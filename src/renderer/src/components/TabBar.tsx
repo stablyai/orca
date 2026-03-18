@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   DndContext,
   closestCenter,
@@ -16,12 +16,12 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { X, Plus, Terminal as TerminalIcon } from 'lucide-react'
 import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
-  ContextMenuTrigger
-} from '@/components/ui/context-menu'
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import type { TerminalTab } from '../../../shared/types'
 
 interface SortableTabProps {
@@ -50,6 +50,8 @@ const TAB_COLORS = [
   { label: 'Gray', value: '#9ca3af' }
 ]
 
+const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
+
 function SortableTab({
   tab,
   tabCount,
@@ -72,10 +74,25 @@ function SortableTab({
     zIndex: isDragging ? 10 : undefined,
     opacity: isDragging ? 0.8 : 1
   }
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
+
+  useEffect(() => {
+    const closeMenu = (): void => setMenuOpen(false)
+    window.addEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
+    return () => window.removeEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
+  }, [])
 
   return (
-    <ContextMenu>
-      <ContextMenuTrigger asChild>
+    <>
+      <div
+        onContextMenuCapture={(event) => {
+          event.preventDefault()
+          window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
+          setMenuPoint({ x: event.clientX, y: event.clientY })
+          setMenuOpen(true)
+        }}
+      >
         <div
           ref={setNodeRef}
           style={style}
@@ -87,6 +104,7 @@ function SortableTab({
               : 'bg-card text-muted-foreground hover:text-foreground hover:bg-accent/50'
           }`}
           onPointerDown={(e) => {
+            if (e.button !== 0) return
             onActivate(tab.id)
             listeners?.onPointerDown?.(e)
           }}
@@ -121,55 +139,69 @@ function SortableTab({
             <X className="w-3 h-3" />
           </button>
         </div>
-      </ContextMenuTrigger>
+      </div>
 
-      <ContextMenuContent className="w-56">
-        <ContextMenuItem onClick={() => onClose(tab.id)}>Close</ContextMenuItem>
-        <ContextMenuItem onClick={() => onCloseOthers(tab.id)} disabled={tabCount <= 1}>
-          Close Others
-        </ContextMenuItem>
-        <ContextMenuItem onClick={() => onCloseToRight(tab.id)} disabled={!hasTabsToRight}>
-          Close Tabs To The Right
-        </ContextMenuItem>
-        <ContextMenuSeparator />
-        <ContextMenuItem
-          onSelect={() => {
-            const next = window.prompt('Change tab title', tab.customTitle ?? tab.title)
-            if (next === null) return
-            const trimmed = next.trim()
-            onSetCustomTitle(tab.id, trimmed.length > 0 ? trimmed : null)
-          }}
-        >
-          Change Title
-        </ContextMenuItem>
-        <div className="px-2 pt-1.5 pb-1">
-          <div className="text-xs font-medium text-muted-foreground mb-1.5">Tab Color</div>
-          <div className="flex flex-wrap gap-2">
-            {TAB_COLORS.map((color) => {
-              const isSelected = tab.color === color.value
-              return (
-                <ContextMenuItem
-                  key={color.label}
-                  className={`relative h-4 w-4 min-w-4 p-0 rounded-full border ${
-                    isSelected ? 'ring-1 ring-foreground/70 ring-offset-1 ring-offset-popover' : ''
-                  } ${
-                    color.value ? 'border-transparent' : 'border-muted-foreground/50 bg-transparent'
-                  }`}
-                  style={color.value ? { backgroundColor: color.value } : undefined}
-                  onSelect={() => {
-                    onSetTabColor(tab.id, color.value)
-                  }}
-                >
-                  {color.value === null && (
-                    <span className="absolute block h-px w-3 rotate-45 bg-muted-foreground/80" />
-                  )}
-                </ContextMenuItem>
-              )
-            })}
+      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen} modal={false}>
+        <DropdownMenuTrigger asChild>
+          <button
+            aria-hidden
+            tabIndex={-1}
+            className="pointer-events-none fixed size-px opacity-0"
+            style={{ left: menuPoint.x, top: menuPoint.y }}
+          />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="w-56" sideOffset={0} align="start">
+          <DropdownMenuItem onSelect={() => onClose(tab.id)}>Close</DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => onCloseOthers(tab.id)} disabled={tabCount <= 1}>
+            Close Others
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => onCloseToRight(tab.id)} disabled={!hasTabsToRight}>
+            Close Tabs To The Right
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onSelect={() => {
+              const next = window.prompt('Change tab title', tab.customTitle ?? tab.title)
+              if (next === null) return
+              const trimmed = next.trim()
+              onSetCustomTitle(tab.id, trimmed.length > 0 ? trimmed : null)
+            }}
+          >
+            Change Title
+          </DropdownMenuItem>
+          <div className="px-2 pt-1.5 pb-1">
+            <div className="text-xs font-medium text-muted-foreground mb-1.5">Tab Color</div>
+            <div className="flex flex-wrap gap-2">
+              {TAB_COLORS.map((color) => {
+                const isSelected = tab.color === color.value
+                return (
+                  <DropdownMenuItem
+                    key={color.label}
+                    className={`relative h-4 w-4 min-w-4 p-0 rounded-full border ${
+                      isSelected
+                        ? 'ring-1 ring-foreground/70 ring-offset-1 ring-offset-popover'
+                        : ''
+                    } ${
+                      color.value
+                        ? 'border-transparent'
+                        : 'border-muted-foreground/50 bg-transparent'
+                    }`}
+                    style={color.value ? { backgroundColor: color.value } : undefined}
+                    onSelect={() => {
+                      onSetTabColor(tab.id, color.value)
+                    }}
+                  >
+                    {color.value === null && (
+                      <span className="absolute block h-px w-3 rotate-45 bg-muted-foreground/80" />
+                    )}
+                  </DropdownMenuItem>
+                )
+              })}
+            </div>
           </div>
-        </div>
-      </ContextMenuContent>
-    </ContextMenu>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
   )
 }
 

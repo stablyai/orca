@@ -1,5 +1,14 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Restty, getBuiltinTheme } from 'restty'
+import { Clipboard, Copy, Eraser, PanelBottomOpen, PanelRightOpen, X } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import { useAppStore } from '../store'
 
 type PtyTransport = {
@@ -26,6 +35,8 @@ type PtyTransport = {
   isConnected: () => boolean
   destroy?: () => void | Promise<void>
 }
+
+const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 
 const OSC_TITLE_RE = /\x1b\]([012]);([^\x07\x1b]*?)(?:\x07|\x1b\\)/g
 
@@ -149,7 +160,16 @@ export default function TerminalPane({
 }: TerminalPaneProps): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
   const resttyRef = useRef<Restty | null>(null)
+  const contextPaneIdRef = useRef<number | null>(null)
   const wasActiveRef = useRef(false)
+  const [terminalMenuOpen, setTerminalMenuOpen] = useState(false)
+  const [terminalMenuPoint, setTerminalMenuPoint] = useState({ x: 0, y: 0 })
+
+  useEffect(() => {
+    const closeMenu = (): void => setTerminalMenuOpen(false)
+    window.addEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
+    return () => window.removeEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
+  }, [])
 
   const updateTabTitle = useAppStore((s) => s.updateTabTitle)
   const updateTabPtyId = useAppStore((s) => s.updateTabPtyId)
@@ -194,6 +214,7 @@ export default function TerminalPane({
       createInitialPane: false,
       autoInit: false,
       shortcuts: { enabled: true },
+      defaultContextMenu: false,
       appOptions: ({ id }) => {
         const onExit = (): void => {
           // Schedule close via parent
@@ -341,11 +362,134 @@ export default function TerminalPane({
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
   }, [isActive])
 
+  const resolveMenuPane = () => {
+    const restty = resttyRef.current
+    if (!restty) return null
+    const panes = restty.getPanes()
+
+    if (contextPaneIdRef.current !== null) {
+      const clickedPane = panes.find((p) => p.id === contextPaneIdRef.current) ?? null
+      if (clickedPane) return clickedPane
+    }
+    return restty.getActivePane() ?? panes[0] ?? null
+  }
+
+  const handleCopy = async (): Promise<void> => {
+    const pane = resolveMenuPane()
+    if (!pane) return
+    await pane.app.copySelectionToClipboard()
+  }
+
+  const handlePaste = async (): Promise<void> => {
+    const pane = resolveMenuPane()
+    if (!pane) return
+    await pane.app.pasteFromClipboard()
+  }
+
+  const handleSplitRight = (): void => {
+    const pane = resolveMenuPane()
+    if (!pane) return
+    resttyRef.current?.splitPane(pane.id, 'vertical')
+  }
+
+  const handleSplitDown = (): void => {
+    const pane = resolveMenuPane()
+    if (!pane) return
+    resttyRef.current?.splitPane(pane.id, 'horizontal')
+  }
+
+  const handleClosePane = (): void => {
+    const pane = resolveMenuPane()
+    if (!pane) return
+    const panes = resttyRef.current?.getPanes() ?? []
+    if (panes.length <= 1) return
+    resttyRef.current?.closePane(pane.id)
+  }
+
+  const handleClearScreen = (): void => {
+    const pane = resolveMenuPane()
+    if (!pane) return
+    pane.app.clearScreen()
+  }
+
+  const canClosePane = (resttyRef.current?.getPanes().length ?? 1) > 1
+
   return (
-    <div
-      ref={containerRef}
-      className="absolute inset-0 min-h-0 min-w-0"
-      style={{ display: isActive ? 'flex' : 'none' }}
-    />
+    <>
+      <div
+        ref={containerRef}
+        className="absolute inset-0 min-h-0 min-w-0"
+        style={{ display: isActive ? 'flex' : 'none' }}
+        onContextMenuCapture={(event) => {
+          event.preventDefault()
+          window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
+
+          const restty = resttyRef.current
+          if (!restty) {
+            contextPaneIdRef.current = null
+            return
+          }
+
+          const target = event.target
+          if (!(target instanceof Node)) {
+            contextPaneIdRef.current = null
+            return
+          }
+          const clickedPane =
+            restty.getPanes().find((pane) => pane.container.contains(target)) ?? null
+          contextPaneIdRef.current = clickedPane?.id ?? null
+
+          const bounds = event.currentTarget.getBoundingClientRect()
+          setTerminalMenuPoint({ x: event.clientX - bounds.left, y: event.clientY - bounds.top })
+          setTerminalMenuOpen(true)
+        }}
+      />
+      <DropdownMenu open={terminalMenuOpen} onOpenChange={setTerminalMenuOpen} modal={false}>
+        <DropdownMenuTrigger asChild>
+          <button
+            aria-hidden
+            tabIndex={-1}
+            className="pointer-events-none absolute size-px opacity-0"
+            style={{ left: terminalMenuPoint.x, top: terminalMenuPoint.y }}
+          />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="w-56" sideOffset={0} align="start">
+          <DropdownMenuItem onSelect={() => void handleCopy()}>
+            <Copy />
+            Copy
+            <DropdownMenuShortcut>⌘C</DropdownMenuShortcut>
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => void handlePaste()}>
+            <Clipboard />
+            Paste
+            <DropdownMenuShortcut>⌘V</DropdownMenuShortcut>
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={handleSplitRight}>
+            <PanelRightOpen />
+            Split Right
+            <DropdownMenuShortcut>⌘D</DropdownMenuShortcut>
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={handleSplitDown}>
+            <PanelBottomOpen />
+            Split Down
+            <DropdownMenuShortcut>⌘⇧D</DropdownMenuShortcut>
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            variant="destructive"
+            disabled={!canClosePane}
+            onSelect={handleClosePane}
+          >
+            <X />
+            Close Pane
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={handleClearScreen}>
+            <Eraser />
+            Clear Screen
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
   )
 }
