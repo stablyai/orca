@@ -841,8 +841,28 @@ export default function TerminalPane({
       }
     }
 
+    // Ctrl+Backspace → send \x17 (backward-kill-word) to PTY.
+    // Most terminal emulators map this shortcut but xterm.js/Restty does not
+    // by default, so we intercept at the capture phase and forward manually.
+    const onCtrlBackspace = (e: KeyboardEvent): void => {
+      if (!e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return
+      if (e.key !== 'Backspace') return
+
+      const restty = resttyRef.current
+      if (!restty) return
+
+      e.preventDefault()
+      e.stopPropagation()
+      const pane = restty.getActivePane() ?? restty.getPanes()[0]
+      pane?.app.sendKeyInput('\x17')
+    }
+
     window.addEventListener('keydown', onKeyDown, { capture: true })
-    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
+    window.addEventListener('keydown', onCtrlBackspace, { capture: true })
+    return () => {
+      window.removeEventListener('keydown', onKeyDown, { capture: true })
+      window.removeEventListener('keydown', onCtrlBackspace, { capture: true })
+    }
   }, [isActive])
 
   const resolveMenuPane = () => {
