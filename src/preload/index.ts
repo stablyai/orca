@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webFrame } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
 // Custom APIs for renderer
@@ -133,7 +133,15 @@ const api = {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('ui:openSettings', listener)
       return () => ipcRenderer.removeListener('ui:openSettings', listener)
-    }
+    },
+    onTerminalZoom: (callback: (direction: 'in' | 'out' | 'reset') => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, direction: 'in' | 'out' | 'reset') =>
+        callback(direction)
+      ipcRenderer.on('terminal:zoom', listener)
+      return () => ipcRenderer.removeListener('terminal:zoom', listener)
+    },
+    getZoomLevel: (): number => webFrame.getZoomLevel(),
+    setZoomLevel: (level: number): void => webFrame.setZoomLevel(level)
   }
 }
 

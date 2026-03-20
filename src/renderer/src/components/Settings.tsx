@@ -26,6 +26,7 @@ import {
   Minus,
   Plus,
   SlidersHorizontal,
+  RotateCcw,
   SquareTerminal,
   Trash2
 } from 'lucide-react'
@@ -35,6 +36,65 @@ const DEFAULT_REPO_HOOK_SETTINGS = getDefaultRepoHookSettings()
 const MAX_THEME_RESULTS = 80
 const MAX_FONT_RESULTS = 12
 const SCROLLBACK_PRESETS_MB = [10, 25, 50, 100, 250] as const
+const ZOOM_STEP = 0.5
+const ZOOM_MIN = -3
+const ZOOM_MAX = 5
+
+function zoomLevelToPercent(level: number): number {
+  return Math.round(100 * Math.pow(1.2, level))
+}
+
+function UIZoomControl(): React.JSX.Element {
+  const [zoomLevel, setZoomLevel] = useState(() => window.api.ui.getZoomLevel())
+
+  useEffect(() => {
+    return window.api.ui.onTerminalZoom((direction) => {
+      setZoomLevel(window.api.ui.getZoomLevel())
+      // Small delay to read after the level is actually applied
+      setTimeout(() => setZoomLevel(window.api.ui.getZoomLevel()), 50)
+    })
+  }, [])
+
+  const applyZoom = useCallback((level: number) => {
+    const clamped = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, level))
+    window.api.ui.setZoomLevel(clamped)
+    setZoomLevel(clamped)
+  }, [])
+
+  const percent = zoomLevelToPercent(zoomLevel)
+
+  return (
+    <div className="flex items-center gap-2">
+      <Button
+        variant="outline"
+        size="icon-sm"
+        onClick={() => applyZoom(zoomLevel - ZOOM_STEP)}
+        disabled={zoomLevel <= ZOOM_MIN}
+      >
+        <Minus className="size-3" />
+      </Button>
+      <span className="w-14 text-center text-sm tabular-nums text-foreground">{percent}%</span>
+      <Button
+        variant="outline"
+        size="icon-sm"
+        onClick={() => applyZoom(zoomLevel + ZOOM_STEP)}
+        disabled={zoomLevel >= ZOOM_MAX}
+      >
+        <Plus className="size-3" />
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => applyZoom(0)}
+        disabled={zoomLevel === 0}
+        className="ml-1 gap-1.5"
+      >
+        <RotateCcw className="size-3" />
+        Reset
+      </Button>
+    </div>
+  )
+}
 
 function getFallbackTerminalFonts(): string[] {
   const nav =
@@ -889,6 +949,22 @@ function Settings(): React.JSX.Element {
                       </button>
                     ))}
                   </div>
+                </section>
+
+                <Separator />
+
+                <section className="space-y-4">
+                  <div className="space-y-1">
+                    <h2 className="text-sm font-semibold">UI Zoom</h2>
+                    <p className="text-xs text-muted-foreground">
+                      Scale the entire application interface. Use{' '}
+                      <kbd className="rounded border px-1 py-0.5 text-[10px]">⌘+</kbd> /{' '}
+                      <kbd className="rounded border px-1 py-0.5 text-[10px]">⌘-</kbd> when not in a
+                      terminal pane.
+                    </p>
+                  </div>
+
+                  <UIZoomControl />
                 </section>
               </div>
             ) : showTerminalPane ? (

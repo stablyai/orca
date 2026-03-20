@@ -158,14 +158,14 @@ function createIpcPtyTransport(
           }
         })
 
-        ptyExitHandlers.set(result.id, (code) => {
+        const spawnedId = result.id
+        ptyExitHandlers.set(spawnedId, (code) => {
           connected = false
-          const exitedPtyId = ptyId!
           ptyId = null
-          unregisterPtyHandlers(exitedPtyId)
+          unregisterPtyHandlers(spawnedId)
           storedCallbacks.onExit?.(code)
           storedCallbacks.onDisconnect?.()
-          onPtyExit?.(exitedPtyId)
+          onPtyExit?.(spawnedId)
         })
 
         storedCallbacks.onConnect?.()
@@ -391,6 +391,7 @@ export default function TerminalPane({
   const resttyRef = useRef<Restty | null>(null)
   const contextPaneIdRef = useRef<number | null>(null)
   const wasActiveRef = useRef(false)
+  const paneFontSizesRef = useRef<Map<number, number>>(new Map())
   const expandedPaneIdRef = useRef<number | null>(null)
   const expandedStyleSnapshotRef = useRef<Map<HTMLElement, { display: string; flex: string }>>(
     new Map()
@@ -581,7 +582,8 @@ export default function TerminalPane({
       if (theme) {
         pane.app.applyTheme(theme, appearance.themeName)
       }
-      pane.app.setFontSize(currentSettings.terminalFontSize)
+      const paneSize = paneFontSizesRef.current.get(pane.id)
+      pane.app.setFontSize(paneSize ?? currentSettings.terminalFontSize)
       pane.app.sendInput(cursorSequence, 'pty')
     }
 
@@ -650,7 +652,8 @@ export default function TerminalPane({
           fontSize: currentSettings?.terminalFontSize ?? 14,
           fontSizeMode: 'em',
           fontHinting: true,
-          fontHintTarget: 'light',
+          fontHintTarget: 'normal',
+          fontThicken: true,
           alphaBlending: 'linear-corrected',
           maxScrollbackBytes: currentSettings?.terminalScrollbackBytes ?? 10_000_000,
           ptyTransport: createIpcPtyTransport(
@@ -733,6 +736,38 @@ export default function TerminalPane({
         )
     )
   }, [settings, systemPrefersDark])
+
+  // Per-pane font zoom via Cmd+Plus/Minus/0
+  useEffect(() => {
+    if (!isActive) return
+    const MIN_FONT_SIZE = 8
+    const MAX_FONT_SIZE = 32
+    const FONT_SIZE_STEP = 1
+
+    return window.api.ui.onTerminalZoom((direction) => {
+      const restty = resttyRef.current
+      if (!restty) return
+      const pane = restty.getActivePane()
+      if (!pane) return
+
+      const globalSize = settingsRef.current?.terminalFontSize ?? 14
+      const currentSize = paneFontSizesRef.current.get(pane.id) ?? globalSize
+
+      let nextSize: number
+      if (direction === 'reset') {
+        nextSize = globalSize
+        paneFontSizesRef.current.delete(pane.id)
+      } else if (direction === 'in') {
+        nextSize = Math.min(MAX_FONT_SIZE, currentSize + FONT_SIZE_STEP)
+        paneFontSizesRef.current.set(pane.id, nextSize)
+      } else {
+        nextSize = Math.max(MIN_FONT_SIZE, currentSize - FONT_SIZE_STEP)
+        paneFontSizesRef.current.set(pane.id, nextSize)
+      }
+
+      pane.app.setFontSize(nextSize)
+    })
+  }, [isActive])
 
   // Handle focus and resize when tab becomes active
   useEffect(() => {

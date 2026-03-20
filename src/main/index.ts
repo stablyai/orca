@@ -53,6 +53,23 @@ function createWindow(): BrowserWindow {
     return { action: 'deny' }
   })
 
+  // Handle zoom shortcuts reliably via before-input-event
+  mainWindow.webContents.on('before-input-event', (_event, input) => {
+    if (input.type !== 'keyDown') return
+    const mod = process.platform === 'darwin' ? input.meta : input.control
+    if (!mod || input.alt) return
+    if (input.key === '=' || input.key === '+') {
+      _event.preventDefault()
+      mainWindow.webContents.send('terminal:zoom', 'in')
+    } else if (input.key === '-') {
+      _event.preventDefault()
+      mainWindow.webContents.send('terminal:zoom', 'out')
+    } else if (input.key === '0' && !input.shift) {
+      _event.preventDefault()
+      mainWindow.webContents.send('terminal:zoom', 'reset')
+    }
+  })
+
   // HMR for renderer base on electron-vite cli.
   // Load the remote URL for development or the local html file for production.
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
@@ -123,9 +140,21 @@ app.whenReady().then(() => {
         { role: 'forceReload' },
         { role: 'toggleDevTools' },
         { type: 'separator' },
-        { role: 'resetZoom' },
-        { role: 'zoomIn' },
-        { role: 'zoomOut' },
+        {
+          label: 'Actual Size',
+          accelerator: 'CmdOrCtrl+0',
+          registerAccelerator: false
+        },
+        {
+          label: 'Zoom In',
+          accelerator: 'CmdOrCtrl+=',
+          registerAccelerator: false
+        },
+        {
+          label: 'Zoom Out',
+          accelerator: 'CmdOrCtrl+-',
+          registerAccelerator: false
+        },
         { type: 'separator' },
         { role: 'togglefullscreen' }
       ]

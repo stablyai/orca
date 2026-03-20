@@ -87,6 +87,9 @@ interface UIApi {
   get: () => Promise<PersistedUIState>
   set: (args: Partial<PersistedUIState>) => Promise<void>
   onOpenSettings: (callback: () => void) => () => void
+  onTerminalZoom: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void
+  getZoomLevel: () => number
+  setZoomLevel: (level: number) => void
 }
 
 interface Api {
