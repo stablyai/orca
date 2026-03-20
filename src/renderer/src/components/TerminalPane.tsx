@@ -88,6 +88,7 @@ function createIpcPtyTransport(
   onBell?: () => void
 ): PtyTransport {
   let connected = false
+  let destroyed = false
   let ptyId: string | null = null
   let pendingEscape = false
   let inOsc = false
@@ -103,6 +104,13 @@ function createIpcPtyTransport(
   let unsubData: (() => void) | null = null
   let unsubExit: (() => void) | null = null
 
+  function cleanupListeners(): void {
+    unsubData?.()
+    unsubExit?.()
+    unsubData = null
+    unsubExit = null
+  }
+
   return {
     async connect(options) {
       storedCallbacks = options.callbacks
@@ -113,9 +121,19 @@ function createIpcPtyTransport(
           rows: options.rows ?? 24,
           cwd
         })
+
+        // If destroyed while spawn was in flight, kill the new pty and bail
+        if (destroyed) {
+          window.api.pty.kill(result.id)
+          return
+        }
+
         ptyId = result.id
         connected = true
         onPtySpawn?.(result.id)
+
+        // Clean up any stale listeners before registering new ones
+        cleanupListeners()
 
         unsubData = window.api.pty.onData((payload) => {
           if (payload.id === ptyId) {
@@ -154,10 +172,7 @@ function createIpcPtyTransport(
         window.api.pty.kill(ptyId)
         connected = false
         ptyId = null
-        unsubData?.()
-        unsubExit?.()
-        unsubData = null
-        unsubExit = null
+        cleanupListeners()
         storedCallbacks.onDisconnect?.()
       }
     },
@@ -179,6 +194,7 @@ function createIpcPtyTransport(
     },
 
     destroy() {
+      destroyed = true
       this.disconnect()
     }
   }
@@ -623,7 +639,9 @@ export default function TerminalPane({
           renderer: 'auto',
           fontSize: currentSettings?.terminalFontSize ?? 14,
           fontSizeMode: 'em',
-          alphaBlending: 'native',
+          fontHinting: true,
+          fontHintTarget: 'light',
+          alphaBlending: 'linear-corrected',
           maxScrollbackBytes: currentSettings?.terminalScrollbackBytes ?? 10_000_000,
           ptyTransport: createIpcPtyTransport(
             cwd,

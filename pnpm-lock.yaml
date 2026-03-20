@@ -45,8 +45,8 @@ importers:
         specifier: ^1.4.3
         version: 1.4.3(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       restty:
-        specifier: ^0.1.34
-        version: 0.1.34(typescript@5.9.3)
+        specifier: github:nwparker/restty#orca/desktop-word-line-selection
+        version: https://codeload.github.com/nwparker/restty/tar.gz/fb8a604be99f570fb437b414790ef36fe85c8f17(typescript@5.9.3)
       shadcn:
         specifier: ^4.0.8
         version: 4.0.8(@types/node@25.5.0)(typescript@5.9.3)
@@ -3798,8 +3798,9 @@ packages:
     resolution: {integrity: sha512-oMA2dcrw6u0YfxJQXm342bFKX/E4sG9rbTzO9ptUcR/e8A33cHuvStiYOwH7fszkZlZ1z/ta9AAoPk2F4qIOHA==}
     engines: {node: '>=18'}
 
-  restty@0.1.34:
-    resolution: {integrity: sha512-466w3EXe/yLNfO8Jbha6tLLTij1QRI2MnKbm0UHCmP33Avon4YikIeIIPW1ga1A9310poAcnkoXPeV0b84Yyxw==}
+  restty@https://codeload.github.com/nwparker/restty/tar.gz/fb8a604be99f570fb437b414790ef36fe85c8f17:
+    resolution: {tarball: https://codeload.github.com/nwparker/restty/tar.gz/fb8a604be99f570fb437b414790ef36fe85c8f17}
+    version: 0.1.34
     engines: {bun: '>=1.2.0'}
 
   retry@0.12.0:
@@ -8146,7 +8147,7 @@ snapshots:
       onetime: 7.0.0
       signal-exit: 4.1.0
 
-  restty@0.1.34(typescript@5.9.3):
+  restty@https://codeload.github.com/nwparker/restty/tar.gz/fb8a604be99f570fb437b414790ef36fe85c8f17(typescript@5.9.3):
     dependencies:
       text-shaper: 0.1.18(typescript@5.9.3)
     transitivePeerDependencies:

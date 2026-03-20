@@ -38,7 +38,7 @@
     "lucide-react": "^0.577.0",
     "node-pty": "^1.1.0",
     "radix-ui": "^1.4.3",
-    "restty": "^0.1.34",
+    "restty": "github:nwparker/restty#orca/desktop-word-line-selection",
     "shadcn": "^4.0.8",
     "simple-git": "^3.33.0",
     "tailwind-merge": "^3.5.0",
