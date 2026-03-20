@@ -61,6 +61,24 @@ type PtyTransport = {
   destroy?: () => void | Promise<void>
 }
 
+// Singleton PTY event dispatcher — one global IPC listener per channel,
+// routes events to transports by PTY ID. Eliminates the N-listener problem
+// that triggers MaxListenersExceededWarning with many panes/tabs.
+const ptyDataHandlers = new Map<string, (data: string) => void>()
+const ptyExitHandlers = new Map<string, (code: number) => void>()
+let ptyDispatcherAttached = false
+
+function ensurePtyDispatcher(): void {
+  if (ptyDispatcherAttached) return
+  ptyDispatcherAttached = true
+  window.api.pty.onData((payload) => {
+    ptyDataHandlers.get(payload.id)?.(payload.data)
+  })
+  window.api.pty.onExit((payload) => {
+    ptyExitHandlers.get(payload.id)?.(payload.code)
+  })
+}
+
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 const EMPTY_LAYOUT: TerminalLayoutSnapshot = {
   root: null,
@@ -101,19 +119,16 @@ function createIpcPtyTransport(
     onError?: (message: string, errors?: string[]) => void
     onExit?: (code: number) => void
   } = {}
-  let unsubData: (() => void) | null = null
-  let unsubExit: (() => void) | null = null
 
-  function cleanupListeners(): void {
-    unsubData?.()
-    unsubExit?.()
-    unsubData = null
-    unsubExit = null
+  function unregisterPtyHandlers(id: string): void {
+    ptyDataHandlers.delete(id)
+    ptyExitHandlers.delete(id)
   }
 
   return {
     async connect(options) {
       storedCallbacks = options.callbacks
+      ensurePtyDispatcher()
 
       try {
         const result = await window.api.pty.spawn({
@@ -132,31 +147,25 @@ function createIpcPtyTransport(
         connected = true
         onPtySpawn?.(result.id)
 
-        // Clean up any stale listeners before registering new ones
-        cleanupListeners()
-
-        unsubData = window.api.pty.onData((payload) => {
-          if (payload.id === ptyId) {
-            storedCallbacks.onData?.(payload.data)
-            if (onTitleChange) {
-              const title = extractLastOscTitle(payload.data)
-              if (title !== null) onTitleChange(title)
-            }
-            if (onBell && chunkContainsBell(payload.data)) {
-              onBell()
-            }
+        ptyDataHandlers.set(result.id, (data) => {
+          storedCallbacks.onData?.(data)
+          if (onTitleChange) {
+            const title = extractLastOscTitle(data)
+            if (title !== null) onTitleChange(title)
+          }
+          if (onBell && chunkContainsBell(data)) {
+            onBell()
           }
         })
 
-        unsubExit = window.api.pty.onExit((payload) => {
-          if (payload.id === ptyId) {
-            connected = false
-            const exitedPtyId = payload.id
-            storedCallbacks.onExit?.(payload.code)
-            storedCallbacks.onDisconnect?.()
-            ptyId = null
-            onPtyExit?.(exitedPtyId)
-          }
+        ptyExitHandlers.set(result.id, (code) => {
+          connected = false
+          const exitedPtyId = ptyId!
+          ptyId = null
+          unregisterPtyHandlers(exitedPtyId)
+          storedCallbacks.onExit?.(code)
+          storedCallbacks.onDisconnect?.()
+          onPtyExit?.(exitedPtyId)
         })
 
         storedCallbacks.onConnect?.()
@@ -169,10 +178,11 @@ function createIpcPtyTransport(
 
     disconnect() {
       if (ptyId) {
-        window.api.pty.kill(ptyId)
+        const id = ptyId
+        window.api.pty.kill(id)
         connected = false
         ptyId = null
-        cleanupListeners()
+        unregisterPtyHandlers(id)
         storedCallbacks.onDisconnect?.()
       }
     },
