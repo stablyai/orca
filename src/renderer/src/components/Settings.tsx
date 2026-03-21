@@ -55,7 +55,6 @@ function UIZoomControl(): React.JSX.Element {
   useEffect(() => {
     return window.api.ui.onTerminalZoom(() => {
       setZoomLevel(window.api.ui.getZoomLevel())
-      setTimeout(() => setZoomLevel(window.api.ui.getZoomLevel()), 50)
     })
   }, [])
 
@@ -306,12 +305,14 @@ function FontAutocomplete({
   onChange
 }: FontAutocompleteProps): React.JSX.Element {
   const [query, setQuery] = useState(value)
+  const [prevValue, setPrevValue] = useState(value)
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
 
-  useEffect(() => {
+  if (value !== prevValue) {
+    setPrevValue(value)
     setQuery(value)
-  }, [value])
+  }
 
   useEffect(() => {
     if (!open) return
@@ -442,6 +443,7 @@ function Settings(): React.JSX.Element {
   const [themeSearchLight, setThemeSearchLight] = useState('')
   const [systemPrefersDark, setSystemPrefersDark] = useState(getSystemPrefersDark())
   const [scrollbackMode, setScrollbackMode] = useState<'preset' | 'custom'>('preset')
+  const [prevSettings, setPrevSettings] = useState(settings)
   const [terminalFontSuggestions, setTerminalFontSuggestions] = useState<string[]>(
     getFallbackTerminalFonts()
   )
@@ -490,16 +492,17 @@ function Settings(): React.JSX.Element {
     }
   }, [selectedPane])
 
-  useEffect(() => {
-    if (!settings) return
-
-    const scrollbackMb = Math.max(1, Math.round(settings.terminalScrollbackBytes / 1_000_000))
-    setScrollbackMode(
-      SCROLLBACK_PRESETS_MB.includes(scrollbackMb as (typeof SCROLLBACK_PRESETS_MB)[number])
-        ? 'preset'
-        : 'custom'
-    )
-  }, [settings])
+  if (settings !== prevSettings) {
+    setPrevSettings(settings)
+    if (settings) {
+      const scrollbackMb = Math.max(1, Math.round(settings.terminalScrollbackBytes / 1_000_000))
+      setScrollbackMode(
+        SCROLLBACK_PRESETS_MB.includes(scrollbackMb as (typeof SCROLLBACK_PRESETS_MB)[number])
+          ? 'preset'
+          : 'custom'
+      )
+    }
+  }
 
   useEffect(() => {
     let stale = false
@@ -603,17 +606,15 @@ function Settings(): React.JSX.Element {
     }
   }, [selectedRepoId, baseRefQuery])
 
-  useEffect(() => {
-    if (repos.length === 0) {
+  // Validate selectedRepoId against current repos (adjusting state during render)
+  if (repos.length === 0) {
+    if (selectedRepoId !== null) {
       setSelectedRepoId(null)
       if (selectedPane === 'repo') setSelectedPane('general')
-      return
     }
-
-    if (!selectedRepoId || !repos.some((repo) => repo.id === selectedRepoId)) {
-      setSelectedRepoId(repos[0].id)
-    }
-  }, [repos, selectedRepoId])
+  } else if (!selectedRepoId || !repos.some((repo) => repo.id === selectedRepoId)) {
+    setSelectedRepoId(repos[0].id)
+  }
 
   const applyTheme = useCallback((theme: 'system' | 'dark' | 'light') => {
     const root = document.documentElement

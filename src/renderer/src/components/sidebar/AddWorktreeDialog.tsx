@@ -51,6 +51,8 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
   const nameInputRef = useRef<HTMLInputElement>(null)
   const lastSuggestedNameRef = useRef('')
   const resetTimeoutRef = useRef<number | null>(null)
+  const prevIsOpenRef = useRef(false)
+  const prevSuggestedNameRef = useRef('')
 
   const isOpen = activeModal === 'create-worktree'
   const preselectedRepoId =
@@ -64,6 +66,33 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
     () => getSuggestedSpaceName(repoId, worktreesByRepo, settings?.nestWorkspaces ?? false),
     [repoId, worktreesByRepo, settings?.nestWorkspaces]
   )
+
+  // Auto-select repo when dialog opens (adjusting state during render)
+  if (isOpen && !prevIsOpenRef.current && repos.length > 0) {
+    if (preselectedRepoId && repos.some((repo) => repo.id === preselectedRepoId)) {
+      setRepoId(preselectedRepoId)
+    } else if (activeWorktreeRepoId && repos.some((repo) => repo.id === activeWorktreeRepoId)) {
+      setRepoId(activeWorktreeRepoId)
+    } else if (activeRepoId && repos.some((repo) => repo.id === activeRepoId)) {
+      setRepoId(activeRepoId)
+    } else {
+      setRepoId(repos[0].id)
+    }
+  }
+  prevIsOpenRef.current = isOpen
+
+  // Auto-fill name from suggestion (adjusting state during render)
+  if (isOpen && repoId && suggestedName && suggestedName !== prevSuggestedNameRef.current) {
+    const shouldApplySuggestion = !name.trim() || name === lastSuggestedNameRef.current
+    prevSuggestedNameRef.current = suggestedName
+    if (shouldApplySuggestion) {
+      setName(suggestedName)
+      lastSuggestedNameRef.current = suggestedName
+    }
+  }
+  if (!isOpen) {
+    prevSuggestedNameRef.current = ''
+  }
 
   const handleOpenChange = useCallback(
     (open: boolean) => {
@@ -151,45 +180,16 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
     }
   }, [isOpen])
 
-  React.useEffect(() => {
-    if (!isOpen || repos.length === 0) return
-
-    if (preselectedRepoId && repos.some((repo) => repo.id === preselectedRepoId)) {
-      setRepoId(preselectedRepoId)
-      return
-    }
-
-    if (activeWorktreeRepoId && repos.some((repo) => repo.id === activeWorktreeRepoId)) {
-      setRepoId(activeWorktreeRepoId)
-      return
-    }
-
-    if (activeRepoId && repos.some((repo) => repo.id === activeRepoId)) {
-      setRepoId(activeRepoId)
-      return
-    }
-
-    if (!repoId) {
-      setRepoId(repos[0].id)
-    }
-  }, [isOpen, repos, repoId, preselectedRepoId, activeWorktreeRepoId, activeRepoId])
-
+  // Focus and select name input when suggestion is applied
   React.useEffect(() => {
     if (!isOpen || !repoId || !suggestedName) return
-
-    const shouldApplySuggestion = !name.trim() || name === lastSuggestedNameRef.current
-    if (!shouldApplySuggestion) return
-
-    setName(suggestedName)
-    lastSuggestedNameRef.current = suggestedName
-
     requestAnimationFrame(() => {
       const input = nameInputRef.current
       if (!input) return
       input.focus()
       input.select()
     })
-  }, [isOpen, repoId, suggestedName, name])
+  }, [isOpen, repoId, suggestedName])
 
   // Safety guard: creating a worktree requires at least one repo.
   React.useEffect(() => {

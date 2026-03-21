@@ -25,6 +25,11 @@ export default function Terminal(): React.JSX.Element | null {
   const allWorktrees = Object.values(worktreesByRepo).flat()
   const prevTabCountRef = useRef(tabs.length)
 
+  // Ensure activeTabId is valid (adjusting state during render)
+  if (tabs.length > 0 && (!activeTabId || !tabs.find((t) => t.id === activeTabId))) {
+    setActiveTab(tabs[0].id)
+  }
+
   // Track which worktrees have been activated during this app session.
   // Only mount TerminalPanes for visited worktrees to prevent mass PTY
   // spawning when restoring a session with many saved worktree tabs.
@@ -56,13 +61,6 @@ export default function Terminal(): React.JSX.Element | null {
     initialTabCreationGuardRef.current = activeWorktreeId
     createTab(activeWorktreeId)
   }, [workspaceSessionReady, activeWorktreeId, tabs.length, createTab])
-
-  // Ensure activeTabId is valid
-  useEffect(() => {
-    if (tabs.length > 0 && (!activeTabId || !tabs.find((t) => t.id === activeTabId))) {
-      setActiveTab(tabs[0].id)
-    }
-  }, [tabs, activeTabId, setActiveTab])
 
   // Animate tab bar height with grid transition
   useEffect(() => {

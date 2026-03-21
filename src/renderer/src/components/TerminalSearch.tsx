@@ -49,9 +49,9 @@ export default function TerminalSearch({
       return
     }
     if (searchAddon && isOpen) {
-      searchAddon.findNext(query, searchOptions(true))
+      searchAddon.findNext(query, { caseSensitive, regex, incremental: true })
     }
-  }, [query, searchAddon, isOpen, searchOptions])
+  }, [query, searchAddon, isOpen, caseSensitive, regex])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {

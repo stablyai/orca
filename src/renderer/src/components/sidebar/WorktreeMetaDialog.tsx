@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import {
   Dialog,
@@ -32,11 +32,12 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   const [commentInput, setCommentInput] = useState('')
   const [saving, setSaving] = useState(false)
 
-  useEffect(() => {
-    if (!isOpen) return
+  const prevIsOpenRef = useRef(false)
+  if (isOpen && !prevIsOpenRef.current) {
     setIssueInput(currentIssue)
     setCommentInput(currentComment)
-  }, [isOpen, currentIssue, currentComment])
+  }
+  prevIsOpenRef.current = isOpen
 
   const canSave = useMemo(() => {
     if (!worktreeId) return false

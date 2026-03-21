@@ -269,23 +269,6 @@ const WorktreeList = React.memo(function WorktreeList() {
     return result
   }, [groupBy, worktrees, repoMap, prCache, collapsedGroups, tabsByWorktree])
 
-  React.useEffect(() => {
-    if (!pendingRevealWorktreeId || groupBy === 'none') return
-
-    const targetWorktree = worktrees.find((worktree) => worktree.id === pendingRevealWorktreeId)
-    if (!targetWorktree) return
-
-    const groupKey = getGroupKeyForWorktree(groupBy, targetWorktree, repoMap, prCache)
-    if (!groupKey) return
-
-    setCollapsedGroups((prev) => {
-      if (!prev.has(groupKey)) return prev
-      const next = new Set(prev)
-      next.delete(groupKey)
-      return next
-    })
-  }, [pendingRevealWorktreeId, groupBy, worktrees, repoMap, prCache])
-
   // ── TanStack Virtual ──────────────────────────────────────────
   const virtualizer = useVirtualizer({
     count: rows.length,
@@ -301,14 +284,42 @@ const WorktreeList = React.memo(function WorktreeList() {
   React.useEffect(() => {
     if (!pendingRevealWorktreeId) return
 
-    const targetIndex = rows.findIndex(
-      (row) => row.type === 'item' && row.worktree.id === pendingRevealWorktreeId
-    )
-    if (targetIndex === -1) return
+    // Uncollapse the group containing the target worktree
+    if (groupBy !== 'none') {
+      const targetWorktree = worktrees.find((w) => w.id === pendingRevealWorktreeId)
+      if (targetWorktree) {
+        const groupKey = getGroupKeyForWorktree(groupBy, targetWorktree, repoMap, prCache)
+        if (groupKey) {
+          setCollapsedGroups((prev) => {
+            if (!prev.has(groupKey)) return prev
+            const next = new Set(prev)
+            next.delete(groupKey)
+            return next
+          })
+        }
+      }
+    }
 
-    virtualizer.scrollToIndex(targetIndex, { align: 'center' })
-    clearPendingRevealWorktreeId()
-  }, [pendingRevealWorktreeId, rows, virtualizer, clearPendingRevealWorktreeId])
+    // Scroll to the target after the group uncollapse re-render settles
+    requestAnimationFrame(() => {
+      const targetIndex = rows.findIndex(
+        (row) => row.type === 'item' && row.worktree.id === pendingRevealWorktreeId
+      )
+      if (targetIndex !== -1) {
+        virtualizer.scrollToIndex(targetIndex, { align: 'center' })
+      }
+      clearPendingRevealWorktreeId()
+    })
+  }, [
+    pendingRevealWorktreeId,
+    groupBy,
+    worktrees,
+    repoMap,
+    prCache,
+    rows,
+    virtualizer,
+    clearPendingRevealWorktreeId
+  ])
 
   const handleCreateForRepo = useCallback(
     (repoId: string) => {
