@@ -144,11 +144,12 @@ const WorktreeCard = React.memo(function WorktreeCard({
     }
   }, [repo, worktree.linkedIssue, issue, fetchIssue, issueCacheKey])
 
-  // Stable click handler
-  const handleClick = useCallback(
-    () => setActiveWorktree(worktree.id),
-    [worktree.id, setActiveWorktree]
-  )
+  // Stable click handler – ignore clicks that are really text selections
+  const handleClick = useCallback(() => {
+    const selection = window.getSelection()
+    if (selection && selection.toString().length > 0) return
+    setActiveWorktree(worktree.id)
+  }, [worktree.id, setActiveWorktree])
 
   const handleToggleUnreadQuick = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {

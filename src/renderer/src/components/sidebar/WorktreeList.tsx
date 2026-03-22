@@ -273,7 +273,7 @@ const WorktreeList = React.memo(function WorktreeList() {
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: (index) => (rows[index].type === 'header' ? 38 : 56),
+    estimateSize: (index) => (rows[index].type === 'header' ? 38 : 56 + 4),
     overscan: 10,
     getItemKey: (index) => {
       const row = rows[index]
@@ -450,7 +450,7 @@ const WorktreeList = React.memo(function WorktreeList() {
               key={vItem.key}
               data-index={vItem.index}
               ref={virtualizer.measureElement}
-              className="absolute left-0 right-0"
+              className="absolute left-0 right-0 pb-1"
               style={{ transform: `translateY(${vItem.start}px)` }}
             >
               <WorktreeCard

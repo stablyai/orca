@@ -198,9 +198,19 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
     }
   }, [isOpen, repos.length, handleOpenChange])
 
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' && !e.shiftKey && repoId && name.trim() && !creating) {
+        e.preventDefault()
+        handleCreate()
+      }
+    },
+    [repoId, name, creating, handleCreate]
+  )
+
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md" onKeyDown={handleKeyDown}>
         <DialogHeader>
           <DialogTitle className="text-sm">New Worktree</DialogTitle>
           <DialogDescription className="text-xs">
