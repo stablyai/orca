@@ -273,7 +273,7 @@ const WorktreeList = React.memo(function WorktreeList() {
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: (index) => (rows[index].type === 'header' ? 38 : 56 + 4),
+    estimateSize: (index) => (rows[index].type === 'header' ? 42 : 56 + 4),
     overscan: 10,
     getItemKey: (index) => {
       const row = rows[index]
@@ -373,24 +373,17 @@ const WorktreeList = React.memo(function WorktreeList() {
               >
                 <button
                   className={cn(
-                    'group mx-1 mt-1.5 flex h-8 w-[calc(100%-0.5rem)] items-center gap-2 rounded-lg border px-2 py-1 text-left transition-all hover:brightness-110',
-                    row.tone,
-                    row.repo ? 'overflow-hidden' : ''
+                    'group mb-1 mt-1.5 flex h-8 w-full items-center gap-1.5 rounded-lg border border-transparent px-1.5 py-1 text-left transition-all',
+                    row.repo
+                      ? 'overflow-hidden hover:bg-accent/50'
+                      : cn(row.tone, 'hover:brightness-110')
                   )}
                   onClick={() => toggleGroup(row.key)}
-                  style={
-                    row.repo
-                      ? {
-                          backgroundImage: `linear-gradient(135deg, ${row.repo.badgeColor}26 0%, ${row.repo.badgeColor}12 52%, rgba(0,0,0,0) 100%)`,
-                          borderColor: `${row.repo.badgeColor}44`
-                        }
-                      : undefined
-                  }
                 >
                   <div
                     className={cn(
-                      'flex size-5 shrink-0 items-center justify-center rounded-md border',
-                      row.repo ? 'bg-black/10 text-foreground border-white/10' : 'bg-black/10'
+                      'flex size-5 shrink-0 items-center justify-center rounded-md',
+                      row.repo ? 'text-foreground' : 'border bg-black/10'
                     )}
                     style={row.repo ? { color: row.repo.badgeColor } : undefined}
                   >
@@ -399,7 +392,7 @@ const WorktreeList = React.memo(function WorktreeList() {
 
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
-                      <div className="truncate text-[11px] font-semibold leading-none">
+                      <div className="truncate text-[13px] font-semibold leading-none">
                         {row.label}
                       </div>
                       <div className="rounded-full bg-black/12 px-1.5 py-0.5 text-[9px] font-medium leading-none text-muted-foreground/90">
@@ -415,7 +408,7 @@ const WorktreeList = React.memo(function WorktreeList() {
                           type="button"
                           variant="ghost"
                           size="icon-xs"
-                          className="mr-0.5 size-5 shrink-0 rounded-md border border-white/10 bg-black/10 text-foreground hover:bg-black/20"
+                          className="mr-0.5 size-5 shrink-0 rounded-md text-muted-foreground hover:bg-accent/70 hover:text-foreground"
                           aria-label={`Create worktree for ${row.label}`}
                           onClick={(event) => {
                             event.preventDefault()
