@@ -58,5 +58,19 @@
     "unicorn/prefer-ternary": "error",
     "unicorn/throw-new-error": "error"
   },
+  "overrides": [
+    {
+      "files": ["**/*.ts"],
+      "rules": {
+        "max-lines": ["error", { "max": 300, "skipBlankLines": true, "skipComments": true }]
+      }
+    },
+    {
+      "files": ["**/*.tsx"],
+      "rules": {
+        "max-lines": ["error", { "max": 400, "skipBlankLines": true, "skipComments": true }]
+      }
+    }
+  ],
   "ignorePatterns": ["**/node_modules", "**/dist", "**/out"]
 }

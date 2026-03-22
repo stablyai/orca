@@ -10,6 +10,11 @@
       "source": "softaworks/agent-toolkit",
       "sourceType": "github",
       "computedHash": "8c24990b50f431a570f3ad1f60632dee154431861547103047f6ce80092ca734"
+    },
+    "typescript": {
+      "source": "pproenca/dot-skills",
+      "sourceType": "github",
+      "computedHash": "3475c8e2a2e556833213dc2d4dff19e09ef166375a203b256b0d7f04f7d5d424"
     }
   }
 }
