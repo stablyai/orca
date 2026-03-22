@@ -10,8 +10,8 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import TabBar from './TabBar'
-import TerminalPane from './TerminalPane'
+import TabBar from './tab-bar/TabBar'
+import TerminalPane from './terminal-pane/TerminalPane'
 
 const EditorPanel = lazy(() => import('./editor/EditorPanel'))
 
@@ -61,9 +61,13 @@ export default function Terminal(): React.JSX.Element | null {
   )
 
   const handleSaveDialogSave = useCallback(async () => {
-    if (!saveDialogFileId) return
+    if (!saveDialogFileId) {
+      return
+    }
     const file = useAppStore.getState().openFiles.find((f) => f.id === saveDialogFileId)
-    if (!file) return
+    if (!file) {
+      return
+    }
     // EditorPanel stores edit buffers internally — we need to read the current content from the editor.
     // The simplest approach: dispatch a custom event that the MonacoEditor listens for to trigger save,
     // then close. But that's complex. Instead, just save via the editor ref approach.
@@ -77,7 +81,9 @@ export default function Terminal(): React.JSX.Element | null {
   }, [saveDialogFileId])
 
   const handleSaveDialogDiscard = useCallback(() => {
-    if (!saveDialogFileId) return
+    if (!saveDialogFileId) {
+      return
+    }
     markFileDirty(saveDialogFileId, false)
     closeFile(saveDialogFileId)
     setSaveDialogFileId(null)
@@ -104,7 +110,9 @@ export default function Terminal(): React.JSX.Element | null {
 
   // Auto-create first tab when worktree activates
   useEffect(() => {
-    if (!workspaceSessionReady) return
+    if (!workspaceSessionReady) {
+      return
+    }
     if (!activeWorktreeId) {
       initialTabCreationGuardRef.current = null
       return
@@ -119,7 +127,9 @@ export default function Terminal(): React.JSX.Element | null {
 
     // In React StrictMode (dev), mount effects are intentionally invoked twice.
     // Track the worktree we already initialized so we only create one first tab.
-    if (initialTabCreationGuardRef.current === activeWorktreeId) return
+    if (initialTabCreationGuardRef.current === activeWorktreeId) {
+      return
+    }
     initialTabCreationGuardRef.current = activeWorktreeId
     createTab(activeWorktreeId)
   }, [workspaceSessionReady, activeWorktreeId, tabs.length, createTab])
@@ -127,13 +137,17 @@ export default function Terminal(): React.JSX.Element | null {
   const totalTabs = tabs.length + openFiles.length
 
   const handleNewTab = useCallback(() => {
-    if (!activeWorktreeId) return
+    if (!activeWorktreeId) {
+      return
+    }
     createTab(activeWorktreeId)
   }, [activeWorktreeId, createTab])
 
   const handleCloseTab = useCallback(
     (tabId: string) => {
-      if (!activeWorktreeId) return
+      if (!activeWorktreeId) {
+        return
+      }
       const currentTabs = useAppStore.getState().tabsByWorktree[activeWorktreeId] ?? []
       if (currentTabs.length <= 1) {
         // Last tab - deactivate worktree
@@ -146,7 +160,9 @@ export default function Terminal(): React.JSX.Element | null {
       if (tabId === useAppStore.getState().activeTabId) {
         const idx = currentTabs.findIndex((t) => t.id === tabId)
         const nextTab = currentTabs[idx + 1] ?? currentTabs[idx - 1]
-        if (nextTab) setActiveTab(nextTab.id)
+        if (nextTab) {
+          setActiveTab(nextTab.id)
+        }
       }
       closeTab(tabId)
     },
@@ -155,7 +171,9 @@ export default function Terminal(): React.JSX.Element | null {
 
   const handlePtyExit = useCallback(
     (tabId: string, ptyId: string) => {
-      if (consumeSuppressedPtyExit(ptyId)) return
+      if (consumeSuppressedPtyExit(ptyId)) {
+        return
+      }
       handleCloseTab(tabId)
     },
     [consumeSuppressedPtyExit, handleCloseTab]
@@ -163,7 +181,9 @@ export default function Terminal(): React.JSX.Element | null {
 
   const handleCloseOthers = useCallback(
     (tabId: string) => {
-      if (!activeWorktreeId) return
+      if (!activeWorktreeId) {
+        return
+      }
       const currentTabs = useAppStore.getState().tabsByWorktree[activeWorktreeId] ?? []
       setActiveTab(tabId)
       for (const tab of currentTabs) {
@@ -177,10 +197,14 @@ export default function Terminal(): React.JSX.Element | null {
 
   const handleCloseTabsToRight = useCallback(
     (tabId: string) => {
-      if (!activeWorktreeId) return
+      if (!activeWorktreeId) {
+        return
+      }
       const currentTabs = useAppStore.getState().tabsByWorktree[activeWorktreeId] ?? []
       const index = currentTabs.findIndex((t) => t.id === tabId)
-      if (index === -1) return
+      if (index === -1) {
+        return
+      }
       const rightTabs = currentTabs.slice(index + 1)
       for (const tab of rightTabs) {
         closeTab(tab.id)
@@ -213,7 +237,9 @@ export default function Terminal(): React.JSX.Element | null {
 
   // Keyboard shortcuts
   useEffect(() => {
-    if (!activeWorktreeId) return
+    if (!activeWorktreeId) {
+      return
+    }
 
     const onKeyDown = (e: KeyboardEvent): void => {
       // Cmd+T - new tab
@@ -262,7 +288,6 @@ export default function Terminal(): React.JSX.Element | null {
             state.setActiveTabType('editor')
           }
         }
-        return
       }
     }
     window.addEventListener('keydown', onKeyDown, { capture: true })
@@ -281,7 +306,9 @@ export default function Terminal(): React.JSX.Element | null {
     return () => window.removeEventListener('beforeunload', handler)
   }, [])
 
-  if (!activeWorktreeId) return null
+  if (!activeWorktreeId) {
+    return null
+  }
 
   return (
     <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
@@ -367,7 +394,9 @@ export default function Terminal(): React.JSX.Element | null {
       <Dialog
         open={saveDialogFileId !== null}
         onOpenChange={(open) => {
-          if (!open) handleSaveDialogCancel()
+          if (!open) {
+            handleSaveDialogCancel()
+          }
         }}
       >
         <DialogContent className="max-w-sm">

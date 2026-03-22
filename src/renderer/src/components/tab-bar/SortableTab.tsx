@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { X, Minimize2, Terminal as TerminalIcon } from 'lucide-react'
+import { X, Terminal as TerminalIcon, Minimize2 } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,9 +19,9 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import type { TerminalTab } from '../../../shared/types'
+import type { TerminalTab } from '../../../../shared/types'
 
-export type SortableTabProps = {
+type SortableTabProps = {
   tab: TerminalTab
   tabCount: number
   hasTabsToRight: boolean
@@ -36,7 +36,7 @@ export type SortableTabProps = {
   onToggleExpand: (tabId: string) => void
 }
 
-const TAB_COLORS = [
+export const TAB_COLORS = [
   { label: 'None', value: null },
   { label: 'Blue', value: '#3b82f6' },
   { label: 'Purple', value: '#a855f7' },
@@ -49,9 +49,9 @@ const TAB_COLORS = [
   { label: 'Gray', value: '#9ca3af' }
 ]
 
-const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
+export const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 
-export function SortableTab({
+export default function SortableTab({
   tab,
   tabCount,
   hasTabsToRight,

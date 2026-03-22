@@ -8,7 +8,7 @@ import { useIpcEvents } from './hooks/useIpcEvents'
 import Sidebar from './components/Sidebar'
 import Terminal from './components/Terminal'
 import Landing from './components/Landing'
-import Settings from './components/Settings'
+import Settings from './components/settings/Settings'
 import RightSidebar from './components/right-sidebar'
 
 function App(): React.JSX.Element {
@@ -100,7 +100,9 @@ function App(): React.JSX.Element {
   ])
 
   useEffect(() => {
-    if (!workspaceSessionReady) return
+    if (!workspaceSessionReady) {
+      return
+    }
 
     const timer = window.setTimeout(() => {
       void window.api.session.set({
@@ -123,7 +125,9 @@ function App(): React.JSX.Element {
   ])
 
   useEffect(() => {
-    if (!persistedUIReady) return
+    if (!persistedUIReady) {
+      return
+    }
 
     const timer = window.setTimeout(() => {
       void window.api.ui.set({
@@ -139,7 +143,9 @@ function App(): React.JSX.Element {
 
   // Apply theme to document
   useEffect(() => {
-    if (!settings) return
+    if (!settings) {
+      return
+    }
 
     const applyTheme = (dark: boolean): void => {
       document.documentElement.classList.toggle('dark', dark)
@@ -147,10 +153,10 @@ function App(): React.JSX.Element {
 
     if (settings.theme === 'dark') {
       applyTheme(true)
-      return
+      return undefined
     } else if (settings.theme === 'light') {
       applyTheme(false)
-      return
+      return undefined
     } else {
       // system
       const mq = window.matchMedia('(prefers-color-scheme: dark)')
@@ -178,7 +184,9 @@ function App(): React.JSX.Element {
   const showSidebar = activeView !== 'settings'
 
   const handleToggleExpand = (): void => {
-    if (!effectiveActiveTabId) return
+    if (!effectiveActiveTabId) {
+      return
+    }
     window.dispatchEvent(
       new CustomEvent(TOGGLE_TERMINAL_PANE_EXPAND_EVENT, {
         detail: { tabId: effectiveActiveTabId }
@@ -188,12 +196,18 @@ function App(): React.JSX.Element {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent): void => {
-      if (e.repeat) return
-      if (!e.metaKey) return
+      if (e.repeat) {
+        return
+      }
+      if (!e.metaKey) {
+        return
+      }
 
       // Cmd+N — create worktree
       if (!e.ctrlKey && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'n') {
-        if (repos.length === 0) return
+        if (repos.length === 0) {
+          return
+        }
         e.preventDefault()
         openModal('create-worktree')
         return
@@ -212,7 +226,6 @@ function App(): React.JSX.Element {
         e.preventDefault()
         setRightSidebarTab('source-control')
         setRightSidebarOpen(true)
-        return
       }
     }
 
