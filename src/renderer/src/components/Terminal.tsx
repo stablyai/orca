@@ -112,7 +112,6 @@ export default function Terminal(): React.JSX.Element | null {
       mountedWorktreeIdsRef.current.delete(id)
     }
   }
-  const tabBarRef = useRef<HTMLDivElement>(null)
   const initialTabCreationGuardRef = useRef<string | null>(null)
 
   // Auto-create first tab when worktree activates
@@ -152,19 +151,29 @@ export default function Terminal(): React.JSX.Element | null {
 
   const handleCloseTab = useCallback(
     (tabId: string) => {
-      if (!activeWorktreeId) {
-        return
-      }
-      const currentTabs = useAppStore.getState().tabsByWorktree[activeWorktreeId] ?? []
-      if (currentTabs.length <= 1) {
-        // Last tab - deactivate worktree
-        closeTab(tabId)
-        setActiveWorktree(null)
+      const state = useAppStore.getState()
+      const owningWorktreeEntry = Object.entries(state.tabsByWorktree).find(([, worktreeTabs]) =>
+        worktreeTabs.some((tab) => tab.id === tabId)
+      )
+      const owningWorktreeId = owningWorktreeEntry?.[0] ?? null
+
+      if (!owningWorktreeId) {
         return
       }
 
-      // If closing the active tab, switch to a neighbor
-      if (tabId === useAppStore.getState().activeTabId) {
+      const currentTabs = state.tabsByWorktree[owningWorktreeId] ?? []
+      if (currentTabs.length <= 1) {
+        // Last tab in this worktree. Only clear the active worktree if this
+        // tab belongs to the currently focused worktree.
+        closeTab(tabId)
+        if (state.activeWorktreeId === owningWorktreeId) {
+          setActiveWorktree(null)
+        }
+        return
+      }
+
+      // If closing the active tab in the active worktree, switch to a neighbor.
+      if (state.activeWorktreeId === owningWorktreeId && tabId === state.activeTabId) {
         const idx = currentTabs.findIndex((t) => t.id === tabId)
         const nextTab = currentTabs[idx + 1] ?? currentTabs[idx - 1]
         if (nextTab) {
@@ -173,7 +182,7 @@ export default function Terminal(): React.JSX.Element | null {
       }
       closeTab(tabId)
     },
-    [activeWorktreeId, closeTab, setActiveTab, setActiveWorktree]
+    [closeTab, setActiveTab, setActiveWorktree]
   )
 
   const handlePtyExit = useCallback(
@@ -314,10 +323,11 @@ export default function Terminal(): React.JSX.Element | null {
   }, [])
 
   return (
-    <div className={`flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden${activeWorktreeId ? '' : ' hidden'}`}>
+    <div
+      className={`flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden${activeWorktreeId ? '' : ' hidden'}`}
+    >
       {/* Animated tab bar container using CSS grid for smooth height animation */}
       <div
-        ref={tabBarRef}
         className="grid transition-[grid-template-rows] duration-200 ease-in-out"
         style={{ gridTemplateRows: activeWorktreeId && totalTabs >= 2 ? '1fr' : '0fr' }}
       >
