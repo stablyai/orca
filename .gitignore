@@ -13,6 +13,7 @@ release/
 
 # pnpm
 .pnpm-store/
+package-lock.json
 
 # Environment
 .env
