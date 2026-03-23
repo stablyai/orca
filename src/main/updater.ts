@@ -85,7 +85,15 @@ export function setupAutoUpdater(mainWindow: BrowserWindow): void {
   })
 
   autoUpdater.on('update-available', (info) => {
+    const wasUserInitiated = userInitiatedCheck
     userInitiatedCheck = false
+    // Guard against re-downloading the version we're already running.
+    // With allowPrerelease enabled, electron-updater may consider the
+    // current version as an "available" update (same-version match).
+    if (info.version === app.getVersion()) {
+      sendStatus({ state: 'not-available', userInitiated: wasUserInitiated || undefined })
+      return
+    }
     sendStatus({ state: 'available', version: info.version })
   })
 
@@ -100,6 +108,11 @@ export function setupAutoUpdater(mainWindow: BrowserWindow): void {
   })
 
   autoUpdater.on('update-downloaded', (info) => {
+    // Don't show the banner if the downloaded version is the one already running.
+    if (info.version === app.getVersion()) {
+      sendStatus({ state: 'not-available' })
+      return
+    }
     sendStatus({ state: 'downloaded', version: info.version })
   })
 
