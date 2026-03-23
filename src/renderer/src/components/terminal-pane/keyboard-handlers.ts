@@ -45,7 +45,8 @@ export function useTerminalKeyboardShortcuts({
         return
       }
 
-      // Cmd+F opens search
+      // Keep Cmd+F bound to the terminal search until the app has a real
+      // top-level find-in-page flow to fall back to.
       if (!e.shiftKey && e.key.toLowerCase() === 'f') {
         e.preventDefault()
         e.stopPropagation()

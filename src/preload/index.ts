@@ -206,6 +206,7 @@ const api = {
       ipcRenderer.invoke('git:discard', args)
   },
 
+
   ui: {
     get: (): Promise<unknown> => ipcRenderer.invoke('ui:get'),
     set: (args: Record<string, unknown>): Promise<void> => ipcRenderer.invoke('ui:set', args),

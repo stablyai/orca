@@ -12,6 +12,7 @@ export default function RightSidebar(): React.JSX.Element {
   const setRightSidebarWidth = useAppStore((s) => s.setRightSidebarWidth)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
+  const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
 
   // ─── Resize logic (handle on LEFT edge) ────────────
   const isResizing = useRef(false)
@@ -78,9 +79,13 @@ export default function RightSidebar(): React.JSX.Element {
         />
       </div>
 
-      {/* Tab content */}
+      {/* Tab content – key on worktreeId forces remount so stale file trees don't persist */}
       <div className="flex-1 min-h-0 overflow-hidden scrollbar-sleek-parent">
-        {rightSidebarTab === 'explorer' ? <FileExplorer /> : <SourceControl />}
+        {rightSidebarTab === 'explorer' ? (
+          <FileExplorer key={activeWorktreeId ?? 'none'} />
+        ) : (
+          <SourceControl key={activeWorktreeId ?? 'none'} />
+        )}
       </div>
 
       {/* Resize handle on LEFT side */}
