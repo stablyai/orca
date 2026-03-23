@@ -1,4 +1,4 @@
-import { ElectronAPI } from '@electron-toolkit/preload'
+import type { ElectronAPI } from '@electron-toolkit/preload'
 import type {
   Repo,
   Worktree,
@@ -15,7 +15,7 @@ import type {
   GitDiffResult
 } from '../../shared/types'
 
-interface ReposApi {
+type ReposApi = {
   list: () => Promise<Repo[]>
   add: (args: { path: string }) => Promise<Repo>
   remove: (args: { repoId: string }) => Promise<void>
@@ -30,7 +30,7 @@ interface ReposApi {
   onChanged: (callback: () => void) => () => void
 }
 
-interface WorktreesApi {
+type WorktreesApi = {
   list: (args: { repoId: string }) => Promise<Worktree[]>
   listAll: () => Promise<Worktree[]>
   create: (args: { repoId: string; name: string; baseBranch?: string }) => Promise<Worktree>
@@ -39,7 +39,7 @@ interface WorktreesApi {
   onChanged: (callback: (data: { repoId: string }) => void) => () => void
 }
 
-interface PtyApi {
+type PtyApi = {
   spawn: (opts: { cols: number; rows: number; cwd?: string }) => Promise<{ id: string }>
   write: (id: string, data: string) => void
   resize: (id: string, cols: number, rows: number) => void
@@ -48,28 +48,28 @@ interface PtyApi {
   onExit: (callback: (data: { id: string; code: number }) => void) => () => void
 }
 
-interface GhApi {
+type GhApi = {
   prForBranch: (args: { repoPath: string; branch: string }) => Promise<PRInfo | null>
   issue: (args: { repoPath: string; number: number }) => Promise<IssueInfo | null>
   listIssues: (args: { repoPath: string; limit?: number }) => Promise<IssueInfo[]>
 }
 
-interface SettingsApi {
+type SettingsApi = {
   get: () => Promise<GlobalSettings>
   set: (args: Partial<GlobalSettings>) => Promise<GlobalSettings>
   listFonts: () => Promise<string[]>
 }
 
-interface ShellApi {
+type ShellApi = {
   openPath: (path: string) => Promise<void>
   openExternal: (url: string) => Promise<void>
 }
 
-interface HooksApi {
+type HooksApi = {
   check: (args: { repoId: string }) => Promise<{ hasHooks: boolean; hooks: OrcaHooks | null }>
 }
 
-interface CacheApi {
+type CacheApi = {
   getGitHub: () => Promise<{
     pr: Record<string, { data: PRInfo | null; fetchedAt: number }>
     issue: Record<string, { data: IssueInfo | null; fetchedAt: number }>
@@ -82,19 +82,20 @@ interface CacheApi {
   }) => Promise<void>
 }
 
-interface SessionApi {
+type SessionApi = {
   get: () => Promise<WorkspaceSessionState>
   set: (args: WorkspaceSessionState) => Promise<void>
 }
 
-interface UpdaterApi {
+type UpdaterApi = {
+  getVersion: () => Promise<string>
   getStatus: () => Promise<UpdateStatus>
   check: () => Promise<void>
   quitAndInstall: () => Promise<void>
   onStatus: (callback: (status: UpdateStatus) => void) => () => void
 }
 
-interface UIApi {
+type UIApi = {
   get: () => Promise<PersistedUIState>
   set: (args: Partial<PersistedUIState>) => Promise<void>
   onOpenSettings: (callback: () => void) => () => void
@@ -104,7 +105,7 @@ interface UIApi {
   setZoomLevel: (level: number) => void
 }
 
-interface FsApi {
+type FsApi = {
   readDir: (args: { dirPath: string }) => Promise<DirEntry[]>
   readFile: (args: { filePath: string }) => Promise<{ content: string; isBinary: boolean }>
   writeFile: (args: { filePath: string; content: string }) => Promise<void>
@@ -113,7 +114,7 @@ interface FsApi {
   }) => Promise<{ size: number; isDirectory: boolean; mtime: number }>
 }
 
-interface GitApi {
+type GitApi = {
   status: (args: { worktreePath: string }) => Promise<GitStatusEntry[]>
   diff: (args: {
     worktreePath: string
@@ -125,7 +126,7 @@ interface GitApi {
   discard: (args: { worktreePath: string; filePath: string }) => Promise<void>
 }
 
-interface Api {
+type Api = {
   repos: ReposApi
   worktrees: WorktreesApi
   pty: PtyApi
@@ -142,6 +143,7 @@ interface Api {
 }
 
 declare global {
+  // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface
   interface Window {
     electron: ElectronAPI
     api: Api
