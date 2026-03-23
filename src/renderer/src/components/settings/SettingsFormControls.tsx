@@ -149,6 +149,33 @@ export function NumberField({
   onChange,
   suffix
 }: NumberFieldProps): React.JSX.Element {
+  const [draft, setDraft] = useState(Number.isFinite(value) ? String(value) : '')
+  const [prevValue, setPrevValue] = useState(value)
+
+  // Sync draft when the external value changes (e.g. from another source)
+  if (value !== prevValue) {
+    setPrevValue(value)
+    setDraft(Number.isFinite(value) ? String(value) : '')
+  }
+
+  const commit = (): void => {
+    const trimmed = draft.trim()
+    if (trimmed === '') {
+      // Empty input — reset to current value rather than committing 0
+      setDraft(Number.isFinite(value) ? String(value) : '')
+      return
+    }
+    const next = Number(trimmed)
+    if (Number.isFinite(next)) {
+      const clamped = Math.min(max, Math.max(min, next))
+      onChange(clamped)
+      setDraft(String(clamped))
+    } else {
+      // Reset to current value if input is invalid
+      setDraft(Number.isFinite(value) ? String(value) : '')
+    }
+  }
+
   return (
     <div className="space-y-2">
       <div className="space-y-1">
@@ -161,13 +188,13 @@ export function NumberField({
           min={min}
           max={max}
           step={step}
-          value={Number.isFinite(value) ? String(value) : ''}
-          onChange={(e) => {
-            const next = Number(e.target.value)
-            if (!Number.isFinite(next)) {
-              return
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              commit()
             }
-            onChange(next)
           }}
           className="number-input-clean w-28 tabular-nums"
         />
