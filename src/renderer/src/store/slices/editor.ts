@@ -2,7 +2,7 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GitStatusEntry } from '../../../../shared/types'
 
-export interface OpenFile {
+export type OpenFile = {
   id: string // use filePath as unique key
   filePath: string // absolute path
   relativePath: string // relative to worktree root
@@ -15,7 +15,7 @@ export interface OpenFile {
 
 export type RightSidebarTab = 'explorer' | 'source-control'
 
-export interface EditorSlice {
+export type EditorSlice = {
   // Right sidebar
   rightSidebarOpen: boolean
   rightSidebarWidth: number
@@ -32,6 +32,8 @@ export interface EditorSlice {
   // Open files / editor tabs
   openFiles: OpenFile[]
   activeFileId: string | null
+  activeFileIdByWorktree: Record<string, string | null> // worktreeId -> last active file
+  activeTabTypeByWorktree: Record<string, 'terminal' | 'editor'> // worktreeId -> last active tab type
   activeTabType: 'terminal' | 'editor'
   setActiveTabType: (type: 'terminal' | 'editor') => void
   openFile: (file: Omit<OpenFile, 'id' | 'isDirty'>) => void
@@ -80,57 +82,138 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   // Open files
   openFiles: [],
   activeFileId: null,
+  activeFileIdByWorktree: {},
+  activeTabTypeByWorktree: {},
   activeTabType: 'terminal',
-  setActiveTabType: (type) => set({ activeTabType: type }),
+  setActiveTabType: (type) =>
+    set((s) => {
+      const worktreeId = s.activeWorktreeId
+      return {
+        activeTabType: type,
+        activeTabTypeByWorktree: worktreeId
+          ? { ...s.activeTabTypeByWorktree, [worktreeId]: type }
+          : s.activeTabTypeByWorktree
+      }
+    }),
 
   openFile: (file) =>
     set((s) => {
       const id = file.filePath
       const existing = s.openFiles.find((f) => f.id === id)
+      const worktreeId = file.worktreeId
       if (existing) {
-        // If it's already open, just activate it (and update mode if needed)
         if (existing.mode === file.mode && existing.diffStaged === file.diffStaged) {
-          return { activeFileId: id, activeTabType: 'editor' }
+          return {
+            activeFileId: id,
+            activeTabType: 'editor',
+            activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
+            activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+          }
         }
-        // Update the existing file entry
         return {
           openFiles: s.openFiles.map((f) =>
             f.id === id ? { ...f, mode: file.mode, diffStaged: file.diffStaged } : f
           ),
           activeFileId: id,
-          activeTabType: 'editor'
+          activeTabType: 'editor',
+          activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
+          activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
         }
       }
       return {
         openFiles: [...s.openFiles, { ...file, id, isDirty: false }],
         activeFileId: id,
-        activeTabType: 'editor'
+        activeTabType: 'editor',
+        activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
+        activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
       }
     }),
 
   closeFile: (fileId) =>
     set((s) => {
+      const closedFile = s.openFiles.find((f) => f.id === fileId)
       const idx = s.openFiles.findIndex((f) => f.id === fileId)
       const newFiles = s.openFiles.filter((f) => f.id !== fileId)
       let newActiveId = s.activeFileId
+      const newActiveFileIdByWorktree = { ...s.activeFileIdByWorktree }
+
       if (s.activeFileId === fileId) {
-        // Activate adjacent tab
-        if (newFiles.length === 0) {
+        // Find next file within the same worktree
+        const worktreeId = closedFile?.worktreeId
+        const worktreeFiles = worktreeId
+          ? newFiles.filter((f) => f.worktreeId === worktreeId)
+          : newFiles
+        if (worktreeFiles.length === 0) {
           newActiveId = null
-        } else if (idx >= newFiles.length) {
-          newActiveId = newFiles[newFiles.length - 1].id
         } else {
-          newActiveId = newFiles[idx].id
+          // Pick adjacent file from same worktree
+          const closedWorktreeIdx = worktreeId
+            ? s.openFiles
+                .filter((f) => f.worktreeId === worktreeId)
+                .findIndex((f) => f.id === fileId)
+            : idx
+          newActiveId =
+            closedWorktreeIdx >= worktreeFiles.length
+              ? worktreeFiles.at(-1)!.id
+              : worktreeFiles[closedWorktreeIdx].id
+        }
+        if (worktreeId) {
+          newActiveFileIdByWorktree[worktreeId] = newActiveId
         }
       }
-      // When last editor file is closed, switch back to terminal
-      const newActiveTabType = newFiles.length === 0 ? 'terminal' : s.activeTabType
-      return { openFiles: newFiles, activeFileId: newActiveId, activeTabType: newActiveTabType }
+
+      // When last editor file for current worktree is closed, switch back to terminal
+      const activeWorktreeId = s.activeWorktreeId
+      const remainingForWorktree = activeWorktreeId
+        ? newFiles.filter((f) => f.worktreeId === activeWorktreeId)
+        : newFiles
+      const newActiveTabType = remainingForWorktree.length === 0 ? 'terminal' : s.activeTabType
+      const newActiveTabTypeByWorktree = { ...s.activeTabTypeByWorktree }
+      if (activeWorktreeId && remainingForWorktree.length === 0) {
+        newActiveTabTypeByWorktree[activeWorktreeId] = 'terminal'
+      }
+
+      return {
+        openFiles: newFiles,
+        activeFileId: newActiveId,
+        activeTabType: newActiveTabType,
+        activeFileIdByWorktree: newActiveFileIdByWorktree,
+        activeTabTypeByWorktree: newActiveTabTypeByWorktree
+      }
     }),
 
-  closeAllFiles: () => set({ openFiles: [], activeFileId: null, activeTabType: 'terminal' }),
+  closeAllFiles: () =>
+    set((s) => {
+      const activeWorktreeId = s.activeWorktreeId
+      if (!activeWorktreeId) {
+        return { openFiles: [], activeFileId: null, activeTabType: 'terminal' }
+      }
+      // Only close files for the current worktree
+      const newFiles = s.openFiles.filter((f) => f.worktreeId !== activeWorktreeId)
+      const newActiveFileIdByWorktree = { ...s.activeFileIdByWorktree }
+      delete newActiveFileIdByWorktree[activeWorktreeId]
+      const newActiveTabTypeByWorktree = { ...s.activeTabTypeByWorktree }
+      newActiveTabTypeByWorktree[activeWorktreeId] = 'terminal'
+      return {
+        openFiles: newFiles,
+        activeFileId: null,
+        activeTabType: 'terminal',
+        activeFileIdByWorktree: newActiveFileIdByWorktree,
+        activeTabTypeByWorktree: newActiveTabTypeByWorktree
+      }
+    }),
 
-  setActiveFile: (fileId) => set({ activeFileId: fileId }),
+  setActiveFile: (fileId) =>
+    set((s) => {
+      const file = s.openFiles.find((f) => f.id === fileId)
+      const worktreeId = file?.worktreeId
+      return {
+        activeFileId: fileId,
+        activeFileIdByWorktree: worktreeId
+          ? { ...s.activeFileIdByWorktree, [worktreeId]: fileId }
+          : s.activeFileIdByWorktree
+      }
+    }),
 
   markFileDirty: (fileId, dirty) =>
     set((s) => ({
@@ -139,11 +222,15 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
 
   openDiff: (worktreeId, filePath, relativePath, language, staged) =>
     set((s) => {
-      // Use a unique ID that includes staging state to allow both staged and unstaged diffs
       const id = `${filePath}${staged ? '::staged' : ''}`
       const existing = s.openFiles.find((f) => f.id === id)
       if (existing) {
-        return { activeFileId: id, activeTabType: 'editor' }
+        return {
+          activeFileId: id,
+          activeTabType: 'editor',
+          activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
+          activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+        }
       }
       const newFile: OpenFile = {
         id,
@@ -158,7 +245,9 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       return {
         openFiles: [...s.openFiles, newFile],
         activeFileId: id,
-        activeTabType: 'editor'
+        activeTabType: 'editor',
+        activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
+        activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
       }
     }),
 
@@ -167,7 +256,12 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const id = `${worktreeId}::all-diffs`
       const existing = s.openFiles.find((f) => f.id === id)
       if (existing) {
-        return { activeFileId: id, activeTabType: 'editor' }
+        return {
+          activeFileId: id,
+          activeTabType: 'editor',
+          activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
+          activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+        }
       }
       const newFile: OpenFile = {
         id,
@@ -182,7 +276,9 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       return {
         openFiles: [...s.openFiles, newFile],
         activeFileId: id,
-        activeTabType: 'editor'
+        activeTabType: 'editor',
+        activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
+        activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
       }
     }),
 

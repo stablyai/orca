@@ -96,6 +96,16 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         }
         const nextDeleteState = { ...s.deleteStateByWorktreeId }
         delete nextDeleteState[worktreeId]
+        // Clean up editor files belonging to this worktree
+        const newOpenFiles = s.openFiles.filter((f) => f.worktreeId !== worktreeId)
+        const nextActiveFileIdByWorktree = { ...s.activeFileIdByWorktree }
+        delete nextActiveFileIdByWorktree[worktreeId]
+        const nextActiveTabTypeByWorktree = { ...s.activeTabTypeByWorktree }
+        delete nextActiveTabTypeByWorktree[worktreeId]
+        // If the active file belonged to the removed worktree, clear it
+        const activeFileCleared = s.activeFileId
+          ? s.openFiles.some((f) => f.id === s.activeFileId && f.worktreeId === worktreeId)
+          : false
         return {
           worktreesByRepo: next,
           tabsByWorktree: nextTabs,
@@ -103,7 +113,12 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           terminalLayoutsByTabId: nextLayouts,
           deleteStateByWorktreeId: nextDeleteState,
           activeWorktreeId: s.activeWorktreeId === worktreeId ? null : s.activeWorktreeId,
-          activeTabId: s.activeTabId && tabIds.has(s.activeTabId) ? null : s.activeTabId
+          activeTabId: s.activeTabId && tabIds.has(s.activeTabId) ? null : s.activeTabId,
+          openFiles: newOpenFiles,
+          activeFileIdByWorktree: nextActiveFileIdByWorktree,
+          activeTabTypeByWorktree: nextActiveTabTypeByWorktree,
+          activeFileId: activeFileCleared ? null : s.activeFileId,
+          activeTabType: activeFileCleared ? 'terminal' : s.activeTabType
         }
       })
       return { ok: true as const }
@@ -189,8 +204,31 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
 
       const worktree = findWorktreeById(s.worktreesByRepo, worktreeId)
       shouldClearUnread = Boolean(worktree?.isUnread)
+
+      // Restore per-worktree editor state
+      const restoredFileId = s.activeFileIdByWorktree[worktreeId] ?? null
+      const restoredTabType = s.activeTabTypeByWorktree[worktreeId] ?? 'terminal'
+      // Verify the restored file still exists in openFiles
+      const fileStillOpen = restoredFileId
+        ? s.openFiles.some((f) => f.id === restoredFileId)
+        : false
+
+      // If restored file is gone, fall back to another open file for this worktree
+      let activeFileId: string | null
+      let activeTabType: 'terminal' | 'editor'
+      if (fileStillOpen) {
+        activeFileId = restoredFileId
+        activeTabType = restoredTabType
+      } else {
+        const fallbackFile = s.openFiles.find((f) => f.worktreeId === worktreeId)
+        activeFileId = fallbackFile?.id ?? null
+        activeTabType = fallbackFile ? 'editor' : 'terminal'
+      }
+
       return {
         activeWorktreeId: worktreeId,
+        activeFileId,
+        activeTabType,
         worktreesByRepo: shouldClearUnread
           ? applyWorktreeUpdates(s.worktreesByRepo, worktreeId, { isUnread: false })
           : s.worktreesByRepo

@@ -44,6 +44,11 @@ export default function Terminal(): React.JSX.Element | null {
   const tabs = activeWorktreeId ? (tabsByWorktree[activeWorktreeId] ?? []) : []
   const allWorktrees = Object.values(worktreesByRepo).flat()
 
+  // Filter editor files to only show those belonging to the active worktree
+  const worktreeFiles = activeWorktreeId
+    ? openFiles.filter((f) => f.worktreeId === activeWorktreeId)
+    : []
+
   // Save confirmation dialog state
   const [saveDialogFileId, setSaveDialogFileId] = useState<string | null>(null)
   const saveDialogFile = saveDialogFileId ? openFiles.find((f) => f.id === saveDialogFileId) : null
@@ -140,7 +145,7 @@ export default function Terminal(): React.JSX.Element | null {
     createTab(activeWorktreeId)
   }, [workspaceSessionReady, activeWorktreeId, tabs.length, createTab])
 
-  const totalTabs = tabs.length + openFiles.length
+  const totalTabs = tabs.length + worktreeFiles.length
 
   const handleNewTab = useCallback(() => {
     if (!activeWorktreeId) {
@@ -281,7 +286,9 @@ export default function Terminal(): React.JSX.Element | null {
       if (e.metaKey && e.shiftKey && (e.key === ']' || e.key === '[') && !e.repeat) {
         const state = useAppStore.getState()
         const currentTerminalTabs = state.tabsByWorktree[activeWorktreeId] ?? []
-        const currentEditorFiles = state.openFiles
+        const currentEditorFiles = activeWorktreeId
+          ? state.openFiles.filter((f) => f.worktreeId === activeWorktreeId)
+          : []
 
         // Build unified tab list: terminal tabs then editor tabs
         const allTabIds: { type: 'terminal' | 'editor'; id: string }[] = [
@@ -347,7 +354,7 @@ export default function Terminal(): React.JSX.Element | null {
               onSetTabColor={setTabColor}
               expandedPaneByTabId={expandedPaneByTabId}
               onTogglePaneExpand={handleTogglePaneExpand}
-              editorFiles={openFiles}
+              editorFiles={worktreeFiles}
               activeFileId={activeFileId}
               activeTabType={activeTabType}
               onActivateFile={(fileId) => {
@@ -363,7 +370,7 @@ export default function Terminal(): React.JSX.Element | null {
 
       {/* Terminal panes container - hidden when editor tab active */}
       <div
-        className={`relative flex-1 min-h-0 overflow-hidden ${activeTabType === 'editor' && openFiles.length > 0 ? 'hidden' : ''}`}
+        className={`relative flex-1 min-h-0 overflow-hidden ${activeTabType === 'editor' && worktreeFiles.length > 0 ? 'hidden' : ''}`}
       >
         {allWorktrees
           .filter((wt) => mountedWorktreeIdsRef.current.has(wt.id))
@@ -393,7 +400,7 @@ export default function Terminal(): React.JSX.Element | null {
       </div>
 
       {/* Editor panel - shown when editor tab is active */}
-      {activeWorktreeId && activeTabType === 'editor' && openFiles.length > 0 && (
+      {activeWorktreeId && activeTabType === 'editor' && worktreeFiles.length > 0 && (
         <Suspense
           fallback={
             <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
