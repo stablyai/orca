@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useCallback } from 'react'
+import React, { useEffect, useMemo, useCallback } from 'react'
 import { useAppStore } from '@/store'
 import { Badge } from '@/components/ui/badge'
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card'
@@ -50,7 +50,7 @@ function checksLabel(status: CheckStatus): string {
 // ── Stable empty array for tabs fallback ─────────────────────────
 const EMPTY_TABS: TerminalTab[] = []
 
-interface WorktreeCardProps {
+type WorktreeCardProps = {
   worktree: Worktree
   repo: Repo | undefined
   isActive: boolean
@@ -103,7 +103,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
 
   // Derive status
   const status: Status = useMemo(() => {
-    if (!hasTerminals) return 'inactive'
+    if (!hasTerminals) {
+      return 'inactive'
+    }
     const liveTabs = tabs.filter((tab) => tab.ptyId)
     if (liveTabs.some((tab) => detectAgentStatusFromTitle(tab.title) === 'permission')) {
       return 'permission'
@@ -114,32 +116,37 @@ const WorktreeCard = React.memo(function WorktreeCard({
     return liveTabs.length > 0 ? 'active' : 'inactive'
   }, [hasTerminals, tabs])
 
-  // Fetch PR data on mount – the store's isFresh() check prevents redundant API calls
+  // Fetch PR data on mount. The store handles freshness checks, and
+  // activity-based refresh is triggered by setActiveWorktree + visibilitychange.
   useEffect(() => {
     if (repo && !worktree.isBare && prCacheKey) {
       fetchPRForBranch(repo.path, branch)
     }
   }, [repo, worktree.isBare, fetchPRForBranch, branch, prCacheKey])
 
-  // Fetch issue data (debounced via ref guard)
-  const issueFetchedRef = useRef<string | null>(null)
+  // Fetch issue data on mount + background poll as safety net.
+  // Primary refresh comes from setActiveWorktree + visibilitychange.
   useEffect(() => {
-    if (
-      repo &&
-      worktree.linkedIssue &&
-      issue === undefined &&
-      issueCacheKey &&
-      issueCacheKey !== issueFetchedRef.current
-    ) {
-      issueFetchedRef.current = issueCacheKey
-      fetchIssue(repo.path, worktree.linkedIssue)
+    if (!repo || !worktree.linkedIssue || !issueCacheKey) {
+      return
     }
-  }, [repo, worktree.linkedIssue, issue, fetchIssue, issueCacheKey])
+
+    fetchIssue(repo.path, worktree.linkedIssue)
+
+    // Background poll as fallback (activity triggers handle the fast path)
+    const interval = setInterval(() => {
+      fetchIssue(repo.path, worktree.linkedIssue!)
+    }, 5 * 60_000) // 5 minutes
+
+    return () => clearInterval(interval)
+  }, [repo, worktree.linkedIssue, fetchIssue, issueCacheKey])
 
   // Stable click handler – ignore clicks that are really text selections
   const handleClick = useCallback(() => {
     const selection = window.getSelection()
-    if (selection && selection.toString().length > 0) return
+    if (selection && selection.toString().length > 0) {
+      return
+    }
     setActiveWorktree(worktree.id)
   }, [worktree.id, setActiveWorktree])
 

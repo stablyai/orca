@@ -2,13 +2,13 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { Worktree, WorktreeMeta } from '../../../../shared/types'
 
-export interface WorktreeDeleteState {
+export type WorktreeDeleteState = {
   isDeleting: boolean
   error: string | null
   canForceDelete: boolean
 }
 
-export interface WorktreeSlice {
+export type WorktreeSlice = {
   worktreesByRepo: Record<string, Worktree[]>
   activeWorktreeId: string | null
   deleteStateByWorktreeId: Record<string, WorktreeDeleteState>
@@ -126,7 +126,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
 
   clearWorktreeDeleteState: (worktreeId) => {
     set((s) => {
-      if (!s.deleteStateByWorktreeId[worktreeId]) return {}
+      if (!s.deleteStateByWorktreeId[worktreeId]) {
+        return {}
+      }
       const next = { ...s.deleteStateByWorktreeId }
       delete next[worktreeId]
       return { deleteStateByWorktreeId: next }
@@ -149,19 +151,25 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
 
   markWorktreeUnreadFromBell: (worktreeId) => {
     const activeWorktreeId = get().activeWorktreeId
-    if (activeWorktreeId === worktreeId) return
+    if (activeWorktreeId === worktreeId) {
+      return
+    }
 
     let shouldPersist = false
     set((s) => {
       const worktree = findWorktreeById(s.worktreesByRepo, worktreeId)
-      if (!worktree || worktree.isUnread) return {}
+      if (!worktree || worktree.isUnread) {
+        return {}
+      }
       shouldPersist = true
       return {
         worktreesByRepo: applyWorktreeUpdates(s.worktreesByRepo, worktreeId, { isUnread: true })
       }
     })
 
-    if (!shouldPersist) return
+    if (!shouldPersist) {
+      return
+    }
 
     void window.api.worktrees
       .updateMeta({ worktreeId, updates: { isUnread: true } })
@@ -174,7 +182,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   setActiveWorktree: (worktreeId) => {
     let shouldClearUnread = false
     set((s) => {
-      if (!worktreeId) return { activeWorktreeId: null }
+      if (!worktreeId) {
+        return { activeWorktreeId: null }
+      }
 
       const worktree = findWorktreeById(s.worktreesByRepo, worktreeId)
       shouldClearUnread = Boolean(worktree?.isUnread)
@@ -186,7 +196,14 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       }
     })
 
-    if (!worktreeId || !shouldClearUnread) return
+    // Refresh GitHub data (PR + issue status) for the activated worktree
+    if (worktreeId) {
+      get().refreshGitHubForWorktree(worktreeId)
+    }
+
+    if (!worktreeId || !shouldClearUnread) {
+      return
+    }
 
     void window.api.worktrees
       .updateMeta({ worktreeId, updates: { isUnread: false } })
@@ -205,7 +222,9 @@ function findWorktreeById(
 ): Worktree | undefined {
   for (const worktrees of Object.values(worktreesByRepo)) {
     const match = worktrees.find((worktree) => worktree.id === worktreeId)
-    if (match) return match
+    if (match) {
+      return match
+    }
   }
 
   return undefined
@@ -222,7 +241,9 @@ function applyWorktreeUpdates(
   for (const [repoId, worktrees] of Object.entries(worktreesByRepo)) {
     let repoChanged = false
     const nextWorktrees = worktrees.map((worktree) => {
-      if (worktree.id !== worktreeId) return worktree
+      if (worktree.id !== worktreeId) {
+        return worktree
+      }
 
       const updatedWorktree = { ...worktree, ...updates }
       repoChanged = true

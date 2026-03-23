@@ -26,6 +26,7 @@ function App(): React.JSX.Element {
   const fetchAllWorktrees = useAppStore((s) => s.fetchAllWorktrees)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
   const initGitHubCache = useAppStore((s) => s.initGitHubCache)
+  const refreshAllGitHub = useAppStore((s) => s.refreshAllGitHub)
   const hydrateWorkspaceSession = useAppStore((s) => s.hydrateWorkspaceSession)
   const hydratePersistedUI = useAppStore((s) => s.hydratePersistedUI)
   const openModal = useAppStore((s) => s.openModal)
@@ -166,6 +167,17 @@ function App(): React.JSX.Element {
       return () => mq.removeEventListener('change', handler)
     }
   }, [settings?.theme])
+
+  // Refresh GitHub data (PR/issue status) when window regains focus
+  useEffect(() => {
+    const handler = (): void => {
+      if (document.visibilityState === 'visible') {
+        refreshAllGitHub()
+      }
+    }
+    document.addEventListener('visibilitychange', handler)
+    return () => document.removeEventListener('visibilitychange', handler)
+  }, [refreshAllGitHub])
 
   const tabs = activeWorktreeId ? (tabsByWorktree[activeWorktreeId] ?? []) : []
   const hasTabBar = tabs.length >= 2
