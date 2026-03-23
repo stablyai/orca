@@ -100,6 +100,7 @@ type UIApi = {
   set: (args: Partial<PersistedUIState>) => Promise<void>
   onOpenSettings: (callback: () => void) => () => void
   onTerminalZoom: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void
+  readClipboardText: () => Promise<string>
   onFileDrop: (callback: (data: { path: string }) => void) => () => void
   getZoomLevel: () => number
   setZoomLevel: (level: number) => void

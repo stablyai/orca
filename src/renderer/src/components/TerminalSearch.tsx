@@ -72,6 +72,7 @@ export default function TerminalSearch({
 
   return (
     <div
+      data-terminal-search-root
       className="absolute top-2 right-2 z-50 flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-800/95 px-2 py-1 shadow-lg backdrop-blur-sm"
       style={{ width: 300 }}
       onKeyDown={handleKeyDown}

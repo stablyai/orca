@@ -436,6 +436,49 @@ export default function TerminalPane({
     })
   }, [isActive])
 
+  // Intercept paste events on the terminal to bypass Chromium's native
+  // clipboard pipeline. Chromium holds NSPasteboard references during format
+  // conversion, which can cause concurrent clipboard reads by CLI tools
+  // (e.g. Codex checking for images) to fail intermittently. Reading via
+  // Electron's clipboard module in the main process avoids this contention.
+  useEffect(() => {
+    if (!isActive) {
+      return
+    }
+    const container = containerRef.current
+    if (!container) {
+      return
+    }
+    const onPaste = (e: ClipboardEvent): void => {
+      const target = e.target
+      if (target instanceof Element && target.closest('[data-terminal-search-root]')) {
+        return
+      }
+      e.preventDefault()
+      e.stopPropagation()
+      const manager = managerRef.current
+      if (!manager) {
+        return
+      }
+      const pane = manager.getActivePane() ?? manager.getPanes()[0]
+      if (!pane) {
+        return
+      }
+      void window.api.ui
+        .readClipboardText()
+        .then((text) => {
+          if (text) {
+            pane.terminal.paste(text)
+          }
+        })
+        .catch(() => {
+          /* ignore clipboard read failures */
+        })
+    }
+    container.addEventListener('paste', onPaste, { capture: true })
+    return () => container.removeEventListener('paste', onPaste, { capture: true })
+  }, [isActive])
+
   const resolveMenuPane = () => {
     const manager = managerRef.current
     if (!manager) {
@@ -467,9 +510,9 @@ export default function TerminalPane({
     if (!pane) {
       return
     }
-    const text = await navigator.clipboard.readText()
+    const text = await window.api.ui.readClipboardText()
     if (text) {
-      paneTransportsRef.current.get(pane.id)?.sendInput(text)
+      pane.terminal.paste(text)
     }
   }
 

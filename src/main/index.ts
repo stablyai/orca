@@ -1,4 +1,13 @@
-import { app, shell, BrowserWindow, Menu, nativeImage, ipcMain, nativeTheme } from 'electron'
+import {
+  app,
+  shell,
+  BrowserWindow,
+  Menu,
+  nativeImage,
+  ipcMain,
+  nativeTheme,
+  clipboard
+} from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -264,6 +273,10 @@ app.whenReady().then(() => {
   warmSystemFontFamilies()
   setupAutoUpdater(mainWindow)
 
+  // Clipboard: read text via Electron's native clipboard module so the
+  // renderer can bypass Chromium's clipboard pipeline (which holds
+  // NSPasteboard references and causes contention with CLI tools like Codex).
+  ipcMain.handle('clipboard:readText', () => clipboard.readText())
 
   // Updater IPC
   ipcMain.handle('updater:getStatus', () => getUpdateStatus())
