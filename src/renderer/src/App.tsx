@@ -289,7 +289,7 @@ function App(): React.JSX.Element {
         <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
           <div
             className={
-              activeView === 'settings'
+              activeView === 'settings' || !activeWorktreeId
                 ? 'hidden flex-1 min-w-0 min-h-0'
                 : 'flex flex-1 min-w-0 min-h-0'
             }
