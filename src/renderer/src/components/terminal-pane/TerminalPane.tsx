@@ -192,7 +192,6 @@ export default function TerminalPane({
 
   const contextMenu = useTerminalPaneContextMenu({
     managerRef,
-    paneTransportsRef,
     toggleExpandPane
   })
 

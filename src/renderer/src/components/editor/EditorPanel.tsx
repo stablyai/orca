@@ -16,7 +16,7 @@ type DiffContent = {
   modifiedContent: string
 }
 
-export default function EditorPanel(): React.JSX.Element {
+export default function EditorPanel(): React.JSX.Element | null {
   const openFiles = useAppStore((s) => s.openFiles)
   const activeFileId = useAppStore((s) => s.activeFileId)
   const markFileDirty = useAppStore((s) => s.markFileDirty)

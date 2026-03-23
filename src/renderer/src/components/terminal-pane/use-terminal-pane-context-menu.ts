@@ -1,12 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { PtyTransport } from './pty-transport'
-
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 
 type UseTerminalPaneContextMenuDeps = {
   managerRef: React.RefObject<PaneManager | null>
-  paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
   toggleExpandPane: (paneId: number) => void
 }
 
@@ -29,7 +26,6 @@ type TerminalMenuState = {
 
 export function useTerminalPaneContextMenu({
   managerRef,
-  paneTransportsRef,
   toggleExpandPane
 }: UseTerminalPaneContextMenuDeps): TerminalMenuState {
   const contextPaneIdRef = useRef<number | null>(null)
