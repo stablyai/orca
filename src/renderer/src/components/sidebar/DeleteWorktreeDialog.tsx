@@ -69,14 +69,14 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
         <DialogHeader>
           <DialogTitle className="text-sm">Delete Worktree</DialogTitle>
           <DialogDescription className="text-xs">
-            Remove <span className="font-medium text-foreground">{worktree?.displayName}</span> from
+            Remove <span className="break-all font-medium text-foreground">{worktree?.displayName}</span> from
             git and delete its working tree folder.
           </DialogDescription>
         </DialogHeader>
 
         {worktree && (
           <div className="rounded-md border border-border/70 bg-muted/35 px-3 py-2 text-xs">
-            <div className="font-medium text-foreground">{worktree.displayName}</div>
+            <div className="break-all font-medium text-foreground">{worktree.displayName}</div>
             <div className="mt-1 break-all font-mono text-muted-foreground">{worktree.path}</div>
           </div>
         )}
@@ -85,7 +85,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
           <div className="rounded-md border border-destructive/40 bg-destructive/8 px-3 py-2 text-xs text-destructive">
             <div className="flex items-start gap-2">
               <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-              <span>{deleteError}</span>
+              <div className="min-w-0 flex-1 whitespace-pre-wrap break-all">{deleteError}</div>
             </div>
           </div>
         )}
