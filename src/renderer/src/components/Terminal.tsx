@@ -105,6 +105,13 @@ export default function Terminal(): React.JSX.Element | null {
   if (activeWorktreeId) {
     mountedWorktreeIdsRef.current.add(activeWorktreeId)
   }
+  // Prune IDs of worktrees that no longer exist (deleted/removed)
+  const allWorktreeIds = new Set(allWorktrees.map((wt) => wt.id))
+  for (const id of mountedWorktreeIdsRef.current) {
+    if (!allWorktreeIds.has(id)) {
+      mountedWorktreeIdsRef.current.delete(id)
+    }
+  }
   const tabBarRef = useRef<HTMLDivElement>(null)
   const initialTabCreationGuardRef = useRef<string | null>(null)
 
@@ -306,43 +313,41 @@ export default function Terminal(): React.JSX.Element | null {
     return () => window.removeEventListener('beforeunload', handler)
   }, [])
 
-  if (!activeWorktreeId) {
-    return null
-  }
-
   return (
-    <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
+    <div className={`flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden${activeWorktreeId ? '' : ' hidden'}`}>
       {/* Animated tab bar container using CSS grid for smooth height animation */}
       <div
         ref={tabBarRef}
         className="grid transition-[grid-template-rows] duration-200 ease-in-out"
-        style={{ gridTemplateRows: totalTabs >= 2 ? '1fr' : '0fr' }}
+        style={{ gridTemplateRows: activeWorktreeId && totalTabs >= 2 ? '1fr' : '0fr' }}
       >
         <div className="overflow-hidden">
-          <TabBar
-            tabs={tabs}
-            activeTabId={activeTabId}
-            worktreeId={activeWorktreeId}
-            onActivate={handleActivateTab}
-            onClose={handleCloseTab}
-            onCloseOthers={handleCloseOthers}
-            onCloseToRight={handleCloseTabsToRight}
-            onReorder={reorderTabs}
-            onNewTab={handleNewTab}
-            onSetCustomTitle={setTabCustomTitle}
-            onSetTabColor={setTabColor}
-            expandedPaneByTabId={expandedPaneByTabId}
-            onTogglePaneExpand={handleTogglePaneExpand}
-            editorFiles={openFiles}
-            activeFileId={activeFileId}
-            activeTabType={activeTabType}
-            onActivateFile={(fileId) => {
-              setActiveFile(fileId)
-              setActiveTabType('editor')
-            }}
-            onCloseFile={handleCloseFile}
-            onCloseAllFiles={closeAllFiles}
-          />
+          {activeWorktreeId && (
+            <TabBar
+              tabs={tabs}
+              activeTabId={activeTabId}
+              worktreeId={activeWorktreeId}
+              onActivate={handleActivateTab}
+              onClose={handleCloseTab}
+              onCloseOthers={handleCloseOthers}
+              onCloseToRight={handleCloseTabsToRight}
+              onReorder={reorderTabs}
+              onNewTab={handleNewTab}
+              onSetCustomTitle={setTabCustomTitle}
+              onSetTabColor={setTabColor}
+              expandedPaneByTabId={expandedPaneByTabId}
+              onTogglePaneExpand={handleTogglePaneExpand}
+              editorFiles={openFiles}
+              activeFileId={activeFileId}
+              activeTabType={activeTabType}
+              onActivateFile={(fileId) => {
+                setActiveFile(fileId)
+                setActiveTabType('editor')
+              }}
+              onCloseFile={handleCloseFile}
+              onCloseAllFiles={closeAllFiles}
+            />
+          )}
         </div>
       </div>
 
@@ -378,7 +383,7 @@ export default function Terminal(): React.JSX.Element | null {
       </div>
 
       {/* Editor panel - shown when editor tab is active */}
-      {activeTabType === 'editor' && openFiles.length > 0 && (
+      {activeWorktreeId && activeTabType === 'editor' && openFiles.length > 0 && (
         <Suspense
           fallback={
             <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
