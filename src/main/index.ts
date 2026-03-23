@@ -4,6 +4,36 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import devIcon from '../../resources/icon-dev.png?asset'
 
+// Packaged Electron apps on macOS/Linux don't inherit the user's shell PATH,
+// so CLI tools installed via Homebrew / nix / snap / etc. (e.g. `gh`) can't be
+// found. Augment PATH once at startup with common binary directories.
+// Windows GUI apps inherit the full system PATH, so no fix is needed there.
+if (app.isPackaged && process.platform !== 'win32') {
+  const home = process.env.HOME ?? ''
+  const extraPaths = [
+    '/opt/homebrew/bin', // macOS ARM Homebrew
+    '/opt/homebrew/sbin',
+    '/usr/local/bin', // macOS Intel Homebrew / common
+    '/usr/local/sbin',
+    '/snap/bin', // Ubuntu snap packages
+    '/home/linuxbrew/.linuxbrew/bin', // Linuxbrew
+    '/nix/var/nix/profiles/default/bin' // nix (system)
+  ]
+  if (home) {
+    extraPaths.push(
+      join(home, '.local/bin'), // Linux user-local (pipx, cargo, etc.)
+      join(home, '.nix-profile/bin') // nix (user)
+    )
+  }
+  const sep = ':'
+  const currentPath = process.env.PATH ?? ''
+  const existing = new Set(currentPath.split(sep))
+  const missing = extraPaths.filter((p) => !existing.has(p))
+  if (missing.length) {
+    process.env.PATH = [...missing, ...currentPath.split(sep).filter(Boolean)].join(sep)
+  }
+}
+
 import { Store } from './persistence'
 import { registerRepoHandlers } from './ipc/repos'
 import { registerWorktreeHandlers } from './ipc/worktrees'
@@ -87,9 +117,13 @@ function createWindow(): BrowserWindow {
 
   // Handle zoom shortcuts reliably via before-input-event
   mainWindow.webContents.on('before-input-event', (_event, input) => {
-    if (input.type !== 'keyDown') return
+    if (input.type !== 'keyDown') {
+      return
+    }
     const mod = process.platform === 'darwin' ? input.meta : input.control
-    if (!mod || input.alt) return
+    if (!mod || input.alt) {
+      return
+    }
     if (input.key === '=' || input.key === '+') {
       _event.preventDefault()
       mainWindow.webContents.send('terminal:zoom', 'in')
