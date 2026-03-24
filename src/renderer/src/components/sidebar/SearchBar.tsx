@@ -4,13 +4,13 @@ import { useAppStore } from '@/store'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-  SelectSeparator
-} from '@/components/ui/select'
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import RepoDotLabel from '@/components/repo/RepoDotLabel'
@@ -20,11 +20,41 @@ const SearchBar = React.memo(function SearchBar() {
   const setSearchQuery = useAppStore((s) => s.setSearchQuery)
   const showActiveOnly = useAppStore((s) => s.showActiveOnly)
   const setShowActiveOnly = useAppStore((s) => s.setShowActiveOnly)
-  const filterRepoId = useAppStore((s) => s.filterRepoId)
-  const setFilterRepoId = useAppStore((s) => s.setFilterRepoId)
+  const filterRepoIds = useAppStore((s) => s.filterRepoIds)
+  const setFilterRepoIds = useAppStore((s) => s.setFilterRepoIds)
   const repos = useAppStore((s) => s.repos)
   const addRepo = useAppStore((s) => s.addRepo)
-  const selectedRepo = repos.find((r) => r.id === filterRepoId)
+  const selectedRepos = repos.filter((r) => filterRepoIds.includes(r.id))
+
+  const handleToggleRepo = useCallback(
+    (repoId: string) => {
+      setFilterRepoIds(
+        filterRepoIds.includes(repoId)
+          ? filterRepoIds.filter((id) => id !== repoId)
+          : [...filterRepoIds, repoId]
+      )
+    },
+    [filterRepoIds, setFilterRepoIds]
+  )
+
+  const repoTriggerLabel =
+    selectedRepos.length === 0 ? (
+      <span className="flex items-center gap-1">
+        <FolderTree className="size-3 text-muted-foreground" />
+        <span>All</span>
+      </span>
+    ) : selectedRepos.length === 1 ? (
+      <RepoDotLabel
+        name={selectedRepos[0].displayName}
+        color={selectedRepos[0].badgeColor}
+        dotClassName="size-1"
+      />
+    ) : (
+      <span className="flex items-center gap-1">
+        <FolderTree className="size-3 text-muted-foreground" />
+        <span>{selectedRepos.length} repos</span>
+      </span>
+    )
 
   const handleClear = useCallback(() => setSearchQuery(''), [setSearchQuery])
   const handleToggleActive = useCallback(
@@ -70,51 +100,49 @@ const SearchBar = React.memo(function SearchBar() {
             </TooltipContent>
           </Tooltip>
           {repos.length > 1 && (
-            <Select
-              value={filterRepoId ?? '__all__'}
-              onValueChange={(v) => {
-                if (v === '__add__') {
-                  addRepo()
-                } else {
-                  setFilterRepoId(v === '__all__' ? null : v)
-                }
-              }}
-            >
-              <SelectTrigger
-                size="sm"
-                className="h-5 w-auto gap-1 border-none bg-transparent px-1 text-[10px] shadow-none focus-visible:ring-0"
-              >
-                <SelectValue>
-                  {selectedRepo ? (
-                    <RepoDotLabel
-                      name={selectedRepo.displayName}
-                      color={selectedRepo.badgeColor}
-                      dotClassName="size-1"
-                    />
-                  ) : (
-                    <span className="flex items-center gap-1">
-                      <FolderTree className="size-3 text-muted-foreground" />
-                      <span>All</span>
-                    </span>
-                  )}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent position="popper" align="end">
-                <SelectItem value="__all__">All repos</SelectItem>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  type="button"
+                  aria-label="Filter repositories"
+                  className="h-5 w-auto gap-1 border-none bg-transparent px-1 text-[10px] font-normal shadow-none hover:bg-accent/60 focus-visible:ring-0"
+                >
+                  {repoTriggerLabel}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onSelect={() => {
+                    setFilterRepoIds([])
+                  }}
+                >
+                  All repos
+                </DropdownMenuItem>
                 {repos.map((r) => (
-                  <SelectItem key={r.id} value={r.id}>
+                  <DropdownMenuCheckboxItem
+                    key={r.id}
+                    checked={filterRepoIds.includes(r.id)}
+                    onCheckedChange={() => handleToggleRepo(r.id)}
+                    onSelect={(event) => event.preventDefault()}
+                  >
                     <RepoDotLabel name={r.displayName} color={r.badgeColor} />
-                  </SelectItem>
+                  </DropdownMenuCheckboxItem>
                 ))}
-                <SelectSeparator />
-                <SelectItem value="__add__">
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onSelect={() => {
+                    addRepo()
+                  }}
+                >
                   <span className="flex items-center gap-1.5 text-muted-foreground">
                     <FolderPlus className="size-3.5" />
                     Add repo
                   </span>
-                </SelectItem>
-              </SelectContent>
-            </Select>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
       </div>

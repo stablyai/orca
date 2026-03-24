@@ -27,7 +27,7 @@ const WorktreeList = React.memo(function WorktreeList() {
   const groupBy = useAppStore((s) => s.groupBy)
   const sortBy = useAppStore((s) => s.sortBy)
   const showActiveOnly = useAppStore((s) => s.showActiveOnly)
-  const filterRepoId = useAppStore((s) => s.filterRepoId)
+  const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const openModal = useAppStore((s) => s.openModal)
   const pendingRevealWorktreeId = useAppStore((s) => s.pendingRevealWorktreeId)
   const clearPendingRevealWorktreeId = useAppStore((s) => s.clearPendingRevealWorktreeId)
@@ -56,8 +56,9 @@ const WorktreeList = React.memo(function WorktreeList() {
     all = all.filter((w) => !w.isArchived)
 
     // Filter by repo
-    if (filterRepoId) {
-      all = all.filter((w) => w.repoId === filterRepoId)
+    if (filterRepoIds.length > 0) {
+      const selectedRepoIds = new Set(filterRepoIds)
+      all = all.filter((w) => selectedRepoIds.has(w.repoId))
     }
 
     // Filter by search
@@ -98,7 +99,7 @@ const WorktreeList = React.memo(function WorktreeList() {
     })
 
     return all
-  }, [worktreesByRepo, filterRepoId, searchQuery, showActiveOnly, sortBy, repoMap, tabsByWorktree])
+  }, [worktreesByRepo, filterRepoIds, searchQuery, showActiveOnly, sortBy, repoMap, tabsByWorktree])
 
   // Collapsed group state
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
@@ -260,16 +261,16 @@ const WorktreeList = React.memo(function WorktreeList() {
     [openModal]
   )
 
-  const hasFilters = !!(searchQuery || showActiveOnly || filterRepoId)
+  const hasFilters = !!(searchQuery || showActiveOnly || filterRepoIds.length)
   const setSearchQuery = useAppStore((s) => s.setSearchQuery)
   const setShowActiveOnly = useAppStore((s) => s.setShowActiveOnly)
-  const setFilterRepoId = useAppStore((s) => s.setFilterRepoId)
+  const setFilterRepoIds = useAppStore((s) => s.setFilterRepoIds)
 
   const clearFilters = useCallback(() => {
     setSearchQuery('')
     setShowActiveOnly(false)
-    setFilterRepoId(null)
-  }, [setSearchQuery, setShowActiveOnly, setFilterRepoId])
+    setFilterRepoIds([])
+  }, [setSearchQuery, setShowActiveOnly, setFilterRepoIds])
 
   if (worktrees.length === 0) {
     return (

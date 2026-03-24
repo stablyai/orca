@@ -38,7 +38,7 @@ export const useSearchQuery = () => useAppStore((s) => s.searchQuery)
 export const useGroupBy = () => useAppStore((s) => s.groupBy)
 export const useSortBy = () => useAppStore((s) => s.sortBy)
 export const useShowActiveOnly = () => useAppStore((s) => s.showActiveOnly)
-export const useFilterRepoId = () => useAppStore((s) => s.filterRepoId)
+export const useFilterRepoIds = () => useAppStore((s) => s.filterRepoIds)
 
 // ─── GitHub ─────────────────────────────────────────────────────────
 export const usePRCache = () => useAppStore((s) => s.prCache)

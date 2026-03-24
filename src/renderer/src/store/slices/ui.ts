@@ -22,8 +22,8 @@ export type UISlice = {
   setSortBy: (s: UISlice['sortBy']) => void
   showActiveOnly: boolean
   setShowActiveOnly: (v: boolean) => void
-  filterRepoId: string | null
-  setFilterRepoId: (id: string | null) => void
+  filterRepoIds: string[]
+  setFilterRepoIds: (ids: string[]) => void
   pendingRevealWorktreeId: string | null
   revealWorktreeInSidebar: (worktreeId: string) => void
   clearPendingRevealWorktreeId: () => void
@@ -62,8 +62,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set) => (
   showActiveOnly: false,
   setShowActiveOnly: (v) => set({ showActiveOnly: v }),
 
-  filterRepoId: null,
-  setFilterRepoId: (id) => set({ filterRepoId: id }),
+  filterRepoIds: [],
+  setFilterRepoIds: (ids) => set({ filterRepoIds: ids }),
 
   pendingRevealWorktreeId: null,
   revealWorktreeInSidebar: (worktreeId) => set({ pendingRevealWorktreeId: worktreeId }),
