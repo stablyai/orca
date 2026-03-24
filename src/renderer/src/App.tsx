@@ -43,7 +43,6 @@ function App(): React.JSX.Element {
   const setRightSidebarOpen = useAppStore((s) => s.setRightSidebarOpen)
   const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
 
-
   // Subscribe to IPC push events
   useIpcEvents()
 
@@ -234,6 +233,14 @@ function App(): React.JSX.Element {
         return
       }
 
+      // Cmd+Shift+F — toggle right sidebar / search tab
+      if (e.shiftKey && !e.ctrlKey && !e.altKey && e.key.toLowerCase() === 'f') {
+        e.preventDefault()
+        setRightSidebarTab('search')
+        setRightSidebarOpen(true)
+        return
+      }
+
       // Cmd+Shift+G — toggle right sidebar / source control tab
       if (e.shiftKey && !e.ctrlKey && !e.altKey && e.key.toLowerCase() === 'g') {
         e.preventDefault()
@@ -245,7 +252,6 @@ function App(): React.JSX.Element {
     window.addEventListener('keydown', onKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
   }, [openModal, repos.length, setRightSidebarTab, setRightSidebarOpen])
-
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden">

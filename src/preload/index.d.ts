@@ -12,7 +12,9 @@ import type {
   UpdateStatus,
   DirEntry,
   GitStatusEntry,
-  GitDiffResult
+  GitDiffResult,
+  SearchOptions,
+  SearchResult
 } from '../../shared/types'
 
 type ReposApi = {
@@ -116,6 +118,7 @@ type FsApi = {
   stat: (args: {
     filePath: string
   }) => Promise<{ size: number; isDirectory: boolean; mtime: number }>
+  search: (args: SearchOptions) => Promise<SearchResult>
 }
 
 type GitApi = {

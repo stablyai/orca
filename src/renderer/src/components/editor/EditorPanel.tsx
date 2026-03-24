@@ -20,6 +20,7 @@ export default function EditorPanel(): React.JSX.Element | null {
   const openFiles = useAppStore((s) => s.openFiles)
   const activeFileId = useAppStore((s) => s.activeFileId)
   const markFileDirty = useAppStore((s) => s.markFileDirty)
+  const pendingEditorReveal = useAppStore((s) => s.pendingEditorReveal)
 
   const activeFile = openFiles.find((f) => f.id === activeFileId) ?? null
 
@@ -218,6 +219,9 @@ export default function EditorPanel(): React.JSX.Element | null {
                 language={resolvedLanguage}
                 onContentChange={handleContentChange}
                 onSave={handleSave}
+                revealLine={pendingEditorReveal?.line}
+                revealColumn={pendingEditorReveal?.column}
+                revealMatchLength={pendingEditorReveal?.matchLength}
               />
             )
           })()

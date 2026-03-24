@@ -1,6 +1,6 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { GitStatusEntry } from '../../../../shared/types'
+import type { GitStatusEntry, SearchResult } from '../../../../shared/types'
 
 export type OpenFile = {
   id: string // use filePath as unique key
@@ -13,17 +13,20 @@ export type OpenFile = {
   diffStaged?: boolean
 }
 
-export type RightSidebarTab = 'explorer' | 'source-control'
+export type RightSidebarTab = 'explorer' | 'search' | 'source-control'
+export type ActivityBarPosition = 'top' | 'side'
 
 export type EditorSlice = {
   // Right sidebar
   rightSidebarOpen: boolean
   rightSidebarWidth: number
   rightSidebarTab: RightSidebarTab
+  activityBarPosition: ActivityBarPosition
   toggleRightSidebar: () => void
   setRightSidebarOpen: (open: boolean) => void
   setRightSidebarWidth: (width: number) => void
   setRightSidebarTab: (tab: RightSidebarTab) => void
+  setActivityBarPosition: (position: ActivityBarPosition) => void
 
   // File explorer state
   expandedDirs: Record<string, Set<string>> // worktreeId -> set of expanded dir paths
@@ -53,6 +56,33 @@ export type EditorSlice = {
   // Git status cache
   gitStatusByWorktree: Record<string, GitStatusEntry[]>
   setGitStatus: (worktreeId: string, entries: GitStatusEntry[]) => void
+
+  // File search state
+  fileSearchQuery: string
+  fileSearchCaseSensitive: boolean
+  fileSearchWholeWord: boolean
+  fileSearchUseRegex: boolean
+  fileSearchIncludePattern: string
+  fileSearchExcludePattern: string
+  fileSearchResults: SearchResult | null
+  fileSearchLoading: boolean
+  fileSearchCollapsedFiles: Set<string>
+  setFileSearchQuery: (query: string) => void
+  setFileSearchCaseSensitive: (v: boolean) => void
+  setFileSearchWholeWord: (v: boolean) => void
+  setFileSearchUseRegex: (v: boolean) => void
+  setFileSearchIncludePattern: (v: string) => void
+  setFileSearchExcludePattern: (v: string) => void
+  setFileSearchResults: (results: SearchResult | null) => void
+  setFileSearchLoading: (loading: boolean) => void
+  toggleFileSearchCollapsedFile: (filePath: string) => void
+  clearFileSearch: () => void
+
+  // Editor navigation (for search result → go-to-line)
+  pendingEditorReveal: { line: number; column: number; matchLength: number } | null
+  setPendingEditorReveal: (
+    reveal: { line: number; column: number; matchLength: number } | null
+  ) => void
 }
 
 export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (set) => ({
@@ -60,10 +90,12 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   rightSidebarOpen: false,
   rightSidebarWidth: 280,
   rightSidebarTab: 'explorer',
+  activityBarPosition: 'top',
   toggleRightSidebar: () => set((s) => ({ rightSidebarOpen: !s.rightSidebarOpen })),
   setRightSidebarOpen: (open) => set({ rightSidebarOpen: open }),
   setRightSidebarWidth: (width) => set({ rightSidebarWidth: width }),
   setRightSidebarTab: (tab) => set({ rightSidebarTab: tab }),
+  setActivityBarPosition: (position) => set({ activityBarPosition: position }),
 
   // File explorer
   expandedDirs: {},
@@ -178,7 +210,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         activeFileId: newActiveId,
         activeTabType: newActiveTabType,
         activeFileIdByWorktree: newActiveFileIdByWorktree,
-        activeTabTypeByWorktree: newActiveTabTypeByWorktree
+        activeTabTypeByWorktree: newActiveTabTypeByWorktree,
+        pendingEditorReveal: null
       }
     }),
 
@@ -287,5 +320,45 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   setGitStatus: (worktreeId, entries) =>
     set((s) => ({
       gitStatusByWorktree: { ...s.gitStatusByWorktree, [worktreeId]: entries }
-    }))
+    })),
+
+  // File search
+  fileSearchQuery: '',
+  fileSearchCaseSensitive: false,
+  fileSearchWholeWord: false,
+  fileSearchUseRegex: false,
+  fileSearchIncludePattern: '',
+  fileSearchExcludePattern: '',
+  fileSearchResults: null,
+  fileSearchLoading: false,
+  fileSearchCollapsedFiles: new Set<string>(),
+  setFileSearchQuery: (query) => set({ fileSearchQuery: query }),
+  setFileSearchCaseSensitive: (v) => set({ fileSearchCaseSensitive: v }),
+  setFileSearchWholeWord: (v) => set({ fileSearchWholeWord: v }),
+  setFileSearchUseRegex: (v) => set({ fileSearchUseRegex: v }),
+  setFileSearchIncludePattern: (v) => set({ fileSearchIncludePattern: v }),
+  setFileSearchExcludePattern: (v) => set({ fileSearchExcludePattern: v }),
+  setFileSearchResults: (results) => set({ fileSearchResults: results }),
+  setFileSearchLoading: (loading) => set({ fileSearchLoading: loading }),
+  toggleFileSearchCollapsedFile: (filePath) =>
+    set((s) => {
+      const next = new Set(s.fileSearchCollapsedFiles)
+      if (next.has(filePath)) {
+        next.delete(filePath)
+      } else {
+        next.add(filePath)
+      }
+      return { fileSearchCollapsedFiles: next }
+    }),
+  clearFileSearch: () =>
+    set({
+      fileSearchQuery: '',
+      fileSearchResults: null,
+      fileSearchLoading: false,
+      fileSearchCollapsedFiles: new Set<string>()
+    }),
+
+  // Editor navigation
+  pendingEditorReveal: null,
+  setPendingEditorReveal: (reveal) => set({ pendingEditorReveal: reveal })
 })

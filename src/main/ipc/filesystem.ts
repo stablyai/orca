@@ -1,8 +1,16 @@
 import { ipcMain } from 'electron'
 import { readdir, readFile, writeFile, stat } from 'fs/promises'
-import { resolve } from 'path'
+import { resolve, relative } from 'path'
+import { execFile } from 'child_process'
 import type { Store } from '../persistence'
-import type { DirEntry, GitStatusEntry, GitDiffResult } from '../../shared/types'
+import type {
+  DirEntry,
+  GitStatusEntry,
+  GitDiffResult,
+  SearchOptions,
+  SearchResult,
+  SearchFileResult
+} from '../../shared/types'
 import { getStatus, getDiff, stageFile, unstageFile, discardChanges } from '../git/status'
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
@@ -17,7 +25,7 @@ function isPathAllowed(targetPath: string, store: Store): boolean {
   for (const repo of repos) {
     // Allow paths within the repo itself
     if (
-      resolvedTarget.startsWith(resolve(repo.path) + '/') ||
+      resolvedTarget.startsWith(`${resolve(repo.path)}/`) ||
       resolvedTarget === resolve(repo.path)
     ) {
       return true
@@ -29,7 +37,7 @@ function isPathAllowed(targetPath: string, store: Store): boolean {
   if (settings.workspaceDir) {
     const resolvedWorkspace = resolve(settings.workspaceDir)
     if (
-      resolvedTarget.startsWith(resolvedWorkspace + '/') ||
+      resolvedTarget.startsWith(`${resolvedWorkspace}/`) ||
       resolvedTarget === resolvedWorkspace
     ) {
       return true
@@ -45,7 +53,9 @@ function isPathAllowed(targetPath: string, store: Store): boolean {
 function isBinaryBuffer(buffer: Buffer): boolean {
   const len = Math.min(buffer.length, 8192)
   for (let i = 0; i < len; i++) {
-    if (buffer[i] === 0) return true
+    if (buffer[i] === 0) {
+      return true
+    }
   }
   return false
 }
@@ -66,7 +76,9 @@ export function registerFilesystemHandlers(store: Store): void {
       }))
       .sort((a, b) => {
         // Directories first, then alphabetical
-        if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1
+        if (a.isDirectory !== b.isDirectory) {
+          return a.isDirectory ? -1 : 1
+        }
         return a.name.localeCompare(b.name)
       })
   })
@@ -123,6 +135,118 @@ export function registerFilesystemHandlers(store: Store): void {
       }
     }
   )
+
+  // ─── Search ────────────────────────────────────────────
+  ipcMain.handle('fs:search', async (_event, args: SearchOptions): Promise<SearchResult> => {
+    if (!isPathAllowed(args.rootPath, store)) {
+      throw new Error('Access denied: path is outside allowed directories')
+    }
+
+    const maxResults = args.maxResults ?? 10000
+
+    return new Promise((resolvePromise) => {
+      const rgArgs: string[] = [
+        '--json',
+        '--max-count',
+        '200', // max matches per file
+        '--max-filesize',
+        '1M'
+      ]
+
+      if (!args.caseSensitive) {
+        rgArgs.push('--ignore-case')
+      }
+      if (args.wholeWord) {
+        rgArgs.push('--word-regexp')
+      }
+      if (!args.useRegex) {
+        rgArgs.push('--fixed-strings')
+      }
+      if (args.includePattern) {
+        for (const pat of args.includePattern
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)) {
+          rgArgs.push('--glob', pat)
+        }
+      }
+      if (args.excludePattern) {
+        for (const pat of args.excludePattern
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)) {
+          rgArgs.push('--glob', `!${pat}`)
+        }
+      }
+
+      rgArgs.push('--', args.query, args.rootPath)
+
+      const fileMap = new Map<string, SearchFileResult>()
+      let totalMatches = 0
+      let truncated = false
+
+      const child = execFile('rg', rgArgs, { maxBuffer: 50 * 1024 * 1024 }, (error, stdout) => {
+        clearTimeout(killTimeout)
+
+        // rg exit code 1 = no matches, exit code 2 = error.
+        // If there's no stdout and a real error, return empty.
+        if (error && !stdout) {
+          resolvePromise({ files: [], totalMatches: 0, truncated: false })
+          return
+        }
+
+        const lines = stdout.split('\n').filter(Boolean)
+        for (const line of lines) {
+          if (totalMatches >= maxResults) {
+            truncated = true
+            break
+          }
+
+          try {
+            const msg = JSON.parse(line)
+            if (msg.type !== 'match') {
+              continue
+            }
+
+            const data = msg.data
+            const absPath: string = data.path.text
+            const relPath = relative(args.rootPath, absPath)
+
+            let fileResult = fileMap.get(absPath)
+            if (!fileResult) {
+              fileResult = { filePath: absPath, relativePath: relPath, matches: [] }
+              fileMap.set(absPath, fileResult)
+            }
+
+            for (const sub of data.submatches) {
+              fileResult.matches.push({
+                line: data.line_number,
+                column: sub.start + 1,
+                matchLength: sub.end - sub.start,
+                lineContent: data.lines.text.replace(/\n$/, '')
+              })
+              totalMatches++
+              if (totalMatches >= maxResults) {
+                truncated = true
+                break
+              }
+            }
+          } catch {
+            // skip malformed JSON lines
+          }
+        }
+
+        resolvePromise({
+          files: Array.from(fileMap.values()),
+          totalMatches,
+          truncated
+        })
+      })
+
+      // Kill after 30s if still running
+      const killTimeout = setTimeout(() => child.kill(), 30000)
+    })
+  })
 
   // ─── Git operations ─────────────────────────────────────
   ipcMain.handle(
