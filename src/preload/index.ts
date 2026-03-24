@@ -20,6 +20,11 @@ document.addEventListener(
 document.addEventListener(
   'drop',
   (e) => {
+    // Let in-app drags (e.g. file explorer → terminal) through to React handlers
+    if (e.dataTransfer?.types.includes('text/x-orca-file-path')) {
+      return
+    }
+
     e.preventDefault()
     e.stopPropagation()
     const files = e.dataTransfer?.files
