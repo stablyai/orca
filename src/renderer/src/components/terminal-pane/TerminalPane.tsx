@@ -10,6 +10,7 @@ import {
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import TerminalSearch from '@/components/TerminalSearch'
 import type { PtyTransport } from './pty-transport'
+import { shellEscapePath } from './pane-helpers'
 import { EMPTY_LAYOUT, serializeTerminalLayout } from './layout-serialization'
 import { createExpandCollapseActions } from './expand-collapse'
 import { useTerminalKeyboardShortcuts, useTerminalFontZoom } from './keyboard-handlers'
@@ -218,6 +219,33 @@ export default function TerminalPane({
         className="absolute inset-0 min-h-0 min-w-0"
         style={terminalContainerStyle}
         onContextMenuCapture={contextMenu.onContextMenuCapture}
+        onDragOver={(e) => {
+          if (e.dataTransfer.types.includes('text/x-orca-file-path')) {
+            e.preventDefault()
+            e.dataTransfer.dropEffect = 'copy'
+          }
+        }}
+        onDrop={(e) => {
+          const filePath = e.dataTransfer.getData('text/x-orca-file-path')
+          if (!filePath) {
+            return
+          }
+          e.preventDefault()
+          e.stopPropagation()
+          const manager = managerRef.current
+          if (!manager) {
+            return
+          }
+          const pane = manager.getActivePane() ?? manager.getPanes()[0]
+          if (!pane) {
+            return
+          }
+          const transport = paneTransportsRef.current.get(pane.id)
+          if (!transport) {
+            return
+          }
+          transport.sendInput(shellEscapePath(filePath))
+        }}
       />
       {activePane?.container &&
         createPortal(

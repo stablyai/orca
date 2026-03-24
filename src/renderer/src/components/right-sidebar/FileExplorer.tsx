@@ -209,6 +209,11 @@ export default function FileExplorer(): React.JSX.Element {
                   isActive && !node.isDirectory && 'bg-accent text-accent-foreground'
                 )}
                 style={{ paddingLeft: `${node.depth * 16 + 8}px` }}
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData('text/x-orca-file-path', node.path)
+                  e.dataTransfer.effectAllowed = 'copy'
+                }}
                 onClick={() => handleClick(node)}
               >
                 {node.isDirectory ? (
