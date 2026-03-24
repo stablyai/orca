@@ -40,7 +40,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({ worktree, 
   }, [worktree.path])
 
   const handleCopyPath = useCallback(() => {
-    navigator.clipboard.writeText(worktree.path)
+    window.api.ui.writeClipboardText(worktree.path)
   }, [worktree.path])
 
   const handleToggleRead = useCallback(() => {

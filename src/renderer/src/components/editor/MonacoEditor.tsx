@@ -187,7 +187,7 @@ export default function MonacoEditor({
         <DropdownMenuContent sideOffset={0} align="start">
           <DropdownMenuItem
             onSelect={() => {
-              navigator.clipboard.writeText(`${filePath}#L${gutterMenuLine}`)
+              window.api.ui.writeClipboardText(`${filePath}#L${gutterMenuLine}`)
             }}
           >
             <Copy className="w-3.5 h-3.5 mr-1.5" />
@@ -195,7 +195,7 @@ export default function MonacoEditor({
           </DropdownMenuItem>
           <DropdownMenuItem
             onSelect={() => {
-              navigator.clipboard.writeText(`${relativePath}#L${gutterMenuLine}`)
+              window.api.ui.writeClipboardText(`${relativePath}#L${gutterMenuLine}`)
             }}
           >
             <Copy className="w-3.5 h-3.5 mr-1.5" />

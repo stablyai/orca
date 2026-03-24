@@ -115,7 +115,7 @@ export default function EditorFileTab({
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onSelect={() => {
-              navigator.clipboard.writeText(file.filePath)
+              window.api.ui.writeClipboardText(file.filePath)
             }}
           >
             <Copy className="w-3.5 h-3.5 mr-1.5" />
@@ -123,7 +123,7 @@ export default function EditorFileTab({
           </DropdownMenuItem>
           <DropdownMenuItem
             onSelect={() => {
-              navigator.clipboard.writeText(file.relativePath)
+              window.api.ui.writeClipboardText(file.relativePath)
             }}
           >
             <Copy className="w-3.5 h-3.5 mr-1.5" />
@@ -134,7 +134,7 @@ export default function EditorFileTab({
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onSelect={() => {
-                  navigator.clipboard.writeText(`${file.filePath}#L${cursorLine}`)
+                  window.api.ui.writeClipboardText(`${file.filePath}#L${cursorLine}`)
                 }}
               >
                 <MapPin className="w-3.5 h-3.5 mr-1.5" />
@@ -142,7 +142,7 @@ export default function EditorFileTab({
               </DropdownMenuItem>
               <DropdownMenuItem
                 onSelect={() => {
-                  navigator.clipboard.writeText(`${file.relativePath}#L${cursorLine}`)
+                  window.api.ui.writeClipboardText(`${file.relativePath}#L${cursorLine}`)
                 }}
               >
                 <MapPin className="w-3.5 h-3.5 mr-1.5" />

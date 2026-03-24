@@ -67,7 +67,7 @@ export function useTerminalPaneContextMenu({
     }
     const selection = pane.terminal.getSelection()
     if (selection) {
-      await navigator.clipboard.writeText(selection)
+      await window.api.ui.writeClipboardText(selection)
     }
   }
 

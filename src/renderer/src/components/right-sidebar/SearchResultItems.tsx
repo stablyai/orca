@@ -81,7 +81,9 @@ export function FileResultItem({
           </button>
         </ContextMenuTrigger>
         <ContextMenuContent>
-          <ContextMenuItem onClick={() => navigator.clipboard.writeText(fileResult.relativePath)}>
+          <ContextMenuItem
+            onClick={() => window.api.ui.writeClipboardText(fileResult.relativePath)}
+          >
             <Copy className="size-3.5" />
             Copy Path
           </ContextMenuItem>
@@ -151,7 +153,7 @@ export function MatchItem({
       </ContextMenuTrigger>
       <ContextMenuContent>
         <ContextMenuItem
-          onClick={() => navigator.clipboard.writeText(`${relativePath}#L${match.line}`)}
+          onClick={() => window.api.ui.writeClipboardText(`${relativePath}#L${match.line}`)}
         >
           <Copy className="size-3.5" />
           Copy Line Path

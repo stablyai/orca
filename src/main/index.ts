@@ -272,10 +272,27 @@ app.whenReady().then(() => {
   warmSystemFontFamilies()
   setupAutoUpdater(mainWindow, { onBeforeQuit: () => store?.flush() })
 
-  // Clipboard: read text via Electron's native clipboard module so the
-  // renderer can bypass Chromium's clipboard pipeline (which holds
-  // NSPasteboard references and causes contention with CLI tools like Codex).
+  // Clipboard: route all clipboard operations through Electron's native
+  // clipboard module so the renderer bypasses Chromium's clipboard pipeline.
+  // Chromium holds NSPasteboard references during format conversion and
+  // change-detection polling, which causes concurrent clipboard reads by CLI
+  // tools (e.g. Codex checking for images on Enter) to fail intermittently.
   ipcMain.handle('clipboard:readText', () => clipboard.readText())
+  ipcMain.handle('clipboard:writeText', (_event, text: string) => clipboard.writeText(text))
+
+  // Deny clipboard-read permission to the renderer so Chromium does not
+  // autonomously poll NSPasteboard (e.g. for Edit-menu state or async
+  // Clipboard API calls). All clipboard access now goes through the IPC
+  // handlers above, eliminating contention with CLI subprocesses.
+  mainWindow.webContents.session.setPermissionRequestHandler(
+    (_webContents, permission, callback) => {
+      if (permission === 'clipboard-read' || permission === 'clipboard-sanitized-write') {
+        callback(false)
+        return
+      }
+      callback(true)
+    }
+  )
 
   // Updater IPC
   ipcMain.handle('updater:getStatus', () => getUpdateStatus())

@@ -251,6 +251,8 @@ const api = {
       return () => ipcRenderer.removeListener('terminal:zoom', listener)
     },
     readClipboardText: (): Promise<string> => ipcRenderer.invoke('clipboard:readText'),
+    writeClipboardText: (text: string): Promise<void> =>
+      ipcRenderer.invoke('clipboard:writeText', text),
     onFileDrop: (callback: (data: { path: string }) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, data: { path: string }) => callback(data)
       ipcRenderer.on('terminal:file-drop', listener)
