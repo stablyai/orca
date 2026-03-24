@@ -16,8 +16,8 @@ function processOrders(orders: Order[], config: AppConfig): ProcessedOrder[] {
   const results: ProcessedOrder[] = []
 
   for (const order of orders) {
-    const tax = order.total * config.tax.rate  // Nested access each iteration
-    const shipping = config.shipping.rates[order.region]  // Nested access again
+    const tax = order.total * config.tax.rate // Nested access each iteration
+    const shipping = config.shipping.rates[order.region] // Nested access again
     results.push({ ...order, tax, shipping, final: order.total + tax + shipping })
   }
 
@@ -49,14 +49,16 @@ function processOrders(orders: Order[], config: AppConfig): ProcessedOrder[] {
 // Monomorphic — all objects have same shape, V8 ICs optimize this
 function sumOrders(orders: Order[]): number {
   let total = 0
-  for (let i = 0; i < orders.length; i++) {  // orders.length is fine
-    total += orders[i].total  // Same shape every time
+  for (let i = 0; i < orders.length; i++) {
+    // orders.length is fine
+    total += orders[i].total // Same shape every time
   }
   return total
 }
 ```
 
 **When to skip this optimization:**
+
 - Arrays under 1,000 items
 - Monomorphic objects (same shape/class)
 - Non-hot paths executed infrequently

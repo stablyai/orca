@@ -12,7 +12,9 @@ export function parseWorktreeList(output: string): GitWorktreeInfo[] {
   const blocks = output.trim().split('\n\n')
 
   for (const block of blocks) {
-    if (!block.trim()) continue
+    if (!block.trim()) {
+      continue
+    }
 
     const lines = block.trim().split('\n')
     let path = ''
@@ -69,7 +71,9 @@ export function addWorktree(
   baseBranch?: string
 ): void {
   const args = ['worktree', 'add', '-b', branch, worktreePath]
-  if (baseBranch) args.push(baseBranch)
+  if (baseBranch) {
+    args.push(baseBranch)
+  }
   execFileSync('git', args, {
     cwd: repoPath,
     encoding: 'utf-8',
@@ -86,7 +90,9 @@ export async function removeWorktree(
   force = false
 ): Promise<void> {
   const args = ['worktree', 'remove', worktreePath]
-  if (force) args.push('--force')
+  if (force) {
+    args.push('--force')
+  }
   await execFileAsync('git', args, {
     cwd: repoPath,
     encoding: 'utf-8'

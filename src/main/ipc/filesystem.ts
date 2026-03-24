@@ -17,7 +17,7 @@ function isPathAllowed(targetPath: string, store: Store): boolean {
   for (const repo of repos) {
     // Allow paths within the repo itself
     if (
-      resolvedTarget.startsWith(resolve(repo.path) + '/') ||
+      resolvedTarget.startsWith(`${resolve(repo.path)}/`) ||
       resolvedTarget === resolve(repo.path)
     ) {
       return true
@@ -29,7 +29,7 @@ function isPathAllowed(targetPath: string, store: Store): boolean {
   if (settings.workspaceDir) {
     const resolvedWorkspace = resolve(settings.workspaceDir)
     if (
-      resolvedTarget.startsWith(resolvedWorkspace + '/') ||
+      resolvedTarget.startsWith(`${resolvedWorkspace}/`) ||
       resolvedTarget === resolvedWorkspace
     ) {
       return true
@@ -45,7 +45,9 @@ function isPathAllowed(targetPath: string, store: Store): boolean {
 function isBinaryBuffer(buffer: Buffer): boolean {
   const len = Math.min(buffer.length, 8192)
   for (let i = 0; i < len; i++) {
-    if (buffer[i] === 0) return true
+    if (buffer[i] === 0) {
+      return true
+    }
   }
   return false
 }
@@ -66,7 +68,9 @@ export function registerFilesystemHandlers(store: Store): void {
       }))
       .sort((a, b) => {
         // Directories first, then alphabetical
-        if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1
+        if (a.isDirectory !== b.isDirectory) {
+          return a.isDirectory ? -1 : 1
+        }
         return a.name.localeCompare(b.name)
       })
   })

@@ -8,6 +8,7 @@ let mainWindowRef: BrowserWindow | null = null
 let currentStatus: UpdateStatus = { state: 'idle' }
 let userInitiatedCheck = false
 let onBeforeQuitCleanup: (() => void) | null = null
+let autoUpdaterInitialized = false
 
 function sendStatus(status: UpdateStatus): void {
   currentStatus = status
@@ -84,6 +85,11 @@ export function setupAutoUpdater(
   // and instead parse the version directly from the atom feed which works reliably.
   // This is safe since we don't publish prerelease versions.
   autoUpdater.allowPrerelease = true
+
+  if (autoUpdaterInitialized) {
+    return
+  }
+  autoUpdaterInitialized = true
 
   autoUpdater.on('checking-for-update', () => {
     sendStatus({ state: 'checking', userInitiated: userInitiatedCheck || undefined })

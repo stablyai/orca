@@ -5,7 +5,7 @@ import { useAppStore } from '@/store'
 import { detectLanguage } from '@/lib/language-detect'
 import { cn } from '@/lib/utils'
 
-interface TreeNode {
+type TreeNode = {
   name: string
   path: string // absolute path
   relativePath: string
@@ -13,7 +13,7 @@ interface TreeNode {
   depth: number
 }
 
-interface DirCache {
+type DirCache = {
   children: TreeNode[]
   loading: boolean
 }
@@ -28,10 +28,14 @@ export default function FileExplorer(): React.JSX.Element {
 
   // Find active worktree path
   const worktreePath = useMemo(() => {
-    if (!activeWorktreeId) return null
+    if (!activeWorktreeId) {
+      return null
+    }
     for (const worktrees of Object.values(worktreesByRepo)) {
       const wt = worktrees.find((w) => w.id === activeWorktreeId)
-      if (wt) return wt.path
+      if (wt) {
+        return wt.path
+      }
     }
     return null
   }, [activeWorktreeId, worktreesByRepo])
@@ -48,7 +52,9 @@ export default function FileExplorer(): React.JSX.Element {
   // Load directory contents
   const loadDir = useCallback(
     async (dirPath: string, depth: number) => {
-      if (dirCache[dirPath]?.children.length > 0 || dirCache[dirPath]?.loading) return
+      if (dirCache[dirPath]?.children.length > 0 || dirCache[dirPath]?.loading) {
+        return
+      }
 
       setDirCache((prev) => ({
         ...prev,
@@ -90,7 +96,9 @@ export default function FileExplorer(): React.JSX.Element {
 
   // Load root when worktree changes
   useEffect(() => {
-    if (!worktreePath) return
+    if (!worktreePath) {
+      return
+    }
     setDirCache({})
     void loadDir(worktreePath, -1)
   }, [worktreePath]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -109,13 +117,17 @@ export default function FileExplorer(): React.JSX.Element {
 
   // Flatten tree into visible rows
   const flatRows = useMemo(() => {
-    if (!worktreePath) return []
+    if (!worktreePath) {
+      return []
+    }
 
     const result: TreeNode[] = []
 
     const addChildren = (parentPath: string): void => {
       const cached = dirCache[parentPath]
-      if (!cached?.children) return
+      if (!cached?.children) {
+        return
+      }
 
       for (const child of cached.children) {
         result.push(child)
@@ -139,7 +151,9 @@ export default function FileExplorer(): React.JSX.Element {
 
   const handleClick = useCallback(
     (node: TreeNode) => {
-      if (!activeWorktreeId) return
+      if (!activeWorktreeId) {
+        return
+      }
 
       if (node.isDirectory) {
         toggleDir(activeWorktreeId, node.path)

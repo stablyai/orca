@@ -15,14 +15,14 @@ Explicit return types on async functions catch mismatches at the function bounda
 async function fetchUserOrders(userId: string) {
   const response = await fetch(`/api/users/${userId}/orders`)
   if (!response.ok) {
-    return null  // Implicit: Promise<Order[] | null>
+    return null // Implicit: Promise<Order[] | null>
   }
-  return response.json()  // Implicit: Promise<any>
+  return response.json() // Implicit: Promise<any>
 }
 
 // Caller has unclear type: Promise<any>
 const orders = await fetchUserOrders('123')
-orders.map(o => o.id)  // No type error even if orders is null
+orders.map((o) => o.id) // No type error even if orders is null
 ```
 
 **Correct (explicit Promise type):**
@@ -45,7 +45,7 @@ async function fetchUserOrders(userId: string): Promise<Order[] | null> {
 // Caller knows the exact type
 const orders = await fetchUserOrders('123')
 if (orders) {
-  orders.map(o => o.id)  // Type-safe access
+  orders.map((o) => o.id) // Type-safe access
 }
 ```
 
@@ -60,7 +60,7 @@ async function fetchUserOrders(userId: string): Promise<Result<Order[]>> {
     if (!response.ok) {
       return { ok: false, error: new Error(`HTTP ${response.status}`) }
     }
-    const orders = await response.json() as Order[]
+    const orders = (await response.json()) as Order[]
     return { ok: true, value: orders }
   } catch (error) {
     return { ok: false, error: error as Error }
@@ -69,6 +69,7 @@ async function fetchUserOrders(userId: string): Promise<Result<Order[]>> {
 ```
 
 **Benefits:**
+
 - Errors caught at function definition, not call sites
 - Better IDE autocomplete for consumers
 - Self-documenting API contracts

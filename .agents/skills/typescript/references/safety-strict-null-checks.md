@@ -15,11 +15,11 @@ With `strictNullChecks`, TypeScript distinguishes between `T`, `T | null`, and `
 // tsconfig.json: { "strictNullChecks": false }
 
 function getUser(id: string): User {
-  return userMap.get(id)  // Returns User | undefined, but typed as User
+  return userMap.get(id) // Returns User | undefined, but typed as User
 }
 
 const user = getUser('123')
-console.log(user.email)  // No error, but crashes if user is undefined
+console.log(user.email) // No error, but crashes if user is undefined
 ```
 
 **Correct (strictNullChecks enabled):**
@@ -28,22 +28,22 @@ console.log(user.email)  // No error, but crashes if user is undefined
 // tsconfig.json: { "strict": true } (includes strictNullChecks)
 
 function getUser(id: string): User | undefined {
-  return userMap.get(id)  // Correctly typed as User | undefined
+  return userMap.get(id) // Correctly typed as User | undefined
 }
 
 const user = getUser('123')
-console.log(user.email)  // Error: 'user' is possibly 'undefined'
+console.log(user.email) // Error: 'user' is possibly 'undefined'
 
 // Must handle the undefined case
 if (user) {
-  console.log(user.email)  // Type narrowed to User
+  console.log(user.email) // Type narrowed to User
 }
 
 // Or use optional chaining
-console.log(user?.email)  // string | undefined
+console.log(user?.email) // string | undefined
 
 // Or assert when you're certain
-const confirmedUser = getUser('123')!  // Non-null assertion (use sparingly)
+const confirmedUser = getUser('123')! // Non-null assertion (use sparingly)
 ```
 
 **Common patterns with strictNullChecks:**

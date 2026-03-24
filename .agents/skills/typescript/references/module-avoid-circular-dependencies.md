@@ -20,10 +20,12 @@ export interface User {
   orders: Order[]
 }
 
-export function createUser(): User { /* ... */ }
+export function createUser(): User {
+  /* ... */
+}
 
 // order.ts
-import { User } from './user'  // Circular!
+import { User } from './user' // Circular!
 
 export interface Order {
   id: string
@@ -52,12 +54,16 @@ export interface Order {
 // user.ts
 import { User, Order } from './types'
 
-export function createUser(): User { /* ... */ }
+export function createUser(): User {
+  /* ... */
+}
 
 // order.ts
 import { User, Order } from './types'
 
-export function createOrder(user: User): Order { /* ... */ }
+export function createOrder(user: User): Order {
+  /* ... */
+}
 ```
 
 **Alternative (interface segregation):**
@@ -74,7 +80,7 @@ import { UserBase } from './user-types'
 
 export interface Order {
   id: string
-  user: UserBase  // Only needs base interface, not full User
+  user: UserBase // Only needs base interface, not full User
 }
 ```
 

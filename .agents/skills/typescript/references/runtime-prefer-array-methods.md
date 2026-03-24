@@ -12,25 +12,25 @@ Modern JavaScript includes most common array operations. Native methods are fast
 **Incorrect (lodash for native operations):**
 
 ```typescript
-import _ from 'lodash'  // Imports entire library
+import _ from 'lodash' // Imports entire library
 
-const activeUsers = _.filter(users, u => u.isActive)
-const userNames = _.map(activeUsers, u => u.name)
-const firstAdmin = _.find(users, u => u.role === 'admin')
-const hasAdmin = _.some(users, u => u.role === 'admin')
-const allActive = _.every(users, u => u.isActive)
-const userIds = _.uniq(users.map(u => u.id))
+const activeUsers = _.filter(users, (u) => u.isActive)
+const userNames = _.map(activeUsers, (u) => u.name)
+const firstAdmin = _.find(users, (u) => u.role === 'admin')
+const hasAdmin = _.some(users, (u) => u.role === 'admin')
+const allActive = _.every(users, (u) => u.isActive)
+const userIds = _.uniq(users.map((u) => u.id))
 ```
 
 **Correct (native methods):**
 
 ```typescript
-const activeUsers = users.filter(u => u.isActive)
-const userNames = activeUsers.map(u => u.name)
-const firstAdmin = users.find(u => u.role === 'admin')
-const hasAdmin = users.some(u => u.role === 'admin')
-const allActive = users.every(u => u.isActive)
-const userIds = [...new Set(users.map(u => u.id))]
+const activeUsers = users.filter((u) => u.isActive)
+const userNames = activeUsers.map((u) => u.name)
+const firstAdmin = users.find((u) => u.role === 'admin')
+const hasAdmin = users.some((u) => u.role === 'admin')
+const allActive = users.every((u) => u.isActive)
+const userIds = [...new Set(users.map((u) => u.id))]
 ```
 
 **Native replacements for common Lodash functions:**
@@ -48,23 +48,27 @@ function chunk<T>(array: T[], size: number): T[][] {
 
 // _.groupBy
 function groupBy<T>(array: T[], key: keyof T): Record<string, T[]> {
-  return array.reduce((groups, item) => {
-    const group = String(item[key])
-    groups[group] = groups[group] ?? []
-    groups[group].push(item)
-    return groups
-  }, {} as Record<string, T[]>)
+  return array.reduce(
+    (groups, item) => {
+      const group = String(item[key])
+      groups[group] = groups[group] ?? []
+      groups[group].push(item)
+      return groups
+    },
+    {} as Record<string, T[]>
+  )
 }
 
 // Object.groupBy (ES2024)
-const grouped = Object.groupBy(users, user => user.role)
+const grouped = Object.groupBy(users, (user) => user.role)
 
 // _.pick / _.omit
-const { password, ...userWithoutPassword } = user  // omit
-const { id, name } = user  // pick
+const { password, ...userWithoutPassword } = user // omit
+const { id, name } = user // pick
 ```
 
 **When Lodash is still valuable:**
+
 - `_.debounce`, `_.throttle` - complex timing logic
 - `_.cloneDeep` - deep object cloning
 - `_.merge` - deep object merging

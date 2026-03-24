@@ -53,6 +53,7 @@ async function getUser(userId: string): Promise<User> {
 ```
 
 **When async IS needed:**
+
 - Multiple sequential await statements
 - Try/catch around await (use `return await` here)
 - Conditional await logic

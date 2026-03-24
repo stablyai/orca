@@ -25,7 +25,7 @@ function containsSearchTerm(text: string, term: string): boolean {
 }
 
 function formatOrderId(id: number): string {
-  return ('000000' + id).slice(-6)  // Pad to 6 digits
+  return ('000000' + id).slice(-6) // Pad to 6 digits
 }
 ```
 
@@ -33,9 +33,7 @@ function formatOrderId(id: number): string {
 
 ```typescript
 function isImageFile(filename: string): boolean {
-  return filename.endsWith('.jpg') ||
-         filename.endsWith('.png') ||
-         filename.endsWith('.gif')
+  return filename.endsWith('.jpg') || filename.endsWith('.png') || filename.endsWith('.gif')
 }
 
 function hasHttpPrefix(url: string): boolean {
@@ -58,12 +56,12 @@ function formatOrderId(id: number): string {
 const sanitized = input.replaceAll('<', '&lt;').replaceAll('>', '&gt;')
 
 // at() for negative indexing
-const lastChar = filename.at(-1)  // Last character
-const extension = filename.split('.').at(-1)  // Last segment
+const lastChar = filename.at(-1) // Last character
+const extension = filename.split('.').at(-1) // Last segment
 
 // trimStart/trimEnd for directional trimming
-const trimmedLeft = '   text   '.trimStart()   // 'text   '
-const trimmedRight = '   text   '.trimEnd()    // '   text'
+const trimmedLeft = '   text   '.trimStart() // 'text   '
+const trimmedRight = '   text   '.trimEnd() // '   text'
 
 // repeat for string multiplication
 const separator = '-'.repeat(40)
@@ -71,6 +69,7 @@ const indent = '  '.repeat(depth)
 ```
 
 **When regex is still needed:**
+
 - Complex pattern matching
 - Capture groups
 - Case-insensitive matching (`/pattern/i`)

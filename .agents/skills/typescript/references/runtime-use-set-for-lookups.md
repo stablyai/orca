@@ -15,12 +15,12 @@ Array methods like `.includes()` and `.find()` are O(n) operations. For frequent
 const allowedRoles = ['admin', 'editor', 'viewer', 'moderator']
 
 function hasPermission(userRole: string): boolean {
-  return allowedRoles.includes(userRole)  // O(n) every call
+  return allowedRoles.includes(userRole) // O(n) every call
 }
 
 // In a loop, this becomes O(n × m)
 function filterAuthorizedUsers(users: User[]): User[] {
-  return users.filter(user => allowedRoles.includes(user.role))
+  return users.filter((user) => allowedRoles.includes(user.role))
   // 1000 users × 4 roles = 4000 comparisons
 }
 ```
@@ -31,11 +31,11 @@ function filterAuthorizedUsers(users: User[]): User[] {
 const allowedRoles = new Set(['admin', 'editor', 'viewer', 'moderator'])
 
 function hasPermission(userRole: string): boolean {
-  return allowedRoles.has(userRole)  // O(1) every call
+  return allowedRoles.has(userRole) // O(1) every call
 }
 
 function filterAuthorizedUsers(users: User[]): User[] {
-  return users.filter(user => allowedRoles.has(user.role))
+  return users.filter((user) => allowedRoles.has(user.role))
   // 1000 users × O(1) = 1000 operations
 }
 ```
@@ -44,19 +44,22 @@ function filterAuthorizedUsers(users: User[]): User[] {
 
 ```typescript
 // Incorrect - O(n) search
-const users: User[] = [/* ... */]
+const users: User[] = [
+  /* ... */
+]
 function findUserById(id: string): User | undefined {
-  return users.find(u => u.id === id)  // Scans entire array
+  return users.find((u) => u.id === id) // Scans entire array
 }
 
 // Correct - O(1) lookup
-const userById = new Map<string, User>(users.map(u => [u.id, u]))
+const userById = new Map<string, User>(users.map((u) => [u.id, u]))
 function findUserById(id: string): User | undefined {
   return userById.get(id)
 }
 ```
 
 **When to stick with arrays:**
+
 - Small collections (< 10 items)
 - One-time lookups where conversion cost exceeds benefit
 - When you need array methods like `.map()`, `.filter()`, `.slice()`

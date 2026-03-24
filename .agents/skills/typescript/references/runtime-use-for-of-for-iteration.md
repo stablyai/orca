@@ -54,7 +54,7 @@ for (const item of items) {
 }
 
 // forEach: when you want functional style (but can't break/return)
-items.forEach(item => process(item))
+items.forEach((item) => process(item))
 
 // for-in: only for object keys (never for arrays)
 for (const key in config) {
@@ -64,8 +64,8 @@ for (const key in config) {
 // Traditional for: when you need index, or need to modify loop
 for (let i = 0; i < items.length; i++) {
   if (items[i].id === targetId) {
-    items[i] = updatedItem  // Modifying array
-    break  // Early exit
+    items[i] = updatedItem // Modifying array
+    break // Early exit
   }
 }
 

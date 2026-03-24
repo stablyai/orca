@@ -21,7 +21,9 @@ export default function RightSidebar(): React.JSX.Element {
 
   const handleMouseMove = useCallback(
     (e: MouseEvent) => {
-      if (!isResizing.current) return
+      if (!isResizing.current) {
+        return
+      }
       // Dragging left = larger width (opposite of left sidebar)
       const delta = startX.current - e.clientX
       const next = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startWidth.current + delta))

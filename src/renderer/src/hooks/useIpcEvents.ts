@@ -48,7 +48,9 @@ export function useIpcEvents(): void {
             checkingToastId = undefined
           }
         } else if (status.state === 'available') {
-          if (checkingToastId) toast.dismiss(checkingToastId)
+          if (checkingToastId) {
+            toast.dismiss(checkingToastId)
+          }
           checkingToastId = undefined
         } else if (status.state === 'downloaded') {
           toast.success(`Version ${status.version} is ready to install.`, {
@@ -72,12 +74,18 @@ export function useIpcEvents(): void {
     unsubs.push(
       window.api.ui.onTerminalZoom((direction) => {
         const { activeView } = useAppStore.getState()
-        if (activeView === 'terminal') return
+        if (activeView === 'terminal') {
+          return
+        }
         const current = window.api.ui.getZoomLevel()
         let next: number
-        if (direction === 'in') next = current + ZOOM_STEP
-        else if (direction === 'out') next = current - ZOOM_STEP
-        else next = 0
+        if (direction === 'in') {
+          next = current + ZOOM_STEP
+        } else if (direction === 'out') {
+          next = current - ZOOM_STEP
+        } else {
+          next = 0
+        }
         applyUIZoom(next)
         window.api.ui.set({ uiZoomLevel: next })
       })

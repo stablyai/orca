@@ -12,9 +12,9 @@ Dynamic `import()` creates separate chunks that load on demand. Use them for lar
 **Incorrect (static import, always loaded):**
 
 ```typescript
-import { PDFGenerator } from 'pdfkit'  // 500KB
-import { ExcelExporter } from 'exceljs'  // 800KB
-import { ChartLibrary } from 'chart.js'  // 300KB
+import { PDFGenerator } from 'pdfkit' // 500KB
+import { ExcelExporter } from 'exceljs' // 800KB
+import { ChartLibrary } from 'chart.js' // 300KB
 
 export async function exportReport(format: 'pdf' | 'excel' | 'chart') {
   if (format === 'pdf') {

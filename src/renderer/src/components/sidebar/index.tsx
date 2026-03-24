@@ -35,7 +35,9 @@ export default function Sidebar(): React.JSX.Element {
 
   const handleMouseMove = useCallback(
     (e: MouseEvent) => {
-      if (!isResizing.current) return
+      if (!isResizing.current) {
+        return
+      }
       const delta = e.clientX - startX.current
       const next = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startWidth.current + delta))
       setSidebarWidth(next)

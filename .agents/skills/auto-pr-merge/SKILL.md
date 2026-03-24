@@ -117,6 +117,7 @@ Use the Skill tool: skill: "review-code"
 ```
 
 After review completes:
+
 - If **Critical or High** issues found: fix them using the Edit tool, then re-run `pn typecheck` to verify the review fixes don't introduce type errors
 - If only **Medium or Low** issues: acceptable, continue
 - If **no issues**: continue
@@ -181,6 +182,7 @@ fi
 - `--delete-branch` cleans up the feature branch after merge (skipped in worktrees to avoid checkout conflict)
 
 If merge fails:
+
 1. Check the error message
 2. If the error contains `'master' is already used by worktree` or similar: retry without `--delete-branch` and delete the remote branch manually with `git push origin --delete <branch>`
 3. If merge conflicts: use Skill tool with `skill: "resolve-conflicts"`, push, then retry merge once

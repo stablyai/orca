@@ -17,13 +17,13 @@ type ColorConfig = Record<string, [number, number, number]>
 const colors: ColorConfig = {
   red: [255, 0, 0],
   green: [0, 255, 0],
-  blue: [0, 0, 255],
+  blue: [0, 0, 255]
   // Can't access colors.red - it's just string keys
 }
 
 // TypeScript doesn't know 'red' is a valid key
-const redValue = colors.red    // Type: [number, number, number]
-const pinkValue = colors.pink  // No error! Type: [number, number, number]
+const redValue = colors.red // Type: [number, number, number]
+const pinkValue = colors.pink // No error! Type: [number, number, number]
 ```
 
 **Correct (satisfies preserves literal types):**
@@ -34,12 +34,12 @@ type ColorConfig = Record<string, [number, number, number]>
 const colors = {
   red: [255, 0, 0],
   green: [0, 255, 0],
-  blue: [0, 0, 255],
+  blue: [0, 0, 255]
 } satisfies ColorConfig
 
 // TypeScript knows exact keys
-const redValue = colors.red    // Type: [number, number, number]
-const pinkValue = colors.pink  // Error: Property 'pink' does not exist
+const redValue = colors.red // Type: [number, number, number]
+const pinkValue = colors.pink // Error: Property 'pink' does not exist
 ```
 
 **For configuration objects:**
@@ -54,18 +54,18 @@ interface Route {
 // Without satisfies - loses literal path types
 const routes: Route[] = [
   { path: '/', component: Home },
-  { path: '/users', component: Users },
+  { path: '/users', component: Users }
 ]
 // routes[0].path is just 'string'
 
 // With satisfies - preserves literal paths
 const routes = [
   { path: '/', component: Home },
-  { path: '/users', component: Users },
+  { path: '/users', component: Users }
 ] satisfies Route[]
 // routes[0].path is '/'
 
-type RoutePath = typeof routes[number]['path']  // '/' | '/users'
+type RoutePath = (typeof routes)[number]['path'] // '/' | '/users'
 ```
 
 **Combining with as const:**
@@ -74,7 +74,7 @@ type RoutePath = typeof routes[number]['path']  // '/' | '/users'
 const config = {
   apiUrl: 'https://api.example.com',
   timeout: 5000,
-  retries: 3,
+  retries: 3
 } as const satisfies {
   apiUrl: string
   timeout: number
@@ -82,11 +82,12 @@ const config = {
 }
 
 // Both validated AND readonly with literal types
-config.apiUrl  // Type: 'https://api.example.com' (not just string)
-config.timeout = 3000  // Error: Cannot assign to 'timeout' (readonly)
+config.apiUrl // Type: 'https://api.example.com' (not just string)
+config.timeout = 3000 // Error: Cannot assign to 'timeout' (readonly)
 ```
 
 **When to use satisfies vs type annotation:**
+
 - Use `satisfies` when you want validation but need literal types
 - Use type annotation (`:`) when you want the variable to be exactly that type
 - Use `as const satisfies` for readonly config with validation

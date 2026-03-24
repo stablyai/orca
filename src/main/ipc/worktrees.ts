@@ -1,4 +1,5 @@
-import { BrowserWindow, ipcMain } from 'electron'
+import type { BrowserWindow } from 'electron'
+import { ipcMain } from 'electron'
 import { join, basename } from 'path'
 import type { Store } from '../persistence'
 import type { Worktree, WorktreeMeta } from '../../shared/types'
@@ -7,6 +8,15 @@ import { getGitUsername, getDefaultBaseRef, getAvailableBranchName } from '../gi
 import { getEffectiveHooks, loadHooks, runHook, hasHooksFile } from '../hooks'
 
 export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store): void {
+  // Remove any previously registered handlers so we can re-register them
+  // (e.g. when macOS re-activates the app and creates a new window).
+  ipcMain.removeHandler('worktrees:listAll')
+  ipcMain.removeHandler('worktrees:list')
+  ipcMain.removeHandler('worktrees:create')
+  ipcMain.removeHandler('worktrees:remove')
+  ipcMain.removeHandler('worktrees:updateMeta')
+  ipcMain.removeHandler('hooks:check')
+
   ipcMain.handle('worktrees:listAll', async () => {
     const repos = store.getRepos()
     const allWorktrees: Worktree[] = []
@@ -25,7 +35,9 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
 
   ipcMain.handle('worktrees:list', async (_event, args: { repoId: string }) => {
     const repo = store.getRepo(args.repoId)
-    if (!repo) return []
+    if (!repo) {
+      return []
+    }
 
     const gitWorktrees = await listWorktrees(repo.path)
     return gitWorktrees.map((gw) => {
@@ -39,7 +51,9 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
     'worktrees:create',
     async (_event, args: { repoId: string; name: string; baseBranch?: string }) => {
       const repo = store.getRepo(args.repoId)
-      if (!repo) throw new Error(`Repo not found: ${args.repoId}`)
+      if (!repo) {
+        throw new Error(`Repo not found: ${args.repoId}`)
+      }
 
       const settings = store.getSettings()
 
@@ -78,7 +92,9 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
       // Re-list to get the freshly created worktree info
       const gitWorktrees = await listWorktrees(repo.path)
       const created = gitWorktrees.find((gw) => gw.path === worktreePath)
-      if (!created) throw new Error('Worktree created but not found in listing')
+      if (!created) {
+        throw new Error('Worktree created but not found in listing')
+      }
 
       const worktreeId = `${repo.id}::${worktreePath}`
       const metaUpdates: Partial<WorktreeMeta> =
@@ -108,7 +124,9 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
     async (_event, args: { worktreeId: string; force?: boolean }) => {
       const { repoId, worktreePath } = parseWorktreeId(args.worktreeId)
       const repo = store.getRepo(repoId)
-      if (!repo) throw new Error(`Repo not found: ${repoId}`)
+      if (!repo) {
+        throw new Error(`Repo not found: ${repoId}`)
+      }
 
       // Run archive hook before removal
       const hooks = getEffectiveHooks(repo)
@@ -142,7 +160,9 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
 
   ipcMain.handle('hooks:check', (_event, args: { repoId: string }) => {
     const repo = store.getRepo(args.repoId)
-    if (!repo) return { hasHooks: false, hooks: null }
+    if (!repo) {
+      return { hasHooks: false, hooks: null }
+    }
 
     const has = hasHooksFile(repo.path)
     const hooks = has ? loadHooks(repo.path) : null
@@ -178,7 +198,9 @@ function mergeWorktree(
 
 function parseWorktreeId(worktreeId: string): { repoId: string; worktreePath: string } {
   const sepIdx = worktreeId.indexOf('::')
-  if (sepIdx === -1) throw new Error(`Invalid worktreeId: ${worktreeId}`)
+  if (sepIdx === -1) {
+    throw new Error(`Invalid worktreeId: ${worktreeId}`)
+  }
   return {
     repoId: worktreeId.slice(0, sepIdx),
     worktreePath: worktreeId.slice(sepIdx + 2)
@@ -196,7 +218,9 @@ function formatWorktreeRemovalError(error: unknown, worktreePath: string, force:
     ? `Failed to force delete worktree at ${worktreePath}.`
     : `Failed to delete worktree at ${worktreePath}.`
 
-  if (!(error instanceof Error)) return fallback
+  if (!(error instanceof Error)) {
+    return fallback
+  }
 
   const errorWithStreams = error as Error & { stderr?: string; stdout?: string }
   const details = [errorWithStreams.stderr, errorWithStreams.stdout, error.message]

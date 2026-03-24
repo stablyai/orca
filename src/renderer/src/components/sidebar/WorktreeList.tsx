@@ -1,103 +1,22 @@
 import React, { useMemo, useCallback, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import {
-  ChevronDown,
-  CircleCheckBig,
-  CircleDot,
-  CircleX,
-  FolderGit2,
-  GitPullRequest,
-  Plus
-} from 'lucide-react'
+import { ChevronDown, CircleX, Plus } from 'lucide-react'
 import { useAppStore } from '@/store'
 import WorktreeCard from './WorktreeCard'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import type { Worktree, Repo } from '../../../../shared/types'
-
-function branchName(branch: string): string {
-  return branch.replace(/^refs\/heads\//, '')
-}
-
-// ── Row types for the virtualizer ───────────────────────────────
-type GroupHeaderRow = {
-  type: 'header'
-  key: string
-  label: string
-  count: number
-  tone: string
-  icon: React.ComponentType<{ className?: string }>
-  repo?: Repo
-}
-type WorktreeRow = { type: 'item'; worktree: Worktree; repo: Repo | undefined }
-type Row = GroupHeaderRow | WorktreeRow
-
-type PRGroupKey = 'done' | 'in-review' | 'in-progress' | 'closed'
-
-const PR_GROUP_ORDER: PRGroupKey[] = ['done', 'in-review', 'in-progress', 'closed']
-
-const PR_GROUP_META: Record<
-  PRGroupKey,
-  {
-    label: string
-    icon: React.ComponentType<{ className?: string }>
-    tone: string
-  }
-> = {
-  done: {
-    label: 'Done',
-    icon: CircleCheckBig,
-    tone: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'
-  },
-  'in-review': {
-    label: 'In review',
-    icon: GitPullRequest,
-    tone: 'border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-200'
-  },
-  'in-progress': {
-    label: 'In progress',
-    icon: CircleDot,
-    tone: 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-200'
-  },
-  closed: {
-    label: 'Closed',
-    icon: CircleX,
-    tone: 'border-zinc-500/20 bg-zinc-500/10 text-zinc-600 dark:text-zinc-300'
-  }
-}
-
-function getPRGroupKey(
-  worktree: Worktree,
-  repoMap: Map<string, Repo>,
-  prCache: Record<string, unknown> | null
-): PRGroupKey {
-  const repo = repoMap.get(worktree.repoId)
-  const branch = branchName(worktree.branch)
-  const cacheKey = repo ? `${repo.path}::${branch}` : ''
-  const prEntry =
-    cacheKey && prCache
-      ? (prCache[cacheKey] as { data?: { state?: string } } | undefined)
-      : undefined
-  const pr = prEntry?.data
-
-  if (!pr) return 'in-progress'
-  if (pr.state === 'merged') return 'done'
-  if (pr.state === 'closed') return 'closed'
-  if (pr.state === 'draft') return 'in-progress'
-  return 'in-review'
-}
-
-function getGroupKeyForWorktree(
-  groupBy: 'none' | 'repo' | 'pr-status',
-  worktree: Worktree,
-  repoMap: Map<string, Repo>,
-  prCache: Record<string, unknown> | null
-): string | null {
-  if (groupBy === 'none') return null
-  if (groupBy === 'repo') return `repo:${worktree.repoId}`
-  return `pr:${getPRGroupKey(worktree, repoMap, prCache)}`
-}
+import {
+  branchName,
+  getPRGroupKey,
+  type PRGroupKey,
+  type Row,
+  PR_GROUP_META,
+  PR_GROUP_ORDER,
+  REPO_GROUP_META,
+  getGroupKeyForWorktree
+} from './worktree-list-groups'
 
 const WorktreeList = React.memo(function WorktreeList() {
   // ── Granular selectors (each is a primitive or shallow-stable ref) ──
@@ -123,7 +42,9 @@ const WorktreeList = React.memo(function WorktreeList() {
 
   const repoMap = useMemo(() => {
     const m = new Map<string, Repo>()
-    for (const r of repos) m.set(r.id, r)
+    for (const r of repos) {
+      m.set(r.id, r)
+    }
     return m
   }, [repos])
 
@@ -185,8 +106,11 @@ const WorktreeList = React.memo(function WorktreeList() {
   const toggleGroup = useCallback((key: string) => {
     setCollapsedGroups((prev) => {
       const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
+      if (next.has(key)) {
+        next.delete(key)
+      } else {
+        next.add(key)
+      }
       return next
     })
   }, [])
@@ -216,16 +140,20 @@ const WorktreeList = React.memo(function WorktreeList() {
         key = `pr:${prGroup}`
         label = PR_GROUP_META[prGroup].label
       }
-      if (!grouped.has(key)) grouped.set(key, { label, items: [], repo })
+      if (!grouped.has(key)) {
+        grouped.set(key, { label, items: [], repo })
+      }
       grouped.get(key)!.items.push(w)
     }
 
-    const orderedGroups: Array<[string, { label: string; items: Worktree[]; repo?: Repo }]> = []
+    const orderedGroups: [string, { label: string; items: Worktree[]; repo?: Repo }][] = []
     if (groupBy === 'pr-status') {
       for (const prGroup of PR_GROUP_ORDER) {
         const key = `pr:${prGroup}`
         const group = grouped.get(key)
-        if (group) orderedGroups.push([key, group])
+        if (group) {
+          orderedGroups.push([key, group])
+        }
       }
     } else {
       orderedGroups.push(...Array.from(grouped.entries()))
@@ -241,8 +169,8 @@ const WorktreeList = React.memo(function WorktreeList() {
               key,
               label: group.label,
               count: group.items.length,
-              tone: 'border-border/70 bg-background/70 text-foreground',
-              icon: FolderGit2,
+              tone: REPO_GROUP_META.tone,
+              icon: REPO_GROUP_META.icon,
               repo
             }
           : (() => {
@@ -267,7 +195,7 @@ const WorktreeList = React.memo(function WorktreeList() {
     }
 
     return result
-  }, [groupBy, worktrees, repoMap, prCache, collapsedGroups, tabsByWorktree])
+  }, [groupBy, worktrees, repoMap, prCache, collapsedGroups])
 
   // ── TanStack Virtual ──────────────────────────────────────────
   const virtualizer = useVirtualizer({
@@ -282,7 +210,9 @@ const WorktreeList = React.memo(function WorktreeList() {
   })
 
   React.useEffect(() => {
-    if (!pendingRevealWorktreeId) return
+    if (!pendingRevealWorktreeId) {
+      return
+    }
 
     // Uncollapse the group containing the target worktree
     if (groupBy !== 'none') {
@@ -291,7 +221,9 @@ const WorktreeList = React.memo(function WorktreeList() {
         const groupKey = getGroupKeyForWorktree(groupBy, targetWorktree, repoMap, prCache)
         if (groupKey) {
           setCollapsedGroups((prev) => {
-            if (!prev.has(groupKey)) return prev
+            if (!prev.has(groupKey)) {
+              return prev
+            }
             const next = new Set(prev)
             next.delete(groupKey)
             return next
@@ -413,7 +345,9 @@ const WorktreeList = React.memo(function WorktreeList() {
                           onClick={(event) => {
                             event.preventDefault()
                             event.stopPropagation()
-                            if (row.repo) handleCreateForRepo(row.repo.id)
+                            if (row.repo) {
+                              handleCreateForRepo(row.repo.id)
+                            }
                           }}
                         >
                           <Plus className="size-3" />

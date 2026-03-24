@@ -18,7 +18,7 @@ function createDataProcessor(largeDataset: DataRecord[]): () => void {
   return function processNext(): void {
     // This closure retains reference to largeDataset
     // even though it only needs processedIds
-    const next = largeDataset.find(r => !processedIds.has(r.id))
+    const next = largeDataset.find((r) => !processedIds.has(r.id))
     if (next) {
       processedIds.add(next.id)
       sendToServer(next)
@@ -28,7 +28,7 @@ function createDataProcessor(largeDataset: DataRecord[]): () => void {
 
 // largeDataset (100MB) stays in memory as long as processNext exists
 const processor = createDataProcessor(hugeDataset)
-setInterval(processor, 1000)  // Runs forever, 100MB never freed
+setInterval(processor, 1000) // Runs forever, 100MB never freed
 ```
 
 **Correct (closure captures only what it needs):**
@@ -36,9 +36,8 @@ setInterval(processor, 1000)  // Runs forever, 100MB never freed
 ```typescript
 function createDataProcessor(largeDataset: DataRecord[]): () => void {
   // Build a queue of just the IDs and a lookup for individual records
-  const pendingQueue: string[] = largeDataset.map(r => r.id)
-  const getRecord = (id: string): DataRecord | undefined =>
-    largeDataset.find(r => r.id === id)
+  const pendingQueue: string[] = largeDataset.map((r) => r.id)
+  const getRecord = (id: string): DataRecord | undefined => largeDataset.find((r) => r.id === id)
 
   // Release the array reference — closure only captures pendingQueue and getRecord
   // Caller should also release their reference to largeDataset
@@ -76,7 +75,7 @@ class Dashboard {
 
   initialize(): void {
     window.addEventListener('resize', () => {
-      this.handleResize()  // 'this' keeps entire Dashboard alive
+      this.handleResize() // 'this' keeps entire Dashboard alive
     })
   }
 }

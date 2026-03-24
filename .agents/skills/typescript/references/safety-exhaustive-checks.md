@@ -51,7 +51,7 @@ function getStatusMessage(status: OrderStatus): string {
     case 'delivered':
       return 'Order complete'
     default:
-      return assertNever(status)  // Compile error if case missed
+      return assertNever(status) // Compile error if case missed
   }
 }
 
@@ -66,7 +66,7 @@ const statusMessages: Record<OrderStatus, string> = {
   pending: 'Order received',
   processing: 'Preparing your order',
   shipped: 'On the way',
-  delivered: 'Order complete',
+  delivered: 'Order complete'
   // Missing key causes: Property 'cancelled' is missing in type
 }
 
@@ -76,6 +76,7 @@ function getStatusMessage(status: OrderStatus): string {
 ```
 
 **Benefits:**
+
 - Compile-time error when union expands
 - Self-documenting: all cases explicitly handled
 - Runtime safety via assertNever fallback

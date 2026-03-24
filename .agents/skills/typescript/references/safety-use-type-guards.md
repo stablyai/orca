@@ -19,12 +19,12 @@ interface User {
 }
 
 function handleUserEvent(event: MessageEvent): void {
-  const user = event.data as User  // Unsafe assertion
-  sendEmail(user.email)  // Crashes if data isn't actually a User
+  const user = event.data as User // Unsafe assertion
+  sendEmail(user.email) // Crashes if data isn't actually a User
 }
 
 function processResponse(data: unknown): User[] {
-  return data as User[]  // No runtime check
+  return data as User[] // No runtime check
 }
 ```
 
@@ -46,7 +46,7 @@ function handleUserEvent(event: MessageEvent): void {
     console.error('Invalid user data received')
     return
   }
-  sendEmail(event.data.email)  // Type-safe: event.data is User
+  sendEmail(event.data.email) // Type-safe: event.data is User
 }
 
 function processResponse(data: unknown): User[] {
@@ -76,9 +76,9 @@ function isSuccess(result: ApiResult): result is SuccessResult {
 
 function handleResult(result: ApiResult): void {
   if (isSuccess(result)) {
-    console.log(result.data.email)  // Type narrowed to SuccessResult
+    console.log(result.data.email) // Type narrowed to SuccessResult
   } else {
-    console.error(result.message)  // Type narrowed to ErrorResult
+    console.error(result.message) // Type narrowed to ErrorResult
   }
 }
 ```

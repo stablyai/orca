@@ -13,8 +13,8 @@ Start async operations immediately but defer `await` until the value is actually
 
 ```typescript
 async function processOrder(orderId: string): Promise<OrderResult> {
-  const order = await fetchOrder(orderId)  // Blocks here
-  const config = await loadProcessingConfig()  // Waits for order first, unnecessarily
+  const order = await fetchOrder(orderId) // Blocks here
+  const config = await loadProcessingConfig() // Waits for order first, unnecessarily
 
   // config doesn't depend on order — these could run in parallel
   if (order.priority === 'express') {
@@ -28,10 +28,10 @@ async function processOrder(orderId: string): Promise<OrderResult> {
 
 ```typescript
 async function processOrder(orderId: string): Promise<OrderResult> {
-  const orderPromise = fetchOrder(orderId)  // Start immediately
-  const config = await loadProcessingConfig()  // Runs while order fetches
+  const orderPromise = fetchOrder(orderId) // Start immediately
+  const config = await loadProcessingConfig() // Runs while order fetches
 
-  const order = await orderPromise  // Now await when needed
+  const order = await orderPromise // Now await when needed
 
   if (order.priority === 'express') {
     return processExpress(order, config)
@@ -61,7 +61,7 @@ async function loadUserContent(userId: string): Promise<Content> {
     settingsPromise,
     featuresPromise,
     ordersPromise,
-    prefsPromise,
+    prefsPromise
   ])
 
   return { user, settings, features, orders, prefs }

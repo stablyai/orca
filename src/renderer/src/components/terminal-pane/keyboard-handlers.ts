@@ -221,7 +221,18 @@ export function useTerminalKeyboardShortcuts({
       window.removeEventListener('keydown', onAltBackspace, { capture: true })
       window.removeEventListener('keydown', onShiftEnter, { capture: true })
     }
-  }, [isActive])
+  }, [
+    isActive,
+    managerRef,
+    paneTransportsRef,
+    expandedPaneIdRef,
+    setExpandedPane,
+    restoreExpandedLayout,
+    refreshPaneSizes,
+    persistLayoutSnapshot,
+    toggleExpandPane,
+    setSearchOpen
+  ])
 }
 
 type FontZoomDeps = {
@@ -277,5 +288,5 @@ export function useTerminalFontZoom({
         /* ignore */
       }
     })
-  }, [isActive])
+  }, [isActive, managerRef, paneFontSizesRef, settingsRef])
 }

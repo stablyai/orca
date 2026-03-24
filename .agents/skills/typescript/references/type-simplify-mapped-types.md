@@ -33,11 +33,7 @@ type ComplexTransform<T> = {
 **Correct (composed utility types):**
 
 ```typescript
-type TransformValue<T> = T extends Date
-  ? string
-  : T extends number
-    ? string
-    : T
+type TransformValue<T> = T extends Date ? string : T extends number ? string : T
 
 type TransformObject<T> = {
   [K in keyof T]: TransformProperty<T[K]>
@@ -51,20 +47,20 @@ type TransformProperty<T> = T extends Function
       ? TransformObject<T>
       : TransformValue<T>
 
-type TransformArray<T> = T extends object
-  ? TransformObject<T>[]
-  : T[]
+type TransformArray<T> = T extends object ? TransformObject<T>[] : T[]
 
 // Each utility is cached independently
 type TransformedUser = TransformObject<User>
 ```
 
 **Benefits:**
+
 - Each small utility type is cached separately
 - Easier to debug type errors
 - More reusable across the codebase
 
 **When complex mapped types are acceptable:**
+
 - Internal utility types used in few places
 - Types that genuinely require complex logic
 

@@ -104,7 +104,9 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
   )
 
   const handleCreate = useCallback(async () => {
-    if (!repoId || !name.trim()) return
+    if (!repoId || !name.trim()) {
+      return
+    }
     setCreating(true)
     try {
       const wt = await createWorktree(repoId, name.trim())
@@ -161,7 +163,9 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
       resetTimeoutRef.current = null
     }
 
-    if (isOpen) return
+    if (isOpen) {
+      return
+    }
 
     resetTimeoutRef.current = window.setTimeout(() => {
       setRepoId('')
@@ -182,10 +186,14 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
 
   // Focus and select name input when suggestion is applied
   React.useEffect(() => {
-    if (!isOpen || !repoId || !suggestedName) return
+    if (!isOpen || !repoId || !suggestedName) {
+      return
+    }
     requestAnimationFrame(() => {
       const input = nameInputRef.current
-      if (!input) return
+      if (!input) {
+        return
+      }
       input.focus()
       input.select()
     })
@@ -318,7 +326,9 @@ function getSuggestedSpaceName(
   worktreesByRepo: Record<string, { path: string }[]>,
   nestWorkspaces: boolean
 ): string {
-  if (!repoId) return SPACE_NAMES[0]
+  if (!repoId) {
+    return SPACE_NAMES[0]
+  }
 
   const usedNames = new Set<string>()
   const repoWorktrees = worktreesByRepo[repoId] ?? []
@@ -365,7 +375,9 @@ function findRepoIdForWorktree(
   worktreeId: string | null,
   worktreesByRepo: Record<string, { id: string }[]>
 ): string | null {
-  if (!worktreeId) return null
+  if (!worktreeId) {
+    return null
+  }
 
   for (const [repoId, worktrees] of Object.entries(worktreesByRepo)) {
     if (worktrees.some((worktree) => worktree.id === worktreeId)) {

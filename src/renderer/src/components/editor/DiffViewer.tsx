@@ -4,7 +4,7 @@ import { Columns2, Rows2 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import '@/lib/monaco-setup'
 
-interface DiffViewerProps {
+type DiffViewerProps = {
   originalContent: string
   modifiedContent: string
   language: string

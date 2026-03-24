@@ -10,6 +10,7 @@ Comprehensive performance optimization guide for TypeScript applications. Contai
 ## When to Apply
 
 Reference these guidelines when:
+
 - Configuring tsconfig.json for a new or existing project
 - Writing complex type definitions or generics
 - Optimizing async/await patterns and data fetching
@@ -18,16 +19,16 @@ Reference these guidelines when:
 
 ## Rule Categories by Priority
 
-| Priority | Category | Impact | Prefix |
-|----------|----------|--------|--------|
-| 1 | Type System Performance | CRITICAL | `type-` |
-| 2 | Compiler Configuration | CRITICAL | `tscfg-` |
-| 3 | Async Patterns | HIGH | `async-` |
-| 4 | Module Organization | HIGH | `module-` |
-| 5 | Type Safety Patterns | MEDIUM-HIGH | `safety-` |
-| 6 | Memory Management | MEDIUM | `mem-` |
-| 7 | Runtime Optimization | LOW-MEDIUM | `runtime-` |
-| 8 | Advanced Patterns | LOW | `advanced-` |
+| Priority | Category                | Impact      | Prefix      |
+| -------- | ----------------------- | ----------- | ----------- |
+| 1        | Type System Performance | CRITICAL    | `type-`     |
+| 2        | Compiler Configuration  | CRITICAL    | `tscfg-`    |
+| 3        | Async Patterns          | HIGH        | `async-`    |
+| 4        | Module Organization     | HIGH        | `module-`   |
+| 5        | Type Safety Patterns    | MEDIUM-HIGH | `safety-`   |
+| 6        | Memory Management       | MEDIUM      | `mem-`      |
+| 7        | Runtime Optimization    | LOW-MEDIUM  | `runtime-`  |
+| 8        | Advanced Patterns       | LOW         | `advanced-` |
 
 ## Table of Contents
 

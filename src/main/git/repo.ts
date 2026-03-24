@@ -10,9 +10,13 @@ const execFileAsync = promisify(execFile)
  */
 export function isGitRepo(path: string): boolean {
   try {
-    if (!existsSync(path) || !statSync(path).isDirectory()) return false
+    if (!existsSync(path) || !statSync(path).isDirectory()) {
+      return false
+    }
     // .git dir or file (for worktrees) or bare repo
-    if (existsSync(join(path, '.git'))) return true
+    if (existsSync(join(path, '.git'))) {
+      return true
+    }
     // Might be a bare repo — ask git
     const result = execSync('git rev-parse --is-inside-work-tree', {
       cwd: path,
@@ -73,7 +77,9 @@ function getGitConfigValue(path: string, key: string): string {
 
 function normalizeUsername(value: string): string {
   const trimmed = value.trim()
-  if (!trimmed) return ''
+  if (!trimmed) {
+    return ''
+  }
 
   const localPart = trimmed.includes('@') ? trimmed.split('@')[0] : trimmed
   return localPart.replace(/^\d+\+/, '')
@@ -85,7 +91,9 @@ function getGhLogin(): string {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe']
     }).trim()
-    if (apiLogin) return normalizeUsername(apiLogin)
+    if (apiLogin) {
+      return normalizeUsername(apiLogin)
+    }
   } catch {
     // Fall through to auth status parsing
   }
@@ -100,7 +108,9 @@ function getGhLogin(): string {
     const activeAccountMatch = output.match(
       /Active account:\s+true[\s\S]*?account\s+([A-Za-z0-9-]+)/
     )
-    if (activeAccountMatch?.[1]) return normalizeUsername(activeAccountMatch[1])
+    if (activeAccountMatch?.[1]) {
+      return normalizeUsername(activeAccountMatch[1])
+    }
 
     const accountMatch = output.match(/Logged in to github\.com account\s+([A-Za-z0-9-]+)/)
     return normalizeUsername(accountMatch?.[1] ?? '')
@@ -154,10 +164,18 @@ export function getDefaultBaseRef(path: string): string {
     // Fall through to explicit remote branch probes.
   }
 
-  if (hasGitRef(path, 'refs/remotes/origin/main')) return 'origin/main'
-  if (hasGitRef(path, 'refs/remotes/origin/master')) return 'origin/master'
-  if (hasGitRef(path, 'refs/heads/main')) return 'main'
-  if (hasGitRef(path, 'refs/heads/master')) return 'master'
+  if (hasGitRef(path, 'refs/remotes/origin/main')) {
+    return 'origin/main'
+  }
+  if (hasGitRef(path, 'refs/remotes/origin/master')) {
+    return 'origin/master'
+  }
+  if (hasGitRef(path, 'refs/heads/main')) {
+    return 'main'
+  }
+  if (hasGitRef(path, 'refs/heads/master')) {
+    return 'master'
+  }
 
   return 'origin/main'
 }
@@ -184,17 +202,27 @@ async function getDefaultBaseRefAsync(path: string): Promise<string> {
     // Fall through to explicit remote branch probes.
   }
 
-  if (await hasGitRefAsync(path, 'refs/remotes/origin/main')) return 'origin/main'
-  if (await hasGitRefAsync(path, 'refs/remotes/origin/master')) return 'origin/master'
-  if (await hasGitRefAsync(path, 'refs/heads/main')) return 'main'
-  if (await hasGitRefAsync(path, 'refs/heads/master')) return 'master'
+  if (await hasGitRefAsync(path, 'refs/remotes/origin/main')) {
+    return 'origin/main'
+  }
+  if (await hasGitRefAsync(path, 'refs/remotes/origin/master')) {
+    return 'origin/master'
+  }
+  if (await hasGitRefAsync(path, 'refs/heads/main')) {
+    return 'main'
+  }
+  if (await hasGitRefAsync(path, 'refs/heads/master')) {
+    return 'master'
+  }
 
   return 'origin/main'
 }
 
 export async function searchBaseRefs(path: string, query: string, limit = 25): Promise<string[]> {
   const normalizedQuery = normalizeRefSearchQuery(query)
-  if (!normalizedQuery) return []
+  if (!normalizedQuery) {
+    return []
+  }
 
   try {
     const { stdout } = await execFileAsync(
@@ -218,7 +246,9 @@ export async function searchBaseRefs(path: string, query: string, limit = 25): P
       .map((line) => line.trim())
       .filter((line) => line && line !== 'origin/HEAD')
       .filter((line) => {
-        if (seen.has(line)) return false
+        if (seen.has(line)) {
+          return false
+        }
         seen.add(line)
         return true
       })

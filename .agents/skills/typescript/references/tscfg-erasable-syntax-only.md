@@ -50,7 +50,7 @@ export type OrderStatus = 'pending' | 'shipped' | 'delivered'
 export const OrderStatus = {
   Pending: 'pending',
   Shipped: 'shipped',
-  Delivered: 'delivered',
+  Delivered: 'delivered'
 } as const satisfies Record<string, OrderStatus>
 
 // Module-level functions instead of namespace
@@ -80,6 +80,7 @@ class UserService {
 ```
 
 **When NOT to use this flag:**
+
 - Projects using a bundler (esbuild, swc, Vite) that supports enum transformation
 - Libraries that need to support both bundled and unbundled consumers
 - Codebases with extensive enum usage where migration cost is high

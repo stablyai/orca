@@ -41,7 +41,7 @@ class DataPoller {
   private intervalId: ReturnType<typeof setInterval> | null = null
 
   start(): void {
-    if (this.intervalId) return  // Prevent duplicate intervals
+    if (this.intervalId) return // Prevent duplicate intervals
 
     this.intervalId = setInterval(() => {
       this.data = fetchLatestData()
@@ -87,7 +87,7 @@ class AnimationController {
 function usePolling(callback: () => void, interval: number): void {
   useEffect(() => {
     const id = setInterval(callback, interval)
-    return () => clearInterval(id)  // Cleanup on unmount
+    return () => clearInterval(id) // Cleanup on unmount
   }, [callback, interval])
 }
 
@@ -96,7 +96,7 @@ function useDebounce<T>(value: T, delay: number): T {
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedValue(value), delay)
-    return () => clearTimeout(timer)  // Clear on value change or unmount
+    return () => clearTimeout(timer) // Clear on value change or unmount
   }, [value, delay])
 
   return debouncedValue

@@ -7,7 +7,7 @@ const execFileAsync = promisify(execFile)
 // Concurrency limiter - max 4 parallel gh processes
 const MAX_CONCURRENT = 4
 let running = 0
-const queue: Array<() => void> = []
+const queue: (() => void)[] = []
 
 function acquire(): Promise<void> {
   if (running < MAX_CONCURRENT) {
@@ -25,7 +25,9 @@ function acquire(): Promise<void> {
 function release(): void {
   running--
   const next = queue.shift()
-  if (next) next()
+  if (next) {
+    next()
+  }
 }
 
 /**
@@ -104,13 +106,13 @@ export async function listIssues(repoPath: string, limit = 20): Promise<IssueInf
         encoding: 'utf-8'
       }
     )
-    const data = JSON.parse(stdout) as Array<{
+    const data = JSON.parse(stdout) as {
       number: number
       title: string
       state: string
       url: string
-      labels: Array<{ name: string }>
-    }>
+      labels: { name: string }[]
+    }[]
     return data.map((d) => ({
       number: d.number,
       title: d.title,
@@ -127,19 +129,25 @@ export async function listIssues(repoPath: string, limit = 20): Promise<IssueInf
 
 function mapPRState(state: string): PRInfo['state'] {
   const s = state?.toUpperCase()
-  if (s === 'MERGED') return 'merged'
-  if (s === 'CLOSED') return 'closed'
+  if (s === 'MERGED') {
+    return 'merged'
+  }
+  if (s === 'CLOSED') {
+    return 'closed'
+  }
   // gh CLI returns isDraft separately, but state field is OPEN for drafts too
   return 'open'
 }
 
 function deriveCheckStatus(rollup: unknown[] | null | undefined): CheckStatus {
-  if (!rollup || !Array.isArray(rollup) || rollup.length === 0) return 'pending'
+  if (!rollup || !Array.isArray(rollup) || rollup.length === 0) {
+    return 'pending'
+  }
 
   let hasFailure = false
   let hasPending = false
 
-  for (const check of rollup as Array<{ status?: string; conclusion?: string; state?: string }>) {
+  for (const check of rollup as { status?: string; conclusion?: string; state?: string }[]) {
     const conclusion = check.conclusion?.toUpperCase()
     const status = check.status?.toUpperCase()
     const state = check.state?.toUpperCase()
@@ -162,7 +170,11 @@ function deriveCheckStatus(rollup: unknown[] | null | undefined): CheckStatus {
     }
   }
 
-  if (hasFailure) return 'failure'
-  if (hasPending) return 'pending'
+  if (hasFailure) {
+    return 'failure'
+  }
+  if (hasPending) {
+    return 'pending'
+  }
   return 'success'
 }

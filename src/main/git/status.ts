@@ -20,7 +20,9 @@ export async function getStatus(worktreePath: string): Promise<GitStatusEntry[]>
     )
 
     for (const line of stdout.split('\n')) {
-      if (!line) continue
+      if (!line) {
+        continue
+      }
 
       if (line.startsWith('1 ') || line.startsWith('2 ')) {
         // Changed entries: "1 XY sub mH mI mW hH path" or "2 XY sub mH mI mW hH X\tscore\tpath\torigPath"

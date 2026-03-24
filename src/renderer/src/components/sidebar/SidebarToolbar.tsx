@@ -22,9 +22,7 @@ const SidebarToolbar = React.memo(function SidebarToolbar() {
         <div className="flex items-center border-t border-sidebar-border bg-primary/10">
           <button
             onClick={() =>
-              updateStatus.state === 'downloaded'
-                ? window.api.updater.quitAndInstall()
-                : undefined
+              updateStatus.state === 'downloaded' ? window.api.updater.quitAndInstall() : undefined
             }
             className="flex items-center gap-1.5 flex-1 min-w-0 px-2 py-1.5 text-[11px] font-medium text-primary hover:bg-primary/15 transition-colors cursor-pointer"
           >

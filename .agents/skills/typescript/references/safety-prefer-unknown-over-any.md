@@ -20,7 +20,7 @@ function processApiResponse(data: any): string {
 
 async function fetchData(): Promise<any> {
   const response = await fetch('/api/data')
-  return response.json()  // Returns Promise<any>, loses all type info
+  return response.json() // Returns Promise<any>, loses all type info
 }
 ```
 
@@ -46,7 +46,7 @@ function processApiResponse(data: unknown): string {
   if (!isApiResponse(data)) {
     throw new Error('Invalid API response')
   }
-  return data.user.name.toUpperCase()  // Type-safe access
+  return data.user.name.toUpperCase() // Type-safe access
 }
 ```
 
@@ -54,7 +54,7 @@ function processApiResponse(data: unknown): string {
 
 ```typescript
 // Incorrect
-const config = JSON.parse(configString) as AppConfig  // Unsafe assertion
+const config = JSON.parse(configString) as AppConfig // Unsafe assertion
 
 // Correct
 function parseConfig(configString: string): AppConfig {
@@ -69,6 +69,7 @@ function parseConfig(configString: string): AppConfig {
 ```
 
 **When any is acceptable:**
+
 - Migrating JavaScript to TypeScript incrementally
 - Third-party library workarounds (with `// @ts-expect-error`)
 - Truly dynamic code where type is unknowable

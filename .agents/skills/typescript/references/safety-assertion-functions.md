@@ -40,7 +40,7 @@ function shipOrder(order: Order | null): void {
 ```typescript
 interface ValidOrder extends Order {
   status: 'pending'
-  items: [OrderItem, ...OrderItem[]]  // Non-empty array
+  items: [OrderItem, ...OrderItem[]] // Non-empty array
 }
 
 function assertValidOrder(order: Order | null): asserts order is ValidOrder {
@@ -58,7 +58,7 @@ function assertValidOrder(order: Order | null): asserts order is ValidOrder {
 function processOrder(order: Order | null): void {
   assertValidOrder(order)
   // order is now typed as ValidOrder
-  submitOrder(order)  // Type-safe
+  submitOrder(order) // Type-safe
 }
 
 function shipOrder(order: Order | null): void {
@@ -85,6 +85,7 @@ function processUser(user: User | null): void {
 ```
 
 **Benefits:**
+
 - Centralizes validation logic
 - Automatic type narrowing after assertion
 - Clearer intent than if-throw patterns

@@ -44,12 +44,16 @@ export class Store {
   }
 
   private scheduleSave(): void {
-    if (this.writeTimer) clearTimeout(this.writeTimer)
+    if (this.writeTimer) {
+      clearTimeout(this.writeTimer)
+    }
     this.writeTimer = setTimeout(() => {
       this.writeTimer = null
       try {
         const dir = dirname(DATA_FILE)
-        if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+        if (!existsSync(dir)) {
+          mkdirSync(dir, { recursive: true })
+        }
         const tmpFile = `${DATA_FILE}.tmp`
         writeFileSync(tmpFile, JSON.stringify(this.state, null, 2), 'utf-8')
         renameSync(tmpFile, DATA_FILE)
@@ -67,7 +71,9 @@ export class Store {
 
   getRepo(id: string): Repo | undefined {
     const repo = this.state.repos.find((r) => r.id === id)
-    if (!repo) return undefined
+    if (!repo) {
+      return undefined
+    }
     return this.hydrateRepo(repo)
   }
 
@@ -93,7 +99,9 @@ export class Store {
     updates: Partial<Pick<Repo, 'displayName' | 'badgeColor' | 'hookSettings' | 'worktreeBaseRef'>>
   ): Repo | null {
     const repo = this.state.repos.find((r) => r.id === id)
-    if (!repo) return null
+    if (!repo) {
+      return null
+    }
     Object.assign(repo, updates)
     this.scheduleSave()
     return this.hydrateRepo(repo)
@@ -199,7 +207,9 @@ export class Store {
     }
     try {
       const dir = dirname(DATA_FILE)
-      if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+      if (!existsSync(dir)) {
+        mkdirSync(dir, { recursive: true })
+      }
       const tmpFile = `${DATA_FILE}.tmp`
       writeFileSync(tmpFile, JSON.stringify(this.state, null, 2), 'utf-8')
       renameSync(tmpFile, DATA_FILE)

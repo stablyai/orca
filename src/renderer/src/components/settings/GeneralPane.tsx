@@ -142,9 +142,7 @@ export function GeneralPane({
       <section className="space-y-4">
         <div className="space-y-1">
           <h2 className="text-sm font-semibold">Updates</h2>
-          <p className="text-xs text-muted-foreground">
-            Current version: {appVersion ?? '…'}
-          </p>
+          <p className="text-xs text-muted-foreground">Current version: {appVersion ?? '…'}</p>
         </div>
 
         <div className="flex items-center gap-3">

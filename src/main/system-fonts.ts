@@ -4,8 +4,12 @@ let cachedFonts: string[] | null = null
 let fontsPromise: Promise<string[]> | null = null
 
 export async function listSystemFontFamilies(): Promise<string[]> {
-  if (cachedFonts) return cachedFonts
-  if (fontsPromise) return fontsPromise
+  if (cachedFonts) {
+    return cachedFonts
+  }
+  if (fontsPromise) {
+    return fontsPromise
+  }
 
   fontsPromise = loadSystemFontFamilies()
     .then((fonts) => {
@@ -28,8 +32,12 @@ export function warmSystemFontFamilies(): void {
 }
 
 function loadSystemFontFamilies(): Promise<string[]> {
-  if (process.platform === 'darwin') return listMacFonts()
-  if (process.platform === 'win32') return listWindowsFonts()
+  if (process.platform === 'darwin') {
+    return listMacFonts()
+  }
+  if (process.platform === 'win32') {
+    return listWindowsFonts()
+  }
   return listLinuxFonts()
 }
 
@@ -37,11 +45,11 @@ function listMacFonts(): Promise<string[]> {
   return execFileText('system_profiler', ['SPFontsDataType', '-json'], 32 * 1024 * 1024).then(
     (output) => {
       const parsed = JSON.parse(output) as {
-        SPFontsDataType?: Array<{
-          typefaces?: Array<{
+        SPFontsDataType?: {
+          typefaces?: {
             family?: string
-          }>
-        }>
+          }[]
+        }[]
       }
 
       return uniqueSorted(
@@ -98,7 +106,7 @@ function execFileText(command: string, args: string[], maxBuffer: number): Promi
   })
 }
 
-function uniqueSorted(values: Array<string | undefined>): string[] {
+function uniqueSorted(values: (string | undefined)[]): string[] {
   return Array.from(
     new Set(
       values

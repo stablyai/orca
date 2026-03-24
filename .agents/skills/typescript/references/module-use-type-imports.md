@@ -13,8 +13,8 @@ Type-only imports (`import type`) are completely erased during compilation, prev
 
 ```typescript
 // config.ts
-import { DatabaseConfig } from './database'  // Loads entire database module
-import { Logger } from './logger'  // Loads entire logger module
+import { DatabaseConfig } from './database' // Loads entire database module
+import { Logger } from './logger' // Loads entire logger module
 
 interface AppConfig {
   db: DatabaseConfig
@@ -73,6 +73,7 @@ import { createUser, type User, type UserRole } from './user'
 ```
 
 **Benefits:**
+
 - Smaller bundles (unused modules not included)
 - Faster cold starts (fewer modules to parse)
 - Clearer code intent (types vs runtime values)

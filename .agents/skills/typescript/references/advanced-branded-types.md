@@ -16,15 +16,19 @@ type UserId = string
 type OrderId = string
 type ProductId = string
 
-function fetchUser(id: UserId): Promise<User> { /* ... */ }
-function fetchOrder(id: OrderId): Promise<Order> { /* ... */ }
+function fetchUser(id: UserId): Promise<User> {
+  /* ... */
+}
+function fetchOrder(id: OrderId): Promise<Order> {
+  /* ... */
+}
 
 const userId: UserId = 'user-123'
 const orderId: OrderId = 'order-456'
 
 // No error - all strings are interchangeable
-fetchUser(orderId)  // Bug: passed OrderId to UserId parameter
-fetchOrder(userId)  // Bug: passed UserId to OrderId parameter
+fetchUser(orderId) // Bug: passed OrderId to UserId parameter
+fetchOrder(userId) // Bug: passed UserId to OrderId parameter
 ```
 
 **Correct (branded types prevent mixing):**
@@ -44,15 +48,19 @@ function createOrderId(id: string): OrderId {
   return id as OrderId
 }
 
-function fetchUser(id: UserId): Promise<User> { /* ... */ }
-function fetchOrder(id: OrderId): Promise<Order> { /* ... */ }
+function fetchUser(id: UserId): Promise<User> {
+  /* ... */
+}
+function fetchOrder(id: OrderId): Promise<Order> {
+  /* ... */
+}
 
 const userId = createUserId('user-123')
 const orderId = createOrderId('order-456')
 
-fetchUser(orderId)  // Error: Argument of type 'OrderId' is not assignable to 'UserId'
-fetchOrder(userId)  // Error: Argument of type 'UserId' is not assignable to 'OrderId'
-fetchUser(userId)   // OK
+fetchUser(orderId) // Error: Argument of type 'OrderId' is not assignable to 'UserId'
+fetchOrder(userId) // Error: Argument of type 'UserId' is not assignable to 'OrderId'
+fetchUser(userId) // OK
 ```
 
 **For numeric types:**
@@ -70,11 +78,12 @@ function formatPrice(cents: Cents): string {
 }
 
 const price = 29.99 as Dollars
-formatPrice(price)  // Error: Dollars not assignable to Cents
-formatPrice(toCents(price))  // OK: '$29.99'
+formatPrice(price) // Error: Dollars not assignable to Cents
+formatPrice(toCents(price)) // OK: '$29.99'
 ```
 
 **When to use branded types:**
+
 - Entity IDs that shouldn't be mixed
 - Currency/unit conversions
 - Validated strings (email, URL, slug)

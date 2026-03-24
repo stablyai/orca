@@ -109,6 +109,7 @@ function createWindow(): BrowserWindow {
 
   // File drag-and-drop: the preload script handles the drop event (because
   // File.path is only available there), sends paths here, and we relay to renderer.
+  ipcMain.removeAllListeners('terminal:file-dropped-from-preload')
   ipcMain.on('terminal:file-dropped-from-preload', (_event, args: { paths: string[] }) => {
     if (!mainWindow.isDestroyed()) {
       for (const p of args.paths) {
@@ -286,7 +287,10 @@ app.whenReady().then(() => {
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) {
       mainWindow = createWindow()
+      registerRepoHandlers(mainWindow, store!)
+      registerWorktreeHandlers(mainWindow, store!)
       registerPtyHandlers(mainWindow)
+      setupAutoUpdater(mainWindow, { onBeforeQuit: () => store?.flush() })
     }
   })
 })

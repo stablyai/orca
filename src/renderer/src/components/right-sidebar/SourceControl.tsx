@@ -63,16 +63,22 @@ export default function SourceControl(): React.JSX.Element {
 
   // Find active worktree path
   const worktreePath = useMemo(() => {
-    if (!activeWorktreeId) return null
+    if (!activeWorktreeId) {
+      return null
+    }
     for (const worktrees of Object.values(worktreesByRepo)) {
       const wt = worktrees.find((w) => w.id === activeWorktreeId)
-      if (wt) return wt.path
+      if (wt) {
+        return wt.path
+      }
     }
     return null
   }, [activeWorktreeId, worktreesByRepo])
 
   const fetchStatus = useCallback(async () => {
-    if (!activeWorktreeId || !worktreePath) return
+    if (!activeWorktreeId || !worktreePath) {
+      return
+    }
     try {
       const entries = (await window.api.git.status({ worktreePath })) as GitStatusEntry[]
       setGitStatus(activeWorktreeId, entries)
@@ -86,7 +92,9 @@ export default function SourceControl(): React.JSX.Element {
     void fetchStatus()
     pollRef.current = setInterval(() => void fetchStatus(), 3000)
     return () => {
-      if (pollRef.current) clearInterval(pollRef.current)
+      if (pollRef.current) {
+        clearInterval(pollRef.current)
+      }
     }
   }, [fetchStatus])
 
@@ -110,15 +118,20 @@ export default function SourceControl(): React.JSX.Element {
   const toggleSection = useCallback((section: string) => {
     setCollapsedSections((prev) => {
       const next = new Set(prev)
-      if (next.has(section)) next.delete(section)
-      else next.add(section)
+      if (next.has(section)) {
+        next.delete(section)
+      } else {
+        next.add(section)
+      }
       return next
     })
   }, [])
 
   const handleStage = useCallback(
     async (filePath: string) => {
-      if (!worktreePath) return
+      if (!worktreePath) {
+        return
+      }
       try {
         await window.api.git.stage({ worktreePath, filePath })
         void fetchStatus()
@@ -131,7 +144,9 @@ export default function SourceControl(): React.JSX.Element {
 
   const handleUnstage = useCallback(
     async (filePath: string) => {
-      if (!worktreePath) return
+      if (!worktreePath) {
+        return
+      }
       try {
         await window.api.git.unstage({ worktreePath, filePath })
         void fetchStatus()
@@ -144,7 +159,9 @@ export default function SourceControl(): React.JSX.Element {
 
   const handleDiscard = useCallback(
     async (filePath: string) => {
-      if (!worktreePath) return
+      if (!worktreePath) {
+        return
+      }
       try {
         await window.api.git.discard({ worktreePath, filePath })
         void fetchStatus()
@@ -156,13 +173,17 @@ export default function SourceControl(): React.JSX.Element {
   )
 
   const handleViewAllChanges = useCallback(() => {
-    if (!activeWorktreeId || !worktreePath) return
+    if (!activeWorktreeId || !worktreePath) {
+      return
+    }
     openAllDiffs(activeWorktreeId, worktreePath)
   }, [activeWorktreeId, worktreePath, openAllDiffs])
 
   const handleOpenDiff = useCallback(
     (entry: GitStatusEntry) => {
-      if (!activeWorktreeId) return
+      if (!activeWorktreeId) {
+        return
+      }
       const language = detectLanguage(entry.path)
       const absolutePath = worktreePath ? `${worktreePath}/${entry.path}` : entry.path
       openDiff(activeWorktreeId, absolutePath, entry.path, language, entry.area === 'staged')
@@ -202,7 +223,9 @@ export default function SourceControl(): React.JSX.Element {
 
       {SECTION_ORDER.map((area) => {
         const items = grouped[area]
-        if (items.length === 0) return null
+        if (items.length === 0) {
+          return null
+        }
         const isCollapsed = collapsedSections.has(area)
 
         return (

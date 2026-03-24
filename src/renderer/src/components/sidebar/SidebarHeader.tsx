@@ -20,7 +20,9 @@ const SidebarHeader = React.memo(function SidebarHeader() {
             variant="ghost"
             size="icon-xs"
             onClick={() => {
-              if (!canCreateWorktree) return
+              if (!canCreateWorktree) {
+                return
+              }
               openModal('create-worktree')
             }}
             aria-label="Add worktree"

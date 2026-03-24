@@ -47,11 +47,13 @@ export function calculateTotal(items: CartItem[]): number {
 ```
 
 **What requires annotation under isolatedDeclarations:**
+
 - Exported function return types
 - Exported variable types when not inferable from a literal
 - Exported class method return types
 
 **What does NOT need annotation:**
+
 - Local variables and functions (not exported)
 - Function parameters (already required by TypeScript)
 - Exports initialized with literals (`export const MAX = 100` is fine)

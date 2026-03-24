@@ -1,4 +1,5 @@
-import { BrowserWindow, dialog, ipcMain } from 'electron'
+import type { BrowserWindow } from 'electron'
+import { dialog, ipcMain } from 'electron'
 import { randomUUID } from 'crypto'
 import type { Store } from '../persistence'
 import type { Repo } from '../../shared/types'
@@ -12,6 +13,17 @@ import {
 } from '../git/repo'
 
 export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): void {
+  // Remove any previously registered handlers so we can re-register them
+  // (e.g. when macOS re-activates the app and creates a new window).
+  ipcMain.removeHandler('repos:list')
+  ipcMain.removeHandler('repos:add')
+  ipcMain.removeHandler('repos:remove')
+  ipcMain.removeHandler('repos:update')
+  ipcMain.removeHandler('repos:pickFolder')
+  ipcMain.removeHandler('repos:getGitUsername')
+  ipcMain.removeHandler('repos:getBaseRefDefault')
+  ipcMain.removeHandler('repos:searchBaseRefs')
+
   ipcMain.handle('repos:list', () => {
     return store.getRepos()
   })
@@ -23,7 +35,9 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
 
     // Check if already added
     const existing = store.getRepos().find((r) => r.path === args.path)
-    if (existing) return existing
+    if (existing) {
+      return existing
+    }
 
     const repo: Repo = {
       id: randomUUID(),
@@ -55,7 +69,9 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       }
     ) => {
       const updated = store.updateRepo(args.repoId, args.updates)
-      if (updated) notifyReposChanged(mainWindow)
+      if (updated) {
+        notifyReposChanged(mainWindow)
+      }
       return updated
     }
   )
@@ -64,19 +80,25 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     const result = await dialog.showOpenDialog(mainWindow, {
       properties: ['openDirectory']
     })
-    if (result.canceled || result.filePaths.length === 0) return null
+    if (result.canceled || result.filePaths.length === 0) {
+      return null
+    }
     return result.filePaths[0]
   })
 
   ipcMain.handle('repos:getGitUsername', (_event, args: { repoId: string }) => {
     const repo = store.getRepo(args.repoId)
-    if (!repo) return ''
+    if (!repo) {
+      return ''
+    }
     return getGitUsername(repo.path)
   })
 
   ipcMain.handle('repos:getBaseRefDefault', async (_event, args: { repoId: string }) => {
     const repo = store.getRepo(args.repoId)
-    if (!repo) return 'origin/main'
+    if (!repo) {
+      return 'origin/main'
+    }
     return getBaseRefDefault(repo.path)
   })
 
@@ -84,7 +106,9 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     'repos:searchBaseRefs',
     async (_event, args: { repoId: string; query: string; limit?: number }) => {
       const repo = store.getRepo(args.repoId)
-      if (!repo) return []
+      if (!repo) {
+        return []
+      }
       return searchBaseRefs(repo.path, args.query, args.limit ?? 25)
     }
   )

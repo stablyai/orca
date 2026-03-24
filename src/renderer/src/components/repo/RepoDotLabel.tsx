@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react'
 import { cn } from '@/lib/utils'
 
-interface RepoDotLabelProps {
+type RepoDotLabelProps = {
   name: string
   color: string
   className?: string

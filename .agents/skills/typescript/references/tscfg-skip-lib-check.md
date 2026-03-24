@@ -57,6 +57,7 @@ The `skipLibCheck` option skips type-checking of declaration files (`.d.ts`). Si
 This only skips checking the default library files (lib.d.ts), not third-party declarations.
 
 **When to disable skipLibCheck:**
+
 - Debugging type conflicts between declaration files
 - Publishing a library where you want to verify `.d.ts` output
 - Encountering mysterious type errors that might originate in declarations

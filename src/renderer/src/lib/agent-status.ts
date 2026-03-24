@@ -27,23 +27,43 @@ function containsAny(title: string, words: string[]): boolean {
 }
 
 export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
-  if (!title) return null
+  if (!title) {
+    return null
+  }
 
   // Gemini CLI symbols are the most specific and should take precedence.
-  if (title.includes(GEMINI_PERMISSION)) return 'permission'
-  if (title.includes(GEMINI_WORKING)) return 'working'
-  if (title.includes(GEMINI_IDLE)) return 'idle'
+  if (title.includes(GEMINI_PERMISSION)) {
+    return 'permission'
+  }
+  if (title.includes(GEMINI_WORKING)) {
+    return 'working'
+  }
+  if (title.includes(GEMINI_IDLE)) {
+    return 'idle'
+  }
 
-  if (containsBrailleSpinner(title)) return 'working'
+  if (containsBrailleSpinner(title)) {
+    return 'working'
+  }
 
   if (containsAgentName(title)) {
-    if (containsAny(title, ['action required', 'permission', 'waiting'])) return 'permission'
-    if (containsAny(title, ['ready', 'idle', 'done'])) return 'idle'
-    if (containsAny(title, ['working', 'thinking', 'running'])) return 'working'
+    if (containsAny(title, ['action required', 'permission', 'waiting'])) {
+      return 'permission'
+    }
+    if (containsAny(title, ['ready', 'idle', 'done'])) {
+      return 'idle'
+    }
+    if (containsAny(title, ['working', 'thinking', 'running'])) {
+      return 'working'
+    }
 
     // Claude Code title prefixes: ". " = working, "* " = idle
-    if (title.startsWith('. ')) return 'working'
-    if (title.startsWith('* ')) return 'idle'
+    if (title.startsWith('. ')) {
+      return 'working'
+    }
+    if (title.startsWith('* ')) {
+      return 'idle'
+    }
 
     return 'idle'
   }

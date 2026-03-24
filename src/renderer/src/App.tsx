@@ -43,7 +43,6 @@ function App(): React.JSX.Element {
   const setRightSidebarOpen = useAppStore((s) => s.setRightSidebarOpen)
   const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
 
-
   // Subscribe to IPC push events
   useIpcEvents()
 
@@ -167,7 +166,7 @@ function App(): React.JSX.Element {
       mq.addEventListener('change', handler)
       return () => mq.removeEventListener('change', handler)
     }
-  }, [settings?.theme])
+  }, [settings])
 
   // Refresh GitHub data (PR/issue status) when window regains focus
   useEffect(() => {
@@ -245,7 +244,6 @@ function App(): React.JSX.Element {
     window.addEventListener('keydown', onKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
   }, [openModal, repos.length, setRightSidebarTab, setRightSidebarOpen])
-
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden">

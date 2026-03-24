@@ -81,6 +81,7 @@ git diff $(git merge-base origin/main HEAD) --stat | tail -1
 ```
 
 If the diff contains more than 500 changed files, **EXIT immediately** with:
+
 ```
 ❌ Diff too large (>500 files). Please split this PR into smaller, focused changes.
 ```
@@ -101,28 +102,35 @@ Create `00-review-context.md` in the working directory with:
 # Review Context
 
 ## Branch Info
+
 - Base: origin/main
 - Current: [branch name]
 
 ## Changed Files Summary
+
 [List all changed files with their change type: A/M/D]
 
 ## Changed Line Ranges (PR Scope)
+
 <!-- In scope: issues on these lines OR caused by these changes. Out of scope: unrelated pre-existing issues -->
-| File | Changed Lines |
-|------|---------------|
+
+| File               | Changed Lines    |
+| ------------------ | ---------------- |
 | [path/to/file1.ts] | [45-67, 120-135] |
-| [path/to/file2.ts] | [10-25] |
+| [path/to/file2.ts] | [10-25]          |
 
 ## Review Standards Reference
+
 - Follow /review-code standards
 - Focus on: correctness, security, performance, maintainability
 - Priority levels: Critical > High > Medium > Low
 
 ## File Categories
+
 [Categorized list - see below]
 
 ## Skipped Issues (Do Not Re-validate)
+
 <!-- Issues validated but deemed not worth fixing. Do not re-validate these in future iterations. -->
 <!-- Format: [file:line-range] | [severity] | [reason skipped] | [issue summary] -->
 <!-- NOTE: Skips should be RARE - only purely cosmetic issues with no functional impact -->
@@ -130,11 +138,12 @@ Create `00-review-context.md` in the working directory with:
 [Initially empty - populated during validation phase]
 
 ## Iteration State
+
 <!-- Updated after each phase to enable crash recovery -->
+
 Current iteration: 1
 Last completed phase: Setup
 Files fixed this iteration: []
-
 ```
 
 **IMPORTANT**: The "Skipped Issues" section persists across iterations. However, skips should be RARE - only purely cosmetic issues (naming, JSDoc, import ordering) may be skipped. Functional issues like error handling, type safety, and performance must ALWAYS be fixed.
@@ -143,17 +152,18 @@ Files fixed this iteration: []
 
 Assign each file to **exactly ONE** file category (no duplicates):
 
-| Priority | Category | File Patterns |
-|----------|----------|---------------|
-| 1 | Electron/Main | `src/main/`, `src/preload/`, `electron.*` |
-| 2 | Backend/IPC | `*ipc*`, `*handler*`, `*service*` (in main process) |
-| 3 | Frontend/UI | `src/renderer/`, `components/`, `*.tsx`, `*.css` |
-| 4 | Config/Build | `*.config.*`, `package.json`, `tsconfig.*`, `electron-builder.*` |
-| 5 | Utility/Common | Everything else |
+| Priority | Category       | File Patterns                                                    |
+| -------- | -------------- | ---------------------------------------------------------------- |
+| 1        | Electron/Main  | `src/main/`, `src/preload/`, `electron.*`                        |
+| 2        | Backend/IPC    | `*ipc*`, `*handler*`, `*service*` (in main process)              |
+| 3        | Frontend/UI    | `src/renderer/`, `components/`, `*.tsx`, `*.css`                 |
+| 4        | Config/Build   | `*.config.*`, `package.json`, `tsconfig.*`, `electron-builder.*` |
+| 5        | Utility/Common | Everything else                                                  |
 
 **Deduplication rule**: A file belongs to the FIRST matching category only.
 
 **Tiebreaker rule**: If a file path matches multiple categories at different directory depths:
+
 1. Use the **deepest matching directory** (e.g., `src/main/services/ui/dialog.ts` → Backend/IPC because `services/` is deeper than `main/`)
 2. If same depth, use priority order (lower number wins)
 
@@ -161,12 +171,12 @@ Assign each file to **exactly ONE** file category (no duplicates):
 
 Each file category gets reviewed by multiple specialized review commands:
 
-| Category | Review Commands |
-|----------|-----------------|
-| Electron/Main | `/review-code`, `/review-algorithm-architecture` |
-| Backend/IPC | `/review-code`, `/review-algorithm-architecture` |
-| Frontend/UI | `/review-code`, `/review-algorithm-architecture` |
-| Config/Build | `/review-code` |
+| Category       | Review Commands                                  |
+| -------------- | ------------------------------------------------ |
+| Electron/Main  | `/review-code`, `/review-algorithm-architecture` |
+| Backend/IPC    | `/review-code`, `/review-algorithm-architecture` |
+| Frontend/UI    | `/review-code`, `/review-algorithm-architecture` |
+| Config/Build   | `/review-code`                                   |
 | Utility/Common | `/review-code`, `/review-algorithm-architecture` |
 
 **Total review agents**: (Categories with files) × (Applicable review commands per category)
@@ -179,10 +189,10 @@ Spawn review subagents using the Task tool. **CRITICAL**: Use the exact Task() d
 
 ### Review Command Descriptions
 
-| Command | Focus | Engine |
-|---------|-------|--------|
-| `/review-code` | Logical bugs, security issues, TypeScript best practices, error handling | Claude |
-| `/review-algorithm-architecture` | File organization, module boundaries, performance on hot paths | Claude |
+| Command                          | Focus                                                                    | Engine |
+| -------------------------------- | ------------------------------------------------------------------------ | ------ |
+| `/review-code`                   | Logical bugs, security issues, TypeScript best practices, error handling | Claude |
+| `/review-algorithm-architecture` | File organization, module boundaries, performance on hot paths           | Claude |
 
 ### Spawn agents by category × review command
 
@@ -243,6 +253,7 @@ Total: 6 parallel review agents
 **Launch ALL Task() calls in a single message block for true parallelism.**
 
 **IMPORTANT — WAIT FOR ALL AGENTS**:
+
 - Do NOT use `run_in_background: true` for any Phase 1 review agent.
 - Task() calls without `run_in_background` are blocking by default — they return only when the subagent finishes.
 - **VERIFICATION CHECKPOINT**: Before starting Phase 2, you MUST count the number of Task() results you received. It MUST equal the total number of Task() calls you made. If any result is missing, DO NOT proceed — wait or re-spawn the missing agent.
@@ -290,6 +301,7 @@ Total: 6 parallel review agents
 Validate all issues that weren't excluded by the "Skipped Issues" list.
 
 ### Grouping strategy:
+
 - Group findings by file
 - One validation agent per file (handles all findings for that file)
 - Maximum 10 validation agents total
@@ -356,6 +368,7 @@ For any issues marked as ⏭️ **Skip**, append them to the "Skipped Issues" se
 
 ```markdown
 ## Skipped Issues (Do Not Re-validate)
+
 <!-- Format: [file:line-range] | [severity] | [reason skipped] | [issue summary] -->
 
 src/utils/helper.ts:42-45 | Low | Stylistic preference | Variable naming convention
@@ -398,10 +411,12 @@ git add -A && git commit -m "WIP: Changes before auto-review fixes"
 **MANDATORY**: Create an explicit mapping from validation results to fix actions.
 
 For every issue marked "✅ Fix" in validation:
+
 1. Record: `[file] → [issue description] → [suggested fix]`
 2. Group by file
 
 **Traceability requirement**: Every "✅ Fix" issue MUST appear in the fix manifest. Do not:
+
 - Skip issues because you believe a different fix "solves the root cause"
 - Substitute your judgment for what validation explicitly said to fix
 - Rationalize away issues as "will be handled by another fix"
@@ -419,6 +434,7 @@ If validation says "✅ Fix" for file X, spawn a fix agent for file X. Period.
 ### Conflict prevention
 
 To avoid race conditions when multiple agents edit overlapping code:
+
 - Each file should have **at most ONE fix agent running at a time**
 - If a file has >5 issues requiring multiple agents, spawn them **sequentially** (not in parallel)
 - After each fix agent completes for a multi-agent file, verify the file is syntactically valid before spawning the next
@@ -466,6 +482,7 @@ npm run typecheck 2>&1
 ```
 
 If the type check fails:
+
 - Log which fix agent(s) likely caused the failure
 - Continue to Phase 5 - the next iteration's review will catch the type errors as new issues
 - Update Iteration State: `Build status: FAILED (type errors in [files])`
@@ -473,6 +490,7 @@ If the type check fails:
 ### Step 6: Verify fix manifest completeness
 
 Before proceeding to Phase 5, verify:
+
 - Every file in the fix manifest had a fix agent spawned
 - Every "✅ Fix" issue from validation was addressed by a fix agent
 - No issues were skipped due to assumptions about "root cause" fixes elsewhere
@@ -506,6 +524,7 @@ OTHERWISE:
 **The key insight**: "I fixed all issues" ≠ "There are no issues". Another review round must confirm.
 
 **Note on convergence**: The loop converges because:
+
 1. Fixed issues no longer appear in subsequent reviews
 2. Skipped issues are tracked and excluded from future validation
 3. Only genuinely new issues trigger additional work
@@ -612,13 +631,13 @@ ls -t .context/auto-review-*.md 2>/dev/null | tail -n +6 | xargs rm -f 2>/dev/nu
 
 ## Token Efficiency Summary
 
-| Before | After | Improvement |
-|--------|-------|-------------|
-| Full diff to all agents | Relevant files only per category | ~6x reduction |
-| Generic review for all | Specialized review commands | Better issue coverage |
-| Re-validate skipped issues | Track in Skipped Issues list | ~2x reduction per iteration |
-| 1 agent per finding | 1 agent per file (up to 5 issues) | ~5x reduction |
-| No deduplication | Files assigned to one category only | ~2x reduction |
+| Before                     | After                               | Improvement                 |
+| -------------------------- | ----------------------------------- | --------------------------- |
+| Full diff to all agents    | Relevant files only per category    | ~6x reduction               |
+| Generic review for all     | Specialized review commands         | Better issue coverage       |
+| Re-validate skipped issues | Track in Skipped Issues list        | ~2x reduction per iteration |
+| 1 agent per finding        | 1 agent per file (up to 5 issues)   | ~5x reduction               |
+| No deduplication           | Files assigned to one category only | ~2x reduction               |
 
 ---
 

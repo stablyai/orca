@@ -14,11 +14,7 @@ Inline conditional types are re-evaluated on every function call. Extracting the
 ```typescript
 function processResponse<T>(
   response: T
-): T extends { data: infer D }
-   ? D extends Array<infer Item>
-     ? Item[]
-     : D
-   : never {
+): T extends { data: infer D } ? (D extends Array<infer Item> ? Item[] : D) : never {
   // Compiler re-computes this complex conditional on every call
   return response.data
 }
@@ -50,6 +46,7 @@ function getFirstItem<T>(collection: T): UnwrapArray<T> {
 ```
 
 **Benefits:**
+
 - Type alias acts as a cache boundary
 - Reduces duplicate computation across multiple call sites
 - Improves IDE responsiveness for autocomplete

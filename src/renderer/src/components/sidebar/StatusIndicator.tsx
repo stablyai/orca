@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils'
 
 type Status = 'active' | 'working' | 'permission' | 'inactive'
 
-interface StatusIndicatorProps {
+type StatusIndicatorProps = {
   status: Status
   className?: string
 }

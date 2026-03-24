@@ -13,7 +13,7 @@ Global variables and module-level state persist for the application's lifetime. 
 
 ```typescript
 // cache.ts
-const userCache = new Map<string, User>()  // Never cleared
+const userCache = new Map<string, User>() // Never cleared
 
 export function getCachedUser(id: string): User | undefined {
   return userCache.get(id)
@@ -61,7 +61,7 @@ class LRUCache<K, V> {
   }
 }
 
-const userCache = new LRUCache<string, User>(1000)  // Max 1000 entries
+const userCache = new LRUCache<string, User>(1000) // Max 1000 entries
 
 export function getCachedUser(id: string): User | undefined {
   return userCache.get(id)

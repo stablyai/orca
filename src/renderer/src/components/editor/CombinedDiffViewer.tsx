@@ -7,7 +7,7 @@ import '@/lib/monaco-setup'
 import { cn } from '@/lib/utils'
 import type { GitStatusEntry } from '../../../../shared/types'
 
-interface DiffSection {
+type DiffSection = {
   entry: GitStatusEntry
   originalContent: string
   modifiedContent: string
@@ -38,7 +38,9 @@ export default function CombinedDiffViewer({
         // Filter to only staged and unstaged (not untracked)
         const changed = entries.filter((e) => e.area !== 'untracked')
 
-        if (cancelled) return
+        if (cancelled) {
+          return
+        }
 
         // Initialize sections
         const initialSections: DiffSection[] = changed.map((entry) => ({
@@ -66,7 +68,9 @@ export default function CombinedDiffViewer({
           })
         )
 
-        if (cancelled) return
+        if (cancelled) {
+          return
+        }
 
         setSections((prev) =>
           prev.map((section, i) => ({
@@ -136,7 +140,7 @@ export default function CombinedDiffViewer({
 
           return (
             <div
-              key={section.entry.path + ':' + section.entry.area}
+              key={`${section.entry.path}:${section.entry.area}`}
               className="border-b border-border"
             >
               {/* Section header */}

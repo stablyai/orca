@@ -18,17 +18,17 @@ type EventHandler = {
 }
 
 const handler: EventHandler = {
-  event: 'click',  // OK
+  event: 'click', // OK
   handler: () => {}
 }
 
 const badHandler: EventHandler = {
-  event: 'clck',  // Typo - no error
+  event: 'clck', // Typo - no error
   handler: () => {}
 }
 
-function addEventListener(event: string, handler: () => void): void { }
-addEventListener('onlcick', () => {})  // Typo compiles fine
+function addEventListener(event: string, handler: () => void): void {}
+addEventListener('onlcick', () => {}) // Typo compiles fine
 ```
 
 **Correct (template literal type validates pattern):**
@@ -43,12 +43,12 @@ type EventHandler = {
 }
 
 const handler: EventHandler = {
-  event: 'onClick',  // OK
+  event: 'onClick', // OK
   handler: () => {}
 }
 
 const badHandler: EventHandler = {
-  event: 'onClck',  // Error: Type '"onClck"' is not assignable to type 'EventHandlerName'
+  event: 'onClck', // Error: Type '"onClck"' is not assignable to type 'EventHandlerName'
   handler: () => {}
 }
 ```
@@ -63,10 +63,10 @@ function setWidth(element: HTMLElement, width: CSSValue): void {
   element.style.width = width
 }
 
-setWidth(div, '100px')   // OK
-setWidth(div, '2.5rem')  // OK
-setWidth(div, '100')     // Error: Type '"100"' is not assignable to type 'CSSValue'
-setWidth(div, '100pixels')  // Error
+setWidth(div, '100px') // OK
+setWidth(div, '2.5rem') // OK
+setWidth(div, '100') // Error: Type '"100"' is not assignable to type 'CSSValue'
+setWidth(div, '100pixels') // Error
 ```
 
 **For API route patterns:**
@@ -80,10 +80,10 @@ function fetchResource(route: APIRoute): Promise<Response> {
   return fetch(route)
 }
 
-fetchResource('/api/v1/users')    // OK
-fetchResource('/api/v2/orders')   // OK
-fetchResource('/api/v3/users')    // Error: 'v3' not in APIVersion
-fetchResource('/users')           // Error: doesn't match pattern
+fetchResource('/api/v1/users') // OK
+fetchResource('/api/v2/orders') // OK
+fetchResource('/api/v3/users') // Error: 'v3' not in APIVersion
+fetchResource('/users') // Error: doesn't match pattern
 ```
 
 **Combining with mapped types:**

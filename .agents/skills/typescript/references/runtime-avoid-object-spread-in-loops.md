@@ -13,9 +13,9 @@ Object spread (`...`) creates a new object on each use. In loops, this causes N 
 
 ```typescript
 function enrichOrders(orders: Order[]): EnrichedOrder[] {
-  return orders.map(order => ({
-    ...order,  // Creates new object
-    ...calculateTotals(order),  // Spreads another object
+  return orders.map((order) => ({
+    ...order, // Creates new object
+    ...calculateTotals(order), // Spreads another object
     processedAt: new Date()
   }))
 }
@@ -33,7 +33,7 @@ interface EnrichedOrder extends Order {
 }
 
 function enrichOrders(orders: Order[]): EnrichedOrder[] {
-  return orders.map(order => {
+  return orders.map((order) => {
     const totals = calculateTotals(order)
 
     return {
@@ -56,21 +56,28 @@ function enrichOrders(orders: Order[]): EnrichedOrder[] {
 
 ```typescript
 // Incorrect - spreads on every iteration
-const result = items.reduce((acc, item) => ({
-  ...acc,
-  [item.id]: item.value
-}), {})
+const result = items.reduce(
+  (acc, item) => ({
+    ...acc,
+    [item.id]: item.value
+  }),
+  {}
+)
 // O(n²) - each spread copies growing object
 
 // Correct - mutate accumulator
-const result = items.reduce((acc, item) => {
-  acc[item.id] = item.value
-  return acc
-}, {} as Record<string, number>)
+const result = items.reduce(
+  (acc, item) => {
+    acc[item.id] = item.value
+    return acc
+  },
+  {} as Record<string, number>
+)
 // O(n) - direct property assignment
 ```
 
 **When spread is acceptable:**
+
 - Outside hot paths
 - Small objects (< 10 properties)
 - When immutability is required for state management

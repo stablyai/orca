@@ -17,13 +17,7 @@ type DeepPartial<T> = {
 }
 // No depth limit - deeply nested objects cause exponential expansion
 
-type JSONValue =
-  | string
-  | number
-  | boolean
-  | null
-  | JSONValue[]
-  | { [key: string]: JSONValue }
+type JSONValue = string | number | boolean | null | JSONValue[] | { [key: string]: JSONValue }
 // Infinite recursion potential
 ```
 
@@ -31,21 +25,20 @@ type JSONValue =
 
 ```typescript
 type DeepPartial<T, Depth extends number[] = []> = Depth['length'] extends 5
-  ? T  // Stop at depth 5
+  ? T // Stop at depth 5
   : {
-      [P in keyof T]?: T[P] extends object
-        ? DeepPartial<T[P], [...Depth, 1]>
-        : T[P]
+      [P in keyof T]?: T[P] extends object ? DeepPartial<T[P], [...Depth, 1]> : T[P]
     }
 
 type JSONValue<Depth extends number[] = []> = Depth['length'] extends 10
   ? unknown
-  : | string
-    | number
-    | boolean
-    | null
-    | JSONValue<[...Depth, 1]>[]
-    | { [key: string]: JSONValue<[...Depth, 1]> }
+  :
+      | string
+      | number
+      | boolean
+      | null
+      | JSONValue<[...Depth, 1]>[]
+      | { [key: string]: JSONValue<[...Depth, 1]> }
 ```
 
 **Alternative (use built-in utilities):**
@@ -59,6 +52,7 @@ type Config = Partial<AppConfig>
 ```
 
 **When unbounded recursion is acceptable:**
+
 - Types with guaranteed shallow depth (max 2-3 levels)
 - Internal types not exposed in public APIs
 

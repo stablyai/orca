@@ -16,7 +16,7 @@ async function enrichUsers(userIds: string[]): Promise<EnrichedUser[]> {
   const enrichedUsers: EnrichedUser[] = []
 
   for (const userId of userIds) {
-    const user = await fetchUser(userId)  // Waits for each request
+    const user = await fetchUser(userId) // Waits for each request
     const profile = await fetchProfile(userId)
     enrichedUsers.push({ ...user, profile })
   }
@@ -32,10 +32,7 @@ async function enrichUsers(userIds: string[]): Promise<EnrichedUser[]> {
 async function enrichUsers(userIds: string[]): Promise<EnrichedUser[]> {
   const enrichedUsers = await Promise.all(
     userIds.map(async (userId) => {
-      const [user, profile] = await Promise.all([
-        fetchUser(userId),
-        fetchProfile(userId),
-      ])
+      const [user, profile] = await Promise.all([fetchUser(userId), fetchProfile(userId)])
       return { ...user, profile }
     })
   )
@@ -56,10 +53,7 @@ async function enrichUsers(userIds: string[]): Promise<EnrichedUser[]> {
     const batch = userIds.slice(i, i + BATCH_SIZE)
     const batchResults = await Promise.all(
       batch.map(async (userId) => {
-        const [user, profile] = await Promise.all([
-          fetchUser(userId),
-          fetchProfile(userId),
-        ])
+        const [user, profile] = await Promise.all([fetchUser(userId), fetchProfile(userId)])
         return { ...user, profile }
       })
     )
@@ -71,6 +65,7 @@ async function enrichUsers(userIds: string[]): Promise<EnrichedUser[]> {
 ```
 
 **When sequential loop await is acceptable:**
+
 - Each iteration depends on the previous result
 - API strictly requires sequential calls
 - Processing order affects correctness

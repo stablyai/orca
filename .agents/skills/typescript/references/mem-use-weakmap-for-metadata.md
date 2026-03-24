@@ -24,7 +24,7 @@ function trackUser(user: User): void {
 function removeUser(user: User): void {
   // Even after user is "removed" from app state,
   // Map still holds reference, preventing GC
-  userMetadata.delete(user)  // Must manually clean up
+  userMetadata.delete(user) // Must manually clean up
 }
 
 // If delete is forgotten, user objects leak forever
@@ -77,6 +77,7 @@ function getComputedConfig(config: Config): ComputedConfig {
 ```
 
 **Limitations of WeakMap:**
+
 - Keys must be objects (not primitives)
 - Not iterable (no `.keys()`, `.values()`, `.entries()`)
 - No `.size` property

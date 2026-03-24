@@ -40,7 +40,9 @@ const GroupControls = React.memo(function GroupControls() {
         type="single"
         value={groupBy}
         onValueChange={(v) => {
-          if (v) setGroupBy(v as typeof groupBy)
+          if (v) {
+            setGroupBy(v as typeof groupBy)
+          }
         }}
         variant="outline"
         size="sm"

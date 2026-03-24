@@ -16,7 +16,9 @@ function parseOrcaYaml(content: string): OrcaHooks | null {
 
   // Match top-level "scripts:" block
   const scriptsMatch = content.match(/^scripts:\s*$/m)
-  if (!scriptsMatch) return null
+  if (!scriptsMatch) {
+    return null
+  }
 
   const afterScripts = content.slice(scriptsMatch.index! + scriptsMatch[0].length)
   const lines = afterScripts.split('\n')
@@ -26,7 +28,9 @@ function parseOrcaYaml(content: string): OrcaHooks | null {
 
   for (const line of lines) {
     // Another top-level key (not indented) — stop parsing scripts block
-    if (/^\S/.test(line) && line.trim().length > 0) break
+    if (/^\S/.test(line) && line.trim().length > 0) {
+      break
+    }
 
     // Indented key like "  setup: |" or "  archive: |"
     const keyMatch = line.match(/^  (setup|archive):\s*\|?\s*$/)
@@ -42,7 +46,7 @@ function parseOrcaYaml(content: string): OrcaHooks | null {
 
     // Content line (indented by 4+ spaces under a key)
     if (currentKey && line.startsWith('    ')) {
-      currentValue += line.slice(4) + '\n'
+      currentValue += `${line.slice(4)}\n`
     }
   }
 
@@ -51,7 +55,9 @@ function parseOrcaYaml(content: string): OrcaHooks | null {
     hooks.scripts[currentKey] = currentValue.trimEnd()
   }
 
-  if (!hooks.scripts.setup && !hooks.scripts.archive) return null
+  if (!hooks.scripts.setup && !hooks.scripts.archive) {
+    return null
+  }
   return hooks
 }
 
@@ -60,7 +66,9 @@ function parseOrcaYaml(content: string): OrcaHooks | null {
  */
 export function loadHooks(repoPath: string): OrcaHooks | null {
   const yamlPath = join(repoPath, 'orca.yaml')
-  if (!existsSync(yamlPath)) return null
+  if (!existsSync(yamlPath)) {
+    return null
+  }
 
   try {
     const content = readFileSync(yamlPath, 'utf-8')
@@ -103,7 +111,9 @@ export function getEffectiveHooks(repo: Repo): OrcaHooks | null {
     }
   }
 
-  if (!hooks.scripts.setup && !hooks.scripts.archive) return null
+  if (!hooks.scripts.setup && !hooks.scripts.archive) {
+    return null
+  }
   return hooks
 }
 

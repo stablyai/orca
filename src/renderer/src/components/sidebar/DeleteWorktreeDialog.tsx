@@ -42,8 +42,12 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
 
   const handleOpenChange = useCallback(
     (open: boolean) => {
-      if (open || isDeleting) return
-      if (worktreeId) clearWorktreeDeleteState(worktreeId)
+      if (open || isDeleting) {
+        return
+      }
+      if (worktreeId) {
+        clearWorktreeDeleteState(worktreeId)
+      }
       closeModal()
     },
     [clearWorktreeDeleteState, closeModal, isDeleting, worktreeId]
@@ -51,7 +55,9 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
 
   const handleDelete = useCallback(
     async (force = false) => {
-      if (!worktreeId) return
+      if (!worktreeId) {
+        return
+      }
       closeModal()
       const result = await removeWorktree(worktreeId, force)
       if (!result.ok) {
@@ -69,8 +75,9 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
         <DialogHeader>
           <DialogTitle className="text-sm">Delete Worktree</DialogTitle>
           <DialogDescription className="text-xs">
-            Remove <span className="break-all font-medium text-foreground">{worktree?.displayName}</span> from
-            git and delete its working tree folder.
+            Remove{' '}
+            <span className="break-all font-medium text-foreground">{worktree?.displayName}</span>{' '}
+            from git and delete its working tree folder.
           </DialogDescription>
         </DialogHeader>
 

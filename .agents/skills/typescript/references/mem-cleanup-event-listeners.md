@@ -80,7 +80,7 @@ class WebSocketManager {
   }
 
   disconnect(): void {
-    this.abortController.abort()  // Removes all listeners at once
+    this.abortController.abort() // Removes all listeners at once
     this.socket.close()
   }
 }

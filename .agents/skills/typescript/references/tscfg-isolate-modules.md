@@ -29,7 +29,7 @@ export const enum Status {
 
 // user.ts
 import { Status } from './constants'
-const status = Status.Active  // Requires reading constants.ts to inline
+const status = Status.Active // Requires reading constants.ts to inline
 ```
 
 **Correct (single-file transpilable):**
@@ -47,14 +47,15 @@ const status = Status.Active  // Requires reading constants.ts to inline
 
 ```typescript
 // constants.ts
-export enum Status {  // Regular enum, not const enum
+export enum Status {
+  // Regular enum, not const enum
   Active = 'active',
   Inactive = 'inactive'
 }
 
 // user.ts
 import { Status } from './constants'
-const status = Status.Active  // Reference preserved, no cross-file read
+const status = Status.Active // Reference preserved, no cross-file read
 ```
 
 **Build pipeline integration:**
@@ -70,6 +71,7 @@ export default {
 ```
 
 **Code patterns blocked by isolatedModules:**
+
 - `const enum` (use regular `enum` or union types instead)
 - `export =` / `import =` syntax
 - Re-exporting types without `type` keyword

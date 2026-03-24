@@ -28,7 +28,7 @@ type CachedResponse<T> = PaginatedResponse<{
 }>
 
 // Usage creates 4+ levels of nesting
-function fetchUsers(): CachedResponse<User> { }
+function fetchUsers(): CachedResponse<User> {}
 // Compiler must resolve: CachedResponse<User> → PaginatedResponse<...> → ApiResponse<...>
 ```
 
@@ -57,7 +57,7 @@ interface ApiResponse<T> {
 // Compose at usage site instead of nesting
 type UserListResponse = ApiResponse<PaginatedData<User> & CacheInfo>
 
-function fetchUsers(): UserListResponse { }
+function fetchUsers(): UserListResponse {}
 // Single-level generic instantiation
 ```
 

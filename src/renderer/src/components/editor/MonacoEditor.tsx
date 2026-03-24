@@ -4,7 +4,7 @@ import type { editor } from 'monaco-editor'
 import { useAppStore } from '@/store'
 import '@/lib/monaco-setup'
 
-interface MonacoEditorProps {
+type MonacoEditorProps = {
   filePath: string
   content: string
   language: string
@@ -51,12 +51,14 @@ export default function MonacoEditor({
 
   // Update editor options when settings change
   useEffect(() => {
-    if (!editorRef.current || !settings) return
+    if (!editorRef.current || !settings) {
+      return
+    }
     editorRef.current.updateOptions({
       fontSize: settings.terminalFontSize,
       fontFamily: settings.terminalFontFamily || 'monospace'
     })
-  }, [settings?.terminalFontSize, settings?.terminalFontFamily])
+  }, [settings])
 
   return (
     <Editor

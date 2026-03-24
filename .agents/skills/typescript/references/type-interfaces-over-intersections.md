@@ -34,6 +34,7 @@ interface ExtendedOrder extends Order, Timestamps {
 ```
 
 **When to use intersections:**
+
 - Combining function types or primitives (interfaces cannot extend these)
 - Creating mapped or conditional types
 - One-off type combinations not reused elsewhere

@@ -19,7 +19,9 @@ export type EffectiveTerminalAppearance = {
 }
 
 export function getSystemPrefersDark(): boolean {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return true
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return true
+  }
   return window.matchMedia('(prefers-color-scheme: dark)').matches
 }
 
@@ -29,7 +31,9 @@ export function getBuiltinTheme(name: string): ITheme | null {
 
 export function getTerminalThemePreview(name: string): ITheme | null {
   const theme = getTheme(name)
-  if (theme) return theme
+  if (theme) {
+    return theme
+  }
   return getTheme(DEFAULT_TERMINAL_THEME_DARK)
 }
 
@@ -67,7 +71,9 @@ export function resolveEffectiveTerminalAppearance(
 
 export function normalizeColor(value: string | undefined, fallback: string): string {
   const trimmed = value?.trim()
-  if (!trimmed) return fallback
+  if (!trimmed) {
+    return fallback
+  }
   return trimmed
 }
 
@@ -135,8 +141,12 @@ export function colorToCss(
   color: { r: number; g: number; b: number; a?: number } | string | undefined,
   fallback: string
 ): string {
-  if (!color) return fallback
-  if (typeof color === 'string') return color
+  if (!color) {
+    return fallback
+  }
+  if (typeof color === 'string') {
+    return color
+  }
   const alpha = typeof color.a === 'number' ? color.a / 255 : 1
   return `rgba(${color.r}, ${color.g}, ${color.b}, ${alpha})`
 }
@@ -161,11 +171,15 @@ const PALETTE_KEYS = [
 ] as const
 
 export function terminalPalettePreview(theme: ITheme | null): string[] {
-  if (!theme) return []
+  if (!theme) {
+    return []
+  }
   const swatches: string[] = []
   for (const key of PALETTE_KEYS) {
     const color = theme[key]
-    if (color) swatches.push(color)
+    if (color) {
+      swatches.push(color)
+    }
   }
   return swatches
 }

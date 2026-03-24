@@ -13,6 +13,13 @@ let loadGeneration = 0
 const ptyLoadGeneration = new Map<string, number>()
 
 export function registerPtyHandlers(mainWindow: BrowserWindow): void {
+  // Remove any previously registered handlers so we can re-register them
+  // (e.g. when macOS re-activates the app and creates a new window).
+  ipcMain.removeHandler('pty:spawn')
+  ipcMain.removeHandler('pty:resize')
+  ipcMain.removeHandler('pty:kill')
+  ipcMain.removeAllListeners('pty:write')
+
   // Kill orphaned PTY processes from previous page loads when the renderer reloads.
   // PTYs tagged with the current loadGeneration were spawned during THIS page load
   // and must be preserved — only kill PTYs from earlier generations.
