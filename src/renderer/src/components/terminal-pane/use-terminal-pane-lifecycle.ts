@@ -82,8 +82,7 @@ export function useTerminalPaneLifecycle({
       manager,
       currentSettings,
       systemPrefersDarkRef.current,
-      paneFontSizesRef.current,
-      paneTransportsRef.current
+      paneFontSizesRef.current
     )
   }
 

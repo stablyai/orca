@@ -2,26 +2,19 @@ import type { ITheme } from '@xterm/xterm'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { GlobalSettings } from '../../../../shared/types'
 import {
-  getCursorStyleSequence,
   getBuiltinTheme,
   resolvePaneStyleOptions,
   resolveEffectiveTerminalAppearance
 } from '@/lib/terminal-theme'
-import type { PtyTransport } from './pty-transport'
 
 export function applyTerminalAppearance(
   manager: PaneManager,
   settings: GlobalSettings,
   systemPrefersDark: boolean,
-  paneFontSizes: Map<number, number>,
-  paneTransports: Map<number, PtyTransport>
+  paneFontSizes: Map<number, number>
 ): void {
   const appearance = resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
   const paneStyles = resolvePaneStyleOptions(settings)
-  const cursorSequence = getCursorStyleSequence(
-    settings.terminalCursorStyle,
-    settings.terminalCursorBlink
-  )
   const theme: ITheme | null = appearance.theme ?? getBuiltinTheme(appearance.themeName)
   const paneBackground = theme?.background ?? '#000000'
 
@@ -38,8 +31,6 @@ export function applyTerminalAppearance(
     } catch {
       /* ignore */
     }
-    const transport = paneTransports.get(pane.id)
-    transport?.sendInput(cursorSequence)
   }
 
   manager.setPaneStyleOptions({
