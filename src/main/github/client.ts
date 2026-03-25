@@ -1,6 +1,6 @@
 import { execFile } from 'child_process'
 import { promisify } from 'util'
-import type { PRInfo, IssueInfo, CheckStatus } from '../../shared/types'
+import type { PRInfo, IssueInfo, CheckStatus, PRCheckDetail } from '../../shared/types'
 
 const execFileAsync = promisify(execFile)
 
@@ -125,6 +125,95 @@ export async function listIssues(repoPath: string, limit = 20): Promise<IssueInf
   } finally {
     release()
   }
+}
+
+/**
+ * Get detailed check statuses for a PR by number.
+ */
+export async function getPRChecks(repoPath: string, prNumber: number): Promise<PRCheckDetail[]> {
+  await acquire()
+  try {
+    const { stdout } = await execFileAsync(
+      'gh',
+      ['pr', 'checks', String(prNumber), '--json', 'name,state,link'],
+      {
+        cwd: repoPath,
+        encoding: 'utf-8'
+      }
+    )
+    const data = JSON.parse(stdout) as { name: string; state: string; link: string }[]
+    return data.map((d) => ({
+      name: d.name,
+      status: mapCheckStatus(d.state),
+      conclusion: mapCheckConclusion(d.state),
+      url: d.link || null
+    }))
+  } catch (err) {
+    console.warn('getPRChecks failed:', err)
+    return []
+  } finally {
+    release()
+  }
+}
+
+/**
+ * Update a PR's title.
+ */
+export async function updatePRTitle(
+  repoPath: string,
+  prNumber: number,
+  title: string
+): Promise<boolean> {
+  await acquire()
+  try {
+    await execFileAsync('gh', ['pr', 'edit', String(prNumber), '--title', title], {
+      cwd: repoPath,
+      encoding: 'utf-8'
+    })
+    return true
+  } catch (err) {
+    console.warn('updatePRTitle failed:', err)
+    return false
+  } finally {
+    release()
+  }
+}
+
+function mapCheckStatus(state: string): PRCheckDetail['status'] {
+  const s = state?.toUpperCase()
+  if (s === 'PENDING' || s === 'QUEUED') {
+    return 'queued'
+  }
+  if (s === 'IN_PROGRESS') {
+    return 'in_progress'
+  }
+  return 'completed'
+}
+
+function mapCheckConclusion(state: string): PRCheckDetail['conclusion'] {
+  const s = state?.toUpperCase()
+  if (s === 'SUCCESS' || s === 'PASS') {
+    return 'success'
+  }
+  if (s === 'FAILURE' || s === 'FAIL') {
+    return 'failure'
+  }
+  if (s === 'CANCELLED') {
+    return 'cancelled'
+  }
+  if (s === 'TIMED_OUT') {
+    return 'timed_out'
+  }
+  if (s === 'SKIPPED') {
+    return 'skipped'
+  }
+  if (s === 'PENDING' || s === 'QUEUED' || s === 'IN_PROGRESS') {
+    return 'pending'
+  }
+  if (s === 'NEUTRAL') {
+    return 'neutral'
+  }
+  return null
 }
 
 export function mapPRState(state: string): PRInfo['state'] {

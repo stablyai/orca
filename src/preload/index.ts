@@ -140,7 +140,16 @@ const api = {
       ipcRenderer.invoke('gh:issue', args),
 
     listIssues: (args: { repoPath: string; limit?: number }): Promise<unknown[]> =>
-      ipcRenderer.invoke('gh:listIssues', args)
+      ipcRenderer.invoke('gh:listIssues', args),
+
+    prChecks: (args: { repoPath: string; prNumber: number }): Promise<unknown[]> =>
+      ipcRenderer.invoke('gh:prChecks', args),
+
+    updatePRTitle: (args: {
+      repoPath: string
+      prNumber: number
+      title: string
+    }): Promise<boolean> => ipcRenderer.invoke('gh:updatePRTitle', args)
   },
 
   settings: {

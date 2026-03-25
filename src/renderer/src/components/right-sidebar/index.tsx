@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useEffect } from 'react'
-import { Files, Search, GitBranch } from 'lucide-react'
+import { Files, Search, GitBranch, ListChecks } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import type { RightSidebarTab, ActivityBarPosition } from '@/store/slices/editor'
@@ -15,6 +15,7 @@ import {
 import FileExplorer from './FileExplorer'
 import SourceControl from './SourceControl'
 import SearchPanel from './Search'
+import ChecksPanel from './ChecksPanel'
 
 const MIN_WIDTH = 220
 const MAX_WIDTH = 500
@@ -43,6 +44,12 @@ const ACTIVITY_ITEMS: ActivityBarItem[] = [
     icon: GitBranch,
     title: 'Source Control',
     shortcut: `${isMac ? '\u21E7' : 'Shift+'}${mod}G`
+  },
+  {
+    id: 'checks',
+    icon: ListChecks,
+    title: 'Checks',
+    shortcut: `${isMac ? '\u21E7' : 'Shift+'}${mod}K`
   },
   { id: 'search', icon: Search, title: 'Search', shortcut: `${isMac ? '\u21E7' : 'Shift+'}${mod}F` }
 ]
@@ -110,6 +117,7 @@ export default function RightSidebar(): React.JSX.Element {
       {rightSidebarTab === 'explorer' && <FileExplorer key={activeWorktreeId ?? 'none'} />}
       {rightSidebarTab === 'search' && <SearchPanel key={activeWorktreeId ?? 'none'} />}
       {rightSidebarTab === 'source-control' && <SourceControl key={activeWorktreeId ?? 'none'} />}
+      {rightSidebarTab === 'checks' && <ChecksPanel key={activeWorktreeId ?? 'none'} />}
     </div>
   )
 

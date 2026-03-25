@@ -100,6 +100,21 @@ export type PRInfo = {
   updatedAt: string
 }
 
+export type PRCheckDetail = {
+  name: string
+  status: 'queued' | 'in_progress' | 'completed'
+  conclusion:
+    | 'success'
+    | 'failure'
+    | 'cancelled'
+    | 'timed_out'
+    | 'neutral'
+    | 'skipped'
+    | 'pending'
+    | null
+  url: string | null
+}
+
 export type IssueInfo = {
   number: number
   title: string

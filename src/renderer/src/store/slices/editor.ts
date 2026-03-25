@@ -14,7 +14,7 @@ export type OpenFile = {
   diffStaged?: boolean
 }
 
-export type RightSidebarTab = 'explorer' | 'search' | 'source-control'
+export type RightSidebarTab = 'explorer' | 'search' | 'source-control' | 'checks'
 export type ActivityBarPosition = 'top' | 'side'
 
 export type EditorSlice = {
