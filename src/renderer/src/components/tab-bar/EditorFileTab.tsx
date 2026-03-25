@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
-import { X, FileCode, GitCompareArrows, Copy, MapPin } from 'lucide-react'
+import { useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { X, FileCode, GitCompareArrows, Copy } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -7,30 +9,39 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { useAppStore } from '@/store'
 import type { OpenFile } from '../../store/slices/editor'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from './SortableTab'
 
 export default function EditorFileTab({
   file,
   isActive,
-  editorFileCount,
+  hasTabsToRight,
   onActivate,
   onClose,
-  onCloseOthers,
+  onCloseToRight,
   onCloseAll
 }: {
   file: OpenFile
   isActive: boolean
-  editorFileCount: number
+  hasTabsToRight: boolean
   onActivate: () => void
   onClose: () => void
-  onCloseOthers: () => void
+  onCloseToRight: () => void
   onCloseAll: () => void
 }): React.JSX.Element {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: file.id
+  })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 10 : undefined,
+    opacity: isDragging ? 0.8 : 1
+  }
+
   const fileName = file.relativePath.split('/').pop() ?? file.relativePath
   const isDiff = file.mode === 'diff'
-  const cursorLine = useAppStore((s) => s.editorCursorLine[file.filePath])
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
 
@@ -51,12 +62,22 @@ export default function EditorFileTab({
         }}
       >
         <div
+          ref={setNodeRef}
+          style={style}
+          {...attributes}
+          {...listeners}
           className={`group relative flex items-center h-full px-3 text-sm cursor-pointer select-none shrink-0 border-r border-border ${
             isActive
               ? 'bg-background text-foreground border-b-transparent'
               : 'bg-card text-muted-foreground hover:text-foreground hover:bg-accent/50'
           }`}
-          onClick={onActivate}
+          onPointerDown={(e) => {
+            if (e.button !== 0) {
+              return
+            }
+            onActivate()
+            listeners?.onPointerDown?.(e)
+          }}
           onMouseDown={(e) => {
             if (e.button === 1) {
               e.preventDefault()
@@ -108,8 +129,8 @@ export default function EditorFileTab({
         </DropdownMenuTrigger>
         <DropdownMenuContent className="w-48" sideOffset={0} align="start">
           <DropdownMenuItem onSelect={onClose}>Close</DropdownMenuItem>
-          <DropdownMenuItem onSelect={onCloseOthers} disabled={editorFileCount <= 1}>
-            Close Others
+          <DropdownMenuItem onSelect={onCloseToRight} disabled={!hasTabsToRight}>
+            Close Tabs To The Right
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={onCloseAll}>Close All Editor Tabs</DropdownMenuItem>
           <DropdownMenuSeparator />
@@ -129,27 +150,6 @@ export default function EditorFileTab({
             <Copy className="w-3.5 h-3.5 mr-1.5" />
             Copy Relative Path
           </DropdownMenuItem>
-          {cursorLine != null && !isDiff && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onSelect={() => {
-                  window.api.ui.writeClipboardText(`${file.filePath}#L${cursorLine}`)
-                }}
-              >
-                <MapPin className="w-3.5 h-3.5 mr-1.5" />
-                Copy Path to Line
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={() => {
-                  window.api.ui.writeClipboardText(`${file.relativePath}#L${cursorLine}`)
-                }}
-              >
-                <MapPin className="w-3.5 h-3.5 mr-1.5" />
-                Copy Relative Path to Line
-              </DropdownMenuItem>
-            </>
-          )}
         </DropdownMenuContent>
       </DropdownMenu>
     </>

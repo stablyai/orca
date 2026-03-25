@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GitStatusEntry, SearchResult } from '../../../../shared/types'
@@ -43,6 +44,7 @@ export type EditorSlice = {
   closeFile: (fileId: string) => void
   closeAllFiles: () => void
   setActiveFile: (fileId: string) => void
+  reorderFiles: (fileIds: string[]) => void
   markFileDirty: (fileId: string, dirty: boolean) => void
   openDiff: (
     worktreeId: string,
@@ -250,6 +252,24 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           ? { ...s.activeFileIdByWorktree, [worktreeId]: fileId }
           : s.activeFileIdByWorktree
       }
+    }),
+
+  reorderFiles: (fileIds) =>
+    set((s) => {
+      const reorderedSet = new Set(fileIds)
+      const byId = new Map(s.openFiles.map((f) => [f.id, f]))
+      const reordered = fileIds.map((id) => byId.get(id)).filter(Boolean) as OpenFile[]
+      // Replace the reordered subset in-place: keep other-worktree files at their positions
+      const result: OpenFile[] = []
+      let ri = 0
+      for (const f of s.openFiles) {
+        if (reorderedSet.has(f.id)) {
+          result.push(reordered[ri++])
+        } else {
+          result.push(f)
+        }
+      }
+      return { openFiles: result }
     }),
 
   markFileDirty: (fileId, dirty) =>

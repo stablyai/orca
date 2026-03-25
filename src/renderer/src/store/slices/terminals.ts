@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type {
@@ -15,10 +16,12 @@ export type TerminalSlice = {
   expandedPaneByTabId: Record<string, boolean>
   canExpandPaneByTabId: Record<string, boolean>
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>
+  tabBarOrderByWorktree: Record<string, string[]>
   workspaceSessionReady: boolean
   createTab: (worktreeId: string) => TerminalTab
   closeTab: (tabId: string) => void
   reorderTabs: (worktreeId: string, tabIds: string[]) => void
+  setTabBarOrder: (worktreeId: string, order: string[]) => void
   setActiveTab: (tabId: string) => void
   updateTabTitle: (tabId: string, title: string) => void
   setTabCustomTitle: (tabId: string, title: string | null) => void
@@ -41,6 +44,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   expandedPaneByTabId: {},
   canExpandPaneByTabId: {},
   terminalLayoutsByTabId: {},
+  tabBarOrderByWorktree: {},
   workspaceSessionReady: false,
 
   createTab: (worktreeId) => {
@@ -112,6 +116,32 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         .filter((t): t is TerminalTab => t !== undefined)
       return {
         tabsByWorktree: { ...s.tabsByWorktree, [worktreeId]: reordered }
+      }
+    })
+  },
+
+  setTabBarOrder: (worktreeId, order) => {
+    set((s) => {
+      // Update unified visual order
+      const newTabBarOrder = { ...s.tabBarOrderByWorktree, [worktreeId]: order }
+
+      // Keep terminal tab sortOrder in sync for persistence
+      const tabs = s.tabsByWorktree[worktreeId]
+      if (!tabs) {
+        return { tabBarOrderByWorktree: newTabBarOrder }
+      }
+      const tabMap = new Map(tabs.map((t) => [t.id, t]))
+      // Extract terminal IDs in their new relative order
+      const terminalIdsInOrder = order.filter((id) => tabMap.has(id))
+      const updatedTabs = terminalIdsInOrder
+        .map((id, i) => {
+          const tab = tabMap.get(id)
+          return tab ? { ...tab, sortOrder: i } : undefined
+        })
+        .filter((t): t is TerminalTab => t !== undefined)
+      return {
+        tabBarOrderByWorktree: newTabBarOrder,
+        tabsByWorktree: { ...s.tabsByWorktree, [worktreeId]: updatedTabs }
       }
     })
   },

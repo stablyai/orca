@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { useEffect, useCallback, useRef, useState, lazy, Suspense } from 'react'
 import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
 import { useAppStore } from '../store'
@@ -24,7 +25,8 @@ export default function Terminal(): React.JSX.Element | null {
   const createTab = useAppStore((s) => s.createTab)
   const closeTab = useAppStore((s) => s.closeTab)
   const setActiveTab = useAppStore((s) => s.setActiveTab)
-  const reorderTabs = useAppStore((s) => s.reorderTabs)
+  const tabBarOrderByWorktree = useAppStore((s) => s.tabBarOrderByWorktree)
+  const setTabBarOrder = useAppStore((s) => s.setTabBarOrder)
   const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
   const setTabCustomTitle = useAppStore((s) => s.setTabCustomTitle)
   const setTabColor = useAppStore((s) => s.setTabColor)
@@ -221,17 +223,42 @@ export default function Terminal(): React.JSX.Element | null {
       if (!activeWorktreeId) {
         return
       }
-      const currentTabs = useAppStore.getState().tabsByWorktree[activeWorktreeId] ?? []
-      const index = currentTabs.findIndex((t) => t.id === tabId)
+      const state = useAppStore.getState()
+      const currentTerminalTabs = state.tabsByWorktree[activeWorktreeId] ?? []
+      const currentEditorFiles = state.openFiles.filter((f) => f.worktreeId === activeWorktreeId)
+      const terminalIdSet = new Set(currentTerminalTabs.map((t) => t.id))
+      const editorIdSet = new Set(currentEditorFiles.map((f) => f.id))
+      const storedOrder = state.tabBarOrderByWorktree[activeWorktreeId]
+
+      // Build unified order (same reconciliation as TabBar)
+      const validIds = new Set([...terminalIdSet, ...editorIdSet])
+      const orderedIds: string[] = (storedOrder ?? []).filter((id) => validIds.has(id))
+      const inOrder = new Set(orderedIds)
+      for (const t of currentTerminalTabs) {
+        if (!inOrder.has(t.id)) {
+          orderedIds.push(t.id)
+        }
+      }
+      for (const f of currentEditorFiles) {
+        if (!inOrder.has(f.id)) {
+          orderedIds.push(f.id)
+        }
+      }
+
+      const index = orderedIds.indexOf(tabId)
       if (index === -1) {
         return
       }
-      const rightTabs = currentTabs.slice(index + 1)
-      for (const tab of rightTabs) {
-        closeTab(tab.id)
+      const rightIds = orderedIds.slice(index + 1)
+      for (const id of rightIds) {
+        if (terminalIdSet.has(id)) {
+          closeTab(id)
+        } else {
+          closeFile(id)
+        }
       }
     },
-    [activeWorktreeId, closeTab]
+    [activeWorktreeId, closeTab, closeFile]
   )
 
   const handleActivateTab = useCallback(
@@ -290,11 +317,29 @@ export default function Terminal(): React.JSX.Element | null {
           ? state.openFiles.filter((f) => f.worktreeId === activeWorktreeId)
           : []
 
-        // Build unified tab list: terminal tabs then editor tabs
-        const allTabIds: { type: 'terminal' | 'editor'; id: string }[] = [
-          ...currentTerminalTabs.map((t) => ({ type: 'terminal' as const, id: t.id })),
-          ...currentEditorFiles.map((f) => ({ type: 'editor' as const, id: f.id }))
-        ]
+        const terminalIdSet = new Set(currentTerminalTabs.map((t) => t.id))
+        const editorIdSet = new Set(currentEditorFiles.map((f) => f.id))
+        const storedOrder = state.tabBarOrderByWorktree[activeWorktreeId]
+
+        // Build unified tab list respecting stored tab bar order
+        const validIds = new Set([...terminalIdSet, ...editorIdSet])
+        const orderedIds: string[] = (storedOrder ?? []).filter((id) => validIds.has(id))
+        const inOrder = new Set(orderedIds)
+        for (const t of currentTerminalTabs) {
+          if (!inOrder.has(t.id)) {
+            orderedIds.push(t.id)
+          }
+        }
+        for (const f of currentEditorFiles) {
+          if (!inOrder.has(f.id)) {
+            orderedIds.push(f.id)
+          }
+        }
+
+        const allTabIds = orderedIds.map((id) => ({
+          type: (terminalIdSet.has(id) ? 'terminal' : 'editor') as 'terminal' | 'editor',
+          id
+        }))
 
         if (allTabIds.length > 1) {
           e.preventDefault()
@@ -348,7 +393,7 @@ export default function Terminal(): React.JSX.Element | null {
               onClose={handleCloseTab}
               onCloseOthers={handleCloseOthers}
               onCloseToRight={handleCloseTabsToRight}
-              onReorder={reorderTabs}
+              onReorder={setTabBarOrder}
               onNewTab={handleNewTab}
               onSetCustomTitle={setTabCustomTitle}
               onSetTabColor={setTabColor}
@@ -363,6 +408,7 @@ export default function Terminal(): React.JSX.Element | null {
               }}
               onCloseFile={handleCloseFile}
               onCloseAllFiles={closeAllFiles}
+              tabBarOrder={activeWorktreeId ? tabBarOrderByWorktree[activeWorktreeId] : undefined}
             />
           )}
         </div>

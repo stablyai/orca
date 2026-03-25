@@ -23,7 +23,7 @@ type TabBarProps = {
   onClose: (tabId: string) => void
   onCloseOthers: (tabId: string) => void
   onCloseToRight: (tabId: string) => void
-  onReorder: (worktreeId: string, tabIds: string[]) => void
+  onReorder: (worktreeId: string, order: string[]) => void
   onNewTab: () => void
   onSetCustomTitle: (tabId: string, title: string | null) => void
   onSetTabColor: (tabId: string, color: string | null) => void
@@ -34,6 +34,38 @@ type TabBarProps = {
   onActivateFile?: (fileId: string) => void
   onCloseFile?: (fileId: string) => void
   onCloseAllFiles?: () => void
+  tabBarOrder?: string[]
+}
+
+type TabItem =
+  | { type: 'terminal'; id: string; data: TerminalTab }
+  | { type: 'editor'; id: string; data: OpenFile }
+
+/**
+ * Reconcile stored order with the current set of terminal + editor tabs.
+ * Keeps items that still exist in their stored positions, appends new items at the end.
+ */
+function reconcileOrder(
+  storedOrder: string[] | undefined,
+  terminalIds: string[],
+  editorFileIds: string[]
+): string[] {
+  const validIds = new Set([...terminalIds, ...editorFileIds])
+
+  const result: string[] = (storedOrder ?? []).filter((id) => validIds.has(id))
+  const inResult = new Set(result)
+
+  for (const id of terminalIds) {
+    if (!inResult.has(id)) {
+      result.push(id)
+    }
+  }
+  for (const id of editorFileIds) {
+    if (!inResult.has(id)) {
+      result.push(id)
+    }
+  }
+  return result
 }
 
 export default function TabBar({
@@ -55,7 +87,8 @@ export default function TabBar({
   activeTabType,
   onActivateFile,
   onCloseFile,
-  onCloseAllFiles
+  onCloseAllFiles,
+  tabBarOrder
 }: TabBarProps): React.JSX.Element {
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -63,7 +96,31 @@ export default function TabBar({
     })
   )
 
-  const tabIds = useMemo(() => tabs.map((t) => t.id), [tabs])
+  const terminalMap = useMemo(() => new Map(tabs.map((t) => [t.id, t])), [tabs])
+  const editorMap = useMemo(() => new Map((editorFiles ?? []).map((f) => [f.id, f])), [editorFiles])
+
+  const terminalIds = useMemo(() => tabs.map((t) => t.id), [tabs])
+  const editorFileIds = useMemo(() => editorFiles?.map((f) => f.id) ?? [], [editorFiles])
+
+  // Build the unified ordered list, reconciling stored order with current items
+  const orderedItems = useMemo(() => {
+    const ids = reconcileOrder(tabBarOrder, terminalIds, editorFileIds)
+    const items: TabItem[] = []
+    for (const id of ids) {
+      const terminal = terminalMap.get(id)
+      if (terminal) {
+        items.push({ type: 'terminal', id, data: terminal })
+        continue
+      }
+      const file = editorMap.get(id)
+      if (file) {
+        items.push({ type: 'editor', id, data: file })
+      }
+    }
+    return items
+  }, [tabBarOrder, terminalIds, editorFileIds, terminalMap, editorMap])
+
+  const sortableIds = useMemo(() => orderedItems.map((item) => item.id), [orderedItems])
 
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
@@ -72,16 +129,16 @@ export default function TabBar({
         return
       }
 
-      const oldIndex = tabIds.indexOf(active.id as string)
-      const newIndex = tabIds.indexOf(over.id as string)
+      const oldIndex = sortableIds.indexOf(active.id as string)
+      const newIndex = sortableIds.indexOf(over.id as string)
       if (oldIndex === -1 || newIndex === -1) {
         return
       }
 
-      const newOrder = arrayMove(tabIds, oldIndex, newIndex)
+      const newOrder = arrayMove(sortableIds, oldIndex, newIndex)
       onReorder(worktreeId, newOrder)
     },
-    [tabIds, worktreeId, onReorder]
+    [sortableIds, worktreeId, onReorder]
   )
 
   // Horizontal wheel scrolling for the tab strip
@@ -101,58 +158,47 @@ export default function TabBar({
     return () => el.removeEventListener('wheel', onWheel)
   }, [])
 
-  const handleCloseOtherEditorFiles = useCallback(
-    (keepFileId: string) => {
-      if (!editorFiles || !onCloseFile) {
-        return
-      }
-      for (const f of editorFiles) {
-        if (f.id !== keepFileId) {
-          onCloseFile(f.id)
-        }
-      }
-    },
-    [editorFiles, onCloseFile]
-  )
-
   return (
     <div className="flex items-stretch h-9 bg-card border-b border-border overflow-hidden shrink-0">
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <SortableContext items={tabIds} strategy={horizontalListSortingStrategy}>
+        <SortableContext items={sortableIds} strategy={horizontalListSortingStrategy}>
           <div
             ref={tabStripRef}
             className="terminal-tab-strip flex items-stretch overflow-x-auto overflow-y-hidden"
           >
-            {tabs.map((tab, index) => (
-              <SortableTab
-                key={tab.id}
-                tab={tab}
-                tabCount={tabs.length}
-                hasTabsToRight={index < tabs.length - 1}
-                isActive={activeTabType === 'terminal' && tab.id === activeTabId}
-                isExpanded={expandedPaneByTabId[tab.id] === true}
-                onActivate={onActivate}
-                onClose={onClose}
-                onCloseOthers={onCloseOthers}
-                onCloseToRight={onCloseToRight}
-                onSetCustomTitle={onSetCustomTitle}
-                onSetTabColor={onSetTabColor}
-                onToggleExpand={onTogglePaneExpand}
-              />
-            ))}
-            {/* Editor tabs - after terminal tabs */}
-            {editorFiles?.map((file) => (
-              <EditorFileTab
-                key={file.id}
-                file={file}
-                isActive={activeTabType === 'editor' && activeFileId === file.id}
-                editorFileCount={editorFiles.length}
-                onActivate={() => onActivateFile?.(file.id)}
-                onClose={() => onCloseFile?.(file.id)}
-                onCloseOthers={() => handleCloseOtherEditorFiles(file.id)}
-                onCloseAll={() => onCloseAllFiles?.()}
-              />
-            ))}
+            {orderedItems.map((item, index) => {
+              if (item.type === 'terminal') {
+                return (
+                  <SortableTab
+                    key={item.id}
+                    tab={item.data}
+                    tabCount={tabs.length}
+                    hasTabsToRight={index < orderedItems.length - 1}
+                    isActive={activeTabType === 'terminal' && item.id === activeTabId}
+                    isExpanded={expandedPaneByTabId[item.id] === true}
+                    onActivate={onActivate}
+                    onClose={onClose}
+                    onCloseOthers={onCloseOthers}
+                    onCloseToRight={onCloseToRight}
+                    onSetCustomTitle={onSetCustomTitle}
+                    onSetTabColor={onSetTabColor}
+                    onToggleExpand={onTogglePaneExpand}
+                  />
+                )
+              }
+              return (
+                <EditorFileTab
+                  key={item.id}
+                  file={item.data}
+                  isActive={activeTabType === 'editor' && activeFileId === item.id}
+                  hasTabsToRight={index < orderedItems.length - 1}
+                  onActivate={() => onActivateFile?.(item.id)}
+                  onClose={() => onCloseFile?.(item.id)}
+                  onCloseToRight={() => onCloseToRight(item.id)}
+                  onCloseAll={() => onCloseAllFiles?.()}
+                />
+              )
+            })}
           </div>
         </SortableContext>
       </DndContext>
