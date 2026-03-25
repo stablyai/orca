@@ -279,10 +279,18 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
 
   openDiff: (worktreeId, filePath, relativePath, language, staged) =>
     set((s) => {
-      const id = `${filePath}${staged ? '::staged' : ''}`
+      const id = `${filePath}::${staged ? 'staged' : 'unstaged'}`
       const existing = s.openFiles.find((f) => f.id === id)
       if (existing) {
+        // Ensure mode and diffStaged are up-to-date (e.g. if a plain edit tab
+        // previously occupied this id before the suffix scheme changed).
+        const needsUpdate = existing.mode !== 'diff' || existing.diffStaged !== staged
         return {
+          openFiles: needsUpdate
+            ? s.openFiles.map((f) =>
+                f.id === id ? { ...f, mode: 'diff' as const, diffStaged: staged } : f
+              )
+            : s.openFiles,
           activeFileId: id,
           activeTabType: 'editor',
           activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },

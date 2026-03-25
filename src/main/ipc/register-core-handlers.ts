@@ -12,7 +12,7 @@ import {
 } from '../window/attach-main-window-services'
 
 export function registerCoreHandlers(store: Store): void {
-  registerGitHubHandlers()
+  registerGitHubHandlers(store)
   registerSettingsHandlers(store)
   registerShellHandlers()
   registerSessionHandlers(store)

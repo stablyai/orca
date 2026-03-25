@@ -13,14 +13,10 @@ export function attachMainWindowServices(mainWindow: BrowserWindow, store: Store
   registerFileDropRelay(mainWindow)
   setupAutoUpdater(mainWindow, { onBeforeQuit: () => store.flush() })
 
+  const allowedPermissions = new Set(['media', 'fullscreen', 'pointerLock'])
   mainWindow.webContents.session.setPermissionRequestHandler(
     (_webContents, permission, callback) => {
-      if (permission === 'clipboard-read' || permission === 'clipboard-sanitized-write') {
-        callback(false)
-        return
-      }
-
-      callback(true)
+      callback(allowedPermissions.has(permission))
     }
   )
 }

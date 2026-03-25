@@ -19,7 +19,7 @@ export function createMainWindow(store: Store | null): BrowserWindow {
     icon: is.dev ? devIcon : icon,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
+      sandbox: true
     }
   })
 
@@ -33,7 +33,14 @@ export function createMainWindow(store: Store | null): BrowserWindow {
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
+    try {
+      const parsed = new URL(details.url)
+      if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
+        shell.openExternal(details.url)
+      }
+    } catch {
+      // ignore malformed URLs
+    }
     return { action: 'deny' }
   })
 

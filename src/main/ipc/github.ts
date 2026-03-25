@@ -1,27 +1,43 @@
 import { ipcMain } from 'electron'
+import { resolve } from 'path'
+import type { Store } from '../persistence'
 import { getPRForBranch, getIssue, listIssues, getPRChecks, updatePRTitle } from '../github/client'
 
-export function registerGitHubHandlers(): void {
+function assertRegisteredRepoPath(repoPath: string, store: Store): string {
+  const resolvedRepoPath = resolve(repoPath)
+  const registeredRepo = store.getRepos().find((repo) => resolve(repo.path) === resolvedRepoPath)
+  if (!registeredRepo) {
+    throw new Error('Access denied: unknown repository path')
+  }
+  return registeredRepo.path
+}
+
+export function registerGitHubHandlers(store: Store): void {
   ipcMain.handle('gh:prForBranch', (_event, args: { repoPath: string; branch: string }) => {
-    return getPRForBranch(args.repoPath, args.branch)
+    const repoPath = assertRegisteredRepoPath(args.repoPath, store)
+    return getPRForBranch(repoPath, args.branch)
   })
 
   ipcMain.handle('gh:issue', (_event, args: { repoPath: string; number: number }) => {
-    return getIssue(args.repoPath, args.number)
+    const repoPath = assertRegisteredRepoPath(args.repoPath, store)
+    return getIssue(repoPath, args.number)
   })
 
   ipcMain.handle('gh:listIssues', (_event, args: { repoPath: string; limit?: number }) => {
-    return listIssues(args.repoPath, args.limit)
+    const repoPath = assertRegisteredRepoPath(args.repoPath, store)
+    return listIssues(repoPath, args.limit)
   })
 
   ipcMain.handle('gh:prChecks', (_event, args: { repoPath: string; prNumber: number }) => {
-    return getPRChecks(args.repoPath, args.prNumber)
+    const repoPath = assertRegisteredRepoPath(args.repoPath, store)
+    return getPRChecks(repoPath, args.prNumber)
   })
 
   ipcMain.handle(
     'gh:updatePRTitle',
     (_event, args: { repoPath: string; prNumber: number; title: string }) => {
-      return updatePRTitle(args.repoPath, args.prNumber, args.title)
+      const repoPath = assertRegisteredRepoPath(args.repoPath, store)
+      return updatePRTitle(repoPath, args.prNumber, args.title)
     }
   )
 }

@@ -41,7 +41,13 @@ export async function getPRForBranch(repoPath: string, branch: string): Promise<
     const branchName = branch.replace(/^refs\/heads\//, '')
     const { stdout } = await execFileAsync(
       'gh',
-      ['pr', 'view', branchName, '--json', 'number,title,state,url,statusCheckRollup,updatedAt'],
+      [
+        'pr',
+        'view',
+        branchName,
+        '--json',
+        'number,title,state,url,statusCheckRollup,updatedAt,isDraft'
+      ],
       {
         cwd: repoPath,
         encoding: 'utf-8'
@@ -51,7 +57,7 @@ export async function getPRForBranch(repoPath: string, branch: string): Promise<
     return {
       number: data.number,
       title: data.title,
-      state: mapPRState(data.state),
+      state: mapPRState(data.state, data.isDraft),
       url: data.url,
       checksStatus: deriveCheckStatus(data.statusCheckRollup),
       updatedAt: data.updatedAt
@@ -216,7 +222,7 @@ function mapCheckConclusion(state: string): PRCheckDetail['conclusion'] {
   return null
 }
 
-export function mapPRState(state: string): PRInfo['state'] {
+export function mapPRState(state: string, isDraft?: boolean): PRInfo['state'] {
   const s = state?.toUpperCase()
   if (s === 'MERGED') {
     return 'merged'
@@ -224,7 +230,9 @@ export function mapPRState(state: string): PRInfo['state'] {
   if (s === 'CLOSED') {
     return 'closed'
   }
-  // gh CLI returns isDraft separately, but state field is OPEN for drafts too
+  if (isDraft) {
+    return 'draft'
+  }
   return 'open'
 }
 

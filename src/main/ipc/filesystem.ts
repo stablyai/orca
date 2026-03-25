@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
-import { readdir, readFile, writeFile, stat } from 'fs/promises'
-import { resolve, relative } from 'path'
+import { readdir, readFile, writeFile, stat, lstat } from 'fs/promises'
+import { relative } from 'path'
 import { spawn } from 'child_process'
 import type { Store } from '../persistence'
 import type {
@@ -12,40 +12,14 @@ import type {
   SearchFileResult
 } from '../../shared/types'
 import { getStatus, getDiff, stageFile, unstageFile, discardChanges } from '../git/status'
+import {
+  resolveAuthorizedPath,
+  resolveRegisteredWorktreePath,
+  validateGitRelativeFilePath,
+  isENOENT
+} from './filesystem-auth'
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
-
-/**
- * Validate that a path is within a known worktree directory.
- */
-function isPathAllowed(targetPath: string, store: Store): boolean {
-  const resolvedTarget = resolve(targetPath)
-  const repos = store.getRepos()
-
-  for (const repo of repos) {
-    // Allow paths within the repo itself
-    if (
-      resolvedTarget.startsWith(`${resolve(repo.path)}/`) ||
-      resolvedTarget === resolve(repo.path)
-    ) {
-      return true
-    }
-  }
-
-  // Also check the workspace directory from settings
-  const settings = store.getSettings()
-  if (settings.workspaceDir) {
-    const resolvedWorkspace = resolve(settings.workspaceDir)
-    if (
-      resolvedTarget.startsWith(`${resolvedWorkspace}/`) ||
-      resolvedTarget === resolvedWorkspace
-    ) {
-      return true
-    }
-  }
-
-  return false
-}
 
 /**
  * Check if a buffer appears to be binary (contains null bytes in first 8KB).
@@ -63,11 +37,8 @@ function isBinaryBuffer(buffer: Buffer): boolean {
 export function registerFilesystemHandlers(store: Store): void {
   // ─── Filesystem ─────────────────────────────────────────
   ipcMain.handle('fs:readDir', async (_event, args: { dirPath: string }): Promise<DirEntry[]> => {
-    if (!isPathAllowed(args.dirPath, store)) {
-      throw new Error('Access denied: path is outside allowed directories')
-    }
-
-    const entries = await readdir(args.dirPath, { withFileTypes: true })
+    const dirPath = await resolveAuthorizedPath(args.dirPath, store)
+    const entries = await readdir(dirPath, { withFileTypes: true })
     return entries
       .map((entry) => ({
         name: entry.name,
@@ -86,18 +57,15 @@ export function registerFilesystemHandlers(store: Store): void {
   ipcMain.handle(
     'fs:readFile',
     async (_event, args: { filePath: string }): Promise<{ content: string; isBinary: boolean }> => {
-      if (!isPathAllowed(args.filePath, store)) {
-        throw new Error('Access denied: path is outside allowed directories')
-      }
-
-      const stats = await stat(args.filePath)
+      const filePath = await resolveAuthorizedPath(args.filePath, store)
+      const stats = await stat(filePath)
       if (stats.size > MAX_FILE_SIZE) {
         throw new Error(
           `File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit`
         )
       }
 
-      const buffer = await readFile(args.filePath)
+      const buffer = await readFile(filePath)
       if (isBinaryBuffer(buffer)) {
         return { content: '', isBinary: true }
       }
@@ -109,11 +77,20 @@ export function registerFilesystemHandlers(store: Store): void {
   ipcMain.handle(
     'fs:writeFile',
     async (_event, args: { filePath: string; content: string }): Promise<void> => {
-      if (!isPathAllowed(args.filePath, store)) {
-        throw new Error('Access denied: path is outside allowed directories')
+      const filePath = await resolveAuthorizedPath(args.filePath, store)
+
+      try {
+        const fileStats = await lstat(filePath)
+        if (fileStats.isDirectory()) {
+          throw new Error('Cannot write to a directory')
+        }
+      } catch (error) {
+        if (!isENOENT(error)) {
+          throw error
+        }
       }
 
-      await writeFile(args.filePath, args.content, 'utf-8')
+      await writeFile(filePath, args.content, 'utf-8')
     }
   )
 
@@ -123,11 +100,8 @@ export function registerFilesystemHandlers(store: Store): void {
       _event,
       args: { filePath: string }
     ): Promise<{ size: number; isDirectory: boolean; mtime: number }> => {
-      if (!isPathAllowed(args.filePath, store)) {
-        throw new Error('Access denied: path is outside allowed directories')
-      }
-
-      const stats = await stat(args.filePath)
+      const filePath = await resolveAuthorizedPath(args.filePath, store)
+      const stats = await stat(filePath)
       return {
         size: stats.size,
         isDirectory: stats.isDirectory(),
@@ -138,9 +112,7 @@ export function registerFilesystemHandlers(store: Store): void {
 
   // ─── Search ────────────────────────────────────────────
   ipcMain.handle('fs:search', async (_event, args: SearchOptions): Promise<SearchResult> => {
-    if (!isPathAllowed(args.rootPath, store)) {
-      throw new Error('Access denied: path is outside allowed directories')
-    }
+    const rootPath = await resolveAuthorizedPath(args.rootPath, store)
 
     const maxResults = args.maxResults ?? 10000
 
@@ -179,7 +151,7 @@ export function registerFilesystemHandlers(store: Store): void {
         }
       }
 
-      rgArgs.push('--', args.query, args.rootPath)
+      rgArgs.push('--', args.query, rootPath)
 
       const fileMap = new Map<string, SearchFileResult>()
       let totalMatches = 0
@@ -213,7 +185,7 @@ export function registerFilesystemHandlers(store: Store): void {
 
           const data = msg.data
           const absPath: string = data.path.text
-          const relPath = relative(args.rootPath, absPath)
+          const relPath = relative(rootPath, absPath)
 
           let fileResult = fileMap.get(absPath)
           if (!fileResult) {
@@ -275,7 +247,8 @@ export function registerFilesystemHandlers(store: Store): void {
   ipcMain.handle(
     'git:status',
     async (_event, args: { worktreePath: string }): Promise<GitStatusEntry[]> => {
-      return getStatus(args.worktreePath)
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      return getStatus(worktreePath)
     }
   )
 
@@ -285,28 +258,36 @@ export function registerFilesystemHandlers(store: Store): void {
       _event,
       args: { worktreePath: string; filePath: string; staged: boolean }
     ): Promise<GitDiffResult> => {
-      return getDiff(args.worktreePath, args.filePath, args.staged)
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
+      return getDiff(worktreePath, filePath, args.staged)
     }
   )
 
   ipcMain.handle(
     'git:stage',
     async (_event, args: { worktreePath: string; filePath: string }): Promise<void> => {
-      await stageFile(args.worktreePath, args.filePath)
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
+      await stageFile(worktreePath, filePath)
     }
   )
 
   ipcMain.handle(
     'git:unstage',
     async (_event, args: { worktreePath: string; filePath: string }): Promise<void> => {
-      await unstageFile(args.worktreePath, args.filePath)
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
+      await unstageFile(worktreePath, filePath)
     }
   )
 
   ipcMain.handle(
     'git:discard',
     async (_event, args: { worktreePath: string; filePath: string }): Promise<void> => {
-      await discardChanges(args.worktreePath, args.filePath)
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
+      await discardChanges(worktreePath, filePath)
     }
   )
 }

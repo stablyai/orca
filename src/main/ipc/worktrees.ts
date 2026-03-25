@@ -1,6 +1,6 @@
 import type { BrowserWindow } from 'electron'
 import { ipcMain } from 'electron'
-import { join, basename } from 'path'
+import { join, basename, resolve, relative, isAbsolute } from 'path'
 import type { Store } from '../persistence'
 import type { Worktree, WorktreeMeta } from '../../shared/types'
 import { listWorktrees, addWorktree, removeWorktree } from '../git/worktree'
@@ -58,9 +58,7 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
       const settings = store.getSettings()
 
       const requestedName = args.name
-      // Sanitize name for use in branch names and directory paths
-      // (git branch names cannot contain spaces; collapse runs of spaces to a single hyphen)
-      const sanitizedName = args.name.replace(/\s+/g, '-')
+      const sanitizedName = sanitizeWorktreeName(args.name)
 
       // Compute branch name with prefix
       let branchName = sanitizedName
@@ -83,6 +81,7 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
       } else {
         worktreePath = join(settings.workspaceDir, sanitizedName)
       }
+      worktreePath = ensurePathWithinWorkspace(worktreePath, settings.workspaceDir)
 
       // Determine base branch
       const baseBranch = args.baseBranch || repo.worktreeBaseRef || getDefaultBaseRef(repo.path)
@@ -194,6 +193,34 @@ function mergeWorktree(
     isUnread: meta?.isUnread ?? false,
     sortOrder: meta?.sortOrder ?? 0
   }
+}
+
+function sanitizeWorktreeName(input: string): string {
+  const sanitized = input
+    .trim()
+    .replace(/[\\/]+/g, '-')
+    .replace(/\s+/g, '-')
+    .replace(/[^A-Za-z0-9._-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^[.-]+|[.-]+$/g, '')
+
+  if (!sanitized || sanitized === '.' || sanitized === '..') {
+    throw new Error('Invalid worktree name')
+  }
+
+  return sanitized
+}
+
+function ensurePathWithinWorkspace(targetPath: string, workspaceDir: string): string {
+  const resolvedWorkspaceDir = resolve(workspaceDir)
+  const resolvedTargetPath = resolve(targetPath)
+  const rel = relative(resolvedWorkspaceDir, resolvedTargetPath)
+
+  if (isAbsolute(rel) || rel.startsWith('..')) {
+    throw new Error('Invalid worktree path')
+  }
+
+  return resolvedTargetPath
 }
 
 function parseWorktreeId(worktreeId: string): { repoId: string; worktreePath: string } {
