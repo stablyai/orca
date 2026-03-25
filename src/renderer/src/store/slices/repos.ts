@@ -23,7 +23,14 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
   fetchRepos: async () => {
     try {
       const repos = await window.api.repos.list()
-      set({ repos })
+      set((s) => {
+        const validRepoIds = new Set(repos.map((repo) => repo.id))
+        return {
+          repos,
+          activeRepoId: s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
+          filterRepoIds: s.filterRepoIds.filter((repoId) => validRepoIds.has(repoId))
+        }
+      })
     } catch (err) {
       console.error('Failed to fetch repos:', err)
     }
@@ -94,6 +101,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         return {
           repos: s.repos.filter((r) => r.id !== repoId),
           activeRepoId: s.activeRepoId === repoId ? null : s.activeRepoId,
+          filterRepoIds: s.filterRepoIds.filter((id) => id !== repoId),
           worktreesByRepo: nextWorktrees,
           tabsByWorktree: nextTabs,
           ptyIdsByTabId: nextPtyIdsByTabId,

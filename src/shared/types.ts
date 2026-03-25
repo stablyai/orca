@@ -164,6 +164,7 @@ export type PersistedUIState = {
   rightSidebarWidth: number
   groupBy: 'none' | 'repo' | 'pr-status'
   sortBy: 'name' | 'recent' | 'repo'
+  filterRepoIds: string[]
   uiZoomLevel: number
 }
 

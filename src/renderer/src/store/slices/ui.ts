@@ -71,12 +71,16 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set) => (
   persistedUIReady: false,
 
   hydratePersistedUI: (ui) =>
-    set({
-      sidebarWidth: ui.sidebarWidth,
-      rightSidebarWidth: ui.rightSidebarWidth ?? 280,
-      groupBy: ui.groupBy,
-      sortBy: ui.sortBy,
-      persistedUIReady: true
+    set((s) => {
+      const validRepoIds = new Set(s.repos.map((repo) => repo.id))
+      return {
+        sidebarWidth: ui.sidebarWidth,
+        rightSidebarWidth: ui.rightSidebarWidth ?? 280,
+        groupBy: ui.groupBy,
+        sortBy: ui.sortBy,
+        filterRepoIds: (ui.filterRepoIds ?? []).filter((repoId) => validRepoIds.has(repoId)),
+        persistedUIReady: true
+      }
     }),
 
   updateStatus: { state: 'idle' },

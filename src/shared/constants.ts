@@ -73,6 +73,7 @@ export function getDefaultUIState(): PersistedUIState {
     rightSidebarWidth: 350,
     groupBy: 'none',
     sortBy: 'name',
+    filterRepoIds: [],
     uiZoomLevel: 0
   }
 }

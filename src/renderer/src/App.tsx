@@ -34,6 +34,7 @@ function App(): React.JSX.Element {
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const groupBy = useAppStore((s) => s.groupBy)
   const sortBy = useAppStore((s) => s.sortBy)
+  const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
 
   // Right sidebar + editor state
@@ -73,6 +74,7 @@ function App(): React.JSX.Element {
             rightSidebarWidth: 350,
             groupBy: 'none',
             sortBy: 'name',
+            filterRepoIds: [],
             uiZoomLevel: 0
           })
           hydrateWorkspaceSession({
@@ -135,12 +137,13 @@ function App(): React.JSX.Element {
         sidebarWidth,
         rightSidebarWidth,
         groupBy,
-        sortBy
+        sortBy,
+        filterRepoIds
       })
     }, 150)
 
     return () => window.clearTimeout(timer)
-  }, [persistedUIReady, sidebarWidth, rightSidebarWidth, groupBy, sortBy])
+  }, [persistedUIReady, sidebarWidth, rightSidebarWidth, groupBy, sortBy, filterRepoIds])
 
   // Apply theme to document
   useEffect(() => {

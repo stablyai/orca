@@ -36,8 +36,11 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
   const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
   const setActiveView = useAppStore((s) => s.setActiveView)
   const setSidebarOpen = useAppStore((s) => s.setSidebarOpen)
+  const searchQuery = useAppStore((s) => s.searchQuery)
   const setSearchQuery = useAppStore((s) => s.setSearchQuery)
+  const showActiveOnly = useAppStore((s) => s.showActiveOnly)
   const setShowActiveOnly = useAppStore((s) => s.setShowActiveOnly)
+  const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const setFilterRepoIds = useAppStore((s) => s.setFilterRepoIds)
   const revealWorktreeInSidebar = useAppStore((s) => s.revealWorktreeInSidebar)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
@@ -128,9 +131,15 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
         setActiveRepo(repoId)
         setActiveView('terminal')
         setSidebarOpen(true)
-        setSearchQuery('')
-        setShowActiveOnly(false)
-        setFilterRepoIds([])
+        if (searchQuery) {
+          setSearchQuery('')
+        }
+        if (showActiveOnly) {
+          setShowActiveOnly(false)
+        }
+        if (filterRepoIds.length > 0 && !filterRepoIds.includes(repoId)) {
+          setFilterRepoIds([])
+        }
         setActiveWorktree(wt.id)
         revealWorktreeInSidebar(wt.id)
       }
@@ -148,8 +157,11 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
     setActiveRepo,
     setActiveView,
     setSidebarOpen,
+    searchQuery,
     setSearchQuery,
+    showActiveOnly,
     setShowActiveOnly,
+    filterRepoIds,
     setFilterRepoIds,
     setActiveWorktree,
     revealWorktreeInSidebar,
