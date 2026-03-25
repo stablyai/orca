@@ -2,6 +2,19 @@ import { useEffect } from 'react'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
 
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false
+  }
+
+  if (target.isContentEditable) {
+    return true
+  }
+
+  const editableAncestor = target.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"]')
+  return editableAncestor !== null
+}
+
 type KeyboardHandlersDeps = {
   isActive: boolean
   managerRef: React.RefObject<PaneManager | null>
@@ -34,6 +47,9 @@ export function useTerminalKeyboardShortcuts({
 
     const onKeyDown = (e: KeyboardEvent): void => {
       if (e.repeat) {
+        return
+      }
+      if (isEditableTarget(e.target)) {
         return
       }
       if (!e.metaKey || e.altKey || e.ctrlKey) {
@@ -148,8 +164,7 @@ export function useTerminalKeyboardShortcuts({
       if (e.key !== 'Backspace') {
         return
       }
-      const tag = (e.target as HTMLElement)?.tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA') {
+      if (isEditableTarget(e.target)) {
         return
       }
 
@@ -177,8 +192,7 @@ export function useTerminalKeyboardShortcuts({
       if (e.key !== 'Backspace') {
         return
       }
-      const tag = (e.target as HTMLElement)?.tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA') {
+      if (isEditableTarget(e.target)) {
         return
       }
 
@@ -203,6 +217,9 @@ export function useTerminalKeyboardShortcuts({
         return
       }
       if (e.key !== 'Enter') {
+        return
+      }
+      if (isEditableTarget(e.target)) {
         return
       }
 
