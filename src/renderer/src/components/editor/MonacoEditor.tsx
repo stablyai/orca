@@ -92,7 +92,7 @@ export default function MonacoEditor({
         editorInstance.focus()
       }
     },
-    [onSave, filePath, relativePath, setEditorCursorLine]
+    [onSave, filePath, setEditorCursorLine]
   )
 
   const handleChange = useCallback(

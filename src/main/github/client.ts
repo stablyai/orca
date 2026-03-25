@@ -127,7 +127,7 @@ export async function listIssues(repoPath: string, limit = 20): Promise<IssueInf
   }
 }
 
-function mapPRState(state: string): PRInfo['state'] {
+export function mapPRState(state: string): PRInfo['state'] {
   const s = state?.toUpperCase()
   if (s === 'MERGED') {
     return 'merged'
@@ -139,7 +139,7 @@ function mapPRState(state: string): PRInfo['state'] {
   return 'open'
 }
 
-function deriveCheckStatus(rollup: unknown[] | null | undefined): CheckStatus {
+export function deriveCheckStatus(rollup: unknown[] | null | undefined): CheckStatus {
   if (!rollup || !Array.isArray(rollup) || rollup.length === 0) {
     return 'neutral'
   }
