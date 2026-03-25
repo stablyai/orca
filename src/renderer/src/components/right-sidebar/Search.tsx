@@ -44,6 +44,16 @@ export default function Search(): React.JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null)
   const [showFilters, setShowFilters] = useState(false)
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const latestSearchIdRef = useRef(0)
+
+  const cancelPendingSearch = useCallback(() => {
+    latestSearchIdRef.current += 1
+    if (searchTimerRef.current) {
+      clearTimeout(searchTimerRef.current)
+      searchTimerRef.current = null
+    }
+    setFileSearchLoading(false)
+  }, [setFileSearchLoading])
 
   // Find active worktree path
   const worktreePath = useMemo(() => {
@@ -67,18 +77,27 @@ export default function Search(): React.JSX.Element {
   // Cleanup debounce timer on unmount
   useEffect(() => {
     return () => {
-      if (searchTimerRef.current) {
-        clearTimeout(searchTimerRef.current)
-      }
+      cancelPendingSearch()
     }
-  }, [])
+  }, [cancelPendingSearch])
+
+  useEffect(() => {
+    if (!worktreePath) {
+      cancelPendingSearch()
+      setFileSearchResults(null)
+    }
+  }, [worktreePath, cancelPendingSearch, setFileSearchResults])
 
   // Execute search with debounce — reads fresh state inside setTimeout
   // to avoid stale closures when options change during debounce
   const executeSearch = useCallback(
     (query: string) => {
+      latestSearchIdRef.current += 1
+      const searchId = latestSearchIdRef.current
+
       if (searchTimerRef.current) {
         clearTimeout(searchTimerRef.current)
+        searchTimerRef.current = null
       }
 
       if (!query.trim() || !worktreePath) {
@@ -89,6 +108,7 @@ export default function Search(): React.JSX.Element {
 
       setFileSearchLoading(true)
       searchTimerRef.current = setTimeout(async () => {
+        searchTimerRef.current = null
         try {
           const state = useAppStore.getState()
           const results = await window.api.fs.search({
@@ -101,17 +121,28 @@ export default function Search(): React.JSX.Element {
             excludePattern: state.fileSearchExcludePattern || undefined,
             maxResults: 10000
           })
-          setFileSearchResults(results)
+          if (latestSearchIdRef.current === searchId) {
+            setFileSearchResults(results)
+          }
         } catch (err) {
           console.error('Search failed:', err)
-          setFileSearchResults({ files: [], totalMatches: 0, truncated: false })
+          if (latestSearchIdRef.current === searchId) {
+            setFileSearchResults({ files: [], totalMatches: 0, truncated: false })
+          }
         } finally {
-          setFileSearchLoading(false)
+          if (latestSearchIdRef.current === searchId) {
+            setFileSearchLoading(false)
+          }
         }
       }, 300)
     },
     [worktreePath, setFileSearchResults, setFileSearchLoading]
   )
+
+  const handleClearSearch = useCallback(() => {
+    cancelPendingSearch()
+    clearFileSearch()
+  }, [cancelPendingSearch, clearFileSearch])
 
   // Re-execute search from event handlers when options change
   const rerunSearch = useCallback(() => {
@@ -134,14 +165,14 @@ export default function Search(): React.JSX.Element {
     (e: React.KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (fileSearchQuery) {
-          clearFileSearch()
+          handleClearSearch()
         }
       }
       if (e.key === 'Enter') {
         executeSearch(fileSearchQuery)
       }
     },
-    [fileSearchQuery, clearFileSearch, executeSearch]
+    [fileSearchQuery, handleClearSearch, executeSearch]
   )
 
   const handleMatchClick = useCallback(
@@ -199,7 +230,7 @@ export default function Search(): React.JSX.Element {
           {fileSearchQuery && (
             <button
               className="p-0.5 rounded-sm hover:bg-muted text-muted-foreground hover:text-foreground"
-              onClick={clearFileSearch}
+              onClick={handleClearSearch}
             >
               <X size={12} />
             </button>

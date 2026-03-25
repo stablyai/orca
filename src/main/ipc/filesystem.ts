@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron'
 import { readdir, readFile, writeFile, stat } from 'fs/promises'
 import { resolve, relative } from 'path'
-import { execFile } from 'child_process'
+import { spawn } from 'child_process'
 import type { Store } from '../persistence'
 import type {
   DirEntry,
@@ -150,7 +150,7 @@ export function registerFilesystemHandlers(store: Store): void {
         '--max-count',
         '200', // max matches per file
         '--max-filesize',
-        '1M'
+        `${Math.floor(MAX_FILE_SIZE / 1024 / 1024)}M`
       ]
 
       if (!args.caseSensitive) {
@@ -184,63 +184,86 @@ export function registerFilesystemHandlers(store: Store): void {
       const fileMap = new Map<string, SearchFileResult>()
       let totalMatches = 0
       let truncated = false
+      let stdoutBuffer = ''
+      let resolved = false
 
-      const child = execFile('rg', rgArgs, { maxBuffer: 50 * 1024 * 1024 }, (error, stdout) => {
-        clearTimeout(killTimeout)
-
-        // rg exit code 1 = no matches, exit code 2 = error.
-        // If there's no stdout and a real error, return empty.
-        if (error && !stdout) {
-          resolvePromise({ files: [], totalMatches: 0, truncated: false })
+      const resolveOnce = (): void => {
+        if (resolved) {
           return
         }
-
-        const lines = stdout.split('\n').filter(Boolean)
-        for (const line of lines) {
-          if (totalMatches >= maxResults) {
-            truncated = true
-            break
-          }
-
-          try {
-            const msg = JSON.parse(line)
-            if (msg.type !== 'match') {
-              continue
-            }
-
-            const data = msg.data
-            const absPath: string = data.path.text
-            const relPath = relative(args.rootPath, absPath)
-
-            let fileResult = fileMap.get(absPath)
-            if (!fileResult) {
-              fileResult = { filePath: absPath, relativePath: relPath, matches: [] }
-              fileMap.set(absPath, fileResult)
-            }
-
-            for (const sub of data.submatches) {
-              fileResult.matches.push({
-                line: data.line_number,
-                column: sub.start + 1,
-                matchLength: sub.end - sub.start,
-                lineContent: data.lines.text.replace(/\n$/, '')
-              })
-              totalMatches++
-              if (totalMatches >= maxResults) {
-                truncated = true
-                break
-              }
-            }
-          } catch {
-            // skip malformed JSON lines
-          }
-        }
-
+        resolved = true
+        clearTimeout(killTimeout)
         resolvePromise({
           files: Array.from(fileMap.values()),
           totalMatches,
           truncated
         })
+      }
+
+      const processLine = (line: string): void => {
+        if (!line || totalMatches >= maxResults) {
+          return
+        }
+
+        try {
+          const msg = JSON.parse(line)
+          if (msg.type !== 'match') {
+            return
+          }
+
+          const data = msg.data
+          const absPath: string = data.path.text
+          const relPath = relative(args.rootPath, absPath)
+
+          let fileResult = fileMap.get(absPath)
+          if (!fileResult) {
+            fileResult = { filePath: absPath, relativePath: relPath, matches: [] }
+            fileMap.set(absPath, fileResult)
+          }
+
+          for (const sub of data.submatches) {
+            fileResult.matches.push({
+              line: data.line_number,
+              column: sub.start + 1,
+              matchLength: sub.end - sub.start,
+              lineContent: data.lines.text.replace(/\n$/, '')
+            })
+            totalMatches++
+            if (totalMatches >= maxResults) {
+              truncated = true
+              child.kill()
+              break
+            }
+          }
+        } catch {
+          // skip malformed JSON lines
+        }
+      }
+
+      const child = spawn('rg', rgArgs, { stdio: ['ignore', 'pipe', 'pipe'] })
+
+      child.stdout.setEncoding('utf-8')
+      child.stdout.on('data', (chunk: string) => {
+        stdoutBuffer += chunk
+        const lines = stdoutBuffer.split('\n')
+        stdoutBuffer = lines.pop() ?? ''
+        for (const line of lines) {
+          processLine(line)
+        }
+      })
+      child.stderr.on('data', () => {
+        // Drain stderr so rg cannot block on a full pipe.
+      })
+
+      child.once('error', () => {
+        resolveOnce()
+      })
+
+      child.once('close', () => {
+        if (stdoutBuffer) {
+          processLine(stdoutBuffer)
+        }
+        resolveOnce()
       })
 
       // Kill after 30s if still running
