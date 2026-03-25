@@ -6,12 +6,15 @@ import {
   resolvePaneStyleOptions,
   resolveEffectiveTerminalAppearance
 } from '@/lib/terminal-theme'
+import { buildFontFamily } from './layout-serialization'
+import type { PtyTransport } from './pty-transport'
 
 export function applyTerminalAppearance(
   manager: PaneManager,
   settings: GlobalSettings,
   systemPrefersDark: boolean,
-  paneFontSizes: Map<number, number>
+  paneFontSizes: Map<number, number>,
+  paneTransports: Map<number, PtyTransport>
 ): void {
   const appearance = resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
   const paneStyles = resolvePaneStyleOptions(settings)
@@ -26,10 +29,15 @@ export function applyTerminalAppearance(
     pane.terminal.options.cursorBlink = settings.terminalCursorBlink
     const paneSize = paneFontSizes.get(pane.id)
     pane.terminal.options.fontSize = paneSize ?? settings.terminalFontSize
+    pane.terminal.options.fontFamily = buildFontFamily(settings.terminalFontFamily)
     try {
       pane.fitAddon.fit()
     } catch {
       /* ignore */
+    }
+    const transport = paneTransports.get(pane.id)
+    if (transport?.isConnected()) {
+      transport.resize(pane.terminal.cols, pane.terminal.rows)
     }
   }
 

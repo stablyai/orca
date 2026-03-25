@@ -82,7 +82,8 @@ export function useTerminalPaneLifecycle({
       manager,
       currentSettings,
       systemPrefersDarkRef.current,
-      paneFontSizesRef.current
+      paneFontSizesRef.current,
+      paneTransportsRef.current
     )
   }
 
@@ -275,15 +276,6 @@ export function useTerminalPaneLifecycle({
       return
     }
     applyAppearance(manager)
-    const fontFamily = buildFontFamily(settings.terminalFontFamily)
-    for (const pane of manager.getPanes()) {
-      pane.terminal.options.fontFamily = fontFamily
-      try {
-        pane.fitAddon.fit()
-      } catch {
-        /* ignore */
-      }
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings, systemPrefersDark])
 }
