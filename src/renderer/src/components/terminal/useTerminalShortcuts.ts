@@ -29,7 +29,10 @@ export function useTerminalShortcuts({
   onActivateEditorTab
 }: UseTerminalShortcutsParams): void {
   const handleKeyDown = useEffectEvent((event: KeyboardEvent) => {
-    if (!activeWorktreeId || !event.metaKey || event.repeat) {
+    // Accept Cmd on macOS, Ctrl on other platforms
+    const isMac = navigator.userAgent.includes('Mac')
+    const mod = isMac ? event.metaKey : event.ctrlKey
+    if (!activeWorktreeId || !mod || event.repeat) {
       return
     }
 

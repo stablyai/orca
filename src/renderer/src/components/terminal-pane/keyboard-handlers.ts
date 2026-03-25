@@ -32,11 +32,13 @@ export function useTerminalKeyboardShortcuts({
       return
     }
 
+    const isMac = navigator.userAgent.includes('Mac')
     const onKeyDown = (e: KeyboardEvent): void => {
       if (e.repeat) {
         return
       }
-      if (!e.metaKey || e.altKey || e.ctrlKey) {
+      const mod = isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey
+      if (!mod || e.altKey) {
         return
       }
 

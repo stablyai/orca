@@ -28,10 +28,23 @@ type ActivityBarItem = {
   shortcut: string
 }
 
+const isMac = navigator.userAgent.includes('Mac')
+const mod = isMac ? '\u2318' : 'Ctrl+'
+
 const ACTIVITY_ITEMS: ActivityBarItem[] = [
-  { id: 'explorer', icon: Files, title: 'Explorer', shortcut: '\u21E7\u2318E' },
-  { id: 'source-control', icon: GitBranch, title: 'Source Control', shortcut: '\u21E7\u2318G' },
-  { id: 'search', icon: Search, title: 'Search', shortcut: '\u21E7\u2318F' }
+  {
+    id: 'explorer',
+    icon: Files,
+    title: 'Explorer',
+    shortcut: `${isMac ? '\u21E7' : 'Shift+'}${mod}E`
+  },
+  {
+    id: 'source-control',
+    icon: GitBranch,
+    title: 'Source Control',
+    shortcut: `${isMac ? '\u21E7' : 'Shift+'}${mod}G`
+  },
+  { id: 'search', icon: Search, title: 'Search', shortcut: `${isMac ? '\u21E7' : 'Shift+'}${mod}F` }
 ]
 
 export default function RightSidebar(): React.JSX.Element {

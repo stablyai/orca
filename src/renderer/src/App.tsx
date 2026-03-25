@@ -214,12 +214,14 @@ function App(): React.JSX.Element {
       if (e.repeat) {
         return
       }
-      if (!e.metaKey) {
+      // Accept Cmd on macOS, Ctrl on other platforms
+      const mod = navigator.userAgent.includes('Mac') ? e.metaKey : e.ctrlKey
+      if (!mod) {
         return
       }
 
-      // Cmd+N — create worktree
-      if (!e.ctrlKey && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'n') {
+      // Cmd/Ctrl+N — create worktree
+      if (!e.altKey && !e.shiftKey && e.key.toLowerCase() === 'n') {
         if (repos.length === 0) {
           return
         }
@@ -228,24 +230,24 @@ function App(): React.JSX.Element {
         return
       }
 
-      // Cmd+Shift+E — toggle right sidebar / explorer tab
-      if (e.shiftKey && !e.ctrlKey && !e.altKey && e.key.toLowerCase() === 'e') {
+      // Cmd/Ctrl+Shift+E — toggle right sidebar / explorer tab
+      if (e.shiftKey && !e.altKey && e.key.toLowerCase() === 'e') {
         e.preventDefault()
         setRightSidebarTab('explorer')
         setRightSidebarOpen(true)
         return
       }
 
-      // Cmd+Shift+F — toggle right sidebar / search tab
-      if (e.shiftKey && !e.ctrlKey && !e.altKey && e.key.toLowerCase() === 'f') {
+      // Cmd/Ctrl+Shift+F — toggle right sidebar / search tab
+      if (e.shiftKey && !e.altKey && e.key.toLowerCase() === 'f') {
         e.preventDefault()
         setRightSidebarTab('search')
         setRightSidebarOpen(true)
         return
       }
 
-      // Cmd+Shift+G — toggle right sidebar / source control tab
-      if (e.shiftKey && !e.ctrlKey && !e.altKey && e.key.toLowerCase() === 'g') {
+      // Cmd/Ctrl+Shift+G — toggle right sidebar / source control tab
+      if (e.shiftKey && !e.altKey && e.key.toLowerCase() === 'g') {
         e.preventDefault()
         setRightSidebarTab('source-control')
         setRightSidebarOpen(true)
