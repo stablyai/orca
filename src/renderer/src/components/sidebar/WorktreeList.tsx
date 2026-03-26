@@ -85,8 +85,23 @@ const WorktreeList = React.memo(function WorktreeList() {
       switch (sortBy) {
         case 'name':
           return a.displayName.localeCompare(b.displayName)
-        case 'recent':
+        case 'recent': {
+          const aTabs = tabsByWorktree?.[a.id] ?? []
+          const bTabs = tabsByWorktree?.[b.id] ?? []
+          const aActive = aTabs.some((t) => t.ptyId)
+          const bActive = bTabs.some((t) => t.ptyId)
+          // Active worktrees pin to top in stable (name) order
+          if (aActive && bActive) {
+            return a.displayName.localeCompare(b.displayName)
+          }
+          if (aActive) {
+            return -1
+          }
+          if (bActive) {
+            return 1
+          }
           return b.sortOrder - a.sortOrder
+        }
         case 'repo': {
           const ra = repoMap.get(a.repoId)?.displayName ?? ''
           const rb = repoMap.get(b.repoId)?.displayName ?? ''
