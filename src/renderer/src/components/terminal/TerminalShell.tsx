@@ -37,6 +37,7 @@ type TerminalShellProps = {
   onActivateFile: (fileId: string) => void
   onCloseFile: (fileId: string) => void
   onCloseAllFiles: () => void
+  onPinFile: (fileId: string) => void
   onPtyExit: (tabId: string, ptyId: string) => void
   tabBarOrder?: string[]
   editorPanel: ReactNode
@@ -72,6 +73,7 @@ export function TerminalShell({
   onActivateFile,
   onCloseFile,
   onCloseAllFiles,
+  onPinFile,
   onPtyExit,
   tabBarOrder,
   editorPanel,
@@ -112,6 +114,7 @@ export function TerminalShell({
               onActivateFile={onActivateFile}
               onCloseFile={onCloseFile}
               onCloseAllFiles={onCloseAllFiles}
+              onPinFile={onPinFile}
               tabBarOrder={tabBarOrder}
             />
           )}

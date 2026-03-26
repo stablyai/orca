@@ -19,7 +19,8 @@ export default function EditorFileTab({
   onActivate,
   onClose,
   onCloseToRight,
-  onCloseAll
+  onCloseAll,
+  onPin
 }: {
   file: OpenFile
   isActive: boolean
@@ -28,6 +29,7 @@ export default function EditorFileTab({
   onClose: () => void
   onCloseToRight: () => void
   onCloseAll: () => void
+  onPin?: () => void
 }): React.JSX.Element {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: file.id
@@ -78,6 +80,11 @@ export default function EditorFileTab({
             onActivate()
             listeners?.onPointerDown?.(e)
           }}
+          onDoubleClick={() => {
+            if (file.isPreview && onPin) {
+              onPin()
+            }
+          }}
           onMouseDown={(e) => {
             if (e.button === 1) {
               e.preventDefault()
@@ -94,7 +101,7 @@ export default function EditorFileTab({
           {file.isDirty && (
             <span className="mr-1 size-1.5 rounded-full bg-foreground/60 shrink-0" />
           )}
-          <span className="truncate max-w-[130px] mr-1.5">
+          <span className={`truncate max-w-[130px] mr-1.5${file.isPreview ? ' italic' : ''}`}>
             {isDiff
               ? file.relativePath === 'All Changes'
                 ? 'All Changes'

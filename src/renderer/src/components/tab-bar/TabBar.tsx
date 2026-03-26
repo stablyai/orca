@@ -34,6 +34,7 @@ type TabBarProps = {
   onActivateFile?: (fileId: string) => void
   onCloseFile?: (fileId: string) => void
   onCloseAllFiles?: () => void
+  onPinFile?: (fileId: string) => void
   tabBarOrder?: string[]
 }
 
@@ -88,6 +89,7 @@ export default function TabBar({
   onActivateFile,
   onCloseFile,
   onCloseAllFiles,
+  onPinFile,
   tabBarOrder
 }: TabBarProps): React.JSX.Element {
   const sensors = useSensors(
@@ -196,6 +198,7 @@ export default function TabBar({
                   onClose={() => onCloseFile?.(item.id)}
                   onCloseToRight={() => onCloseToRight(item.id)}
                   onCloseAll={() => onCloseAllFiles?.()}
+                  onPin={() => onPinFile?.(item.id)}
                 />
               )
             })}

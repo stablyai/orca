@@ -38,6 +38,7 @@ export default function Terminal(): React.JSX.Element | null {
   const setActiveFile = useAppStore((s) => s.setActiveFile)
   const closeFile = useAppStore((s) => s.closeFile)
   const closeAllFiles = useAppStore((s) => s.closeAllFiles)
+  const pinFile = useAppStore((s) => s.pinFile)
 
   const markFileDirty = useAppStore((s) => s.markFileDirty)
 
@@ -365,6 +366,7 @@ export default function Terminal(): React.JSX.Element | null {
               }}
               onCloseFile={handleCloseFile}
               onCloseAllFiles={closeAllFiles}
+              onPinFile={pinFile}
             />
           )}
         </div>

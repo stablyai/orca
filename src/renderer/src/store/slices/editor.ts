@@ -12,6 +12,7 @@ export type OpenFile = {
   isDirty: boolean
   mode: 'edit' | 'diff'
   diffStaged?: boolean
+  isPreview?: boolean // preview tabs are replaced when another file is single-clicked
 }
 
 export type RightSidebarTab = 'explorer' | 'search' | 'source-control' | 'checks'
@@ -40,7 +41,8 @@ export type EditorSlice = {
   activeTabTypeByWorktree: Record<string, 'terminal' | 'editor'> // worktreeId -> last active tab type
   activeTabType: 'terminal' | 'editor'
   setActiveTabType: (type: 'terminal' | 'editor') => void
-  openFile: (file: Omit<OpenFile, 'id' | 'isDirty'>) => void
+  openFile: (file: Omit<OpenFile, 'id' | 'isDirty'>, options?: { preview?: boolean }) => void
+  pinFile: (fileId: string) => void
   closeFile: (fileId: string) => void
   closeAllFiles: () => void
   setActiveFile: (fileId: string) => void
@@ -134,36 +136,72 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       }
     }),
 
-  openFile: (file) =>
+  openFile: (file, options) =>
     set((s) => {
       const id = file.filePath
       const existing = s.openFiles.find((f) => f.id === id)
       const worktreeId = file.worktreeId
+      const isPreview = options?.preview ?? false
+
+      const activeResult = {
+        activeFileId: id,
+        activeTabType: 'editor' as const,
+        activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
+        activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' as const }
+      }
+
       if (existing) {
-        if (existing.mode === file.mode && existing.diffStaged === file.diffStaged) {
-          return {
-            activeFileId: id,
-            activeTabType: 'editor',
-            activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
-            activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
-          }
+        // If opening as non-preview, also pin the existing tab
+        const updatedPreview = isPreview ? existing.isPreview : false
+        if (
+          existing.mode === file.mode &&
+          existing.diffStaged === file.diffStaged &&
+          existing.isPreview === updatedPreview
+        ) {
+          return activeResult
         }
         return {
           openFiles: s.openFiles.map((f) =>
-            f.id === id ? { ...f, mode: file.mode, diffStaged: file.diffStaged } : f
+            f.id === id
+              ? { ...f, mode: file.mode, diffStaged: file.diffStaged, isPreview: updatedPreview }
+              : f
           ),
-          activeFileId: id,
-          activeTabType: 'editor',
-          activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
-          activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+          ...activeResult
         }
       }
+
+      // If opening as preview, replace the existing preview tab for this worktree
+      let newFiles = s.openFiles
+      if (isPreview) {
+        const existingPreviewIdx = s.openFiles.findIndex(
+          (f) => f.worktreeId === worktreeId && f.isPreview
+        )
+        if (existingPreviewIdx !== -1) {
+          // Replace in-place to preserve tab position
+          newFiles = s.openFiles.map((f, i) =>
+            i === existingPreviewIdx ? { ...file, id, isDirty: false, isPreview: true } : f
+          )
+          return { openFiles: newFiles, ...activeResult }
+        }
+      }
+
       return {
-        openFiles: [...s.openFiles, { ...file, id, isDirty: false }],
-        activeFileId: id,
-        activeTabType: 'editor',
-        activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
-        activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+        openFiles: [
+          ...newFiles,
+          { ...file, id, isDirty: false, isPreview: isPreview || undefined }
+        ],
+        ...activeResult
+      }
+    }),
+
+  pinFile: (fileId) =>
+    set((s) => {
+      const file = s.openFiles.find((f) => f.id === fileId)
+      if (!file?.isPreview) {
+        return s
+      }
+      return {
+        openFiles: s.openFiles.map((f) => (f.id === fileId ? { ...f, isPreview: undefined } : f))
       }
     }),
 
@@ -274,7 +312,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
 
   markFileDirty: (fileId, dirty) =>
     set((s) => ({
-      openFiles: s.openFiles.map((f) => (f.id === fileId ? { ...f, isDirty: dirty } : f))
+      openFiles: s.openFiles.map((f) =>
+        f.id === fileId
+          ? { ...f, isDirty: dirty, ...(dirty && f.isPreview ? { isPreview: undefined } : {}) }
+          : f
+      )
     })),
 
   openDiff: (worktreeId, filePath, relativePath, language, staged) =>

@@ -188,13 +188,16 @@ export default function Search(): React.JSX.Element {
         matchLength: match.matchLength
       })
 
-      openFile({
-        filePath: fileResult.filePath,
-        relativePath: fileResult.relativePath,
-        worktreeId: activeWorktreeId,
-        language: detectLanguage(fileResult.relativePath),
-        mode: 'edit'
-      })
+      openFile(
+        {
+          filePath: fileResult.filePath,
+          relativePath: fileResult.relativePath,
+          worktreeId: activeWorktreeId,
+          language: detectLanguage(fileResult.relativePath),
+          mode: 'edit'
+        },
+        { preview: true }
+      )
     },
     [activeWorktreeId, openFile, setPendingEditorReveal]
   )

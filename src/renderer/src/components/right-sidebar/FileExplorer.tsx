@@ -24,6 +24,7 @@ export default function FileExplorer(): React.JSX.Element {
   const expandedDirs = useAppStore((s) => s.expandedDirs)
   const toggleDir = useAppStore((s) => s.toggleDir)
   const openFile = useAppStore((s) => s.openFile)
+  const pinFile = useAppStore((s) => s.pinFile)
   const activeFileId = useAppStore((s) => s.activeFileId)
 
   // Find active worktree path
@@ -158,16 +159,29 @@ export default function FileExplorer(): React.JSX.Element {
       if (node.isDirectory) {
         toggleDir(activeWorktreeId, node.path)
       } else {
-        openFile({
-          filePath: node.path,
-          relativePath: node.relativePath,
-          worktreeId: activeWorktreeId,
-          language: detectLanguage(node.name),
-          mode: 'edit'
-        })
+        openFile(
+          {
+            filePath: node.path,
+            relativePath: node.relativePath,
+            worktreeId: activeWorktreeId,
+            language: detectLanguage(node.name),
+            mode: 'edit'
+          },
+          { preview: true }
+        )
       }
     },
     [activeWorktreeId, toggleDir, openFile]
+  )
+
+  const handleDoubleClick = useCallback(
+    (node: TreeNode) => {
+      if (!activeWorktreeId || node.isDirectory) {
+        return
+      }
+      pinFile(node.path)
+    },
+    [activeWorktreeId, pinFile]
   )
 
   if (!worktreePath) {
@@ -215,6 +229,7 @@ export default function FileExplorer(): React.JSX.Element {
                   e.dataTransfer.effectAllowed = 'copy'
                 }}
                 onClick={() => handleClick(node)}
+                onDoubleClick={() => handleDoubleClick(node)}
               >
                 {node.isDirectory ? (
                   <>
