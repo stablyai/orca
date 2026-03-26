@@ -186,84 +186,79 @@ export function RepositoryPane({
           </div>
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-3">
           <Label className="text-sm">Default Worktree Base</Label>
-          <div className="rounded-xl border bg-background/80 p-4 shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <div className="text-sm font-medium text-foreground">{effectiveBaseRef}</div>
-                <p className="text-xs text-muted-foreground">
-                  {repo.worktreeBaseRef
-                    ? 'Pinned for this repo'
-                    : `Following primary branch (${defaultBaseRef})`}
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setBaseRefQuery('')
-                  setBaseRefResults([])
-                  updateRepo(repo.id, {
-                    worktreeBaseRef: undefined
-                  })
-                }}
-                disabled={!repo.worktreeBaseRef}
-              >
-                Use Primary
-              </Button>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <div className="text-sm font-medium text-foreground">{effectiveBaseRef}</div>
+              <p className="text-xs text-muted-foreground">
+                {repo.worktreeBaseRef
+                  ? 'Pinned for this repo'
+                  : `Following primary branch (${defaultBaseRef})`}
+              </p>
             </div>
-
-            <div className="mt-4 space-y-2">
-              <Input
-                value={baseRefQuery}
-                onChange={(e) => setBaseRefQuery(e.target.value)}
-                placeholder="Search branches by name..."
-                className="max-w-md"
-              />
-              <p className="text-xs text-muted-foreground">Type at least 2 characters.</p>
-            </div>
-
-            {isSearchingBaseRefs ? (
-              <p className="mt-3 text-xs text-muted-foreground">Searching branches...</p>
-            ) : null}
-
-            {!isSearchingBaseRefs && baseRefQuery.trim().length >= 2 ? (
-              baseRefResults.length > 0 ? (
-                <ScrollArea className="mt-3 h-48 rounded-md border">
-                  <div className="p-1">
-                    {baseRefResults.map((ref) => (
-                      <button
-                        key={ref}
-                        onClick={() => {
-                          setBaseRefQuery(ref)
-                          setBaseRefResults([])
-                          updateRepo(repo.id, {
-                            worktreeBaseRef: ref
-                          })
-                        }}
-                        className={`flex w-full items-center justify-between rounded-sm px-3 py-2 text-left text-sm transition-colors hover:bg-muted/60 ${
-                          repo.worktreeBaseRef === ref
-                            ? 'bg-accent text-accent-foreground'
-                            : 'text-foreground'
-                        }`}
-                      >
-                        <span className="truncate">{ref}</span>
-                        {repo.worktreeBaseRef === ref ? (
-                          <span className="text-[10px] uppercase tracking-[0.18em]">Current</span>
-                        ) : null}
-                      </button>
-                    ))}
-                  </div>
-                </ScrollArea>
-              ) : (
-                <p className="mt-3 text-xs text-muted-foreground">No matching branches found.</p>
-              )
-            ) : null}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setBaseRefQuery('')
+                setBaseRefResults([])
+                updateRepo(repo.id, {
+                  worktreeBaseRef: undefined
+                })
+              }}
+              disabled={!repo.worktreeBaseRef}
+            >
+              Use Primary
+            </Button>
           </div>
-          <p className="text-xs text-muted-foreground">
-            New worktrees default to the repo primary branch unless you pin a different base here.
-          </p>
+
+          <div className="space-y-2">
+            <Input
+              value={baseRefQuery}
+              onChange={(e) => setBaseRefQuery(e.target.value)}
+              placeholder="Search branches by name..."
+              className="max-w-md"
+            />
+            <p className="text-xs text-muted-foreground">Type at least 2 characters.</p>
+          </div>
+
+          {isSearchingBaseRefs ? (
+            <p className="text-xs text-muted-foreground">Searching branches...</p>
+          ) : null}
+
+          {!isSearchingBaseRefs && baseRefQuery.trim().length >= 2 ? (
+            baseRefResults.length > 0 ? (
+              <ScrollArea className="h-48 rounded-md border">
+                <div className="p-1">
+                  {baseRefResults.map((ref) => (
+                    <button
+                      key={ref}
+                      onClick={() => {
+                        setBaseRefQuery(ref)
+                        setBaseRefResults([])
+                        updateRepo(repo.id, {
+                          worktreeBaseRef: ref
+                        })
+                      }}
+                      className={`flex w-full items-center justify-between rounded-sm px-3 py-2 text-left text-sm transition-colors hover:bg-muted/60 ${
+                        repo.worktreeBaseRef === ref
+                          ? 'bg-accent text-accent-foreground'
+                          : 'text-foreground'
+                      }`}
+                    >
+                      <span className="truncate">{ref}</span>
+                      {repo.worktreeBaseRef === ref ? (
+                        <span className="text-[10px] uppercase tracking-[0.18em]">Current</span>
+                      ) : null}
+                    </button>
+                  ))}
+                </div>
+              </ScrollArea>
+            ) : (
+              <p className="text-xs text-muted-foreground">No matching branches found.</p>
+            )
+          ) : null}
         </div>
       </section>
 
