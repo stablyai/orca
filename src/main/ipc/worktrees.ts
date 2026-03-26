@@ -1,5 +1,6 @@
 import type { BrowserWindow } from 'electron'
 import { ipcMain } from 'electron'
+import { execFileSync } from 'child_process'
 import { join, basename, resolve, relative, isAbsolute } from 'path'
 import type { Store } from '../persistence'
 import type { Worktree, WorktreeMeta } from '../../shared/types'
@@ -85,6 +86,18 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
 
       // Determine base branch
       const baseBranch = args.baseBranch || repo.worktreeBaseRef || getDefaultBaseRef(repo.path)
+
+      // Fetch latest from remote so the worktree starts with up-to-date content
+      const remote = baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'
+      try {
+        execFileSync('git', ['fetch', remote], {
+          cwd: repo.path,
+          encoding: 'utf-8',
+          stdio: ['pipe', 'pipe', 'pipe']
+        })
+      } catch {
+        // Fetch is best-effort — don't block worktree creation if offline
+      }
 
       addWorktree(repo.path, worktreePath, branchName, baseBranch)
 

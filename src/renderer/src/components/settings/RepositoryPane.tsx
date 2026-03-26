@@ -133,7 +133,7 @@ export function RepositoryPane({
 
   return (
     <div className="space-y-8">
-      <section className="space-y-4">
+      <section className="space-y-6">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-1">
             <h2 className="text-sm font-semibold">Identity</h2>
