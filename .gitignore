@@ -47,6 +47,7 @@ coverage/
 tmp/
 .tmp/
 design-docs/
+.context/
 
 # Stably CLI (only docs/ are tracked)
 .stably/*

@@ -8,7 +8,8 @@ import {
   shouldSetDisplayName,
   mergeWorktree,
   parseWorktreeId,
-  formatWorktreeRemovalError
+  formatWorktreeRemovalError,
+  isOrphanedWorktreeError
 } from './worktree-logic'
 
 describe('sanitizeWorktreeName', () => {
@@ -252,5 +253,31 @@ describe('formatWorktreeRemovalError', () => {
     expect(formatWorktreeRemovalError(error, path, false)).toBe(
       `Failed to delete worktree at ${path}.`
     )
+  })
+})
+
+describe('isOrphanedWorktreeError', () => {
+  it('returns true when stderr contains "is not a working tree"', () => {
+    const error = Object.assign(new Error('git failed'), {
+      stderr: "fatal: '/some/path' is not a working tree"
+    })
+    expect(isOrphanedWorktreeError(error)).toBe(true)
+  })
+
+  it('returns true when message contains "is not a working tree"', () => {
+    const error = new Error("fatal: '/some/path' is not a working tree")
+    expect(isOrphanedWorktreeError(error)).toBe(true)
+  })
+
+  it('returns false for unrelated git errors', () => {
+    const error = Object.assign(new Error('git failed'), {
+      stderr: 'fatal: contains modified or untracked files'
+    })
+    expect(isOrphanedWorktreeError(error)).toBe(false)
+  })
+
+  it('returns false for non-Error input', () => {
+    expect(isOrphanedWorktreeError('string error')).toBe(false)
+    expect(isOrphanedWorktreeError(null)).toBe(false)
   })
 })

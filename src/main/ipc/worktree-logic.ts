@@ -123,6 +123,19 @@ export function parseWorktreeId(worktreeId: string): { repoId: string; worktreeP
 }
 
 /**
+ * Check whether a git error indicates the worktree is no longer tracked by git.
+ * This happens when a worktree's internal git tracking is removed (e.g. via
+ * `git worktree prune`) but the directory still exists on disk.
+ */
+export function isOrphanedWorktreeError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false
+  }
+  const msg = (error as { stderr?: string }).stderr || error.message
+  return /is not a working tree/.test(msg)
+}
+
+/**
  * Format a human-readable error message for worktree removal failures.
  */
 export function formatWorktreeRemovalError(

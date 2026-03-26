@@ -1,6 +1,7 @@
 import type { BrowserWindow } from 'electron'
 import { ipcMain } from 'electron'
 import { execFileSync } from 'child_process'
+import { rm } from 'fs/promises'
 import type { Store } from '../persistence'
 import type { Worktree, WorktreeMeta } from '../../shared/types'
 import { listWorktrees, addWorktree, removeWorktree } from '../git/worktree'
@@ -14,7 +15,8 @@ import {
   shouldSetDisplayName,
   mergeWorktree,
   parseWorktreeId,
-  formatWorktreeRemovalError
+  formatWorktreeRemovalError,
+  isOrphanedWorktreeError
 } from './worktree-logic'
 
 export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store): void {
@@ -150,6 +152,14 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
       try {
         await removeWorktree(repo.path, worktreePath, args.force ?? false)
       } catch (error) {
+        // If git no longer tracks this worktree, clean up the directory and metadata
+        if (isOrphanedWorktreeError(error)) {
+          console.warn(`[worktrees] Orphaned worktree detected at ${worktreePath}, cleaning up`)
+          await rm(worktreePath, { recursive: true, force: true }).catch(() => {})
+          store.removeWorktreeMeta(args.worktreeId)
+          notifyWorktreesChanged(mainWindow, repoId)
+          return
+        }
         throw new Error(formatWorktreeRemovalError(error, worktreePath, args.force ?? false))
       }
       store.removeWorktreeMeta(args.worktreeId)
