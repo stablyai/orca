@@ -21,50 +21,44 @@ const SidebarToolbar = React.memo(function SidebarToolbar() {
   return (
     <div className="mt-auto shrink-0">
       {showUpdateBanner && (
-        <button
-          onClick={() => {
-            if (updateStatus.state === 'downloaded') {
-              window.api.updater.quitAndInstall()
-            } else if (updateStatus.state === 'available') {
-              window.api.updater.download()
-            }
-          }}
-          disabled={updateStatus.state === 'downloading'}
-          className="group flex items-center gap-1.5 w-full px-2 py-1.5 text-[11px] font-medium text-primary hover:bg-primary/15 transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-default border-t border-sidebar-border bg-primary/10"
-        >
-          <Download className="size-3.5 shrink-0" />
-          {updateStatus.state === 'downloaded' ? (
-            <span>Restart now (update)</span>
-          ) : updateStatus.state === 'downloading' ? (
-            <span>
-              Downloading <span className="font-semibold">v{updateVersion}</span>…{' '}
-              {updateStatus.percent}%
-            </span>
-          ) : (
-            <span>
-              Update <span className="font-semibold">v{updateStatus.version}</span> available
-              — Install
-            </span>
-          )}
-          <span
-            role="button"
-            tabIndex={0}
+        <div className="flex items-center border-t border-sidebar-border bg-primary/10">
+          <button
+            onClick={() => {
+              if (updateStatus.state === 'downloaded') {
+                window.api.updater.quitAndInstall()
+              } else if (updateStatus.state === 'available') {
+                window.api.updater.download()
+              }
+            }}
+            disabled={updateStatus.state === 'downloading'}
+            className="flex items-center gap-1.5 flex-1 min-w-0 px-2 py-1.5 text-[11px] font-medium text-primary hover:bg-primary/15 transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-default"
+          >
+            <Download className="size-3.5 shrink-0" />
+            {updateStatus.state === 'downloaded' ? (
+              <span>Restart now (update)</span>
+            ) : updateStatus.state === 'downloading' ? (
+              <span>
+                Downloading <span className="font-semibold">v{updateVersion}</span>…{' '}
+                {updateStatus.percent}%
+              </span>
+            ) : (
+              <span>
+                Update <span className="font-semibold">v{updateStatus.version}</span> available —
+                Install
+              </span>
+            )}
+          </button>
+          <button
             onClick={(e) => {
               e.stopPropagation()
               dismissUpdate()
             }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.stopPropagation()
-                dismissUpdate()
-              }
-            }}
-            className="ml-auto shrink-0 p-0.5 rounded text-primary/40 hover:text-primary hover:bg-primary/20 opacity-0 group-hover:opacity-100 transition-all"
+            className="shrink-0 p-1 mr-1 rounded text-primary/60 hover:text-primary hover:bg-primary/15 transition-colors"
             title="Dismiss"
           >
             <X className="size-3" />
-          </span>
-        </button>
+          </button>
+        </div>
       )}
       <div className="flex items-center justify-between px-2 py-1.5 border-t border-sidebar-border">
         <Tooltip>
