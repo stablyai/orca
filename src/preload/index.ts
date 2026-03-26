@@ -192,6 +192,7 @@ const api = {
     getStatus: (): Promise<unknown> => ipcRenderer.invoke('updater:getStatus'),
     getVersion: (): Promise<string> => ipcRenderer.invoke('updater:getVersion'),
     check: (): Promise<void> => ipcRenderer.invoke('updater:check'),
+    download: (): Promise<void> => ipcRenderer.invoke('updater:download'),
     quitAndInstall: (): Promise<void> => ipcRenderer.invoke('updater:quitAndInstall'),
     onStatus: (callback: (status: unknown) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, status: unknown) => callback(status)

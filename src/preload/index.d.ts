@@ -99,6 +99,7 @@ type UpdaterApi = {
   getVersion: () => Promise<string>
   getStatus: () => Promise<UpdateStatus>
   check: () => Promise<void>
+  download: () => Promise<void>
   quitAndInstall: () => Promise<void>
   onStatus: (callback: (status: UpdateStatus) => void) => () => void
 }

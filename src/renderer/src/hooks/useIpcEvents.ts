@@ -34,6 +34,7 @@ export function useIpcEvents(): void {
     })
 
     let checkingToastId: string | number | undefined
+    let availableToastId: string | number | undefined
     unsubs.push(
       window.api.updater.onStatus((raw) => {
         const status = raw as UpdateStatus
@@ -52,7 +53,23 @@ export function useIpcEvents(): void {
             toast.dismiss(checkingToastId)
           }
           checkingToastId = undefined
+          availableToastId = toast.info(`Version ${status.version} is available.`, {
+            duration: Infinity,
+            action: {
+              label: 'Install',
+              onClick: () => window.api.updater.download()
+            }
+          })
+        } else if (status.state === 'downloading') {
+          if (availableToastId) {
+            toast.dismiss(availableToastId)
+            availableToastId = undefined
+          }
         } else if (status.state === 'downloaded') {
+          if (availableToastId) {
+            toast.dismiss(availableToastId)
+            availableToastId = undefined
+          }
           toast.success(`Version ${status.version} is ready to install.`, {
             duration: Infinity,
             action: {

@@ -4,7 +4,13 @@ import type { Store } from '../persistence'
 import { registerRepoHandlers } from '../ipc/repos'
 import { registerWorktreeHandlers } from '../ipc/worktrees'
 import { registerPtyHandlers } from '../ipc/pty'
-import { checkForUpdates, getUpdateStatus, quitAndInstall, setupAutoUpdater } from '../updater'
+import {
+  checkForUpdates,
+  downloadUpdate,
+  getUpdateStatus,
+  quitAndInstall,
+  setupAutoUpdater
+} from '../updater'
 
 export function attachMainWindowServices(mainWindow: BrowserWindow, store: Store): void {
   registerRepoHandlers(mainWindow, store)
@@ -46,10 +52,12 @@ export function registerUpdaterHandlers(): void {
   ipcMain.removeHandler('updater:getStatus')
   ipcMain.removeHandler('updater:getVersion')
   ipcMain.removeHandler('updater:check')
+  ipcMain.removeHandler('updater:download')
   ipcMain.removeHandler('updater:quitAndInstall')
 
   ipcMain.handle('updater:getStatus', () => getUpdateStatus())
   ipcMain.handle('updater:getVersion', () => app.getVersion())
   ipcMain.handle('updater:check', () => checkForUpdates())
+  ipcMain.handle('updater:download', () => downloadUpdate())
   ipcMain.handle('updater:quitAndInstall', () => quitAndInstall())
 }

@@ -13,7 +13,9 @@ const SidebarToolbar = React.memo(function SidebarToolbar() {
 
   const updateVersion = 'version' in updateStatus ? updateStatus.version : null
   const showUpdateBanner =
-    (updateStatus.state === 'downloaded' || updateStatus.state === 'available') &&
+    (updateStatus.state === 'downloaded' ||
+      updateStatus.state === 'available' ||
+      updateStatus.state === 'downloading') &&
     updateVersion !== dismissedUpdateVersion
 
   return (
@@ -21,17 +23,28 @@ const SidebarToolbar = React.memo(function SidebarToolbar() {
       {showUpdateBanner && (
         <div className="flex items-center border-t border-sidebar-border bg-primary/10">
           <button
-            onClick={() =>
-              updateStatus.state === 'downloaded' ? window.api.updater.quitAndInstall() : undefined
-            }
-            className="flex items-center gap-1.5 flex-1 min-w-0 px-2 py-1.5 text-[11px] font-medium text-primary hover:bg-primary/15 transition-colors cursor-pointer"
+            onClick={() => {
+              if (updateStatus.state === 'downloaded') {
+                window.api.updater.quitAndInstall()
+              } else if (updateStatus.state === 'available') {
+                window.api.updater.download()
+              }
+            }}
+            disabled={updateStatus.state === 'downloading'}
+            className="flex items-center gap-1.5 flex-1 min-w-0 px-2 py-1.5 text-[11px] font-medium text-primary hover:bg-primary/15 transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-default"
           >
             <Download className="size-3.5 shrink-0" />
             {updateStatus.state === 'downloaded' ? (
               <span>Restart now (update)</span>
+            ) : updateStatus.state === 'downloading' ? (
+              <span>
+                Downloading <span className="font-semibold">v{updateVersion}</span>…{' '}
+                {updateStatus.percent}%
+              </span>
             ) : (
               <span>
-                Downloading <span className="font-semibold">v{updateStatus.version}</span>…
+                Update <span className="font-semibold">v{updateStatus.version}</span> available —
+                Install
               </span>
             )}
           </button>

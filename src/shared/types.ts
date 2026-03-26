@@ -145,7 +145,7 @@ export type UpdateStatus =
   | { state: 'checking'; userInitiated?: boolean }
   | { state: 'available'; version: string }
   | { state: 'not-available'; userInitiated?: boolean }
-  | { state: 'downloading'; percent: number }
+  | { state: 'downloading'; percent: number; version: string }
   | { state: 'downloaded'; version: string }
   | { state: 'error'; message: string; userInitiated?: boolean }
 

@@ -9,6 +9,7 @@ let currentStatus: UpdateStatus = { state: 'idle' }
 let userInitiatedCheck = false
 let onBeforeQuitCleanup: (() => void) | null = null
 let autoUpdaterInitialized = false
+let availableVersion: string | null = null
 
 function sendStatus(status: UpdateStatus): void {
   currentStatus = status
@@ -79,7 +80,7 @@ export function setupAutoUpdater(
     return
   }
 
-  autoUpdater.autoDownload = true
+  autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = true
   // Use allowPrerelease to bypass broken /releases/latest endpoint (returns 406)
   // and instead parse the version directly from the atom feed which works reliably.
@@ -105,6 +106,7 @@ export function setupAutoUpdater(
       sendStatus({ state: 'not-available', userInitiated: wasUserInitiated || undefined })
       return
     }
+    availableVersion = info.version
     sendStatus({ state: 'available', version: info.version })
   })
 
@@ -115,7 +117,11 @@ export function setupAutoUpdater(
   })
 
   autoUpdater.on('download-progress', (progress) => {
-    sendStatus({ state: 'downloading', percent: Math.round(progress.percent) })
+    sendStatus({
+      state: 'downloading',
+      percent: Math.round(progress.percent),
+      version: availableVersion ?? ''
+    })
   })
 
   autoUpdater.on('update-downloaded', (info) => {
@@ -137,5 +143,17 @@ export function setupAutoUpdater(
     })
   })
 
-  autoUpdater.checkForUpdatesAndNotify()
+  autoUpdater.checkForUpdates().catch((err) => {
+    // Startup check — don't bother the user, but log for diagnostics
+    console.error('[updater] startup check failed:', err?.message ?? err)
+  })
+}
+
+export function downloadUpdate(): void {
+  if (currentStatus.state !== 'available') {
+    return
+  }
+  autoUpdater.downloadUpdate().catch((err) => {
+    sendStatus({ state: 'error', message: String(err?.message ?? err) })
+  })
 }

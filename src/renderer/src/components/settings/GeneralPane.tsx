@@ -161,7 +161,17 @@ export function GeneralPane({
             Check for Updates
           </Button>
 
-          {updateStatus.state === 'downloaded' ? (
+          {updateStatus.state === 'available' ? (
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => window.api.updater.download()}
+              className="gap-2"
+            >
+              <Download className="size-3.5" />
+              Install Update ({updateStatus.version})
+            </Button>
+          ) : updateStatus.state === 'downloaded' ? (
             <Button
               variant="default"
               size="sm"
@@ -178,9 +188,10 @@ export function GeneralPane({
           {updateStatus.state === 'idle' && 'Updates are checked automatically on launch.'}
           {updateStatus.state === 'checking' && 'Checking for updates...'}
           {updateStatus.state === 'available' &&
-            `Version ${updateStatus.version} is available. Downloading...`}
+            `Version ${updateStatus.version} is available. Click "Install Update" to download.`}
           {updateStatus.state === 'not-available' && 'You\u2019re on the latest version.'}
-          {updateStatus.state === 'downloading' && `Downloading update... ${updateStatus.percent}%`}
+          {updateStatus.state === 'downloading' &&
+            `Downloading v${updateStatus.version}... ${updateStatus.percent}%`}
           {updateStatus.state === 'downloaded' &&
             `Version ${updateStatus.version} is ready to install.`}
           {updateStatus.state === 'error' && `Update error: ${updateStatus.message}`}
