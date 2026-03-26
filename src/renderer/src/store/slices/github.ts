@@ -1,6 +1,6 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { PRInfo, IssueInfo, Worktree } from '../../../../shared/types'
+import type { PRInfo, IssueInfo, PRCheckDetail, Worktree } from '../../../../shared/types'
 
 export type CacheEntry<T> = {
   data: T | null
@@ -8,12 +8,14 @@ export type CacheEntry<T> = {
 }
 
 const CACHE_TTL = 300_000 // 5 minutes (stale data shown instantly, then refreshed)
+const CHECKS_CACHE_TTL = 60_000 // 1 minute — checks change more frequently
 
 const inflightPRRequests = new Map<string, Promise<PRInfo | null>>()
 const inflightIssueRequests = new Map<string, Promise<IssueInfo | null>>()
+const inflightChecksRequests = new Map<string, Promise<PRCheckDetail[]>>()
 
-function isFresh<T>(entry: CacheEntry<T> | undefined): entry is CacheEntry<T> {
-  return entry !== undefined && Date.now() - entry.fetchedAt < CACHE_TTL
+function isFresh<T>(entry: CacheEntry<T> | undefined, ttl = CACHE_TTL): entry is CacheEntry<T> {
+  return entry !== undefined && Date.now() - entry.fetchedAt < ttl
 }
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null
@@ -36,8 +38,10 @@ function debouncedSaveCache(state: AppState): void {
 export type GitHubSlice = {
   prCache: Record<string, CacheEntry<PRInfo>>
   issueCache: Record<string, CacheEntry<IssueInfo>>
+  checksCache: Record<string, CacheEntry<PRCheckDetail[]>>
   fetchPRForBranch: (repoPath: string, branch: string) => Promise<PRInfo | null>
   fetchIssue: (repoPath: string, number: number) => Promise<IssueInfo | null>
+  fetchPRChecks: (repoPath: string, prNumber: number) => Promise<PRCheckDetail[]>
   initGitHubCache: () => Promise<void>
   refreshAllGitHub: () => void
   refreshGitHubForWorktree: (worktreeId: string) => void
@@ -46,6 +50,7 @@ export type GitHubSlice = {
 export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (set, get) => ({
   prCache: {},
   issueCache: {},
+  checksCache: {},
 
   initGitHubCache: async () => {
     try {
@@ -133,22 +138,48 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     return request
   },
 
-  refreshAllGitHub: () => {
-    // Invalidate all cache entries so next fetch bypasses TTL
-    set((s) => {
-      const nextPr: Record<string, CacheEntry<PRInfo>> = {}
-      for (const [k, v] of Object.entries(s.prCache)) {
-        nextPr[k] = { ...v, fetchedAt: 0 }
-      }
-      const nextIssue: Record<string, CacheEntry<IssueInfo>> = {}
-      for (const [k, v] of Object.entries(s.issueCache)) {
-        nextIssue[k] = { ...v, fetchedAt: 0 }
-      }
-      return { prCache: nextPr, issueCache: nextIssue }
-    })
+  fetchPRChecks: async (repoPath, prNumber) => {
+    const cacheKey = `${repoPath}::pr-checks::${prNumber}`
+    const cached = get().checksCache[cacheKey]
+    if (isFresh(cached, CHECKS_CACHE_TTL)) {
+      return cached.data ?? []
+    }
 
-    // Re-fetch all worktrees' PR + issue data
+    const inflightRequest = inflightChecksRequests.get(cacheKey)
+    if (inflightRequest) {
+      return inflightRequest
+    }
+
+    const request = (async () => {
+      try {
+        const checks = (await window.api.gh.prChecks({
+          repoPath,
+          prNumber
+        })) as PRCheckDetail[]
+        set((s) => ({
+          checksCache: { ...s.checksCache, [cacheKey]: { data: checks, fetchedAt: Date.now() } }
+        }))
+        return checks
+      } catch (err) {
+        console.error('Failed to fetch PR checks:', err)
+        return get().checksCache[cacheKey]?.data ?? []
+      } finally {
+        inflightChecksRequests.delete(cacheKey)
+      }
+    })()
+
+    inflightChecksRequests.set(cacheKey, request)
+    return request
+  },
+
+  refreshAllGitHub: () => {
+    // Invalidate checks cache so it refreshes on next access
+    set({ checksCache: {} })
+
+    // Only re-fetch PR/issue entries that are already stale — skip fresh ones
     const state = get()
+    const now = Date.now()
+
     for (const worktrees of Object.values(state.worktreesByRepo)) {
       for (const wt of worktrees) {
         const repo = state.repos.find((r) => r.id === wt.repoId)
@@ -158,10 +189,18 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
         const branch = wt.branch.replace(/^refs\/heads\//, '')
         if (!wt.isBare) {
-          void get().fetchPRForBranch(repo.path, branch)
+          const prKey = `${repo.path}::${branch}`
+          const prEntry = state.prCache[prKey]
+          if (!prEntry || now - prEntry.fetchedAt >= CACHE_TTL) {
+            void get().fetchPRForBranch(repo.path, branch)
+          }
         }
         if (wt.linkedIssue) {
-          void get().fetchIssue(repo.path, wt.linkedIssue)
+          const issueKey = `${repo.path}::${wt.linkedIssue}`
+          const issueEntry = state.issueCache[issueKey]
+          if (!issueEntry || now - issueEntry.fetchedAt >= CACHE_TTL) {
+            void get().fetchIssue(repo.path, wt.linkedIssue)
+          }
         }
       }
     }

@@ -85,14 +85,21 @@ function normalizeUsername(value: string): string {
   return localPart.replace(/^\d+\+/, '')
 }
 
+let cachedGhLogin: string | undefined
+
 function getGhLogin(): string {
+  if (cachedGhLogin !== undefined) {
+    return cachedGhLogin
+  }
+
   try {
     const apiLogin = execSync('gh api user -q .login', {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe']
     }).trim()
     if (apiLogin) {
-      return normalizeUsername(apiLogin)
+      cachedGhLogin = normalizeUsername(apiLogin)
+      return cachedGhLogin
     }
   } catch {
     // Fall through to auth status parsing
@@ -109,12 +116,18 @@ function getGhLogin(): string {
       /Active account:\s+true[\s\S]*?account\s+([A-Za-z0-9-]+)/
     )
     if (activeAccountMatch?.[1]) {
-      return normalizeUsername(activeAccountMatch[1])
+      cachedGhLogin = normalizeUsername(activeAccountMatch[1])
+      return cachedGhLogin
     }
 
     const accountMatch = output.match(/Logged in to github\.com account\s+([A-Za-z0-9-]+)/)
-    return normalizeUsername(accountMatch?.[1] ?? '')
+    const login = normalizeUsername(accountMatch?.[1] ?? '')
+    if (login) {
+      cachedGhLogin = login
+    }
+    return login
   } catch {
+    // Don't cache empty results on failure — allow retry on next call
     return ''
   }
 }

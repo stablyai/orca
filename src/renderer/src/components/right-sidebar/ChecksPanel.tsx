@@ -66,13 +66,17 @@ export default function ChecksPanel(): React.JSX.Element {
   const prCache = useAppStore((s) => s.prCache)
   const fetchPRForBranch = useAppStore((s) => s.fetchPRForBranch)
 
+  const fetchPRChecks = useAppStore((s) => s.fetchPRChecks)
+
   const [checks, setChecks] = useState<PRCheckDetail[]>([])
   const [checksLoading, setChecksLoading] = useState(false)
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
   const [titleSaving, setTitleSaving] = useState(false)
   const titleInputRef = useRef<HTMLInputElement>(null)
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pollIntervalRef = useRef(30_000) // start at 30s, backs off to 120s
+  const prevChecksRef = useRef<string>('')
 
   // Find active worktree and repo
   const { worktree, repo } = useMemo(() => {
@@ -93,37 +97,60 @@ export default function ChecksPanel(): React.JSX.Element {
   const prCacheKey = repo && branch ? `${repo.path}::${branch}` : ''
   const pr: PRInfo | null = prCacheKey ? (prCache[prCacheKey]?.data ?? null) : null
 
-  // Fetch checks
+  // Fetch checks via cached store method
   const fetchChecks = useCallback(async () => {
     if (!repo || !pr) {
       return
     }
     setChecksLoading(true)
     try {
-      const result = (await window.api.gh.prChecks({
-        repoPath: repo.path,
-        prNumber: pr.number
-      })) as PRCheckDetail[]
+      const result = await fetchPRChecks(repo.path, pr.number)
       setChecks(result)
+
+      // Exponential backoff: if checks haven't changed, double the interval (cap 120s).
+      // If they changed, reset to 30s.
+      const signature = JSON.stringify(result.map((c) => `${c.name}:${c.status}:${c.conclusion}`))
+      pollIntervalRef.current =
+        signature === prevChecksRef.current
+          ? Math.min(pollIntervalRef.current * 2, 120_000)
+          : 30_000
+      prevChecksRef.current = signature
     } catch (err) {
       console.warn('Failed to fetch PR checks:', err)
       setChecks([])
     } finally {
       setChecksLoading(false)
     }
-  }, [repo, pr])
+  }, [repo, pr, fetchPRChecks])
 
-  // Fetch checks on mount + poll
+  // Fetch checks on mount + poll with exponential backoff
   useEffect(() => {
     if (!pr) {
       setChecks([])
       return
     }
+
+    // Reset backoff state on PR change
+    pollIntervalRef.current = 30_000
+    prevChecksRef.current = ''
+    let cancelled = false
     void fetchChecks()
-    pollRef.current = setInterval(() => void fetchChecks(), 30_000)
+
+    const schedulePoll = (): void => {
+      pollRef.current = setTimeout(() => {
+        void fetchChecks().then(() => {
+          if (!cancelled) {
+            schedulePoll()
+          }
+        })
+      }, pollIntervalRef.current)
+    }
+    schedulePoll()
+
     return () => {
+      cancelled = true
       if (pollRef.current) {
-        clearInterval(pollRef.current)
+        clearTimeout(pollRef.current)
       }
     }
   }, [fetchChecks, pr])
