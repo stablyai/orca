@@ -9,7 +9,8 @@ type SortBy = 'name' | 'recent' | 'smart' | 'repo'
 export function buildWorktreeComparator(
   sortBy: SortBy,
   tabsByWorktree: Record<string, TerminalTab[]> | null,
-  repoMap: Map<string, Repo>
+  repoMap: Map<string, Repo>,
+  activeWorktreeId: string | null = null
 ): (a: Worktree, b: Worktree) => number {
   return (a, b) => {
     switch (sortBy) {
@@ -37,7 +38,13 @@ export function buildWorktreeComparator(
         return bActivity - aActivity
       }
       case 'smart':
-        return computeSmartScore(b, tabsByWorktree) - computeSmartScore(a, tabsByWorktree)
+        return (
+          computeSmartScore(b, tabsByWorktree, activeWorktreeId) -
+            computeSmartScore(a, tabsByWorktree, activeWorktreeId) ||
+          b.lastActivityAt - a.lastActivityAt ||
+          b.sortOrder - a.sortOrder ||
+          a.displayName.localeCompare(b.displayName)
+        )
       case 'repo': {
         const ra = repoMap.get(a.repoId)?.displayName ?? ''
         const rb = repoMap.get(b.repoId)?.displayName ?? ''
@@ -55,15 +62,20 @@ export function buildWorktreeComparator(
  * Higher score = higher in the list.
  *
  * Scoring:
- *   running AI job  → +100
- *   needs attention  → +40  (permission prompt, CI failure)
- *   unread           → +20
- *   recent activity  → +10  (scaled: 10 for just now, decaying over 1 hour)
- *   last viewed      → +1   (scaled: 1 for just now, decaying over 1 hour)
+ *   active worktree   → +80
+ *   running AI job    → +60
+ *   needs attention   → +35
+ *   unread            → +18
+ *   open terminal     → +12
+ *   linked PR         → +10
+ *   linked issue      → +6
+ *   recent activity   → +24 (decays over 24 hours)
+ *   last viewed       → +8  (decays over 12 hours)
  */
 export function computeSmartScore(
   worktree: Worktree,
-  tabsByWorktree: Record<string, TerminalTab[]> | null
+  tabsByWorktree: Record<string, TerminalTab[]> | null,
+  activeWorktreeId: string | null = null
 ): number {
   const tabs = tabsByWorktree?.[worktree.id] ?? []
   const liveTabs = tabs.filter((t) => t.ptyId)
@@ -71,37 +83,53 @@ export function computeSmartScore(
 
   let score = 0
 
+  if (worktree.id === activeWorktreeId) {
+    score += 80
+  }
+
   // Running: any live PTY with an AI agent actively working
   const isRunning = liveTabs.some((t) => detectAgentStatusFromTitle(t.title) === 'working')
   if (isRunning) {
-    score += 100
-  } else if (liveTabs.length > 0) {
-    // Has live terminals but not actively working — still somewhat relevant
-    score += 5
+    score += 60
   }
 
-  // Needs attention: permission prompt or CI-related unread
+  // Needs attention: permission prompt in a live agent terminal
   const needsAttention = liveTabs.some((t) => detectAgentStatusFromTitle(t.title) === 'permission')
   if (needsAttention) {
-    score += 40
+    score += 35
   }
 
   // Unread
   if (worktree.isUnread) {
-    score += 20
+    score += 18
   }
 
-  // Recent meaningful activity (decays over 1 hour)
+  // Live terminals are a strong sign of ongoing work, even if no agent title is detected.
+  if (liveTabs.length > 0) {
+    score += 12
+  }
+
+  if (worktree.linkedPR !== null) {
+    score += 10
+  }
+
+  if (worktree.linkedIssue !== null) {
+    score += 6
+  }
+
+  // Recent meaningful activity should stay relevant for the rest of the day,
+  // not vanish after an hour.
   const activityAge = now - (worktree.lastActivityAt || 0)
-  const ONE_HOUR = 60 * 60 * 1000
   if (worktree.lastActivityAt > 0) {
-    score += 10 * Math.max(0, 1 - activityAge / ONE_HOUR)
+    const ONE_DAY = 24 * 60 * 60 * 1000
+    score += 24 * Math.max(0, 1 - activityAge / ONE_DAY)
   }
 
-  // Last viewed (minor tiebreaker, decays over 1 hour)
+  // Last viewed matters, but less than actual activity.
   const viewAge = now - (worktree.sortOrder || 0)
   if (worktree.sortOrder > 0) {
-    score += 1 * Math.max(0, 1 - viewAge / ONE_HOUR)
+    const TWELVE_HOURS = 12 * 60 * 60 * 1000
+    score += 8 * Math.max(0, 1 - viewAge / TWELVE_HOURS)
   }
 
   return score

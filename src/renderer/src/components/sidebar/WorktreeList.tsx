@@ -83,10 +83,19 @@ const WorktreeList = React.memo(function WorktreeList() {
     }
 
     // Sort
-    all.sort(buildWorktreeComparator(sortBy, tabsByWorktree, repoMap))
+    all.sort(buildWorktreeComparator(sortBy, tabsByWorktree, repoMap, activeWorktreeId))
 
     return all
-  }, [worktreesByRepo, filterRepoIds, searchQuery, showActiveOnly, sortBy, repoMap, tabsByWorktree])
+  }, [
+    worktreesByRepo,
+    filterRepoIds,
+    searchQuery,
+    showActiveOnly,
+    sortBy,
+    repoMap,
+    tabsByWorktree,
+    activeWorktreeId
+  ])
 
   // Collapsed group state
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
