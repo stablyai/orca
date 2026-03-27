@@ -42,14 +42,27 @@ export function registerPtyHandlers(mainWindow: BrowserWindow): void {
 
   ipcMain.handle('pty:spawn', (_event, args: { cols: number; rows: number; cwd?: string }) => {
     const id = String(++ptyCounter)
-    const shellPath = process.env.SHELL || '/bin/zsh'
-    const shellArgs = process.platform === 'win32' ? [] : ['-l']
+
+    let shellPath: string
+    let shellArgs: string[]
+    if (process.platform === 'win32') {
+      shellPath = process.env.COMSPEC || 'powershell.exe'
+      shellArgs = []
+    } else {
+      shellPath = process.env.SHELL || '/bin/zsh'
+      shellArgs = ['-l']
+    }
+
+    const defaultCwd =
+      process.platform === 'win32'
+        ? process.env.USERPROFILE || process.env.HOMEPATH || 'C:\\'
+        : process.env.HOME || '/'
 
     const ptyProcess = pty.spawn(shellPath, shellArgs, {
       name: 'xterm-256color',
       cols: args.cols,
       rows: args.rows,
-      cwd: args.cwd || process.env.HOME || '/',
+      cwd: args.cwd || defaultCwd,
       env: {
         ...process.env,
         TERM: 'xterm-256color',
