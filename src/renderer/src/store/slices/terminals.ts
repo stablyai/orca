@@ -179,9 +179,14 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   },
 
   updateTabPtyId: (tabId, ptyId) => {
+    let worktreeId: string | null = null
     set((s) => {
       const next = { ...s.tabsByWorktree }
       for (const wId of Object.keys(next)) {
+        const found = next[wId].some((t) => t.id === tabId)
+        if (found) {
+          worktreeId = wId
+        }
         next[wId] = next[wId].map((t) => (t.id === tabId ? { ...t, ptyId } : t))
       }
       const existingPtyIds = s.ptyIdsByTabId[tabId] ?? []
@@ -193,12 +198,21 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         }
       }
     })
+
+    // Bump meaningful activity when a PTY spawns
+    if (worktreeId) {
+      get().bumpWorktreeActivity(worktreeId)
+    }
   },
 
   clearTabPtyId: (tabId, ptyId) => {
+    let worktreeId: string | null = null
     set((s) => {
       const next = { ...s.tabsByWorktree }
       for (const wId of Object.keys(next)) {
+        if (next[wId].some((t) => t.id === tabId)) {
+          worktreeId = wId
+        }
         next[wId] = next[wId].map((t) => {
           if (t.id !== tabId) {
             return t
@@ -215,6 +229,12 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         : []
       return { tabsByWorktree: next, ptyIdsByTabId: nextPtyIdsByTabId }
     })
+
+    // Bump meaningful activity when a PTY exits, but skip if this exit
+    // was triggered by an intentional shutdown (suppressed exits).
+    if (worktreeId && !(ptyId && get().suppressedPtyExitIds[ptyId])) {
+      get().bumpWorktreeActivity(worktreeId)
+    }
   },
 
   shutdownWorktreeTerminals: async (worktreeId) => {

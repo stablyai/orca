@@ -23,7 +23,8 @@ const worktree: Worktree = {
   comment: '',
   isUnread: false,
   displayName: 'feature/super-critical',
-  sortOrder: 0
+  sortOrder: 0,
+  lastActivityAt: 0
 }
 
 describe('getPRGroupKey', () => {

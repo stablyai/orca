@@ -1,5 +1,5 @@
 import React from 'react'
-import { ArrowUpAZ, ArrowUpDown, Check, Clock3, FolderTree } from 'lucide-react'
+import { ArrowUpAZ, ArrowUpDown, Check, Clock3, FolderTree, Sparkles } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import {
@@ -19,6 +19,10 @@ const SORT_OPTIONS = {
   recent: {
     label: 'Recent',
     icon: Clock3
+  },
+  smart: {
+    label: 'Smart',
+    icon: Sparkles
   },
   repo: {
     label: 'Repo',

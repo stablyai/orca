@@ -104,7 +104,8 @@ export function mergeWorktree(
     linkedPR: meta?.linkedPR ?? null,
     isArchived: meta?.isArchived ?? false,
     isUnread: meta?.isUnread ?? false,
-    sortOrder: meta?.sortOrder ?? 0
+    sortOrder: meta?.sortOrder ?? 0,
+    lastActivityAt: meta?.lastActivityAt ?? 0
   }
 }
 

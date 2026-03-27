@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import type { Worktree, Repo } from '../../../../shared/types'
+import { buildWorktreeComparator } from './smart-sort'
 import {
   branchName,
   getPRGroupKey,
@@ -32,8 +33,9 @@ const WorktreeList = React.memo(function WorktreeList() {
   const pendingRevealWorktreeId = useAppStore((s) => s.pendingRevealWorktreeId)
   const clearPendingRevealWorktreeId = useAppStore((s) => s.clearPendingRevealWorktreeId)
 
-  // Only read tabsByWorktree when showActiveOnly is on (avoid subscription otherwise)
-  const tabsByWorktree = useAppStore((s) => (showActiveOnly ? s.tabsByWorktree : null))
+  // Read tabsByWorktree when needed for filtering or sorting
+  const needsTabs = showActiveOnly || sortBy === 'recent' || sortBy === 'smart'
+  const tabsByWorktree = useAppStore((s) => (needsTabs ? s.tabsByWorktree : null))
 
   // PR cache only when grouping by pr-status
   const prCache = useAppStore((s) => (groupBy === 'pr-status' ? s.prCache : null))
@@ -81,37 +83,7 @@ const WorktreeList = React.memo(function WorktreeList() {
     }
 
     // Sort
-    all.sort((a, b) => {
-      switch (sortBy) {
-        case 'name':
-          return a.displayName.localeCompare(b.displayName)
-        case 'recent': {
-          const aTabs = tabsByWorktree?.[a.id] ?? []
-          const bTabs = tabsByWorktree?.[b.id] ?? []
-          const aActive = aTabs.some((t) => t.ptyId)
-          const bActive = bTabs.some((t) => t.ptyId)
-          // Active worktrees pin to top in stable (name) order
-          if (aActive && bActive) {
-            return a.displayName.localeCompare(b.displayName)
-          }
-          if (aActive) {
-            return -1
-          }
-          if (bActive) {
-            return 1
-          }
-          return b.sortOrder - a.sortOrder
-        }
-        case 'repo': {
-          const ra = repoMap.get(a.repoId)?.displayName ?? ''
-          const rb = repoMap.get(b.repoId)?.displayName ?? ''
-          const cmp = ra.localeCompare(rb)
-          return cmp !== 0 ? cmp : a.displayName.localeCompare(b.displayName)
-        }
-        default:
-          return 0
-      }
-    })
+    all.sort(buildWorktreeComparator(sortBy, tabsByWorktree, repoMap))
 
     return all
   }, [worktreesByRepo, filterRepoIds, searchQuery, showActiveOnly, sortBy, repoMap, tabsByWorktree])

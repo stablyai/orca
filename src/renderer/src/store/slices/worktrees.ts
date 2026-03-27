@@ -1,30 +1,12 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { Worktree, WorktreeMeta } from '../../../../shared/types'
-
-export type WorktreeDeleteState = {
-  isDeleting: boolean
-  error: string | null
-  canForceDelete: boolean
-}
-
-export type WorktreeSlice = {
-  worktreesByRepo: Record<string, Worktree[]>
-  activeWorktreeId: string | null
-  deleteStateByWorktreeId: Record<string, WorktreeDeleteState>
-  fetchWorktrees: (repoId: string) => Promise<void>
-  fetchAllWorktrees: () => Promise<void>
-  createWorktree: (repoId: string, name: string, baseBranch?: string) => Promise<Worktree | null>
-  removeWorktree: (
-    worktreeId: string,
-    force?: boolean
-  ) => Promise<{ ok: true } | { ok: false; error: string }>
-  clearWorktreeDeleteState: (worktreeId: string) => void
-  updateWorktreeMeta: (worktreeId: string, updates: Partial<WorktreeMeta>) => Promise<void>
-  markWorktreeUnreadFromBell: (worktreeId: string) => void
-  setActiveWorktree: (worktreeId: string | null) => void
-  allWorktrees: () => Worktree[]
-}
+import {
+  findWorktreeById,
+  applyWorktreeUpdates,
+  getRepoIdFromWorktreeId,
+  type WorktreeSlice
+} from './worktree-helpers'
+export type { WorktreeSlice, WorktreeDeleteState } from './worktree-helpers'
 
 export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> = (set, get) => ({
   worktreesByRepo: {},
@@ -171,6 +153,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     }
 
     let shouldPersist = false
+    const now = Date.now()
     set((s) => {
       const worktree = findWorktreeById(s.worktreesByRepo, worktreeId)
       if (!worktree || worktree.isUnread) {
@@ -178,7 +161,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       }
       shouldPersist = true
       return {
-        worktreesByRepo: applyWorktreeUpdates(s.worktreesByRepo, worktreeId, { isUnread: true })
+        worktreesByRepo: applyWorktreeUpdates(s.worktreesByRepo, worktreeId, {
+          isUnread: true,
+          lastActivityAt: now
+        })
       }
     })
 
@@ -187,9 +173,31 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     }
 
     void window.api.worktrees
-      .updateMeta({ worktreeId, updates: { isUnread: true } })
+      .updateMeta({ worktreeId, updates: { isUnread: true, lastActivityAt: now } })
       .catch((err) => {
         console.error('Failed to persist unread worktree bell state:', err)
+        void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+      })
+  },
+
+  bumpWorktreeActivity: (worktreeId) => {
+    const now = Date.now()
+    set((s) => {
+      const worktree = findWorktreeById(s.worktreesByRepo, worktreeId)
+      if (!worktree) {
+        return {}
+      }
+      return {
+        worktreesByRepo: applyWorktreeUpdates(s.worktreesByRepo, worktreeId, {
+          lastActivityAt: now
+        })
+      }
+    })
+
+    void window.api.worktrees
+      .updateMeta({ worktreeId, updates: { lastActivityAt: now } })
+      .catch((err) => {
+        console.error('Failed to persist worktree activity timestamp:', err)
         void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
       })
   },
@@ -279,49 +287,3 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
 
   allWorktrees: () => Object.values(get().worktreesByRepo).flat()
 })
-
-function findWorktreeById(
-  worktreesByRepo: Record<string, Worktree[]>,
-  worktreeId: string
-): Worktree | undefined {
-  for (const worktrees of Object.values(worktreesByRepo)) {
-    const match = worktrees.find((worktree) => worktree.id === worktreeId)
-    if (match) {
-      return match
-    }
-  }
-
-  return undefined
-}
-
-function applyWorktreeUpdates(
-  worktreesByRepo: Record<string, Worktree[]>,
-  worktreeId: string,
-  updates: Partial<WorktreeMeta>
-): Record<string, Worktree[]> {
-  let changed = false
-  const next: Record<string, Worktree[]> = {}
-
-  for (const [repoId, worktrees] of Object.entries(worktreesByRepo)) {
-    let repoChanged = false
-    const nextWorktrees = worktrees.map((worktree) => {
-      if (worktree.id !== worktreeId) {
-        return worktree
-      }
-
-      const updatedWorktree = { ...worktree, ...updates }
-      repoChanged = true
-      changed = true
-      return updatedWorktree
-    })
-
-    next[repoId] = repoChanged ? nextWorktrees : worktrees
-  }
-
-  return changed ? next : worktreesByRepo
-}
-
-function getRepoIdFromWorktreeId(worktreeId: string): string {
-  const sepIdx = worktreeId.indexOf('::')
-  return sepIdx === -1 ? worktreeId : worktreeId.slice(0, sepIdx)
-}

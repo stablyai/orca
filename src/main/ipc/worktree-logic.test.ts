@@ -150,7 +150,8 @@ describe('mergeWorktree', () => {
       linkedPR: 10,
       isArchived: true,
       isUnread: true,
-      sortOrder: 5
+      sortOrder: 5,
+      lastActivityAt: 1000
     }
     const result = mergeWorktree('repo1', baseGit, meta)
     expect(result).toEqual({
@@ -166,7 +167,8 @@ describe('mergeWorktree', () => {
       linkedPR: 10,
       isArchived: true,
       isUnread: true,
-      sortOrder: 5
+      sortOrder: 5,
+      lastActivityAt: 1000
     })
   })
 
@@ -179,6 +181,7 @@ describe('mergeWorktree', () => {
     expect(result.isArchived).toBe(false)
     expect(result.isUnread).toBe(false)
     expect(result.sortOrder).toBe(0)
+    expect(result.lastActivityAt).toBe(0)
   })
 
   it('strips refs/heads/ prefix from branch for display name', () => {

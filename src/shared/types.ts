@@ -29,6 +29,7 @@ export type Worktree = {
   isArchived: boolean
   isUnread: boolean
   sortOrder: number
+  lastActivityAt: number
 } & GitWorktreeInfo
 
 // ─── Worktree metadata (persisted user-authored fields only) ─────────
@@ -40,6 +41,7 @@ export type WorktreeMeta = {
   isArchived: boolean
   isUnread: boolean
   sortOrder: number
+  lastActivityAt: number
 }
 
 // ─── Terminal Tab ────────────────────────────────────────────────────
@@ -178,7 +180,7 @@ export type PersistedUIState = {
   sidebarWidth: number
   rightSidebarWidth: number
   groupBy: 'none' | 'repo' | 'pr-status'
-  sortBy: 'name' | 'recent' | 'repo'
+  sortBy: 'name' | 'recent' | 'smart' | 'repo'
   filterRepoIds: string[]
   uiZoomLevel: number
 }

@@ -18,7 +18,7 @@ export type UISlice = {
   setSearchQuery: (q: string) => void
   groupBy: 'none' | 'repo' | 'pr-status'
   setGroupBy: (g: UISlice['groupBy']) => void
-  sortBy: 'name' | 'recent' | 'repo'
+  sortBy: 'name' | 'recent' | 'smart' | 'repo'
   setSortBy: (s: UISlice['sortBy']) => void
   showActiveOnly: boolean
   setShowActiveOnly: (v: boolean) => void
