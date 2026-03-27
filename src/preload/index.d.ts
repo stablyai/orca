@@ -55,7 +55,11 @@ type GhApi = {
   prForBranch: (args: { repoPath: string; branch: string }) => Promise<PRInfo | null>
   issue: (args: { repoPath: string; number: number }) => Promise<IssueInfo | null>
   listIssues: (args: { repoPath: string; limit?: number }) => Promise<IssueInfo[]>
-  prChecks: (args: { repoPath: string; prNumber: number }) => Promise<PRCheckDetail[]>
+  prChecks: (args: {
+    repoPath: string
+    prNumber: number
+    branch?: string
+  }) => Promise<PRCheckDetail[]>
   updatePRTitle: (args: { repoPath: string; prNumber: number; title: string }) => Promise<boolean>
 }
 

@@ -96,15 +96,16 @@ export default function ChecksPanel(): React.JSX.Element {
   const branch = worktree ? worktree.branch.replace(/^refs\/heads\//, '') : ''
   const prCacheKey = repo && branch ? `${repo.path}::${branch}` : ''
   const pr: PRInfo | null = prCacheKey ? (prCache[prCacheKey]?.data ?? null) : null
+  const prNumber = pr?.number ?? null
 
   // Fetch checks via cached store method
   const fetchChecks = useCallback(async () => {
-    if (!repo || !pr) {
+    if (!repo || !prNumber) {
       return
     }
     setChecksLoading(true)
     try {
-      const result = await fetchPRChecks(repo.path, pr.number)
+      const result = await fetchPRChecks(repo.path, prNumber, branch)
       setChecks(result)
 
       // Exponential backoff: if checks haven't changed, double the interval (cap 120s).
@@ -121,11 +122,11 @@ export default function ChecksPanel(): React.JSX.Element {
     } finally {
       setChecksLoading(false)
     }
-  }, [repo, pr, fetchPRChecks])
+  }, [repo, prNumber, branch, fetchPRChecks])
 
   // Fetch checks on mount + poll with exponential backoff
   useEffect(() => {
-    if (!pr) {
+    if (!prNumber) {
       setChecks([])
       return
     }
@@ -153,7 +154,7 @@ export default function ChecksPanel(): React.JSX.Element {
         clearTimeout(pollRef.current)
       }
     }
-  }, [fetchChecks, pr])
+  }, [fetchChecks, prNumber])
 
   const handleRefresh = useCallback(async () => {
     if (!repo || !branch) {

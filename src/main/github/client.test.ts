@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { deriveCheckStatus, mapPRState, mapCheckStatus, mapCheckConclusion } from './client'
+import { deriveCheckStatus, mapPRState, mapCheckStatus, mapCheckConclusion } from './mappers'
 
 describe('mapPRState', () => {
   it('returns draft when an open PR is marked as draft', () => {

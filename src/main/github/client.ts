@@ -1,6 +1,15 @@
 import { execFile } from 'child_process'
 import { promisify } from 'util'
-import type { PRInfo, IssueInfo, CheckStatus, PRCheckDetail } from '../../shared/types'
+import type { PRInfo, IssueInfo, PRCheckDetail } from '../../shared/types'
+import {
+  mapCheckRunRESTStatus,
+  mapCheckRunRESTConclusion,
+  mapCheckStatus,
+  mapCheckConclusion,
+  mapPRState,
+  deriveCheckStatus,
+  mapIssueInfo
+} from './mappers'
 
 const execFileAsync = promisify(execFile)
 
@@ -28,6 +37,31 @@ function release(): void {
   if (next) {
     next()
   }
+}
+
+// ── Owner/repo resolution for gh api --cache ──────────────────────────
+const ownerRepoCache = new Map<string, { owner: string; repo: string } | null>()
+
+async function getOwnerRepo(repoPath: string): Promise<{ owner: string; repo: string } | null> {
+  if (ownerRepoCache.has(repoPath)) {
+    return ownerRepoCache.get(repoPath)!
+  }
+  try {
+    const { stdout } = await execFileAsync('git', ['remote', 'get-url', 'origin'], {
+      cwd: repoPath,
+      encoding: 'utf-8'
+    })
+    const match = stdout.trim().match(/github\.com[:/]([^/]+)\/([^/.]+?)(?:\.git)?$/)
+    if (match) {
+      const result = { owner: match[1], repo: match[2] }
+      ownerRepoCache.set(repoPath, result)
+      return result
+    }
+  } catch {
+    // ignore — non-GitHub remote or no remote
+  }
+  ownerRepoCache.set(repoPath, null)
+  return null
 }
 
 /**
@@ -71,26 +105,34 @@ export async function getPRForBranch(repoPath: string, branch: string): Promise<
 
 /**
  * Get a single issue by number.
+ * Uses gh api --cache so 304 Not Modified responses don't count against the rate limit.
  */
 export async function getIssue(repoPath: string, issueNumber: number): Promise<IssueInfo | null> {
+  const ownerRepo = await getOwnerRepo(repoPath)
   await acquire()
   try {
+    if (ownerRepo) {
+      const { stdout } = await execFileAsync(
+        'gh',
+        [
+          'api',
+          '--cache',
+          '300s',
+          `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues/${issueNumber}`
+        ],
+        { cwd: repoPath, encoding: 'utf-8' }
+      )
+      const data = JSON.parse(stdout)
+      return mapIssueInfo(data)
+    }
+    // Fallback for non-GitHub remotes
     const { stdout } = await execFileAsync(
       'gh',
       ['issue', 'view', String(issueNumber), '--json', 'number,title,state,url,labels'],
-      {
-        cwd: repoPath,
-        encoding: 'utf-8'
-      }
+      { cwd: repoPath, encoding: 'utf-8' }
     )
     const data = JSON.parse(stdout)
-    return {
-      number: data.number,
-      title: data.title,
-      state: data.state?.toLowerCase() === 'open' ? 'open' : 'closed',
-      url: data.url,
-      labels: (data.labels || []).map((l: { name: string }) => l.name)
-    }
+    return mapIssueInfo(data)
   } catch {
     return null
   } finally {
@@ -100,32 +142,34 @@ export async function getIssue(repoPath: string, issueNumber: number): Promise<I
 
 /**
  * List issues for a repo.
+ * Uses gh api --cache so 304 Not Modified responses don't count against the rate limit.
  */
 export async function listIssues(repoPath: string, limit = 20): Promise<IssueInfo[]> {
+  const ownerRepo = await getOwnerRepo(repoPath)
   await acquire()
   try {
+    if (ownerRepo) {
+      const { stdout } = await execFileAsync(
+        'gh',
+        [
+          'api',
+          '--cache',
+          '120s',
+          `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues?per_page=${limit}&state=open&sort=updated&direction=desc`
+        ],
+        { cwd: repoPath, encoding: 'utf-8' }
+      )
+      const data = JSON.parse(stdout) as unknown[]
+      return data.map((d) => mapIssueInfo(d as Parameters<typeof mapIssueInfo>[0]))
+    }
+    // Fallback for non-GitHub remotes
     const { stdout } = await execFileAsync(
       'gh',
       ['issue', 'list', '--json', 'number,title,state,url,labels', '--limit', String(limit)],
-      {
-        cwd: repoPath,
-        encoding: 'utf-8'
-      }
+      { cwd: repoPath, encoding: 'utf-8' }
     )
-    const data = JSON.parse(stdout) as {
-      number: number
-      title: string
-      state: string
-      url: string
-      labels: { name: string }[]
-    }[]
-    return data.map((d) => ({
-      number: d.number,
-      title: d.title,
-      state: d.state?.toLowerCase() === 'open' ? ('open' as const) : ('closed' as const),
-      url: d.url,
-      labels: (d.labels || []).map((l) => l.name)
-    }))
+    const data = JSON.parse(stdout) as unknown[]
+    return data.map((d) => mapIssueInfo(d as Parameters<typeof mapIssueInfo>[0]))
   } catch {
     return []
   } finally {
@@ -134,18 +178,50 @@ export async function listIssues(repoPath: string, limit = 20): Promise<IssueInf
 }
 
 /**
- * Get detailed check statuses for a PR by number.
+ * Get detailed check statuses for a PR.
+ * When branch is provided, uses gh api --cache with the check-runs REST endpoint
+ * so 304 Not Modified responses don't count against the rate limit.
  */
-export async function getPRChecks(repoPath: string, prNumber: number): Promise<PRCheckDetail[]> {
+export async function getPRChecks(
+  repoPath: string,
+  prNumber: number,
+  branch?: string
+): Promise<PRCheckDetail[]> {
+  const ownerRepo = branch ? await getOwnerRepo(repoPath) : null
   await acquire()
   try {
+    if (ownerRepo && branch) {
+      const { stdout } = await execFileAsync(
+        'gh',
+        [
+          'api',
+          '--cache',
+          '60s',
+          `repos/${ownerRepo.owner}/${ownerRepo.repo}/commits/${encodeURIComponent(branch)}/check-runs?per_page=100`
+        ],
+        { cwd: repoPath, encoding: 'utf-8' }
+      )
+      const data = JSON.parse(stdout) as {
+        check_runs: {
+          name: string
+          status: string
+          conclusion: string | null
+          html_url: string
+          details_url: string | null
+        }[]
+      }
+      return data.check_runs.map((d) => ({
+        name: d.name,
+        status: mapCheckRunRESTStatus(d.status),
+        conclusion: mapCheckRunRESTConclusion(d.status, d.conclusion),
+        url: d.details_url || d.html_url || null
+      }))
+    }
+    // Fallback: no branch provided or non-GitHub remote
     const { stdout } = await execFileAsync(
       'gh',
       ['pr', 'checks', String(prNumber), '--json', 'name,state,link'],
-      {
-        cwd: repoPath,
-        encoding: 'utf-8'
-      }
+      { cwd: repoPath, encoding: 'utf-8' }
     )
     const data = JSON.parse(stdout) as { name: string; state: string; link: string }[]
     return data.map((d) => ({
@@ -183,95 +259,4 @@ export async function updatePRTitle(
   } finally {
     release()
   }
-}
-
-export function mapCheckStatus(state: string): PRCheckDetail['status'] {
-  const s = state?.toUpperCase()
-  if (s === 'PENDING' || s === 'QUEUED') {
-    return 'queued'
-  }
-  if (s === 'IN_PROGRESS') {
-    return 'in_progress'
-  }
-  return 'completed'
-}
-
-export function mapCheckConclusion(state: string): PRCheckDetail['conclusion'] {
-  const s = state?.toUpperCase()
-  if (s === 'SUCCESS' || s === 'PASS') {
-    return 'success'
-  }
-  if (s === 'FAILURE' || s === 'FAIL') {
-    return 'failure'
-  }
-  if (s === 'CANCELLED') {
-    return 'cancelled'
-  }
-  if (s === 'TIMED_OUT') {
-    return 'timed_out'
-  }
-  if (s === 'SKIPPED') {
-    return 'skipped'
-  }
-  if (s === 'PENDING' || s === 'QUEUED' || s === 'IN_PROGRESS') {
-    return 'pending'
-  }
-  if (s === 'NEUTRAL') {
-    return 'neutral'
-  }
-  return null
-}
-
-export function mapPRState(state: string, isDraft?: boolean): PRInfo['state'] {
-  const s = state?.toUpperCase()
-  if (s === 'MERGED') {
-    return 'merged'
-  }
-  if (s === 'CLOSED') {
-    return 'closed'
-  }
-  if (isDraft) {
-    return 'draft'
-  }
-  return 'open'
-}
-
-export function deriveCheckStatus(rollup: unknown[] | null | undefined): CheckStatus {
-  if (!rollup || !Array.isArray(rollup) || rollup.length === 0) {
-    return 'neutral'
-  }
-
-  let hasFailure = false
-  let hasPending = false
-
-  for (const check of rollup as { status?: string; conclusion?: string; state?: string }[]) {
-    const conclusion = check.conclusion?.toUpperCase()
-    const status = check.status?.toUpperCase()
-    const state = check.state?.toUpperCase()
-
-    if (
-      conclusion === 'FAILURE' ||
-      conclusion === 'TIMED_OUT' ||
-      conclusion === 'CANCELLED' ||
-      state === 'FAILURE' ||
-      state === 'ERROR'
-    ) {
-      hasFailure = true
-    } else if (
-      status === 'IN_PROGRESS' ||
-      status === 'QUEUED' ||
-      status === 'PENDING' ||
-      state === 'PENDING'
-    ) {
-      hasPending = true
-    }
-  }
-
-  if (hasFailure) {
-    return 'failure'
-  }
-  if (hasPending) {
-    return 'pending'
-  }
-  return 'success'
 }

@@ -41,7 +41,7 @@ export type GitHubSlice = {
   checksCache: Record<string, CacheEntry<PRCheckDetail[]>>
   fetchPRForBranch: (repoPath: string, branch: string) => Promise<PRInfo | null>
   fetchIssue: (repoPath: string, number: number) => Promise<IssueInfo | null>
-  fetchPRChecks: (repoPath: string, prNumber: number) => Promise<PRCheckDetail[]>
+  fetchPRChecks: (repoPath: string, prNumber: number, branch?: string) => Promise<PRCheckDetail[]>
   initGitHubCache: () => Promise<void>
   refreshAllGitHub: () => void
   refreshGitHubForWorktree: (worktreeId: string) => void
@@ -138,7 +138,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     return request
   },
 
-  fetchPRChecks: async (repoPath, prNumber) => {
+  fetchPRChecks: async (repoPath, prNumber, branch?) => {
     const cacheKey = `${repoPath}::pr-checks::${prNumber}`
     const cached = get().checksCache[cacheKey]
     if (isFresh(cached, CHECKS_CACHE_TTL)) {
@@ -154,7 +154,8 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       try {
         const checks = (await window.api.gh.prChecks({
           repoPath,
-          prNumber
+          prNumber,
+          branch
         })) as PRCheckDetail[]
         set((s) => ({
           checksCache: { ...s.checksCache, [cacheKey]: { data: checks, fetchedAt: Date.now() } }

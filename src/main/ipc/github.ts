@@ -28,10 +28,13 @@ export function registerGitHubHandlers(store: Store): void {
     return listIssues(repoPath, args.limit)
   })
 
-  ipcMain.handle('gh:prChecks', (_event, args: { repoPath: string; prNumber: number }) => {
-    const repoPath = assertRegisteredRepoPath(args.repoPath, store)
-    return getPRChecks(repoPath, args.prNumber)
-  })
+  ipcMain.handle(
+    'gh:prChecks',
+    (_event, args: { repoPath: string; prNumber: number; branch?: string }) => {
+      const repoPath = assertRegisteredRepoPath(args.repoPath, store)
+      return getPRChecks(repoPath, args.prNumber, args.branch)
+    }
+  )
 
   ipcMain.handle(
     'gh:updatePRTitle',
