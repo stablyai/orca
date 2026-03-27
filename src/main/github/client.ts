@@ -239,6 +239,31 @@ export async function getPRChecks(
 }
 
 /**
+ * Merge a PR by number using gh CLI.
+ * method: 'merge' | 'squash' | 'rebase' (default: 'squash')
+ */
+export async function mergePR(
+  repoPath: string,
+  prNumber: number,
+  method: 'merge' | 'squash' | 'rebase' = 'squash'
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  await acquire()
+  try {
+    await execFileAsync('gh', ['pr', 'merge', String(prNumber), `--${method}`, '--delete-branch'], {
+      cwd: repoPath,
+      encoding: 'utf-8'
+    })
+    return { ok: true }
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : typeof err === 'string' ? err : 'Unknown error'
+    return { ok: false, error: message }
+  } finally {
+    release()
+  }
+}
+
+/**
  * Update a PR's title.
  */
 export async function updatePRTitle(

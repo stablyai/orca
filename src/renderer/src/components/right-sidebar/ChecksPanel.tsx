@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
+import PRActions from './PRActions'
 import type { PRInfo, PRCheckDetail } from '../../../../shared/types'
 
 function PullRequestIcon({ className }: { className?: string }): React.JSX.Element {
@@ -213,6 +214,13 @@ export default function ChecksPanel(): React.JSX.Element {
     [handleSaveTitle, handleCancelEdit]
   )
 
+  // Refresh PR (passed to PRActions)
+  const handleRefreshPR = useCallback(async () => {
+    if (repo && branch) {
+      await fetchPRForBranch(repo.path, branch)
+    }
+  }, [repo, branch, fetchPRForBranch])
+
   // Open PR in browser
   const handleOpenPR = useCallback(() => {
     if (pr?.url) {
@@ -347,6 +355,11 @@ export default function ChecksPanel(): React.JSX.Element {
           <div className="text-[10px] text-muted-foreground/60">
             Updated {new Date(pr.updatedAt).toLocaleString()}
           </div>
+        )}
+
+        {/* Merge / Delete Worktree actions */}
+        {worktree && repo && (
+          <PRActions pr={pr} repo={repo} worktree={worktree} onRefreshPR={handleRefreshPR} />
         )}
       </div>
 

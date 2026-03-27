@@ -1,7 +1,14 @@
 import { ipcMain } from 'electron'
 import { resolve } from 'path'
 import type { Store } from '../persistence'
-import { getPRForBranch, getIssue, listIssues, getPRChecks, updatePRTitle } from '../github/client'
+import {
+  getPRForBranch,
+  getIssue,
+  listIssues,
+  getPRChecks,
+  updatePRTitle,
+  mergePR
+} from '../github/client'
 
 function assertRegisteredRepoPath(repoPath: string, store: Store): string {
   const resolvedRepoPath = resolve(repoPath)
@@ -41,6 +48,17 @@ export function registerGitHubHandlers(store: Store): void {
     (_event, args: { repoPath: string; prNumber: number; title: string }) => {
       const repoPath = assertRegisteredRepoPath(args.repoPath, store)
       return updatePRTitle(repoPath, args.prNumber, args.title)
+    }
+  )
+
+  ipcMain.handle(
+    'gh:mergePR',
+    (
+      _event,
+      args: { repoPath: string; prNumber: number; method?: 'merge' | 'squash' | 'rebase' }
+    ) => {
+      const repoPath = assertRegisteredRepoPath(args.repoPath, store)
+      return mergePR(repoPath, args.prNumber, args.method)
     }
   )
 }

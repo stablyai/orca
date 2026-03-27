@@ -149,7 +149,14 @@ const api = {
       repoPath: string
       prNumber: number
       title: string
-    }): Promise<boolean> => ipcRenderer.invoke('gh:updatePRTitle', args)
+    }): Promise<boolean> => ipcRenderer.invoke('gh:updatePRTitle', args),
+
+    mergePR: (args: {
+      repoPath: string
+      prNumber: number
+      method?: 'merge' | 'squash' | 'rebase'
+    }): Promise<{ ok: true } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('gh:mergePR', args)
   },
 
   settings: {

@@ -61,6 +61,11 @@ type GhApi = {
     branch?: string
   }) => Promise<PRCheckDetail[]>
   updatePRTitle: (args: { repoPath: string; prNumber: number; title: string }) => Promise<boolean>
+  mergePR: (args: {
+    repoPath: string
+    prNumber: number
+    method?: 'merge' | 'squash' | 'rebase'
+  }) => Promise<{ ok: true } | { ok: false; error: string }>
 }
 
 type SettingsApi = {
