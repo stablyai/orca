@@ -249,9 +249,13 @@ export async function mergePR(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   await acquire()
   try {
-    await execFileAsync('gh', ['pr', 'merge', String(prNumber), `--${method}`, '--delete-branch'], {
+    // Don't use --delete-branch: it tries to delete the local branch which
+    // fails when the user's worktree is checked out on it. Branch cleanup
+    // is handled by worktree deletion (local) and GitHub's auto-delete setting (remote).
+    await execFileAsync('gh', ['pr', 'merge', String(prNumber), `--${method}`], {
       cwd: repoPath,
-      encoding: 'utf-8'
+      encoding: 'utf-8',
+      env: { ...process.env, GH_PROMPT_DISABLED: '1' }
     })
     return { ok: true }
   } catch (err) {
