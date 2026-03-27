@@ -241,42 +241,13 @@ export function useTerminalKeyboardShortcuts({
       transport?.sendInput('\x1b\x7f')
     }
 
-    // Shift+Enter → insert a literal newline into the shell command line.
-    const onShiftEnter = (e: KeyboardEvent): void => {
-      if (!e.shiftKey || e.metaKey || e.altKey || e.ctrlKey) {
-        return
-      }
-      if (e.key !== 'Enter') {
-        return
-      }
-      if (isEditableTarget(e.target)) {
-        return
-      }
-
-      const manager = managerRef.current
-      if (!manager) {
-        return
-      }
-
-      e.preventDefault()
-      e.stopPropagation()
-      const pane = manager.getActivePane() ?? manager.getPanes()[0]
-      if (!pane) {
-        return
-      }
-      const transport = paneTransportsRef.current.get(pane.id)
-      transport?.sendInput('\x16\x0a')
-    }
-
     window.addEventListener('keydown', onKeyDown, { capture: true })
     window.addEventListener('keydown', onCtrlBackspace, { capture: true })
     window.addEventListener('keydown', onAltBackspace, { capture: true })
-    window.addEventListener('keydown', onShiftEnter, { capture: true })
     return () => {
       window.removeEventListener('keydown', onKeyDown, { capture: true })
       window.removeEventListener('keydown', onCtrlBackspace, { capture: true })
       window.removeEventListener('keydown', onAltBackspace, { capture: true })
-      window.removeEventListener('keydown', onShiftEnter, { capture: true })
     }
   }, [
     isActive,

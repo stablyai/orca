@@ -35,6 +35,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   const [issueInput, setIssueInput] = useState('')
   const [commentInput, setCommentInput] = useState('')
   const [saving, setSaving] = useState(false)
+  const isMac = navigator.userAgent.includes('Mac')
 
   const issueInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -202,7 +203,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
               className="w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-2 text-xs shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 resize-none max-h-60 overflow-y-auto"
             />
             <p className="text-[10px] text-muted-foreground">
-              Press Enter or Cmd+Enter to save, Shift+Enter for a new line.
+              Press Enter or {isMac ? 'Cmd' : 'Ctrl'}+Enter to save, Shift+Enter for a new line.
             </p>
           </div>
         </div>
