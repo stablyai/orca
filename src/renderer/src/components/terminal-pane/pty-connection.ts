@@ -13,7 +13,7 @@ type PtyConnectionDeps = {
   clearTabPtyId: (tabId: string, ptyId: string) => void
   updateTabTitle: (tabId: string, title: string) => void
   updateTabPtyId: (tabId: string, ptyId: string) => void
-  markWorktreeUnreadFromBell: (worktreeId: string) => void
+  markWorktreeUnread: (worktreeId: string) => void
 }
 
 export function connectPanePty(
@@ -36,9 +36,17 @@ export function connectPanePty(
   }
 
   const onPtySpawn = (ptyId: string): void => deps.updateTabPtyId(deps.tabId, ptyId)
-  const onBell = (): void => deps.markWorktreeUnreadFromBell(deps.worktreeId)
+  const onBell = (): void => deps.markWorktreeUnread(deps.worktreeId)
+  const onAgentBecameIdle = (): void => deps.markWorktreeUnread(deps.worktreeId)
 
-  const transport = createIpcPtyTransport(deps.cwd, onExit, onTitleChange, onPtySpawn, onBell)
+  const transport = createIpcPtyTransport({
+    cwd: deps.cwd,
+    onPtyExit: onExit,
+    onTitleChange,
+    onPtySpawn,
+    onBell,
+    onAgentBecameIdle
+  })
   deps.paneTransportsRef.current.set(pane.id, transport)
 
   pane.terminal.onData((data) => {

@@ -1,4 +1,8 @@
-import { detectAgentStatusFromTitle, clearWorkingIndicators } from '@/lib/agent-status'
+import {
+  detectAgentStatusFromTitle,
+  clearWorkingIndicators,
+  createAgentStatusTracker
+} from '@/lib/agent-status'
 
 export type PtyTransport = {
   connect: (options: {
@@ -58,13 +62,17 @@ export function extractLastOscTitle(data: string): string | null {
   return last
 }
 
-export function createIpcPtyTransport(
-  cwd?: string,
-  onPtyExit?: (ptyId: string) => void,
-  onTitleChange?: (title: string) => void,
-  onPtySpawn?: (ptyId: string) => void,
+export type IpcPtyTransportOptions = {
+  cwd?: string
+  onPtyExit?: (ptyId: string) => void
+  onTitleChange?: (title: string) => void
+  onPtySpawn?: (ptyId: string) => void
   onBell?: () => void
-): PtyTransport {
+  onAgentBecameIdle?: () => void
+}
+
+export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTransport {
+  const { cwd, onPtyExit, onTitleChange, onPtySpawn, onBell, onAgentBecameIdle } = opts
   let connected = false
   let destroyed = false
   let ptyId: string | null = null
@@ -73,6 +81,7 @@ export function createIpcPtyTransport(
   let pendingOscEscape = false
   let lastEmittedTitle: string | null = null
   let staleTitleTimer: ReturnType<typeof setTimeout> | null = null
+  const agentTracker = onAgentBecameIdle ? createAgentStatusTracker(onAgentBecameIdle) : null
 
   // How long data must flow without a title update before we consider
   // the last agent-working title stale and clear it (ms).
@@ -125,6 +134,7 @@ export function createIpcPtyTransport(
               }
               lastEmittedTitle = title
               onTitleChange(title)
+              agentTracker?.handleTitle(title)
             } else if (
               lastEmittedTitle &&
               detectAgentStatusFromTitle(lastEmittedTitle) === 'working'

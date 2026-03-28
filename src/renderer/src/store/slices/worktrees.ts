@@ -146,7 +146,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     }
   },
 
-  markWorktreeUnreadFromBell: (worktreeId) => {
+  markWorktreeUnread: (worktreeId) => {
     const activeWorktreeId = get().activeWorktreeId
     if (activeWorktreeId === worktreeId) {
       return
@@ -175,7 +175,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     void window.api.worktrees
       .updateMeta({ worktreeId, updates: { isUnread: true, lastActivityAt: now } })
       .catch((err) => {
-        console.error('Failed to persist unread worktree bell state:', err)
+        console.error('Failed to persist unread worktree state:', err)
         void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
       })
   },

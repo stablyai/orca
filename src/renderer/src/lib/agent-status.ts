@@ -1,6 +1,9 @@
 export type AgentStatus = 'working' | 'permission' | 'idle'
 
+const CLAUDE_IDLE = '\u2733' // ✳ (eight-spoked asterisk — Claude Code idle prefix)
+
 const GEMINI_WORKING = '\u2726' // ✦
+const GEMINI_SILENT_WORKING = '\u23F2' // ⏲
 const GEMINI_IDLE = '\u25C7' // ◇
 const GEMINI_PERMISSION = '\u270B' // ✋
 
@@ -36,8 +39,9 @@ const WORKING_KEYWORDS = ['working', 'thinking', 'running']
 export function clearWorkingIndicators(title: string): string {
   let cleaned = title
 
-  // Gemini working symbol
+  // Gemini working symbols
   cleaned = cleaned.replace(GEMINI_WORKING, '')
+  cleaned = cleaned.replace(GEMINI_SILENT_WORKING, '')
 
   // Braille spinner characters (U+2800–U+28FF)
   // eslint-disable-next-line no-control-regex -- intentional unicode range
@@ -62,6 +66,29 @@ export function clearWorkingIndicators(title: string): string {
   return cleaned || title
 }
 
+/**
+ * Tracks agent status transitions from terminal title changes.
+ * Fires `onBecameIdle` when an agent transitions from working to idle/permission,
+ * like haunt's attention flag — the key trigger for unread notifications.
+ */
+export function createAgentStatusTracker(onBecameIdle: () => void): {
+  handleTitle: (title: string) => void
+} {
+  let lastStatus: AgentStatus | null = null
+
+  return {
+    handleTitle(title: string): void {
+      const newStatus = detectAgentStatusFromTitle(title)
+      if (lastStatus === 'working' && newStatus !== null && newStatus !== 'working') {
+        onBecameIdle()
+      }
+      if (newStatus !== null) {
+        lastStatus = newStatus
+      }
+    }
+  }
+}
+
 export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
   if (!title) {
     return null
@@ -71,10 +98,16 @@ export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
   if (title.includes(GEMINI_PERMISSION)) {
     return 'permission'
   }
-  if (title.includes(GEMINI_WORKING)) {
+  if (title.includes(GEMINI_WORKING) || title.includes(GEMINI_SILENT_WORKING)) {
     return 'working'
   }
   if (title.includes(GEMINI_IDLE)) {
+    return 'idle'
+  }
+
+  // Claude Code uses ✳ prefix for idle — must check before braille/agent-name
+  // because the title text is the task description, not "Claude Code".
+  if (title.startsWith(`${CLAUDE_IDLE} `) || title === CLAUDE_IDLE) {
     return 'idle'
   }
 

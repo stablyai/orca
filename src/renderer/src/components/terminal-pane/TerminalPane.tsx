@@ -58,7 +58,7 @@ export default function TerminalPane({
   const updateTabTitle = useAppStore((store) => store.updateTabTitle)
   const updateTabPtyId = useAppStore((store) => store.updateTabPtyId)
   const clearTabPtyId = useAppStore((store) => store.clearTabPtyId)
-  const markWorktreeUnreadFromBell = useAppStore((store) => store.markWorktreeUnreadFromBell)
+  const markWorktreeUnread = useAppStore((store) => store.markWorktreeUnread)
   const settings = useAppStore((store) => store.settings)
   const settingsRef = useRef(settings)
   settingsRef.current = settings
@@ -114,7 +114,7 @@ export default function TerminalPane({
     clearTabPtyId,
     updateTabTitle,
     updateTabPtyId,
-    markWorktreeUnreadFromBell,
+    markWorktreeUnread,
     setTabPaneExpanded,
     setTabCanExpandPane,
     setExpandedPane,

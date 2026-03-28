@@ -34,7 +34,7 @@ type UseTerminalPaneLifecycleDeps = {
   clearTabPtyId: (tabId: string, ptyId: string) => void
   updateTabTitle: (tabId: string, title: string) => void
   updateTabPtyId: (tabId: string, ptyId: string) => void
-  markWorktreeUnreadFromBell: (worktreeId: string) => void
+  markWorktreeUnread: (worktreeId: string) => void
   setTabPaneExpanded: (tabId: string, expanded: boolean) => void
   setTabCanExpandPane: (tabId: string, canExpand: boolean) => void
   setExpandedPane: (paneId: number | null) => void
@@ -62,7 +62,7 @@ export function useTerminalPaneLifecycle({
   clearTabPtyId,
   updateTabTitle,
   updateTabPtyId,
-  markWorktreeUnreadFromBell,
+  markWorktreeUnread,
   setTabPaneExpanded,
   setTabCanExpandPane,
   setExpandedPane,
@@ -151,7 +151,7 @@ export function useTerminalPaneLifecycle({
       clearTabPtyId,
       updateTabTitle,
       updateTabPtyId,
-      markWorktreeUnreadFromBell
+      markWorktreeUnread
     }
 
     const manager = new PaneManager(container, {
