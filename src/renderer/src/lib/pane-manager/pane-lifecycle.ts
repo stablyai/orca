@@ -37,6 +37,7 @@ export function createPaneDOM(
   xtermContainer.style.height = `calc(100% - ${TERMINAL_PADDING}px)`
   xtermContainer.style.marginTop = `${TERMINAL_PADDING}px`
   xtermContainer.style.marginLeft = `${TERMINAL_PADDING}px`
+  xtermContainer.style.position = 'relative'
   container.appendChild(xtermContainer)
 
   // Build terminal options
@@ -65,12 +66,12 @@ export function createPaneDOM(
   // URL tooltip element — Ghostty-style bottom-left hint on hover
   const linkTooltip = document.createElement('div')
   linkTooltip.className = 'pane-link-tooltip'
+  linkTooltip.classList.add('xterm-hover')
   linkTooltip.style.cssText =
     'display:none;position:absolute;bottom:4px;left:8px;z-index:40;' +
     'padding:2px 8px;border-radius:4px;font-size:11px;font-family:inherit;' +
     'color:#a1a1aa;background:rgba(24,24,27,0.85);border:1px solid rgba(63,63,70,0.6);' +
     'pointer-events:none;max-width:80%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'
-  container.appendChild(linkTooltip)
 
   // Ghostty-style drag handle — appears at top of pane on hover when 2+ panes
   const dragHandle = document.createElement('div')
@@ -81,13 +82,14 @@ export function createPaneDOM(
   const webLinksAddon = new WebLinksAddon(
     options.onLinkClick ? (event, uri) => options.onLinkClick!(event, uri) : undefined,
     {
-      hover: (event, uri) => {
-        if (event.type === 'mouseover' && uri) {
+      hover: (_event, uri) => {
+        if (uri) {
           linkTooltip.textContent = uri
           linkTooltip.style.display = ''
-        } else {
-          linkTooltip.style.display = 'none'
         }
+      },
+      leave: () => {
+        linkTooltip.style.display = 'none'
       }
     }
   )
@@ -97,6 +99,7 @@ export function createPaneDOM(
     terminal,
     container,
     xtermContainer,
+    linkTooltip,
     fitAddon,
     searchAddon,
     unicode11Addon,
@@ -117,10 +120,12 @@ export function createPaneDOM(
 
 /** Open terminal into its container and load addons. Must be called after the container is in the DOM. */
 export function openTerminal(pane: ManagedPaneInternal): void {
-  const { terminal, xtermContainer, fitAddon, searchAddon, unicode11Addon, webLinksAddon } = pane
+  const { terminal, xtermContainer, linkTooltip, fitAddon, searchAddon, unicode11Addon, webLinksAddon } = pane
 
   // Open terminal into DOM
   terminal.open(xtermContainer)
+  const linkTooltipContainer = terminal.element ?? xtermContainer
+  linkTooltipContainer.appendChild(linkTooltip)
 
   // Load addons (order matters: WebGL must be after open())
   terminal.loadAddon(fitAddon)

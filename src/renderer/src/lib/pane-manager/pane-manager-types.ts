@@ -42,6 +42,7 @@ export type ManagedPane = {
 
 export type ManagedPaneInternal = {
   xtermContainer: HTMLElement
+  linkTooltip: HTMLElement
   webglAddon: WebglAddon | null
   unicode11Addon: Unicode11Addon
   webLinksAddon: WebLinksAddon
