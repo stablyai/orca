@@ -3,6 +3,7 @@ import { Files, Search, GitBranch, ListChecks } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import type { RightSidebarTab, ActivityBarPosition } from '@/store/slices/editor'
+import type { CheckStatus } from '../../../../shared/types'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import {
   ContextMenu,
@@ -22,6 +23,43 @@ const MAX_WIDTH = 500
 
 const ACTIVITY_BAR_SIDE_WIDTH = 40
 
+function branchDisplayName(branch: string): string {
+  return branch.replace(/^refs\/heads\//, '')
+}
+
+function findWorktreeById(
+  worktreesByRepo: ReturnType<typeof useAppStore.getState>['worktreesByRepo'],
+  worktreeId: string | null
+) {
+  if (!worktreeId) {
+    return null
+  }
+
+  for (const worktrees of Object.values(worktreesByRepo)) {
+    const worktree = worktrees.find((entry) => entry.id === worktreeId)
+    if (worktree) {
+      return worktree
+    }
+  }
+
+  return null
+}
+
+function getActiveChecksStatus(state: ReturnType<typeof useAppStore.getState>): CheckStatus | null {
+  const activeWorktree = findWorktreeById(state.worktreesByRepo, state.activeWorktreeId)
+  if (!activeWorktree) {
+    return null
+  }
+
+  const activeRepo = state.repos.find((repo) => repo.id === activeWorktree.repoId)
+  if (!activeRepo) {
+    return null
+  }
+
+  const prCacheKey = `${activeRepo.path}::${branchDisplayName(activeWorktree.branch)}`
+  return state.prCache[prCacheKey]?.data?.checksStatus ?? null
+}
+
 type ActivityBarItem = {
   id: RightSidebarTab
   icon: React.ComponentType<{ size?: number; className?: string }>
@@ -40,6 +78,12 @@ const ACTIVITY_ITEMS: ActivityBarItem[] = [
     shortcut: `${isMac ? '\u21E7' : 'Shift+'}${mod}E`
   },
   {
+    id: 'search',
+    icon: Search,
+    title: 'Search',
+    shortcut: `${isMac ? '\u21E7' : 'Shift+'}${mod}F`
+  },
+  {
     id: 'source-control',
     icon: GitBranch,
     title: 'Source Control',
@@ -50,8 +94,7 @@ const ACTIVITY_ITEMS: ActivityBarItem[] = [
     icon: ListChecks,
     title: 'Checks',
     shortcut: `${isMac ? '\u21E7' : 'Shift+'}${mod}K`
-  },
-  { id: 'search', icon: Search, title: 'Search', shortcut: `${isMac ? '\u21E7' : 'Shift+'}${mod}F` }
+  }
 ]
 
 export default function RightSidebar(): React.JSX.Element {
@@ -61,6 +104,7 @@ export default function RightSidebar(): React.JSX.Element {
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const checksStatus = useAppStore(getActiveChecksStatus)
   const activityBarPosition = useAppStore((s) => s.activityBarPosition)
   const setActivityBarPosition = useAppStore((s) => s.setActivityBarPosition)
 
@@ -128,6 +172,7 @@ export default function RightSidebar(): React.JSX.Element {
       active={rightSidebarTab === item.id}
       onClick={() => setRightSidebarTab(item.id)}
       layout={activityBarPosition}
+      statusIndicator={item.id === 'checks' ? checksStatus : null}
     />
   ))
 
@@ -192,17 +237,27 @@ export default function RightSidebar(): React.JSX.Element {
   )
 }
 
+// ─── Status indicator dot color mapping ──────
+const STATUS_DOT_COLOR: Record<CheckStatus, string> = {
+  success: 'bg-emerald-500',
+  failure: 'bg-rose-500',
+  pending: 'bg-amber-500',
+  neutral: 'bg-muted-foreground'
+}
+
 // ─── Activity Bar Button (shared for top + side) ──────
 function ActivityBarButton({
   item,
   active,
   onClick,
-  layout
+  layout,
+  statusIndicator
 }: {
   item: ActivityBarItem
   active: boolean
   onClick: () => void
   layout: 'top' | 'side'
+  statusIndicator?: CheckStatus | null
 }): React.JSX.Element {
   const Icon = item.icon
   const isTop = layout === 'top'
@@ -220,6 +275,17 @@ function ActivityBarButton({
           aria-label={`${item.title} (${item.shortcut})`}
         >
           <Icon size={isTop ? 16 : 18} />
+
+          {/* Status indicator dot */}
+          {statusIndicator && statusIndicator !== 'neutral' && (
+            <div
+              className={cn(
+                'absolute rounded-full size-[7px] ring-1 ring-sidebar',
+                isTop ? 'top-[5px] right-[5px]' : 'top-[7px] right-[7px]',
+                STATUS_DOT_COLOR[statusIndicator] ?? 'bg-muted-foreground'
+              )}
+            />
+          )}
 
           {/* Active indicator */}
           {active && isTop && (

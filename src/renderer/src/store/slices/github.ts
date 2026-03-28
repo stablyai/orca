@@ -1,6 +1,7 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { PRInfo, IssueInfo, PRCheckDetail, Worktree } from '../../../../shared/types'
+import { syncPRChecksStatus } from './github-checks'
 
 export type CacheEntry<T> = {
   data: T | null
@@ -155,7 +156,13 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const cacheKey = `${repoPath}::pr-checks::${prNumber}`
     const cached = get().checksCache[cacheKey]
     if (!options?.force && isFresh(cached, CHECKS_CACHE_TTL)) {
-      return cached.data ?? []
+      const cachedChecks = cached.data ?? []
+      const prStatusUpdate = syncPRChecksStatus(get(), repoPath, branch, cachedChecks)
+      if (prStatusUpdate) {
+        set(prStatusUpdate)
+        debouncedSaveCache(get())
+      }
+      return cachedChecks
     }
 
     const inflightRequest = inflightChecksRequests.get(cacheKey)
@@ -170,9 +177,19 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           prNumber,
           branch
         })) as PRCheckDetail[]
-        set((s) => ({
-          checksCache: { ...s.checksCache, [cacheKey]: { data: checks, fetchedAt: Date.now() } }
-        }))
+        set((s) => {
+          const nextState: Partial<AppState> = {
+            checksCache: { ...s.checksCache, [cacheKey]: { data: checks, fetchedAt: Date.now() } }
+          }
+
+          const prStatusUpdate = syncPRChecksStatus(s, repoPath, branch, checks)
+          if (prStatusUpdate?.prCache) {
+            nextState.prCache = prStatusUpdate.prCache
+          }
+
+          return nextState
+        })
+        debouncedSaveCache(get())
         return checks
       } catch (err) {
         console.error('Failed to fetch PR checks:', err)
