@@ -48,6 +48,17 @@ const SidebarToolbar = React.memo(function SidebarToolbar() {
               </span>
             )}
           </button>
+          {updateVersion && (
+            <a
+              href={`https://github.com/stablyai/orca/releases/tag/v${updateVersion}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="shrink-0 px-1.5 py-1 mr-0.5 text-[10px] text-primary/60 hover:text-primary underline transition-colors"
+            >
+              Notes
+            </a>
+          )}
           <button
             onClick={(e) => {
               e.stopPropagation()

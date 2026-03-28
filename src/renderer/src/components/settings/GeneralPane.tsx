@@ -187,13 +187,36 @@ export function GeneralPane({
         <p className="text-xs text-muted-foreground">
           {updateStatus.state === 'idle' && 'Updates are checked automatically on launch.'}
           {updateStatus.state === 'checking' && 'Checking for updates...'}
-          {updateStatus.state === 'available' &&
-            `Version ${updateStatus.version} is available. Click "Install Update" to download.`}
+          {updateStatus.state === 'available' && (
+            <>
+              Version {updateStatus.version} is available. Click &quot;Install Update&quot; to
+              download.{' '}
+              <a
+                href={`https://github.com/stablyai/orca/releases/tag/v${updateStatus.version}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-foreground"
+              >
+                Release notes
+              </a>
+            </>
+          )}
           {updateStatus.state === 'not-available' && 'You\u2019re on the latest version.'}
           {updateStatus.state === 'downloading' &&
             `Downloading v${updateStatus.version}... ${updateStatus.percent}%`}
-          {updateStatus.state === 'downloaded' &&
-            `Version ${updateStatus.version} is ready to install.`}
+          {updateStatus.state === 'downloaded' && (
+            <>
+              Version {updateStatus.version} is ready to install.{' '}
+              <a
+                href={`https://github.com/stablyai/orca/releases/tag/v${updateStatus.version}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-foreground"
+              >
+                Release notes
+              </a>
+            </>
+          )}
           {updateStatus.state === 'error' && `Update error: ${updateStatus.message}`}
         </p>
       </section>

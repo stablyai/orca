@@ -60,6 +60,16 @@ export function useIpcEvents(): void {
           }
           checkingToastId = undefined
           availableToastId = toast.info(`Version ${status.version} is available.`, {
+            description: createElement(
+              'a',
+              {
+                href: `https://github.com/stablyai/orca/releases/tag/v${status.version}`,
+                target: '_blank',
+                rel: 'noopener noreferrer',
+                style: { textDecoration: 'underline' }
+              },
+              'Release notes'
+            ),
             duration: Infinity,
             action: {
               label: 'Install',
@@ -82,6 +92,16 @@ export function useIpcEvents(): void {
           }
           toast.dismiss(downloadToastId)
           toast.success(`Version ${status.version} is ready to install.`, {
+            description: createElement(
+              'a',
+              {
+                href: `https://github.com/stablyai/orca/releases/tag/v${status.version}`,
+                target: '_blank',
+                rel: 'noopener noreferrer',
+                style: { textDecoration: 'underline' }
+              },
+              'Release notes'
+            ),
             duration: Infinity,
             action: {
               label: 'Restart Now',
