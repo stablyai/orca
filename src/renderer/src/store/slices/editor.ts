@@ -18,7 +18,13 @@ export type OpenFile = {
 export type RightSidebarTab = 'explorer' | 'search' | 'source-control' | 'checks'
 export type ActivityBarPosition = 'top' | 'side'
 
+export type MarkdownViewMode = 'source' | 'preview'
+
 export type EditorSlice = {
+  // Markdown view mode per file (fileId -> mode)
+  markdownViewMode: Record<string, MarkdownViewMode>
+  setMarkdownViewMode: (fileId: string, mode: MarkdownViewMode) => void
+
   // Right sidebar
   rightSidebarOpen: boolean
   rightSidebarWidth: number
@@ -94,6 +100,13 @@ export type EditorSlice = {
 }
 
 export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (set) => ({
+  // Markdown view mode
+  markdownViewMode: {},
+  setMarkdownViewMode: (fileId, mode) =>
+    set((s) => ({
+      markdownViewMode: { ...s.markdownViewMode, [fileId]: mode }
+    })),
+
   // Right sidebar
   rightSidebarOpen: false,
   rightSidebarWidth: 280,
@@ -177,11 +190,24 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           (f) => f.worktreeId === worktreeId && f.isPreview
         )
         if (existingPreviewIdx !== -1) {
+          const replacedPreview = s.openFiles[existingPreviewIdx]
+          const nextMarkdownViewMode =
+            replacedPreview.id === id
+              ? s.markdownViewMode
+              : Object.fromEntries(
+                  Object.entries(s.markdownViewMode).filter(
+                    ([fileId]) => fileId !== replacedPreview.id
+                  )
+                )
           // Replace in-place to preserve tab position
           newFiles = s.openFiles.map((f, i) =>
             i === existingPreviewIdx ? { ...file, id, isDirty: false, isPreview: true } : f
           )
-          return { openFiles: newFiles, ...activeResult }
+          return {
+            openFiles: newFiles,
+            markdownViewMode: nextMarkdownViewMode,
+            ...activeResult
+          }
         }
       }
 
@@ -210,6 +236,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const closedFile = s.openFiles.find((f) => f.id === fileId)
       const idx = s.openFiles.findIndex((f) => f.id === fileId)
       const newFiles = s.openFiles.filter((f) => f.id !== fileId)
+      const newMarkdownViewMode = { ...s.markdownViewMode }
+      delete newMarkdownViewMode[fileId]
       let newActiveId = s.activeFileId
       const newActiveFileIdByWorktree = { ...s.activeFileIdByWorktree }
 
@@ -255,6 +283,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         activeTabType: newActiveTabType,
         activeFileIdByWorktree: newActiveFileIdByWorktree,
         activeTabTypeByWorktree: newActiveTabTypeByWorktree,
+        markdownViewMode: newMarkdownViewMode,
         pendingEditorReveal: null
       }
     }),
@@ -263,10 +292,19 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     set((s) => {
       const activeWorktreeId = s.activeWorktreeId
       if (!activeWorktreeId) {
-        return { openFiles: [], activeFileId: null, activeTabType: 'terminal' }
+        return {
+          openFiles: [],
+          activeFileId: null,
+          activeTabType: 'terminal',
+          markdownViewMode: {}
+        }
       }
       // Only close files for the current worktree
       const newFiles = s.openFiles.filter((f) => f.worktreeId !== activeWorktreeId)
+      const remainingFileIds = new Set(newFiles.map((f) => f.id))
+      const newMarkdownViewMode = Object.fromEntries(
+        Object.entries(s.markdownViewMode).filter(([fileId]) => remainingFileIds.has(fileId))
+      )
       const newActiveFileIdByWorktree = { ...s.activeFileIdByWorktree }
       delete newActiveFileIdByWorktree[activeWorktreeId]
       const newActiveTabTypeByWorktree = { ...s.activeTabTypeByWorktree }
@@ -275,6 +313,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         openFiles: newFiles,
         activeFileId: null,
         activeTabType: 'terminal',
+        markdownViewMode: newMarkdownViewMode,
         activeFileIdByWorktree: newActiveFileIdByWorktree,
         activeTabTypeByWorktree: newActiveTabTypeByWorktree
       }

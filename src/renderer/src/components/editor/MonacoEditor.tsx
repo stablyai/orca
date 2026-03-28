@@ -158,7 +158,7 @@ export default function MonacoEditor({
         onChange={handleChange}
         onMount={handleMount}
         options={{
-          minimap: { enabled: true },
+          minimap: { enabled: false },
           scrollBeyondLastLine: false,
           wordWrap: 'on',
           fontSize: settings?.terminalFontSize ?? 13,

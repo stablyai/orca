@@ -87,3 +87,40 @@ describe('createEditorSlice openDiff', () => {
     expect(store.getState().activeFileId).toBe('/repo/file.ts::staged')
   })
 })
+
+describe('createEditorSlice markdown preview state', () => {
+  it('drops markdown view mode for a replaced preview tab', () => {
+    const store = createEditorStore()
+
+    store.getState().openFile(
+      {
+        filePath: '/repo/docs/README.md',
+        relativePath: 'docs/README.md',
+        worktreeId: 'wt-1',
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { preview: true }
+    )
+    store.getState().setMarkdownViewMode('/repo/docs/README.md', 'preview')
+
+    store.getState().openFile(
+      {
+        filePath: '/repo/docs/guide.md',
+        relativePath: 'docs/guide.md',
+        worktreeId: 'wt-1',
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { preview: true }
+    )
+
+    expect(store.getState().markdownViewMode).toEqual({})
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        id: '/repo/docs/guide.md',
+        isPreview: true
+      })
+    ])
+  })
+})

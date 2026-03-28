@@ -4,10 +4,13 @@ import { useAppStore } from '@/store'
 import { detectLanguage } from '@/lib/language-detect'
 import { getEditorHeaderCopyState } from './editor-header'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import type { MarkdownViewMode } from '@/store/slices/editor'
+import MarkdownViewToggle from './MarkdownViewToggle'
 
 const MonacoEditor = lazy(() => import('./MonacoEditor'))
 const DiffViewer = lazy(() => import('./DiffViewer'))
 const CombinedDiffViewer = lazy(() => import('./CombinedDiffViewer'))
+const MarkdownPreview = lazy(() => import('./MarkdownPreview'))
 
 type FileContent = {
   content: string
@@ -24,6 +27,9 @@ export default function EditorPanel(): React.JSX.Element | null {
   const activeFileId = useAppStore((s) => s.activeFileId)
   const markFileDirty = useAppStore((s) => s.markFileDirty)
   const pendingEditorReveal = useAppStore((s) => s.pendingEditorReveal)
+
+  const markdownViewMode = useAppStore((s) => s.markdownViewMode)
+  const setMarkdownViewMode = useAppStore((s) => s.setMarkdownViewMode)
 
   const activeFile = openFiles.find((f) => f.id === activeFileId) ?? null
 
@@ -244,11 +250,41 @@ export default function EditorPanel(): React.JSX.Element | null {
       ? detectLanguage(activeFile.relativePath)
       : detectLanguage(activeFile.filePath)
 
+  const isMarkdown = resolvedLanguage === 'markdown'
+  const mdViewMode: MarkdownViewMode =
+    isMarkdown && activeFile.mode === 'edit'
+      ? (markdownViewMode[activeFile.id] ?? 'source')
+      : 'source'
+
   const loadingFallback = (
     <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
       Loading editor...
     </div>
   )
+
+  const renderMonacoEditor = (fc: FileContent): React.JSX.Element => (
+    <MonacoEditor
+      filePath={activeFile.filePath}
+      relativePath={activeFile.relativePath}
+      content={editBuffers[activeFile.id] ?? fc.content}
+      language={resolvedLanguage}
+      onContentChange={handleContentChange}
+      onSave={handleSave}
+      revealLine={pendingEditorReveal?.line}
+      revealColumn={pendingEditorReveal?.column}
+      revealMatchLength={pendingEditorReveal?.matchLength}
+    />
+  )
+
+  const renderMarkdownContent = (fc: FileContent): React.JSX.Element => {
+    const currentContent = editBuffers[activeFile.id] ?? fc.content
+
+    if (mdViewMode === 'preview') {
+      return <MarkdownPreview content={currentContent} filePath={activeFile.filePath} />
+    }
+
+    return renderMonacoEditor(fc)
+  }
 
   return (
     <div className="flex flex-col flex-1 min-w-0 min-h-0">
@@ -288,6 +324,12 @@ export default function EditorPanel(): React.JSX.Element | null {
             </Tooltip>
           </TooltipProvider>
         )}
+        {isMarkdown && activeFile.mode === 'edit' && (
+          <MarkdownViewToggle
+            mode={mdViewMode}
+            onChange={(mode) => setMarkdownViewMode(activeFile.id, mode)}
+          />
+        )}
       </div>
       <Suspense fallback={loadingFallback}>
         {isCombinedDiff ? (
@@ -309,19 +351,7 @@ export default function EditorPanel(): React.JSX.Element | null {
                 </div>
               )
             }
-            return (
-              <MonacoEditor
-                filePath={activeFile.filePath}
-                relativePath={activeFile.relativePath}
-                content={editBuffers[activeFile.id] ?? fc.content}
-                language={resolvedLanguage}
-                onContentChange={handleContentChange}
-                onSave={handleSave}
-                revealLine={pendingEditorReveal?.line}
-                revealColumn={pendingEditorReveal?.column}
-                revealMatchLength={pendingEditorReveal?.matchLength}
-              />
-            )
+            return isMarkdown ? renderMarkdownContent(fc) : renderMonacoEditor(fc)
           })()
         ) : (
           (() => {
