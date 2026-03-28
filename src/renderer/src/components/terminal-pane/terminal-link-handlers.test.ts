@@ -1,25 +1,32 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { handleOscLink, isTerminalLinkActivation } from './terminal-link-handlers'
 
 const openUrlMock = vi.fn()
 const openFileUriMock = vi.fn()
 
+function setPlatform(userAgent: string): void {
+  vi.stubGlobal('navigator', { userAgent })
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
-  Object.defineProperty(window, 'api', {
-    value: {
+  vi.stubGlobal('window', {
+    api: {
       shell: {
         openUrl: openUrlMock,
         openFileUri: openFileUriMock
       }
-    },
-    configurable: true
+    }
   })
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
 })
 
 describe('isTerminalLinkActivation', () => {
   it('requires cmd on macOS', () => {
-    vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue('Macintosh')
+    setPlatform('Macintosh')
 
     expect(isTerminalLinkActivation({ metaKey: true, ctrlKey: false })).toBe(true)
     expect(isTerminalLinkActivation({ metaKey: false, ctrlKey: true })).toBe(false)
@@ -27,7 +34,7 @@ describe('isTerminalLinkActivation', () => {
   })
 
   it('requires ctrl on non-macOS platforms', () => {
-    vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue('Windows')
+    setPlatform('Windows')
 
     expect(isTerminalLinkActivation({ metaKey: false, ctrlKey: true })).toBe(true)
     expect(isTerminalLinkActivation({ metaKey: true, ctrlKey: false })).toBe(false)
@@ -37,7 +44,7 @@ describe('isTerminalLinkActivation', () => {
 
 describe('handleOscLink', () => {
   it('opens http links only when the platform modifier is pressed', () => {
-    vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue('Macintosh')
+    setPlatform('Macintosh')
 
     handleOscLink('https://example.com', { metaKey: false, ctrlKey: false })
     expect(openUrlMock).not.toHaveBeenCalled()
@@ -47,7 +54,7 @@ describe('handleOscLink', () => {
   })
 
   it('opens file links only when the platform modifier is pressed', () => {
-    vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue('Windows')
+    setPlatform('Windows')
 
     handleOscLink('file:///tmp/test.txt', { metaKey: false, ctrlKey: false })
     expect(openFileUriMock).not.toHaveBeenCalled()
