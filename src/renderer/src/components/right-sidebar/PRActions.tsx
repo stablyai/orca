@@ -126,7 +126,7 @@ export default function PRActions({
       <button
         className={cn(
           'w-full flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-[11px] font-medium transition-colors',
-          'bg-destructive text-destructive-foreground hover:bg-destructive/90'
+          'bg-secondary text-secondary-foreground hover:bg-secondary/80'
         )}
         onClick={handleDeleteWorktree}
       >
