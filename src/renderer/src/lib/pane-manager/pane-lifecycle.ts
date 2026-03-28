@@ -77,8 +77,7 @@ export function createPaneDOM(
   const linkTooltipHint = document.createElement('div')
   linkTooltipHint.textContent = openLinkHint
   linkTooltipHint.style.cssText =
-    'font-size:10px;font-weight:600;letter-spacing:0.02em;text-transform:uppercase;' +
-    'color:#d4d4d8;margin-bottom:2px;'
+    'font-size:9px;font-weight:500;letter-spacing:0;' + 'color:#d4d4d8;margin-bottom:2px;'
   const linkTooltipUrl = document.createElement('div')
   linkTooltipUrl.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'
   linkTooltip.append(linkTooltipHint, linkTooltipUrl)
