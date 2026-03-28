@@ -62,6 +62,8 @@ export function createPaneDOM(
   const fitAddon = new FitAddon()
   const searchAddon = new SearchAddon()
   const unicode11Addon = new Unicode11Addon()
+  const isMac = navigator.userAgent.includes('Mac')
+  const openLinkHint = isMac ? '⌘+click to open' : 'Ctrl+click to open'
 
   // URL tooltip element — Ghostty-style bottom-left hint on hover
   const linkTooltip = document.createElement('div')
@@ -69,9 +71,17 @@ export function createPaneDOM(
   linkTooltip.classList.add('xterm-hover')
   linkTooltip.style.cssText =
     'display:none;position:absolute;bottom:4px;left:8px;z-index:40;' +
-    'padding:2px 8px;border-radius:4px;font-size:11px;font-family:inherit;' +
+    'padding:5px 8px;border-radius:4px;font-size:11px;font-family:inherit;' +
     'color:#a1a1aa;background:rgba(24,24,27,0.85);border:1px solid rgba(63,63,70,0.6);' +
     'pointer-events:none;max-width:80%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'
+  const linkTooltipHint = document.createElement('div')
+  linkTooltipHint.textContent = openLinkHint
+  linkTooltipHint.style.cssText =
+    'font-size:10px;font-weight:600;letter-spacing:0.02em;text-transform:uppercase;' +
+    'color:#d4d4d8;margin-bottom:2px;'
+  const linkTooltipUrl = document.createElement('div')
+  linkTooltipUrl.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'
+  linkTooltip.append(linkTooltipHint, linkTooltipUrl)
 
   // Ghostty-style drag handle — appears at top of pane on hover when 2+ panes
   const dragHandle = document.createElement('div')
@@ -84,7 +94,7 @@ export function createPaneDOM(
     {
       hover: (_event, uri) => {
         if (uri) {
-          linkTooltip.textContent = uri
+          linkTooltipUrl.textContent = uri
           linkTooltip.style.display = ''
         }
       },
@@ -120,7 +130,15 @@ export function createPaneDOM(
 
 /** Open terminal into its container and load addons. Must be called after the container is in the DOM. */
 export function openTerminal(pane: ManagedPaneInternal): void {
-  const { terminal, xtermContainer, linkTooltip, fitAddon, searchAddon, unicode11Addon, webLinksAddon } = pane
+  const {
+    terminal,
+    xtermContainer,
+    linkTooltip,
+    fitAddon,
+    searchAddon,
+    unicode11Addon,
+    webLinksAddon
+  } = pane
 
   // Open terminal into DOM
   terminal.open(xtermContainer)
