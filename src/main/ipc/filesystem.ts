@@ -21,6 +21,10 @@ import {
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
 
+function normalizeRelativePath(path: string): string {
+  return path.replace(/[\\/]+/g, '/').replace(/^\/+/, '')
+}
+
 /**
  * Check if a buffer appears to be binary (contains null bytes in first 8KB).
  */
@@ -185,7 +189,7 @@ export function registerFilesystemHandlers(store: Store): void {
 
           const data = msg.data
           const absPath: string = data.path.text
-          const relPath = relative(rootPath, absPath)
+          const relPath = normalizeRelativePath(relative(rootPath, absPath))
 
           let fileResult = fileMap.get(absPath)
           if (!fileResult) {

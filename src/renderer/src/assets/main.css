@@ -91,6 +91,12 @@
   --sidebar-accent-foreground: #171717;
   --sidebar-border: #e5e5e5;
   --sidebar-ring: #a1a1a1;
+  --git-decoration-added: #587c0c;
+  --git-decoration-modified: #895503;
+  --git-decoration-deleted: #ad0707;
+  --git-decoration-renamed: #007acc;
+  --git-decoration-untracked: #007100;
+  --git-decoration-copied: #007acc;
 }
 
 /* ── Dark Mode ───────────────────────────────────────── */
@@ -129,6 +135,12 @@
   --sidebar-accent-foreground: #fafafa;
   --sidebar-border: rgb(255 255 255 / 0.07);
   --sidebar-ring: #525252;
+  --git-decoration-added: #81b88b;
+  --git-decoration-modified: #e2c08d;
+  --git-decoration-deleted: #c74e39;
+  --git-decoration-renamed: #73c991;
+  --git-decoration-untracked: #73c991;
+  --git-decoration-copied: #73c991;
 }
 
 /* ── Base Layer ──────────────────────────────────────── */

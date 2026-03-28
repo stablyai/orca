@@ -10,6 +10,8 @@ import {
 import { SortableContext, horizontalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
 import { Plus } from 'lucide-react'
 import type { TerminalTab } from '../../../../shared/types'
+import { useAppStore } from '../../store'
+import { buildStatusMap } from '../right-sidebar/status-display'
 import type { OpenFile } from '../../store/slices/editor'
 import SortableTab from './SortableTab'
 import EditorFileTab from './EditorFileTab'
@@ -96,6 +98,12 @@ export default function TabBar({
     useSensor(PointerSensor, {
       activationConstraint: { distance: 5 }
     })
+  )
+
+  const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
+  const statusByRelativePath = useMemo(
+    () => buildStatusMap(gitStatusByWorktree[worktreeId] ?? []),
+    [worktreeId, gitStatusByWorktree]
   )
 
   const terminalMap = useMemo(() => new Map(tabs.map((t) => [t.id, t])), [tabs])
@@ -194,6 +202,7 @@ export default function TabBar({
                   file={item.data}
                   isActive={activeTabType === 'editor' && activeFileId === item.id}
                   hasTabsToRight={index < orderedItems.length - 1}
+                  statusByRelativePath={statusByRelativePath}
                   onActivate={() => onActivateFile?.(item.id)}
                   onClose={() => onCloseFile?.(item.id)}
                   onCloseToRight={() => onCloseToRight(item.id)}

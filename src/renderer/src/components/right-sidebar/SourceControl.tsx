@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import {
   ChevronDown,
   Minus,
@@ -18,32 +18,18 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import type { GitStatusEntry, GitStagingArea } from '../../../../shared/types'
 import { getSourceControlActions } from './source-control-actions'
+import { STATUS_COLORS, STATUS_LABELS } from './status-display'
 
-const STATUS_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+const STATUS_ICONS: Record<
+  string,
+  React.ComponentType<{ className?: string; style?: React.CSSProperties }>
+> = {
   modified: FileEdit,
   added: FilePlus,
   deleted: FileMinus,
   renamed: ArrowRightLeft,
   untracked: FileQuestion,
   copied: FilePlus
-}
-
-const STATUS_LABELS: Record<string, string> = {
-  modified: 'M',
-  added: 'A',
-  deleted: 'D',
-  renamed: 'R',
-  untracked: 'U',
-  copied: 'C'
-}
-
-const STATUS_COLORS: Record<string, string> = {
-  modified: 'text-amber-500',
-  added: 'text-green-500',
-  deleted: 'text-red-500',
-  renamed: 'text-blue-500',
-  untracked: 'text-green-600',
-  copied: 'text-blue-400'
 }
 
 const SECTION_ORDER: GitStagingArea[] = ['staged', 'unstaged', 'untracked']
@@ -62,7 +48,6 @@ export default function SourceControl(): React.JSX.Element {
   const openAllDiffs = useAppStore((s) => s.openAllDiffs)
 
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // Find active worktree path
   const worktreePath = useMemo(() => {
@@ -89,17 +74,6 @@ export default function SourceControl(): React.JSX.Element {
       // ignore
     }
   }, [activeWorktreeId, worktreePath, setGitStatus])
-
-  // Poll git status every 3 seconds
-  useEffect(() => {
-    void fetchStatus()
-    pollRef.current = setInterval(() => void fetchStatus(), 3000)
-    return () => {
-      if (pollRef.current) {
-        clearInterval(pollRef.current)
-      }
-    }
-  }, [fetchStatus])
 
   const entries = useMemo(
     () => (activeWorktreeId ? (gitStatusByWorktree[activeWorktreeId] ?? []) : []),
@@ -266,7 +240,10 @@ export default function SourceControl(): React.JSX.Element {
                     className="group flex items-center gap-1 px-3 py-0.5 hover:bg-accent/40 transition-colors cursor-pointer"
                     onClick={() => handleOpenDiff(entry)}
                   >
-                    <StatusIcon className={cn('size-3.5 shrink-0', STATUS_COLORS[entry.status])} />
+                    <StatusIcon
+                      className="size-3.5 shrink-0"
+                      style={{ color: STATUS_COLORS[entry.status] }}
+                    />
                     <span className="truncate text-[12px] flex-1 min-w-0">
                       <span className="text-foreground">{fileName}</span>
                       {dirPath && (
@@ -274,10 +251,8 @@ export default function SourceControl(): React.JSX.Element {
                       )}
                     </span>
                     <span
-                      className={cn(
-                        'text-[10px] font-bold shrink-0 w-4 text-center',
-                        STATUS_COLORS[entry.status]
-                      )}
+                      className="text-[10px] font-bold shrink-0 w-4 text-center"
+                      style={{ color: STATUS_COLORS[entry.status] }}
                     >
                       {STATUS_LABELS[entry.status]}
                     </span>

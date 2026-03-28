@@ -10,6 +10,10 @@ function getSeparator(path: string): '/' | '\\' {
   return path.includes('\\') ? '\\' : '/'
 }
 
+export function normalizeRelativePath(path: string): string {
+  return stripLeadingSeparators(path).replace(/[\\/]+/g, '/')
+}
+
 export function basename(path: string): string {
   const normalizedPath = stripTrailingSeparators(path)
   const lastSeparatorIndex = Math.max(

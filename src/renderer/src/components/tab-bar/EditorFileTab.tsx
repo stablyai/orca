@@ -9,6 +9,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import { basename, normalizeRelativePath } from '@/lib/path'
+import { STATUS_COLORS, STATUS_LABELS } from '../right-sidebar/status-display'
+import type { GitFileStatus } from '../../../../shared/types'
 import type { OpenFile } from '../../store/slices/editor'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from './SortableTab'
 
@@ -16,6 +19,7 @@ export default function EditorFileTab({
   file,
   isActive,
   hasTabsToRight,
+  statusByRelativePath,
   onActivate,
   onClose,
   onCloseToRight,
@@ -25,6 +29,7 @@ export default function EditorFileTab({
   file: OpenFile
   isActive: boolean
   hasTabsToRight: boolean
+  statusByRelativePath: Map<string, GitFileStatus>
   onActivate: () => void
   onClose: () => void
   onCloseToRight: () => void
@@ -42,10 +47,16 @@ export default function EditorFileTab({
     opacity: isDragging ? 0.8 : 1
   }
 
-  const fileName = file.relativePath.split('/').pop() ?? file.relativePath
+  const fileName = basename(file.relativePath)
   const isDiff = file.mode === 'diff'
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
+
+  const tabStatus =
+    file.relativePath === 'All Changes'
+      ? null
+      : (statusByRelativePath.get(normalizeRelativePath(file.relativePath)) ?? null)
+  const tabStatusColor = tabStatus ? STATUS_COLORS[tabStatus] : undefined
 
   useEffect(() => {
     const closeMenu = (): void => setMenuOpen(false)
@@ -101,12 +112,25 @@ export default function EditorFileTab({
           {file.isDirty && (
             <span className="mr-1 size-1.5 rounded-full bg-foreground/60 shrink-0" />
           )}
-          <span className={`truncate max-w-[130px] mr-1.5${file.isPreview ? ' italic' : ''}`}>
-            {isDiff
-              ? file.relativePath === 'All Changes'
-                ? 'All Changes'
-                : `${fileName} (diff${file.diffStaged ? ' staged' : ''})`
-              : fileName}
+          <span className="mr-1.5 flex min-w-0 items-baseline gap-1.5">
+            <span
+              className={`truncate max-w-[130px]${file.isPreview ? ' italic' : ''}`}
+              style={tabStatusColor ? { color: tabStatusColor } : undefined}
+            >
+              {isDiff
+                ? file.relativePath === 'All Changes'
+                  ? 'All Changes'
+                  : `${fileName} (diff${file.diffStaged ? ' staged' : ''})`
+                : fileName}
+            </span>
+            {tabStatus && (
+              <span
+                className="shrink-0 text-[10px] leading-none font-semibold tracking-wide"
+                style={{ color: tabStatusColor }}
+              >
+                {STATUS_LABELS[tabStatus]}
+              </span>
+            )}
           </span>
           <button
             className={`flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${

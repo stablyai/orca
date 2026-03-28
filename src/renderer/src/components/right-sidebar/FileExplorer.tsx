@@ -3,7 +3,17 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { ChevronRight, File, Folder, FolderOpen, Loader2 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { detectLanguage } from '@/lib/language-detect'
+import { joinPath, normalizeRelativePath } from '@/lib/path'
 import { cn } from '@/lib/utils'
+import type { GitFileStatus } from '../../../../shared/types'
+import { splitPathSegments } from './path-tree'
+import {
+  buildStatusMap,
+  getDominantStatus,
+  shouldPropagateStatus,
+  STATUS_COLORS,
+  STATUS_LABELS
+} from './status-display'
 
 type TreeNode = {
   name: string
@@ -26,6 +36,7 @@ export default function FileExplorer(): React.JSX.Element {
   const openFile = useAppStore((s) => s.openFile)
   const pinFile = useAppStore((s) => s.pinFile)
   const activeFileId = useAppStore((s) => s.activeFileId)
+  const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
 
   // Find active worktree path
   const worktreePath = useMemo(() => {
@@ -43,6 +54,46 @@ export default function FileExplorer(): React.JSX.Element {
 
   const [dirCache, setDirCache] = useState<Record<string, DirCache>>({})
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  const entries = useMemo(
+    () => (activeWorktreeId ? (gitStatusByWorktree[activeWorktreeId] ?? []) : []),
+    [activeWorktreeId, gitStatusByWorktree]
+  )
+
+  const statusByRelativePath = useMemo(() => buildStatusMap(entries), [entries])
+
+  const folderStatusByRelativePath = useMemo(() => {
+    const folderStatuses = new Map<string, GitFileStatus[]>()
+
+    for (const entry of entries) {
+      if (!shouldPropagateStatus(entry.status)) {
+        continue
+      }
+
+      const segments = splitPathSegments(entry.path)
+      if (segments.length <= 1) {
+        continue
+      }
+
+      let currentPath = ''
+      for (const segment of segments.slice(0, -1)) {
+        currentPath = currentPath ? joinPath(currentPath, segment) : segment
+        const statuses = folderStatuses.get(currentPath)
+        if (statuses) {
+          statuses.push(entry.status)
+        } else {
+          folderStatuses.set(currentPath, [entry.status])
+        }
+      }
+    }
+
+    return new Map(
+      Array.from(folderStatuses.entries()).map(([folderPath, statuses]) => [
+        folderPath,
+        getDominantStatus(statuses)
+      ])
+    )
+  }, [entries])
 
   const expanded = useMemo(
     () =>
@@ -73,9 +124,9 @@ export default function FileExplorer(): React.JSX.Element {
           .filter((e) => e.name !== 'node_modules' && e.name !== '.git')
           .map((e) => ({
             name: e.name,
-            path: `${dirPath}/${e.name}`,
+            path: joinPath(dirPath, e.name),
             relativePath: worktreePath
-              ? `${dirPath}/${e.name}`.slice(worktreePath.length + 1)
+              ? normalizeRelativePath(joinPath(dirPath, e.name).slice(worktreePath.length + 1))
               : e.name,
             isDirectory: e.isDirectory,
             depth: depth + 1
@@ -109,7 +160,7 @@ export default function FileExplorer(): React.JSX.Element {
     for (const dirPath of expanded) {
       if (!dirCache[dirPath]?.children.length && !dirCache[dirPath]?.loading) {
         const depth = worktreePath
-          ? dirPath.slice(worktreePath.length + 1).split('/').length - 1
+          ? splitPathSegments(dirPath.slice(worktreePath.length + 1)).length - 1
           : 0
         void loadDir(dirPath, depth)
       }
@@ -159,16 +210,13 @@ export default function FileExplorer(): React.JSX.Element {
       if (node.isDirectory) {
         toggleDir(activeWorktreeId, node.path)
       } else {
-        openFile(
-          {
-            filePath: node.path,
-            relativePath: node.relativePath,
-            worktreeId: activeWorktreeId,
-            language: detectLanguage(node.name),
-            mode: 'edit'
-          },
-          { preview: true }
-        )
+        openFile({
+          filePath: node.path,
+          relativePath: node.relativePath,
+          worktreeId: activeWorktreeId,
+          language: detectLanguage(node.name),
+          mode: 'edit'
+        })
       }
     },
     [activeWorktreeId, toggleDir, openFile]
@@ -208,6 +256,11 @@ export default function FileExplorer(): React.JSX.Element {
           const isExpanded = expanded.has(node.path)
           const isLoading = node.isDirectory && dirCache[node.path]?.loading
           const isActive = activeFileId === node.path
+          const normalizedRelativePath = normalizeRelativePath(node.relativePath)
+          const nodeStatus = node.isDirectory
+            ? (folderStatusByRelativePath.get(normalizedRelativePath) ?? null)
+            : (statusByRelativePath.get(normalizedRelativePath) ?? null)
+          const statusColor = nodeStatus ? STATUS_COLORS[nodeStatus] : null
 
           return (
             <div
@@ -253,7 +306,20 @@ export default function FileExplorer(): React.JSX.Element {
                     <File className="size-3.5 shrink-0 text-muted-foreground" />
                   </>
                 )}
-                <span className="truncate">{node.name}</span>
+                <span
+                  className={cn('truncate', isActive && !nodeStatus && 'text-accent-foreground')}
+                  style={nodeStatus ? { color: statusColor ?? undefined } : undefined}
+                >
+                  {node.name}
+                </span>
+                {nodeStatus && (
+                  <span
+                    className="ml-auto shrink-0 text-[10px] font-semibold tracking-wide"
+                    style={{ color: statusColor ?? undefined }}
+                  >
+                    {STATUS_LABELS[nodeStatus]}
+                  </span>
+                )}
               </button>
             </div>
           )
