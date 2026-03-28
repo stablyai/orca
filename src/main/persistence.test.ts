@@ -68,7 +68,7 @@ describe('Store', () => {
     expect(settings.branchPrefix).toBe('git-username')
     expect(settings.theme).toBe('system')
     expect(settings.terminalFontSize).toBe(14)
-    expect(settings.rightSidebarOpenByDefault).toBe(false)
+    expect(settings.rightSidebarOpenByDefault).toBe(true)
   })
 
   it('returns default UI state when no data file exists', async () => {
@@ -130,7 +130,7 @@ describe('Store', () => {
     // settings should preserve the overridden value
     expect(store.getSettings().theme).toBe('dark')
     // new fields get defaults when missing from persisted data
-    expect(store.getSettings().rightSidebarOpenByDefault).toBe(false)
+    expect(store.getSettings().rightSidebarOpenByDefault).toBe(true)
     // repos should be loaded
     expect(store.getRepos()).toHaveLength(1)
   })
@@ -242,13 +242,13 @@ describe('Store', () => {
 
   it('updateSettings toggles rightSidebarOpenByDefault', async () => {
     const store = await createStore()
-    expect(store.getSettings().rightSidebarOpenByDefault).toBe(false)
-
-    store.updateSettings({ rightSidebarOpenByDefault: true })
     expect(store.getSettings().rightSidebarOpenByDefault).toBe(true)
 
     store.updateSettings({ rightSidebarOpenByDefault: false })
     expect(store.getSettings().rightSidebarOpenByDefault).toBe(false)
+
+    store.updateSettings({ rightSidebarOpenByDefault: true })
+    expect(store.getSettings().rightSidebarOpenByDefault).toBe(true)
   })
 
   // ── 10. flush writes synchronously ─────────────────────────────────
