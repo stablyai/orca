@@ -28,6 +28,8 @@ Grab a release from https://www.orcabuild.ai/ or download from the GH release pa
 
 ## Developing
 
+See [CONTRIBUTING.md](CONTRIBUTING.md) for branch naming, PR expectations, and required checks.
+
 ### Install
 
 ```bash
