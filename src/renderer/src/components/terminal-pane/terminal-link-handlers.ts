@@ -125,7 +125,19 @@ export function createFilePathLinkProvider(paneId: number, deps: LinkHandlerDeps
   }
 }
 
-export function handleOscLink(rawText: string): void {
+export function isTerminalLinkActivation(event: Pick<MouseEvent, 'metaKey' | 'ctrlKey'> | undefined): boolean {
+  const isMac = navigator.userAgent.includes('Mac')
+  return isMac ? Boolean(event?.metaKey) : Boolean(event?.ctrlKey)
+}
+
+export function handleOscLink(
+  rawText: string,
+  event: Pick<MouseEvent, 'metaKey' | 'ctrlKey'> | undefined
+): void {
+  if (!isTerminalLinkActivation(event)) {
+    return
+  }
+
   let parsed: URL
   try {
     parsed = new URL(rawText)

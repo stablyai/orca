@@ -16,7 +16,7 @@ export type PaneManagerOptions = {
   onActivePaneChange?: (pane: ManagedPane) => void
   onLayoutChanged?: () => void
   terminalOptions?: (paneId: number) => Partial<ITerminalOptions>
-  onLinkClick?: (url: string) => void
+  onLinkClick?: (event: MouseEvent | undefined, url: string) => void
 }
 
 export type PaneStyleOptions = {

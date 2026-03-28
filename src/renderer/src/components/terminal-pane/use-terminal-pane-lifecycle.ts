@@ -162,7 +162,7 @@ export function useTerminalPaneLifecycle({
         linkProviderDisposablesRef.current.set(pane.id, linkProviderDisposable)
         pane.terminal.options.linkHandler = {
           allowNonHttpProtocols: true,
-          activate: (_event, text) => handleOscLink(text)
+          activate: (event, text) => handleOscLink(text, event as MouseEvent | undefined)
         }
         applyAppearance(manager)
         connectPanePty(pane, manager, ptyDeps)
@@ -211,8 +211,11 @@ export function useTerminalPaneLifecycle({
           cursorBlink: currentSettings?.terminalCursorBlink ?? true
         }
       },
-      onLinkClick: (url) => {
-        void window.api.shell.openUrl(url)
+      onLinkClick: (event, url) => {
+        if (!event) {
+          return
+        }
+        void handleOscLink(url, event)
       }
     })
 

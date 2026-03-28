@@ -79,7 +79,7 @@ export function createPaneDOM(
   attachPaneDrag(dragHandle, id, dragState, dragCallbacks)
 
   const webLinksAddon = new WebLinksAddon(
-    options.onLinkClick ? (_event, uri) => options.onLinkClick!(uri) : undefined,
+    options.onLinkClick ? (event, uri) => options.onLinkClick!(event, uri) : undefined,
     {
       hover: (event, uri) => {
         if (event.type === 'mouseover' && uri) {
