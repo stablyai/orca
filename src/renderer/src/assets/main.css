@@ -59,6 +59,7 @@
 :root {
   --radius: 0.625rem;
   --background: #fff;
+  --editor-surface: #ffffff;
   --foreground: #0a0a0a;
   --card: #fff;
   --card-foreground: #0a0a0a;
@@ -96,6 +97,7 @@
 
 .dark {
   --background: #0a0a0a;
+  --editor-surface: #1e1e1e;
   --foreground: #fafafa;
   --card: #171717;
   --card-foreground: #fafafa;
@@ -339,6 +341,80 @@
 .titlebar-icon-button:disabled:hover {
   background: none;
   color: var(--muted-foreground);
+}
+
+.editor-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 10px 14px;
+  background: var(--editor-surface);
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  flex-shrink: 0;
+}
+
+.editor-header-text {
+  min-width: 0;
+  flex: 1;
+}
+
+.editor-header-path {
+  display: block;
+  padding: 0;
+  max-width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1.2;
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    SF Mono,
+    Menlo,
+    Consolas,
+    monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+
+.editor-header-path:hover,
+.editor-header-path:focus-visible {
+  color: var(--foreground);
+}
+
+.editor-header-path-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  min-width: 0;
+}
+
+.editor-header-copy-toast {
+  opacity: 0;
+  transform: translateY(2px);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
+  pointer-events: none;
+  flex-shrink: 0;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 72%, transparent);
+  color: var(--foreground);
+  font-size: 11px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.editor-header-copy-toast.is-visible {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 /* ── Content ─────────────────────────────────────────── */

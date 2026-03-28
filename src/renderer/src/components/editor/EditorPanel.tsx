@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState, lazy, Suspense } from 'react'
 import { useAppStore } from '@/store'
 import { detectLanguage } from '@/lib/language-detect'
+import { getEditorHeaderCopyState } from './editor-header'
 
 const MonacoEditor = lazy(() => import('./MonacoEditor'))
 const DiffViewer = lazy(() => import('./DiffViewer'))
@@ -27,6 +28,9 @@ export default function EditorPanel(): React.JSX.Element | null {
   const [fileContents, setFileContents] = useState<Record<string, FileContent>>({})
   const [diffContents, setDiffContents] = useState<Record<string, DiffContent>>({})
   const [editBuffers, setEditBuffers] = useState<Record<string, string>>({})
+  const [copiedPathToast, setCopiedPathToast] = useState<{ fileId: string; token: number } | null>(
+    null
+  )
 
   // Load file content when active file changes
   useEffect(() => {
@@ -45,6 +49,14 @@ export default function EditorPanel(): React.JSX.Element | null {
       void loadDiffContent(activeFile)
     }
   }, [activeFile?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!copiedPathToast) {
+      return
+    }
+    const timeout = window.setTimeout(() => setCopiedPathToast(null), 1500)
+    return () => window.clearTimeout(timeout)
+  }, [copiedPathToast])
 
   const loadFileContent = async (filePath: string, id: string): Promise<void> => {
     try {
@@ -201,11 +213,28 @@ export default function EditorPanel(): React.JSX.Element | null {
     })
   }, [openFiles])
 
+  const handleCopyPath = useCallback(async (): Promise<void> => {
+    if (!activeFile) {
+      return
+    }
+    const copyState = getEditorHeaderCopyState(activeFile)
+    if (!copyState.copyText) {
+      return
+    }
+    try {
+      await window.api.ui.writeClipboardText(copyState.copyText)
+      setCopiedPathToast({ fileId: activeFile.id, token: Date.now() })
+    } catch {
+      setCopiedPathToast(null)
+    }
+  }, [activeFile])
+
   if (!activeFile) {
     return null
   }
 
   const isCombinedDiff = activeFile.mode === 'diff' && activeFile.diffStaged === undefined
+  const headerCopyState = getEditorHeaderCopyState(activeFile)
   const resolvedLanguage =
     activeFile.mode === 'diff'
       ? detectLanguage(activeFile.relativePath)
@@ -219,6 +248,26 @@ export default function EditorPanel(): React.JSX.Element | null {
 
   return (
     <div className="flex flex-col flex-1 min-w-0 min-h-0">
+      <div className="editor-header">
+        <div className="editor-header-text">
+          <div className="editor-header-path-row">
+            <button
+              type="button"
+              className="editor-header-path"
+              onClick={() => void handleCopyPath()}
+              title={headerCopyState.pathTitle}
+            >
+              {headerCopyState.pathLabel}
+            </button>
+            <span
+              className={`editor-header-copy-toast${copiedPathToast?.fileId === activeFile.id ? ' is-visible' : ''}`}
+              aria-live="polite"
+            >
+              {headerCopyState.copyToastLabel}
+            </span>
+          </div>
+        </div>
+      </div>
       <Suspense fallback={loadingFallback}>
         {isCombinedDiff ? (
           <CombinedDiffViewer worktreePath={activeFile.filePath} />
