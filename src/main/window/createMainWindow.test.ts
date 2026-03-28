@@ -31,7 +31,7 @@ describe('createMainWindow', () => {
     openExternalMock.mockReset()
   })
 
-  it('enables renderer sandboxing and only opens http(s) URLs externally', () => {
+  it('enables renderer sandboxing and opens external links safely', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
       on: vi.fn((event, handler) => {
@@ -64,10 +64,35 @@ describe('createMainWindow', () => {
     )
 
     expect(windowHandlers.windowOpen({ url: 'https://example.com' })).toEqual({ action: 'deny' })
+    expect(windowHandlers.windowOpen({ url: 'localhost:3000' })).toEqual({ action: 'deny' })
     expect(windowHandlers.windowOpen({ url: 'file:///etc/passwd' })).toEqual({ action: 'deny' })
     expect(windowHandlers.windowOpen({ url: 'not a url' })).toEqual({ action: 'deny' })
 
-    expect(openExternalMock).toHaveBeenCalledTimes(1)
+    expect(openExternalMock).toHaveBeenCalledTimes(2)
     expect(openExternalMock).toHaveBeenCalledWith('https://example.com')
+    expect(openExternalMock).toHaveBeenCalledWith('http://localhost:3000/')
+
+    const preventDefault = vi.fn()
+    windowHandlers['will-navigate']({ preventDefault } as never, 'https://example.com/docs')
+    expect(preventDefault).toHaveBeenCalledTimes(1)
+    expect(openExternalMock).toHaveBeenCalledTimes(3)
+    expect(openExternalMock).toHaveBeenLastCalledWith('https://example.com/docs')
+
+    const localhostPreventDefault = vi.fn()
+    windowHandlers['will-navigate'](
+      { preventDefault: localhostPreventDefault } as never,
+      'localhost:3000'
+    )
+    expect(localhostPreventDefault).toHaveBeenCalledTimes(1)
+    expect(openExternalMock).toHaveBeenCalledTimes(4)
+    expect(openExternalMock).toHaveBeenLastCalledWith('http://localhost:3000/')
+
+    const fileNavigationPreventDefault = vi.fn()
+    windowHandlers['will-navigate'](
+      { preventDefault: fileNavigationPreventDefault } as never,
+      'file:///etc/passwd'
+    )
+    expect(fileNavigationPreventDefault).toHaveBeenCalledTimes(1)
+    expect(openExternalMock).toHaveBeenCalledTimes(4)
   })
 })

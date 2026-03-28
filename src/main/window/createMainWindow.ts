@@ -5,6 +5,26 @@ import icon from '../../../resources/icon.png?asset'
 import devIcon from '../../../resources/icon-dev.png?asset'
 import type { Store } from '../persistence'
 
+const LOCAL_ADDRESS_PATTERN =
+  /^(?:localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|\[[0-9a-f:]+\])(?::\d+)?(?:\/.*)?$/i
+
+function normalizeExternalUrl(rawUrl: string): string | null {
+  if (LOCAL_ADDRESS_PATTERN.test(rawUrl)) {
+    try {
+      return new URL(`http://${rawUrl}`).toString()
+    } catch {
+      return null
+    }
+  }
+
+  try {
+    const parsed = new URL(rawUrl)
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? rawUrl : null
+  } catch {
+    return null
+  }
+}
+
 export function createMainWindow(store: Store | null): BrowserWindow {
   const mainWindow = new BrowserWindow({
     width: 1200,
@@ -33,21 +53,36 @@ export function createMainWindow(store: Store | null): BrowserWindow {
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
-    try {
-      const parsed = new URL(details.url)
-      if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
-        shell.openExternal(details.url)
-      }
-    } catch {
-      // ignore malformed URLs
+    const externalUrl = normalizeExternalUrl(details.url)
+    if (externalUrl) {
+      shell.openExternal(externalUrl)
     }
     return { action: 'deny' }
   })
 
+  // Block ALL in-window navigations to prevent remote pages from inheriting
+  // the privileged preload bridge (PTY, filesystem, etc.).
+  // In dev mode, allow navigations to the local dev server (e.g. HMR reloads).
   mainWindow.webContents.on('will-navigate', (event, url) => {
-    if (url.startsWith('file://')) {
-      event.preventDefault()
+    const externalUrl = normalizeExternalUrl(url)
+
+    if (externalUrl) {
+      const target = new URL(externalUrl)
+      if (is.dev && process.env.ELECTRON_RENDERER_URL) {
+        try {
+          const allowed = new URL(process.env.ELECTRON_RENDERER_URL)
+          if (target.origin === allowed.origin) {
+            return // allow dev server navigations (HMR, etc.)
+          }
+        } catch {
+          // fall through to prevent
+        }
+      }
+
+      shell.openExternal(externalUrl)
     }
+
+    event.preventDefault()
   })
 
   mainWindow.webContents.on('before-input-event', (event, input) => {

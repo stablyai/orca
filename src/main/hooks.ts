@@ -7,6 +7,14 @@ import type { OrcaHooks, Repo } from '../shared/types'
 const HOOK_TIMEOUT = 120_000 // 2 minutes
 type HookName = keyof OrcaHooks['scripts']
 
+function getHookShell(): string | undefined {
+  if (process.platform === 'win32') {
+    return process.env.ComSpec || 'cmd.exe'
+  }
+
+  return '/bin/bash'
+}
+
 /**
  * Parse a simple orca.yaml file. Handles only the `scripts:` block with
  * multiline string values (YAML block scalar `|`).
@@ -138,7 +146,7 @@ export function runHook(
       {
         cwd,
         timeout: HOOK_TIMEOUT,
-        shell: '/bin/bash',
+        shell: getHookShell(),
         env: {
           ...process.env,
           ORCA_ROOT_PATH: repo.path,

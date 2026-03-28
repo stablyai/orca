@@ -1,7 +1,7 @@
 import { execFile } from 'child_process'
 import { readFile, rm } from 'fs/promises'
 import { promisify } from 'util'
-import { join, resolve } from 'path'
+import * as path from 'path'
 import type { GitStatusEntry, GitFileStatus, GitDiffResult } from '../../shared/types'
 
 const execFileAsync = promisify(execFile)
@@ -127,7 +127,7 @@ export async function getDiff(
     } else {
       // Unstaged: modified is the working tree version
       try {
-        modifiedContent = await readFile(join(worktreePath, filePath), 'utf-8')
+        modifiedContent = await readFile(path.join(worktreePath, filePath), 'utf-8')
       } catch {
         modifiedContent = ''
       }
@@ -163,9 +163,9 @@ export async function unstageFile(worktreePath: string, filePath: string): Promi
  * Discard working tree changes for a file.
  */
 export async function discardChanges(worktreePath: string, filePath: string): Promise<void> {
-  const resolvedWorktree = resolve(worktreePath)
-  const resolvedTarget = resolve(worktreePath, filePath)
-  if (!resolvedTarget.startsWith(`${resolvedWorktree}/`)) {
+  const resolvedWorktree = path.resolve(worktreePath)
+  const resolvedTarget = path.resolve(worktreePath, filePath)
+  if (!isWithinWorktree(path, resolvedWorktree, resolvedTarget)) {
     throw new Error(`Path "${filePath}" resolves outside the worktree`)
   }
 
@@ -186,4 +186,18 @@ export async function discardChanges(worktreePath: string, filePath: string): Pr
         encoding: 'utf-8'
       })
     : rm(resolvedTarget, { force: true, recursive: true }))
+}
+
+export function isWithinWorktree(
+  pathApi: Pick<typeof path, 'isAbsolute' | 'relative' | 'sep'>,
+  resolvedWorktree: string,
+  resolvedTarget: string
+): boolean {
+  const relativeTarget = pathApi.relative(resolvedWorktree, resolvedTarget)
+  return !(
+    relativeTarget === '' ||
+    relativeTarget === '..' ||
+    relativeTarget.startsWith(`..${pathApi.sep}`) ||
+    pathApi.isAbsolute(relativeTarget)
+  )
 }

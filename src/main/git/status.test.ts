@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import path from 'path'
 
 const { execFileAsyncMock, readFileMock, rmMock } = vi.hoisted(() => ({
   execFileAsyncMock: vi.fn(),
@@ -19,7 +20,7 @@ vi.mock('fs/promises', () => ({
   rm: rmMock
 }))
 
-import { discardChanges } from './status'
+import { discardChanges, isWithinWorktree } from './status'
 
 describe('discardChanges', () => {
   beforeEach(() => {
@@ -74,5 +75,9 @@ describe('discardChanges', () => {
 
     expect(execFileAsyncMock).not.toHaveBeenCalled()
     expect(rmMock).not.toHaveBeenCalled()
+  })
+
+  it('accepts in-tree Windows paths when resolving containment', async () => {
+    expect(isWithinWorktree(path.win32, 'C:\\repo', 'C:\\repo\\src\\file.ts')).toBe(true)
   })
 })

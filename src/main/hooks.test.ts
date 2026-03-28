@@ -7,6 +7,14 @@ vi.mock('fs', () => ({
   existsSync: vi.fn()
 }))
 
+const { execMock } = vi.hoisted(() => ({
+  execMock: vi.fn()
+}))
+
+vi.mock('child_process', () => ({
+  exec: execMock
+}))
+
 describe('parseOrcaYaml', () => {
   it('parses YAML with setup script only', () => {
     const yaml = `scripts:\n  setup: |\n    echo "setting up"\n    npm install\n`
@@ -159,5 +167,115 @@ describe('getEffectiveHooks', () => {
     const result = getEffectiveHooks(repo)
 
     expect(result).toBeNull()
+  })
+})
+
+describe('runHook', () => {
+  const makeRepo = (hookSettings?: {
+    mode: 'auto' | 'override'
+    scripts: { setup: string; archive: string }
+  }) => ({
+    id: 'test-id',
+    path: '/test/repo',
+    displayName: 'Test Repo',
+    badgeColor: '#000',
+    addedAt: Date.now(),
+    hookSettings
+  })
+
+  it('uses the Windows command shell when running hooks', async () => {
+    execMock.mockImplementation((_script, _options, callback) => {
+      callback?.(null, '', '')
+      return {} as never
+    })
+
+    const originalPlatform = process.platform
+    const originalComSpec = process.env.ComSpec
+
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    process.env.ComSpec = 'C:\\Windows\\System32\\cmd.exe'
+
+    try {
+      const { runHook } = await import('./hooks')
+      const result = await runHook(
+        'setup',
+        'C:\\repo\\worktree',
+        makeRepo({
+          mode: 'override',
+          scripts: { setup: 'echo hello', archive: '' }
+        })
+      )
+
+      expect(result).toEqual({ success: true, output: '' })
+      expect(execMock).toHaveBeenCalledWith(
+        'echo hello',
+        expect.objectContaining({
+          cwd: 'C:\\repo\\worktree',
+          shell: 'C:\\Windows\\System32\\cmd.exe'
+        }),
+        expect.any(Function)
+      )
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+      if (originalComSpec === undefined) {
+        delete process.env.ComSpec
+      } else {
+        process.env.ComSpec = originalComSpec
+      }
+    }
+  })
+
+  it('keeps bash as the hook shell on non-Windows platforms', async () => {
+    execMock.mockImplementation((_script, _options, callback) => {
+      callback?.(null, '', '')
+      return {} as never
+    })
+
+    const originalPlatform = process.platform
+    const originalShell = process.env.SHELL
+
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'linux'
+    })
+    process.env.SHELL = '/opt/homebrew/bin/fish'
+
+    try {
+      const { runHook } = await import('./hooks')
+      const result = await runHook(
+        'setup',
+        '/repo/worktree',
+        makeRepo({
+          mode: 'override',
+          scripts: { setup: 'echo hello', archive: '' }
+        })
+      )
+
+      expect(result).toEqual({ success: true, output: '' })
+      expect(execMock).toHaveBeenCalledWith(
+        'echo hello',
+        expect.objectContaining({
+          cwd: '/repo/worktree',
+          shell: '/bin/bash'
+        }),
+        expect.any(Function)
+      )
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+      if (originalShell === undefined) {
+        delete process.env.SHELL
+      } else {
+        process.env.SHELL = originalShell
+      }
+    }
   })
 })
