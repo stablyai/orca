@@ -28,6 +28,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { BaseRefPicker } from '@/components/settings/BaseRefPicker'
+import { prStateColor } from './checks-helpers'
 import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary,
@@ -351,7 +352,6 @@ export default function SourceControl(): React.JSX.Element {
           <div className="border-b border-border px-3 py-2">
             <CompareSummary
               summary={branchSummary}
-              uncommittedCount={entries.length}
               prInfo={prInfo}
               onChangeBaseRef={() => setBaseRefDialogOpen(true)}
               onRetry={() => void refreshBranchCompare()}
@@ -494,13 +494,11 @@ export default function SourceControl(): React.JSX.Element {
 
 function CompareSummary({
   summary,
-  uncommittedCount,
   prInfo,
   onChangeBaseRef,
   onRetry
 }: {
   summary: GitBranchCompareSummary | null
-  uncommittedCount: number
   prInfo: PRInfo | null
   onChangeBaseRef: () => void
   onRetry: () => void
@@ -534,14 +532,15 @@ function CompareSummary({
 
   return (
     <div className="flex items-center gap-2 text-xs text-muted-foreground">
-      <span>{summary.changedFiles + uncommittedCount} files changed</span>
       {summary.commitsAhead !== undefined && (
         <span title={`Comparing against ${summary.baseRef}`}>
           {summary.commitsAhead} commits ahead
         </span>
       )}
       {prInfo && (
-        <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] text-foreground">
+        <span
+          className={cn('rounded border px-1.5 py-0.5 text-[11px]', prStateColor(prInfo.state))}
+        >
           PR #{prInfo.number}
         </span>
       )}
