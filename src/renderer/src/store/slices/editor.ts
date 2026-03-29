@@ -58,6 +58,16 @@ export type CombinedDiffSkippedConflict = {
   conflictKind: GitConflictKind
 }
 
+// Why: OpenFile is a single type (not a discriminated union on `mode`) because
+// the tab plumbing (reorder, close, activate) treats all tabs uniformly. However,
+// consumers that access `filePath` must be aware that conflict-review tabs use
+// the worktree root as filePath, not a real file. Any code that assumes filePath
+// points to an actual file should check `mode` first.
+//
+// `skippedConflicts` is stored directly on the tab state so the exclusion notice
+// in combined-diff views is stable for the tab's lifetime. It must NOT be
+// reconstructed from live status on every render — the live set can change
+// between polls, which would make the notice flicker or become inaccurate.
 export type OpenFile = {
   id: string // use filePath as unique key
   filePath: string // absolute path
@@ -371,6 +381,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       }
     }),
 
+  // Why: closing a tab does NOT clear Resolved locally state. If the file is
+  // still present in Changes or Staged Changes, the continuity badge should
+  // remain visible until the file leaves the sidebar, the session resets, or
+  // the file becomes live-unresolved again. trackedConflictPaths is tied to
+  // sidebar presence, not tab lifecycle.
   closeFile: (fileId) =>
     set((s) => {
       const closedFile = s.openFiles.find((f) => f.id === fileId)
@@ -669,6 +684,13 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const id = absolutePath
       const conflict = toOpenConflictMetadata(entry)
       const existing = s.openFiles.find((f) => f.id === id)
+      const nextTracked =
+        entry.conflictStatus === 'unresolved' && entry.conflictKind
+          ? {
+              ...s.trackedConflictPathsByWorktree[worktreeId],
+              [entry.path]: entry.conflictKind
+            }
+          : s.trackedConflictPathsByWorktree[worktreeId]
 
       if (!conflict) {
         return s
@@ -694,7 +716,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           activeFileId: id,
           activeTabType: 'editor',
           activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
-          activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+          activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' },
+          trackedConflictPathsByWorktree:
+            nextTracked === s.trackedConflictPathsByWorktree[worktreeId]
+              ? s.trackedConflictPathsByWorktree
+              : { ...s.trackedConflictPathsByWorktree, [worktreeId]: nextTracked }
         }
       }
 
@@ -714,10 +740,19 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         activeFileId: id,
         activeTabType: 'editor',
         activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
-        activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+        activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' },
+        trackedConflictPathsByWorktree:
+          nextTracked === s.trackedConflictPathsByWorktree[worktreeId]
+            ? s.trackedConflictPathsByWorktree
+            : { ...s.trackedConflictPathsByWorktree, [worktreeId]: nextTracked }
       }
     }),
 
+  // Why: Review conflicts is launched from Source Control into the editor area,
+  // not from Checks. Merge-conflict review is source-control work, not CI/PR
+  // status. The tab renders from a stored snapshot (entries + timestamp), not
+  // from live status on every paint, so the list is stable even if the live
+  // unresolved set changes between polls.
   openConflictReview: (worktreeId, worktreePath, entries, source) =>
     set((s) => {
       const id = `${worktreeId}::conflict-review`
@@ -844,11 +879,20 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         }
       }
     }),
+  // Why: session-local conflict tracking (trackedConflictPaths, Resolved locally
+  // state) lives entirely in the renderer and never crosses the IPC boundary.
+  // The main process returns only what `git status` reports. The renderer is
+  // responsible for setting conflictStatusSource ('git' for live u-records,
+  // 'session' for Resolved locally) and for all Resolved locally lifecycle.
   setGitStatus: (worktreeId, status) =>
     set((s) => {
       const prevEntries = s.gitStatusByWorktree[worktreeId] ?? []
       const prevOperation = s.gitConflictOperationByWorktree[worktreeId] ?? 'unknown'
       const currentTracked = { ...s.trackedConflictPathsByWorktree[worktreeId] }
+      // Why: conflictStatusSource is NOT set by the main process. The renderer
+      // stamps 'git' here for live u-records, and 'session' below when applying
+      // Resolved locally state. This keeps the main process free of session
+      // awareness while letting the renderer distinguish the two sources.
       const normalizedEntries = status.entries.map((entry) =>
         entry.conflictStatus === 'unresolved'
           ? { ...entry, conflictStatusSource: 'git' as const }
@@ -859,6 +903,13 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       )
       const unresolvedByPath = new Map(unresolvedEntries.map((entry) => [entry.path, entry]))
 
+      // Why: when the operation is aborted (git merge --abort, etc.), all u-records
+      // disappear and the HEAD file is cleaned up simultaneously. We detect this as
+      // the operation transitioning to 'unknown' with zero unresolved entries. In
+      // this case we clear the entire trackedConflictPaths set rather than
+      // transitioning each path to Resolved locally — abort is NOT resolution, and
+      // showing "Resolved locally" on every previously-conflicted file after an
+      // abort would be misleading.
       if (
         status.conflictOperation === 'unknown' &&
         prevOperation !== 'unknown' &&
@@ -1064,6 +1115,10 @@ function toOpenConflictMetadata(entry: GitStatusEntry): OpenConflictMetadata | u
       }
 }
 
+// Why: equality checks comparing only path/status/area are insufficient. A row
+// can change from unresolved to resolved_locally (or vice versa) without its
+// base GitFileStatus changing. Without checking conflictKind, conflictStatus,
+// and conflictStatusSource here, the affected row would remain visually stale.
 function areGitStatusEntriesEqual(prev: GitStatusEntry[], next: GitStatusEntry[]): boolean {
   return (
     prev.length === next.length &&

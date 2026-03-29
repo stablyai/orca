@@ -141,6 +141,9 @@ async function parseUnmergedEntry(
   const modeStage2 = parts[4]
   const modeStage3 = parts[5]
 
+  // Why: submodule conflicts (mode 160000) are out of scope for v1.
+  // Presenting them with normal file-conflict UX would be misleading because
+  // submodule resolution requires different Git commands and user mental model.
   if ([modeStage1, modeStage2, modeStage3].some((mode) => mode === '160000')) {
     return null
   }
@@ -150,6 +153,9 @@ async function parseUnmergedEntry(
     return null
   }
 
+  // Why: porcelain v2 `u` records do not provide rename-origin metadata (unlike
+  // `2` records), so oldPath is intentionally omitted. v1 should not promise
+  // rename ancestry in conflict rows without a separate Git query.
   return {
     path: filePath,
     area: 'unstaged',
@@ -180,6 +186,16 @@ function parseConflictKind(xy: string): GitConflictKind | null {
   }
 }
 
+// Why: the `status` field on conflict entries is a *rendering compatibility*
+// choice for existing icon/color plumbing, not a semantic claim about the file.
+// The conflict badge and subtype carry the real meaning. We use 'modified' when
+// a working-tree file exists and 'deleted' when it does not, so that downstream
+// consumers (file explorer decorations, tab badges) get a reasonable fallback
+// without needing conflict-aware upgrades in v1.
+//
+// For `deleted_by_us` / `deleted_by_them` and the `added_by_*` variants, Git's
+// behavior depends on the merge strategy, so we check the filesystem rather
+// than hardcoding an assumption.
 async function getConflictCompatibilityStatus(
   worktreePath: string,
   filePath: string,
@@ -196,10 +212,19 @@ async function getConflictCompatibilityStatus(
   try {
     return existsSync(path.join(worktreePath, filePath)) ? 'modified' : 'deleted'
   } catch {
+    // Why: if the filesystem check throws (permissions error, unmounted path,
+    // etc.), 'modified' is the safer fallback. It avoids suppressing the row
+    // from the sidebar and avoids a misleading 'deleted' when we simply could
+    // not check. The conflict badge still carries the real semantics.
     return 'modified'
   }
 }
 
+// Why: there is an inherent race between the `git status` call and these
+// fs.existsSync checks — the HEAD file may not yet exist or may already be
+// cleaned up by the time we check. In that case we fall back to 'unknown' for
+// one poll cycle, which is acceptable. The renderer uses this to label the
+// merge summary ("Merge conflicts" vs "Rebase conflicts" vs generic "Conflicts").
 async function detectConflictOperation(worktreePath: string): Promise<GitConflictOperation> {
   const gitDir = await resolveGitDir(worktreePath)
   const mergeHead = path.join(gitDir, 'MERGE_HEAD')

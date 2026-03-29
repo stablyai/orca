@@ -126,6 +126,42 @@ describe('createEditorSlice markdown preview state', () => {
 })
 
 describe('createEditorSlice conflict status reconciliation', () => {
+  it('tracks unresolved conflicts when opened through the conflict-safe entry point', () => {
+    const store = createEditorStore()
+
+    store.getState().openConflictFile(
+      'wt-1',
+      '/repo',
+      {
+        path: 'src/conflict.ts',
+        status: 'modified',
+        area: 'unstaged',
+        conflictKind: 'both_modified',
+        conflictStatus: 'unresolved',
+        conflictStatusSource: 'git'
+      },
+      'typescript'
+    )
+    store.getState().setGitStatus('wt-1', {
+      conflictOperation: 'merge',
+      entries: [{ path: 'src/conflict.ts', status: 'modified', area: 'staged' }]
+    })
+
+    expect(store.getState().trackedConflictPathsByWorktree['wt-1']).toEqual({
+      'src/conflict.ts': 'both_modified'
+    })
+    expect(store.getState().gitStatusByWorktree['wt-1']).toEqual([
+      {
+        path: 'src/conflict.ts',
+        status: 'modified',
+        area: 'staged',
+        conflictKind: 'both_modified',
+        conflictStatus: 'resolved_locally',
+        conflictStatusSource: 'session'
+      }
+    ])
+  })
+
   it('marks tracked conflicts as resolved locally after live conflict state disappears', () => {
     const store = createEditorStore()
 

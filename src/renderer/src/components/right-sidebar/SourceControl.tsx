@@ -82,6 +82,10 @@ const CONFLICT_KIND_LABELS: Record<GitConflictKind, string> = {
   both_deleted: 'Both deleted'
 }
 
+// Why: hint text is derived at render time in the renderer, not returned by the
+// main process on GitUncommittedEntry. This keeps UI copy out of the IPC layer
+// and the main-process parser. See also ConflictComponents.tsx for the editor-
+// side copy of this map.
 const CONFLICT_HINT_MAP: Record<GitConflictKind, string> = {
   both_modified: 'Open and edit the final contents',
   both_added: 'Choose which version to keep, or combine them',
@@ -297,6 +301,12 @@ export default function SourceControl(): React.JSX.Element {
       if (!activeWorktreeId || !worktreePath) {
         return
       }
+      // Why: unresolved conflicts must NOT go through openDiff(). The current
+      // diff pipeline reads normal index and worktree content, not merge stages,
+      // so routing conflicts into the two-way diff viewer would show misleading
+      // content. Instead, we use the conflict-aware open path (openConflictFile)
+      // which opens an editable file view or a placeholder, depending on whether
+      // a working-tree file exists.
       if (entry.conflictKind && entry.conflictStatus) {
         if (entry.conflictStatus === 'unresolved') {
           trackConflictPath(activeWorktreeId, entry.path, entry.conflictKind)
@@ -847,6 +857,15 @@ function UncommittedEntryRow({
   const isResolvedLocally = entry.conflictStatus === 'resolved_locally'
   const conflictLabel = entry.conflictKind ? CONFLICT_KIND_LABELS[entry.conflictKind] : null
   const conflictHint = entry.conflictKind ? CONFLICT_HINT_MAP[entry.conflictKind] : null
+  // Why: Stage is suppressed for unresolved conflicts because `git add` would
+  // immediately erase the `u` record — the only live conflict signal in the
+  // sidebar — before the user has actually reviewed the file. The user should
+  // resolve in the editor first, then stage from the post-resolution state.
+  //
+  // Discard is hidden for both unresolved AND resolved_locally rows in v1.
+  // For unresolved: discarding is too easy to misfire on a high-risk file.
+  // For resolved_locally: discarding can silently re-create the conflict or
+  // lose the resolution, and v1 does not have UX to explain this clearly.
   const canDiscard =
     !isUnresolvedConflict &&
     !isResolvedLocally &&
@@ -878,7 +897,9 @@ function UncommittedEntryRow({
         <div className="min-w-0 flex-1 text-xs">
           <div className="flex items-center gap-1.5">
             <span className="min-w-0 truncate text-foreground">{fileName}</span>
-            {dirPath && <span className="truncate text-[11px] text-muted-foreground">{dirPath}</span>}
+            {dirPath && (
+              <span className="truncate text-[11px] text-muted-foreground">{dirPath}</span>
+            )}
           </div>
           {conflictLabel && conflictHint && (
             <div className="truncate text-[11px] text-muted-foreground">
