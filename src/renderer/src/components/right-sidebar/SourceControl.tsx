@@ -28,7 +28,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { BaseRefPicker } from '@/components/settings/BaseRefPicker'
-import { prStateColor } from './checks-helpers'
+import { PullRequestIcon } from './checks-helpers'
 import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary,
@@ -347,17 +347,27 @@ export default function SourceControl(): React.JSX.Element {
             </button>
           ))}
           {prInfo && (
-            <button
-              type="button"
-              className={cn(
-                'ml-auto mb-1.5 rounded border px-1.5 py-0.5 text-[11px] cursor-pointer hover:opacity-80 transition-opacity',
-                prStateColor(prInfo.state)
-              )}
-              onClick={() => window.api.shell.openUrl(prInfo.url)}
-              title={prInfo.title}
-            >
-              PR #{prInfo.number}
-            </button>
+            <div className="ml-auto mb-1.5 flex items-center gap-1.5 min-w-0 text-[11.5px] leading-none">
+              <PullRequestIcon
+                className={cn(
+                  'size-3 shrink-0',
+                  prInfo.state === 'merged' && 'text-purple-500/80',
+                  prInfo.state === 'open' && 'text-emerald-500/80',
+                  prInfo.state === 'closed' && 'text-muted-foreground/60',
+                  prInfo.state === 'draft' && 'text-muted-foreground/50'
+                )}
+              />
+              <a
+                href={prInfo.url}
+                target="_blank"
+                rel="noreferrer"
+                className="text-foreground opacity-80 font-medium shrink-0 hover:text-foreground hover:underline"
+                onClick={(e) => e.stopPropagation()}
+              >
+                PR #{prInfo.number}
+              </a>
+              <span className="text-muted-foreground truncate">{prInfo.title}</span>
+            </div>
           )}
         </div>
 
