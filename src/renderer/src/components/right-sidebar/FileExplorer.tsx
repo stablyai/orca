@@ -5,6 +5,7 @@ import { useAppStore } from '@/store'
 import { detectLanguage } from '@/lib/language-detect'
 import { joinPath, normalizeRelativePath } from '@/lib/path'
 import { cn } from '@/lib/utils'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import type { GitFileStatus } from '../../../../shared/types'
 import { splitPathSegments } from './path-tree'
 import {
@@ -268,9 +269,10 @@ export default function FileExplorer(): React.JSX.Element {
   }
 
   return (
-    <div
-      ref={scrollRef}
-      className="h-full min-h-0 overflow-auto scrollbar-sleek py-2"
+    <ScrollArea
+      className="h-full min-h-0"
+      viewportRef={scrollRef}
+      viewportClassName="h-full min-h-0 py-2"
       onWheelCapture={handleWheelCapture}
     >
       <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
@@ -354,6 +356,6 @@ export default function FileExplorer(): React.JSX.Element {
           )
         })}
       </div>
-    </div>
+    </ScrollArea>
   )
 }
