@@ -211,25 +211,24 @@ export default function ChecksPanel(): React.JSX.Element {
   // ── Empty state ──
   if (!worktree) {
     return (
-      <div className="flex items-center justify-center h-full text-[11px] text-muted-foreground px-4 text-center">
-        Select a worktree to view PR checks
+      <div className="px-4 py-6">
+        <div className="text-sm font-medium text-foreground">No worktree selected</div>
+        <div className="mt-1 text-xs text-muted-foreground">
+          Select a worktree to view PR checks
+        </div>
       </div>
     )
   }
 
   if (!pr) {
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-3 px-4 text-center">
-        <PullRequestIcon className="size-8 text-muted-foreground/30" />
-        <div className="text-[11px] text-muted-foreground">
-          No pull request found for this branch
-        </div>
-        <div className="text-[10px] text-muted-foreground/60">
+      <div className="px-4 py-6">
+        <div className="text-sm font-medium text-foreground">No pull request found</div>
+        <div className="mt-1 text-xs text-muted-foreground">
           Push your branch and open a PR to see checks here
         </div>
         <button
-          className="p-1.5 rounded-md hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-          title="Refresh"
+          className="mt-3 px-3 py-1 text-xs font-medium rounded-md border border-border bg-accent/50 text-foreground hover:bg-accent transition-colors disabled:opacity-50"
           disabled={emptyRefreshing}
           onClick={() => {
             if (!activeWorktreeId) {
@@ -241,7 +240,7 @@ export default function ChecksPanel(): React.JSX.Element {
             })
           }}
         >
-          <RefreshCw className={cn('size-4', emptyRefreshing && 'animate-spin')} />
+          {emptyRefreshing ? 'Refreshing…' : 'Refresh'}
         </button>
       </div>
     )
