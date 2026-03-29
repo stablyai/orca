@@ -330,7 +330,7 @@ export default function SourceControl(): React.JSX.Element {
   return (
     <>
       <div className="flex h-full flex-col overflow-hidden">
-        <div className="flex px-3 pt-2 border-b border-border">
+        <div className="flex items-center px-3 pt-2 border-b border-border">
           {(['all', 'uncommitted'] as const).map((value) => (
             <button
               key={value}
@@ -346,13 +346,25 @@ export default function SourceControl(): React.JSX.Element {
               {value === 'all' ? 'All' : 'Uncommitted'}
             </button>
           ))}
+          {prInfo && (
+            <button
+              type="button"
+              className={cn(
+                'ml-auto mb-1.5 rounded border px-1.5 py-0.5 text-[11px] cursor-pointer hover:opacity-80 transition-opacity',
+                prStateColor(prInfo.state)
+              )}
+              onClick={() => window.api.shell.openUrl(prInfo.url)}
+              title={prInfo.title}
+            >
+              PR #{prInfo.number}
+            </button>
+          )}
         </div>
 
         {scope === 'all' && (
           <div className="border-b border-border px-3 py-2">
             <CompareSummary
               summary={branchSummary}
-              prInfo={prInfo}
               onChangeBaseRef={() => setBaseRefDialogOpen(true)}
               onRetry={() => void refreshBranchCompare()}
             />
@@ -494,12 +506,10 @@ export default function SourceControl(): React.JSX.Element {
 
 function CompareSummary({
   summary,
-  prInfo,
   onChangeBaseRef,
   onRetry
 }: {
   summary: GitBranchCompareSummary | null
-  prInfo: PRInfo | null
   onChangeBaseRef: () => void
   onRetry: () => void
 }): React.JSX.Element {
@@ -535,13 +545,6 @@ function CompareSummary({
       {summary.commitsAhead !== undefined && (
         <span title={`Comparing against ${summary.baseRef}`}>
           {summary.commitsAhead} commits ahead
-        </span>
-      )}
-      {prInfo && (
-        <span
-          className={cn('rounded border px-1.5 py-0.5 text-[11px]', prStateColor(prInfo.state))}
-        >
-          PR #{prInfo.number}
         </span>
       )}
       <TooltipProvider delayDuration={400}>
