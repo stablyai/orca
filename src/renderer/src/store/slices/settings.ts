@@ -24,7 +24,16 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
     try {
       await window.api.settings.set(updates)
       set((s) => ({
-        settings: s.settings ? { ...s.settings, ...updates } : null
+        settings: s.settings
+          ? {
+              ...s.settings,
+              ...updates,
+              notifications: {
+                ...s.settings.notifications,
+                ...updates.notifications
+              }
+            }
+          : null
       }))
     } catch (err) {
       console.error('Failed to update settings:', err)

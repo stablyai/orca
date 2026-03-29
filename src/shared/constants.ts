@@ -1,5 +1,6 @@
 import type {
   GlobalSettings,
+  NotificationSettings,
   PersistedState,
   PersistedUIState,
   RepoHookSettings,
@@ -18,6 +19,15 @@ export const REPO_COLORS = [
   '#8b5cf6', // purple
   '#ec4899' // pink
 ] as const
+
+export function getDefaultNotificationSettings(): NotificationSettings {
+  return {
+    enabled: true,
+    agentTaskComplete: true,
+    terminalBell: false,
+    suppressWhenFocused: true
+  }
+}
 
 export function getDefaultSettings(homedir: string): GlobalSettings {
   return {
@@ -40,7 +50,8 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalPaneOpacityTransitionMs: 140,
     terminalDividerThicknessPx: 1,
     terminalScrollbackBytes: 10_000_000,
-    rightSidebarOpenByDefault: true
+    rightSidebarOpenByDefault: true,
+    notifications: getDefaultNotificationSettings()
   }
 }
 

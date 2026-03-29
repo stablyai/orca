@@ -68,7 +68,7 @@ export type IpcPtyTransportOptions = {
   onTitleChange?: (title: string) => void
   onPtySpawn?: (ptyId: string) => void
   onBell?: () => void
-  onAgentBecameIdle?: () => void
+  onAgentBecameIdle?: (title: string) => void
 }
 
 export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTransport {

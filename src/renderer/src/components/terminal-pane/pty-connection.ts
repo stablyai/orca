@@ -14,6 +14,10 @@ type PtyConnectionDeps = {
   updateTabTitle: (tabId: string, title: string) => void
   updateTabPtyId: (tabId: string, ptyId: string) => void
   markWorktreeUnread: (worktreeId: string) => void
+  dispatchNotification: (event: {
+    source: 'agent-task-complete' | 'terminal-bell'
+    terminalTitle?: string
+  }) => void
 }
 
 export function connectPanePty(
@@ -36,8 +40,14 @@ export function connectPanePty(
   }
 
   const onPtySpawn = (ptyId: string): void => deps.updateTabPtyId(deps.tabId, ptyId)
-  const onBell = (): void => deps.markWorktreeUnread(deps.worktreeId)
-  const onAgentBecameIdle = (): void => deps.markWorktreeUnread(deps.worktreeId)
+  const onBell = (): void => {
+    deps.markWorktreeUnread(deps.worktreeId)
+    deps.dispatchNotification({ source: 'terminal-bell' })
+  }
+  const onAgentBecameIdle = (title: string): void => {
+    deps.markWorktreeUnread(deps.worktreeId)
+    deps.dispatchNotification({ source: 'agent-task-complete', terminalTitle: title })
+  }
 
   const transport = createIpcPtyTransport({
     cwd: deps.cwd,

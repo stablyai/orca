@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { CSSProperties } from 'react'
 import { useAppStore } from '../../store'
@@ -59,6 +59,9 @@ export default function TerminalPane({
   const updateTabPtyId = useAppStore((store) => store.updateTabPtyId)
   const clearTabPtyId = useAppStore((store) => store.clearTabPtyId)
   const markWorktreeUnread = useAppStore((store) => store.markWorktreeUnread)
+  const activeWorktreeId = useAppStore((store) => store.activeWorktreeId)
+  const repos = useAppStore((store) => store.repos)
+  const allWorktrees = useAppStore((store) => store.allWorktrees())
   const settings = useAppStore((store) => store.settings)
   const settingsRef = useRef(settings)
   settingsRef.current = settings
@@ -66,6 +69,23 @@ export default function TerminalPane({
   onPtyExitRef.current = onPtyExit
 
   const systemPrefersDark = useSystemPrefersDark()
+  const repoId = worktreeId.includes('::') ? worktreeId.slice(0, worktreeId.indexOf('::')) : ''
+  const repo = repos.find((candidate) => candidate.id === repoId) ?? null
+  const worktree = allWorktrees.find((candidate) => candidate.id === worktreeId) ?? null
+
+  const dispatchNotification = useCallback(
+    (event: { source: 'agent-task-complete' | 'terminal-bell'; terminalTitle?: string }) => {
+      void window.api.notifications.dispatch({
+        source: event.source,
+        worktreeId,
+        repoLabel: repo?.displayName,
+        worktreeLabel: worktree?.displayName || worktree?.branch || worktreeId,
+        terminalTitle: event.terminalTitle,
+        isActiveWorktree: activeWorktreeId === worktreeId
+      })
+    },
+    [activeWorktreeId, repo?.displayName, worktree?.branch, worktree?.displayName, worktreeId]
+  )
 
   const persistLayoutSnapshot = (): void => {
     const manager = managerRef.current
@@ -115,6 +135,7 @@ export default function TerminalPane({
     updateTabTitle,
     updateTabPtyId,
     markWorktreeUnread,
+    dispatchNotification,
     setTabPaneExpanded,
     setTabCanExpandPane,
     setExpandedPane,

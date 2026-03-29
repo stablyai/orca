@@ -1,6 +1,7 @@
 import type { Store } from '../persistence'
 import { registerFilesystemHandlers } from './filesystem'
 import { registerGitHubHandlers } from './github'
+import { registerNotificationHandlers } from './notifications'
 import { registerSessionHandlers } from './session'
 import { registerSettingsHandlers } from './settings'
 import { registerShellHandlers } from './shell'
@@ -13,6 +14,7 @@ import {
 
 export function registerCoreHandlers(store: Store): void {
   registerGitHubHandlers(store)
+  registerNotificationHandlers(store)
   registerSettingsHandlers(store)
   registerShellHandlers()
   registerSessionHandlers(store)

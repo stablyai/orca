@@ -168,6 +168,11 @@ const api = {
     listFonts: (): Promise<string[]> => ipcRenderer.invoke('settings:listFonts')
   },
 
+  notifications: {
+    dispatch: (args: Record<string, unknown>): Promise<{ delivered: boolean }> =>
+      ipcRenderer.invoke('notifications:dispatch', args)
+  },
+
   shell: {
     openPath: (path: string): Promise<void> => ipcRenderer.invoke('shell:openPath', path),
 
