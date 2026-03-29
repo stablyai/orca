@@ -4,9 +4,12 @@ import {
   LoaderCircle,
   CircleDashed,
   CircleMinus,
-  GitPullRequest
+  GitPullRequest,
+  AlertTriangle
 } from 'lucide-react'
-import type { PRInfo } from '../../../../shared/types'
+import { ExternalLink } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import type { PRInfo, PRMergeableState, PRCheckDetail } from '../../../../shared/types'
 
 export const PullRequestIcon = GitPullRequest
 
@@ -28,6 +31,133 @@ export const CHECK_COLOR: Record<string, string> = {
   skipped: 'text-muted-foreground/60',
   cancelled: 'text-muted-foreground/60',
   timed_out: 'text-rose-500'
+}
+
+/** Shown when GitHub reports the PR branch has merge conflicts. */
+export function MergeConflictWarning({
+  mergeable
+}: {
+  mergeable: PRMergeableState
+}): React.JSX.Element | null {
+  if (mergeable !== 'CONFLICTING') {
+    return null
+  }
+  return (
+    <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2">
+      <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-amber-500" />
+      <div>
+        <div className="text-[11px] font-medium text-foreground">
+          This branch has conflicts that must be resolved before merging
+        </div>
+        <div className="mt-0.5 text-[10px] text-muted-foreground">
+          Resolve conflicts on GitHub or locally, then push
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const CHECK_SORT_ORDER: Record<string, number> = {
+  failure: 0,
+  timed_out: 0,
+  cancelled: 1,
+  pending: 2,
+  neutral: 3,
+  skipped: 4,
+  success: 5
+}
+
+/** Renders the checks summary bar + scrollable check list. */
+export function ChecksList({
+  checks,
+  checksLoading
+}: {
+  checks: PRCheckDetail[]
+  checksLoading: boolean
+}): React.JSX.Element {
+  const sorted = [...checks].sort(
+    (a, b) =>
+      (CHECK_SORT_ORDER[a.conclusion ?? 'pending'] ?? 3) -
+      (CHECK_SORT_ORDER[b.conclusion ?? 'pending'] ?? 3)
+  )
+  const passingCount = checks.filter((c) => c.conclusion === 'success').length
+  const failingCount = checks.filter(
+    (c) => c.conclusion === 'failure' || c.conclusion === 'timed_out'
+  ).length
+  const pendingCount = checks.filter(
+    (c) => c.conclusion === 'pending' || c.conclusion === null
+  ).length
+
+  return (
+    <>
+      {/* Checks Summary */}
+      {checks.length > 0 && (
+        <div className="flex items-center gap-3 px-3 py-2 border-b border-border text-[10px] text-muted-foreground">
+          {passingCount > 0 && (
+            <span className="flex items-center gap-1">
+              <CircleCheck className="size-3 text-emerald-500" />
+              {passingCount} passing
+            </span>
+          )}
+          {failingCount > 0 && (
+            <span className="flex items-center gap-1">
+              <CircleX className="size-3 text-rose-500" />
+              {failingCount} failing
+            </span>
+          )}
+          {pendingCount > 0 && (
+            <span className="flex items-center gap-1">
+              <LoaderCircle className="size-3 text-amber-500" />
+              {pendingCount} pending
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Checks List */}
+      {checksLoading && checks.length === 0 ? (
+        <div className="flex items-center justify-center py-8">
+          <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
+        </div>
+      ) : checks.length === 0 ? (
+        <div className="flex items-center justify-center py-8 text-[11px] text-muted-foreground">
+          No checks configured
+        </div>
+      ) : (
+        <div className="py-1">
+          {sorted.map((check) => {
+            const conclusion = check.conclusion ?? 'pending'
+            const Icon = CHECK_ICON[conclusion] ?? CircleDashed
+            const color = CHECK_COLOR[conclusion] ?? 'text-muted-foreground'
+            return (
+              <div
+                key={check.name}
+                className={cn(
+                  'flex items-center gap-2 px-3 py-1.5 hover:bg-accent/40 transition-colors',
+                  check.url && 'cursor-pointer'
+                )}
+                onClick={() => {
+                  if (check.url) {
+                    window.api.shell.openUrl(check.url)
+                  }
+                }}
+              >
+                <Icon
+                  className={cn(
+                    'size-3.5 shrink-0',
+                    color,
+                    conclusion === 'pending' && 'animate-spin'
+                  )}
+                />
+                <span className="flex-1 truncate text-[12px] text-foreground">{check.name}</span>
+                {check.url && <ExternalLink className="size-3 text-muted-foreground/40 shrink-0" />}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </>
+  )
 }
 
 export function prStateColor(state: PRInfo['state']): string {

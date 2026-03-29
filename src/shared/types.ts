@@ -93,6 +93,8 @@ export type PRState = 'open' | 'closed' | 'merged' | 'draft'
 export type IssueState = 'open' | 'closed'
 export type CheckStatus = 'pending' | 'success' | 'failure' | 'neutral'
 
+export type PRMergeableState = 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN'
+
 export type PRInfo = {
   number: number
   title: string
@@ -100,6 +102,7 @@ export type PRInfo = {
   url: string
   checksStatus: CheckStatus
   updatedAt: string
+  mergeable: PRMergeableState
 }
 
 export type PRCheckDetail = {

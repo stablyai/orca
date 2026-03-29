@@ -1,19 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  CircleCheck,
-  CircleX,
-  LoaderCircle,
-  CircleDashed,
-  ExternalLink,
-  RefreshCw,
-  Check,
-  X,
-  Pencil
-} from 'lucide-react'
+import { LoaderCircle, ExternalLink, RefreshCw, Check, X, Pencil } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import PRActions from './PRActions'
-import { PullRequestIcon, CHECK_ICON, CHECK_COLOR, prStateColor } from './checks-helpers'
+import { PullRequestIcon, prStateColor, MergeConflictWarning, ChecksList } from './checks-helpers'
 import type { PRInfo, PRCheckDetail } from '../../../../shared/types'
 
 export default function ChecksPanel(): React.JSX.Element {
@@ -246,30 +236,6 @@ export default function ChecksPanel(): React.JSX.Element {
     )
   }
 
-  // ── Sorted checks: failures first, then pending, then success ──
-  const sortedChecks = [...checks].sort((a, b) => {
-    const order = {
-      failure: 0,
-      timed_out: 0,
-      cancelled: 1,
-      pending: 2,
-      neutral: 3,
-      skipped: 4,
-      success: 5
-    }
-    const aOrder = order[a.conclusion ?? 'pending'] ?? 3
-    const bOrder = order[b.conclusion ?? 'pending'] ?? 3
-    return aOrder - bOrder
-  })
-
-  const passingCount = checks.filter((c) => c.conclusion === 'success').length
-  const failingCount = checks.filter(
-    (c) => c.conclusion === 'failure' || c.conclusion === 'timed_out'
-  ).length
-  const pendingCount = checks.filter(
-    (c) => c.conclusion === 'pending' || c.conclusion === null
-  ).length
-
   return (
     <div className="flex-1 overflow-auto scrollbar-sleek">
       {/* PR Header */}
@@ -353,79 +319,17 @@ export default function ChecksPanel(): React.JSX.Element {
           </div>
         )}
 
+        {/* Merge conflict warning — surfaced from GitHub's mergeable state so the
+           user knows they must resolve conflicts before the PR can merge. */}
+        <MergeConflictWarning mergeable={pr.mergeable} />
+
         {/* Merge / Delete Worktree actions */}
         {worktree && repo && (
           <PRActions pr={pr} repo={repo} worktree={worktree} onRefreshPR={handleRefreshPR} />
         )}
       </div>
 
-      {/* Checks Summary */}
-      {checks.length > 0 && (
-        <div className="flex items-center gap-3 px-3 py-2 border-b border-border text-[10px] text-muted-foreground">
-          {passingCount > 0 && (
-            <span className="flex items-center gap-1">
-              <CircleCheck className="size-3 text-emerald-500" />
-              {passingCount} passing
-            </span>
-          )}
-          {failingCount > 0 && (
-            <span className="flex items-center gap-1">
-              <CircleX className="size-3 text-rose-500" />
-              {failingCount} failing
-            </span>
-          )}
-          {pendingCount > 0 && (
-            <span className="flex items-center gap-1">
-              <LoaderCircle className="size-3 text-amber-500" />
-              {pendingCount} pending
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Checks List */}
-      {checksLoading && checks.length === 0 ? (
-        <div className="flex items-center justify-center py-8">
-          <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
-        </div>
-      ) : checks.length === 0 ? (
-        <div className="flex items-center justify-center py-8 text-[11px] text-muted-foreground">
-          No checks configured
-        </div>
-      ) : (
-        <div className="py-1">
-          {sortedChecks.map((check) => {
-            const conclusion = check.conclusion ?? 'pending'
-            const Icon = CHECK_ICON[conclusion] ?? CircleDashed
-            const color = CHECK_COLOR[conclusion] ?? 'text-muted-foreground'
-
-            return (
-              <div
-                key={check.name}
-                className={cn(
-                  'flex items-center gap-2 px-3 py-1.5 hover:bg-accent/40 transition-colors',
-                  check.url && 'cursor-pointer'
-                )}
-                onClick={() => {
-                  if (check.url) {
-                    window.api.shell.openUrl(check.url)
-                  }
-                }}
-              >
-                <Icon
-                  className={cn(
-                    'size-3.5 shrink-0',
-                    color,
-                    conclusion === 'pending' && 'animate-spin'
-                  )}
-                />
-                <span className="flex-1 truncate text-[12px] text-foreground">{check.name}</span>
-                {check.url && <ExternalLink className="size-3 text-muted-foreground/40 shrink-0" />}
-              </div>
-            )
-          })}
-        </div>
-      )}
+      <ChecksList checks={checks} checksLoading={checksLoading} />
     </div>
   )
 }

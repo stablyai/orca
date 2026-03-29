@@ -32,7 +32,8 @@ describe('getPRForBranch', () => {
             url: 'https://github.com/acme/widgets/pull/42',
             statusCheckRollup: [],
             updatedAt: '2026-03-28T00:00:00Z',
-            isDraft: false
+            isDraft: false,
+            mergeable: 'MERGEABLE'
           }
         ])
       })
@@ -58,12 +59,13 @@ describe('getPRForBranch', () => {
         '--limit',
         '1',
         '--json',
-        'number,title,state,url,statusCheckRollup,updatedAt,isDraft'
+        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable'
       ],
       { cwd: '/repo-root', encoding: 'utf-8' }
     )
     expect(pr?.number).toBe(42)
     expect(pr?.state).toBe('open')
+    expect(pr?.mergeable).toBe('MERGEABLE')
   })
 
   it('falls back to gh pr view when the remote cannot be resolved to GitHub', async () => {
@@ -75,7 +77,8 @@ describe('getPRForBranch', () => {
         url: 'https://example.com/pr/7',
         statusCheckRollup: [],
         updatedAt: '2026-03-28T00:00:00Z',
-        isDraft: true
+        isDraft: true,
+        mergeable: 'CONFLICTING'
       })
     })
 
@@ -89,12 +92,13 @@ describe('getPRForBranch', () => {
         'view',
         'feature/test',
         '--json',
-        'number,title,state,url,statusCheckRollup,updatedAt,isDraft'
+        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable'
       ],
       { cwd: '/non-github-repo', encoding: 'utf-8' }
     )
     expect(pr?.number).toBe(7)
     expect(pr?.state).toBe('draft')
+    expect(pr?.mergeable).toBe('CONFLICTING')
   })
 
   it('returns null for empty branch (e.g. during rebase with detached HEAD)', async () => {

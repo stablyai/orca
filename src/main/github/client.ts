@@ -1,6 +1,6 @@
 import { execFile } from 'child_process'
 import { promisify } from 'util'
-import type { PRInfo, IssueInfo, PRCheckDetail } from '../../shared/types'
+import type { PRInfo, PRMergeableState, IssueInfo, PRCheckDetail } from '../../shared/types'
 import {
   mapCheckRunRESTStatus,
   mapCheckRunRESTConclusion,
@@ -94,6 +94,7 @@ export async function getPRForBranch(repoPath: string, branch: string): Promise<
       statusCheckRollup: unknown[]
       updatedAt: string
       isDraft?: boolean
+      mergeable: string
     } | null = null
 
     if (ownerRepo) {
@@ -111,7 +112,7 @@ export async function getPRForBranch(repoPath: string, branch: string): Promise<
           '--limit',
           '1',
           '--json',
-          'number,title,state,url,statusCheckRollup,updatedAt,isDraft'
+          'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable'
         ],
         {
           cwd: repoPath,
@@ -128,7 +129,7 @@ export async function getPRForBranch(repoPath: string, branch: string): Promise<
           'view',
           branchName,
           '--json',
-          'number,title,state,url,statusCheckRollup,updatedAt,isDraft'
+          'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable'
         ],
         {
           cwd: repoPath,
@@ -148,7 +149,8 @@ export async function getPRForBranch(repoPath: string, branch: string): Promise<
       state: mapPRState(data.state, data.isDraft),
       url: data.url,
       checksStatus: deriveCheckStatus(data.statusCheckRollup),
-      updatedAt: data.updatedAt
+      updatedAt: data.updatedAt,
+      mergeable: (data.mergeable as PRMergeableState) ?? 'UNKNOWN'
     }
   } catch {
     return null
