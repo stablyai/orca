@@ -671,7 +671,7 @@ function UncommittedEntryRow({
 
   return (
     <div
-      className="group flex cursor-pointer items-center gap-1.5 pl-7 pr-3 py-1 transition-colors hover:bg-accent/40"
+      className="group flex cursor-pointer items-center gap-1 pl-5 pr-3 py-1 transition-colors hover:bg-accent/40"
       draggable
       onDragStart={(e) => {
         const absolutePath = joinPath(worktreePath, entry.path)
@@ -680,13 +680,13 @@ function UncommittedEntryRow({
       }}
       onClick={onOpen}
     >
-      <StatusIcon className="size-4 shrink-0" style={{ color: STATUS_COLORS[entry.status] }} />
-      <span className="min-w-0 flex-1 truncate text-[13px]">
+      <StatusIcon className="size-3.5 shrink-0" style={{ color: STATUS_COLORS[entry.status] }} />
+      <span className="min-w-0 flex-1 truncate text-xs">
         <span className="text-foreground">{fileName}</span>
-        {dirPath && <span className="ml-1.5 text-xs text-muted-foreground">{dirPath}</span>}
+        {dirPath && <span className="ml-1.5 text-[11px] text-muted-foreground">{dirPath}</span>}
       </span>
       <span
-        className="w-4 shrink-0 text-center text-[11px] font-bold"
+        className="w-4 shrink-0 text-center text-[10px] font-bold"
         style={{ color: STATUS_COLORS[entry.status] }}
       >
         {STATUS_LABELS[entry.status]}
@@ -747,16 +747,16 @@ function BranchEntryRow({
 
   return (
     <div
-      className="group flex cursor-pointer items-center gap-1.5 pl-7 pr-3 py-1 transition-colors hover:bg-accent/40"
+      className="group flex cursor-pointer items-center gap-1 pl-5 pr-3 py-1 transition-colors hover:bg-accent/40"
       onClick={onOpen}
     >
-      <StatusIcon className="size-4 shrink-0" style={{ color: STATUS_COLORS[entry.status] }} />
-      <span className="min-w-0 flex-1 truncate text-[13px]">
+      <StatusIcon className="size-3.5 shrink-0" style={{ color: STATUS_COLORS[entry.status] }} />
+      <span className="min-w-0 flex-1 truncate text-xs">
         <span className="text-foreground">{fileName}</span>
-        {dirPath && <span className="ml-1.5 text-xs text-muted-foreground">{dirPath}</span>}
+        {dirPath && <span className="ml-1.5 text-[11px] text-muted-foreground">{dirPath}</span>}
       </span>
       <span
-        className="w-4 shrink-0 text-center text-[11px] font-bold"
+        className="w-4 shrink-0 text-center text-[10px] font-bold"
         style={{ color: STATUS_COLORS[entry.status] }}
       >
         {STATUS_LABELS[entry.status]}

@@ -272,7 +272,7 @@ export default function FileExplorer(): React.JSX.Element {
             >
               <button
                 className={cn(
-                  'flex items-center w-full py-1 px-2 gap-1.5 text-left text-[13px] transition-colors hover:bg-accent/60 rounded-sm',
+                  'flex items-center w-full py-1 px-2 gap-1 text-left text-xs transition-colors hover:bg-accent/60 rounded-sm',
                   isActive && !node.isDirectory && 'bg-accent text-accent-foreground'
                 )}
                 style={{ paddingLeft: `${node.depth * 16 + 8}px` }}
@@ -293,17 +293,17 @@ export default function FileExplorer(): React.JSX.Element {
                       )}
                     />
                     {isLoading ? (
-                      <Loader2 className="size-3.5 shrink-0 text-muted-foreground animate-spin" />
+                      <Loader2 className="size-3 shrink-0 text-muted-foreground animate-spin" />
                     ) : isExpanded ? (
-                      <FolderOpen className="size-3.5 shrink-0 text-muted-foreground" />
+                      <FolderOpen className="size-3 shrink-0 text-muted-foreground" />
                     ) : (
-                      <Folder className="size-3.5 shrink-0 text-muted-foreground" />
+                      <Folder className="size-3 shrink-0 text-muted-foreground" />
                     )}
                   </>
                 ) : (
                   <>
                     <span className="size-3 shrink-0" />
-                    <File className="size-3.5 shrink-0 text-muted-foreground" />
+                    <File className="size-3 shrink-0 text-muted-foreground" />
                   </>
                 )}
                 <span
