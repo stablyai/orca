@@ -1,8 +1,9 @@
-import { app, BrowserWindow, autoUpdater as nativeUpdater } from 'electron'
+import { app, BrowserWindow, autoUpdater as nativeUpdater, shell } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import { is } from '@electron-toolkit/utils'
 import type { UpdateStatus } from '../shared/types'
 import { killAllPty } from './ipc/pty'
+import { findFallbackReleaseVersion, isGitHubReleaseTransitionFailure } from './updater-fallback'
 
 let mainWindowRef: BrowserWindow | null = null
 let currentStatus: UpdateStatus = { state: 'idle' }
@@ -10,10 +11,57 @@ let userInitiatedCheck = false
 let onBeforeQuitCleanup: (() => void) | null = null
 let autoUpdaterInitialized = false
 let availableVersion: string | null = null
+let availableReleaseUrl: string | null = null
+let pendingCheckFailureKey: string | null = null
+let pendingCheckFailurePromise: Promise<void> | null = null
 /** Whether Squirrel.Mac has finished downloading the update from the localhost proxy. */
 let squirrelReady = false
 
+function clearAvailableUpdateContext(): void {
+  availableVersion = null
+  availableReleaseUrl = null
+}
+
+function statusesEqual(left: UpdateStatus, right: UpdateStatus): boolean {
+  switch (left.state) {
+    case 'idle':
+      return right.state === 'idle'
+    case 'checking':
+      return right.state === 'checking' && left.userInitiated === right.userInitiated
+    case 'not-available':
+      return right.state === 'not-available' && left.userInitiated === right.userInitiated
+    case 'available':
+      return (
+        right.state === 'available' &&
+        left.version === right.version &&
+        left.releaseUrl === right.releaseUrl &&
+        left.manualDownloadUrl === right.manualDownloadUrl
+      )
+    case 'downloading':
+      return (
+        right.state === 'downloading' &&
+        left.version === right.version &&
+        left.percent === right.percent
+      )
+    case 'downloaded':
+      return (
+        right.state === 'downloaded' &&
+        left.version === right.version &&
+        left.releaseUrl === right.releaseUrl
+      )
+    case 'error':
+      return (
+        right.state === 'error' &&
+        left.message === right.message &&
+        left.userInitiated === right.userInitiated
+      )
+  }
+}
+
 function sendStatus(status: UpdateStatus): void {
+  if (statusesEqual(currentStatus, status)) {
+    return
+  }
   currentStatus = status
   mainWindowRef?.webContents.send('updater:status', status)
 }
@@ -29,17 +77,79 @@ function sendErrorStatus(message: string, userInitiated?: boolean): void {
   sendStatus({ state: 'error', message, userInitiated })
 }
 
-function isBenignCheckFailure(message: string): boolean {
-  return message.includes('net::ERR_FAILED')
+function getKnownReleaseUrl(): string | undefined {
+  return availableReleaseUrl ?? undefined
 }
 
-function sendCheckFailureStatus(message: string, userInitiated?: boolean): void {
-  if (isBenignCheckFailure(message)) {
-    console.warn('[updater] benign check failure:', message)
-    sendStatus({ state: 'idle' })
-    return
+function isBenignCheckFailure(message: string): boolean {
+  const normalizedMessage = message.toLowerCase()
+
+  if (normalizedMessage.includes('net::err_failed')) {
+    return true
   }
-  sendErrorStatus(message, userInitiated)
+
+  // GitHub releases can briefly be in a half-published state while the
+  // release workflow is creating a draft and uploading update metadata.
+  // During that window electron-updater may fail the check even though
+  // nothing is wrong on the client side.
+  return (
+    isGitHubReleaseTransitionFailure(normalizedMessage) ||
+    normalizedMessage.includes('no published versions on github')
+  )
+}
+
+async function sendCheckFailureStatus(message: string, userInitiated?: boolean): Promise<void> {
+  const failureKey = `${userInitiated ? 'user' : 'auto'}:${message}`
+  if (pendingCheckFailureKey === failureKey && pendingCheckFailurePromise) {
+    return pendingCheckFailurePromise
+  }
+
+  const handleFailure = async (): Promise<void> => {
+    if (isBenignCheckFailure(message)) {
+      if (isGitHubReleaseTransitionFailure(message.toLowerCase())) {
+        try {
+          const fallbackRelease = await findFallbackReleaseVersion()
+          if (fallbackRelease) {
+            console.warn(
+              '[updater] using fallback GitHub release during release transition:',
+              fallbackRelease.version
+            )
+            availableVersion = fallbackRelease.version
+            availableReleaseUrl = fallbackRelease.releaseUrl
+            sendStatus({
+              state: 'available',
+              version: fallbackRelease.version,
+              releaseUrl: fallbackRelease.releaseUrl,
+              manualDownloadUrl: fallbackRelease.manualDownloadUrl
+            })
+            return
+          }
+        } catch (fallbackError) {
+          console.warn(
+            '[updater] fallback GitHub release lookup failed:',
+            String((fallbackError as Error)?.message ?? fallbackError)
+          )
+        }
+      }
+
+      console.warn('[updater] benign check failure:', message)
+      clearAvailableUpdateContext()
+      sendStatus({ state: 'idle' })
+      return
+    }
+
+    clearAvailableUpdateContext()
+    sendErrorStatus(message, userInitiated)
+  }
+
+  pendingCheckFailureKey = failureKey
+  pendingCheckFailurePromise = handleFailure().finally(() => {
+    if (pendingCheckFailureKey === failureKey) {
+      pendingCheckFailureKey = null
+      pendingCheckFailurePromise = null
+    }
+  })
+  return pendingCheckFailurePromise
 }
 
 export function getUpdateStatus(): UpdateStatus {
@@ -54,7 +164,7 @@ export function checkForUpdates(): void {
   // Don't send 'checking' here — the 'checking-for-update' event handler does it,
   // and sending it from both places causes duplicate notifications (issue #35).
   autoUpdater.checkForUpdates().catch((err) => {
-    sendCheckFailureStatus(String(err?.message ?? err))
+    void sendCheckFailureStatus(String(err?.message ?? err))
   })
 }
 
@@ -71,7 +181,7 @@ export function checkForUpdatesFromMenu(): void {
 
   autoUpdater.checkForUpdates().catch((err) => {
     userInitiatedCheck = false
-    sendCheckFailureStatus(String(err?.message ?? err), true)
+    void sendCheckFailureStatus(String(err?.message ?? err), true)
   })
 }
 
@@ -127,12 +237,17 @@ export function setupAutoUpdater(
       squirrelReady = true
       // If we were holding the 'downloaded' status, send it now
       if (availableVersion && availableVersion !== app.getVersion()) {
-        sendStatus({ state: 'downloaded', version: availableVersion })
+        sendStatus({
+          state: 'downloaded',
+          version: availableVersion,
+          releaseUrl: getKnownReleaseUrl()
+        })
       }
     })
   }
 
   autoUpdater.on('checking-for-update', () => {
+    clearAvailableUpdateContext()
     sendStatus({ state: 'checking', userInitiated: userInitiatedCheck || undefined })
   })
 
@@ -143,16 +258,19 @@ export function setupAutoUpdater(
     // With allowPrerelease enabled, electron-updater may consider the
     // current version as an "available" update (same-version match).
     if (info.version === app.getVersion()) {
+      clearAvailableUpdateContext()
       sendStatus({ state: 'not-available', userInitiated: wasUserInitiated || undefined })
       return
     }
     availableVersion = info.version
+    availableReleaseUrl = null
     sendStatus({ state: 'available', version: info.version })
   })
 
   autoUpdater.on('update-not-available', () => {
     const wasUserInitiated = userInitiatedCheck
     userInitiatedCheck = false
+    clearAvailableUpdateContext()
     sendStatus({ state: 'not-available', userInitiated: wasUserInitiated || undefined })
   })
 
@@ -167,6 +285,7 @@ export function setupAutoUpdater(
   autoUpdater.on('update-downloaded', (info) => {
     // Don't show the banner if the downloaded version is the one already running.
     if (info.version === app.getVersion()) {
+      clearAvailableUpdateContext()
       sendStatus({ state: 'not-available' })
       return
     }
@@ -180,7 +299,7 @@ export function setupAutoUpdater(
       sendStatus({ state: 'downloading', percent: 100, version: info.version })
       return
     }
-    sendStatus({ state: 'downloaded', version: info.version })
+    sendStatus({ state: 'downloaded', version: info.version, releaseUrl: getKnownReleaseUrl() })
   })
 
   autoUpdater.on('error', (err) => {
@@ -188,7 +307,7 @@ export function setupAutoUpdater(
     userInitiatedCheck = false
     const message = err?.message ?? 'Unknown error'
     if (currentStatus.state === 'checking') {
-      sendCheckFailureStatus(message, wasUserInitiated || undefined)
+      void sendCheckFailureStatus(message, wasUserInitiated || undefined)
       return
     }
     sendErrorStatus(message, wasUserInitiated || undefined)
@@ -202,6 +321,12 @@ export function setupAutoUpdater(
 
 export function downloadUpdate(): void {
   if (currentStatus.state !== 'available') {
+    return
+  }
+  if (currentStatus.manualDownloadUrl) {
+    shell.openExternal(currentStatus.manualDownloadUrl).catch((err) => {
+      sendErrorStatus(String(err?.message ?? err))
+    })
     return
   }
   squirrelReady = false

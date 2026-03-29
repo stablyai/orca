@@ -63,7 +63,9 @@ export function useIpcEvents(): void {
             description: createElement(
               'a',
               {
-                href: `https://github.com/stablyai/orca/releases/tag/v${status.version}`,
+                href:
+                  status.releaseUrl ??
+                  `https://github.com/stablyai/orca/releases/tag/v${status.version}`,
                 target: '_blank',
                 rel: 'noopener noreferrer',
                 style: { textDecoration: 'underline' }
@@ -72,7 +74,7 @@ export function useIpcEvents(): void {
             ),
             duration: Infinity,
             action: {
-              label: 'Install',
+              label: status.manualDownloadUrl ? 'Download' : 'Install',
               onClick: () => window.api.updater.download()
             }
           })
@@ -95,7 +97,9 @@ export function useIpcEvents(): void {
             description: createElement(
               'a',
               {
-                href: `https://github.com/stablyai/orca/releases/tag/v${status.version}`,
+                href:
+                  status.releaseUrl ??
+                  `https://github.com/stablyai/orca/releases/tag/v${status.version}`,
                 target: '_blank',
                 rel: 'noopener noreferrer',
                 style: { textDecoration: 'underline' }

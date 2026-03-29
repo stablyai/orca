@@ -145,10 +145,15 @@ export type RepoHookSettings = {
 export type UpdateStatus =
   | { state: 'idle' }
   | { state: 'checking'; userInitiated?: boolean }
-  | { state: 'available'; version: string }
+  | {
+      state: 'available'
+      version: string
+      releaseUrl?: string
+      manualDownloadUrl?: string
+    }
   | { state: 'not-available'; userInitiated?: boolean }
   | { state: 'downloading'; percent: number; version: string }
-  | { state: 'downloaded'; version: string }
+  | { state: 'downloaded'; version: string; releaseUrl?: string }
   | { state: 'error'; message: string; userInitiated?: boolean }
 
 // ─── Settings ────────────────────────────────────────────────────────

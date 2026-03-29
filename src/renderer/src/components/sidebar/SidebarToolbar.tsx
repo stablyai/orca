@@ -44,13 +44,18 @@ const SidebarToolbar = React.memo(function SidebarToolbar() {
             ) : (
               <span>
                 Update <span className="font-semibold">v{updateStatus.version}</span> available —
-                Install
+                {updateStatus.manualDownloadUrl ? ' Download' : ' Install'}
               </span>
             )}
           </button>
           {updateVersion && (
             <a
-              href={`https://github.com/stablyai/orca/releases/tag/v${updateVersion}`}
+              href={
+                (updateStatus.state === 'available' || updateStatus.state === 'downloaded') &&
+                updateStatus.releaseUrl
+                  ? updateStatus.releaseUrl
+                  : `https://github.com/stablyai/orca/releases/tag/v${updateVersion}`
+              }
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}

@@ -169,7 +169,9 @@ export function GeneralPane({
               className="gap-2"
             >
               <Download className="size-3.5" />
-              Install Update ({updateStatus.version})
+              {updateStatus.manualDownloadUrl
+                ? `Download Update (${updateStatus.version})`
+                : `Install Update (${updateStatus.version})`}
             </Button>
           ) : updateStatus.state === 'downloaded' ? (
             <Button
@@ -189,10 +191,15 @@ export function GeneralPane({
           {updateStatus.state === 'checking' && 'Checking for updates...'}
           {updateStatus.state === 'available' && (
             <>
-              Version {updateStatus.version} is available. Click &quot;Install Update&quot; to
-              download.{' '}
+              Version {updateStatus.version} is available.{' '}
+              {updateStatus.manualDownloadUrl
+                ? 'Open the download to install it manually.'
+                : 'Click "Install Update" to download it.'}{' '}
               <a
-                href={`https://github.com/stablyai/orca/releases/tag/v${updateStatus.version}`}
+                href={
+                  updateStatus.releaseUrl ??
+                  `https://github.com/stablyai/orca/releases/tag/v${updateStatus.version}`
+                }
                 target="_blank"
                 rel="noopener noreferrer"
                 className="underline hover:text-foreground"
@@ -208,7 +215,10 @@ export function GeneralPane({
             <>
               Version {updateStatus.version} is ready to install.{' '}
               <a
-                href={`https://github.com/stablyai/orca/releases/tag/v${updateStatus.version}`}
+                href={
+                  updateStatus.releaseUrl ??
+                  `https://github.com/stablyai/orca/releases/tag/v${updateStatus.version}`
+                }
                 target="_blank"
                 rel="noopener noreferrer"
                 className="underline hover:text-foreground"
