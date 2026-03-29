@@ -1,4 +1,5 @@
 import type { PaneManager, ManagedPane } from '@/lib/pane-manager/pane-manager'
+import { isGeminiTerminalTitle } from '@/lib/agent-status'
 import type { PtyTransport } from './pty-transport'
 import { createIpcPtyTransport } from './pty-transport'
 
@@ -23,6 +24,7 @@ export function connectPanePty(
 ): void {
   const onExit = (ptyId: string): void => {
     deps.clearTabPtyId(deps.tabId, ptyId)
+    manager.setPaneGpuRendering(pane.id, true)
     const panes = manager.getPanes()
     if (panes.length <= 1) {
       deps.onPtyExitRef.current(ptyId)
@@ -31,7 +33,8 @@ export function connectPanePty(
     manager.closePane(pane.id)
   }
 
-  const onTitleChange = (title: string): void => {
+  const onTitleChange = (title: string, rawTitle: string): void => {
+    manager.setPaneGpuRendering(pane.id, !isGeminiTerminalTitle(rawTitle))
     deps.updateTabTitle(deps.tabId, title)
   }
 

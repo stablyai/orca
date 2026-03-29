@@ -209,6 +209,32 @@ export class PaneManager {
     applyRootBackground(this.root, this.styleOptions)
   }
 
+  setPaneGpuRendering(paneId: number, enabled: boolean): void {
+    const pane = this.panes.get(paneId)
+    if (!pane) {
+      return
+    }
+
+    pane.gpuRenderingEnabled = enabled
+
+    if (!enabled) {
+      if (pane.webglAddon) {
+        try {
+          pane.webglAddon.dispose()
+        } catch {
+          /* ignore */
+        }
+        pane.webglAddon = null
+      }
+      return
+    }
+
+    if (!pane.webglAddon) {
+      attachWebgl(pane)
+      safeFit(pane)
+    }
+  }
+
   /**
    * Suspend GPU rendering for all panes. Disposes WebGL addons to free
    * GPU contexts while keeping Terminal instances alive (scrollback, cursor,
@@ -233,7 +259,7 @@ export class PaneManager {
    */
   resumeRendering(): void {
     for (const pane of this.panes.values()) {
-      if (!pane.webglAddon) {
+      if (pane.gpuRenderingEnabled && !pane.webglAddon) {
         attachWebgl(pane)
       }
     }

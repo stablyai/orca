@@ -17,6 +17,7 @@ import { safeFit } from './pane-tree-ops'
 // ---------------------------------------------------------------------------
 
 const TERMINAL_PADDING = 4
+const ENABLE_WEBGL_RENDERER = true
 
 export function createPaneDOM(
   id: number,
@@ -102,6 +103,7 @@ export function createPaneDOM(
     container,
     xtermContainer,
     linkTooltip,
+    gpuRenderingEnabled: ENABLE_WEBGL_RENDERER,
     fitAddon,
     searchAddon,
     unicode11Addon,
@@ -146,8 +148,9 @@ export function openTerminal(pane: ManagedPaneInternal): void {
   // Activate unicode 11
   terminal.unicode.activeVersion = '11'
 
-  // Attach GPU renderer
-  attachWebgl(pane)
+  if (pane.gpuRenderingEnabled) {
+    attachWebgl(pane)
+  }
 
   // Initial fit (deferred to ensure layout has settled)
   requestAnimationFrame(() => {
@@ -156,6 +159,10 @@ export function openTerminal(pane: ManagedPaneInternal): void {
 }
 
 export function attachWebgl(pane: ManagedPaneInternal): void {
+  if (!ENABLE_WEBGL_RENDERER || !pane.gpuRenderingEnabled) {
+    pane.webglAddon = null
+    return
+  }
   try {
     const webglAddon = new WebglAddon()
     webglAddon.onContextLoss(() => {

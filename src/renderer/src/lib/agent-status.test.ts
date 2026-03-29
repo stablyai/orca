@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   detectAgentStatusFromTitle,
   clearWorkingIndicators,
-  createAgentStatusTracker
+  createAgentStatusTracker,
+  isGeminiTerminalTitle,
+  normalizeTerminalTitle
 } from './agent-status'
 import { extractLastOscTitle } from '../components/terminal-pane/pty-transport'
 
@@ -185,6 +187,36 @@ describe('clearWorkingIndicators', () => {
   it('returns original title if no working indicators found', () => {
     expect(clearWorkingIndicators('* claude')).toBe('* claude')
     expect(clearWorkingIndicators('Terminal 1')).toBe('Terminal 1')
+  })
+})
+
+describe('normalizeTerminalTitle', () => {
+  it('collapses Gemini working titles to a stable label', () => {
+    expect(normalizeTerminalTitle('✦  Typing prompt... (workspace)')).toBe('✦ Gemini CLI')
+    expect(normalizeTerminalTitle('⏲  Working… (workspace)')).toBe('✦ Gemini CLI')
+  })
+
+  it('collapses Gemini idle and permission titles to stable labels', () => {
+    expect(normalizeTerminalTitle('◇  Ready (workspace)')).toBe('◇ Gemini CLI')
+    expect(normalizeTerminalTitle('✋  Action Required (workspace)')).toBe('✋ Gemini CLI')
+  })
+
+  it('leaves non-Gemini titles unchanged', () => {
+    expect(normalizeTerminalTitle('⠂ Claude Code')).toBe('⠂ Claude Code')
+    expect(normalizeTerminalTitle('bash')).toBe('bash')
+  })
+})
+
+describe('isGeminiTerminalTitle', () => {
+  it('detects Gemini titles by symbol or name', () => {
+    expect(isGeminiTerminalTitle('✦  Typing prompt... (workspace)')).toBe(true)
+    expect(isGeminiTerminalTitle('◇  Ready (workspace)')).toBe(true)
+    expect(isGeminiTerminalTitle('gemini waiting for input')).toBe(true)
+  })
+
+  it('does not match other terminal titles', () => {
+    expect(isGeminiTerminalTitle('⠂ Claude Code')).toBe(false)
+    expect(isGeminiTerminalTitle('bash')).toBe(false)
   })
 })
 

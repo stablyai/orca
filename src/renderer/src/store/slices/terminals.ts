@@ -150,11 +150,18 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
 
   updateTabTitle: (tabId, title) => {
     set((s) => {
+      let changed = false
       const next = { ...s.tabsByWorktree }
       for (const wId of Object.keys(next)) {
-        next[wId] = next[wId].map((t) => (t.id === tabId ? { ...t, title } : t))
+        next[wId] = next[wId].map((t) => {
+          if (t.id !== tabId || t.title === title) {
+            return t
+          }
+          changed = true
+          return { ...t, title }
+        })
       }
-      return { tabsByWorktree: next }
+      return changed ? { tabsByWorktree: next } : s
     })
   },
 

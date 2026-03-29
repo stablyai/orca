@@ -1,7 +1,8 @@
 import {
   detectAgentStatusFromTitle,
   clearWorkingIndicators,
-  createAgentStatusTracker
+  createAgentStatusTracker,
+  normalizeTerminalTitle
 } from '@/lib/agent-status'
 
 export type PtyTransport = {
@@ -65,7 +66,7 @@ export function extractLastOscTitle(data: string): string | null {
 export type IpcPtyTransportOptions = {
   cwd?: string
   onPtyExit?: (ptyId: string) => void
-  onTitleChange?: (title: string) => void
+  onTitleChange?: (title: string, rawTitle: string) => void
   onPtySpawn?: (ptyId: string) => void
   onBell?: () => void
   onAgentBecameIdle?: () => void
@@ -132,8 +133,8 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
                 clearTimeout(staleTitleTimer)
                 staleTitleTimer = null
               }
-              lastEmittedTitle = title
-              onTitleChange(title)
+              lastEmittedTitle = normalizeTerminalTitle(title)
+              onTitleChange(lastEmittedTitle, title)
               agentTracker?.handleTitle(title)
             } else if (
               lastEmittedTitle &&
@@ -152,7 +153,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
                 ) {
                   const cleared = clearWorkingIndicators(lastEmittedTitle)
                   lastEmittedTitle = cleared
-                  onTitleChange(cleared)
+                  onTitleChange(cleared, cleared)
                 }
               }, STALE_TITLE_TIMEOUT)
             }

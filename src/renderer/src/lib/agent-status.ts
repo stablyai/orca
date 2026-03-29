@@ -9,6 +9,16 @@ const GEMINI_PERMISSION = '\u270B' // ✋
 
 const AGENT_NAMES = ['claude', 'codex', 'gemini', 'opencode', 'aider']
 
+export function isGeminiTerminalTitle(title: string): boolean {
+  return (
+    title.includes(GEMINI_PERMISSION) ||
+    title.includes(GEMINI_WORKING) ||
+    title.includes(GEMINI_SILENT_WORKING) ||
+    title.includes(GEMINI_IDLE) ||
+    title.toLowerCase().includes('gemini')
+  )
+}
+
 function containsBrailleSpinner(title: string): boolean {
   for (const char of title) {
     const codePoint = char.codePointAt(0)
@@ -87,6 +97,32 @@ export function createAgentStatusTracker(onBecameIdle: () => void): {
       }
     }
   }
+}
+
+/**
+ * Normalize high-churn agent titles into stable display labels before storing
+ * them in app state. Gemini CLI can emit per-keystroke title updates, which
+ * otherwise causes broad rerenders and visible flashing.
+ */
+export function normalizeTerminalTitle(title: string): string {
+  if (!title) {
+    return title
+  }
+
+  if (isGeminiTerminalTitle(title)) {
+    const status = detectAgentStatusFromTitle(title)
+    if (status === 'permission') {
+      return `${GEMINI_PERMISSION} Gemini CLI`
+    }
+    if (status === 'working') {
+      return `${GEMINI_WORKING} Gemini CLI`
+    }
+    if (status === 'idle') {
+      return `${GEMINI_IDLE} Gemini CLI`
+    }
+  }
+
+  return title
 }
 
 export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
