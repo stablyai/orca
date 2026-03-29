@@ -9,6 +9,7 @@ import { FileDeleteDialog } from './FileDeleteDialog'
 import { FileExplorerRow } from './FileExplorerRow'
 import type { DirCache, TreeNode } from './file-explorer-types'
 import { splitPathSegments } from './path-tree'
+import { shouldIncludeFileExplorerEntry } from './file-explorer-entries'
 import { buildFolderStatusMap, buildStatusMap, STATUS_COLORS } from './status-display'
 import { useFileDeletion } from './useFileDeletion'
 import { useFileExplorerReveal } from './useFileExplorerReveal'
@@ -92,8 +93,7 @@ export default function FileExplorer(): React.JSX.Element {
       try {
         const entries = await window.api.fs.readDir({ dirPath })
         const children: TreeNode[] = entries
-          .filter((entry) => !entry.name.startsWith('.') || entry.name === '.github')
-          .filter((entry) => entry.name !== 'node_modules' && entry.name !== '.git')
+          .filter(shouldIncludeFileExplorerEntry)
           .map((entry) => ({
             name: entry.name,
             path: joinPath(dirPath, entry.name),
