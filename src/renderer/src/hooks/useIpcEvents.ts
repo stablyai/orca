@@ -6,6 +6,10 @@ import type { UpdateStatus } from '../../../shared/types'
 
 const ZOOM_STEP = 0.5
 
+function getReleaseUrl(status: Extract<UpdateStatus, { releaseUrl?: string; version: string }>): string {
+  return status.releaseUrl ?? `https://github.com/stablyai/orca/releases/tag/v${status.version}`
+}
+
 export function useIpcEvents(): void {
   useEffect(() => {
     const unsubs: (() => void)[] = []
@@ -59,13 +63,12 @@ export function useIpcEvents(): void {
             toast.dismiss(checkingToastId)
           }
           checkingToastId = undefined
+          const releaseUrl = getReleaseUrl(status)
           availableToastId = toast.info(`Version ${status.version} is available.`, {
             description: createElement(
               'a',
               {
-                href:
-                  status.releaseUrl ??
-                  `https://github.com/stablyai/orca/releases/tag/v${status.version}`,
+                href: releaseUrl,
                 target: '_blank',
                 rel: 'noopener noreferrer',
                 style: { textDecoration: 'underline' }
@@ -76,6 +79,12 @@ export function useIpcEvents(): void {
             action: {
               label: status.manualDownloadUrl ? 'Download' : 'Install',
               onClick: () => window.api.updater.download()
+            },
+            cancel: {
+              // Keep release notes in the external browser so the updater toast
+              // stays inside Orca instead of navigating the app window away.
+              label: 'View Changes',
+              onClick: () => window.api.shell.openUrl(releaseUrl)
             }
           })
         } else if (status.state === 'downloading') {
@@ -93,13 +102,12 @@ export function useIpcEvents(): void {
             availableToastId = undefined
           }
           toast.dismiss(downloadToastId)
+          const releaseUrl = getReleaseUrl(status)
           toast.success(`Version ${status.version} is ready to install.`, {
             description: createElement(
               'a',
               {
-                href:
-                  status.releaseUrl ??
-                  `https://github.com/stablyai/orca/releases/tag/v${status.version}`,
+                href: releaseUrl,
                 target: '_blank',
                 rel: 'noopener noreferrer',
                 style: { textDecoration: 'underline' }
@@ -110,6 +118,12 @@ export function useIpcEvents(): void {
             action: {
               label: 'Restart Now',
               onClick: () => window.api.updater.quitAndInstall()
+            },
+            cancel: {
+              // Keep release notes in the external browser so the updater toast
+              // stays inside Orca instead of navigating the app window away.
+              label: 'View Changes',
+              onClick: () => window.api.shell.openUrl(releaseUrl)
             }
           })
         } else if (status.state === 'error') {
