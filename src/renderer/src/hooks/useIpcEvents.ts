@@ -11,6 +11,22 @@ function getReleaseUrl(status: ReleaseToastStatus): string {
   return status.releaseUrl ?? `https://github.com/stablyai/orca/releases/tag/v${status.version}`
 }
 
+function createViewChangesButton(releaseUrl: string): ReturnType<typeof createElement> {
+  return createElement(
+    'button',
+    {
+      type: 'button',
+      'data-button': true,
+      'data-cancel': true,
+      // Sonner auto-dismisses structured cancel actions after onClick. Render a
+      // plain button instead so users can open the release notes and keep the
+      // update toast visible until they explicitly install or close it.
+      onClick: () => window.api.shell.openUrl(releaseUrl)
+    },
+    'View Changes'
+  )
+}
+
 export function useIpcEvents(): void {
   useEffect(() => {
     const unsubs: (() => void)[] = []
@@ -81,12 +97,7 @@ export function useIpcEvents(): void {
               label: status.manualDownloadUrl ? 'Download' : 'Install',
               onClick: () => window.api.updater.download()
             },
-            cancel: {
-              // Keep release notes in the external browser so the updater toast
-              // stays inside Orca instead of navigating the app window away.
-              label: 'View Changes',
-              onClick: () => window.api.shell.openUrl(releaseUrl)
-            }
+            cancel: createViewChangesButton(releaseUrl)
           })
         } else if (status.state === 'downloading') {
           if (availableToastId) {
@@ -120,12 +131,7 @@ export function useIpcEvents(): void {
               label: 'Restart Now',
               onClick: () => window.api.updater.quitAndInstall()
             },
-            cancel: {
-              // Keep release notes in the external browser so the updater toast
-              // stays inside Orca instead of navigating the app window away.
-              label: 'View Changes',
-              onClick: () => window.api.shell.openUrl(releaseUrl)
-            }
+            cancel: createViewChangesButton(releaseUrl)
           })
         } else if (status.state === 'error') {
           toast.dismiss(downloadToastId)
