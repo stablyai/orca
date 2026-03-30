@@ -225,7 +225,7 @@ export default function QuickOpen(): React.JSX.Element | null {
         </div>
 
         {/* Results list — only rendered when there is content to avoid empty padding */}
-        {(loading || query.trim()) && (
+        {(loading || query.trim() || filtered.length > 0) && (
           <div ref={listRef} className="max-h-[300px] overflow-y-auto scrollbar-sleek pb-1">
             {loading && (
               <div className="px-3 py-6 text-center text-xs text-muted-foreground">
