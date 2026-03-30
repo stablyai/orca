@@ -5,8 +5,9 @@ import { applyUIZoom } from '@/lib/ui-zoom'
 import type { UpdateStatus } from '../../../shared/types'
 
 const ZOOM_STEP = 0.5
+type ReleaseToastStatus = Extract<UpdateStatus, { state: 'available' | 'downloaded' }>
 
-function getReleaseUrl(status: Extract<UpdateStatus, { releaseUrl?: string; version: string }>): string {
+function getReleaseUrl(status: ReleaseToastStatus): string {
   return status.releaseUrl ?? `https://github.com/stablyai/orca/releases/tag/v${status.version}`
 }
 
