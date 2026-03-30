@@ -174,8 +174,12 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
     'worktrees:updateMeta',
     (_event, args: { worktreeId: string; updates: Partial<WorktreeMeta> }) => {
       const meta = store.setWorktreeMeta(args.worktreeId, args.updates)
-      const { repoId } = parseWorktreeId(args.worktreeId)
-      notifyWorktreesChanged(mainWindow, repoId)
+      // Do NOT call notifyWorktreesChanged here. The renderer applies meta
+      // updates optimistically before calling this IPC, so a notification
+      // would trigger a redundant fetchWorktrees round-trip that bumps
+      // sortEpoch and reorders the sidebar — the exact bug PR #209 tried
+      // to fix (clicking a card would clear isUnread → updateMeta →
+      // worktrees:changed → fetchWorktrees → sortEpoch++ → re-sort).
       return meta
     }
   )

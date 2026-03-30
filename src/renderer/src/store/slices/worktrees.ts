@@ -194,11 +194,21 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       if (!worktree) {
         return {}
       }
+      // Skip sortEpoch bump for the active worktree. Terminal events
+      // (PTY spawn, PTY exit) in the active worktree are side-effects of
+      // the user clicking the card or interacting with the terminal —
+      // re-sorting the sidebar in response would cause the exact reorder-
+      // on-click bug PR #209 intended to fix (e.g. dead-PTY reconnection
+      // after generation bump triggers updateTabPtyId → here).
+      // The lastActivityAt timestamp is still persisted so that the NEXT
+      // meaningful sortEpoch bump (from a background worktree event) will
+      // include this worktree's updated score.
+      const isActive = s.activeWorktreeId === worktreeId
       return {
         worktreesByRepo: applyWorktreeUpdates(s.worktreesByRepo, worktreeId, {
           lastActivityAt: now
         }),
-        sortEpoch: s.sortEpoch + 1
+        ...(isActive ? {} : { sortEpoch: s.sortEpoch + 1 })
       }
     })
 

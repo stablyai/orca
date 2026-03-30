@@ -151,6 +151,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   updateTabTitle: (tabId, title) => {
     set((s) => {
       let changed = false
+      let ownerWorktreeId: string | null = null
       const next = { ...s.tabsByWorktree }
       for (const wId of Object.keys(next)) {
         next[wId] = next[wId].map((t) => {
@@ -158,12 +159,24 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
             return t
           }
           changed = true
+          ownerWorktreeId = wId
           return { ...t, title }
         })
       }
+      if (!changed) {
+        return s
+      }
       // Agent status is derived from terminal titles and affects sort scoring,
-      // so a title change is a meaningful event that should allow re-sort.
-      return changed ? { tabsByWorktree: next, sortEpoch: s.sortEpoch + 1 } : s
+      // so a title change is a meaningful event that should allow re-sort —
+      // but only for background worktrees. Title changes in the active
+      // worktree are side-effects of PTY reconnection during worktree
+      // activation (generation bump → TerminalPane remount → new shell →
+      // title update). Bumping sortEpoch here would reorder the sidebar
+      // on click — the exact bug PR #209 intended to fix.
+      const isActive = ownerWorktreeId === s.activeWorktreeId
+      return isActive
+        ? { tabsByWorktree: next }
+        : { tabsByWorktree: next, sortEpoch: s.sortEpoch + 1 }
     })
   },
 
