@@ -296,6 +296,10 @@ export type GitDiffBinaryResult = {
   kind: 'binary'
   originalContent: string
   modifiedContent: string
+  /** True when both sides are a recognized image format (PNG, JPG, etc.) */
+  isImage?: boolean
+  /** MIME type for image rendering, e.g. "image/png" */
+  mimeType?: string
 } & (
   | { originalIsBinary: true; modifiedIsBinary: boolean }
   | { originalIsBinary: boolean; modifiedIsBinary: true }

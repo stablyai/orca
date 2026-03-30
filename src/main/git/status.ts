@@ -307,7 +307,13 @@ export async function getDiff(
     // Fallback
   }
 
-  return buildDiffResult(originalContent, modifiedContent, originalIsBinary, modifiedIsBinary)
+  return buildDiffResult(
+    originalContent,
+    modifiedContent,
+    originalIsBinary,
+    modifiedIsBinary,
+    filePath
+  )
 }
 
 export async function getBranchCompare(
@@ -390,7 +396,8 @@ export async function getBranchDiff(
       leftBlob.content,
       rightBlob.content,
       leftBlob.isBinary,
-      rightBlob.isBinary
+      rightBlob.isBinary,
+      args.filePath
     )
   } catch {
     return {
@@ -523,7 +530,7 @@ async function readGitBlobAtIndexPath(
       maxBuffer: MAX_GIT_SHOW_BYTES
     })) as { stdout: Buffer }
 
-    return { ...bufferToBlob(stdout), exists: true }
+    return { ...bufferToBlob(stdout, filePath), exists: true }
   } catch {
     return { content: '', isBinary: false, exists: false }
   }
@@ -541,7 +548,7 @@ async function readGitBlobAtOidPath(
       maxBuffer: MAX_GIT_SHOW_BYTES
     })) as { stdout: Buffer }
 
-    return { ...bufferToBlob(stdout), exists: true }
+    return { ...bufferToBlob(stdout, filePath), exists: true }
   } catch {
     return { content: '', isBinary: false, exists: false }
   }
@@ -550,16 +557,18 @@ async function readGitBlobAtOidPath(
 async function readWorkingTreeFile(filePath: string): Promise<GitBlobReadResult> {
   try {
     const buffer = await readFile(filePath)
-    return bufferToBlob(buffer)
+    return bufferToBlob(buffer, filePath)
   } catch {
     return { content: '', isBinary: false, exists: false }
   }
 }
 
-function bufferToBlob(buffer: Buffer): GitBlobReadResult {
+function bufferToBlob(buffer: Buffer, filePath?: string): GitBlobReadResult {
   const isBinary = isBinaryBuffer(buffer)
+  // Return base64 for recognized image formats so the renderer can display them
+  const isImage = filePath ? !!IMAGE_MIME_TYPES[path.extname(filePath).toLowerCase()] : false
   return {
-    content: isBinary ? '' : buffer.toString('utf-8'),
+    content: isBinary ? (isImage ? buffer.toString('base64') : '') : buffer.toString('utf-8'),
     isBinary,
     exists: true
   }
@@ -579,15 +588,20 @@ function buildDiffResult(
   originalContent: string,
   modifiedContent: string,
   originalIsBinary: boolean,
-  modifiedIsBinary: boolean
+  modifiedIsBinary: boolean,
+  filePath?: string
 ): GitDiffResult {
   if (originalIsBinary || modifiedIsBinary) {
+    const mimeType = filePath ? IMAGE_MIME_TYPES[path.extname(filePath).toLowerCase()] : undefined
     return {
       kind: 'binary',
       originalContent,
       modifiedContent,
       originalIsBinary,
-      modifiedIsBinary
+      modifiedIsBinary,
+      // Include image metadata so the renderer can show image diffs instead of
+      // a generic "binary file changed" message.
+      ...(mimeType ? { isImage: true, mimeType } : {})
     } as GitDiffResult
   }
 
@@ -604,6 +618,17 @@ type GitBlobReadResult = {
   content: string
   isBinary: boolean
   exists: boolean
+}
+
+const IMAGE_MIME_TYPES: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+  '.webp': 'image/webp',
+  '.bmp': 'image/bmp',
+  '.ico': 'image/x-icon'
 }
 
 /**

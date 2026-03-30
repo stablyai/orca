@@ -1,4 +1,4 @@
-import React, { type MutableRefObject } from 'react'
+import React, { lazy, type MutableRefObject } from 'react'
 import { LazySection } from './LazySection'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
@@ -7,6 +7,8 @@ import { basename, dirname } from '@/lib/path'
 import { detectLanguage } from '@/lib/language-detect'
 import { cn } from '@/lib/utils'
 import type { GitDiffResult } from '../../../../shared/types'
+
+const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
 
 type DiffSection = {
   key: string
@@ -143,16 +145,26 @@ export function DiffSectionItem({
               Loading...
             </div>
           ) : section.diffResult?.kind === 'binary' ? (
-            <div className="flex h-full items-center justify-center px-6 text-center">
-              <div className="space-y-2">
-                <div className="text-sm font-medium text-foreground">Binary file changed</div>
-                <div className="text-xs text-muted-foreground">
-                  {isBranchMode
-                    ? 'Text diff is unavailable for this file in branch compare.'
-                    : 'Text diff is unavailable for this file.'}
+            section.diffResult.isImage ? (
+              <ImageDiffViewer
+                originalContent={section.diffResult.originalContent}
+                modifiedContent={section.diffResult.modifiedContent}
+                filePath={section.path}
+                mimeType={section.diffResult.mimeType}
+                sideBySide={sideBySide}
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center px-6 text-center">
+                <div className="space-y-2">
+                  <div className="text-sm font-medium text-foreground">Binary file changed</div>
+                  <div className="text-xs text-muted-foreground">
+                    {isBranchMode
+                      ? 'Text diff is unavailable for this file in branch compare.'
+                      : 'Text diff is unavailable for this file.'}
+                  </div>
                 </div>
               </div>
-            </div>
+            )
           ) : (
             <DiffEditor
               height="100%"

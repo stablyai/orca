@@ -9,10 +9,14 @@ const MonacoEditor = lazy(() => import('./MonacoEditor'))
 const DiffViewer = lazy(() => import('./DiffViewer'))
 const CombinedDiffViewer = lazy(() => import('./CombinedDiffViewer'))
 const MarkdownPreview = lazy(() => import('./MarkdownPreview'))
+const ImageViewer = lazy(() => import('./ImageViewer'))
+const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
 
 type FileContent = {
   content: string
   isBinary: boolean
+  isImage?: boolean
+  mimeType?: string
 }
 
 type MarkdownViewMode = 'source' | 'preview'
@@ -128,6 +132,11 @@ export function EditorContent({
       )
     }
     if (fc.isBinary) {
+      if (fc.isImage) {
+        return (
+          <ImageViewer content={fc.content} filePath={activeFile.filePath} mimeType={fc.mimeType} />
+        )
+      }
       return (
         <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
           Binary file — cannot display
@@ -155,6 +164,17 @@ export function EditorContent({
   }
   const isEditable = activeFile.diffSource === 'unstaged'
   if (dc.kind === 'binary') {
+    if (dc.isImage) {
+      return (
+        <ImageDiffViewer
+          originalContent={dc.originalContent}
+          modifiedContent={dc.modifiedContent}
+          filePath={activeFile.relativePath}
+          mimeType={dc.mimeType}
+          sideBySide={sideBySide}
+        />
+      )
+    }
     return (
       <div className="flex h-full items-center justify-center px-6 text-center">
         <div className="space-y-2">

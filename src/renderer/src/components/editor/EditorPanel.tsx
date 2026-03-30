@@ -12,6 +12,8 @@ import type { GitDiffResult } from '../../../../shared/types'
 type FileContent = {
   content: string
   isBinary: boolean
+  isImage?: boolean
+  mimeType?: string
 }
 
 type DiffContent = GitDiffResult
