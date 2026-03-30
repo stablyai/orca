@@ -3,6 +3,8 @@ import { ipcMain, shell } from 'electron'
 import { readdir, readFile, writeFile, stat, lstat } from 'fs/promises'
 import { extname, relative } from 'path'
 import { spawn } from 'child_process'
+import type { ChildProcessByStdio } from 'child_process'
+import type { Readable } from 'stream'
 import type { Store } from '../persistence'
 import type {
   DirEntry,
@@ -31,6 +33,9 @@ import {
 import { listQuickOpenFiles } from './filesystem-list-files'
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
+const DEFAULT_SEARCH_MAX_RESULTS = 2000
+const MAX_MATCHES_PER_FILE = 100
+const SEARCH_TIMEOUT_MS = 15000
 const IMAGE_MIME_TYPES: Record<string, string> = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
@@ -60,6 +65,8 @@ function isBinaryBuffer(buffer: Buffer): boolean {
 }
 
 export function registerFilesystemHandlers(store: Store): void {
+  const activeTextSearches = new Map<string, ChildProcessByStdio<null, Readable, Readable>>()
+
   // ─── Filesystem ─────────────────────────────────────────
   ipcMain.handle('fs:readDir', async (_event, args: { dirPath: string }): Promise<DirEntry[]> => {
     const dirPath = await resolveAuthorizedPath(args.dirPath, store)
@@ -155,10 +162,13 @@ export function registerFilesystemHandlers(store: Store): void {
   )
 
   // ─── Search ────────────────────────────────────────────
-  ipcMain.handle('fs:search', async (_event, args: SearchOptions): Promise<SearchResult> => {
+  ipcMain.handle('fs:search', async (event, args: SearchOptions): Promise<SearchResult> => {
     const rootPath = await resolveAuthorizedPath(args.rootPath, store)
-
-    const maxResults = args.maxResults ?? 10000
+    const maxResults = Math.max(
+      1,
+      Math.min(args.maxResults ?? DEFAULT_SEARCH_MAX_RESULTS, DEFAULT_SEARCH_MAX_RESULTS)
+    )
+    const searchKey = `${event.sender.id}:${rootPath}`
 
     return new Promise((resolvePromise) => {
       const rgArgs: string[] = [
@@ -167,7 +177,7 @@ export function registerFilesystemHandlers(store: Store): void {
         '--glob',
         '!.git',
         '--max-count',
-        '200', // max matches per file
+        String(MAX_MATCHES_PER_FILE),
         '--max-filesize',
         `${Math.floor(MAX_FILE_SIZE / 1024 / 1024)}M`
       ]
@@ -200,17 +210,28 @@ export function registerFilesystemHandlers(store: Store): void {
 
       rgArgs.push('--', args.query, rootPath)
 
+      // Why: search requests are fired on each query/options change. If the
+      // previous ripgrep process keeps running, it can continue streaming and
+      // parsing thousands of matches on the Electron main thread after the UI
+      // no longer cares about that result, which is exactly the freeze users
+      // experience in large repos.
+      activeTextSearches.get(searchKey)?.kill()
+
       const fileMap = new Map<string, SearchFileResult>()
       let totalMatches = 0
       let truncated = false
       let stdoutBuffer = ''
       let resolved = false
+      let child: ChildProcessByStdio<null, Readable, Readable> | null = null
 
       const resolveOnce = (): void => {
         if (resolved) {
           return
         }
         resolved = true
+        if (activeTextSearches.get(searchKey) === child) {
+          activeTextSearches.delete(searchKey)
+        }
         clearTimeout(killTimeout)
         resolvePromise({
           files: Array.from(fileMap.values()),
@@ -250,7 +271,7 @@ export function registerFilesystemHandlers(store: Store): void {
             totalMatches++
             if (totalMatches >= maxResults) {
               truncated = true
-              child.kill()
+              child?.kill()
               break
             }
           }
@@ -259,10 +280,12 @@ export function registerFilesystemHandlers(store: Store): void {
         }
       }
 
-      const child = spawn('rg', rgArgs, { stdio: ['ignore', 'pipe', 'pipe'] })
+      const nextChild = spawn('rg', rgArgs, { stdio: ['ignore', 'pipe', 'pipe'] })
+      child = nextChild
+      activeTextSearches.set(searchKey, nextChild)
 
-      child.stdout.setEncoding('utf-8')
-      child.stdout.on('data', (chunk: string) => {
+      nextChild.stdout.setEncoding('utf-8')
+      nextChild.stdout.on('data', (chunk: string) => {
         stdoutBuffer += chunk
         const lines = stdoutBuffer.split('\n')
         stdoutBuffer = lines.pop() ?? ''
@@ -270,23 +293,22 @@ export function registerFilesystemHandlers(store: Store): void {
           processLine(line)
         }
       })
-      child.stderr.on('data', () => {
+      nextChild.stderr.on('data', () => {
         // Drain stderr so rg cannot block on a full pipe.
       })
 
-      child.once('error', () => {
+      nextChild.once('error', () => {
         resolveOnce()
       })
 
-      child.once('close', () => {
+      nextChild.once('close', () => {
         if (stdoutBuffer) {
           processLine(stdoutBuffer)
         }
         resolveOnce()
       })
 
-      // Kill after 30s if still running
-      const killTimeout = setTimeout(() => child.kill(), 30000)
+      const killTimeout = setTimeout(() => child?.kill(), SEARCH_TIMEOUT_MS)
     })
   })
 

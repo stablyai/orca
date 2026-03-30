@@ -43,16 +43,14 @@ export function ToggleButton({
 }
 
 // ─── File Result ──────────────────────────────────────────
-export function FileResultItem({
+export function FileResultRow({
   fileResult,
-  collapsed,
   onToggleCollapse,
-  onMatchClick
+  collapsed
 }: {
   fileResult: SearchFileResult
-  collapsed: boolean
   onToggleCollapse: () => void
-  onMatchClick: (match: SearchMatch) => void
+  collapsed: boolean
 }): React.JSX.Element {
   const fileName = basename(fileResult.relativePath)
   const parentDir = dirname(fileResult.relativePath)
@@ -95,23 +93,12 @@ export function FileResultItem({
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
-
-      {/* Matches */}
-      {!collapsed &&
-        fileResult.matches.map((match, i) => (
-          <MatchItem
-            key={`${match.line}:${match.column}:${i}`}
-            match={match}
-            relativePath={fileResult.relativePath}
-            onClick={() => onMatchClick(match)}
-          />
-        ))}
     </div>
   )
 }
 
 // ─── Match Item ───────────────────────────────────────────
-export function MatchItem({
+export function MatchResultRow({
   match,
   relativePath,
   onClick

@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   Search as SearchIcon,
   CaseSensitive,
@@ -13,7 +14,12 @@ import { useAppStore } from '@/store'
 import { detectLanguage } from '@/lib/language-detect'
 import { Button } from '@/components/ui/button'
 import type { SearchFileResult, SearchMatch } from '../../../../shared/types'
-import { ToggleButton, FileResultItem } from './SearchResultItems'
+import { buildSearchRows } from './search-rows'
+import { ToggleButton, FileResultRow, MatchResultRow } from './SearchResultItems'
+
+const SEARCH_DEBOUNCE_MS = 300
+const SEARCH_MAX_RESULTS = 2000
+const SEARCH_VIRTUAL_OVERSCAN = 12
 
 export default function Search(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
@@ -46,6 +52,7 @@ export default function Search(): React.JSX.Element {
   const [showFilters, setShowFilters] = useState(false)
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const latestSearchIdRef = useRef(0)
+  const resultsScrollRef = useRef<HTMLDivElement>(null)
 
   const cancelPendingSearch = useCallback(() => {
     latestSearchIdRef.current += 1
@@ -89,6 +96,51 @@ export default function Search(): React.JSX.Element {
     }
   }, [worktreePath, cancelPendingSearch, setFileSearchResults])
 
+  // Why: large search result sets can update while the user is still typing.
+  // Deferring the heavy row-model update keeps the input responsive instead of
+  // blocking on a full sidebar rerender.
+  const deferredSearchResults = useDeferredValue(fileSearchResults)
+  const searchRows = useMemo(
+    () =>
+      buildSearchRows(
+        fileSearchQuery.trim() && worktreePath ? deferredSearchResults : null,
+        fileSearchCollapsedFiles
+      ),
+    [deferredSearchResults, fileSearchCollapsedFiles, fileSearchQuery, worktreePath]
+  )
+
+  const virtualizer = useVirtualizer({
+    count: searchRows.length,
+    getScrollElement: () => resultsScrollRef.current,
+    estimateSize: (index) => {
+      const row = searchRows[index]
+      if (!row) {
+        return 24
+      }
+      if (row.type === 'summary') {
+        return 24
+      }
+      if (row.type === 'file') {
+        return 26
+      }
+      return 22
+    },
+    overscan: SEARCH_VIRTUAL_OVERSCAN,
+    getItemKey: (index) => {
+      const row = searchRows[index]
+      if (!row) {
+        return `missing:${index}`
+      }
+      if (row.type === 'summary') {
+        return 'summary'
+      }
+      if (row.type === 'file') {
+        return `file:${row.fileResult.filePath}`
+      }
+      return `match:${row.fileResult.filePath}:${row.match.line}:${row.match.column}:${row.matchIndex}`
+    }
+  })
+
   // Execute search with debounce — reads fresh state inside setTimeout
   // to avoid stale closures when options change during debounce
   const executeSearch = useCallback(
@@ -120,7 +172,7 @@ export default function Search(): React.JSX.Element {
             useRegex: state.fileSearchUseRegex,
             includePattern: state.fileSearchIncludePattern || undefined,
             excludePattern: state.fileSearchExcludePattern || undefined,
-            maxResults: 10000
+            maxResults: SEARCH_MAX_RESULTS
           })
           if (latestSearchIdRef.current === searchId) {
             setFileSearchResults(results)
@@ -135,7 +187,7 @@ export default function Search(): React.JSX.Element {
             setFileSearchLoading(false)
           }
         }
-      }, 300)
+      }, SEARCH_DEBOUNCE_MS)
     },
     [worktreePath, setFileSearchResults, setFileSearchLoading]
   )
@@ -312,28 +364,55 @@ export default function Search(): React.JSX.Element {
       </div>
 
       {/* Results area */}
-      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-sleek">
-        {fileSearchResults && (
-          <>
-            {/* Results summary */}
-            <div className="px-2 py-1 text-[10px] text-muted-foreground border-b border-border">
-              {fileSearchResults.totalMatches} result
-              {fileSearchResults.totalMatches !== 1 ? 's' : ''} in {fileSearchResults.files.length}{' '}
-              file{fileSearchResults.files.length !== 1 ? 's' : ''}
-              {fileSearchResults.truncated && ' (results truncated)'}
-            </div>
+      <div ref={resultsScrollRef} className="flex-1 min-h-0 overflow-y-auto scrollbar-sleek">
+        {searchRows.length > 0 && (
+          <div
+            className="relative w-full"
+            style={{
+              height: virtualizer.getTotalSize()
+            }}
+          >
+            {virtualizer.getVirtualItems().map((virtualRow) => {
+              const row = searchRows[virtualRow.index]
+              if (!row) {
+                return null
+              }
 
-            {/* File results */}
-            {fileSearchResults.files.map((fileResult) => (
-              <FileResultItem
-                key={fileResult.filePath}
-                fileResult={fileResult}
-                collapsed={fileSearchCollapsedFiles.has(fileResult.filePath)}
-                onToggleCollapse={() => toggleFileSearchCollapsedFile(fileResult.filePath)}
-                onMatchClick={(match) => handleMatchClick(fileResult, match)}
-              />
-            ))}
-          </>
+              return (
+                <div
+                  key={virtualRow.key}
+                  className="absolute left-0 top-0 w-full"
+                  style={{
+                    transform: `translateY(${virtualRow.start}px)`
+                  }}
+                >
+                  {row.type === 'summary' && (
+                    <div className="px-2 py-1 text-[10px] text-muted-foreground border-b border-border">
+                      {row.totalMatches} result{row.totalMatches !== 1 ? 's' : ''} in{' '}
+                      {row.fileCount} file{row.fileCount !== 1 ? 's' : ''}
+                      {row.truncated && ' (results truncated)'}
+                    </div>
+                  )}
+                  {row.type === 'file' && (
+                    <FileResultRow
+                      fileResult={row.fileResult}
+                      collapsed={row.collapsed}
+                      onToggleCollapse={() =>
+                        toggleFileSearchCollapsedFile(row.fileResult.filePath)
+                      }
+                    />
+                  )}
+                  {row.type === 'match' && (
+                    <MatchResultRow
+                      match={row.match}
+                      relativePath={row.fileResult.relativePath}
+                      onClick={() => handleMatchClick(row.fileResult, row.match)}
+                    />
+                  )}
+                </div>
+              )
+            })}
+          </div>
         )}
 
         {!fileSearchResults && fileSearchQuery && !fileSearchLoading && (
