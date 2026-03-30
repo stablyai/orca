@@ -130,6 +130,16 @@ async function sendCheckFailureStatus(message: string, userInitiated?: boolean):
             String((fallbackError as Error)?.message ?? fallbackError)
           )
         }
+
+        // The fallback confirmed there is no published version newer than the
+        // current one (the only "newer" entry is a draft mid-release).  Tell
+        // the user they're up-to-date so clicking "Check for Updates" doesn't
+        // appear to silently do nothing.
+        if (userInitiated) {
+          clearAvailableUpdateContext()
+          sendStatus({ state: 'not-available', userInitiated: true })
+          return
+        }
       }
 
       console.warn('[updater] benign check failure:', message)
