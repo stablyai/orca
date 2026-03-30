@@ -545,6 +545,13 @@
   list-style: square;
 }
 
+/* GFM task lists already render an explicit checkbox input, so keeping the
+   browser marker here would show both a bullet and a checkbox for one item. */
+.markdown-body ul.contains-task-list,
+.markdown-body li.task-list-item {
+  list-style: none;
+}
+
 .markdown-body li {
   margin: 0.25em 0;
 }
