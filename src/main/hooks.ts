@@ -29,7 +29,9 @@ export function parseOrcaYaml(content: string): OrcaHooks | null {
   }
 
   const afterScripts = content.slice(scriptsMatch.index! + scriptsMatch[0].length)
-  const lines = afterScripts.split('\n')
+  // [Fix]: Split using /\r?\n/ instead of '\n'. Otherwise, on Windows, trailing \r characters
+  // stay attached to script commands, which causes fatal '\r command not found' errors in WSL/bash.
+  const lines = afterScripts.split(/\r?\n/)
 
   let currentKey: 'setup' | 'archive' | null = null
   let currentValue = ''

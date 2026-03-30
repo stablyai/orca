@@ -56,7 +56,8 @@ export async function listQuickOpenFiles(rootPath: string, store: Store): Promis
       buf += chunk
       const lines = buf.split('\n')
       buf = lines.pop() ?? ''
-      for (const line of lines) {
+      for (let line of lines) {
+        line = line.replace(/\r$/, '')
         if (!line) {
           continue
         }
@@ -74,6 +75,8 @@ export async function listQuickOpenFiles(rootPath: string, store: Store): Promis
     })
     child.once('close', () => {
       if (buf) {
+        // [Fix]: Strip trailing \r on Windows for the final buffered chunk
+        buf = buf.replace(/\r$/, '')
         const relPath = normalizeRelativePath(relative(authorizedRootPath, buf))
         if (shouldIncludeQuickOpenPath(relPath)) {
           files.push(relPath)

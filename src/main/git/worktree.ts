@@ -9,14 +9,17 @@ const execFileAsync = promisify(execFile)
  */
 export function parseWorktreeList(output: string): GitWorktreeInfo[] {
   const worktrees: GitWorktreeInfo[] = []
-  const blocks = output.trim().split('\n\n')
+  // [Fix]: Use /\r?\n\r?\n/ to handle both LF and CRLF (\r\n) line endings,
+  // which are common when running git on Windows.
+  const blocks = output.trim().split(/\r?\n\r?\n/)
 
   for (const block of blocks) {
     if (!block.trim()) {
       continue
     }
 
-    const lines = block.trim().split('\n')
+    // [Fix]: Use /\r?\n/ to handle both LF and CRLF (\r\n) line endings.
+    const lines = block.trim().split(/\r?\n/)
     let path = ''
     let head = ''
     let branch = ''

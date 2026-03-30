@@ -1,5 +1,5 @@
 import { realpath } from 'fs/promises'
-import { resolve, relative, sep, dirname, basename } from 'path'
+import { resolve, relative, dirname, basename, isAbsolute } from 'path'
 import type { Store } from '../persistence'
 import { listWorktrees } from '../git/worktree'
 
@@ -16,10 +16,12 @@ export function isDescendantOrEqual(resolvedTarget: string, resolvedBase: string
   }
   const rel = relative(resolvedBase, resolvedTarget)
   // rel must not start with ".." and must not be an absolute path (e.g. different drive on Windows)
+  // [Security Fix]: Added !isAbsolute(rel) to prevent drive traversal bypasses on Windows
+  // where relative('D:\\repo', 'C:\\etc\\passwd') returns absolute path 'C:\\etc\\passwd'
   return (
     rel !== '' &&
     !rel.startsWith('..') &&
-    !rel.startsWith(sep + sep) &&
+    !isAbsolute(rel) &&
     resolve(resolvedBase, rel) === resolvedTarget
   )
 }

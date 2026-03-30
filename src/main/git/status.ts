@@ -34,7 +34,9 @@ export async function getStatus(worktreePath: string): Promise<GitStatusResult> 
       { cwd: worktreePath, encoding: 'utf-8' }
     )
 
-    for (const line of stdout.split('\n')) {
+    // [Fix]: Split by /\r?\n/ instead of '\n' to correctly parse git output on Windows,
+    // avoiding trailing \r characters in parsed paths.
+    for (const line of stdout.split(/\r?\n/)) {
       if (!line) {
         continue
       }
@@ -417,7 +419,9 @@ async function loadBranchChanges(
   )
 
   const entries: GitBranchChangeEntry[] = []
-  for (const line of stdout.split('\n')) {
+  // [Fix]: Split by /\r?\n/ instead of '\n' to handle Git CRLF output on Windows,
+  // preventing trailing \r characters in extracted file paths.
+  for (const line of stdout.split(/\r?\n/)) {
     if (!line) {
       continue
     }
