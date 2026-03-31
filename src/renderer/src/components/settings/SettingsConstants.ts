@@ -4,7 +4,6 @@ import { getDefaultRepoHookSettings } from '../../../../shared/constants'
 export type HookName = keyof OrcaHooks['scripts']
 export const DEFAULT_REPO_HOOK_SETTINGS = getDefaultRepoHookSettings()
 export const MAX_THEME_RESULTS = 80
-export const MAX_FONT_RESULTS = 12
 export const SCROLLBACK_PRESETS_MB = [10, 25, 50, 100, 250] as const
 export const ZOOM_STEP = 0.5
 export const ZOOM_MIN = -3

@@ -4,7 +4,7 @@ import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Check, ChevronsUpDown, CircleX } from 'lucide-react'
 import { BUILTIN_TERMINAL_THEME_NAMES, normalizeColor } from '@/lib/terminal-theme'
-import { MAX_THEME_RESULTS, MAX_FONT_RESULTS } from './SettingsConstants'
+import { MAX_THEME_RESULTS } from './SettingsConstants'
 
 type ThemePickerProps = {
   label: string
@@ -246,8 +246,7 @@ export function FontAutocomplete({
         !font.toLowerCase().startsWith(normalizedQuery) &&
         font.toLowerCase().includes(normalizedQuery)
     )
-    const ordered = normalizedQuery ? [...startsWith, ...includes] : suggestions
-    return ordered.slice(0, MAX_FONT_RESULTS)
+    return normalizedQuery ? [...startsWith, ...includes] : suggestions
   }, [suggestions, normalizedQuery])
 
   const commitValue = (nextValue: string): void => {
@@ -301,7 +300,7 @@ export function FontAutocomplete({
 
       {open ? (
         <div className="absolute top-full z-20 mt-2 w-full overflow-hidden rounded-md border border-border/50 bg-popover shadow-md">
-          <ScrollArea className="max-h-64">
+          <ScrollArea className={filteredSuggestions.length > 8 ? 'h-64' : undefined}>
             <div className="p-1">
               {filteredSuggestions.length > 0 ? (
                 filteredSuggestions.map((font) => (
