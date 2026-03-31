@@ -11,7 +11,7 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import TerminalSearch from '@/components/TerminalSearch'
 import type { PtyTransport } from './pty-transport'
 import { shellEscapePath } from './pane-helpers'
-import { EMPTY_LAYOUT, serializeTerminalLayout } from './layout-serialization'
+import { EMPTY_LAYOUT, paneLeafId, serializeTerminalLayout } from './layout-serialization'
 import { createExpandCollapseActions } from './expand-collapse'
 import { useTerminalKeyboardShortcuts, useTerminalFontZoom } from './keyboard-handlers'
 import TerminalContextMenu from './TerminalContextMenu'
@@ -19,6 +19,13 @@ import { useSystemPrefersDark } from './use-system-prefers-dark'
 import { useTerminalPaneGlobalEffects } from './use-terminal-pane-global-effects'
 import { useTerminalPaneLifecycle } from './use-terminal-pane-lifecycle'
 import { useTerminalPaneContextMenu } from './use-terminal-pane-context-menu'
+
+/** Global set of buffer-capture callbacks, one per mounted TerminalPane.
+ *  The beforeunload handler in App.tsx invokes every callback to populate
+ *  Zustand with serialized buffers before flushing the session to disk. */
+export const shutdownBufferCaptures = new Set<() => void>()
+
+const MAX_BUFFER_BYTES = 512 * 1024
 
 type TerminalPaneProps = {
   tabId: string
@@ -74,7 +81,14 @@ export default function TerminalPane({
       return
     }
     const activePaneId = manager.getActivePane()?.id ?? manager.getPanes()[0]?.id ?? null
-    setTabLayout(tabId, serializeTerminalLayout(container, activePaneId, expandedPaneIdRef.current))
+    const layout = serializeTerminalLayout(container, activePaneId, expandedPaneIdRef.current)
+    // Preserve existing buffersByLeafId so layout-only persists (resize, split,
+    // reorder) don't clobber previously captured scrollback.
+    const existing = useAppStore.getState().terminalLayoutsByTabId[tabId]
+    if (existing?.buffersByLeafId) {
+      layout.buffersByLeafId = existing.buffersByLeafId
+    }
+    setTabLayout(tabId, layout)
   }
 
   const {
@@ -190,6 +204,71 @@ export default function TerminalPane({
     container.addEventListener('paste', onPaste, { capture: true })
     return () => container.removeEventListener('paste', onPaste, { capture: true })
   }, [isActive])
+
+  // Register a capture callback for shutdown. The beforeunload handler in
+  // App.tsx calls all registered callbacks to serialize terminal buffers.
+  useEffect(() => {
+    const captureBuffers = (): void => {
+      const manager = managerRef.current
+      const container = containerRef.current
+      if (!manager || !container) {
+        return
+      }
+      const panes = manager.getPanes()
+      if (panes.length === 0) {
+        return
+      }
+      // Flush pending background PTY output into terminals before serializing.
+      // terminal.write() is async so some trailing bytes may be lost — best effort.
+      for (const pane of panes) {
+        const pending = pendingWritesRef.current.get(pane.id)
+        if (pending) {
+          pane.terminal.write(pending)
+          pendingWritesRef.current.set(pane.id, '')
+        }
+      }
+      const buffers: Record<string, string> = {}
+      for (const pane of panes) {
+        try {
+          const leafId = paneLeafId(pane.id)
+          let scrollback = pane.terminal.options.scrollback ?? 10_000
+          let serialized = pane.serializeAddon.serialize({ scrollback })
+          // Cap at 512KB — binary search for largest scrollback that fits.
+          if (serialized.length > MAX_BUFFER_BYTES && scrollback > 1) {
+            let lo = 1
+            let hi = scrollback
+            let best = ''
+            while (lo <= hi) {
+              const mid = Math.floor((lo + hi) / 2)
+              const attempt = pane.serializeAddon.serialize({ scrollback: mid })
+              if (attempt.length <= MAX_BUFFER_BYTES) {
+                best = attempt
+                lo = mid + 1
+              } else {
+                hi = mid - 1
+              }
+            }
+            serialized = best
+          }
+          if (serialized.length > 0) {
+            buffers[leafId] = serialized
+          }
+        } catch {
+          // Serialization failure for one pane should not block others.
+        }
+      }
+      if (Object.keys(buffers).length === 0) {
+        return
+      }
+      const activePaneId = manager.getActivePane()?.id ?? panes[0]?.id ?? null
+      const layout = serializeTerminalLayout(container, activePaneId, expandedPaneIdRef.current)
+      setTabLayout(tabId, { ...layout, buffersByLeafId: buffers })
+    }
+    shutdownBufferCaptures.add(captureBuffers)
+    return () => {
+      shutdownBufferCaptures.delete(captureBuffers)
+    }
+  }, [tabId, setTabLayout])
 
   const contextMenu = useTerminalPaneContextMenu({
     managerRef,

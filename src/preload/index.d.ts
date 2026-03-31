@@ -103,6 +103,8 @@ type CacheApi = {
 type SessionApi = {
   get: () => Promise<WorkspaceSessionState>
   set: (args: WorkspaceSessionState) => Promise<void>
+  /** Synchronous session save for beforeunload — blocks until flushed to disk. */
+  setSync: (args: WorkspaceSessionState) => void
 }
 
 type UpdaterApi = {

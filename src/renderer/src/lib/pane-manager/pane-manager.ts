@@ -318,7 +318,8 @@ export class PaneManager {
       terminal: pane.terminal,
       container: pane.container,
       fitAddon: pane.fitAddon,
-      searchAddon: pane.searchAddon
+      searchAddon: pane.searchAddon,
+      serializeAddon: pane.serializeAddon
     }
   }
 

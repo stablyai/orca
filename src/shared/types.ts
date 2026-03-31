@@ -78,6 +78,8 @@ export type TerminalLayoutSnapshot = {
   root: TerminalPaneLayoutNode | null
   activeLeafId: string | null
   expandedLeafId: string | null
+  /** Serialized terminal buffers per leaf for scrollback restoration on restart. */
+  buffersByLeafId?: Record<string, string>
 }
 
 export type WorkspaceSessionState = {

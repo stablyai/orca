@@ -7,6 +7,7 @@ import { useAppStore } from './store'
 import { useIpcEvents } from './hooks/useIpcEvents'
 import Sidebar from './components/Sidebar'
 import Terminal from './components/Terminal'
+import { shutdownBufferCaptures } from './components/terminal-pane/TerminalPane'
 import Landing from './components/Landing'
 import Settings from './components/settings/Settings'
 import RightSidebar from './components/right-sidebar'
@@ -150,6 +151,33 @@ function App(): React.JSX.Element {
     tabsByWorktree,
     terminalLayoutsByTabId
   ])
+
+  // On shutdown, capture terminal scrollback buffers and flush to disk.
+  // Runs synchronously in beforeunload: capture → Zustand set → sendSync → flush.
+  useEffect(() => {
+    const captureAndFlush = (): void => {
+      if (!useAppStore.getState().workspaceSessionReady) {
+        return
+      }
+      for (const capture of shutdownBufferCaptures) {
+        try {
+          capture()
+        } catch {
+          // Don't let one pane's failure block the rest.
+        }
+      }
+      const state = useAppStore.getState()
+      window.api.session.setSync({
+        activeRepoId: state.activeRepoId,
+        activeWorktreeId: state.activeWorktreeId,
+        activeTabId: state.activeTabId,
+        tabsByWorktree: state.tabsByWorktree,
+        terminalLayoutsByTabId: state.terminalLayoutsByTabId
+      })
+    }
+    window.addEventListener('beforeunload', captureAndFlush)
+    return () => window.removeEventListener('beforeunload', captureAndFlush)
+  }, [])
 
   useEffect(() => {
     if (!persistedUIReady) {

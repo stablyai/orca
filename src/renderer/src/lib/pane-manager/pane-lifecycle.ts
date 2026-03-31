@@ -5,6 +5,7 @@ import { SearchAddon } from '@xterm/addon-search'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { WebglAddon } from '@xterm/addon-webgl'
+import { SerializeAddon } from '@xterm/addon-serialize'
 
 import type { PaneManagerOptions, ManagedPaneInternal } from './pane-manager-types'
 import type { DragReorderState } from './pane-drag-reorder'
@@ -97,6 +98,8 @@ export function createPaneDOM(
     }
   )
 
+  const serializeAddon = new SerializeAddon()
+
   const pane: ManagedPaneInternal = {
     id,
     terminal,
@@ -106,6 +109,7 @@ export function createPaneDOM(
     gpuRenderingEnabled: ENABLE_WEBGL_RENDERER,
     fitAddon,
     searchAddon,
+    serializeAddon,
     unicode11Addon,
     webLinksAddon,
     webglAddon: null
@@ -130,6 +134,7 @@ export function openTerminal(pane: ManagedPaneInternal): void {
     linkTooltip,
     fitAddon,
     searchAddon,
+    serializeAddon,
     unicode11Addon,
     webLinksAddon
   } = pane
@@ -142,6 +147,7 @@ export function openTerminal(pane: ManagedPaneInternal): void {
   // Load addons (order matters: WebGL must be after open())
   terminal.loadAddon(fitAddon)
   terminal.loadAddon(searchAddon)
+  terminal.loadAddon(serializeAddon)
   terminal.loadAddon(unicode11Addon)
   terminal.loadAddon(webLinksAddon)
 
@@ -188,6 +194,11 @@ export function disposePane(
   }
   try {
     pane.searchAddon.dispose()
+  } catch {
+    /* ignore */
+  }
+  try {
+    pane.serializeAddon.dispose()
   } catch {
     /* ignore */
   }
