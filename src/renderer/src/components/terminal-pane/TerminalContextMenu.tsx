@@ -107,19 +107,13 @@ export default function TerminalContextMenu({
         <DropdownMenuItem onSelect={onSplitDown}>
           <PanelBottomOpen />
           Split Down
-          <DropdownMenuShortcut>
-            {mod}
-            {shift}D
-          </DropdownMenuShortcut>
+          <DropdownMenuShortcut>{`${mod}${shift}D`}</DropdownMenuShortcut>
         </DropdownMenuItem>
         {canExpandPane && (
           <DropdownMenuItem onSelect={onToggleExpand}>
             {menuPaneIsExpanded ? <Minimize2 /> : <Maximize2 />}
             {menuPaneIsExpanded ? 'Collapse Pane' : 'Expand Pane'}
-            <DropdownMenuShortcut>
-              {mod}
-              {shift}↩
-            </DropdownMenuShortcut>
+            <DropdownMenuShortcut>{`${mod}${shift}↩`}</DropdownMenuShortcut>
           </DropdownMenuItem>
         )}
         {canClosePane && (
