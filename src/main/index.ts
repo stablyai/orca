@@ -5,7 +5,7 @@ import { Store } from './persistence'
 import { killAllPty } from './ipc/pty'
 import { registerCoreHandlers } from './ipc/register-core-handlers'
 import { registerAppMenu } from './menu/register-app-menu'
-import { checkForUpdatesFromMenu } from './updater'
+import { checkForUpdatesFromMenu, isQuittingForUpdate } from './updater'
 import {
   enableMainProcessGpuFeatures,
   installUncaughtPipeErrorGuard,
@@ -63,7 +63,10 @@ app.whenReady().then(() => {
   openMainWindow()
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
+    // Don't re-open a window while Squirrel's ShipIt is replacing the .app
+    // bundle.  Without this guard the old version gets resurrected and the
+    // update never applies.
+    if (BrowserWindow.getAllWindows().length === 0 && !isQuittingForUpdate()) {
       openMainWindow()
     }
   })

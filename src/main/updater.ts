@@ -3,7 +3,11 @@ import { autoUpdater } from 'electron-updater'
 import { is } from '@electron-toolkit/utils'
 import type { UpdateStatus } from '../shared/types'
 import { killAllPty } from './ipc/pty'
-import { findFallbackReleaseVersion, isGitHubReleaseTransitionFailure } from './updater-fallback'
+import {
+  compareVersions,
+  findFallbackReleaseVersion,
+  isGitHubReleaseTransitionFailure
+} from './updater-fallback'
 
 let mainWindowRef: BrowserWindow | null = null
 let currentStatus: UpdateStatus = { state: 'idle' }
@@ -14,6 +18,9 @@ let availableVersion: string | null = null
 let availableReleaseUrl: string | null = null
 let pendingCheckFailureKey: string | null = null
 let pendingCheckFailurePromise: Promise<void> | null = null
+/** Guards against the macOS `activate` handler re-opening the old version
+ *  while Squirrel's ShipIt is replacing the .app bundle. */
+let quittingForUpdate = false
 /** Whether Squirrel.Mac has finished downloading the update from the localhost proxy. */
 let squirrelReady = false
 
@@ -195,16 +202,22 @@ export function checkForUpdatesFromMenu(): void {
   })
 }
 
+export function isQuittingForUpdate(): boolean {
+  return quittingForUpdate
+}
+
 export function quitAndInstall(): void {
+  // Set this BEFORE anything else so the `activate` handler in index.ts
+  // won't re-open the old version while Squirrel's ShipIt is replacing
+  // the .app bundle.  Without this guard the quit triggers window
+  // destruction → BrowserWindow.getAllWindows().length === 0 → activate
+  // fires → openMainWindow() resurrects the old process and ShipIt
+  // either can't replace it or the user ends up on the old version.
+  quittingForUpdate = true
+
   killAllPty()
   onBeforeQuitCleanup?.()
 
-  // Remove close listeners so windows don't block the quit, but do NOT
-  // destroy them yet. On macOS, MacUpdater.quitAndInstall() delegates to
-  // Squirrel.Mac's nativeUpdater.quitAndInstall() which handles quitting
-  // the app. If we destroy windows before Squirrel is ready, the app ends
-  // up with zero windows and the dock "activate" handler re-opens the old
-  // version instead of actually updating.
   for (const win of BrowserWindow.getAllWindows()) {
     win.removeAllListeners('close')
   }
@@ -245,8 +258,9 @@ export function setupAutoUpdater(
   if (process.platform === 'darwin') {
     nativeUpdater.on('update-downloaded', () => {
       squirrelReady = true
-      // If we were holding the 'downloaded' status, send it now
-      if (availableVersion && availableVersion !== app.getVersion()) {
+      // If we were holding the 'downloaded' status, send it now — but only
+      // when the staged version is actually newer than what's running.
+      if (availableVersion && compareVersions(availableVersion, app.getVersion()) > 0) {
         sendStatus({
           state: 'downloaded',
           version: availableVersion,
@@ -264,10 +278,12 @@ export function setupAutoUpdater(
   autoUpdater.on('update-available', (info) => {
     const wasUserInitiated = userInitiatedCheck
     userInitiatedCheck = false
-    // Guard against re-downloading the version we're already running.
-    // With allowPrerelease enabled, electron-updater may consider the
-    // current version as an "available" update (same-version match).
-    if (info.version === app.getVersion()) {
+    // Guard against showing an update that isn't actually newer than what's running.
+    // With allowPrerelease enabled, electron-updater may report the current or
+    // even an older version as "available".  Use semver comparison, not strict
+    // equality, so we never prompt the user to "update" to a version they already
+    // have (or an older one).
+    if (compareVersions(info.version, app.getVersion()) <= 0) {
       clearAvailableUpdateContext()
       sendStatus({ state: 'not-available', userInitiated: wasUserInitiated || undefined })
       return
@@ -293,8 +309,10 @@ export function setupAutoUpdater(
   })
 
   autoUpdater.on('update-downloaded', (info) => {
-    // Don't show the banner if the downloaded version is the one already running.
-    if (info.version === app.getVersion()) {
+    // Don't show the banner if the downloaded version isn't actually newer
+    // than what's running.  This catches the exact-same-version case as well
+    // as stale cached updates from an older release.
+    if (compareVersions(info.version, app.getVersion()) <= 0) {
       clearAvailableUpdateContext()
       sendStatus({ state: 'not-available' })
       return
