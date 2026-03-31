@@ -11,22 +11,6 @@ function getReleaseUrl(status: ReleaseToastStatus): string {
   return status.releaseUrl ?? `https://github.com/stablyai/orca/releases/tag/v${status.version}`
 }
 
-function createViewChangesButton(releaseUrl: string): ReturnType<typeof createElement> {
-  return createElement(
-    'button',
-    {
-      type: 'button',
-      'data-button': true,
-      'data-cancel': true,
-      // Sonner auto-dismisses structured cancel actions after onClick. Render a
-      // plain button instead so users can open the release notes and keep the
-      // update toast visible until they explicitly install or close it.
-      onClick: () => window.api.shell.openUrl(releaseUrl)
-    },
-    'View Changes'
-  )
-}
-
 export function useIpcEvents(): void {
   useEffect(() => {
     const unsubs: (() => void)[] = []
@@ -57,10 +41,19 @@ export function useIpcEvents(): void {
     let checkingToastId: string | number | undefined
     let availableToastId: string | number | undefined
     const downloadToastId = 'update-download-progress'
+    // When the user clicks "Update" in the toast we download and then
+    // auto-restart once the download finishes, avoiding a second confirmation.
+    let autoRestartAfterDownload = false
     unsubs.push(
       window.api.updater.onStatus((raw) => {
         const status = raw as UpdateStatus
         useAppStore.getState().setUpdateStatus(status)
+
+        // A new check cycle or error invalidates any previous one-click
+        // "Update" intent so we don't auto-restart from a stale flag.
+        if (status.state === 'checking' || status.state === 'error') {
+          autoRestartAfterDownload = false
+        }
 
         // Show toasts for user-initiated checks
         if (status.state === 'checking' && 'userInitiated' in status && status.userInitiated) {
@@ -94,10 +87,16 @@ export function useIpcEvents(): void {
             ),
             duration: Infinity,
             action: {
-              label: status.manualDownloadUrl ? 'Download' : 'Install',
-              onClick: () => window.api.updater.download()
-            },
-            cancel: createViewChangesButton(releaseUrl)
+              label: 'Update',
+              onClick: () => {
+                // For auto-download updates, download and then auto-restart
+                // once finished so the user only clicks one button.
+                if (!status.manualDownloadUrl) {
+                  autoRestartAfterDownload = true
+                }
+                window.api.updater.download()
+              }
+            }
           })
         } else if (status.state === 'downloading') {
           if (availableToastId) {
@@ -114,6 +113,13 @@ export function useIpcEvents(): void {
             availableToastId = undefined
           }
           toast.dismiss(downloadToastId)
+          // If the user clicked "Update" in the available toast, skip the
+          // second confirmation and restart immediately.
+          if (autoRestartAfterDownload) {
+            autoRestartAfterDownload = false
+            window.api.updater.quitAndInstall()
+            return
+          }
           const releaseUrl = getReleaseUrl(status)
           toast.success(`Version ${status.version} is ready to install.`, {
             description: createElement(
@@ -130,8 +136,7 @@ export function useIpcEvents(): void {
             action: {
               label: 'Restart Now',
               onClick: () => window.api.updater.quitAndInstall()
-            },
-            cancel: createViewChangesButton(releaseUrl)
+            }
           })
         } else if (status.state === 'error') {
           toast.dismiss(downloadToastId)
