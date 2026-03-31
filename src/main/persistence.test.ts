@@ -68,6 +68,7 @@ describe('Store', () => {
     expect(settings.branchPrefix).toBe('git-username')
     expect(settings.theme).toBe('system')
     expect(settings.terminalFontSize).toBe(14)
+    expect(settings.terminalFontWeight).toBe(500)
     expect(settings.rightSidebarOpenByDefault).toBe(true)
   })
 
@@ -233,9 +234,14 @@ describe('Store', () => {
     const initial = store.getSettings()
     expect(initial.theme).toBe('system')
 
-    const updated = store.updateSettings({ theme: 'dark', terminalFontSize: 16 })
+    const updated = store.updateSettings({
+      theme: 'dark',
+      terminalFontSize: 16,
+      terminalFontWeight: 600
+    })
     expect(updated.theme).toBe('dark')
     expect(updated.terminalFontSize).toBe(16)
+    expect(updated.terminalFontWeight).toBe(600)
     // Other fields preserved
     expect(updated.branchPrefix).toBe('git-username')
   })

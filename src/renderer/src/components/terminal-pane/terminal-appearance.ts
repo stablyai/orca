@@ -1,6 +1,7 @@
 import type { ITheme } from '@xterm/xterm'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { GlobalSettings } from '../../../../shared/types'
+import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import {
   getBuiltinTheme,
   resolvePaneStyleOptions,
@@ -20,6 +21,7 @@ export function applyTerminalAppearance(
   const paneStyles = resolvePaneStyleOptions(settings)
   const theme: ITheme | null = appearance.theme ?? getBuiltinTheme(appearance.themeName)
   const paneBackground = theme?.background ?? '#000000'
+  const terminalFontWeights = resolveTerminalFontWeights(settings.terminalFontWeight)
 
   for (const pane of manager.getPanes()) {
     if (theme) {
@@ -30,6 +32,8 @@ export function applyTerminalAppearance(
     const paneSize = paneFontSizes.get(pane.id)
     pane.terminal.options.fontSize = paneSize ?? settings.terminalFontSize
     pane.terminal.options.fontFamily = buildFontFamily(settings.terminalFontFamily)
+    pane.terminal.options.fontWeight = terminalFontWeights.fontWeight
+    pane.terminal.options.fontWeightBold = terminalFontWeights.fontWeightBold
     try {
       pane.fitAddon.fit()
     } catch {

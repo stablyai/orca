@@ -5,6 +5,7 @@ import type {
   RepoHookSettings,
   WorkspaceSessionState
 } from './types'
+import { DEFAULT_TERMINAL_FONT_WEIGHT } from './terminal-fonts'
 
 export const SCHEMA_VERSION = 1
 
@@ -28,6 +29,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     theme: 'system',
     terminalFontSize: 14,
     terminalFontFamily: 'SF Mono',
+    terminalFontWeight: DEFAULT_TERMINAL_FONT_WEIGHT,
     terminalCursorStyle: 'bar',
     terminalCursorBlink: true,
     terminalThemeDark: 'Ghostty Default Style Dark',

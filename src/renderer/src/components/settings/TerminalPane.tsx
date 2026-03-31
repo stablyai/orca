@@ -1,5 +1,12 @@
 import { useState } from 'react'
 import type { GlobalSettings } from '../../../../shared/types'
+import {
+  DEFAULT_TERMINAL_FONT_WEIGHT,
+  TERMINAL_FONT_WEIGHT_MAX,
+  TERMINAL_FONT_WEIGHT_MIN,
+  TERMINAL_FONT_WEIGHT_STEP,
+  normalizeTerminalFontWeight
+} from '../../../../shared/terminal-fonts'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
@@ -111,6 +118,22 @@ export function TerminalPane({
             onChange={(value) => updateSettings({ terminalFontFamily: value })}
           />
         </div>
+
+        <NumberField
+          label="Font Weight"
+          description="Controls the terminal text font weight."
+          value={normalizeTerminalFontWeight(settings.terminalFontWeight)}
+          defaultValue={DEFAULT_TERMINAL_FONT_WEIGHT}
+          min={TERMINAL_FONT_WEIGHT_MIN}
+          max={TERMINAL_FONT_WEIGHT_MAX}
+          step={TERMINAL_FONT_WEIGHT_STEP}
+          suffix="100 to 900"
+          onChange={(value) =>
+            updateSettings({
+              terminalFontWeight: normalizeTerminalFontWeight(value)
+            })
+          }
+        />
       </section>
 
       <Separator />

@@ -5,6 +5,7 @@ import { useAppStore } from '@/store'
 import { createFilePathLinkProvider, handleOscLink } from './terminal-link-handlers'
 import type { LinkHandlerDeps } from './terminal-link-handlers'
 import type { GlobalSettings, TerminalLayoutSnapshot } from '../../../../shared/types'
+import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import { buildFontFamily, replayTerminalLayout } from './layout-serialization'
 import { applyExpandedLayoutTo, restoreExpandedLayoutFrom } from './expand-collapse'
 import { applyTerminalAppearance } from './terminal-appearance'
@@ -197,9 +198,12 @@ export function useTerminalPaneLifecycle({
       },
       terminalOptions: () => {
         const currentSettings = settingsRef.current
+        const terminalFontWeights = resolveTerminalFontWeights(currentSettings?.terminalFontWeight)
         return {
           fontSize: currentSettings?.terminalFontSize ?? 14,
           fontFamily: buildFontFamily(currentSettings?.terminalFontFamily ?? 'SF Mono'),
+          fontWeight: terminalFontWeights.fontWeight,
+          fontWeightBold: terminalFontWeights.fontWeightBold,
           scrollback: Math.min(
             50_000,
             Math.max(

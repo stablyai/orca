@@ -168,6 +168,7 @@ export type GlobalSettings = {
   theme: 'system' | 'dark' | 'light'
   terminalFontSize: number
   terminalFontFamily: string
+  terminalFontWeight: number
   terminalCursorStyle: 'bar' | 'block' | 'underline'
   terminalCursorBlink: boolean
   terminalThemeDark: string
