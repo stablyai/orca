@@ -370,8 +370,11 @@ export function FontAutocomplete({
             type="button"
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => {
-              setOpen((current) => !current)
-              focusInput()
+              const nextOpen = !open
+              setOpen(nextOpen)
+              if (nextOpen) {
+                focusInput()
+              }
             }}
             className="rounded-sm p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             aria-label="Toggle font suggestions"
