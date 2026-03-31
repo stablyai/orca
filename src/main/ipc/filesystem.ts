@@ -31,6 +31,7 @@ import {
   isENOENT
 } from './filesystem-auth'
 import { listQuickOpenFiles } from './filesystem-list-files'
+import { registerFilesystemMutationHandlers } from './filesystem-mutations'
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
 const DEFAULT_SEARCH_MAX_RESULTS = 2000
@@ -144,6 +145,8 @@ export function registerFilesystemHandlers(store: Store): void {
 
     await shell.trashItem(targetPath)
   })
+
+  registerFilesystemMutationHandlers(store)
 
   ipcMain.handle(
     'fs:stat',

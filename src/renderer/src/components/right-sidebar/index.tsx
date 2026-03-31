@@ -165,7 +165,7 @@ export default function RightSidebar(): React.JSX.Element {
     : 0
 
   const panelContent = (
-    <div className="flex-1 min-h-0 overflow-hidden scrollbar-sleek-parent">
+    <div className="flex flex-col flex-1 min-h-0 overflow-hidden scrollbar-sleek-parent">
       {rightSidebarTab === 'explorer' && <FileExplorer key={activeWorktreeId ?? 'none'} />}
       {rightSidebarTab === 'search' && <SearchPanel key={activeWorktreeId ?? 'none'} />}
       {rightSidebarTab === 'source-control' && <SourceControl key={activeWorktreeId ?? 'none'} />}

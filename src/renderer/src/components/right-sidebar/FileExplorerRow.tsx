@@ -1,9 +1,21 @@
-import React from 'react'
-import { ChevronRight, File, Folder, FolderOpen, Loader2, Trash2 } from 'lucide-react'
+import React, { useCallback, useEffect, useRef } from 'react'
+import {
+  ChevronRight,
+  Copy,
+  File,
+  FilePlus,
+  Folder,
+  FolderOpen,
+  FolderPlus,
+  Loader2,
+  Pencil,
+  Trash2
+} from 'lucide-react'
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuSeparator,
   ContextMenuShortcut,
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
@@ -11,6 +23,131 @@ import { cn } from '@/lib/utils'
 import type { GitFileStatus } from '../../../../shared/types'
 import { STATUS_LABELS } from './status-display'
 import type { TreeNode } from './file-explorer-types'
+
+const isMac = navigator.userAgent.includes('Mac')
+
+export type InlineInput = {
+  parentPath: string
+  type: 'file' | 'folder' | 'rename'
+  depth: number
+  existingName?: string
+  existingPath?: string
+}
+
+// ─── Inline Input Row ────────────────────────────────────────────
+
+export function InlineInputRow({
+  depth,
+  inlineInput,
+  onSubmit,
+  onCancel
+}: {
+  depth: number
+  inlineInput: InlineInput
+  onSubmit: (value: string) => void
+  onCancel: () => void
+}): React.JSX.Element {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const blurTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const submitted = useRef(false)
+
+  useEffect(() => {
+    submitted.current = false
+
+    // Schedule focus after any pending focus-restore from menu close
+    const raf = requestAnimationFrame(() => {
+      const el = inputRef.current
+      if (!el) {
+        return
+      }
+      el.focus()
+      if (inlineInput.type === 'rename' && inlineInput.existingName) {
+        const dotIndex = inlineInput.existingName.lastIndexOf('.')
+        if (dotIndex > 0) {
+          el.setSelectionRange(0, dotIndex)
+        } else {
+          el.select()
+        }
+      }
+    })
+    return () => {
+      cancelAnimationFrame(raf)
+      if (blurTimeout.current) {
+        clearTimeout(blurTimeout.current)
+      }
+    }
+  }, [inlineInput])
+
+  const clearBlurTimeout = useCallback(() => {
+    if (blurTimeout.current) {
+      clearTimeout(blurTimeout.current)
+      blurTimeout.current = null
+    }
+  }, [])
+
+  const submit = useCallback(
+    (value: string) => {
+      if (submitted.current) {
+        return
+      }
+      submitted.current = true
+      clearBlurTimeout()
+      onSubmit(value)
+    },
+    [onSubmit, clearBlurTimeout]
+  )
+
+  return (
+    <div
+      className="flex items-center w-full h-[26px] px-2 gap-1"
+      style={{ paddingLeft: `${depth * 16 + 8}px` }}
+    >
+      <span className="size-3 shrink-0" />
+      {inlineInput.type === 'folder' ? (
+        <Folder className="size-3 shrink-0 text-muted-foreground" />
+      ) : (
+        <File className="size-3 shrink-0 text-muted-foreground" />
+      )}
+      <input
+        ref={inputRef}
+        className="flex-1 min-w-0 bg-transparent text-xs text-foreground outline-none border border-ring rounded-sm px-1"
+        defaultValue={inlineInput.type === 'rename' ? inlineInput.existingName : ''}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            submit(e.currentTarget.value)
+          } else if (e.key === 'Escape') {
+            clearBlurTimeout()
+            submitted.current = true
+            onCancel()
+          }
+        }}
+        onFocus={clearBlurTimeout}
+        onBlur={(e) => {
+          // When a Radix menu (context or dropdown) closes, it restores focus
+          // to its trigger button, which steals focus from this input before
+          // the user can type. Detect this by checking relatedTarget — if focus
+          // moved to any menu trigger, it's Radix cleanup, not a user action.
+          if (
+            e.relatedTarget instanceof HTMLElement &&
+            (e.relatedTarget.closest('[data-slot="context-menu-trigger"]') ||
+              e.relatedTarget.closest('[data-slot="dropdown-menu-trigger"]'))
+          ) {
+            requestAnimationFrame(() => inputRef.current?.focus())
+            return
+          }
+          const value = e.currentTarget.value
+          blurTimeout.current = setTimeout(() => {
+            blurTimeout.current = null
+            submit(value)
+          }, 150)
+        }}
+      />
+    </div>
+  )
+}
+
+// ─── File / Folder Row with Context Menu ─────────────────────────
 
 type FileExplorerRowProps = {
   node: TreeNode
@@ -21,9 +158,13 @@ type FileExplorerRowProps = {
   nodeStatus: GitFileStatus | null
   statusColor: string | null
   deleteShortcutLabel: string
+  targetDir: string
+  targetDepth: number
   onClick: () => void
   onDoubleClick: () => void
   onSelect: () => void
+  onStartNew: (type: 'file' | 'folder', dir: string, depth: number) => void
+  onStartRename: (node: TreeNode) => void
   onRequestDelete: () => void
 }
 
@@ -36,9 +177,13 @@ export function FileExplorerRow({
   nodeStatus,
   statusColor,
   deleteShortcutLabel,
+  targetDir,
+  targetDepth,
   onClick,
   onDoubleClick,
   onSelect,
+  onStartNew,
+  onStartRename,
   onRequestDelete
 }: FileExplorerRowProps): React.JSX.Element {
   return (
@@ -99,9 +244,37 @@ export function FileExplorerRow({
           )}
         </button>
       </ContextMenuTrigger>
-      <ContextMenuContent className="w-56">
-        <ContextMenuItem onSelect={onRequestDelete}>
-          <Trash2 className="size-3.5" />
+      <ContextMenuContent
+        className="w-64 bg-[rgba(255,255,255,0.82)] dark:bg-[rgba(0,0,0,0.72)]"
+        onCloseAutoFocus={(e) => e.preventDefault()}
+      >
+        <ContextMenuItem onSelect={() => onStartNew('file', targetDir, targetDepth)}>
+          <FilePlus />
+          New File
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={() => onStartNew('folder', targetDir, targetDepth)}>
+          <FolderPlus />
+          New Folder
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem onSelect={() => window.api.ui.writeClipboardText(node.path)}>
+          <Copy />
+          Copy Path
+          <ContextMenuShortcut>{isMac ? '⌥⌘C' : 'Shift+Alt+C'}</ContextMenuShortcut>
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={() => window.api.ui.writeClipboardText(node.relativePath)}>
+          <Copy />
+          Copy Relative Path
+          <ContextMenuShortcut>{isMac ? '⌥⇧⌘C' : 'Ctrl+Shift+Alt+C'}</ContextMenuShortcut>
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem onSelect={() => onStartRename(node)}>
+          <Pencil />
+          Rename
+          <ContextMenuShortcut>{isMac ? '↩' : 'Enter'}</ContextMenuShortcut>
+        </ContextMenuItem>
+        <ContextMenuItem variant="destructive" onSelect={onRequestDelete}>
+          <Trash2 />
           Delete
           <ContextMenuShortcut>{deleteShortcutLabel}</ContextMenuShortcut>
         </ContextMenuItem>
