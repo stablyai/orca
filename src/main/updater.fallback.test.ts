@@ -139,6 +139,15 @@ describe('updater fallback', () => {
     vi.unstubAllGlobals()
   })
 
+  it('compares prerelease and build semver strings correctly', async () => {
+    const { compareVersions } = await import('./updater-fallback')
+
+    expect(compareVersions('1.0.70-rc.1', '1.0.69')).toBeGreaterThan(0)
+    expect(compareVersions('1.0.70', '1.0.70-rc.1')).toBeGreaterThan(0)
+    expect(compareVersions('1.0.70+build.5', '1.0.70')).toBe(0)
+    expect(compareVersions('v1.0.70-beta.2', '1.0.70-beta.1')).toBeGreaterThan(0)
+  })
+
   it('falls back to the latest stable GitHub release when GitHub reports no published versions', async () => {
     mockReleaseLookupResponse()
     mockCheckFailure('No published versions on GitHub')
