@@ -4,7 +4,7 @@ import { useAppStore } from '@/store'
 import { Badge } from '@/components/ui/badge'
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { Bell, LoaderCircle, CircleDot, CircleCheck, CircleX } from 'lucide-react'
+import { Bell, GitMerge, LoaderCircle, CircleDot, CircleCheck, CircleX } from 'lucide-react'
 import StatusIndicator from './StatusIndicator'
 import WorktreeContextMenu from './WorktreeContextMenu'
 import { cn } from '@/lib/utils'
@@ -16,6 +16,7 @@ import type {
   IssueInfo,
   PRState,
   CheckStatus,
+  GitConflictOperation,
   TerminalTab
 } from '../../../../shared/types'
 import type { Status } from './StatusIndicator'
@@ -45,6 +46,12 @@ function checksLabel(status: CheckStatus): string {
     default:
       return ''
   }
+}
+
+const CONFLICT_OPERATION_LABELS: Record<Exclude<GitConflictOperation, 'unknown'>, string> = {
+  merge: 'Merging',
+  rebase: 'Rebasing',
+  'cherry-pick': 'Cherry-picking'
 }
 
 // ── Stable empty array for tabs fallback ─────────────────────────
@@ -121,6 +128,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   )
 
   const deleteState = useAppStore((s) => s.deleteStateByWorktreeId[worktree.id])
+  const conflictOperation = useAppStore((s) => s.gitConflictOperationByWorktree[worktree.id])
 
   // ── GRANULAR selectors: only subscribe to THIS worktree's data ──
   const tabs = useAppStore((s) => s.tabsByWorktree[worktree.id] ?? EMPTY_TABS)
@@ -322,6 +330,20 @@ const WorktreeCard = React.memo(function WorktreeCard({
               <span className="text-[11px] text-muted-foreground truncate leading-none">
                 {branch}
               </span>
+            )}
+
+            {/* Why: the conflict operation (merge/rebase/cherry-pick) is the
+               only signal that the worktree is in an incomplete operation state.
+               Showing it on the card lets the user spot worktrees that need
+               attention without switching to them first. */}
+            {conflictOperation && conflictOperation !== 'unknown' && (
+              <Badge
+                variant="outline"
+                className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 gap-1 text-amber-600 border-amber-500/30 bg-amber-500/5 dark:text-amber-400 dark:border-amber-400/30 dark:bg-amber-400/5 leading-none"
+              >
+                <GitMerge className="size-2.5" />
+                {CONFLICT_OPERATION_LABELS[conflictOperation]}
+              </Badge>
             )}
           </div>
 

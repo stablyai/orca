@@ -15,6 +15,7 @@ import {
   ArrowRightLeft,
   FolderOpen,
   GitMerge,
+  GitPullRequestArrow,
   TriangleAlert,
   CircleCheck
 } from 'lucide-react'
@@ -63,7 +64,11 @@ const STATUS_ICONS: Record<
   copied: FilePlus
 }
 
-const SECTION_ORDER = ['staged', 'unstaged', 'untracked'] as const
+// Why: unstaged ("Changes") is listed first so that conflict files — which
+// are assigned area:'unstaged' by the parser — appear above "Staged Changes".
+// This keeps unresolved conflicts visible at the top of the list where the
+// user won't miss them.
+const SECTION_ORDER = ['unstaged', 'staged', 'untracked'] as const
 const SECTION_LABELS: Record<(typeof SECTION_ORDER)[number], string> = {
   staged: 'Staged Changes',
   unstaged: 'Changes',
@@ -80,20 +85,6 @@ const CONFLICT_KIND_LABELS: Record<GitConflictKind, string> = {
   added_by_us: 'Added by us',
   added_by_them: 'Added by them',
   both_deleted: 'Both deleted'
-}
-
-// Why: hint text is derived at render time in the renderer, not returned by the
-// main process on GitUncommittedEntry. This keeps UI copy out of the IPC layer
-// and the main-process parser. See also ConflictComponents.tsx for the editor-
-// side copy of this map.
-const CONFLICT_HINT_MAP: Record<GitConflictKind, string> = {
-  both_modified: 'Open and edit the final contents',
-  both_added: 'Choose which version to keep, or combine them',
-  deleted_by_us: 'Decide whether to restore the file',
-  deleted_by_them: 'Decide whether to keep the file or accept deletion',
-  added_by_us: 'Review whether to keep the added file',
-  added_by_them: 'Review the added file before keeping it',
-  both_deleted: 'Resolve in Git or restore one side before editing'
 }
 
 export default function SourceControl(): React.JSX.Element {
@@ -473,6 +464,15 @@ export default function SourceControl(): React.JSX.Element {
               />
             </div>
           )}
+          {/* Why: show operation banner when rebase/merge/cherry-pick is in progress
+              but there are no unresolved conflicts (e.g. between rebase steps, or
+              after resolving all conflicts before running --continue). The
+              ConflictSummaryCard handles the "has conflicts" case above. */}
+          {unresolvedConflictReviewEntries.length === 0 && conflictOperation !== 'unknown' && (
+            <div className="px-3 pb-2">
+              <OperationBanner conflictOperation={conflictOperation} />
+            </div>
+          )}
 
           {scope === 'all' && showGenericEmptyState ? (
             <EmptyState
@@ -764,7 +764,7 @@ function SectionHeader({
   actions?: React.ReactNode
 }): React.JSX.Element {
   return (
-    <div className="group/section flex items-center pl-1 pr-3 py-1">
+    <div className="group/section flex items-center pl-1 pr-3 pt-3 pb-1">
       <button
         type="button"
         className="flex flex-1 items-center gap-1 rounded-md px-0.5 py-0.5 text-left text-xs font-semibold uppercase tracking-wider text-foreground/70 hover:bg-accent hover:text-accent-foreground"
@@ -805,9 +805,9 @@ function ConflictSummaryCard({
           : 'Conflicts'
 
   return (
-    <div className="rounded-md border border-destructive/25 bg-destructive/5 px-3 py-2">
+    <div className="rounded-md border border-amber-500/25 bg-amber-500/5 px-3 py-2">
       <div className="flex items-start gap-2">
-        <TriangleAlert className="mt-0.5 size-4 shrink-0 text-destructive" />
+        <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
         <div className="min-w-0 flex-1">
           <div
             className="text-xs font-medium text-foreground"
@@ -817,16 +817,49 @@ function ConflictSummaryCard({
             Resolved files move back to normal changes after they leave the live conflict state.
           </div>
         </div>
+      </div>
+      <div className="mt-2">
         <Button
           type="button"
           variant="outline"
           size="sm"
-          className="h-7 text-xs"
+          className="h-7 text-xs w-full"
           onClick={onReview}
         >
           <GitMerge className="size-3.5" />
           Review conflicts
         </Button>
+      </div>
+    </div>
+  )
+}
+
+// Why: this banner is separate from ConflictSummaryCard because a rebase (or
+// merge/cherry-pick) can be in progress without any conflicts — e.g. between
+// rebase steps, or after resolving all conflicts but before --continue. The
+// user needs to see the operation state so they know the worktree is mid-rebase
+// and that they should run `git rebase --continue` or `--abort`.
+function OperationBanner({
+  conflictOperation
+}: {
+  conflictOperation: GitConflictOperation
+}): React.JSX.Element {
+  const label =
+    conflictOperation === 'merge'
+      ? 'Merge in progress'
+      : conflictOperation === 'rebase'
+        ? 'Rebase in progress'
+        : conflictOperation === 'cherry-pick'
+          ? 'Cherry-pick in progress'
+          : 'Operation in progress'
+
+  const Icon = conflictOperation === 'rebase' ? GitPullRequestArrow : GitMerge
+
+  return (
+    <div className="rounded-md border border-amber-500/25 bg-amber-500/5 px-3 py-2">
+      <div className="flex items-center gap-2">
+        <Icon className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+        <span className="text-xs font-medium text-foreground">{label}</span>
       </div>
     </div>
   )
@@ -856,7 +889,9 @@ function UncommittedEntryRow({
   const isUnresolvedConflict = entry.conflictStatus === 'unresolved'
   const isResolvedLocally = entry.conflictStatus === 'resolved_locally'
   const conflictLabel = entry.conflictKind ? CONFLICT_KIND_LABELS[entry.conflictKind] : null
-  const conflictHint = entry.conflictKind ? CONFLICT_HINT_MAP[entry.conflictKind] : null
+  // Why: the hint text ("Open and edit…", "Decide whether to…") was removed
+  // from the sidebar because it's not actionable here — the user can only
+  // click the row, and the conflict-kind label alone is sufficient context.
   // Why: Stage is suppressed for unresolved conflicts because `git add` would
   // immediately erase the `u` record — the only live conflict signal in the
   // sidebar — before the user has actually reviewed the file. The user should
@@ -901,10 +936,8 @@ function UncommittedEntryRow({
               <span className="truncate text-[11px] text-muted-foreground">{dirPath}</span>
             )}
           </div>
-          {conflictLabel && conflictHint && (
-            <div className="truncate text-[11px] text-muted-foreground">
-              {conflictLabel} · {conflictHint}
-            </div>
+          {conflictLabel && (
+            <div className="truncate text-[11px] text-muted-foreground">{conflictLabel}</div>
           )}
         </div>
         {entry.conflictStatus ? (

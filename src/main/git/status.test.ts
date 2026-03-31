@@ -165,7 +165,7 @@ describe('getStatus', () => {
     existsSyncMock.mockImplementation((target: string) => target.endsWith('MERGE_HEAD'))
     execFileAsyncMock.mockResolvedValueOnce({
       stdout:
-        'u UU N... 100644 100644 100644 100644 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb cccccccccccccccccccccccccccccccccccccccc\tsrc/app.ts\n'
+        'u UU N... 100644 100644 100644 100644 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb cccccccccccccccccccccccccccccccccccccccc src/app.ts\n'
     })
 
     const result = await getStatus('/repo')
@@ -187,7 +187,7 @@ describe('getStatus', () => {
     existsSyncMock.mockReturnValue(false)
     execFileAsyncMock.mockResolvedValueOnce({
       stdout:
-        'u UD N... 100644 100644 000000 100644 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb cccccccccccccccccccccccccccccccccccccccc\tsrc/deleted.ts\n'
+        'u UD N... 100644 100644 000000 100644 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb cccccccccccccccccccccccccccccccccccccccc src/deleted.ts\n'
     })
 
     const result = await getStatus('/repo')
@@ -208,7 +208,7 @@ describe('getStatus', () => {
     })
     execFileAsyncMock.mockResolvedValueOnce({
       stdout:
-        'u AU N... 100644 100644 100644 100644 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb cccccccccccccccccccccccccccccccccccccccc\tsrc/new.ts\n'
+        'u AU N... 100644 100644 100644 100644 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb cccccccccccccccccccccccccccccccccccccccc src/new.ts\n'
     })
 
     const result = await getStatus('/repo')

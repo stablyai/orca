@@ -97,6 +97,13 @@ export type CheckStatus = 'pending' | 'success' | 'failure' | 'neutral'
 
 export type PRMergeableState = 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN'
 
+export type PRConflictSummary = {
+  baseRef: string
+  baseCommit: string
+  commitsBehind: number
+  files: string[]
+}
+
 export type PRInfo = {
   number: number
   title: string
@@ -105,6 +112,7 @@ export type PRInfo = {
   checksStatus: CheckStatus
   updatedAt: string
   mergeable: PRMergeableState
+  conflictSummary?: PRConflictSummary
 }
 
 export type PRCheckDetail = {

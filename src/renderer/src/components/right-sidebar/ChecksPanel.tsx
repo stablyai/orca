@@ -3,7 +3,13 @@ import { LoaderCircle, ExternalLink, RefreshCw, Check, X, Pencil } from 'lucide-
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import PRActions from './PRActions'
-import { PullRequestIcon, prStateColor, MergeConflictWarning, ChecksList } from './checks-helpers'
+import {
+  PullRequestIcon,
+  prStateColor,
+  ConflictingFilesSection,
+  MergeConflictNotice,
+  ChecksList
+} from './checks-helpers'
 import type { PRInfo, PRCheckDetail } from '../../../../shared/types'
 
 export default function ChecksPanel(): React.JSX.Element {
@@ -12,6 +18,7 @@ export default function ChecksPanel(): React.JSX.Element {
   const repos = useAppStore((s) => s.repos)
   const prCache = useAppStore((s) => s.prCache)
   const fetchPRForBranch = useAppStore((s) => s.fetchPRForBranch)
+  const gitConflictOperationByWorktree = useAppStore((s) => s.gitConflictOperationByWorktree)
 
   const fetchPRChecks = useAppStore((s) => s.fetchPRChecks)
 
@@ -26,6 +33,7 @@ export default function ChecksPanel(): React.JSX.Element {
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pollIntervalRef = useRef(30_000) // start at 30s, backs off to 120s
   const prevChecksRef = useRef<string>('')
+  const conflictSummaryRefreshKeyRef = useRef<string | null>(null)
 
   // Find active worktree and repo
   const { worktree, repo } = useMemo(() => {
@@ -46,6 +54,9 @@ export default function ChecksPanel(): React.JSX.Element {
   const prCacheKey = repo && branch ? `${repo.path}::${branch}` : ''
   const pr: PRInfo | null = prCacheKey ? (prCache[prCacheKey]?.data ?? null) : null
   const prNumber = pr?.number ?? null
+  const conflictOperation = activeWorktreeId
+    ? (gitConflictOperationByWorktree[activeWorktreeId] ?? 'unknown')
+    : 'unknown'
 
   // Fetch PR data when the active worktree/branch changes
   useEffect(() => {
@@ -53,6 +64,25 @@ export default function ChecksPanel(): React.JSX.Element {
       void fetchPRForBranch(repo.path, branch)
     }
   }, [repo, branch, fetchPRForBranch])
+
+  useEffect(() => {
+    if (!repo || !branch || !pr || pr.mergeable !== 'CONFLICTING') {
+      conflictSummaryRefreshKeyRef.current = null
+      return
+    }
+
+    const refreshKey = `${repo.path}::${branch}::${pr.number}`
+    if (conflictSummaryRefreshKeyRef.current === refreshKey) {
+      return
+    }
+
+    // Why: the checks panel is the one place where stale conflict metadata is
+    // visibly wrong. Force-refresh conflicting PRs once when the panel sees
+    // them so we don't keep rendering cached branch summaries or empty file
+    // lists from an older payload.
+    conflictSummaryRefreshKeyRef.current = refreshKey
+    void fetchPRForBranch(repo.path, branch, { force: true })
+  }, [repo, branch, pr, fetchPRForBranch])
 
   // Fetch checks via cached store method
   const fetchChecks = useCallback(
@@ -211,27 +241,47 @@ export default function ChecksPanel(): React.JSX.Element {
   }
 
   if (!pr) {
+    // Why: during a rebase/merge/cherry-pick the worktree is on a detached
+    // HEAD, so there is no branch to look up a PR for. Showing "No pull
+    // request found" is misleading — the PR still exists on the original
+    // branch. Show an operation-aware message instead.
+    const operationInProgress = conflictOperation !== 'unknown'
+    const operationLabel =
+      conflictOperation === 'rebase'
+        ? 'Rebase'
+        : conflictOperation === 'merge'
+          ? 'Merge'
+          : conflictOperation === 'cherry-pick'
+            ? 'Cherry-pick'
+            : null
+
     return (
       <div className="px-4 py-6">
-        <div className="text-sm font-medium text-foreground">No pull request found</div>
-        <div className="mt-1 text-xs text-muted-foreground">
-          Push your branch and open a PR to see checks here
+        <div className="text-sm font-medium text-foreground">
+          {operationInProgress ? `${operationLabel} in progress` : 'No pull request found'}
         </div>
-        <button
-          className="mt-3 px-3 py-1 text-xs font-medium rounded-md border border-border bg-accent/50 text-foreground hover:bg-accent transition-colors disabled:opacity-50"
-          disabled={emptyRefreshing}
-          onClick={() => {
-            if (!activeWorktreeId) {
-              return
-            }
-            setEmptyRefreshing(true)
-            void handleRefresh().finally(() => {
-              setEmptyRefreshing(false)
-            })
-          }}
-        >
-          {emptyRefreshing ? 'Refreshing…' : 'Refresh'}
-        </button>
+        <div className="mt-1 text-xs text-muted-foreground">
+          {operationInProgress
+            ? 'PR checks will be available after the operation completes'
+            : 'Push your branch and open a PR to see checks here'}
+        </div>
+        {!operationInProgress && (
+          <button
+            className="mt-3 px-3 py-1 text-xs font-medium rounded-md border border-border bg-accent/50 text-foreground hover:bg-accent transition-colors disabled:opacity-50"
+            disabled={emptyRefreshing}
+            onClick={() => {
+              if (!activeWorktreeId) {
+                return
+              }
+              setEmptyRefreshing(true)
+              void handleRefresh().finally(() => {
+                setEmptyRefreshing(false)
+              })
+            }}
+          >
+            {emptyRefreshing ? 'Refreshing…' : 'Refresh'}
+          </button>
+        )}
       </div>
     )
   }
@@ -319,17 +369,20 @@ export default function ChecksPanel(): React.JSX.Element {
           </div>
         )}
 
-        {/* Merge conflict warning — surfaced from GitHub's mergeable state so the
-           user knows they must resolve conflicts before the PR can merge. */}
-        <MergeConflictWarning mergeable={pr.mergeable} />
-
         {/* Merge / Delete Worktree actions */}
         {worktree && repo && (
           <PRActions pr={pr} repo={repo} worktree={worktree} onRefreshPR={handleRefreshPR} />
         )}
       </div>
 
-      <ChecksList checks={checks} checksLoading={checksLoading} />
+      <ConflictingFilesSection pr={pr} />
+      <MergeConflictNotice pr={pr} />
+      {/* Why: when the PR has merge conflicts and no checks have been fetched,
+          showing "No checks configured" is misleading — checks may exist but
+          simply cannot run until conflicts are resolved. Hide the empty state. */}
+      {!(pr.mergeable === 'CONFLICTING' && checks.length === 0 && !checksLoading) && (
+        <ChecksList checks={checks} checksLoading={checksLoading} />
+      )}
     </div>
   )
 }

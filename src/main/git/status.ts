@@ -130,18 +130,21 @@ async function parseUnmergedEntry(
   worktreePath: string,
   line: string
 ): Promise<GitStatusEntry | null> {
-  const tabIndex = line.indexOf('\t')
-  if (tabIndex === -1) {
-    return null
-  }
-
-  const metadata = line.slice(0, tabIndex)
-  const filePath = line.slice(tabIndex + 1)
-  const parts = metadata.split(' ')
+  // Why: porcelain v2 unmerged entries are fully space-separated (like type-1
+  // ordinary entries), NOT tab-separated. The format is:
+  //   u <XY> <sub> <m1> <m2> <m3> <mW> <h1> <h2> <h3> <path>
+  // The path starts at field index 10 and may contain spaces, so we join the
+  // remaining fields. The earlier tab-based parsing silently dropped all
+  // unmerged entries because the tab was never present.
+  const parts = line.split(' ')
   const xy = parts[1]
   const modeStage1 = parts[3]
   const modeStage2 = parts[4]
   const modeStage3 = parts[5]
+  const filePath = parts.slice(10).join(' ')
+  if (!filePath) {
+    return null
+  }
 
   // Why: submodule conflicts (mode 160000) are out of scope for v1.
   // Presenting them with normal file-conflict UX would be misleading because
@@ -227,35 +230,45 @@ async function getConflictCompatibilityStatus(
 // cleaned up by the time we check. In that case we fall back to 'unknown' for
 // one poll cycle, which is acceptable. The renderer uses this to label the
 // merge summary ("Merge conflicts" vs "Rebase conflicts" vs generic "Conflicts").
+//
+// Why we also check rebase-merge/ and rebase-apply/ directories: during a
+// rebase, REBASE_HEAD only exists when the *current* step has a conflict.
+// Between steps (or after resolving and before `git rebase --continue`), the
+// rebase is still in progress but REBASE_HEAD is absent. The rebase-merge/ or
+// rebase-apply/ directory persists for the entire rebase, so checking it
+// catches the "rebase in progress, no conflicts on current step" case.
 async function detectConflictOperation(worktreePath: string): Promise<GitConflictOperation> {
   const gitDir = await resolveGitDir(worktreePath)
   const mergeHead = path.join(gitDir, 'MERGE_HEAD')
   const rebaseHead = path.join(gitDir, 'REBASE_HEAD')
   const cherryPickHead = path.join(gitDir, 'CHERRY_PICK_HEAD')
+  const rebaseMergeDir = path.join(gitDir, 'rebase-merge')
+  const rebaseApplyDir = path.join(gitDir, 'rebase-apply')
 
   let hasMergeHead = false
   let hasRebaseHead = false
   let hasCherryPickHead = false
+  let hasRebaseDir = false
 
   try {
     hasMergeHead = existsSync(mergeHead)
     hasRebaseHead = existsSync(rebaseHead)
     hasCherryPickHead = existsSync(cherryPickHead)
+    hasRebaseDir = existsSync(rebaseMergeDir) || existsSync(rebaseApplyDir)
   } catch {
-    return 'unknown'
-  }
-
-  if (Number(hasMergeHead) + Number(hasRebaseHead) + Number(hasCherryPickHead) !== 1) {
     return 'unknown'
   }
 
   if (hasMergeHead) {
     return 'merge'
   }
-  if (hasRebaseHead) {
+  if (hasRebaseHead || hasRebaseDir) {
     return 'rebase'
   }
-  return 'cherry-pick'
+  if (hasCherryPickHead) {
+    return 'cherry-pick'
+  }
+  return 'unknown'
 }
 
 async function resolveGitDir(worktreePath: string): Promise<string> {
