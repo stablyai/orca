@@ -112,7 +112,13 @@ describe('registerFilesystemHandlers', () => {
 
     realpathMock.mockImplementation(async (targetPath: string) => targetPath)
     listWorktreesMock.mockResolvedValue([
-      { path: '/workspace/repo-feature', head: 'abc', branch: '', isBare: false }
+      {
+        path: '/workspace/repo-feature',
+        head: 'abc',
+        branch: '',
+        isBare: false,
+        isMainWorktree: false
+      }
     ])
     trashItemMock.mockResolvedValue(undefined)
     statMock.mockResolvedValue({ size: 10, isDirectory: () => false, mtimeMs: 123 })

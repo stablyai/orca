@@ -38,7 +38,8 @@ export function parseWorktreeList(output: string): GitWorktreeInfo[] {
     }
 
     if (path) {
-      worktrees.push({ path, head, branch, isBare })
+      // `git worktree list` always emits the main working tree first.
+      worktrees.push({ path, head, branch, isBare, isMainWorktree: worktrees.length === 0 })
     }
   }
 

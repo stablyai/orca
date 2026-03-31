@@ -139,7 +139,8 @@ describe('mergeWorktree', () => {
     path: '/workspaces/feature',
     head: 'abc123',
     branch: 'refs/heads/feature-x',
-    isBare: false
+    isBare: false,
+    isMainWorktree: false
   }
 
   it('merges with full metadata', () => {
@@ -161,6 +162,7 @@ describe('mergeWorktree', () => {
       head: 'abc123',
       branch: 'refs/heads/feature-x',
       isBare: false,
+      isMainWorktree: false,
       displayName: 'My Feature',
       comment: 'WIP',
       linkedIssue: 42,
@@ -194,7 +196,8 @@ describe('mergeWorktree', () => {
       path: '/workspaces/bare-repo',
       head: '000000',
       branch: '',
-      isBare: true
+      isBare: true,
+      isMainWorktree: false
     }
     const result = mergeWorktree('repo1', bareGit, undefined)
     expect(result.displayName).toBe('bare-repo')
