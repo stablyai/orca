@@ -217,6 +217,7 @@ export function FontAutocomplete({
   const [prevValue, setPrevValue] = useState(value)
   const [open, setOpen] = useState(false)
   const [highlightedIndex, setHighlightedIndex] = useState(-1)
+  const inputRef = useRef<HTMLInputElement | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const optionRefs = useRef(new Map<string, HTMLButtonElement>())
   const listboxId = useId()
@@ -281,10 +282,15 @@ export function FontAutocomplete({
     setOpen(false)
   }
 
+  const focusInput = (): void => {
+    inputRef.current?.focus()
+  }
+
   return (
     <div ref={rootRef} className="relative max-w-sm">
       <div className="relative">
         <Input
+          ref={inputRef}
           value={query}
           onChange={(e) => {
             const next = e.target.value
@@ -346,10 +352,12 @@ export function FontAutocomplete({
           {query ? (
             <button
               type="button"
+              onMouseDown={(e) => e.preventDefault()}
               onClick={() => {
                 setQuery('')
                 onChange('')
                 setOpen(true)
+                focusInput()
               }}
               className="rounded-sm p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               aria-label="Clear font selection"
@@ -360,7 +368,11 @@ export function FontAutocomplete({
           ) : null}
           <button
             type="button"
-            onClick={() => setOpen((current) => !current)}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              setOpen((current) => !current)
+              focusInput()
+            }}
             className="rounded-sm p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             aria-label="Toggle font suggestions"
             title="Fonts"
