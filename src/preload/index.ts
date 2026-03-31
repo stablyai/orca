@@ -204,7 +204,13 @@ const api = {
     getVersion: (): Promise<string> => ipcRenderer.invoke('updater:getVersion'),
     check: (): Promise<void> => ipcRenderer.invoke('updater:check'),
     download: (): Promise<void> => ipcRenderer.invoke('updater:download'),
-    quitAndInstall: (): Promise<void> => ipcRenderer.invoke('updater:quitAndInstall'),
+    quitAndInstall: (): Promise<void> => {
+      // Dispatch beforeunload to trigger terminal buffer capture before the
+      // update process bypasses the normal window close sequence (quitAndInstall
+      // removes close listeners, preventing beforeunload from firing naturally).
+      window.dispatchEvent(new Event('beforeunload'))
+      return ipcRenderer.invoke('updater:quitAndInstall')
+    },
     onStatus: (callback: (status: unknown) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, status: unknown) => callback(status)
       ipcRenderer.on('updater:status', listener)
