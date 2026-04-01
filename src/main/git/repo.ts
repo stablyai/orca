@@ -346,7 +346,15 @@ export function getRemoteFileUrl(
   }
 
   const defaultBranch = getDefaultBaseRef(repoPath).replace(/^origin\//, '')
-  const browseUrl = info.browseFile(relativePath, { committish: defaultBranch })
+
+  // Why: @types/hosted-git-info is stuck on the v3 API and doesn't include
+  // browseFile(), which was added in later versions. We cast to access it
+  // because browseFile() produces correct /blob/ URLs for files, whereas
+  // browse() produces /tree/ URLs meant for directories.
+  const browseUrl = (info as unknown as { browseFile: typeof info.browse }).browseFile(
+    relativePath,
+    { committish: defaultBranch }
+  )
   if (!browseUrl) {
     return null
   }
