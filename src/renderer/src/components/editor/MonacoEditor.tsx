@@ -1,7 +1,7 @@
 import React, { useRef, useCallback, useEffect, useState } from 'react'
 import Editor, { type OnMount } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
-import { Copy } from 'lucide-react'
+import { Copy, ExternalLink } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -205,6 +205,23 @@ export default function MonacoEditor({
           >
             <Copy className="w-3.5 h-3.5 mr-1.5" />
             Copy Rel. Path to Line
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={async () => {
+              // Derive worktree root from the absolute and relative paths
+              const worktreePath = filePath.slice(0, -(relativePath.length + 1))
+              const url = await window.api.git.remoteFileUrl({
+                worktreePath,
+                relativePath,
+                line: gutterMenuLine
+              })
+              if (url) {
+                window.api.ui.writeClipboardText(url)
+              }
+            }}
+          >
+            <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
+            Copy Remote URL
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

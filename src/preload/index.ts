@@ -283,7 +283,12 @@ const api = {
     unstage: (args: { worktreePath: string; filePath: string }): Promise<void> =>
       ipcRenderer.invoke('git:unstage', args),
     discard: (args: { worktreePath: string; filePath: string }): Promise<void> =>
-      ipcRenderer.invoke('git:discard', args)
+      ipcRenderer.invoke('git:discard', args),
+    remoteFileUrl: (args: {
+      worktreePath: string
+      relativePath: string
+      line: number
+    }): Promise<string | null> => ipcRenderer.invoke('git:remoteFileUrl', args)
   },
 
   ui: {

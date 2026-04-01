@@ -26,6 +26,7 @@ import {
   getBranchCompare,
   getBranchDiff
 } from '../git/status'
+import { getRemoteFileUrl } from '../git/repo'
 import {
   resolveAuthorizedPath,
   resolveRegisteredWorktreePath,
@@ -430,6 +431,17 @@ export function registerFilesystemHandlers(store: Store): void {
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
       await discardChanges(worktreePath, filePath)
+    }
+  )
+
+  ipcMain.handle(
+    'git:remoteFileUrl',
+    async (
+      _event,
+      args: { worktreePath: string; relativePath: string; line: number }
+    ): Promise<string | null> => {
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      return getRemoteFileUrl(worktreePath, args.relativePath, args.line)
     }
   )
 }

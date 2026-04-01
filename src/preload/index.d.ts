@@ -172,6 +172,11 @@ type GitApi = {
   stage: (args: { worktreePath: string; filePath: string }) => Promise<void>
   unstage: (args: { worktreePath: string; filePath: string }) => Promise<void>
   discard: (args: { worktreePath: string; filePath: string }) => Promise<void>
+  remoteFileUrl: (args: {
+    worktreePath: string
+    relativePath: string
+    line: number
+  }) => Promise<string | null>
 }
 
 type Api = {

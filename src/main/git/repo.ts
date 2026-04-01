@@ -2,6 +2,7 @@ import { execFile, execSync } from 'child_process'
 import { existsSync, statSync } from 'fs'
 import { join, basename } from 'path'
 import { promisify } from 'util'
+import hostedGitInfo from 'hosted-git-info'
 
 const execFileAsync = promisify(execFile)
 
@@ -320,4 +321,37 @@ export async function getBranchConflictKind(
   } catch {
     return null
   }
+}
+
+/**
+ * Build a hosted URL (e.g. GitHub, GitLab, Bitbucket) for a specific file
+ * and line in the repo. Returns null when the remote isn't a recognized host.
+ *
+ * Why hosted-git-info: it handles SSH, HTTPS, and shorthand remote URLs
+ * across multiple providers, so we don't have to maintain our own URL parser.
+ */
+export function getRemoteFileUrl(
+  repoPath: string,
+  relativePath: string,
+  line: number
+): string | null {
+  const remoteUrl = getRemoteUrl(repoPath)
+  if (!remoteUrl) {
+    return null
+  }
+
+  const info = hostedGitInfo.fromUrl(remoteUrl)
+  if (!info) {
+    return null
+  }
+
+  const defaultBranch = getDefaultBaseRef(repoPath).replace(/^origin\//, '')
+  const browseUrl = info.browseFile(relativePath, { committish: defaultBranch })
+  if (!browseUrl) {
+    return null
+  }
+
+  // Why: hosted-git-info lowercases the fragment, but GitHub convention
+  // uses uppercase L for line links (e.g. #L42). Append manually.
+  return `${browseUrl}#L${line}`
 }
