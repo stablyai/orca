@@ -445,9 +445,95 @@
 /* ── Markdown Preview ────────────────────────────────── */
 
 .markdown-preview {
+  position: relative;
   padding: 24px 32px;
   font-size: 14px;
   line-height: 1.7;
+}
+
+.markdown-preview:focus-visible {
+  outline: none;
+}
+
+.markdown-preview-search {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  width: fit-content;
+  max-width: min(100%, 460px);
+  margin-left: auto;
+  margin-right: -20px;
+  margin-bottom: 6px;
+  padding: 0 2px 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 0 0 0 4px;
+  background: var(--background);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
+}
+
+.markdown-preview-search-field {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  width: 220px;
+  border: 1px solid var(--ring);
+  background: var(--background);
+  flex: 0 1 auto;
+}
+
+.markdown-preview-search-status {
+  min-width: 0;
+  padding: 0 6px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+
+.markdown-preview-search-divider {
+  width: 1px;
+  height: 16px;
+  margin: 0 2px;
+  background: var(--border);
+}
+
+.markdown-preview-search-input {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.markdown-preview-search-input::placeholder {
+  color: var(--muted-foreground);
+}
+
+.markdown-preview-search-button {
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  padding: 0;
+  border-radius: 2px;
+  color: var(--muted-foreground);
+}
+
+.markdown-preview-search-button:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+.markdown-preview-search-match {
+  padding: 0;
+  border-radius: 2px;
+  background: color-mix(in srgb, #facc15 50%, transparent);
+  color: inherit;
+}
+
+.markdown-preview-search-match[data-active] {
+  background: color-mix(in srgb, #fb923c 60%, transparent);
 }
 
 .markdown-body h1,
