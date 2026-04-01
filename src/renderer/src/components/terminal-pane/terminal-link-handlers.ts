@@ -114,7 +114,10 @@ export function createFilePathLinkProvider(
               end: { x: parsed.endIndex + 1, y: bufferLineNumber }
             },
             text: parsed.displayText,
-            activate: () => {
+            activate: (event) => {
+              if (!isTerminalLinkActivation(event)) {
+                return
+              }
               openDetectedFilePath(resolved.absolutePath, resolved.line, resolved.column, {
                 worktreeId,
                 worktreePath
