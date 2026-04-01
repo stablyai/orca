@@ -159,15 +159,28 @@ export function useTerminalPaneLifecycle({
       markWorktreeUnread
     }
 
+    const isMac = navigator.userAgent.includes('Mac')
+    const openLinkHint = isMac ? '⌘+click to open' : 'Ctrl+click to open'
+
     const manager = new PaneManager(container, {
       onPaneCreated: (pane) => {
         const linkProviderDisposable = pane.terminal.registerLinkProvider(
-          createFilePathLinkProvider(pane.id, linkDeps)
+          createFilePathLinkProvider(pane.id, linkDeps, pane.linkTooltip, openLinkHint)
         )
         linkProviderDisposablesRef.current.set(pane.id, linkProviderDisposable)
         pane.terminal.options.linkHandler = {
           allowNonHttpProtocols: true,
-          activate: (event, text) => handleOscLink(text, event as MouseEvent | undefined)
+          activate: (event, text) => handleOscLink(text, event as MouseEvent | undefined),
+          // Show bottom-left tooltip on hover for OSC 8 hyperlinks (e.g.
+          // GitHub owner/repo#issue references emitted by CLI tools) — same
+          // behaviour as the WebLinksAddon provides for plain-text URLs.
+          hover: (_event, text) => {
+            pane.linkTooltip.textContent = `${text} (${openLinkHint})`
+            pane.linkTooltip.style.display = ''
+          },
+          leave: () => {
+            pane.linkTooltip.style.display = 'none'
+          }
         }
         applyAppearance(manager)
         connectPanePty(pane, manager, ptyDeps)
