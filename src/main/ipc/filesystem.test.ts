@@ -275,6 +275,52 @@ describe('registerFilesystemHandlers', () => {
     expect(getBranchCompareMock).toHaveBeenCalledWith('/workspace/repo-feature', 'origin/main')
   })
 
+  it('allows git operations on worktrees outside repo/workspace roots', async () => {
+    // Linked worktrees can live anywhere on disk (e.g. ~/.codex/worktrees/).
+    // As long as the path matches a worktree reported by `git worktree list`
+    // for a registered repo, it should be allowed — the security boundary is
+    // worktree registration, not directory containment.
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/repo',
+        head: 'abc',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      },
+      {
+        path: '/external/worktrees/feature',
+        head: 'def',
+        branch: 'refs/heads/feature',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    getBranchCompareMock.mockResolvedValue({
+      summary: {
+        baseRef: 'origin/main',
+        baseOid: 'base-oid',
+        compareRef: 'feature',
+        headOid: 'head-oid',
+        mergeBase: 'merge-base-oid',
+        changedFiles: 0,
+        status: 'ready'
+      },
+      entries: []
+    })
+
+    registerFilesystemHandlers(store as never)
+
+    // /external/worktrees/feature is outside both /workspace/repo and /workspace
+    await handlers.get('git:branchCompare')!(null, {
+      worktreePath: '/external/worktrees/feature',
+      baseRef: 'origin/main'
+    })
+
+    expect(getBranchCompareMock).toHaveBeenCalledWith('/external/worktrees/feature', 'origin/main')
+  })
+
   it('routes branch diff queries through the pinned branch diff helper', async () => {
     getBranchDiffMock.mockResolvedValue({
       kind: 'text',
