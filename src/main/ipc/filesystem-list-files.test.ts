@@ -143,11 +143,11 @@ describe('filesystem-list-files', () => {
       const result = await promise
 
       // Verify rg was never called
-      const rgCalls = spawnMock.mock.calls.filter(([cmd]: [string]) => cmd === 'rg')
+      const rgCalls = spawnMock.mock.calls.filter((call) => call[0] === 'rg')
       expect(rgCalls.length).toBe(0)
 
       // Verify git ls-files was called
-      const gitCalls = spawnMock.mock.calls.filter(([cmd]: [string]) => cmd === 'git')
+      const gitCalls = spawnMock.mock.calls.filter((call) => call[0] === 'git')
       expect(gitCalls.length).toBe(2)
       expect(gitCalls[0][1]).toContain('ls-files')
 
@@ -217,7 +217,7 @@ describe('filesystem-list-files', () => {
 
       expect(result).toEqual(['file.ts'])
       // git should never have been called
-      const gitCalls = spawnMock.mock.calls.filter(([cmd]: [string]) => cmd === 'git')
+      const gitCalls = spawnMock.mock.calls.filter((call) => call[0] === 'git')
       expect(gitCalls.length).toBe(0)
     })
   })
