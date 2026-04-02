@@ -2,6 +2,7 @@ import { spawn } from 'child_process'
 import { relative, sep } from 'path'
 import type { Store } from '../persistence'
 import { resolveAuthorizedPath } from './filesystem-auth'
+import { checkRgAvailable } from './rg-availability'
 
 // Why: We use --hidden to surface dotfiles users commonly edit (e.g. .env,
 // .github workflows, .eslintrc) but must still exclude non-editable hidden
@@ -45,6 +46,15 @@ function shouldIncludeQuickOpenPath(path: string): boolean {
 
 export async function listQuickOpenFiles(rootPath: string, store: Store): Promise<string[]> {
   const authorizedRootPath = await resolveAuthorizedPath(rootPath, store)
+
+  // Why: checking rg availability upfront avoids a race condition where
+  // spawn('rg') emits 'close' before 'error' on some platforms, causing
+  // the handler to resolve with empty results before the git fallback
+  // can run. The result is cached after the first check.
+  const rgAvailable = await checkRgAvailable()
+  if (!rgAvailable) {
+    return listFilesWithGit(authorizedRootPath)
+  }
 
   // Why: We try fast string slicing first (O(1) per file), but fall back to
   // path.relative() if the rg output doesn't start with the expected prefix.
@@ -167,4 +177,86 @@ export async function listQuickOpenFiles(rootPath: string, store: Store): Promis
   ])
 
   return Array.from(files)
+}
+
+/**
+ * Fallback file lister using git ls-files. Used when rg is not available.
+ *
+ * Why two git ls-files calls: the first lists tracked + untracked-but-not-ignored
+ * files (mirrors rg --files --hidden with gitignore respect). The second specifically
+ * surfaces .env* files that are typically gitignored but users frequently need in
+ * quick-open (mirrors the second rg call with --no-ignore-vcs).
+ */
+function listFilesWithGit(rootPath: string): Promise<string[]> {
+  const files = new Set<string>()
+
+  const runGitLsFiles = (args: string[]): Promise<void> => {
+    return new Promise((resolve) => {
+      let buf = ''
+      let done = false
+      const finish = (): void => {
+        if (done) {
+          return
+        }
+        done = true
+        clearTimeout(timer)
+        resolve()
+      }
+
+      const processLine = (line: string): void => {
+        if (line.charCodeAt(line.length - 1) === 13 /* \r */) {
+          line = line.substring(0, line.length - 1)
+        }
+        if (!line) {
+          return
+        }
+        if (shouldIncludeQuickOpenPath(line)) {
+          files.add(line)
+        }
+      }
+
+      // Why: git ls-files outputs paths relative to cwd, so we set cwd to
+      // rootPath and use the output directly — no prefix stripping needed.
+      const child = spawn('git', ['ls-files', ...args], {
+        cwd: rootPath,
+        stdio: ['ignore', 'pipe', 'pipe']
+      })
+      child.stdout.setEncoding('utf-8')
+      child.stdout.on('data', (chunk: string) => {
+        buf += chunk
+        let start = 0
+        let newlineIdx = buf.indexOf('\n', start)
+        while (newlineIdx !== -1) {
+          processLine(buf.substring(start, newlineIdx))
+          start = newlineIdx + 1
+          newlineIdx = buf.indexOf('\n', start)
+        }
+        buf = start < buf.length ? buf.substring(start) : ''
+      })
+      child.stderr.on('data', () => {
+        /* drain */
+      })
+      child.once('error', () => {
+        finish()
+      })
+      child.once('close', () => {
+        if (buf) {
+          processLine(buf)
+        }
+        finish()
+      })
+      const timer = setTimeout(() => child.kill(), 10000)
+    })
+  }
+
+  return Promise.all([
+    // Why: --cached lists tracked files, --others lists untracked files,
+    // --exclude-standard respects .gitignore. Together this mirrors
+    // rg --files --hidden (which respects gitignore by default).
+    runGitLsFiles(['--cached', '--others', '--exclude-standard']),
+    // Why: surfaces .env* files that are typically gitignored. --others
+    // without --exclude-standard lists all untracked files; the pathspec
+    // restricts output to .env* only. Mirrors the rg --no-ignore-vcs call.
+    runGitLsFiles(['--others', '--', '**/.env*'])
+  ]).then(() => Array.from(files))
 }
