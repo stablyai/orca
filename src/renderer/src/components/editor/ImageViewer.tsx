@@ -100,16 +100,18 @@ export default function ImageViewer({
       className="relative flex flex-1 items-center justify-center overflow-auto bg-muted/20 p-4"
       title="Open PDF in popup"
     >
-      <iframe
+      {/* Why: Electron's Chromium PDF viewer can fail to initialize inside a
+          sandboxed iframe even when the Blob URL is valid. Using <embed> keeps
+          the preview isolated to the browser's native PDF surface without
+          depending on iframe document execution. */}
+      <embed
         src={previewUrl}
-        title={filename}
-        sandbox="allow-same-origin"
+        type={mimeType}
         className="h-full min-h-[24rem] w-full rounded-md border border-border/60 bg-background"
-        onError={() => setImageError(true)}
       />
-      {/* Why: clicks inside an iframe are consumed by the iframe's own document,
-          so the parent div's onClick never fires. This transparent overlay sits
-          on top of the iframe to intercept clicks and open the popup. */}
+      {/* Why: the native PDF surface handles pointer events itself, so the
+          parent container does not reliably see clicks for opening the popup.
+          This overlay keeps the "open expanded preview" affordance working. */}
       <div
         className="absolute inset-0 z-10 cursor-pointer"
         onClick={() => setIsPopupOpen(true)}
@@ -215,10 +217,9 @@ export default function ImageViewer({
           </div>
           <div className="flex h-[calc(100%-4.5rem)] w-full min-h-0 items-center justify-center overflow-auto bg-muted/20 p-4">
             {isPdf ? (
-              <iframe
+              <embed
                 src={previewUrl}
-                title={filename}
-                sandbox="allow-same-origin"
+                type={mimeType}
                 className="h-full w-full rounded-md border border-border/60 bg-background"
               />
             ) : (
