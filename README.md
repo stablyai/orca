@@ -9,7 +9,7 @@
 Seamlessly manage multiple worktrees and open multiple terminals running anything — Claude Code, Codex, OpenCode, and more.<br/>
 Built-in status tracking, notifications, and unread markers. Makes coding multiple features across multiple repos a breeze.
 
-Learn more at <a align="center" href="https://www.orcabuild.ai">www.OrcaBuild.ai</a>
+Learn more at <a align="center" href="https://onOrca.dev">onOrca.dev</a>
 
 <p align="center">
   <img src="file-drag.gif" alt="Orca Screenshot" width="800" />
@@ -32,7 +32,7 @@ Missing something? It's probably landing tomorrow. **[Request a feature](https:/
   * File editor, search, source control tab (see worktree changes, make edits, easily commit)
 
 ## Install
-Grab a release from https://www.orcabuild.ai/ or download from the GH release page
+Grab a release from https://onOrca.dev or download from the GH release page
 
 ## Developing
 
