@@ -128,7 +128,11 @@ export function EditorContent({
       )
     }
 
-    return <div className="min-h-0 flex-1">{renderMonacoEditor(fc)}</div>
+    // Why: Monaco sizes itself against the immediate parent when `height="100%"`
+    // is used. Markdown source mode briefly wrapped it in a non-flex container
+    // with no explicit height, which made the code surface collapse even though
+    // the surrounding editor pane was tall enough.
+    return <div className="h-full min-h-0">{renderMonacoEditor(fc)}</div>
   }
 
   if (activeFile.mode === 'conflict-review') {
