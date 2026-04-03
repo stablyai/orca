@@ -1,5 +1,5 @@
 import { basename, join, resolve, relative, isAbsolute } from 'path'
-import type { Worktree, WorktreeMeta } from '../../shared/types'
+import type { GitWorktreeInfo, Worktree, WorktreeMeta } from '../../shared/types'
 
 /**
  * Sanitize a worktree name for use in branch names and directory paths.
@@ -87,7 +87,7 @@ export function shouldSetDisplayName(
  */
 export function mergeWorktree(
   repoId: string,
-  git: { path: string; head: string; branch: string; isBare: boolean },
+  git: GitWorktreeInfo,
   meta: WorktreeMeta | undefined
 ): Worktree {
   const branchShort = git.branch.replace(/^refs\/heads\//, '')
@@ -98,6 +98,7 @@ export function mergeWorktree(
     head: git.head,
     branch: git.branch,
     isBare: git.isBare,
+    isMainWorktree: git.isMainWorktree,
     displayName: meta?.displayName || branchShort || basename(git.path),
     comment: meta?.comment || '',
     linkedIssue: meta?.linkedIssue ?? null,

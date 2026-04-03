@@ -17,6 +17,7 @@ const worktree: Worktree = {
   branch: 'refs/heads/feature/super-critical',
   head: 'abc123',
   isBare: false,
+  isMainWorktree: false,
   linkedIssue: null,
   linkedPR: null,
   isArchived: false,

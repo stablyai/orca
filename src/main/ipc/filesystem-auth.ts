@@ -83,24 +83,45 @@ async function normalizeExistingPath(targetPath: string): Promise<string> {
   }
 }
 
+/**
+ * Resolve and verify that a worktree path belongs to a registered repo.
+ *
+ * Why this doesn't use resolveAuthorizedPath: linked worktrees can live
+ * anywhere on disk (e.g. ~/.codex/worktrees/), far outside the repo root
+ * and workspaceDir that resolveAuthorizedPath allows.  The security boundary
+ * for git operations is *worktree registration* — the path must match a
+ * worktree reported by `git worktree list` for a known repo — not
+ * directory containment within allowed roots.
+ */
 export async function resolveRegisteredWorktreePath(
   worktreePath: string,
   store: Store
 ): Promise<string> {
-  const resolvedPath = await resolveAuthorizedPath(worktreePath, store)
+  // Reject obviously malformed paths early — mirrors the null-byte check in
+  // validateGitRelativeFilePath and prevents probing via realpath.
+  if (!worktreePath || worktreePath.includes('\0')) {
+    throw new Error('Access denied: invalid worktree path')
+  }
+
+  const resolvedTarget = resolve(worktreePath)
+
+  // Resolve through symlinks when the path exists on disk, so that we
+  // compare canonical paths on both sides (git worktree list also resolves
+  // symlinks).
+  const normalizedTarget = await normalizeExistingPath(resolvedTarget)
 
   for (const repo of store.getRepos()) {
     const normalizedRepoPath = await normalizeExistingPath(repo.path)
 
-    if (resolvedPath === normalizedRepoPath) {
-      return resolvedPath
+    if (normalizedTarget === normalizedRepoPath) {
+      return normalizedTarget
     }
 
     const worktrees = await listWorktrees(repo.path)
     for (const worktree of worktrees) {
       const normalizedWorktreePath = await normalizeExistingPath(worktree.path)
-      if (resolvedPath === normalizedWorktreePath) {
-        return resolvedPath
+      if (normalizedTarget === normalizedWorktreePath) {
+        return normalizedTarget
       }
     }
   }

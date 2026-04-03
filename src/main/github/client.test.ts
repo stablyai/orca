@@ -33,7 +33,11 @@ describe('getPRForBranch', () => {
             statusCheckRollup: [],
             updatedAt: '2026-03-28T00:00:00Z',
             isDraft: false,
-            mergeable: 'MERGEABLE'
+            mergeable: 'MERGEABLE',
+            baseRefName: 'main',
+            headRefName: 'feature/test',
+            baseRefOid: 'base-oid',
+            headRefOid: 'head-oid'
           }
         ])
       })
@@ -59,7 +63,7 @@ describe('getPRForBranch', () => {
         '--limit',
         '1',
         '--json',
-        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable'
+        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid'
       ],
       { cwd: '/repo-root', encoding: 'utf-8' }
     )
@@ -78,7 +82,11 @@ describe('getPRForBranch', () => {
         statusCheckRollup: [],
         updatedAt: '2026-03-28T00:00:00Z',
         isDraft: true,
-        mergeable: 'CONFLICTING'
+        mergeable: 'CONFLICTING',
+        baseRefName: 'main',
+        headRefName: 'feature/test',
+        baseRefOid: 'base-oid',
+        headRefOid: 'head-oid'
       })
     })
 
@@ -92,13 +100,122 @@ describe('getPRForBranch', () => {
         'view',
         'feature/test',
         '--json',
-        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable'
+        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid'
       ],
       { cwd: '/non-github-repo', encoding: 'utf-8' }
     )
     expect(pr?.number).toBe(7)
     expect(pr?.state).toBe('draft')
     expect(pr?.mergeable).toBe('CONFLICTING')
+  })
+
+  it('derives a read-only conflict summary for conflicting PRs when the base ref exists locally', async () => {
+    execFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'git@github.com:acme/widgets.git\n' })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            number: 42,
+            title: 'Fix PR discovery',
+            state: 'OPEN',
+            url: 'https://github.com/acme/widgets/pull/42',
+            statusCheckRollup: [],
+            updatedAt: '2026-03-28T00:00:00Z',
+            isDraft: false,
+            mergeable: 'CONFLICTING',
+            baseRefName: 'main',
+            headRefName: 'feature/test',
+            baseRefOid: 'base-oid',
+            headRefOid: 'head-oid'
+          }
+        ])
+      })
+      .mockResolvedValueOnce({ stdout: '' })
+      .mockResolvedValueOnce({ stdout: 'latest-base-oid\n' })
+      .mockResolvedValueOnce({ stdout: 'merge-base-oid\n' })
+      .mockResolvedValueOnce({ stdout: '3\n' })
+      .mockResolvedValueOnce({ stdout: 'result-tree-oid\u0000src/a.ts\u0000src/b.ts\u0000' })
+
+    const pr = await getPRForBranch('/repo-root', 'feature/test')
+
+    expect(pr?.conflictSummary).toEqual({
+      baseRef: 'main',
+      baseCommit: 'latest-',
+      commitsBehind: 3,
+      files: ['src/a.ts', 'src/b.ts']
+    })
+  })
+
+  it('keeps conflicted file paths when git merge-tree exits 1 with stdout', async () => {
+    execFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'git@github.com:acme/widgets.git\n' })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            number: 42,
+            title: 'Fix PR discovery',
+            state: 'OPEN',
+            url: 'https://github.com/acme/widgets/pull/42',
+            statusCheckRollup: [],
+            updatedAt: '2026-03-28T00:00:00Z',
+            isDraft: false,
+            mergeable: 'CONFLICTING',
+            baseRefName: 'main',
+            headRefName: 'feature/test',
+            baseRefOid: 'base-oid',
+            headRefOid: 'head-oid'
+          }
+        ])
+      })
+      .mockResolvedValueOnce({ stdout: '' })
+      .mockResolvedValueOnce({ stdout: 'latest-base-oid\n' })
+      .mockResolvedValueOnce({ stdout: 'merge-base-oid\n' })
+      .mockResolvedValueOnce({ stdout: '2\n' })
+      .mockRejectedValueOnce({
+        stdout: 'result-tree-oid\u0000src/conflict.ts\u0000'
+      })
+
+    const pr = await getPRForBranch('/repo-root', 'feature/test')
+
+    expect(pr?.conflictSummary?.files).toEqual(['src/conflict.ts'])
+  })
+
+  it('falls back to GitHub baseRefOid when fetching or resolving the base ref fails', async () => {
+    execFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'git@github.com:acme/widgets.git\n' })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            number: 42,
+            title: 'Fix PR discovery',
+            state: 'OPEN',
+            url: 'https://github.com/acme/widgets/pull/42',
+            statusCheckRollup: [],
+            updatedAt: '2026-03-28T00:00:00Z',
+            isDraft: false,
+            mergeable: 'CONFLICTING',
+            baseRefName: 'main',
+            headRefName: 'feature/test',
+            baseRefOid: 'base-oid',
+            headRefOid: 'head-oid'
+          }
+        ])
+      })
+      .mockRejectedValueOnce(new Error('fetch failed'))
+      .mockRejectedValueOnce(new Error('missing refs/remotes/origin/main'))
+      .mockRejectedValueOnce(new Error('missing origin/main'))
+      .mockResolvedValueOnce({ stdout: 'merge-base-oid\n' })
+      .mockResolvedValueOnce({ stdout: '1\n' })
+      .mockResolvedValueOnce({ stdout: 'result-tree-oid\u0000src/fallback.ts\u0000' })
+
+    const pr = await getPRForBranch('/repo-root', 'feature/test')
+
+    expect(pr?.conflictSummary).toEqual({
+      baseRef: 'main',
+      baseCommit: 'base-oi',
+      commitsBehind: 1,
+      files: ['src/fallback.ts']
+    })
   })
 
   it('returns null for empty branch (e.g. during rebase with detached HEAD)', async () => {

@@ -22,19 +22,22 @@ bare
         path: '/repo',
         head: 'abc123',
         branch: 'refs/heads/main',
-        isBare: false
+        isBare: false,
+        isMainWorktree: true
       },
       {
         path: '/repo-feature',
         head: 'def456',
         branch: 'refs/heads/feature/test',
-        isBare: false
+        isBare: false,
+        isMainWorktree: false
       },
       {
         path: '/repo-bare',
         head: '0000000',
         branch: '',
-        isBare: true
+        isBare: true,
+        isMainWorktree: false
       }
     ])
   })
@@ -57,7 +60,8 @@ branch refs/heads/main
         path: '/single-repo',
         head: 'aaa111',
         branch: 'refs/heads/main',
-        isBare: false
+        isBare: false,
+        isMainWorktree: true
       }
     ])
   })
@@ -72,7 +76,8 @@ detached
         path: '/repo-detached',
         head: 'abc123',
         branch: '',
-        isBare: false
+        isBare: false,
+        isMainWorktree: true
       }
     ])
   })
@@ -92,13 +97,15 @@ branch refs/heads/dev
         path: '/repo-a',
         head: 'aaa111',
         branch: 'refs/heads/main',
-        isBare: false
+        isBare: false,
+        isMainWorktree: true
       },
       {
         path: '/repo-b',
         head: 'bbb222',
         branch: 'refs/heads/dev',
-        isBare: false
+        isBare: false,
+        isMainWorktree: false
       }
     ])
   })
@@ -112,7 +119,8 @@ branch refs/heads/main
         path: '/repo-no-head',
         head: '',
         branch: 'refs/heads/main',
-        isBare: false
+        isBare: false,
+        isMainWorktree: true
       }
     ])
   })
@@ -127,7 +135,8 @@ branch refs/heads/main
         path: '/path/to/my worktree',
         head: 'ccc333',
         branch: 'refs/heads/main',
-        isBare: false
+        isBare: false,
+        isMainWorktree: true
       }
     ])
   })
@@ -150,19 +159,22 @@ bare
         path: '/bare-one',
         head: '0000000',
         branch: '',
-        isBare: true
+        isBare: true,
+        isMainWorktree: true
       },
       {
         path: '/regular',
         head: 'abc123',
         branch: 'refs/heads/main',
-        isBare: false
+        isBare: false,
+        isMainWorktree: false
       },
       {
         path: '/bare-two',
         head: '1111111',
         branch: '',
-        isBare: true
+        isBare: true,
+        isMainWorktree: false
       }
     ])
   })

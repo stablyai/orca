@@ -50,6 +50,10 @@ export default function TerminalContextMenu({
   onClearScreen,
   onToggleExpand
 }: TerminalContextMenuProps): React.JSX.Element {
+  const isMac = navigator.userAgent.includes('Mac')
+  const mod = isMac ? '⌘' : 'Ctrl+'
+  const shift = isMac ? '⇧' : 'Shift+'
+
   return (
     <DropdownMenu
       open={open}
@@ -87,29 +91,29 @@ export default function TerminalContextMenu({
         <DropdownMenuItem onSelect={onCopy}>
           <Copy />
           Copy
-          <DropdownMenuShortcut>⌘C</DropdownMenuShortcut>
+          <DropdownMenuShortcut>{mod}C</DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onPaste}>
           <Clipboard />
           Paste
-          <DropdownMenuShortcut>⌘V</DropdownMenuShortcut>
+          <DropdownMenuShortcut>{mod}V</DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onSplitRight}>
           <PanelRightOpen />
           Split Right
-          <DropdownMenuShortcut>⌘D</DropdownMenuShortcut>
+          <DropdownMenuShortcut>{mod}D</DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onSplitDown}>
           <PanelBottomOpen />
           Split Down
-          <DropdownMenuShortcut>⌘⇧D</DropdownMenuShortcut>
+          <DropdownMenuShortcut>{`${mod}${shift}D`}</DropdownMenuShortcut>
         </DropdownMenuItem>
         {canExpandPane && (
           <DropdownMenuItem onSelect={onToggleExpand}>
             {menuPaneIsExpanded ? <Minimize2 /> : <Maximize2 />}
             {menuPaneIsExpanded ? 'Collapse Pane' : 'Expand Pane'}
-            <DropdownMenuShortcut>⌘⇧↩</DropdownMenuShortcut>
+            <DropdownMenuShortcut>{`${mod}${shift}↩`}</DropdownMenuShortcut>
           </DropdownMenuItem>
         )}
         {canClosePane && (

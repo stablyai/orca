@@ -66,7 +66,12 @@ export function openDetectedFilePath(
   })()
 }
 
-export function createFilePathLinkProvider(paneId: number, deps: LinkHandlerDeps): ILinkProvider {
+export function createFilePathLinkProvider(
+  paneId: number,
+  deps: LinkHandlerDeps,
+  linkTooltip: HTMLElement,
+  openLinkHint: string
+): ILinkProvider {
   const { startupCwd, managerRef, pathExistsCache, worktreeId, worktreePath } = deps
   return {
     provideLinks: (bufferLineNumber, callback) => {
@@ -109,11 +114,21 @@ export function createFilePathLinkProvider(paneId: number, deps: LinkHandlerDeps
               end: { x: parsed.endIndex + 1, y: bufferLineNumber }
             },
             text: parsed.displayText,
-            activate: () => {
+            activate: (event) => {
+              if (!isTerminalLinkActivation(event)) {
+                return
+              }
               openDetectedFilePath(resolved.absolutePath, resolved.line, resolved.column, {
                 worktreeId,
                 worktreePath
               })
+            },
+            hover: () => {
+              linkTooltip.textContent = `${resolved.absolutePath} (${openLinkHint})`
+              linkTooltip.style.display = ''
+            },
+            leave: () => {
+              linkTooltip.style.display = 'none'
             }
           }
         })
@@ -125,7 +140,9 @@ export function createFilePathLinkProvider(paneId: number, deps: LinkHandlerDeps
   }
 }
 
-export function isTerminalLinkActivation(event: Pick<MouseEvent, 'metaKey' | 'ctrlKey'> | undefined): boolean {
+export function isTerminalLinkActivation(
+  event: Pick<MouseEvent, 'metaKey' | 'ctrlKey'> | undefined
+): boolean {
   const isMac = navigator.userAgent.includes('Mac')
   return isMac ? Boolean(event?.metaKey) : Boolean(event?.ctrlKey)
 }

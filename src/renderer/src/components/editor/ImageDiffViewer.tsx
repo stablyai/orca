@@ -25,7 +25,7 @@ function ImageDiffPane({
       <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-md bg-muted/10">
         <div className="px-3 py-2 text-xs font-medium text-muted-foreground">{label}</div>
         <div className="flex flex-1 items-center justify-center bg-muted/20 p-6 text-sm text-muted-foreground">
-          No image
+          No preview
         </div>
       </div>
     )

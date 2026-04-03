@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getEditorHeaderCopyState } from './editor-header'
+import { getEditorHeaderCopyState, getEditorHeaderOpenFileState } from './editor-header'
 import type { OpenFile } from '@/store/slices/editor'
 
 function makeOpenFile(overrides: Partial<OpenFile> = {}): OpenFile {
@@ -76,5 +76,74 @@ describe('getEditorHeaderCopyState', () => {
       pathLabel: 'All Changes',
       pathTitle: '/repo/worktree'
     })
+  })
+})
+
+describe('getEditorHeaderOpenFileState', () => {
+  it('allows opening the file from a normal unstaged diff', () => {
+    expect(
+      getEditorHeaderOpenFileState(
+        makeOpenFile({
+          id: 'wt-1::diff::unstaged::file.ts',
+          mode: 'diff',
+          diffSource: 'unstaged'
+        }),
+        { path: 'file.ts', status: 'modified', area: 'unstaged' }
+      )
+    ).toEqual({ canOpen: true })
+  })
+
+  it('disables opening the file when the uncommitted diff is deleted', () => {
+    expect(
+      getEditorHeaderOpenFileState(
+        makeOpenFile({
+          id: 'wt-1::diff::unstaged::file.ts',
+          mode: 'diff',
+          diffSource: 'unstaged'
+        }),
+        { path: 'file.ts', status: 'deleted', area: 'unstaged' }
+      )
+    ).toEqual({ canOpen: false })
+  })
+
+  it('disables opening the file when the branch diff target is deleted', () => {
+    expect(
+      getEditorHeaderOpenFileState(
+        makeOpenFile({
+          id: 'wt-1::diff::branch::main::v1::file.ts',
+          mode: 'diff',
+          diffSource: 'branch'
+        }),
+        null,
+        { path: 'file.ts', status: 'deleted' }
+      )
+    ).toEqual({ canOpen: false })
+  })
+
+  it('keeps branch diff open enabled when the live compare entry is gone', () => {
+    expect(
+      getEditorHeaderOpenFileState(
+        makeOpenFile({
+          id: 'wt-1::diff::branch::main::v1::file.ts',
+          mode: 'diff',
+          diffSource: 'branch'
+        }),
+        null,
+        null
+      )
+    ).toEqual({ canOpen: true })
+  })
+
+  it('keeps the action enabled when live uncommitted metadata has already disappeared', () => {
+    expect(
+      getEditorHeaderOpenFileState(
+        makeOpenFile({
+          id: 'wt-1::diff::unstaged::file.ts',
+          mode: 'diff',
+          diffSource: 'unstaged'
+        }),
+        null
+      )
+    ).toEqual({ canOpen: true })
   })
 })

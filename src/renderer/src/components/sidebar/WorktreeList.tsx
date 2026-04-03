@@ -309,7 +309,13 @@ const WorktreeList = React.memo(function WorktreeList() {
   }
 
   return (
-    <div ref={scrollRef} className="flex-1 overflow-auto px-1 pt-px scrollbar-sleek scroll-smooth">
+    <div
+      ref={scrollRef}
+      className={cn(
+        'flex-1 overflow-auto px-1 scrollbar-sleek scroll-smooth',
+        groupBy === 'none' ? 'pt-2' : 'pt-px'
+      )}
+    >
       <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
         {virtualizer.getVirtualItems().map((vItem) => {
           const row = rows[vItem.index]

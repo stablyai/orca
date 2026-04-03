@@ -33,6 +33,7 @@ export type ManagedPane = {
   id: number
   terminal: Terminal
   container: HTMLElement // the .pane element
+  linkTooltip: HTMLElement
   fitAddon: FitAddon
   searchAddon: SearchAddon
   serializeAddon: SerializeAddon

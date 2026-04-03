@@ -13,6 +13,7 @@ import type {
   UpdateStatus,
   DirEntry,
   GitBranchCompareResult,
+  GitConflictOperation,
   GitStatusEntry,
   GitDiffResult,
   SearchOptions,
@@ -134,6 +135,9 @@ type FsApi = {
     filePath: string
   }) => Promise<{ content: string; isBinary: boolean; isImage?: boolean; mimeType?: string }>
   writeFile: (args: { filePath: string; content: string }) => Promise<void>
+  createFile: (args: { filePath: string }) => Promise<void>
+  createDir: (args: { dirPath: string }) => Promise<void>
+  rename: (args: { oldPath: string; newPath: string }) => Promise<void>
   deletePath: (args: { targetPath: string }) => Promise<void>
   stat: (args: {
     filePath: string
@@ -144,6 +148,7 @@ type FsApi = {
 
 type GitApi = {
   status: (args: { worktreePath: string }) => Promise<GitStatusResult>
+  conflictOperation: (args: { worktreePath: string }) => Promise<GitConflictOperation>
   diff: (args: {
     worktreePath: string
     filePath: string
@@ -167,6 +172,11 @@ type GitApi = {
   stage: (args: { worktreePath: string; filePath: string }) => Promise<void>
   unstage: (args: { worktreePath: string; filePath: string }) => Promise<void>
   discard: (args: { worktreePath: string; filePath: string }) => Promise<void>
+  remoteFileUrl: (args: {
+    worktreePath: string
+    relativePath: string
+    line: number
+  }) => Promise<string | null>
 }
 
 type Api = {

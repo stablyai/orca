@@ -3,6 +3,7 @@ import { LoaderCircle, GitMerge, ChevronDown, Trash2 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import type { PRInfo, Repo, Worktree } from '../../../../shared/types'
 
 const MERGE_METHODS = ['squash', 'merge', 'rebase'] as const
@@ -72,58 +73,84 @@ export default function PRActions({
     openModal('delete-worktree', { worktreeId: worktree.id })
   }, [worktree.id, openModal])
 
+  // Why: merging a PR with unresolved conflicts would fail on GitHub anyway;
+  // disabling the button prevents a confusing error and signals the user must
+  // resolve conflicts first.
+  const hasConflicts = pr.mergeable === 'CONFLICTING'
+
   if (pr.state === 'open') {
     return (
       <div className="space-y-1.5">
-        <div className="relative flex items-stretch" ref={mergeMenuRef}>
-          <Button
-            type="button"
-            size="xs"
-            className={cn(
-              'flex-1 rounded-r-none px-3 text-[11px]',
-              'bg-green-600 text-white hover:bg-green-700',
-              'disabled:opacity-50 disabled:cursor-not-allowed'
-            )}
-            onClick={() => void handleMerge('squash')}
-            disabled={merging}
-          >
-            {merging ? (
-              <LoaderCircle className="size-3.5 animate-spin" />
-            ) : (
-              <GitMerge className="size-3.5" />
-            )}
-            {merging ? 'Merging\u2026' : 'Squash and merge'}
-          </Button>
-          <Button
-            type="button"
-            size="xs"
-            className={cn(
-              'rounded-l-none border-l border-green-700/50 px-1.5',
-              'bg-green-600 text-white hover:bg-green-700',
-              'disabled:opacity-50 disabled:cursor-not-allowed'
-            )}
-            onClick={() => setMergeMenuOpen((v) => !v)}
-            disabled={merging}
-          >
-            <ChevronDown className="size-3.5" />
-          </Button>
-          {mergeMenuOpen && (
-            <div className="absolute top-full left-0 right-0 mt-1 z-50 rounded-md border border-border bg-popover shadow-md overflow-hidden">
-              {MERGE_METHODS.map((method) => (
-                <Button
-                  key={method}
-                  type="button"
-                  variant="ghost"
-                  size="xs"
-                  className="h-auto w-full justify-start rounded-none px-3 py-1 text-left text-[11px]"
-                  onClick={() => void handleMerge(method)}
+        <TooltipProvider delayDuration={300}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              {/* Why: wrapping in a <span> so the tooltip trigger receives pointer
+                events even when the buttons inside are disabled. */}
+              <span className={cn(hasConflicts && 'cursor-not-allowed')}>
+                <div
+                  className={cn(
+                    'relative flex items-stretch',
+                    hasConflicts && 'pointer-events-none'
+                  )}
+                  ref={mergeMenuRef}
                 >
-                  {MERGE_LABELS[method]}
-                </Button>
-              ))}
-            </div>
-          )}
-        </div>
+                  <Button
+                    type="button"
+                    size="xs"
+                    className={cn(
+                      'flex-1 rounded-r-none px-3 text-[11px]',
+                      'bg-green-600 text-white hover:bg-green-700',
+                      'disabled:opacity-50 disabled:cursor-not-allowed'
+                    )}
+                    onClick={() => void handleMerge('squash')}
+                    disabled={merging || hasConflicts}
+                  >
+                    {merging ? (
+                      <LoaderCircle className="size-3.5 animate-spin" />
+                    ) : (
+                      <GitMerge className="size-3.5" />
+                    )}
+                    {merging ? 'Merging\u2026' : 'Squash and merge'}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="xs"
+                    className={cn(
+                      'rounded-l-none border-l border-green-700/50 px-1.5',
+                      'bg-green-600 text-white hover:bg-green-700',
+                      'disabled:opacity-50 disabled:cursor-not-allowed'
+                    )}
+                    onClick={() => setMergeMenuOpen((v) => !v)}
+                    disabled={merging || hasConflicts}
+                  >
+                    <ChevronDown className="size-3.5" />
+                  </Button>
+                  {mergeMenuOpen && (
+                    <div className="absolute top-full left-0 right-0 mt-1 z-50 rounded-md border border-border bg-popover shadow-md overflow-hidden">
+                      {MERGE_METHODS.map((method) => (
+                        <Button
+                          key={method}
+                          type="button"
+                          variant="ghost"
+                          size="xs"
+                          className="h-auto w-full justify-start rounded-none px-3 py-1 text-left text-[11px]"
+                          onClick={() => void handleMerge(method)}
+                        >
+                          {MERGE_LABELS[method]}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </span>
+            </TooltipTrigger>
+            {hasConflicts && (
+              <TooltipContent side="bottom" sideOffset={4}>
+                Merge conflicts must be resolved before merging
+              </TooltipContent>
+            )}
+          </Tooltip>
+        </TooltipProvider>
         {mergeError && <div className="text-[10px] text-rose-500 break-words">{mergeError}</div>}
       </div>
     )

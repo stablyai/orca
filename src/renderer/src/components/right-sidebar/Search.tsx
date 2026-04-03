@@ -11,10 +11,10 @@ import {
   Loader2
 } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { detectLanguage } from '@/lib/language-detect'
 import { Button } from '@/components/ui/button'
 import type { SearchFileResult, SearchMatch } from '../../../../shared/types'
 import { buildSearchRows } from './search-rows'
+import { cancelRevealFrame, openMatchResult } from './search-match-open'
 import { ToggleButton, FileResultRow, MatchResultRow } from './SearchResultItems'
 
 const SEARCH_DEBOUNCE_MS = 300
@@ -53,6 +53,8 @@ export default function Search(): React.JSX.Element {
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const latestSearchIdRef = useRef(0)
   const resultsScrollRef = useRef<HTMLDivElement>(null)
+  const revealRafRef = useRef<number | null>(null)
+  const revealInnerRafRef = useRef<number | null>(null)
 
   const cancelPendingSearch = useCallback(() => {
     latestSearchIdRef.current += 1
@@ -86,6 +88,8 @@ export default function Search(): React.JSX.Element {
   useEffect(() => {
     return () => {
       cancelPendingSearch()
+      cancelRevealFrame(revealRafRef)
+      cancelRevealFrame(revealInnerRafRef)
     }
   }, [cancelPendingSearch])
 
@@ -233,20 +237,14 @@ export default function Search(): React.JSX.Element {
       if (!activeWorktreeId) {
         return
       }
-
-      // Set pending navigation so editor scrolls to the match
-      setPendingEditorReveal({
-        line: match.line,
-        column: match.column,
-        matchLength: match.matchLength
-      })
-
-      openFile({
-        filePath: fileResult.filePath,
-        relativePath: fileResult.relativePath,
-        worktreeId: activeWorktreeId,
-        language: detectLanguage(fileResult.relativePath),
-        mode: 'edit'
+      openMatchResult({
+        activeWorktreeId,
+        fileResult,
+        match,
+        openFile,
+        setPendingEditorReveal,
+        revealRafRef,
+        revealInnerRafRef
       })
     },
     [activeWorktreeId, openFile, setPendingEditorReveal]

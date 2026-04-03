@@ -25,6 +25,7 @@ function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
     branch: overrides.branch ?? `refs/heads/${overrides.id ?? 'wt-1'}`,
     head: overrides.head ?? 'abc123',
     isBare: overrides.isBare ?? false,
+    isMainWorktree: overrides.isMainWorktree ?? false,
     linkedIssue: overrides.linkedIssue ?? null,
     linkedPR: overrides.linkedPR ?? null,
     isArchived: overrides.isArchived ?? false,

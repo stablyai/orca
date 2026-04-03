@@ -6,7 +6,11 @@ import { createFilePathLinkProvider, handleOscLink } from './terminal-link-handl
 import type { LinkHandlerDeps } from './terminal-link-handlers'
 import type { GlobalSettings, TerminalLayoutSnapshot } from '../../../../shared/types'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
-import { buildFontFamily, replayTerminalLayout } from './layout-serialization'
+import {
+  buildFontFamily,
+  replayTerminalLayout,
+  restoreScrollbackBuffers
+} from './layout-serialization'
 import { applyExpandedLayoutTo, restoreExpandedLayoutFrom } from './expand-collapse'
 import { applyTerminalAppearance } from './terminal-appearance'
 import { connectPanePty } from './pty-connection'
@@ -155,15 +159,28 @@ export function useTerminalPaneLifecycle({
       markWorktreeUnread
     }
 
+    const isMac = navigator.userAgent.includes('Mac')
+    const openLinkHint = isMac ? '⌘+click to open' : 'Ctrl+click to open'
+
     const manager = new PaneManager(container, {
       onPaneCreated: (pane) => {
         const linkProviderDisposable = pane.terminal.registerLinkProvider(
-          createFilePathLinkProvider(pane.id, linkDeps)
+          createFilePathLinkProvider(pane.id, linkDeps, pane.linkTooltip, openLinkHint)
         )
         linkProviderDisposablesRef.current.set(pane.id, linkProviderDisposable)
         pane.terminal.options.linkHandler = {
           allowNonHttpProtocols: true,
-          activate: (event, text) => handleOscLink(text, event as MouseEvent | undefined)
+          activate: (event, text) => handleOscLink(text, event as MouseEvent | undefined),
+          // Show bottom-left tooltip on hover for OSC 8 hyperlinks (e.g.
+          // GitHub owner/repo#issue references emitted by CLI tools) — same
+          // behaviour as the WebLinksAddon provides for plain-text URLs.
+          hover: (_event, text) => {
+            pane.linkTooltip.textContent = `${text} (${openLinkHint})`
+            pane.linkTooltip.style.display = ''
+          },
+          leave: () => {
+            pane.linkTooltip.style.display = 'none'
+          }
         }
         applyAppearance(manager)
         connectPanePty(pane, manager, ptyDeps)
@@ -226,40 +243,11 @@ export function useTerminalPaneLifecycle({
     managerRef.current = manager
     const restoredPaneByLeafId = replayTerminalLayout(manager, initialLayoutRef.current, isActive)
 
-    // Restore scrollback buffers from previous session.
-    const savedBuffers = initialLayoutRef.current.buffersByLeafId
-    if (savedBuffers) {
-      const ALT_SCREEN_ON = '\x1b[?1049h'
-      const ALT_SCREEN_OFF = '\x1b[?1049l'
-      for (const [oldLeafId, buffer] of Object.entries(savedBuffers)) {
-        const newPaneId = restoredPaneByLeafId.get(oldLeafId)
-        if (newPaneId == null || !buffer) {
-          continue
-        }
-        const pane = manager.getPanes().find((p) => p.id === newPaneId)
-        if (!pane) {
-          continue
-        }
-        try {
-          let buf = buffer
-          // If buffer ends in alt-screen mode (agent TUI was running at
-          // shutdown), exit alt-screen so the user sees a usable terminal.
-          const lastOn = buf.lastIndexOf(ALT_SCREEN_ON)
-          const lastOff = buf.lastIndexOf(ALT_SCREEN_OFF)
-          if (lastOn > lastOff) {
-            buf = buf.slice(0, lastOn)
-          }
-          if (buf.length > 0) {
-            pane.terminal.write(buf)
-            // Ensure cursor is on a new line so the new shell prompt
-            // doesn't trigger zsh's PROMPT_EOL_MARK (%) indicator.
-            pane.terminal.write('\r\n')
-          }
-        } catch {
-          // If restore fails, continue with blank terminal.
-        }
-      }
-    }
+    restoreScrollbackBuffers(
+      manager,
+      initialLayoutRef.current.buffersByLeafId,
+      restoredPaneByLeafId
+    )
 
     const restoredActivePaneId =
       (initialLayoutRef.current.activeLeafId

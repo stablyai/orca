@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useMemo, useRef } from 'react'
+import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import {
   Dialog,
@@ -50,6 +51,7 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
   const [name, setName] = useState('')
   const [linkedIssue, setLinkedIssue] = useState('')
   const [comment, setComment] = useState('')
+  const [createError, setCreateError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const nameInputRef = useRef<HTMLInputElement>(null)
   const lastSuggestedNameRef = useRef('')
@@ -110,10 +112,13 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
     if (!repoId || !name.trim()) {
       return
     }
+    setCreateError(null)
     setCreating(true)
     try {
       const wt = await createWorktree(repoId, name.trim())
-      if (wt) {
+      // Meta update is best-effort — the worktree already exists, so don't
+      // block the success path if only the metadata write fails.
+      try {
         const metaUpdates: Record<string, unknown> = {}
         if (linkedIssue.trim()) {
           const linkedIssueNumber = parseGitHubIssueOrPRNumber(linkedIssue)
@@ -127,24 +132,30 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
         if (Object.keys(metaUpdates).length > 0) {
           await updateWorktreeMeta(wt.id, metaUpdates as { linkedIssue?: number; comment?: string })
         }
+      } catch {
+        console.error('Failed to update worktree meta after creation')
+      }
 
-        setActiveRepo(repoId)
-        setActiveView('terminal')
-        setSidebarOpen(true)
-        if (searchQuery) {
-          setSearchQuery('')
-        }
-        if (filterRepoIds.length > 0 && !filterRepoIds.includes(repoId)) {
-          setFilterRepoIds([])
-        }
-        setActiveWorktree(wt.id)
-        revealWorktreeInSidebar(wt.id)
-        if (settings?.rightSidebarOpenByDefault) {
-          setRightSidebarTab('explorer')
-          setRightSidebarOpen(true)
-        }
+      setActiveRepo(repoId)
+      setActiveView('terminal')
+      setSidebarOpen(true)
+      if (searchQuery) {
+        setSearchQuery('')
+      }
+      if (filterRepoIds.length > 0 && !filterRepoIds.includes(repoId)) {
+        setFilterRepoIds([])
+      }
+      setActiveWorktree(wt.id)
+      revealWorktreeInSidebar(wt.id)
+      if (settings?.rightSidebarOpenByDefault) {
+        setRightSidebarTab('explorer')
+        setRightSidebarOpen(true)
       }
       handleOpenChange(false)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to create worktree.'
+      setCreateError(message)
+      toast.error(message)
     } finally {
       setCreating(false)
     }
@@ -170,6 +181,26 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
     handleOpenChange
   ])
 
+  const handleNameChange = useCallback(
+    (value: string) => {
+      setName(value)
+      if (createError) {
+        setCreateError(null)
+      }
+    },
+    [createError]
+  )
+
+  const handleRepoChange = useCallback(
+    (value: string) => {
+      setRepoId(value)
+      if (createError) {
+        setCreateError(null)
+      }
+    },
+    [createError]
+  )
+
   // Auto-select repo when opening.
   React.useEffect(() => {
     if (resetTimeoutRef.current !== null) {
@@ -186,6 +217,7 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
       setName('')
       setLinkedIssue('')
       setComment('')
+      setCreateError(null)
       lastSuggestedNameRef.current = ''
       resetTimeoutRef.current = null
     }, DIALOG_CLOSE_RESET_DELAY_MS)
@@ -236,7 +268,7 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
         <DialogHeader>
           <DialogTitle className="text-sm">New Worktree</DialogTitle>
           <DialogDescription className="text-xs">
-            Create a new git worktree. The branch name will inherit from the name you provide.
+            Create a new git worktree on a fresh branch cut from the selected base ref.
           </DialogDescription>
         </DialogHeader>
 
@@ -244,7 +276,7 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
           {/* Repo selector */}
           <div className="space-y-1">
             <label className="text-[11px] font-medium text-muted-foreground">Repository</label>
-            <Select value={repoId} onValueChange={setRepoId}>
+            <Select value={repoId} onValueChange={handleRepoChange}>
               <SelectTrigger className="h-8 text-xs w-full">
                 <SelectValue placeholder="Select repo...">
                   {selectedRepo ? (
@@ -272,11 +304,12 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
             <Input
               ref={nameInputRef}
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => handleNameChange(e.target.value)}
               placeholder="feature/my-feature"
               className="h-8 text-xs"
               autoFocus
             />
+            {createError && <p className="text-[10px] text-destructive">{createError}</p>}
           </div>
 
           {/* Link GH Issue */}

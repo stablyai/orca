@@ -204,7 +204,13 @@ const api = {
     getVersion: (): Promise<string> => ipcRenderer.invoke('updater:getVersion'),
     check: (): Promise<void> => ipcRenderer.invoke('updater:check'),
     download: (): Promise<void> => ipcRenderer.invoke('updater:download'),
-    quitAndInstall: (): Promise<void> => ipcRenderer.invoke('updater:quitAndInstall'),
+    quitAndInstall: (): Promise<void> => {
+      // Dispatch beforeunload to trigger terminal buffer capture before the
+      // update process bypasses the normal window close sequence (quitAndInstall
+      // removes close listeners, preventing beforeunload from firing naturally).
+      window.dispatchEvent(new Event('beforeunload'))
+      return ipcRenderer.invoke('updater:quitAndInstall')
+    },
     onStatus: (callback: (status: unknown) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, status: unknown) => callback(status)
       ipcRenderer.on('updater:status', listener)
@@ -223,6 +229,12 @@ const api = {
       ipcRenderer.invoke('fs:readFile', args),
     writeFile: (args: { filePath: string; content: string }): Promise<void> =>
       ipcRenderer.invoke('fs:writeFile', args),
+    createFile: (args: { filePath: string }): Promise<void> =>
+      ipcRenderer.invoke('fs:createFile', args),
+    createDir: (args: { dirPath: string }): Promise<void> =>
+      ipcRenderer.invoke('fs:createDir', args),
+    rename: (args: { oldPath: string; newPath: string }): Promise<void> =>
+      ipcRenderer.invoke('fs:rename', args),
     deletePath: (args: { targetPath: string }): Promise<void> =>
       ipcRenderer.invoke('fs:deletePath', args),
     stat: (args: {
@@ -254,6 +266,8 @@ const api = {
   git: {
     status: (args: { worktreePath: string }): Promise<unknown> =>
       ipcRenderer.invoke('git:status', args),
+    conflictOperation: (args: { worktreePath: string }): Promise<unknown> =>
+      ipcRenderer.invoke('git:conflictOperation', args),
     diff: (args: { worktreePath: string; filePath: string; staged: boolean }): Promise<unknown> =>
       ipcRenderer.invoke('git:diff', args),
     branchCompare: (args: { worktreePath: string; baseRef: string }): Promise<unknown> =>
@@ -269,7 +283,12 @@ const api = {
     unstage: (args: { worktreePath: string; filePath: string }): Promise<void> =>
       ipcRenderer.invoke('git:unstage', args),
     discard: (args: { worktreePath: string; filePath: string }): Promise<void> =>
-      ipcRenderer.invoke('git:discard', args)
+      ipcRenderer.invoke('git:discard', args),
+    remoteFileUrl: (args: {
+      worktreePath: string
+      relativePath: string
+      line: number
+    }): Promise<string | null> => ipcRenderer.invoke('git:remoteFileUrl', args)
   },
 
   ui: {

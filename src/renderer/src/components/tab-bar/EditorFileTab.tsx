@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { X, FileCode, GitCompareArrows, Copy } from 'lucide-react'
+import { X, FileCode, GitCompareArrows, Copy, ShieldAlert } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -49,6 +49,7 @@ export default function EditorFileTab({
   }
 
   const isDiff = file.mode === 'diff'
+  const isConflictReview = file.mode === 'conflict-review'
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
 
@@ -81,7 +82,7 @@ export default function EditorFileTab({
           {...listeners}
           className={`group relative flex items-center h-full px-3 text-sm cursor-pointer select-none shrink-0 border-r border-border ${
             isActive
-              ? 'bg-background text-foreground border-b-transparent'
+              ? 'bg-accent/40 text-foreground border-b-transparent'
               : 'bg-card text-muted-foreground hover:text-foreground hover:bg-accent/50'
           }`}
           onPointerDown={(e) => {
@@ -104,17 +105,25 @@ export default function EditorFileTab({
             }
           }}
         >
-          {isDiff ? (
-            <GitCompareArrows className="w-3.5 h-3.5 mr-1.5 shrink-0 text-muted-foreground" />
+          {isConflictReview ? (
+            <ShieldAlert
+              className={`w-3.5 h-3.5 mr-1.5 shrink-0 ${isActive ? 'text-orange-400' : 'text-orange-400/70'}`}
+            />
+          ) : isDiff ? (
+            <GitCompareArrows
+              className={`w-3.5 h-3.5 mr-1.5 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
+            />
           ) : (
-            <FileCode className="w-3.5 h-3.5 mr-1.5 shrink-0 text-muted-foreground" />
+            <FileCode
+              className={`w-3.5 h-3.5 mr-1.5 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
+            />
           )}
           {file.isDirty && (
             <span className="mr-1 size-1.5 rounded-full bg-foreground/60 shrink-0" />
           )}
           <span className="mr-1.5 flex min-w-0 items-baseline gap-1.5">
             <span
-              className={`truncate max-w-[130px]${file.isPreview ? ' italic' : ''}`}
+              className={`truncate max-w-[130px]${file.isPreview ? ' italic' : ''}${isActive ? ' font-medium' : ''}`}
               style={tabStatusColor ? { color: tabStatusColor } : undefined}
             >
               {getEditorDisplayLabel(file)}

@@ -1,73 +1,16 @@
-import { execFile } from 'child_process'
-import { promisify } from 'util'
-import type { PRInfo, PRMergeableState, IssueInfo, PRCheckDetail } from '../../shared/types'
+import type { PRInfo, PRMergeableState, PRCheckDetail } from '../../shared/types'
+import { getPRConflictSummary } from './conflict-summary'
+import { execFileAsync, acquire, release, getOwnerRepo } from './gh-utils'
+export { _resetOwnerRepoCache } from './gh-utils'
+export { getIssue, listIssues } from './issues'
 import {
   mapCheckRunRESTStatus,
   mapCheckRunRESTConclusion,
   mapCheckStatus,
   mapCheckConclusion,
   mapPRState,
-  deriveCheckStatus,
-  mapIssueInfo
+  deriveCheckStatus
 } from './mappers'
-
-const execFileAsync = promisify(execFile)
-
-// Concurrency limiter - max 4 parallel gh processes
-const MAX_CONCURRENT = 4
-let running = 0
-const queue: (() => void)[] = []
-
-function acquire(): Promise<void> {
-  if (running < MAX_CONCURRENT) {
-    running++
-    return Promise.resolve()
-  }
-  return new Promise((resolve) =>
-    queue.push(() => {
-      running++
-      resolve()
-    })
-  )
-}
-
-function release(): void {
-  running--
-  const next = queue.shift()
-  if (next) {
-    next()
-  }
-}
-
-// ── Owner/repo resolution for gh api --cache ──────────────────────────
-const ownerRepoCache = new Map<string, { owner: string; repo: string } | null>()
-
-/** @internal — exposed for tests only */
-export function _resetOwnerRepoCache(): void {
-  ownerRepoCache.clear()
-}
-
-async function getOwnerRepo(repoPath: string): Promise<{ owner: string; repo: string } | null> {
-  if (ownerRepoCache.has(repoPath)) {
-    return ownerRepoCache.get(repoPath)!
-  }
-  try {
-    const { stdout } = await execFileAsync('git', ['remote', 'get-url', 'origin'], {
-      cwd: repoPath,
-      encoding: 'utf-8'
-    })
-    const match = stdout.trim().match(/github\.com[:/]([^/]+)\/([^/.]+?)(?:\.git)?$/)
-    if (match) {
-      const result = { owner: match[1], repo: match[2] }
-      ownerRepoCache.set(repoPath, result)
-      return result
-    }
-  } catch {
-    // ignore — non-GitHub remote or no remote
-  }
-  ownerRepoCache.set(repoPath, null)
-  return null
-}
 
 /**
  * Get PR info for a given branch using gh CLI.
@@ -95,6 +38,10 @@ export async function getPRForBranch(repoPath: string, branch: string): Promise<
       updatedAt: string
       isDraft?: boolean
       mergeable: string
+      baseRefName?: string
+      headRefName?: string
+      baseRefOid?: string
+      headRefOid?: string
     } | null = null
 
     if (ownerRepo) {
@@ -112,7 +59,7 @@ export async function getPRForBranch(repoPath: string, branch: string): Promise<
           '--limit',
           '1',
           '--json',
-          'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable'
+          'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid'
         ],
         {
           cwd: repoPath,
@@ -129,7 +76,7 @@ export async function getPRForBranch(repoPath: string, branch: string): Promise<
           'view',
           branchName,
           '--json',
-          'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable'
+          'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid'
         ],
         {
           cwd: repoPath,
@@ -143,6 +90,11 @@ export async function getPRForBranch(repoPath: string, branch: string): Promise<
       return null
     }
 
+    const conflictSummary =
+      data.mergeable === 'CONFLICTING' && data.baseRefName && data.baseRefOid && data.headRefOid
+        ? await getPRConflictSummary(repoPath, data.baseRefName, data.baseRefOid, data.headRefOid)
+        : undefined
+
     return {
       number: data.number,
       title: data.title,
@@ -150,84 +102,11 @@ export async function getPRForBranch(repoPath: string, branch: string): Promise<
       url: data.url,
       checksStatus: deriveCheckStatus(data.statusCheckRollup),
       updatedAt: data.updatedAt,
-      mergeable: (data.mergeable as PRMergeableState) ?? 'UNKNOWN'
+      mergeable: (data.mergeable as PRMergeableState) ?? 'UNKNOWN',
+      conflictSummary
     }
   } catch {
     return null
-  } finally {
-    release()
-  }
-}
-
-/**
- * Get a single issue by number.
- * Uses gh api --cache so 304 Not Modified responses don't count against the rate limit.
- */
-export async function getIssue(repoPath: string, issueNumber: number): Promise<IssueInfo | null> {
-  const ownerRepo = await getOwnerRepo(repoPath)
-  await acquire()
-  try {
-    if (ownerRepo) {
-      const { stdout } = await execFileAsync(
-        'gh',
-        [
-          'api',
-          '--cache',
-          '300s',
-          `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues/${issueNumber}`
-        ],
-        { cwd: repoPath, encoding: 'utf-8' }
-      )
-      const data = JSON.parse(stdout)
-      return mapIssueInfo(data)
-    }
-    // Fallback for non-GitHub remotes
-    const { stdout } = await execFileAsync(
-      'gh',
-      ['issue', 'view', String(issueNumber), '--json', 'number,title,state,url,labels'],
-      { cwd: repoPath, encoding: 'utf-8' }
-    )
-    const data = JSON.parse(stdout)
-    return mapIssueInfo(data)
-  } catch {
-    return null
-  } finally {
-    release()
-  }
-}
-
-/**
- * List issues for a repo.
- * Uses gh api --cache so 304 Not Modified responses don't count against the rate limit.
- */
-export async function listIssues(repoPath: string, limit = 20): Promise<IssueInfo[]> {
-  const ownerRepo = await getOwnerRepo(repoPath)
-  await acquire()
-  try {
-    if (ownerRepo) {
-      const { stdout } = await execFileAsync(
-        'gh',
-        [
-          'api',
-          '--cache',
-          '120s',
-          `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues?per_page=${limit}&state=open&sort=updated&direction=desc`
-        ],
-        { cwd: repoPath, encoding: 'utf-8' }
-      )
-      const data = JSON.parse(stdout) as unknown[]
-      return data.map((d) => mapIssueInfo(d as Parameters<typeof mapIssueInfo>[0]))
-    }
-    // Fallback for non-GitHub remotes
-    const { stdout } = await execFileAsync(
-      'gh',
-      ['issue', 'list', '--json', 'number,title,state,url,labels', '--limit', String(limit)],
-      { cwd: repoPath, encoding: 'utf-8' }
-    )
-    const data = JSON.parse(stdout) as unknown[]
-    return data.map((d) => mapIssueInfo(d as Parameters<typeof mapIssueInfo>[0]))
-  } catch {
-    return []
   } finally {
     release()
   }

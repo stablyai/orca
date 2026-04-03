@@ -5,11 +5,11 @@ import {
   CircleDashed,
   CircleMinus,
   GitPullRequest,
-  AlertTriangle
+  Files
 } from 'lucide-react'
 import { ExternalLink } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import type { PRInfo, PRMergeableState, PRCheckDetail } from '../../../../shared/types'
+import type { PRInfo, PRCheckDetail } from '../../../../shared/types'
 
 export const PullRequestIcon = GitPullRequest
 
@@ -33,26 +33,51 @@ export const CHECK_COLOR: Record<string, string> = {
   timed_out: 'text-rose-500'
 }
 
-/** Shown when GitHub reports the PR branch has merge conflicts. */
-export function MergeConflictWarning({
-  mergeable
-}: {
-  mergeable: PRMergeableState
-}): React.JSX.Element | null {
-  if (mergeable !== 'CONFLICTING') {
+export function ConflictingFilesSection({ pr }: { pr: PRInfo }): React.JSX.Element | null {
+  const files = pr.conflictSummary?.files ?? []
+  if (pr.mergeable !== 'CONFLICTING' || files.length === 0) {
     return null
   }
+
   return (
-    <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2">
-      <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-amber-500" />
-      <div>
-        <div className="text-[11px] font-medium text-foreground">
-          This branch has conflicts that must be resolved before merging
-        </div>
-        <div className="mt-0.5 text-[10px] text-muted-foreground">
-          Resolve conflicts on GitHub or locally, then push
-        </div>
+    <div className="border-t border-border px-3 py-3">
+      <div className="text-[11px] font-medium text-foreground">
+        This branch has conflicts that must be resolved
       </div>
+      <div className="mt-1 text-[11px] text-muted-foreground">
+        It&apos;s {pr.conflictSummary!.commitsBehind} commit
+        {pr.conflictSummary!.commitsBehind === 1 ? '' : 's'} behind (base commit:{' '}
+        <span className="font-mono text-[10px]">{pr.conflictSummary!.baseCommit}</span>)
+      </div>
+      <div className="mt-2 flex items-center gap-2">
+        <Files className="size-3.5 shrink-0 text-muted-foreground" />
+        <div className="text-[11px] text-muted-foreground">Conflicting files</div>
+      </div>
+      <div className="mt-2 space-y-2">
+        {files.map((filePath) => (
+          <div key={filePath} className="rounded-md border border-border bg-accent/20 px-2.5 py-2">
+            <div className="break-all font-mono text-[11px] leading-4 text-foreground">
+              {filePath}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/** Fallback shown when GitHub reports merge conflicts but no file list is available yet. */
+export function MergeConflictNotice({ pr }: { pr: PRInfo }): React.JSX.Element | null {
+  if (pr.mergeable !== 'CONFLICTING' || (pr.conflictSummary?.files.length ?? 0) > 0) {
+    return null
+  }
+
+  return (
+    <div className="border-t border-border px-3 py-3">
+      <div className="text-[11px] font-medium text-foreground">
+        This branch has conflicts that must be resolved
+      </div>
+      <div className="mt-1 text-[11px] text-muted-foreground">Refreshing conflict details…</div>
     </div>
   )
 }

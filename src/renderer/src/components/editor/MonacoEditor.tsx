@@ -1,7 +1,7 @@
 import React, { useRef, useCallback, useEffect, useState } from 'react'
 import Editor, { type OnMount } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
-import { Copy } from 'lucide-react'
+import { Copy, ExternalLink } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -85,7 +85,10 @@ export default function MonacoEditor({
 
       // If there's a pending reveal at mount time, execute it now
       const reveal = useAppStore.getState().pendingEditorReveal
-      if (reveal) {
+      // Why: search-result navigation sets the reveal before openFile switches
+      // the active tab. Without scoping consumption to the destination file,
+      // the previously mounted editor can clear the reveal on the first click.
+      if (reveal?.filePath === filePath) {
         performReveal(editorInstance, reveal.line, reveal.column, reveal.matchLength)
         useAppStore.getState().setPendingEditorReveal(null)
       } else {
@@ -205,6 +208,23 @@ export default function MonacoEditor({
           >
             <Copy className="w-3.5 h-3.5 mr-1.5" />
             Copy Rel. Path to Line
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={async () => {
+              // Derive worktree root from the absolute and relative paths
+              const worktreePath = filePath.slice(0, -(relativePath.length + 1))
+              const url = await window.api.git.remoteFileUrl({
+                worktreePath,
+                relativePath,
+                line: gutterMenuLine
+              })
+              if (url) {
+                window.api.ui.writeClipboardText(url)
+              }
+            }}
+          >
+            <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
+            Copy Remote URL
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

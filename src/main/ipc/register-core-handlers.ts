@@ -19,6 +19,6 @@ export function registerCoreHandlers(store: Store): void {
   registerUIHandlers(store)
   registerFilesystemHandlers(store)
   registerClipboardHandlers()
-  registerUpdaterHandlers()
+  registerUpdaterHandlers(store)
   warmSystemFontFamilies()
 }

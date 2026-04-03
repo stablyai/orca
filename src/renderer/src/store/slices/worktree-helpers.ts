@@ -19,7 +19,7 @@ export type WorktreeSlice = {
   sortEpoch: number
   fetchWorktrees: (repoId: string) => Promise<void>
   fetchAllWorktrees: () => Promise<void>
-  createWorktree: (repoId: string, name: string, baseBranch?: string) => Promise<Worktree | null>
+  createWorktree: (repoId: string, name: string, baseBranch?: string) => Promise<Worktree>
   removeWorktree: (
     worktreeId: string,
     force?: boolean

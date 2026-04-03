@@ -317,6 +317,7 @@ export class PaneManager {
       id: pane.id,
       terminal: pane.terminal,
       container: pane.container,
+      linkTooltip: pane.linkTooltip,
       fitAddon: pane.fitAddon,
       searchAddon: pane.searchAddon,
       serializeAddon: pane.serializeAddon

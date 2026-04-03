@@ -86,7 +86,10 @@ export default function TerminalPane({
     // reorder) don't clobber previously captured scrollback.
     const existing = useAppStore.getState().terminalLayoutsByTabId[tabId]
     if (existing?.buffersByLeafId) {
-      layout.buffersByLeafId = existing.buffersByLeafId
+      const currentLeafIds = new Set(manager.getPanes().map((p) => paneLeafId(p.id)))
+      layout.buffersByLeafId = Object.fromEntries(
+        Object.entries(existing.buffersByLeafId).filter(([id]) => currentLeafIds.has(id))
+      )
     }
     setTabLayout(tabId, layout)
   }

@@ -25,7 +25,14 @@ vi.mock('fs', () => ({
   existsSync: existsSyncMock
 }))
 
-import { discardChanges, getBranchCompare, getDiff, getStatus, isWithinWorktree } from './status'
+import {
+  detectConflictOperation,
+  discardChanges,
+  getBranchCompare,
+  getDiff,
+  getStatus,
+  isWithinWorktree
+} from './status'
 
 describe('discardChanges', () => {
   beforeEach(() => {
@@ -151,6 +158,24 @@ describe('getDiff', () => {
     expect(result.originalIsBinary).toBe(true)
     expect(result.modifiedIsBinary).toBe(false)
   })
+
+  it('includes preview metadata for pdf diffs', async () => {
+    const pdfBuffer = Buffer.from([0x25, 0x50, 0x44, 0x46, 0x00])
+    execFileAsyncMock.mockResolvedValueOnce({ stdout: pdfBuffer })
+    readFileMock.mockResolvedValue(pdfBuffer)
+
+    const result = await getDiff('/repo', 'docs/spec.pdf', false)
+
+    expect(result).toEqual({
+      kind: 'binary',
+      originalContent: pdfBuffer.toString('base64'),
+      modifiedContent: pdfBuffer.toString('base64'),
+      originalIsBinary: true,
+      modifiedIsBinary: true,
+      isImage: true,
+      mimeType: 'application/pdf'
+    })
+  })
 })
 
 describe('getStatus', () => {
@@ -165,7 +190,7 @@ describe('getStatus', () => {
     existsSyncMock.mockImplementation((target: string) => target.endsWith('MERGE_HEAD'))
     execFileAsyncMock.mockResolvedValueOnce({
       stdout:
-        'u UU N... 100644 100644 100644 100644 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb cccccccccccccccccccccccccccccccccccccccc\tsrc/app.ts\n'
+        'u UU N... 100644 100644 100644 100644 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb cccccccccccccccccccccccccccccccccccccccc src/app.ts\n'
     })
 
     const result = await getStatus('/repo')
@@ -187,7 +212,7 @@ describe('getStatus', () => {
     existsSyncMock.mockReturnValue(false)
     execFileAsyncMock.mockResolvedValueOnce({
       stdout:
-        'u UD N... 100644 100644 000000 100644 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb cccccccccccccccccccccccccccccccccccccccc\tsrc/deleted.ts\n'
+        'u UD N... 100644 100644 000000 100644 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb cccccccccccccccccccccccccccccccccccccccc src/deleted.ts\n'
     })
 
     const result = await getStatus('/repo')
@@ -208,13 +233,46 @@ describe('getStatus', () => {
     })
     execFileAsyncMock.mockResolvedValueOnce({
       stdout:
-        'u AU N... 100644 100644 100644 100644 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb cccccccccccccccccccccccccccccccccccccccc\tsrc/new.ts\n'
+        'u AU N... 100644 100644 100644 100644 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb cccccccccccccccccccccccccccccccccccccccc src/new.ts\n'
     })
 
     const result = await getStatus('/repo')
 
     expect(result.entries[0]?.status).toBe('modified')
     expect(result.entries[0]?.conflictKind).toBe('added_by_us')
+  })
+})
+
+describe('detectConflictOperation', () => {
+  beforeEach(() => {
+    readFileMock.mockReset()
+    existsSyncMock.mockReset()
+  })
+
+  it('ignores a stale REBASE_HEAD when no rebase directory exists', async () => {
+    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    existsSyncMock.mockImplementation((target: string) => {
+      if (target.endsWith('MERGE_HEAD')) {
+        return false
+      }
+      if (target.endsWith('CHERRY_PICK_HEAD')) {
+        return false
+      }
+      if (target.endsWith('rebase-merge')) {
+        return false
+      }
+      if (target.endsWith('rebase-apply')) {
+        return false
+      }
+      if (target.endsWith('REBASE_HEAD')) {
+        return true
+      }
+      return false
+    })
+
+    const result = await detectConflictOperation('/repo')
+
+    expect(result).toBe('unknown')
   })
 })
 

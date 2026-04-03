@@ -110,6 +110,53 @@ function collectLeafIds(
   collectLeafIds(node.second, paneByLeafId, paneId)
 }
 
+/**
+ * Write saved scrollback buffers into the restored panes so the user sees
+ * their previous terminal output after an app restart.  If a buffer was
+ * captured while the alternate screen was active (e.g. an agent TUI was
+ * running at shutdown), we exit alt-screen first so the user sees a usable
+ * normal-mode terminal.
+ */
+export function restoreScrollbackBuffers(
+  manager: PaneManager,
+  savedBuffers: Record<string, string> | undefined,
+  restoredPaneByLeafId: Map<string, number>
+): void {
+  if (!savedBuffers) {
+    return
+  }
+  const ALT_SCREEN_ON = '\x1b[?1049h'
+  const ALT_SCREEN_OFF = '\x1b[?1049l'
+  for (const [oldLeafId, buffer] of Object.entries(savedBuffers)) {
+    const newPaneId = restoredPaneByLeafId.get(oldLeafId)
+    if (newPaneId == null || !buffer) {
+      continue
+    }
+    const pane = manager.getPanes().find((p) => p.id === newPaneId)
+    if (!pane) {
+      continue
+    }
+    try {
+      let buf = buffer
+      // If buffer ends in alt-screen mode (agent TUI was running at
+      // shutdown), exit alt-screen so the user sees a usable terminal.
+      const lastOn = buf.lastIndexOf(ALT_SCREEN_ON)
+      const lastOff = buf.lastIndexOf(ALT_SCREEN_OFF)
+      if (lastOn > lastOff) {
+        buf = buf.slice(0, lastOn)
+      }
+      if (buf.length > 0) {
+        pane.terminal.write(buf)
+        // Ensure cursor is on a new line so the new shell prompt
+        // doesn't trigger zsh's PROMPT_EOL_MARK (%) indicator.
+        pane.terminal.write('\r\n')
+      }
+    } catch {
+      // If restore fails, continue with blank terminal.
+    }
+  }
+}
+
 export function replayTerminalLayout(
   manager: PaneManager,
   snapshot: TerminalLayoutSnapshot | null | undefined,

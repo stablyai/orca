@@ -1,6 +1,7 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { PersistedUIState, UpdateStatus } from '../../../../shared/types'
+import type { PersistedUIState, UpdateStatus, WorktreeCardProperty } from '../../../../shared/types'
+import { DEFAULT_WORKTREE_CARD_PROPERTIES } from '../../../../shared/constants'
 
 type LegacyPersistedSortBy = PersistedUIState['sortBy'] | 'smart'
 
@@ -26,6 +27,8 @@ export type UISlice = {
   setShowActiveOnly: (v: boolean) => void
   filterRepoIds: string[]
   setFilterRepoIds: (ids: string[]) => void
+  worktreeCardProperties: WorktreeCardProperty[]
+  toggleWorktreeCardProperty: (prop: WorktreeCardProperty) => void
   pendingRevealWorktreeId: string | null
   revealWorktreeInSidebar: (worktreeId: string) => void
   clearPendingRevealWorktreeId: () => void
@@ -67,6 +70,17 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set) => (
   filterRepoIds: [],
   setFilterRepoIds: (ids) => set({ filterRepoIds: ids }),
 
+  worktreeCardProperties: [...DEFAULT_WORKTREE_CARD_PROPERTIES],
+  toggleWorktreeCardProperty: (prop) =>
+    set((s) => {
+      const current = s.worktreeCardProperties || DEFAULT_WORKTREE_CARD_PROPERTIES
+      const updated = current.includes(prop)
+        ? current.filter((p) => p !== prop)
+        : [...current, prop]
+      window.api.ui.set({ worktreeCardProperties: updated }).catch(console.error)
+      return { worktreeCardProperties: updated }
+    }),
+
   pendingRevealWorktreeId: null,
   revealWorktreeInSidebar: (worktreeId) => set({ pendingRevealWorktreeId: worktreeId }),
   clearPendingRevealWorktreeId: () => set({ pendingRevealWorktreeId: null }),
@@ -82,6 +96,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set) => (
         groupBy: ui.groupBy,
         sortBy,
         filterRepoIds: (ui.filterRepoIds ?? []).filter((repoId) => validRepoIds.has(repoId)),
+        worktreeCardProperties: ui.worktreeCardProperties ?? [...DEFAULT_WORKTREE_CARD_PROPERTIES],
+        dismissedUpdateVersion: ui.dismissedUpdateVersion ?? null,
         persistedUIReady: true
       }
     }),
@@ -90,7 +106,13 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set) => (
   setUpdateStatus: (status) => set({ updateStatus: status }),
   dismissedUpdateVersion: null,
   dismissUpdate: () =>
-    set((s) => ({
-      dismissedUpdateVersion: 'version' in s.updateStatus ? (s.updateStatus.version ?? null) : null
-    }))
+    set((s) => {
+      const dismissedUpdateVersion =
+        'version' in s.updateStatus ? (s.updateStatus.version ?? null) : null
+      // Why: dismissing an update is user intent, not transient view state. Persist
+      // the dismissed version so relaunching the app does not immediately re-show
+      // the same reminder card until a newer release appears.
+      void window.api.ui.set({ dismissedUpdateVersion }).catch(console.error)
+      return { dismissedUpdateVersion }
+    })
 })

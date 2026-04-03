@@ -2,6 +2,7 @@ import { execFile, execSync } from 'child_process'
 import { existsSync, statSync } from 'fs'
 import { join, basename } from 'path'
 import { promisify } from 'util'
+import hostedGitInfo from 'hosted-git-info'
 
 const execFileAsync = promisify(execFile)
 
@@ -289,17 +290,68 @@ async function hasGitRefAsync(path: string, ref: string): Promise<boolean> {
   }
 }
 
-export async function getAvailableBranchName(path: string, branchName: string): Promise<string> {
-  if (!(await hasGitRefAsync(path, `refs/heads/${branchName}`))) {
-    return branchName
+export type BranchConflictKind = 'local' | 'remote'
+
+export async function getBranchConflictKind(
+  path: string,
+  branchName: string
+): Promise<BranchConflictKind | null> {
+  if (await hasGitRefAsync(path, `refs/heads/${branchName}`)) {
+    return 'local'
   }
 
-  let suffix = 1
-  while (true) {
-    const candidate = `${branchName}-${suffix}`
-    if (!(await hasGitRefAsync(path, `refs/heads/${candidate}`))) {
-      return candidate
-    }
-    suffix += 1
+  try {
+    const { stdout } = await execFileAsync(
+      'git',
+      ['for-each-ref', '--format=%(refname)', 'refs/remotes'],
+      {
+        cwd: path,
+        encoding: 'utf-8'
+      }
+    )
+    // Why: refs have the form refs/remotes/<remote>/<branch>. We strip the
+    // first three segments so that e.g. "feature/dashboard" only matches
+    // "refs/remotes/origin/feature/dashboard", not "refs/remotes/origin/other/feature/dashboard".
+    const hasRemoteConflict = stdout.split('\n').some((ref) => {
+      const parts = ref.trim().split('/')
+      return parts.slice(3).join('/') === branchName
+    })
+
+    return hasRemoteConflict ? 'remote' : null
+  } catch {
+    return null
   }
+}
+
+/**
+ * Build a hosted URL (e.g. GitHub, GitLab, Bitbucket) for a specific file
+ * and line in the repo. Returns null when the remote isn't a recognized host.
+ *
+ * Why hosted-git-info: it handles SSH, HTTPS, and shorthand remote URLs
+ * across multiple providers, so we don't have to maintain our own URL parser.
+ */
+export function getRemoteFileUrl(
+  repoPath: string,
+  relativePath: string,
+  line: number
+): string | null {
+  const remoteUrl = getRemoteUrl(repoPath)
+  if (!remoteUrl) {
+    return null
+  }
+
+  const info = hostedGitInfo.fromUrl(remoteUrl)
+  if (!info) {
+    return null
+  }
+
+  const defaultBranch = getDefaultBaseRef(repoPath).replace(/^origin\//, '')
+  const browseUrl = info.browseFile(relativePath, { committish: defaultBranch })
+  if (!browseUrl) {
+    return null
+  }
+
+  // Why: hosted-git-info lowercases the fragment, but GitHub convention
+  // uses uppercase L for line links (e.g. #L42). Append manually.
+  return `${browseUrl}#L${line}`
 }

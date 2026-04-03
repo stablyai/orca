@@ -90,7 +90,7 @@ export type OpenFile = {
 export type RightSidebarTab = 'explorer' | 'search' | 'source-control' | 'checks'
 export type ActivityBarPosition = 'top' | 'side'
 
-export type MarkdownViewMode = 'source' | 'preview'
+export type MarkdownViewMode = 'source' | 'rich'
 
 export type EditorSlice = {
   // Markdown view mode per file (fileId -> mode)
@@ -182,6 +182,9 @@ export type EditorSlice = {
   trackedConflictPathsByWorktree: Record<string, Record<string, GitConflictKind>>
   trackConflictPath: (worktreeId: string, path: string, conflictKind: GitConflictKind) => void
   setGitStatus: (worktreeId: string, status: GitStatusResult) => void
+  // Why: lightweight updater for conflict operation only, used to clear stale
+  // "Rebasing"/"Merging" badges on non-active worktrees without a full git status poll.
+  setConflictOperation: (worktreeId: string, operation: GitConflictOperation) => void
   gitBranchChangesByWorktree: Record<string, GitBranchChangeEntry[]>
   gitBranchCompareSummaryByWorktree: Record<string, GitBranchCompareSummary | null>
   gitBranchCompareRequestKeyByWorktree: Record<string, string>
@@ -214,9 +217,14 @@ export type EditorSlice = {
   clearFileSearch: () => void
 
   // Editor navigation (for search result → go-to-line)
-  pendingEditorReveal: { line: number; column: number; matchLength: number } | null
+  pendingEditorReveal: {
+    filePath: string
+    line: number
+    column: number
+    matchLength: number
+  } | null
   setPendingEditorReveal: (
-    reveal: { line: number; column: number; matchLength: number } | null
+    reveal: { filePath: string; line: number; column: number; matchLength: number } | null
   ) => void
 
   // Quick open (Cmd+P)
@@ -451,7 +459,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           openFiles: [],
           activeFileId: null,
           activeTabType: 'terminal',
-          markdownViewMode: {}
+          markdownViewMode: {},
+          pendingEditorReveal: null
         }
       }
       // Only close files for the current worktree
@@ -470,7 +479,12 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         activeTabType: 'terminal',
         markdownViewMode: newMarkdownViewMode,
         activeFileIdByWorktree: newActiveFileIdByWorktree,
-        activeTabTypeByWorktree: newActiveTabTypeByWorktree
+        activeTabTypeByWorktree: newActiveTabTypeByWorktree,
+        // Why: search-result navigation queues a one-shot reveal for the next
+        // editor mount. If the worktree closes all editor tabs before that
+        // reveal is consumed, keeping it around would make a later reopen jump
+        // to an old match unexpectedly.
+        pendingEditorReveal: null
       }
     }),
 
@@ -967,6 +981,35 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         trackedConflictPathsByWorktree: trackedUnchanged
           ? s.trackedConflictPathsByWorktree
           : { ...s.trackedConflictPathsByWorktree, [worktreeId]: currentTracked }
+      }
+    }),
+  setConflictOperation: (worktreeId, operation) =>
+    set((s) => {
+      const prev = s.gitConflictOperationByWorktree[worktreeId] ?? 'unknown'
+      if (prev === operation) {
+        return s
+      }
+      // Why: when the operation clears (transitions to 'unknown') on a non-active
+      // worktree, we also need to clear tracked conflict paths — same as the
+      // full setGitStatus handler does for the active worktree.
+      const nextTracked =
+        operation === 'unknown' && prev !== 'unknown'
+          ? {}
+          : s.trackedConflictPathsByWorktree[worktreeId]
+      const trackedUnchanged = nextTracked === s.trackedConflictPathsByWorktree[worktreeId]
+      return {
+        gitConflictOperationByWorktree: {
+          ...s.gitConflictOperationByWorktree,
+          [worktreeId]: operation
+        },
+        ...(trackedUnchanged
+          ? {}
+          : {
+              trackedConflictPathsByWorktree: {
+                ...s.trackedConflictPathsByWorktree,
+                [worktreeId]: nextTracked
+              }
+            })
       }
     }),
   gitBranchChangesByWorktree: {},

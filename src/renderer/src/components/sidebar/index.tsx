@@ -28,7 +28,7 @@ export default function Sidebar(): React.JSX.Element {
     }
   }, [repoCount, fetchAllWorktrees])
 
-  // ─── Resize logic ────────────────────────────────────
+  // ─── Resize logic ───────────────────────────────────────────────────
   const isResizing = useRef(false)
   const startX = useRef(0)
   const startWidth = useRef(0)

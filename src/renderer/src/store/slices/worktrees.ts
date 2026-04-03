@@ -44,7 +44,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       return worktree
     } catch (err) {
       console.error('Failed to create worktree:', err)
-      return null
+      throw err
     }
   },
 

@@ -132,6 +132,14 @@ export function MatchResultRow({
           type="button"
           variant="ghost"
           className="min-h-[18px] h-auto w-full justify-start gap-1 rounded-none py-px pr-2 pl-7 text-left"
+          onMouseDown={(event) => {
+            // Why: clicking a result should move focus into the opened editor.
+            // If the sidebar button takes focus first, the browser can restore
+            // it after the click and make the initial reveal feel flaky.
+            if (event.button === 0) {
+              event.preventDefault()
+            }
+          }}
           onClick={onClick}
         >
           <span className="text-[10px] text-muted-foreground flex-shrink-0 w-8 text-right tabular-nums mt-px">

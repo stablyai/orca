@@ -1,5 +1,5 @@
 import React from 'react'
-import { Code, BookOpen } from 'lucide-react'
+import { Code, Eye } from 'lucide-react'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import type { MarkdownViewMode } from '@/store/slices/editor'
 
@@ -28,8 +28,8 @@ export default function MarkdownViewToggle({
       <ToggleGroupItem value="source" aria-label="Source" title="Source">
         <Code className="h-2 w-2" />
       </ToggleGroupItem>
-      <ToggleGroupItem value="preview" aria-label="Preview" title="Preview">
-        <BookOpen className="h-2 w-2" />
+      <ToggleGroupItem value="rich" aria-label="Rich" title="Rich">
+        <Eye className="h-2 w-2" />
       </ToggleGroupItem>
     </ToggleGroup>
   )

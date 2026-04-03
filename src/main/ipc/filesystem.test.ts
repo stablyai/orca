@@ -89,22 +89,26 @@ describe('registerFilesystemHandlers', () => {
 
   beforeEach(() => {
     handlers.clear()
-    handleMock.mockReset()
-    trashItemMock.mockReset()
-    readdirMock.mockReset()
-    readFileMock.mockReset()
-    writeFileMock.mockReset()
-    statMock.mockReset()
-    realpathMock.mockReset()
-    lstatMock.mockReset()
-    getStatusMock.mockReset()
-    getDiffMock.mockReset()
-    getBranchCompareMock.mockReset()
-    getBranchDiffMock.mockReset()
-    stageFileMock.mockReset()
-    unstageFileMock.mockReset()
-    discardChangesMock.mockReset()
-    listWorktreesMock.mockReset()
+    for (const mock of [
+      handleMock,
+      trashItemMock,
+      readdirMock,
+      readFileMock,
+      writeFileMock,
+      statMock,
+      realpathMock,
+      lstatMock,
+      getStatusMock,
+      getDiffMock,
+      getBranchCompareMock,
+      getBranchDiffMock,
+      stageFileMock,
+      unstageFileMock,
+      discardChangesMock,
+      listWorktreesMock
+    ]) {
+      mock.mockReset()
+    }
 
     handleMock.mockImplementation((channel, handler) => {
       handlers.set(channel, handler)
@@ -112,7 +116,13 @@ describe('registerFilesystemHandlers', () => {
 
     realpathMock.mockImplementation(async (targetPath: string) => targetPath)
     listWorktreesMock.mockResolvedValue([
-      { path: '/workspace/repo-feature', head: 'abc', branch: '', isBare: false }
+      {
+        path: '/workspace/repo-feature',
+        head: 'abc',
+        branch: '',
+        isBare: false,
+        isMainWorktree: false
+      }
     ])
     trashItemMock.mockResolvedValue(undefined)
     statMock.mockResolvedValue({ size: 10, isDirectory: () => false, mtimeMs: 123 })
@@ -151,35 +161,26 @@ describe('registerFilesystemHandlers', () => {
     expect(writeFileMock).not.toHaveBeenCalled()
   })
 
-  it('returns base64 content for supported image binaries', async () => {
-    statMock.mockResolvedValue({ size: 4, isDirectory: () => false, mtimeMs: 123 })
-    readFileMock.mockResolvedValue(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00]))
-
+  it.each([
+    { ext: 'png', mime: 'image/png', data: [0x89, 0x50, 0x4e, 0x47, 0x00] },
+    { ext: 'pdf', mime: 'application/pdf', data: [0x25, 0x50, 0x44, 0x46, 0x00] },
+    {
+      ext: 'svg',
+      mime: 'image/svg+xml',
+      data: Array.from(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" />'))
+    }
+  ])('returns base64 content for supported $ext binaries', async ({ ext, mime, data }) => {
+    const buf = Buffer.from(data)
+    statMock.mockResolvedValue({ size: buf.length, isDirectory: () => false, mtimeMs: 123 })
+    readFileMock.mockResolvedValue(buf)
     registerFilesystemHandlers(store as never)
-
     await expect(
-      handlers.get('fs:readFile')!(null, { filePath: '/workspace/repo/image.png' })
+      handlers.get('fs:readFile')!(null, { filePath: `/workspace/repo/file.${ext}` })
     ).resolves.toEqual({
-      content: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00]).toString('base64'),
+      content: buf.toString('base64'),
       isBinary: true,
       isImage: true,
-      mimeType: 'image/png'
-    })
-  })
-
-  it('returns base64 content for supported text-based images', async () => {
-    statMock.mockResolvedValue({ size: 32, isDirectory: () => false, mtimeMs: 123 })
-    readFileMock.mockResolvedValue(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" />'))
-
-    registerFilesystemHandlers(store as never)
-
-    await expect(
-      handlers.get('fs:readFile')!(null, { filePath: '/workspace/repo/image.svg' })
-    ).resolves.toEqual({
-      content: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" />').toString('base64'),
-      isBinary: true,
-      isImage: true,
-      mimeType: 'image/svg+xml'
+      mimeType: mime
     })
   })
 
@@ -267,6 +268,52 @@ describe('registerFilesystemHandlers', () => {
     })
 
     expect(getBranchCompareMock).toHaveBeenCalledWith('/workspace/repo-feature', 'origin/main')
+  })
+
+  it('allows git operations on worktrees outside repo/workspace roots', async () => {
+    // Linked worktrees can live anywhere on disk (e.g. ~/.codex/worktrees/).
+    // As long as the path matches a worktree reported by `git worktree list`
+    // for a registered repo, it should be allowed — the security boundary is
+    // worktree registration, not directory containment.
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/repo',
+        head: 'abc',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      },
+      {
+        path: '/external/worktrees/feature',
+        head: 'def',
+        branch: 'refs/heads/feature',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    getBranchCompareMock.mockResolvedValue({
+      summary: {
+        baseRef: 'origin/main',
+        baseOid: 'base-oid',
+        compareRef: 'feature',
+        headOid: 'head-oid',
+        mergeBase: 'merge-base-oid',
+        changedFiles: 0,
+        status: 'ready'
+      },
+      entries: []
+    })
+
+    registerFilesystemHandlers(store as never)
+
+    // /external/worktrees/feature is outside both /workspace/repo and /workspace
+    await handlers.get('git:branchCompare')!(null, {
+      worktreePath: '/external/worktrees/feature',
+      baseRef: 'origin/main'
+    })
+
+    expect(getBranchCompareMock).toHaveBeenCalledWith('/external/worktrees/feature', 'origin/main')
   })
 
   it('routes branch diff queries through the pinned branch diff helper', async () => {

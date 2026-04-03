@@ -4,10 +4,13 @@ import { useAppStore } from '@/store'
 import { ConflictBanner, ConflictPlaceholderView, ConflictReviewPanel } from './ConflictComponents'
 import type { OpenFile } from '@/store/slices/editor'
 import type { GitStatusEntry, GitDiffResult } from '../../../../shared/types'
+import { getMarkdownRenderMode } from './markdown-render-mode'
+import { getMarkdownRichModeUnsupportedMessage } from './markdown-rich-mode'
 
 const MonacoEditor = lazy(() => import('./MonacoEditor'))
 const DiffViewer = lazy(() => import('./DiffViewer'))
 const CombinedDiffViewer = lazy(() => import('./CombinedDiffViewer'))
+const RichMarkdownEditor = lazy(() => import('./RichMarkdownEditor'))
 const MarkdownPreview = lazy(() => import('./MarkdownPreview'))
 const ImageViewer = lazy(() => import('./ImageViewer'))
 const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
@@ -19,7 +22,7 @@ type FileContent = {
   mimeType?: string
 }
 
-type MarkdownViewMode = 'source' | 'preview'
+type MarkdownViewMode = 'source' | 'rich'
 
 export function EditorContent({
   activeFile,
@@ -44,7 +47,12 @@ export function EditorContent({
   isMarkdown: boolean
   mdViewMode: MarkdownViewMode
   sideBySide: boolean
-  pendingEditorReveal: { line?: number; column?: number; matchLength?: number } | null
+  pendingEditorReveal: {
+    filePath?: string
+    line?: number
+    column?: number
+    matchLength?: number
+  } | null
   handleContentChange: (content: string) => void
   handleSave: (content: string) => Promise<void>
 }): React.JSX.Element {
@@ -69,18 +77,62 @@ export function EditorContent({
       language={resolvedLanguage}
       onContentChange={handleContentChange}
       onSave={handleSave}
-      revealLine={pendingEditorReveal?.line}
-      revealColumn={pendingEditorReveal?.column}
-      revealMatchLength={pendingEditorReveal?.matchLength}
+      revealLine={
+        pendingEditorReveal?.filePath === activeFile.filePath ? pendingEditorReveal.line : undefined
+      }
+      revealColumn={
+        pendingEditorReveal?.filePath === activeFile.filePath
+          ? pendingEditorReveal.column
+          : undefined
+      }
+      revealMatchLength={
+        pendingEditorReveal?.filePath === activeFile.filePath
+          ? pendingEditorReveal.matchLength
+          : undefined
+      }
     />
   )
 
   const renderMarkdownContent = (fc: FileContent): React.JSX.Element => {
     const currentContent = editBuffers[activeFile.id] ?? fc.content
-    if (mdViewMode === 'preview') {
-      return <MarkdownPreview content={currentContent} filePath={activeFile.filePath} />
+    const richModeUnsupportedMessage = getMarkdownRichModeUnsupportedMessage(currentContent)
+    const renderMode = getMarkdownRenderMode({
+      hasRichModeUnsupportedContent: richModeUnsupportedMessage !== null,
+      viewMode: mdViewMode
+    })
+
+    if (renderMode === 'rich-editor') {
+      return (
+        <RichMarkdownEditor
+          content={currentContent}
+          onContentChange={handleContentChange}
+          onSave={handleSave}
+        />
+      )
     }
-    return renderMonacoEditor(fc)
+
+    if (renderMode === 'preview') {
+      return (
+        <div className="flex h-full min-h-0 flex-col">
+          <div className="border-b border-border/60 bg-amber-500/10 px-3 py-2 text-xs text-amber-950 dark:text-amber-100">
+            {richModeUnsupportedMessage}
+          </div>
+          {/* Why: before rich editing shipped, Orca already had a stable markdown
+          preview surface. If Tiptap cannot safely own a document, falling back
+          to that renderer preserves readable preview mode instead of forcing the
+          user out of preview entirely. Source mode remains available for edits. */}
+          <div className="min-h-0 flex-1">
+            <MarkdownPreview content={currentContent} filePath={activeFile.filePath} />
+          </div>
+        </div>
+      )
+    }
+
+    // Why: Monaco sizes itself against the immediate parent when `height="100%"`
+    // is used. Markdown source mode briefly wrapped it in a non-flex container
+    // with no explicit height, which made the code surface collapse even though
+    // the surrounding editor pane was tall enough.
+    return <div className="h-full min-h-0">{renderMonacoEditor(fc)}</div>
   }
 
   if (activeFile.mode === 'conflict-review') {

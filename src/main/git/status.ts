@@ -130,18 +130,21 @@ async function parseUnmergedEntry(
   worktreePath: string,
   line: string
 ): Promise<GitStatusEntry | null> {
-  const tabIndex = line.indexOf('\t')
-  if (tabIndex === -1) {
-    return null
-  }
-
-  const metadata = line.slice(0, tabIndex)
-  const filePath = line.slice(tabIndex + 1)
-  const parts = metadata.split(' ')
+  // Why: porcelain v2 unmerged entries are fully space-separated (like type-1
+  // ordinary entries), NOT tab-separated. The format is:
+  //   u <XY> <sub> <m1> <m2> <m3> <mW> <h1> <h2> <h3> <path>
+  // The path starts at field index 10 and may contain spaces, so we join the
+  // remaining fields. The earlier tab-based parsing silently dropped all
+  // unmerged entries because the tab was never present.
+  const parts = line.split(' ')
   const xy = parts[1]
   const modeStage1 = parts[3]
   const modeStage2 = parts[4]
   const modeStage3 = parts[5]
+  const filePath = parts.slice(10).join(' ')
+  if (!filePath) {
+    return null
+  }
 
   // Why: submodule conflicts (mode 160000) are out of scope for v1.
   // Presenting them with normal file-conflict UX would be misleading because
@@ -227,35 +230,41 @@ async function getConflictCompatibilityStatus(
 // cleaned up by the time we check. In that case we fall back to 'unknown' for
 // one poll cycle, which is acceptable. The renderer uses this to label the
 // merge summary ("Merge conflicts" vs "Rebase conflicts" vs generic "Conflicts").
-async function detectConflictOperation(worktreePath: string): Promise<GitConflictOperation> {
+//
+// Why rebase detection relies on rebase-merge/ or rebase-apply/ directories
+// instead of REBASE_HEAD: those directories persist for the entire rebase, so
+// they cover both conflicting and non-conflicting steps. REBASE_HEAD, by
+// contrast, only exists on some steps and can also be left behind after a
+// completed rebase, which would make the UI show a stale "Rebasing" badge.
+export async function detectConflictOperation(worktreePath: string): Promise<GitConflictOperation> {
   const gitDir = await resolveGitDir(worktreePath)
   const mergeHead = path.join(gitDir, 'MERGE_HEAD')
-  const rebaseHead = path.join(gitDir, 'REBASE_HEAD')
   const cherryPickHead = path.join(gitDir, 'CHERRY_PICK_HEAD')
+  const rebaseMergeDir = path.join(gitDir, 'rebase-merge')
+  const rebaseApplyDir = path.join(gitDir, 'rebase-apply')
 
   let hasMergeHead = false
-  let hasRebaseHead = false
   let hasCherryPickHead = false
+  let hasRebaseDir = false
 
   try {
     hasMergeHead = existsSync(mergeHead)
-    hasRebaseHead = existsSync(rebaseHead)
     hasCherryPickHead = existsSync(cherryPickHead)
+    hasRebaseDir = existsSync(rebaseMergeDir) || existsSync(rebaseApplyDir)
   } catch {
-    return 'unknown'
-  }
-
-  if (Number(hasMergeHead) + Number(hasRebaseHead) + Number(hasCherryPickHead) !== 1) {
     return 'unknown'
   }
 
   if (hasMergeHead) {
     return 'merge'
   }
-  if (hasRebaseHead) {
+  if (hasRebaseDir) {
     return 'rebase'
   }
-  return 'cherry-pick'
+  if (hasCherryPickHead) {
+    return 'cherry-pick'
+  }
+  return 'unknown'
 }
 
 async function resolveGitDir(worktreePath: string): Promise<string> {
@@ -566,9 +575,15 @@ async function readWorkingTreeFile(filePath: string): Promise<GitBlobReadResult>
 function bufferToBlob(buffer: Buffer, filePath?: string): GitBlobReadResult {
   const isBinary = isBinaryBuffer(buffer)
   // Return base64 for recognized image formats so the renderer can display them
-  const isImage = filePath ? !!IMAGE_MIME_TYPES[path.extname(filePath).toLowerCase()] : false
+  const isPreviewableBinary = filePath
+    ? !!PREVIEWABLE_BINARY_MIME_TYPES[path.extname(filePath).toLowerCase()]
+    : false
   return {
-    content: isBinary ? (isImage ? buffer.toString('base64') : '') : buffer.toString('utf-8'),
+    content: isBinary
+      ? isPreviewableBinary
+        ? buffer.toString('base64')
+        : ''
+      : buffer.toString('utf-8'),
     isBinary,
     exists: true
   }
@@ -592,15 +607,18 @@ function buildDiffResult(
   filePath?: string
 ): GitDiffResult {
   if (originalIsBinary || modifiedIsBinary) {
-    const mimeType = filePath ? IMAGE_MIME_TYPES[path.extname(filePath).toLowerCase()] : undefined
+    const mimeType = filePath
+      ? PREVIEWABLE_BINARY_MIME_TYPES[path.extname(filePath).toLowerCase()]
+      : undefined
     return {
       kind: 'binary',
       originalContent,
       modifiedContent,
       originalIsBinary,
       modifiedIsBinary,
-      // Include image metadata so the renderer can show image diffs instead of
-      // a generic "binary file changed" message.
+      // Why: binary diff previews were originally image-only, so the renderer
+      // still checks `isImage` before showing a preview component. Preserve
+      // that legacy flag for PDFs until the wider contract is renamed.
       ...(mimeType ? { isImage: true, mimeType } : {})
     } as GitDiffResult
   }
@@ -620,7 +638,7 @@ type GitBlobReadResult = {
   exists: boolean
 }
 
-const IMAGE_MIME_TYPES: Record<string, string> = {
+const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
@@ -628,7 +646,8 @@ const IMAGE_MIME_TYPES: Record<string, string> = {
   '.svg': 'image/svg+xml',
   '.webp': 'image/webp',
   '.bmp': 'image/bmp',
-  '.ico': 'image/x-icon'
+  '.ico': 'image/x-icon',
+  '.pdf': 'application/pdf'
 }
 
 /**

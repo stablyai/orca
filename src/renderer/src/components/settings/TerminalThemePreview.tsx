@@ -14,7 +14,7 @@ export function TerminalThemePreview({
   title,
   description,
   appearance,
-  dividerThicknessPx = 1,
+  dividerThicknessPx = 3,
   inactivePaneOpacity = 0.9,
   activePaneOpacity = 1
 }: TerminalThemePreviewProps): React.JSX.Element {

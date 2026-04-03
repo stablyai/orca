@@ -1,5 +1,5 @@
 import React from 'react'
-import { CircleCheck, GitMerge, TriangleAlert, X } from 'lucide-react'
+import { CircleCheck, GitMerge, RefreshCw, TriangleAlert, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { OpenFile } from '@/store/slices/editor'
@@ -16,7 +16,7 @@ export const CONFLICT_KIND_LABELS: Record<GitConflictKind, string> = {
 }
 
 export const CONFLICT_HINT_MAP: Record<GitConflictKind, string> = {
-  both_modified: 'Open and edit the final contents',
+  both_modified: 'Resolve the conflict markers',
   both_added: 'Choose which version to keep, or combine them',
   deleted_by_us: 'Decide whether to restore the file',
   deleted_by_them: 'Decide whether to keep the file or accept deletion',
@@ -59,7 +59,11 @@ export function ConflictBanner({
           {label} conflict · {CONFLICT_KIND_LABELS[conflict.conflictKind]}
         </span>
       </div>
-      <div className="mt-1 text-muted-foreground">{CONFLICT_HINT_MAP[conflict.conflictKind]}</div>
+      {/* Why: the hint is omitted here because the file is already open in the
+         editor below. Showing "Open and edit…" or similar would be confusing
+         when the user is already viewing/editing the working-tree contents.
+         The hint is still shown in ConflictPlaceholderView and the review
+         list where it provides actionable guidance. */}
       {!isUnresolved && (
         <div className="mt-1 text-muted-foreground">
           Session-local continuity state. Git is no longer reporting this file as unmerged.
@@ -151,10 +155,8 @@ export function ConflictReviewPanel({
         </div>
         <div className="mt-2 flex items-center gap-2">
           <Button type="button" size="sm" variant="outline" onClick={onRefreshSnapshot}>
-            Open latest conflicts
-          </Button>
-          <Button type="button" size="sm" variant="ghost" onClick={onReturnToSourceControl}>
-            Source Control
+            <RefreshCw className="size-3.5" />
+            Refresh
           </Button>
         </div>
       </div>

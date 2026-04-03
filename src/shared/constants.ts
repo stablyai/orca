@@ -3,11 +3,21 @@ import type {
   PersistedState,
   PersistedUIState,
   RepoHookSettings,
-  WorkspaceSessionState
+  WorkspaceSessionState,
+  WorktreeCardProperty
 } from './types'
 import { DEFAULT_TERMINAL_FONT_WEIGHT } from './terminal-fonts'
 
 export const SCHEMA_VERSION = 1
+
+export const DEFAULT_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = [
+  'status',
+  'unread',
+  'ci',
+  'issue',
+  'pr',
+  'comment'
+]
 
 export const REPO_COLORS = [
   '#737373', // neutral
@@ -40,7 +50,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalInactivePaneOpacity: 0.8,
     terminalActivePaneOpacity: 1,
     terminalPaneOpacityTransitionMs: 140,
-    terminalDividerThicknessPx: 1,
+    terminalDividerThicknessPx: 3,
     terminalScrollbackBytes: 10_000_000,
     rightSidebarOpenByDefault: true
   }
@@ -77,7 +87,10 @@ export function getDefaultUIState(): PersistedUIState {
     groupBy: 'none',
     sortBy: 'name',
     filterRepoIds: [],
-    uiZoomLevel: 0
+    uiZoomLevel: 0,
+    worktreeCardProperties: [...DEFAULT_WORKTREE_CARD_PROPERTIES],
+    dismissedUpdateVersion: null,
+    lastUpdateCheckAt: null
   }
 }
 

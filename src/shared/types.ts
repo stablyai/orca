@@ -16,6 +16,9 @@ export type GitWorktreeInfo = {
   head: string
   branch: string
   isBare: boolean
+  /** True for the repo's main working tree (the first entry from `git worktree list`).
+   *  Linked worktrees created via `git worktree add` have this set to false. */
+  isMainWorktree: boolean
 }
 
 // ─── Worktree (app-level, enriched) ──────────────────────────────────
@@ -97,6 +100,13 @@ export type CheckStatus = 'pending' | 'success' | 'failure' | 'neutral'
 
 export type PRMergeableState = 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN'
 
+export type PRConflictSummary = {
+  baseRef: string
+  baseCommit: string
+  commitsBehind: number
+  files: string[]
+}
+
 export type PRInfo = {
   number: number
   title: string
@@ -105,6 +115,7 @@ export type PRInfo = {
   checksStatus: CheckStatus
   updatedAt: string
   mergeable: PRMergeableState
+  conflictSummary?: PRConflictSummary
 }
 
 export type PRCheckDetail = {
@@ -186,6 +197,8 @@ export type GlobalSettings = {
   rightSidebarOpenByDefault: boolean
 }
 
+export type WorktreeCardProperty = 'status' | 'unread' | 'ci' | 'issue' | 'pr' | 'comment'
+
 export type PersistedUIState = {
   lastActiveRepoId: string | null
   lastActiveWorktreeId: string | null
@@ -195,6 +208,9 @@ export type PersistedUIState = {
   sortBy: 'name' | 'recent' | 'repo'
   filterRepoIds: string[]
   uiZoomLevel: number
+  worktreeCardProperties: WorktreeCardProperty[]
+  dismissedUpdateVersion: string | null
+  lastUpdateCheckAt: number | null
 }
 
 // ─── Persistence shape ──────────────────────────────────────────────
@@ -299,9 +315,9 @@ export type GitDiffBinaryResult = {
   kind: 'binary'
   originalContent: string
   modifiedContent: string
-  /** True when both sides are a recognized image format (PNG, JPG, etc.) */
+  /** Legacy flag used by the renderer for any binary format it can preview, including PDFs. */
   isImage?: boolean
-  /** MIME type for image rendering, e.g. "image/png" */
+  /** MIME type for binary preview rendering, e.g. "image/png" or "application/pdf" */
   mimeType?: string
 } & (
   | { originalIsBinary: true; modifiedIsBinary: boolean }

@@ -17,7 +17,13 @@ export function attachMainWindowServices(mainWindow: BrowserWindow, store: Store
   registerWorktreeHandlers(mainWindow, store)
   registerPtyHandlers(mainWindow)
   registerFileDropRelay(mainWindow)
-  setupAutoUpdater(mainWindow, { onBeforeQuit: () => store.flush() })
+  setupAutoUpdater(mainWindow, {
+    getLastUpdateCheckAt: () => store.getUI().lastUpdateCheckAt,
+    onBeforeQuit: () => store.flush(),
+    setLastUpdateCheckAt: (timestamp) => {
+      store.updateUI({ lastUpdateCheckAt: timestamp })
+    }
+  })
 
   const allowedPermissions = new Set(['media', 'fullscreen', 'pointerLock'])
   mainWindow.webContents.session.setPermissionRequestHandler(
@@ -48,7 +54,7 @@ export function registerClipboardHandlers(): void {
   ipcMain.handle('clipboard:writeText', (_event, text: string) => clipboard.writeText(text))
 }
 
-export function registerUpdaterHandlers(): void {
+export function registerUpdaterHandlers(_store: Store): void {
   ipcMain.removeHandler('updater:getStatus')
   ipcMain.removeHandler('updater:getVersion')
   ipcMain.removeHandler('updater:check')

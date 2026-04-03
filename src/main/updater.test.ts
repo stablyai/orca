@@ -1,9 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  buildReleaseLookupResponse,
-  getFallbackAssetUrl,
-  releaseTagUrl
-} from './updater.test-fixtures'
 
 const {
   appMock,
@@ -14,7 +9,21 @@ const {
   isMock,
   killAllPtyMock
 } = vi.hoisted(() => {
+  const appEventHandlers = new Map<string, ((...args: unknown[]) => void)[]>()
   const eventHandlers = new Map<string, ((...args: unknown[]) => void)[]>()
+
+  const appOn = vi.fn((event: string, handler: (...args: unknown[]) => void) => {
+    const handlers = appEventHandlers.get(event) ?? []
+    handlers.push(handler)
+    appEventHandlers.set(event, handlers)
+    return appMock
+  })
+
+  const appEmit = (event: string, ...args: unknown[]) => {
+    for (const handler of appEventHandlers.get(event) ?? []) {
+      handler(...args)
+    }
+  }
 
   const on = vi.fn((event: string, handler: (...args: unknown[]) => void) => {
     const handlers = eventHandlers.get(event) ?? []
@@ -30,9 +39,11 @@ const {
   }
 
   const reset = () => {
+    appEventHandlers.clear()
+    appOn.mockClear()
     eventHandlers.clear()
     on.mockClear()
-    autoUpdaterMock.checkForUpdates.mockReset()
+    autoUpdaterMock.checkForUpdates.mockReset().mockResolvedValue(null)
     autoUpdaterMock.downloadUpdate.mockReset()
     autoUpdaterMock.quitAndInstall.mockReset()
   }
@@ -52,7 +63,10 @@ const {
   return {
     appMock: {
       isPackaged: true,
-      getVersion: vi.fn(() => '1.0.51')
+      getVersion: vi.fn(() => '1.0.51'),
+      on: appOn,
+      emit: appEmit,
+      quit: vi.fn()
     },
     browserWindowMock: {
       getAllWindows: vi.fn(() => [])
@@ -89,7 +103,6 @@ vi.mock('./ipc/pty', () => ({
 }))
 
 describe('updater', () => {
-  const fallbackAssetUrl = getFallbackAssetUrl()
   beforeEach(() => {
     vi.resetModules()
     autoUpdaterMock.reset()
@@ -99,10 +112,12 @@ describe('updater', () => {
     shellMock.openExternal.mockReset()
     appMock.getVersion.mockReset()
     appMock.getVersion.mockReturnValue('1.0.51')
+    appMock.quit.mockReset()
     appMock.isPackaged = true
     isMock.dev = false
     killAllPtyMock.mockReset()
     vi.unstubAllGlobals()
+    vi.useRealTimers()
   })
 
   it('deduplicates identical check errors from the event and rejected promise', async () => {
@@ -170,126 +185,74 @@ describe('updater', () => {
     )
   })
 
-  it('treats GitHub release transition errors during checks as benign', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => ({
-        ok: true,
-        json: async () => buildReleaseLookupResponse()
-      }))
-    )
+  it('runs a startup check immediately when the last background check is stale', async () => {
+    const mainWindow = { webContents: { send: vi.fn() } }
+    const setLastUpdateCheckAt = vi.fn()
 
-    autoUpdaterMock.checkForUpdates.mockResolvedValueOnce(undefined).mockImplementationOnce(() => {
-      autoUpdaterMock.emit('checking-for-update')
-      queueMicrotask(() => {
-        autoUpdaterMock.emit('error', new Error('Unable to find latest version on GitHub'))
-      })
-      return Promise.reject(new Error('Unable to find latest version on GitHub'))
+    const { setupAutoUpdater } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, {
+      getLastUpdateCheckAt: () => Date.now() - 37 * 60 * 60 * 1000,
+      setLastUpdateCheckAt
     })
 
-    const sendMock = vi.fn()
-    const mainWindow = { webContents: { send: sendMock } }
-
-    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
-
-    setupAutoUpdater(mainWindow as never)
-    checkForUpdatesFromMenu()
-    await vi.waitFor(() => {
-      const statuses = sendMock.mock.calls
-        .filter(([channel]) => channel === 'updater:status')
-        .map(([, status]) => status)
-      expect(statuses).toContainEqual({
-        state: 'available',
-        version: '1.0.61',
-        releaseUrl: releaseTagUrl,
-        manualDownloadUrl: fallbackAssetUrl
-      })
-    })
-
-    const statuses = sendMock.mock.calls
-      .filter(([channel]) => channel === 'updater:status')
-      .map(([, status]) => status)
-
-    expect(statuses).toContainEqual({ state: 'checking', userInitiated: true })
-    expect(statuses).toContainEqual({
-      state: 'available',
-      version: '1.0.61',
-      releaseUrl: releaseTagUrl,
-      manualDownloadUrl: fallbackAssetUrl
-    })
-    expect(statuses).not.toContainEqual(
-      expect.objectContaining({
-        state: 'error',
-        message: 'Unable to find latest version on GitHub'
-      })
-    )
-    expect(
-      statuses.filter(
-        (status) =>
-          typeof status === 'object' &&
-          status !== null &&
-          status.state === 'available' &&
-          status.version === '1.0.61'
-      )
-    ).toHaveLength(1)
+    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    expect(setLastUpdateCheckAt).not.toHaveBeenCalled()
   })
 
-  it('treats missing latest-mac.yml during checks as a benign idle transition', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => ({
-        ok: true,
-        json: async () => []
-      }))
-    )
+  it('waits until the remaining interval before the next background check', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-04-03T12:00:00Z'))
 
-    autoUpdaterMock.checkForUpdates.mockResolvedValueOnce(undefined).mockImplementationOnce(() => {
+    const mainWindow = { webContents: { send: vi.fn() } }
+    const setLastUpdateCheckAt = vi.fn()
+
+    const { setupAutoUpdater } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, {
+      getLastUpdateCheckAt: () => Date.now() - 35 * 60 * 60 * 1000,
+      setLastUpdateCheckAt
+    })
+
+    expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(59 * 60 * 1000)
+    expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(60 * 1000)
+    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    expect(setLastUpdateCheckAt).not.toHaveBeenCalled()
+  })
+
+  it('retries background checks sooner after a failed automatic check', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-04-03T12:00:00Z'))
+
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       autoUpdaterMock.emit('checking-for-update')
       queueMicrotask(() => {
-        autoUpdaterMock.emit(
-          'error',
-          new Error('Cannot find channel "latest-mac.yml" update info: HttpError: 404')
-        )
+        autoUpdaterMock.emit('error', new Error('boom'))
       })
-      return Promise.reject(
-        new Error('Cannot find channel "latest-mac.yml" update info: HttpError: 404')
-      )
+      return Promise.reject(new Error('boom'))
     })
 
     const sendMock = vi.fn()
     const mainWindow = { webContents: { send: sendMock } }
 
-    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+    const { setupAutoUpdater } = await import('./updater')
 
-    setupAutoUpdater(mainWindow as never)
-    checkForUpdatesFromMenu()
-    // User-initiated checks with no fallback release show 'not-available'
-    // (instead of 'idle') so the user gets explicit feedback that they're
-    // already on the latest version.
-    await vi.waitFor(() => {
-      const statuses = sendMock.mock.calls
-        .filter(([channel]) => channel === 'updater:status')
-        .map(([, status]) => status)
-      expect(statuses).toContainEqual({ state: 'not-available', userInitiated: true })
+    setupAutoUpdater(mainWindow as never, {
+      getLastUpdateCheckAt: () => null,
+      setLastUpdateCheckAt: vi.fn()
     })
 
-    const statuses = sendMock.mock.calls
-      .filter(([channel]) => channel === 'updater:status')
-      .map(([, status]) => status)
+    await vi.runAllTicks()
+    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
 
-    expect(statuses).toContainEqual({ state: 'checking', userInitiated: true })
-    expect(statuses).toContainEqual({ state: 'not-available', userInitiated: true })
-    expect(statuses).not.toContainEqual(
-      expect.objectContaining({
-        state: 'error',
-        message: 'Cannot find channel "latest-mac.yml" update info: HttpError: 404'
-      })
-    )
-    expect(
-      statuses.filter(
-        (status) =>
-          typeof status === 'object' && status !== null && status.state === 'not-available'
-      )
-    ).toHaveLength(1)
+    vi.advanceTimersByTime(59 * 60 * 1000)
+    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+
+    vi.advanceTimersByTime(60 * 1000)
+    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
   })
 })

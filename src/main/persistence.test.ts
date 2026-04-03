@@ -78,6 +78,8 @@ describe('Store', () => {
     expect(ui.sidebarWidth).toBe(280)
     expect(ui.groupBy).toBe('none')
     expect(ui.lastActiveRepoId).toBeNull()
+    expect(ui.dismissedUpdateVersion).toBeNull()
+    expect(ui.lastUpdateCheckAt).toBeNull()
   })
 
   // ── 2. Load from existing valid file ─────────────────────────────────
@@ -300,6 +302,15 @@ describe('Store', () => {
     const ui = store.getUI()
     expect(ui.sidebarWidth).toBe(400)
     expect(ui.groupBy).toBe('none') // default preserved
+    expect(ui.dismissedUpdateVersion).toBeNull()
+  })
+
+  it('persists updater reminder metadata in UI state', async () => {
+    const store = await createStore()
+    store.updateUI({ dismissedUpdateVersion: '1.0.99', lastUpdateCheckAt: 1234 })
+    const ui = store.getUI()
+    expect(ui.dismissedUpdateVersion).toBe('1.0.99')
+    expect(ui.lastUpdateCheckAt).toBe(1234)
   })
 
   it('migrates persisted smart sort to recent', async () => {

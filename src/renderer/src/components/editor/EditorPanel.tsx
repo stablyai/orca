@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useState, Suspense } from 'react'
-import { Columns2, Rows2 } from 'lucide-react'
+import { Columns2, FileText, Rows2 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { detectLanguage } from '@/lib/language-detect'
-import { getEditorHeaderCopyState } from './editor-header'
+import { getEditorHeaderCopyState, getEditorHeaderOpenFileState } from './editor-header'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import type { MarkdownViewMode } from '@/store/slices/editor'
 import MarkdownViewToggle from './MarkdownViewToggle'
@@ -24,8 +24,10 @@ export default function EditorPanel(): React.JSX.Element | null {
   const markFileDirty = useAppStore((s) => s.markFileDirty)
   const pendingEditorReveal = useAppStore((s) => s.pendingEditorReveal)
   const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
+  const gitBranchChangesByWorktree = useAppStore((s) => s.gitBranchChangesByWorktree)
   const markdownViewMode = useAppStore((s) => s.markdownViewMode)
   const setMarkdownViewMode = useAppStore((s) => s.setMarkdownViewMode)
+  const openFile = useAppStore((s) => s.openFile)
 
   const activeFile = openFiles.find((f) => f.id === activeFileId) ?? null
 
@@ -283,16 +285,49 @@ export default function EditorPanel(): React.JSX.Element | null {
       activeFile.diffSource === 'combined-branch')
   const headerCopyState = getEditorHeaderCopyState(activeFile)
   const worktreeEntries = gitStatusByWorktree[activeFile.worktreeId] ?? []
+  const branchEntries = gitBranchChangesByWorktree[activeFile.worktreeId] ?? []
   const resolvedLanguage =
     activeFile.mode === 'diff'
       ? detectLanguage(activeFile.relativePath)
       : detectLanguage(activeFile.filePath)
+  const matchingWorktreeEntry =
+    activeFile.mode === 'diff' && activeFile.diffSource !== 'branch'
+      ? (worktreeEntries.find(
+          (entry) =>
+            entry.path === activeFile.relativePath &&
+            (activeFile.diffSource === 'staged'
+              ? entry.area === 'staged'
+              : entry.area === 'unstaged')
+        ) ?? null)
+      : null
+  const matchingBranchEntry =
+    activeFile.mode === 'diff' && activeFile.diffSource === 'branch'
+      ? (branchEntries.find((entry) => entry.path === activeFile.relativePath) ?? null)
+      : null
+  const openFileState = getEditorHeaderOpenFileState(
+    activeFile,
+    matchingWorktreeEntry,
+    matchingBranchEntry
+  )
 
   const isMarkdown = resolvedLanguage === 'markdown'
   const mdViewMode: MarkdownViewMode =
     isMarkdown && activeFile.mode === 'edit'
-      ? (markdownViewMode[activeFile.id] ?? 'source')
+      ? (markdownViewMode[activeFile.id] ?? 'rich')
       : 'source'
+
+  const handleOpenDiffTargetFile = (): void => {
+    if (!openFileState.canOpen) {
+      return
+    }
+    openFile({
+      filePath: activeFile.filePath,
+      relativePath: activeFile.relativePath,
+      worktreeId: activeFile.worktreeId,
+      language: detectLanguage(activeFile.relativePath),
+      mode: 'edit'
+    })
+  }
 
   const loadingFallback = (
     <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
@@ -322,6 +357,30 @@ export default function EditorPanel(): React.JSX.Element | null {
               </span>
             </div>
           </div>
+          {isSingleDiff && (
+            <TooltipProvider delayDuration={300}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors flex-shrink-0 disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+                    onClick={handleOpenDiffTargetFile}
+                    aria-label="Open file"
+                    disabled={!openFileState.canOpen}
+                  >
+                    <FileText size={14} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={4}>
+                  {openFileState.canOpen
+                    ? isMarkdown
+                      ? 'Open file tab to use rich markdown editing'
+                      : 'Open file tab'
+                    : 'This diff has no modified-side file to open'}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
           {isSingleDiff && (
             <TooltipProvider delayDuration={300}>
               <Tooltip>

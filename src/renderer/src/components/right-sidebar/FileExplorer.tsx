@@ -1,18 +1,26 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { Loader2 } from 'lucide-react'
+import { FilePlus, FolderPlus, Loader2 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { detectLanguage } from '@/lib/language-detect'
-import { joinPath, normalizeRelativePath } from '@/lib/path'
+import { dirname, normalizeRelativePath } from '@/lib/path'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import { FileDeleteDialog } from './FileDeleteDialog'
-import { FileExplorerRow } from './FileExplorerRow'
-import type { DirCache, TreeNode } from './file-explorer-types'
+import { FileExplorerRow, InlineInputRow } from './FileExplorerRow'
+import type { TreeNode } from './file-explorer-types'
 import { splitPathSegments } from './path-tree'
-import { shouldIncludeFileExplorerEntry } from './file-explorer-entries'
 import { buildFolderStatusMap, buildStatusMap, STATUS_COLORS } from './status-display'
 import { useFileDeletion } from './useFileDeletion'
 import { useFileExplorerReveal } from './useFileExplorerReveal'
+import { useFileExplorerInlineInput } from './useFileExplorerInlineInput'
+import { useFileExplorerKeys } from './useFileExplorerKeys'
+import { useFileExplorerTree } from './useFileExplorerTree'
 
 export default function FileExplorer(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
@@ -32,22 +40,36 @@ export default function FileExplorer(): React.JSX.Element {
     if (!activeWorktreeId) {
       return null
     }
-
     for (const worktrees of Object.values(worktreesByRepo)) {
-      const worktree = worktrees.find((candidate) => candidate.id === activeWorktreeId)
-      if (worktree) {
-        return worktree.path
+      const wt = worktrees.find((w) => w.id === activeWorktreeId)
+      if (wt) {
+        return wt.path
       }
     }
-
     return null
   }, [activeWorktreeId, worktreesByRepo])
 
-  const [dirCache, setDirCache] = useState<Record<string, DirCache>>({})
-  const dirCacheRef = useRef(dirCache)
-  dirCacheRef.current = dirCache
+  const expanded = useMemo(
+    () =>
+      activeWorktreeId ? (expandedDirs[activeWorktreeId] ?? new Set<string>()) : new Set<string>(),
+    [activeWorktreeId, expandedDirs]
+  )
+
+  const {
+    dirCache,
+    flatRows,
+    rowsByPath,
+    rootCache,
+    loadDir,
+    refreshTree,
+    refreshDir,
+    resetAndLoad
+  } = useFileExplorerTree(worktreePath, expanded)
+
   const [selectedPath, setSelectedPath] = useState<string | null>(null)
   const [flashingPath, setFlashingPath] = useState<string | null>(null)
+  const [bgMenuOpen, setBgMenuOpen] = useState(false)
+  const [bgMenuPoint, setBgMenuPoint] = useState({ x: 0, y: 0 })
   const scrollRef = useRef<HTMLDivElement>(null)
   const flashTimeoutRef = useRef<number | null>(null)
   const isMac = useMemo(() => navigator.userAgent.includes('Mac'), [])
@@ -64,75 +86,8 @@ export default function FileExplorer(): React.JSX.Element {
     () => (activeWorktreeId ? (gitStatusByWorktree[activeWorktreeId] ?? []) : []),
     [activeWorktreeId, gitStatusByWorktree]
   )
-
   const statusByRelativePath = useMemo(() => buildStatusMap(entries), [entries])
-
   const folderStatusByRelativePath = useMemo(() => buildFolderStatusMap(entries), [entries])
-
-  const expanded = useMemo(
-    () =>
-      activeWorktreeId ? (expandedDirs[activeWorktreeId] ?? new Set<string>()) : new Set<string>(),
-    [activeWorktreeId, expandedDirs]
-  )
-
-  const loadDir = useCallback(
-    async (dirPath: string, depth: number, options?: { force?: boolean }) => {
-      const cache = dirCacheRef.current
-      if (!options?.force && (cache[dirPath]?.children.length > 0 || cache[dirPath]?.loading)) {
-        return
-      }
-
-      setDirCache((prev) => ({
-        ...prev,
-        [dirPath]: {
-          children: options?.force ? [] : (prev[dirPath]?.children ?? []),
-          loading: true
-        }
-      }))
-
-      try {
-        const entries = await window.api.fs.readDir({ dirPath })
-        const children: TreeNode[] = entries
-          .filter(shouldIncludeFileExplorerEntry)
-          .map((entry) => ({
-            name: entry.name,
-            path: joinPath(dirPath, entry.name),
-            relativePath: worktreePath
-              ? normalizeRelativePath(joinPath(dirPath, entry.name).slice(worktreePath.length + 1))
-              : entry.name,
-            isDirectory: entry.isDirectory,
-            depth: depth + 1
-          }))
-
-        setDirCache((prev) => ({
-          ...prev,
-          [dirPath]: { children, loading: false }
-        }))
-      } catch {
-        setDirCache((prev) => ({
-          ...prev,
-          [dirPath]: { children: [], loading: false }
-        }))
-      }
-    },
-    [worktreePath]
-  )
-
-  const refreshTree = useCallback(async () => {
-    if (!worktreePath) {
-      return
-    }
-
-    setDirCache({})
-    await loadDir(worktreePath, -1, { force: true })
-
-    await Promise.all(
-      Array.from(expanded).map(async (dirPath) => {
-        const depth = splitPathSegments(dirPath.slice(worktreePath.length + 1)).length - 1
-        await loadDir(dirPath, depth, { force: true })
-      })
-    )
-  }, [expanded, loadDir, worktreePath])
 
   const {
     pendingDelete,
@@ -158,15 +113,11 @@ export default function FileExplorer(): React.JSX.Element {
     if (!worktreePath) {
       return
     }
-
     setSelectedPath(null)
-    setDirCache({})
-    void loadDir(worktreePath, -1)
+    resetAndLoad()
   }, [worktreePath]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    return clearFlashTimeout
-  }, [clearFlashTimeout])
+  useEffect(() => clearFlashTimeout, [clearFlashTimeout])
 
   useEffect(() => {
     for (const dirPath of expanded) {
@@ -179,40 +130,39 @@ export default function FileExplorer(): React.JSX.Element {
     }
   }, [expanded]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const flatRows = useMemo(() => {
-    if (!worktreePath) {
-      return []
-    }
+  const {
+    inlineInput,
+    inlineInputIndex,
+    startNew,
+    startRename,
+    dismissInlineInput,
+    handleInlineSubmit
+  } = useFileExplorerInlineInput({
+    activeWorktreeId,
+    worktreePath,
+    expanded,
+    flatRows,
+    scrollRef,
+    refreshDir
+  })
 
-    const result: TreeNode[] = []
-
-    const addChildren = (parentPath: string): void => {
-      const cached = dirCache[parentPath]
-      if (!cached?.children) {
-        return
-      }
-
-      for (const child of cached.children) {
-        result.push(child)
-        if (child.isDirectory && expanded.has(child.path)) {
-          addChildren(child.path)
-        }
-      }
-    }
-
-    addChildren(worktreePath)
-    return result
-  }, [worktreePath, dirCache, expanded])
-
-  const rowsByPath = useMemo(() => new Map(flatRows.map((row) => [row.path, row])), [flatRows])
-  const rootCache = worktreePath ? dirCache[worktreePath] : undefined
+  const totalCount = flatRows.length + (inlineInputIndex >= 0 ? 1 : 0)
 
   const virtualizer = useVirtualizer({
-    count: flatRows.length,
+    count: totalCount,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => 26,
     overscan: 20,
-    getItemKey: (index) => flatRows[index].path
+    getItemKey: (index) => {
+      if (inlineInputIndex >= 0) {
+        if (index === inlineInputIndex) {
+          return '__inline_input__'
+        }
+        const rowIndex = index > inlineInputIndex ? index - 1 : index
+        return flatRows[rowIndex]?.path ?? `__fallback_${index}`
+      }
+      return flatRows[index]?.path ?? `__fallback_${index}`
+    }
   })
 
   useFileExplorerReveal({
@@ -232,19 +182,26 @@ export default function FileExplorer(): React.JSX.Element {
     virtualizer
   })
 
+  const selectedNode = selectedPath ? (rowsByPath.get(selectedPath) ?? null) : null
+  useFileExplorerKeys({
+    containerRef: scrollRef,
+    flatRows,
+    inlineInput,
+    selectedNode,
+    startRename,
+    requestDelete
+  })
+
   const handleClick = useCallback(
     (node: TreeNode) => {
       if (!activeWorktreeId) {
         return
       }
-
       setSelectedPath(node.path)
-
       if (node.isDirectory) {
         toggleDir(activeWorktreeId, node.path)
         return
       }
-
       openFile({
         filePath: node.path,
         relativePath: node.relativePath,
@@ -261,7 +218,6 @@ export default function FileExplorer(): React.JSX.Element {
       if (!activeWorktreeId || node.isDirectory) {
         return
       }
-
       pinFile(node.path)
     },
     [activeWorktreeId, pinFile]
@@ -272,51 +228,16 @@ export default function FileExplorer(): React.JSX.Element {
     if (!container || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) {
       return
     }
-
     const target = e.target
     if (!(target instanceof Element) || !target.closest('[data-explorer-draggable="true"]')) {
       return
     }
-
     if (container.scrollHeight <= container.clientHeight) {
       return
     }
-
     e.preventDefault()
     container.scrollTop += e.deltaY
   }, [])
-
-  const handleExplorerKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLDivElement>) => {
-      const target = event.target
-      if (
-        !(target instanceof HTMLElement) ||
-        target instanceof HTMLInputElement ||
-        target instanceof HTMLTextAreaElement ||
-        target.isContentEditable
-      ) {
-        return
-      }
-
-      const selectedNode =
-        (selectedPath ? rowsByPath.get(selectedPath) : undefined) ??
-        (activeFileId ? rowsByPath.get(activeFileId) : undefined)
-      if (!selectedNode) {
-        return
-      }
-
-      const isDeleteShortcut =
-        event.key === 'Delete' || (isMac && event.key === 'Backspace' && event.metaKey)
-
-      if (!isDeleteShortcut) {
-        return
-      }
-
-      event.preventDefault()
-      requestDelete(selectedNode)
-    },
-    [activeFileId, isMac, requestDelete, rowsByPath, selectedPath]
-  )
 
   if (!worktreePath) {
     return (
@@ -326,7 +247,7 @@ export default function FileExplorer(): React.JSX.Element {
     )
   }
 
-  if (flatRows.length === 0) {
+  if (flatRows.length === 0 && !inlineInput) {
     if (rootCache?.loading ?? true) {
       return (
         <div className="flex items-center justify-center h-full text-[11px] text-muted-foreground">
@@ -334,7 +255,6 @@ export default function FileExplorer(): React.JSX.Element {
         </div>
       )
     }
-
     return (
       <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground px-4 text-center">
         No files in this worktree
@@ -349,43 +269,116 @@ export default function FileExplorer(): React.JSX.Element {
         viewportRef={scrollRef}
         viewportClassName="h-full min-h-0 py-2"
         onWheelCapture={handleWheelCapture}
-        onKeyDownCapture={handleExplorerKeyDown}
+        onContextMenu={(e) => {
+          const target = e.target as HTMLElement
+          if (target.closest('[data-slot="context-menu-trigger"]')) {
+            return
+          }
+          e.preventDefault()
+          setBgMenuPoint({ x: e.clientX, y: e.clientY })
+          setBgMenuOpen(true)
+        }}
       >
         <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
-          {virtualizer.getVirtualItems().map((virtualItem) => {
-            const node = flatRows[virtualItem.index]
-            const normalizedRelativePath = normalizeRelativePath(node.relativePath)
-            const nodeStatus = node.isDirectory
+          {virtualizer.getVirtualItems().map((vItem) => {
+            const isInlineRow = inlineInputIndex >= 0 && vItem.index === inlineInputIndex
+            const rowIndex =
+              !isInlineRow && inlineInputIndex >= 0 && vItem.index > inlineInputIndex
+                ? vItem.index - 1
+                : vItem.index
+            const node = isInlineRow ? null : flatRows[rowIndex]
+            if (!isInlineRow && !node) {
+              return null
+            }
+
+            const showInline =
+              isInlineRow ||
+              (inlineInput?.type === 'rename' && node && inlineInput.existingPath === node.path)
+            const inlineDepth = isInlineRow ? inlineInput!.depth : (node?.depth ?? 0)
+
+            if (showInline) {
+              return (
+                <div
+                  key={vItem.key}
+                  data-index={vItem.index}
+                  ref={virtualizer.measureElement}
+                  className="absolute left-0 right-0"
+                  style={{ transform: `translateY(${vItem.start}px)` }}
+                >
+                  <InlineInputRow
+                    depth={inlineDepth}
+                    inlineInput={inlineInput!}
+                    onSubmit={handleInlineSubmit}
+                    onCancel={dismissInlineInput}
+                  />
+                </div>
+              )
+            }
+
+            // Safe: the isInlineRow/showInline guards above ensure node is non-null here
+            const n = node!
+            const normalizedRelativePath = normalizeRelativePath(n.relativePath)
+            const nodeStatus = n.isDirectory
               ? (folderStatusByRelativePath.get(normalizedRelativePath) ?? null)
               : (statusByRelativePath.get(normalizedRelativePath) ?? null)
 
             return (
               <div
-                key={virtualItem.key}
-                data-index={virtualItem.index}
+                key={vItem.key}
+                data-index={vItem.index}
                 ref={virtualizer.measureElement}
                 className="absolute left-0 right-0"
-                style={{ transform: `translateY(${virtualItem.start}px)` }}
+                style={{ transform: `translateY(${vItem.start}px)` }}
               >
                 <FileExplorerRow
-                  node={node}
-                  isExpanded={expanded.has(node.path)}
-                  isLoading={node.isDirectory && Boolean(dirCache[node.path]?.loading)}
-                  isSelected={selectedPath === node.path || activeFileId === node.path}
-                  isFlashing={flashingPath === node.path}
+                  node={n}
+                  isExpanded={expanded.has(n.path)}
+                  isLoading={n.isDirectory && Boolean(dirCache[n.path]?.loading)}
+                  isSelected={selectedPath === n.path || activeFileId === n.path}
+                  isFlashing={flashingPath === n.path}
                   nodeStatus={nodeStatus}
                   statusColor={nodeStatus ? STATUS_COLORS[nodeStatus] : null}
                   deleteShortcutLabel={deleteShortcutLabel}
-                  onClick={() => handleClick(node)}
-                  onDoubleClick={() => handleDoubleClick(node)}
-                  onSelect={() => setSelectedPath(node.path)}
-                  onRequestDelete={() => requestDelete(node)}
+                  targetDir={n.isDirectory ? n.path : dirname(n.path)}
+                  targetDepth={n.isDirectory ? n.depth + 1 : n.depth}
+                  onClick={() => handleClick(n)}
+                  onDoubleClick={() => handleDoubleClick(n)}
+                  onSelect={() => setSelectedPath(n.path)}
+                  onStartNew={startNew}
+                  onStartRename={startRename}
+                  onRequestDelete={() => requestDelete(n)}
                 />
               </div>
             )
           })}
         </div>
       </ScrollArea>
+
+      <DropdownMenu open={bgMenuOpen} onOpenChange={setBgMenuOpen} modal={false}>
+        <DropdownMenuTrigger asChild>
+          <button
+            aria-hidden
+            tabIndex={-1}
+            className="pointer-events-none fixed size-px opacity-0"
+            style={{ left: bgMenuPoint.x, top: bgMenuPoint.y }}
+          />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          className="w-48"
+          sideOffset={0}
+          align="start"
+          onCloseAutoFocus={(e) => e.preventDefault()}
+        >
+          <DropdownMenuItem onSelect={() => startNew('file', worktreePath, 0)}>
+            <FilePlus />
+            New File
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => startNew('folder', worktreePath, 0)}>
+            <FolderPlus />
+            New Folder
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       <FileDeleteDialog
         pendingDelete={pendingDelete}

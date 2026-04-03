@@ -11,22 +11,6 @@ function getReleaseUrl(status: ReleaseToastStatus): string {
   return status.releaseUrl ?? `https://github.com/stablyai/orca/releases/tag/v${status.version}`
 }
 
-function createViewChangesButton(releaseUrl: string): ReturnType<typeof createElement> {
-  return createElement(
-    'button',
-    {
-      type: 'button',
-      'data-button': true,
-      'data-cancel': true,
-      // Sonner auto-dismisses structured cancel actions after onClick. Render a
-      // plain button instead so users can open the release notes and keep the
-      // update toast visible until they explicitly install or close it.
-      onClick: () => window.api.shell.openUrl(releaseUrl)
-    },
-    'View Changes'
-  )
-}
-
 export function useIpcEvents(): void {
   useEffect(() => {
     const unsubs: (() => void)[] = []
@@ -55,7 +39,6 @@ export function useIpcEvents(): void {
     })
 
     let checkingToastId: string | number | undefined
-    let availableToastId: string | number | undefined
     const downloadToastId = 'update-download-progress'
     unsubs.push(
       window.api.updater.onStatus((raw) => {
@@ -80,39 +63,12 @@ export function useIpcEvents(): void {
             toast.dismiss(checkingToastId)
           }
           checkingToastId = undefined
-          const releaseUrl = getReleaseUrl(status)
-          availableToastId = toast.info(`Version ${status.version} is available.`, {
-            description: createElement(
-              'a',
-              {
-                href: releaseUrl,
-                target: '_blank',
-                rel: 'noopener noreferrer',
-                style: { textDecoration: 'underline' }
-              },
-              'Release notes'
-            ),
-            duration: Infinity,
-            action: {
-              label: status.manualDownloadUrl ? 'Download' : 'Install',
-              onClick: () => window.api.updater.download()
-            },
-            cancel: createViewChangesButton(releaseUrl)
-          })
         } else if (status.state === 'downloading') {
-          if (availableToastId) {
-            toast.dismiss(availableToastId)
-            availableToastId = undefined
-          }
           toast.loading(`Downloading v${status.version}… ${status.percent}%`, {
             id: downloadToastId,
             duration: Infinity
           })
         } else if (status.state === 'downloaded') {
-          if (availableToastId) {
-            toast.dismiss(availableToastId)
-            availableToastId = undefined
-          }
           toast.dismiss(downloadToastId)
           const releaseUrl = getReleaseUrl(status)
           toast.success(`Version ${status.version} is ready to install.`, {
@@ -130,8 +86,7 @@ export function useIpcEvents(): void {
             action: {
               label: 'Restart Now',
               onClick: () => window.api.updater.quitAndInstall()
-            },
-            cancel: createViewChangesButton(releaseUrl)
+            }
           })
         } else if (status.state === 'error') {
           toast.dismiss(downloadToastId)

@@ -4,8 +4,9 @@ import { execFileSync } from 'child_process'
 import { rm } from 'fs/promises'
 import type { Store } from '../persistence'
 import type { Worktree, WorktreeMeta } from '../../shared/types'
+import { getPRForBranch } from '../github/client'
 import { listWorktrees, addWorktree, removeWorktree } from '../git/worktree'
-import { getGitUsername, getDefaultBaseRef, getAvailableBranchName } from '../git/repo'
+import { getGitUsername, getDefaultBaseRef, getBranchConflictKind } from '../git/repo'
 import { getEffectiveHooks, loadHooks, runHook, hasHooksFile } from '../hooks'
 import {
   sanitizeWorktreeName,
@@ -74,8 +75,30 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
 
       // Compute branch name with prefix
       const username = getGitUsername(repo.path)
-      let branchName = computeBranchName(sanitizedName, settings, username)
-      branchName = await getAvailableBranchName(repo.path, branchName)
+      const branchName = computeBranchName(sanitizedName, settings, username)
+
+      const branchConflictKind = await getBranchConflictKind(repo.path, branchName)
+      if (branchConflictKind) {
+        throw new Error(
+          `Branch "${branchName}" already exists ${branchConflictKind === 'local' ? 'locally' : 'on a remote'}. Pick a different worktree name.`
+        )
+      }
+
+      // Why: the UI resolves PR status by branch name alone. Reusing a historical
+      // PR head name would make a fresh worktree inherit that old merged/closed PR
+      // immediately, so we reject the name instead of silently suffixing it.
+      // The lookup is best-effort — don't block creation if GitHub is unreachable.
+      let existingPR: Awaited<ReturnType<typeof getPRForBranch>> | null = null
+      try {
+        existingPR = await getPRForBranch(repo.path, branchName)
+      } catch {
+        // GitHub API may be unreachable, rate-limited, or token missing
+      }
+      if (existingPR) {
+        throw new Error(
+          `Branch "${branchName}" already has PR #${existingPR.number}. Pick a different worktree name.`
+        )
+      }
 
       // Compute worktree path
       let worktreePath = computeWorktreePath(sanitizedName, repo.path, settings)

@@ -126,7 +126,7 @@ export default function SortableTab({
           {...listeners}
           className={`group relative flex items-center h-full px-3 text-sm cursor-pointer select-none shrink-0 border-r border-border ${
             isActive
-              ? 'bg-background text-foreground border-b-transparent'
+              ? 'bg-accent/40 text-foreground border-b-transparent'
               : 'bg-card text-muted-foreground hover:text-foreground hover:bg-accent/50'
           }`}
           onPointerDown={(e) => {
@@ -144,8 +144,12 @@ export default function SortableTab({
             }
           }}
         >
-          <TerminalIcon className="w-3.5 h-3.5 mr-1.5 shrink-0 text-muted-foreground" />
-          <span className="truncate max-w-[130px] mr-1.5">{tab.customTitle ?? tab.title}</span>
+          <TerminalIcon
+            className={`w-3.5 h-3.5 mr-1.5 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
+          />
+          <span className={`truncate max-w-[130px] mr-1.5${isActive ? ' font-medium' : ''}`}>
+            {tab.customTitle ?? tab.title}
+          </span>
           {tab.color && (
             <span
               className="mr-1.5 size-2 rounded-full shrink-0"

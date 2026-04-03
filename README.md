@@ -9,7 +9,7 @@
 Seamlessly manage multiple worktrees and open multiple terminals running anything — Claude Code, Codex, OpenCode, and more.<br/>
 Built-in status tracking, notifications, and unread markers. Makes coding multiple features across multiple repos a breeze.
 
-Learn more at <a align="center" href="https://www.orcabuild.ai">www.OrcaBuild.ai</a>
+Learn more at <a align="center" href="https://onOrca.dev">onOrca.dev</a>
 
 <p align="center">
   <img src="file-drag.gif" alt="Orca Screenshot" width="800" />
@@ -17,11 +17,8 @@ Learn more at <a align="center" href="https://www.orcabuild.ai">www.OrcaBuild.ai
 
 ---
 
-### Shipping daily
-
-Missing something? It's probably landing tomorrow. **[Request a feature](https://github.com/stablyai/orca/issues)** · **Star** to follow along.
-
----
+## Install
+Download from [onOrca.dev](https://onOrca.dev) or via the [GH release page](https://github.com/stablyai/orca/releases)
 
 ## Features
   * Manage multiple worktrees
@@ -31,34 +28,10 @@ Missing something? It's probably landing tomorrow. **[Request a feature](https:/
   * GitHub integrations for GH PRs (automatic), ability to link GH issues (via `gh` cli), and a GH checks viewer
   * File editor, search, source control tab (see worktree changes, make edits, easily commit)
 
-## Install
-Grab a release from https://www.orcabuild.ai/ or download from the GH release page
+## Shipping daily
+
+Missing something? It's probably landing tomorrow. **[Request a feature](https://github.com/stablyai/orca/issues)** · **Star** to follow along.
 
 ## Developing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for branch naming, PR expectations, and required checks.
-
-### Install
-
-```bash
-$ pnpm install
-```
-
-### Development
-
-```bash
-$ pnpm dev
-```
-
-### Build
-
-```bash
-# For windows
-$ pnpm build:win
-
-# For macOS
-$ pnpm build:mac
-
-# For Linux
-$ pnpm build:linux
-```
+See [CONTRIBUTING.md](CONTRIBUTING.md)

@@ -17,7 +17,6 @@ import FileExplorer from './FileExplorer'
 import SourceControl from './SourceControl'
 import SearchPanel from './Search'
 import ChecksPanel from './ChecksPanel'
-import { useGitStatusPolling } from './useGitStatusPolling'
 
 const MIN_WIDTH = 220
 const MAX_WIDTH = 500
@@ -114,8 +113,6 @@ export default function RightSidebar(): React.JSX.Element {
   const activityBarPosition = useAppStore((s) => s.activityBarPosition)
   const setActivityBarPosition = useAppStore((s) => s.setActivityBarPosition)
 
-  useGitStatusPolling()
-
   // ─── Resize logic (handle on LEFT edge) ────────────
   const isResizing = useRef(false)
   const startX = useRef(0)
@@ -165,7 +162,7 @@ export default function RightSidebar(): React.JSX.Element {
     : 0
 
   const panelContent = (
-    <div className="flex-1 min-h-0 overflow-hidden scrollbar-sleek-parent">
+    <div className="flex flex-col flex-1 min-h-0 overflow-hidden scrollbar-sleek-parent">
       {rightSidebarTab === 'explorer' && <FileExplorer key={activeWorktreeId ?? 'none'} />}
       {rightSidebarTab === 'search' && <SearchPanel key={activeWorktreeId ?? 'none'} />}
       {rightSidebarTab === 'source-control' && <SourceControl key={activeWorktreeId ?? 'none'} />}

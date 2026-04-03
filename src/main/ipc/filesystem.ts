@@ -9,6 +9,7 @@ import type { Store } from '../persistence'
 import type {
   DirEntry,
   GitBranchCompareResult,
+  GitConflictOperation,
   GitDiffResult,
   GitStatusResult,
   SearchOptions,
@@ -17,6 +18,7 @@ import type {
 } from '../../shared/types'
 import {
   getStatus,
+  detectConflictOperation,
   getDiff,
   stageFile,
   unstageFile,
@@ -24,6 +26,7 @@ import {
   getBranchCompare,
   getBranchDiff
 } from '../git/status'
+import { getRemoteFileUrl } from '../git/repo'
 import {
   resolveAuthorizedPath,
   resolveRegisteredWorktreePath,
@@ -31,12 +34,15 @@ import {
   isENOENT
 } from './filesystem-auth'
 import { listQuickOpenFiles } from './filesystem-list-files'
+import { registerFilesystemMutationHandlers } from './filesystem-mutations'
+import { searchWithGitGrep } from './filesystem-search-git'
+import { checkRgAvailable } from './rg-availability'
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
 const DEFAULT_SEARCH_MAX_RESULTS = 2000
 const MAX_MATCHES_PER_FILE = 100
 const SEARCH_TIMEOUT_MS = 15000
-const IMAGE_MIME_TYPES: Record<string, string> = {
+const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
@@ -44,7 +50,8 @@ const IMAGE_MIME_TYPES: Record<string, string> = {
   '.svg': 'image/svg+xml',
   '.webp': 'image/webp',
   '.bmp': 'image/bmp',
-  '.ico': 'image/x-icon'
+  '.ico': 'image/x-icon',
+  '.pdf': 'application/pdf'
 }
 
 function normalizeRelativePath(path: string): string {
@@ -101,11 +108,14 @@ export function registerFilesystemHandlers(store: Store): void {
       }
 
       const buffer = await readFile(filePath)
-      const mimeType = IMAGE_MIME_TYPES[extname(filePath).toLowerCase()]
+      const mimeType = PREVIEWABLE_BINARY_MIME_TYPES[extname(filePath).toLowerCase()]
       if (mimeType) {
         return {
           content: buffer.toString('base64'),
           isBinary: true,
+          // Why: the renderer/store contract already keys previewable binary
+          // rendering off `isImage`. Keep that legacy flag for PDFs too so the
+          // new preview path stays compatible with existing callers.
           isImage: true,
           mimeType
         }
@@ -145,6 +155,8 @@ export function registerFilesystemHandlers(store: Store): void {
     await shell.trashItem(targetPath)
   })
 
+  registerFilesystemMutationHandlers(store)
+
   ipcMain.handle(
     'fs:stat',
     async (
@@ -169,6 +181,15 @@ export function registerFilesystemHandlers(store: Store): void {
       Math.min(args.maxResults ?? DEFAULT_SEARCH_MAX_RESULTS, DEFAULT_SEARCH_MAX_RESULTS)
     )
     const searchKey = `${event.sender.id}:${rootPath}`
+
+    // Why: checking rg availability upfront avoids a race condition where
+    // spawn('rg') emits 'close' before 'error' on some platforms, causing
+    // the handler to resolve with empty results before the git-grep
+    // fallback can run. The result is cached after the first check.
+    const rgAvailable = await checkRgAvailable()
+    if (!rgAvailable) {
+      return searchWithGitGrep(rootPath, args, maxResults)
+    }
 
     return new Promise((resolvePromise) => {
       const rgArgs: string[] = [
@@ -333,6 +354,17 @@ export function registerFilesystemHandlers(store: Store): void {
     }
   )
 
+  // Why: lightweight fs-only check for conflict operation state. Used to poll
+  // non-active worktrees so their "Rebasing"/"Merging" badges clear when the
+  // operation finishes, without running a full `git status`.
+  ipcMain.handle(
+    'git:conflictOperation',
+    async (_event, args: { worktreePath: string }): Promise<GitConflictOperation> => {
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      return detectConflictOperation(worktreePath)
+    }
+  )
+
   ipcMain.handle(
     'git:diff',
     async (
@@ -410,6 +442,17 @@ export function registerFilesystemHandlers(store: Store): void {
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
       await discardChanges(worktreePath, filePath)
+    }
+  )
+
+  ipcMain.handle(
+    'git:remoteFileUrl',
+    async (
+      _event,
+      args: { worktreePath: string; relativePath: string; line: number }
+    ): Promise<string | null> => {
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      return getRemoteFileUrl(worktreePath, args.relativePath, args.line)
     }
   )
 }
