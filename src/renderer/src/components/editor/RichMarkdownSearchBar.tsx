@@ -28,6 +28,13 @@ export function RichMarkdownSearchBar({
     return null
   }
 
+  const keepSearchFocus = (event: React.MouseEvent<HTMLButtonElement>): void => {
+    // Why: rich-mode find drives navigation through the ProseMirror selection.
+    // Letting the toolbar buttons take focus interrupts that selection flow and
+    // makes mouse-based next/previous navigation appear broken.
+    event.preventDefault()
+  }
+
   return (
     <div className="rich-markdown-search" onKeyDown={(event) => event.stopPropagation()}>
       <div className="rich-markdown-search-field">
@@ -65,6 +72,7 @@ export function RichMarkdownSearchBar({
         type="button"
         variant="ghost"
         size="icon-xs"
+        onMouseDown={keepSearchFocus}
         onClick={() => onMoveToMatch(-1)}
         disabled={matchCount === 0}
         title="Previous match"
@@ -77,6 +85,7 @@ export function RichMarkdownSearchBar({
         type="button"
         variant="ghost"
         size="icon-xs"
+        onMouseDown={keepSearchFocus}
         onClick={() => onMoveToMatch(1)}
         disabled={matchCount === 0}
         title="Next match"
@@ -90,6 +99,7 @@ export function RichMarkdownSearchBar({
         type="button"
         variant="ghost"
         size="icon-xs"
+        onMouseDown={keepSearchFocus}
         onClick={onClose}
         title="Close search"
         aria-label="Close search"
