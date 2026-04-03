@@ -1,6 +1,8 @@
-import React, { useCallback, useRef, useEffect } from 'react'
+import React, { useEffect } from 'react'
 import { useAppStore } from '@/store'
+import { cn } from '@/lib/utils'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { useSidebarResize } from '@/hooks/useSidebarResize'
 import SidebarHeader from './SidebarHeader'
 import SearchBar from './SearchBar'
 import GroupControls from './GroupControls'
@@ -28,56 +30,24 @@ export default function Sidebar(): React.JSX.Element {
     }
   }, [repoCount, fetchAllWorktrees])
 
-  // ─── Resize logic ───────────────────────────────────────────────────
-  const isResizing = useRef(false)
-  const startX = useRef(0)
-  const startWidth = useRef(0)
-
-  const handleMouseMove = useCallback(
-    (e: MouseEvent) => {
-      if (!isResizing.current) {
-        return
-      }
-      const delta = e.clientX - startX.current
-      const next = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startWidth.current + delta))
-      setSidebarWidth(next)
-    },
-    [setSidebarWidth]
-  )
-
-  const handleMouseUp = useCallback(() => {
-    isResizing.current = false
-    document.body.style.cursor = ''
-    document.body.style.userSelect = ''
-  }, [])
-
-  useEffect(() => {
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-    }
-  }, [handleMouseMove, handleMouseUp])
-
-  const onResizeStart = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault()
-      isResizing.current = true
-      startX.current = e.clientX
-      startWidth.current = sidebarWidth
-      document.body.style.cursor = 'col-resize'
-      document.body.style.userSelect = 'none'
-    },
-    [sidebarWidth]
-  )
+  const { containerRef, isResizing, onResizeStart } = useSidebarResize<HTMLDivElement>({
+    isOpen: sidebarOpen,
+    width: sidebarWidth,
+    minWidth: MIN_WIDTH,
+    maxWidth: MAX_WIDTH,
+    deltaSign: 1,
+    setWidth: setSidebarWidth
+  })
 
   return (
     <TooltipProvider delayDuration={400}>
       <div
-        className="relative flex-shrink-0 bg-sidebar flex flex-col overflow-hidden transition-[width] duration-200 scrollbar-sleek-parent"
+        ref={containerRef}
+        className={cn(
+          'relative flex-shrink-0 bg-sidebar flex flex-col overflow-hidden scrollbar-sleek-parent',
+          isResizing ? 'transition-none' : 'transition-[width] duration-200'
+        )}
         style={{
-          width: sidebarOpen ? sidebarWidth : 0,
           borderRight: sidebarOpen ? '1px solid var(--sidebar-border)' : 'none'
         }}
       >

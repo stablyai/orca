@@ -1,7 +1,8 @@
-import React, { useCallback, useRef, useEffect } from 'react'
+import React from 'react'
 import { Files, Search, GitBranch, ListChecks } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
+import { useSidebarResize } from '@/hooks/useSidebarResize'
 import type { RightSidebarTab, ActivityBarPosition } from '@/store/slices/editor'
 import type { CheckStatus } from '../../../../shared/types'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
@@ -113,53 +114,16 @@ export default function RightSidebar(): React.JSX.Element {
   const activityBarPosition = useAppStore((s) => s.activityBarPosition)
   const setActivityBarPosition = useAppStore((s) => s.setActivityBarPosition)
 
-  // ─── Resize logic (handle on LEFT edge) ────────────
-  const isResizing = useRef(false)
-  const startX = useRef(0)
-  const startWidth = useRef(0)
-
-  const handleMouseMove = useCallback(
-    (e: MouseEvent) => {
-      if (!isResizing.current) {
-        return
-      }
-      const delta = startX.current - e.clientX
-      const next = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startWidth.current + delta))
-      setRightSidebarWidth(next)
-    },
-    [setRightSidebarWidth]
-  )
-
-  const handleMouseUp = useCallback(() => {
-    isResizing.current = false
-    document.body.style.cursor = ''
-    document.body.style.userSelect = ''
-  }, [])
-
-  useEffect(() => {
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-    }
-  }, [handleMouseMove, handleMouseUp])
-
-  const onResizeStart = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault()
-      isResizing.current = true
-      startX.current = e.clientX
-      startWidth.current = rightSidebarWidth
-      document.body.style.cursor = 'col-resize'
-      document.body.style.userSelect = 'none'
-    },
-    [rightSidebarWidth]
-  )
-
-  const totalWidth = rightSidebarOpen
-    ? rightSidebarWidth + (activityBarPosition === 'side' ? ACTIVITY_BAR_SIDE_WIDTH : 0)
-    : 0
+  const activityBarSideWidth = activityBarPosition === 'side' ? ACTIVITY_BAR_SIDE_WIDTH : 0
+  const { containerRef, isResizing, onResizeStart } = useSidebarResize<HTMLDivElement>({
+    isOpen: rightSidebarOpen,
+    width: rightSidebarWidth,
+    minWidth: MIN_WIDTH,
+    maxWidth: MAX_WIDTH,
+    deltaSign: -1,
+    renderedExtraWidth: activityBarSideWidth,
+    setWidth: setRightSidebarWidth
+  })
 
   const panelContent = (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden scrollbar-sleek-parent">
@@ -183,8 +147,11 @@ export default function RightSidebar(): React.JSX.Element {
 
   return (
     <div
-      className="relative flex-shrink-0 flex flex-row overflow-visible transition-[width] duration-200"
-      style={{ width: totalWidth }}
+      ref={containerRef}
+      className={cn(
+        'relative flex-shrink-0 flex flex-row overflow-visible',
+        isResizing ? 'transition-none' : 'transition-[width] duration-200'
+      )}
     >
       {/* Panel content area */}
       <div
