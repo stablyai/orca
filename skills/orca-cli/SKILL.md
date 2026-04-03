@@ -28,7 +28,6 @@ Examples:
 
 - Prefer the public `orca` command first
 - Orca editor/runtime should already be running, or the agent should start it with `orca open`
-- Only fall back to repo-local development entrypoints when the public `orca` command is genuinely unavailable
 - Do not begin by inspecting Orca source files just to decide how to invoke the CLI. The first step is to check whether the installed `orca` command exists.
 
 First verify the public CLI is installed:
@@ -50,15 +49,7 @@ command -v orca
 orca status --json
 ```
 
-If `orca` is not on PATH and you are explicitly working inside the Orca source repo, then and only then use the repo-local development fallback:
-
-```bash
-pnpm run build:cli
-node out/cli/index.js status --json
-```
-
-Do not assume the fallback is required without checking `command -v orca` first.
-Do not run `./out/cli/index.js ...` directly. The development fallback is `node out/cli/index.js ...`.
+If `orca` is not on PATH, say so explicitly and stop or ask the user to install/register the CLI before continuing.
 
 ## Core Workflow
 
@@ -138,14 +129,12 @@ Why: terminal handles are runtime-scoped and may go stale after reloads. If Orca
 
 - If the user says to create/manage an Orca worktree, use `orca worktree ...`, not raw `git worktree ...`.
 - Treat Orca as the source of truth for Orca worktree and terminal tasks. Do not mix Orca-managed state with ad hoc git worktree commands unless Orca explicitly cannot perform the requested action.
-- Prefer the installed public CLI even when you are inside the Orca source repo. Being in the repo does not by itself justify switching to the development entrypoint.
 - Prefer `--json` for all machine-driven use.
 - Use `worktree ps` as the first summary view when many worktrees may exist.
 - Use `terminal list` to reacquire handles after Orca reloads.
 - Use `terminal read` before `terminal send` unless the next input is obvious.
 - Use `terminal wait --for exit` only when the task actually depends on process completion.
 - Prefer Orca worktree selectors over hardcoded paths when Orca identity already exists.
-- If `orca` is unavailable, say so explicitly after checking `command -v orca`. Only then use the repo-local development fallback in this source tree.
 - If the user asks for CLI UX feedback, test the public `orca` command first. Only inspect `src/cli` or use `node out/cli/index.js` if the public command is missing or the task is explicitly about implementation internals.
 - If a command fails, prefer retrying with the public `orca` command before concluding the CLI is broken, unless the failure already came from `orca` itself.
 
@@ -155,8 +144,7 @@ Why: terminal handles are runtime-scoped and may go stale after reloads. If Orca
 - Terminal handles are ephemeral and tied to the current Orca runtime.
 - `terminal wait` in focused v1 supports only `--for exit`.
 - Orca is the source of truth for worktree/terminal orchestration; do not duplicate that state with manual assumptions.
-- The repo-local `node out/cli/index.js` path is a development fallback for the Orca source repo, not the normal user-facing interface.
-- The public `orca` command is the interface users experience. Agents should validate that surface first and only fall back to internal entrypoints when the installed command is unavailable.
+- The public `orca` command is the interface users experience. Agents should validate and use that surface, not repo-local implementation entrypoints.
 
 ## References
 
