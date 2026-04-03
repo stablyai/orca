@@ -313,7 +313,7 @@ export default function EditorPanel(): React.JSX.Element | null {
   const isMarkdown = resolvedLanguage === 'markdown'
   const mdViewMode: MarkdownViewMode =
     isMarkdown && activeFile.mode === 'edit'
-      ? (markdownViewMode[activeFile.id] ?? 'source')
+      ? (markdownViewMode[activeFile.id] ?? 'rich')
       : 'source'
 
   const handleOpenDiffTargetFile = (): void => {
@@ -374,7 +374,7 @@ export default function EditorPanel(): React.JSX.Element | null {
                 <TooltipContent side="bottom" sideOffset={4}>
                   {openFileState.canOpen
                     ? isMarkdown
-                      ? 'Open file tab to use markdown preview'
+                      ? 'Open file tab to use rich markdown editing'
                       : 'Open file tab'
                     : 'This diff has no modified-side file to open'}
                 </TooltipContent>

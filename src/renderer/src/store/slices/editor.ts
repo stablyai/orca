@@ -90,7 +90,7 @@ export type OpenFile = {
 export type RightSidebarTab = 'explorer' | 'search' | 'source-control' | 'checks'
 export type ActivityBarPosition = 'top' | 'side'
 
-export type MarkdownViewMode = 'source' | 'preview'
+export type MarkdownViewMode = 'source' | 'rich'
 
 export type EditorSlice = {
   // Markdown view mode per file (fileId -> mode)

@@ -88,7 +88,7 @@ describe('createEditorSlice openDiff', () => {
   })
 })
 
-describe('createEditorSlice markdown preview state', () => {
+describe('createEditorSlice markdown view state', () => {
   it('drops markdown view mode for a replaced preview tab', () => {
     const store = createEditorStore()
 
@@ -102,7 +102,7 @@ describe('createEditorSlice markdown preview state', () => {
       },
       { preview: true }
     )
-    store.getState().setMarkdownViewMode('/repo/docs/README.md', 'preview')
+    store.getState().setMarkdownViewMode('/repo/docs/README.md', 'rich')
 
     store.getState().openFile(
       {

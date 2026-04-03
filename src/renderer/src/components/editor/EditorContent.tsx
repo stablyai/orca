@@ -4,11 +4,12 @@ import { useAppStore } from '@/store'
 import { ConflictBanner, ConflictPlaceholderView, ConflictReviewPanel } from './ConflictComponents'
 import type { OpenFile } from '@/store/slices/editor'
 import type { GitStatusEntry, GitDiffResult } from '../../../../shared/types'
+import { getMarkdownRichModeUnsupportedMessage } from './markdown-rich-mode'
 
 const MonacoEditor = lazy(() => import('./MonacoEditor'))
 const DiffViewer = lazy(() => import('./DiffViewer'))
 const CombinedDiffViewer = lazy(() => import('./CombinedDiffViewer'))
-const MarkdownPreview = lazy(() => import('./MarkdownPreview'))
+const RichMarkdownEditor = lazy(() => import('./RichMarkdownEditor'))
 const ImageViewer = lazy(() => import('./ImageViewer'))
 const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
 
@@ -19,7 +20,7 @@ type FileContent = {
   mimeType?: string
 }
 
-type MarkdownViewMode = 'source' | 'preview'
+type MarkdownViewMode = 'source' | 'rich'
 
 export function EditorContent({
   activeFile,
@@ -92,10 +93,28 @@ export function EditorContent({
 
   const renderMarkdownContent = (fc: FileContent): React.JSX.Element => {
     const currentContent = editBuffers[activeFile.id] ?? fc.content
-    if (mdViewMode === 'preview') {
-      return <MarkdownPreview content={currentContent} filePath={activeFile.filePath} />
+    const richModeUnsupportedMessage = getMarkdownRichModeUnsupportedMessage(currentContent)
+
+    if (mdViewMode === 'rich' && !richModeUnsupportedMessage) {
+      return (
+        <RichMarkdownEditor
+          content={currentContent}
+          onContentChange={handleContentChange}
+          onSave={handleSave}
+        />
+      )
     }
-    return renderMonacoEditor(fc)
+
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        {mdViewMode === 'rich' && richModeUnsupportedMessage ? (
+          <div className="border-b border-border/60 bg-amber-500/10 px-3 py-2 text-xs text-amber-950 dark:text-amber-100">
+            {richModeUnsupportedMessage}
+          </div>
+        ) : null}
+        <div className="min-h-0 flex-1">{renderMonacoEditor(fc)}</div>
+      </div>
+    )
   }
 
   if (activeFile.mode === 'conflict-review') {

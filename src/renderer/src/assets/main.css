@@ -442,6 +442,294 @@
   transform: translateY(0);
 }
 
+/* ── Rich Markdown ─────────────────────────────────── */
+
+.rich-markdown-editor-shell {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  height: 100%;
+  flex-direction: column;
+  background: var(--editor-surface);
+}
+
+.rich-markdown-editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  background: color-mix(in srgb, var(--background) 84%, transparent);
+}
+
+.rich-markdown-toolbar-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.rich-markdown-toolbar-button:hover,
+.rich-markdown-toolbar-button.is-active {
+  border-color: color-mix(in srgb, var(--border) 82%, transparent);
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+.rich-markdown-search {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  width: fit-content;
+  max-width: min(100%, 460px);
+  margin-left: auto;
+  margin-right: 12px;
+  margin-top: 8px;
+  margin-bottom: 6px;
+  padding: 0 2px 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--background);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
+}
+
+.rich-markdown-search-field {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  width: 220px;
+  border: 1px solid var(--ring);
+  background: var(--background);
+  flex: 0 1 auto;
+}
+
+.rich-markdown-search-status {
+  min-width: 0;
+  padding: 0 6px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+
+.rich-markdown-search-divider {
+  width: 1px;
+  height: 16px;
+  margin: 0 2px;
+  background: var(--border);
+}
+
+.rich-markdown-search-input {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.rich-markdown-search-button {
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  padding: 0;
+  border-radius: 2px;
+  color: var(--muted-foreground);
+}
+
+.rich-markdown-search-button:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+.rich-markdown-search-match {
+  padding: 0;
+  border-radius: 2px;
+  background: color-mix(in srgb, #facc15 50%, transparent);
+}
+
+.rich-markdown-search-match[data-active='true'] {
+  background: color-mix(in srgb, #fb923c 60%, transparent);
+}
+
+.rich-markdown-editor {
+  min-height: 100%;
+  padding: 24px 32px 96px;
+  font-size: 14px;
+  line-height: 1.7;
+  outline: none;
+}
+
+.rich-markdown-editor p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  color: var(--muted-foreground);
+}
+
+.rich-markdown-editor h1,
+.rich-markdown-editor h2,
+.rich-markdown-editor h3,
+.rich-markdown-editor h4,
+.rich-markdown-editor h5,
+.rich-markdown-editor h6 {
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.rich-markdown-editor h1 {
+  font-size: 1.75em;
+}
+
+.rich-markdown-editor h2 {
+  font-size: 1.4em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--border);
+}
+
+.rich-markdown-editor h3 {
+  font-size: 1.15em;
+}
+
+.rich-markdown-editor p,
+.rich-markdown-editor ul,
+.rich-markdown-editor ol,
+.rich-markdown-editor blockquote,
+.rich-markdown-editor pre {
+  margin: 0.75em 0;
+}
+
+.rich-markdown-editor ul,
+.rich-markdown-editor ol {
+  padding-left: 1.5em;
+}
+
+.rich-markdown-editor ul {
+  list-style: disc;
+}
+
+.rich-markdown-editor ol {
+  list-style: decimal;
+}
+
+.rich-markdown-editor ul[data-type='taskList'] {
+  padding-left: 0;
+  list-style: none;
+}
+
+.rich-markdown-editor ul[data-type='taskList'] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.rich-markdown-editor ul[data-type='taskList'] li > label {
+  margin-top: 0.35em;
+}
+
+.rich-markdown-editor blockquote {
+  padding: 0.25em 1em;
+  border-left: 3px solid var(--border);
+  color: var(--muted-foreground);
+}
+
+.rich-markdown-editor code {
+  padding: 0.2em 0.4em;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+  font-size: 0.9em;
+  font-family: var(--font-mono, monospace);
+}
+
+.rich-markdown-editor pre {
+  padding: 12px 16px;
+  border-radius: 8px;
+  overflow-x: auto;
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+}
+
+.rich-markdown-editor pre code {
+  padding: 0;
+  background: transparent;
+}
+
+.rich-markdown-editor hr {
+  margin: 1.5em 0;
+  border: none;
+  border-top: 1px solid var(--border);
+}
+
+.rich-markdown-editor a {
+  color: var(--primary);
+  text-decoration: underline;
+}
+
+.rich-markdown-editor img {
+  max-width: 100%;
+  border-radius: 8px;
+}
+
+.rich-markdown-editor .ProseMirror-selectednode {
+  outline: 2px solid color-mix(in srgb, var(--ring) 78%, transparent);
+  outline-offset: 2px;
+}
+
+.rich-markdown-slash-menu {
+  position: absolute;
+  z-index: 30;
+  display: flex;
+  width: min(320px, calc(100% - 24px));
+  max-height: 280px;
+  flex-direction: column;
+  overflow-y: auto;
+  border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--background) 92%, transparent);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(16px);
+}
+
+.rich-markdown-slash-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.rich-markdown-slash-item:hover,
+.rich-markdown-slash-item.is-active {
+  background: var(--accent);
+}
+
+.rich-markdown-slash-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+  color: var(--muted-foreground);
+}
+
 /* ── Markdown Preview ────────────────────────────────── */
 
 .markdown-preview {
