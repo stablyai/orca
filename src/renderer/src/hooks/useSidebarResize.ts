@@ -16,16 +16,35 @@ type UseSidebarResizeResult<T extends HTMLElement> = {
   onResizeStart: (event: React.MouseEvent) => void
 }
 
-function clampWidth(width: number, minWidth: number, maxWidth: number): number {
+export function clampSidebarResizeWidth(width: number, minWidth: number, maxWidth: number): number {
   return Math.min(maxWidth, Math.max(minWidth, width))
 }
 
-function getRenderedWidthCssValue(
+export function getRenderedSidebarWidthCssValue(
   isOpen: boolean,
   width: number,
   renderedExtraWidth: number
 ): string {
   return isOpen ? `${width + renderedExtraWidth}px` : '0px'
+}
+
+export function getNextSidebarResizeWidth({
+  clientX,
+  startX,
+  startWidth,
+  deltaSign,
+  minWidth,
+  maxWidth
+}: {
+  clientX: number
+  startX: number
+  startWidth: number
+  deltaSign: 1 | -1
+  minWidth: number
+  maxWidth: number
+}): number {
+  const delta = (clientX - startX) * deltaSign
+  return clampSidebarResizeWidth(startWidth + delta, minWidth, maxWidth)
 }
 
 export function useSidebarResize<T extends HTMLElement>({
@@ -61,7 +80,7 @@ export function useSidebarResize<T extends HTMLElement>({
       // React props. Any unrelated rerender during a drag would otherwise
       // snap the DOM width back to the last persisted store value and make the
       // handle feel like it is lagging behind the pointer.
-      container.style.width = getRenderedWidthCssValue(isOpen, nextWidth, renderedExtraWidth)
+      container.style.width = getRenderedSidebarWidthCssValue(isOpen, nextWidth, renderedExtraWidth)
     },
     [isOpen, renderedExtraWidth]
   )
@@ -103,8 +122,14 @@ export function useSidebarResize<T extends HTMLElement>({
         return
       }
 
-      const delta = (event.clientX - startXRef.current) * deltaSign
-      const nextWidth = clampWidth(startWidthRef.current + delta, minWidth, maxWidth)
+      const nextWidth = getNextSidebarResizeWidth({
+        clientX: event.clientX,
+        startX: startXRef.current,
+        startWidth: startWidthRef.current,
+        deltaSign,
+        minWidth,
+        maxWidth
+      })
       if (nextWidth === draftWidthRef.current) {
         return
       }
