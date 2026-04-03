@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '@/store'
 import '@/lib/monaco-setup'
+import { setupContextualCopy } from './setup-contextual-copy'
 
 type MonacoEditorProps = {
   filePath: string
@@ -35,6 +36,14 @@ export default function MonacoEditor({
   revealMatchLength
 }: MonacoEditorProps): React.JSX.Element {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
+  const copyToastTimeoutRef = useRef<number | null>(null)
+  const copyHintIntervalRef = useRef<number | null>(null)
+  const propsRef = useRef({ relativePath, language, onSave })
+
+  useEffect(() => {
+    propsRef.current = { relativePath, language, onSave }
+  }, [relativePath, language, onSave])
+
   const settings = useAppStore((s) => s.settings)
   const setPendingEditorReveal = useAppStore((s) => s.setPendingEditorReveal)
   const setEditorCursorLine = useAppStore((s) => s.setEditorCursorLine)
@@ -43,6 +52,9 @@ export default function MonacoEditor({
   const [gutterMenuOpen, setGutterMenuOpen] = useState(false)
   const [gutterMenuPoint, setGutterMenuPoint] = useState({ x: 0, y: 0 })
   const [gutterMenuLine, setGutterMenuLine] = useState(1)
+  const [copyToast, setCopyToast] = useState<{ left: number; top: number } | null>(null)
+  const isMac = navigator.userAgent.includes('Mac')
+  const copyShortcutLabel = isMac ? '⌥⌘C' : 'Ctrl+Alt+C'
   const isDark =
     settings?.theme === 'dark' ||
     (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
@@ -51,10 +63,22 @@ export default function MonacoEditor({
     (editorInstance, monaco) => {
       editorRef.current = editorInstance
 
+      setupContextualCopy({
+        editorInstance,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        monaco: monaco as any,
+        filePath,
+        copyShortcutLabel,
+        setCopyToast,
+        propsRef,
+        copyToastTimeoutRef,
+        copyHintIntervalRef
+      })
+
       // Add Cmd+S save keybinding
       editorInstance.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
         const value = editorInstance.getValue()
-        onSave(value)
+        propsRef.current.onSave(value)
       })
 
       // Track cursor line for "copy path to line" feature
@@ -95,7 +119,7 @@ export default function MonacoEditor({
         editorInstance.focus()
       }
     },
-    [onSave, filePath, setEditorCursorLine]
+    [copyShortcutLabel, filePath, setEditorCursorLine]
   )
 
   const handleChange = useCallback(
@@ -117,6 +141,19 @@ export default function MonacoEditor({
       fontFamily: settings.terminalFontFamily || 'monospace'
     })
   }, [settings])
+
+  useEffect(() => {
+    const toastRef = copyToastTimeoutRef
+    const hintRef = copyHintIntervalRef
+    return () => {
+      if (toastRef.current !== null) {
+        window.clearTimeout(toastRef.current)
+      }
+      if (hintRef.current !== null) {
+        window.clearInterval(hintRef.current)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     const handler = (event: Event): void => {
@@ -152,7 +189,7 @@ export default function MonacoEditor({
   }, [revealLine, revealColumn, revealMatchLength, setPendingEditorReveal])
 
   return (
-    <>
+    <div className="relative h-full">
       <Editor
         height="100%"
         language={language}
@@ -182,6 +219,14 @@ export default function MonacoEditor({
         path={filePath}
       />
 
+      {copyToast ? (
+        <div
+          className="pointer-events-none fixed z-50 rounded-md bg-foreground px-2 py-1 text-xs text-background shadow-sm"
+          style={{ left: copyToast.left, top: copyToast.top }}
+        >
+          Context copied
+        </div>
+      ) : null}
       {/* Radix context menu for line number gutter right-click */}
       <DropdownMenu open={gutterMenuOpen} onOpenChange={setGutterMenuOpen} modal={false}>
         <DropdownMenuTrigger asChild>
@@ -228,7 +273,7 @@ export default function MonacoEditor({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-    </>
+    </div>
   )
 }
 
