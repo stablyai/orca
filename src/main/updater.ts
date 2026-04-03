@@ -3,7 +3,11 @@ import { autoUpdater } from 'electron-updater'
 import { is } from '@electron-toolkit/utils'
 import type { UpdateStatus } from '../shared/types'
 import { killAllPty } from './ipc/pty'
-import { beginMacUpdateDownload, markMacQuitAndInstallInFlight } from './updater-mac-install'
+import {
+  beginMacUpdateDownload,
+  deferMacQuitUntilInstallerReady,
+  markMacQuitAndInstallInFlight
+} from './updater-mac-install'
 import { registerAutoUpdaterHandlers } from './updater-events'
 import {
   compareVersions,
