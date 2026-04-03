@@ -3,7 +3,7 @@ import type { OrcaHooks } from '../../../../shared/types'
 import { useAppStore } from '../../store'
 import { ScrollArea } from '../ui/scroll-area'
 import { Button } from '../ui/button'
-import { ArrowLeft, Palette, SlidersHorizontal, SquareTerminal, Keyboard } from 'lucide-react'
+import { ArrowLeft, Bell, Keyboard, Palette, SlidersHorizontal, SquareTerminal } from 'lucide-react'
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
 import { SCROLLBACK_PRESETS_MB, getFallbackTerminalFonts } from './SettingsConstants'
 import { GeneralPane } from './GeneralPane'
@@ -11,6 +11,7 @@ import { AppearancePane } from './AppearancePane'
 import { ShortcutsPane } from './ShortcutsPane'
 import { TerminalPane } from './TerminalPane'
 import { RepositoryPane } from './RepositoryPane'
+import { NotificationsPane } from './NotificationsPane'
 
 function Settings(): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
@@ -22,7 +23,7 @@ function Settings(): React.JSX.Element {
   const removeRepo = useAppStore((s) => s.removeRepo)
 
   const [selectedPane, setSelectedPane] = useState<
-    'general' | 'appearance' | 'terminal' | 'shortcuts' | 'repo'
+    'general' | 'appearance' | 'terminal' | 'notifications' | 'shortcuts' | 'repo'
   >('general')
   const [selectedRepoId, setSelectedRepoId] = useState<string | null>(null)
   const [repoHooksMap, setRepoHooksMap] = useState<
@@ -152,6 +153,7 @@ function Settings(): React.JSX.Element {
   const showGeneralPane = selectedPane === 'general'
   const showAppearancePane = selectedPane === 'appearance'
   const showTerminalPane = selectedPane === 'terminal'
+  const showNotificationsPane = selectedPane === 'notifications'
   const showShortcutsPane = selectedPane === 'shortcuts'
   const showRepoPane = selectedPane === 'repo' && !!selectedRepo
   const displayedGitUsername = (selectedRepo ?? repos[0])?.gitUsername ?? ''
@@ -180,6 +182,13 @@ function Settings(): React.JSX.Element {
       <h1 className="text-2xl font-semibold">Terminal</h1>
       <p className="text-sm text-muted-foreground">
         Terminal appearance, previews, and defaults for new panes.
+      </p>
+    </div>
+  ) : showNotificationsPane ? (
+    <div className="space-y-1">
+      <h1 className="text-2xl font-semibold">Notifications</h1>
+      <p className="text-sm text-muted-foreground">
+        Native desktop notifications for agent activity and terminal events.
       </p>
     </div>
   ) : showShortcutsPane ? (
@@ -255,6 +264,17 @@ function Settings(): React.JSX.Element {
               >
                 <SquareTerminal className="mr-2 size-4" />
                 Terminal
+              </button>
+              <button
+                onClick={() => setSelectedPane('notifications')}
+                className={`flex w-full items-center rounded-lg px-3 py-2 text-left text-sm transition-colors ${
+                  showNotificationsPane
+                    ? 'bg-accent font-medium text-accent-foreground'
+                    : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+                }`}
+              >
+                <Bell className="mr-2 size-4" />
+                Notifications
               </button>
               <button
                 onClick={() => setSelectedPane('shortcuts')}
@@ -333,6 +353,8 @@ function Settings(): React.JSX.Element {
                 scrollbackMode={scrollbackMode}
                 setScrollbackMode={setScrollbackMode}
               />
+            ) : showNotificationsPane ? (
+              <NotificationsPane settings={settings} updateSettings={updateSettings} />
             ) : showShortcutsPane ? (
               <ShortcutsPane />
             ) : selectedRepo ? (

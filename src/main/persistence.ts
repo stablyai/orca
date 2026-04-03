@@ -6,6 +6,7 @@ import type { PersistedState, Repo, WorktreeMeta, GlobalSettings } from '../shar
 import { getGitUsername } from './git/repo'
 import {
   getDefaultPersistedState,
+  getDefaultNotificationSettings,
   getDefaultUIState,
   getDefaultRepoHookSettings,
   getDefaultWorkspaceSession
@@ -42,7 +43,14 @@ export class Store {
         return {
           ...defaults,
           ...parsed,
-          settings: { ...defaults.settings, ...parsed.settings },
+          settings: {
+            ...defaults.settings,
+            ...parsed.settings,
+            notifications: {
+              ...getDefaultNotificationSettings(),
+              ...parsed.settings?.notifications
+            }
+          },
           ui: {
             ...defaults.ui,
             ...parsed.ui,
@@ -174,7 +182,14 @@ export class Store {
   }
 
   updateSettings(updates: Partial<GlobalSettings>): GlobalSettings {
-    this.state.settings = { ...this.state.settings, ...updates }
+    this.state.settings = {
+      ...this.state.settings,
+      ...updates,
+      notifications: {
+        ...this.state.settings.notifications,
+        ...updates.notifications
+      }
+    }
     this.scheduleSave()
     return this.state.settings
   }

@@ -7,6 +7,7 @@ import type {
   PRCheckDetail,
   IssueInfo,
   GlobalSettings,
+  NotificationDispatchRequest,
   OrcaHooks,
   PersistedUIState,
   WorkspaceSessionState,
@@ -74,6 +75,10 @@ type SettingsApi = {
   get: () => Promise<GlobalSettings>
   set: (args: Partial<GlobalSettings>) => Promise<GlobalSettings>
   listFonts: () => Promise<string[]>
+}
+
+type NotificationsApi = {
+  dispatch: (args: NotificationDispatchRequest) => Promise<{ delivered: boolean }>
 }
 
 type ShellApi = {
@@ -185,6 +190,7 @@ type Api = {
   pty: PtyApi
   gh: GhApi
   settings: SettingsApi
+  notifications: NotificationsApi
   shell: ShellApi
   hooks: HooksApi
   cache: CacheApi

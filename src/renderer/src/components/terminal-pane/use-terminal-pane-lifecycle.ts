@@ -40,6 +40,10 @@ type UseTerminalPaneLifecycleDeps = {
   updateTabTitle: (tabId: string, title: string) => void
   updateTabPtyId: (tabId: string, ptyId: string) => void
   markWorktreeUnread: (worktreeId: string) => void
+  dispatchNotification: (event: {
+    source: 'agent-task-complete' | 'terminal-bell'
+    terminalTitle?: string
+  }) => void
   setTabPaneExpanded: (tabId: string, expanded: boolean) => void
   setTabCanExpandPane: (tabId: string, canExpand: boolean) => void
   setExpandedPane: (paneId: number | null) => void
@@ -68,6 +72,7 @@ export function useTerminalPaneLifecycle({
   updateTabTitle,
   updateTabPtyId,
   markWorktreeUnread,
+  dispatchNotification,
   setTabPaneExpanded,
   setTabCanExpandPane,
   setExpandedPane,
@@ -156,7 +161,8 @@ export function useTerminalPaneLifecycle({
       clearTabPtyId,
       updateTabTitle,
       updateTabPtyId,
-      markWorktreeUnread
+      markWorktreeUnread,
+      dispatchNotification
     }
 
     const isMac = navigator.userAgent.includes('Mac')

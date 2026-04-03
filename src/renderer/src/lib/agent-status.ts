@@ -81,7 +81,7 @@ export function clearWorkingIndicators(title: string): string {
  * Fires `onBecameIdle` when an agent transitions from working to idle/permission,
  * like haunt's attention flag — the key trigger for unread notifications.
  */
-export function createAgentStatusTracker(onBecameIdle: () => void): {
+export function createAgentStatusTracker(onBecameIdle: (title: string) => void): {
   handleTitle: (title: string) => void
 } {
   let lastStatus: AgentStatus | null = null
@@ -90,7 +90,7 @@ export function createAgentStatusTracker(onBecameIdle: () => void): {
     handleTitle(title: string): void {
       const newStatus = detectAgentStatusFromTitle(title)
       if (lastStatus === 'working' && newStatus !== null && newStatus !== 'working') {
-        onBecameIdle()
+        onBecameIdle(title)
       }
       if (newStatus !== null) {
         lastStatus = newStatus
