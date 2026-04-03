@@ -16,14 +16,14 @@ module.exports = {
     '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
   ],
   asarUnpack: ['out/cli/**', 'resources/**'],
-  extraResources: [
-    {
-      from: 'resources/darwin/bin/orca',
-      to: 'bin/orca'
-    }
-  ],
   win: {
-    executableName: 'Orca'
+    executableName: 'Orca',
+    extraResources: [
+      {
+        from: 'resources/win32/bin/orca.cmd',
+        to: 'bin/orca.cmd'
+      }
+    ]
   },
   nsis: {
     artifactName: 'orca-windows-setup.${ext}',
@@ -49,6 +49,12 @@ module.exports = {
     // artifacts do not fail with broken ad-hoc launch behavior.
     hardenedRuntime: isMacRelease,
     notarize: isMacRelease,
+    extraResources: [
+      {
+        from: 'resources/darwin/bin/orca',
+        to: 'bin/orca'
+      }
+    ],
     target: [
       {
         target: 'dmg',
@@ -67,6 +73,12 @@ module.exports = {
     artifactName: 'orca-macos-${arch}.${ext}'
   },
   linux: {
+    extraResources: [
+      {
+        from: 'resources/linux/bin/orca',
+        to: 'bin/orca'
+      }
+    ],
     target: ['AppImage', 'deb'],
     maintainer: 'stablyai',
     category: 'Utility'

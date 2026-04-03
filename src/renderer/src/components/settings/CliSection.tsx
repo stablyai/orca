@@ -12,9 +12,33 @@ import {
   DialogTitle
 } from '../ui/dialog'
 import { Label } from '../ui/label'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 
 type CliSectionProps = {
   currentPlatform: string
+}
+
+function getRevealLabel(platform: string): string {
+  if (platform === 'darwin') {
+    return 'Show in Finder'
+  }
+  if (platform === 'win32') {
+    return 'Show in Explorer'
+  }
+  return 'Show in File Manager'
+}
+
+function getInstallDescription(platform: string): string {
+  if (platform === 'darwin') {
+    return 'Register `orca` in /usr/local/bin.'
+  }
+  if (platform === 'linux') {
+    return 'Register `orca` in ~/.local/bin.'
+  }
+  if (platform === 'win32') {
+    return 'Register `orca` in your user PATH.'
+  }
+  return 'CLI registration is not yet available on this platform.'
 }
 
 export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Element {
@@ -40,6 +64,7 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
 
   const isEnabled = status?.state === 'installed'
   const isSupported = status?.supported ?? false
+  const revealLabel = getRevealLabel(currentPlatform)
 
   const handleInstall = async (): Promise<void> => {
     setBusyAction('install')
@@ -86,27 +111,44 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
             <p className="text-xs text-muted-foreground">
               {loading
                 ? 'Checking CLI registration…'
-                : (status?.detail ??
-                  (currentPlatform === 'darwin'
-                    ? 'Register `orca` in /usr/local/bin.'
-                    : 'CLI registration is not yet available on this platform.'))}
+                : (status?.detail ?? getInstallDescription(currentPlatform))}
             </p>
           </div>
-          <button
-            role="switch"
-            aria-checked={isEnabled}
-            disabled={loading || !isSupported || busyAction !== null}
-            onClick={() => setDialogOpen(true)}
-            className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border border-transparent transition-colors ${
-              isEnabled ? 'bg-foreground' : 'bg-muted-foreground/30'
-            } ${loading || !isSupported || busyAction !== null ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
-          >
-            <span
-              className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-                isEnabled ? 'translate-x-4' : 'translate-x-0.5'
-              }`}
-            />
-          </button>
+          <div className="flex items-center gap-2">
+            <TooltipProvider delayDuration={250}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={() => void refreshStatus()}
+                    disabled={loading || busyAction !== null}
+                    aria-label="Refresh CLI status"
+                  >
+                    <RefreshCw className="size-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>
+                  Refresh
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <button
+              role="switch"
+              aria-checked={isEnabled}
+              disabled={loading || !isSupported || busyAction !== null}
+              onClick={() => setDialogOpen(true)}
+              className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border border-transparent transition-colors ${
+                isEnabled ? 'bg-foreground' : 'bg-muted-foreground/30'
+              } ${loading || !isSupported || busyAction !== null ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+            >
+              <span
+                className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
+                  isEnabled ? 'translate-x-4' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          </div>
         </div>
 
         {status?.commandPath ? (
@@ -118,7 +160,13 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
 
         {status?.state === 'stale' && status.currentTarget ? (
           <p className="text-xs text-amber-600 dark:text-amber-400">
-            Existing symlink target: <code>{status.currentTarget}</code>
+            Existing launcher target: <code>{status.currentTarget}</code>
+          </p>
+        ) : null}
+
+        {status?.state === 'installed' && !status.pathConfigured && status.pathDirectory ? (
+          <p className="text-xs text-amber-600 dark:text-amber-400">
+            {status.pathDirectory} is not currently visible on PATH for this shell.
           </p>
         ) : null}
 
@@ -126,17 +174,7 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
           <p className="text-xs text-muted-foreground">{status.detail}</p>
         ) : null}
 
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void refreshStatus()}
-            disabled={loading || busyAction !== null}
-            className="gap-2"
-          >
-            <RefreshCw className="size-3.5" />
-            Refresh
-          </Button>
+        <div className="flex items-center gap-2">
           {status?.commandPath ? (
             <Button
               variant="ghost"
@@ -146,7 +184,7 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
               className="gap-2"
             >
               <FolderOpen className="size-3.5" />
-              Show in Finder
+              {revealLabel}
             </Button>
           ) : null}
         </div>
@@ -161,7 +199,7 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
             <DialogDescription>
               {isEnabled
                 ? 'This removes the shell command symlink. Orca itself remains installed.'
-                : 'Orca will create /usr/local/bin/orca so the command works from any terminal.'}
+                : `Orca will register ${status?.commandPath ?? '`orca`'} so the command works from your terminal.`}
             </DialogDescription>
           </DialogHeader>
           {status?.commandPath ? (

@@ -5,12 +5,14 @@ export type CliInstallUnsupportedReason =
   | 'launcher_missing'
   | 'launch_mode_unavailable'
 
-export type CliInstallMethod = 'symlink'
+export type CliInstallMethod = 'symlink' | 'wrapper'
 
 export type CliInstallStatus = {
   platform: NodeJS.Platform
   commandName: string
   commandPath: string | null
+  pathDirectory: string | null
+  pathConfigured: boolean
   launcherPath: string | null
   installMethod: CliInstallMethod | null
   supported: boolean

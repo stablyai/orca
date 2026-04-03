@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+RESOURCES_DIR="$(cd "$SCRIPT_DIR/.." >/dev/null 2>&1 && pwd)"
+APP_DIR="$(cd "$RESOURCES_DIR/.." >/dev/null 2>&1 && pwd)"
+
+if [ -x "$APP_DIR/orca" ]; then
+	ELECTRON="$APP_DIR/orca"
+elif [ -x "$APP_DIR/Orca" ]; then
+	ELECTRON="$APP_DIR/Orca"
+else
+	echo "Unable to locate the Orca executable next to $RESOURCES_DIR" >&2
+	exit 1
+fi
+
+# Why: Orca packages the CLI entrypoint outside app.asar so the public shell
+# command can execute it directly with ELECTRON_RUN_AS_NODE, mirroring the same
+# launcher model used on macOS instead of maintaining a separate Node binary.
+CLI="$RESOURCES_DIR/app.asar.unpacked/out/cli/index.js"
+
+export ORCA_NODE_OPTIONS="${NODE_OPTIONS-}"
+export ORCA_NODE_REPL_EXTERNAL_MODULE="${NODE_REPL_EXTERNAL_MODULE-}"
+unset NODE_OPTIONS
+unset NODE_REPL_EXTERNAL_MODULE
+
+ELECTRON_RUN_AS_NODE=1 "$ELECTRON" "$CLI" "$@"
