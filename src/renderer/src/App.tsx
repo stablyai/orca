@@ -275,17 +275,14 @@ function App(): React.JSX.Element {
       if (e.repeat) {
         return
       }
-      if (isEditableTarget(e.target)) {
-        return
-      }
-      // Accept Cmd on macOS, Ctrl on other platforms
       const mod = navigator.userAgent.includes('Mac') ? e.metaKey : e.ctrlKey
-      if (!mod) {
-        return
-      }
 
-      // Cmd/Ctrl+P — quick open (go to file)
+      // Why: Cmd/Ctrl+P must be handled before the isEditableTarget guard
+      // because contentEditable elements (e.g. the Tiptap rich markdown
+      // editor) would otherwise swallow the event, making quick-open
+      // unreachable while the rich editor has focus.
       if (
+        mod &&
         !e.altKey &&
         !e.shiftKey &&
         e.key.toLowerCase() === 'p' &&
@@ -294,6 +291,13 @@ function App(): React.JSX.Element {
       ) {
         e.preventDefault()
         setQuickOpenVisible(true)
+        return
+      }
+
+      if (isEditableTarget(e.target)) {
+        return
+      }
+      if (!mod) {
         return
       }
 

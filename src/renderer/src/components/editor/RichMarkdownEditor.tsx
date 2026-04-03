@@ -1,16 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { EditorContent, useEditor } from '@tiptap/react'
 import type { Editor } from '@tiptap/react'
-import StarterKit from '@tiptap/starter-kit'
-import Link from '@tiptap/extension-link'
-import Image from '@tiptap/extension-image'
-import Placeholder from '@tiptap/extension-placeholder'
-import TaskList from '@tiptap/extension-task-list'
-import TaskItem from '@tiptap/extension-task-item'
-import { Markdown } from '@tiptap/markdown'
 import { List, ListOrdered, Quote } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { isMarkdownPreviewFindShortcut } from './markdown-preview-search'
+import { encodeRawMarkdownHtmlForRichEditor } from './raw-markdown-html'
+import { createRichMarkdownExtensions } from './rich-markdown-extensions'
 import { slashCommands } from './rich-markdown-commands'
 import type { SlashCommand } from './rich-markdown-commands'
 import { RichMarkdownSearchBar } from './RichMarkdownSearchBar'
@@ -29,6 +24,10 @@ type SlashMenuState = {
   left: number
   top: number
 }
+
+const richMarkdownExtensions = createRichMarkdownExtensions({
+  includePlaceholder: true
+})
 
 export default function RichMarkdownEditor({
   content,
@@ -56,26 +55,8 @@ export default function RichMarkdownEditor({
 
   const editor = useEditor({
     immediatelyRender: false,
-    extensions: [
-      StarterKit,
-      Link.configure({
-        openOnClick: false
-      }),
-      Image,
-      Placeholder.configure({
-        placeholder: 'Write markdown… Type / for blocks.'
-      }),
-      TaskList,
-      TaskItem.configure({
-        nested: true
-      }),
-      Markdown.configure({
-        markedOptions: {
-          gfm: true
-        }
-      })
-    ],
-    content,
+    extensions: richMarkdownExtensions,
+    content: encodeRawMarkdownHtmlForRichEditor(content),
     contentType: 'markdown',
     editorProps: {
       attributes: {
@@ -224,7 +205,9 @@ export default function RichMarkdownEditor({
     // Why: markdown files on disk remain the source of truth for rich mode in
     // Orca. External file changes, tab replacement, and save-after-reload must
     // overwrite the editor state so the rich view never drifts from repo text.
-    editor.commands.setContent(content, { contentType: 'markdown' })
+    editor.commands.setContent(encodeRawMarkdownHtmlForRichEditor(content), {
+      contentType: 'markdown'
+    })
     lastCommittedMarkdownRef.current = content
     syncSlashMenu(editor, rootRef.current, setSlashMenu)
   }, [content, editor])

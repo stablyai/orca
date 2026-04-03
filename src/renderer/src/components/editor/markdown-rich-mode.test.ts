@@ -2,10 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { getMarkdownRichModeUnsupportedMessage } from './markdown-rich-mode'
 
 describe('getMarkdownRichModeUnsupportedMessage', () => {
-  it('blocks markdown tables that rich mode cannot round-trip', () => {
-    expect(getMarkdownRichModeUnsupportedMessage('| a | b |\n| - | - |\n| 1 | 2 |\n')).toBe(
-      'Markdown tables are only editable in source mode.'
-    )
+  it('allows markdown tables once table nodes are available in rich mode', () => {
+    expect(getMarkdownRichModeUnsupportedMessage('| a | b |\n| - | - |\n| 1 | 2 |\n')).toBeNull()
   })
 
   it('allows plain markdown content', () => {
@@ -35,5 +33,16 @@ describe('getMarkdownRichModeUnsupportedMessage', () => {
   it('ignores jsx-looking tags inside code spans and fences', () => {
     expect(getMarkdownRichModeUnsupportedMessage('Use `<Widget />` in docs.\n')).toBeNull()
     expect(getMarkdownRichModeUnsupportedMessage('```tsx\n<Widget />\n```\n')).toBeNull()
+  })
+
+  it('allows angle brackets in ordinary prose', () => {
+    expect(
+      getMarkdownRichModeUnsupportedMessage('Use 1 < 2 and 3 > 2 in the example.\n')
+    ).toBeNull()
+  })
+
+  it('allows block html and mdx-like tags by preserving them as passthrough nodes', () => {
+    expect(getMarkdownRichModeUnsupportedMessage('<Widget />\n')).toBeNull()
+    expect(getMarkdownRichModeUnsupportedMessage('<div>block</div>\n')).toBeNull()
   })
 })

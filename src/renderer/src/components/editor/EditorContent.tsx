@@ -4,12 +4,14 @@ import { useAppStore } from '@/store'
 import { ConflictBanner, ConflictPlaceholderView, ConflictReviewPanel } from './ConflictComponents'
 import type { OpenFile } from '@/store/slices/editor'
 import type { GitStatusEntry, GitDiffResult } from '../../../../shared/types'
+import { getMarkdownRenderMode } from './markdown-render-mode'
 import { getMarkdownRichModeUnsupportedMessage } from './markdown-rich-mode'
 
 const MonacoEditor = lazy(() => import('./MonacoEditor'))
 const DiffViewer = lazy(() => import('./DiffViewer'))
 const CombinedDiffViewer = lazy(() => import('./CombinedDiffViewer'))
 const RichMarkdownEditor = lazy(() => import('./RichMarkdownEditor'))
+const MarkdownPreview = lazy(() => import('./MarkdownPreview'))
 const ImageViewer = lazy(() => import('./ImageViewer'))
 const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
 
@@ -94,8 +96,12 @@ export function EditorContent({
   const renderMarkdownContent = (fc: FileContent): React.JSX.Element => {
     const currentContent = editBuffers[activeFile.id] ?? fc.content
     const richModeUnsupportedMessage = getMarkdownRichModeUnsupportedMessage(currentContent)
+    const renderMode = getMarkdownRenderMode({
+      hasRichModeUnsupportedContent: richModeUnsupportedMessage !== null,
+      viewMode: mdViewMode
+    })
 
-    if (mdViewMode === 'rich' && !richModeUnsupportedMessage) {
+    if (renderMode === 'rich-editor') {
       return (
         <RichMarkdownEditor
           content={currentContent}
@@ -105,16 +111,24 @@ export function EditorContent({
       )
     }
 
-    return (
-      <div className="flex h-full min-h-0 flex-col">
-        {mdViewMode === 'rich' && richModeUnsupportedMessage ? (
+    if (renderMode === 'preview') {
+      return (
+        <div className="flex h-full min-h-0 flex-col">
           <div className="border-b border-border/60 bg-amber-500/10 px-3 py-2 text-xs text-amber-950 dark:text-amber-100">
             {richModeUnsupportedMessage}
           </div>
-        ) : null}
-        <div className="min-h-0 flex-1">{renderMonacoEditor(fc)}</div>
-      </div>
-    )
+          {/* Why: before rich editing shipped, Orca already had a stable markdown
+          preview surface. If Tiptap cannot safely own a document, falling back
+          to that renderer preserves readable preview mode instead of forcing the
+          user out of preview entirely. Source mode remains available for edits. */}
+          <div className="min-h-0 flex-1">
+            <MarkdownPreview content={currentContent} filePath={activeFile.filePath} />
+          </div>
+        </div>
+      )
+    }
+
+    return <div className="min-h-0 flex-1">{renderMonacoEditor(fc)}</div>
   }
 
   if (activeFile.mode === 'conflict-review') {

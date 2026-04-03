@@ -1,9 +1,11 @@
+import { canRoundTripRichMarkdown, getRichMarkdownRoundTripOutput } from './markdown-round-trip'
+
 export type MarkdownRichModeUnsupportedReason =
   | 'frontmatter'
-  | 'jsx'
+  | 'html-or-jsx'
   | 'reference-links'
   | 'footnotes'
-  | 'tables'
+  | 'other'
 
 type UnsupportedMatch = {
   reason: MarkdownRichModeUnsupportedReason
@@ -21,14 +23,12 @@ const UNSUPPORTED_PATTERNS: UnsupportedMatch[] = [
     pattern: /^(?:---|\+\+\+)\r?\n[\s\S]*?\r?\n(?:---|\+\+\+)(?:\r?\n|$)/
   },
   {
-    reason: 'jsx',
-    message: 'JSX or MDX content is only editable in source mode.',
-    // Why: uppercase tags are a strong MDX/JSX signal, and those files usually
-    // carry component semantics that the markdown editor does not own. Raw HTML
-    // is intentionally allowed because blocking ordinary .md files with common
-    // inline tags proved too disruptive; source mode remains the fallback if a
-    // specific document does not round-trip the way the user expects.
-    pattern: /<[A-Z][\w.]*(?:\s[^<>]*)?\/?>/
+    reason: 'html-or-jsx',
+    message: 'HTML, JSX, or MDX content is only editable in source mode.',
+    // Why: the rich editor preserves common embedded markup via placeholder
+    // tokens before parsing, but any HTML shape that still fails round-trip
+    // must fall back instead of risking silent source corruption.
+    pattern: /<\/?[A-Za-z][\w.:-]*(?:\s[^<>]*)?\/?>|<!--[\s\S]*?-->/
   },
   {
     reason: 'reference-links',
@@ -39,25 +39,39 @@ const UNSUPPORTED_PATTERNS: UnsupportedMatch[] = [
     reason: 'footnotes',
     message: 'Footnotes are only editable in source mode.',
     pattern: /^\[\^[^\]]+\]:\s+/m
-  },
-  {
-    reason: 'tables',
-    message: 'Markdown tables are only editable in source mode.',
-    // Why: the current rich-mode extension set does not include table nodes, so
-    // Tiptap collapses GFM tables instead of round-tripping them verbatim.
-    pattern: /^(?:\|?.+\|.+\|?.*)\r?\n\|?(?:\s*:?-{1,}:?\s*\|){1,}\s*:?-{1,}:?\s*\|?/m
   }
 ]
 
 export function getMarkdownRichModeUnsupportedMessage(content: string): string | null {
   const contentWithoutCode = stripMarkdownCode(content)
 
-  for (const matcher of UNSUPPORTED_PATTERNS) {
+  const frontmatterMatcher = UNSUPPORTED_PATTERNS[0]
+  if (frontmatterMatcher && frontmatterMatcher.pattern.test(contentWithoutCode)) {
+    return frontmatterMatcher.message
+  }
+
+  if (canRoundTripRichMarkdown(content)) {
+    return null
+  }
+
+  const htmlMatcher = UNSUPPORTED_PATTERNS[1]
+  if (htmlMatcher && htmlMatcher.pattern.test(contentWithoutCode)) {
+    const roundTripOutput = getRichMarkdownRoundTripOutput(content)
+    if (roundTripOutput && preservesEmbeddedHtml(contentWithoutCode, roundTripOutput)) {
+      return null
+    }
+  }
+
+  for (const matcher of UNSUPPORTED_PATTERNS.slice(1)) {
     if (matcher.pattern.test(contentWithoutCode)) {
       return matcher.message
     }
   }
 
+  // Why: Tiptap rewrites some harmless markdown spellings such as autolinks or
+  // escaped angle brackets even when the rendered document stays equivalent.
+  // Preview mode should stay editable unless we have a specific syntax we know
+  // the editor will drop or reinterpret in a user-visible way.
   return null
 }
 
@@ -84,4 +98,20 @@ function stripMarkdownCode(content: string): string {
   }
 
   return sanitizedLines.join('\n')
+}
+
+function preservesEmbeddedHtml(contentWithoutCode: string, roundTripOutput: string): boolean {
+  const htmlFragments =
+    contentWithoutCode.match(/<!--[\s\S]*?-->|<\/?[A-Za-z][\w.:-]*(?:\s[^<>]*?)?\/?>/g) ?? []
+
+  let searchIndex = 0
+  for (const fragment of htmlFragments) {
+    const foundIndex = roundTripOutput.indexOf(fragment, searchIndex)
+    if (foundIndex === -1) {
+      return false
+    }
+    searchIndex = foundIndex + fragment.length
+  }
+
+  return true
 }
