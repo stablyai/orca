@@ -17,7 +17,6 @@ import FileExplorer from './FileExplorer'
 import SourceControl from './SourceControl'
 import SearchPanel from './Search'
 import ChecksPanel from './ChecksPanel'
-import { useGitStatusPolling } from './useGitStatusPolling'
 
 const MIN_WIDTH = 220
 const MAX_WIDTH = 500
@@ -113,8 +112,6 @@ export default function RightSidebar(): React.JSX.Element {
   const checksStatus = useAppStore(getActiveChecksStatus)
   const activityBarPosition = useAppStore((s) => s.activityBarPosition)
   const setActivityBarPosition = useAppStore((s) => s.setActivityBarPosition)
-
-  useGitStatusPolling()
 
   // ─── Resize logic (handle on LEFT edge) ────────────
   const isResizing = useRef(false)

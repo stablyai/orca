@@ -14,6 +14,7 @@ import Landing from './components/Landing'
 import Settings from './components/settings/Settings'
 import RightSidebar from './components/right-sidebar'
 import QuickOpen from './components/QuickOpen'
+import { useGitStatusPolling } from './components/right-sidebar/useGitStatusPolling'
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
@@ -73,6 +74,11 @@ function App(): React.JSX.Element {
 
   // Subscribe to IPC push events
   useIpcEvents()
+  // Why: git conflict-operation state also drives the worktree cards. Polling
+  // cannot live under RightSidebar because App unmounts that subtree when the
+  // sidebar is closed, which leaves stale "Rebasing"/"Merging" badges behind
+  // until some unrelated view remount happens to refresh them.
+  useGitStatusPolling()
 
   const settings = useAppStore((s) => s.settings)
 

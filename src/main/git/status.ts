@@ -231,28 +231,24 @@ async function getConflictCompatibilityStatus(
 // one poll cycle, which is acceptable. The renderer uses this to label the
 // merge summary ("Merge conflicts" vs "Rebase conflicts" vs generic "Conflicts").
 //
-// Why we also check rebase-merge/ and rebase-apply/ directories: during a
-// rebase, REBASE_HEAD only exists when the *current* step has a conflict.
-// Between steps (or after resolving and before `git rebase --continue`), the
-// rebase is still in progress but REBASE_HEAD is absent. The rebase-merge/ or
-// rebase-apply/ directory persists for the entire rebase, so checking it
-// catches the "rebase in progress, no conflicts on current step" case.
+// Why rebase detection relies on rebase-merge/ or rebase-apply/ directories
+// instead of REBASE_HEAD: those directories persist for the entire rebase, so
+// they cover both conflicting and non-conflicting steps. REBASE_HEAD, by
+// contrast, only exists on some steps and can also be left behind after a
+// completed rebase, which would make the UI show a stale "Rebasing" badge.
 export async function detectConflictOperation(worktreePath: string): Promise<GitConflictOperation> {
   const gitDir = await resolveGitDir(worktreePath)
   const mergeHead = path.join(gitDir, 'MERGE_HEAD')
-  const rebaseHead = path.join(gitDir, 'REBASE_HEAD')
   const cherryPickHead = path.join(gitDir, 'CHERRY_PICK_HEAD')
   const rebaseMergeDir = path.join(gitDir, 'rebase-merge')
   const rebaseApplyDir = path.join(gitDir, 'rebase-apply')
 
   let hasMergeHead = false
-  let hasRebaseHead = false
   let hasCherryPickHead = false
   let hasRebaseDir = false
 
   try {
     hasMergeHead = existsSync(mergeHead)
-    hasRebaseHead = existsSync(rebaseHead)
     hasCherryPickHead = existsSync(cherryPickHead)
     hasRebaseDir = existsSync(rebaseMergeDir) || existsSync(rebaseApplyDir)
   } catch {
@@ -262,7 +258,7 @@ export async function detectConflictOperation(worktreePath: string): Promise<Git
   if (hasMergeHead) {
     return 'merge'
   }
-  if (hasRebaseHead || hasRebaseDir) {
+  if (hasRebaseDir) {
     return 'rebase'
   }
   if (hasCherryPickHead) {

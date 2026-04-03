@@ -25,7 +25,14 @@ vi.mock('fs', () => ({
   existsSync: existsSyncMock
 }))
 
-import { discardChanges, getBranchCompare, getDiff, getStatus, isWithinWorktree } from './status'
+import {
+  detectConflictOperation,
+  discardChanges,
+  getBranchCompare,
+  getDiff,
+  getStatus,
+  isWithinWorktree
+} from './status'
 
 describe('discardChanges', () => {
   beforeEach(() => {
@@ -233,6 +240,39 @@ describe('getStatus', () => {
 
     expect(result.entries[0]?.status).toBe('modified')
     expect(result.entries[0]?.conflictKind).toBe('added_by_us')
+  })
+})
+
+describe('detectConflictOperation', () => {
+  beforeEach(() => {
+    readFileMock.mockReset()
+    existsSyncMock.mockReset()
+  })
+
+  it('ignores a stale REBASE_HEAD when no rebase directory exists', async () => {
+    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    existsSyncMock.mockImplementation((target: string) => {
+      if (target.endsWith('MERGE_HEAD')) {
+        return false
+      }
+      if (target.endsWith('CHERRY_PICK_HEAD')) {
+        return false
+      }
+      if (target.endsWith('rebase-merge')) {
+        return false
+      }
+      if (target.endsWith('rebase-apply')) {
+        return false
+      }
+      if (target.endsWith('REBASE_HEAD')) {
+        return true
+      }
+      return false
+    })
+
+    const result = await detectConflictOperation('/repo')
+
+    expect(result).toBe('unknown')
   })
 })
 
