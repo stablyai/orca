@@ -75,15 +75,18 @@ function registerRuntimeWindowLifecycle(
 
 function registerFileDropRelay(mainWindow: BrowserWindow): void {
   ipcMain.removeAllListeners('terminal:file-dropped-from-preload')
-  ipcMain.on('terminal:file-dropped-from-preload', (_event, args: { paths: string[] }) => {
-    if (mainWindow.isDestroyed()) {
-      return
-    }
+  ipcMain.on(
+    'terminal:file-dropped-from-preload',
+    (_event, args: { paths: string[]; target: 'editor' | 'terminal' }) => {
+      if (mainWindow.isDestroyed()) {
+        return
+      }
 
-    for (const path of args.paths) {
-      mainWindow.webContents.send('terminal:file-drop', { path })
+      for (const path of args.paths) {
+        mainWindow.webContents.send('terminal:file-drop', { path, target: args.target })
+      }
     }
-  })
+  )
 }
 
 export function registerClipboardHandlers(): void {

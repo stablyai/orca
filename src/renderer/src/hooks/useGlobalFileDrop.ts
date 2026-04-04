@@ -5,7 +5,11 @@ import { useAppStore } from '@/store'
 
 export function useGlobalFileDrop(): void {
   useEffect(() => {
-    return window.api.ui.onFileDrop(({ path: filePath }) => {
+    return window.api.ui.onFileDrop(({ path: filePath, target }) => {
+      if (target !== 'editor') {
+        return
+      }
+
       const store = useAppStore.getState()
       const activeWorktreeId = store.activeWorktreeId
       if (!activeWorktreeId) {
@@ -31,10 +35,10 @@ export function useGlobalFileDrop(): void {
             }
           }
 
-          // Why: native OS file drops are resolved in preload because the
-          // isolated renderer cannot read filesystem paths from File objects.
-          // App owns those external drops so they consistently open in the
-          // editor instead of being misrouted to whichever terminal is active.
+          // Why: the preload bridge already proved this OS drop landed on the
+          // tab-strip editor target. Keeping the editor-open path centralized
+          // here avoids the regression where CLI drops were all coerced into
+          // editor tabs once the renderer lost the original drop surface.
           store.setActiveTabType('editor')
           store.openFile({
             filePath,

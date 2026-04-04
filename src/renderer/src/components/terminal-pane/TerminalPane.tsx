@@ -169,6 +169,7 @@ export default function TerminalPane({
     isActive,
     managerRef,
     containerRef,
+    paneTransportsRef,
     pendingWritesRef,
     isActiveRef,
     toggleExpandPane
@@ -308,6 +309,7 @@ export default function TerminalPane({
       <div
         ref={containerRef}
         className="absolute inset-0 min-h-0 min-w-0"
+        data-native-file-drop-target="terminal"
         style={terminalContainerStyle}
         onContextMenuCapture={contextMenu.onContextMenuCapture}
         onDragOver={(e) => {

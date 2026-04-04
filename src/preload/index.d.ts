@@ -143,7 +143,9 @@ type UIApi = {
   onTerminalZoom: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void
   readClipboardText: () => Promise<string>
   writeClipboardText: (text: string) => Promise<void>
-  onFileDrop: (callback: (data: { path: string }) => void) => () => void
+  onFileDrop: (
+    callback: (data: { path: string; target: 'editor' | 'terminal' }) => void
+  ) => () => void
   getZoomLevel: () => number
   setZoomLevel: (level: number) => void
 }

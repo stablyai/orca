@@ -169,7 +169,15 @@ export default function TabBar({
   }, [])
 
   return (
-    <div className="flex items-stretch h-9 bg-card border-b border-border overflow-hidden shrink-0">
+    <div
+      className="flex items-stretch h-9 bg-card border-b border-border overflow-hidden shrink-0"
+      // Why: only drops aimed at the top tab/session strip should open files in
+      // Orca's editor. Terminal-pane drops need to keep inserting file paths
+      // into the active coding CLI, so preload routes native OS drops based on
+      // this explicit surface marker instead of treating the whole app as an
+      // editor drop zone.
+      data-native-file-drop-target="editor"
+    >
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={sortableIds} strategy={horizontalListSortingStrategy}>
           <div
