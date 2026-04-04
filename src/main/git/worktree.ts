@@ -1,8 +1,46 @@
 import { execFile, execFileSync } from 'child_process'
-import { promisify } from 'util'
+import { posix, win32 } from 'path'
 import type { GitWorktreeInfo } from '../../shared/types'
 
-const execFileAsync = promisify(execFile)
+function runGit(
+  repoPath: string,
+  args: string[]
+): Promise<{
+  stdout: string
+  stderr: string
+}> {
+  return new Promise((resolve, reject) => {
+    execFile('git', args, { cwd: repoPath, encoding: 'utf-8' }, (error, stdout, stderr) => {
+      if (error) {
+        reject(Object.assign(error, { stdout, stderr }))
+        return
+      }
+      resolve({ stdout, stderr })
+    })
+  })
+}
+
+function normalizeLocalBranchRef(branch: string): string {
+  return branch.replace(/^refs\/heads\//, '')
+}
+
+function areWorktreePathsEqual(
+  leftPath: string,
+  rightPath: string,
+  platform = process.platform
+): boolean {
+  if (platform === 'win32' || looksLikeWindowsPath(leftPath) || looksLikeWindowsPath(rightPath)) {
+    return (
+      win32.normalize(win32.resolve(leftPath)).toLowerCase() ===
+      win32.normalize(win32.resolve(rightPath)).toLowerCase()
+    )
+  }
+  return posix.normalize(posix.resolve(leftPath)) === posix.normalize(posix.resolve(rightPath))
+}
+
+function looksLikeWindowsPath(pathValue: string): boolean {
+  return /^[A-Za-z]:[\\/]/.test(pathValue) || pathValue.startsWith('\\\\')
+}
 
 /**
  * Parse the porcelain output of `git worktree list --porcelain`.
@@ -51,10 +89,7 @@ export function parseWorktreeList(output: string): GitWorktreeInfo[] {
  */
 export async function listWorktrees(repoPath: string): Promise<GitWorktreeInfo[]> {
   try {
-    const { stdout } = await execFileAsync('git', ['worktree', 'list', '--porcelain'], {
-      cwd: repoPath,
-      encoding: 'utf-8'
-    })
+    const { stdout } = await runGit(repoPath, ['worktree', 'list', '--porcelain'])
     return parseWorktreeList(stdout)
   } catch {
     return []
@@ -93,12 +128,44 @@ export async function removeWorktree(
   worktreePath: string,
   force = false
 ): Promise<void> {
-  const args = ['worktree', 'remove', worktreePath]
+  const worktreesBeforeRemoval = await listWorktrees(repoPath)
+  const removedWorktree = worktreesBeforeRemoval.find((worktree) =>
+    areWorktreePathsEqual(worktree.path, worktreePath)
+  )
+  const branchName = normalizeLocalBranchRef(removedWorktree?.branch ?? '')
+
+  const args = ['worktree', 'remove']
   if (force) {
     args.push('--force')
   }
-  await execFileAsync('git', args, {
-    cwd: repoPath,
-    encoding: 'utf-8'
-  })
+  args.push(worktreePath)
+  await runGit(repoPath, args)
+  await runGit(repoPath, ['worktree', 'prune'])
+
+  if (!branchName) {
+    return
+  }
+
+  // Why: `git worktree list` can still include stale sibling records until
+  // `git worktree prune` runs. Re-list after prune so branch cleanup only skips
+  // when a still-live worktree actually keeps that branch checked out.
+  const worktreesAfterPrune = await listWorktrees(repoPath)
+  const branchStillInUse = worktreesAfterPrune.some(
+    (worktree) => normalizeLocalBranchRef(worktree.branch) === branchName
+  )
+  if (branchStillInUse) {
+    return
+  }
+
+  try {
+    // Why: `git worktree remove` only detaches the filesystem entry. Orca also
+    // drops the now-unused local branch here so delete-worktree does not leave
+    // behind orphaned feature branches unless another worktree still points at it.
+    await runGit(repoPath, ['branch', '-D', branchName])
+  } catch (error) {
+    console.warn(
+      `[git] Failed to delete local branch "${branchName}" after removing worktree`,
+      error
+    )
+  }
 }
