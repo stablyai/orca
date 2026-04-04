@@ -354,7 +354,7 @@ export function FileExplorerRow({
           </span>
           {nodeStatus && (
             <span
-              className="ml-auto shrink-0 text-[10px] font-semibold tracking-wide"
+              className="ml-auto shrink-0 text-[10px] font-semibold tracking-wide mr-2"
               style={{ color: statusColor ?? undefined }}
             >
               {STATUS_LABELS[nodeStatus]}
