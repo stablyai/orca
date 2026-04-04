@@ -105,6 +105,7 @@ export function EditorContent({
       return (
         <RichMarkdownEditor
           content={currentContent}
+          filePath={activeFile.filePath}
           onContentChange={handleContentChange}
           onSave={handleSave}
         />

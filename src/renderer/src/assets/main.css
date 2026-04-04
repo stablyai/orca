@@ -636,7 +636,14 @@
 }
 
 .rich-markdown-editor ul[data-type='taskList'] li > label {
-  margin-top: 0.35em;
+  /* Vertically center the checkbox with the first line of text. */
+  flex-shrink: 0;
+  margin-top: 0.3em;
+}
+
+/* Remove paragraph margin inside task items so the text sits flush with the checkbox. */
+.rich-markdown-editor ul[data-type='taskList'] li > div > p {
+  margin: 0;
 }
 
 .rich-markdown-editor blockquote {

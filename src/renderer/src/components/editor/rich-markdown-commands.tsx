@@ -42,7 +42,9 @@ export const slashCommands: SlashCommand[] = [
     icon: Heading1,
     description: 'Large section heading.',
     run: (editor) => {
-      editor.chain().focus().toggleHeading({ level: 1 }).run()
+      // Use setHeading (not toggleHeading) so the slash command is idempotent —
+      // invoking "/h1" on an existing H1 should keep it as H1, not revert to paragraph.
+      editor.chain().focus().setHeading({ level: 1 }).run()
     }
   },
   {
@@ -52,7 +54,9 @@ export const slashCommands: SlashCommand[] = [
     icon: Heading2,
     description: 'Medium section heading.',
     run: (editor) => {
-      editor.chain().focus().toggleHeading({ level: 2 }).run()
+      // Use setHeading (not toggleHeading) so the slash command is idempotent —
+      // invoking "/h2" on an existing H2 should keep it as H2, not revert to paragraph.
+      editor.chain().focus().setHeading({ level: 2 }).run()
     }
   },
   {
@@ -62,7 +66,9 @@ export const slashCommands: SlashCommand[] = [
     icon: Heading3,
     description: 'Small section heading.',
     run: (editor) => {
-      editor.chain().focus().toggleHeading({ level: 3 }).run()
+      // Use setHeading (not toggleHeading) so the slash command is idempotent —
+      // invoking "/h3" on an existing H3 should keep it as H3, not revert to paragraph.
+      editor.chain().focus().setHeading({ level: 3 }).run()
     }
   },
   {
@@ -130,13 +136,11 @@ export const slashCommands: SlashCommand[] = [
     label: 'Image',
     aliases: ['image', 'img'],
     icon: ImageIcon,
-    description: 'Insert an image from a URL.',
+    description: 'Insert an image from your computer.',
+    // Why: window.prompt() is not supported in Electron's renderer process,
+    // so image URL input is handled by an inline input bar in RichMarkdownEditor.
     run: (editor) => {
-      const src = window.prompt('Image URL')
-      if (!src) {
-        return
-      }
-      editor.chain().focus().setImage({ src }).run()
+      editor.chain().focus().run()
     }
   }
 ]

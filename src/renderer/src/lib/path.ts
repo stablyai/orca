@@ -26,13 +26,26 @@ export function basename(path: string): string {
 
 export function dirname(path: string): string {
   const normalizedPath = stripTrailingSeparators(path)
+
+  if (!normalizedPath) {
+    return getSeparator(path)
+  }
+
+  if (/^[A-Za-z]:$/.test(normalizedPath)) {
+    return normalizedPath
+  }
+
   const lastSeparatorIndex = Math.max(
     normalizedPath.lastIndexOf('/'),
     normalizedPath.lastIndexOf('\\')
   )
 
-  if (lastSeparatorIndex <= 0) {
+  if (lastSeparatorIndex === -1) {
     return '.'
+  }
+
+  if (lastSeparatorIndex === 0) {
+    return normalizedPath[0]
   }
 
   return normalizedPath.slice(0, lastSeparatorIndex)

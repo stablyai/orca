@@ -1,5 +1,5 @@
-import { ipcMain, shell } from 'electron'
-import { stat } from 'node:fs/promises'
+import { ipcMain, shell, dialog } from 'electron'
+import { constants, copyFile, stat } from 'node:fs/promises'
 import { isAbsolute, normalize } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -81,4 +81,38 @@ export function registerShellHandlers(): void {
   ipcMain.handle('shell:pathExists', async (_event, filePath: string): Promise<boolean> => {
     return pathExists(filePath)
   })
+
+  // Why: window.prompt() and <input type="file"> are unreliable in Electron,
+  // so we use the native OS dialog to let the user pick an image file.
+  ipcMain.handle('shell:pickImage', async (): Promise<string | null> => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openFile'],
+      filters: [
+        { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico'] }
+      ]
+    })
+    if (result.canceled || result.filePaths.length === 0) {
+      return null
+    }
+    return result.filePaths[0]
+  })
+
+  // Why: copying a picked image next to the markdown file lets us insert a
+  // relative path (e.g. `![](image.png)`) instead of embedding base64,
+  // keeping markdown files small and portable.
+  ipcMain.handle(
+    'shell:copyFile',
+    async (_event, args: { srcPath: string; destPath: string }): Promise<void> => {
+      const src = normalize(args.srcPath)
+      const dest = normalize(args.destPath)
+      if (!isAbsolute(src) || !isAbsolute(dest)) {
+        throw new Error('Both source and destination must be absolute paths')
+      }
+      // Why: COPYFILE_EXCL prevents silently overwriting an existing file.
+      // The renderer-side deconfliction loop already picks a unique name, so
+      // the dest should never exist — if it does, something is wrong and we
+      // should fail loudly rather than clobber data.
+      await copyFile(src, dest, constants.COPYFILE_EXCL)
+    }
+  )
 }
