@@ -1,8 +1,27 @@
 import { ipcMain } from 'electron'
 import { lstat, mkdir, rename, writeFile } from 'fs/promises'
-import { dirname } from 'path'
+import { basename, dirname } from 'path'
 import type { Store } from '../persistence'
 import { resolveAuthorizedPath, isENOENT } from './filesystem-auth'
+
+/**
+ * Re-throw filesystem errors with user-friendly messages.
+ * The `wx` flag on writeFile throws a raw EEXIST with no helpful message,
+ * so we catch it here and provide context the renderer can display directly.
+ */
+function rethrowWithUserMessage(error: unknown, targetPath: string): never {
+  const name = basename(targetPath)
+  if (error instanceof Error && 'code' in error) {
+    const code = (error as NodeJS.ErrnoException).code
+    if (code === 'EEXIST') {
+      throw new Error(`A file or folder named '${name}' already exists in this location`)
+    }
+    if (code === 'EACCES' || code === 'EPERM') {
+      throw new Error(`Permission denied: unable to create '${name}'`)
+    }
+  }
+  throw error
+}
 
 /**
  * Ensure `targetPath` does not already exist. Throws if it does.
@@ -15,7 +34,9 @@ import { resolveAuthorizedPath, isENOENT } from './filesystem-auth'
 async function assertNotExists(targetPath: string): Promise<void> {
   try {
     await lstat(targetPath)
-    throw new Error('A file or folder already exists at this path')
+    throw new Error(
+      `A file or folder named '${basename(targetPath)}' already exists in this location`
+    )
   } catch (error) {
     if (!isENOENT(error)) {
       throw error
@@ -31,8 +52,12 @@ export function registerFilesystemMutationHandlers(store: Store): void {
   ipcMain.handle('fs:createFile', async (_event, args: { filePath: string }): Promise<void> => {
     const filePath = await resolveAuthorizedPath(args.filePath, store)
     await mkdir(dirname(filePath), { recursive: true })
-    // Use the 'wx' flag for atomic create-if-not-exists, avoiding TOCTOU races
-    await writeFile(filePath, '', { encoding: 'utf-8', flag: 'wx' })
+    try {
+      // Use the 'wx' flag for atomic create-if-not-exists, avoiding TOCTOU races
+      await writeFile(filePath, '', { encoding: 'utf-8', flag: 'wx' })
+    } catch (error) {
+      rethrowWithUserMessage(error, filePath)
+    }
   })
 
   ipcMain.handle('fs:createDir', async (_event, args: { dirPath: string }): Promise<void> => {

@@ -50,9 +50,16 @@ export function InlineInputRow({
   const inputRef = useRef<HTMLInputElement>(null)
   const blurTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const submitted = useRef(false)
+  // Grace period flag: when a menu (context or dropdown) closes, its focus
+  // management can momentarily steal focus from this input before the user
+  // has a chance to type. During the grace window we re-focus on blur instead
+  // of auto-submitting, which would dismiss the empty input.
+  const focusSettled = useRef(false)
+  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     submitted.current = false
+    focusSettled.current = false
 
     // Schedule focus after any pending focus-restore from menu close
     const raf = requestAnimationFrame(() => {
@@ -69,11 +76,20 @@ export function InlineInputRow({
           el.select()
         }
       }
+      // Allow enough time for the menu close focus management to finish
+      // before treating blur events as intentional user actions.
+      settleTimer.current = setTimeout(() => {
+        settleTimer.current = null
+        focusSettled.current = true
+      }, 200)
     })
     return () => {
       cancelAnimationFrame(raf)
       if (blurTimeout.current) {
         clearTimeout(blurTimeout.current)
+      }
+      if (settleTimer.current) {
+        clearTimeout(settleTimer.current)
       }
     }
   }, [inlineInput])
@@ -133,6 +149,13 @@ export function InlineInputRow({
             (e.relatedTarget.closest('[data-slot="context-menu-trigger"]') ||
               e.relatedTarget.closest('[data-slot="dropdown-menu-trigger"]'))
           ) {
+            requestAnimationFrame(() => inputRef.current?.focus())
+            return
+          }
+          // During the grace period after mount, menu close focus management
+          // may shift focus away (often relatedTarget is null). Re-focus
+          // instead of dismissing the still-empty input.
+          if (!focusSettled.current) {
             requestAnimationFrame(() => inputRef.current?.focus())
             return
           }

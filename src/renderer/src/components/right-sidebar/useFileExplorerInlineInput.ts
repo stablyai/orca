@@ -1,10 +1,24 @@
 import { useCallback, useMemo, useState } from 'react'
 import type React from 'react'
+import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { detectLanguage } from '@/lib/language-detect'
 import { dirname, joinPath } from '@/lib/path'
 import type { InlineInput } from './FileExplorerRow'
 import type { TreeNode } from './file-explorer-types'
+
+/**
+ * Electron's ipcRenderer.invoke wraps errors as:
+ *   "Error invoking remote method 'channel': Error: actual message"
+ * Strip the wrapper so users see only the meaningful part.
+ */
+function extractIpcErrorMessage(err: unknown, fallback: string): string {
+  if (!(err instanceof Error)) {
+    return fallback
+  }
+  const match = err.message.match(/Error invoking remote method '[^']*': (?:Error: )?(.+)/)
+  return match ? match[1] : err.message
+}
 
 type UseFileExplorerInlineInputParams = {
   activeWorktreeId: string | null
@@ -113,7 +127,9 @@ export function useFileExplorerInlineInput({
               newPath: joinPath(parentDir, name)
             })
           } catch (err) {
-            console.error('Rename failed:', err)
+            toast.error(
+              extractIpcErrorMessage(err, `Failed to rename '${inlineInput.existingName}'.`)
+            )
           }
           await refreshDir(parentDir)
         } else {
@@ -135,7 +151,7 @@ export function useFileExplorerInlineInput({
           } catch (err) {
             // Refresh the directory even on failure so the tree stays consistent
             await refreshDir(inlineInput.parentPath)
-            console.error('Create failed:', err)
+            toast.error(extractIpcErrorMessage(err, `Failed to create '${name}'.`))
           }
         }
       }

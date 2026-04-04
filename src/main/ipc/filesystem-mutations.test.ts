@@ -89,7 +89,7 @@ describe('registerFilesystemMutationHandlers', () => {
 
     await expect(
       handlers.get('fs:createFile')!(null, { filePath: '/workspace/repo/existing.ts' })
-    ).rejects.toThrow('EEXIST')
+    ).rejects.toThrow("A file or folder named 'existing.ts' already exists in this location")
   })
 
   it('rejects file creation outside allowed roots', async () => {
@@ -117,7 +117,7 @@ describe('registerFilesystemMutationHandlers', () => {
 
     await expect(
       handlers.get('fs:createDir')!(null, { dirPath: '/workspace/repo/src' })
-    ).rejects.toThrow('A file or folder already exists at this path')
+    ).rejects.toThrow("A file or folder named 'src' already exists in this location")
 
     expect(mkdirMock).not.toHaveBeenCalled()
   })
@@ -158,7 +158,7 @@ describe('registerFilesystemMutationHandlers', () => {
         oldPath: '/workspace/repo/old.ts',
         newPath: '/workspace/repo/new.ts'
       })
-    ).rejects.toThrow('A file or folder already exists at this path')
+    ).rejects.toThrow("A file or folder named 'new.ts' already exists in this location")
 
     expect(renameMock).not.toHaveBeenCalled()
   })
