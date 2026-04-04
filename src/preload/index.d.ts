@@ -98,6 +98,8 @@ type ShellApi = {
   openFilePath: (path: string) => Promise<void>
   openFileUri: (uri: string) => Promise<void>
   pathExists: (path: string) => Promise<boolean>
+  pickImage: () => Promise<string | null>
+  copyFile: (args: { srcPath: string; destPath: string }) => Promise<void>
 }
 
 type HooksApi = {

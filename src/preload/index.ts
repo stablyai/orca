@@ -222,7 +222,12 @@ const api = {
 
     openFileUri: (uri: string): Promise<void> => ipcRenderer.invoke('shell:openFileUri', uri),
 
-    pathExists: (path: string): Promise<boolean> => ipcRenderer.invoke('shell:pathExists', path)
+    pathExists: (path: string): Promise<boolean> => ipcRenderer.invoke('shell:pathExists', path),
+
+    pickImage: (): Promise<string | null> => ipcRenderer.invoke('shell:pickImage'),
+
+    copyFile: (args: { srcPath: string; destPath: string }): Promise<void> =>
+      ipcRenderer.invoke('shell:copyFile', args)
   },
 
   hooks: {
