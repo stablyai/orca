@@ -226,7 +226,8 @@ const WorktreeList = React.memo(function WorktreeList() {
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: (index) => (rows[index].type === 'header' ? 42 : 56 + 4),
+    // FORK: flat row height — shorter rows without card borders/padding
+    estimateSize: (index) => (rows[index].type === 'header' ? 42 : 46),
     overscan: 10,
     getItemKey: (index) => {
       const row = rows[index]
