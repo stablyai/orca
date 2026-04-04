@@ -1,4 +1,4 @@
-import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Search as SearchIcon, CaseSensitive, WholeWord, Regex, X, Loader2 } from 'lucide-react'
 import { useAppStore } from '@/store'
@@ -38,7 +38,6 @@ export default function Search(): React.JSX.Element {
   const clearFileSearch = useAppStore((s) => s.clearFileSearch)
 
   const inputRef = useRef<HTMLInputElement>(null)
-  const [showFilters, setShowFilters] = useState(false)
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const latestSearchIdRef = useRef(0)
   const resultsScrollRef = useRef<HTMLDivElement>(null)
@@ -135,24 +134,24 @@ export default function Search(): React.JSX.Element {
     estimateSize: (index) => {
       const row = searchRows[index]
       if (!row) {
-        return 24
+        return 20
       }
-      if (row.type === 'summary') {
-        return 24
-      }
+      // Why: file rows include pt-1.5 (6 px) for inter-group spacing, so
+      // their estimate is taller than match rows.
       if (row.type === 'file') {
-        return 26
+        return 28
       }
-      return 22
+      return 20
     },
+    // Why: paddingEnd adds visible breathing room after the last result row.
+    // paddingStart is unnecessary because each file row already includes
+    // pt-1.5 for inter-group spacing (which also covers the first row).
+    paddingEnd: 8,
     overscan: SEARCH_VIRTUAL_OVERSCAN,
     getItemKey: (index) => {
       const row = searchRows[index]
       if (!row) {
         return `missing:${index}`
-      }
-      if (row.type === 'summary') {
-        return 'summary'
       }
       if (row.type === 'file') {
         return `file:${row.fileResult.filePath}`
@@ -286,7 +285,7 @@ export default function Search(): React.JSX.Element {
           <input
             ref={inputRef}
             type="text"
-            className="flex-1 bg-transparent text-xs py-1.5 outline-none text-foreground placeholder:text-muted-foreground min-w-0"
+            className="flex-1 bg-transparent text-xs py-1.5 outline-none text-foreground placeholder:text-muted-foreground/50 min-w-0"
             placeholder="Search"
             value={fileSearchQuery}
             onChange={handleQueryChange}
@@ -340,10 +339,8 @@ export default function Search(): React.JSX.Element {
         </div>
 
         <SearchFilters
-          showFilters={showFilters}
           includePattern={fileSearchIncludePattern}
           excludePattern={fileSearchExcludePattern}
-          onToggleFilters={() => setShowFilters(!showFilters)}
           onIncludeChange={(value) => {
             updateActiveSearchState({ includePattern: value })
             rerunSearch()
@@ -354,6 +351,18 @@ export default function Search(): React.JSX.Element {
           }}
         />
       </div>
+
+      {/* Why: the summary is rendered outside the virtualizer so it stays
+         pinned at the top while the user scrolls through results. */}
+      {deferredSearchResults && searchRows.length > 0 && (
+        <div className="px-2 py-1 text-[10px] text-muted-foreground border-b border-border">
+          {deferredSearchResults.totalMatches} result
+          {deferredSearchResults.totalMatches !== 1 ? 's' : ''} in{' '}
+          {deferredSearchResults.files.length} file
+          {deferredSearchResults.files.length !== 1 ? 's' : ''}
+          {deferredSearchResults.truncated && ' (results truncated)'}
+        </div>
+      )}
 
       <div ref={resultsScrollRef} className="flex-1 min-h-0 overflow-y-auto scrollbar-sleek">
         {searchRows.length > 0 && (
@@ -377,13 +386,6 @@ export default function Search(): React.JSX.Element {
                     transform: `translateY(${virtualRow.start}px)`
                   }}
                 >
-                  {row.type === 'summary' && (
-                    <div className="px-2 py-1 text-[10px] text-muted-foreground border-b border-border">
-                      {row.totalMatches} result{row.totalMatches !== 1 ? 's' : ''} in{' '}
-                      {row.fileCount} file{row.fileCount !== 1 ? 's' : ''}
-                      {row.truncated && ' (results truncated)'}
-                    </div>
-                  )}
                   {row.type === 'file' && (
                     <FileResultRow
                       fileResult={row.fileResult}

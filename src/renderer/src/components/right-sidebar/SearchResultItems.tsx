@@ -57,7 +57,7 @@ export function FileResultRow({
   const dirPath = parentDir === '.' ? '' : parentDir
 
   return (
-    <div>
+    <div className="pt-1.5">
       {/* File header with context menu */}
       <ContextMenu>
         <ContextMenuTrigger asChild>
@@ -143,7 +143,7 @@ export function MatchResultRow({
           }}
           onClick={onClick}
         >
-          <span className="text-[10px] text-muted-foreground flex-shrink-0 w-8 text-right tabular-nums mt-px">
+          <span className="text-[10px] text-muted-foreground flex-shrink-0 tabular-nums mt-px">
             {match.line}
           </span>
           <span className="text-xs truncate">

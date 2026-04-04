@@ -2,12 +2,6 @@ import type { SearchFileResult, SearchMatch, SearchResult } from '../../../../sh
 
 export type SearchRow =
   | {
-      type: 'summary'
-      totalMatches: number
-      fileCount: number
-      truncated: boolean
-    }
-  | {
       type: 'file'
       fileResult: SearchFileResult
       collapsed: boolean
@@ -27,14 +21,10 @@ export function buildSearchRows(
     return []
   }
 
-  const rows: SearchRow[] = [
-    {
-      type: 'summary',
-      totalMatches: results.totalMatches,
-      fileCount: results.files.length,
-      truncated: results.truncated
-    }
-  ]
+  // Why: the summary row is rendered as a fixed header in Search.tsx so it
+  // stays visible while the user scrolls through results and doesn't
+  // participate in virtualisation.
+  const rows: SearchRow[] = []
 
   for (const fileResult of results.files) {
     const collapsed = collapsedFiles.has(fileResult.filePath)

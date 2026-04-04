@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { buildSearchRows } from './search-rows'
 
 describe('buildSearchRows', () => {
-  it('includes summary, file headers, and expanded matches in row order', () => {
+  it('includes file headers and expanded matches in row order (summary is rendered separately)', () => {
     const rows = buildSearchRows(
       {
         totalMatches: 3,
@@ -26,14 +26,7 @@ describe('buildSearchRows', () => {
       new Set<string>()
     )
 
-    expect(rows.map((row) => row.type)).toEqual([
-      'summary',
-      'file',
-      'match',
-      'match',
-      'file',
-      'match'
-    ])
+    expect(rows.map((row) => row.type)).toEqual(['file', 'match', 'match', 'file', 'match'])
   })
 
   it('omits match rows for collapsed files', () => {
@@ -57,6 +50,6 @@ describe('buildSearchRows', () => {
       new Set<string>(['/repo/a.ts'])
     )
 
-    expect(rows.map((row) => row.type)).toEqual(['summary', 'file', 'file', 'match'])
+    expect(rows.map((row) => row.type)).toEqual(['file', 'file', 'match'])
   })
 })
