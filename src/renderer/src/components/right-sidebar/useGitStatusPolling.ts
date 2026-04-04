@@ -7,6 +7,7 @@ const POLL_INTERVAL_MS = 3000
 export function useGitStatusPolling(): void {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
   const setGitStatus = useAppStore((s) => s.setGitStatus)
   const setConflictOperation = useAppStore((s) => s.setConflictOperation)
   const conflictOperationByWorktree = useAppStore((s) => s.gitConflictOperationByWorktree)
@@ -19,6 +20,18 @@ export function useGitStatusPolling(): void {
       const wt = worktrees.find((w) => w.id === activeWorktreeId)
       if (wt) {
         return wt.path
+      }
+    }
+    return null
+  }, [activeWorktreeId, worktreesByRepo])
+
+  const activeRepoId = useMemo(() => {
+    if (!activeWorktreeId) {
+      return null
+    }
+    for (const [repoId, worktrees] of Object.entries(worktreesByRepo)) {
+      if (worktrees.some((wt) => wt.id === activeWorktreeId)) {
+        return repoId
       }
     }
     return null
@@ -62,6 +75,20 @@ export function useGitStatusPolling(): void {
     const intervalId = setInterval(() => void fetchStatus(), POLL_INTERVAL_MS)
     return () => clearInterval(intervalId)
   }, [fetchStatus])
+
+  useEffect(() => {
+    if (!activeRepoId) {
+      return
+    }
+
+    // Why: checkout/switch operations happen inside the terminal, outside the
+    // renderer's normal worktree-change events. Poll the active repo's worktree
+    // list so a branch change updates the sidebar's PR key instead of leaving
+    // the previous merged PR attached to this worktree indefinitely.
+    void fetchWorktrees(activeRepoId)
+    const intervalId = setInterval(() => void fetchWorktrees(activeRepoId), POLL_INTERVAL_MS)
+    return () => clearInterval(intervalId)
+  }, [activeRepoId, fetchWorktrees])
 
   // Why: poll conflict operation for non-active worktrees that have a stale
   // non-unknown operation. This is a lightweight fs-only check (no git status)

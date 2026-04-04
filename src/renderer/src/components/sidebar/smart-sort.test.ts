@@ -66,11 +66,19 @@ describe('computeSmartScore', () => {
     const linked = makeWorktree({
       id: 'linked',
       displayName: 'Linked',
-      linkedPR: 17,
       linkedIssue: 42
     })
 
-    expect(computeSmartScore(active, null)).toBeGreaterThan(computeSmartScore(linked, null))
+    const prCache = {
+      '/tmp/repo-1::linked': {
+        data: { number: 17 },
+        fetchedAt: NOW
+      }
+    }
+
+    expect(computeSmartScore(active, null, repoMap, null)).toBeGreaterThan(
+      computeSmartScore(linked, null, repoMap, prCache)
+    )
   })
 
   it('keeps recent activity relevant beyond a one-hour window', () => {
@@ -85,7 +93,9 @@ describe('computeSmartScore', () => {
       lastActivityAt: NOW - 30 * 60 * 60 * 1000
     })
 
-    expect(computeSmartScore(recent, null)).toBeGreaterThan(computeSmartScore(stale, null))
+    expect(computeSmartScore(recent, null, repoMap, null)).toBeGreaterThan(
+      computeSmartScore(stale, null, repoMap, null)
+    )
   })
 
   it('rewards live terminals even without detected agent status', () => {
@@ -97,8 +107,48 @@ describe('computeSmartScore', () => {
       [withLiveTerminal.id]: [makeTab({ worktreeId: withLiveTerminal.id, title: 'bash' })]
     }
 
-    expect(computeSmartScore(withLiveTerminal, tabsByWorktree)).toBeGreaterThan(
-      computeSmartScore(withoutLiveTerminal, tabsByWorktree)
+    expect(computeSmartScore(withLiveTerminal, tabsByWorktree, repoMap, null)).toBeGreaterThan(
+      computeSmartScore(withoutLiveTerminal, tabsByWorktree, repoMap, null)
+    )
+  })
+
+  it('uses the current branch PR cache instead of persisted linkedPR metadata', () => {
+    const staleLinked = makeWorktree({
+      id: 'stale-linked',
+      branch: 'refs/heads/no-pr-anymore',
+      linkedPR: 17
+    })
+    const livePR = makeWorktree({
+      id: 'live-pr',
+      branch: 'refs/heads/has-pr-now',
+      linkedPR: null
+    })
+    const prCache = {
+      '/tmp/repo-1::has-pr-now': {
+        data: { number: 42 },
+        fetchedAt: NOW
+      }
+    }
+
+    expect(computeSmartScore(livePR, null, repoMap, prCache)).toBeGreaterThan(
+      computeSmartScore(staleLinked, null, repoMap, prCache)
+    )
+  })
+
+  it('falls back to linkedPR when the current branch cache entry is still cold', () => {
+    const linked = makeWorktree({
+      id: 'linked',
+      branch: 'refs/heads/not-fetched-yet',
+      linkedPR: 17
+    })
+    const plain = makeWorktree({
+      id: 'plain',
+      branch: 'refs/heads/plain',
+      linkedPR: null
+    })
+
+    expect(computeSmartScore(linked, null, repoMap, {})).toBeGreaterThan(
+      computeSmartScore(plain, null, repoMap, {})
     )
   })
 })
@@ -127,7 +177,7 @@ describe('buildWorktreeComparator', () => {
 
     const worktrees = [recent, stale, active]
 
-    worktrees.sort(buildWorktreeComparator('recent', null, repoMap, NOW))
+    worktrees.sort(buildWorktreeComparator('recent', null, repoMap, null, NOW))
 
     expect(worktrees.map((worktree) => worktree.id)).toEqual(['active', 'recent', 'stale'])
   })
@@ -148,7 +198,7 @@ describe('buildWorktreeComparator', () => {
 
     const worktrees = [second, first]
 
-    worktrees.sort(buildWorktreeComparator('recent', null, repoMap, NOW))
+    worktrees.sort(buildWorktreeComparator('recent', null, repoMap, null, NOW))
 
     expect(worktrees.map((worktree) => worktree.id)).toEqual(['first', 'second'])
   })
@@ -169,8 +219,52 @@ describe('buildWorktreeComparator', () => {
 
     const worktrees = [beta, alpha]
 
-    worktrees.sort(buildWorktreeComparator('recent', null, repoMap, NOW))
+    worktrees.sort(buildWorktreeComparator('recent', null, repoMap, null, NOW))
 
     expect(worktrees.map((worktree) => worktree.id)).toEqual(['alpha', 'beta'])
+  })
+
+  it('prefers a worktree whose current branch has a live PR over stale linkedPR metadata', () => {
+    const staleLinked = makeWorktree({
+      id: 'stale-linked',
+      displayName: 'Stale Linked',
+      branch: 'refs/heads/no-pr-anymore',
+      linkedPR: 17
+    })
+    const livePR = makeWorktree({
+      id: 'live-pr',
+      displayName: 'Live PR',
+      branch: 'refs/heads/has-pr-now'
+    })
+    const worktrees = [staleLinked, livePR]
+    const prCache = {
+      '/tmp/repo-1::has-pr-now': {
+        data: { number: 42 },
+        fetchedAt: NOW
+      }
+    }
+
+    worktrees.sort(buildWorktreeComparator('recent', null, repoMap, prCache, NOW))
+
+    expect(worktrees.map((worktree) => worktree.id)).toEqual(['live-pr', 'stale-linked'])
+  })
+
+  it('keeps linkedPR ordering when branch PR cache has not been fetched yet', () => {
+    const coldCache = makeWorktree({
+      id: 'cold-cache',
+      displayName: 'Cold Cache',
+      branch: 'refs/heads/not-fetched-yet',
+      linkedPR: 17
+    })
+    const plain = makeWorktree({
+      id: 'plain',
+      displayName: 'Plain',
+      branch: 'refs/heads/plain'
+    })
+    const worktrees = [plain, coldCache]
+
+    worktrees.sort(buildWorktreeComparator('recent', null, repoMap, {}, NOW))
+
+    expect(worktrees.map((worktree) => worktree.id)).toEqual(['cold-cache', 'plain'])
   })
 })

@@ -1,5 +1,6 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
+import type { Worktree } from '../../../../shared/types'
 import {
   findWorktreeById,
   applyWorktreeUpdates,
@@ -7,6 +8,33 @@ import {
   type WorktreeSlice
 } from './worktree-helpers'
 export type { WorktreeSlice, WorktreeDeleteState } from './worktree-helpers'
+
+function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): boolean {
+  if (!current || current.length !== next.length) {
+    return false
+  }
+
+  return current.every((worktree, index) => {
+    const candidate = next[index]
+    return (
+      worktree.id === candidate.id &&
+      worktree.repoId === candidate.repoId &&
+      worktree.path === candidate.path &&
+      worktree.head === candidate.head &&
+      worktree.branch === candidate.branch &&
+      worktree.isBare === candidate.isBare &&
+      worktree.isMainWorktree === candidate.isMainWorktree &&
+      worktree.displayName === candidate.displayName &&
+      worktree.comment === candidate.comment &&
+      worktree.linkedIssue === candidate.linkedIssue &&
+      worktree.linkedPR === candidate.linkedPR &&
+      worktree.isArchived === candidate.isArchived &&
+      worktree.isUnread === candidate.isUnread &&
+      worktree.sortOrder === candidate.sortOrder &&
+      worktree.lastActivityAt === candidate.lastActivityAt
+    )
+  })
+}
 
 export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> = (set, get) => ({
   worktreesByRepo: {},
@@ -17,7 +45,15 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   fetchWorktrees: async (repoId) => {
     try {
       const worktrees = await window.api.worktrees.list({ repoId })
+      const current = get().worktreesByRepo[repoId]
+      if (areWorktreesEqual(current, worktrees)) {
+        return
+      }
+
       set((s) => ({
+        // Why: active worktrees can change branches entirely from a terminal.
+        // We refresh that live git identity into renderer state, but only bump
+        // sortEpoch when git actually reports a different worktree payload.
         worktreesByRepo: { ...s.worktreesByRepo, [repoId]: worktrees },
         sortEpoch: s.sortEpoch + 1
       }))

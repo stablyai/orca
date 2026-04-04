@@ -38,8 +38,11 @@ const WorktreeList = React.memo(function WorktreeList() {
   const needsTabs = showActiveOnly || sortBy === 'recent'
   const tabsByWorktree = useAppStore((s) => (needsTabs ? s.tabsByWorktree : null))
 
-  // PR cache only when grouping by pr-status
-  const prCache = useAppStore((s) => (groupBy === 'pr-status' ? s.prCache : null))
+  // PR cache is needed for PR-status grouping and for recent sorting, which
+  // incorporates whether the current branch has a live PR attached.
+  const prCache = useAppStore((s) =>
+    groupBy === 'pr-status' || sortBy === 'recent' ? s.prCache : null
+  )
 
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -69,12 +72,14 @@ const WorktreeList = React.memo(function WorktreeList() {
       .filter((w) => !w.isArchived)
     const currentRepoMap = new Map(state.repos.map((r) => [r.id, r]))
     const currentTabs = state.tabsByWorktree
-    allWorktrees.sort(buildWorktreeComparator(sortBy, currentTabs, currentRepoMap, Date.now()))
+    allWorktrees.sort(
+      buildWorktreeComparator(sortBy, currentTabs, currentRepoMap, state.prCache, Date.now())
+    )
     sortedIdsRef.current = allWorktrees.map((w) => w.id)
     // sortEpoch is an intentional trigger: it's not read inside the memo, but
     // its change signals that the sort order should be recomputed.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [sortEpoch, sortBy])
+  }, [sortEpoch, sortBy, prCache])
 
   // Flatten, filter, and apply stable sort order
   const worktrees = useMemo(() => {
