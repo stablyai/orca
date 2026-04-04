@@ -74,10 +74,12 @@ export function FileResultRow({
               )}
             />
             <File size={12} className="flex-shrink-0 text-muted-foreground" />
-            <span className="text-xs text-foreground truncate">{fileName}</span>
-            {dirPath && (
-              <span className="text-[10px] text-muted-foreground truncate ml-1">{dirPath}</span>
-            )}
+            <span className="min-w-0 flex-1 truncate text-left text-xs">
+              <span className="text-foreground">{fileName}</span>
+              {dirPath && (
+                <span className="ml-1.5 text-[10px] text-muted-foreground">{dirPath}</span>
+              )}
+            </span>
             <span className="ml-auto text-[10px] text-muted-foreground flex-shrink-0 bg-muted/80 rounded-full px-1.5">
               {fileResult.matches.length}
             </span>

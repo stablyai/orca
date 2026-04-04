@@ -943,12 +943,10 @@ function UncommittedEntryRow({
       >
         <StatusIcon className="size-3.5 shrink-0" style={{ color: STATUS_COLORS[entry.status] }} />
         <div className="min-w-0 flex-1 text-xs">
-          <div className="flex items-center gap-1.5">
-            <span className="min-w-0 truncate text-foreground">{fileName}</span>
-            {dirPath && (
-              <span className="truncate text-[11px] text-muted-foreground">{dirPath}</span>
-            )}
-          </div>
+          <span className="min-w-0 block truncate">
+            <span className="text-foreground">{fileName}</span>
+            {dirPath && <span className="ml-1.5 text-[11px] text-muted-foreground">{dirPath}</span>}
+          </span>
           {conflictLabel && (
             <div className="truncate text-[11px] text-muted-foreground">{conflictLabel}</div>
           )}

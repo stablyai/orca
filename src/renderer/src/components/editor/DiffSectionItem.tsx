@@ -101,11 +101,11 @@ export function DiffSectionItem({
         ) : (
           <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
         )}
-        <span className="font-medium">
-          {fileName}
-          {section.dirty && <span className="text-muted-foreground ml-1">M</span>}
+        <span className="min-w-0 flex-1 truncate">
+          <span className="font-medium">{fileName}</span>
+          {section.dirty && <span className="text-muted-foreground font-medium ml-1">M</span>}
+          {dirPath && <span className="text-muted-foreground text-xs ml-2">{dirPath}</span>}
         </span>
-        {dirPath && <span className="text-muted-foreground text-xs">{dirPath}</span>}
         <span
           className={cn(
             'text-xs font-bold ml-auto',
