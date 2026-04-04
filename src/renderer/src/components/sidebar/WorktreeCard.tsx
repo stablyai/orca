@@ -124,9 +124,17 @@ const WorktreeCard = React.memo(function WorktreeCard({
           </div>
         )}
 
-        {/* Line 1: Worktree name */}
-        <div className="text-[14px] font-semibold text-foreground truncate leading-tight">
-          {worktree.displayName}
+        {/* Line 1: Repo folder icon + Worktree name */}
+        <div className="flex items-center gap-2 min-w-0">
+          {repo && (
+            <svg viewBox="0 0 20 20" fill={repo.badgeColor} className="size-4 shrink-0" aria-hidden>
+              <path d="M3.5 4A1.5 1.5 0 0 0 2 5.5V7h3.879a2.5 2.5 0 0 1 1.768.732l1.414 1.415a.5.5 0 0 0 .354.146H18V7.5A1.5 1.5 0 0 0 16.5 6h-5.086a1 1 0 0 1-.707-.293L9.293 4.293A1 1 0 0 0 8.586 4H3.5Z" />
+              <path d="M2 9.5V14.5A1.5 1.5 0 0 0 3.5 16h13a1.5 1.5 0 0 0 1.5-1.5v-5H9.415a2.5 2.5 0 0 1-1.768-.732L6.232 7.354A.5.5 0 0 0 5.879 7.207H2V9.5Z" />
+            </svg>
+          )}
+          <span className="text-[14px] font-semibold text-foreground truncate leading-tight">
+            {worktree.displayName}
+          </span>
         </div>
 
         {/* Line 2: PR info (only if PR exists and pr card property is enabled) */}
