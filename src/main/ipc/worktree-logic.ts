@@ -74,7 +74,7 @@ export function areWorktreePathsEqual(
   rightPath: string,
   platform = process.platform
 ): boolean {
-  if (platform === 'win32') {
+  if (platform === 'win32' || looksLikeWindowsPath(leftPath) || looksLikeWindowsPath(rightPath)) {
     const left = win32.normalize(win32.resolve(leftPath))
     const right = win32.normalize(win32.resolve(rightPath))
     // Why: `git worktree list` can report the same Windows path with different
@@ -86,6 +86,10 @@ export function areWorktreePathsEqual(
   const left = posix.normalize(posix.resolve(leftPath))
   const right = posix.normalize(posix.resolve(rightPath))
   return left === right
+}
+
+function looksLikeWindowsPath(pathValue: string): boolean {
+  return /^[A-Za-z]:[\\/]/.test(pathValue) || pathValue.startsWith('\\\\')
 }
 
 /**
