@@ -1,8 +1,9 @@
 import React, { useMemo } from 'react'
-import { ChevronRight, File, Copy } from 'lucide-react'
+import { ChevronRight, Copy } from 'lucide-react'
 import { basename, dirname } from '@/lib/path'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import {
   ContextMenu,
   ContextMenuTrigger,
@@ -59,41 +60,54 @@ export function FileResultRow({
   return (
     <div className="pt-1.5">
       {/* File header with context menu */}
-      <ContextMenu>
-        <ContextMenuTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            className="h-auto w-full justify-start gap-1 rounded-none px-2 py-0.5 text-left group"
-            onClick={onToggleCollapse}
-          >
-            <ChevronRight
-              className={cn(
-                'size-3 flex-shrink-0 text-muted-foreground transition-transform',
-                !collapsed && 'rotate-90'
-              )}
-            />
-            <File size={12} className="flex-shrink-0 text-muted-foreground" />
-            <span className="min-w-0 flex-1 truncate text-left text-xs">
-              <span className="text-foreground">{fileName}</span>
-              {dirPath && (
-                <span className="ml-1.5 text-[10px] text-muted-foreground">{dirPath}</span>
-              )}
-            </span>
-            <span className="ml-auto text-[10px] text-muted-foreground flex-shrink-0 bg-muted/80 rounded-full px-1.5">
-              {fileResult.matches.length}
-            </span>
-          </Button>
-        </ContextMenuTrigger>
-        <ContextMenuContent>
-          <ContextMenuItem
-            onClick={() => window.api.ui.writeClipboardText(fileResult.relativePath)}
-          >
-            <Copy className="size-3.5" />
-            Copy Path
-          </ContextMenuItem>
-        </ContextMenuContent>
-      </ContextMenu>
+      <TooltipProvider delayDuration={400}>
+        <Tooltip>
+          <ContextMenu>
+            <ContextMenuTrigger asChild>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-auto w-full justify-start gap-1 rounded-none px-2 py-0.5 text-left group"
+                  onClick={onToggleCollapse}
+                >
+                  <ChevronRight
+                    className={cn(
+                      'size-3 flex-shrink-0 text-muted-foreground transition-transform',
+                      !collapsed && 'rotate-90'
+                    )}
+                  />
+                  <div className="min-w-0 flex-1 text-xs">
+                    <span className="min-w-0 block truncate">
+                      <span className="text-foreground">{fileName}</span>
+                      {dirPath && (
+                        <span className="ml-1.5 text-[11px] text-muted-foreground">{dirPath}</span>
+                      )}
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground flex-shrink-0 bg-muted/80 rounded-full px-1.5">
+                    {fileResult.matches.length}
+                  </span>
+                </Button>
+              </TooltipTrigger>
+            </ContextMenuTrigger>
+            <ContextMenuContent>
+              <ContextMenuItem
+                onClick={() => window.api.ui.writeClipboardText(fileResult.relativePath)}
+              >
+                <Copy className="size-3.5" />
+                Copy Path
+              </ContextMenuItem>
+            </ContextMenuContent>
+          </ContextMenu>
+          {/* Why: the row label intentionally truncates long parent paths to
+             keep the result list compact, so the tooltip preserves the full
+             relative path for copy/verification without widening the row. */}
+          <TooltipContent side="top" sideOffset={6}>
+            {fileResult.relativePath}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     </div>
   )
 }
