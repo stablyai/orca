@@ -1,20 +1,12 @@
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import {
-  Search as SearchIcon,
-  CaseSensitive,
-  WholeWord,
-  Regex,
-  ChevronRight,
-  X,
-  ChevronDown,
-  Loader2
-} from 'lucide-react'
+import { Search as SearchIcon, CaseSensitive, WholeWord, Regex, X, Loader2 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import type { SearchFileResult, SearchMatch } from '../../../../shared/types'
 import { buildSearchRows } from './search-rows'
 import { cancelRevealFrame, openMatchResult } from './search-match-open'
+import { SearchFilters } from './SearchFilters'
 import { ToggleButton, FileResultRow, MatchResultRow } from './SearchResultItems'
 
 const SEARCH_DEBOUNCE_MS = 300
@@ -347,42 +339,20 @@ export default function Search(): React.JSX.Element {
           </ToggleButton>
         </div>
 
-        <Button
-          type="button"
-          variant="ghost"
-          className="h-auto justify-start gap-1 self-start px-0 text-[10px] text-muted-foreground hover:text-foreground"
-          onClick={() => setShowFilters(!showFilters)}
-        >
-          {showFilters ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
-          <span>files to include/exclude</span>
-        </Button>
-
-        {showFilters && (
-          <div className="flex flex-col gap-1">
-            <input
-              type="text"
-              className="bg-input/50 border border-border rounded-sm px-2 py-1 text-xs outline-none focus:border-ring text-foreground placeholder:text-muted-foreground"
-              placeholder="files to include (e.g. *.ts, src/**)"
-              value={fileSearchIncludePattern}
-              onChange={(e) => {
-                updateActiveSearchState({ includePattern: e.target.value })
-                rerunSearch()
-              }}
-              spellCheck={false}
-            />
-            <input
-              type="text"
-              className="bg-input/50 border border-border rounded-sm px-2 py-1 text-xs outline-none focus:border-ring text-foreground placeholder:text-muted-foreground"
-              placeholder="files to exclude (e.g. *.min.js, dist/**)"
-              value={fileSearchExcludePattern}
-              onChange={(e) => {
-                updateActiveSearchState({ excludePattern: e.target.value })
-                rerunSearch()
-              }}
-              spellCheck={false}
-            />
-          </div>
-        )}
+        <SearchFilters
+          showFilters={showFilters}
+          includePattern={fileSearchIncludePattern}
+          excludePattern={fileSearchExcludePattern}
+          onToggleFilters={() => setShowFilters(!showFilters)}
+          onIncludeChange={(value) => {
+            updateActiveSearchState({ includePattern: value })
+            rerunSearch()
+          }}
+          onExcludeChange={(value) => {
+            updateActiveSearchState({ excludePattern: value })
+            rerunSearch()
+          }}
+        />
       </div>
 
       <div ref={resultsScrollRef} className="flex-1 min-h-0 overflow-y-auto scrollbar-sleek">
