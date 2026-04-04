@@ -1,18 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { FilePlus, FolderPlus, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { detectLanguage } from '@/lib/language-detect'
 import { dirname, normalizeRelativePath } from '@/lib/path'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
 import { FileDeleteDialog } from './FileDeleteDialog'
+import { FileExplorerBackgroundMenu } from './FileExplorerBackgroundMenu'
 import { FileExplorerRow, InlineInputRow } from './FileExplorerRow'
 import type { TreeNode } from './file-explorer-types'
 import { splitPathSegments } from './path-tree'
@@ -394,31 +389,13 @@ export default function FileExplorer(): React.JSX.Element {
         </div>
       </ScrollArea>
 
-      <DropdownMenu open={bgMenuOpen} onOpenChange={setBgMenuOpen} modal={false}>
-        <DropdownMenuTrigger asChild>
-          <button
-            aria-hidden
-            tabIndex={-1}
-            className="pointer-events-none fixed size-px opacity-0"
-            style={{ left: bgMenuPoint.x, top: bgMenuPoint.y }}
-          />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          className="w-48"
-          sideOffset={0}
-          align="start"
-          onCloseAutoFocus={(e) => e.preventDefault()}
-        >
-          <DropdownMenuItem onSelect={() => startNew('file', worktreePath, 0)}>
-            <FilePlus />
-            New File
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => startNew('folder', worktreePath, 0)}>
-            <FolderPlus />
-            New Folder
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <FileExplorerBackgroundMenu
+        open={bgMenuOpen}
+        onOpenChange={setBgMenuOpen}
+        point={bgMenuPoint}
+        worktreePath={worktreePath}
+        onStartNew={startNew}
+      />
 
       <FileDeleteDialog
         pendingDelete={pendingDelete}
