@@ -124,6 +124,10 @@ describe('computeSmartScore', () => {
       linkedPR: null
     })
     const prCache = {
+      '/tmp/repo-1::no-pr-anymore': {
+        data: null,
+        fetchedAt: NOW
+      },
       '/tmp/repo-1::has-pr-now': {
         data: { number: 42 },
         fetchedAt: NOW
@@ -238,6 +242,10 @@ describe('buildWorktreeComparator', () => {
     })
     const worktrees = [staleLinked, livePR]
     const prCache = {
+      '/tmp/repo-1::no-pr-anymore': {
+        data: null,
+        fetchedAt: NOW
+      },
       '/tmp/repo-1::has-pr-now': {
         data: { number: 42 },
         fetchedAt: NOW
