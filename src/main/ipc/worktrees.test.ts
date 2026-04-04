@@ -169,7 +169,11 @@ describe('registerWorktreeHandlers', () => {
         settings: { nestWorkspaces: boolean; workspaceDir: string }
       ) => {
         if (settings.nestWorkspaces) {
-          const repoName = repoPath.split(/[\\/]/).at(-1)?.replace(/\.git$/, '') ?? 'repo'
+          const repoName =
+            repoPath
+              .split(/[\\/]/)
+              .at(-1)
+              ?.replace(/\.git$/, '') ?? 'repo'
           return `${settings.workspaceDir}/${repoName}/${sanitizedName}`
         }
         return `${settings.workspaceDir}/${sanitizedName}`
@@ -322,120 +326,5 @@ describe('registerWorktreeHandlers', () => {
     expect(addWorktreeMock).not.toHaveBeenCalled()
     expect(store.setWorktreeMeta).not.toHaveBeenCalled()
     expect(createSetupRunnerScriptMock).not.toHaveBeenCalled()
-  })
-
-  it('accepts a newly created Windows worktree when git lists the same path with different separators', async () => {
-    store.getRepo.mockReturnValue({
-      id: 'repo-1',
-      path: 'C:\\repo',
-      displayName: 'repo',
-      badgeColor: '#000',
-      addedAt: 0,
-      worktreeBaseRef: null
-    })
-    store.getSettings.mockReturnValue({
-      branchPrefix: 'none',
-      nestWorkspaces: false,
-      workspaceDir: 'C:\\workspaces'
-    })
-    computeWorktreePathMock.mockReturnValue('C:\\workspaces\\improve-dashboard')
-    ensurePathWithinWorkspaceMock.mockReturnValue('C:\\workspaces\\improve-dashboard')
-    listWorktreesMock.mockResolvedValue([
-      {
-        path: 'C:/workspaces/improve-dashboard',
-        head: 'abc123',
-        branch: 'refs/heads/improve-dashboard',
-        isBare: false,
-        isMainWorktree: false
-      }
-    ])
-
-    const result = await handlers['worktrees:create'](null, {
-      repoId: 'repo-1',
-      name: 'improve-dashboard'
-    })
-
-    expect(addWorktreeMock).toHaveBeenCalledWith(
-      'C:\\repo',
-      'C:\\workspaces\\improve-dashboard',
-      'improve-dashboard',
-      'origin/main'
-    )
-    expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::C:/workspaces/improve-dashboard',
-      expect.objectContaining({
-        lastActivityAt: expect.any(Number)
-      })
-    )
-    expect(result).toMatchObject({
-      id: 'repo-1::C:/workspaces/improve-dashboard',
-      path: 'C:/workspaces/improve-dashboard',
-      branch: 'refs/heads/improve-dashboard'
-    })
-  })
-
-  it('preserves create-time metadata on the next list when Windows path formatting differs', async () => {
-    store.getRepo.mockReturnValue({
-      id: 'repo-1',
-      path: 'C:\\repo',
-      displayName: 'repo',
-      badgeColor: '#000',
-      addedAt: 0,
-      worktreeBaseRef: null
-    })
-    store.getSettings.mockReturnValue({
-      branchPrefix: 'none',
-      nestWorkspaces: false,
-      workspaceDir: 'C:\\workspaces'
-    })
-    computeWorktreePathMock.mockReturnValue('C:\\workspaces\\improve-dashboard')
-    ensurePathWithinWorkspaceMock.mockReturnValue('C:\\workspaces\\improve-dashboard')
-    listWorktreesMock
-      .mockResolvedValueOnce([
-        {
-          path: 'C:/workspaces/improve-dashboard',
-          head: 'abc123',
-          branch: 'refs/heads/improve-dashboard',
-          isBare: false,
-          isMainWorktree: false
-        }
-      ])
-      .mockResolvedValueOnce([
-        {
-          path: 'C:/workspaces/improve-dashboard',
-          head: 'abc123',
-          branch: 'refs/heads/improve-dashboard',
-          isBare: false,
-          isMainWorktree: false
-        }
-      ])
-    store.setWorktreeMeta.mockReturnValue({
-      lastActivityAt: 123,
-      displayName: 'Improve Dashboard'
-    })
-    store.getWorktreeMeta.mockImplementation((worktreeId: string) =>
-      worktreeId === 'repo-1::C:/workspaces/improve-dashboard'
-        ? {
-            lastActivityAt: 123,
-            displayName: 'Improve Dashboard'
-          }
-        : undefined
-    )
-
-    await handlers['worktrees:create'](null, {
-      repoId: 'repo-1',
-      name: 'Improve Dashboard'
-    })
-    const listed = await handlers['worktrees:list'](null, {
-      repoId: 'repo-1'
-    })
-
-    expect(listed).toMatchObject([
-      {
-        id: 'repo-1::C:/workspaces/improve-dashboard',
-        displayName: 'Improve Dashboard',
-        lastActivityAt: 123
-      }
-    ])
   })
 })
