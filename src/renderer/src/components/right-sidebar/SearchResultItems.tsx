@@ -68,9 +68,8 @@ export function FileResultRow({
             onClick={onToggleCollapse}
           >
             <ChevronRight
-              size={12}
               className={cn(
-                'flex-shrink-0 text-muted-foreground transition-transform',
+                'size-3 flex-shrink-0 text-muted-foreground transition-transform',
                 !collapsed && 'rotate-90'
               )}
             />

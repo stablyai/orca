@@ -137,6 +137,14 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           ptyIdsByTabId: nextPtyIdsByTabId,
           terminalLayoutsByTabId: nextLayouts,
           deleteStateByWorktreeId: nextDeleteState,
+          fileSearchStateByWorktree: (() => {
+            const nextSearch = { ...s.fileSearchStateByWorktree }
+            // Why: file search UI state is worktree-scoped. Removing the worktree
+            // must also remove its cached query/results so another worktree never
+            // inherits stale matches from a path that no longer exists.
+            delete nextSearch[worktreeId]
+            return nextSearch
+          })(),
           activeWorktreeId: s.activeWorktreeId === worktreeId ? null : s.activeWorktreeId,
           activeTabId: s.activeTabId && tabIds.has(s.activeTabId) ? null : s.activeTabId,
           openFiles: newOpenFiles,

@@ -20,6 +20,7 @@ import { ToggleButton, FileResultRow, MatchResultRow } from './SearchResultItems
 const SEARCH_DEBOUNCE_MS = 300
 const SEARCH_MAX_RESULTS = 2000
 const SEARCH_VIRTUAL_OVERSCAN = 12
+const EMPTY_COLLAPSED_FILES = new Set<string>()
 
 export default function Search(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
@@ -27,24 +28,20 @@ export default function Search(): React.JSX.Element {
   const openFile = useAppStore((s) => s.openFile)
   const setPendingEditorReveal = useAppStore((s) => s.setPendingEditorReveal)
 
-  const fileSearchQuery = useAppStore((s) => s.fileSearchQuery)
-  const fileSearchCaseSensitive = useAppStore((s) => s.fileSearchCaseSensitive)
-  const fileSearchWholeWord = useAppStore((s) => s.fileSearchWholeWord)
-  const fileSearchUseRegex = useAppStore((s) => s.fileSearchUseRegex)
-  const fileSearchIncludePattern = useAppStore((s) => s.fileSearchIncludePattern)
-  const fileSearchExcludePattern = useAppStore((s) => s.fileSearchExcludePattern)
-  const fileSearchResults = useAppStore((s) => s.fileSearchResults)
-  const fileSearchLoading = useAppStore((s) => s.fileSearchLoading)
-  const fileSearchCollapsedFiles = useAppStore((s) => s.fileSearchCollapsedFiles)
+  const searchState = useAppStore((s) =>
+    activeWorktreeId ? s.fileSearchStateByWorktree[activeWorktreeId] : null
+  )
+  const fileSearchQuery = searchState?.query ?? ''
+  const fileSearchCaseSensitive = searchState?.caseSensitive ?? false
+  const fileSearchWholeWord = searchState?.wholeWord ?? false
+  const fileSearchUseRegex = searchState?.useRegex ?? false
+  const fileSearchIncludePattern = searchState?.includePattern ?? ''
+  const fileSearchExcludePattern = searchState?.excludePattern ?? ''
+  const fileSearchResults = searchState?.results ?? null
+  const fileSearchLoading = searchState?.loading ?? false
+  const fileSearchCollapsedFiles = searchState?.collapsedFiles ?? EMPTY_COLLAPSED_FILES
 
-  const setFileSearchQuery = useAppStore((s) => s.setFileSearchQuery)
-  const setFileSearchCaseSensitive = useAppStore((s) => s.setFileSearchCaseSensitive)
-  const setFileSearchWholeWord = useAppStore((s) => s.setFileSearchWholeWord)
-  const setFileSearchUseRegex = useAppStore((s) => s.setFileSearchUseRegex)
-  const setFileSearchIncludePattern = useAppStore((s) => s.setFileSearchIncludePattern)
-  const setFileSearchExcludePattern = useAppStore((s) => s.setFileSearchExcludePattern)
-  const setFileSearchResults = useAppStore((s) => s.setFileSearchResults)
-  const setFileSearchLoading = useAppStore((s) => s.setFileSearchLoading)
+  const updateFileSearchState = useAppStore((s) => s.updateFileSearchState)
   const toggleFileSearchCollapsedFile = useAppStore((s) => s.toggleFileSearchCollapsedFile)
   const clearFileSearch = useAppStore((s) => s.clearFileSearch)
 
@@ -56,14 +53,41 @@ export default function Search(): React.JSX.Element {
   const revealRafRef = useRef<number | null>(null)
   const revealInnerRafRef = useRef<number | null>(null)
 
+  const updateActiveSearchState = useCallback(
+    (updates: Partial<NonNullable<typeof searchState>>) => {
+      if (!activeWorktreeId) {
+        return
+      }
+      updateFileSearchState(activeWorktreeId, updates)
+    },
+    [activeWorktreeId, updateFileSearchState]
+  )
+
+  const clearActiveSearch = useCallback(() => {
+    if (!activeWorktreeId) {
+      return
+    }
+    clearFileSearch(activeWorktreeId)
+  }, [activeWorktreeId, clearFileSearch])
+
+  const toggleActiveCollapsedFile = useCallback(
+    (filePath: string) => {
+      if (!activeWorktreeId) {
+        return
+      }
+      toggleFileSearchCollapsedFile(activeWorktreeId, filePath)
+    },
+    [activeWorktreeId, toggleFileSearchCollapsedFile]
+  )
+
   const cancelPendingSearch = useCallback(() => {
     latestSearchIdRef.current += 1
     if (searchTimerRef.current) {
       clearTimeout(searchTimerRef.current)
       searchTimerRef.current = null
     }
-    setFileSearchLoading(false)
-  }, [setFileSearchLoading])
+    updateActiveSearchState({ loading: false })
+  }, [updateActiveSearchState])
 
   // Find active worktree path
   const worktreePath = useMemo(() => {
@@ -96,9 +120,9 @@ export default function Search(): React.JSX.Element {
   useEffect(() => {
     if (!worktreePath) {
       cancelPendingSearch()
-      setFileSearchResults(null)
+      updateActiveSearchState({ results: null })
     }
-  }, [worktreePath, cancelPendingSearch, setFileSearchResults])
+  }, [worktreePath, cancelPendingSearch, updateActiveSearchState])
 
   // Why: large search result sets can update while the user is still typing.
   // Deferring the heavy row-model update keeps the input responsive instead of
@@ -158,12 +182,11 @@ export default function Search(): React.JSX.Element {
       }
 
       if (!query.trim() || !worktreePath) {
-        setFileSearchResults(null)
-        setFileSearchLoading(false)
+        updateActiveSearchState({ results: null, loading: false })
         return
       }
 
-      setFileSearchLoading(true)
+      updateActiveSearchState({ loading: true })
       searchTimerRef.current = setTimeout(async () => {
         searchTimerRef.current = null
         try {
@@ -171,51 +194,56 @@ export default function Search(): React.JSX.Element {
           const results = await window.api.fs.search({
             query: query.trim(),
             rootPath: worktreePath,
-            caseSensitive: state.fileSearchCaseSensitive,
-            wholeWord: state.fileSearchWholeWord,
-            useRegex: state.fileSearchUseRegex,
-            includePattern: state.fileSearchIncludePattern || undefined,
-            excludePattern: state.fileSearchExcludePattern || undefined,
+            caseSensitive:
+              state.fileSearchStateByWorktree[activeWorktreeId!]?.caseSensitive ?? false,
+            wholeWord: state.fileSearchStateByWorktree[activeWorktreeId!]?.wholeWord ?? false,
+            useRegex: state.fileSearchStateByWorktree[activeWorktreeId!]?.useRegex ?? false,
+            includePattern:
+              state.fileSearchStateByWorktree[activeWorktreeId!]?.includePattern || undefined,
+            excludePattern:
+              state.fileSearchStateByWorktree[activeWorktreeId!]?.excludePattern || undefined,
             maxResults: SEARCH_MAX_RESULTS
           })
           if (latestSearchIdRef.current === searchId) {
-            setFileSearchResults(results)
+            updateActiveSearchState({ results })
           }
         } catch (err) {
           console.error('Search failed:', err)
           if (latestSearchIdRef.current === searchId) {
-            setFileSearchResults({ files: [], totalMatches: 0, truncated: false })
+            updateActiveSearchState({
+              results: { files: [], totalMatches: 0, truncated: false }
+            })
           }
         } finally {
           if (latestSearchIdRef.current === searchId) {
-            setFileSearchLoading(false)
+            updateActiveSearchState({ loading: false })
           }
         }
       }, SEARCH_DEBOUNCE_MS)
     },
-    [worktreePath, setFileSearchResults, setFileSearchLoading]
+    [worktreePath, updateActiveSearchState, activeWorktreeId]
   )
 
   const handleClearSearch = useCallback(() => {
     cancelPendingSearch()
-    clearFileSearch()
-  }, [cancelPendingSearch, clearFileSearch])
+    clearActiveSearch()
+  }, [cancelPendingSearch, clearActiveSearch])
 
   // Re-execute search from event handlers when options change
   const rerunSearch = useCallback(() => {
-    const q = useAppStore.getState().fileSearchQuery
+    const q = useAppStore.getState().fileSearchStateByWorktree[activeWorktreeId!]?.query ?? ''
     if (q.trim()) {
       executeSearch(q)
     }
-  }, [executeSearch])
+  }, [executeSearch, activeWorktreeId])
 
   const handleQueryChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const val = e.target.value
-      setFileSearchQuery(val)
+      updateActiveSearchState({ query: val })
       executeSearch(val)
     },
-    [setFileSearchQuery, executeSearch]
+    [updateActiveSearchState, executeSearch]
   )
 
   const handleKeyDown = useCallback(
@@ -260,9 +288,7 @@ export default function Search(): React.JSX.Element {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Search input area */}
       <div className="flex flex-col gap-1.5 p-2 border-b border-border">
-        {/* Main search row */}
         <div className="flex items-center gap-1 bg-input/50 border border-border rounded-sm px-1.5 focus-within:border-ring">
           <SearchIcon size={14} className="text-muted-foreground flex-shrink-0" />
           <input
@@ -289,11 +315,10 @@ export default function Search(): React.JSX.Element {
               <X size={12} />
             </Button>
           )}
-          {/* Toggle buttons */}
           <ToggleButton
             active={fileSearchCaseSensitive}
             onClick={() => {
-              setFileSearchCaseSensitive(!fileSearchCaseSensitive)
+              updateActiveSearchState({ caseSensitive: !fileSearchCaseSensitive })
               rerunSearch()
             }}
             title="Match Case"
@@ -303,7 +328,7 @@ export default function Search(): React.JSX.Element {
           <ToggleButton
             active={fileSearchWholeWord}
             onClick={() => {
-              setFileSearchWholeWord(!fileSearchWholeWord)
+              updateActiveSearchState({ wholeWord: !fileSearchWholeWord })
               rerunSearch()
             }}
             title="Match Whole Word"
@@ -313,7 +338,7 @@ export default function Search(): React.JSX.Element {
           <ToggleButton
             active={fileSearchUseRegex}
             onClick={() => {
-              setFileSearchUseRegex(!fileSearchUseRegex)
+              updateActiveSearchState({ useRegex: !fileSearchUseRegex })
               rerunSearch()
             }}
             title="Use Regular Expression"
@@ -322,7 +347,6 @@ export default function Search(): React.JSX.Element {
           </ToggleButton>
         </div>
 
-        {/* Files to include/exclude toggle */}
         <Button
           type="button"
           variant="ghost"
@@ -341,7 +365,7 @@ export default function Search(): React.JSX.Element {
               placeholder="files to include (e.g. *.ts, src/**)"
               value={fileSearchIncludePattern}
               onChange={(e) => {
-                setFileSearchIncludePattern(e.target.value)
+                updateActiveSearchState({ includePattern: e.target.value })
                 rerunSearch()
               }}
               spellCheck={false}
@@ -352,7 +376,7 @@ export default function Search(): React.JSX.Element {
               placeholder="files to exclude (e.g. *.min.js, dist/**)"
               value={fileSearchExcludePattern}
               onChange={(e) => {
-                setFileSearchExcludePattern(e.target.value)
+                updateActiveSearchState({ excludePattern: e.target.value })
                 rerunSearch()
               }}
               spellCheck={false}
@@ -361,7 +385,6 @@ export default function Search(): React.JSX.Element {
         )}
       </div>
 
-      {/* Results area */}
       <div ref={resultsScrollRef} className="flex-1 min-h-0 overflow-y-auto scrollbar-sleek">
         {searchRows.length > 0 && (
           <div
@@ -395,9 +418,7 @@ export default function Search(): React.JSX.Element {
                     <FileResultRow
                       fileResult={row.fileResult}
                       collapsed={row.collapsed}
-                      onToggleCollapse={() =>
-                        toggleFileSearchCollapsedFile(row.fileResult.filePath)
-                      }
+                      onToggleCollapse={() => toggleActiveCollapsedFile(row.fileResult.filePath)}
                     />
                   )}
                   {row.type === 'match' && (

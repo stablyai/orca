@@ -196,25 +196,26 @@ export type EditorSlice = {
   ) => void
 
   // File search state
-  fileSearchQuery: string
-  fileSearchCaseSensitive: boolean
-  fileSearchWholeWord: boolean
-  fileSearchUseRegex: boolean
-  fileSearchIncludePattern: string
-  fileSearchExcludePattern: string
-  fileSearchResults: SearchResult | null
-  fileSearchLoading: boolean
-  fileSearchCollapsedFiles: Set<string>
-  setFileSearchQuery: (query: string) => void
-  setFileSearchCaseSensitive: (v: boolean) => void
-  setFileSearchWholeWord: (v: boolean) => void
-  setFileSearchUseRegex: (v: boolean) => void
-  setFileSearchIncludePattern: (v: string) => void
-  setFileSearchExcludePattern: (v: string) => void
-  setFileSearchResults: (results: SearchResult | null) => void
-  setFileSearchLoading: (loading: boolean) => void
-  toggleFileSearchCollapsedFile: (filePath: string) => void
-  clearFileSearch: () => void
+  fileSearchStateByWorktree: Record<
+    string,
+    {
+      query: string
+      caseSensitive: boolean
+      wholeWord: boolean
+      useRegex: boolean
+      includePattern: string
+      excludePattern: string
+      results: SearchResult | null
+      loading: boolean
+      collapsedFiles: Set<string>
+    }
+  >
+  updateFileSearchState: (
+    worktreeId: string,
+    updates: Partial<EditorSlice['fileSearchStateByWorktree'][string]>
+  ) => void
+  toggleFileSearchCollapsedFile: (worktreeId: string, filePath: string) => void
+  clearFileSearch: (worktreeId: string) => void
 
   // Editor navigation (for search result → go-to-line)
   pendingEditorReveal: {
@@ -1070,39 +1071,64 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     }),
 
   // File search
-  fileSearchQuery: '',
-  fileSearchCaseSensitive: false,
-  fileSearchWholeWord: false,
-  fileSearchUseRegex: false,
-  fileSearchIncludePattern: '',
-  fileSearchExcludePattern: '',
-  fileSearchResults: null,
-  fileSearchLoading: false,
-  fileSearchCollapsedFiles: new Set<string>(),
-  setFileSearchQuery: (query) => set({ fileSearchQuery: query }),
-  setFileSearchCaseSensitive: (v) => set({ fileSearchCaseSensitive: v }),
-  setFileSearchWholeWord: (v) => set({ fileSearchWholeWord: v }),
-  setFileSearchUseRegex: (v) => set({ fileSearchUseRegex: v }),
-  setFileSearchIncludePattern: (v) => set({ fileSearchIncludePattern: v }),
-  setFileSearchExcludePattern: (v) => set({ fileSearchExcludePattern: v }),
-  setFileSearchResults: (results) => set({ fileSearchResults: results }),
-  setFileSearchLoading: (loading) => set({ fileSearchLoading: loading }),
-  toggleFileSearchCollapsedFile: (filePath) =>
+  fileSearchStateByWorktree: {},
+  updateFileSearchState: (worktreeId, updates) =>
     set((s) => {
-      const next = new Set(s.fileSearchCollapsedFiles)
-      if (next.has(filePath)) {
-        next.delete(filePath)
-      } else {
-        next.add(filePath)
+      const current = s.fileSearchStateByWorktree[worktreeId] || {
+        query: '',
+        caseSensitive: false,
+        wholeWord: false,
+        useRegex: false,
+        includePattern: '',
+        excludePattern: '',
+        results: null,
+        loading: false,
+        collapsedFiles: new Set()
       }
-      return { fileSearchCollapsedFiles: next }
+      return {
+        fileSearchStateByWorktree: {
+          ...s.fileSearchStateByWorktree,
+          [worktreeId]: { ...current, ...updates }
+        }
+      }
     }),
-  clearFileSearch: () =>
-    set({
-      fileSearchQuery: '',
-      fileSearchResults: null,
-      fileSearchLoading: false,
-      fileSearchCollapsedFiles: new Set<string>()
+  toggleFileSearchCollapsedFile: (worktreeId, filePath) =>
+    set((s) => {
+      const current = s.fileSearchStateByWorktree[worktreeId]
+      if (!current) {
+        return s
+      }
+      const nextCollapsed = new Set(current.collapsedFiles)
+      if (nextCollapsed.has(filePath)) {
+        nextCollapsed.delete(filePath)
+      } else {
+        nextCollapsed.add(filePath)
+      }
+      return {
+        fileSearchStateByWorktree: {
+          ...s.fileSearchStateByWorktree,
+          [worktreeId]: { ...current, collapsedFiles: nextCollapsed }
+        }
+      }
+    }),
+  clearFileSearch: (worktreeId) =>
+    set((s) => {
+      const current = s.fileSearchStateByWorktree[worktreeId]
+      if (!current) {
+        return s
+      }
+      return {
+        fileSearchStateByWorktree: {
+          ...s.fileSearchStateByWorktree,
+          [worktreeId]: {
+            ...current,
+            query: '',
+            results: null,
+            loading: false,
+            collapsedFiles: new Set()
+          }
+        }
+      }
     }),
 
   // Editor navigation
