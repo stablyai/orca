@@ -15,9 +15,14 @@ globalThis.window = { api: mockApi }
 import { createWorktreeSlice } from './worktrees'
 
 function createTestStore() {
-  return create<AppState>()((...a) => ({
-    ...createWorktreeSlice(...a)
-  }))
+  return create<AppState>()(
+    (...a) =>
+      ({
+        // Why: this test isolates the worktree slice, so it only provides the
+        // state surface that `createWorktreeSlice` reads and writes.
+        ...createWorktreeSlice(...a)
+      }) as AppState
+  )
 }
 
 function makeWorktree(overrides: Partial<Worktree> & { id: string; repoId: string }): Worktree {
