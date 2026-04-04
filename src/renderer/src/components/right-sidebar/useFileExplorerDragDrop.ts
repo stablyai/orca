@@ -1,4 +1,5 @@
-import { useCallback, useRef, useState } from 'react'
+import type { RefObject } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { basename, dirname, joinPath } from '@/lib/path'
@@ -18,6 +19,8 @@ type UseFileExplorerDragDropParams = {
   expanded: Set<string>
   toggleDir: (worktreeId: string, dirPath: string) => void
   refreshDir: (dirPath: string) => Promise<void>
+  // Explorer scroll viewport used to auto-scroll while dragging near top/bottom edges
+  scrollRef: RefObject<HTMLDivElement | null>
 }
 
 type UseFileExplorerDragDropResult = {
@@ -28,6 +31,8 @@ type UseFileExplorerDragDropResult = {
   dragSourcePath: string | null
   setDragSourcePath: (path: string | null) => void
   isRootDragOver: boolean
+  // Stops the drag edge auto-scroll loop (call on drag end / unmount)
+  stopDragEdgeScroll: () => void
   rootDragHandlers: {
     onDragOver: (e: React.DragEvent) => void
     onDragEnter: (e: React.DragEvent) => void
@@ -38,12 +43,17 @@ type UseFileExplorerDragDropResult = {
 
 const ORCA_PATH_MIME = 'text/x-orca-file-path'
 
+// Native drag auto-scroll uses a very thin band; a wider zone matches IDE-style
+// tree dragging so users need not hug the scrollbar.
+const DRAG_EDGE_ZONE_PX = 48
+
 export function useFileExplorerDragDrop({
   worktreePath,
   activeWorktreeId,
   expanded,
   toggleDir,
-  refreshDir
+  refreshDir,
+  scrollRef
 }: UseFileExplorerDragDropParams): UseFileExplorerDragDropResult {
   const openFiles = useAppStore((s) => s.openFiles)
   const closeFile = useAppStore((s) => s.closeFile)
@@ -53,6 +63,48 @@ export function useFileExplorerDragDrop({
   const rootDragCounterRef = useRef(0)
   const [dropTargetDir, setDropTargetDir] = useState<string | null>(null)
   const [dragSourcePath, setDragSourcePath] = useState<string | null>(null)
+
+  const lastDragClientYRef = useRef<number | null>(null)
+  const edgeScrollRafRef = useRef<number | null>(null)
+
+  const stopDragEdgeScroll = useCallback(() => {
+    lastDragClientYRef.current = null
+    if (edgeScrollRafRef.current !== null) {
+      cancelAnimationFrame(edgeScrollRafRef.current)
+      edgeScrollRafRef.current = null
+    }
+  }, [])
+
+  useEffect(() => () => stopDragEdgeScroll(), [stopDragEdgeScroll])
+
+  // requestAnimationFrame + small per-frame deltas avoids choppy jumps from irregular dragover events
+  const tickDragEdgeScroll = useCallback(() => {
+    edgeScrollRafRef.current = null
+    const viewport = scrollRef.current
+    const clientY = lastDragClientYRef.current
+    if (!viewport || clientY == null) {
+      return
+    }
+    const rect = viewport.getBoundingClientRect()
+    const y = clientY - rect.top
+    const h = rect.height
+    const zone = DRAG_EDGE_ZONE_PX
+
+    let delta = 0
+    if (y < zone) {
+      const strength = (zone - y) / zone
+      delta = -(1.25 + strength * 9)
+    } else if (y > h - zone) {
+      const strength = (y - (h - zone)) / zone
+      delta = 1.25 + strength * 9
+    }
+
+    if (delta !== 0) {
+      const maxScroll = Math.max(0, viewport.scrollHeight - viewport.clientHeight)
+      viewport.scrollTop = Math.max(0, Math.min(maxScroll, viewport.scrollTop + delta))
+      edgeScrollRafRef.current = requestAnimationFrame(tickDragEdgeScroll)
+    }
+  }, [scrollRef])
 
   const handleMoveDrop = useCallback(
     (sourcePath: string, destDir: string) => {
@@ -124,13 +176,20 @@ export function useFileExplorerDragDrop({
   )
 
   const rootDragHandlers = {
-    onDragOver: useCallback((e: React.DragEvent) => {
-      if (!e.dataTransfer.types.includes(ORCA_PATH_MIME)) {
-        return
-      }
-      e.preventDefault()
-      e.dataTransfer.dropEffect = 'move'
-    }, []),
+    onDragOver: useCallback(
+      (e: React.DragEvent) => {
+        if (!e.dataTransfer.types.includes(ORCA_PATH_MIME)) {
+          return
+        }
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'move'
+        lastDragClientYRef.current = e.clientY
+        if (edgeScrollRafRef.current === null) {
+          edgeScrollRafRef.current = requestAnimationFrame(tickDragEdgeScroll)
+        }
+      },
+      [tickDragEdgeScroll]
+    ),
     onDragEnter: useCallback((e: React.DragEvent) => {
       if (!e.dataTransfer.types.includes(ORCA_PATH_MIME)) {
         return
@@ -149,6 +208,7 @@ export function useFileExplorerDragDrop({
     onDrop: useCallback(
       (e: React.DragEvent) => {
         e.preventDefault()
+        stopDragEdgeScroll()
         rootDragCounterRef.current = 0
         setIsRootDragOver(false)
         setDropTargetDir(null)
@@ -157,7 +217,7 @@ export function useFileExplorerDragDrop({
           handleMoveDrop(sourcePath, worktreePath)
         }
       },
-      [worktreePath, handleMoveDrop]
+      [worktreePath, handleMoveDrop, stopDragEdgeScroll]
     )
   }
 
@@ -179,6 +239,7 @@ export function useFileExplorerDragDrop({
     dragSourcePath,
     setDragSourcePath,
     isRootDragOver,
+    stopDragEdgeScroll,
     rootDragHandlers
   }
 }

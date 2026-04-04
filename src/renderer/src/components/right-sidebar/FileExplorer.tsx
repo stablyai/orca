@@ -109,13 +109,15 @@ export default function FileExplorer(): React.JSX.Element {
     dragSourcePath,
     setDragSourcePath,
     isRootDragOver,
+    stopDragEdgeScroll,
     rootDragHandlers
   } = useFileExplorerDragDrop({
     worktreePath,
     activeWorktreeId,
     expanded,
     toggleDir,
-    refreshDir
+    refreshDir,
+    scrollRef
   })
 
   useEffect(() => {
@@ -191,10 +193,6 @@ export default function FileExplorer(): React.JSX.Element {
     virtualizer
   })
 
-  // Scroll the inline input into view so the virtualizer renders it.
-  // Without this, an input created at the end of a long tree (e.g. from
-  // the background context menu) can fall outside the visible + overscan
-  // range and never appear.
   useEffect(() => {
     if (inlineInputIndex >= 0) {
       virtualizer.scrollToIndex(inlineInputIndex, { align: 'auto' })
@@ -297,7 +295,10 @@ export default function FileExplorer(): React.JSX.Element {
         onDragEnter={rootDragHandlers.onDragEnter}
         onDragLeave={rootDragHandlers.onDragLeave}
         onDrop={rootDragHandlers.onDrop}
-        onDragEnd={() => setDropTargetDir(null)}
+        onDragEnd={() => {
+          stopDragEdgeScroll()
+          setDropTargetDir(null)
+        }}
         onContextMenu={(e) => {
           const target = e.target as HTMLElement
           if (target.closest('[data-slot="context-menu-trigger"]')) {

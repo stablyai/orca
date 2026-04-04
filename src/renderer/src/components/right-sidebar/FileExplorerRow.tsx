@@ -238,7 +238,6 @@ export function FileExplorerRow({
       return
     }
     e.preventDefault()
-    e.stopPropagation()
     e.dataTransfer.dropEffect = 'move'
   }, [])
 
