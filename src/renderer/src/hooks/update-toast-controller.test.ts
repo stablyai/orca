@@ -82,6 +82,7 @@ describe('createUpdateToastController', () => {
   })
 
   it('auto-restarts after download only when the user clicked the one-click update action', async () => {
+    vi.useFakeTimers()
     const toastApi = createToastApi()
     toastApi.info.mockReturnValue('available-toast')
     const updaterApi = createUpdaterApi()
@@ -96,8 +97,10 @@ describe('createUpdateToastController', () => {
 
     controller.handleStatus({ state: 'downloaded', version: '1.2.3' })
 
+    vi.advanceTimersByTime(500)
     expect(updaterApi.quitAndInstall).toHaveBeenCalledTimes(1)
     expect(toastApi.success).not.toHaveBeenCalled()
+    vi.useRealTimers()
   })
 
   it('shows a restart toast after manual-download updates because they still need confirmation', () => {
