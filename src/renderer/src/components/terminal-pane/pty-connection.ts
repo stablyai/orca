@@ -24,6 +24,16 @@ export function connectPanePty(
   manager: PaneManager,
   deps: PtyConnectionDeps
 ): void {
+  // Why: setup commands must only run once — in the initial pane of the tab.
+  // Capture and clear the startup reference synchronously so that panes
+  // created later by splits or layout restoration cannot re-execute the
+  // setup script, which would be confusing and potentially destructive.
+  // Note: this intentionally mutates `deps` so the caller's object no
+  // longer carries the startup payload — preventing any later consumer
+  // from accidentally replaying it.
+  const paneStartup = deps.startup ?? null
+  deps.startup = undefined
+
   const onExit = (ptyId: string): void => {
     deps.clearTabPtyId(deps.tabId, ptyId)
     // The runtime graph is the CLI's source for live terminal bindings, so
@@ -55,7 +65,7 @@ export function connectPanePty(
 
   const transport = createIpcPtyTransport({
     cwd: deps.cwd,
-    env: deps.startup?.env,
+    env: paneStartup?.env,
     onPtyExit: onExit,
     onTitleChange,
     onPtySpawn,
@@ -89,11 +99,11 @@ export function connectPanePty(
       rows,
       callbacks: {
         onConnect: () => {
-          if (deps.startup?.command) {
+          if (paneStartup?.command) {
             // Why: setup commands are injected only after the PTY reports a live
             // shell connection. Writing earlier is racy with shell startup files
             // and can drop characters on slower shells.
-            transport.sendInput(`${deps.startup.command}\r`)
+            transport.sendInput(`${paneStartup.command}\r`)
           }
         },
         onData: (data) => {
