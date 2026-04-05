@@ -162,15 +162,37 @@ export function DiffSectionItem({
   return (
     <LazySection key={section.key} index={index} onVisible={loadSection}>
       <div
-        className="sticky top-0 z-10 bg-background flex items-center w-full px-3 py-1.5 text-left text-xs hover:bg-accent/30 transition-colors group cursor-pointer"
+        className="sticky top-0 z-10 bg-background flex items-center w-full px-3 py-1.5 text-left text-xs hover:bg-accent transition-colors group cursor-pointer"
         onClick={() => toggleSection(index)}
       >
         <span className="min-w-0 flex-1 truncate text-muted-foreground">
           <span
-            className="hover:underline cursor-copy"
-            onClick={(e) => {
+            role="button"
+            tabIndex={0}
+            className="cursor-copy hover:underline"
+            onMouseDown={(e) => {
+              e.preventDefault()
               e.stopPropagation()
-              navigator.clipboard.writeText(section.path)
+            }}
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              // Why: stop both mouse-down and click on the path affordance so
+              // the parent section-toggle row cannot consume the interaction
+              // before the Electron clipboard write runs.
+              void window.api.ui.writeClipboardText(section.path).catch((err) => {
+                console.error('Failed to copy diff path:', err)
+              })
+            }}
+            onKeyDown={(e) => {
+              if (e.key !== 'Enter' && e.key !== ' ') {
+                return
+              }
+              e.preventDefault()
+              e.stopPropagation()
+              void window.api.ui.writeClipboardText(section.path).catch((err) => {
+                console.error('Failed to copy diff path:', err)
+              })
             }}
             title="Copy path"
           >
@@ -179,7 +201,9 @@ export function DiffSectionItem({
           {section.dirty && <span className="font-medium ml-1">M</span>}
           {lineStats && (lineStats.added > 0 || lineStats.removed > 0) && (
             <span className="tabular-nums ml-2">
-              {lineStats.added > 0 && <span className="text-green-500">+{lineStats.added}</span>}
+              {lineStats.added > 0 && (
+                <span className="text-green-600 dark:text-green-500">+{lineStats.added}</span>
+              )}
               {lineStats.added > 0 && lineStats.removed > 0 && <span> </span>}
               {lineStats.removed > 0 && <span className="text-red-500">-{lineStats.removed}</span>}
             </span>
