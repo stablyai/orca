@@ -37,9 +37,17 @@ export function registerGitHubHandlers(store: Store): void {
 
   ipcMain.handle(
     'gh:prChecks',
-    (_event, args: { repoPath: string; prNumber: number; branch?: string; noCache?: boolean }) => {
+    (
+      _event,
+      args: {
+        repoPath: string
+        prNumber: number
+        headSha?: string
+        noCache?: boolean
+      }
+    ) => {
       const repoPath = assertRegisteredRepoPath(args.repoPath, store)
-      return getPRChecks(repoPath, args.prNumber, args.branch, {
+      return getPRChecks(repoPath, args.prNumber, args.headSha, {
         noCache: args.noCache
       })
     }

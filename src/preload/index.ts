@@ -189,7 +189,7 @@ const api = {
     prChecks: (args: {
       repoPath: string
       prNumber: number
-      branch?: string
+      headSha?: string
       noCache?: boolean
     }): Promise<unknown[]> => ipcRenderer.invoke('gh:prChecks', args),
 

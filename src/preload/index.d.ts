@@ -70,7 +70,7 @@ type GhApi = {
   prChecks: (args: {
     repoPath: string
     prNumber: number
-    branch?: string
+    headSha?: string
     noCache?: boolean
   }) => Promise<PRCheckDetail[]>
   updatePRTitle: (args: { repoPath: string; prNumber: number; title: string }) => Promise<boolean>

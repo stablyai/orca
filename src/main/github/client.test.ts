@@ -12,7 +12,7 @@ vi.mock('util', async () => {
   }
 })
 
-import { getPRForBranch, _resetOwnerRepoCache } from './client'
+import { getPRForBranch, getPRChecks, _resetOwnerRepoCache } from './client'
 
 describe('getPRForBranch', () => {
   beforeEach(() => {
@@ -239,5 +239,73 @@ describe('getPRForBranch', () => {
     const pr = await getPRForBranch('/repo-root', 'no-pr-branch')
 
     expect(pr).toBeNull()
+  })
+})
+
+describe('getPRChecks', () => {
+  beforeEach(() => {
+    execFileAsyncMock.mockReset()
+    _resetOwnerRepoCache()
+  })
+
+  it('queries check-runs by PR head SHA when GitHub remote metadata is available', async () => {
+    execFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'git@github.com:acme/widgets.git\n' })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          check_runs: [
+            {
+              name: 'build',
+              status: 'completed',
+              conclusion: 'success',
+              html_url: 'https://github.com/acme/widgets/actions/runs/1',
+              details_url: null
+            }
+          ]
+        })
+      })
+
+    const checks = await getPRChecks('/repo-root', 42, 'head-oid')
+
+    expect(execFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      'gh',
+      ['api', '--cache', '60s', 'repos/acme/widgets/commits/head-oid/check-runs?per_page=100'],
+      { cwd: '/repo-root', encoding: 'utf-8' }
+    )
+    expect(checks).toEqual([
+      {
+        name: 'build',
+        status: 'completed',
+        conclusion: 'success',
+        url: 'https://github.com/acme/widgets/actions/runs/1'
+      }
+    ])
+  })
+
+  it('falls back to gh pr checks when the cached head SHA no longer resolves', async () => {
+    execFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'git@github.com:acme/widgets.git\n' })
+      .mockRejectedValueOnce(new Error('gh: No commit found for SHA: stale-head (HTTP 422)'))
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([{ name: 'lint', state: 'PASS', link: 'https://example.com/lint' }])
+      })
+
+    const checks = await getPRChecks('/repo-root', 42, 'stale-head')
+
+    expect(execFileAsyncMock).toHaveBeenNthCalledWith(
+      3,
+      'gh',
+      ['pr', 'checks', '42', '--json', 'name,state,link'],
+      { cwd: '/repo-root', encoding: 'utf-8' }
+    )
+    expect(checks).toEqual([
+      {
+        name: 'lint',
+        status: 'completed',
+        conclusion: 'success',
+        url: 'https://example.com/lint'
+      }
+    ])
   })
 })

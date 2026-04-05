@@ -120,6 +120,10 @@ export type PRInfo = {
   checksStatus: CheckStatus
   updatedAt: string
   mergeable: PRMergeableState
+  // Why: check-runs are keyed by the PR head commit, not the mutable branch name.
+  // Keeping the head SHA in cached PR metadata lets the checks panel poll the
+  // correct commit without re-querying GitHub or guessing from local branch refs.
+  headSha?: string
   conflictSummary?: PRConflictSummary
 }
 

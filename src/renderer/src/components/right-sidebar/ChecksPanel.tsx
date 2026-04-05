@@ -96,7 +96,9 @@ export default function ChecksPanel(): React.JSX.Element {
       }
       setChecksLoading(true)
       try {
-        const result = await fetchPRChecks(repo.path, targetPRNumber, branch, { force })
+        const result = await fetchPRChecks(repo.path, targetPRNumber, branch, pr?.headSha, {
+          force
+        })
         setChecks(result)
 
         // Exponential backoff: if checks haven't changed, double the interval (cap 120s).
@@ -114,7 +116,7 @@ export default function ChecksPanel(): React.JSX.Element {
         setChecksLoading(false)
       }
     },
-    [repo, prNumber, branch, fetchPRChecks]
+    [repo, prNumber, branch, pr?.headSha, fetchPRChecks]
   )
 
   // Fetch checks on mount + poll with exponential backoff

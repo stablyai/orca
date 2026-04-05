@@ -103,6 +103,7 @@ export async function getPRForBranch(repoPath: string, branch: string): Promise<
       checksStatus: deriveCheckStatus(data.statusCheckRollup),
       updatedAt: data.updatedAt,
       mergeable: (data.mergeable as PRMergeableState) ?? 'UNKNOWN',
+      headSha: data.headRefOid,
       conflictSummary
     }
   } catch {
@@ -120,40 +121,47 @@ export async function getPRForBranch(repoPath: string, branch: string): Promise<
 export async function getPRChecks(
   repoPath: string,
   prNumber: number,
-  branch?: string,
+  headSha?: string,
   options?: { noCache?: boolean }
 ): Promise<PRCheckDetail[]> {
-  const ownerRepo = branch ? await getOwnerRepo(repoPath) : null
+  const ownerRepo = headSha ? await getOwnerRepo(repoPath) : null
   await acquire()
   try {
-    if (ownerRepo && branch) {
+    if (ownerRepo && headSha) {
       // Why: --cache 60s saves rate-limit budget during polling, but when the
       // user explicitly clicks refresh we must skip it so gh fetches fresh data.
       const cacheArgs = options?.noCache ? [] : ['--cache', '60s']
-      const { stdout } = await execFileAsync(
-        'gh',
-        [
-          'api',
-          ...cacheArgs,
-          `repos/${ownerRepo.owner}/${ownerRepo.repo}/commits/${encodeURIComponent(branch)}/check-runs?per_page=100`
-        ],
-        { cwd: repoPath, encoding: 'utf-8' }
-      )
-      const data = JSON.parse(stdout) as {
-        check_runs: {
-          name: string
-          status: string
-          conclusion: string | null
-          html_url: string
-          details_url: string | null
-        }[]
+      try {
+        const { stdout } = await execFileAsync(
+          'gh',
+          [
+            'api',
+            ...cacheArgs,
+            `repos/${ownerRepo.owner}/${ownerRepo.repo}/commits/${encodeURIComponent(headSha)}/check-runs?per_page=100`
+          ],
+          { cwd: repoPath, encoding: 'utf-8' }
+        )
+        const data = JSON.parse(stdout) as {
+          check_runs: {
+            name: string
+            status: string
+            conclusion: string | null
+            html_url: string
+            details_url: string | null
+          }[]
+        }
+        return data.check_runs.map((d) => ({
+          name: d.name,
+          status: mapCheckRunRESTStatus(d.status),
+          conclusion: mapCheckRunRESTConclusion(d.status, d.conclusion),
+          url: d.details_url || d.html_url || null
+        }))
+      } catch (err) {
+        // Why: a PR can outlive the cached head SHA after force-pushes or remote
+        // rewrites. Falling back to `gh pr checks` keeps the panel populated
+        // instead of rendering a false "no checks" state from a stale commit.
+        console.warn('getPRChecks via head SHA failed, falling back to gh pr checks:', err)
       }
-      return data.check_runs.map((d) => ({
-        name: d.name,
-        status: mapCheckRunRESTStatus(d.status),
-        conclusion: mapCheckRunRESTConclusion(d.status, d.conclusion),
-        url: d.details_url || d.html_url || null
-      }))
     }
     // Fallback: no branch provided or non-GitHub remote
     const { stdout } = await execFileAsync(

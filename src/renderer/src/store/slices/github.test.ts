@@ -37,6 +37,7 @@ function makePR(overrides: Partial<PRInfo> = {}): PRInfo {
     checksStatus: 'pending',
     updatedAt: '2026-03-28T00:00:00Z',
     mergeable: 'UNKNOWN',
+    headSha: 'head-oid',
     ...overrides
   }
 }
@@ -71,7 +72,7 @@ describe('createGitHubSlice.fetchPRChecks', () => {
       { name: 'lint', status: 'completed', conclusion: 'success', url: null }
     ])
 
-    await store.getState().fetchPRChecks(repoPath, 12, branch, { force: true })
+    await store.getState().fetchPRChecks(repoPath, 12, branch, undefined, { force: true })
 
     expect(store.getState().prCache[prCacheKey]?.data?.checksStatus).toBe('success')
   })
@@ -96,7 +97,7 @@ describe('createGitHubSlice.fetchPRChecks', () => {
       { name: 'integration', status: 'completed', conclusion: 'failure', url: null }
     ])
 
-    await store.getState().fetchPRChecks(repoPath, 12, branch, { force: true })
+    await store.getState().fetchPRChecks(repoPath, 12, branch, undefined, { force: true })
 
     expect(store.getState().prCache[prCacheKey]?.data?.checksStatus).toBe('failure')
   })
@@ -120,7 +121,9 @@ describe('createGitHubSlice.fetchPRChecks', () => {
       { name: 'build', status: 'completed', conclusion: 'success', url: null }
     ])
 
-    await store.getState().fetchPRChecks(repoPath, 12, `refs/heads/${branch}`, { force: true })
+    await store
+      .getState()
+      .fetchPRChecks(repoPath, 12, `refs/heads/${branch}`, undefined, { force: true })
 
     expect(store.getState().prCache[prCacheKey]?.data?.checksStatus).toBe('success')
   })
@@ -146,7 +149,7 @@ describe('createGitHubSlice.fetchPRChecks', () => {
       { name: 'build', status: 'completed', conclusion: 'success', url: null }
     ])
 
-    await store.getState().fetchPRChecks(repoPath, 12, branch, { force: true })
+    await store.getState().fetchPRChecks(repoPath, 12, branch, undefined, { force: true })
     await vi.advanceTimersByTimeAsync(1000)
 
     expect(mockApi.cache.setGitHub).toHaveBeenCalledWith({
@@ -191,6 +194,31 @@ describe('createGitHubSlice.fetchPRChecks', () => {
         pr: store.getState().prCache,
         issue: store.getState().issueCache
       }
+    })
+  })
+
+  it('passes the cached PR head SHA to the checks IPC request', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const branch = 'feature/test'
+    const prCacheKey = `${repoPath}::${branch}`
+
+    store.setState({
+      prCache: {
+        [prCacheKey]: {
+          data: makePR({ headSha: 'abc123head' }),
+          fetchedAt: 1
+        }
+      }
+    })
+
+    await store.getState().fetchPRChecks(repoPath, 12, branch, 'abc123head', { force: true })
+
+    expect(mockApi.gh.prChecks).toHaveBeenCalledWith({
+      repoPath,
+      prNumber: 12,
+      headSha: 'abc123head',
+      noCache: true
     })
   })
 })
