@@ -261,6 +261,12 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('does not interpret active as a runtime-global worktree selector', async () => {
+    const runtime = new OrcaRuntimeService(store)
+
+    await expect(runtime.showManagedWorktree('active')).rejects.toThrow('selector_not_found')
+  })
+
   it('reads bounded terminal output and writes through the PTY controller', async () => {
     const writes: string[] = []
     const runtime = new OrcaRuntimeService(store)

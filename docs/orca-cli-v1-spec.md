@@ -375,6 +375,20 @@ Status:
 orca worktree show --worktree branch:feature/foo --json
 ```
 
+Focused v1 also accepts `active` / `current` as CLI-only shortcuts for worktree
+selectors. The CLI resolves them from the caller's current directory and sends a
+`path:` selector to the runtime.
+
+## `orca worktree current`
+
+Status:
+
+- `v1-now`
+
+```bash
+orca worktree current --json
+```
+
 ## `orca worktree create`
 
 Status:
@@ -404,6 +418,7 @@ Status:
 
 ```bash
 orca worktree set --worktree branch:feature/foo --display-name "Parser" --issue 123 --comment "parser work" --json
+orca worktree set --worktree active --comment "parser work" --json
 ```
 
 ## `orca worktree rm`

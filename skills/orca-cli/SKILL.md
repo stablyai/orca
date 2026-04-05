@@ -97,9 +97,11 @@ orca repo search-refs --repo id:<repoId> --query main --limit 10 --json
 ```bash
 orca worktree list --repo id:<repoId> --json
 orca worktree ps --json
+orca worktree current --json
 orca worktree show --worktree id:<worktreeId> --json
 orca worktree create --repo id:<repoId> --name my-task --issue 123 --comment "seed" --json
 orca worktree set --worktree id:<worktreeId> --display-name "My Task" --json
+orca worktree set --worktree active --comment "waiting on review" --json
 orca worktree rm --worktree id:<worktreeId> --force --json
 ```
 
@@ -109,6 +111,7 @@ Worktree selectors supported in focused v1:
 - `path:<absolute-path>`
 - `branch:<branch-name>`
 - `issue:<number>`
+- `active` / `current` to resolve the enclosing Orca-managed worktree from the shell `cwd`
 
 ### Terminal
 
@@ -131,6 +134,7 @@ Why: terminal handles are runtime-scoped and may go stale after reloads. If Orca
 - Treat Orca as the source of truth for Orca worktree and terminal tasks. Do not mix Orca-managed state with ad hoc git worktree commands unless Orca explicitly cannot perform the requested action.
 - Prefer `--json` for all machine-driven use.
 - Use `worktree ps` as the first summary view when many worktrees may exist.
+- Use `worktree current` or `--worktree active` when the agent is already running inside the target worktree.
 - Use `terminal list` to reacquire handles after Orca reloads.
 - Use `terminal read` before `terminal send` unless the next input is obvious.
 - Use `terminal wait --for exit` only when the task actually depends on process completion.

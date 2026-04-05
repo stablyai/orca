@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /* eslint-disable max-lines -- Why: the public CLI entrypoint keeps command dispatch in one place so the bundled shell command and development fallback stay behaviorally identical. */
 
+import { resolve as resolvePath } from 'path'
 import type {
   CliStatusResult,
   RuntimeRepoList,
@@ -96,6 +97,16 @@ const COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'worktree']
   },
   {
+    path: ['worktree', 'current'],
+    summary: 'Show the Orca-managed worktree for the current directory',
+    usage: 'orca worktree current [--json]',
+    allowedFlags: [...GLOBAL_FLAGS],
+    notes: [
+      'Resolves the current shell directory to a path: selector so agents can target the enclosing Orca worktree without spelling out $PWD.'
+    ],
+    examples: ['orca worktree current', 'orca worktree current --json']
+  },
+  {
     path: ['worktree', 'create'],
     summary: 'Create a new Orca-managed worktree',
     usage:
@@ -161,8 +172,8 @@ const COMMAND_SPECS: CommandSpec[] = [
   }
 ]
 
-async function main(): Promise<void> {
-  const parsed = parseArgs(process.argv.slice(2))
+export async function main(argv = process.argv.slice(2), cwd = process.cwd()): Promise<void> {
+  const parsed = parseArgs(argv)
   const helpPath = resolveHelpPath(parsed)
   if (helpPath !== null) {
     printHelp(helpPath)
@@ -237,7 +248,7 @@ async function main(): Promise<void> {
 
     if (matches(commandPath, ['terminal', 'list'])) {
       const result = await client.call<RuntimeTerminalListResult>('terminal.list', {
-        worktree: getOptionalStringFlag(parsed.flags, 'worktree'),
+        worktree: getOptionalWorktreeSelector(parsed.flags, 'worktree', cwd),
         limit: getOptionalPositiveIntegerFlag(parsed.flags, 'limit')
       })
       return printResult(result, json, formatTerminalList)
@@ -288,7 +299,7 @@ async function main(): Promise<void> {
 
     if (matches(commandPath, ['terminal', 'stop'])) {
       const result = await client.call<{ stopped: number }>('terminal.stop', {
-        worktree: getRequiredStringFlag(parsed.flags, 'worktree')
+        worktree: getRequiredWorktreeSelector(parsed.flags, 'worktree', cwd)
       })
       return printResult(result, json, (value) => `Stopped ${value.stopped} terminals.`)
     }
@@ -310,7 +321,14 @@ async function main(): Promise<void> {
 
     if (matches(commandPath, ['worktree', 'show'])) {
       const result = await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', {
-        worktree: getRequiredStringFlag(parsed.flags, 'worktree')
+        worktree: getRequiredWorktreeSelector(parsed.flags, 'worktree', cwd)
+      })
+      return printResult(result, json, formatWorktreeShow)
+    }
+
+    if (matches(commandPath, ['worktree', 'current'])) {
+      const result = await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', {
+        worktree: buildCurrentWorktreeSelector(cwd)
       })
       return printResult(result, json, formatWorktreeShow)
     }
@@ -328,7 +346,7 @@ async function main(): Promise<void> {
 
     if (matches(commandPath, ['worktree', 'set'])) {
       const result = await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.set', {
-        worktree: getRequiredStringFlag(parsed.flags, 'worktree'),
+        worktree: getRequiredWorktreeSelector(parsed.flags, 'worktree', cwd),
         displayName: getOptionalStringFlag(parsed.flags, 'display-name'),
         linkedIssue: getOptionalNullableNumberFlag(parsed.flags, 'issue'),
         comment: getOptionalStringFlag(parsed.flags, 'comment')
@@ -338,7 +356,7 @@ async function main(): Promise<void> {
 
     if (matches(commandPath, ['worktree', 'rm'])) {
       const result = await client.call<{ removed: boolean }>('worktree.rm', {
-        worktree: getRequiredStringFlag(parsed.flags, 'worktree'),
+        worktree: getRequiredWorktreeSelector(parsed.flags, 'worktree', cwd),
         force: parsed.flags.get('force') === true
       })
       return printResult(result, json, (value) => `removed: ${value.removed}`)
@@ -370,7 +388,7 @@ async function main(): Promise<void> {
   }
 }
 
-function parseArgs(argv: string[]): ParsedArgs {
+export function parseArgs(argv: string[]): ParsedArgs {
   const commandPath: string[] = []
   const flags = new Map<string, string | boolean>()
 
@@ -394,7 +412,7 @@ function parseArgs(argv: string[]): ParsedArgs {
   return { commandPath, flags }
 }
 
-function resolveHelpPath(parsed: ParsedArgs): string[] | null {
+export function resolveHelpPath(parsed: ParsedArgs): string[] | null {
   if (parsed.commandPath[0] === 'help') {
     return parsed.commandPath.slice(1)
   }
@@ -404,7 +422,7 @@ function resolveHelpPath(parsed: ParsedArgs): string[] | null {
   return null
 }
 
-function validateCommandAndFlags(parsed: ParsedArgs): void {
+export function validateCommandAndFlags(parsed: ParsedArgs): void {
   const spec = findCommandSpec(parsed.commandPath)
   if (!spec) {
     throw new RuntimeClientError(
@@ -423,7 +441,7 @@ function validateCommandAndFlags(parsed: ParsedArgs): void {
   }
 }
 
-function findCommandSpec(commandPath: string[]): CommandSpec | undefined {
+export function findCommandSpec(commandPath: string[]): CommandSpec | undefined {
   return COMMAND_SPECS.find((spec) => matches(spec.path, commandPath))
 }
 
@@ -445,6 +463,38 @@ function getOptionalStringFlag(
 ): string | undefined {
   const value = flags.get(name)
   return typeof value === 'string' && value.length > 0 ? value : undefined
+}
+
+export function buildCurrentWorktreeSelector(cwd: string): string {
+  return `path:${resolvePath(cwd)}`
+}
+
+export function normalizeWorktreeSelector(selector: string, cwd: string): string {
+  if (selector === 'active' || selector === 'current') {
+    // Why: "active/current" depends on the shell invoking the CLI, so the CLI
+    // resolves it to a concrete path selector before crossing into the runtime.
+    // That keeps the runtime's selector logic canonical and free of per-process
+    // cwd semantics while still giving agents a self-aware shortcut.
+    return buildCurrentWorktreeSelector(cwd)
+  }
+  return selector
+}
+
+function getOptionalWorktreeSelector(
+  flags: Map<string, string | boolean>,
+  name: string,
+  cwd: string
+): string | undefined {
+  const value = getOptionalStringFlag(flags, name)
+  return value ? normalizeWorktreeSelector(value, cwd) : undefined
+}
+
+function getRequiredWorktreeSelector(
+  flags: Map<string, string | boolean>,
+  name: string,
+  cwd: string
+): string {
+  return normalizeWorktreeSelector(getRequiredStringFlag(flags, name), cwd)
 }
 
 function getOptionalNumberFlag(
@@ -487,7 +537,7 @@ function getOptionalNullableNumberFlag(
   return getOptionalNumberFlag(flags, name)
 }
 
-function matches(actual: string[], expected: string[]): boolean {
+export function matches(actual: string[], expected: string[]): boolean {
   return (
     actual.length === expected.length && actual.every((value, index) => value === expected[index])
   )
@@ -685,6 +735,7 @@ Repos:
 Worktrees:
   worktree list             List Orca-managed worktrees
   worktree show             Show one worktree
+  worktree current          Show the Orca-managed worktree for the current directory
   worktree create           Create a new Orca-managed worktree
   worktree set              Update Orca metadata for a worktree
   worktree rm               Remove a worktree from Orca and git
@@ -704,6 +755,7 @@ Common Commands:
   orca worktree list [--repo <selector>] [--limit <n>] [--json]
   orca worktree create --repo <selector> --name <name> [--base-branch <ref>] [--issue <number>] [--comment <text>] [--json]
   orca worktree show --worktree <selector> [--json]
+  orca worktree current [--json]
   orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--comment <text>] [--json]
   orca worktree rm --worktree <selector> [--force] [--json]
   orca worktree ps [--limit <n>] [--json]
@@ -721,7 +773,7 @@ Common Commands:
 
 Selectors:
   --repo <selector>         Registered repo selector such as id:<id>, name:<name>, or path:<path>
-  --worktree <selector>     Worktree selector such as id:<id>, branch:<branch>, issue:<number>, or path:<path>
+  --worktree <selector>     Worktree selector such as id:<id>, branch:<branch>, issue:<number>, path:<path>, or active/current
   --terminal <handle>       Runtime-issued terminal handle returned by \`orca terminal list --json\`
 
 Terminal Send Options:
@@ -747,6 +799,8 @@ Examples:
   $ orca repo list
   $ orca worktree create --repo name:orca --name cli-test-1 --issue 273
   $ orca worktree show --worktree branch:Jinwoo-H/cli
+  $ orca worktree current
+  $ orca worktree set --worktree active --comment "waiting on review"
   $ orca worktree ps --limit 10
   $ orca terminal list --worktree path:/Users/me/orca/workspaces/orca/cli-test-1 --json
   $ orca terminal send --terminal term_123 --text "hi" --enter
@@ -812,10 +866,12 @@ function formatFlagHelp(flag: string): string {
     text: '--text <text>          Text to send to the terminal',
     'timeout-ms': '--timeout-ms <ms>     Maximum wait time before timing out',
     worktree:
-      '--worktree <selector>  Worktree selector such as id:<id>, branch:<branch>, issue:<number>, or path:<path>'
+      '--worktree <selector>  Worktree selector such as id:<id>, branch:<branch>, issue:<number>, path:<path>, or active/current'
   }
 
   return helpByFlag[flag] ?? `--${flag}`
 }
 
-void main()
+if (require.main === module) {
+  void main()
+}

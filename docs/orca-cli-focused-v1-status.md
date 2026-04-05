@@ -50,14 +50,15 @@ The following commands are implemented against the running Orca app:
 Focused v1 supports the complete agent loop for worktree orchestration:
 
 1. Inspect current Orca runtime availability.
-2. Discover repos indirectly through existing worktrees and summary views.
-3. Create a new worktree in a chosen repo.
-4. Attach or update worktree metadata like display name, linked issue, and comment.
-5. Inspect many worktrees at once with `worktree ps`.
-6. Discover live terminal handles in a worktree.
-7. Read terminal output with bounded token-efficient reads.
-8. Send input back to the terminal.
-9. Stop live terminals for a worktree when needed.
+2. Discover the enclosing Orca-managed worktree from the current shell directory.
+3. Discover repos indirectly through existing worktrees and summary views.
+4. Create a new worktree in a chosen repo.
+5. Attach or update worktree metadata like display name, linked issue, and comment.
+6. Inspect many worktrees at once with `worktree ps`.
+7. Discover live terminal handles in a worktree.
+8. Read terminal output with bounded token-efficient reads.
+9. Send input back to the terminal.
+10. Stop live terminals for a worktree when needed.
 
 It also covers the adjacent setup tasks needed to make worktree creation usable:
 
