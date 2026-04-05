@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { AlertTriangle, LoaderCircle, Trash2 } from 'lucide-react'
 import { useAppStore } from '@/store'
+import { toast } from 'sonner'
 
 const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   const activeModal = useAppStore((s) => s.activeModal)
@@ -41,34 +42,62 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
 
   const handleOpenChange = useCallback(
     (open: boolean) => {
-      if (open || isDeleting) {
+      if (open) {
         return
       }
-      if (worktreeId) {
+      const currentState = worktreeId
+        ? useAppStore.getState().deleteStateByWorktreeId[worktreeId]
+        : undefined
+      if (worktreeId && !currentState?.isDeleting) {
         clearWorktreeDeleteState(worktreeId)
       }
       closeModal()
     },
-    [clearWorktreeDeleteState, closeModal, isDeleting, worktreeId]
+    [clearWorktreeDeleteState, closeModal, worktreeId]
   )
 
   const handleDelete = useCallback(
-    async (force = false) => {
+    (force = false) => {
       if (!worktreeId) {
         return
       }
-      const result = await removeWorktree(worktreeId, force)
-      if (!result.ok) {
-        // Modal is already open, just let it show the error
-        return
-      }
-      // Why: successful delete already cleaned the worktree out of store state.
-      // Closing explicitly avoids leaving the Radix dialog open if that removal
-      // effect and this component render land out of order.
-      clearWorktreeDeleteState(worktreeId)
+      const targetWorktreeId = worktreeId
+      removeWorktree(targetWorktreeId, force)
+        .then((result) => {
+          if (!result.ok) {
+            const state = useAppStore.getState().deleteStateByWorktreeId[targetWorktreeId]
+            toast.error('Failed to delete worktree', {
+              description: result.error,
+              duration: 10000,
+              action: state?.canForceDelete
+                ? {
+                    label: 'Force Delete',
+                    onClick: () => {
+                      removeWorktree(targetWorktreeId, true)
+                        .then((forceResult) => {
+                          if (!forceResult.ok) {
+                            toast.error('Force delete failed', { description: forceResult.error })
+                          }
+                        })
+                        .catch((err: unknown) => {
+                          toast.error('Failed to delete worktree', {
+                            description: err instanceof Error ? err.message : String(err)
+                          })
+                        })
+                    }
+                  }
+                : undefined
+            })
+          }
+        })
+        .catch((err: unknown) => {
+          toast.error('Failed to delete worktree', {
+            description: err instanceof Error ? err.message : String(err)
+          })
+        })
       closeModal()
     },
-    [clearWorktreeDeleteState, closeModal, removeWorktree, worktreeId]
+    [closeModal, removeWorktree, worktreeId]
   )
 
   return (
