@@ -54,6 +54,8 @@ export type UISlice = {
   setUpdateStatus: (status: UpdateStatus) => void
   dismissedUpdateVersion: string | null
   dismissUpdate: () => void
+  isFullScreen: boolean
+  setIsFullScreen: (v: boolean) => void
 }
 
 export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set) => ({
@@ -141,5 +143,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set) => (
       // the same reminder card until a newer release appears.
       void window.api.ui.set({ dismissedUpdateVersion }).catch(console.error)
       return { dismissedUpdateVersion }
-    })
+    }),
+  isFullScreen: false,
+  setIsFullScreen: (v) => set({ isFullScreen: v })
 })

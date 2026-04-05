@@ -52,6 +52,14 @@ export function createMainWindow(store: Store | null): BrowserWindow {
     mainWindow.show()
   })
 
+  mainWindow.on('enter-full-screen', () => {
+    mainWindow.webContents.send('window:fullscreen-changed', true)
+  })
+
+  mainWindow.on('leave-full-screen', () => {
+    mainWindow.webContents.send('window:fullscreen-changed', false)
+  })
+
   mainWindow.webContents.setWindowOpenHandler((details) => {
     const externalUrl = normalizeExternalUrl(details.url)
     if (externalUrl) {

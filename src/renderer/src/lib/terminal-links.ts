@@ -220,7 +220,11 @@ export function resolveTerminalFileLink(
 export function isPathInsideWorktree(filePath: string, worktreePath: string): boolean {
   const normalizedFile = normalizeAbsolutePath(filePath)
   const normalizedWorktree = normalizeAbsolutePath(worktreePath)
-  if (!normalizedFile || !normalizedWorktree || normalizedFile.rootKind !== normalizedWorktree.rootKind) {
+  if (
+    !normalizedFile ||
+    !normalizedWorktree ||
+    normalizedFile.rootKind !== normalizedWorktree.rootKind
+  ) {
     return false
   }
   if (normalizedFile.comparisonKey === normalizedWorktree.comparisonKey) {
@@ -232,7 +236,11 @@ export function isPathInsideWorktree(filePath: string, worktreePath: string): bo
 export function toWorktreeRelativePath(filePath: string, worktreePath: string): string | null {
   const normalizedFile = normalizeAbsolutePath(filePath)
   const normalizedWorktree = normalizeAbsolutePath(worktreePath)
-  if (!normalizedFile || !normalizedWorktree || normalizedFile.rootKind !== normalizedWorktree.rootKind) {
+  if (
+    !normalizedFile ||
+    !normalizedWorktree ||
+    normalizedFile.rootKind !== normalizedWorktree.rootKind
+  ) {
     return null
   }
   if (normalizedFile.comparisonKey === normalizedWorktree.comparisonKey) {

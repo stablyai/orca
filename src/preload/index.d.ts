@@ -150,6 +150,7 @@ type UIApi = {
   ) => () => void
   getZoomLevel: () => number
   setZoomLevel: (level: number) => void
+  onFullscreenChanged: (callback: (isFullScreen: boolean) => void) => () => void
 }
 
 type RuntimeApi = {

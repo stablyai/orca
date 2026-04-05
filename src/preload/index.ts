@@ -394,7 +394,13 @@ const api = {
       return () => ipcRenderer.removeListener('terminal:file-drop', listener)
     },
     getZoomLevel: (): number => webFrame.getZoomLevel(),
-    setZoomLevel: (level: number): void => webFrame.setZoomLevel(level)
+    setZoomLevel: (level: number): void => webFrame.setZoomLevel(level),
+    onFullscreenChanged: (callback: (isFullScreen: boolean) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, isFullScreen: boolean) =>
+        callback(isFullScreen)
+      ipcRenderer.on('window:fullscreen-changed', listener)
+      return () => ipcRenderer.removeListener('window:fullscreen-changed', listener)
+    }
   },
 
   runtime: {
