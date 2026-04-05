@@ -1,3 +1,6 @@
+/* eslint-disable max-lines -- Why: GeneralPane is the single owner of all general settings UI;
+   splitting individual settings into separate files would scatter related controls without a
+   meaningful abstraction boundary. */
 import { useEffect, useState } from 'react'
 import type { GlobalSettings } from '../../../../shared/types'
 import { Button } from '../ui/button'
@@ -221,6 +224,35 @@ export function GeneralPane({
               className="number-input-clean w-28 text-right tabular-nums"
             />
             <span className="text-xs text-muted-foreground">ms</span>
+          </div>
+        </SearchableSetting>
+
+        <SearchableSetting
+          title="Default Diff View"
+          description="Preferred presentation format for showing git diffs by default."
+          keywords={['diff', 'view', 'inline', 'side-by-side', 'split']}
+          className="flex flex-col items-start gap-3 px-1 py-2 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div className="space-y-0.5">
+            <Label>Default Diff View</Label>
+            <p className="text-xs text-muted-foreground">
+              Preferred presentation format for showing git diffs by default.
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center rounded-md border border-border/60 bg-background/50 p-0.5">
+            {(['inline', 'side-by-side'] as const).map((option) => (
+              <button
+                key={option}
+                onClick={() => updateSettings({ diffDefaultView: option })}
+                className={`rounded-sm px-3 py-1 text-sm transition-colors ${
+                  settings.diffDefaultView === option
+                    ? 'bg-accent font-medium text-accent-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {option === 'inline' ? 'Inline' : 'Side-by-side'}
+              </button>
+            ))}
           </div>
         </SearchableSetting>
       </section>

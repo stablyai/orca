@@ -227,6 +227,7 @@ export type GlobalSettings = {
   terminalDividerThicknessPx: number
   terminalScrollbackBytes: number
   rightSidebarOpenByDefault: boolean
+  diffDefaultView: 'inline' | 'side-by-side'
 }
 
 export type WorktreeCardProperty = 'status' | 'unread' | 'ci' | 'issue' | 'pr' | 'comment'

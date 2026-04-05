@@ -23,6 +23,11 @@ export const GENERAL_EDITOR_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     title: 'Auto Save Delay',
     description: 'How long Orca waits after your last edit before saving automatically.',
     keywords: ['autosave', 'delay', 'milliseconds']
+  },
+  {
+    title: 'Default Diff View',
+    description: 'Preferred presentation format for showing git diffs by default.',
+    keywords: ['diff', 'view', 'inline', 'side-by-side', 'split']
   }
 ]
 

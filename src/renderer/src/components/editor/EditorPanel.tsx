@@ -51,7 +51,16 @@ export default function EditorPanel(): React.JSX.Element | null {
   const [copiedPathToast, setCopiedPathToast] = useState<{ fileId: string; token: number } | null>(
     null
   )
-  const [sideBySide, setSideBySide] = useState(true)
+  const [sideBySide, setSideBySide] = useState(settings?.diffDefaultView === 'side-by-side')
+
+  // Why: When the user changes their global diff-view preference in Settings,
+  // sync the local toggle to match, even if they manually toggled it this session.
+  useEffect(() => {
+    if (settings?.diffDefaultView !== undefined) {
+      setSideBySide(settings.diffDefaultView === 'side-by-side')
+    }
+  }, [settings?.diffDefaultView])
+
   const autoSaveTimersRef = React.useRef<Map<string, number>>(new Map())
   const autoSaveScheduledContentRef = React.useRef<Map<string, string>>(new Map())
   const saveQueueRef = React.useRef<Map<string, Promise<void>>>(new Map())

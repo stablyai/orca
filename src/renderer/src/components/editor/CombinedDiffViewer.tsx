@@ -35,8 +35,16 @@ export default function CombinedDiffViewer({ file }: { file: OpenFile }): React.
     (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
 
   const [sections, setSections] = useState<DiffSection[]>([])
-  const [sideBySide, setSideBySide] = useState(true)
+  const [sideBySide, setSideBySide] = useState(settings?.diffDefaultView === 'side-by-side')
   const [sectionHeights, setSectionHeights] = useState<Record<number, number>>({})
+
+  // Why: When the user changes their global diff-view preference in Settings,
+  // sync the local toggle to match, even if they manually toggled it this session.
+  useEffect(() => {
+    if (settings?.diffDefaultView !== undefined) {
+      setSideBySide(settings.diffDefaultView === 'side-by-side')
+    }
+  }, [settings?.diffDefaultView])
 
   const branchCompare =
     file.branchCompare?.baseOid && file.branchCompare.headOid && file.branchCompare.mergeBase

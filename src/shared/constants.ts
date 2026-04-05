@@ -57,7 +57,8 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalPaneOpacityTransitionMs: 140,
     terminalDividerThicknessPx: 3,
     terminalScrollbackBytes: 10_000_000,
-    rightSidebarOpenByDefault: true
+    rightSidebarOpenByDefault: true,
+    diffDefaultView: 'inline'
   }
 }
 
