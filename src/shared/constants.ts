@@ -9,6 +9,9 @@ import type {
 import { DEFAULT_TERMINAL_FONT_WEIGHT } from './terminal-fonts'
 
 export const SCHEMA_VERSION = 1
+export const DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS = 1000
+export const MIN_EDITOR_AUTO_SAVE_DELAY_MS = 250
+export const MAX_EDITOR_AUTO_SAVE_DELAY_MS = 10_000
 
 export const DEFAULT_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = [
   'status',
@@ -37,6 +40,8 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     branchPrefix: 'git-username',
     branchPrefixCustom: '',
     theme: 'system',
+    editorAutoSave: false,
+    editorAutoSaveDelayMs: DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS,
     terminalFontSize: 14,
     terminalFontFamily: 'SF Mono',
     terminalFontWeight: DEFAULT_TERMINAL_FONT_WEIGHT,

@@ -1,3 +1,6 @@
+/* eslint-disable max-lines -- Why: this persistence suite keeps defaulting,
+migration, mutation, and flush behavior in one file so schema changes are
+reviewed against the full storage contract instead of being scattered. */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { writeFileSync, readFileSync, rmSync, mkdtempSync, mkdirSync } from 'fs'
 import { join } from 'path'
@@ -67,6 +70,8 @@ describe('Store', () => {
     const settings = store.getSettings()
     expect(settings.branchPrefix).toBe('git-username')
     expect(settings.theme).toBe('system')
+    expect(settings.editorAutoSave).toBe(false)
+    expect(settings.editorAutoSaveDelayMs).toBe(1000)
     expect(settings.terminalFontSize).toBe(14)
     expect(settings.terminalFontWeight).toBe(500)
     expect(settings.rightSidebarOpenByDefault).toBe(true)
@@ -133,9 +138,41 @@ describe('Store', () => {
     // settings should preserve the overridden value
     expect(store.getSettings().theme).toBe('dark')
     // new fields get defaults when missing from persisted data
+    expect(store.getSettings().editorAutoSave).toBe(false)
+    expect(store.getSettings().editorAutoSaveDelayMs).toBe(1000)
     expect(store.getSettings().rightSidebarOpenByDefault).toBe(true)
     // repos should be loaded
     expect(store.getRepos()).toHaveLength(1)
+  })
+
+  it('preserves editorAutoSaveDelayMs when set in persisted data', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { editorAutoSaveDelayMs: 2500 },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getSettings().editorAutoSaveDelayMs).toBe(2500)
+  })
+
+  it('preserves editorAutoSave when set to true in persisted data', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { editorAutoSave: true },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getSettings().editorAutoSave).toBe(true)
   })
 
   it('preserves rightSidebarOpenByDefault when set to true in persisted data', async () => {
@@ -238,14 +275,29 @@ describe('Store', () => {
 
     const updated = store.updateSettings({
       theme: 'dark',
+      editorAutoSave: true,
+      editorAutoSaveDelayMs: 1500,
       terminalFontSize: 16,
       terminalFontWeight: 600
     })
     expect(updated.theme).toBe('dark')
+    expect(updated.editorAutoSave).toBe(true)
+    expect(updated.editorAutoSaveDelayMs).toBe(1500)
     expect(updated.terminalFontSize).toBe(16)
     expect(updated.terminalFontWeight).toBe(600)
     // Other fields preserved
     expect(updated.branchPrefix).toBe('git-username')
+  })
+
+  it('updateSettings toggles editorAutoSave', async () => {
+    const store = await createStore()
+    expect(store.getSettings().editorAutoSave).toBe(false)
+
+    store.updateSettings({ editorAutoSave: true })
+    expect(store.getSettings().editorAutoSave).toBe(true)
+
+    store.updateSettings({ editorAutoSave: false })
+    expect(store.getSettings().editorAutoSave).toBe(false)
   })
 
   it('updateSettings toggles rightSidebarOpenByDefault', async () => {

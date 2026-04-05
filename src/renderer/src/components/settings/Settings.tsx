@@ -185,7 +185,7 @@ function Settings(): React.JSX.Element {
   const pageHeader = showGeneralPane ? (
     <div className="space-y-1">
       <h1 className="text-2xl font-semibold">General</h1>
-      <p className="text-sm text-muted-foreground">Workspace, naming, and updates.</p>
+      <p className="text-sm text-muted-foreground">Workspace, editor, naming, and updates.</p>
     </div>
   ) : showAppearancePane ? (
     <div className="space-y-1">

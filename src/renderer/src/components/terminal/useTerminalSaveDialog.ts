@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react'
 import type { OpenFile } from '@/store/slices/editor'
+import { requestEditorSaveQuiesce } from '@/components/editor/editor-autosave'
 
 type UseTerminalSaveDialogParams = {
   openFiles: OpenFile[]
@@ -50,11 +51,14 @@ export function useTerminalSaveDialog({
     setSaveDialogFileId(null)
   }, [saveDialogFileId])
 
-  const handleSaveDialogDiscard = useCallback(() => {
+  const handleSaveDialogDiscard = useCallback(async () => {
     if (!saveDialogFileId) {
       return
     }
 
+    // Why: "Don't Save" must win over any pending autosave write for the same
+    // tab, even if the editor is currently waiting on a background debounce.
+    await requestEditorSaveQuiesce({ fileId: saveDialogFileId })
     markFileDirty(saveDialogFileId, false)
     closeFile(saveDialogFileId)
     setSaveDialogFileId(null)

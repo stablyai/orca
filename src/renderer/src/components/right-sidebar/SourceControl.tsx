@@ -38,6 +38,10 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { BaseRefPicker } from '@/components/settings/BaseRefPicker'
+import {
+  notifyEditorExternalFileChange,
+  requestEditorSaveQuiesce
+} from '@/components/editor/editor-autosave'
 import { PullRequestIcon } from './checks-helpers'
 import type {
   GitBranchChangeEntry,
@@ -379,16 +383,29 @@ export default function SourceControl(): React.JSX.Element {
 
   const handleDiscard = useCallback(
     async (filePath: string) => {
-      if (!worktreePath) {
+      if (!worktreePath || !activeWorktreeId) {
         return
       }
       try {
+        // Why: git discard replaces the working tree version of this file. Any
+        // pending editor autosave must be quiesced first so it cannot recreate
+        // the discarded edits after git restores the file.
+        await requestEditorSaveQuiesce({
+          worktreeId: activeWorktreeId,
+          worktreePath,
+          relativePath: filePath
+        })
         await window.api.git.discard({ worktreePath, filePath })
+        notifyEditorExternalFileChange({
+          worktreeId: activeWorktreeId,
+          worktreePath,
+          relativePath: filePath
+        })
       } catch {
         // git operation failed silently
       }
     },
-    [worktreePath]
+    [activeWorktreeId, worktreePath]
   )
 
   if (!activeWorktree || !activeRepo || !worktreePath) {

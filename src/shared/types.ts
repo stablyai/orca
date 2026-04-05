@@ -205,6 +205,8 @@ export type GlobalSettings = {
   branchPrefix: 'git-username' | 'custom' | 'none'
   branchPrefixCustom: string
   theme: 'system' | 'dark' | 'light'
+  editorAutoSave: boolean
+  editorAutoSaveDelayMs: number
   terminalFontSize: number
   terminalFontFamily: string
   terminalFontWeight: number

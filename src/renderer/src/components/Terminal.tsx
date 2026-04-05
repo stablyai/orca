@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button'
 import TabBar from './tab-bar/TabBar'
 import TerminalPane from './terminal-pane/TerminalPane'
+import { requestEditorSaveQuiesce } from './editor/editor-autosave'
 
 const EditorPanel = lazy(() => import('./editor/EditorPanel'))
 
@@ -86,10 +87,14 @@ export default function Terminal(): React.JSX.Element | null {
     setSaveDialogFileId(null)
   }, [saveDialogFileId])
 
-  const handleSaveDialogDiscard = useCallback(() => {
+  const handleSaveDialogDiscard = useCallback(async () => {
     if (!saveDialogFileId) {
       return
     }
+    // Why: autosave runs on a background timer. Wait for any pending/in-flight
+    // write to settle before honoring "Don't Save", otherwise the file can be
+    // written after the user explicitly chose to discard their edits.
+    await requestEditorSaveQuiesce({ fileId: saveDialogFileId })
     markFileDirty(saveDialogFileId, false)
     closeFile(saveDialogFileId)
     setSaveDialogFileId(null)
@@ -403,17 +408,26 @@ export default function Terminal(): React.JSX.Element | null {
           })}
       </div>
 
-      {/* Editor panel - shown when editor tab is active */}
-      {activeWorktreeId && activeTabType === 'editor' && worktreeFiles.length > 0 && (
-        <Suspense
-          fallback={
-            <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
-              Loading editor...
-            </div>
+      {/* Editor panel - keep mounted while files are open so autosave/discard
+          coordination and in-memory edit buffers survive tab switches. */}
+      {activeWorktreeId && openFiles.length > 0 && (
+        <div
+          className={
+            activeTabType === 'editor' && worktreeFiles.length > 0
+              ? 'flex flex-1 min-h-0'
+              : 'hidden'
           }
         >
-          <EditorPanel />
-        </Suspense>
+          <Suspense
+            fallback={
+              <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
+                Loading editor...
+              </div>
+            }
+          >
+            <EditorPanel />
+          </Suspense>
+        </div>
       )}
 
       {/* Save confirmation dialog */}

@@ -7,6 +7,12 @@ import { Separator } from '../ui/separator'
 import { Download, FolderOpen, Loader2, RefreshCw } from 'lucide-react'
 import { useAppStore } from '../../store'
 import { CliSection } from './CliSection'
+import {
+  DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS,
+  MAX_EDITOR_AUTO_SAVE_DELAY_MS,
+  MIN_EDITOR_AUTO_SAVE_DELAY_MS
+} from '../../../../shared/constants'
+import { clampNumber } from '@/lib/terminal-theme'
 
 type GeneralPaneProps = {
   settings: GlobalSettings
@@ -21,16 +27,45 @@ export function GeneralPane({
 }: GeneralPaneProps): React.JSX.Element {
   const updateStatus = useAppStore((s) => s.updateStatus)
   const [appVersion, setAppVersion] = useState<string | null>(null)
+  const [autoSaveDelayDraft, setAutoSaveDelayDraft] = useState(
+    String(settings.editorAutoSaveDelayMs)
+  )
 
   useEffect(() => {
     window.api.updater.getVersion().then(setAppVersion)
   }, [])
+
+  useEffect(() => {
+    setAutoSaveDelayDraft(String(settings.editorAutoSaveDelayMs))
+  }, [settings.editorAutoSaveDelayMs])
 
   const handleBrowseWorkspace = async () => {
     const path = await window.api.repos.pickFolder()
     if (path) {
       updateSettings({ workspaceDir: path })
     }
+  }
+
+  const commitAutoSaveDelay = (): void => {
+    const trimmed = autoSaveDelayDraft.trim()
+    if (trimmed === '') {
+      setAutoSaveDelayDraft(String(settings.editorAutoSaveDelayMs))
+      return
+    }
+
+    const value = Number(trimmed)
+    if (!Number.isFinite(value)) {
+      setAutoSaveDelayDraft(String(settings.editorAutoSaveDelayMs))
+      return
+    }
+
+    const next = clampNumber(
+      Math.round(value),
+      MIN_EDITOR_AUTO_SAVE_DELAY_MS,
+      MAX_EDITOR_AUTO_SAVE_DELAY_MS
+    )
+    updateSettings({ editorAutoSaveDelayMs: next })
+    setAutoSaveDelayDraft(String(next))
   }
 
   return (
@@ -91,6 +126,70 @@ export function GeneralPane({
               }`}
             />
           </button>
+        </div>
+      </section>
+
+      <Separator />
+
+      <section className="space-y-4">
+        <div className="space-y-1">
+          <h2 className="text-sm font-semibold">Editor</h2>
+          <p className="text-xs text-muted-foreground">Configure how Orca persists file edits.</p>
+        </div>
+
+        <div className="flex items-center justify-between gap-4 px-1 py-2">
+          <div className="space-y-0.5">
+            <Label>Auto Save Files</Label>
+            <p className="text-xs text-muted-foreground">
+              Save editor and editable diff changes automatically after a short pause.
+            </p>
+          </div>
+          <button
+            role="switch"
+            aria-checked={settings.editorAutoSave}
+            onClick={() =>
+              updateSettings({
+                editorAutoSave: !settings.editorAutoSave
+              })
+            }
+            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
+              settings.editorAutoSave ? 'bg-foreground' : 'bg-muted-foreground/30'
+            }`}
+          >
+            <span
+              className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
+                settings.editorAutoSave ? 'translate-x-4' : 'translate-x-0.5'
+              }`}
+            />
+          </button>
+        </div>
+
+        <div className="flex items-center justify-between gap-4 px-1 py-2">
+          <div className="space-y-0.5">
+            <Label>Auto Save Delay</Label>
+            <p className="text-xs text-muted-foreground">
+              How long Orca waits after your last edit before saving automatically. First launch
+              defaults to {DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS} ms.
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <Input
+              type="number"
+              min={MIN_EDITOR_AUTO_SAVE_DELAY_MS}
+              max={MAX_EDITOR_AUTO_SAVE_DELAY_MS}
+              step={250}
+              value={autoSaveDelayDraft}
+              onChange={(e) => setAutoSaveDelayDraft(e.target.value)}
+              onBlur={commitAutoSaveDelay}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  commitAutoSaveDelay()
+                }
+              }}
+              className="number-input-clean w-28 text-right tabular-nums"
+            />
+            <span className="text-xs text-muted-foreground">ms</span>
+          </div>
         </div>
       </section>
 

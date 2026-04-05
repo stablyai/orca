@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { isPathEqualOrDescendant } from './file-explorer-paths'
 import type { PendingDelete, TreeNode } from './file-explorer-types'
+import { requestEditorSaveQuiesce } from '@/components/editor/editor-autosave'
 
 type UseFileDeletionParams = {
   activeWorktreeId: string | null
@@ -79,11 +80,16 @@ export function useFileDeletion({
     setIsDeleting(true)
 
     try {
-      await window.api.fs.deletePath({ targetPath: node.path })
-
       const filesToClose = openFiles.filter((file) =>
         isPathEqualOrDescendant(file.filePath, node.path)
       )
+      // Why: moving a file to Trash/Recycle Bin is another external mutation of
+      // the file path. Let any in-flight autosave finish first so the delete
+      // action cannot be undone by a trailing write that recreates the file.
+      await Promise.all(filesToClose.map((file) => requestEditorSaveQuiesce({ fileId: file.id })))
+
+      await window.api.fs.deletePath({ targetPath: node.path })
+
       for (const file of filesToClose) {
         closeFile(file.id)
       }
