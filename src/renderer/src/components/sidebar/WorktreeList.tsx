@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import type { Worktree, Repo } from '../../../../shared/types'
-import { buildWorktreeComparator, hasRecentPRSignal, type RecentSortOverride } from './smart-sort'
+import { buildWorktreeComparator } from './smart-sort'
 import { branchName, type Row, buildRows, getGroupKeyForWorktree } from './worktree-list-groups'
 
 const WorktreeList = React.memo(function WorktreeList() {
@@ -15,7 +15,6 @@ const WorktreeList = React.memo(function WorktreeList() {
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const repos = useAppStore((s) => s.repos)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
-  const activeWorktreeSelectionNonce = useAppStore((s) => s.activeWorktreeSelectionNonce)
   const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
   const searchQuery = useAppStore((s) => s.searchQuery)
   const groupBy = useAppStore((s) => s.groupBy)
@@ -50,8 +49,10 @@ const WorktreeList = React.memo(function WorktreeList() {
   // ── Stable sort order ──────────────────────────────────────────
   // The sort order is cached and only recomputed when `sortEpoch` changes
   // (worktree add/remove, terminal activity, backend refresh, etc.).
-  // Selection-triggered side-effects (clearing isUnread, GitHub refresh)
-  // do NOT bump sortEpoch, so clicking a card never reorders the list.
+  // Why: explicit selection also triggers local side-effects like clearing
+  // `isUnread` and force-refreshing the branch PR cache. Those updates are
+  // useful for card contents, but they must not participate in ordering or a
+  // sequence of clicks will keep reshuffling the sidebar underneath the user.
   //
   // Why useMemo instead of useEffect: the sort order must be computed
   // synchronously *before* the worktrees memo reads it, otherwise the
@@ -70,7 +71,7 @@ const WorktreeList = React.memo(function WorktreeList() {
     // sortEpoch is an intentional trigger: it's not read inside the memo, but
     // its change signals that the sort order should be recomputed.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [sortEpoch, sortBy, prCache])
+  }, [sortEpoch, sortBy, repos])
 
   // Flatten, filter, and apply stable sort order
   const visibleWorktrees = useMemo(() => {
@@ -113,67 +114,18 @@ const WorktreeList = React.memo(function WorktreeList() {
       return ai - bi
     })
 
-
     return all
-  }, [worktreesByRepo, filterRepoIds, searchQuery, showActiveOnly, repoMap, tabsByWorktree, sortedIds])
+  }, [
+    worktreesByRepo,
+    filterRepoIds,
+    searchQuery,
+    showActiveOnly,
+    repoMap,
+    tabsByWorktree,
+    sortedIds
+  ])
 
-  const latestRecentSortInputsRef = useRef<Record<string, RecentSortOverride>>({})
-  const frozenActiveRecentSortRef = useRef<{
-    selectionNonce: number
-    override: RecentSortOverride | null
-  }>({ selectionNonce: -1, override: null })
-
-  // Why: snapshot the active worktree's sort inputs at the moment the user
-  // selects it, so that subsequent background updates (e.g. clearing isUnread)
-  // don't cause the active card to jump in the list.  The ref mutation is
-  // idempotent for a given nonce value, which makes it safe even if React
-  // replays the render under concurrent mode.
-  if (sortBy === 'recent') {
-    if (activeWorktreeSelectionNonce !== frozenActiveRecentSortRef.current.selectionNonce) {
-      frozenActiveRecentSortRef.current = {
-        selectionNonce: activeWorktreeSelectionNonce,
-        override: activeWorktreeId
-          ? (latestRecentSortInputsRef.current[activeWorktreeId] ?? null)
-          : null
-      }
-    }
-  }
-
-  // Why: grab the stable primitive/ref values instead of creating a new object
-  // literal every render, which would bust the useMemo cache and cause the
-  // worktree list to re-sort on every single React render loop.
-  const activeOverride =
-    sortBy === 'recent' && activeWorktreeId ? frozenActiveRecentSortRef.current.override : null
-
-  const worktrees = useMemo(() => {
-    // Only construct the record literal inside the memo so it doesn't
-    // break memoization as a new object reference each render.
-    const overrides =
-      activeOverride && activeWorktreeId ? { [activeWorktreeId]: activeOverride } : null
-    const sorted = [...visibleWorktrees]
-    sorted.sort(
-      buildWorktreeComparator(sortBy, tabsByWorktree, repoMap, prCache, Date.now(), overrides)
-    )
-    return sorted
-  }, [visibleWorktrees, sortBy, tabsByWorktree, repoMap, prCache, activeWorktreeId, activeOverride])
-
-  // Why: memoize the per-worktree recent-sort inputs so we only iterate
-  // visible worktrees and call hasRecentPRSignal when the underlying data
-  // actually changes, rather than on every render.
-  const nextRecentSortInputs = useMemo(() => {
-    const inputs: Record<string, RecentSortOverride> = {}
-    if (sortBy === 'recent') {
-      for (const wt of visibleWorktrees) {
-        inputs[wt.id] = {
-          worktree: wt,
-          tabs: tabsByWorktree?.[wt.id] ?? [],
-          hasRecentPRSignal: hasRecentPRSignal(wt, repoMap, prCache)
-        }
-      }
-    }
-    return inputs
-  }, [visibleWorktrees, tabsByWorktree, repoMap, prCache, sortBy])
-  latestRecentSortInputsRef.current = nextRecentSortInputs
+  const worktrees = visibleWorktrees
 
   // Collapsed group state
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
