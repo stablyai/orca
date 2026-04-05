@@ -1,51 +1,16 @@
+// FORK: flat row layout — minimal sidebar inspired by Kodu-style reference.
+// Only shows worktree name + PR info (if exists). Status, unread, repo badge,
+// branch, issue, and comment are hidden by default (still toggleable in view options).
 /* eslint-disable max-lines */
-import React, { useEffect, useMemo, useCallback } from 'react'
+import React, { useEffect, useCallback } from 'react'
 import { useAppStore } from '@/store'
-import { Badge } from '@/components/ui/badge'
-import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card'
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { Bell, GitMerge, LoaderCircle, CircleDot, CircleCheck, CircleX } from 'lucide-react'
-import StatusIndicator from './StatusIndicator'
+import { CircleCheck, CircleX, LoaderCircle } from 'lucide-react'
 import WorktreeContextMenu from './WorktreeContextMenu'
 import { cn } from '@/lib/utils'
-import { detectAgentStatusFromTitle } from '@/lib/agent-status'
-import type {
-  Worktree,
-  Repo,
-  PRInfo,
-  IssueInfo,
-  PRState,
-  CheckStatus,
-  GitConflictOperation,
-  TerminalTab
-} from '../../../../shared/types'
-import type { Status } from './StatusIndicator'
+import type { Worktree, Repo, PRInfo, GitConflictOperation } from '../../../../shared/types'
 
 function branchDisplayName(branch: string): string {
   return branch.replace(/^refs\/heads\//, '')
-}
-
-const PRIMARY_BRANCHES = new Set(['main', 'master', 'develop', 'dev'])
-
-function isPrimaryBranch(branch: string): boolean {
-  return PRIMARY_BRANCHES.has(branchDisplayName(branch))
-}
-
-function prStateLabel(state: PRState): string {
-  return state.charAt(0).toUpperCase() + state.slice(1)
-}
-
-function checksLabel(status: CheckStatus): string {
-  switch (status) {
-    case 'success':
-      return 'Passing'
-    case 'failure':
-      return 'Failing'
-    case 'pending':
-      return 'Pending'
-    default:
-      return ''
-  }
 }
 
 const CONFLICT_OPERATION_LABELS: Record<Exclude<GitConflictOperation, 'unknown'>, string> = {
@@ -54,27 +19,10 @@ const CONFLICT_OPERATION_LABELS: Record<Exclude<GitConflictOperation, 'unknown'>
   'cherry-pick': 'Cherry-picking'
 }
 
-// ── Stable empty array for tabs fallback ─────────────────────────
-const EMPTY_TABS: TerminalTab[] = []
-
 type WorktreeCardProps = {
   worktree: Worktree
   repo: Repo | undefined
   isActive: boolean
-  hideRepoBadge?: boolean
-}
-
-function FilledBellIcon({ className }: { className?: string }): React.JSX.Element {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden className={className}>
-      <path
-        fill="currentColor"
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d="M5.25 9A6.75 6.75 0 0 1 12 2.25 6.75 6.75 0 0 1 18.75 9v3.75c0 .526.214 1.03.594 1.407l.53.532a.75.75 0 0 1-.53 1.28H4.656a.75.75 0 0 1-.53-1.28l.53-.532A1.989 1.989 0 0 0 5.25 12.75V9Zm6.75 12a3 3 0 0 0 2.996-2.825.75.75 0 0 0-.748-.8h-4.5a.75.75 0 0 0-.748.8A3 3 0 0 0 12 21Z"
-      />
-    </svg>
-  )
 }
 
 function PullRequestIcon({ className }: { className?: string }): React.JSX.Element {
@@ -91,48 +39,16 @@ function PullRequestIcon({ className }: { className?: string }): React.JSX.Eleme
 const WorktreeCard = React.memo(function WorktreeCard({
   worktree,
   repo,
-  isActive,
-  hideRepoBadge
+  isActive
 }: WorktreeCardProps) {
   const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
   const openModal = useAppStore((s) => s.openModal)
-  const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const fetchPRForBranch = useAppStore((s) => s.fetchPRForBranch)
   const fetchIssue = useAppStore((s) => s.fetchIssue)
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
-  const handleEditIssue = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation()
-      openModal('edit-meta', {
-        worktreeId: worktree.id,
-        currentDisplayName: worktree.displayName,
-        currentIssue: worktree.linkedIssue,
-        currentComment: worktree.comment,
-        focus: 'issue'
-      })
-    },
-    [worktree, openModal]
-  )
-
-  const handleEditComment = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation()
-      openModal('edit-meta', {
-        worktreeId: worktree.id,
-        currentDisplayName: worktree.displayName,
-        currentIssue: worktree.linkedIssue,
-        currentComment: worktree.comment,
-        focus: 'comment'
-      })
-    },
-    [worktree, openModal]
-  )
 
   const deleteState = useAppStore((s) => s.deleteStateByWorktreeId[worktree.id])
   const conflictOperation = useAppStore((s) => s.gitConflictOperationByWorktree[worktree.id])
-
-  // ── GRANULAR selectors: only subscribe to THIS worktree's data ──
-  const tabs = useAppStore((s) => s.tabsByWorktree[worktree.id] ?? EMPTY_TABS)
 
   const branch = branchDisplayName(worktree.branch)
   const prCacheKey = repo && branch ? `${repo.path}::${branch}` : ''
@@ -140,60 +56,31 @@ const WorktreeCard = React.memo(function WorktreeCard({
 
   // Subscribe to ONLY the specific cache entry, not entire prCache/issueCache
   const prEntry = useAppStore((s) => (prCacheKey ? s.prCache[prCacheKey] : undefined))
-  const issueEntry = useAppStore((s) => (issueCacheKey ? s.issueCache[issueCacheKey] : undefined))
 
   const pr: PRInfo | null | undefined = prEntry !== undefined ? prEntry.data : undefined
-  const issue: IssueInfo | null | undefined = worktree.linkedIssue
-    ? issueEntry !== undefined
-      ? issueEntry.data
-      : undefined
-    : null
 
-  const hasTerminals = tabs.length > 0
   const isDeleting = deleteState?.isDeleting ?? false
-
-  // Derive status
-  const status: Status = useMemo(() => {
-    if (!hasTerminals) {
-      return 'inactive'
-    }
-    const liveTabs = tabs.filter((tab) => tab.ptyId)
-    if (liveTabs.some((tab) => detectAgentStatusFromTitle(tab.title) === 'permission')) {
-      return 'permission'
-    }
-    if (liveTabs.some((tab) => detectAgentStatusFromTitle(tab.title) === 'working')) {
-      return 'working'
-    }
-    return liveTabs.length > 0 ? 'active' : 'inactive'
-  }, [hasTerminals, tabs])
 
   const showPR = cardProps.includes('pr')
   const showCI = cardProps.includes('ci')
   const showIssue = cardProps.includes('issue')
 
   // Skip GitHub fetches when the corresponding card sections are hidden.
-  // This preference is purely presentational, so background refreshes would
-  // spend rate limit budget on data the user cannot see.
   useEffect(() => {
     if (repo && !worktree.isBare && prCacheKey && (showPR || showCI)) {
       fetchPRForBranch(repo.path, branch)
     }
   }, [repo, worktree.isBare, fetchPRForBranch, branch, prCacheKey, showPR, showCI])
 
-  // Same rationale for issues: once that section is hidden, polling only burns
-  // GitHub calls and keeps stale-but-invisible data warm for no user benefit.
+  // Issue fetching — kept for potential future use via view options
   useEffect(() => {
     if (!repo || !worktree.linkedIssue || !issueCacheKey || !showIssue) {
       return
     }
-
     fetchIssue(repo.path, worktree.linkedIssue)
-
-    // Background poll as fallback (activity triggers handle the fast path)
     const interval = setInterval(() => {
       fetchIssue(repo.path, worktree.linkedIssue!)
-    }, 5 * 60_000) // 5 minutes
-
+    }, 5 * 60_000)
     return () => clearInterval(interval)
   }, [repo, worktree.linkedIssue, fetchIssue, issueCacheKey, showIssue])
 
@@ -215,25 +102,13 @@ const WorktreeCard = React.memo(function WorktreeCard({
     })
   }, [worktree.id, worktree.displayName, worktree.linkedIssue, worktree.comment, openModal])
 
-  const handleToggleUnreadQuick = useCallback(
-    (event: React.MouseEvent<HTMLButtonElement>) => {
-      event.preventDefault()
-      event.stopPropagation()
-      updateWorktreeMeta(worktree.id, { isUnread: !worktree.isUnread })
-    },
-    [worktree.id, worktree.isUnread, updateWorktreeMeta]
-  )
-
-  const unreadTooltip = worktree.isUnread ? 'Mark read' : 'Mark unread'
-
   return (
     <WorktreeContextMenu worktree={worktree}>
       <div
         className={cn(
-          'group relative flex items-start gap-2.5 px-3 py-2 rounded-lg cursor-pointer transition-all duration-200 outline-none select-none mx-1',
-          isActive
-            ? 'bg-black/[0.06] shadow-[0_1px_2px_rgba(0,0,0,0.03)] border border-border/60 dark:bg-white/[0.10] dark:border-border/40'
-            : 'border border-transparent hover:bg-accent/40',
+          // FORK: flat row layout — no card borders, generous padding, subtle active highlight
+          'group relative flex flex-col px-3.5 py-3 rounded-lg cursor-pointer transition-all duration-200 outline-none select-none mx-2',
+          isActive ? 'bg-black/[0.06] dark:bg-white/[0.06]' : 'hover:bg-accent/30',
           isDeleting && 'opacity-50 grayscale cursor-not-allowed'
         )}
         onClick={handleClick}
@@ -249,249 +124,66 @@ const WorktreeCard = React.memo(function WorktreeCard({
           </div>
         )}
 
-        {/* Status indicator on the left */}
-        {(cardProps.includes('status') || cardProps.includes('unread')) && (
-          <div className="flex flex-col items-center justify-start pt-[2px] gap-2 shrink-0">
-            {cardProps.includes('status') && <StatusIndicator status={status} />}
+        {/* Line 1: Worktree name */}
+        <div className="text-[14px] font-semibold text-foreground truncate leading-tight">
+          {worktree.displayName}
+        </div>
 
-            {cardProps.includes('unread') && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={handleToggleUnreadQuick}
-                    className={cn(
-                      'group/unread flex size-4 cursor-pointer items-center justify-center rounded transition-all',
-                      'hover:bg-accent/80 active:scale-95',
-                      'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
-                    )}
-                    aria-label={worktree.isUnread ? 'Mark as read' : 'Mark as unread'}
-                  >
-                    {worktree.isUnread ? (
-                      <FilledBellIcon className="size-[13px] text-amber-500 drop-shadow-sm" />
-                    ) : (
-                      <Bell className="size-3 text-muted-foreground/40 opacity-0 group-hover:opacity-100 group-hover/unread:opacity-100 transition-opacity" />
-                    )}
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="right" sideOffset={8}>
-                  <span>{unreadTooltip}</span>
-                </TooltipContent>
-              </Tooltip>
-            )}
+        {/* Line 2: PR info (only if PR exists and pr card property is enabled) */}
+        {showPR && pr && (
+          <div className="flex items-center gap-1.5 mt-1.5 min-w-0">
+            <PullRequestIcon
+              className={cn(
+                'size-3.5 shrink-0',
+                pr.state === 'merged' && 'text-purple-500/80',
+                pr.state === 'open' && 'text-emerald-500/80',
+                pr.state === 'closed' && 'text-muted-foreground/60',
+                pr.state === 'draft' && 'text-muted-foreground/50',
+                (!pr.state || !['merged', 'open', 'closed', 'draft'].includes(pr.state)) &&
+                  'text-muted-foreground opacity-60'
+              )}
+            />
+            <a
+              href={pr.url}
+              target="_blank"
+              rel="noreferrer"
+              className="text-[12px] text-foreground/80 font-medium shrink-0 hover:underline"
+              onClick={(e) => e.stopPropagation()}
+            >
+              #{pr.number}
+            </a>
+            <span className="text-[12px] text-muted-foreground truncate">{pr.title}</span>
+
+            {/* Right side: CI check + conflict badge */}
+            <div className="flex items-center gap-1.5 ml-auto shrink-0">
+              {conflictOperation && conflictOperation !== 'unknown' && (
+                <span className="text-[11px] text-amber-500 dark:text-amber-400 whitespace-nowrap">
+                  ⚠ {CONFLICT_OPERATION_LABELS[conflictOperation]}
+                </span>
+              )}
+              {showCI && pr.checksStatus !== 'neutral' && (
+                <>
+                  {pr.checksStatus === 'success' && (
+                    <CircleCheck className="size-3.5 text-emerald-500" />
+                  )}
+                  {pr.checksStatus === 'failure' && <CircleX className="size-3.5 text-rose-500" />}
+                  {pr.checksStatus === 'pending' && (
+                    <LoaderCircle className="size-3.5 text-amber-500 animate-spin" />
+                  )}
+                </>
+              )}
+            </div>
           </div>
         )}
 
-        {/* Content area */}
-        <div className="flex-1 min-w-0 flex flex-col gap-1.5">
-          {/* Header row: Title and Checks */}
-          <div className="flex items-center justify-between min-w-0 gap-2">
-            <div className="text-[12px] font-semibold text-foreground truncate leading-tight">
-              {worktree.displayName}
-            </div>
-
-            {/* CI Checks & PR state on the right */}
-            {cardProps.includes('ci') && pr && pr.checksStatus !== 'neutral' && (
-              <div className="flex items-center gap-2 shrink-0">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="inline-flex items-center opacity-80 hover:opacity-100 transition-opacity">
-                      {pr.checksStatus === 'success' && (
-                        <CircleCheck className="size-3.5 text-emerald-500" />
-                      )}
-                      {pr.checksStatus === 'failure' && (
-                        <CircleX className="size-3.5 text-rose-500" />
-                      )}
-                      {pr.checksStatus === 'pending' && (
-                        <LoaderCircle className="size-3.5 text-amber-500 animate-spin" />
-                      )}
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent side="right" sideOffset={8}>
-                    <span>CI checks {checksLabel(pr.checksStatus).toLowerCase()}</span>
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-            )}
+        {/* Conflict badge shown even without PR */}
+        {!(showPR && pr) && conflictOperation && conflictOperation !== 'unknown' && (
+          <div className="flex items-center gap-1 mt-1.5">
+            <span className="text-[11px] text-amber-500 dark:text-amber-400">
+              ⚠ {CONFLICT_OPERATION_LABELS[conflictOperation]}
+            </span>
           </div>
-
-          {/* Subtitle row: Repo badge + Branch */}
-          <div className="flex items-center gap-1.5 min-w-0">
-            {repo && !hideRepoBadge && (
-              <div className="flex items-center gap-1.5 shrink-0 px-1.5 py-0.5 rounded-[4px] bg-accent border border-border dark:bg-accent/50 dark:border-border/60">
-                <div
-                  className="size-1.5 rounded-full"
-                  style={{ backgroundColor: repo.badgeColor }}
-                />
-                <span className="text-[10px] font-semibold text-foreground truncate max-w-[6rem] leading-none lowercase">
-                  {repo.displayName}
-                </span>
-              </div>
-            )}
-
-            {isPrimaryBranch(worktree.branch) ? (
-              <Badge
-                variant="secondary"
-                className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 text-muted-foreground bg-accent border border-border dark:bg-accent/80 dark:border-border/50 leading-none"
-              >
-                main
-              </Badge>
-            ) : (
-              <span className="text-[11px] text-muted-foreground truncate leading-none">
-                {branch}
-              </span>
-            )}
-
-            {/* Why: the conflict operation (merge/rebase/cherry-pick) is the
-               only signal that the worktree is in an incomplete operation state.
-               Showing it on the card lets the user spot worktrees that need
-               attention without switching to them first. */}
-            {conflictOperation && conflictOperation !== 'unknown' && (
-              <Badge
-                variant="outline"
-                className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 gap-1 text-amber-600 border-amber-500/30 bg-amber-500/5 dark:text-amber-400 dark:border-amber-400/30 dark:bg-amber-400/5 leading-none"
-              >
-                <GitMerge className="size-2.5" />
-                {CONFLICT_OPERATION_LABELS[conflictOperation]}
-              </Badge>
-            )}
-          </div>
-
-          {/* Meta section: Issue / PR Links / Comment */}
-          {((cardProps.includes('issue') && issue) ||
-            (cardProps.includes('pr') && pr) ||
-            (cardProps.includes('comment') && worktree.comment)) && (
-            <div className="flex flex-col gap-[3px] mt-0.5">
-              {cardProps.includes('issue') && issue && (
-                <HoverCard openDelay={300}>
-                  <HoverCardTrigger asChild>
-                    <div
-                      className="flex items-center gap-1.5 min-w-0 cursor-pointer group/meta -mx-1.5 px-1.5 py-0.5 rounded transition-colors hover:bg-background/40"
-                      onClick={handleEditIssue}
-                    >
-                      <CircleDot className="size-3 shrink-0 text-muted-foreground opacity-60" />
-                      <div className="flex-1 min-w-0 flex items-center gap-1.5 text-[11.5px] leading-none">
-                        <span className="text-foreground opacity-80 font-medium shrink-0">
-                          #{issue.number}
-                        </span>
-                        <span className="text-muted-foreground truncate group-hover/meta:text-foreground transition-colors">
-                          {issue.title}
-                        </span>
-                      </div>
-                    </div>
-                  </HoverCardTrigger>
-                  <HoverCardContent
-                    side="right"
-                    align="start"
-                    className="w-72 p-3 text-xs space-y-1.5"
-                  >
-                    <div className="font-semibold text-[13px]">
-                      #{issue.number} {issue.title}
-                    </div>
-                    <div className="text-muted-foreground">
-                      State: {issue.state === 'open' ? 'Open' : 'Closed'}
-                    </div>
-                    {issue.labels.length > 0 && (
-                      <div className="flex flex-wrap gap-1">
-                        {issue.labels.map((l) => (
-                          <Badge key={l} variant="outline" className="h-4 px-1.5 text-[9px]">
-                            {l}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                    <a
-                      href={issue.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-muted-foreground underline underline-offset-2 hover:text-foreground"
-                    >
-                      View on GitHub
-                    </a>
-                  </HoverCardContent>
-                </HoverCard>
-              )}
-
-              {cardProps.includes('pr') && pr && (
-                <HoverCard openDelay={300}>
-                  <HoverCardTrigger asChild>
-                    <div
-                      className="flex items-center gap-1.5 min-w-0 cursor-pointer group/meta -mx-1.5 px-1.5 py-0.5 rounded transition-colors hover:bg-background/40"
-                      onClick={handleEditIssue}
-                    >
-                      <PullRequestIcon
-                        className={cn(
-                          'size-3 shrink-0',
-                          pr.state === 'merged' && 'text-purple-500/80',
-                          pr.state === 'open' && 'text-emerald-500/80',
-                          pr.state === 'closed' && 'text-muted-foreground/60',
-                          pr.state === 'draft' && 'text-muted-foreground/50',
-                          (!pr.state ||
-                            !['merged', 'open', 'closed', 'draft'].includes(pr.state)) &&
-                            'text-muted-foreground opacity-60'
-                        )}
-                      />
-                      <div className="flex-1 min-w-0 flex items-center gap-1.5 text-[11.5px] leading-none">
-                        <a
-                          href={pr.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-foreground opacity-80 font-medium shrink-0 hover:text-foreground hover:underline"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          PR #{pr.number}
-                        </a>
-                        <span className="text-muted-foreground truncate group-hover/meta:text-foreground transition-colors">
-                          {pr.title}
-                        </span>
-                      </div>
-                    </div>
-                  </HoverCardTrigger>
-                  <HoverCardContent
-                    side="right"
-                    align="start"
-                    className="w-72 p-3 text-xs space-y-1.5"
-                  >
-                    <div className="font-semibold text-[13px]">
-                      #{pr.number} {pr.title}
-                    </div>
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <span>State: {prStateLabel(pr.state)}</span>
-                      {pr.checksStatus !== 'neutral' && (
-                        <span>Checks: {checksLabel(pr.checksStatus)}</span>
-                      )}
-                    </div>
-                    <a
-                      href={pr.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-muted-foreground underline underline-offset-2 hover:text-foreground"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      View on GitHub
-                    </a>
-                  </HoverCardContent>
-                </HoverCard>
-              )}
-
-              {cardProps.includes('comment') && worktree.comment && (
-                <HoverCard openDelay={300}>
-                  <HoverCardTrigger asChild>
-                    <div
-                      className="text-[11px] text-muted-foreground truncate cursor-pointer -mx-1.5 px-1.5 py-0.5 hover:bg-background/40 hover:text-foreground rounded transition-colors leading-none"
-                      onClick={handleEditComment}
-                    >
-                      {worktree.comment}
-                    </div>
-                  </HoverCardTrigger>
-                  <HoverCardContent side="right" align="start" className="w-64 p-3 text-xs">
-                    <p className="whitespace-pre-wrap">{worktree.comment}</p>
-                  </HoverCardContent>
-                </HoverCard>
-              )}
-            </div>
-          )}
-        </div>
+        )}
       </div>
     </WorktreeContextMenu>
   )

@@ -77,7 +77,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set) => (
   searchQuery: '',
   setSearchQuery: (q) => set({ searchQuery: q }),
 
-  groupBy: 'none',
+  // FORK: default to repo grouping so repo headers with colored folder icons are always visible
+  groupBy: 'repo',
   setGroupBy: (g) => set({ groupBy: g }),
 
   sortBy: 'name',

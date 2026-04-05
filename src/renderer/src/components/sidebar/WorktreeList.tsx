@@ -117,7 +117,8 @@ const WorktreeList = React.memo(function WorktreeList() {
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: (index) => (rows[index].type === 'header' ? 42 : 56 + 4),
+    // FORK: flat row height — shorter rows without card borders/padding
+    estimateSize: (index) => (rows[index].type === 'header' ? 42 : 46),
     overscan: 10,
     getItemKey: (index) => {
       const row = rows[index]
@@ -312,7 +313,15 @@ const WorktreeList = React.memo(function WorktreeList() {
                     )}
                     style={row.repo ? { color: row.repo.badgeColor } : undefined}
                   >
-                    <row.icon className="size-3" />
+                    {/* FORK: filled folder for repo headers, outline icon for other groups */}
+                    {row.repo ? (
+                      <svg viewBox="0 0 20 20" fill="currentColor" className="size-3.5" aria-hidden>
+                        <path d="M3.5 4A1.5 1.5 0 0 0 2 5.5V7h3.879a2.5 2.5 0 0 1 1.768.732l1.414 1.415a.5.5 0 0 0 .354.146H18V7.5A1.5 1.5 0 0 0 16.5 6h-5.086a1 1 0 0 1-.707-.293L9.293 4.293A1 1 0 0 0 8.586 4H3.5Z" />
+                        <path d="M2 9.5v5A1.5 1.5 0 0 0 3.5 16h13a1.5 1.5 0 0 0 1.5-1.5v-5H9.415a2.5 2.5 0 0 1-1.768-.732L6.232 7.354a.5.5 0 0 0-.354-.147H2v2.293Z" />
+                      </svg>
+                    ) : (
+                      <row.icon className="size-3" />
+                    )}
                   </div>
 
                   <div className="min-w-0 flex-1">
