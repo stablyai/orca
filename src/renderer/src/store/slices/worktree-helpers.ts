@@ -14,6 +14,7 @@ export type WorktreeDeleteState = {
 export type WorktreeSlice = {
   worktreesByRepo: Record<string, Worktree[]>
   activeWorktreeId: string | null
+  activeWorktreeSelectionNonce: number
   deleteStateByWorktreeId: Record<string, WorktreeDeleteState>
   /**
    * Monotonically increasing counter that signals when the sidebar sort order

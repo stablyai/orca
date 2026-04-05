@@ -1,6 +1,7 @@
+/* eslint-disable max-lines */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Repo, TerminalTab, Worktree } from '../../../../shared/types'
-import { buildWorktreeComparator, computeSmartScore } from './smart-sort'
+import { buildWorktreeComparator, computeSmartScore, type RecentSortOverride } from './smart-sort'
 
 const NOW = new Date('2026-03-27T12:00:00.000Z').getTime()
 
@@ -274,5 +275,83 @@ describe('buildWorktreeComparator', () => {
     worktrees.sort(buildWorktreeComparator('recent', null, repoMap, {}, NOW))
 
     expect(worktrees.map((worktree) => worktree.id)).toEqual(['cold-cache', 'plain'])
+  })
+
+  it('can freeze the active worktree recent signals without blocking background reordering', () => {
+    const activeBeforeClick = makeWorktree({
+      id: 'active',
+      displayName: 'Active',
+      isUnread: true,
+      lastActivityAt: NOW - 30_000
+    })
+    const activeAfterClick = { ...activeBeforeClick, isUnread: false }
+    const background = makeWorktree({
+      id: 'background',
+      displayName: 'Background',
+      lastActivityAt: NOW - 60_000
+    })
+    const worktrees = [background, activeAfterClick]
+    const tabsByWorktree = {
+      [background.id]: [makeTab({ worktreeId: background.id, title: 'Claude Code - working' })]
+    }
+    const recentSortOverrides: Record<string, RecentSortOverride> = {
+      [activeAfterClick.id]: {
+        worktree: activeBeforeClick,
+        tabs: [],
+        hasRecentPRSignal: false
+      }
+    }
+
+    worktrees.sort(
+      buildWorktreeComparator('recent', tabsByWorktree, repoMap, null, NOW, recentSortOverrides)
+    )
+
+    expect(worktrees.map((worktree) => worktree.id)).toEqual(['background', 'active'])
+  })
+
+  it('can keep the active worktree in place while its unread badge is cleared on selection', () => {
+    const activeBeforeClick = makeWorktree({
+      id: 'active',
+      displayName: 'Active',
+      isUnread: true,
+      lastActivityAt: NOW - 30_000
+    })
+    const activeAfterClick = { ...activeBeforeClick, isUnread: false }
+    const background = makeWorktree({
+      id: 'background',
+      displayName: 'Background',
+      lastActivityAt: NOW - 2 * 60_000
+    })
+    const worktrees = [background, activeAfterClick]
+    const recentSortOverrides: Record<string, RecentSortOverride> = {
+      [activeAfterClick.id]: {
+        worktree: activeBeforeClick,
+        tabs: [],
+        hasRecentPRSignal: false
+      }
+    }
+
+    worktrees.sort(buildWorktreeComparator('recent', null, repoMap, null, NOW, recentSortOverrides))
+
+    expect(worktrees.map((worktree) => worktree.id)).toEqual(['active', 'background'])
+  })
+
+  it('keeps a more recent worktree ahead even without an override', () => {
+    const activeAfterClick = makeWorktree({
+      id: 'active',
+      displayName: 'Active',
+      isUnread: false,
+      lastActivityAt: NOW - 30_000
+    })
+    const background = makeWorktree({
+      id: 'background',
+      displayName: 'Background',
+      lastActivityAt: NOW - 2 * 60_000
+    })
+    const worktrees = [background, activeAfterClick]
+
+    worktrees.sort(buildWorktreeComparator('recent', null, repoMap, null, NOW))
+
+    expect(worktrees.map((worktree) => worktree.id)).toEqual(['active', 'background'])
   })
 })

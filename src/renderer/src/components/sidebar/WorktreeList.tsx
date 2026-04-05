@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import type { Worktree, Repo } from '../../../../shared/types'
-import { buildWorktreeComparator } from './smart-sort'
+import { buildWorktreeComparator, hasRecentPRSignal, type RecentSortOverride } from './smart-sort'
 import { branchName, type Row, buildRows, getGroupKeyForWorktree } from './worktree-list-groups'
 
 const WorktreeList = React.memo(function WorktreeList() {
@@ -15,6 +15,7 @@ const WorktreeList = React.memo(function WorktreeList() {
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const repos = useAppStore((s) => s.repos)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const activeWorktreeSelectionNonce = useAppStore((s) => s.activeWorktreeSelectionNonce)
   const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
   const searchQuery = useAppStore((s) => s.searchQuery)
   const groupBy = useAppStore((s) => s.groupBy)
@@ -45,8 +46,8 @@ const WorktreeList = React.memo(function WorktreeList() {
     return m
   }, [repos])
 
-  // Flatten, filter, sort
-  const worktrees = useMemo(() => {
+  // Flatten and filter the current live worktree data first.
+  const visibleWorktrees = useMemo(() => {
     let all: Worktree[] = Object.values(worktreesByRepo).flat()
 
     // Filter archived
@@ -77,20 +78,66 @@ const WorktreeList = React.memo(function WorktreeList() {
       })
     }
 
-    // Sort
-    all.sort(buildWorktreeComparator(sortBy, tabsByWorktree, repoMap, prCache))
-
     return all
-  }, [
-    worktreesByRepo,
-    filterRepoIds,
-    searchQuery,
-    showActiveOnly,
-    sortBy,
-    repoMap,
-    tabsByWorktree,
-    prCache
-  ])
+  }, [worktreesByRepo, filterRepoIds, searchQuery, showActiveOnly, repoMap, tabsByWorktree])
+
+  const latestRecentSortInputsRef = useRef<Record<string, RecentSortOverride>>({})
+  const frozenActiveRecentSortRef = useRef<{
+    selectionNonce: number
+    override: RecentSortOverride | null
+  }>({ selectionNonce: -1, override: null })
+
+  // Why: snapshot the active worktree's sort inputs at the moment the user
+  // selects it, so that subsequent background updates (e.g. clearing isUnread)
+  // don't cause the active card to jump in the list.  The ref mutation is
+  // idempotent for a given nonce value, which makes it safe even if React
+  // replays the render under concurrent mode.
+  if (sortBy === 'recent') {
+    if (activeWorktreeSelectionNonce !== frozenActiveRecentSortRef.current.selectionNonce) {
+      frozenActiveRecentSortRef.current = {
+        selectionNonce: activeWorktreeSelectionNonce,
+        override: activeWorktreeId
+          ? (latestRecentSortInputsRef.current[activeWorktreeId] ?? null)
+          : null
+      }
+    }
+  }
+
+  // Why: grab the stable primitive/ref values instead of creating a new object
+  // literal every render, which would bust the useMemo cache and cause the
+  // worktree list to re-sort on every single React render loop.
+  const activeOverride =
+    sortBy === 'recent' && activeWorktreeId ? frozenActiveRecentSortRef.current.override : null
+
+  const worktrees = useMemo(() => {
+    // Only construct the record literal inside the memo so it doesn't
+    // break memoization as a new object reference each render.
+    const overrides =
+      activeOverride && activeWorktreeId ? { [activeWorktreeId]: activeOverride } : null
+    const sorted = [...visibleWorktrees]
+    sorted.sort(
+      buildWorktreeComparator(sortBy, tabsByWorktree, repoMap, prCache, Date.now(), overrides)
+    )
+    return sorted
+  }, [visibleWorktrees, sortBy, tabsByWorktree, repoMap, prCache, activeWorktreeId, activeOverride])
+
+  // Why: memoize the per-worktree recent-sort inputs so we only iterate
+  // visible worktrees and call hasRecentPRSignal when the underlying data
+  // actually changes, rather than on every render.
+  const nextRecentSortInputs = useMemo(() => {
+    const inputs: Record<string, RecentSortOverride> = {}
+    if (sortBy === 'recent') {
+      for (const wt of visibleWorktrees) {
+        inputs[wt.id] = {
+          worktree: wt,
+          tabs: tabsByWorktree?.[wt.id] ?? [],
+          hasRecentPRSignal: hasRecentPRSignal(wt, repoMap, prCache)
+        }
+      }
+    }
+    return inputs
+  }, [visibleWorktrees, tabsByWorktree, repoMap, prCache, sortBy])
+  latestRecentSortInputsRef.current = nextRecentSortInputs
 
   // Collapsed group state
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())

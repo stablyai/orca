@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { Worktree } from '../../../../shared/types'
@@ -39,6 +40,7 @@ function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): b
 export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> = (set, get) => ({
   worktreesByRepo: {},
   activeWorktreeId: null,
+  activeWorktreeSelectionNonce: 0,
   deleteStateByWorktreeId: {},
   sortEpoch: 0,
 
@@ -272,7 +274,16 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     let shouldClearUnread = false
     set((s) => {
       if (!worktreeId) {
-        return { activeWorktreeId: null }
+        return {
+          activeWorktreeId: null,
+          // Why: only bump the nonce when the selection genuinely changes.
+          // Re-selecting null when already null should not invalidate the
+          // frozen sort override, which would defeat the freeze effect.
+          activeWorktreeSelectionNonce:
+            s.activeWorktreeId === null
+              ? s.activeWorktreeSelectionNonce
+              : s.activeWorktreeSelectionNonce + 1
+        }
       }
 
       const worktree = findWorktreeById(s.worktreesByRepo, worktreeId)
@@ -300,6 +311,14 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
 
       return {
         activeWorktreeId: worktreeId,
+        // Why: only bump the nonce when the worktreeId genuinely changes.
+        // Clicking the already-active worktree again would re-freeze the
+        // sort override with its current (post-click, isUnread:false) state,
+        // defeating the freeze and causing the card to drop in the list.
+        activeWorktreeSelectionNonce:
+          worktreeId === s.activeWorktreeId
+            ? s.activeWorktreeSelectionNonce
+            : s.activeWorktreeSelectionNonce + 1,
         activeFileId,
         activeTabType,
         worktreesByRepo: applyWorktreeUpdates(
