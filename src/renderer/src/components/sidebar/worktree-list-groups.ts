@@ -87,6 +87,97 @@ export function getPRGroupKey(
   return 'in-review'
 }
 
+/**
+ * Build the flat row list consumed by the virtualizer.
+ * Extracted here to keep WorktreeList.tsx under the line-count lint limit.
+ */
+export function buildRows(
+  groupBy: 'none' | 'repo' | 'pr-status',
+  worktrees: Worktree[],
+  repoMap: Map<string, Repo>,
+  prCache: Record<string, unknown> | null,
+  collapsedGroups: Set<string>
+): Row[] {
+  const result: Row[] = []
+
+  if (groupBy === 'none') {
+    for (const w of worktrees) {
+      result.push({ type: 'item', worktree: w, repo: repoMap.get(w.repoId) })
+    }
+    return result
+  }
+
+  const grouped = new Map<string, { label: string; items: Worktree[]; repo?: Repo }>()
+  for (const w of worktrees) {
+    let key: string
+    let label: string
+    let repo: Repo | undefined
+    if (groupBy === 'repo') {
+      repo = repoMap.get(w.repoId)
+      key = `repo:${w.repoId}`
+      label = repo?.displayName ?? 'Unknown'
+    } else {
+      const prGroup = getPRGroupKey(w, repoMap, prCache)
+      key = `pr:${prGroup}`
+      label = PR_GROUP_META[prGroup].label
+    }
+    if (!grouped.has(key)) {
+      grouped.set(key, { label, items: [], repo })
+    }
+    grouped.get(key)!.items.push(w)
+  }
+
+  const orderedGroups: [string, { label: string; items: Worktree[]; repo?: Repo }][] = []
+  if (groupBy === 'pr-status') {
+    for (const prGroup of PR_GROUP_ORDER) {
+      const key = `pr:${prGroup}`
+      const group = grouped.get(key)
+      if (group) {
+        orderedGroups.push([key, group])
+      }
+    }
+  } else {
+    orderedGroups.push(...Array.from(grouped.entries()))
+  }
+
+  for (const [key, group] of orderedGroups) {
+    const isCollapsed = collapsedGroups.has(key)
+    const repo = group.repo
+    const header =
+      groupBy === 'repo'
+        ? {
+            type: 'header' as const,
+            key,
+            label: group.label,
+            count: group.items.length,
+            tone: REPO_GROUP_META.tone,
+            icon: REPO_GROUP_META.icon,
+            repo
+          }
+        : (() => {
+            const prGroup = key.replace(/^pr:/, '') as PRGroupKey
+            const meta = PR_GROUP_META[prGroup]
+            return {
+              type: 'header' as const,
+              key,
+              label: meta.label,
+              count: group.items.length,
+              tone: meta.tone,
+              icon: meta.icon
+            }
+          })()
+
+    result.push(header)
+    if (!isCollapsed) {
+      for (const w of group.items) {
+        result.push({ type: 'item', worktree: w, repo: repoMap.get(w.repoId) })
+      }
+    }
+  }
+
+  return result
+}
+
 export function getGroupKeyForWorktree(
   groupBy: 'none' | 'repo' | 'pr-status',
   worktree: Worktree,

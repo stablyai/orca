@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useRef, useState } from 'react'
+import React, { useMemo, useCallback, useRef, useState, useEffect } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { ChevronDown, CircleX, Plus } from 'lucide-react'
 import { useAppStore } from '@/store'
@@ -8,26 +8,17 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import type { Worktree, Repo } from '../../../../shared/types'
 import { buildWorktreeComparator } from './smart-sort'
-import {
-  branchName,
-  getPRGroupKey,
-  type PRGroupKey,
-  type Row,
-  PR_GROUP_META,
-  PR_GROUP_ORDER,
-  REPO_GROUP_META,
-  getGroupKeyForWorktree
-} from './worktree-list-groups'
+import { branchName, type Row, buildRows, getGroupKeyForWorktree } from './worktree-list-groups'
 
 const WorktreeList = React.memo(function WorktreeList() {
   // ── Granular selectors (each is a primitive or shallow-stable ref) ──
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const repos = useAppStore((s) => s.repos)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
   const searchQuery = useAppStore((s) => s.searchQuery)
   const groupBy = useAppStore((s) => s.groupBy)
   const sortBy = useAppStore((s) => s.sortBy)
-  const sortEpoch = useAppStore((s) => s.sortEpoch)
   const showActiveOnly = useAppStore((s) => s.showActiveOnly)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const openModal = useAppStore((s) => s.openModal)
@@ -54,34 +45,7 @@ const WorktreeList = React.memo(function WorktreeList() {
     return m
   }, [repos])
 
-  // ── Stable sort order ──────────────────────────────────────────
-  // The sort order is cached and only recomputed when `sortEpoch` changes
-  // (worktree add/remove, terminal activity, backend refresh, etc.).
-  // Selection-triggered side-effects (clearing isUnread, GitHub refresh)
-  // do NOT bump sortEpoch, so clicking a card never reorders the list.
-  //
-  // Why useMemo instead of useEffect: the sort order must be computed
-  // synchronously *before* the worktrees memo reads it, otherwise the
-  // first render (and epoch bumps) would use stale/empty data from the ref.
-  const sortedIdsRef = useRef<string[]>([])
-
-  useMemo(() => {
-    const state = useAppStore.getState()
-    const allWorktrees: Worktree[] = Object.values(state.worktreesByRepo)
-      .flat()
-      .filter((w) => !w.isArchived)
-    const currentRepoMap = new Map(state.repos.map((r) => [r.id, r]))
-    const currentTabs = state.tabsByWorktree
-    allWorktrees.sort(
-      buildWorktreeComparator(sortBy, currentTabs, currentRepoMap, state.prCache, Date.now())
-    )
-    sortedIdsRef.current = allWorktrees.map((w) => w.id)
-    // sortEpoch is an intentional trigger: it's not read inside the memo, but
-    // its change signals that the sort order should be recomputed.
-    // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [sortEpoch, sortBy, prCache])
-
-  // Flatten, filter, and apply stable sort order
+  // Flatten, filter, sort
   const worktrees = useMemo(() => {
     let all: Worktree[] = Object.values(worktreesByRepo).flat()
 
@@ -113,17 +77,20 @@ const WorktreeList = React.memo(function WorktreeList() {
       })
     }
 
-    // Apply cached sort order.  Items not yet in the cache (e.g. brand-new
-    // worktrees before the effect fires) are appended at the end.
-    const orderIndex = new Map(sortedIdsRef.current.map((id, i) => [id, i]))
-    all.sort((a, b) => {
-      const ai = orderIndex.get(a.id) ?? Infinity
-      const bi = orderIndex.get(b.id) ?? Infinity
-      return ai - bi
-    })
+    // Sort
+    all.sort(buildWorktreeComparator(sortBy, tabsByWorktree, repoMap, prCache))
 
     return all
-  }, [worktreesByRepo, filterRepoIds, searchQuery, showActiveOnly, repoMap, tabsByWorktree])
+  }, [
+    worktreesByRepo,
+    filterRepoIds,
+    searchQuery,
+    showActiveOnly,
+    sortBy,
+    repoMap,
+    tabsByWorktree,
+    prCache
+  ])
 
   // Collapsed group state
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
@@ -141,86 +108,10 @@ const WorktreeList = React.memo(function WorktreeList() {
   }, [])
 
   // Build flat row list for virtualizer
-  const rows: Row[] = useMemo(() => {
-    const result: Row[] = []
-
-    if (groupBy === 'none') {
-      for (const w of worktrees) {
-        result.push({ type: 'item', worktree: w, repo: repoMap.get(w.repoId) })
-      }
-      return result
-    }
-
-    const grouped = new Map<string, { label: string; items: Worktree[]; repo?: Repo }>()
-    for (const w of worktrees) {
-      let key: string
-      let label: string
-      let repo: Repo | undefined
-      if (groupBy === 'repo') {
-        repo = repoMap.get(w.repoId)
-        key = `repo:${w.repoId}`
-        label = repo?.displayName ?? 'Unknown'
-      } else {
-        const prGroup = getPRGroupKey(w, repoMap, prCache)
-        key = `pr:${prGroup}`
-        label = PR_GROUP_META[prGroup].label
-      }
-      if (!grouped.has(key)) {
-        grouped.set(key, { label, items: [], repo })
-      }
-      grouped.get(key)!.items.push(w)
-    }
-
-    const orderedGroups: [string, { label: string; items: Worktree[]; repo?: Repo }][] = []
-    if (groupBy === 'pr-status') {
-      for (const prGroup of PR_GROUP_ORDER) {
-        const key = `pr:${prGroup}`
-        const group = grouped.get(key)
-        if (group) {
-          orderedGroups.push([key, group])
-        }
-      }
-    } else {
-      orderedGroups.push(...Array.from(grouped.entries()))
-    }
-
-    for (const [key, group] of orderedGroups) {
-      const isCollapsed = collapsedGroups.has(key)
-      const repo = group.repo
-      const header =
-        groupBy === 'repo'
-          ? {
-              type: 'header' as const,
-              key,
-              label: group.label,
-              count: group.items.length,
-              tone: REPO_GROUP_META.tone,
-              icon: REPO_GROUP_META.icon,
-              repo
-            }
-          : (() => {
-              const prGroup = key.replace(/^pr:/, '') as PRGroupKey
-              const meta = PR_GROUP_META[prGroup]
-              return {
-                type: 'header' as const,
-                key,
-                label: meta.label,
-                count: group.items.length,
-                tone: meta.tone,
-                icon: meta.icon
-              }
-            })()
-
-      result.push(header)
-      if (!isCollapsed) {
-        for (const w of group.items) {
-          result.push({ type: 'item', worktree: w, repo: repoMap.get(w.repoId) })
-        }
-      }
-    }
-
-    return result
-  }, [groupBy, worktrees, repoMap, prCache, collapsedGroups])
+  const rows: Row[] = useMemo(
+    () => buildRows(groupBy, worktrees, repoMap, prCache, collapsedGroups),
+    [groupBy, worktrees, repoMap, prCache, collapsedGroups]
+  )
 
   // ── TanStack Virtual ──────────────────────────────────────────
   const virtualizer = useVirtualizer({
@@ -278,6 +169,80 @@ const WorktreeList = React.memo(function WorktreeList() {
     clearPendingRevealWorktreeId
   ])
 
+  const navigateWorktree = useCallback(
+    (direction: 'up' | 'down') => {
+      const worktreeRows = rows.filter(
+        (r): r is Extract<Row, { type: 'item' }> => r.type === 'item'
+      )
+      if (worktreeRows.length === 0) {
+        return
+      }
+
+      let nextIndex = 0
+      const currentIndex = worktreeRows.findIndex((r) => r.worktree.id === activeWorktreeId)
+
+      if (currentIndex !== -1) {
+        if (direction === 'up') {
+          nextIndex = currentIndex - 1
+          if (nextIndex < 0) {
+            nextIndex = worktreeRows.length - 1
+          }
+        } else {
+          nextIndex = currentIndex + 1
+          if (nextIndex >= worktreeRows.length) {
+            nextIndex = 0
+          }
+        }
+      }
+
+      const nextWorktreeId = worktreeRows[nextIndex].worktree.id
+      setActiveWorktree(nextWorktreeId)
+
+      const rowIndex = rows.findIndex((r) => r.type === 'item' && r.worktree.id === nextWorktreeId)
+      if (rowIndex !== -1) {
+        virtualizer.scrollToIndex(rowIndex, { align: 'auto' })
+      }
+    },
+    [rows, activeWorktreeId, setActiveWorktree, virtualizer]
+  )
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const mod = navigator.userAgent.includes('Mac') ? e.metaKey : e.ctrlKey
+      if (mod && !e.shiftKey && e.key === '0') {
+        scrollRef.current?.focus()
+        e.preventDefault()
+        return
+      }
+
+      if (mod && e.shiftKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+        navigateWorktree(e.key === 'ArrowUp' ? 'up' : 'down')
+        e.preventDefault()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown, { capture: true })
+    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true })
+  }, [navigateWorktree])
+
+  const handleContainerKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        navigateWorktree(e.key === 'ArrowUp' ? 'up' : 'down')
+        e.preventDefault()
+      } else if (e.key === 'Enter') {
+        const helper = document.querySelector(
+          '.xterm-helper-textarea'
+        ) as HTMLTextAreaElement | null
+        if (helper) {
+          helper.focus()
+        }
+        e.preventDefault()
+      }
+    },
+    [navigateWorktree]
+  )
+
   const handleCreateForRepo = useCallback(
     (repoId: string) => {
       openModal('create-worktree', { preselectedRepoId: repoId })
@@ -316,10 +281,9 @@ const WorktreeList = React.memo(function WorktreeList() {
   return (
     <div
       ref={scrollRef}
-      className={cn(
-        'flex-1 overflow-auto px-1 scrollbar-sleek scroll-smooth',
-        groupBy === 'none' ? 'pt-2' : 'pt-px'
-      )}
+      tabIndex={0}
+      onKeyDown={handleContainerKeyDown}
+      className="flex-1 overflow-auto px-1 scrollbar-sleek scroll-smooth outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset pt-px"
     >
       <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
         {virtualizer.getVirtualItems().map((vItem) => {

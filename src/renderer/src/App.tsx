@@ -333,6 +333,13 @@ function App(): React.JSX.Element {
         return
       }
 
+      // Cmd/Ctrl+B — toggle left sidebar
+      if (!e.altKey && !e.shiftKey && e.key.toLowerCase() === 'b') {
+        e.preventDefault()
+        toggleSidebar()
+        return
+      }
+
       // Cmd/Ctrl+N — create worktree
       if (!e.altKey && !e.shiftKey && e.key.toLowerCase() === 'n') {
         if (repos.length === 0) {
