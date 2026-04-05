@@ -71,7 +71,7 @@ const STATUS_ICONS: Record<
 // are assigned area:'unstaged' by the parser — appear above "Staged Changes".
 // This keeps unresolved conflicts visible at the top of the list where the
 // user won't miss them.
-const SECTION_ORDER = ['untracked', 'unstaged', 'staged'] as const
+const SECTION_ORDER = ['unstaged', 'staged', 'untracked'] as const
 const SECTION_LABELS: Record<(typeof SECTION_ORDER)[number], string> = {
   staged: 'Staged Changes',
   unstaged: 'Changes',

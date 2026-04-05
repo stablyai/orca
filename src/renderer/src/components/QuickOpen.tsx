@@ -55,6 +55,7 @@ export default function QuickOpen(): React.JSX.Element | null {
   const [files, setFiles] = useState<string[]>([])
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
 
@@ -88,6 +89,7 @@ export default function QuickOpen(): React.JSX.Element | null {
     setQuery('')
     setSelectedIndex(0)
     setFiles([])
+    setLoadError(null)
     setLoading(true)
 
     void window.api.fs
@@ -97,9 +99,12 @@ export default function QuickOpen(): React.JSX.Element | null {
           setFiles(result)
         }
       })
-      .catch(() => {
+      .catch((error) => {
         if (!cancelled) {
           setFiles([])
+          // Why: treating list-files failures as "no matches" hides the real
+          // cause when the active worktree path is unauthorized or stale.
+          setLoadError(error instanceof Error ? error.message : String(error))
         }
       })
       .finally(() => {
@@ -230,6 +235,11 @@ export default function QuickOpen(): React.JSX.Element | null {
             {loading && (
               <div className="px-3 py-6 text-center text-xs text-muted-foreground">
                 Loading files...
+              </div>
+            )}
+            {!loading && loadError && (
+              <div className="px-3 py-6 text-center text-xs text-muted-foreground">
+                Could not load files: {loadError}
               </div>
             )}
             {filtered.length === 0 && query.trim() && (

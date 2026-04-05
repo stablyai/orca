@@ -32,7 +32,8 @@ import {
   resolveRegisteredWorktreePath,
   validateGitRelativeFilePath,
   isENOENT,
-  authorizeExternalPath
+  authorizeExternalPath,
+  rebuildAuthorizedRootsCache
 } from './filesystem-auth'
 import { listQuickOpenFiles } from './filesystem-list-files'
 import { registerFilesystemMutationHandlers } from './filesystem-mutations'
@@ -73,6 +74,7 @@ function isBinaryBuffer(buffer: Buffer): boolean {
 }
 
 export function registerFilesystemHandlers(store: Store): void {
+  void rebuildAuthorizedRootsCache(store)
   const activeTextSearches = new Map<string, ChildProcessByStdio<null, Readable, Readable>>()
 
   // ─── Filesystem ─────────────────────────────────────────

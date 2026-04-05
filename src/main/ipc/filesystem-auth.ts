@@ -7,9 +7,16 @@ export const PATH_ACCESS_DENIED_MESSAGE =
   'Access denied: path resolves outside allowed directories. If this blocks a legitimate workflow, please file a GitHub issue.'
 
 const authorizedExternalPaths = new Set<string>()
+const registeredWorktreeRoots = new Set<string>()
+let registeredWorktreeRootsDirty = true
+let registeredWorktreeRootsRefresh: Promise<void> | null = null
 
 export function authorizeExternalPath(targetPath: string): void {
   authorizedExternalPaths.add(resolve(targetPath))
+}
+
+export function invalidateAuthorizedRootsCache(): void {
+  registeredWorktreeRootsDirty = true
 }
 
 /**
@@ -46,7 +53,51 @@ export function isPathAllowed(targetPath: string, store: Store): boolean {
   if (authorizedExternalPaths.has(resolvedTarget)) {
     return true
   }
+  for (const authorizedPath of authorizedExternalPaths) {
+    if (isDescendantOrEqual(resolvedTarget, authorizedPath)) {
+      return true
+    }
+  }
   return getAllowedRoots(store).some((root) => isDescendantOrEqual(resolvedTarget, root))
+}
+
+export async function rebuildAuthorizedRootsCache(store: Store): Promise<void> {
+  const nextRoots = new Set<string>()
+
+  for (const repo of store.getRepos()) {
+    try {
+      nextRoots.add(await normalizeExistingPath(repo.path))
+
+      const worktrees = await listWorktrees(repo.path)
+      for (const worktree of worktrees) {
+        nextRoots.add(await normalizeExistingPath(worktree.path))
+      }
+    } catch (error) {
+      // Why: a single inaccessible repo (EACCES, EIO, etc.) must not break
+      // the entire cache rebuild — that would disable File Explorer and
+      // Quick Open for all other repos. We skip the failing repo and let
+      // the rest proceed.
+      console.warn(`[filesystem-auth] skipping repo ${repo.path} during cache rebuild:`, error)
+    }
+  }
+
+  registeredWorktreeRoots.clear()
+  for (const root of nextRoots) {
+    registeredWorktreeRoots.add(root)
+  }
+  registeredWorktreeRootsDirty = false
+}
+
+export async function ensureAuthorizedRootsCache(store: Store): Promise<void> {
+  if (!registeredWorktreeRootsDirty) {
+    return
+  }
+  if (!registeredWorktreeRootsRefresh) {
+    registeredWorktreeRootsRefresh = rebuildAuthorizedRootsCache(store).finally(() => {
+      registeredWorktreeRootsRefresh = null
+    })
+  }
+  await registeredWorktreeRootsRefresh
 }
 
 /**
@@ -60,13 +111,13 @@ export function isENOENT(error: unknown): boolean {
 
 export async function resolveAuthorizedPath(targetPath: string, store: Store): Promise<string> {
   const resolvedTarget = resolve(targetPath)
-  if (!isPathAllowed(resolvedTarget, store)) {
+  if (!(await isPathAllowedIncludingRegisteredWorktrees(resolvedTarget, store))) {
     throw new Error(PATH_ACCESS_DENIED_MESSAGE)
   }
 
   try {
     const realTarget = await realpath(resolvedTarget)
-    if (!isPathAllowed(realTarget, store)) {
+    if (!(await isPathAllowedIncludingRegisteredWorktrees(realTarget, store))) {
       throw new Error(PATH_ACCESS_DENIED_MESSAGE)
     }
     return realTarget
@@ -77,11 +128,33 @@ export async function resolveAuthorizedPath(targetPath: string, store: Store): P
 
     const realParent = await realpath(dirname(resolvedTarget))
     const candidateTarget = resolve(realParent, basename(resolvedTarget))
-    if (!isPathAllowed(candidateTarget, store)) {
+    if (!(await isPathAllowedIncludingRegisteredWorktrees(candidateTarget, store))) {
       throw new Error(PATH_ACCESS_DENIED_MESSAGE)
     }
     return candidateTarget
   }
+}
+
+async function isPathAllowedIncludingRegisteredWorktrees(
+  targetPath: string,
+  store: Store
+): Promise<boolean> {
+  if (isPathAllowed(targetPath, store)) {
+    return true
+  }
+
+  await ensureAuthorizedRootsCache(store)
+
+  // Why: external linked worktrees are already trusted for git operations.
+  // Cache their normalized roots once and reuse that index so quick-open and
+  // file explorer do not spawn `git worktree list` on every filesystem read.
+  for (const root of registeredWorktreeRoots) {
+    if (isDescendantOrEqual(targetPath, root)) {
+      return true
+    }
+  }
+
+  return false
 }
 
 async function normalizeExistingPath(targetPath: string): Promise<string> {
@@ -119,19 +192,10 @@ export async function resolveRegisteredWorktreePath(
   // symlinks).
   const normalizedTarget = await normalizeExistingPath(resolvedTarget)
 
-  for (const repo of store.getRepos()) {
-    const normalizedRepoPath = await normalizeExistingPath(repo.path)
-
-    if (normalizedTarget === normalizedRepoPath) {
+  await ensureAuthorizedRootsCache(store)
+  for (const root of registeredWorktreeRoots) {
+    if (normalizedTarget === root) {
       return normalizedTarget
-    }
-
-    const worktrees = await listWorktrees(repo.path)
-    for (const worktree of worktrees) {
-      const normalizedWorktreePath = await normalizeExistingPath(worktree.path)
-      if (normalizedTarget === normalizedWorktreePath) {
-        return normalizedTarget
-      }
     }
   }
 

@@ -9,6 +9,7 @@ type UseFileExplorerTreeResult = {
   flatRows: TreeNode[]
   rowsByPath: Map<string, TreeNode>
   rootCache: DirCache | undefined
+  rootError: string | null
   loadDir: (dirPath: string, depth: number, options?: { force?: boolean }) => Promise<void>
   refreshTree: () => Promise<void>
   refreshDir: (dirPath: string) => Promise<void>
@@ -20,6 +21,7 @@ export function useFileExplorerTree(
   expanded: Set<string>
 ): UseFileExplorerTreeResult {
   const [dirCache, setDirCache] = useState<Record<string, DirCache>>({})
+  const [rootError, setRootError] = useState<string | null>(null)
   const dirCacheRef = useRef(dirCache)
   dirCacheRef.current = dirCache
 
@@ -38,6 +40,9 @@ export function useFileExplorerTree(
       }))
       try {
         const entries = await window.api.fs.readDir({ dirPath })
+        if (depth === -1) {
+          setRootError(null)
+        }
         const children: TreeNode[] = entries
           .filter(shouldIncludeFileExplorerEntry)
           .map((entry) => ({
@@ -50,7 +55,14 @@ export function useFileExplorerTree(
             depth: depth + 1
           }))
         setDirCache((prev) => ({ ...prev, [dirPath]: { children, loading: false } }))
-      } catch {
+      } catch (error) {
+        if (depth === -1) {
+          // Why: the old implementation collapsed root read failures into an
+          // empty tree, which made authorization/path bugs look like a real
+          // empty worktree. Preserve the message so the UI can distinguish
+          // "no files" from "could not read this worktree".
+          setRootError(error instanceof Error ? error.message : String(error))
+        }
         setDirCache((prev) => ({ ...prev, [dirPath]: { children: [], loading: false } }))
       }
     },
@@ -111,6 +123,7 @@ export function useFileExplorerTree(
 
   const resetAndLoad = useCallback(() => {
     setDirCache({})
+    setRootError(null)
     if (worktreePath) {
       void loadDir(worktreePath, -1, { force: true })
     }
@@ -121,6 +134,7 @@ export function useFileExplorerTree(
     flatRows,
     rowsByPath,
     rootCache,
+    rootError,
     loadDir,
     refreshTree,
     refreshDir,

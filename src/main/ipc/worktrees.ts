@@ -32,6 +32,7 @@ import {
   formatWorktreeRemovalError,
   isOrphanedWorktreeError
 } from './worktree-logic'
+import { rebuildAuthorizedRootsCache, ensureAuthorizedRootsCache } from './filesystem-auth'
 
 export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store): void {
   // Remove any previously registered handlers so we can re-register them
@@ -44,6 +45,10 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
   ipcMain.removeHandler('hooks:check')
 
   ipcMain.handle('worktrees:listAll', async () => {
+    // Why: use ensureAuthorizedRootsCache (not rebuild) to avoid redundantly
+    // listing git worktrees when the cache is already fresh — the handler
+    // itself calls listWorktrees for every repo below.
+    await ensureAuthorizedRootsCache(store)
     const repos = store.getRepos()
     const allWorktrees: Worktree[] = []
 
@@ -60,6 +65,10 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
   })
 
   ipcMain.handle('worktrees:list', async (_event, args: { repoId: string }) => {
+    // Why: use ensureAuthorizedRootsCache (not rebuild) to avoid redundantly
+    // listing git worktrees when the cache is already fresh — the handler
+    // itself calls listWorktrees below.
+    await ensureAuthorizedRootsCache(store)
     const repo = store.getRepo(args.repoId)
     if (!repo) {
       return []
@@ -160,6 +169,7 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
       }
       const meta = store.setWorktreeMeta(worktreeId, metaUpdates)
       const worktree = mergeWorktree(repo.id, created, meta)
+      await rebuildAuthorizedRootsCache(store)
 
       let setup: CreateWorktreeResult['setup']
       if (setupScript && shouldLaunchSetup) {
@@ -213,12 +223,14 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
           console.warn(`[worktrees] Orphaned worktree detected at ${worktreePath}, cleaning up`)
           await rm(worktreePath, { recursive: true, force: true }).catch(() => {})
           store.removeWorktreeMeta(args.worktreeId)
+          await rebuildAuthorizedRootsCache(store)
           notifyWorktreesChanged(mainWindow, repoId)
           return
         }
         throw new Error(formatWorktreeRemovalError(error, worktreePath, args.force ?? false))
       }
       store.removeWorktreeMeta(args.worktreeId)
+      await rebuildAuthorizedRootsCache(store)
 
       notifyWorktreesChanged(mainWindow, repoId)
     }

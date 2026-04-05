@@ -36,6 +36,7 @@ const WorktreeList = React.memo(function WorktreeList() {
     groupBy === 'pr-status' || sortBy === 'recent' ? s.prCache : null
   )
 
+  const sortEpoch = useAppStore((s) => s.sortEpoch)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const repoMap = useMemo(() => {
@@ -46,7 +47,32 @@ const WorktreeList = React.memo(function WorktreeList() {
     return m
   }, [repos])
 
-  // Flatten and filter the current live worktree data first.
+  // ── Stable sort order ──────────────────────────────────────────
+  // The sort order is cached and only recomputed when `sortEpoch` changes
+  // (worktree add/remove, terminal activity, backend refresh, etc.).
+  // Selection-triggered side-effects (clearing isUnread, GitHub refresh)
+  // do NOT bump sortEpoch, so clicking a card never reorders the list.
+  //
+  // Why useMemo instead of useEffect: the sort order must be computed
+  // synchronously *before* the worktrees memo reads it, otherwise the
+  // first render (and epoch bumps) would use stale/empty data from the ref.
+  const sortedIds = useMemo(() => {
+    const state = useAppStore.getState()
+    const allWorktrees: Worktree[] = Object.values(state.worktreesByRepo)
+      .flat()
+      .filter((w) => !w.isArchived)
+    const currentRepoMap = new Map(state.repos.map((r) => [r.id, r]))
+    const currentTabs = state.tabsByWorktree
+    allWorktrees.sort(
+      buildWorktreeComparator(sortBy, currentTabs, currentRepoMap, state.prCache, Date.now())
+    )
+    return allWorktrees.map((w) => w.id)
+    // sortEpoch is an intentional trigger: it's not read inside the memo, but
+    // its change signals that the sort order should be recomputed.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [sortEpoch, sortBy, prCache])
+
+  // Flatten, filter, and apply stable sort order
   const visibleWorktrees = useMemo(() => {
     let all: Worktree[] = Object.values(worktreesByRepo).flat()
 
@@ -78,8 +104,18 @@ const WorktreeList = React.memo(function WorktreeList() {
       })
     }
 
+    // Apply cached sort order. Items not yet in the cache (e.g. brand-new
+    // worktrees before the next sortEpoch bump) are appended at the end.
+    const orderIndex = new Map(sortedIds.map((id, i) => [id, i]))
+    all.sort((a, b) => {
+      const ai = orderIndex.get(a.id) ?? Infinity
+      const bi = orderIndex.get(b.id) ?? Infinity
+      return ai - bi
+    })
+
+
     return all
-  }, [worktreesByRepo, filterRepoIds, searchQuery, showActiveOnly, repoMap, tabsByWorktree])
+  }, [worktreesByRepo, filterRepoIds, searchQuery, showActiveOnly, repoMap, tabsByWorktree, sortedIds])
 
   const latestRecentSortInputsRef = useRef<Record<string, RecentSortOverride>>({})
   const frozenActiveRecentSortRef = useRef<{
@@ -275,6 +311,12 @@ const WorktreeList = React.memo(function WorktreeList() {
   const handleContainerKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        // Why: only capture bare arrow keys when the list container itself is
+        // focused. If focus is on an inner input or button, arrow keys should
+        // perform their native function (e.g. cursor movement in text fields).
+        if (e.target !== e.currentTarget) {
+          return
+        }
         navigateWorktree(e.key === 'ArrowUp' ? 'up' : 'down')
         e.preventDefault()
       } else if (e.key === 'Enter') {

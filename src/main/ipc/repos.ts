@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto'
 import type { Store } from '../persistence'
 import type { Repo } from '../../shared/types'
 import { REPO_COLORS } from '../../shared/constants'
+import { rebuildAuthorizedRootsCache } from './filesystem-auth'
 import {
   isGitRepo,
   getGitUsername,
@@ -48,12 +49,14 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     }
 
     store.addRepo(repo)
+    await rebuildAuthorizedRootsCache(store)
     notifyReposChanged(mainWindow)
     return repo
   })
 
-  ipcMain.handle('repos:remove', (_event, args: { repoId: string }) => {
+  ipcMain.handle('repos:remove', async (_event, args: { repoId: string }) => {
     store.removeRepo(args.repoId)
+    await rebuildAuthorizedRootsCache(store)
     notifyReposChanged(mainWindow)
   })
 

@@ -47,6 +47,7 @@ export default function FileExplorer(): React.JSX.Element {
     flatRows,
     rowsByPath,
     rootCache,
+    rootError,
     loadDir,
     refreshTree,
     refreshDir,
@@ -264,6 +265,13 @@ export default function FileExplorer(): React.JSX.Element {
       return (
         <div className="flex items-center justify-center h-full text-[11px] text-muted-foreground">
           <Loader2 className="size-4 animate-spin" />
+        </div>
+      )
+    }
+    if (rootError) {
+      return (
+        <div className="flex h-full items-center justify-center px-4 text-center text-[11px] text-muted-foreground">
+          Could not load files for this worktree: {rootError}
         </div>
       )
     }

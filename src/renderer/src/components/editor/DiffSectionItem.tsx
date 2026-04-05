@@ -19,7 +19,13 @@ function computeLineStats(
   original: string,
   modified: string,
   status: string
-): { added: number; removed: number } {
+): { added: number; removed: number } | null {
+  // Why: for very large files (e.g. package-lock.json), splitting and
+  // iterating synchronously in the React render cycle would block the
+  // main thread and freeze the UI. Return null to skip stats display.
+  if (original.length + modified.length > 500_000) {
+    return null
+  }
   if (status === 'added') {
     return { added: modified ? modified.split('\n').length : 0, removed: 0 }
   }
