@@ -342,6 +342,8 @@ export default function CombinedDiffViewer({ file }: { file: OpenFile }): React.
             isDark={isDark}
             settings={settings}
             sectionHeight={sectionHeights[index]}
+            worktreeId={file.worktreeId}
+            worktreeRoot={file.filePath}
             loadSection={loadSection}
             toggleSection={toggleSection}
             setSectionHeights={setSectionHeights}

@@ -1,14 +1,54 @@
-import React, { lazy, type MutableRefObject } from 'react'
+import React, { lazy, useMemo, type MutableRefObject } from 'react'
 import { LazySection } from './LazySection'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { ChevronDown, ChevronRight, ExternalLink } from 'lucide-react'
 import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
 import type { editor as monacoEditor } from 'monaco-editor'
-import { basename, dirname } from '@/lib/path'
+import { joinPath } from '@/lib/path'
 import { detectLanguage } from '@/lib/language-detect'
-import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store'
 import type { GitDiffResult } from '../../../../shared/types'
 
 const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
+
+/**
+ * Compute approximate added/removed line counts by matching lines
+ * between original and modified content using a multiset approach.
+ * Not a true Myers diff, but fast and accurate enough for stat display.
+ */
+function computeLineStats(
+  original: string,
+  modified: string,
+  status: string
+): { added: number; removed: number } {
+  if (status === 'added') {
+    return { added: modified ? modified.split('\n').length : 0, removed: 0 }
+  }
+  if (status === 'deleted') {
+    return { added: 0, removed: original ? original.split('\n').length : 0 }
+  }
+
+  const origLines = original.split('\n')
+  const modLines = modified.split('\n')
+
+  const origMap = new Map<string, number>()
+  for (const line of origLines) {
+    origMap.set(line, (origMap.get(line) ?? 0) + 1)
+  }
+
+  let matched = 0
+  for (const line of modLines) {
+    const count = origMap.get(line) ?? 0
+    if (count > 0) {
+      origMap.set(line, count - 1)
+      matched++
+    }
+  }
+
+  return {
+    added: modLines.length - matched,
+    removed: origLines.length - matched
+  }
+}
 
 type DiffSection = {
   key: string
@@ -32,6 +72,8 @@ export function DiffSectionItem({
   isDark,
   settings,
   sectionHeight,
+  worktreeId,
+  worktreeRoot,
   loadSection,
   toggleSection,
   setSectionHeights,
@@ -46,6 +88,9 @@ export function DiffSectionItem({
   isDark: boolean
   settings: { terminalFontSize?: number; terminalFontFamily?: string } | null
   sectionHeight: number | undefined
+  worktreeId: string
+  /** The worktree root directory — not a file path; used to resolve absolute paths for opening files. */
+  worktreeRoot: string
   loadSection: (index: number) => void
   toggleSection: (index: number) => void
   setSectionHeights: React.Dispatch<React.SetStateAction<Record<number, number>>>
@@ -53,11 +98,29 @@ export function DiffSectionItem({
   modifiedEditorsRef: MutableRefObject<Map<number, monacoEditor.IStandaloneCodeEditor>>
   handleSectionSaveRef: MutableRefObject<(index: number) => Promise<void>>
 }): React.JSX.Element {
+  const openFile = useAppStore((s) => s.openFile)
   const language = detectLanguage(section.path)
-  const fileName = basename(section.path)
-  const parentDir = dirname(section.path)
-  const dirPath = parentDir === '.' ? '' : parentDir
   const isEditable = section.area === 'unstaged'
+
+  const lineStats = useMemo(
+    () =>
+      section.loading
+        ? null
+        : computeLineStats(section.originalContent, section.modifiedContent, section.status),
+    [section.loading, section.originalContent, section.modifiedContent, section.status]
+  )
+
+  const handleOpenInEditor = (e: React.MouseEvent): void => {
+    e.stopPropagation()
+    const absolutePath = joinPath(worktreeRoot, section.path)
+    openFile({
+      filePath: absolutePath,
+      relativePath: section.path,
+      worktreeId,
+      language,
+      mode: 'edit'
+    })
+  }
 
   const handleMount: DiffOnMount = (editor, monaco) => {
     const modifiedEditor = editor.getModifiedEditor()
@@ -92,37 +155,45 @@ export function DiffSectionItem({
 
   return (
     <LazySection key={section.key} index={index} onVisible={loadSection}>
-      <button
-        className="flex items-center gap-2 w-full px-3 py-2 text-left text-sm hover:bg-accent/30 transition-colors"
+      <div
+        className="sticky top-0 z-10 bg-background flex items-center w-full px-3 py-1.5 text-left text-xs hover:bg-accent/30 transition-colors group cursor-pointer"
         onClick={() => toggleSection(index)}
       >
-        {section.collapsed ? (
-          <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
-        ) : (
-          <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
-        )}
-        <span className="min-w-0 flex-1 truncate">
-          <span className="font-medium">{fileName}</span>
-          {section.dirty && <span className="text-muted-foreground font-medium ml-1">M</span>}
-          {dirPath && <span className="text-muted-foreground text-xs ml-2">{dirPath}</span>}
-        </span>
-        <span
-          className={cn(
-            'text-xs font-bold ml-auto',
-            section.status === 'modified' && 'text-amber-500',
-            section.status === 'added' && 'text-green-500',
-            section.status === 'deleted' && 'text-red-500'
+        <span className="min-w-0 flex-1 truncate text-muted-foreground">
+          <span
+            className="hover:underline cursor-copy"
+            onClick={(e) => {
+              e.stopPropagation()
+              navigator.clipboard.writeText(section.path)
+            }}
+            title="Copy path"
+          >
+            {section.path}
+          </span>
+          {section.dirty && <span className="font-medium ml-1">M</span>}
+          {lineStats && (lineStats.added > 0 || lineStats.removed > 0) && (
+            <span className="tabular-nums ml-2">
+              {lineStats.added > 0 && <span className="text-green-500">+{lineStats.added}</span>}
+              {lineStats.added > 0 && lineStats.removed > 0 && <span> </span>}
+              {lineStats.removed > 0 && <span className="text-red-500">-{lineStats.removed}</span>}
+            </span>
           )}
-        >
-          {section.area === 'staged'
-            ? 'Staged'
-            : section.area === 'unstaged'
-              ? 'Modified'
-              : isBranchMode
-                ? 'Branch'
-                : ''}
         </span>
-      </button>
+        <div className="flex items-center gap-1 shrink-0 ml-2">
+          <button
+            className="p-0.5 rounded text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+            onClick={handleOpenInEditor}
+            title="Open in editor"
+          >
+            <ExternalLink className="size-3.5" />
+          </button>
+          {section.collapsed ? (
+            <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
+          )}
+        </div>
+      </div>
 
       {!section.collapsed && (
         <div

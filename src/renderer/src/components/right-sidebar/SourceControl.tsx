@@ -2,7 +2,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ChevronDown,
-  Layers,
   Minus,
   Plus,
   RefreshCw,
@@ -68,7 +67,7 @@ const STATUS_ICONS: Record<
 // are assigned area:'unstaged' by the parser — appear above "Staged Changes".
 // This keeps unresolved conflicts visible at the top of the list where the
 // user won't miss them.
-const SECTION_ORDER = ['unstaged', 'staged', 'untracked'] as const
+const SECTION_ORDER = ['untracked', 'unstaged', 'staged'] as const
 const SECTION_LABELS: Record<(typeof SECTION_ORDER)[number], string> = {
   staged: 'Staged Changes',
   unstaged: 'Changes',
@@ -533,19 +532,23 @@ export default function SourceControl(): React.JSX.Element {
                               }
                             }}
                           >
-                            Open non-conflict diffs
+                            View all
                           </Button>
                         ) : (
-                          <ActionButton
-                            icon={Layers}
-                            title="Open all diffs in this section"
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-auto px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground"
                             onClick={(e) => {
                               e.stopPropagation()
                               if (activeWorktreeId && worktreePath) {
                                 openAllDiffs(activeWorktreeId, worktreePath, undefined, area)
                               }
                             }}
-                          />
+                          >
+                            View all
+                          </Button>
                         )
                       }
                     />
@@ -589,16 +592,20 @@ export default function SourceControl(): React.JSX.Element {
                 isCollapsed={collapsedSections.has('branch')}
                 onToggle={() => toggleSection('branch')}
                 actions={
-                  <ActionButton
-                    icon={Layers}
-                    title="Open all branch diffs"
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-auto px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground"
                     onClick={(e) => {
                       e.stopPropagation()
                       if (activeWorktreeId && worktreePath && branchSummary) {
                         openBranchAllDiffs(activeWorktreeId, worktreePath, branchSummary)
                       }
                     }}
-                  />
+                  >
+                    View all
+                  </Button>
                 }
               />
               {!collapsedSections.has('branch') &&
