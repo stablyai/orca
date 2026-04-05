@@ -19,6 +19,7 @@ import {
 
 const AUTO_UPDATE_CHECK_INTERVAL_MS = 36 * 60 * 60 * 1000
 const AUTO_UPDATE_RETRY_INTERVAL_MS = 60 * 60 * 1000
+const QUIT_AND_INSTALL_DELAY_MS = 100
 
 let mainWindowRef: BrowserWindow | null = null
 let currentStatus: UpdateStatus = { state: 'idle' }
@@ -30,6 +31,7 @@ let availableReleaseUrl: string | null = null
 let pendingCheckFailureKey: string | null = null
 let pendingCheckFailurePromise: Promise<void> | null = null
 let autoUpdateCheckTimer: ReturnType<typeof setTimeout> | null = null
+let pendingQuitAndInstallTimer: ReturnType<typeof setTimeout> | null = null
 let persistLastUpdateCheckAt: ((timestamp: number) => void) | null = null
 /** Guards against the macOS `activate` handler re-opening the old version
  *  while Squirrel's ShipIt is replacing the .app bundle. */
@@ -78,6 +80,11 @@ function getPendingInstallVersion(): string {
 }
 
 function performQuitAndInstall(): void {
+  if (pendingQuitAndInstallTimer) {
+    clearTimeout(pendingQuitAndInstallTimer)
+    pendingQuitAndInstallTimer = null
+  }
+
   markMacQuitAndInstallInFlight()
 
   // Set this BEFORE anything else so the `activate` handler in index.ts
@@ -233,6 +240,10 @@ export function isQuittingForUpdate(): boolean {
 }
 
 export function quitAndInstall(): void {
+  if (pendingQuitAndInstallTimer) {
+    return
+  }
+
   if (
     deferMacQuitUntilInstallerReady(
       currentStatus,
@@ -244,7 +255,13 @@ export function quitAndInstall(): void {
     return
   }
 
-  performQuitAndInstall()
+  // Why: every renderer entrypoint reaches this IPC handler from an in-flight
+  // click or toast callback. Deferring the actual quit here gives the renderer
+  // a moment to flush dismissals/state updates before windows start closing,
+  // and centralizing it avoids drift between the toast flow and settings UI.
+  pendingQuitAndInstallTimer = setTimeout(() => {
+    performQuitAndInstall()
+  }, QUIT_AND_INSTALL_DELAY_MS)
 }
 
 export function setupAutoUpdater(

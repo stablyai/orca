@@ -123,11 +123,7 @@ export function createUpdateToastController(deps?: {
         toastApi.dismiss(downloadToastId)
         if (autoRestartAfterDownload) {
           autoRestartAfterDownload = false
-          // Delay restart slightly to allow the main process to finish its
-          // update-downloaded event loop and release file handles.
-          setTimeout(() => {
-            void updaterApi.quitAndInstall()
-          }, 500)
+          void updaterApi.quitAndInstall()
           return
         }
         const releaseUrl = getReleaseUrl(status)
@@ -146,11 +142,7 @@ export function createUpdateToastController(deps?: {
           action: {
             label: 'Restart Now',
             onClick: () => {
-              // Defer slightly to avoid interfering with toast dismissal animations
-              // and ensure the IPC message is sent outside the React event handler.
-              setTimeout(() => {
-                void updaterApi.quitAndInstall()
-              }, 100)
+              void updaterApi.quitAndInstall()
             }
           }
         })

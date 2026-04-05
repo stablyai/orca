@@ -185,6 +185,40 @@ describe('updater', () => {
     )
   })
 
+  it('defers quitAndInstall through the shared main-process entrypoint', async () => {
+    vi.useFakeTimers()
+
+    const mainWindow = { webContents: { send: vi.fn() } }
+    const { setupAutoUpdater, quitAndInstall } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never)
+    quitAndInstall()
+
+    expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(99)
+    expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(1)
+    expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
+    expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledWith(false, true)
+  })
+
+  it('ignores duplicate quitAndInstall requests while the shared delay is pending', async () => {
+    vi.useFakeTimers()
+
+    const mainWindow = { webContents: { send: vi.fn() } }
+    const { setupAutoUpdater, quitAndInstall } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never)
+    quitAndInstall()
+    quitAndInstall()
+
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
+  })
+
   it('runs a startup check immediately when the last background check is stale', async () => {
     const mainWindow = { webContents: { send: vi.fn() } }
     const setLastUpdateCheckAt = vi.fn()
