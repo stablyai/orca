@@ -71,6 +71,7 @@ type GhApi = {
     repoPath: string
     prNumber: number
     branch?: string
+    noCache?: boolean
   }) => Promise<PRCheckDetail[]>
   updatePRTitle: (args: { repoPath: string; prNumber: number; title: string }) => Promise<boolean>
   mergePR: (args: {

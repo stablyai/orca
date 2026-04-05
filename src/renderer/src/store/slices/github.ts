@@ -193,7 +193,8 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         const checks = (await window.api.gh.prChecks({
           repoPath,
           prNumber,
-          branch
+          branch,
+          noCache: options?.force
         })) as PRCheckDetail[]
         set((s) => {
           const nextState: Partial<AppState> = {

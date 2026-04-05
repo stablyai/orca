@@ -120,18 +120,21 @@ export async function getPRForBranch(repoPath: string, branch: string): Promise<
 export async function getPRChecks(
   repoPath: string,
   prNumber: number,
-  branch?: string
+  branch?: string,
+  options?: { noCache?: boolean }
 ): Promise<PRCheckDetail[]> {
   const ownerRepo = branch ? await getOwnerRepo(repoPath) : null
   await acquire()
   try {
     if (ownerRepo && branch) {
+      // Why: --cache 60s saves rate-limit budget during polling, but when the
+      // user explicitly clicks refresh we must skip it so gh fetches fresh data.
+      const cacheArgs = options?.noCache ? [] : ['--cache', '60s']
       const { stdout } = await execFileAsync(
         'gh',
         [
           'api',
-          '--cache',
-          '60s',
+          ...cacheArgs,
           `repos/${ownerRepo.owner}/${ownerRepo.repo}/commits/${encodeURIComponent(branch)}/check-runs?per_page=100`
         ],
         { cwd: repoPath, encoding: 'utf-8' }
