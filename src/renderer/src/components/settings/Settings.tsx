@@ -1,16 +1,38 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Keyboard, Palette, SlidersHorizontal, SquareTerminal } from 'lucide-react'
 import type { OrcaHooks } from '../../../../shared/types'
 import { useAppStore } from '../../store'
-import { ScrollArea } from '../ui/scroll-area'
-import { Button } from '../ui/button'
-import { ArrowLeft, Palette, SlidersHorizontal, SquareTerminal, Keyboard } from 'lucide-react'
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
 import { SCROLLBACK_PRESETS_MB, getFallbackTerminalFonts } from './SettingsConstants'
-import { GeneralPane } from './GeneralPane'
-import { AppearancePane } from './AppearancePane'
-import { ShortcutsPane } from './ShortcutsPane'
-import { TerminalPane } from './TerminalPane'
-import { RepositoryPane } from './RepositoryPane'
+import { GeneralPane, GENERAL_PANE_SEARCH_ENTRIES } from './GeneralPane'
+import { AppearancePane, APPEARANCE_PANE_SEARCH_ENTRIES } from './AppearancePane'
+import { ShortcutsPane, SHORTCUTS_PANE_SEARCH_ENTRIES } from './ShortcutsPane'
+import { TerminalPane, TERMINAL_PANE_SEARCH_ENTRIES } from './TerminalPane'
+import { RepositoryPane, getRepositoryPaneSearchEntries } from './RepositoryPane'
+import { SettingsSidebar } from './SettingsSidebar'
+import { SettingsSection } from './SettingsSection'
+import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
+
+type SettingsNavTarget = 'general' | 'appearance' | 'terminal' | 'shortcuts' | 'repo'
+
+type SettingsNavSection = {
+  id: string
+  title: string
+  description: string
+  icon: typeof SlidersHorizontal
+  searchEntries: SettingsSearchEntry[]
+}
+
+function getSettingsSectionId(pane: SettingsNavTarget, repoId: string | null): string {
+  if (pane === 'repo' && repoId) {
+    return `repo-${repoId}`
+  }
+  return pane
+}
+
+function getFallbackVisibleSection(sections: SettingsNavSection[]): SettingsNavSection | undefined {
+  return sections.at(0)
+}
 
 function Settings(): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
@@ -22,11 +44,9 @@ function Settings(): React.JSX.Element {
   const removeRepo = useAppStore((s) => s.removeRepo)
   const settingsNavigationTarget = useAppStore((s) => s.settingsNavigationTarget)
   const clearSettingsTarget = useAppStore((s) => s.clearSettingsTarget)
+  const settingsSearchQuery = useAppStore((s) => s.settingsSearchQuery)
+  const setSettingsSearchQuery = useAppStore((s) => s.setSettingsSearchQuery)
 
-  const [selectedPane, setSelectedPane] = useState<
-    'general' | 'appearance' | 'terminal' | 'shortcuts' | 'repo'
-  >('general')
-  const [selectedRepoId, setSelectedRepoId] = useState<string | null>(null)
   const [repoHooksMap, setRepoHooksMap] = useState<
     Record<string, { hasHooks: boolean; hooks: OrcaHooks | null }>
   >({})
@@ -36,23 +56,36 @@ function Settings(): React.JSX.Element {
   const [terminalFontSuggestions, setTerminalFontSuggestions] = useState<string[]>(
     getFallbackTerminalFonts()
   )
+  const [activeSectionId, setActiveSectionId] = useState('general')
+  const contentScrollRef = useRef<HTMLDivElement | null>(null)
   const terminalFontsLoadedRef = useRef(false)
+  const pendingScrollTargetRef = useRef<string | null>(null)
 
   useEffect(() => {
     fetchSettings()
   }, [fetchSettings])
+
+  useEffect(
+    () => () => {
+      // Why: the settings search is a transient in-page filter. Leaving it behind makes the next
+      // visit look partially broken because whole sections stay hidden before the user types again.
+      setSettingsSearchQuery('')
+    },
+    [setSettingsSearchQuery]
+  )
 
   useEffect(() => {
     if (!settingsNavigationTarget) {
       return
     }
 
-    // Why: the create-worktree dialog links here so setup configuration stays
-    // out of the dialog until the user explicitly asks to edit it.
-    setSelectedPane(settingsNavigationTarget.pane)
-    if (settingsNavigationTarget.repoId) {
-      setSelectedRepoId(settingsNavigationTarget.repoId)
-    }
+    // Why: settings entry points elsewhere in the app target a section, not a
+    // transient tab, so the scroll-based settings page needs an explicit anchor
+    // handoff to land the user on the intended configuration block.
+    pendingScrollTargetRef.current = getSettingsSectionId(
+      settingsNavigationTarget.pane,
+      settingsNavigationTarget.repoId
+    )
     clearSettingsTarget()
   }, [clearSettingsTarget, settingsNavigationTarget])
 
@@ -67,7 +100,7 @@ function Settings(): React.JSX.Element {
   }, [])
 
   useEffect(() => {
-    if (selectedPane !== 'terminal' || terminalFontsLoadedRef.current) {
+    if (terminalFontsLoadedRef.current) {
       return
     }
 
@@ -91,7 +124,7 @@ function Settings(): React.JSX.Element {
     return () => {
       stale = true
     }
-  }, [selectedPane])
+  }, [])
 
   if (settings !== prevSettings) {
     setPrevSettings(settings)
@@ -107,7 +140,8 @@ function Settings(): React.JSX.Element {
 
   useEffect(() => {
     let stale = false
-    const checkHooks = async () => {
+
+    const checkHooks = async (): Promise<void> => {
       const results = await Promise.all(
         repos.map(async (repo) => {
           try {
@@ -125,7 +159,7 @@ function Settings(): React.JSX.Element {
     }
 
     if (repos.length > 0) {
-      checkHooks()
+      void checkHooks()
     } else {
       setRepoHooksMap({})
     }
@@ -134,18 +168,6 @@ function Settings(): React.JSX.Element {
       stale = true
     }
   }, [repos])
-
-  // Validate selectedRepoId against current repos (adjusting state during render)
-  if (repos.length === 0) {
-    if (selectedRepoId !== null) {
-      setSelectedRepoId(null)
-      if (selectedPane === 'repo') {
-        setSelectedPane('general')
-      }
-    }
-  } else if (!selectedRepoId || !repos.some((repo) => repo.id === selectedRepoId)) {
-    setSelectedRepoId(repos[0].id)
-  }
 
   const applyTheme = useCallback((theme: 'system' | 'dark' | 'light') => {
     const root = document.documentElement
@@ -163,15 +185,139 @@ function Settings(): React.JSX.Element {
     }
   }, [])
 
-  const selectedRepo = repos.find((repo) => repo.id === selectedRepoId) ?? null
-  const selectedRepoHooksState = selectedRepo ? repoHooksMap[selectedRepo.id] : undefined
-  const selectedYamlHooks = selectedRepoHooksState?.hooks ?? null
-  const showGeneralPane = selectedPane === 'general'
-  const showAppearancePane = selectedPane === 'appearance'
-  const showTerminalPane = selectedPane === 'terminal'
-  const showShortcutsPane = selectedPane === 'shortcuts'
-  const showRepoPane = selectedPane === 'repo' && !!selectedRepo
-  const displayedGitUsername = (selectedRepo ?? repos[0])?.gitUsername ?? ''
+  const displayedGitUsername = repos[0]?.gitUsername ?? ''
+
+  const navSections = useMemo<SettingsNavSection[]>(
+    () => [
+      {
+        id: 'general',
+        title: 'General',
+        description: 'Workspace, editor, naming, and updates.',
+        icon: SlidersHorizontal,
+        searchEntries: GENERAL_PANE_SEARCH_ENTRIES
+      },
+      {
+        id: 'appearance',
+        title: 'Appearance',
+        description: 'Theme and UI scaling.',
+        icon: Palette,
+        searchEntries: APPEARANCE_PANE_SEARCH_ENTRIES
+      },
+      {
+        id: 'terminal',
+        title: 'Terminal',
+        description: 'Terminal appearance, previews, and defaults for new panes.',
+        icon: SquareTerminal,
+        searchEntries: TERMINAL_PANE_SEARCH_ENTRIES
+      },
+      {
+        id: 'shortcuts',
+        title: 'Shortcuts',
+        description: 'Keyboard shortcuts for common actions.',
+        icon: Keyboard,
+        searchEntries: SHORTCUTS_PANE_SEARCH_ENTRIES
+      },
+      ...repos.map((repo) => ({
+        id: `repo-${repo.id}`,
+        title: repo.displayName,
+        description: repo.path,
+        icon: SlidersHorizontal,
+        searchEntries: getRepositoryPaneSearchEntries(repo)
+      }))
+    ],
+    [repos]
+  )
+
+  const visibleNavSections = useMemo(
+    () =>
+      navSections.filter((section) =>
+        matchesSettingsSearch(settingsSearchQuery, section.searchEntries)
+      ),
+    [navSections, settingsSearchQuery]
+  )
+
+  useEffect(() => {
+    const scrollTargetId = pendingScrollTargetRef.current
+    const visibleIds = new Set(visibleNavSections.map((section) => section.id))
+
+    if (scrollTargetId && visibleIds.has(scrollTargetId)) {
+      const target = document.getElementById(scrollTargetId)
+      target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      setActiveSectionId(scrollTargetId)
+      pendingScrollTargetRef.current = null
+      return
+    }
+
+    if (scrollTargetId && settingsSearchQuery.trim() !== '') {
+      // Why: keep the ref set so the *next* effect cycle (after the search clears and
+      // sections become visible) can scroll to the target via the branch above.
+      // The loop concern is mitigated because once the search clears, the target becomes
+      // visible, the branch above consumes and clears the ref, and the cycle stops.
+      setSettingsSearchQuery('')
+      return
+    }
+
+    if (!visibleIds.has(activeSectionId) && visibleNavSections.length > 0) {
+      setActiveSectionId(getFallbackVisibleSection(visibleNavSections)?.id ?? activeSectionId)
+    }
+  }, [activeSectionId, setSettingsSearchQuery, settingsSearchQuery, visibleNavSections])
+
+  useEffect(() => {
+    const container = contentScrollRef.current
+    if (!container) {
+      return
+    }
+
+    const updateActiveSection = (): void => {
+      const sections = Array.from(
+        container.querySelectorAll<HTMLElement>('[data-settings-section]')
+      )
+      if (sections.length === 0) {
+        return
+      }
+
+      const containerTop = container.getBoundingClientRect().top
+      const candidate =
+        sections.find((section) => section.getBoundingClientRect().top - containerTop >= -24) ??
+        sections.at(-1)
+      if (!candidate) {
+        return
+      }
+      setActiveSectionId(candidate.dataset.settingsSection ?? candidate.id)
+    }
+
+    // Why: the scroll handler runs querySelectorAll + getBoundingClientRect for every
+    // section on each scroll event (60+ fps). Wrapping it in a requestAnimationFrame
+    // throttle limits it to once per frame, avoiding layout-thrashing jank.
+    let rafId: number | null = null
+    const throttledUpdateActiveSection = (): void => {
+      if (rafId !== null) {
+        return
+      }
+      rafId = requestAnimationFrame(() => {
+        rafId = null
+        updateActiveSection()
+      })
+    }
+
+    updateActiveSection()
+    container.addEventListener('scroll', throttledUpdateActiveSection, { passive: true })
+    return () => {
+      container.removeEventListener('scroll', throttledUpdateActiveSection)
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId)
+      }
+    }
+  }, [visibleNavSections])
+
+  const scrollToSection = useCallback((sectionId: string) => {
+    const target = document.getElementById(sectionId)
+    if (!target) {
+      return
+    }
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    setActiveSectionId(sectionId)
+  }, [])
 
   if (!settings) {
     return (
@@ -181,192 +327,122 @@ function Settings(): React.JSX.Element {
     )
   }
 
-  const contentClassName = 'w-full max-w-5xl px-8'
-  const pageHeader = showGeneralPane ? (
-    <div className="space-y-1">
-      <h1 className="text-2xl font-semibold">General</h1>
-      <p className="text-sm text-muted-foreground">Workspace, editor, naming, and updates.</p>
-    </div>
-  ) : showAppearancePane ? (
-    <div className="space-y-1">
-      <h1 className="text-2xl font-semibold">Appearance</h1>
-      <p className="text-sm text-muted-foreground">Theme and UI scaling.</p>
-    </div>
-  ) : showTerminalPane ? (
-    <div className="space-y-1">
-      <h1 className="text-2xl font-semibold">Terminal</h1>
-      <p className="text-sm text-muted-foreground">
-        Terminal appearance, previews, and defaults for new panes.
-      </p>
-    </div>
-  ) : showShortcutsPane ? (
-    <div className="space-y-1">
-      <h1 className="text-2xl font-semibold">Shortcuts</h1>
-      <p className="text-sm text-muted-foreground">Keyboard shortcuts for common actions.</p>
-    </div>
-  ) : selectedRepo ? (
-    <div className="space-y-1">
-      <div className="flex items-center gap-3">
-        <span
-          className="size-3 rounded-full"
-          style={{ backgroundColor: selectedRepo.badgeColor }}
-        />
-        <h1 className="text-2xl font-semibold">{selectedRepo.displayName}</h1>
-      </div>
-      <p className="text-xs text-muted-foreground">{selectedRepo.path}</p>
-    </div>
-  ) : (
-    <div className="space-y-1">
-      <h1 className="text-2xl font-semibold">Repository Settings</h1>
-      <p className="text-sm text-muted-foreground">Select a repository to edit its settings.</p>
-    </div>
-  )
+  const generalNavSections = visibleNavSections.filter((section) => !section.id.startsWith('repo-'))
+  const repoNavSections = visibleNavSections
+    .filter((section) => section.id.startsWith('repo-'))
+    .map((section) => {
+      const repo = repos.find((entry) => entry.id === section.id.replace('repo-', ''))
+      return { ...section, badgeColor: repo?.badgeColor }
+    })
 
   return (
     <div className="settings-view-shell flex min-h-0 flex-1 overflow-hidden bg-background">
-      <aside className="flex w-[260px] shrink-0 flex-col border-r border-border/50 bg-card/40">
-        <div className="border-b border-border/50 px-3 py-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setActiveView('terminal')}
-            className="w-full justify-start gap-2 text-muted-foreground"
-          >
-            <ArrowLeft className="size-4" />
-            Back to app
-          </Button>
-        </div>
-
-        <ScrollArea className="min-h-0 flex-1">
-          <div className="space-y-5 px-3 py-4">
-            <div className="space-y-1">
-              <button
-                onClick={() => setSelectedPane('general')}
-                className={`flex w-full items-center rounded-lg px-3 py-2 text-left text-sm transition-colors ${
-                  showGeneralPane
-                    ? 'bg-accent font-medium text-accent-foreground'
-                    : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
-                }`}
-              >
-                <SlidersHorizontal className="mr-2 size-4" />
-                General
-              </button>
-              <button
-                onClick={() => setSelectedPane('appearance')}
-                className={`flex w-full items-center rounded-lg px-3 py-2 text-left text-sm transition-colors ${
-                  showAppearancePane
-                    ? 'bg-accent font-medium text-accent-foreground'
-                    : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
-                }`}
-              >
-                <Palette className="mr-2 size-4" />
-                Appearance
-              </button>
-              <button
-                onClick={() => setSelectedPane('terminal')}
-                className={`flex w-full items-center rounded-lg px-3 py-2 text-left text-sm transition-colors ${
-                  showTerminalPane
-                    ? 'bg-accent font-medium text-accent-foreground'
-                    : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
-                }`}
-              >
-                <SquareTerminal className="mr-2 size-4" />
-                Terminal
-              </button>
-              <button
-                onClick={() => setSelectedPane('shortcuts')}
-                className={`flex w-full items-center rounded-lg px-3 py-2 text-left text-sm transition-colors ${
-                  showShortcutsPane
-                    ? 'bg-accent font-medium text-accent-foreground'
-                    : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
-                }`}
-              >
-                <Keyboard className="mr-2 size-4" />
-                Shortcuts
-              </button>
-            </div>
-
-            <div className="space-y-2">
-              <p className="px-3 text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                Repositories
-              </p>
-
-              {repos.length === 0 ? (
-                <p className="px-3 text-xs text-muted-foreground">No repositories added yet.</p>
-              ) : (
-                <div className="space-y-1">
-                  {repos.map((repo) => (
-                    <button
-                      key={repo.id}
-                      onClick={() => {
-                        setSelectedRepoId(repo.id)
-                        setSelectedPane('repo')
-                      }}
-                      className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
-                        showRepoPane && selectedRepoId === repo.id
-                          ? 'bg-accent font-medium text-accent-foreground'
-                          : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
-                      }`}
-                    >
-                      <span
-                        className="size-2.5 shrink-0 rounded-full"
-                        style={{ backgroundColor: repo.badgeColor }}
-                      />
-                      <span className="truncate">{repo.displayName}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </ScrollArea>
-      </aside>
+      <SettingsSidebar
+        activeSectionId={activeSectionId}
+        generalSections={generalNavSections}
+        repoSections={repoNavSections}
+        hasRepos={repos.length > 0}
+        searchQuery={settingsSearchQuery}
+        onBack={() => setActiveView('terminal')}
+        onSearchChange={setSettingsSearchQuery}
+        onSelectSection={scrollToSection}
+      />
 
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="sticky top-0 z-10 border-b border-border/50 bg-background/95 py-6 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-          <div className={contentClassName}>{pageHeader}</div>
+        <div className="border-b border-border/50 bg-background/95 px-8 py-6 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+          <div className="space-y-1">
+            <h1 className="text-2xl font-semibold">Settings</h1>
+            <p className="text-sm text-muted-foreground">
+              Search across every settings section without leaving the page.
+            </p>
+          </div>
         </div>
 
-        <ScrollArea className="min-h-0 flex-1">
-          <div className={`${contentClassName} py-8`}>
-            {showGeneralPane ? (
-              <GeneralPane
-                settings={settings}
-                updateSettings={updateSettings}
-                displayedGitUsername={displayedGitUsername}
-              />
-            ) : showAppearancePane ? (
-              <AppearancePane
-                settings={settings}
-                updateSettings={updateSettings}
-                applyTheme={applyTheme}
-              />
-            ) : showTerminalPane ? (
-              <TerminalPane
-                settings={settings}
-                updateSettings={updateSettings}
-                systemPrefersDark={systemPrefersDark}
-                terminalFontSuggestions={terminalFontSuggestions}
-                scrollbackMode={scrollbackMode}
-                setScrollbackMode={setScrollbackMode}
-              />
-            ) : showShortcutsPane ? (
-              <ShortcutsPane />
-            ) : selectedRepo ? (
-              <RepositoryPane
-                repo={selectedRepo}
-                yamlHooks={selectedYamlHooks}
-                hasHooksFile={selectedRepoHooksState?.hasHooks ?? false}
-                updateRepo={updateRepo}
-                removeRepo={removeRepo}
-              />
-            ) : (
-              <div className="flex min-h-[24rem] items-center justify-center text-sm text-muted-foreground">
-                Select a repository to edit its settings.
+        <div ref={contentScrollRef} className="min-h-0 flex-1 overflow-y-auto">
+          <div className="flex w-full max-w-5xl flex-col gap-10 px-8 py-8">
+            {visibleNavSections.length === 0 ? (
+              <div className="flex min-h-[24rem] items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card/30 text-sm text-muted-foreground">
+                No settings found for &quot;{settingsSearchQuery.trim()}&quot;
               </div>
+            ) : (
+              <>
+                <SettingsSection
+                  id="general"
+                  title="General"
+                  description="Workspace, editor, naming, and updates."
+                  searchEntries={GENERAL_PANE_SEARCH_ENTRIES}
+                >
+                  <GeneralPane
+                    settings={settings}
+                    updateSettings={updateSettings}
+                    displayedGitUsername={displayedGitUsername}
+                  />
+                </SettingsSection>
+
+                <SettingsSection
+                  id="appearance"
+                  title="Appearance"
+                  description="Theme and UI scaling."
+                  searchEntries={APPEARANCE_PANE_SEARCH_ENTRIES}
+                >
+                  <AppearancePane
+                    settings={settings}
+                    updateSettings={updateSettings}
+                    applyTheme={applyTheme}
+                  />
+                </SettingsSection>
+
+                <SettingsSection
+                  id="terminal"
+                  title="Terminal"
+                  description="Terminal appearance, previews, and defaults for new panes."
+                  searchEntries={TERMINAL_PANE_SEARCH_ENTRIES}
+                >
+                  <TerminalPane
+                    settings={settings}
+                    updateSettings={updateSettings}
+                    systemPrefersDark={systemPrefersDark}
+                    terminalFontSuggestions={terminalFontSuggestions}
+                    scrollbackMode={scrollbackMode}
+                    setScrollbackMode={setScrollbackMode}
+                  />
+                </SettingsSection>
+
+                <SettingsSection
+                  id="shortcuts"
+                  title="Shortcuts"
+                  description="Keyboard shortcuts for common actions."
+                  searchEntries={SHORTCUTS_PANE_SEARCH_ENTRIES}
+                >
+                  <ShortcutsPane />
+                </SettingsSection>
+
+                {repos.map((repo) => {
+                  const repoSectionId = `repo-${repo.id}`
+                  const repoHooksState = repoHooksMap[repo.id]
+
+                  return (
+                    <SettingsSection
+                      key={repo.id}
+                      id={repoSectionId}
+                      title={repo.displayName}
+                      description={repo.path}
+                      searchEntries={getRepositoryPaneSearchEntries(repo)}
+                    >
+                      <RepositoryPane
+                        repo={repo}
+                        yamlHooks={repoHooksState?.hooks ?? null}
+                        hasHooksFile={repoHooksState?.hasHooks ?? false}
+                        updateRepo={updateRepo}
+                        removeRepo={removeRepo}
+                      />
+                    </SettingsSection>
+                  )
+                })}
+              </>
             )}
           </div>
-        </ScrollArea>
+        </div>
       </div>
     </div>
   )

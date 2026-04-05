@@ -13,6 +13,18 @@ import {
   MIN_EDITOR_AUTO_SAVE_DELAY_MS
 } from '../../../../shared/constants'
 import { clampNumber } from '@/lib/terminal-theme'
+import {
+  GENERAL_BRANCH_SEARCH_ENTRIES,
+  GENERAL_CLI_SEARCH_ENTRIES,
+  GENERAL_EDITOR_SEARCH_ENTRIES,
+  GENERAL_PANE_SEARCH_ENTRIES,
+  GENERAL_UPDATE_SEARCH_ENTRIES,
+  GENERAL_WORKSPACE_SEARCH_ENTRIES
+} from './general-search'
+import { SearchableSetting } from './SearchableSetting'
+import { matchesSettingsSearch } from './settings-search'
+
+export { GENERAL_PANE_SEARCH_ENTRIES }
 
 type GeneralPaneProps = {
   settings: GlobalSettings
@@ -25,6 +37,7 @@ export function GeneralPane({
   updateSettings,
   displayedGitUsername
 }: GeneralPaneProps): React.JSX.Element {
+  const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const updateStatus = useAppStore((s) => s.updateStatus)
   const [appVersion, setAppVersion] = useState<string | null>(null)
   const [autoSaveDelayDraft, setAutoSaveDelayDraft] = useState(
@@ -68,17 +81,22 @@ export function GeneralPane({
     setAutoSaveDelayDraft(String(next))
   }
 
-  return (
-    <div className="space-y-8">
-      <section className="space-y-4">
+  const visibleSections = [
+    matchesSettingsSearch(searchQuery, GENERAL_WORKSPACE_SEARCH_ENTRIES) ? (
+      <section key="workspace" className="space-y-4">
         <div className="space-y-1">
-          <h2 className="text-sm font-semibold">Workspace</h2>
+          <h3 className="text-sm font-semibold">Workspace</h3>
           <p className="text-xs text-muted-foreground">
             Configure where new worktrees are created.
           </p>
         </div>
 
-        <div className="space-y-2">
+        <SearchableSetting
+          title="Workspace Directory"
+          description="Root directory where worktree folders are created."
+          keywords={['workspace', 'folder', 'path', 'worktree']}
+          className="space-y-2"
+        >
           <Label>Workspace Directory</Label>
           <div className="flex gap-2">
             <Input
@@ -99,9 +117,14 @@ export function GeneralPane({
           <p className="text-xs text-muted-foreground">
             Root directory where worktree folders are created.
           </p>
-        </div>
+        </SearchableSetting>
 
-        <div className="flex items-center justify-between gap-4 px-1 py-2">
+        <SearchableSetting
+          title="Nest Workspaces"
+          description="Create worktrees inside a repo-named subfolder."
+          keywords={['nested', 'subfolder', 'directory']}
+          className="flex items-center justify-between gap-4 px-1 py-2"
+        >
           <div className="space-y-0.5">
             <Label>Nest Workspaces</Label>
             <p className="text-xs text-muted-foreground">
@@ -126,18 +149,22 @@ export function GeneralPane({
               }`}
             />
           </button>
-        </div>
+        </SearchableSetting>
       </section>
-
-      <Separator />
-
-      <section className="space-y-4">
+    ) : null,
+    matchesSettingsSearch(searchQuery, GENERAL_EDITOR_SEARCH_ENTRIES) ? (
+      <section key="editor" className="space-y-4">
         <div className="space-y-1">
-          <h2 className="text-sm font-semibold">Editor</h2>
+          <h3 className="text-sm font-semibold">Editor</h3>
           <p className="text-xs text-muted-foreground">Configure how Orca persists file edits.</p>
         </div>
 
-        <div className="flex items-center justify-between gap-4 px-1 py-2">
+        <SearchableSetting
+          title="Auto Save Files"
+          description="Save editor and editable diff changes automatically after a short pause."
+          keywords={['autosave', 'save']}
+          className="flex items-center justify-between gap-4 px-1 py-2"
+        >
           <div className="space-y-0.5">
             <Label>Auto Save Files</Label>
             <p className="text-xs text-muted-foreground">
@@ -162,9 +189,14 @@ export function GeneralPane({
               }`}
             />
           </button>
-        </div>
+        </SearchableSetting>
 
-        <div className="flex items-center justify-between gap-4 px-1 py-2">
+        <SearchableSetting
+          title="Auto Save Delay"
+          description="How long Orca waits after your last edit before saving automatically."
+          keywords={['autosave', 'delay', 'milliseconds']}
+          className="flex items-center justify-between gap-4 px-1 py-2"
+        >
           <div className="space-y-0.5">
             <Label>Auto Save Delay</Label>
             <p className="text-xs text-muted-foreground">
@@ -190,150 +222,179 @@ export function GeneralPane({
             />
             <span className="text-xs text-muted-foreground">ms</span>
           </div>
-        </div>
+        </SearchableSetting>
       </section>
-
-      <Separator />
-
-      <CliSection currentPlatform={navigator.userAgent.includes('Mac') ? 'darwin' : 'other'} />
-
-      <Separator />
-
-      <section className="space-y-4">
+    ) : null,
+    matchesSettingsSearch(searchQuery, GENERAL_CLI_SEARCH_ENTRIES) ? (
+      <CliSection
+        key="cli"
+        currentPlatform={navigator.userAgent.includes('Mac') ? 'darwin' : 'other'}
+      />
+    ) : null,
+    matchesSettingsSearch(searchQuery, GENERAL_BRANCH_SEARCH_ENTRIES) ? (
+      <section key="branch-prefix" className="space-y-4">
         <div className="space-y-1">
-          <h2 className="text-sm font-semibold">Branch Naming</h2>
+          <h3 className="text-sm font-semibold">Branch Naming</h3>
           <p className="text-xs text-muted-foreground">
             Prefix added to branch names when creating worktrees.
           </p>
         </div>
 
-        <div className="flex w-fit gap-1 rounded-md border border-border/50 p-1">
-          {(['git-username', 'custom', 'none'] as const).map((option) => (
-            <button
-              key={option}
-              onClick={() => updateSettings({ branchPrefix: option })}
-              className={`rounded-sm px-3 py-1 text-sm transition-colors ${
-                settings.branchPrefix === option
-                  ? 'bg-accent font-medium text-accent-foreground'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {option === 'git-username' ? 'Git Username' : option === 'custom' ? 'Custom' : 'None'}
-            </button>
-          ))}
-        </div>
-        {(settings.branchPrefix === 'custom' || settings.branchPrefix === 'git-username') && (
-          <Input
-            value={
-              settings.branchPrefix === 'git-username'
-                ? displayedGitUsername
-                : settings.branchPrefixCustom
-            }
-            onChange={(e) => updateSettings({ branchPrefixCustom: e.target.value })}
-            placeholder={
-              settings.branchPrefix === 'git-username'
-                ? 'No git username configured'
-                : 'e.g. feature'
-            }
-            className="max-w-xs"
-            readOnly={settings.branchPrefix === 'git-username'}
-          />
-        )}
+        <SearchableSetting
+          title="Branch Prefix"
+          description="Prefix added to branch names when creating worktrees."
+          keywords={['branch naming', 'git username', 'custom']}
+          className="space-y-3"
+        >
+          <div className="flex w-fit gap-1 rounded-md border border-border/50 p-1">
+            {(['git-username', 'custom', 'none'] as const).map((option) => (
+              <button
+                key={option}
+                onClick={() => updateSettings({ branchPrefix: option })}
+                className={`rounded-sm px-3 py-1 text-sm transition-colors ${
+                  settings.branchPrefix === option
+                    ? 'bg-accent font-medium text-accent-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {option === 'git-username'
+                  ? 'Git Username'
+                  : option === 'custom'
+                    ? 'Custom'
+                    : 'None'}
+              </button>
+            ))}
+          </div>
+          {(settings.branchPrefix === 'custom' || settings.branchPrefix === 'git-username') && (
+            <Input
+              value={
+                settings.branchPrefix === 'git-username'
+                  ? displayedGitUsername
+                  : settings.branchPrefixCustom
+              }
+              onChange={(e) => updateSettings({ branchPrefixCustom: e.target.value })}
+              placeholder={
+                settings.branchPrefix === 'git-username'
+                  ? 'No git username configured'
+                  : 'e.g. feature'
+              }
+              className="max-w-xs"
+              readOnly={settings.branchPrefix === 'git-username'}
+            />
+          )}
+        </SearchableSetting>
       </section>
-
-      <Separator />
-
-      <section className="space-y-4">
+    ) : null,
+    matchesSettingsSearch(searchQuery, GENERAL_UPDATE_SEARCH_ENTRIES) ? (
+      <section key="updates" className="space-y-4">
         <div className="space-y-1">
-          <h2 className="text-sm font-semibold">Updates</h2>
+          <h3 className="text-sm font-semibold">Updates</h3>
           <p className="text-xs text-muted-foreground">Current version: {appVersion ?? '…'}</p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => window.api.updater.check()}
-            disabled={updateStatus.state === 'checking' || updateStatus.state === 'downloading'}
-            className="gap-2"
-          >
-            {updateStatus.state === 'checking' ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <RefreshCw className="size-3.5" />
+        <SearchableSetting
+          title="Check for Updates"
+          description="Check for app updates and install a newer Orca version."
+          keywords={['update', 'version', 'release notes', 'download']}
+          className="space-y-3"
+        >
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => window.api.updater.check()}
+              disabled={updateStatus.state === 'checking' || updateStatus.state === 'downloading'}
+              className="gap-2"
+            >
+              {updateStatus.state === 'checking' ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="size-3.5" />
+              )}
+              Check for Updates
+            </Button>
+
+            {updateStatus.state === 'available' ? (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => window.api.updater.download()}
+                className="gap-2"
+              >
+                <Download className="size-3.5" />
+                {updateStatus.manualDownloadUrl
+                  ? `Download Update (${updateStatus.version})`
+                  : `Install Update (${updateStatus.version})`}
+              </Button>
+            ) : updateStatus.state === 'downloaded' ? (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => window.api.updater.quitAndInstall()}
+                className="gap-2"
+              >
+                <Download className="size-3.5" />
+                Restart to Update ({updateStatus.version})
+              </Button>
+            ) : null}
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            {updateStatus.state === 'idle' && 'Updates are checked automatically on launch.'}
+            {updateStatus.state === 'checking' && 'Checking for updates...'}
+            {updateStatus.state === 'available' && (
+              <>
+                Version {updateStatus.version} is available.{' '}
+                {updateStatus.manualDownloadUrl
+                  ? 'Open the download to install it manually.'
+                  : 'Click "Install Update" to download it.'}{' '}
+                <a
+                  href={
+                    updateStatus.releaseUrl ??
+                    `https://github.com/stablyai/orca/releases/tag/v${updateStatus.version}`
+                  }
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-foreground"
+                >
+                  Release notes
+                </a>
+              </>
             )}
-            Check for Updates
-          </Button>
-
-          {updateStatus.state === 'available' ? (
-            <Button
-              variant="default"
-              size="sm"
-              onClick={() => window.api.updater.download()}
-              className="gap-2"
-            >
-              <Download className="size-3.5" />
-              {updateStatus.manualDownloadUrl
-                ? `Download Update (${updateStatus.version})`
-                : `Install Update (${updateStatus.version})`}
-            </Button>
-          ) : updateStatus.state === 'downloaded' ? (
-            <Button
-              variant="default"
-              size="sm"
-              onClick={() => window.api.updater.quitAndInstall()}
-              className="gap-2"
-            >
-              <Download className="size-3.5" />
-              Restart to Update ({updateStatus.version})
-            </Button>
-          ) : null}
-        </div>
-
-        <p className="text-xs text-muted-foreground">
-          {updateStatus.state === 'idle' && 'Updates are checked automatically on launch.'}
-          {updateStatus.state === 'checking' && 'Checking for updates...'}
-          {updateStatus.state === 'available' && (
-            <>
-              Version {updateStatus.version} is available.{' '}
-              {updateStatus.manualDownloadUrl
-                ? 'Open the download to install it manually.'
-                : 'Click "Install Update" to download it.'}{' '}
-              <a
-                href={
-                  updateStatus.releaseUrl ??
-                  `https://github.com/stablyai/orca/releases/tag/v${updateStatus.version}`
-                }
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline hover:text-foreground"
-              >
-                Release notes
-              </a>
-            </>
-          )}
-          {updateStatus.state === 'not-available' && 'You\u2019re on the latest version.'}
-          {updateStatus.state === 'downloading' &&
-            `Downloading v${updateStatus.version}... ${updateStatus.percent}%`}
-          {updateStatus.state === 'downloaded' && (
-            <>
-              Version {updateStatus.version} is ready to install.{' '}
-              <a
-                href={
-                  updateStatus.releaseUrl ??
-                  `https://github.com/stablyai/orca/releases/tag/v${updateStatus.version}`
-                }
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline hover:text-foreground"
-              >
-                Release notes
-              </a>
-            </>
-          )}
-          {updateStatus.state === 'error' && `Update error: ${updateStatus.message}`}
-        </p>
+            {updateStatus.state === 'not-available' && 'You\u2019re on the latest version.'}
+            {updateStatus.state === 'downloading' &&
+              `Downloading v${updateStatus.version}... ${updateStatus.percent}%`}
+            {updateStatus.state === 'downloaded' && (
+              <>
+                Version {updateStatus.version} is ready to install.{' '}
+                <a
+                  href={
+                    updateStatus.releaseUrl ??
+                    `https://github.com/stablyai/orca/releases/tag/v${updateStatus.version}`
+                  }
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-foreground"
+                >
+                  Release notes
+                </a>
+              </>
+            )}
+            {updateStatus.state === 'error' && `Update error: ${updateStatus.message}`}
+          </p>
+        </SearchableSetting>
       </section>
+    ) : null
+  ].filter(Boolean)
+
+  return (
+    <div className="space-y-8">
+      {visibleSections.map((section, index) => (
+        <div key={index} className="space-y-8">
+          {index > 0 ? <Separator /> : null}
+          {section}
+        </div>
+      ))}
     </div>
   )
 }

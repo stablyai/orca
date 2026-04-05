@@ -4,12 +4,16 @@ import type { GlobalSettings } from '../../../../shared/types'
 
 export type SettingsSlice = {
   settings: GlobalSettings | null
+  settingsSearchQuery: string
+  setSettingsSearchQuery: (q: string) => void
   fetchSettings: () => Promise<void>
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void>
 }
 
 export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> = (set) => ({
   settings: null,
+  settingsSearchQuery: '',
+  setSettingsSearchQuery: (q) => set({ settingsSearchQuery: q }),
 
   fetchSettings: async () => {
     try {

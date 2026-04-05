@@ -2,6 +2,9 @@ import type { GlobalSettings } from '../../../../shared/types'
 import { Label } from '../ui/label'
 import { Separator } from '../ui/separator'
 import { UIZoomControl } from './UIZoomControl'
+import { SearchableSetting } from './SearchableSetting'
+import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
+import { useAppStore } from '../../store'
 
 type AppearancePaneProps = {
   settings: GlobalSettings
@@ -9,66 +12,107 @@ type AppearancePaneProps = {
   applyTheme: (theme: 'system' | 'dark' | 'light') => void
 }
 
+export const APPEARANCE_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
+  {
+    title: 'Theme',
+    description: 'Choose how Orca looks in the app window.',
+    keywords: ['dark', 'light', 'system']
+  },
+  {
+    title: 'UI Zoom',
+    description: 'Scale the entire application interface.',
+    keywords: ['zoom', 'scale', 'shortcut']
+  },
+  {
+    title: 'Open Right Sidebar by Default',
+    description: 'Automatically expand the file explorer panel when creating a new worktree.',
+    keywords: ['layout', 'file explorer', 'sidebar']
+  }
+]
+
 export function AppearancePane({
   settings,
   updateSettings,
   applyTheme
 }: AppearancePaneProps): React.JSX.Element {
-  return (
-    <div className="space-y-8">
-      <section className="space-y-4">
+  const searchQuery = useAppStore((state) => state.settingsSearchQuery)
+  const isMac = navigator.userAgent.includes('Mac')
+  const zoomInLabel = isMac ? '⌘+' : 'Ctrl +'
+  const zoomOutLabel = isMac ? '⌘-' : 'Ctrl -'
+  const themeEntries = APPEARANCE_PANE_SEARCH_ENTRIES.slice(0, 1)
+  const zoomEntries = APPEARANCE_PANE_SEARCH_ENTRIES.slice(1, 2)
+  const layoutEntries = APPEARANCE_PANE_SEARCH_ENTRIES.slice(2)
+
+  const visibleSections = [
+    matchesSettingsSearch(searchQuery, themeEntries) ? (
+      <section key="theme" className="space-y-4">
         <div className="space-y-1">
-          <h2 className="text-sm font-semibold">Theme</h2>
+          <h3 className="text-sm font-semibold">Theme</h3>
           <p className="text-xs text-muted-foreground">Choose how Orca looks in the app window.</p>
         </div>
 
-        <div className="flex w-fit gap-1 rounded-md border border-border/50 p-1">
-          {(['system', 'dark', 'light'] as const).map((option) => (
-            <button
-              key={option}
-              onClick={() => {
-                updateSettings({ theme: option })
-                applyTheme(option)
-              }}
-              className={`rounded-sm px-3 py-1 text-sm capitalize transition-colors ${
-                settings.theme === option
-                  ? 'bg-accent font-medium text-accent-foreground'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {option}
-            </button>
-          ))}
-        </div>
+        <SearchableSetting
+          title="Theme"
+          description="Choose how Orca looks in the app window."
+          keywords={['dark', 'light', 'system']}
+        >
+          <div className="flex w-fit gap-1 rounded-md border border-border/50 p-1">
+            {(['system', 'dark', 'light'] as const).map((option) => (
+              <button
+                key={option}
+                onClick={() => {
+                  updateSettings({ theme: option })
+                  applyTheme(option)
+                }}
+                className={`rounded-sm px-3 py-1 text-sm capitalize transition-colors ${
+                  settings.theme === option
+                    ? 'bg-accent font-medium text-accent-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {option}
+              </button>
+            ))}
+          </div>
+        </SearchableSetting>
       </section>
-
-      <Separator />
-
-      <section className="space-y-4">
+    ) : null,
+    matchesSettingsSearch(searchQuery, zoomEntries) ? (
+      <section key="zoom" className="space-y-4">
         <div className="space-y-1">
-          <h2 className="text-sm font-semibold">UI Zoom</h2>
+          <h3 className="text-sm font-semibold">UI Zoom</h3>
           <p className="text-xs text-muted-foreground">
             Scale the entire application interface. Use{' '}
-            <kbd className="rounded border px-1 py-0.5 text-[10px]">⌘+</kbd> /{' '}
-            <kbd className="rounded border px-1 py-0.5 text-[10px]">⌘-</kbd> when not in a terminal
-            pane.
+            <kbd className="rounded border px-1 py-0.5 text-[10px]">{zoomInLabel}</kbd> /{' '}
+            <kbd className="rounded border px-1 py-0.5 text-[10px]">{zoomOutLabel}</kbd> when not in
+            a terminal pane.
           </p>
         </div>
 
-        <UIZoomControl />
+        <SearchableSetting
+          title="UI Zoom"
+          description="Scale the entire application interface."
+          keywords={['zoom', 'scale', 'shortcut']}
+        >
+          <UIZoomControl />
+        </SearchableSetting>
       </section>
-
-      <Separator />
-
-      <section className="space-y-4">
+    ) : null,
+    matchesSettingsSearch(searchQuery, layoutEntries) ? (
+      <section key="layout" className="space-y-4">
         <div className="space-y-1">
-          <h2 className="text-sm font-semibold">Layout</h2>
+          <h3 className="text-sm font-semibold">Layout</h3>
           <p className="text-xs text-muted-foreground">
             Default layout when creating new worktrees.
           </p>
         </div>
 
-        <div className="flex items-center justify-between gap-4 px-1 py-2">
+        <SearchableSetting
+          title="Open Right Sidebar by Default"
+          description="Automatically expand the file explorer panel when creating a new worktree."
+          keywords={['layout', 'file explorer', 'sidebar']}
+          className="flex items-center justify-between gap-4 px-1 py-2"
+        >
           <div className="space-y-0.5">
             <Label>Open Right Sidebar by Default</Label>
             <p className="text-xs text-muted-foreground">
@@ -93,8 +137,19 @@ export function AppearancePane({
               }`}
             />
           </button>
-        </div>
+        </SearchableSetting>
       </section>
+    ) : null
+  ].filter(Boolean)
+
+  return (
+    <div className="space-y-8">
+      {visibleSections.map((section, index) => (
+        <div key={index} className="space-y-8">
+          {index > 0 ? <Separator /> : null}
+          {section}
+        </div>
+      ))}
     </div>
   )
 }

@@ -9,6 +9,9 @@ import { Trash2 } from 'lucide-react'
 import { DEFAULT_REPO_HOOK_SETTINGS } from './SettingsConstants'
 import { BaseRefPicker } from './BaseRefPicker'
 import { RepositoryHooksSection } from './RepositoryHooksSection'
+import { SearchableSetting } from './SearchableSetting'
+import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
+import { useAppStore } from '../../store'
 
 type RepositoryPaneProps = {
   repo: Repo
@@ -18,6 +21,46 @@ type RepositoryPaneProps = {
   removeRepo: (repoId: string) => void
 }
 
+export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[] {
+  return [
+    {
+      title: 'Display Name',
+      description: 'Repo-specific display details for the sidebar and tabs.',
+      keywords: [repo.displayName, repo.path, 'repository name']
+    },
+    {
+      title: 'Badge Color',
+      description: 'Repo color used in the sidebar and tabs.',
+      keywords: [repo.displayName, 'color', 'badge']
+    },
+    {
+      title: 'Default Worktree Base',
+      description: 'Default base branch or ref when creating worktrees.',
+      keywords: [repo.displayName, 'base ref', 'branch']
+    },
+    {
+      title: 'Remove Repo',
+      description: 'Remove this repository from Orca.',
+      keywords: [repo.displayName, 'delete', 'repository']
+    },
+    {
+      title: 'orca.yaml hooks',
+      description: 'Shared setup and archive hook commands for this repository.',
+      keywords: [repo.displayName, 'hooks', 'setup', 'archive', 'yaml']
+    },
+    {
+      title: 'Legacy Repo-Local Hooks',
+      description: 'Older setup and archive hook scripts stored in local repo settings.',
+      keywords: [repo.displayName, 'legacy', 'fallback', 'hooks']
+    },
+    {
+      title: 'When to Run Setup',
+      description: 'Choose the default behavior when a setup command is available.',
+      keywords: [repo.displayName, 'setup run policy', 'ask', 'run by default', 'skip by default']
+    }
+  ]
+}
+
 export function RepositoryPane({
   repo,
   yamlHooks,
@@ -25,6 +68,7 @@ export function RepositoryPane({
   updateRepo,
   removeRepo
 }: RepositoryPaneProps): React.JSX.Element {
+  const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const [confirmingRemove, setConfirmingRemove] = useState<string | null>(null)
   const [copiedTemplate, setCopiedTemplate] = useState(false)
 
@@ -83,30 +127,45 @@ export function RepositoryPane({
     })
   }
 
-  return (
-    <div className="space-y-8">
-      <section className="space-y-6">
+  const allEntries = getRepositoryPaneSearchEntries(repo)
+  const identityEntries = allEntries.slice(0, 4)
+  const hooksEntries = allEntries.slice(4)
+
+  const visibleSections = [
+    matchesSettingsSearch(searchQuery, identityEntries) ? (
+      <section key="identity" className="space-y-6">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-1">
-            <h2 className="text-sm font-semibold">Identity</h2>
+            <h3 className="text-sm font-semibold">Identity</h3>
             <p className="text-xs text-muted-foreground">
               Repo-specific display details for the sidebar and tabs.
             </p>
           </div>
 
-          <Button
-            variant={confirmingRemove === repo.id ? 'destructive' : 'outline'}
-            size="sm"
-            onClick={() => handleRemoveRepo(repo.id)}
-            onBlur={() => setConfirmingRemove(null)}
-            className="gap-2"
+          <SearchableSetting
+            title="Remove Repo"
+            description="Remove this repository from Orca."
+            keywords={[repo.displayName, 'delete', 'repository']}
           >
-            <Trash2 className="size-3.5" />
-            {confirmingRemove === repo.id ? 'Confirm Remove' : 'Remove Repo'}
-          </Button>
+            <Button
+              variant={confirmingRemove === repo.id ? 'destructive' : 'outline'}
+              size="sm"
+              onClick={() => handleRemoveRepo(repo.id)}
+              onBlur={() => setConfirmingRemove(null)}
+              className="gap-2"
+            >
+              <Trash2 className="size-3.5" />
+              {confirmingRemove === repo.id ? 'Confirm Remove' : 'Remove Repo'}
+            </Button>
+          </SearchableSetting>
         </div>
 
-        <div className="space-y-2">
+        <SearchableSetting
+          title="Display Name"
+          description="Repo-specific display details for the sidebar and tabs."
+          keywords={[repo.displayName, repo.path, 'repository name']}
+          className="space-y-2"
+        >
           <Label>Display Name</Label>
           <Input
             value={repo.displayName}
@@ -117,9 +176,14 @@ export function RepositoryPane({
             }
             className="h-9 text-sm"
           />
-        </div>
+        </SearchableSetting>
 
-        <div className="space-y-2">
+        <SearchableSetting
+          title="Badge Color"
+          description="Repo color used in the sidebar and tabs."
+          keywords={[repo.displayName, 'color', 'badge']}
+          className="space-y-2"
+        >
           <Label>Badge Color</Label>
           <div className="flex flex-wrap gap-2">
             {REPO_COLORS.map((color) => (
@@ -136,9 +200,14 @@ export function RepositoryPane({
               />
             ))}
           </div>
-        </div>
+        </SearchableSetting>
 
-        <div className="space-y-3">
+        <SearchableSetting
+          title="Default Worktree Base"
+          description="Default base branch or ref when creating worktrees."
+          keywords={[repo.displayName, 'base ref', 'branch']}
+          className="space-y-3"
+        >
           <Label>Default Worktree Base</Label>
           <BaseRefPicker
             repoId={repo.id}
@@ -146,12 +215,12 @@ export function RepositoryPane({
             onSelect={(ref) => updateRepo(repo.id, { worktreeBaseRef: ref })}
             onUsePrimary={() => updateRepo(repo.id, { worktreeBaseRef: undefined })}
           />
-        </div>
+        </SearchableSetting>
       </section>
-
-      <Separator />
-
+    ) : null,
+    matchesSettingsSearch(searchQuery, hooksEntries) ? (
       <RepositoryHooksSection
+        key="hooks"
         repo={repo}
         yamlHooks={yamlHooks}
         hasHooksFile={hasHooksFile}
@@ -162,6 +231,17 @@ export function RepositoryPane({
           updateSelectedRepoHookSettings({ setupRunPolicy: policy as SetupRunPolicy })
         }
       />
+    ) : null
+  ].filter(Boolean)
+
+  return (
+    <div className="space-y-8">
+      {visibleSections.map((section, index) => (
+        <div key={index} className="space-y-8">
+          {index > 0 ? <Separator /> : null}
+          {section}
+        </div>
+      ))}
     </div>
   )
 }

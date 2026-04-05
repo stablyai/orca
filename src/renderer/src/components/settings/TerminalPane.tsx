@@ -12,15 +12,29 @@ import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Separator } from '../ui/separator'
 import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group'
-import { TerminalThemePreview } from './TerminalThemePreview'
 import { Minus, Plus } from 'lucide-react'
 import {
   clampNumber,
   resolveEffectiveTerminalAppearance,
   resolvePaneStyleOptions
 } from '@/lib/terminal-theme'
-import { ThemePicker, ColorField, NumberField, FontAutocomplete } from './SettingsFormControls'
+import { NumberField, FontAutocomplete } from './SettingsFormControls'
 import { SCROLLBACK_PRESETS_MB } from './SettingsConstants'
+import { SearchableSetting } from './SearchableSetting'
+import { matchesSettingsSearch } from './settings-search'
+import { useAppStore } from '../../store'
+import {
+  TERMINAL_ADVANCED_SEARCH_ENTRIES,
+  TERMINAL_CURSOR_SEARCH_ENTRIES,
+  TERMINAL_DARK_THEME_SEARCH_ENTRIES,
+  TERMINAL_LIGHT_THEME_SEARCH_ENTRIES,
+  TERMINAL_PANE_SEARCH_ENTRIES,
+  TERMINAL_PANE_STYLE_SEARCH_ENTRIES,
+  TERMINAL_TYPOGRAPHY_SEARCH_ENTRIES
+} from './terminal-search'
+import { DarkTerminalThemeSection, LightTerminalThemeSection } from './TerminalThemeSections'
+
+export { TERMINAL_PANE_SEARCH_ENTRIES }
 
 type TerminalPaneProps = {
   settings: GlobalSettings
@@ -39,6 +53,7 @@ export function TerminalPane({
   scrollbackMode,
   setScrollbackMode
 }: TerminalPaneProps): React.JSX.Element {
+  const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const [themeSearchDark, setThemeSearchDark] = useState('')
   const [themeSearchLight, setThemeSearchLight] = useState('')
 
@@ -58,17 +73,22 @@ export function TerminalPane({
   const scrollbackToggleValue =
     scrollbackMode === 'custom' ? 'custom' : isPreset ? `${scrollbackMb}` : 'custom'
 
-  return (
-    <div className="space-y-8">
-      <section className="space-y-4">
+  const visibleSections = [
+    matchesSettingsSearch(searchQuery, TERMINAL_TYPOGRAPHY_SEARCH_ENTRIES) ? (
+      <section key="typography" className="space-y-4">
         <div className="space-y-1">
-          <h2 className="text-sm font-semibold">Typography</h2>
+          <h3 className="text-sm font-semibold">Typography</h3>
           <p className="text-xs text-muted-foreground">
             Default terminal typography for new panes and live updates.
           </p>
         </div>
 
-        <div className="space-y-2">
+        <SearchableSetting
+          title="Font Size"
+          description="Default terminal font size for new panes and live updates."
+          keywords={['terminal', 'typography', 'text size']}
+          className="space-y-2"
+        >
           <Label>Font Size</Label>
           <div className="flex items-center gap-2">
             <Button
@@ -108,46 +128,61 @@ export function TerminalPane({
             </Button>
             <span className="text-xs text-muted-foreground">px</span>
           </div>
-        </div>
+        </SearchableSetting>
 
-        <div className="space-y-2">
+        <SearchableSetting
+          title="Font Family"
+          description="Default terminal font family for new panes and live updates."
+          keywords={['terminal', 'typography', 'font']}
+          className="space-y-2"
+        >
           <Label>Font Family</Label>
           <FontAutocomplete
             value={settings.terminalFontFamily}
             suggestions={terminalFontSuggestions}
             onChange={(value) => updateSettings({ terminalFontFamily: value })}
           />
-        </div>
+        </SearchableSetting>
 
-        <NumberField
-          label="Font Weight"
+        <SearchableSetting
+          title="Font Weight"
           description="Controls the terminal text font weight."
-          value={normalizeTerminalFontWeight(settings.terminalFontWeight)}
-          defaultValue={DEFAULT_TERMINAL_FONT_WEIGHT}
-          min={TERMINAL_FONT_WEIGHT_MIN}
-          max={TERMINAL_FONT_WEIGHT_MAX}
-          step={TERMINAL_FONT_WEIGHT_STEP}
-          suffix="100 to 900"
-          onChange={(value) =>
-            updateSettings({
-              terminalFontWeight: normalizeTerminalFontWeight(value)
-            })
-          }
-        />
+          keywords={['terminal', 'typography', 'weight']}
+        >
+          <NumberField
+            label="Font Weight"
+            description="Controls the terminal text font weight."
+            value={normalizeTerminalFontWeight(settings.terminalFontWeight)}
+            defaultValue={DEFAULT_TERMINAL_FONT_WEIGHT}
+            min={TERMINAL_FONT_WEIGHT_MIN}
+            max={TERMINAL_FONT_WEIGHT_MAX}
+            step={TERMINAL_FONT_WEIGHT_STEP}
+            suffix="100 to 900"
+            onChange={(value) =>
+              updateSettings({
+                terminalFontWeight: normalizeTerminalFontWeight(value)
+              })
+            }
+          />
+        </SearchableSetting>
       </section>
-
-      <Separator />
-
-      <section className="space-y-4">
+    ) : null,
+    matchesSettingsSearch(searchQuery, TERMINAL_CURSOR_SEARCH_ENTRIES) ? (
+      <section key="cursor" className="space-y-4">
         <div className="space-y-1">
-          <h2 className="text-sm font-semibold">Cursor</h2>
+          <h3 className="text-sm font-semibold">Cursor</h3>
           <p className="text-xs text-muted-foreground">
             Default cursor appearance for Orca terminal panes.
           </p>
         </div>
 
         <div className="space-y-4">
-          <div className="space-y-2">
+          <SearchableSetting
+            title="Cursor Shape"
+            description="Default cursor appearance for Orca terminal panes."
+            keywords={['terminal', 'cursor', 'bar', 'block', 'underline']}
+            className="space-y-2"
+          >
             <Label>Cursor Shape</Label>
             <div className="flex w-fit gap-1 rounded-md border border-border/50 p-1">
               {(['bar', 'block', 'underline'] as const).map((option) => (
@@ -164,9 +199,14 @@ export function TerminalPane({
                 </button>
               ))}
             </div>
-          </div>
+          </SearchableSetting>
 
-          <div className="flex items-center justify-between gap-4 px-1 py-2">
+          <SearchableSetting
+            title="Blinking Cursor"
+            description="Uses the blinking variant of the selected cursor shape."
+            keywords={['terminal', 'cursor', 'blink']}
+            className="flex items-center justify-between gap-4 px-1 py-2"
+          >
             <div className="space-y-0.5">
               <Label>Blinking Cursor</Label>
               <p className="text-xs text-muted-foreground">
@@ -191,172 +231,103 @@ export function TerminalPane({
                 }`}
               />
             </button>
-          </div>
+          </SearchableSetting>
         </div>
       </section>
-
-      <Separator />
-
-      <section className="space-y-4">
+    ) : null,
+    matchesSettingsSearch(searchQuery, TERMINAL_PANE_STYLE_SEARCH_ENTRIES) ? (
+      <section key="pane-styling" className="space-y-4">
         <div className="space-y-1">
-          <h2 className="text-sm font-semibold">Pane Styling</h2>
+          <h3 className="text-sm font-semibold">Pane Styling</h3>
           <p className="text-xs text-muted-foreground">
             Control inactive pane dimming, divider thickness, and transition timing.
           </p>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
-          <NumberField
-            label="Inactive Pane Opacity"
+          <SearchableSetting
+            title="Inactive Pane Opacity"
             description="Opacity applied to panes that are not currently active."
-            value={paneStyleOptions.inactivePaneOpacity}
-            defaultValue={0.8}
-            min={0}
-            max={1}
-            step={0.05}
-            suffix="0 to 1"
-            onChange={(value) =>
-              updateSettings({
-                terminalInactivePaneOpacity: clampNumber(value, 0, 1)
-              })
-            }
-          />
-          <NumberField
-            label="Divider Thickness"
-            description="Thickness of the pane divider line."
-            value={paneStyleOptions.dividerThicknessPx}
-            defaultValue={1}
-            min={1}
-            max={32}
-            step={1}
-            suffix="px"
-            onChange={(value) =>
-              updateSettings({
-                terminalDividerThicknessPx: clampNumber(value, 1, 32)
-              })
-            }
-          />
-        </div>
-      </section>
-
-      <Separator />
-
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="space-y-6">
-          <ThemePicker
-            label="Dark Theme"
-            description="Choose the terminal theme used in dark mode."
-            selectedTheme={settings.terminalThemeDark}
-            query={themeSearchDark}
-            onQueryChange={setThemeSearchDark}
-            onSelectTheme={(theme) => updateSettings({ terminalThemeDark: theme })}
-          />
-
-          <ColorField
-            label="Dark Divider Color"
-            description="Controls the split divider line between panes in dark mode."
-            value={settings.terminalDividerColorDark}
-            fallback="#3f3f46"
-            onChange={(value) => updateSettings({ terminalDividerColorDark: value })}
-          />
-        </div>
-
-        <TerminalThemePreview
-          title="Dark Mode Preview"
-          description={
-            settings.theme === 'system'
-              ? `System mode is currently ${systemPrefersDark ? 'Dark' : 'Light'}.`
-              : `Orca is currently in ${settings.theme} mode.`
-          }
-          appearance={darkPreviewAppearance}
-          dividerThicknessPx={paneStyleOptions.dividerThicknessPx}
-          inactivePaneOpacity={paneStyleOptions.inactivePaneOpacity}
-          activePaneOpacity={paneStyleOptions.activePaneOpacity}
-        />
-      </section>
-
-      <Separator />
-
-      <section className="space-y-4">
-        <div className="flex items-center justify-between gap-4 px-1 py-2">
-          <div className="space-y-0.5">
-            <Label>Use Separate Theme In Light Mode</Label>
-            <p className="text-xs text-muted-foreground">
-              When disabled, light mode reuses the dark terminal theme.
-            </p>
-          </div>
-          <button
-            role="switch"
-            aria-checked={settings.terminalUseSeparateLightTheme}
-            onClick={() =>
-              updateSettings({
-                terminalUseSeparateLightTheme: !settings.terminalUseSeparateLightTheme
-              })
-            }
-            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-              settings.terminalUseSeparateLightTheme ? 'bg-foreground' : 'bg-muted-foreground/30'
-            }`}
+            keywords={['pane', 'opacity', 'dimming']}
           >
-            <span
-              className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-                settings.terminalUseSeparateLightTheme ? 'translate-x-4' : 'translate-x-0.5'
-              }`}
+            <NumberField
+              label="Inactive Pane Opacity"
+              description="Opacity applied to panes that are not currently active."
+              value={paneStyleOptions.inactivePaneOpacity}
+              defaultValue={0.8}
+              min={0}
+              max={1}
+              step={0.05}
+              suffix="0 to 1"
+              onChange={(value) =>
+                updateSettings({
+                  terminalInactivePaneOpacity: clampNumber(value, 0, 1)
+                })
+              }
             />
-          </button>
-        </div>
-
-        <div
-          className={`grid overflow-hidden transition-all duration-300 ease-out ${
-            settings.terminalUseSeparateLightTheme
-              ? 'grid-rows-[1fr] opacity-100'
-              : 'grid-rows-[0fr] opacity-0'
-          }`}
-        >
-          <div className="min-h-0">
-            <div className="grid gap-6 pt-2 xl:grid-cols-[minmax(0,1fr)_360px]">
-              <div className="space-y-6">
-                <ThemePicker
-                  label="Light Theme"
-                  description="Choose the theme used when Orca is in light mode."
-                  selectedTheme={settings.terminalThemeLight}
-                  query={themeSearchLight}
-                  onQueryChange={setThemeSearchLight}
-                  onSelectTheme={(theme) => updateSettings({ terminalThemeLight: theme })}
-                />
-
-                <ColorField
-                  label="Light Divider Color"
-                  description="Controls the split divider line between panes in light mode."
-                  value={settings.terminalDividerColorLight}
-                  fallback="#d4d4d8"
-                  onChange={(value) => updateSettings({ terminalDividerColorLight: value })}
-                />
-              </div>
-
-              <TerminalThemePreview
-                title="Light Mode Preview"
-                description="Updates live as you change the light theme or divider color."
-                appearance={lightPreviewAppearance}
-                dividerThicknessPx={paneStyleOptions.dividerThicknessPx}
-                inactivePaneOpacity={paneStyleOptions.inactivePaneOpacity}
-                activePaneOpacity={paneStyleOptions.activePaneOpacity}
-              />
-            </div>
-          </div>
+          </SearchableSetting>
+          <SearchableSetting
+            title="Divider Thickness"
+            description="Thickness of the pane divider line."
+            keywords={['pane', 'divider', 'thickness']}
+          >
+            <NumberField
+              label="Divider Thickness"
+              description="Thickness of the pane divider line."
+              value={paneStyleOptions.dividerThicknessPx}
+              defaultValue={1}
+              min={1}
+              max={32}
+              step={1}
+              suffix="px"
+              onChange={(value) =>
+                updateSettings({
+                  terminalDividerThicknessPx: clampNumber(value, 1, 32)
+                })
+              }
+            />
+          </SearchableSetting>
         </div>
       </section>
-
-      <Separator />
-
-      <section className="space-y-4">
+    ) : null,
+    matchesSettingsSearch(searchQuery, TERMINAL_DARK_THEME_SEARCH_ENTRIES) ? (
+      <DarkTerminalThemeSection
+        key="dark-theme"
+        settings={settings}
+        systemPrefersDark={systemPrefersDark}
+        themeSearchDark={themeSearchDark}
+        setThemeSearchDark={setThemeSearchDark}
+        updateSettings={updateSettings}
+        previewProps={paneStyleOptions}
+        darkPreviewAppearance={darkPreviewAppearance}
+      />
+    ) : null,
+    matchesSettingsSearch(searchQuery, TERMINAL_LIGHT_THEME_SEARCH_ENTRIES) ? (
+      <LightTerminalThemeSection
+        key="light-theme"
+        settings={settings}
+        themeSearchLight={themeSearchLight}
+        setThemeSearchLight={setThemeSearchLight}
+        updateSettings={updateSettings}
+        previewProps={paneStyleOptions}
+        lightPreviewAppearance={lightPreviewAppearance}
+      />
+    ) : null,
+    matchesSettingsSearch(searchQuery, TERMINAL_ADVANCED_SEARCH_ENTRIES) ? (
+      <section key="advanced" className="space-y-4">
         <div className="space-y-1">
-          <h2 className="text-sm font-semibold">Advanced</h2>
+          <h3 className="text-sm font-semibold">Advanced</h3>
           <p className="text-xs text-muted-foreground">
             Scrollback is bounded for stability. This setting applies to new terminal panes.
           </p>
         </div>
 
-        <div className="space-y-3">
+        <SearchableSetting
+          title="Scrollback Size"
+          description="Maximum terminal scrollback buffer size."
+          keywords={['terminal', 'scrollback', 'buffer', 'memory']}
+          className="space-y-3"
+        >
           <Label>Scrollback Size</Label>
           <ToggleGroup
             type="single"
@@ -411,8 +382,19 @@ export function TerminalPane({
               }
             />
           ) : null}
-        </div>
+        </SearchableSetting>
       </section>
+    ) : null
+  ].filter(Boolean)
+
+  return (
+    <div className="space-y-8">
+      {visibleSections.map((section, index) => (
+        <div key={index} className="space-y-8">
+          {index > 0 ? <Separator /> : null}
+          {section}
+        </div>
+      ))}
     </div>
   )
 }
