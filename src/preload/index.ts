@@ -5,6 +5,10 @@ import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../shared/runtime-types'
+import {
+  ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT,
+  type EditorSaveDirtyFilesDetail
+} from '../shared/editor-save-events'
 
 type NativeFileDropTarget = 'editor' | 'terminal'
 
@@ -270,7 +274,31 @@ const api = {
     getVersion: (): Promise<string> => ipcRenderer.invoke('updater:getVersion'),
     check: (): Promise<void> => ipcRenderer.invoke('updater:check'),
     download: (): Promise<void> => ipcRenderer.invoke('updater:download'),
-    quitAndInstall: (): Promise<void> => {
+    quitAndInstall: async (): Promise<void> => {
+      await new Promise<void>((resolve, reject) => {
+        let claimed = false
+        window.dispatchEvent(
+          new CustomEvent<EditorSaveDirtyFilesDetail>(ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT, {
+            detail: {
+              claim: () => {
+                claimed = true
+              },
+              resolve,
+              reject: (message) => {
+                reject(new Error(message))
+              }
+            }
+          })
+        )
+
+        // Why: updater installs can run when no editor surface is mounted.
+        // When nothing claims the request there are no in-memory editor buffers
+        // to flush, so proceed with the normal shutdown path immediately.
+        if (!claimed) {
+          resolve()
+        }
+      })
+
       // Dispatch beforeunload to trigger terminal buffer capture before the
       // update process bypasses the normal window close sequence (quitAndInstall
       // removes close listeners, preventing beforeunload from firing naturally).

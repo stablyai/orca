@@ -21,6 +21,10 @@ import {
   type EditorPathMutationTarget,
   type EditorSaveQuiesceDetail
 } from './editor-autosave'
+import {
+  ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT,
+  type EditorSaveDirtyFilesDetail
+} from '../../../../shared/editor-save-events'
 
 type FileContent = {
   content: string
@@ -66,9 +70,13 @@ export default function EditorPanel(): React.JSX.Element | null {
   const saveQueueRef = React.useRef<Map<string, Promise<void>>>(new Map())
   const saveGenerationRef = React.useRef<Map<string, number>>(new Map())
   const openFilesRef = React.useRef(openFiles)
+  const fileContentsRef = React.useRef(fileContents)
+  const diffContentsRef = React.useRef(diffContents)
   const editBuffersRef = React.useRef(editBuffers)
   const autoSaveDelayMs = normalizeAutoSaveDelayMs(settings?.editorAutoSaveDelayMs)
   openFilesRef.current = openFiles
+  fileContentsRef.current = fileContents
+  diffContentsRef.current = diffContents
   editBuffersRef.current = editBuffers
 
   const clearAutoSaveTimer = useCallback((fileId: string): void => {
@@ -311,7 +319,56 @@ export default function EditorPanel(): React.JSX.Element | null {
     [activeFile, queueSave]
   )
 
+  const getLatestWritableContent = useCallback((file: OpenFile): string | null => {
+    const bufferedContent = editBuffersRef.current[file.id]
+    if (bufferedContent !== undefined) {
+      return bufferedContent
+    }
+
+    if (file.mode === 'edit') {
+      return fileContentsRef.current[file.id]?.content ?? null
+    }
+
+    const diffContent = diffContentsRef.current[file.id]
+    return diffContent?.kind === 'text' ? diffContent.modifiedContent : null
+  }, [])
+
   // Handle save-and-close events from the save confirmation dialog
+  useEffect(() => {
+    const handler = async (event: Event): Promise<void> => {
+      const detail = (event as CustomEvent<EditorSaveDirtyFilesDetail>).detail
+      if (!detail) {
+        return
+      }
+      detail.claim()
+
+      const dirtyFiles = openFilesRef.current.filter((file) => file.isDirty)
+      const unsupportedDirtyFiles = dirtyFiles.filter((file) => !canAutoSaveOpenFile(file))
+      if (unsupportedDirtyFiles.length > 0) {
+        detail.reject('Some unsaved editor changes cannot be auto-saved before restart.')
+        return
+      }
+
+      try {
+        await Promise.all(
+          dirtyFiles.map(async (file) => {
+            const content = getLatestWritableContent(file)
+            if (content === null) {
+              throw new Error(`Missing editor buffer for ${file.relativePath}`)
+            }
+            await queueSave(file, content)
+          })
+        )
+        detail.resolve()
+      } catch (error) {
+        detail.reject(String((error as Error)?.message ?? error))
+      }
+    }
+
+    window.addEventListener(ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT, handler as EventListener)
+    return () => window.removeEventListener(ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT, handler as EventListener)
+  }, [getLatestWritableContent, queueSave])
+
   useEffect(() => {
     const handler = async (e: Event): Promise<void> => {
       const { fileId } = (e as CustomEvent).detail as { fileId: string }
