@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { CSSProperties } from 'react'
 import { useAppStore } from '../../store'
@@ -14,6 +14,7 @@ import { shellEscapePath } from './pane-helpers'
 import { EMPTY_LAYOUT, paneLeafId, serializeTerminalLayout } from './layout-serialization'
 import { createExpandCollapseActions } from './expand-collapse'
 import { useTerminalKeyboardShortcuts, useTerminalFontZoom } from './keyboard-handlers'
+import CloseTerminalDialog from './CloseTerminalDialog'
 import TerminalContextMenu from './TerminalContextMenu'
 import { useSystemPrefersDark } from './use-system-prefers-dark'
 import { useTerminalPaneGlobalEffects } from './use-terminal-pane-global-effects'
@@ -33,6 +34,7 @@ type TerminalPaneProps = {
   cwd?: string
   isActive: boolean
   onPtyExit: (ptyId: string) => void
+  onCloseTab: () => void
 }
 
 export default function TerminalPane({
@@ -40,7 +42,8 @@ export default function TerminalPane({
   worktreeId,
   cwd,
   isActive,
-  onPtyExit
+  onPtyExit,
+  onCloseTab
 }: TerminalPaneProps): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
   const managerRef = useRef<PaneManager | null>(null)
@@ -56,6 +59,7 @@ export default function TerminalPane({
 
   const [expandedPaneId, setExpandedPaneId] = useState<number | null>(null)
   const [searchOpen, setSearchOpen] = useState(false)
+  const [closeConfirmPaneId, setCloseConfirmPaneId] = useState<number | null>(null)
 
   const setTabPaneExpanded = useAppStore((store) => store.setTabPaneExpanded)
   const setTabCanExpandPane = useAppStore((store) => store.setTabCanExpandPane)
@@ -120,6 +124,44 @@ export default function TerminalPane({
     persistLayoutSnapshot
   })
 
+  const executeClosePane = useCallback(
+    (paneId: number) => {
+      const manager = managerRef.current
+      if (!manager) {
+        return
+      }
+      if (manager.getPanes().length <= 1) {
+        onCloseTab()
+      } else {
+        manager.closePane(paneId)
+      }
+    },
+    [onCloseTab]
+  )
+
+  // Cmd+W handler — shows a Ghostty-style confirmation dialog when the
+  // pane's PTY is still running, so the user doesn't accidentally kill a
+  // long-lived process. Ctrl+D (explicit EOF) bypasses this by design.
+  const handleRequestClosePane = useCallback(
+    (paneId: number) => {
+      const transport = paneTransportsRef.current.get(paneId)
+      if (transport && transport.isConnected()) {
+        setCloseConfirmPaneId(paneId)
+      } else {
+        executeClosePane(paneId)
+      }
+    },
+    [executeClosePane]
+  )
+
+  const handleConfirmClose = useCallback(() => {
+    if (closeConfirmPaneId === null) {
+      return
+    }
+    executeClosePane(closeConfirmPaneId)
+    setCloseConfirmPaneId(null)
+  }, [closeConfirmPaneId, executeClosePane])
+
   useTerminalPaneLifecycle({
     tabId,
     worktreeId,
@@ -161,7 +203,8 @@ export default function TerminalPane({
     refreshPaneSizes,
     persistLayoutSnapshot,
     toggleExpandPane,
-    setSearchOpen
+    setSearchOpen,
+    onRequestClosePane: handleRequestClosePane
   })
 
   useTerminalPaneGlobalEffects({
@@ -366,6 +409,11 @@ export default function TerminalPane({
         onClosePane={contextMenu.onClosePane}
         onClearScreen={contextMenu.onClearScreen}
         onToggleExpand={contextMenu.onToggleExpand}
+      />
+      <CloseTerminalDialog
+        open={closeConfirmPaneId !== null}
+        onCancel={() => setCloseConfirmPaneId(null)}
+        onConfirm={handleConfirmClose}
       />
     </>
   )

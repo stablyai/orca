@@ -62,6 +62,10 @@ export default function Terminal(): React.JSX.Element | null {
   const [saveDialogFileId, setSaveDialogFileId] = useState<string | null>(null)
   const saveDialogFile = saveDialogFileId ? openFiles.find((f) => f.id === saveDialogFileId) : null
 
+  // Window close confirmation dialog — shown when the user tries to close the
+  // window (X button, Cmd+Q) while terminals with running processes exist.
+  const [windowCloseDialogOpen, setWindowCloseDialogOpen] = useState(false)
+
   const handleCloseFile = useCallback(
     (fileId: string) => {
       const file = useAppStore.getState().openFiles.find((f) => f.id === fileId)
@@ -288,14 +292,16 @@ export default function Terminal(): React.JSX.Element | null {
         return
       }
 
-      // Cmd/Ctrl+W - close active tab
+      // Cmd/Ctrl+W - close active editor tab or terminal pane.
+      // Terminal pane/tab close is handled by the pane-level keyboard handler
+      // in keyboard-handlers.ts so it can close individual split panes and
+      // show a confirmation dialog. We still preventDefault here so Electron
+      // doesn't close the window as its default Cmd+W action.
       if (mod && e.key === 'w' && !e.shiftKey && !e.repeat) {
         e.preventDefault()
         const state = useAppStore.getState()
         if (state.activeTabType === 'editor' && state.activeFileId) {
           handleCloseFile(state.activeFileId)
-        } else if (state.activeTabId) {
-          handleCloseTab(state.activeTabId)
         }
         return
       }
@@ -351,6 +357,26 @@ export default function Terminal(): React.JSX.Element | null {
     }
     window.addEventListener('beforeunload', handler)
     return () => window.removeEventListener('beforeunload', handler)
+  }, [])
+
+  // Listen for main-process window close requests. When terminals are running,
+  // show a confirmation dialog instead of closing immediately.
+  useEffect(() => {
+    return window.api.ui.onWindowCloseRequested(() => {
+      if (isUpdaterQuitAndInstallInProgress()) {
+        window.api.ui.confirmWindowClose()
+        return
+      }
+      const state = useAppStore.getState()
+      const hasTerminals = Object.values(state.tabsByWorktree).some(
+        (worktreeTabs) => worktreeTabs.length > 0
+      )
+      if (hasTerminals) {
+        setWindowCloseDialogOpen(true)
+      } else {
+        window.api.ui.confirmWindowClose()
+      }
+    })
   }, [])
 
   return (
@@ -419,6 +445,7 @@ export default function Terminal(): React.JSX.Element | null {
                     cwd={worktree.path}
                     isActive={isVisible && tab.id === activeTabId && activeTabType === 'terminal'}
                     onPtyExit={(ptyId) => handlePtyExit(tab.id, ptyId)}
+                    onCloseTab={() => handleCloseTab(tab.id)}
                   />
                 ))}
               </div>
@@ -469,6 +496,49 @@ export default function Terminal(): React.JSX.Element | null {
             </Button>
             <Button type="button" size="sm" onClick={handleSaveDialogSave}>
               Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Window close confirmation dialog — shown when the window is being
+          closed and terminals are still running. */}
+      <Dialog
+        open={windowCloseDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setWindowCloseDialogOpen(false)
+          }
+        }}
+      >
+        <DialogContent className="max-w-sm" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle className="text-sm">Close Window?</DialogTitle>
+            <DialogDescription className="text-xs">
+              There are terminals with running processes. If you close the window, those processes
+              will be killed.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setWindowCloseDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              autoFocus
+              onClick={() => {
+                setWindowCloseDialogOpen(false)
+                window.api.ui.confirmWindowClose()
+              }}
+            >
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>

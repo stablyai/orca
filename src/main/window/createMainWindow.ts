@@ -1,4 +1,4 @@
-import { BrowserWindow, nativeTheme, shell } from 'electron'
+import { BrowserWindow, ipcMain, nativeTheme, shell } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import icon from '../../../resources/icon.png?asset'
@@ -113,6 +113,32 @@ export function createMainWindow(store: Store | null): BrowserWindow {
       event.preventDefault()
       mainWindow.webContents.send('terminal:zoom', 'reset')
     }
+  })
+
+  // Intercept window close so the renderer can show a confirmation dialog
+  // when terminals with running processes would be killed. The renderer
+  // replies with 'window:confirm-close' to proceed, or does nothing to cancel.
+  let windowCloseConfirmed = false
+  const confirmCloseChannel = 'window:confirm-close'
+
+  mainWindow.on('close', (e) => {
+    if (windowCloseConfirmed) {
+      windowCloseConfirmed = false
+      return
+    }
+    e.preventDefault()
+    mainWindow.webContents.send('window:close-requested')
+  })
+
+  const onConfirmClose = (): void => {
+    windowCloseConfirmed = true
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.close()
+    }
+  }
+  ipcMain.on(confirmCloseChannel, onConfirmClose)
+  mainWindow.on('closed', () => {
+    ipcMain.removeListener(confirmCloseChannel, onConfirmClose)
   })
 
   if (is.dev && process.env.ELECTRON_RENDERER_URL) {

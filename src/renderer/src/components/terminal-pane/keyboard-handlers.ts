@@ -35,6 +35,7 @@ type KeyboardHandlersDeps = {
   persistLayoutSnapshot: () => void
   toggleExpandPane: (paneId: number) => void
   setSearchOpen: React.Dispatch<React.SetStateAction<boolean>>
+  onRequestClosePane: (paneId: number) => void
 }
 
 export function useTerminalKeyboardShortcuts({
@@ -47,7 +48,8 @@ export function useTerminalKeyboardShortcuts({
   refreshPaneSizes,
   persistLayoutSnapshot,
   toggleExpandPane,
-  setSearchOpen
+  setSearchOpen,
+  onRequestClosePane
 }: KeyboardHandlersDeps): void {
   useEffect(() => {
     if (!isActive) {
@@ -156,20 +158,18 @@ export function useTerminalKeyboardShortcuts({
         return
       }
 
-      // Cmd+W closes only the active split pane and prevents the tab-level
-      // handler from closing the entire terminal tab.
+      // Cmd+W closes the active split pane (or the whole tab when only one
+      // pane remains). Always intercepted here so the tab-level handler in
+      // Terminal.tsx never closes the entire tab directly — that would kill
+      // every pane instead of just the focused one.
       if (!e.shiftKey && e.key.toLowerCase() === 'w') {
-        const panes = manager.getPanes()
-        if (panes.length < 2) {
-          return
-        }
         e.preventDefault()
         e.stopPropagation()
-        const pane = manager.getActivePane() ?? panes[0]
+        const pane = manager.getActivePane() ?? manager.getPanes()[0]
         if (!pane) {
           return
         }
-        manager.closePane(pane.id)
+        onRequestClosePane(pane.id)
         return
       }
 
@@ -293,7 +293,8 @@ export function useTerminalKeyboardShortcuts({
     refreshPaneSizes,
     persistLayoutSnapshot,
     toggleExpandPane,
-    setSearchOpen
+    setSearchOpen,
+    onRequestClosePane
   ])
 }
 

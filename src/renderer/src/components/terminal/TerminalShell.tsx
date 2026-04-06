@@ -142,6 +142,7 @@ export function TerminalShell({
                   cwd={worktree.path}
                   isActive={isVisible && tab.id === activeTabId}
                   onPtyExit={(ptyId) => onPtyExit(tab.id, ptyId)}
+                  onCloseTab={() => onCloseTab(tab.id)}
                 />
               ))}
             </div>
