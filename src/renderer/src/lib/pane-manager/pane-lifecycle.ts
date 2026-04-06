@@ -49,7 +49,11 @@ export function createPaneDOM(
     cursorBlink: true,
     cursorStyle: 'bar',
     fontSize: 14,
-    fontFamily: '"SF Mono", Menlo, monospace',
+    // Cross-platform fallback chain — ensures the terminal can always find a
+    // usable monospace font regardless of OS, even if user settings haven't
+    // loaded yet. macOS-only fonts are harmlessly skipped on other platforms.
+    fontFamily:
+      '"SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", monospace',
     fontWeight: '300',
     fontWeightBold: '500',
     scrollback: 10000,
@@ -172,13 +176,19 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
   try {
     const webglAddon = new WebglAddon()
     webglAddon.onContextLoss(() => {
+      console.warn(
+        '[terminal] WebGL context lost for pane',
+        pane.id,
+        '— falling back to DOM renderer'
+      )
       webglAddon.dispose()
       pane.webglAddon = null
     })
     pane.terminal.loadAddon(webglAddon)
     pane.webglAddon = webglAddon
-  } catch {
-    // WebGL not available — default DOM renderer is fine
+  } catch (err) {
+    // WebGL not available — default DOM renderer is fine, but log it for debugging
+    console.warn('[terminal] WebGL unavailable for pane', pane.id, '— using DOM renderer:', err)
     pane.webglAddon = null
   }
 }

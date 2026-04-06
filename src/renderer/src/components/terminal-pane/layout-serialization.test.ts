@@ -78,30 +78,44 @@ describe('paneLeafId', () => {
 // ---------------------------------------------------------------------------
 // buildFontFamily
 // ---------------------------------------------------------------------------
+const FULL_FALLBACK =
+  '"SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", monospace'
+
 describe('buildFontFamily', () => {
-  it('puts custom font first with SF Mono, Menlo, monospace fallbacks', () => {
+  it('puts custom font first with full cross-platform fallback chain', () => {
     const result = buildFontFamily('JetBrains Mono')
-    expect(result).toBe('"JetBrains Mono", "SF Mono", Menlo, monospace')
+    expect(result).toBe(`"JetBrains Mono", ${FULL_FALLBACK}`)
   })
 
   it('does not duplicate SF Mono when it is the input', () => {
     const result = buildFontFamily('SF Mono')
-    expect(result).toBe('"SF Mono", Menlo, monospace')
+    expect(result).toBe(
+      '"SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", monospace'
+    )
   })
 
-  it('returns SF Mono, Menlo, monospace for empty string', () => {
+  it('returns full fallback chain for empty string', () => {
     const result = buildFontFamily('')
-    expect(result).toBe('"SF Mono", Menlo, monospace')
+    expect(result).toBe(FULL_FALLBACK)
   })
 
   it('treats whitespace-only string same as empty', () => {
     const result = buildFontFamily('   ')
-    expect(result).toBe('"SF Mono", Menlo, monospace')
+    expect(result).toBe(FULL_FALLBACK)
   })
 
   it('does not duplicate when font name contains "sf mono" (case-insensitive)', () => {
     const result = buildFontFamily('My SF Mono Custom')
-    expect(result).toBe('"My SF Mono Custom", Menlo, monospace')
+    expect(result).toBe(
+      '"My SF Mono Custom", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", monospace'
+    )
+  })
+
+  it('does not duplicate Consolas when it is the input', () => {
+    const result = buildFontFamily('Consolas')
+    expect(result).toBe(
+      '"Consolas", "SF Mono", "Menlo", "Monaco", "Cascadia Mono", "DejaVu Sans Mono", "Liberation Mono", monospace'
+    )
   })
 })
 

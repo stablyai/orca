@@ -14,6 +14,7 @@ type PtyConnectionDeps = {
   pendingWritesRef: React.RefObject<Map<number, string>>
   isActiveRef: React.RefObject<boolean>
   onPtyExitRef: React.RefObject<(ptyId: string) => void>
+  onPtyErrorRef?: React.RefObject<(paneId: number, message: string) => void>
   clearTabPtyId: (tabId: string, ptyId: string) => void
   updateTabTitle: (tabId: string, title: string) => void
   updateTabPtyId: (tabId: string, ptyId: string) => void
@@ -95,6 +96,20 @@ export function connectPanePty(
     const cols = pane.terminal.cols
     const rows = pane.terminal.rows
 
+    // Why: if fitAddon resolved to 0×0, the container likely has no layout
+    // dimensions (display:none, unmounted, or zero-size parent). Surface a
+    // diagnostic so the user sees something instead of a blank pane.
+    if (cols === 0 || rows === 0) {
+      deps.onPtyErrorRef?.current?.(
+        pane.id,
+        `Terminal has zero dimensions (${cols}×${rows}). The pane container may not be visible.`
+      )
+    }
+
+    const reportError = (message: string): void => {
+      deps.onPtyErrorRef?.current?.(pane.id, message)
+    }
+
     const dataCallback = (data: string): void => {
       if (deps.isActiveRef.current) {
         pane.terminal.write(data)
@@ -127,7 +142,8 @@ export function connectPanePty(
         cols,
         rows,
         callbacks: {
-          onData: dataCallback
+          onData: dataCallback,
+          onError: reportError
         }
       })
     } else {
@@ -144,7 +160,8 @@ export function connectPanePty(
               transport.sendInput(`${paneStartup.command}\r`)
             }
           },
-          onData: dataCallback
+          onData: dataCallback,
+          onError: reportError
         }
       })
     }

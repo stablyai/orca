@@ -93,20 +93,29 @@ export function registerPtyHandlers(mainWindow: BrowserWindow, runtime?: OrcaRun
           ? process.env.USERPROFILE || process.env.HOMEPATH || 'C:\\'
           : process.env.HOME || '/'
 
-      const ptyProcess = pty.spawn(shellPath, shellArgs, {
-        name: 'xterm-256color',
-        cols: args.cols,
-        rows: args.rows,
-        cwd: args.cwd || defaultCwd,
-        env: {
-          ...process.env,
-          ...args.env,
-          TERM: 'xterm-256color',
-          COLORTERM: 'truecolor',
-          TERM_PROGRAM: 'Orca',
-          FORCE_HYPERLINK: '1'
-        } as Record<string, string>
-      })
+      let ptyProcess: pty.IPty
+      try {
+        ptyProcess = pty.spawn(shellPath, shellArgs, {
+          name: 'xterm-256color',
+          cols: args.cols,
+          rows: args.rows,
+          cwd: args.cwd || defaultCwd,
+          env: {
+            ...process.env,
+            ...args.env,
+            TERM: 'xterm-256color',
+            COLORTERM: 'truecolor',
+            TERM_PROGRAM: 'Orca',
+            FORCE_HYPERLINK: '1'
+          } as Record<string, string>
+        })
+      } catch (err) {
+        // Why: node-pty.spawn can throw if the shell binary doesn't exist,
+        // permissions are denied, or the cwd is invalid. Surface the error
+        // to the renderer so it can show a diagnostic instead of a blank pane.
+        const message = err instanceof Error ? err.message : String(err)
+        throw new Error(`Failed to spawn shell "${shellPath}": ${message}`)
+      }
 
       ptyProcesses.set(id, ptyProcess)
       ptyShellName.set(id, basename(shellPath))

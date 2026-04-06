@@ -15,14 +15,34 @@ export function paneLeafId(paneId: number): string {
   return `pane:${paneId}`
 }
 
+// Cross-platform monospace fallback chain ensures the terminal always has a
+// usable font regardless of OS.  macOS-only fonts like SF Mono and Menlo are
+// harmless on other platforms (the browser skips them), while Cascadia Mono /
+// Consolas cover Windows and DejaVu Sans Mono / Liberation Mono cover Linux.
+const FALLBACK_FONTS = [
+  'SF Mono', // macOS 10.12+
+  'Menlo', // macOS (older)
+  'Monaco', // macOS (legacy)
+  'Cascadia Mono', // Windows 11+
+  'Consolas', // Windows Vista+
+  'DejaVu Sans Mono', // Linux (common)
+  'Liberation Mono', // Linux (common)
+  'monospace' // ultimate generic fallback
+] as const
+
 export function buildFontFamily(fontFamily: string): string {
   const trimmed = fontFamily.trim()
   const parts = trimmed ? [`"${trimmed}"`] : []
-  // Always include fallbacks
-  if (!parts.some((p) => p.toLowerCase().includes('sf mono'))) {
-    parts.push('"SF Mono"')
+  const lowerParts = parts.map((p) => p.toLowerCase())
+  // Append each fallback unless the user's font name already contains it
+  // (case-insensitive) to avoid duplicates like '"SF Mono", "SF Mono"'.
+  for (const fallback of FALLBACK_FONTS) {
+    const lower = fallback.toLowerCase()
+    if (!lowerParts.some((p) => p.includes(lower))) {
+      // Generic keywords like "monospace" are unquoted; named fonts are quoted.
+      parts.push(fallback === 'monospace' ? fallback : `"${fallback}"`)
+    }
   }
-  parts.push('Menlo', 'monospace')
   return parts.join(', ')
 }
 

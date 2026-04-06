@@ -15,6 +15,7 @@ import { EMPTY_LAYOUT, paneLeafId, serializeTerminalLayout } from './layout-seri
 import { createExpandCollapseActions } from './expand-collapse'
 import { useTerminalKeyboardShortcuts, useTerminalFontZoom } from './keyboard-handlers'
 import CloseTerminalDialog from './CloseTerminalDialog'
+import { TerminalErrorToast } from './TerminalErrorToast'
 import TerminalContextMenu from './TerminalContextMenu'
 import { useSystemPrefersDark } from './use-system-prefers-dark'
 import { useTerminalPaneGlobalEffects } from './use-terminal-pane-global-effects'
@@ -60,6 +61,10 @@ export default function TerminalPane({
   const [expandedPaneId, setExpandedPaneId] = useState<number | null>(null)
   const [searchOpen, setSearchOpen] = useState(false)
   const [closeConfirmPaneId, setCloseConfirmPaneId] = useState<number | null>(null)
+  const [terminalError, setTerminalError] = useState<string | null>(null)
+  const onPtyErrorRef = useRef((_paneId: number, message: string) => {
+    setTerminalError((prev) => (prev ? `${prev}\n${message}` : message))
+  })
 
   const setTabPaneExpanded = useAppStore((store) => store.setTabPaneExpanded)
   const setTabCanExpandPane = useAppStore((store) => store.setTabCanExpandPane)
@@ -188,6 +193,7 @@ export default function TerminalPane({
     pendingWritesRef,
     isActiveRef,
     onPtyExitRef,
+    onPtyErrorRef,
     clearTabPtyId,
     updateTabTitle,
     updateTabPtyId,
@@ -391,6 +397,9 @@ export default function TerminalPane({
           transport.sendInput(shellEscapePath(filePath))
         }}
       />
+      {terminalError && isActive && (
+        <TerminalErrorToast error={terminalError} onDismiss={() => setTerminalError(null)} />
+      )}
       {activePane?.container &&
         createPortal(
           <TerminalSearch

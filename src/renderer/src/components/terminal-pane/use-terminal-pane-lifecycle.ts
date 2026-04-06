@@ -39,6 +39,7 @@ type UseTerminalPaneLifecycleDeps = {
   pendingWritesRef: React.RefObject<Map<number, string>>
   isActiveRef: React.RefObject<boolean>
   onPtyExitRef: React.RefObject<(ptyId: string) => void>
+  onPtyErrorRef?: React.RefObject<(paneId: number, message: string) => void>
   clearTabPtyId: (tabId: string, ptyId: string) => void
   updateTabTitle: (tabId: string, title: string) => void
   updateTabPtyId: (tabId: string, ptyId: string) => void
@@ -68,6 +69,7 @@ export function useTerminalPaneLifecycle({
   pendingWritesRef,
   isActiveRef,
   onPtyExitRef,
+  onPtyErrorRef,
   clearTabPtyId,
   updateTabTitle,
   updateTabPtyId,
@@ -158,6 +160,7 @@ export function useTerminalPaneLifecycle({
       pendingWritesRef,
       isActiveRef,
       onPtyExitRef,
+      onPtyErrorRef,
       clearTabPtyId,
       updateTabTitle,
       updateTabPtyId,
@@ -239,7 +242,7 @@ export function useTerminalPaneLifecycle({
         const terminalFontWeights = resolveTerminalFontWeights(currentSettings?.terminalFontWeight)
         return {
           fontSize: currentSettings?.terminalFontSize ?? 14,
-          fontFamily: buildFontFamily(currentSettings?.terminalFontFamily ?? 'SF Mono'),
+          fontFamily: buildFontFamily(currentSettings?.terminalFontFamily ?? ''),
           fontWeight: terminalFontWeights.fontWeight,
           fontWeightBold: terminalFontWeights.fontWeightBold,
           scrollback: Math.min(

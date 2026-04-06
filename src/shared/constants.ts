@@ -9,6 +9,20 @@ import type {
 import { DEFAULT_TERMINAL_FONT_WEIGHT } from './terminal-fonts'
 
 export const SCHEMA_VERSION = 1
+
+// Pick a default terminal font that is likely to exist on the current OS.
+// buildFontFamily() adds the full cross-platform fallback chain, so this only
+// affects what users see in Settings as the initial value.
+function defaultTerminalFontFamily(): string {
+  const platform = typeof process !== 'undefined' ? process.platform : ''
+  if (platform === 'win32') {
+    return 'Cascadia Mono'
+  }
+  if (platform === 'linux') {
+    return 'DejaVu Sans Mono'
+  }
+  return 'SF Mono' // macOS default
+}
 export const DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS = 1000
 export const MIN_EDITOR_AUTO_SAVE_DELAY_MS = 250
 export const MAX_EDITOR_AUTO_SAVE_DELAY_MS = 10_000
@@ -43,7 +57,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     editorAutoSave: false,
     editorAutoSaveDelayMs: DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS,
     terminalFontSize: 14,
-    terminalFontFamily: 'SF Mono',
+    terminalFontFamily: defaultTerminalFontFamily(),
     terminalFontWeight: DEFAULT_TERMINAL_FONT_WEIGHT,
     terminalCursorStyle: 'bar',
     terminalCursorBlink: true,
