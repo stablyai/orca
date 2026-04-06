@@ -9,7 +9,7 @@ import {
   isMacQuitAndInstallInFlight,
   resetMacInstallState
 } from './updater-mac-install'
-import { compareVersions } from './updater-fallback'
+import { compareVersions, isPrerelease } from './updater-fallback'
 
 type UpdaterHandlerContext = {
   clearAvailableUpdateContext: () => void
@@ -95,6 +95,15 @@ export function registerAutoUpdaterHandlers({
   autoUpdater.on('update-available', (info) => {
     const wasUserInitiated = getUserInitiatedCheck()
     setUserInitiatedCheck(false)
+    // RC releases are only meant to be installed by hand; the auto-updater must
+    // never offer them. We need this guard because allowPrerelease is enabled on
+    // electron-updater to work around a broken GitHub endpoint, which causes
+    // prerelease versions to slip through its normal filter.
+    if (isPrerelease(info.version)) {
+      clearAvailableUpdateContext()
+      sendStatus({ state: 'not-available', userInitiated: wasUserInitiated || undefined })
+      return
+    }
     // Guard against showing an update that isn't actually newer than what's running.
     // With allowPrerelease enabled, electron-updater may report the current or
     // even an older version as "available". Use semver comparison so we never
@@ -134,6 +143,13 @@ export function registerAutoUpdaterHandlers({
   })
 
   autoUpdater.on('update-downloaded', (info) => {
+    // Safety net: reject RC downloads that somehow slipped past the
+    // update-available guard. RC releases are manual-install only.
+    if (isPrerelease(info.version)) {
+      clearAvailableUpdateContext()
+      sendStatus({ state: 'not-available' })
+      return
+    }
     // Don't show the banner if the downloaded version isn't actually newer
     // than what's running. This catches the exact-same-version case as well
     // as stale cached updates from an older release.

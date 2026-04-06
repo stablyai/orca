@@ -287,7 +287,8 @@ export function setupAutoUpdater(
   autoUpdater.autoInstallOnAppQuit = true
   // Use allowPrerelease to bypass broken /releases/latest endpoint (returns 406)
   // and instead parse the version directly from the atom feed which works reliably.
-  // This is safe since we don't publish prerelease versions.
+  // RC/prerelease versions are filtered out in the update-available and
+  // update-downloaded event handlers so they are never offered to the user.
   autoUpdater.allowPrerelease = true
 
   if (autoUpdaterInitialized) {

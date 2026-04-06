@@ -150,6 +150,19 @@ describe('updater fallback', () => {
     expect(compareVersions('v1.0.70-beta.2', '1.0.70-beta.1')).toBeGreaterThan(0)
   })
 
+  it('identifies prerelease versions correctly', async () => {
+    const { isPrerelease } = await import('./updater-fallback')
+
+    expect(isPrerelease('1.0.70-rc.1')).toBe(true)
+    expect(isPrerelease('1.0.70-rc.0')).toBe(true)
+    expect(isPrerelease('1.0.70-beta.1')).toBe(true)
+    expect(isPrerelease('1.0.70-alpha.3')).toBe(true)
+    expect(isPrerelease('v1.0.70-rc.1')).toBe(true)
+    expect(isPrerelease('1.0.70')).toBe(false)
+    expect(isPrerelease('v1.0.70')).toBe(false)
+    expect(isPrerelease('1.0.70+build.5')).toBe(false)
+  })
+
   it('falls back to the latest stable GitHub release when GitHub reports no published versions', async () => {
     mockReleaseLookupResponse()
     mockCheckFailure('No published versions on GitHub')

@@ -258,6 +258,55 @@ describe('updater', () => {
     expect(setLastUpdateCheckAt).not.toHaveBeenCalled()
   })
 
+  it('treats an RC version from update-available as not-available', async () => {
+    autoUpdaterMock.checkForUpdates.mockResolvedValueOnce(undefined).mockImplementationOnce(() => {
+      autoUpdaterMock.emit('checking-for-update')
+      queueMicrotask(() => {
+        autoUpdaterMock.emit('update-available', { version: '1.0.52-rc.1' })
+      })
+      return Promise.resolve(null)
+    })
+
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never)
+    checkForUpdatesFromMenu()
+    await vi.waitFor(() => {
+      const statuses = sendMock.mock.calls
+        .filter(([channel]) => channel === 'updater:status')
+        .map(([, status]) => status)
+      expect(statuses).toContainEqual(expect.objectContaining({ state: 'not-available' }))
+    })
+
+    const statuses = sendMock.mock.calls
+      .filter(([channel]) => channel === 'updater:status')
+      .map(([, status]) => status)
+
+    expect(statuses).not.toContainEqual(expect.objectContaining({ state: 'available' }))
+  })
+
+  it('treats an RC version from update-downloaded as not-available', async () => {
+    autoUpdaterMock.checkForUpdates.mockResolvedValueOnce(undefined)
+
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+
+    const { setupAutoUpdater } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never)
+    autoUpdaterMock.emit('update-downloaded', { version: '1.0.52-rc.0' })
+
+    const statuses = sendMock.mock.calls
+      .filter(([channel]) => channel === 'updater:status')
+      .map(([, status]) => status)
+
+    expect(statuses).toContainEqual({ state: 'not-available' })
+    expect(statuses).not.toContainEqual(expect.objectContaining({ state: 'downloaded' }))
+  })
+
   it('retries background checks sooner after a failed automatic check', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-04-03T12:00:00Z'))

@@ -127,6 +127,18 @@ function compareIdentifiers(left: string, right: string): number {
   return left.localeCompare(right)
 }
 
+/** Returns true if the version string contains a prerelease tag (e.g. "-rc.1").
+ *  RC releases are only meant to be installed by hand, so the auto-updater must
+ *  never offer them. We need this guard because allowPrerelease is enabled on
+ *  electron-updater to work around a broken GitHub /releases/latest endpoint,
+ *  which means prerelease versions slip through its normal filter. */
+export function isPrerelease(version: string): boolean {
+  const parsed = parseVersion(version)
+  // Treat unparseable versions as prerelease so they are rejected early rather
+  // than slipping through to downstream guards.
+  return parsed === null || parsed.prerelease.length > 0
+}
+
 /** Returns negative if left < right, 0 if equal, positive if left > right. */
 export function compareVersions(left: string, right: string): number {
   const leftVersion = parseVersion(left)
