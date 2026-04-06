@@ -3,6 +3,8 @@ import { toast } from 'sonner'
 import type { AppState } from '../types'
 import type { Repo } from '../../../../shared/types'
 
+const ERROR_TOAST_DURATION = 60_000
+
 export type RepoSlice = {
   repos: Repo[]
   activeRepoId: string | null
@@ -59,15 +61,16 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     } catch (err) {
       console.error('Failed to add repo:', err)
       const message = err instanceof Error ? err.message : String(err)
+      const duration = ERROR_TOAST_DURATION
       if (message.includes('Not a valid git repository')) {
         toast.error('Not a git repository', {
           description: 'Only git repositories can be added. Initialize one with git init first.',
-          duration: 60_000
+          duration
         })
       } else {
         toast.error('Failed to add repo', {
           description: message,
-          duration: 60_000
+          duration
         })
       }
       return null
