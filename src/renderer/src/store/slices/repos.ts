@@ -58,6 +58,16 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       return repo
     } catch (err) {
       console.error('Failed to add repo:', err)
+      const message = err instanceof Error ? err.message : String(err)
+      if (message.includes('Not a valid git repository')) {
+        toast.error('Not a git repository', {
+          description: 'Only git repositories can be added. Initialize one with git init first.'
+        })
+      } else {
+        toast.error('Failed to add repo', {
+          description: message
+        })
+      }
       return null
     }
   },
