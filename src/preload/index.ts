@@ -275,29 +275,41 @@ const api = {
     check: (): Promise<void> => ipcRenderer.invoke('updater:check'),
     download: (): Promise<void> => ipcRenderer.invoke('updater:download'),
     quitAndInstall: async (): Promise<void> => {
-      await new Promise<void>((resolve, reject) => {
-        let claimed = false
-        window.dispatchEvent(
-          new CustomEvent<EditorSaveDirtyFilesDetail>(ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT, {
-            detail: {
-              claim: () => {
-                claimed = true
-              },
-              resolve,
-              reject: (message) => {
-                reject(new Error(message))
+      // Why: we wrap the save attempt in try/catch so that a save failure
+      // (e.g., unsupported dirty files or a write error) never silently
+      // prevents the update from installing. The user already clicked
+      // "install update" — proceeding with the restart is better than
+      // leaving them stuck with no feedback.
+      try {
+        await new Promise<void>((resolve, reject) => {
+          let claimed = false
+          window.dispatchEvent(
+            new CustomEvent<EditorSaveDirtyFilesDetail>(ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT, {
+              detail: {
+                claim: () => {
+                  claimed = true
+                },
+                resolve,
+                reject: (message) => {
+                  reject(new Error(message))
+                }
               }
-            }
-          })
-        )
+            })
+          )
 
-        // Why: updater installs can run when no editor surface is mounted.
-        // When nothing claims the request there are no in-memory editor buffers
-        // to flush, so proceed with the normal shutdown path immediately.
-        if (!claimed) {
-          resolve()
-        }
-      })
+          // Why: updater installs can run when no editor surface is mounted.
+          // When nothing claims the request there are no in-memory editor buffers
+          // to flush, so proceed with the normal shutdown path immediately.
+          if (!claimed) {
+            resolve()
+          }
+        })
+      } catch (error) {
+        console.warn(
+          '[updater] Saving dirty files before quit failed; proceeding with install anyway:',
+          error
+        )
+      }
 
       // Dispatch beforeunload to trigger terminal buffer capture before the
       // update process bypasses the normal window close sequence (quitAndInstall

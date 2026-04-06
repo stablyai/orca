@@ -333,6 +333,16 @@ export default function EditorPanel(): React.JSX.Element | null {
     return diffContent?.kind === 'text' ? diffContent.modifiedContent : null
   }, [])
 
+  const getDuplicateDirtySavePaths = useCallback((files: OpenFile[]): string[] => {
+    const counts = new Map<string, number>()
+    for (const file of files) {
+      counts.set(file.filePath, (counts.get(file.filePath) ?? 0) + 1)
+    }
+    return Array.from(counts.entries())
+      .filter(([, count]) => count > 1)
+      .map(([filePath]) => filePath)
+  }, [])
+
   // Handle save-and-close events from the save confirmation dialog
   useEffect(() => {
     const handler = async (event: Event): Promise<void> => {
@@ -340,16 +350,31 @@ export default function EditorPanel(): React.JSX.Element | null {
       if (!detail) {
         return
       }
-      detail.claim()
 
-      const dirtyFiles = openFilesRef.current.filter((file) => file.isDirty)
-      const unsupportedDirtyFiles = dirtyFiles.filter((file) => !canAutoSaveOpenFile(file))
-      if (unsupportedDirtyFiles.length > 0) {
-        detail.reject('Some unsaved editor changes cannot be auto-saved before restart.')
-        return
-      }
-
+      // Why: the entire handler body after the null guard is wrapped in a
+      // single try/catch so that any unexpected error (including from
+      // detail.claim()) always calls detail.reject() rather than leaving
+      // the promise in the preload hanging forever.
       try {
+        detail.claim()
+
+        const dirtyFiles = openFilesRef.current.filter((file) => file.isDirty)
+        const unsupportedDirtyFiles = dirtyFiles.filter((file) => !canAutoSaveOpenFile(file))
+        if (unsupportedDirtyFiles.length > 0) {
+          detail.reject('Some unsaved editor changes cannot be auto-saved before restart.')
+          return
+        }
+
+        const duplicateDirtySavePaths = getDuplicateDirtySavePaths(dirtyFiles)
+        if (duplicateDirtySavePaths.length > 0) {
+          // Why: edit tabs and unstaged diff tabs can both target the same
+          // on-disk file while holding different in-memory buffers. Refusing the
+          // updater restart here is safer than racing two writes and silently
+          // picking whichever tab happens to save last.
+          detail.reject('Some unsaved files are open in multiple dirty tabs. Save them manually before restarting.')
+          return
+        }
+
         await Promise.all(
           dirtyFiles.map(async (file) => {
             const content = getLatestWritableContent(file)
@@ -366,8 +391,9 @@ export default function EditorPanel(): React.JSX.Element | null {
     }
 
     window.addEventListener(ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT, handler as EventListener)
-    return () => window.removeEventListener(ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT, handler as EventListener)
-  }, [getLatestWritableContent, queueSave])
+    return () =>
+      window.removeEventListener(ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT, handler as EventListener)
+  }, [getDuplicateDirtySavePaths, getLatestWritableContent, queueSave])
 
   useEffect(() => {
     const handler = async (e: Event): Promise<void> => {
