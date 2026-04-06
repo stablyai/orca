@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { useEffect } from 'react'
 import { DEFAULT_WORKTREE_CARD_PROPERTIES } from '../../shared/constants'
 
@@ -60,6 +61,7 @@ function App(): React.JSX.Element {
   const initGitHubCache = useAppStore((s) => s.initGitHubCache)
   const refreshAllGitHub = useAppStore((s) => s.refreshAllGitHub)
   const hydrateWorkspaceSession = useAppStore((s) => s.hydrateWorkspaceSession)
+  const reconnectPersistedTerminals = useAppStore((s) => s.reconnectPersistedTerminals)
   const hydratePersistedUI = useAppStore((s) => s.hydratePersistedUI)
   const openModal = useAppStore((s) => s.openModal)
   const repos = useAppStore((s) => s.repos)
@@ -92,6 +94,10 @@ function App(): React.JSX.Element {
   // Fetch initial data + hydrate GitHub cache from disk
   useEffect(() => {
     let cancelled = false
+    // Why: AbortController must be declared outside the async block so the
+    // cleanup function can abort it. Under StrictMode the effect runs twice;
+    // without this, the first (unmounted) pass would keep spawning PTYs.
+    const abortController = new AbortController()
 
     void (async () => {
       try {
@@ -102,6 +108,7 @@ function App(): React.JSX.Element {
         if (!cancelled) {
           hydratePersistedUI(persistedUI)
           hydrateWorkspaceSession(session)
+          await reconnectPersistedTerminals(abortController.signal)
           syncZoomCSSVar()
         }
       } catch (error) {
@@ -128,6 +135,10 @@ function App(): React.JSX.Element {
             tabsByWorktree: {},
             terminalLayoutsByTabId: {}
           })
+          // Why: hydrateWorkspaceSession no longer sets workspaceSessionReady.
+          // The error path has no worktrees to reconnect, but must still flip
+          // the flag so auto-tab-creation and session writes are unblocked.
+          await reconnectPersistedTerminals()
         }
       }
       void fetchSettings()
@@ -136,6 +147,7 @@ function App(): React.JSX.Element {
 
     return () => {
       cancelled = true
+      abortController.abort()
     }
   }, [
     fetchRepos,
@@ -143,7 +155,8 @@ function App(): React.JSX.Element {
     fetchSettings,
     initGitHubCache,
     hydratePersistedUI,
-    hydrateWorkspaceSession
+    hydrateWorkspaceSession,
+    reconnectPersistedTerminals
   ])
 
   useEffect(() => {
@@ -165,12 +178,19 @@ function App(): React.JSX.Element {
       return
     }
     const timer = window.setTimeout(() => {
+      // Why: setWorkspaceSession is a full replacement, not a merge.
+      // Every call MUST include activeWorktreeIdsOnShutdown or it is
+      // silently erased from disk.
+      const activeWorktreeIdsOnShutdown = Object.entries(tabsByWorktree)
+        .filter(([, tabs]) => tabs.some((t) => t.ptyId))
+        .map(([worktreeId]) => worktreeId)
       void window.api.session.set({
         activeRepoId,
         activeWorktreeId,
         activeTabId,
         tabsByWorktree,
-        terminalLayoutsByTabId
+        terminalLayoutsByTabId,
+        activeWorktreeIdsOnShutdown
       })
     }, 150)
 
@@ -199,12 +219,16 @@ function App(): React.JSX.Element {
         }
       }
       const state = useAppStore.getState()
+      const activeWorktreeIdsOnShutdown = Object.entries(state.tabsByWorktree)
+        .filter(([, tabs]) => tabs.some((t) => t.ptyId))
+        .map(([worktreeId]) => worktreeId)
       window.api.session.setSync({
         activeRepoId: state.activeRepoId,
         activeWorktreeId: state.activeWorktreeId,
         activeTabId: state.activeTabId,
         tabsByWorktree: state.tabsByWorktree,
-        terminalLayoutsByTabId: state.terminalLayoutsByTabId
+        terminalLayoutsByTabId: state.terminalLayoutsByTabId,
+        activeWorktreeIdsOnShutdown
       })
     }
     window.addEventListener('beforeunload', captureAndFlush)

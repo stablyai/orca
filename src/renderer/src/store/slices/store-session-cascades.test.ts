@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
@@ -223,8 +224,10 @@ describe('hydrateWorkspaceSession', () => {
     expect(s.terminalLayoutsByTabId['tab-valid']).toBeDefined()
     expect(s.terminalLayoutsByTabId['tab-invalid']).toBeUndefined()
 
-    // Session is marked ready
-    expect(s.workspaceSessionReady).toBe(true)
+    // Why: with two-phase hydration, workspaceSessionReady stays false after
+    // hydrateWorkspaceSession. It flips to true in reconnectPersistedTerminals()
+    // after all eager PTY spawns complete.
+    expect(s.workspaceSessionReady).toBe(false)
   })
 
   it('restores valid activeWorktreeId and activeTabId', () => {
@@ -311,5 +314,278 @@ describe('terminal slice behaviors', () => {
     const tab = store.getState().tabsByWorktree[worktreeId][0]
     expect(tab.ptyId).toBe('pty-1')
     expect(store.getState().ptyIdsByTabId['tab-1']).toEqual(['pty-1'])
+  })
+})
+
+// ─── Reconnect persisted terminals ──────────────────────────────────
+
+// Mock pty-transport's eager buffer registration
+vi.mock('@/components/terminal-pane/pty-transport', () => ({
+  registerEagerPtyBuffer: vi.fn().mockReturnValue({ flush: () => '', dispose: () => {} }),
+  ensurePtyDispatcher: vi.fn()
+}))
+
+describe('reconnectPersistedTerminals', () => {
+  let ptyIdCounter: number
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    ptyIdCounter = 0
+    // Mock pty.spawn to return incrementing IDs
+    mockApi.pty.kill = vi.fn().mockResolvedValue(undefined)
+    ;(mockApi.pty as Record<string, unknown>).spawn = vi.fn().mockImplementation(() => {
+      ptyIdCounter++
+      return Promise.resolve({ id: `pty-${ptyIdCounter}` })
+    })
+  })
+
+  it('spawns PTYs for worktrees that were active at shutdown and sets workspaceSessionReady', async () => {
+    const store = createTestStore()
+    const wt1 = 'repo1::/path/wt1'
+    const wt2 = 'repo1::/path/wt2'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: wt1, repoId: 'repo1', path: '/path/wt1' }),
+          makeWorktree({ id: wt2, repoId: 'repo1', path: '/path/wt2' })
+        ]
+      }
+    })
+
+    // Hydrate with activeWorktreeIdsOnShutdown indicating both worktrees had terminals
+    store.getState().hydrateWorkspaceSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: wt1,
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        [wt1]: [makeTab({ id: 'tab1', worktreeId: wt1, ptyId: 'old-pty-1' })],
+        [wt2]: [makeTab({ id: 'tab2', worktreeId: wt2, ptyId: 'old-pty-2' })]
+      },
+      terminalLayoutsByTabId: { tab1: makeLayout(), tab2: makeLayout() },
+      activeWorktreeIdsOnShutdown: [wt1, wt2]
+    })
+
+    // After hydration, workspaceSessionReady is false
+    expect(store.getState().workspaceSessionReady).toBe(false)
+    // ptyIds are cleared by clearTransientTerminalState
+    expect(store.getState().tabsByWorktree[wt1][0].ptyId).toBeNull()
+    expect(store.getState().tabsByWorktree[wt2][0].ptyId).toBeNull()
+    // pendingReconnectWorktreeIds is populated
+    expect(store.getState().pendingReconnectWorktreeIds).toEqual([wt1, wt2])
+
+    // Run reconnect
+    await store.getState().reconnectPersistedTerminals()
+
+    const s = store.getState()
+    // workspaceSessionReady is now true
+    expect(s.workspaceSessionReady).toBe(true)
+    // Tabs now have live ptyIds
+    expect(s.tabsByWorktree[wt1][0].ptyId).toBe('pty-1')
+    expect(s.tabsByWorktree[wt2][0].ptyId).toBe('pty-2')
+    // ptyIdsByTabId is populated
+    expect(s.ptyIdsByTabId['tab1']).toContain('pty-1')
+    expect(s.ptyIdsByTabId['tab2']).toContain('pty-2')
+    // pendingReconnectWorktreeIds is cleared
+    expect(s.pendingReconnectWorktreeIds).toEqual([])
+    // Spawn was called with correct cwd
+    expect((mockApi.pty as Record<string, unknown>).spawn).toHaveBeenCalledTimes(2)
+    expect((mockApi.pty as Record<string, unknown>).spawn).toHaveBeenCalledWith(
+      expect.objectContaining({ cwd: '/path/wt1' })
+    )
+    expect((mockApi.pty as Record<string, unknown>).spawn).toHaveBeenCalledWith(
+      expect.objectContaining({ cwd: '/path/wt2' })
+    )
+  })
+
+  it('sets workspaceSessionReady even with no pending worktrees', async () => {
+    const store = createTestStore()
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: { repo1: [] }
+    })
+
+    store.getState().hydrateWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {}
+    })
+
+    await store.getState().reconnectPersistedTerminals()
+    expect(store.getState().workspaceSessionReady).toBe(true)
+    expect((mockApi.pty as Record<string, unknown>).spawn).not.toHaveBeenCalled()
+  })
+
+  it('falls back to tab ptyIds when activeWorktreeIdsOnShutdown is absent (upgrade)', async () => {
+    const store = createTestStore()
+    const wt1 = 'repo1::/path/wt1'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt1, repoId: 'repo1', path: '/path/wt1' })]
+      }
+    })
+
+    // No activeWorktreeIdsOnShutdown — simulates session from older build
+    // The tab still has a ptyId from the raw session data
+    store.getState().hydrateWorkspaceSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: wt1,
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        [wt1]: [makeTab({ id: 'tab1', worktreeId: wt1, ptyId: 'old-pty' })]
+      },
+      terminalLayoutsByTabId: { tab1: makeLayout() }
+      // No activeWorktreeIdsOnShutdown field
+    })
+
+    // Should still detect wt1 as needing reconnection from raw ptyIds
+    expect(store.getState().pendingReconnectWorktreeIds).toEqual([wt1])
+
+    await store.getState().reconnectPersistedTerminals()
+    expect(store.getState().tabsByWorktree[wt1][0].ptyId).toBe('pty-1')
+  })
+
+  it('reconnects the correct tab per worktree (not always tabs[0])', async () => {
+    const store = createTestStore()
+    const wt1 = 'repo1::/path/wt1'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt1, repoId: 'repo1', path: '/path/wt1' })]
+      }
+    })
+
+    // Tab2 had the live PTY, not tab1
+    store.getState().hydrateWorkspaceSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: wt1,
+      activeTabId: 'tab2',
+      tabsByWorktree: {
+        [wt1]: [
+          makeTab({ id: 'tab1', worktreeId: wt1, ptyId: null }),
+          makeTab({ id: 'tab2', worktreeId: wt1, ptyId: 'old-pty-2' })
+        ]
+      },
+      terminalLayoutsByTabId: { tab1: makeLayout(), tab2: makeLayout() },
+      activeWorktreeIdsOnShutdown: [wt1]
+    })
+
+    await store.getState().reconnectPersistedTerminals()
+
+    // tab2 should get the PTY, not tab1
+    expect(store.getState().tabsByWorktree[wt1][0].ptyId).toBeNull() // tab1
+    expect(store.getState().tabsByWorktree[wt1][1].ptyId).toBe('pty-1') // tab2
+  })
+
+  it('reconnects multiple live tabs in the same worktree', async () => {
+    const store = createTestStore()
+    const wt1 = 'repo1::/path/wt1'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt1, repoId: 'repo1', path: '/path/wt1' })]
+      }
+    })
+
+    // Both tabs had live PTYs
+    store.getState().hydrateWorkspaceSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: wt1,
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        [wt1]: [
+          makeTab({ id: 'tab1', worktreeId: wt1, ptyId: 'old-pty-1' }),
+          makeTab({ id: 'tab2', worktreeId: wt1, ptyId: 'old-pty-2' })
+        ]
+      },
+      terminalLayoutsByTabId: { tab1: makeLayout(), tab2: makeLayout() },
+      activeWorktreeIdsOnShutdown: [wt1]
+    })
+
+    await store.getState().reconnectPersistedTerminals()
+
+    // Both tabs should have new PTYs
+    expect(store.getState().tabsByWorktree[wt1][0].ptyId).toBe('pty-1')
+    expect(store.getState().tabsByWorktree[wt1][1].ptyId).toBe('pty-2')
+  })
+
+  it('does not bump lastActivityAt for reconnected worktrees', async () => {
+    const store = createTestStore()
+    const wt1 = 'repo1::/path/wt1'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt1, repoId: 'repo1', path: '/path/wt1', lastActivityAt: 1000 })]
+      }
+    })
+
+    store.getState().hydrateWorkspaceSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: wt1,
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        [wt1]: [makeTab({ id: 'tab1', worktreeId: wt1, ptyId: 'old-pty' })]
+      },
+      terminalLayoutsByTabId: { tab1: makeLayout() },
+      activeWorktreeIdsOnShutdown: [wt1]
+    })
+
+    await store.getState().reconnectPersistedTerminals()
+
+    // updateMeta should NOT have been called — we bypassed bumpWorktreeActivity
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
+  })
+
+  it('skips deleted worktrees in activeWorktreeIdsOnShutdown', async () => {
+    const store = createTestStore()
+    const existing = 'repo1::/path/wt1'
+    const deleted = 'repo1::/path/deleted'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: existing, repoId: 'repo1', path: '/path/wt1' })]
+      }
+    })
+
+    store.getState().hydrateWorkspaceSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: existing,
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        [existing]: [makeTab({ id: 'tab1', worktreeId: existing, ptyId: 'old' })]
+      },
+      terminalLayoutsByTabId: { tab1: makeLayout() },
+      activeWorktreeIdsOnShutdown: [existing, deleted]
+    })
+
+    // Deleted worktree should be filtered out
+    expect(store.getState().pendingReconnectWorktreeIds).toEqual([existing])
+
+    await store.getState().reconnectPersistedTerminals()
+    expect((mockApi.pty as Record<string, unknown>).spawn).toHaveBeenCalledTimes(1)
   })
 })

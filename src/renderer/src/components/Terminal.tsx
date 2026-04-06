@@ -113,7 +113,12 @@ export default function Terminal(): React.JSX.Element | null {
   // Only mount TerminalPanes for visited worktrees to prevent mass PTY
   // spawning when restoring a session with many saved worktree tabs.
   const mountedWorktreeIdsRef = useRef(new Set<string>())
-  if (activeWorktreeId) {
+  // Why: gated on workspaceSessionReady to prevent TerminalPane from mounting
+  // before reconnectPersistedTerminals() has finished eagerly spawning PTYs.
+  // Without this gate, Phase 1 (hydrateWorkspaceSession) sets activeWorktreeId
+  // with ptyId: null, and TerminalPane would call connectPanePty → pty:spawn,
+  // creating a duplicate PTY for the same tab.
+  if (activeWorktreeId && workspaceSessionReady) {
     mountedWorktreeIdsRef.current.add(activeWorktreeId)
   }
   // Prune IDs of worktrees that no longer exist (deleted/removed)

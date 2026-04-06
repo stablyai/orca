@@ -96,6 +96,10 @@ export type WorkspaceSessionState = {
   activeTabId: string | null
   tabsByWorktree: Record<string, TerminalTab[]>
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>
+  /** Worktree IDs that had at least one tab with a live PTY at shutdown.
+   *  Used on startup to eagerly re-spawn PTY processes so the Active filter
+   *  works immediately after restart. */
+  activeWorktreeIdsOnShutdown?: string[]
 }
 
 // ─── GitHub ──────────────────────────────────────────────────────────

@@ -8,6 +8,10 @@ import type {
 } from '../../../../shared/types'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { clearTransientTerminalState, emptyLayoutSnapshot } from './terminal-helpers'
+import {
+  registerEagerPtyBuffer,
+  ensurePtyDispatcher
+} from '@/components/terminal-pane/pty-transport'
 
 export type TerminalSlice = {
   tabsByWorktree: Record<string, TerminalTab[]>
@@ -20,6 +24,8 @@ export type TerminalSlice = {
   pendingStartupByTabId: Record<string, { command: string; env?: Record<string, string> }>
   tabBarOrderByWorktree: Record<string, string[]>
   workspaceSessionReady: boolean
+  pendingReconnectWorktreeIds: string[]
+  pendingReconnectTabByWorktree: Record<string, string[]>
   createTab: (worktreeId: string) => TerminalTab
   closeTab: (tabId: string) => void
   reorderTabs: (worktreeId: string, tabIds: string[]) => void
@@ -43,6 +49,7 @@ export type TerminalSlice = {
     tabId: string
   ) => { command: string; env?: Record<string, string> } | null
   hydrateWorkspaceSession: (session: WorkspaceSessionState) => void
+  reconnectPersistedTerminals: (signal?: AbortSignal) => Promise<void>
 }
 
 export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> = (set, get) => ({
@@ -56,6 +63,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   pendingStartupByTabId: {},
   tabBarOrderByWorktree: {},
   workspaceSessionReady: false,
+  pendingReconnectWorktreeIds: [],
+  pendingReconnectTabByWorktree: {},
 
   createTab: (worktreeId) => {
     const id = globalThis.crypto.randomUUID()
@@ -422,11 +431,41 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           ? session.activeRepoId
           : null
 
+      // Why: workspaceSessionReady stays false here. It is set to true in
+      // reconnectPersistedTerminals() after all eager PTY spawns complete.
+      // This prevents TerminalPane from mounting and spawning duplicate PTYs
+      // before the reconnect phase has set ptyId on each tab.
+      // Why: fall back to deriving the list from tabsByWorktree ptyIds when
+      // activeWorktreeIdsOnShutdown is absent (upgrade from older build).
+      // The raw tabs still carry ptyId values before clearTransientTerminalState
+      // nulls them, so we can infer which worktrees had active terminals.
+      const shutdownIds =
+        session.activeWorktreeIdsOnShutdown ??
+        Object.entries(session.tabsByWorktree)
+          .filter(([, tabs]) => tabs.some((t) => t.ptyId))
+          .map(([wId]) => wId)
+      const pendingReconnectWorktreeIds = shutdownIds.filter((id) => validWorktreeIds.has(id))
+
+      // Why: capture which specific tabs had live PTYs per worktree from the
+      // raw session data BEFORE clearTransientTerminalState nulled the ptyIds.
+      // This ensures reconnectPersistedTerminals binds PTYs to the correct
+      // tabs, not just tabs[0], which matters for multi-tab worktrees.
+      const pendingReconnectTabByWorktree: Record<string, string[]> = {}
+      for (const worktreeId of pendingReconnectWorktreeIds) {
+        const rawTabs = session.tabsByWorktree[worktreeId] ?? []
+        const liveTabIds = rawTabs.filter((t) => t.ptyId && validTabIds.has(t.id)).map((t) => t.id)
+        if (liveTabIds.length > 0) {
+          pendingReconnectTabByWorktree[worktreeId] = liveTabIds
+        }
+      }
+
       return {
         activeRepoId,
         activeWorktreeId,
         activeTabId,
         tabsByWorktree,
+        pendingReconnectWorktreeIds,
+        pendingReconnectTabByWorktree,
         ptyIdsByTabId: Object.fromEntries(
           Object.values(tabsByWorktree)
             .flat()
@@ -434,9 +473,136 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         ),
         terminalLayoutsByTabId: Object.fromEntries(
           Object.entries(session.terminalLayoutsByTabId).filter(([tabId]) => validTabIds.has(tabId))
-        ),
-        workspaceSessionReady: true
+        )
       }
+    })
+  },
+
+  reconnectPersistedTerminals: async (signal) => {
+    const {
+      pendingReconnectWorktreeIds,
+      pendingReconnectTabByWorktree,
+      worktreesByRepo,
+      tabsByWorktree
+    } = get()
+    const ids = pendingReconnectWorktreeIds ?? []
+
+    if (ids.length === 0) {
+      set({
+        workspaceSessionReady: true,
+        pendingReconnectWorktreeIds: [],
+        pendingReconnectTabByWorktree: {}
+      })
+      return
+    }
+
+    const allWorktrees = Object.values(worktreesByRepo).flat()
+    const worktreeMap = new Map(allWorktrees.map((w) => [w.id, w]))
+    const spawnedPtyIds: string[] = []
+
+    // Why: ensure the global IPC listener for pty:data/pty:exit events is
+    // active before any spawn calls. This guarantees that data emitted
+    // immediately after spawn (before registerEagerPtyBuffer runs) is at
+    // least delivered to the dispatcher — and since registerEagerPtyBuffer
+    // runs synchronously in the microtask continuation after await spawn(),
+    // the handler will be in place before any macrotask-queued data arrives.
+    ensurePtyDispatcher()
+
+    for (const worktreeId of ids) {
+      if (signal?.aborted) {
+        // StrictMode unmount — kill any PTYs we already spawned and bail.
+        await Promise.allSettled(spawnedPtyIds.map((id) => window.api.pty.kill(id)))
+        return
+      }
+
+      const worktree = worktreeMap.get(worktreeId)
+      if (!worktree) {
+        continue
+      }
+
+      const tabs = tabsByWorktree[worktreeId] ?? []
+      // Why: pendingReconnectTabByWorktree was computed during hydration from
+      // the raw session data (before ptyIds were cleared). It tells us exactly
+      // which tabs had live PTYs in each worktree, so we reconnect all of them
+      // rather than just one arbitrary tab.
+      const targetTabIds = pendingReconnectTabByWorktree[worktreeId] ?? []
+      const tabsToReconnect: TerminalTab[] =
+        targetTabIds.length > 0
+          ? targetTabIds
+              .map((id) => tabs.find((t) => t.id === id))
+              .filter((t): t is TerminalTab => t != null)
+          : tabs.slice(0, 1) // fallback: first tab only
+      if (tabsToReconnect.length === 0) {
+        continue
+      }
+
+      for (const tab of tabsToReconnect) {
+        if (signal?.aborted) {
+          await Promise.allSettled(spawnedPtyIds.map((id) => window.api.pty.kill(id)))
+          return
+        }
+
+        try {
+          const { id: ptyId } = await window.api.pty.spawn({
+            cols: 80,
+            rows: 24,
+            cwd: worktree.path
+          })
+          spawnedPtyIds.push(ptyId)
+
+          if (signal?.aborted) {
+            await window.api.pty.kill(ptyId)
+            await Promise.allSettled(
+              spawnedPtyIds.filter((id) => id !== ptyId).map((id) => window.api.pty.kill(id))
+            )
+            return
+          }
+
+          const tabId = tab.id
+          // Why: re-check that the tab/worktree still exist after the async
+          // spawn. If the user deleted the worktree during the spawn round-
+          // trip, kill the orphan PTY immediately instead of registering it.
+          const currentTabs = get().tabsByWorktree[worktreeId]
+          if (!currentTabs?.some((t) => t.id === tabId)) {
+            void window.api.pty.kill(ptyId)
+            continue
+          }
+
+          // Why: register exit handler so that if the shell dies before
+          // TerminalPane attaches, the tab's ptyId is cleared and
+          // connectPanePty falls through to the normal connect() path.
+          registerEagerPtyBuffer(ptyId, (_exitedPtyId, _code) => {
+            get().clearTabPtyId(tabId, _exitedPtyId)
+          })
+
+          // Why: set ptyId directly instead of using updateTabPtyId to avoid
+          // bumpWorktreeActivity which would overwrite every reconnected
+          // worktree's lastActivityAt with the restart timestamp, destroying
+          // the relative recency sort order.
+          set((s) => {
+            const next = { ...s.tabsByWorktree }
+            if (!next[worktreeId]) {
+              return {}
+            }
+            next[worktreeId] = next[worktreeId].map((t) => (t.id === tabId ? { ...t, ptyId } : t))
+            return {
+              tabsByWorktree: next,
+              ptyIdsByTabId: {
+                ...s.ptyIdsByTabId,
+                [tabId]: [...(s.ptyIdsByTabId[tabId] ?? []), ptyId]
+              }
+            }
+          })
+        } catch {
+          // PTY spawn failure — this tab stays inactive, same as today.
+        }
+      }
+    }
+
+    set({
+      workspaceSessionReady: true,
+      pendingReconnectWorktreeIds: [],
+      pendingReconnectTabByWorktree: {}
     })
   }
 })

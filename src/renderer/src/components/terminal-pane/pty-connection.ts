@@ -1,8 +1,9 @@
 import type { PaneManager, ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { isGeminiTerminalTitle } from '@/lib/agent-status'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
+import { useAppStore } from '@/store'
 import type { PtyTransport } from './pty-transport'
-import { createIpcPtyTransport } from './pty-transport'
+import { createIpcPtyTransport, getEagerPtyBufferHandle } from './pty-transport'
 
 type PtyConnectionDeps = {
   tabId: string
@@ -82,7 +83,7 @@ export function connectPanePty(
     transport.resize(cols, rows)
   })
 
-  // Defer PTY spawn to next frame so FitAddon has time to calculate
+  // Defer PTY spawn/attach to next frame so FitAddon has time to calculate
   // the correct terminal dimensions from the laid-out container.
   deps.pendingWritesRef.current.set(pane.id, '')
   requestAnimationFrame(() => {
@@ -93,29 +94,60 @@ export function connectPanePty(
     }
     const cols = pane.terminal.cols
     const rows = pane.terminal.rows
-    transport.connect({
-      url: '',
-      cols,
-      rows,
-      callbacks: {
-        onConnect: () => {
-          if (paneStartup?.command) {
-            // Why: setup commands are injected only after the PTY reports a live
-            // shell connection. Writing earlier is racy with shell startup files
-            // and can drop characters on slower shells.
-            transport.sendInput(`${paneStartup.command}\r`)
-          }
-        },
-        onData: (data) => {
-          if (deps.isActiveRef.current) {
-            pane.terminal.write(data)
-          } else {
-            const pending = deps.pendingWritesRef.current
-            pending.set(pane.id, (pending.get(pane.id) ?? '') + data)
-          }
-        }
+
+    const dataCallback = (data: string): void => {
+      if (deps.isActiveRef.current) {
+        pane.terminal.write(data)
+      } else {
+        const pending = deps.pendingWritesRef.current
+        pending.set(pane.id, (pending.get(pane.id) ?? '') + data)
       }
-    })
+    }
+
+    // Why: re-read ptyId inside the rAF instead of capturing it before.
+    // The eagerly-spawned PTY could exit during the one-frame gap (e.g.,
+    // broken .bashrc), clearing the tab's ptyId. Reading it stale would
+    // cause attach() on a dead process, leaving the pane frozen.
+    const existingPtyId = useAppStore
+      .getState()
+      .tabsByWorktree[deps.worktreeId]?.find((t) => t.id === deps.tabId)?.ptyId
+
+    // Why: only attach if the eager buffer handle still exists. For split-pane
+    // tabs, replayTerminalLayout calls connectPanePty once per pane. The first
+    // pane consumes the handle via attach(); subsequent panes find no handle
+    // and fall through to connect(), which spawns their own fresh PTYs. Without
+    // this guard, every split pane would try to share the same PTY ID, and the
+    // last one's handler would overwrite the earlier ones' in the dispatcher.
+    if (existingPtyId && getEagerPtyBufferHandle(existingPtyId)) {
+      // Why: this tab had a PTY eagerly spawned by reconnectPersistedTerminals().
+      // Attach to it instead of spawning a duplicate. Startup commands are
+      // intentionally skipped — the PTY was already spawned with a fresh shell.
+      transport.attach({
+        existingPtyId,
+        cols,
+        rows,
+        callbacks: {
+          onData: dataCallback
+        }
+      })
+    } else {
+      transport.connect({
+        url: '',
+        cols,
+        rows,
+        callbacks: {
+          onConnect: () => {
+            if (paneStartup?.command) {
+              // Why: setup commands are injected only after the PTY reports a live
+              // shell connection. Writing earlier is racy with shell startup files
+              // and can drop characters on slower shells.
+              transport.sendInput(`${paneStartup.command}\r`)
+            }
+          },
+          onData: dataCallback
+        }
+      })
+    }
     scheduleRuntimeGraphSync()
   })
 }
