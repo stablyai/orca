@@ -44,6 +44,11 @@ const SHORTCUT_GROUP_DEFINITIONS: ShortcutGroupDefinition[] = [
         keys: ({ mod }) => [mod, 'B']
       },
       {
+        action: 'Toggle Right Sidebar',
+        searchKeywords: ['shortcut', 'sidebar', 'right'],
+        keys: ({ mod }) => [mod, 'L']
+      },
+      {
         action: 'Move up worktree',
         searchKeywords: ['shortcut', 'global', 'worktree', 'move'],
         keys: ({ mod, shift }) => [mod, shift, '↑']

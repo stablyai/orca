@@ -371,6 +371,13 @@ function App(): React.JSX.Element {
         return
       }
 
+      // Cmd/Ctrl+L — toggle right sidebar
+      if (!e.altKey && !e.shiftKey && e.key.toLowerCase() === 'l') {
+        e.preventDefault()
+        toggleRightSidebar()
+        return
+      }
+
       // Cmd/Ctrl+N — create worktree
       if (!e.altKey && !e.shiftKey && e.key.toLowerCase() === 'n') {
         if (repos.length === 0) {
@@ -413,6 +420,7 @@ function App(): React.JSX.Element {
     openModal,
     repos.length,
     toggleSidebar,
+    toggleRightSidebar,
     setRightSidebarTab,
     setRightSidebarOpen,
     setQuickOpenVisible
@@ -447,7 +455,7 @@ function App(): React.JSX.Element {
         <button
           className="sidebar-toggle mr-2"
           onClick={toggleRightSidebar}
-          title="Toggle right sidebar"
+          title={`Toggle right sidebar (${isMac ? '⌘L' : 'Ctrl+L'})`}
           aria-label="Toggle right sidebar"
           disabled={!showSidebar}
         >
