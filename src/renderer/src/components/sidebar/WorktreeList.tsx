@@ -40,14 +40,20 @@ const WorktreeList = React.memo(function WorktreeList() {
 
   // Warm PR/issue caches when the user starts searching so that title-based
   // matches work even for off-screen worktrees whose cards haven't fetched yet.
-  // Only fires once on search activation (empty → non-empty), not every keystroke.
+  // Fires on search activation (empty → non-empty) and also when worktrees
+  // finish hydrating while a search is already active (startup race).
+  const hasWorktrees = Object.keys(worktreesByRepo).length > 0
   const prevSearchQuery = useRef('')
+  const prevHasWorktrees = useRef(false)
   useEffect(() => {
-    if (searchQuery && !prevSearchQuery.current) {
+    const searchActivated = searchQuery && !prevSearchQuery.current
+    const worktreesJustLoaded = hasWorktrees && !prevHasWorktrees.current && !!searchQuery
+    if (searchActivated || worktreesJustLoaded) {
       refreshAllGitHub()
     }
     prevSearchQuery.current = searchQuery
-  }, [searchQuery, refreshAllGitHub])
+    prevHasWorktrees.current = hasWorktrees
+  }, [searchQuery, hasWorktrees, refreshAllGitHub])
 
   const sortEpoch = useAppStore((s) => s.sortEpoch)
   const scrollRef = useRef<HTMLDivElement>(null)
