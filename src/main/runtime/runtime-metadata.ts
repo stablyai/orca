@@ -1,7 +1,6 @@
 import {
   chmodSync,
   existsSync,
-  readdirSync,
   mkdirSync,
   readFileSync,
   renameSync,
@@ -9,23 +8,14 @@ import {
   writeFileSync
 } from 'fs'
 import { execFileSync } from 'child_process'
-import { dirname, join } from 'path'
-import {
-  getRuntimeMetadataPath,
-  getRuntimeRecordPath,
-  isRuntimeRecordFileName,
-  type RuntimeMetadata
-} from '../../shared/runtime-bootstrap'
+import { dirname } from 'path'
+import { getRuntimeMetadataPath, type RuntimeMetadata } from '../../shared/runtime-bootstrap'
 
 let cachedWindowsUserSid: string | null | undefined
 
 export function writeRuntimeMetadata(userDataPath: string, metadata: RuntimeMetadata): void {
   const metadataPath = getRuntimeMetadataPath(userDataPath)
   writeMetadataFile(metadataPath, metadata)
-}
-
-export function writeRuntimeRecord(userDataPath: string, metadata: RuntimeMetadata): void {
-  writeMetadataFile(getRuntimeRecordPath(userDataPath, metadata.runtimeId), metadata)
 }
 
 export function readRuntimeMetadata(userDataPath: string): RuntimeMetadata | null {
@@ -38,33 +28,6 @@ export function readRuntimeMetadata(userDataPath: string): RuntimeMetadata | nul
 
 export function clearRuntimeMetadata(userDataPath: string): void {
   rmSync(getRuntimeMetadataPath(userDataPath), { force: true })
-}
-
-export function readRuntimeRecord(userDataPath: string, runtimeId: string): RuntimeMetadata | null {
-  const recordPath = getRuntimeRecordPath(userDataPath, runtimeId)
-  if (!existsSync(recordPath)) {
-    return null
-  }
-  return JSON.parse(readFileSync(recordPath, 'utf-8')) as RuntimeMetadata
-}
-
-export function listRuntimeRecords(userDataPath: string): RuntimeMetadata[] {
-  if (!existsSync(userDataPath)) {
-    return []
-  }
-  return readdirSync(userDataPath)
-    .filter((fileName) => isRuntimeRecordFileName(fileName))
-    .flatMap((fileName) => {
-      try {
-        return [JSON.parse(readFileSync(join(userDataPath, fileName), 'utf-8')) as RuntimeMetadata]
-      } catch {
-        return []
-      }
-    })
-}
-
-export function clearRuntimeRecord(userDataPath: string, runtimeId: string): void {
-  rmSync(getRuntimeRecordPath(userDataPath, runtimeId), { force: true })
 }
 
 function writeMetadataFile(path: string, metadata: RuntimeMetadata): void {
@@ -81,9 +44,8 @@ function writeMetadataFile(path: string, metadata: RuntimeMetadata): void {
   hardenRuntimePath(tmpFile, { isDirectory: false, platform: process.platform })
   renameSync(tmpFile, path)
   // Why: runtime bootstrap files carry auth material that lets the local CLI
-  // attach to a live Orca runtime. Every published record must stay scoped to
-  // the current user even when we retain multiple per-runtime records for
-  // stale-bootstrap recovery.
+  // attach to a live Orca runtime. The published file must stay scoped to
+  // the current user.
   hardenRuntimePath(path, { isDirectory: false, platform: process.platform })
 }
 

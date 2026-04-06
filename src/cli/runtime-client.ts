@@ -3,12 +3,11 @@ import { createConnection } from 'net'
 import { randomUUID } from 'crypto'
 import { homedir } from 'os'
 import { dirname, join } from 'path'
-import { mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'fs'
+import { readFileSync } from 'fs'
 import { spawn as spawnProcess } from 'child_process'
 import type { CliStatusResult, RuntimeStatus } from '../shared/runtime-types'
 import {
   getRuntimeMetadataPath,
-  isRuntimeRecordFileName,
   type RuntimeMetadata,
   type RuntimeTransportMetadata
 } from '../shared/runtime-bootstrap'
@@ -71,7 +70,7 @@ export class RuntimeClient {
       timeoutMs?: number
     }
   ): Promise<RuntimeRpcSuccess<TResult>> {
-    const metadata = await this.readMetadata()
+    const metadata = this.readMetadata()
     const response = await this.sendRequest<TResult>(metadata, method, params, options?.timeoutMs)
     if (!response.ok) {
       throw new RuntimeRpcFailureError(response)
@@ -80,10 +79,7 @@ export class RuntimeClient {
   }
 
   async getCliStatus(): Promise<RuntimeRpcSuccess<CliStatusResult>> {
-    const resolution = await this.resolveRuntimeMetadata({
-      requireReachablePrimary: true
-    })
-    const metadata = resolution.metadata
+    const metadata = this.tryReadMetadata()
     if (!metadata?.transport || !metadata.authToken) {
       return buildCliStatusResponse({
         app: {
@@ -91,7 +87,10 @@ export class RuntimeClient {
           pid: null
         },
         runtime: {
-          state: resolution.sawBootstrapArtifacts ? 'stale_bootstrap' : 'not_running',
+          // Why: distinguishing "never started" from "was running but died"
+          // gives the user a better signal about what happened. If the metadata
+          // file exists, Orca was running at some point.
+          state: metadata ? 'stale_bootstrap' : 'not_running',
           reachable: false,
           runtimeId: null
         },
@@ -134,11 +133,7 @@ export class RuntimeClient {
           pid: running ? metadata.pid : null
         },
         runtime: {
-          state: running
-            ? 'starting'
-            : resolution.sawBootstrapArtifacts
-              ? 'stale_bootstrap'
-              : 'not_running',
+          state: running ? 'starting' : 'stale_bootstrap',
           reachable: false,
           runtimeId: null
         },
@@ -171,72 +166,34 @@ export class RuntimeClient {
     )
   }
 
-  private async readMetadata(): Promise<RuntimeMetadata> {
-    const resolution = await this.resolveRuntimeMetadata({
-      requireReachablePrimary: false
-    })
-    if (!resolution.metadata?.transport || !resolution.metadata.authToken) {
+  private readMetadata(): RuntimeMetadata {
+    const metadataPath = getRuntimeMetadataPath(this.userDataPath)
+    try {
+      const metadata = JSON.parse(readFileSync(metadataPath, 'utf8')) as RuntimeMetadata | null
+      if (!metadata?.transport || !metadata.authToken) {
+        throw new RuntimeClientError(
+          'runtime_unavailable',
+          `Orca runtime metadata is incomplete at ${metadataPath}`
+        )
+      }
+      return metadata
+    } catch (error) {
+      if (error instanceof RuntimeClientError) {
+        throw error
+      }
       throw new RuntimeClientError(
         'runtime_unavailable',
-        `Could not resolve Orca runtime metadata at ${getRuntimeMetadataPath(this.userDataPath)}. Start the Orca app first.`
+        `Could not read Orca runtime metadata at ${metadataPath}. Start the Orca app first.`
       )
     }
-    return resolution.metadata
   }
 
-  private async resolveRuntimeMetadata(options?: { requireReachablePrimary?: boolean }): Promise<{
-    metadata: RuntimeMetadata | null
-    sawBootstrapArtifacts: boolean
-  }> {
-    const primary = readMetadataFile(getRuntimeMetadataPath(this.userDataPath))
-    if (isUsableRuntimeMetadata(primary)) {
-      if (!options?.requireReachablePrimary || (await this.canReachRuntime(primary))) {
-        return {
-          metadata: primary,
-          sawBootstrapArtifacts: true
-        }
-      }
-    }
-
-    const recovered = await this.tryRecoverRuntimeMetadata(primary)
-    if (recovered) {
-      writePrimaryRuntimeMetadata(this.userDataPath, recovered)
-      return {
-        metadata: recovered,
-        sawBootstrapArtifacts: true
-      }
-    }
-
-    return {
-      metadata: null,
-      sawBootstrapArtifacts:
-        Boolean(primary) || listRuntimeRecordCandidates(this.userDataPath).length > 0
-    }
-  }
-
-  private async tryRecoverRuntimeMetadata(
-    primary: RuntimeMetadata | null
-  ): Promise<RuntimeMetadata | null> {
-    for (const candidate of listRuntimeRecordCandidates(this.userDataPath)) {
-      if (primary && candidate.runtimeId === primary.runtimeId) {
-        continue
-      }
-      if (await this.canReachRuntime(candidate)) {
-        return candidate
-      }
-    }
-    return null
-  }
-
-  private async canReachRuntime(metadata: RuntimeMetadata): Promise<boolean> {
-    if (!isUsableRuntimeMetadata(metadata)) {
-      return false
-    }
+  private tryReadMetadata(): RuntimeMetadata | null {
+    const metadataPath = getRuntimeMetadataPath(this.userDataPath)
     try {
-      const response = await this.sendRequest<RuntimeStatus>(metadata, 'status.get', undefined, 500)
-      return response.ok && response._meta.runtimeId === metadata.runtimeId
+      return JSON.parse(readFileSync(metadataPath, 'utf8')) as RuntimeMetadata | null
     } catch {
-      return false
+      return null
     }
   }
 
@@ -345,53 +302,6 @@ function isProcessRunning(pid: number | null | undefined): boolean {
   } catch {
     return false
   }
-}
-
-function isUsableRuntimeMetadata(metadata: RuntimeMetadata | null): metadata is RuntimeMetadata {
-  return Boolean(metadata?.transport && metadata.authToken)
-}
-
-function readMetadataFile(path: string): RuntimeMetadata | null {
-  try {
-    return JSON.parse(readFileSync(path, 'utf8')) as RuntimeMetadata | null
-  } catch {
-    return null
-  }
-}
-
-function listRuntimeRecordCandidates(userDataPath: string): RuntimeMetadata[] {
-  try {
-    return readdirSync(userDataPath)
-      .filter((fileName) => isRuntimeRecordFileName(fileName))
-      .flatMap((fileName) => {
-        const recordPath = join(userDataPath, fileName)
-        const metadata = readMetadataFile(recordPath)
-        if (!isUsableRuntimeMetadata(metadata)) {
-          return []
-        }
-        return [{ metadata, mtimeMs: statSync(recordPath).mtimeMs }]
-      })
-      .sort((left, right) => {
-        if (right.metadata.startedAt !== left.metadata.startedAt) {
-          return right.metadata.startedAt - left.metadata.startedAt
-        }
-        return right.mtimeMs - left.mtimeMs
-      })
-      .map((entry) => entry.metadata)
-  } catch {
-    return []
-  }
-}
-
-function writePrimaryRuntimeMetadata(userDataPath: string, metadata: RuntimeMetadata): void {
-  const metadataPath = getRuntimeMetadataPath(userDataPath)
-  mkdirSync(dirname(metadataPath), { recursive: true, mode: 0o700 })
-  const tmpFile = `${metadataPath}.tmp`
-  writeFileSync(tmpFile, JSON.stringify(metadata, null, 2), {
-    encoding: 'utf8',
-    mode: 0o600
-  })
-  renameSync(tmpFile, metadataPath)
 }
 
 function launchOrcaApp(): void {

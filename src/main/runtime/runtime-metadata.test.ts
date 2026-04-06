@@ -2,16 +2,8 @@ import { mkdtempSync, statSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { getRuntimeMetadataPath, getRuntimeRecordPath } from '../../shared/runtime-bootstrap'
-import {
-  clearRuntimeMetadata,
-  clearRuntimeRecord,
-  listRuntimeRecords,
-  readRuntimeMetadata,
-  readRuntimeRecord,
-  writeRuntimeRecord,
-  writeRuntimeMetadata
-} from './runtime-metadata'
+import { getRuntimeMetadataPath } from '../../shared/runtime-bootstrap'
+import { clearRuntimeMetadata, readRuntimeMetadata, writeRuntimeMetadata } from './runtime-metadata'
 
 const tempDirs: string[] = []
 
@@ -19,9 +11,6 @@ describe('runtime metadata', () => {
   afterEach(() => {
     for (const dir of tempDirs.splice(0)) {
       clearRuntimeMetadata(dir)
-      for (const record of listRuntimeRecords(dir)) {
-        clearRuntimeRecord(dir, record.runtimeId)
-      }
     }
   })
 
@@ -68,47 +57,6 @@ describe('runtime metadata', () => {
 
     expect(readRuntimeMetadata(userDataPath)).toBeNull()
     expect(getRuntimeMetadataPath(userDataPath)).toContain('orca-runtime.json')
-  })
-
-  it('writes, reads, lists, and clears per-runtime records', () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-metadata-'))
-    tempDirs.push(userDataPath)
-
-    writeRuntimeRecord(userDataPath, {
-      runtimeId: 'rt_a',
-      pid: 42,
-      transport: {
-        kind: 'unix',
-        endpoint: '/tmp/orca-a.sock'
-      },
-      authToken: 'secret-a',
-      startedAt: 100
-    })
-    writeRuntimeRecord(userDataPath, {
-      runtimeId: 'rt_b',
-      pid: 43,
-      transport: {
-        kind: 'unix',
-        endpoint: '/tmp/orca-b.sock'
-      },
-      authToken: 'secret-b',
-      startedAt: 101
-    })
-
-    expect(getRuntimeRecordPath(userDataPath, 'rt_a')).toContain('orca-runtime-rt_a.json')
-    expect(readRuntimeRecord(userDataPath, 'rt_b')).toMatchObject({
-      runtimeId: 'rt_b',
-      authToken: 'secret-b'
-    })
-    expect(
-      listRuntimeRecords(userDataPath)
-        .map((record) => record.runtimeId)
-        .sort()
-    ).toEqual(['rt_a', 'rt_b'])
-
-    clearRuntimeRecord(userDataPath, 'rt_a')
-
-    expect(readRuntimeRecord(userDataPath, 'rt_a')).toBeNull()
   })
 
   it.runIf(process.platform !== 'win32')(
