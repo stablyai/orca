@@ -22,6 +22,7 @@ const WorktreeList = React.memo(function WorktreeList() {
   const showActiveOnly = useAppStore((s) => s.showActiveOnly)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const openModal = useAppStore((s) => s.openModal)
+  const refreshAllGitHub = useAppStore((s) => s.refreshAllGitHub)
   const pendingRevealWorktreeId = useAppStore((s) => s.pendingRevealWorktreeId)
   const clearPendingRevealWorktreeId = useAppStore((s) => s.clearPendingRevealWorktreeId)
 
@@ -36,6 +37,15 @@ const WorktreeList = React.memo(function WorktreeList() {
   )
   // Subscribe to issue cache only during active search to avoid unnecessary re-renders.
   const issueCache = useAppStore((s) => (searchQuery ? s.issueCache : null))
+
+  // Warm PR/issue caches when the user starts searching so that title-based
+  // matches work even for off-screen worktrees whose cards haven't fetched yet.
+  // TTL + inflight dedup inside refreshAllGitHub make repeated calls cheap.
+  useEffect(() => {
+    if (searchQuery) {
+      refreshAllGitHub()
+    }
+  }, [searchQuery, refreshAllGitHub])
 
   const sortEpoch = useAppStore((s) => s.sortEpoch)
   const scrollRef = useRef<HTMLDivElement>(null)
