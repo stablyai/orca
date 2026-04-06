@@ -390,7 +390,7 @@ function App(): React.JSX.Element {
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden">
       <div className="titlebar">
-        <div className="titlebar-traffic-light-pad" />
+        {navigator.userAgent.includes('Mac') && <div className="titlebar-traffic-light-pad" />}
         <button
           className="sidebar-toggle"
           onClick={toggleSidebar}
