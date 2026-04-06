@@ -204,8 +204,12 @@ export function matchesSearch(
     return true
   }
 
-  // Strip leading '#' so that searching "#304" matches number 304
+  // Strip leading '#' so that searching "#304" matches number 304.
+  // Guard against bare '#' which would produce an empty string and match everything.
   const numQuery = q.startsWith('#') ? q.slice(1) : q
+  if (!numQuery) {
+    return false
+  }
 
   // PR: check auto-detected PR from cache, then manual linkedPR as fallback
   const repo = repoMap.get(w.repoId)

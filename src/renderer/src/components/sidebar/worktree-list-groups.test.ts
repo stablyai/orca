@@ -136,4 +136,14 @@ describe('matchesSearch', () => {
     // Should match on issue number but not crash on null title
     expect(matchesSearch(w, '99', repoMap, null, issueCache)).toBe(true)
   })
+
+  it('does not treat bare # as a wildcard that matches all numbers', () => {
+    const prCache = {
+      '/tmp/orca::feature/super-critical': {
+        data: { number: 304, title: 'Enhancement' }
+      }
+    }
+    const w = { ...worktree, linkedIssue: 99 }
+    expect(matchesSearch(w, '#', repoMap, prCache, null)).toBe(false)
+  })
 })
