@@ -1,11 +1,16 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react'
+/* eslint-disable max-lines -- Why: combined diff behavior depends on one
+component-level state machine that coordinates lazy loading, inline editing,
+restore-on-remount caching, and scroll preservation. Splitting those pieces
+across smaller files would make the lifecycle edges harder to reason about and
+more error-prone than keeping the whole viewer flow together. */
+import React, { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { useAppStore } from '@/store'
 import { joinPath } from '@/lib/path'
 import '@/lib/monaco-setup'
 import { Button } from '@/components/ui/button'
 import type { OpenFile } from '@/store/slices/editor'
-import type { GitDiffResult, GitStatusEntry } from '../../../../shared/types'
+import type { GitBranchChangeEntry, GitDiffResult, GitStatusEntry } from '../../../../shared/types'
 import { DiffSectionItem } from './DiffSectionItem'
 
 type DiffSection = {
@@ -20,6 +25,36 @@ type DiffSection = {
   loading: boolean
   dirty: boolean
   diffResult: GitDiffResult | null
+}
+
+type CachedCombinedDiffViewState = {
+  entrySignature: string
+  sections: DiffSection[]
+  sectionHeights: Record<number, number>
+  loadedIndices: number[]
+  scrollTop: number
+  sideBySide: boolean
+}
+
+const combinedDiffViewStateCache = new Map<string, CachedCombinedDiffViewState>()
+const combinedDiffScrollTopCache = new Map<string, number>()
+
+// Why: Module-scoped Maps grow unboundedly as unique file.ids accumulate.
+// Cap them with a simple LRU eviction: after each set, if the map exceeds
+// this limit, delete the oldest entry (Maps iterate in insertion order).
+const CACHE_MAX_ENTRIES = 20
+
+function setWithLRU<K, V>(map: Map<K, V>, key: K, value: V): void {
+  // Re-insert to refresh insertion order (move to end).
+  map.delete(key)
+  map.set(key, value)
+  if (map.size > CACHE_MAX_ENTRIES) {
+    // The first key in the Map is the oldest entry.
+    const oldestKey = map.keys().next().value
+    if (oldestKey !== undefined) {
+      map.delete(oldestKey)
+    }
+  }
 }
 
 export default function CombinedDiffViewer({ file }: { file: OpenFile }): React.JSX.Element {
@@ -37,6 +72,13 @@ export default function CombinedDiffViewer({ file }: { file: OpenFile }): React.
   const [sections, setSections] = useState<DiffSection[]>([])
   const [sideBySide, setSideBySide] = useState(settings?.diffDefaultView === 'side-by-side')
   const [sectionHeights, setSectionHeights] = useState<Record<number, number>>({})
+  // Why: `generation` is a state counter used as a React key to force remounting
+  // DiffSectionItem components when the entry list changes. A separate ref
+  // (`generationRef`) is kept in sync for stale-async-result detection inside
+  // `loadSection`, where reading state would capture a stale closure value.
+  const [generation, setGeneration] = useState(0)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const pendingRestoreScrollTopRef = useRef<number | null>(null)
 
   // Why: When the user changes their global diff-view preference in Settings,
   // sync the local toggle to match, even if they manually toggled it this session.
@@ -46,12 +88,13 @@ export default function CombinedDiffViewer({ file }: { file: OpenFile }): React.
     }
   }, [settings?.diffDefaultView])
 
+  const branchSummary = gitBranchCompareSummaryByWorktree[file.worktreeId]
+  const isBranchMode = file.diffSource === 'combined-branch'
   const branchCompare =
     file.branchCompare?.baseOid && file.branchCompare.headOid && file.branchCompare.mergeBase
       ? file.branchCompare
       : null
-  const branchSummary = gitBranchCompareSummaryByWorktree[file.worktreeId]
-  const isBranchMode = file.diffSource === 'combined-branch'
+
   const uncommittedEntries = React.useMemo(
     () =>
       (gitStatusByWorktree[file.worktreeId] ?? []).filter((entry) => {
@@ -65,14 +108,66 @@ export default function CombinedDiffViewer({ file }: { file: OpenFile }): React.
       }),
     [file.worktreeId, file.combinedAreaFilter, gitStatusByWorktree]
   )
-  const branchEntries = React.useMemo(
-    () => gitBranchChangesByWorktree[file.worktreeId] ?? [],
-    [file.worktreeId, gitBranchChangesByWorktree]
+  const branchEntries = React.useMemo<GitBranchChangeEntry[]>(() => {
+    const snapshotEntries = file.branchEntriesSnapshot ?? []
+    if (snapshotEntries.length > 0) {
+      return snapshotEntries
+    }
+    return gitBranchChangesByWorktree[file.worktreeId] ?? []
+  }, [file.branchEntriesSnapshot, file.worktreeId, gitBranchChangesByWorktree])
+  const entries = isBranchMode ? branchEntries : uncommittedEntries
+  const entrySignature = React.useMemo(
+    () =>
+      JSON.stringify({
+        mode: file.diffSource,
+        areaFilter: file.combinedAreaFilter ?? null,
+        compareVersion: file.branchCompare?.compareVersion ?? null,
+        compare:
+          isBranchMode && branchCompare
+            ? {
+                baseOid: branchCompare.baseOid,
+                headOid: branchCompare.headOid,
+                mergeBase: branchCompare.mergeBase
+              }
+            : null,
+        entries: entries.map((entry) => ({
+          path: entry.path,
+          status: entry.status,
+          oldPath: entry.oldPath ?? null,
+          area: 'area' in entry ? entry.area : null
+        }))
+      }),
+    [
+      branchCompare,
+      entries,
+      file.branchCompare?.compareVersion,
+      file.combinedAreaFilter,
+      file.diffSource,
+      isBranchMode
+    ]
   )
 
-  // Initialize sections from entries without loading diff content
+  // Why: switching tabs or worktrees unmounts this viewer through the shared
+  // editor surface above it. Cache the rendered combined-diff state by tab id
+  // so remounting can restore loaded sections and scroll position instead of
+  // flashing back to "Loading..." and forcing the user to find their place again.
   useEffect(() => {
-    const entries = isBranchMode ? branchEntries : uncommittedEntries
+    const cached = combinedDiffViewStateCache.get(file.id)
+    const canRestoreCachedSections =
+      cached &&
+      cached.entrySignature === entrySignature &&
+      (cached.sections.length > 0 || entries.length === 0)
+    if (canRestoreCachedSections && cached) {
+      setSections(cached.sections)
+      setSectionHeights(cached.sectionHeights)
+      setSideBySide(cached.sideBySide)
+      loadedIndicesRef.current = new Set(cached.loadedIndices)
+      pendingRestoreScrollTopRef.current =
+        combinedDiffScrollTopCache.get(file.id) ?? cached.scrollTop
+      return
+    }
+
+    pendingRestoreScrollTopRef.current = combinedDiffScrollTopCache.get(file.id) ?? null
     setSections(
       entries.map((entry) => ({
         key: `${'area' in entry ? entry.area : 'branch'}:${entry.path}`,
@@ -91,7 +186,8 @@ export default function CombinedDiffViewer({ file }: { file: OpenFile }): React.
     setSectionHeights({})
     loadedIndicesRef.current.clear()
     generationRef.current += 1
-  }, [branchEntries, isBranchMode, uncommittedEntries])
+    setGeneration((prev) => prev + 1)
+  }, [entries, entrySignature, file.id])
 
   // Progressive loading: load diff content when a section becomes visible
   const loadedIndicesRef = useRef<Set<number>>(new Set())
@@ -202,6 +298,94 @@ export default function CombinedDiffViewer({ file }: { file: OpenFile }): React.
 
   const handleSectionSaveRef = useRef(handleSectionSave)
   handleSectionSaveRef.current = handleSectionSave
+
+  useEffect(() => {
+    if (sections.length === 0 && entries.length > 0) {
+      return
+    }
+    const preservedScrollTop =
+      combinedDiffScrollTopCache.get(file.id) ?? scrollContainerRef.current?.scrollTop ?? 0
+    setWithLRU(combinedDiffViewStateCache, file.id, {
+      entrySignature,
+      sections,
+      sectionHeights,
+      loadedIndices: Array.from(loadedIndicesRef.current),
+      scrollTop: preservedScrollTop,
+      sideBySide
+    })
+  }, [entries.length, entrySignature, file.id, sectionHeights, sections, sideBySide])
+
+  useLayoutEffect(() => {
+    const container = scrollContainerRef.current
+    if (!container) {
+      return
+    }
+
+    const cached = combinedDiffViewStateCache.get(file.id)
+    if (cached && cached.entrySignature === entrySignature) {
+      pendingRestoreScrollTopRef.current =
+        combinedDiffScrollTopCache.get(file.id) ?? cached.scrollTop
+    }
+
+    const updateCachedScrollPosition = (): void => {
+      const existing = combinedDiffViewStateCache.get(file.id)
+      setWithLRU(combinedDiffScrollTopCache, file.id, container.scrollTop)
+      if (!existing || existing.entrySignature !== entrySignature) {
+        return
+      }
+      setWithLRU(combinedDiffViewStateCache, file.id, {
+        ...existing,
+        scrollTop: container.scrollTop
+      })
+    }
+
+    // Why: React swaps the active editor DOM during tab changes. This listener
+    // must detach in the layout phase so the outgoing tab snapshots its last
+    // real scroll position before the soon-to-be-removed container emits a
+    // reset-to-top scroll event during teardown.
+    container.addEventListener('scroll', updateCachedScrollPosition)
+    return () => {
+      updateCachedScrollPosition()
+      container.removeEventListener('scroll', updateCachedScrollPosition)
+    }
+  }, [entrySignature, file.id, sections.length])
+
+  useLayoutEffect(() => {
+    const container = scrollContainerRef.current
+    const targetScrollTop = pendingRestoreScrollTopRef.current
+    if (!container || targetScrollTop === null) {
+      return
+    }
+
+    let frameId = 0
+    let attempts = 0
+
+    const restoreScrollPosition = (): void => {
+      const liveContainer = scrollContainerRef.current
+      const liveTarget = pendingRestoreScrollTopRef.current
+      if (!liveContainer || liveTarget === null) {
+        return
+      }
+
+      const maxScrollTop = Math.max(0, liveContainer.scrollHeight - liveContainer.clientHeight)
+      const nextScrollTop = Math.min(liveTarget, maxScrollTop)
+      liveContainer.scrollTop = nextScrollTop
+      setWithLRU(combinedDiffScrollTopCache, file.id, nextScrollTop)
+
+      if (Math.abs(liveContainer.scrollTop - liveTarget) <= 1 || maxScrollTop >= liveTarget) {
+        pendingRestoreScrollTopRef.current = null
+        return
+      }
+
+      attempts += 1
+      if (attempts < 30) {
+        frameId = window.requestAnimationFrame(restoreScrollPosition)
+      }
+    }
+
+    restoreScrollPosition()
+    return () => window.cancelAnimationFrame(frameId)
+  }, [file.id, sectionHeights, sections])
 
   const openAlternateDiff = useCallback(() => {
     if (!file.combinedAlternate) {
@@ -338,11 +522,11 @@ export default function CombinedDiffViewer({ file }: { file: OpenFile }): React.
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto scrollbar-editor">
+      <div ref={scrollContainerRef} className="flex-1 overflow-auto scrollbar-editor">
         {skippedConflictNotice}
         {sections.map((section, index) => (
           <DiffSectionItem
-            key={section.key}
+            key={`${section.key}:${generation}`}
             section={section}
             index={index}
             isBranchMode={isBranchMode}

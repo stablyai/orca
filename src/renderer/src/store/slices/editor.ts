@@ -68,6 +68,12 @@ export type CombinedDiffSkippedConflict = {
 // in combined-diff views is stable for the tab's lifetime. It must NOT be
 // reconstructed from live status on every render — the live set can change
 // between polls, which would make the notice flicker or become inaccurate.
+//
+// `branchEntriesSnapshot` exists for the same reason on combined branch diffs:
+// the active worktree is the only one guaranteed to keep a live branch-compare
+// entry list warm. When the user switches worktrees and comes back, the tab must
+// still know which files it was showing even if the live compare data for that
+// inactive worktree has not been refreshed yet.
 export type OpenFile = {
   id: string // use filePath as unique key
   filePath: string // absolute path
@@ -80,6 +86,7 @@ export type OpenFile = {
   branchOldPath?: string
   combinedAlternate?: CombinedDiffAlternate
   combinedAreaFilter?: string // filter combined diff to a specific area (e.g. 'staged', 'unstaged', 'untracked')
+  branchEntriesSnapshot?: GitBranchChangeEntry[]
   conflict?: OpenConflictMetadata
   skippedConflicts?: CombinedDiffSkippedConflict[]
   conflictReview?: ConflictReviewState
@@ -824,6 +831,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   openBranchAllDiffs: (worktreeId, worktreePath, compare, alternate) =>
     set((s) => {
       const branchCompare = toBranchCompareSnapshot(compare)
+      const branchEntriesSnapshot = s.gitBranchChangesByWorktree[worktreeId] ?? []
       const id = `${worktreeId}::all-diffs::branch::${compare.baseRef}::${branchCompare.compareVersion}`
       const existing = s.openFiles.find((f) => f.id === id)
       if (existing) {
@@ -833,6 +841,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
               ? {
                   ...f,
                   branchCompare,
+                  branchEntriesSnapshot,
                   combinedAlternate: alternate,
                   conflict: undefined,
                   skippedConflicts: undefined,
@@ -856,6 +865,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         mode: 'diff',
         diffSource: 'combined-branch',
         branchCompare,
+        branchEntriesSnapshot,
         combinedAlternate: alternate,
         conflict: undefined,
         skippedConflicts: undefined,
