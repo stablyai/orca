@@ -46,6 +46,7 @@ type WorktreesApi = {
   create: (args: CreateWorktreeArgs) => Promise<CreateWorktreeResult>
   remove: (args: { worktreeId: string; force?: boolean }) => Promise<void>
   updateMeta: (args: { worktreeId: string; updates: Partial<WorktreeMeta> }) => Promise<Worktree>
+  persistSortOrder: (args: { orderedIds: string[] }) => Promise<void>
   onChanged: (callback: (data: { repoId: string }) => void) => () => void
 }
 

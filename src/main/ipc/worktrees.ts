@@ -42,6 +42,7 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
   ipcMain.removeHandler('worktrees:create')
   ipcMain.removeHandler('worktrees:remove')
   ipcMain.removeHandler('worktrees:updateMeta')
+  ipcMain.removeHandler('worktrees:persistSortOrder')
   ipcMain.removeHandler('hooks:check')
 
   ipcMain.handle('worktrees:listAll', async () => {
@@ -249,6 +250,25 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
       return meta
     }
   )
+
+  // Why: the renderer continuously snapshots the computed sidebar order into
+  // sortOrder so that it can be restored on cold start (when ephemeral signals
+  // like running jobs and live terminals are gone). A single batch call avoids
+  // N individual updateMeta IPC round-trips; the persistence layer debounces
+  // the actual disk write.
+  ipcMain.handle('worktrees:persistSortOrder', (_event, args: { orderedIds: string[] }) => {
+    // Defensive: guard against malformed or missing input from the renderer.
+    if (!Array.isArray(args?.orderedIds) || args.orderedIds.length === 0) {
+      return
+    }
+    const now = Date.now()
+    for (let i = 0; i < args.orderedIds.length; i++) {
+      // Descending timestamps so that the first item has the highest
+      // sortOrder value (most recent), making b.sortOrder - a.sortOrder
+      // a natural "first wins" comparator on cold start.
+      store.setWorktreeMeta(args.orderedIds[i], { sortOrder: now - i * 1000 })
+    }
+  })
 
   ipcMain.handle('hooks:check', (_event, args: { repoId: string }) => {
     const repo = store.getRepo(args.repoId)

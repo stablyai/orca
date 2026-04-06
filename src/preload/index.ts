@@ -139,6 +139,9 @@ const api = {
       updates: Record<string, unknown>
     }): Promise<unknown> => ipcRenderer.invoke('worktrees:updateMeta', args),
 
+    persistSortOrder: (args: { orderedIds: string[] }): Promise<void> =>
+      ipcRenderer.invoke('worktrees:persistSortOrder', args),
+
     onChanged: (callback: (data: { repoId: string }) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, data: { repoId: string }) =>
         callback(data)

@@ -39,6 +39,13 @@ const WorktreeList = React.memo(function WorktreeList() {
 
   const sortEpoch = useAppStore((s) => s.sortEpoch)
   const scrollRef = useRef<HTMLDivElement>(null)
+  // Why a latching ref: we need to distinguish "app just started, no PTYs
+  // have spawned yet" from "user closed all terminals mid-session." The
+  // former should use the persisted sortOrder; the latter should keep using
+  // the live smart score. A point-in-time `hasAnyLivePty` check conflates
+  // the two. This ref flips to true once any PTY is observed and never
+  // reverts, so the cold-start path is only used on actual cold start.
+  const sessionHasHadPty = useRef(false)
 
   const repoMap = useMemo(() => {
     const m = new Map<string, Repo>()
@@ -64,6 +71,28 @@ const WorktreeList = React.memo(function WorktreeList() {
     const allWorktrees: Worktree[] = Object.values(state.worktreesByRepo)
       .flat()
       .filter((w) => !w.isArchived)
+
+    // Why cold-start detection: the smart score is dominated by ephemeral
+    // signals (running jobs +60, live terminals +12, needs attention +35)
+    // that vanish after restart. Recomputing the smart score on cold start
+    // produces a shuffled ordering because those signals are gone while
+    // persistent ones (unread, linked PR) survive — changing relative ranks.
+    // Instead, restore the pre-shutdown order from the persisted sortOrder
+    // snapshot, and switch to the live smart score once PTYs start spawning.
+    if (sortBy === 'recent' && !sessionHasHadPty.current) {
+      const hasAnyLivePty = Object.values(state.tabsByWorktree)
+        .flat()
+        .some((t) => t.ptyId)
+      if (hasAnyLivePty) {
+        sessionHasHadPty.current = true
+      } else {
+        allWorktrees.sort(
+          (a, b) => b.sortOrder - a.sortOrder || a.displayName.localeCompare(b.displayName)
+        )
+        return allWorktrees.map((w) => w.id)
+      }
+    }
+
     const currentRepoMap = new Map(state.repos.map((r) => [r.id, r]))
     const currentTabs = state.tabsByWorktree
     allWorktrees.sort(
@@ -74,6 +103,16 @@ const WorktreeList = React.memo(function WorktreeList() {
     // its change signals that the sort order should be recomputed.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [sortEpoch, sortBy, repos])
+
+  // Persist the computed sort order so the sidebar can be restored after
+  // restart. Only persist during live sessions (sessionHasHadPty latched) —
+  // on cold start we are *reading* the persisted order, not overwriting it.
+  useEffect(() => {
+    if (sortBy !== 'recent' || sortedIds.length === 0 || !sessionHasHadPty.current) {
+      return
+    }
+    void window.api.worktrees.persistSortOrder({ orderedIds: sortedIds })
+  }, [sortedIds, sortBy])
 
   // Flatten, filter, and apply stable sort order
   const visibleWorktrees = useMemo(() => {
