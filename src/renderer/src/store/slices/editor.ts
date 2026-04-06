@@ -100,6 +100,15 @@ export type ActivityBarPosition = 'top' | 'side'
 export type MarkdownViewMode = 'source' | 'rich'
 
 export type EditorSlice = {
+  // Why: #300 originally kept EditorPanel mounted while hidden so unsaved
+  // drafts and autosave timers could survive tab switches. Drafts live in the
+  // store instead so the visible editor UI can unmount without losing edits or
+  // widening the app-shutdown surface.
+  editorDrafts: Record<string, string>
+  setEditorDraft: (fileId: string, content: string) => void
+  clearEditorDraft: (fileId: string) => void
+  clearEditorDrafts: (fileIds: string[]) => void
+
   // Markdown view mode per file (fileId -> mode)
   markdownViewMode: Record<string, MarkdownViewMode>
   setMarkdownViewMode: (fileId: string, mode: MarkdownViewMode) => void
@@ -241,6 +250,36 @@ export type EditorSlice = {
 }
 
 export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (set) => ({
+  editorDrafts: {},
+  setEditorDraft: (fileId, content) =>
+    set((s) => ({
+      editorDrafts: { ...s.editorDrafts, [fileId]: content }
+    })),
+  clearEditorDraft: (fileId) =>
+    set((s) => {
+      if (!(fileId in s.editorDrafts)) {
+        return s
+      }
+      const next = { ...s.editorDrafts }
+      delete next[fileId]
+      return { editorDrafts: next }
+    }),
+  clearEditorDrafts: (fileIds) =>
+    set((s) => {
+      if (fileIds.length === 0) {
+        return s
+      }
+      const next = { ...s.editorDrafts }
+      let changed = false
+      for (const fileId of fileIds) {
+        if (fileId in next) {
+          delete next[fileId]
+          changed = true
+        }
+      }
+      return changed ? { editorDrafts: next } : s
+    }),
+
   // Markdown view mode
   markdownViewMode: {},
   setMarkdownViewMode: (fileId, mode) =>
@@ -357,6 +396,12 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         )
         if (existingPreviewIdx !== -1) {
           const replacedPreview = s.openFiles[existingPreviewIdx]
+          const nextEditorDrafts =
+            replacedPreview.id === id
+              ? s.editorDrafts
+              : Object.fromEntries(
+                  Object.entries(s.editorDrafts).filter(([fileId]) => fileId !== replacedPreview.id)
+                )
           const nextMarkdownViewMode =
             replacedPreview.id === id
               ? s.markdownViewMode
@@ -371,6 +416,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           )
           return {
             openFiles: newFiles,
+            editorDrafts: nextEditorDrafts,
             markdownViewMode: nextMarkdownViewMode,
             ...activeResult
           }
@@ -407,6 +453,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const closedFile = s.openFiles.find((f) => f.id === fileId)
       const idx = s.openFiles.findIndex((f) => f.id === fileId)
       const newFiles = s.openFiles.filter((f) => f.id !== fileId)
+      const newEditorDrafts = { ...s.editorDrafts }
+      delete newEditorDrafts[fileId]
       const newMarkdownViewMode = { ...s.markdownViewMode }
       delete newMarkdownViewMode[fileId]
       let newActiveId = s.activeFileId
@@ -450,6 +498,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
 
       return {
         openFiles: newFiles,
+        editorDrafts: newEditorDrafts,
         activeFileId: newActiveId,
         activeTabType: newActiveTabType,
         activeFileIdByWorktree: newActiveFileIdByWorktree,
@@ -465,6 +514,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       if (!activeWorktreeId) {
         return {
           openFiles: [],
+          editorDrafts: {},
           activeFileId: null,
           activeTabType: 'terminal',
           markdownViewMode: {},
@@ -474,6 +524,9 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       // Only close files for the current worktree
       const newFiles = s.openFiles.filter((f) => f.worktreeId !== activeWorktreeId)
       const remainingFileIds = new Set(newFiles.map((f) => f.id))
+      const newEditorDrafts = Object.fromEntries(
+        Object.entries(s.editorDrafts).filter(([fileId]) => remainingFileIds.has(fileId))
+      )
       const newMarkdownViewMode = Object.fromEntries(
         Object.entries(s.markdownViewMode).filter(([fileId]) => remainingFileIds.has(fileId))
       )
@@ -483,6 +536,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       newActiveTabTypeByWorktree[activeWorktreeId] = 'terminal'
       return {
         openFiles: newFiles,
+        editorDrafts: newEditorDrafts,
         activeFileId: null,
         activeTabType: 'terminal',
         markdownViewMode: newMarkdownViewMode,

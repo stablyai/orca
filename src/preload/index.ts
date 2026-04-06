@@ -9,6 +9,10 @@ import {
   ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT,
   type EditorSaveDirtyFilesDetail
 } from '../shared/editor-save-events'
+import {
+  ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT,
+  ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT
+} from '../shared/updater-renderer-events'
 
 type NativeFileDropTarget = 'editor' | 'terminal'
 
@@ -275,6 +279,13 @@ const api = {
     check: (): Promise<void> => ipcRenderer.invoke('updater:check'),
     download: (): Promise<void> => ipcRenderer.invoke('updater:download'),
     quitAndInstall: async (): Promise<void> => {
+      // Why: quitAndInstall closes the BrowserWindow directly from the main
+      // process. Renderer beforeunload guards treat that like a normal window
+      // close unless we mark the updater path explicitly, and #300 introduced
+      // longer-lived editor dirty/autosave state that can otherwise veto the
+      // restart even after the update payload has been downloaded.
+      window.dispatchEvent(new Event(ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT))
+
       // Why: we wrap the save attempt in try/catch so that a save failure
       // (e.g., unsupported dirty files or a write error) never silently
       // prevents the update from installing. The user already clicked
@@ -315,7 +326,12 @@ const api = {
       // update process bypasses the normal window close sequence (quitAndInstall
       // removes close listeners, preventing beforeunload from firing naturally).
       window.dispatchEvent(new Event('beforeunload'))
-      return ipcRenderer.invoke('updater:quitAndInstall')
+      try {
+        return await ipcRenderer.invoke('updater:quitAndInstall')
+      } catch (error) {
+        window.dispatchEvent(new Event(ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT))
+        throw error
+      }
     },
     onStatus: (callback: (status: unknown) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, status: unknown) => callback(status)

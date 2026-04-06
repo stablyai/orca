@@ -5,6 +5,7 @@ import {
   getOpenFilesForExternalFileChange,
   normalizeAutoSaveDelayMs,
   ORCA_EDITOR_QUIESCE_FILE_SAVES_EVENT,
+  requestEditorFileSave,
   requestEditorSaveQuiesce
 } from './editor-autosave'
 
@@ -128,6 +129,14 @@ describe('requestEditorSaveQuiesce', () => {
     } finally {
       window.removeEventListener(ORCA_EDITOR_QUIESCE_FILE_SAVES_EVENT, handler as EventListener)
     }
+  })
+})
+
+describe('requestEditorFileSave', () => {
+  it('rejects when no save controller claims the request', async () => {
+    await expect(requestEditorFileSave({ fileId: 'file-1' })).rejects.toThrow(
+      'Editor save controller is unavailable.'
+    )
   })
 })
 

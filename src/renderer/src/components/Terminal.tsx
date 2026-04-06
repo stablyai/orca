@@ -1,3 +1,5 @@
+/* eslint-disable max-lines */
+
 import { useEffect, useCallback, useRef, useState, lazy, Suspense } from 'react'
 import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
 import { useAppStore } from '../store'
@@ -12,7 +14,12 @@ import {
 import { Button } from '@/components/ui/button'
 import TabBar from './tab-bar/TabBar'
 import TerminalPane from './terminal-pane/TerminalPane'
-import { requestEditorSaveQuiesce } from './editor/editor-autosave'
+import {
+  ORCA_EDITOR_SAVE_AND_CLOSE_EVENT,
+  requestEditorSaveQuiesce
+} from './editor/editor-autosave'
+import { isUpdaterQuitAndInstallInProgress } from '@/lib/updater-beforeunload'
+import EditorAutosaveController from './editor/EditorAutosaveController'
 
 const EditorPanel = lazy(() => import('./editor/EditorPanel'))
 
@@ -75,14 +82,12 @@ export default function Terminal(): React.JSX.Element | null {
     if (!file) {
       return
     }
-    // EditorPanel stores edit buffers internally — we need to read the current content from the editor.
-    // The simplest approach: dispatch a custom event that the MonacoEditor listens for to trigger save,
-    // then close. But that's complex. Instead, just save via the editor ref approach.
-    // Actually, we can read the current content from the DOM's Monaco instance.
-    // Simpler: just close without saving is "Don't Save", and save is handled by a custom event.
-    // For now, trigger a save event that EditorPanel listens for.
+    // Why: save-and-close must flush the latest draft even when the visible
+    // editor panel has already unmounted. The headless autosave controller
+    // owns that write path now, so the dialog signals it through a custom
+    // event instead of poking at editor component refs.
     window.dispatchEvent(
-      new CustomEvent('orca:save-and-close', { detail: { fileId: saveDialogFileId } })
+      new CustomEvent(ORCA_EDITOR_SAVE_AND_CLOSE_EVENT, { detail: { fileId: saveDialogFileId } })
     )
     setSaveDialogFileId(null)
   }, [saveDialogFileId])
@@ -328,6 +333,12 @@ export default function Terminal(): React.JSX.Element | null {
   // Warn on window close if there are unsaved editor files
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent): void => {
+      // Why: updater restarts intentionally close the app even if a hidden
+      // editor tab still reports dirty. Let ShipIt replace the bundle instead
+      // of vetoing quitAndInstall and leaving the old version running.
+      if (isUpdaterQuitAndInstallInProgress()) {
+        return
+      }
       const dirtyFiles = useAppStore.getState().openFiles.filter((f) => f.isDirty)
       if (dirtyFiles.length > 0) {
         e.preventDefault()
@@ -341,6 +352,8 @@ export default function Terminal(): React.JSX.Element | null {
     <div
       className={`flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden${activeWorktreeId ? '' : ' hidden'}`}
     >
+      <EditorAutosaveController />
+
       {/* Animated tab bar container using CSS grid for smooth height animation */}
       <div
         className="grid transition-[grid-template-rows] duration-200 ease-in-out"
@@ -408,26 +421,20 @@ export default function Terminal(): React.JSX.Element | null {
           })}
       </div>
 
-      {/* Editor panel - keep mounted while files are open so autosave/discard
-          coordination and in-memory edit buffers survive tab switches. */}
-      {activeWorktreeId && openFiles.length > 0 && (
-        <div
-          className={
-            activeTabType === 'editor' && worktreeFiles.length > 0
-              ? 'flex flex-1 min-h-0'
-              : 'hidden'
+      {/* Why: v1.0.85 only mounted the visible editor surface, which kept
+          hidden editor effects out of app shutdown. Autosave now lives in the
+          narrow EditorAutosaveController above, so the full EditorPanel can go
+          back to the safer "mount only while visible" lifecycle. */}
+      {activeWorktreeId && activeTabType === 'editor' && worktreeFiles.length > 0 && (
+        <Suspense
+          fallback={
+            <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
+              Loading editor...
+            </div>
           }
         >
-          <Suspense
-            fallback={
-              <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
-                Loading editor...
-              </div>
-            }
-          >
-            <EditorPanel />
-          </Suspense>
-        </div>
+          <EditorPanel />
+        </Suspense>
       )}
 
       {/* Save confirmation dialog */}

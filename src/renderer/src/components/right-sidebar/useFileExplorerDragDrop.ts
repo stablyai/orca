@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { basename, dirname, joinPath } from '@/lib/path'
 import { detectLanguage } from '@/lib/language-detect'
+import { requestEditorSaveQuiesce } from '@/components/editor/editor-autosave'
 
 function extractIpcErrorMessage(err: unknown, fallback: string): string {
   if (!(err instanceof Error)) {
@@ -56,8 +57,11 @@ export function useFileExplorerDragDrop({
   scrollRef
 }: UseFileExplorerDragDropParams): UseFileExplorerDragDropResult {
   const openFiles = useAppStore((s) => s.openFiles)
+  const editorDrafts = useAppStore((s) => s.editorDrafts)
   const closeFile = useAppStore((s) => s.closeFile)
   const openFile = useAppStore((s) => s.openFile)
+  const setEditorDraft = useAppStore((s) => s.setEditorDraft)
+  const markFileDirty = useAppStore((s) => s.markFileDirty)
 
   const [isRootDragOver, setIsRootDragOver] = useState(false)
   const rootDragCounterRef = useRef(0)
@@ -130,6 +134,21 @@ export function useFileExplorerDragDrop({
       const newPath = joinPath(destDir, fileName)
 
       const run = async (): Promise<void> => {
+        const filesToMove = openFiles.filter((file) => {
+          if (file.filePath === sourcePath) {
+            return true
+          }
+          return (
+            file.filePath.startsWith(`${sourcePath}/`) ||
+            file.filePath.startsWith(`${sourcePath}\\`)
+          )
+        })
+
+        // Why: a file move changes the write target path. Let any in-flight
+        // autosave settle first, then carry draft state forward to the new tab
+        // id so explorer drag-and-drop does not silently drop unsaved edits.
+        await Promise.all(filesToMove.map((file) => requestEditorSaveQuiesce({ fileId: file.id })))
+
         try {
           await window.api.fs.rename({ oldPath: sourcePath, newPath })
         } catch (err) {
@@ -142,7 +161,7 @@ export function useFileExplorerDragDrop({
         // Update any open editor tabs whose paths were under the moved item.
         // Since OpenFile.id === filePath, we close the old tab and reopen at
         // the new path so all derived state (relativePath, language) stays correct.
-        for (const file of openFiles) {
+        for (const file of filesToMove) {
           let oldFilePath: string | null = null
           if (file.filePath === sourcePath) {
             oldFilePath = sourcePath
@@ -159,8 +178,18 @@ export function useFileExplorerDragDrop({
           const suffix = oldFilePath.slice(sourcePath.length)
           const updatedPath = newPath + suffix
           const updatedRelative = updatedPath.slice(worktreePath.length + 1)
+          const draft = editorDrafts[file.id]
+          const wasDirty = file.isDirty
 
           closeFile(oldFilePath)
+
+          if (file.mode !== 'edit') {
+            // Why: diff/conflict tabs encode extra git state in their ids. A
+            // filesystem move invalidates that state, so closing them is safer
+            // than silently reopening the path as a normal edit tab.
+            continue
+          }
+
           openFile({
             filePath: updatedPath,
             relativePath: updatedRelative,
@@ -168,11 +197,28 @@ export function useFileExplorerDragDrop({
             language: detectLanguage(basename(updatedPath)),
             mode: 'edit'
           })
+
+          if (draft !== undefined) {
+            setEditorDraft(updatedPath, draft)
+          }
+          if (wasDirty) {
+            markFileDirty(updatedPath, true)
+          }
         }
       }
       void run()
     },
-    [worktreePath, activeWorktreeId, openFiles, closeFile, openFile, refreshDir]
+    [
+      worktreePath,
+      activeWorktreeId,
+      closeFile,
+      editorDrafts,
+      markFileDirty,
+      openFile,
+      openFiles,
+      refreshDir,
+      setEditorDraft
+    ]
   )
 
   const rootDragHandlers = {

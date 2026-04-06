@@ -1,3 +1,5 @@
+/* eslint-disable max-lines */
+
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { describe, expect, it } from 'vitest'
 import { createEditorSlice } from './editor'
@@ -165,6 +167,54 @@ describe('createEditorSlice pending editor reveal', () => {
 
     expect(store.getState().openFiles).toEqual([])
     expect(store.getState().pendingEditorReveal).toBeNull()
+  })
+})
+
+describe('createEditorSlice editor drafts', () => {
+  it('clears draft buffers when closing the file', () => {
+    const store = createEditorStore()
+
+    store.getState().openFile({
+      filePath: '/repo/src/file.ts',
+      relativePath: 'src/file.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+    store.getState().setEditorDraft('/repo/src/file.ts', 'edited')
+
+    store.getState().closeFile('/repo/src/file.ts')
+
+    expect(store.getState().editorDrafts).toEqual({})
+  })
+
+  it('drops replaced preview drafts so hidden preview state cannot linger', () => {
+    const store = createEditorStore()
+
+    store.getState().openFile(
+      {
+        filePath: '/repo/docs/README.md',
+        relativePath: 'docs/README.md',
+        worktreeId: 'wt-1',
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { preview: true }
+    )
+    store.getState().setEditorDraft('/repo/docs/README.md', 'draft')
+
+    store.getState().openFile(
+      {
+        filePath: '/repo/docs/guide.md',
+        relativePath: 'docs/guide.md',
+        worktreeId: 'wt-1',
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { preview: true }
+    )
+
+    expect(store.getState().editorDrafts).toEqual({})
   })
 })
 

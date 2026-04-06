@@ -20,6 +20,7 @@ import {
   setRuntimeGraphSyncEnabled
 } from './runtime/sync-runtime-graph'
 import { useGlobalFileDrop } from './hooks/useGlobalFileDrop'
+import { registerUpdaterBeforeUnloadBypass } from './lib/updater-beforeunload'
 
 const isMac = navigator.userAgent.includes('Mac')
 
@@ -155,6 +156,8 @@ function App(): React.JSX.Element {
       setRuntimeGraphStoreStateGetter(null)
     }
   }, [])
+
+  useEffect(() => registerUpdaterBeforeUnloadBypass(), [])
 
   useEffect(() => {
     setRuntimeGraphSyncEnabled(workspaceSessionReady)

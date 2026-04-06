@@ -1,7 +1,8 @@
-/* eslint-disable max-lines -- Why: EditorPanel owns the editor tab save/load
-lifecycle end-to-end, including autosave coordination with external mutations.
-Keeping that state machine co-located avoids subtle regressions from splitting
-the tightly-coupled effects, refs, and event handlers across multiple modules. */
+/* eslint-disable max-lines -- Why: EditorPanel still owns the visible editor
+save/load/render lifecycle for many modes (edit, diff, conflict review), and
+keeping that UI state together is easier to reason about than scattering it
+across multiple components. Autosave now lives in a smaller headless controller
+so hidden editor UI no longer participates in shutdown. */
 import React, { useCallback, useEffect, useState, Suspense } from 'react'
 import { Columns2, FileText, Rows2 } from 'lucide-react'
 import { useAppStore } from '@/store'
@@ -13,18 +14,13 @@ import MarkdownViewToggle from './MarkdownViewToggle'
 import { EditorContent } from './EditorContent'
 import type { GitDiffResult } from '../../../../shared/types'
 import {
-  canAutoSaveOpenFile,
   getOpenFilesForExternalFileChange,
-  normalizeAutoSaveDelayMs,
+  ORCA_EDITOR_FILE_SAVED_EVENT,
   ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
-  ORCA_EDITOR_QUIESCE_FILE_SAVES_EVENT,
-  type EditorPathMutationTarget,
-  type EditorSaveQuiesceDetail
+  requestEditorFileSave,
+  type EditorFileSavedDetail,
+  type EditorPathMutationTarget
 } from './editor-autosave'
-import {
-  ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT,
-  type EditorSaveDirtyFilesDetail
-} from '../../../../shared/editor-save-events'
 
 type FileContent = {
   content: string
@@ -45,13 +41,14 @@ export default function EditorPanel(): React.JSX.Element | null {
   const markdownViewMode = useAppStore((s) => s.markdownViewMode)
   const setMarkdownViewMode = useAppStore((s) => s.setMarkdownViewMode)
   const openFile = useAppStore((s) => s.openFile)
+  const editorDrafts = useAppStore((s) => s.editorDrafts)
+  const setEditorDraft = useAppStore((s) => s.setEditorDraft)
   const settings = useAppStore((s) => s.settings)
 
   const activeFile = openFiles.find((f) => f.id === activeFileId) ?? null
 
   const [fileContents, setFileContents] = useState<Record<string, FileContent>>({})
   const [diffContents, setDiffContents] = useState<Record<string, DiffContent>>({})
-  const [editBuffers, setEditBuffers] = useState<Record<string, string>>({})
   const [copiedPathToast, setCopiedPathToast] = useState<{ fileId: string; token: number } | null>(
     null
   )
@@ -65,32 +62,8 @@ export default function EditorPanel(): React.JSX.Element | null {
     }
   }, [settings?.diffDefaultView])
 
-  const autoSaveTimersRef = React.useRef<Map<string, number>>(new Map())
-  const autoSaveScheduledContentRef = React.useRef<Map<string, string>>(new Map())
-  const saveQueueRef = React.useRef<Map<string, Promise<void>>>(new Map())
-  const saveGenerationRef = React.useRef<Map<string, number>>(new Map())
   const openFilesRef = React.useRef(openFiles)
-  const fileContentsRef = React.useRef(fileContents)
-  const diffContentsRef = React.useRef(diffContents)
-  const editBuffersRef = React.useRef(editBuffers)
-  const autoSaveDelayMs = normalizeAutoSaveDelayMs(settings?.editorAutoSaveDelayMs)
   openFilesRef.current = openFiles
-  fileContentsRef.current = fileContents
-  diffContentsRef.current = diffContents
-  editBuffersRef.current = editBuffers
-
-  const clearAutoSaveTimer = useCallback((fileId: string): void => {
-    const timerId = autoSaveTimersRef.current.get(fileId)
-    if (timerId !== undefined) {
-      window.clearTimeout(timerId)
-      autoSaveTimersRef.current.delete(fileId)
-    }
-    autoSaveScheduledContentRef.current.delete(fileId)
-  }, [])
-
-  const bumpSaveGeneration = useCallback((fileId: string): void => {
-    saveGenerationRef.current.set(fileId, (saveGenerationRef.current.get(fileId) ?? 0) + 1)
-  }, [])
 
   // Load file content when active file changes
   useEffect(() => {
@@ -188,100 +161,12 @@ export default function EditorPanel(): React.JSX.Element | null {
     }
   }, [])
 
-  const queueSave = useCallback(
-    (file: OpenFile, fallbackContent: string): Promise<void> => {
-      clearAutoSaveTimer(file.id)
-      const saveGeneration = saveGenerationRef.current.get(file.id) ?? 0
-
-      const previousSave = saveQueueRef.current.get(file.id) ?? Promise.resolve()
-      const queuedSave = previousSave
-        .catch(() => undefined)
-        .then(async () => {
-          if ((saveGenerationRef.current.get(file.id) ?? 0) !== saveGeneration) {
-            return
-          }
-          if (!openFilesRef.current.some((openFile) => openFile.id === file.id)) {
-            return
-          }
-
-          const liveFile = openFilesRef.current.find((openFile) => openFile.id === file.id) ?? file
-          const contentToSave = editBuffersRef.current[file.id] ?? fallbackContent
-
-          try {
-            await window.api.fs.writeFile({ filePath: liveFile.filePath, content: contentToSave })
-            if ((saveGenerationRef.current.get(file.id) ?? 0) !== saveGeneration) {
-              return
-            }
-
-            if (liveFile.mode === 'edit') {
-              setFileContents((prev) => ({
-                ...prev,
-                [file.id]: { content: contentToSave, isBinary: false }
-              }))
-            } else {
-              setDiffContents((prev) => {
-                const existing = prev[file.id]
-                if (!existing || existing.kind !== 'text') {
-                  return prev
-                }
-                return {
-                  ...prev,
-                  [file.id]: { ...existing, modifiedContent: contentToSave }
-                }
-              })
-            }
-
-            const currentBuffer = editBuffersRef.current[file.id]
-            const stillDirty = currentBuffer !== undefined && currentBuffer !== contentToSave
-
-            markFileDirty(file.id, stillDirty)
-            setEditBuffers((prev) => {
-              const bufferedContent = prev[file.id]
-              if (bufferedContent === undefined || bufferedContent === contentToSave) {
-                const next = { ...prev }
-                delete next[file.id]
-                editBuffersRef.current = next
-                return next
-              }
-              editBuffersRef.current = prev
-              return prev
-            })
-          } catch (err) {
-            console.error('Save failed:', err)
-            throw err
-          }
-        })
-
-      let trackedSave: Promise<void>
-      trackedSave = queuedSave.finally(() => {
-        if (saveQueueRef.current.get(file.id) === trackedSave) {
-          saveQueueRef.current.delete(file.id)
-        }
-      })
-      saveQueueRef.current.set(file.id, trackedSave)
-      return trackedSave
-    },
-    [clearAutoSaveTimer, markFileDirty]
-  )
-
-  const quiesceFileSave = useCallback(
-    async (fileId: string): Promise<void> => {
-      const pendingSave = saveQueueRef.current.get(fileId)
-      clearAutoSaveTimer(fileId)
-      bumpSaveGeneration(fileId)
-      await pendingSave?.catch(() => undefined)
-    },
-    [bumpSaveGeneration, clearAutoSaveTimer]
-  )
-
   const handleContentChange = useCallback(
     (content: string) => {
       if (!activeFile) {
         return
       }
-      const nextBuffers = { ...editBuffersRef.current, [activeFile.id]: content }
-      editBuffersRef.current = nextBuffers
-      setEditBuffers(nextBuffers)
+      setEditorDraft(activeFile.id, content)
       if (activeFile.mode === 'edit') {
         // Compare against saved content to determine dirty state
         const saved = fileContents[activeFile.id]?.content ?? ''
@@ -292,19 +177,8 @@ export default function EditorPanel(): React.JSX.Element | null {
         const original = dc?.kind === 'text' ? dc.modifiedContent : ''
         markFileDirty(activeFile.id, content !== original)
       }
-
-      if (!settings?.editorAutoSave) {
-        clearAutoSaveTimer(activeFile.id)
-      }
     },
-    [
-      activeFile,
-      clearAutoSaveTimer,
-      diffContents,
-      fileContents,
-      markFileDirty,
-      settings?.editorAutoSave
-    ]
+    [activeFile, diffContents, fileContents, markFileDirty, setEditorDraft]
   )
 
   const handleSave = useCallback(
@@ -313,130 +187,11 @@ export default function EditorPanel(): React.JSX.Element | null {
         return
       }
       try {
-        await queueSave(activeFile, content)
+        await requestEditorFileSave({ fileId: activeFile.id, fallbackContent: content })
       } catch {}
     },
-    [activeFile, queueSave]
+    [activeFile]
   )
-
-  const getLatestWritableContent = useCallback((file: OpenFile): string | null => {
-    const bufferedContent = editBuffersRef.current[file.id]
-    if (bufferedContent !== undefined) {
-      return bufferedContent
-    }
-
-    if (file.mode === 'edit') {
-      return fileContentsRef.current[file.id]?.content ?? null
-    }
-
-    const diffContent = diffContentsRef.current[file.id]
-    return diffContent?.kind === 'text' ? diffContent.modifiedContent : null
-  }, [])
-
-  const getDuplicateDirtySavePaths = useCallback((files: OpenFile[]): string[] => {
-    const counts = new Map<string, number>()
-    for (const file of files) {
-      counts.set(file.filePath, (counts.get(file.filePath) ?? 0) + 1)
-    }
-    return Array.from(counts.entries())
-      .filter(([, count]) => count > 1)
-      .map(([filePath]) => filePath)
-  }, [])
-
-  // Handle save-and-close events from the save confirmation dialog
-  useEffect(() => {
-    const handler = async (event: Event): Promise<void> => {
-      const detail = (event as CustomEvent<EditorSaveDirtyFilesDetail>).detail
-      if (!detail) {
-        return
-      }
-
-      // Why: the entire handler body after the null guard is wrapped in a
-      // single try/catch so that any unexpected error (including from
-      // detail.claim()) always calls detail.reject() rather than leaving
-      // the promise in the preload hanging forever.
-      try {
-        detail.claim()
-
-        const dirtyFiles = openFilesRef.current.filter((file) => file.isDirty)
-        const unsupportedDirtyFiles = dirtyFiles.filter((file) => !canAutoSaveOpenFile(file))
-        if (unsupportedDirtyFiles.length > 0) {
-          detail.reject('Some unsaved editor changes cannot be auto-saved before restart.')
-          return
-        }
-
-        const duplicateDirtySavePaths = getDuplicateDirtySavePaths(dirtyFiles)
-        if (duplicateDirtySavePaths.length > 0) {
-          // Why: edit tabs and unstaged diff tabs can both target the same
-          // on-disk file while holding different in-memory buffers. Refusing the
-          // updater restart here is safer than racing two writes and silently
-          // picking whichever tab happens to save last.
-          detail.reject('Some unsaved files are open in multiple dirty tabs. Save them manually before restarting.')
-          return
-        }
-
-        await Promise.all(
-          dirtyFiles.map(async (file) => {
-            const content = getLatestWritableContent(file)
-            if (content === null) {
-              throw new Error(`Missing editor buffer for ${file.relativePath}`)
-            }
-            await queueSave(file, content)
-          })
-        )
-        detail.resolve()
-      } catch (error) {
-        detail.reject(String((error as Error)?.message ?? error))
-      }
-    }
-
-    window.addEventListener(ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT, handler as EventListener)
-    return () =>
-      window.removeEventListener(ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT, handler as EventListener)
-  }, [getDuplicateDirtySavePaths, getLatestWritableContent, queueSave])
-
-  useEffect(() => {
-    const handler = async (e: Event): Promise<void> => {
-      const { fileId } = (e as CustomEvent).detail as { fileId: string }
-      const file = useAppStore.getState().openFiles.find((f) => f.id === fileId)
-      if (!file) {
-        return
-      }
-      const buffer = editBuffersRef.current[fileId]
-      if (buffer !== undefined) {
-        try {
-          await queueSave(file, buffer)
-        } catch {
-          return // Don't close if save fails
-        }
-      }
-      useAppStore.getState().closeFile(fileId)
-    }
-    window.addEventListener('orca:save-and-close', handler as EventListener)
-    return () => window.removeEventListener('orca:save-and-close', handler as EventListener)
-  }, [queueSave])
-
-  useEffect(() => {
-    const handler = async (event: Event): Promise<void> => {
-      const detail = (event as CustomEvent<EditorSaveQuiesceDetail>).detail
-      if (!detail) {
-        return
-      }
-      detail.claim()
-
-      const matchingFiles =
-        'fileId' in detail
-          ? openFilesRef.current.filter((file) => file.id === detail.fileId)
-          : getOpenFilesForExternalFileChange(openFilesRef.current, detail)
-
-      await Promise.all(matchingFiles.map((file) => quiesceFileSave(file.id)))
-      detail.resolve()
-    }
-
-    window.addEventListener(ORCA_EDITOR_QUIESCE_FILE_SAVES_EVENT, handler as EventListener)
-    return () =>
-      window.removeEventListener(ORCA_EDITOR_QUIESCE_FILE_SAVES_EVENT, handler as EventListener)
-  }, [quiesceFileSave])
 
   useEffect(() => {
     const handler = (event: Event): void => {
@@ -449,24 +204,6 @@ export default function EditorPanel(): React.JSX.Element | null {
       if (matchingFiles.length === 0) {
         return
       }
-
-      const matchingIds = new Set(matchingFiles.map((file) => file.id))
-
-      for (const file of matchingFiles) {
-        clearAutoSaveTimer(file.id)
-        bumpSaveGeneration(file.id)
-        markFileDirty(file.id, false)
-      }
-
-      setEditBuffers((prev) => {
-        const next = { ...prev }
-        for (const fileId of matchingIds) {
-          delete next[fileId]
-        }
-        editBuffersRef.current = next
-        return next
-      })
-
       setFileContents((prev) => {
         const next = { ...prev }
         for (const file of matchingFiles) {
@@ -502,73 +239,8 @@ export default function EditorPanel(): React.JSX.Element | null {
     window.addEventListener(ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT, handler as EventListener)
     return () =>
       window.removeEventListener(ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT, handler as EventListener)
-  }, [bumpSaveGeneration, clearAutoSaveTimer, loadDiffContent, loadFileContent, markFileDirty])
+  }, [loadDiffContent, loadFileContent])
 
-  useEffect(() => {
-    const openFilesById = new Map(openFiles.map((file) => [file.id, file]))
-
-    for (const fileId of Array.from(autoSaveTimersRef.current.keys())) {
-      const file = openFilesById.get(fileId)
-      const buffer = editBuffers[fileId]
-      const shouldKeepTimer =
-        settings?.editorAutoSave &&
-        file &&
-        file.isDirty &&
-        canAutoSaveOpenFile(file) &&
-        buffer !== undefined
-      if (!shouldKeepTimer) {
-        clearAutoSaveTimer(fileId)
-      }
-    }
-
-    if (!settings?.editorAutoSave) {
-      return
-    }
-
-    for (const file of openFiles) {
-      const buffer = editBuffers[file.id]
-      if (!file.isDirty || buffer === undefined || !canAutoSaveOpenFile(file)) {
-        clearAutoSaveTimer(file.id)
-        continue
-      }
-
-      if (
-        autoSaveTimersRef.current.has(file.id) &&
-        autoSaveScheduledContentRef.current.get(file.id) === buffer
-      ) {
-        continue
-      }
-
-      clearAutoSaveTimer(file.id)
-      autoSaveScheduledContentRef.current.set(file.id, buffer)
-      const timerId = window.setTimeout(() => {
-        autoSaveTimersRef.current.delete(file.id)
-        autoSaveScheduledContentRef.current.delete(file.id)
-        void queueSave(file, buffer)
-      }, autoSaveDelayMs)
-      autoSaveTimersRef.current.set(file.id, timerId)
-    }
-  }, [
-    autoSaveDelayMs,
-    clearAutoSaveTimer,
-    editBuffers,
-    openFiles,
-    queueSave,
-    settings?.editorAutoSave
-  ])
-
-  useEffect(
-    () => () => {
-      for (const timerId of autoSaveTimersRef.current.values()) {
-        window.clearTimeout(timerId)
-      }
-      autoSaveTimersRef.current.clear()
-      autoSaveScheduledContentRef.current.clear()
-    },
-    []
-  )
-
-  // Clean up content caches when files are closed
   useEffect(() => {
     const openIds = new Set(openFiles.map((f) => f.id))
     setFileContents((prev) => {
@@ -589,17 +261,43 @@ export default function EditorPanel(): React.JSX.Element | null {
       }
       return next
     })
-    setEditBuffers((prev) => {
-      const next: Record<string, string> = {}
-      for (const [k, v] of Object.entries(prev)) {
-        if (openIds.has(k)) {
-          next[k] = v
-        }
-      }
-      editBuffersRef.current = next
-      return next
-    })
   }, [openFiles])
+
+  useEffect(() => {
+    const handler = (event: Event): void => {
+      const detail = (event as CustomEvent<EditorFileSavedDetail>).detail
+      if (!detail) {
+        return
+      }
+
+      const file = openFilesRef.current.find((openFile) => openFile.id === detail.fileId)
+      if (!file) {
+        return
+      }
+
+      if (file.mode === 'edit') {
+        setFileContents((prev) => ({
+          ...prev,
+          [file.id]: { content: detail.content, isBinary: false }
+        }))
+        return
+      }
+
+      setDiffContents((prev) => {
+        const existing = prev[file.id]
+        if (!existing || existing.kind !== 'text') {
+          return prev
+        }
+        return {
+          ...prev,
+          [file.id]: { ...existing, modifiedContent: detail.content }
+        }
+      })
+    }
+
+    window.addEventListener(ORCA_EDITOR_FILE_SAVED_EVENT, handler as EventListener)
+    return () => window.removeEventListener(ORCA_EDITOR_FILE_SAVED_EVENT, handler as EventListener)
+  }, [])
 
   const handleCopyPath = useCallback(async (): Promise<void> => {
     if (!activeFile) {
@@ -758,7 +456,7 @@ export default function EditorPanel(): React.JSX.Element | null {
           activeFile={activeFile}
           fileContents={fileContents}
           diffContents={diffContents}
-          editBuffers={editBuffers}
+          editBuffers={editorDrafts}
           worktreeEntries={worktreeEntries}
           resolvedLanguage={resolvedLanguage}
           isMarkdown={isMarkdown}

@@ -9,6 +9,9 @@ import { clampNumber } from '@/lib/terminal-theme'
 
 export const ORCA_EDITOR_QUIESCE_FILE_SAVES_EVENT = 'orca:editor-quiesce-file-saves'
 export const ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT = 'orca:editor-external-file-change'
+export const ORCA_EDITOR_SAVE_FILE_EVENT = 'orca:editor-save-file'
+export const ORCA_EDITOR_SAVE_AND_CLOSE_EVENT = 'orca:save-and-close'
+export const ORCA_EDITOR_FILE_SAVED_EVENT = 'orca:editor-file-saved'
 
 export type EditorPathMutationTarget = {
   worktreeId: string
@@ -21,6 +24,22 @@ export type EditorSaveQuiesceTarget = { fileId: string } | EditorPathMutationTar
 export type EditorSaveQuiesceDetail = EditorSaveQuiesceTarget & {
   claim: () => void
   resolve: () => void
+}
+
+export type EditorSaveFileTarget = {
+  fileId: string
+  fallbackContent?: string
+}
+
+export type EditorSaveFileDetail = EditorSaveFileTarget & {
+  claim: () => void
+  resolve: () => void
+  reject: (message: string) => void
+}
+
+export type EditorFileSavedDetail = {
+  fileId: string
+  content: string
 }
 
 export function canAutoSaveOpenFile(file: OpenFile): boolean {
@@ -82,6 +101,31 @@ export async function requestEditorSaveQuiesce(target: EditorSaveQuiesceTarget):
     // waiting on a quiesce listener that does not exist in that UI state.
     if (!claimed) {
       resolve()
+    }
+  })
+}
+
+export async function requestEditorFileSave(target: EditorSaveFileTarget): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    let claimed = false
+    window.dispatchEvent(
+      new CustomEvent<EditorSaveFileDetail>(ORCA_EDITOR_SAVE_FILE_EVENT, {
+        detail: {
+          ...target,
+          claim: () => {
+            claimed = true
+          },
+          resolve,
+          reject: (message) => reject(new Error(message))
+        }
+      })
+    )
+    // Why: a direct save request should never report success unless some
+    // controller actually accepted responsibility for writing the file. Unlike
+    // quiesce, silently no-oping here would make Cmd/Ctrl+S look successful
+    // while dropping the user's save entirely.
+    if (!claimed) {
+      reject(new Error('Editor save controller is unavailable.'))
     }
   })
 }
