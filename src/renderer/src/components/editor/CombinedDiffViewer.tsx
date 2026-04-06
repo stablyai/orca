@@ -7,6 +7,7 @@ import React, { useState, useEffect, useCallback, useRef, useLayoutEffect } from
 import type { editor as monacoEditor } from 'monaco-editor'
 import { useAppStore } from '@/store'
 import { joinPath } from '@/lib/path'
+import { setWithLRU } from '@/lib/scroll-cache'
 import '@/lib/monaco-setup'
 import { Button } from '@/components/ui/button'
 import type { OpenFile } from '@/store/slices/editor'
@@ -38,24 +39,6 @@ type CachedCombinedDiffViewState = {
 
 const combinedDiffViewStateCache = new Map<string, CachedCombinedDiffViewState>()
 const combinedDiffScrollTopCache = new Map<string, number>()
-
-// Why: Module-scoped Maps grow unboundedly as unique file.ids accumulate.
-// Cap them with a simple LRU eviction: after each set, if the map exceeds
-// this limit, delete the oldest entry (Maps iterate in insertion order).
-const CACHE_MAX_ENTRIES = 20
-
-function setWithLRU<K, V>(map: Map<K, V>, key: K, value: V): void {
-  // Re-insert to refresh insertion order (move to end).
-  map.delete(key)
-  map.set(key, value)
-  if (map.size > CACHE_MAX_ENTRIES) {
-    // The first key in the Map is the oldest entry.
-    const oldestKey = map.keys().next().value
-    if (oldestKey !== undefined) {
-      map.delete(oldestKey)
-    }
-  }
-}
 
 export default function CombinedDiffViewer({ file }: { file: OpenFile }): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)

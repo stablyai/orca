@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkFrontmatter from 'remark-frontmatter'
@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useAppStore } from '@/store'
 import { computeEditorFontSize } from '@/lib/editor-font-zoom'
+import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
 import { getMarkdownPreviewLinkTarget } from './markdown-preview-links'
 import { useLocalImageSrc } from './useLocalImageSrc'
 import {
@@ -41,6 +42,79 @@ export default function MarkdownPreview({
   const isDark =
     settings?.theme === 'dark' ||
     (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+
+  // Why: Each markdown viewing mode (source/rich/preview) produces different
+  // DOM structures and content heights. A scroll position saved in source mode
+  // has no meaningful correspondence in preview mode. Using mode-scoped keys
+  // means each mode remembers its own position independently.
+  const scrollCacheKey = `${filePath}:preview`
+
+  // Save scroll position with trailing throttle and synchronous unmount snapshot.
+  useLayoutEffect(() => {
+    const container = rootRef.current
+    if (!container) {
+      return
+    }
+
+    let throttleTimer: ReturnType<typeof setTimeout> | null = null
+
+    const onScroll = (): void => {
+      if (throttleTimer !== null) {
+        clearTimeout(throttleTimer)
+      }
+      throttleTimer = setTimeout(() => {
+        setWithLRU(scrollTopCache, scrollCacheKey, container.scrollTop)
+        throttleTimer = null
+      }, 150)
+    }
+
+    container.addEventListener('scroll', onScroll, { passive: true })
+    return () => {
+      // Snapshot final position synchronously before detach.
+      setWithLRU(scrollTopCache, scrollCacheKey, container.scrollTop)
+      if (throttleTimer !== null) {
+        clearTimeout(throttleTimer)
+      }
+      container.removeEventListener('scroll', onScroll)
+    }
+  }, [scrollCacheKey])
+
+  // Restore scroll position with RAF retry loop for async react-markdown content.
+  useLayoutEffect(() => {
+    const container = rootRef.current
+    const targetScrollTop = scrollTopCache.get(scrollCacheKey)
+    if (!container || targetScrollTop === undefined) {
+      return
+    }
+
+    let frameId = 0
+    let attempts = 0
+
+    // Why: react-markdown renders asynchronously, so scrollHeight may still be
+    // too small on the first frame. Retry up to 30 frames (~500ms at 60fps) to
+    // accommodate content loading. This matches CombinedDiffViewer's proven
+    // pattern for dynamic-height content restoration.
+    const tryRestore = (): void => {
+      const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight)
+      const nextScrollTop = Math.min(targetScrollTop, maxScrollTop)
+      container.scrollTop = nextScrollTop
+
+      if (Math.abs(container.scrollTop - targetScrollTop) <= 1 || maxScrollTop >= targetScrollTop) {
+        return
+      }
+
+      attempts += 1
+      if (attempts < 30) {
+        frameId = window.requestAnimationFrame(tryRestore)
+      }
+    }
+
+    tryRestore()
+    return () => window.cancelAnimationFrame(frameId)
+    // Why: content is included so the restore loop re-triggers when markdown
+    // content arrives or changes (e.g., async file load), since scrollHeight
+    // depends on rendered content and may not be large enough until then.
+  }, [scrollCacheKey, content])
 
   const moveToMatch = useCallback((direction: 1 | -1) => {
     const matches = matchesRef.current

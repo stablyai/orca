@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useEffect, useState } from 'react'
+import React, { useRef, useCallback, useEffect, useLayoutEffect, useState } from 'react'
 import Editor, { type OnMount } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
 import { Copy, ExternalLink } from 'lucide-react'
@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '@/store'
+import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
 import '@/lib/monaco-setup'
 import { setupContextualCopy } from './setup-contextual-copy'
 import { computeEditorFontSize } from '@/lib/editor-font-zoom'
@@ -39,6 +40,11 @@ export default function MonacoEditor({
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const copyToastTimeoutRef = useRef<number | null>(null)
   const copyHintIntervalRef = useRef<number | null>(null)
+  // Why: The scroll throttle timer must be accessible from useLayoutEffect cleanup
+  // so we can cancel any pending write before synchronously snapshotting the final
+  // scroll position on unmount. Without this, a pending timer could fire after
+  // cleanup and overwrite the correct value with a stale one.
+  const scrollThrottleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const propsRef = useRef({ relativePath, language, onSave })
 
   useEffect(() => {
@@ -96,6 +102,20 @@ export default function MonacoEditor({
         setEditorCursorLine(filePath, e.position.lineNumber)
       })
 
+      // Why: Writing to the Map at 60fps (every scroll frame) is unnecessary since
+      // we only need the final position when the user stops scrolling or switches
+      // tabs. A trailing throttle of ~150ms captures the resting position while
+      // avoiding excessive writes.
+      editorInstance.onDidScrollChange((e) => {
+        if (scrollThrottleTimerRef.current !== null) {
+          clearTimeout(scrollThrottleTimerRef.current)
+        }
+        scrollThrottleTimerRef.current = setTimeout(() => {
+          setWithLRU(scrollTopCache, filePath, e.scrollTop)
+          scrollThrottleTimerRef.current = null
+        }, 150)
+      })
+
       // Intercept right-click on line number gutter to show Radix context menu
       // (same approach as VSCode: custom menu instead of Monaco's built-in one)
       editorInstance.onMouseDown((e) => {
@@ -122,7 +142,20 @@ export default function MonacoEditor({
         performReveal(editorInstance, reveal.line, reveal.column, reveal.matchLength)
         useAppStore.getState().setPendingEditorReveal(null)
       } else {
-        editorInstance.focus()
+        const savedScrollTop = scrollTopCache.get(filePath)
+        if (savedScrollTop !== undefined) {
+          // Why: Monaco renders synchronously, so a single RAF is sufficient to
+          // wait for the layout pass. Unlike react-markdown or Tiptap, there is
+          // no async content loading that would require a retry loop.
+          // Focus is deferred into the same RAF to avoid a one-frame flash where
+          // the editor is focused at scroll position 0 before restoration.
+          requestAnimationFrame(() => {
+            editorInstance.setScrollTop(savedScrollTop)
+            editorInstance.focus()
+          })
+        } else {
+          editorInstance.focus()
+        }
       }
     },
     [copyShortcutLabel, filePath, setEditorCursorLine]
@@ -136,6 +169,26 @@ export default function MonacoEditor({
     },
     [onContentChange]
   )
+
+  // Snapshot scroll position synchronously on unmount so tab switches always
+  // capture the latest value, even if the trailing throttle hasn't fired yet.
+  // Why useLayoutEffect: cleanup runs before @monaco-editor/react's useEffect
+  // disposes the editor instance, guaranteeing getScrollTop() reads valid state.
+  useLayoutEffect(() => {
+    return () => {
+      // Why: Cancel any pending throttled scroll write so it cannot fire after
+      // this synchronous snapshot, which would overwrite the correct final
+      // position with a stale intermediate value.
+      if (scrollThrottleTimerRef.current !== null) {
+        clearTimeout(scrollThrottleTimerRef.current)
+        scrollThrottleTimerRef.current = null
+      }
+      const ed = editorRef.current
+      if (ed) {
+        setWithLRU(scrollTopCache, filePath, ed.getScrollTop())
+      }
+    }
+  }, [filePath])
 
   // Update editor options when settings change
   useEffect(() => {

@@ -1,17 +1,18 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { EditorContent, useEditor } from '@tiptap/react'
 import type { Editor } from '@tiptap/react'
 import { ImageIcon, List, ListOrdered, Quote } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
+import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
 import { RichMarkdownToolbarButton } from './RichMarkdownToolbarButton'
 import { isMarkdownPreviewFindShortcut } from './markdown-preview-search'
 import { extractIpcErrorMessage, getImageCopyDestination } from './rich-markdown-image-utils'
 import { encodeRawMarkdownHtmlForRichEditor } from './raw-markdown-html'
 import { createRichMarkdownExtensions } from './rich-markdown-extensions'
-import { slashCommands } from './rich-markdown-commands'
-import type { SlashCommand } from './rich-markdown-commands'
+import { runSlashCommand, slashCommands, syncSlashMenu } from './rich-markdown-commands'
+import type { SlashCommand, SlashMenuState } from './rich-markdown-commands'
 import { RichMarkdownSearchBar } from './RichMarkdownSearchBar'
 import { useRichMarkdownSearch } from './useRichMarkdownSearch'
 
@@ -20,14 +21,6 @@ type RichMarkdownEditorProps = {
   filePath: string
   onContentChange: (content: string) => void
   onSave: (content: string) => void
-}
-
-type SlashMenuState = {
-  query: string
-  from: number
-  to: number
-  left: number
-  top: number
 }
 
 const richMarkdownExtensions = createRichMarkdownExtensions({
@@ -42,6 +35,7 @@ export default function RichMarkdownEditor({
 }: RichMarkdownEditorProps): React.JSX.Element {
   const rootRef = useRef<HTMLDivElement | null>(null)
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null)
   const [slashMenu, setSlashMenu] = useState<SlashMenuState | null>(null)
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(0)
   const isMac = navigator.userAgent.includes('Mac')
@@ -157,6 +151,77 @@ export default function RichMarkdownEditor({
   useEffect(() => {
     editorRef.current = editor ?? null
   }, [editor])
+
+  const scrollCacheKey = `${filePath}:rich`
+
+  // Save scroll position with trailing throttle and synchronous unmount snapshot.
+  useLayoutEffect(() => {
+    const container = scrollContainerRef.current
+    if (!container) {
+      return
+    }
+
+    let throttleTimer: ReturnType<typeof setTimeout> | null = null
+
+    const onScroll = (): void => {
+      if (throttleTimer !== null) {
+        clearTimeout(throttleTimer)
+      }
+      throttleTimer = setTimeout(() => {
+        setWithLRU(scrollTopCache, scrollCacheKey, container.scrollTop)
+        throttleTimer = null
+      }, 150)
+    }
+
+    container.addEventListener('scroll', onScroll, { passive: true })
+    return () => {
+      // Snapshot final position synchronously before detach.
+      setWithLRU(scrollTopCache, scrollCacheKey, container.scrollTop)
+      if (throttleTimer !== null) {
+        clearTimeout(throttleTimer)
+      }
+      container.removeEventListener('scroll', onScroll)
+    }
+  }, [scrollCacheKey])
+
+  // Restore scroll position with RAF retry loop for async Tiptap content.
+  useLayoutEffect(() => {
+    const container = scrollContainerRef.current
+    const targetScrollTop = scrollTopCache.get(scrollCacheKey)
+    if (!container || targetScrollTop === undefined) {
+      return
+    }
+
+    let frameId = 0
+    let attempts = 0
+
+    // Why: Tiptap renders asynchronously as it hydrates its ProseMirror document,
+    // so scrollHeight may be undersized on the initial frame. Retry up to 30
+    // frames (~500ms at 60fps) to accommodate content loading. This matches
+    // CombinedDiffViewer's proven pattern for dynamic-height content restoration.
+    const tryRestore = (): void => {
+      const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight)
+      const nextScrollTop = Math.min(targetScrollTop, maxScrollTop)
+      container.scrollTop = nextScrollTop
+
+      if (Math.abs(container.scrollTop - targetScrollTop) <= 1 || maxScrollTop >= targetScrollTop) {
+        return
+      }
+
+      attempts += 1
+      if (attempts < 30) {
+        frameId = window.requestAnimationFrame(tryRestore)
+      }
+    }
+
+    tryRestore()
+    return () => window.cancelAnimationFrame(frameId)
+    // Why: `editor` is included so the effect re-runs when the Tiptap editor
+    // instance becomes available (non-null). With `immediatelyRender: false`,
+    // editor is null on the first render, so the retry loop would start before
+    // content is mounted and exhaust its 30 frames before Tiptap hydrates.
+  }, [scrollCacheKey, editor])
+
   // Why: the custom Image extension reads filePath from editor.storage to resolve
   // relative image src values to file:// URLs for display. After updating the
   // stored path we dispatch a no-op transaction so ProseMirror re-renders image
@@ -337,7 +402,9 @@ export default function RichMarkdownEditor({
         query={searchQuery}
         searchInputRef={searchInputRef}
       />
-      <EditorContent editor={editor} className="min-h-0 flex-1 overflow-auto" />
+      <div ref={scrollContainerRef} className="min-h-0 flex-1 overflow-auto">
+        <EditorContent editor={editor} />
+      </div>
       {slashMenu && filteredSlashCommands.length > 0 ? (
         <div
           className="rich-markdown-slash-menu"
@@ -376,64 +443,4 @@ export default function RichMarkdownEditor({
       ) : null}
     </div>
   )
-}
-
-function syncSlashMenu(
-  editor: Editor,
-  root: HTMLDivElement | null,
-  setSlashMenu: React.Dispatch<React.SetStateAction<SlashMenuState | null>>
-): void {
-  if (!root || editor.view.composing || !editor.isEditable) {
-    setSlashMenu(null)
-    return
-  }
-
-  const { state, view } = editor
-  const { selection } = state
-  if (!selection.empty) {
-    setSlashMenu(null)
-    return
-  }
-
-  const { $from } = selection
-  if (!$from.parent.isTextblock) {
-    setSlashMenu(null)
-    return
-  }
-
-  const blockTextBeforeCursor = $from.parent.textBetween(0, $from.parentOffset, '\0', '\0')
-  const slashMatch = blockTextBeforeCursor.match(/^\s*\/([a-z0-9-]*)$/i)
-  if (!slashMatch) {
-    setSlashMenu(null)
-    return
-  }
-
-  const slashOffset = blockTextBeforeCursor.lastIndexOf('/')
-  const start = selection.from - ($from.parentOffset - slashOffset)
-  const coords = view.coordsAtPos(selection.from)
-  const rect = root.getBoundingClientRect()
-
-  setSlashMenu({
-    query: slashMatch[1] ?? '',
-    from: start,
-    to: selection.from,
-    left: coords.left - rect.left,
-    top: coords.bottom - rect.top + 8
-  })
-}
-
-function runSlashCommand(
-  editor: Editor,
-  slashMenu: SlashMenuState,
-  command: SlashCommand,
-  onImageCommand?: () => void
-): void {
-  editor.chain().focus().deleteRange({ from: slashMenu.from, to: slashMenu.to }).run()
-  // Why: image insertion cannot rely on window.prompt() in Electron, so this
-  // command is rerouted into the editor's local image picker flow.
-  if (command.id === 'image' && onImageCommand) {
-    onImageCommand()
-    return
-  }
-  command.run(editor)
 }
