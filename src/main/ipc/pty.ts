@@ -1,10 +1,12 @@
+import { basename } from 'path'
 import { type BrowserWindow, ipcMain } from 'electron'
-import { execFile } from 'child_process'
 import * as pty from 'node-pty'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 
 let ptyCounter = 0
 const ptyProcesses = new Map<string, pty.IPty>()
+/** Basename of the shell binary each PTY was spawned with (e.g. "zsh"). */
+const ptyShellName = new Map<string, string>()
 
 // Track which "page load generation" each PTY belongs to.
 // When the renderer reloads, we only kill PTYs from previous generations,
@@ -36,6 +38,7 @@ export function registerPtyHandlers(mainWindow: BrowserWindow, runtime?: OrcaRun
           // Process may already be dead
         }
         ptyProcesses.delete(id)
+        ptyShellName.delete(id)
         ptyLoadGeneration.delete(id)
       }
     }
@@ -63,6 +66,7 @@ export function registerPtyHandlers(mainWindow: BrowserWindow, runtime?: OrcaRun
         return false
       }
       ptyProcesses.delete(ptyId)
+      ptyShellName.delete(ptyId)
       ptyLoadGeneration.delete(ptyId)
       runtime?.onPtyExit(ptyId, -1)
       return true
@@ -105,6 +109,7 @@ export function registerPtyHandlers(mainWindow: BrowserWindow, runtime?: OrcaRun
       })
 
       ptyProcesses.set(id, ptyProcess)
+      ptyShellName.set(id, basename(shellPath))
       ptyLoadGeneration.set(id, loadGeneration)
       runtime?.onPtySpawned(id)
 
@@ -117,6 +122,7 @@ export function registerPtyHandlers(mainWindow: BrowserWindow, runtime?: OrcaRun
 
       ptyProcess.onExit(({ exitCode }) => {
         ptyProcesses.delete(id)
+        ptyShellName.delete(id)
         ptyLoadGeneration.delete(id)
         runtime?.onPtyExit(id, exitCode)
         if (!mainWindow.isDestroyed()) {
@@ -151,34 +157,33 @@ export function registerPtyHandlers(mainWindow: BrowserWindow, runtime?: OrcaRun
         // Process may already be dead
       }
       ptyProcesses.delete(args.id)
+      ptyShellName.delete(args.id)
       ptyLoadGeneration.delete(args.id)
       runtime?.onPtyExit(args.id, -1)
     }
   })
 
-  // Check whether the shell process has child processes (e.g. a running
-  // command). Used by the renderer to decide whether closing a terminal
-  // pane needs a confirmation dialog — an idle shell prompt does not.
-  ipcMain.handle('pty:hasChildProcesses', (_event, args: { id: string }): Promise<boolean> => {
+  // Check whether the terminal's foreground process differs from its shell
+  // (e.g. the user is running `node server.js`). Uses node-pty's native
+  // .process getter which reads the OS process table directly — no external
+  // tools like pgrep required.
+  ipcMain.handle('pty:hasChildProcesses', (_event, args: { id: string }): boolean => {
     const proc = ptyProcesses.get(args.id)
     if (!proc) {
-      return Promise.resolve(false)
+      return false
     }
-    const pid = proc.pid
-    if (process.platform === 'win32') {
-      // On Windows, always show the dialog since reliable child-process
-      // detection requires WMI which is slow and complex.
-      return Promise.resolve(true)
+    try {
+      const foreground = proc.process
+      const shell = ptyShellName.get(args.id)
+      // If we can't determine the shell name, err on the side of caution.
+      if (!shell) {
+        return true
+      }
+      return foreground !== shell
+    } catch {
+      // .process can throw if the PTY fd is already closed.
+      return false
     }
-    return new Promise((resolve) => {
-      execFile('pgrep', ['-P', String(pid)], (err, stdout) => {
-        if (err || !stdout.trim()) {
-          resolve(false)
-        } else {
-          resolve(true)
-        }
-      })
-    })
   })
 }
 
@@ -193,6 +198,7 @@ export function killAllPty(): void {
       // Process may already be dead
     }
     ptyProcesses.delete(id)
+    ptyShellName.delete(id)
     ptyLoadGeneration.delete(id)
   }
 }
