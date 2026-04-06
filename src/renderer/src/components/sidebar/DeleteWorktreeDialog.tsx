@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { AlertTriangle, LoaderCircle, Trash2 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { toast } from 'sonner'
+import { getDeleteWorktreeToastCopy } from './delete-worktree-toast'
 
 const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   const activeModal = useAppStore((s) => s.activeModal)
@@ -32,6 +33,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   const isDeleting = deleteState?.isDeleting ?? false
   const deleteError = deleteState?.error ?? null
   const canForceDelete = deleteState?.canForceDelete ?? false
+  const worktreeName = worktree?.displayName ?? 'unknown'
 
   useEffect(() => {
     if (isOpen && worktreeId && !worktree && !isDeleting) {
@@ -66,8 +68,14 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
         .then((result) => {
           if (!result.ok) {
             const state = useAppStore.getState().deleteStateByWorktreeId[targetWorktreeId]
-            toast.error('Failed to delete worktree', {
-              description: result.error,
+            const toastCopy = getDeleteWorktreeToastCopy(
+              worktreeName,
+              state?.canForceDelete ?? false,
+              result.error
+            )
+            const showToast = toastCopy.isDestructive ? toast.error : toast.info
+            showToast(toastCopy.title, {
+              description: toastCopy.description,
               duration: 10000,
               action: state?.canForceDelete
                 ? {
@@ -97,7 +105,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
         })
       closeModal()
     },
-    [closeModal, removeWorktree, worktreeId]
+    [closeModal, removeWorktree, worktreeId, worktreeName]
   )
 
   return (
