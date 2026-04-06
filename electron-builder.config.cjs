@@ -15,7 +15,11 @@ module.exports = {
     '!{.env,.env.*,.npmrc,pnpm-lock.yaml}',
     '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
   ],
-  asarUnpack: ['out/cli/**', 'resources/**'],
+  // Why: the CLI entry-point lives in out/cli/ but imports shared modules
+  // from out/shared/ (e.g. runtime-bootstrap). Both directories must be
+  // unpacked so that Node's require() can resolve the cross-directory imports
+  // when the CLI runs outside the asar archive.
+  asarUnpack: ['out/cli/**', 'out/shared/**', 'resources/**'],
   win: {
     executableName: 'Orca',
     extraResources: [
