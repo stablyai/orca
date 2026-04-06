@@ -8,7 +8,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import type { Worktree, Repo } from '../../../../shared/types'
 import { buildWorktreeComparator } from './smart-sort'
-import { branchName, type Row, buildRows, getGroupKeyForWorktree } from './worktree-list-groups'
+import { matchesSearch, type Row, buildRows, getGroupKeyForWorktree } from './worktree-list-groups'
 
 const WorktreeList = React.memo(function WorktreeList() {
   // ── Granular selectors (each is a primitive or shallow-stable ref) ──
@@ -32,8 +32,10 @@ const WorktreeList = React.memo(function WorktreeList() {
   // PR cache is needed for PR-status grouping and for recent sorting, which
   // incorporates whether the current branch has a live PR attached.
   const prCache = useAppStore((s) =>
-    groupBy === 'pr-status' || sortBy === 'recent' ? s.prCache : null
+    groupBy === 'pr-status' || sortBy === 'recent' || searchQuery ? s.prCache : null
   )
+  // Subscribe to issue cache only during active search to avoid unnecessary re-renders.
+  const issueCache = useAppStore((s) => (searchQuery ? s.issueCache : null))
 
   const sortEpoch = useAppStore((s) => s.sortEpoch)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -86,15 +88,11 @@ const WorktreeList = React.memo(function WorktreeList() {
       all = all.filter((w) => selectedRepoIds.has(w.repoId))
     }
 
-    // Filter by search
+    // Filter by search — matches against displayName, branch, repo, comment,
+    // PR number/title, and issue number/title (see matchesSearch).
     if (searchQuery) {
       const q = searchQuery.toLowerCase()
-      all = all.filter(
-        (w) =>
-          w.displayName.toLowerCase().includes(q) ||
-          branchName(w.branch).toLowerCase().includes(q) ||
-          (repoMap.get(w.repoId)?.displayName ?? '').toLowerCase().includes(q)
-      )
+      all = all.filter((w) => matchesSearch(w, q, repoMap, prCache, issueCache))
     }
 
     // Filter active only
@@ -122,7 +120,9 @@ const WorktreeList = React.memo(function WorktreeList() {
     showActiveOnly,
     repoMap,
     tabsByWorktree,
-    sortedIds
+    sortedIds,
+    prCache,
+    issueCache
   ])
 
   const worktrees = visibleWorktrees
