@@ -40,11 +40,13 @@ const WorktreeList = React.memo(function WorktreeList() {
 
   // Warm PR/issue caches when the user starts searching so that title-based
   // matches work even for off-screen worktrees whose cards haven't fetched yet.
-  // TTL + inflight dedup inside refreshAllGitHub make repeated calls cheap.
+  // Only fires once on search activation (empty → non-empty), not every keystroke.
+  const prevSearchQuery = useRef('')
   useEffect(() => {
-    if (searchQuery) {
+    if (searchQuery && !prevSearchQuery.current) {
       refreshAllGitHub()
     }
+    prevSearchQuery.current = searchQuery
   }, [searchQuery, refreshAllGitHub])
 
   const sortEpoch = useAppStore((s) => s.sortEpoch)
