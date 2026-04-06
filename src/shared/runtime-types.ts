@@ -12,7 +12,12 @@ export type RuntimeStatus = {
   liveLeafCount: number
 }
 
-export type CliRuntimeState = 'not_running' | 'starting' | 'ready' | 'graph_not_ready'
+export type CliRuntimeState =
+  | 'not_running'
+  | 'starting'
+  | 'ready'
+  | 'graph_not_ready'
+  | 'stale_bootstrap'
 
 export type CliStatusResult = {
   app: {

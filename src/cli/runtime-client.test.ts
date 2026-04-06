@@ -1,8 +1,10 @@
+/* eslint-disable max-lines -- Why: this test keeps the runtime bootstrap recovery matrix together so stale-pointer, recovery, and status semantics regressions are reviewed in one place. */
 import { mkdtempSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { createServer, type Socket } from 'net'
 import { afterEach, describe, expect, it } from 'vitest'
+import { getRuntimeRecordPath } from '../shared/runtime-bootstrap'
 import { RuntimeClient, RuntimeRpcFailureError } from './runtime-client'
 
 const servers = new Set<ReturnType<typeof createServer>>()
@@ -36,6 +38,30 @@ function writeMetadata(userDataPath: string, endpoint: string, authToken = 'toke
       },
       authToken,
       startedAt: 1
+    }),
+    'utf8'
+  )
+}
+
+function writeRuntimeRecord(
+  userDataPath: string,
+  runtimeId: string,
+  endpoint: string,
+  authToken = 'token',
+  startedAt = 1,
+  pid = 123
+): void {
+  writeFileSync(
+    getRuntimeRecordPath(userDataPath, runtimeId),
+    JSON.stringify({
+      runtimeId,
+      pid,
+      transport: {
+        kind: 'unix',
+        endpoint
+      },
+      authToken,
+      startedAt
     }),
     'utf8'
   )
@@ -95,6 +121,17 @@ describe('RuntimeClient', () => {
         state: 'not_running'
       }
     })
+  })
+
+  it('reports stale_bootstrap when bootstrap artifacts exist but no runtime is reachable', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
+    writeMetadata(userDataPath, join(userDataPath, 'missing.sock'))
+
+    const client = new RuntimeClient(userDataPath, 100)
+    const status = await client.getCliStatus()
+
+    expect(status.result.runtime.state).toBe('stale_bootstrap')
+    expect(status.result.runtime.reachable).toBe(false)
   })
 
   it('reports graph_not_ready when the runtime is reachable but graph is unavailable', async () => {
@@ -167,6 +204,82 @@ describe('RuntimeClient', () => {
 
     expect(status.result.runtime.state).toBe('ready')
     expect(status.result.runtime.reachable).toBe(true)
+  })
+
+  it('recovers from stale primary metadata by probing per-runtime records', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
+    const staleEndpoint = join(userDataPath, 'stale.sock')
+    const liveEndpoint = join(userDataPath, 'live.sock')
+    const server = createServer((socket) => {
+      sockets.add(socket)
+      socket.once('close', () => sockets.delete(socket))
+      socket.once('data', (data) => {
+        const request = JSON.parse(String(data).trim()) as { id: string; authToken: string }
+        socket.write(
+          `${JSON.stringify({
+            id: request.id,
+            ok: true,
+            result: {
+              runtimeId: 'runtime-2',
+              rendererGraphEpoch: 0,
+              graphStatus: 'ready',
+              authoritativeWindowId: 1,
+              liveTabCount: 1,
+              liveLeafCount: 1
+            },
+            _meta: { runtimeId: 'runtime-2' }
+          })}\n`
+        )
+      })
+    })
+    servers.add(server)
+    await new Promise<void>((resolve) => server.listen(liveEndpoint, resolve))
+    writeMetadata(userDataPath, staleEndpoint, 'stale-token')
+    writeRuntimeRecord(userDataPath, 'runtime-2', liveEndpoint, 'live-token', 2, process.pid)
+
+    const client = new RuntimeClient(userDataPath, 100)
+    const status = await client.getCliStatus()
+
+    expect(status.result.runtime.state).toBe('ready')
+    expect(status.result.runtime.runtimeId).toBe('runtime-2')
+  })
+
+  it('openOrca returns the recovered runtime without launching a new app', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
+    const staleEndpoint = join(userDataPath, 'stale.sock')
+    const liveEndpoint = join(userDataPath, 'live.sock')
+    const server = createServer((socket) => {
+      sockets.add(socket)
+      socket.once('close', () => sockets.delete(socket))
+      socket.once('data', (data) => {
+        const request = JSON.parse(String(data).trim()) as { id: string }
+        socket.write(
+          `${JSON.stringify({
+            id: request.id,
+            ok: true,
+            result: {
+              runtimeId: 'runtime-3',
+              rendererGraphEpoch: 0,
+              graphStatus: 'ready',
+              authoritativeWindowId: 1,
+              liveTabCount: 1,
+              liveLeafCount: 1
+            },
+            _meta: { runtimeId: 'runtime-3' }
+          })}\n`
+        )
+      })
+    })
+    servers.add(server)
+    await new Promise<void>((resolve) => server.listen(liveEndpoint, resolve))
+    writeMetadata(userDataPath, staleEndpoint, 'stale-token')
+    writeRuntimeRecord(userDataPath, 'runtime-3', liveEndpoint, 'live-token', 3, process.pid)
+
+    const client = new RuntimeClient(userDataPath, 100)
+    const status = await client.openOrca(100)
+
+    expect(status.result.runtime.state).toBe('ready')
+    expect(status.result.runtime.runtimeId).toBe('runtime-3')
   })
 
   it('times out if the runtime never responds', async () => {

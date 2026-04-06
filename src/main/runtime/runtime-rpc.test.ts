@@ -6,7 +6,7 @@ import { createConnection } from 'net'
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import * as runtimeMetadataModule from './runtime-metadata'
-import { readRuntimeMetadata } from './runtime-metadata'
+import { readRuntimeMetadata, readRuntimeRecord } from './runtime-metadata'
 import { createRuntimeTransportMetadata, OrcaRuntimeRpcServer } from './runtime-rpc'
 
 vi.mock('../git/worktree', () => ({
@@ -109,6 +109,10 @@ describe('OrcaRuntimeRpcServer', () => {
     expect(metadata?.authToken).toBeTruthy()
     expect(metadata?.transport?.endpoint).toBeTruthy()
     expect(metadata?.transport).toEqual(server['transport'])
+    expect(readRuntimeRecord(userDataPath, runtime.getRuntimeId())).toMatchObject({
+      runtimeId: runtime.getRuntimeId(),
+      authToken: metadata?.authToken
+    })
 
     await server.stop()
     expect(readRuntimeMetadata(userDataPath)).toMatchObject({

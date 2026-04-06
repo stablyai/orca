@@ -45,6 +45,17 @@ export function patchPackagedProcessPath(): void {
   }
 }
 
+export function configureDevUserDataPath(isDev: boolean): void {
+  if (!isDev) {
+    return
+  }
+  // Why: development runs share the same machine as packaged Orca, and both
+  // publish runtime bootstrap files under userData. Without a dev-only path,
+  // `pnpm dev` can overwrite the packaged app's runtime pointer and make the
+  // public `orca` CLI look broken even though the packaged app is still open.
+  app.setPath('userData', join(app.getPath('appData'), 'orca-dev'))
+}
+
 export function enableMainProcessGpuFeatures(): void {
   app.commandLine.appendSwitch('enable-features', 'Vulkan,UseSkiaGraphite')
   app.commandLine.appendSwitch('enable-unsafe-webgpu')

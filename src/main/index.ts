@@ -9,6 +9,7 @@ import { OrcaRuntimeRpcServer } from './runtime/runtime-rpc'
 import { registerAppMenu } from './menu/register-app-menu'
 import { checkForUpdatesFromMenu, isQuittingForUpdate } from './updater'
 import {
+  configureDevUserDataPath,
   enableMainProcessGpuFeatures,
   installUncaughtPipeErrorGuard,
   patchPackagedProcessPath
@@ -23,6 +24,7 @@ let runtimeRpc: OrcaRuntimeRpcServer | null = null
 
 installUncaughtPipeErrorGuard()
 patchPackagedProcessPath()
+configureDevUserDataPath(is.dev)
 enableMainProcessGpuFeatures()
 
 function openMainWindow(): BrowserWindow {

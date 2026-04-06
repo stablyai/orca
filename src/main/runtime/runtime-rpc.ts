@@ -3,10 +3,12 @@ import { randomBytes } from 'crypto'
 import { createServer, type Server, type Socket } from 'net'
 import { chmodSync, existsSync, rmSync } from 'fs'
 import { join } from 'path'
+import type { RuntimeMetadata, RuntimeTransportMetadata } from '../../shared/runtime-bootstrap'
 import type { OrcaRuntimeService } from './orca-runtime'
 import {
-  type RuntimeMetadata,
-  type RuntimeTransportMetadata,
+  clearRuntimeRecord,
+  listRuntimeRecords,
+  writeRuntimeRecord,
   writeRuntimeMetadata
 } from './runtime-metadata'
 
@@ -750,6 +752,48 @@ export class OrcaRuntimeRpcServer {
       startedAt: this.runtime.getStartedAt()
     }
     writeRuntimeMetadata(this.userDataPath, metadata)
+    writeRuntimeRecord(this.userDataPath, metadata)
+    this.pruneRuntimeRecords(metadata.runtimeId)
+  }
+
+  private pruneRuntimeRecords(currentRuntimeId: string): void {
+    const records = listRuntimeRecords(this.userDataPath)
+      .filter((record) => record.runtimeId !== currentRuntimeId)
+      .sort((left, right) => right.startedAt - left.startedAt)
+    for (const record of records.slice(5)) {
+      // Why: per-runtime records let the CLI recover from stale bootstrap
+      // pointers, but keeping every dead runtime forever would accumulate
+      // secret-bearing files on disk. Retaining a small recent history preserves
+      // restart safety without turning local state into an unbounded graveyard.
+      clearRuntimeRecord(this.userDataPath, record.runtimeId)
+    }
+    for (const record of records.slice(0, 5)) {
+      if (!isRecordLikelyLive(record)) {
+        clearRuntimeRecord(this.userDataPath, record.runtimeId)
+      }
+    }
+  }
+}
+
+function isRecordLikelyLive(record: RuntimeMetadata): boolean {
+  if (!isProcessRunning(record.pid)) {
+    return false
+  }
+  if (record.transport?.kind === 'unix' && record.transport.endpoint) {
+    return existsSync(record.transport.endpoint)
+  }
+  return true
+}
+
+function isProcessRunning(pid: number | null | undefined): boolean {
+  if (!pid || pid <= 0) {
+    return false
+  }
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
   }
 }
 
