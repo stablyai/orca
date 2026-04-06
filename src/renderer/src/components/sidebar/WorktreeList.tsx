@@ -22,7 +22,6 @@ const WorktreeList = React.memo(function WorktreeList() {
   const showActiveOnly = useAppStore((s) => s.showActiveOnly)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const openModal = useAppStore((s) => s.openModal)
-  const refreshAllGitHub = useAppStore((s) => s.refreshAllGitHub)
   const pendingRevealWorktreeId = useAppStore((s) => s.pendingRevealWorktreeId)
   const clearPendingRevealWorktreeId = useAppStore((s) => s.clearPendingRevealWorktreeId)
 
@@ -37,23 +36,6 @@ const WorktreeList = React.memo(function WorktreeList() {
   )
   // Subscribe to issue cache only during active search to avoid unnecessary re-renders.
   const issueCache = useAppStore((s) => (searchQuery ? s.issueCache : null))
-
-  // Warm PR/issue caches when the user starts searching so that title-based
-  // matches work even for off-screen worktrees whose cards haven't fetched yet.
-  // Fires on search activation (empty → non-empty) and when the worktree count
-  // grows during an active search (new worktree added, or repo finishes hydrating).
-  const worktreeCount = Object.values(worktreesByRepo).reduce((n, wts) => n + wts.length, 0)
-  const prevSearchQuery = useRef('')
-  const prevWorktreeCount = useRef(0)
-  useEffect(() => {
-    const searchActivated = searchQuery && !prevSearchQuery.current
-    const worktreesGrew = searchQuery && worktreeCount > prevWorktreeCount.current
-    if (searchActivated || worktreesGrew) {
-      refreshAllGitHub()
-    }
-    prevSearchQuery.current = searchQuery
-    prevWorktreeCount.current = worktreeCount
-  }, [searchQuery, worktreeCount, refreshAllGitHub])
 
   const sortEpoch = useAppStore((s) => s.sortEpoch)
   const scrollRef = useRef<HTMLDivElement>(null)
