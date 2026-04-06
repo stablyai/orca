@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { getMarkdownPreviewImageSrc, getMarkdownPreviewLinkTarget } from './markdown-preview-links'
+import {
+  getMarkdownPreviewImageSrc,
+  getMarkdownPreviewLinkTarget,
+  resolveImageAbsolutePath
+} from './markdown-preview-links'
 
 describe('getMarkdownPreviewLinkTarget', () => {
   it('resolves relative markdown links against the current file', () => {
@@ -36,5 +40,37 @@ describe('getMarkdownPreviewImageSrc', () => {
     expect(getMarkdownPreviewImageSrc('data:image/png;base64,abc', '/repo/docs/README.md')).toBe(
       'data:image/png;base64,abc'
     )
+  })
+})
+
+describe('resolveImageAbsolutePath', () => {
+  it('resolves a relative image src to an absolute filesystem path', () => {
+    expect(resolveImageAbsolutePath('diagram.png', '/repo/docs/README.md')).toBe(
+      '/repo/docs/diagram.png'
+    )
+  })
+
+  it('resolves parent-directory references', () => {
+    expect(resolveImageAbsolutePath('../assets/img.png', '/repo/docs/guides/README.md')).toBe(
+      '/repo/docs/assets/img.png'
+    )
+  })
+
+  it('resolves Windows paths', () => {
+    expect(resolveImageAbsolutePath('./diagram.png', 'C:\\repo\\docs\\README.md')).toBe(
+      'C:/repo/docs/diagram.png'
+    )
+  })
+
+  it('returns null for http URLs', () => {
+    expect(resolveImageAbsolutePath('https://example.com/img.png', '/repo/README.md')).toBeNull()
+  })
+
+  it('returns null for data URLs', () => {
+    expect(resolveImageAbsolutePath('data:image/png;base64,abc', '/repo/README.md')).toBeNull()
+  })
+
+  it('returns null for undefined src', () => {
+    expect(resolveImageAbsolutePath(undefined, '/repo/README.md')).toBeNull()
   })
 })

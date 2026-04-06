@@ -2,7 +2,6 @@ import type { AnyExtension } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
 import Image from '@tiptap/extension-image'
-import type { DOMOutputSpec } from '@tiptap/pm/model'
 import Placeholder from '@tiptap/extension-placeholder'
 import TaskList from '@tiptap/extension-task-list'
 import TaskItem from '@tiptap/extension-task-item'
@@ -11,7 +10,7 @@ import { TableCell } from '@tiptap/extension-table-cell'
 import { TableHeader } from '@tiptap/extension-table-header'
 import { TableRow } from '@tiptap/extension-table-row'
 import { Markdown } from '@tiptap/markdown'
-import { getMarkdownPreviewImageSrc } from './markdown-preview-links'
+import { loadLocalImageSrc, onImageCacheInvalidated } from './useLocalImageSrc'
 import { RawMarkdownHtmlBlock, RawMarkdownHtmlInline } from './raw-markdown-html'
 
 const RICH_MARKDOWN_PLACEHOLDER = 'Write markdown… Type / for blocks.'
@@ -31,20 +30,75 @@ export function createRichMarkdownExtensions({
     Link.configure({
       openOnClick: false
     }),
-    // Why: the default Image extension renders <img src="image.png"> which
-    // resolves against the app origin (localhost), not the file system. This
-    // custom extension overrides renderHTML to resolve relative src values to
-    // file:// URLs using the exact same resolver as preview mode, so nested
-    // paths and Windows drive roots stay consistent across both surfaces.
+    // Why: in dev mode the renderer is served from http://localhost, so
+    // file:// URLs in <img> tags are blocked by cross-origin restrictions.
+    // A nodeView loads local images via IPC → blob URL, which bypasses this
+    // and works identically in dev and production modes.
     Image.extend({
       addStorage() {
         return { filePath: '' }
       },
-      renderHTML({ HTMLAttributes }) {
-        const src = HTMLAttributes.src as string | undefined
-        const filePath = this.storage.filePath as string
-        const resolvedSrc = filePath ? getMarkdownPreviewImageSrc(src, filePath) : src
-        return ['img', { ...HTMLAttributes, src: resolvedSrc }] satisfies DOMOutputSpec
+      addNodeView() {
+        return ({ node, HTMLAttributes }) => {
+          // Why: wrapping the <img> in a container prevents the browser's
+          // native image drag (which sends image bytes) from conflicting with
+          // ProseMirror's node-level drag (which serializes the schema node
+          // for relocation within the document).
+          const dom = document.createElement('div')
+          dom.style.lineHeight = '0'
+
+          const img = document.createElement('img')
+          img.draggable = false
+          for (const [key, value] of Object.entries(HTMLAttributes)) {
+            if (key !== 'src' && value != null && value !== false) {
+              img.setAttribute(key, String(value))
+            }
+          }
+          dom.appendChild(img)
+
+          let currentSrc = node.attrs.src as string | undefined
+
+          const loadImage = (src: string | undefined): void => {
+            const fp = this.storage.filePath as string
+            if (src && fp) {
+              // Why: when IPC resolution fails (e.g. unsupported format),
+              // the ternary falls back to the raw src so the browser can
+              // attempt its own loading rather than leaving a broken image.
+              void loadLocalImageSrc(src, fp).then((resolved) => {
+                img.src = resolved ? resolved : src
+              })
+            } else if (src) {
+              img.src = src
+            }
+          }
+
+          loadImage(currentSrc)
+
+          // Why: when the user refocuses the window after deleting or replacing
+          // image files, the blob URL cache is cleared and this callback re-loads
+          // the image from disk so the editor reflects the current filesystem state.
+          const unsubscribe = onImageCacheInvalidated(() => {
+            loadImage(currentSrc)
+          })
+
+          return {
+            dom,
+            update: (updatedNode) => {
+              if (updatedNode.type.name !== 'image') {
+                return false
+              }
+              const newSrc = updatedNode.attrs.src as string | undefined
+              if (newSrc !== currentSrc) {
+                currentSrc = newSrc
+                loadImage(newSrc)
+              }
+              return true
+            },
+            destroy: () => {
+              unsubscribe()
+            }
+          }
+        }
       }
     }).configure({
       allowBase64: true
