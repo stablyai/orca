@@ -73,3 +73,31 @@ export function getMarkdownPreviewImageSrc(
 
   return rawSrc
 }
+
+/**
+ * Resolves a relative image src against the markdown file path to produce an
+ * absolute filesystem path. Returns null for external URLs (http, https, data,
+ * blob) that don't need local file loading.
+ */
+export function resolveImageAbsolutePath(
+  rawSrc: string | undefined,
+  filePath: string
+): string | null {
+  if (!rawSrc) {
+    return null
+  }
+
+  const resolved = resolveMarkdownUrl(rawSrc, filePath)
+  if (!resolved || resolved.protocol !== 'file:') {
+    return null
+  }
+
+  // Convert file:///path/to/file → /path/to/file (Unix)
+  // Convert file:///C:/path/to/file → C:/path/to/file (Windows)
+  let absolutePath = decodeURIComponent(resolved.pathname)
+  if (/^\/[A-Za-z]:\//.test(absolutePath)) {
+    absolutePath = absolutePath.slice(1)
+  }
+
+  return absolutePath
+}

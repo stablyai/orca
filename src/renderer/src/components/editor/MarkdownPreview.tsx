@@ -8,7 +8,8 @@ import type { Components } from 'react-markdown'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useAppStore } from '@/store'
-import { getMarkdownPreviewImageSrc, getMarkdownPreviewLinkTarget } from './markdown-preview-links'
+import { getMarkdownPreviewLinkTarget } from './markdown-preview-links'
+import { useLocalImageSrc } from './useLocalImageSrc'
 import {
   applyMarkdownPreviewSearchHighlights,
   clearMarkdownPreviewSearchHighlights,
@@ -175,9 +176,13 @@ export default function MarkdownPreview({
         </a>
       )
     },
-    img: ({ src, alt, ...props }) => (
-      <img {...props} src={getMarkdownPreviewImageSrc(src, filePath)} alt={alt ?? ''} />
-    )
+    img: function MarkdownImg({ src, alt, ...props }) {
+      // eslint-disable-next-line react-hooks/rules-of-hooks -- react-markdown
+      // instantiates component overrides as regular React components, so hooks
+      // are valid here despite the lowercase function name.
+      const resolvedSrc = useLocalImageSrc(src, filePath)
+      return <img {...props} src={resolvedSrc} alt={alt ?? ''} />
+    }
   }
 
   return (

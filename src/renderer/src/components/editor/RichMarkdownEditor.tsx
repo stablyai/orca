@@ -171,6 +171,11 @@ export default function RichMarkdownEditor({
     if (!editor) {
       return
     }
+    // Why: the native file picker steals focus from the editor, which can cause
+    // ProseMirror to lose track of its selection. We snapshot the cursor position
+    // before the async dialog so we can insert the image exactly where the user
+    // intended, not at whatever position focus() falls back to afterward.
+    const insertPos = editor.state.selection.from
     try {
       const srcPath = await window.api.shell.pickImage()
       if (!srcPath) {
@@ -182,7 +187,14 @@ export default function RichMarkdownEditor({
       if (srcPath !== destPath) {
         await window.api.shell.copyFile({ srcPath, destPath })
       }
-      editor.chain().focus().setImage({ src: imageName }).run()
+      // Why: insertContentAt places the image at the exact saved position
+      // regardless of where focus lands after the native file dialog closes,
+      // whereas setTextSelection can be overridden by ProseMirror's focus logic.
+      editor
+        .chain()
+        .focus()
+        .insertContentAt(insertPos, { type: 'image', attrs: { src: imageName } })
+        .run()
     } catch (err) {
       toast.error(extractIpcErrorMessage(err, 'Failed to insert image.'))
     }
