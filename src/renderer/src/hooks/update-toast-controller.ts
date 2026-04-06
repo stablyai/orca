@@ -43,6 +43,19 @@ export function createUpdateToastController(deps?: {
   // finish in one step instead of showing a second bottom-right prompt.
   let autoRestartAfterDownload = false
 
+  const showRestartFailure = (message: string): void => {
+    toastApi.error('Could not restart to install the update.', {
+      description: message
+    })
+  }
+
+  const requestRestartInstall = (): void => {
+    void updaterApi.quitAndInstall().catch((error) => {
+      autoRestartAfterDownload = false
+      showRestartFailure(String((error as Error)?.message ?? error))
+    })
+  }
+
   return {
     handleStatus(status) {
       // Why: update checks are a new lifecycle. Clearing the one-click
@@ -123,7 +136,7 @@ export function createUpdateToastController(deps?: {
         toastApi.dismiss(downloadToastId)
         if (autoRestartAfterDownload) {
           autoRestartAfterDownload = false
-          void updaterApi.quitAndInstall()
+          requestRestartInstall()
           return
         }
         const releaseUrl = getReleaseUrl(status)
@@ -142,7 +155,7 @@ export function createUpdateToastController(deps?: {
           action: {
             label: 'Restart Now',
             onClick: () => {
-              void updaterApi.quitAndInstall()
+              requestRestartInstall()
             }
           }
         })

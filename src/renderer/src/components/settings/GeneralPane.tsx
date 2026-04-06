@@ -10,6 +10,7 @@ import { Separator } from '../ui/separator'
 import { Download, FolderOpen, Loader2, RefreshCw } from 'lucide-react'
 import { useAppStore } from '../../store'
 import { CliSection } from './CliSection'
+import { toast } from 'sonner'
 import {
   DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS,
   MAX_EDITOR_AUTO_SAVE_DELAY_MS,
@@ -82,6 +83,14 @@ export function GeneralPane({
     )
     updateSettings({ editorAutoSaveDelayMs: next })
     setAutoSaveDelayDraft(String(next))
+  }
+
+  const handleRestartToUpdate = (): void => {
+    void window.api.updater.quitAndInstall().catch((error) => {
+      toast.error('Could not restart to install the update.', {
+        description: String((error as Error)?.message ?? error)
+      })
+    })
   }
 
   const visibleSections = [
@@ -359,12 +368,7 @@ export function GeneralPane({
                   : `Install Update (${updateStatus.version})`}
               </Button>
             ) : updateStatus.state === 'downloaded' ? (
-              <Button
-                variant="default"
-                size="sm"
-                onClick={() => window.api.updater.quitAndInstall()}
-                className="gap-2"
-              >
+              <Button variant="default" size="sm" onClick={handleRestartToUpdate} className="gap-2">
                 <Download className="size-3.5" />
                 Restart to Update ({updateStatus.version})
               </Button>
