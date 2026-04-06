@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils'
 import type { Worktree, Repo } from '../../../../shared/types'
 import { buildWorktreeComparator } from './smart-sort'
 import { matchesSearch, type Row, buildRows, getGroupKeyForWorktree } from './worktree-list-groups'
+import { estimateRowHeight } from './worktree-list-estimate'
 
 const WorktreeList = React.memo(function WorktreeList() {
   // ── Granular selectors (each is a primitive or shallow-stable ref) ──
@@ -195,45 +196,9 @@ const WorktreeList = React.memo(function WorktreeList() {
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
-    // Dynamic height estimate based on which metadata rows will render.
-    // Pixel constants (52, 22, 2, 4) are coupled to WorktreeCard's Tailwind
-    // classes — see the comment there near the meta section padding/gap.
-    estimateSize: (index) => {
-      const row = rows[index]
-      if (row.type === 'header') {
-        return 42
-      }
-      const wt = row.worktree
-      // Base: py-2 + title + subtitle + gaps ≈ 52px.
-      // Each metadata line adds ~22px (icon + text + py-0.5 + gap-[3px]).
-      let h = 52
-      // Why linkedIssue (truthy string) not the resolved issue object:
-      // WorktreeCard renders the issue row only once the fetched IssueInfo is
-      // truthy, so there's a brief mismatch until data loads. This is
-      // intentional — checking the issueCache here would require subscribing
-      // to the entire cache map, re-rendering the list on every issue fetch.
-      // The slight over-estimate self-corrects once measureElement fires.
-      if (cardProps.includes('issue') && wt.linkedIssue) {
-        h += 22
-      }
-      // PR: use prCache lookup, not wt.linkedPR (rarely populated).
-      // Match the cache-key format WorktreeCard uses: `repo.path::branch`.
-      if (cardProps.includes('pr')) {
-        const repo = repoMap.get(wt.repoId)
-        const branch = wt.branch.replace(/^refs\/heads\//, '')
-        const prKey = repo && branch ? `${repo.path}::${branch}` : ''
-        if (prKey && prCache?.[prKey]?.data) {
-          h += 22
-        }
-      }
-      if (cardProps.includes('comment') && wt.comment) {
-        h += 22
-      }
-      if (h > 52) {
-        h += 2
-      } // mt-0.5 on meta container
-      return h + 4 // pb-1 wrapper padding
-    },
+    // Dynamic height estimate — pixel constants coupled to WorktreeCard's
+    // Tailwind classes (see coupling comment in WorktreeCard meta section).
+    estimateSize: (index) => estimateRowHeight(rows[index], cardProps, repoMap, prCache),
     overscan: 10,
     getItemKey: (index) => {
       const row = rows[index]
@@ -241,13 +206,12 @@ const WorktreeList = React.memo(function WorktreeList() {
     }
   })
 
-  // When prCache changes (PR data loads async) or the user toggles card
-  // properties, cards may grow/shrink. Invalidate cached sizes so the
-  // virtualizer re-measures and eliminates overlap or scroll jumps.
+  // Invalidate cached sizes when async PR data arrives or card props change,
+  // so the virtualizer re-measures and eliminates overlap / scroll jumps.
   useEffect(() => {
     if (!prCache) {
       return
-    } // subscription inactive — nothing to re-measure
+    }
     virtualizer.measure()
   }, [prCache, virtualizer])
   useEffect(() => {
