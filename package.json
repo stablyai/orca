@@ -1,6 +1,6 @@
 {
   "name": "orca",
-  "version": "1.0.92-rc.0",
+  "version": "1.0.92-rc.1",
   "description": "An Electron application with React and TypeScript",
   "homepage": "https://github.com/stablyai/orca",
   "author": "stablyai",
