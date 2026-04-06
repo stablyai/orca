@@ -60,6 +60,7 @@ type PtyApi = {
   write: (id: string, data: string) => void
   resize: (id: string, cols: number, rows: number) => void
   kill: (id: string) => Promise<void>
+  hasChildProcesses: (id: string) => Promise<boolean>
   onData: (callback: (data: { id: string; data: string }) => void) => () => void
   onExit: (callback: (data: { id: string; code: number }) => void) => () => void
 }

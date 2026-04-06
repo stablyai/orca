@@ -8,22 +8,15 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 
-type CloseTerminalDialogProps = {
-  open: boolean
-  onCancel: () => void
-  onConfirm: () => void
-}
-
-/**
- * Ghostty-style confirmation dialog shown when Cmd+W would kill a running
- * terminal process. The "Close" button is auto-focused so the user can
- * quickly confirm with Enter.
- */
 export default function CloseTerminalDialog({
   open,
   onCancel,
   onConfirm
-}: CloseTerminalDialogProps): React.JSX.Element {
+}: {
+  open: boolean
+  onCancel: () => void
+  onConfirm: () => void
+}): React.JSX.Element {
   return (
     <Dialog
       open={open}

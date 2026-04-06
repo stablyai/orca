@@ -140,16 +140,24 @@ export default function TerminalPane({
   )
 
   // Cmd+W handler — shows a Ghostty-style confirmation dialog when the
-  // pane's PTY is still running, so the user doesn't accidentally kill a
-  // long-lived process. Ctrl+D (explicit EOF) bypasses this by design.
+  // pane's shell has a running child process (e.g. npm run dev), so the
+  // user doesn't accidentally kill it. An idle shell prompt closes
+  // immediately. Ctrl+D (explicit EOF) bypasses this by design.
   const handleRequestClosePane = useCallback(
     (paneId: number) => {
       const transport = paneTransportsRef.current.get(paneId)
-      if (transport && transport.isConnected()) {
-        setCloseConfirmPaneId(paneId)
-      } else {
+      const ptyId = transport?.getPtyId()
+      if (!ptyId) {
         executeClosePane(paneId)
+        return
       }
+      void window.api.pty.hasChildProcesses(ptyId).then((hasChildren) => {
+        if (hasChildren) {
+          setCloseConfirmPaneId(paneId)
+        } else {
+          executeClosePane(paneId)
+        }
+      })
     },
     [executeClosePane]
   )

@@ -7,6 +7,7 @@ const { browserWindowMock, openExternalMock } = vi.hoisted(() => ({
 
 vi.mock('electron', () => ({
   BrowserWindow: browserWindowMock,
+  ipcMain: { on: vi.fn(), removeListener: vi.fn() },
   nativeTheme: { shouldUseDarkColors: false },
   shell: { openExternal: openExternalMock }
 }))

@@ -1,4 +1,5 @@
 import { type BrowserWindow, ipcMain } from 'electron'
+import { execFile } from 'child_process'
 import * as pty from 'node-pty'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 
@@ -19,6 +20,7 @@ export function registerPtyHandlers(mainWindow: BrowserWindow, runtime?: OrcaRun
   ipcMain.removeHandler('pty:spawn')
   ipcMain.removeHandler('pty:resize')
   ipcMain.removeHandler('pty:kill')
+  ipcMain.removeHandler('pty:hasChildProcesses')
   ipcMain.removeAllListeners('pty:write')
 
   // Kill orphaned PTY processes from previous page loads when the renderer reloads.
@@ -152,6 +154,31 @@ export function registerPtyHandlers(mainWindow: BrowserWindow, runtime?: OrcaRun
       ptyLoadGeneration.delete(args.id)
       runtime?.onPtyExit(args.id, -1)
     }
+  })
+
+  // Check whether the shell process has child processes (e.g. a running
+  // command). Used by the renderer to decide whether closing a terminal
+  // pane needs a confirmation dialog — an idle shell prompt does not.
+  ipcMain.handle('pty:hasChildProcesses', (_event, args: { id: string }): Promise<boolean> => {
+    const proc = ptyProcesses.get(args.id)
+    if (!proc) {
+      return Promise.resolve(false)
+    }
+    const pid = proc.pid
+    if (process.platform === 'win32') {
+      // On Windows, always show the dialog since reliable child-process
+      // detection requires WMI which is slow and complex.
+      return Promise.resolve(true)
+    }
+    return new Promise((resolve) => {
+      execFile('pgrep', ['-P', String(pid)], (err, stdout) => {
+        if (err || !stdout.trim()) {
+          resolve(false)
+        } else {
+          resolve(true)
+        }
+      })
+    })
   })
 }
 

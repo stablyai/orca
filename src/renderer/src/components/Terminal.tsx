@@ -359,8 +359,8 @@ export default function Terminal(): React.JSX.Element | null {
     return () => window.removeEventListener('beforeunload', handler)
   }, [])
 
-  // Listen for main-process window close requests. When terminals are running,
-  // show a confirmation dialog instead of closing immediately.
+  // Listen for main-process window close requests. When any terminal has a
+  // child process running (not just an idle shell), show a confirmation dialog.
   useEffect(() => {
     return window.api.ui.onWindowCloseRequested(() => {
       if (isUpdaterQuitAndInstallInProgress()) {
@@ -368,14 +368,20 @@ export default function Terminal(): React.JSX.Element | null {
         return
       }
       const state = useAppStore.getState()
-      const hasTerminals = Object.values(state.tabsByWorktree).some(
-        (worktreeTabs) => worktreeTabs.length > 0
-      )
-      if (hasTerminals) {
-        setWindowCloseDialogOpen(true)
-      } else {
+      const allPtyIds = Object.values(state.ptyIdsByTabId).flat()
+      if (allPtyIds.length === 0) {
         window.api.ui.confirmWindowClose()
+        return
       }
+      void Promise.all(allPtyIds.map((id) => window.api.pty.hasChildProcesses(id))).then(
+        (results) => {
+          if (results.some(Boolean)) {
+            setWindowCloseDialogOpen(true)
+          } else {
+            window.api.ui.confirmWindowClose()
+          }
+        }
+      )
     })
   }, [])
 
