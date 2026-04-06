@@ -1,4 +1,5 @@
 import { registerCliHandlers } from './cli'
+import { registerPreflightHandlers } from './preflight'
 import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { registerFilesystemHandlers } from './filesystem'
@@ -16,6 +17,7 @@ import {
 
 export function registerCoreHandlers(store: Store, runtime: OrcaRuntimeService): void {
   registerCliHandlers()
+  registerPreflightHandlers()
   registerGitHubHandlers(store)
   registerSettingsHandlers(store)
   registerShellHandlers()

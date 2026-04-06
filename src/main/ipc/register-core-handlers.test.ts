@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   registerCliHandlersMock,
+  registerPreflightHandlersMock,
   registerGitHubHandlersMock,
   registerSettingsHandlersMock,
   registerShellHandlersMock,
@@ -13,6 +14,7 @@ const {
   registerUpdaterHandlersMock
 } = vi.hoisted(() => ({
   registerCliHandlersMock: vi.fn(),
+  registerPreflightHandlersMock: vi.fn(),
   registerGitHubHandlersMock: vi.fn(),
   registerSettingsHandlersMock: vi.fn(),
   registerShellHandlersMock: vi.fn(),
@@ -26,6 +28,10 @@ const {
 
 vi.mock('./cli', () => ({
   registerCliHandlers: registerCliHandlersMock
+}))
+
+vi.mock('./preflight', () => ({
+  registerPreflightHandlers: registerPreflightHandlersMock
 }))
 
 vi.mock('./github', () => ({
@@ -66,6 +72,7 @@ import { registerCoreHandlers } from './register-core-handlers'
 describe('registerCoreHandlers', () => {
   beforeEach(() => {
     registerCliHandlersMock.mockReset()
+    registerPreflightHandlersMock.mockReset()
     registerGitHubHandlersMock.mockReset()
     registerSettingsHandlersMock.mockReset()
     registerShellHandlersMock.mockReset()
@@ -90,6 +97,7 @@ describe('registerCoreHandlers', () => {
     expect(registerFilesystemHandlersMock).toHaveBeenCalledWith(store)
     expect(registerRuntimeHandlersMock).toHaveBeenCalledWith(runtime)
     expect(registerCliHandlersMock).toHaveBeenCalled()
+    expect(registerPreflightHandlersMock).toHaveBeenCalled()
     expect(registerShellHandlersMock).toHaveBeenCalled()
     expect(registerClipboardHandlersMock).toHaveBeenCalled()
     expect(registerUpdaterHandlersMock).toHaveBeenCalled()

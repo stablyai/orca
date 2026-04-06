@@ -209,6 +209,15 @@ type GitApi = {
   }) => Promise<string | null>
 }
 
+type PreflightStatus = {
+  git: { installed: boolean }
+  gh: { installed: boolean; authenticated: boolean }
+}
+
+type PreflightApi = {
+  check: () => Promise<PreflightStatus>
+}
+
 type Api = {
   repos: ReposApi
   worktrees: WorktreesApi
@@ -216,6 +225,7 @@ type Api = {
   gh: GhApi
   settings: SettingsApi
   cli: CliApi
+  preflight: PreflightApi
   shell: ShellApi
   hooks: HooksApi
   cache: CacheApi

@@ -222,6 +222,13 @@ const api = {
     remove: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:remove')
   },
 
+  preflight: {
+    check: (): Promise<{
+      git: { installed: boolean }
+      gh: { installed: boolean; authenticated: boolean }
+    }> => ipcRenderer.invoke('preflight:check')
+  },
+
   shell: {
     openPath: (path: string): Promise<void> => ipcRenderer.invoke('shell:openPath', path),
 
