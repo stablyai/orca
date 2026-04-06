@@ -357,7 +357,10 @@ const WorktreeCard = React.memo(function WorktreeCard({
             )}
           </div>
 
-          {/* Meta section: Issue / PR Links / Comment */}
+          {/* Meta section: Issue / PR Links / Comment
+             ⚠ Layout coupling: the padding (py-0.5, mt-0.5), gap-[3px], and
+             line heights here are used to derive the pixel constants in
+             WorktreeList's estimateSize. Update both if changing spacing. */}
           {((cardProps.includes('issue') && issue) ||
             (cardProps.includes('pr') && pr) ||
             (cardProps.includes('comment') && worktree.comment)) && (

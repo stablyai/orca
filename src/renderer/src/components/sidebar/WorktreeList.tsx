@@ -29,10 +29,14 @@ const WorktreeList = React.memo(function WorktreeList() {
   const needsTabs = showActiveOnly || sortBy === 'recent'
   const tabsByWorktree = useAppStore((s) => (needsTabs ? s.tabsByWorktree : null))
 
-  // PR cache is needed for PR-status grouping and for recent sorting, which
-  // incorporates whether the current branch has a live PR attached.
+  const cardProps = useAppStore((s) => s.worktreeCardProperties)
+
+  // PR cache is needed for PR-status grouping, recent sorting, search, and
+  // estimateSize when the PR card property is visible.
   const prCache = useAppStore((s) =>
-    groupBy === 'pr-status' || sortBy === 'recent' || searchQuery ? s.prCache : null
+    groupBy === 'pr-status' || sortBy === 'recent' || searchQuery || cardProps.includes('pr')
+      ? s.prCache
+      : null
   )
   // Subscribe to issue cache only during active search to avoid unnecessary re-renders.
   const issueCache = useAppStore((s) => (searchQuery ? s.issueCache : null))
@@ -191,13 +195,64 @@ const WorktreeList = React.memo(function WorktreeList() {
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: (index) => (rows[index].type === 'header' ? 42 : 56 + 4),
+    // Dynamic height estimate based on which metadata rows will render.
+    // Pixel constants (52, 22, 2, 4) are coupled to WorktreeCard's Tailwind
+    // classes — see the comment there near the meta section padding/gap.
+    estimateSize: (index) => {
+      const row = rows[index]
+      if (row.type === 'header') {
+        return 42
+      }
+      const wt = row.worktree
+      // Base: py-2 + title + subtitle + gaps ≈ 52px.
+      // Each metadata line adds ~22px (icon + text + py-0.5 + gap-[3px]).
+      let h = 52
+      // Why linkedIssue (truthy string) not the resolved issue object:
+      // WorktreeCard renders the issue row only once the fetched IssueInfo is
+      // truthy, so there's a brief mismatch until data loads. This is
+      // intentional — checking the issueCache here would require subscribing
+      // to the entire cache map, re-rendering the list on every issue fetch.
+      // The slight over-estimate self-corrects once measureElement fires.
+      if (cardProps.includes('issue') && wt.linkedIssue) {
+        h += 22
+      }
+      // PR: use prCache lookup, not wt.linkedPR (rarely populated).
+      // Match the cache-key format WorktreeCard uses: `repo.path::branch`.
+      if (cardProps.includes('pr')) {
+        const repo = repoMap.get(wt.repoId)
+        const branch = wt.branch.replace(/^refs\/heads\//, '')
+        const prKey = repo && branch ? `${repo.path}::${branch}` : ''
+        if (prKey && prCache?.[prKey]?.data) {
+          h += 22
+        }
+      }
+      if (cardProps.includes('comment') && wt.comment) {
+        h += 22
+      }
+      if (h > 52) {
+        h += 2
+      } // mt-0.5 on meta container
+      return h + 4 // pb-1 wrapper padding
+    },
     overscan: 10,
     getItemKey: (index) => {
       const row = rows[index]
       return row.type === 'header' ? `hdr:${row.key}` : `wt:${row.worktree.id}`
     }
   })
+
+  // When prCache changes (PR data loads async) or the user toggles card
+  // properties, cards may grow/shrink. Invalidate cached sizes so the
+  // virtualizer re-measures and eliminates overlap or scroll jumps.
+  useEffect(() => {
+    if (!prCache) {
+      return
+    } // subscription inactive — nothing to re-measure
+    virtualizer.measure()
+  }, [prCache, virtualizer])
+  useEffect(() => {
+    virtualizer.measure()
+  }, [cardProps, virtualizer])
 
   React.useEffect(() => {
     if (!pendingRevealWorktreeId) {
