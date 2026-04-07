@@ -100,31 +100,6 @@ describe('createUpdateToastController', () => {
     expect(toastApi.success).not.toHaveBeenCalled()
   })
 
-  it('shows a restart toast after manual-download updates because they still need confirmation', () => {
-    const toastApi = createToastApi()
-    toastApi.info.mockReturnValue('available-toast')
-    const updaterApi = createUpdaterApi()
-    const storeApi = createStoreApi()
-    const controller = createUpdateToastController({ toastApi, updaterApi, storeApi })
-
-    controller.handleStatus({
-      state: 'available',
-      version: '1.2.3',
-      manualDownloadUrl: 'https://example.com/download/1.2.3'
-    })
-    const infoOptions = getInfoOptions(toastApi)
-    ;(infoOptions.action as { onClick: () => void }).onClick()
-    controller.handleStatus({ state: 'downloaded', version: '1.2.3' })
-
-    expect(updaterApi.download).toHaveBeenCalledTimes(1)
-    expect(updaterApi.quitAndInstall).not.toHaveBeenCalled()
-    expect(toastApi.success).toHaveBeenCalledWith('Version 1.2.3 is ready to install.', {
-      description: expect.any(Object),
-      duration: Infinity,
-      action: expect.objectContaining({ label: 'Restart Now' })
-    })
-  })
-
   it('clears stale one-click restart intent after a later check error', () => {
     const toastApi = createToastApi()
     toastApi.info.mockReturnValue('available-toast')

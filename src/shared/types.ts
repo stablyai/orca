@@ -221,7 +221,6 @@ export type UpdateStatus =
       state: 'available'
       version: string
       releaseUrl?: string
-      manualDownloadUrl?: string
     }
   | { state: 'not-available'; userInitiated?: boolean }
   | { state: 'downloading'; percent: number; version: string }

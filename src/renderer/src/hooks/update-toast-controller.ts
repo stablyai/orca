@@ -108,13 +108,7 @@ export function createUpdateToastController(deps?: {
           action: {
             label: 'Update',
             onClick: () => {
-              // Why: manual-download builds still need the follow-up install
-              // step, but auto-download builds should preserve the previous
-              // one-click toast behavior and restart as soon as the payload
-              // is ready.
-              if (!status.manualDownloadUrl) {
-                autoRestartAfterDownload = true
-              }
+              autoRestartAfterDownload = true
               void updaterApi.download()
             }
           }

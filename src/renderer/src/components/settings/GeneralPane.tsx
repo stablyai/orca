@@ -363,9 +363,7 @@ export function GeneralPane({
                 className="gap-2"
               >
                 <Download className="size-3.5" />
-                {updateStatus.manualDownloadUrl
-                  ? `Download Update (${updateStatus.version})`
-                  : `Install Update (${updateStatus.version})`}
+                Install Update ({updateStatus.version})
               </Button>
             ) : updateStatus.state === 'downloaded' ? (
               <Button variant="default" size="sm" onClick={handleRestartToUpdate} className="gap-2">
@@ -380,10 +378,8 @@ export function GeneralPane({
             {updateStatus.state === 'checking' && 'Checking for updates...'}
             {updateStatus.state === 'available' && (
               <>
-                Version {updateStatus.version} is available.{' '}
-                {updateStatus.manualDownloadUrl
-                  ? 'Open the download to install it manually.'
-                  : 'Click "Install Update" to download it.'}{' '}
+                Version {updateStatus.version} is available. Click &quot;Install Update&quot; to
+                download and install it.{' '}
                 <a
                   href={
                     updateStatus.releaseUrl ??

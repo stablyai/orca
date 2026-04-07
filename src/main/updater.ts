@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import { is } from '@electron-toolkit/utils'
 import type { UpdateStatus } from '../shared/types'
@@ -11,7 +11,6 @@ import {
 import { registerAutoUpdaterHandlers } from './updater-events'
 import {
   compareVersions,
-  findFallbackReleaseVersion,
   isBenignCheckFailure,
   isGitHubReleaseTransitionFailure,
   statusesEqual
@@ -113,45 +112,15 @@ async function sendCheckFailureStatus(message: string, userInitiated?: boolean):
 
   const handleFailure = async (): Promise<void> => {
     if (isBenignCheckFailure(message)) {
-      if (isGitHubReleaseTransitionFailure(message.toLowerCase())) {
-        try {
-          const fallbackRelease = await findFallbackReleaseVersion()
-          if (fallbackRelease) {
-            console.warn(
-              '[updater] using fallback GitHub release during release transition:',
-              fallbackRelease.version
-            )
-            availableVersion = fallbackRelease.version
-            availableReleaseUrl = fallbackRelease.releaseUrl
-            persistLastUpdateCheckAt?.(Date.now())
-            if (!userInitiated) {
-              scheduleAutomaticUpdateCheck(AUTO_UPDATE_CHECK_INTERVAL_MS)
-            }
-            sendStatus({
-              state: 'available',
-              version: fallbackRelease.version,
-              releaseUrl: fallbackRelease.releaseUrl,
-              manualDownloadUrl: fallbackRelease.manualDownloadUrl
-            })
-            return
-          }
-        } catch (fallbackError) {
-          console.warn(
-            '[updater] fallback GitHub release lookup failed:',
-            String((fallbackError as Error)?.message ?? fallbackError)
-          )
-        }
-
-        // The fallback confirmed there is no published version newer than the
-        // current one (the only "newer" entry is a draft mid-release).  Tell
-        // the user they're up-to-date so clicking "Check for Updates" doesn't
-        // appear to silently do nothing.
-        if (userInitiated) {
-          clearAvailableUpdateContext()
-          persistLastUpdateCheckAt?.(Date.now())
-          sendStatus({ state: 'not-available', userInitiated: true })
-          return
-        }
+      // Release transition failures (missing latest.yml during publishing) and
+      // network blips are transient. For user-initiated checks during a release
+      // transition, show "up to date" so the action doesn't appear to silently
+      // do nothing; for background checks, silently retry later.
+      if (userInitiated && isGitHubReleaseTransitionFailure(message.toLowerCase())) {
+        clearAvailableUpdateContext()
+        persistLastUpdateCheckAt?.(Date.now())
+        sendStatus({ state: 'not-available', userInitiated: true })
+        return
       }
 
       console.warn('[updater] benign check failure:', message)
@@ -285,13 +254,16 @@ export function setupAutoUpdater(
 
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = true
-  // Use allowPrerelease to bypass broken /releases/latest endpoint (returns 406)
-  // and instead parse the version directly from the atom feed which works reliably.
-  // RC/prerelease versions are filtered out in the update-available and
-  // update-downloaded event handlers. When an RC is the latest release, the
-  // update-available handler falls back to the GitHub releases API to find the
-  // newest stable version so that real updates are not silently skipped.
-  autoUpdater.allowPrerelease = true
+
+  // Use the generic provider with GitHub's /releases/latest/download/ URL so
+  // electron-updater always fetches the manifest (latest-mac.yml, latest.yml,
+  // latest-linux.yml) from the latest non-prerelease release. This sidesteps
+  // the broken /releases/latest API endpoint (returns 406) and automatically
+  // excludes RC/prerelease versions without client-side filtering.
+  autoUpdater.setFeedURL({
+    provider: 'generic',
+    url: 'https://github.com/stablyai/orca/releases/latest/download'
+  })
 
   if (autoUpdaterInitialized) {
     return
@@ -336,12 +308,6 @@ export function setupAutoUpdater(
 
 export function downloadUpdate(): void {
   if (currentStatus.state !== 'available') {
-    return
-  }
-  if (currentStatus.manualDownloadUrl) {
-    shell.openExternal(currentStatus.manualDownloadUrl).catch((err) => {
-      sendErrorStatus(String(err?.message ?? err))
-    })
     return
   }
   beginMacUpdateDownload()

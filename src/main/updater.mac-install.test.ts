@@ -51,11 +51,11 @@ const {
   const autoUpdaterMock = {
     autoDownload: false,
     autoInstallOnAppQuit: false,
-    allowPrerelease: false,
     on,
     checkForUpdates: vi.fn(),
     downloadUpdate: vi.fn(),
     quitAndInstall: vi.fn(),
+    setFeedURL: vi.fn(),
     emit,
     reset
   }

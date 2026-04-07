@@ -1,96 +1,82 @@
-/* eslint-disable max-lines -- Why: the updater test suite covers event-handler interactions (RC rejection, fallback, version comparison, retry scheduling) that share mocking infrastructure and are easiest to reason about in one file. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const {
-  appMock,
-  browserWindowMock,
-  nativeUpdaterMock,
-  autoUpdaterMock,
-  shellMock,
-  isMock,
-  killAllPtyMock,
-  findFallbackReleaseVersionMock
-} = vi.hoisted(() => {
-  const appEventHandlers = new Map<string, ((...args: unknown[]) => void)[]>()
-  const eventHandlers = new Map<string, ((...args: unknown[]) => void)[]>()
+const { appMock, browserWindowMock, nativeUpdaterMock, autoUpdaterMock, isMock, killAllPtyMock } =
+  vi.hoisted(() => {
+    const appEventHandlers = new Map<string, ((...args: unknown[]) => void)[]>()
+    const eventHandlers = new Map<string, ((...args: unknown[]) => void)[]>()
 
-  const appOn = vi.fn((event: string, handler: (...args: unknown[]) => void) => {
-    const handlers = appEventHandlers.get(event) ?? []
-    handlers.push(handler)
-    appEventHandlers.set(event, handlers)
-    return appMock
-  })
+    const appOn = vi.fn((event: string, handler: (...args: unknown[]) => void) => {
+      const handlers = appEventHandlers.get(event) ?? []
+      handlers.push(handler)
+      appEventHandlers.set(event, handlers)
+      return appMock
+    })
 
-  const appEmit = (event: string, ...args: unknown[]) => {
-    for (const handler of appEventHandlers.get(event) ?? []) {
-      handler(...args)
+    const appEmit = (event: string, ...args: unknown[]) => {
+      for (const handler of appEventHandlers.get(event) ?? []) {
+        handler(...args)
+      }
     }
-  }
 
-  const on = vi.fn((event: string, handler: (...args: unknown[]) => void) => {
-    const handlers = eventHandlers.get(event) ?? []
-    handlers.push(handler)
-    eventHandlers.set(event, handlers)
-    return autoUpdaterMock
-  })
+    const on = vi.fn((event: string, handler: (...args: unknown[]) => void) => {
+      const handlers = eventHandlers.get(event) ?? []
+      handlers.push(handler)
+      eventHandlers.set(event, handlers)
+      return autoUpdaterMock
+    })
 
-  const emit = (event: string, ...args: unknown[]) => {
-    for (const handler of eventHandlers.get(event) ?? []) {
-      handler(...args)
+    const emit = (event: string, ...args: unknown[]) => {
+      for (const handler of eventHandlers.get(event) ?? []) {
+        handler(...args)
+      }
     }
-  }
 
-  const reset = () => {
-    appEventHandlers.clear()
-    appOn.mockClear()
-    eventHandlers.clear()
-    on.mockClear()
-    autoUpdaterMock.checkForUpdates.mockReset().mockResolvedValue(null)
-    autoUpdaterMock.downloadUpdate.mockReset()
-    autoUpdaterMock.quitAndInstall.mockReset()
-  }
+    const reset = () => {
+      appEventHandlers.clear()
+      appOn.mockClear()
+      eventHandlers.clear()
+      on.mockClear()
+      autoUpdaterMock.checkForUpdates.mockReset().mockResolvedValue(null)
+      autoUpdaterMock.downloadUpdate.mockReset()
+      autoUpdaterMock.quitAndInstall.mockReset()
+    }
 
-  const autoUpdaterMock = {
-    autoDownload: false,
-    autoInstallOnAppQuit: false,
-    allowPrerelease: false,
-    on,
-    checkForUpdates: vi.fn(),
-    downloadUpdate: vi.fn(),
-    quitAndInstall: vi.fn(),
-    emit,
-    reset
-  }
+    const autoUpdaterMock = {
+      autoDownload: false,
+      autoInstallOnAppQuit: false,
+      on,
+      checkForUpdates: vi.fn(),
+      downloadUpdate: vi.fn(),
+      quitAndInstall: vi.fn(),
+      setFeedURL: vi.fn(),
+      emit,
+      reset
+    }
 
-  return {
-    appMock: {
-      isPackaged: true,
-      getVersion: vi.fn(() => '1.0.51'),
-      on: appOn,
-      emit: appEmit,
-      quit: vi.fn()
-    },
-    browserWindowMock: {
-      getAllWindows: vi.fn(() => [])
-    },
-    nativeUpdaterMock: {
-      on: vi.fn()
-    },
-    autoUpdaterMock,
-    shellMock: {
-      openExternal: vi.fn()
-    },
-    isMock: { dev: false },
-    killAllPtyMock: vi.fn(),
-    findFallbackReleaseVersionMock: vi.fn()
-  }
-})
+    return {
+      appMock: {
+        isPackaged: true,
+        getVersion: vi.fn(() => '1.0.51'),
+        on: appOn,
+        emit: appEmit,
+        quit: vi.fn()
+      },
+      browserWindowMock: {
+        getAllWindows: vi.fn(() => [])
+      },
+      nativeUpdaterMock: {
+        on: vi.fn()
+      },
+      autoUpdaterMock,
+      isMock: { dev: false },
+      killAllPtyMock: vi.fn()
+    }
+  })
 
 vi.mock('electron', () => ({
   app: appMock,
   BrowserWindow: browserWindowMock,
-  autoUpdater: nativeUpdaterMock,
-  shell: shellMock
+  autoUpdater: nativeUpdaterMock
 }))
 
 vi.mock('electron-updater', () => ({
@@ -105,14 +91,6 @@ vi.mock('./ipc/pty', () => ({
   killAllPty: killAllPtyMock
 }))
 
-vi.mock('./updater-fallback', async (importOriginal) => {
-  const actual = (await importOriginal()) as Record<string, unknown>
-  return {
-    ...actual,
-    findFallbackReleaseVersion: findFallbackReleaseVersionMock
-  }
-})
-
 describe('updater', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -120,14 +98,12 @@ describe('updater', () => {
     nativeUpdaterMock.on.mockReset()
     browserWindowMock.getAllWindows.mockReset()
     browserWindowMock.getAllWindows.mockReturnValue([])
-    shellMock.openExternal.mockReset()
     appMock.getVersion.mockReset()
     appMock.getVersion.mockReturnValue('1.0.51')
     appMock.quit.mockReset()
     appMock.isPackaged = true
     isMock.dev = false
     killAllPtyMock.mockReset()
-    findFallbackReleaseVersionMock.mockReset().mockResolvedValue(null)
     vi.unstubAllGlobals()
     vi.useRealTimers()
   })
@@ -268,101 +244,6 @@ describe('updater', () => {
     vi.advanceTimersByTime(60 * 1000)
     expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
     expect(setLastUpdateCheckAt).not.toHaveBeenCalled()
-  })
-
-  it('treats an RC version from update-available as not-available when no stable fallback exists', async () => {
-    findFallbackReleaseVersionMock.mockResolvedValueOnce(null)
-    autoUpdaterMock.checkForUpdates.mockResolvedValueOnce(undefined).mockImplementationOnce(() => {
-      autoUpdaterMock.emit('checking-for-update')
-      queueMicrotask(() => {
-        autoUpdaterMock.emit('update-available', { version: '1.0.52-rc.1' })
-      })
-      return Promise.resolve(null)
-    })
-
-    const sendMock = vi.fn()
-    const mainWindow = { webContents: { send: sendMock } }
-
-    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
-
-    setupAutoUpdater(mainWindow as never)
-    checkForUpdatesFromMenu()
-    await vi.waitFor(() => {
-      const statuses = sendMock.mock.calls
-        .filter(([channel]) => channel === 'updater:status')
-        .map(([, status]) => status)
-      expect(statuses).toContainEqual(expect.objectContaining({ state: 'not-available' }))
-    })
-
-    const statuses = sendMock.mock.calls
-      .filter(([channel]) => channel === 'updater:status')
-      .map(([, status]) => status)
-
-    expect(statuses).not.toContainEqual(expect.objectContaining({ state: 'available' }))
-  })
-
-  it('falls back to a stable release when update-available reports an RC', async () => {
-    findFallbackReleaseVersionMock.mockResolvedValueOnce({
-      version: '1.0.52',
-      releaseUrl: 'https://github.com/stablyai/orca/releases/tag/v1.0.52',
-      manualDownloadUrl: 'https://github.com/stablyai/orca/releases/download/v1.0.52/Orca.dmg'
-    })
-    autoUpdaterMock.checkForUpdates.mockResolvedValueOnce(undefined).mockImplementationOnce(() => {
-      autoUpdaterMock.emit('checking-for-update')
-      queueMicrotask(() => {
-        autoUpdaterMock.emit('update-available', { version: '1.0.53-rc.1' })
-      })
-      return Promise.resolve(null)
-    })
-
-    const sendMock = vi.fn()
-    const mainWindow = { webContents: { send: sendMock } }
-
-    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
-
-    setupAutoUpdater(mainWindow as never)
-    checkForUpdatesFromMenu()
-    await vi.waitFor(() => {
-      const statuses = sendMock.mock.calls
-        .filter(([channel]) => channel === 'updater:status')
-        .map(([, status]) => status)
-      expect(statuses).toContainEqual(
-        expect.objectContaining({ state: 'available', version: '1.0.52' })
-      )
-    })
-
-    const statuses = sendMock.mock.calls
-      .filter(([channel]) => channel === 'updater:status')
-      .map(([, status]) => status)
-
-    // Should offer the stable fallback, not the RC
-    expect(statuses).toContainEqual(
-      expect.objectContaining({
-        state: 'available',
-        version: '1.0.52',
-        releaseUrl: 'https://github.com/stablyai/orca/releases/tag/v1.0.52',
-        manualDownloadUrl: 'https://github.com/stablyai/orca/releases/download/v1.0.52/Orca.dmg'
-      })
-    )
-  })
-
-  it('treats an RC version from update-downloaded as not-available', async () => {
-    autoUpdaterMock.checkForUpdates.mockResolvedValueOnce(undefined)
-
-    const sendMock = vi.fn()
-    const mainWindow = { webContents: { send: sendMock } }
-
-    const { setupAutoUpdater } = await import('./updater')
-
-    setupAutoUpdater(mainWindow as never)
-    autoUpdaterMock.emit('update-downloaded', { version: '1.0.52-rc.0' })
-
-    const statuses = sendMock.mock.calls
-      .filter(([channel]) => channel === 'updater:status')
-      .map(([, status]) => status)
-
-    expect(statuses).toContainEqual({ state: 'not-available' })
-    expect(statuses).not.toContainEqual(expect.objectContaining({ state: 'downloaded' }))
   })
 
   it('retries background checks sooner after a failed automatic check', async () => {
