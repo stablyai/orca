@@ -684,7 +684,6 @@
 .rich-markdown-code-block-wrapper {
   position: relative;
   border-radius: 8px;
-  overflow: hidden;
   background: color-mix(in srgb, var(--foreground) 6%, transparent);
   border: 1px solid color-mix(in srgb, var(--foreground) 6%, transparent);
   margin: 0.75em 0;
@@ -703,13 +702,6 @@
   font-size: 11px;
   font-family: var(--font-mono, monospace);
   cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.15s;
-}
-
-.rich-markdown-code-block-wrapper:hover .rich-markdown-code-block-lang,
-.rich-markdown-code-block-lang:focus {
-  opacity: 1;
 }
 
 .rich-markdown-editor pre {

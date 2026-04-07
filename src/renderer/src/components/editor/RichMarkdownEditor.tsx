@@ -1,11 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { EditorContent, useEditor } from '@tiptap/react'
 import type { Editor } from '@tiptap/react'
-import { ImageIcon, Link as LinkIcon, List, ListOrdered, Quote } from 'lucide-react'
 import { toast } from 'sonner'
 import { RichMarkdownSlashMenu } from './RichMarkdownSlashMenu'
 import { useAppStore } from '@/store'
-import { RichMarkdownToolbarButton } from './RichMarkdownToolbarButton'
+import { RichMarkdownToolbar } from './RichMarkdownToolbar'
 import { isMarkdownPreviewFindShortcut } from './markdown-preview-search'
 import { extractIpcErrorMessage, getImageCopyDestination } from './rich-markdown-image-utils'
 import { encodeRawMarkdownHtmlForRichEditor } from './raw-markdown-html'
@@ -393,60 +392,11 @@ export default function RichMarkdownEditor({
       className="rich-markdown-editor-shell"
       style={{ '--editor-font-zoom-level': editorFontZoomLevel } as React.CSSProperties}
     >
-      <div className="rich-markdown-editor-toolbar">
-        <RichMarkdownToolbarButton
-          active={editor?.isActive('bold') ?? false}
-          label="Bold"
-          onClick={() => editor?.chain().focus().toggleBold().run()}
-        >
-          B
-        </RichMarkdownToolbarButton>
-        <RichMarkdownToolbarButton
-          active={editor?.isActive('italic') ?? false}
-          label="Italic"
-          onClick={() => editor?.chain().focus().toggleItalic().run()}
-        >
-          I
-        </RichMarkdownToolbarButton>
-        <RichMarkdownToolbarButton
-          active={editor?.isActive('strike') ?? false}
-          label="Strike"
-          onClick={() => editor?.chain().focus().toggleStrike().run()}
-        >
-          S
-        </RichMarkdownToolbarButton>
-        <RichMarkdownToolbarButton
-          active={editor?.isActive('bulletList') ?? false}
-          label="Bullet list"
-          onClick={() => editor?.chain().focus().toggleBulletList().run()}
-        >
-          <List className="size-3.5" />
-        </RichMarkdownToolbarButton>
-        <RichMarkdownToolbarButton
-          active={editor?.isActive('orderedList') ?? false}
-          label="Numbered list"
-          onClick={() => editor?.chain().focus().toggleOrderedList().run()}
-        >
-          <ListOrdered className="size-3.5" />
-        </RichMarkdownToolbarButton>
-        <RichMarkdownToolbarButton
-          active={editor?.isActive('blockquote') ?? false}
-          label="Quote"
-          onClick={() => editor?.chain().focus().toggleBlockquote().run()}
-        >
-          <Quote className="size-3.5" />
-        </RichMarkdownToolbarButton>
-        <RichMarkdownToolbarButton
-          active={editor?.isActive('link') ?? false}
-          label="Link"
-          onClick={toggleLinkFromToolbar}
-        >
-          <LinkIcon className="size-3.5" />
-        </RichMarkdownToolbarButton>
-        <RichMarkdownToolbarButton active={false} label="Image" onClick={handleLocalImagePick}>
-          <ImageIcon className="size-3.5" />
-        </RichMarkdownToolbarButton>
-      </div>
+      <RichMarkdownToolbar
+        editor={editor}
+        onToggleLink={toggleLinkFromToolbar}
+        onImagePick={handleLocalImagePick}
+      />
       <RichMarkdownSearchBar
         activeMatchIndex={activeMatchIndex}
         isOpen={isSearchOpen}
