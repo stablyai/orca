@@ -66,7 +66,10 @@ export function applyExpandedLayoutTo(
       }
       rememberPaneStyle(snapshots, child)
       if (child === current) {
-        child.style.display = ''
+        // Only update flex — do NOT reset display to '' because split
+        // containers rely on inline `display: flex` (no CSS class rule
+        // exists for it). Clearing it collapses the flex context, which
+        // prevents FitAddon from measuring the expanded dimensions.
         child.style.flex = '1 1 auto'
       } else {
         child.style.display = 'none'
