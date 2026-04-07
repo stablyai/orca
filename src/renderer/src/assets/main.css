@@ -57,6 +57,9 @@
 /* ── Light Mode ──────────────────────────────────────── */
 
 :root {
+  --font-mono:
+    'SF Mono', SFMono-Regular, ui-monospace, 'Cascadia Code', Menlo, Consolas, 'Liberation Mono',
+    monospace;
   --radius: 0.625rem;
   --background: #fff;
   --editor-surface: #ffffff;
@@ -589,8 +592,14 @@
   line-height: 1.3;
 }
 
+.rich-markdown-editor > :first-child {
+  margin-top: 0;
+}
+
 .rich-markdown-editor h1 {
-  font-size: 1.75em;
+  font-size: 1.85em;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 .rich-markdown-editor h2 {
@@ -647,24 +656,28 @@
 }
 
 .rich-markdown-editor blockquote {
-  padding: 0.25em 1em;
+  padding: 0.5em 1em;
   border-left: 3px solid var(--border);
+  border-radius: 0 6px 6px 0;
   color: var(--muted-foreground);
+  background: color-mix(in srgb, var(--foreground) 2%, transparent);
 }
 
 .rich-markdown-editor code {
   padding: 0.2em 0.4em;
-  border-radius: 4px;
+  border-radius: 5px;
   background: color-mix(in srgb, var(--foreground) 8%, transparent);
-  font-size: 0.9em;
+  font-size: 0.88em;
   font-family: var(--font-mono, monospace);
 }
 
 .rich-markdown-editor pre {
-  padding: 12px 16px;
+  padding: 14px 18px;
   border-radius: 8px;
   overflow-x: auto;
+  line-height: 1.55;
   background: color-mix(in srgb, var(--foreground) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--foreground) 6%, transparent);
 }
 
 .rich-markdown-editor pre code {
@@ -679,8 +692,14 @@
 }
 
 .rich-markdown-editor a {
-  color: var(--primary);
+  color: #0969da;
   text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+  text-underline-offset: 2px;
+}
+
+.dark .rich-markdown-editor a {
+  color: #58a6ff;
 }
 
 .rich-markdown-editor img {
@@ -843,14 +862,22 @@
   line-height: 1.3;
 }
 
-.markdown-body h1 {
-  font-size: 1.75em;
+.markdown-body > :first-child {
+  margin-top: 0;
 }
+
+.markdown-body h1 {
+  font-size: 1.85em;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
 .markdown-body h2 {
   font-size: 1.4em;
   border-bottom: 1px solid var(--border);
   padding-bottom: 0.3em;
 }
+
 .markdown-body h3 {
   font-size: 1.15em;
 }
@@ -859,46 +886,66 @@
   margin: 0.75em 0;
 }
 
+/* Links use a proper blue instead of --primary (which is near-black/white and
+   visually indistinguishable from body text). */
 .markdown-body a {
-  color: var(--primary);
   text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+  text-underline-offset: 2px;
+  transition: text-decoration-color 150ms;
+}
+
+.markdown-body a:hover {
+  text-decoration-color: currentColor;
+}
+
+.markdown-light .markdown-body a {
+  color: #0969da;
+}
+
+.markdown-dark .markdown-body a {
+  color: #58a6ff;
 }
 
 .markdown-body code {
   padding: 0.2em 0.4em;
-  border-radius: 4px;
-  font-size: 0.9em;
+  border-radius: 5px;
+  font-size: 0.88em;
   font-family: var(--font-mono, monospace);
 }
 
 .markdown-dark .markdown-body code {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .markdown-light .markdown-body code {
-  background: rgba(0, 0, 0, 0.06);
+  background: rgba(0, 0, 0, 0.07);
 }
 
 .markdown-body pre {
   margin: 1em 0;
-  padding: 12px 16px;
-  border-radius: 6px;
+  padding: 14px 18px;
+  border-radius: 8px;
   overflow-x: auto;
-  line-height: 1.5;
+  line-height: 1.55;
 }
 
 .markdown-dark .markdown-body pre {
   background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .markdown-light .markdown-body pre {
-  background: rgba(0, 0, 0, 0.04);
+  background: #f6f8fa;
+  border: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .markdown-body pre code {
   padding: 0;
   background: none;
-  font-size: 0.85em;
+  border: none;
+  font-size: inherit;
+  border-radius: 0;
 }
 
 .markdown-body ul,
@@ -942,45 +989,227 @@
 
 .markdown-body blockquote {
   margin: 0.75em 0;
-  padding: 0.25em 1em;
+  padding: 0.5em 1em;
   border-left: 3px solid var(--border);
-  color: var(--muted-foreground);
+  border-radius: 0 6px 6px 0;
+}
+
+.markdown-dark .markdown-body blockquote {
+  background: rgba(255, 255, 255, 0.025);
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.markdown-light .markdown-body blockquote {
+  background: rgba(0, 0, 0, 0.02);
+  color: rgba(0, 0, 0, 0.6);
 }
 
 .markdown-body table {
   margin: 1em 0;
   border-collapse: collapse;
   width: 100%;
+  font-size: 0.95em;
 }
 
 .markdown-body th,
 .markdown-body td {
-  padding: 6px 12px;
+  padding: 8px 14px;
   border: 1px solid var(--border);
   text-align: left;
 }
 
 .markdown-body th {
   font-weight: 600;
+  font-size: 0.85em;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
 .markdown-dark .markdown-body th {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .markdown-light .markdown-body th {
-  background: rgba(0, 0, 0, 0.03);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.markdown-dark .markdown-body tr:nth-child(even) td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.markdown-light .markdown-body tr:nth-child(even) td {
+  background: rgba(0, 0, 0, 0.015);
 }
 
 .markdown-body hr {
-  margin: 1.5em 0;
+  margin: 2em 0;
   border: none;
   border-top: 1px solid var(--border);
 }
 
 .markdown-body img {
   max-width: 100%;
-  border-radius: 4px;
+  border-radius: 6px;
+}
+
+/* ── Syntax Highlighting (GitHub-inspired) ────────── */
+
+.markdown-light .hljs {
+  color: #24292f;
+}
+
+.markdown-light .hljs-comment,
+.markdown-light .hljs-quote {
+  color: #6e7781;
+  font-style: italic;
+}
+
+.markdown-light .hljs-keyword,
+.markdown-light .hljs-selector-tag,
+.markdown-light .hljs-template-tag {
+  color: #cf222e;
+}
+
+.markdown-light .hljs-string,
+.markdown-light .hljs-doctag,
+.markdown-light .hljs-regexp {
+  color: #0a3069;
+}
+
+.markdown-light .hljs-number,
+.markdown-light .hljs-literal {
+  color: #0550ae;
+}
+
+.markdown-light .hljs-title,
+.markdown-light .hljs-section {
+  color: #8250df;
+}
+
+.markdown-light .hljs-type,
+.markdown-light .hljs-built_in {
+  color: #0550ae;
+}
+
+.markdown-light .hljs-attr,
+.markdown-light .hljs-attribute {
+  color: #0550ae;
+}
+
+.markdown-light .hljs-variable,
+.markdown-light .hljs-template-variable {
+  color: #953800;
+}
+
+.markdown-light .hljs-tag,
+.markdown-light .hljs-name {
+  color: #116329;
+}
+
+.markdown-light .hljs-symbol,
+.markdown-light .hljs-bullet,
+.markdown-light .hljs-selector-class,
+.markdown-light .hljs-selector-id {
+  color: #0550ae;
+}
+
+.markdown-light .hljs-meta {
+  color: #1f7f34;
+}
+
+.markdown-light .hljs-addition {
+  color: #116329;
+  background: rgba(46, 160, 67, 0.1);
+}
+.markdown-light .hljs-deletion {
+  color: #82071e;
+  background: rgba(248, 81, 73, 0.1);
+}
+
+.markdown-light .hljs-emphasis {
+  font-style: italic;
+}
+.markdown-light .hljs-strong {
+  font-weight: 700;
+}
+
+.markdown-dark .hljs {
+  color: #e6edf3;
+}
+
+.markdown-dark .hljs-comment,
+.markdown-dark .hljs-quote {
+  color: #8b949e;
+  font-style: italic;
+}
+
+.markdown-dark .hljs-keyword,
+.markdown-dark .hljs-selector-tag,
+.markdown-dark .hljs-template-tag {
+  color: #ff7b72;
+}
+
+.markdown-dark .hljs-string,
+.markdown-dark .hljs-doctag,
+.markdown-dark .hljs-regexp {
+  color: #a5d6ff;
+}
+
+.markdown-dark .hljs-number,
+.markdown-dark .hljs-literal {
+  color: #79c0ff;
+}
+
+.markdown-dark .hljs-title,
+.markdown-dark .hljs-section {
+  color: #d2a8ff;
+}
+
+.markdown-dark .hljs-type,
+.markdown-dark .hljs-built_in {
+  color: #ffa657;
+}
+
+.markdown-dark .hljs-attr,
+.markdown-dark .hljs-attribute {
+  color: #79c0ff;
+}
+
+.markdown-dark .hljs-variable,
+.markdown-dark .hljs-template-variable {
+  color: #ffa657;
+}
+
+.markdown-dark .hljs-tag,
+.markdown-dark .hljs-name {
+  color: #7ee787;
+}
+
+.markdown-dark .hljs-symbol,
+.markdown-dark .hljs-bullet,
+.markdown-dark .hljs-selector-class,
+.markdown-dark .hljs-selector-id {
+  color: #d2a8ff;
+}
+
+.markdown-dark .hljs-meta {
+  color: #79c0ff;
+}
+
+.markdown-dark .hljs-addition {
+  color: #aff5b4;
+  background: rgba(46, 160, 67, 0.15);
+}
+.markdown-dark .hljs-deletion {
+  color: #ffdcd7;
+  background: rgba(248, 81, 73, 0.15);
+}
+
+.markdown-dark .hljs-emphasis {
+  font-style: italic;
+}
+.markdown-dark .hljs-strong {
+  font-weight: 700;
 }
 
 /* ── Content ─────────────────────────────────────────── */

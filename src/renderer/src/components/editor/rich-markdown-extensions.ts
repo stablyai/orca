@@ -1,4 +1,4 @@
-import type { AnyExtension } from '@tiptap/core'
+import { Extension, type AnyExtension } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
 import Image from '@tiptap/extension-image'
@@ -12,6 +12,28 @@ import { TableRow } from '@tiptap/extension-table-row'
 import { Markdown } from '@tiptap/markdown'
 import { loadLocalImageSrc, onImageCacheInvalidated } from './useLocalImageSrc'
 import { RawMarkdownHtmlBlock, RawMarkdownHtmlInline } from './raw-markdown-html'
+
+// Why: StarterKit's ListItem extension handles Tab (sinkListItem) and
+// Shift-Tab (liftListItem), but when those commands fail (e.g. cursor is not
+// in a list or can't indent further), ProseMirror lets the browser handle the
+// event — which moves focus out of the editor. This catch-all extension is
+// registered after StarterKit so it only runs when no other handler consumed
+// the key, preventing the focus escape and adding Tab support in code blocks.
+const TabCatchAll = Extension.create({
+  name: 'tabCatchAll',
+  addKeyboardShortcuts() {
+    return {
+      Tab: ({ editor }) => {
+        if (editor.isActive('codeBlock')) {
+          return editor.commands.insertContent('  ')
+        }
+        // Consume the event to prevent focus from leaving the editor.
+        return true
+      },
+      'Shift-Tab': () => true
+    }
+  }
+})
 
 const RICH_MARKDOWN_PLACEHOLDER = 'Write markdown… Type / for blocks.'
 
@@ -115,6 +137,7 @@ export function createRichMarkdownExtensions({
     TableCell,
     RawMarkdownHtmlInline,
     RawMarkdownHtmlBlock,
+    TabCatchAll,
     Markdown.configure({
       markedOptions: {
         gfm: true
