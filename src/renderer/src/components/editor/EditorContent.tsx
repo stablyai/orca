@@ -70,7 +70,12 @@ export function EditorContent({
       activeFile.diffSource === 'combined-branch')
 
   const renderMonacoEditor = (fc: FileContent): React.JSX.Element => (
+    // Why: Without a key, React reuses the same MonacoEditor instance when
+    // switching tabs, just updating props. That means useLayoutEffect cleanup
+    // (which snapshots scroll position) never fires. Keying on activeFile.id
+    // forces unmount/remount so the scroll cache captures the outgoing position.
     <MonacoEditor
+      key={activeFile.id}
       filePath={activeFile.filePath}
       relativePath={activeFile.relativePath}
       content={editBuffers[activeFile.id] ?? fc.content}
@@ -103,7 +108,9 @@ export function EditorContent({
 
     if (renderMode === 'rich-editor') {
       return (
+        // Why: same remount reasoning as MonacoEditor — see renderMonacoEditor.
         <RichMarkdownEditor
+          key={activeFile.id}
           content={currentContent}
           filePath={activeFile.filePath}
           onContentChange={handleContentChange}
@@ -123,7 +130,11 @@ export function EditorContent({
           to that renderer preserves readable preview mode instead of forcing the
           user out of preview entirely. Source mode remains available for edits. */}
           <div className="min-h-0 flex-1">
-            <MarkdownPreview content={currentContent} filePath={activeFile.filePath} />
+            <MarkdownPreview
+              key={activeFile.id}
+              content={currentContent}
+              filePath={activeFile.filePath}
+            />
           </div>
         </div>
       )
@@ -169,7 +180,7 @@ export function EditorContent({
   }
 
   if (isCombinedDiff) {
-    return <CombinedDiffViewer file={activeFile} />
+    return <CombinedDiffViewer key={activeFile.id} file={activeFile} />
   }
 
   if (activeFile.mode === 'edit') {
