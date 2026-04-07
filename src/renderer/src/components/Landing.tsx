@@ -29,7 +29,7 @@ function KeyCap({ label }: { label: string }): React.JSX.Element {
 
 type StarState = 'loading' | 'starred' | 'not-starred' | 'hidden'
 
-function GitHubStarButton(): React.JSX.Element | null {
+function GitHubStarButton({ hasRepos }: { hasRepos: boolean }): React.JSX.Element | null {
   const [state, setState] = useState<StarState>('loading')
 
   useEffect(() => {
@@ -60,7 +60,8 @@ function GitHubStarButton(): React.JSX.Element | null {
     }
   }
 
-  if (state === 'hidden') {
+  // Hide if gh CLI is unavailable, or if the user has already starred and added a repo
+  if (state === 'hidden' || (state === 'starred' && hasRepos)) {
     return null
   }
 
@@ -192,8 +193,6 @@ export default function Landing(): React.JSX.Element {
           </div>
           <h1 className="text-4xl font-bold text-foreground tracking-tight">ORCA</h1>
 
-          <GitHubStarButton />
-
           {preflightIssues.length > 0 && <PreflightBanner issues={preflightIssues} />}
 
           <p className="text-sm text-muted-foreground text-center">
@@ -235,6 +234,10 @@ export default function Landing(): React.JSX.Element {
             ))}
           </div>
         </div>
+      </div>
+
+      <div className="absolute bottom-6 left-0 right-0 flex justify-center">
+        <GitHubStarButton hasRepos={repos.length > 0} />
       </div>
     </div>
   )
