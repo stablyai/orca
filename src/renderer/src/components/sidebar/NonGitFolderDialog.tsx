@@ -39,10 +39,10 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-sm sm:max-w-sm" showCloseButton={false}>
         <DialogHeader>
-          <DialogTitle className="text-sm">Not a Git Repository</DialogTitle>
+          <DialogTitle className="text-sm">Open as Folder</DialogTitle>
           <DialogDescription className="text-xs">
-            Orca can still open it for editing, terminal, search, and quick open. Git-based features
-            like worktrees, source control, pull requests, and checks will be unavailable.
+            This folder isn&apos;t a Git repository. You&apos;ll have the editor, terminal, and
+            search, but Git-based features won&apos;t be available.
           </DialogDescription>
         </DialogHeader>
 
