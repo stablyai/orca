@@ -3,7 +3,7 @@ save/load/render lifecycle for many modes (edit, diff, conflict review), and
 keeping that UI state together is easier to reason about than scattering it
 across multiple components. Autosave now lives in a smaller headless controller
 so hidden editor UI no longer participates in shutdown. */
-import React, { useCallback, useEffect, useState, Suspense } from 'react'
+import React, { useCallback, useEffect, useRef, useState, Suspense } from 'react'
 import { Columns2, FileText, Rows2 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { detectLanguage } from '@/lib/language-detect'
@@ -12,7 +12,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor'
 import MarkdownViewToggle from './MarkdownViewToggle'
 import { EditorContent } from './EditorContent'
-import type { GitDiffResult } from '../../../../shared/types'
+import type { GitDiffResult, GitStatusEntry } from '../../../../shared/types'
 import {
   getOpenFilesForExternalFileChange,
   ORCA_EDITOR_FILE_SAVED_EVENT,
@@ -30,6 +30,14 @@ type FileContent = {
 }
 
 type DiffContent = GitDiffResult
+
+// Why: Hoisted to module scope so the JSX reference is stable across renders,
+// avoiding prop-identity changes that would defeat React.memo on EditorFilePane.
+const LOADING_FALLBACK = (
+  <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+    Loading editor...
+  </div>
+)
 
 export default function EditorPanel(): React.JSX.Element | null {
   const openFiles = useAppStore((s) => s.openFiles)
@@ -163,36 +171,31 @@ export default function EditorPanel(): React.JSX.Element | null {
     }
   }, [])
 
-  const handleContentChange = useCallback(
-    (content: string) => {
-      if (!activeFile) {
-        return
-      }
-      setEditorDraft(activeFile.id, content)
-      if (activeFile.mode === 'edit') {
-        // Compare against saved content to determine dirty state
-        const saved = fileContents[activeFile.id]?.content ?? ''
-        markFileDirty(activeFile.id, content !== saved)
-      } else {
-        // Diff mode: compare against the original modified content from git
-        const dc = diffContents[activeFile.id]
-        const original = dc?.kind === 'text' ? dc.modifiedContent : ''
-        markFileDirty(activeFile.id, content !== original)
-      }
-    },
-    [activeFile, diffContents, fileContents, markFileDirty, setEditorDraft]
-  )
+  // Why: handleContentChange and handleSave are parameterised by fileId so that
+  // each keep-mounted editor pane uses a handler scoped to its own file, avoiding
+  // cross-talk when an inactive editor's content-sync effect fires.
 
-  const handleSave = useCallback(
-    async (content: string) => {
-      if (!activeFile) {
-        return
+  // Why: fileContents and diffContents change reference on every load, which would
+  // recreate this callback and defeat React.memo on every EditorFilePane. Using
+  // refs lets the callback read the latest records without being a dependency.
+  const fileContentsRef = useRef(fileContents)
+  fileContentsRef.current = fileContents
+  const diffContentsRef = useRef(diffContents)
+  diffContentsRef.current = diffContents
+
+  const handleContentChangeForFile = useCallback(
+    (fileId: string, fileMode: OpenFile['mode'], content: string) => {
+      setEditorDraft(fileId, content)
+      if (fileMode === 'edit') {
+        const saved = fileContentsRef.current[fileId]?.content ?? ''
+        markFileDirty(fileId, content !== saved)
+      } else {
+        const dc = diffContentsRef.current[fileId]
+        const original = dc?.kind === 'text' ? dc.modifiedContent : ''
+        markFileDirty(fileId, content !== original)
       }
-      try {
-        await requestEditorFileSave({ fileId: activeFile.id, fallbackContent: content })
-      } catch {}
     },
-    [activeFile]
+    [markFileDirty, setEditorDraft]
   )
 
   useEffect(() => {
@@ -376,12 +379,6 @@ export default function EditorPanel(): React.JSX.Element | null {
     })
   }
 
-  const loadingFallback = (
-    <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-      Loading editor...
-    </div>
-  )
-
   return (
     <div className="flex flex-col flex-1 min-w-0 min-h-0">
       {!isCombinedDiff && (
@@ -453,13 +450,102 @@ export default function EditorPanel(): React.JSX.Element | null {
           )}
         </div>
       )}
-      <Suspense fallback={loadingFallback}>
+      {/* Why: All open editors stay mounted and only the active one is visible.
+       * This preserves scroll position natively via the browser DOM — no save/
+       * restore cycle needed for tab switches. Inactive panes use visibility:hidden
+       * (not display:none) so the DOM retains layout dimensions and scrollTop. */}
+      <div className="relative min-h-0 flex-1">
+        {openFiles.map((file) => (
+          <EditorFilePane
+            key={file.id}
+            file={file}
+            isActive={file.id === activeFileId}
+            fileContent={fileContents[file.id]}
+            diffContent={diffContents[file.id]}
+            editBuffer={editorDrafts[file.id]}
+            worktreeEntries={gitStatusByWorktree[file.worktreeId]}
+            markdownViewModeForFile={markdownViewMode[file.id]}
+            sideBySide={sideBySide}
+            pendingEditorReveal={file.id === activeFileId ? pendingEditorReveal : null}
+            onContentChange={handleContentChangeForFile}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// Why: Each open file gets its own component instance so useCallback can produce
+// stable per-file handlers. Without this, creating closures inside the map would
+// recreate handlers on every render, causing unnecessary child re-renders.
+// Wrapped in React.memo so that panes whose per-file slices haven't changed
+// skip re-rendering when unrelated files update.
+const EditorFilePane = React.memo(function EditorFilePane({
+  file,
+  isActive,
+  fileContent,
+  diffContent,
+  editBuffer,
+  worktreeEntries,
+  markdownViewModeForFile,
+  sideBySide,
+  pendingEditorReveal,
+  onContentChange
+}: {
+  file: OpenFile
+  isActive: boolean
+  fileContent: FileContent | undefined
+  diffContent: DiffContent | undefined
+  editBuffer: string | undefined
+  worktreeEntries: GitStatusEntry[] | undefined
+  markdownViewModeForFile: MarkdownViewMode | undefined
+  sideBySide: boolean
+  pendingEditorReveal: {
+    filePath?: string
+    line?: number
+    column?: number
+    matchLength?: number
+  } | null
+  onContentChange: (fileId: string, fileMode: OpenFile['mode'], content: string) => void
+}): React.JSX.Element {
+  const resolvedWorktreeEntries = worktreeEntries ?? []
+  const resolvedLanguage =
+    file.mode === 'diff' ? detectLanguage(file.relativePath) : detectLanguage(file.filePath)
+  const isMarkdown = resolvedLanguage === 'markdown'
+  const mdViewMode: MarkdownViewMode =
+    isMarkdown && file.mode === 'edit' ? (markdownViewModeForFile ?? 'rich') : 'source'
+
+  const handleContentChange = useCallback(
+    (content: string) => {
+      onContentChange(file.id, file.mode, content)
+    },
+    [file.id, file.mode, onContentChange]
+  )
+
+  const handleSave = useCallback(
+    async (content: string) => {
+      try {
+        await requestEditorFileSave({ fileId: file.id, fallbackContent: content })
+      } catch (err) {
+        // Why: Logging rather than silently swallowing so save failures are
+        // visible during development and in production diagnostics.
+        console.error('Save failed:', err)
+      }
+    },
+    [file.id]
+  )
+
+  return (
+    <div
+      className={`absolute inset-0 flex flex-col${isActive ? '' : ' invisible pointer-events-none'}`}
+    >
+      <Suspense fallback={LOADING_FALLBACK}>
         <EditorContent
-          activeFile={activeFile}
-          fileContents={fileContents}
-          diffContents={diffContents}
-          editBuffers={editorDrafts}
-          worktreeEntries={worktreeEntries}
+          activeFile={file}
+          fileContent={fileContent}
+          diffContent={diffContent}
+          editBuffer={editBuffer}
+          worktreeEntries={resolvedWorktreeEntries}
           resolvedLanguage={resolvedLanguage}
           isMarkdown={isMarkdown}
           mdViewMode={mdViewMode}
@@ -471,4 +557,4 @@ export default function EditorPanel(): React.JSX.Element | null {
       </Suspense>
     </div>
   )
-}
+})
