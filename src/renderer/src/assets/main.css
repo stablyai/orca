@@ -1122,16 +1122,18 @@
 }
 
 .pane-divider.is-vertical::after {
-  top: 0;
-  bottom: 0;
+  /* Negative insets on the cross axis extend the line into perpendicular
+     divider hit zones so that intersecting splits visually connect (├ not |-). */
+  top: calc(-1 * var(--divider-extension, 5px));
+  bottom: calc(-1 * var(--divider-extension, 5px));
   left: 50%;
   width: var(--divider-thickness);
   transform: translateX(-50%);
 }
 
 .pane-divider.is-horizontal::after {
-  left: 0;
-  right: 0;
+  left: calc(-1 * var(--divider-extension, 5px));
+  right: calc(-1 * var(--divider-extension, 5px));
   top: 50%;
   height: var(--divider-thickness);
   transform: translateY(-50%);

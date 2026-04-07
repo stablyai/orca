@@ -109,7 +109,9 @@ export function insertPaneNextTo(
     split.style.flex = targetFlex || '1 1 0%'
     split.style.minWidth = targetMinW || '0'
     split.style.minHeight = targetMinH || '0'
-    split.style.overflow = 'hidden'
+    // No overflow:hidden here — divider ::after lines extend beyond
+    // their parent split with negative insets so intersecting dividers
+    // visually connect. Individual .pane containers still clip content.
   } else {
     split.style.width = '100%'
     split.style.height = '100%'
@@ -243,7 +245,6 @@ export function wrapInSplit(
     split.style.flex = existingFlex || '1 1 0%'
     split.style.minWidth = existingMinW || '0'
     split.style.minHeight = existingMinH || '0'
-    split.style.overflow = 'hidden'
   } else {
     split.style.width = '100%'
     split.style.height = '100%'

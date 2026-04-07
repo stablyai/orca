@@ -171,6 +171,9 @@ export function applyDividerStyles(root: HTMLElement, styleOptions: PaneStyleOpt
     }
     // Store the visual thickness for the CSS ::after pseudo-element
     el.style.setProperty('--divider-thickness', `${thickness}px`)
+    // Extension amount lets ::after reach the center of perpendicular
+    // dividers so intersecting splits visually connect.
+    el.style.setProperty('--divider-extension', `${hitSize / 2}px`)
   }
 }
 
