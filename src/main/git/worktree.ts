@@ -109,6 +109,54 @@ export function addWorktree(
   branch: string,
   baseBranch?: string
 ): void {
+  // Why: Fast-forward the local branch (e.g. master) to match its remote tracking
+  // branch (e.g. origin/master) so that `git diff master...HEAD` works correctly
+  // inside worktrees. Callers are responsible for fetching the remote before
+  // calling addWorktree(), so we do not fetch here.
+  if (baseBranch) {
+    // Why: We split on '/' instead of matching a hardcoded 'origin/' prefix because
+    // callers may pass arbitrary remotes (e.g. 'upstream/main'), not just 'origin'.
+    const slashIndex = baseBranch.indexOf('/')
+    if (slashIndex > 0) {
+      const localBranch = baseBranch.slice(slashIndex + 1)
+      try {
+        // Why: We only fast-forward the local branch pointer. A force-move (`branch -f`)
+        // would silently destroy unpushed local commits if the branch has diverged from
+        // remote. `merge-base --is-ancestor` returns exit 0 when localBranch is an
+        // ancestor of baseBranch — i.e. the update is a safe fast-forward.
+        execFileSync('git', ['merge-base', '--is-ancestor', localBranch, baseBranch], {
+          cwd: repoPath,
+          encoding: 'utf-8',
+          stdio: ['pipe', 'pipe', 'pipe']
+        })
+        // Why: If the worktree that has localBranch checked out has uncommitted
+        // changes, moving the ref with update-ref would shift the baseline commit
+        // and muddle their diffs. Only update if the working tree is clean.
+        const status = execFileSync('git', ['status', '--porcelain', '--untracked-files=no'], {
+          cwd: repoPath,
+          encoding: 'utf-8',
+          stdio: ['pipe', 'pipe', 'pipe']
+        })
+        if (!status.trim()) {
+          // Safe fast-forward: local branch is behind (or equal to) the remote ref.
+          // Why: `git branch -f` refuses to update a branch checked out in another
+          // worktree. `git update-ref` writes the ref directly, bypassing that
+          // restriction. This is the common case — master/main is almost always
+          // checked out in the main worktree.
+          execFileSync('git', ['update-ref', `refs/heads/${localBranch}`, baseBranch], {
+            cwd: repoPath,
+            encoding: 'utf-8',
+            stdio: ['pipe', 'pipe', 'pipe']
+          })
+        }
+      } catch {
+        // merge-base fails if the local branch doesn't exist or has diverged;
+        // update-ref fails on locked/corrupted refs or filesystem errors.
+        // Both cases are non-fatal — skip the update silently.
+      }
+    }
+  }
+
   const args = ['worktree', 'add', '-b', branch, worktreePath]
   if (baseBranch) {
     args.push(baseBranch)

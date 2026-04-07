@@ -1,5 +1,16 @@
-import { describe, expect, it } from 'vitest'
-import { parseWorktreeList } from './worktree'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const { execFileMock, execFileSyncMock } = vi.hoisted(() => ({
+  execFileMock: vi.fn(),
+  execFileSyncMock: vi.fn()
+}))
+
+vi.mock('child_process', () => ({
+  execFile: execFileMock,
+  execFileSync: execFileSyncMock
+}))
+
+import { addWorktree, parseWorktreeList } from './worktree'
 
 describe('parseWorktreeList', () => {
   it('parses regular and bare worktree blocks from porcelain output', () => {
@@ -176,6 +187,117 @@ bare
         isBare: true,
         isMainWorktree: false
       }
+    ])
+  })
+})
+
+describe('addWorktree', () => {
+  beforeEach(() => {
+    execFileMock.mockReset()
+    execFileSyncMock.mockReset()
+  })
+
+  it('fast-forwards the local base branch before creating the worktree when safe', () => {
+    execFileSyncMock
+      .mockReturnValueOnce('')
+      .mockReturnValueOnce('')
+      .mockReturnValueOnce(undefined)
+      .mockReturnValueOnce(undefined)
+
+    addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main')
+
+    expect(execFileSyncMock.mock.calls).toEqual([
+      [
+        'git',
+        ['merge-base', '--is-ancestor', 'main', 'origin/main'],
+        expect.objectContaining({ cwd: '/repo' })
+      ],
+      [
+        'git',
+        ['status', '--porcelain', '--untracked-files=no'],
+        expect.objectContaining({ cwd: '/repo' })
+      ],
+      [
+        'git',
+        ['update-ref', 'refs/heads/main', 'origin/main'],
+        expect.objectContaining({ cwd: '/repo' })
+      ],
+      [
+        'git',
+        ['worktree', 'add', '-b', 'feature/test', '/repo-feature', 'origin/main'],
+        expect.objectContaining({ cwd: '/repo' })
+      ]
+    ])
+  })
+
+  it('skips updating the local branch when the main worktree is dirty', () => {
+    execFileSyncMock
+      .mockReturnValueOnce('')
+      .mockReturnValueOnce(' M package.json\n')
+      .mockReturnValueOnce(undefined)
+
+    addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main')
+
+    expect(execFileSyncMock.mock.calls).toEqual([
+      [
+        'git',
+        ['merge-base', '--is-ancestor', 'main', 'origin/main'],
+        expect.objectContaining({ cwd: '/repo' })
+      ],
+      [
+        'git',
+        ['status', '--porcelain', '--untracked-files=no'],
+        expect.objectContaining({ cwd: '/repo' })
+      ],
+      [
+        'git',
+        ['worktree', 'add', '-b', 'feature/test', '/repo-feature', 'origin/main'],
+        expect.objectContaining({ cwd: '/repo' })
+      ]
+    ])
+  })
+
+  it('skips updating the local branch when it has diverged and still creates the worktree', () => {
+    execFileSyncMock.mockImplementationOnce(() => {
+      throw new Error('not a fast-forward')
+    })
+    execFileSyncMock.mockReturnValueOnce(undefined)
+
+    addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main')
+
+    expect(execFileSyncMock.mock.calls).toEqual([
+      [
+        'git',
+        ['merge-base', '--is-ancestor', 'main', 'origin/main'],
+        expect.objectContaining({ cwd: '/repo' })
+      ],
+      [
+        'git',
+        ['worktree', 'add', '-b', 'feature/test', '/repo-feature', 'origin/main'],
+        expect.objectContaining({ cwd: '/repo' })
+      ]
+    ])
+  })
+
+  it('uses the remote name from the base ref instead of hardcoding origin', () => {
+    execFileSyncMock
+      .mockReturnValueOnce('')
+      .mockReturnValueOnce('')
+      .mockReturnValueOnce(undefined)
+      .mockReturnValueOnce(undefined)
+
+    addWorktree('/repo', '/repo-feature', 'feature/test', 'upstream/main')
+
+    expect(execFileSyncMock.mock.calls[0]?.[1]).toEqual([
+      'merge-base',
+      '--is-ancestor',
+      'main',
+      'upstream/main'
+    ])
+    expect(execFileSyncMock.mock.calls[2]?.[1]).toEqual([
+      'update-ref',
+      'refs/heads/main',
+      'upstream/main'
     ])
   })
 })
