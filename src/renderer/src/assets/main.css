@@ -480,6 +480,13 @@
   font-weight: 600;
 }
 
+.rich-markdown-toolbar-separator {
+  width: 1px;
+  height: 18px;
+  background: color-mix(in srgb, var(--border) 72%, transparent);
+  flex-shrink: 0;
+}
+
 .rich-markdown-toolbar-button:hover,
 .rich-markdown-toolbar-button.is-active {
   border-color: color-mix(in srgb, var(--border) 82%, transparent);

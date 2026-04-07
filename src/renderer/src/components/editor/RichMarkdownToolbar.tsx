@@ -1,12 +1,26 @@
 import React from 'react'
 import type { Editor } from '@tiptap/react'
-import { ImageIcon, Link as LinkIcon, List, ListOrdered, Quote } from 'lucide-react'
+import {
+  Heading1,
+  Heading2,
+  Heading3,
+  ImageIcon,
+  Link as LinkIcon,
+  List,
+  ListOrdered,
+  ListTodo,
+  Quote
+} from 'lucide-react'
 import { RichMarkdownToolbarButton } from './RichMarkdownToolbarButton'
 
 type RichMarkdownToolbarProps = {
   editor: Editor | null
   onToggleLink: () => void
   onImagePick: () => void
+}
+
+function Separator(): React.JSX.Element {
+  return <div className="rich-markdown-toolbar-separator" />
 }
 
 export function RichMarkdownToolbar({
@@ -16,6 +30,28 @@ export function RichMarkdownToolbar({
 }: RichMarkdownToolbarProps): React.JSX.Element {
   return (
     <div className="rich-markdown-editor-toolbar">
+      <RichMarkdownToolbarButton
+        active={editor?.isActive('heading', { level: 1 }) ?? false}
+        label="Heading 1"
+        onClick={() => editor?.chain().focus().toggleHeading({ level: 1 }).run()}
+      >
+        <Heading1 className="size-3.5" />
+      </RichMarkdownToolbarButton>
+      <RichMarkdownToolbarButton
+        active={editor?.isActive('heading', { level: 2 }) ?? false}
+        label="Heading 2"
+        onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}
+      >
+        <Heading2 className="size-3.5" />
+      </RichMarkdownToolbarButton>
+      <RichMarkdownToolbarButton
+        active={editor?.isActive('heading', { level: 3 }) ?? false}
+        label="Heading 3"
+        onClick={() => editor?.chain().focus().toggleHeading({ level: 3 }).run()}
+      >
+        <Heading3 className="size-3.5" />
+      </RichMarkdownToolbarButton>
+      <Separator />
       <RichMarkdownToolbarButton
         active={editor?.isActive('bold') ?? false}
         label="Bold"
@@ -37,6 +73,7 @@ export function RichMarkdownToolbar({
       >
         S
       </RichMarkdownToolbarButton>
+      <Separator />
       <RichMarkdownToolbarButton
         active={editor?.isActive('bulletList') ?? false}
         label="Bullet list"
@@ -51,6 +88,14 @@ export function RichMarkdownToolbar({
       >
         <ListOrdered className="size-3.5" />
       </RichMarkdownToolbarButton>
+      <RichMarkdownToolbarButton
+        active={editor?.isActive('taskList') ?? false}
+        label="Checklist"
+        onClick={() => editor?.chain().focus().toggleTaskList().run()}
+      >
+        <ListTodo className="size-3.5" />
+      </RichMarkdownToolbarButton>
+      <Separator />
       <RichMarkdownToolbarButton
         active={editor?.isActive('blockquote') ?? false}
         label="Quote"
