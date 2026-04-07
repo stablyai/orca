@@ -47,14 +47,43 @@ export function useFileDuplicate({
           n += 1
         }
 
-        try {
-          await window.api.shell.copyFile({ srcPath: node.path, destPath: candidate })
-        } catch (err) {
-          toast.error(extractIpcErrorMessage(err, `Failed to duplicate '${name}'.`))
-          return
+        // Why: Between the final pathExists returning false and the copyFile
+        // call, another process could create a file at that path (TOCTOU race).
+        // The backend uses COPYFILE_EXCL which will fail with EEXIST in that
+        // case. Instead of surfacing a generic error toast, we retry with the
+        // next candidate name. A max-retry limit of 10 prevents infinite loops
+        // in degenerate scenarios.
+        const MAX_RETRIES = 10
+        let retries = 0
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          try {
+            await window.api.shell.copyFile({ srcPath: node.path, destPath: candidate })
+            break
+          } catch (err) {
+            const isEexist =
+              err instanceof Error &&
+              (err.message.includes('EEXIST') || err.message.includes('already exists'))
+            if (isEexist && retries < MAX_RETRIES) {
+              // The candidate was taken between our check and the copy attempt;
+              // advance to the next name and retry.
+              candidate = joinPath(dir, `${stem} copy ${n}${ext}`)
+              n += 1
+              retries += 1
+              continue
+            }
+            toast.error(extractIpcErrorMessage(err, `Failed to duplicate '${name}'.`))
+            return
+          }
         }
 
-        await refreshDir(dir)
+        // Best-effort refresh; the file was already copied successfully,
+        // so a refresh failure should not surface an error to the user.
+        try {
+          await refreshDir(dir)
+        } catch {
+          // noop – the copy succeeded; stale tree is a minor inconvenience.
+        }
       }
       void run()
     },
