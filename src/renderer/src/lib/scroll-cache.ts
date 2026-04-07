@@ -1,7 +1,7 @@
-// Why: The shared scrollTopCache is keyed with mode suffixes (e.g. filePath,
-// filePath:preview, filePath:rich), so each file can occupy up to 3 entries.
-// A limit of 50 supports ~16 files comfortably while still bounding memory.
-const CACHE_MAX_ENTRIES = 50
+// Why: 20 entries covers a typical working set of open/recently-viewed files.
+// Eviction only means losing a scroll position (user sees top of file), not a
+// correctness bug, so a conservative cap is fine.
+const CACHE_MAX_ENTRIES = 20
 
 // Why: Module-scoped Maps grow unboundedly as unique file keys accumulate.
 // Cap them with a simple LRU eviction: after each set, if the map exceeds
