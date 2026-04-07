@@ -1,7 +1,9 @@
-import { Extension, type AnyExtension } from '@tiptap/core'
+import type { AnyExtension } from '@tiptap/core'
+import { ReactNodeViewRenderer } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
 import Image from '@tiptap/extension-image'
+import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight'
 import Placeholder from '@tiptap/extension-placeholder'
 import TaskList from '@tiptap/extension-task-list'
 import TaskItem from '@tiptap/extension-task-item'
@@ -10,30 +12,12 @@ import { TableCell } from '@tiptap/extension-table-cell'
 import { TableHeader } from '@tiptap/extension-table-header'
 import { TableRow } from '@tiptap/extension-table-row'
 import { Markdown } from '@tiptap/markdown'
+import { createLowlight, common } from 'lowlight'
 import { loadLocalImageSrc, onImageCacheInvalidated } from './useLocalImageSrc'
 import { RawMarkdownHtmlBlock, RawMarkdownHtmlInline } from './raw-markdown-html'
+import { RichMarkdownCodeBlock } from './RichMarkdownCodeBlock'
 
-// Why: StarterKit's ListItem extension handles Tab (sinkListItem) and
-// Shift-Tab (liftListItem), but when those commands fail (e.g. cursor is not
-// in a list or can't indent further), ProseMirror lets the browser handle the
-// event — which moves focus out of the editor. This catch-all extension is
-// registered after StarterKit so it only runs when no other handler consumed
-// the key, preventing the focus escape and adding Tab support in code blocks.
-const TabCatchAll = Extension.create({
-  name: 'tabCatchAll',
-  addKeyboardShortcuts() {
-    return {
-      Tab: ({ editor }) => {
-        if (editor.isActive('codeBlock')) {
-          return editor.commands.insertContent('  ')
-        }
-        // Consume the event to prevent focus from leaving the editor.
-        return true
-      },
-      'Shift-Tab': () => true
-    }
-  }
-})
+const lowlight = createLowlight(common)
 
 const RICH_MARKDOWN_PLACEHOLDER = 'Write markdown… Type / for blocks.'
 
@@ -47,10 +31,21 @@ export function createRichMarkdownExtensions({
     // the live editor. If these drift, Orca can claim a document is editable in
     // preview and then still lose syntax on save.
     StarterKit.configure({
-      link: false
+      link: false,
+      codeBlock: false
+    }),
+    CodeBlockLowlight.extend({
+      addNodeView() {
+        return ReactNodeViewRenderer(RichMarkdownCodeBlock)
+      }
+    }).configure({
+      lowlight,
+      defaultLanguage: null
     }),
     Link.configure({
-      openOnClick: false
+      openOnClick: false,
+      autolink: true,
+      linkOnPaste: true
     }),
     // Why: in dev mode the renderer is served from http://localhost, so
     // file:// URLs in <img> tags are blocked by cross-origin restrictions.
@@ -137,7 +132,6 @@ export function createRichMarkdownExtensions({
     TableCell,
     RawMarkdownHtmlInline,
     RawMarkdownHtmlBlock,
-    TabCatchAll,
     Markdown.configure({
       markedOptions: {
         gfm: true

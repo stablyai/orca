@@ -1,11 +1,10 @@
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { EditorContent, useEditor } from '@tiptap/react'
 import type { Editor } from '@tiptap/react'
-import { ImageIcon, List, ListOrdered, Quote } from 'lucide-react'
+import { ImageIcon, Link as LinkIcon, List, ListOrdered, Quote } from 'lucide-react'
 import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
+import { RichMarkdownSlashMenu } from './RichMarkdownSlashMenu'
 import { useAppStore } from '@/store'
-import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
 import { RichMarkdownToolbarButton } from './RichMarkdownToolbarButton'
 import { isMarkdownPreviewFindShortcut } from './markdown-preview-search'
 import { extractIpcErrorMessage, getImageCopyDestination } from './rich-markdown-image-utils'
@@ -15,6 +14,13 @@ import { runSlashCommand, slashCommands, syncSlashMenu } from './rich-markdown-c
 import type { SlashCommand, SlashMenuState } from './rich-markdown-commands'
 import { RichMarkdownSearchBar } from './RichMarkdownSearchBar'
 import { useRichMarkdownSearch } from './useRichMarkdownSearch'
+import {
+  getLinkBubblePosition,
+  RichMarkdownLinkBubble,
+  type LinkBubbleState
+} from './RichMarkdownLinkBubble'
+import { useLinkBubble } from './useLinkBubble'
+import { useEditorScrollRestore } from './useEditorScrollRestore'
 
 type RichMarkdownEditorProps = {
   content: string
@@ -49,6 +55,9 @@ export default function RichMarkdownEditor({
   // Why: ProseMirror keeps the initial handleKeyDown closure, so `editor` stays
   // stuck at the first-render null value unless we read the live instance here.
   const editorRef = useRef<Editor | null>(null)
+  const [linkBubble, setLinkBubble] = useState<LinkBubbleState | null>(null)
+  const [isEditingLink, setIsEditingLink] = useState(false)
+  const isEditingLinkRef = useRef(false)
 
   useEffect(() => {
     onContentChangeRef.current = onContentChange
@@ -56,6 +65,9 @@ export default function RichMarkdownEditor({
   useEffect(() => {
     onSaveRef.current = onSave
   }, [onSave])
+  useEffect(() => {
+    isEditingLinkRef.current = isEditingLink
+  }, [isEditingLink])
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -80,6 +92,72 @@ export default function RichMarkdownEditor({
           return true
         }
 
+        // Strikethrough: Cmd/Ctrl+Shift+X (standard shortcut used by Google
+        // Docs, Notion, etc. — supplements Tiptap's built-in Mod+Shift+S).
+        if (mod && event.shiftKey && event.key.toLowerCase() === 'x') {
+          event.preventDefault()
+          editorRef.current?.chain().focus().toggleStrike().run()
+          return true
+        }
+
+        // Link: Cmd/Ctrl+K — insert or edit a hyperlink.
+        if (mod && event.key.toLowerCase() === 'k') {
+          event.preventDefault()
+          const ed = editorRef.current
+          if (!ed) {
+            return true
+          }
+
+          if (isEditingLinkRef.current) {
+            setIsEditingLink(false)
+            if (!ed.isActive('link')) {
+              setLinkBubble(null)
+            }
+            ed.commands.focus()
+            return true
+          }
+
+          const pos = getLinkBubblePosition(ed, rootRef.current)
+          if (pos) {
+            const href = ed.isActive('link') ? (ed.getAttributes('link').href as string) || '' : ''
+            setLinkBubble({ href, ...pos })
+            setIsEditingLink(true)
+          }
+          return true
+        }
+
+        // Tab/Shift-Tab: indent/outdent lists, insert spaces in code blocks,
+        // and prevent focus from escaping the editor. When the slash menu is
+        // open, Tab selects a command instead (handled in the slash-menu block
+        // below).
+        if (event.key === 'Tab' && !slashMenuRef.current) {
+          event.preventDefault()
+          const ed = editorRef.current
+          if (!ed) {
+            return true
+          }
+
+          if (event.shiftKey) {
+            if (!ed.commands.liftListItem('listItem')) {
+              ed.commands.liftListItem('taskItem')
+            }
+            return true
+          }
+
+          if (ed.isActive('codeBlock')) {
+            ed.commands.insertContent('  ')
+            return true
+          }
+
+          // Why: sinkListItem succeeds when cursor is in a non-first list item;
+          // otherwise it no-ops. Either way we consume Tab to prevent focus escape.
+          if (!ed.commands.sinkListItem('listItem')) {
+            ed.commands.sinkListItem('taskItem')
+          }
+          return true
+        }
+
+        // ── Slash menu navigation ─────────────────────────
         const currentSlashMenu = slashMenuRef.current
         if (!currentSlashMenu) {
           return false
@@ -132,6 +210,24 @@ export default function RichMarkdownEditor({
         }
 
         return false
+      },
+      // Why: Cmd/Ctrl+click on a link opens it in the system browser, matching
+      // VS Code and other editor conventions. Without the modifier, clicks just
+      // position the cursor normally for editing.
+      handleClick: (_view, _pos, event) => {
+        const ed = editorRef.current
+        if (!ed) {
+          return false
+        }
+        const modKey = isMac ? event.metaKey : event.ctrlKey
+        if (modKey && ed.isActive('link')) {
+          const href = (ed.getAttributes('link').href as string) || ''
+          if (href) {
+            void window.api.shell.openUrl(href)
+            return true
+          }
+        }
+        return false
       }
     },
     onCreate: ({ editor: nextEditor }) => {
@@ -145,6 +241,19 @@ export default function RichMarkdownEditor({
     },
     onSelectionUpdate: ({ editor: nextEditor }) => {
       syncSlashMenu(nextEditor, rootRef.current, setSlashMenu)
+
+      // Sync link bubble: show preview when cursor is on a link, hide otherwise.
+      // Any selection change in the editor cancels an in-progress link edit.
+      setIsEditingLink(false)
+      if (nextEditor.isActive('link')) {
+        const attrs = nextEditor.getAttributes('link')
+        const pos = getLinkBubblePosition(nextEditor, rootRef.current)
+        if (pos) {
+          setLinkBubble({ href: (attrs.href as string) || '', ...pos })
+        }
+      } else {
+        setLinkBubble(null)
+      }
     }
   })
 
@@ -152,75 +261,7 @@ export default function RichMarkdownEditor({
     editorRef.current = editor ?? null
   }, [editor])
 
-  const scrollCacheKey = `${filePath}:rich`
-
-  // Save scroll position with trailing throttle and synchronous unmount snapshot.
-  useLayoutEffect(() => {
-    const container = scrollContainerRef.current
-    if (!container) {
-      return
-    }
-
-    let throttleTimer: ReturnType<typeof setTimeout> | null = null
-
-    const onScroll = (): void => {
-      if (throttleTimer !== null) {
-        clearTimeout(throttleTimer)
-      }
-      throttleTimer = setTimeout(() => {
-        setWithLRU(scrollTopCache, scrollCacheKey, container.scrollTop)
-        throttleTimer = null
-      }, 150)
-    }
-
-    container.addEventListener('scroll', onScroll, { passive: true })
-    return () => {
-      // Snapshot final position synchronously before detach.
-      setWithLRU(scrollTopCache, scrollCacheKey, container.scrollTop)
-      if (throttleTimer !== null) {
-        clearTimeout(throttleTimer)
-      }
-      container.removeEventListener('scroll', onScroll)
-    }
-  }, [scrollCacheKey])
-
-  // Restore scroll position with RAF retry loop for async Tiptap content.
-  useLayoutEffect(() => {
-    const container = scrollContainerRef.current
-    const targetScrollTop = scrollTopCache.get(scrollCacheKey)
-    if (!container || targetScrollTop === undefined) {
-      return
-    }
-
-    let frameId = 0
-    let attempts = 0
-
-    // Why: Tiptap renders asynchronously as it hydrates its ProseMirror document,
-    // so scrollHeight may be undersized on the initial frame. Retry up to 30
-    // frames (~500ms at 60fps) to accommodate content loading. This matches
-    // CombinedDiffViewer's proven pattern for dynamic-height content restoration.
-    const tryRestore = (): void => {
-      const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight)
-      const nextScrollTop = Math.min(targetScrollTop, maxScrollTop)
-      container.scrollTop = nextScrollTop
-
-      if (Math.abs(container.scrollTop - targetScrollTop) <= 1 || maxScrollTop >= targetScrollTop) {
-        return
-      }
-
-      attempts += 1
-      if (attempts < 30) {
-        frameId = window.requestAnimationFrame(tryRestore)
-      }
-    }
-
-    tryRestore()
-    return () => window.cancelAnimationFrame(frameId)
-    // Why: `editor` is included so the effect re-runs when the Tiptap editor
-    // instance becomes available (non-null). With `immediatelyRender: false`,
-    // editor is null on the first render, so the retry loop would start before
-    // content is mounted and exhaust its 30 frames before Tiptap hydrates.
-  }, [scrollCacheKey, editor])
+  useEditorScrollRestore(scrollContainerRef, `${filePath}:rich`, editor)
 
   // Why: the custom Image extension reads filePath from editor.storage to resolve
   // relative image src values to file:// URLs for display. After updating the
@@ -270,6 +311,15 @@ export default function RichMarkdownEditor({
   useEffect(() => {
     handleLocalImagePickRef.current = handleLocalImagePick
   }, [handleLocalImagePick])
+
+  const {
+    handleLinkSave,
+    handleLinkRemove,
+    handleLinkEditCancel,
+    handleLinkOpen,
+    toggleLinkFromToolbar
+  } = useLinkBubble(editor, rootRef, linkBubble, setLinkBubble, setIsEditingLink)
+
   const {
     activeMatchIndex,
     closeSearch,
@@ -300,11 +350,9 @@ export default function RichMarkdownEditor({
   useEffect(() => {
     slashMenuRef.current = slashMenu
   }, [slashMenu])
-
   useEffect(() => {
     filteredSlashCommandsRef.current = filteredSlashCommands
   }, [filteredSlashCommands])
-
   useEffect(() => {
     selectedCommandIndexRef.current = selectedCommandIndex
   }, [selectedCommandIndex])
@@ -388,6 +436,13 @@ export default function RichMarkdownEditor({
         >
           <Quote className="size-3.5" />
         </RichMarkdownToolbarButton>
+        <RichMarkdownToolbarButton
+          active={editor?.isActive('link') ?? false}
+          label="Link"
+          onClick={toggleLinkFromToolbar}
+        >
+          <LinkIcon className="size-3.5" />
+        </RichMarkdownToolbarButton>
         <RichMarkdownToolbarButton active={false} label="Image" onClick={handleLocalImagePick}>
           <ImageIcon className="size-3.5" />
         </RichMarkdownToolbarButton>
@@ -405,41 +460,25 @@ export default function RichMarkdownEditor({
       <div ref={scrollContainerRef} className="min-h-0 flex-1 overflow-auto">
         <EditorContent editor={editor} />
       </div>
+      {linkBubble ? (
+        <RichMarkdownLinkBubble
+          linkBubble={linkBubble}
+          isEditing={isEditingLink}
+          onSave={handleLinkSave}
+          onRemove={handleLinkRemove}
+          onEditStart={() => setIsEditingLink(true)}
+          onEditCancel={handleLinkEditCancel}
+          onOpen={handleLinkOpen}
+        />
+      ) : null}
       {slashMenu && filteredSlashCommands.length > 0 ? (
-        <div
-          className="rich-markdown-slash-menu"
-          style={{ left: slashMenu.left, top: slashMenu.top }}
-          role="listbox"
-          aria-label="Slash commands"
-        >
-          {filteredSlashCommands.map((command, index) => {
-            const Icon = command.icon
-            return (
-              <button
-                key={command.id}
-                type="button"
-                className={cn(
-                  'rich-markdown-slash-item',
-                  index === selectedCommandIndex && 'is-active'
-                )}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() =>
-                  editor && runSlashCommand(editor, slashMenu, command, handleLocalImagePick)
-                }
-              >
-                <span className="rich-markdown-slash-icon">
-                  <Icon className="size-3.5" />
-                </span>
-                <span className="flex min-w-0 flex-1 flex-col items-start">
-                  <span className="truncate text-sm font-medium">{command.label}</span>
-                  <span className="truncate text-xs text-muted-foreground">
-                    {command.description}
-                  </span>
-                </span>
-              </button>
-            )
-          })}
-        </div>
+        <RichMarkdownSlashMenu
+          editor={editor}
+          slashMenu={slashMenu}
+          filteredCommands={filteredSlashCommands}
+          selectedIndex={selectedCommandIndex}
+          onImagePick={handleLocalImagePick}
+        />
       ) : null}
     </div>
   )

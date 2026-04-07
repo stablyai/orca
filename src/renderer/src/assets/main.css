@@ -615,8 +615,7 @@
 .rich-markdown-editor p,
 .rich-markdown-editor ul,
 .rich-markdown-editor ol,
-.rich-markdown-editor blockquote,
-.rich-markdown-editor pre {
+.rich-markdown-editor blockquote {
   margin: 0.75em 0;
 }
 
@@ -631,6 +630,17 @@
 
 .rich-markdown-editor ol {
   list-style: decimal;
+}
+
+/* Tiptap wraps each list item's content in a <p>, which inherits the global
+   paragraph margin and bloats inter-item spacing. Suppress it so lists render
+   tight, matching the preview surface. */
+.rich-markdown-editor li > p {
+  margin: 0;
+}
+
+.rich-markdown-editor li {
+  margin: 0.15em 0;
 }
 
 .rich-markdown-editor ul[data-type='taskList'] {
@@ -671,18 +681,169 @@
   font-family: var(--font-mono, monospace);
 }
 
+.rich-markdown-code-block-wrapper {
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--foreground) 6%, transparent);
+  margin: 0.75em 0;
+}
+
+.rich-markdown-code-block-lang {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 1;
+  padding: 1px 4px;
+  border-radius: 4px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+  background: color-mix(in srgb, var(--background) 80%, transparent);
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.rich-markdown-code-block-wrapper:hover .rich-markdown-code-block-lang,
+.rich-markdown-code-block-lang:focus {
+  opacity: 1;
+}
+
 .rich-markdown-editor pre {
   padding: 14px 18px;
   border-radius: 8px;
   overflow-x: auto;
   line-height: 1.55;
-  background: color-mix(in srgb, var(--foreground) 6%, transparent);
-  border: 1px solid color-mix(in srgb, var(--foreground) 6%, transparent);
+  background: transparent;
 }
 
 .rich-markdown-editor pre code {
   padding: 0;
   background: transparent;
+}
+
+/* Why: CodeBlockLowlight's decoration plugin adds hljs class spans directly
+   inside the <pre> contentDOM — there is no <code> wrapper when using a
+   React NodeView, so selectors must target pre > .hljs-* directly. */
+.rich-markdown-code-block-wrapper .hljs-keyword {
+  color: #cf222e;
+}
+.rich-markdown-code-block-wrapper .hljs-string {
+  color: #0a3069;
+}
+.rich-markdown-code-block-wrapper .hljs-number {
+  color: #0550ae;
+}
+.rich-markdown-code-block-wrapper .hljs-comment {
+  color: #6e7781;
+  font-style: italic;
+}
+.rich-markdown-code-block-wrapper .hljs-function {
+  color: #8250df;
+}
+.rich-markdown-code-block-wrapper .hljs-title {
+  color: #8250df;
+}
+.rich-markdown-code-block-wrapper .hljs-built_in {
+  color: #0550ae;
+}
+.rich-markdown-code-block-wrapper .hljs-type {
+  color: #0550ae;
+}
+.rich-markdown-code-block-wrapper .hljs-attr {
+  color: #0550ae;
+}
+.rich-markdown-code-block-wrapper .hljs-selector-class {
+  color: #0550ae;
+}
+.rich-markdown-code-block-wrapper .hljs-variable {
+  color: #953800;
+}
+.rich-markdown-code-block-wrapper .hljs-meta {
+  color: #6e7781;
+}
+.rich-markdown-code-block-wrapper .hljs-tag {
+  color: #116329;
+}
+.rich-markdown-code-block-wrapper .hljs-name {
+  color: #116329;
+}
+.rich-markdown-code-block-wrapper .hljs-params {
+  color: #953800;
+}
+.rich-markdown-code-block-wrapper .hljs-literal {
+  color: #0550ae;
+}
+.rich-markdown-code-block-wrapper .hljs-regexp {
+  color: #0a3069;
+}
+.rich-markdown-code-block-wrapper .hljs-operator {
+  color: #cf222e;
+}
+.rich-markdown-code-block-wrapper .hljs-property {
+  color: #0550ae;
+}
+
+.dark .rich-markdown-code-block-wrapper .hljs-keyword {
+  color: #ff7b72;
+}
+.dark .rich-markdown-code-block-wrapper .hljs-string {
+  color: #a5d6ff;
+}
+.dark .rich-markdown-code-block-wrapper .hljs-number {
+  color: #79c0ff;
+}
+.dark .rich-markdown-code-block-wrapper .hljs-comment {
+  color: #8b949e;
+  font-style: italic;
+}
+.dark .rich-markdown-code-block-wrapper .hljs-function {
+  color: #d2a8ff;
+}
+.dark .rich-markdown-code-block-wrapper .hljs-title {
+  color: #d2a8ff;
+}
+.dark .rich-markdown-code-block-wrapper .hljs-built_in {
+  color: #79c0ff;
+}
+.dark .rich-markdown-code-block-wrapper .hljs-type {
+  color: #79c0ff;
+}
+.dark .rich-markdown-code-block-wrapper .hljs-attr {
+  color: #79c0ff;
+}
+.dark .rich-markdown-code-block-wrapper .hljs-selector-class {
+  color: #79c0ff;
+}
+.dark .rich-markdown-code-block-wrapper .hljs-variable {
+  color: #ffa657;
+}
+.dark .rich-markdown-code-block-wrapper .hljs-meta {
+  color: #8b949e;
+}
+.dark .rich-markdown-code-block-wrapper .hljs-tag {
+  color: #7ee787;
+}
+.dark .rich-markdown-code-block-wrapper .hljs-name {
+  color: #7ee787;
+}
+.dark .rich-markdown-code-block-wrapper .hljs-params {
+  color: #ffa657;
+}
+.dark .rich-markdown-code-block-wrapper .hljs-literal {
+  color: #79c0ff;
+}
+.dark .rich-markdown-code-block-wrapper .hljs-regexp {
+  color: #a5d6ff;
+}
+.dark .rich-markdown-code-block-wrapper .hljs-operator {
+  color: #ff7b72;
+}
+.dark .rich-markdown-code-block-wrapper .hljs-property {
+  color: #79c0ff;
 }
 
 .rich-markdown-editor hr {
@@ -753,6 +914,67 @@
   flex-shrink: 0;
   border-radius: 8px;
   background: color-mix(in srgb, var(--foreground) 6%, transparent);
+  color: var(--muted-foreground);
+}
+
+/* ── Link Bubble ──────────────────────────────────────── */
+
+.rich-markdown-link-bubble {
+  position: absolute;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px;
+  border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--background) 92%, transparent);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  backdrop-filter: blur(16px);
+}
+
+.rich-markdown-link-url {
+  padding: 2px 6px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono, monospace);
+}
+
+.rich-markdown-link-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted-foreground);
+}
+
+.rich-markdown-link-button:hover {
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+.rich-markdown-link-input {
+  font-size: 13px;
+  width: 280px;
+  padding: 4px 8px;
+  border: none;
+  background: transparent;
+  color: var(--foreground);
+  outline: none;
+  font-family: var(--font-mono, monospace);
+}
+
+.rich-markdown-link-input::placeholder {
   color: var(--muted-foreground);
 }
 
