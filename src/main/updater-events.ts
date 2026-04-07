@@ -135,6 +135,7 @@ export function registerAutoUpdaterHandlers({
             String(err?.message ?? err)
           )
           clearAvailableUpdateContext()
+          recordCompletedUpdateCheck()
           if (!wasUserInitiated) {
             scheduleAutomaticUpdateCheck(36 * 60 * 60 * 1000)
           }
