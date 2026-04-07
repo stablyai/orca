@@ -11,7 +11,13 @@ import {
   getDefaultWorkspaceSession
 } from '../shared/constants'
 
-const DATA_FILE = join(app.getPath('userData'), 'orca-data.json')
+// Why: this must be lazy (a getter, not a top-level const) because
+// persistence.ts is imported before configureDevUserDataPath() runs in
+// index.ts. A top-level const would capture the default 'orca' userData
+// path, ignoring the dev-mode redirect to 'orca-dev'.
+function getDataFile(): string {
+  return join(app.getPath('userData'), 'orca-data.json')
+}
 
 function normalizeSortBy(sortBy: unknown): 'name' | 'recent' | 'repo' {
   if (sortBy === 'recent' || sortBy === 'repo' || sortBy === 'name') {
@@ -34,8 +40,8 @@ export class Store {
 
   private load(): PersistedState {
     try {
-      if (existsSync(DATA_FILE)) {
-        const raw = readFileSync(DATA_FILE, 'utf-8')
+      if (existsSync(getDataFile())) {
+        const raw = readFileSync(getDataFile(), 'utf-8')
         const parsed = JSON.parse(raw) as PersistedState
         // Merge with defaults in case new fields were added
         const defaults = getDefaultPersistedState(homedir())
@@ -72,7 +78,7 @@ export class Store {
   }
 
   private writeToDisk(): void {
-    const dir = dirname(DATA_FILE)
+    const dir = dirname(getDataFile())
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true })
     }
@@ -81,9 +87,9 @@ export class Store {
     // temp file from the other, which surfaces as ENOENT even though the final
     // state may already be on disk. Use a unique temp file per write so atomic
     // replaces remain race-safe across platforms.
-    const tmpFile = `${DATA_FILE}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
+    const tmpFile = `${getDataFile()}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
     writeFileSync(tmpFile, JSON.stringify(this.state, null, 2), 'utf-8')
-    renameSync(tmpFile, DATA_FILE)
+    renameSync(tmpFile, getDataFile())
   }
 
   // ── Repos ──────────────────────────────────────────────────────────
