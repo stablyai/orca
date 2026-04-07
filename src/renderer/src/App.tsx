@@ -22,8 +22,40 @@ import {
 } from './runtime/sync-runtime-graph'
 import { useGlobalFileDrop } from './hooks/useGlobalFileDrop'
 import { registerUpdaterBeforeUnloadBypass } from './lib/updater-beforeunload'
+import type { PersistedOpenFile } from '../../shared/types'
+import type { OpenFile } from './store/slices/editor'
 
 const isMac = navigator.userAgent.includes('Mac')
+
+/** Build the editor-file portion of the workspace session for persistence.
+ *  Only edit-mode files are saved — diffs and conflict views are transient. */
+function buildEditorSessionData(
+  openFiles: OpenFile[],
+  activeFileIdByWorktree: Record<string, string | null>,
+  activeTabTypeByWorktree: Record<string, 'terminal' | 'editor'>
+): {
+  openFilesByWorktree: Record<string, PersistedOpenFile[]>
+  activeFileIdByWorktree: Record<string, string | null>
+  activeTabTypeByWorktree: Record<string, 'terminal' | 'editor'>
+} {
+  const editFiles = openFiles.filter((f) => f.mode === 'edit')
+  const byWorktree: Record<string, PersistedOpenFile[]> = {}
+  for (const f of editFiles) {
+    const arr = byWorktree[f.worktreeId] ?? (byWorktree[f.worktreeId] = [])
+    arr.push({
+      filePath: f.filePath,
+      relativePath: f.relativePath,
+      worktreeId: f.worktreeId,
+      language: f.language,
+      isPreview: f.isPreview || undefined
+    })
+  }
+  return {
+    openFilesByWorktree: byWorktree,
+    activeFileIdByWorktree,
+    activeTabTypeByWorktree
+  }
+}
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
@@ -64,6 +96,7 @@ function App(): React.JSX.Element {
   const initGitHubCache = useAppStore((s) => s.initGitHubCache)
   const refreshAllGitHub = useAppStore((s) => s.refreshAllGitHub)
   const hydrateWorkspaceSession = useAppStore((s) => s.hydrateWorkspaceSession)
+  const hydrateEditorSession = useAppStore((s) => s.hydrateEditorSession)
   const reconnectPersistedTerminals = useAppStore((s) => s.reconnectPersistedTerminals)
   const hydratePersistedUI = useAppStore((s) => s.hydratePersistedUI)
   const openModal = useAppStore((s) => s.openModal)
@@ -74,6 +107,11 @@ function App(): React.JSX.Element {
   const showActiveOnly = useAppStore((s) => s.showActiveOnly)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
+
+  // Editor state for session persistence
+  const openFiles = useAppStore((s) => s.openFiles)
+  const activeFileIdByWorktree = useAppStore((s) => s.activeFileIdByWorktree)
+  const activeTabTypeByWorktree = useAppStore((s) => s.activeTabTypeByWorktree)
 
   // Right sidebar + editor state
   const toggleRightSidebar = useAppStore((s) => s.toggleRightSidebar)
@@ -112,6 +150,7 @@ function App(): React.JSX.Element {
         if (!cancelled) {
           hydratePersistedUI(persistedUI)
           hydrateWorkspaceSession(session)
+          hydrateEditorSession(session)
           await reconnectPersistedTerminals(abortController.signal)
           syncZoomCSSVar()
         }
@@ -161,6 +200,7 @@ function App(): React.JSX.Element {
     initGitHubCache,
     hydratePersistedUI,
     hydrateWorkspaceSession,
+    hydrateEditorSession,
     reconnectPersistedTerminals
   ])
 
@@ -197,7 +237,8 @@ function App(): React.JSX.Element {
         activeTabId,
         tabsByWorktree,
         terminalLayoutsByTabId,
-        activeWorktreeIdsOnShutdown
+        activeWorktreeIdsOnShutdown,
+        ...buildEditorSessionData(openFiles, activeFileIdByWorktree, activeTabTypeByWorktree)
       })
     }, 150)
 
@@ -208,7 +249,10 @@ function App(): React.JSX.Element {
     activeWorktreeId,
     activeTabId,
     tabsByWorktree,
-    terminalLayoutsByTabId
+    terminalLayoutsByTabId,
+    openFiles,
+    activeFileIdByWorktree,
+    activeTabTypeByWorktree
   ])
 
   // On shutdown, capture terminal scrollback buffers and flush to disk.
@@ -235,7 +279,12 @@ function App(): React.JSX.Element {
         activeTabId: state.activeTabId,
         tabsByWorktree: state.tabsByWorktree,
         terminalLayoutsByTabId: state.terminalLayoutsByTabId,
-        activeWorktreeIdsOnShutdown
+        activeWorktreeIdsOnShutdown,
+        ...buildEditorSessionData(
+          state.openFiles,
+          state.activeFileIdByWorktree,
+          state.activeTabTypeByWorktree
+        )
       })
     }
     window.addEventListener('beforeunload', captureAndFlush)

@@ -90,6 +90,17 @@ export type TerminalLayoutSnapshot = {
   buffersByLeafId?: Record<string, string>
 }
 
+/** Minimal subset of OpenFile persisted across restarts.
+ *  Only edit-mode files are saved — diffs, conflict reviews, and other
+ *  transient views are reconstructed on demand from git state. */
+export type PersistedOpenFile = {
+  filePath: string
+  relativePath: string
+  worktreeId: string
+  language: string
+  isPreview?: boolean
+}
+
 export type WorkspaceSessionState = {
   activeRepoId: string | null
   activeWorktreeId: string | null
@@ -100,6 +111,14 @@ export type WorkspaceSessionState = {
    *  Used on startup to eagerly re-spawn PTY processes so the Active filter
    *  works immediately after restart. */
   activeWorktreeIdsOnShutdown?: string[]
+  /** Editor files that were open at shutdown, keyed by worktree ID.
+   *  Only edit-mode files are persisted — diffs and conflict views are
+   *  transient and not restored. */
+  openFilesByWorktree?: Record<string, PersistedOpenFile[]>
+  /** Per-worktree active editor file ID (filePath) at shutdown. */
+  activeFileIdByWorktree?: Record<string, string | null>
+  /** Per-worktree active tab type (terminal vs editor) at shutdown. */
+  activeTabTypeByWorktree?: Record<string, 'terminal' | 'editor'>
 }
 
 // ─── GitHub ──────────────────────────────────────────────────────────

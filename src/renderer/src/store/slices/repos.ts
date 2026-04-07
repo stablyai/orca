@@ -113,6 +113,21 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         for (const ptyId of killedPtyIds) {
           nextSuppressedPtyExitIds[ptyId] = true
         }
+        // Why: editor state is worktree-scoped. Removing a repo must also
+        // remove open editor files and per-worktree active-file tracking for
+        // all worktrees that belonged to the repo, otherwise orphaned entries
+        // would persist in the session save and pollute state.
+        const worktreeIdSet = new Set(worktreeIds)
+        const nextOpenFiles = s.openFiles.filter((f) => !worktreeIdSet.has(f.worktreeId))
+        const nextActiveFileIdByWorktree = { ...s.activeFileIdByWorktree }
+        const nextActiveTabTypeByWorktree = { ...s.activeTabTypeByWorktree }
+        for (const wId of worktreeIds) {
+          delete nextActiveFileIdByWorktree[wId]
+          delete nextActiveTabTypeByWorktree[wId]
+        }
+        const activeFileCleared = s.activeFileId
+          ? s.openFiles.some((f) => f.id === s.activeFileId && worktreeIdSet.has(f.worktreeId))
+          : false
         return {
           repos: s.repos.filter((r) => r.id !== repoId),
           activeRepoId: s.activeRepoId === repoId ? null : s.activeRepoId,
@@ -123,6 +138,11 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           suppressedPtyExitIds: nextSuppressedPtyExitIds,
           terminalLayoutsByTabId: nextLayouts,
           activeTabId: s.activeTabId && killedTabIds.has(s.activeTabId) ? null : s.activeTabId,
+          openFiles: nextOpenFiles,
+          activeFileIdByWorktree: nextActiveFileIdByWorktree,
+          activeTabTypeByWorktree: nextActiveTabTypeByWorktree,
+          activeFileId: activeFileCleared ? null : s.activeFileId,
+          activeTabType: activeFileCleared ? 'terminal' : s.activeTabType,
           sortEpoch: s.sortEpoch + 1
         }
       })

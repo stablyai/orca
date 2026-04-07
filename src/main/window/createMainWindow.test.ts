@@ -124,12 +124,12 @@ describe('createMainWindow', () => {
     const beforeInputEvent = windowHandlers['before-input-event']
 
     for (const input of [
-      { type: 'keyDown', control: true, meta: false, alt: false, key: '-' },
-      { type: 'keyDown', control: true, meta: false, alt: false, key: '_' },
-      { type: 'keyDown', control: true, meta: false, alt: false, key: 'Minus' },
-      { type: 'keyDown', control: true, meta: false, alt: false, key: 'Subtract' },
-      { type: 'keyDown', control: true, meta: false, alt: false, key: '', code: 'Minus' },
-      { type: 'keyDown', control: true, meta: false, alt: false, key: '', code: 'NumpadSubtract' }
+      { type: 'keyDown', control: true, meta: true, alt: false, key: '-' },
+      { type: 'keyDown', control: true, meta: true, alt: false, key: '_' },
+      { type: 'keyDown', control: true, meta: true, alt: false, key: 'Minus' },
+      { type: 'keyDown', control: true, meta: true, alt: false, key: 'Subtract' },
+      { type: 'keyDown', control: true, meta: true, alt: false, key: '', code: 'Minus' },
+      { type: 'keyDown', control: true, meta: true, alt: false, key: '', code: 'NumpadSubtract' }
     ]) {
       const preventDefault = vi.fn()
       beforeInputEvent({ preventDefault } as never, input as never)

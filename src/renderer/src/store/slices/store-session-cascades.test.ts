@@ -589,3 +589,175 @@ describe('reconnectPersistedTerminals', () => {
     expect((mockApi.pty as Record<string, unknown>).spawn).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('hydrateEditorSession', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('restores edit-mode files from persisted session', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      // Why: hydrateEditorSession reads activeWorktreeId from the store
+      // (set by hydrateWorkspaceSession), not from the raw session.
+      activeWorktreeId: wt
+    })
+
+    store.getState().hydrateEditorSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: wt,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      openFilesByWorktree: {
+        [wt]: [
+          {
+            filePath: '/path/wt1/src/index.ts',
+            relativePath: 'src/index.ts',
+            worktreeId: wt,
+            language: 'typescript'
+          },
+          {
+            filePath: '/path/wt1/README.md',
+            relativePath: 'README.md',
+            worktreeId: wt,
+            language: 'markdown',
+            isPreview: true
+          }
+        ]
+      },
+      activeFileIdByWorktree: { [wt]: '/path/wt1/src/index.ts' },
+      activeTabTypeByWorktree: { [wt]: 'editor' }
+    })
+
+    const s = store.getState()
+    expect(s.openFiles).toHaveLength(2)
+    expect(s.openFiles[0].filePath).toBe('/path/wt1/src/index.ts')
+    expect(s.openFiles[0].mode).toBe('edit')
+    expect(s.openFiles[0].isDirty).toBe(false)
+    expect(s.openFiles[1].isPreview).toBe(true)
+    expect(s.activeFileId).toBe('/path/wt1/src/index.ts')
+    expect(s.activeTabType).toBe('editor')
+  })
+
+  it('does nothing when no editor files are persisted', () => {
+    const store = createTestStore()
+
+    store.getState().hydrateEditorSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {}
+    })
+
+    const s = store.getState()
+    expect(s.openFiles).toHaveLength(0)
+    expect(s.activeFileId).toBeNull()
+    expect(s.activeTabType).toBe('terminal')
+  })
+
+  it('falls back to terminal if persisted activeFileId is missing from restored files', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      activeWorktreeId: wt
+    })
+
+    store.getState().hydrateEditorSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: wt,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      openFilesByWorktree: {
+        [wt]: [
+          {
+            filePath: '/path/wt1/src/index.ts',
+            relativePath: 'src/index.ts',
+            worktreeId: wt,
+            language: 'typescript'
+          }
+        ]
+      },
+      // Points to a file that no longer exists in the restored set
+      activeFileIdByWorktree: { [wt]: '/path/wt1/gone.ts' },
+      activeTabTypeByWorktree: { [wt]: 'editor' }
+    })
+
+    const s = store.getState()
+    expect(s.openFiles).toHaveLength(1)
+    expect(s.activeFileId).toBeNull()
+    expect(s.activeTabType).toBe('terminal')
+  })
+
+  it('filters out files for deleted worktrees', () => {
+    const store = createTestStore()
+    const validWt = 'repo1::/path/wt1'
+    const deletedWt = 'repo1::/path/gone'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: validWt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      activeWorktreeId: validWt
+    })
+
+    store.getState().hydrateEditorSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: validWt,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      openFilesByWorktree: {
+        [validWt]: [
+          {
+            filePath: '/path/wt1/src/index.ts',
+            relativePath: 'src/index.ts',
+            worktreeId: validWt,
+            language: 'typescript'
+          }
+        ],
+        [deletedWt]: [
+          {
+            filePath: '/path/gone/src/app.ts',
+            relativePath: 'src/app.ts',
+            worktreeId: deletedWt,
+            language: 'typescript'
+          }
+        ]
+      },
+      activeFileIdByWorktree: {
+        [validWt]: '/path/wt1/src/index.ts',
+        [deletedWt]: '/path/gone/src/app.ts'
+      },
+      activeTabTypeByWorktree: { [validWt]: 'editor', [deletedWt]: 'editor' }
+    })
+
+    const s = store.getState()
+    // Only files from the valid worktree should be restored
+    expect(s.openFiles).toHaveLength(1)
+    expect(s.openFiles[0].worktreeId).toBe(validWt)
+    // Deleted worktree should not appear in per-worktree maps
+    expect(s.activeFileIdByWorktree[deletedWt]).toBeUndefined()
+    expect(s.activeTabTypeByWorktree[deletedWt]).toBeUndefined()
+  })
+})
