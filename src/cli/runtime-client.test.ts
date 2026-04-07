@@ -41,7 +41,10 @@ function writeMetadata(userDataPath: string, endpoint: string, authToken = 'toke
   )
 }
 
-describe('RuntimeClient', () => {
+// Why: these tests create Unix domain socket servers in temp directories.
+// Windows does not support Unix domain sockets in the same way, causing
+// EACCES errors on listen(), so the suite is skipped on that platform.
+describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
   it('returns the full RPC envelope for successful calls', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
     const endpoint = join(userDataPath, 'runtime.sock')

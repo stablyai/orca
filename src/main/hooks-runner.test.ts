@@ -16,7 +16,11 @@ vi.mock('fs', () => ({
 
 vi.mock('child_process', () => ({
   exec: vi.fn(),
-  execFileSync: execFileSyncMock
+  execFileSync: execFileSyncMock,
+  // runner.ts imports these from child_process; stubs prevent
+  // "missing export" errors when the mock is resolved transitively.
+  execFile: vi.fn(),
+  spawn: vi.fn()
 }))
 
 describe('createSetupRunnerScript', () => {

@@ -15,7 +15,11 @@ const { execMock } = vi.hoisted(() => ({
 
 vi.mock('child_process', () => ({
   exec: execMock,
-  execFileSync: vi.fn()
+  execFileSync: vi.fn(),
+  // runner.ts imports these from child_process; stubs prevent
+  // "missing export" errors when the mock is resolved transitively.
+  execFile: vi.fn(),
+  spawn: vi.fn()
 }))
 
 describe('parseOrcaYaml', () => {

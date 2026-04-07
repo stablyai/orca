@@ -74,7 +74,9 @@ describe('discardChanges', () => {
     await discardChanges('/repo', 'src/new-file.ts')
 
     expect(execFileAsyncMock).toHaveBeenCalledTimes(1)
-    expect(rmMock).toHaveBeenCalledWith('/repo/src/new-file.ts', {
+    // Why: discardChanges uses path.resolve(worktreePath, filePath) to build
+    // the absolute rm target, which on Windows prepends a drive letter.
+    expect(rmMock).toHaveBeenCalledWith(path.resolve('/repo', 'src', 'new-file.ts'), {
       force: true,
       recursive: true
     })
@@ -116,7 +118,7 @@ describe('getDiff', () => {
         maxBuffer: 10 * 1024 * 1024
       })
     )
-    expect(readFileMock).toHaveBeenCalledWith('/repo/src/file.ts')
+    expect(readFileMock).toHaveBeenCalledWith(path.join('/repo', 'src/file.ts'))
     expect(result).toEqual({
       kind: 'text',
       originalContent: 'index-content\n',

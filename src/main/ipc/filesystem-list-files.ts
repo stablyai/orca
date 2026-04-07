@@ -1,8 +1,9 @@
-import { spawn } from 'child_process'
 import { relative, sep } from 'path'
 import type { Store } from '../persistence'
 import { resolveAuthorizedPath } from './filesystem-auth'
 import { checkRgAvailable } from './rg-availability'
+import { gitSpawn, wslAwareSpawn } from '../git/runner'
+import { parseWslPath, toWindowsWslPath } from '../wsl'
 
 // Why: We use --hidden to surface dotfiles users commonly edit (e.g. .env,
 // .github workflows, .eslintrc) but must still exclude non-editable hidden
@@ -51,7 +52,7 @@ export async function listQuickOpenFiles(rootPath: string, store: Store): Promis
   // spawn('rg') emits 'close' before 'error' on some platforms, causing
   // the handler to resolve with empty results before the git fallback
   // can run. The result is cached after the first check.
-  const rgAvailable = await checkRgAvailable()
+  const rgAvailable = await checkRgAvailable(authorizedRootPath)
   if (!rgAvailable) {
     return listFilesWithGit(authorizedRootPath)
   }
@@ -78,6 +79,11 @@ export async function listQuickOpenFiles(rootPath: string, store: Store): Promis
         resolve()
       }
 
+      // Why: when rg runs inside WSL, output paths are Linux-native
+      // (e.g. /home/user/repo/src/file.ts). Detect this upfront so we
+      // can translate them back to Windows UNC paths for prefix matching.
+      const wslInfo = parseWslPath(authorizedRootPath)
+
       const processLine = (line: string): void => {
         if (line.charCodeAt(line.length - 1) === 13 /* \r */) {
           line = line.substring(0, line.length - 1)
@@ -85,6 +91,12 @@ export async function listQuickOpenFiles(rootPath: string, store: Store): Promis
         if (!line) {
           return
         }
+
+        // Translate Linux paths from WSL rg output to Windows UNC paths
+        if (wslInfo) {
+          line = toWindowsWslPath(line, wslInfo.distro)
+        }
+
         // Why: Normalize separators to '/' so the prefix check works on all
         // platforms (Windows rg uses '\', macOS/Linux use '/').
         const normalized = line.replace(/\\/g, '/')
@@ -105,9 +117,12 @@ export async function listQuickOpenFiles(rootPath: string, store: Store): Promis
         }
       }
 
-      const child = spawn('rg', args, { stdio: ['ignore', 'pipe', 'pipe'] })
-      child.stdout.setEncoding('utf-8')
-      child.stdout.on('data', (chunk: string) => {
+      const child = wslAwareSpawn('rg', args, {
+        cwd: authorizedRootPath,
+        stdio: ['ignore', 'pipe', 'pipe']
+      })
+      child.stdout!.setEncoding('utf-8')
+      child.stdout!.on('data', (chunk: string) => {
         buf += chunk
         let start = 0
         let newlineIdx = buf.indexOf('\n', start)
@@ -119,7 +134,7 @@ export async function listQuickOpenFiles(rootPath: string, store: Store): Promis
         // Keep the incomplete trailing segment for the next chunk
         buf = start < buf.length ? buf.substring(start) : ''
       })
-      child.stderr.on('data', () => {
+      child.stderr!.on('data', () => {
         /* drain */
       })
       child.once('error', () => {
@@ -217,12 +232,12 @@ function listFilesWithGit(rootPath: string): Promise<string[]> {
 
       // Why: git ls-files outputs paths relative to cwd, so we set cwd to
       // rootPath and use the output directly — no prefix stripping needed.
-      const child = spawn('git', ['ls-files', ...args], {
+      const child = gitSpawn(['ls-files', ...args], {
         cwd: rootPath,
         stdio: ['ignore', 'pipe', 'pipe']
       })
-      child.stdout.setEncoding('utf-8')
-      child.stdout.on('data', (chunk: string) => {
+      child.stdout!.setEncoding('utf-8')
+      child.stdout!.on('data', (chunk: string) => {
         buf += chunk
         let start = 0
         let newlineIdx = buf.indexOf('\n', start)
@@ -233,7 +248,7 @@ function listFilesWithGit(rootPath: string): Promise<string[]> {
         }
         buf = start < buf.length ? buf.substring(start) : ''
       })
-      child.stderr.on('data', () => {
+      child.stderr!.on('data', () => {
         /* drain */
       })
       child.once('error', () => {

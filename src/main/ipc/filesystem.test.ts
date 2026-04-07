@@ -1,3 +1,4 @@
+import path from 'path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const handlers = new Map<string, (_event: unknown, args: unknown) => Promise<unknown> | unknown>()
@@ -72,19 +73,25 @@ vi.mock('../git/worktree', () => ({
 import { registerFilesystemHandlers } from './filesystem'
 import { invalidateAuthorizedRootsCache } from './filesystem-auth'
 
+// Why: paths are resolved via path.resolve() in production code, so test
+// data must use resolved paths to avoid Unix-vs-Windows mismatches.
+const REPO_PATH = path.resolve('/workspace/repo')
+const WORKSPACE_DIR = path.resolve('/workspace')
+const WORKTREE_FEATURE_PATH = path.resolve('/workspace/repo-feature')
+
 describe('registerFilesystemHandlers', () => {
   const store = {
     getRepos: () => [
       {
         id: 'repo-1',
-        path: '/workspace/repo',
+        path: REPO_PATH,
         displayName: 'repo',
         badgeColor: '#000',
         addedAt: 0
       }
     ],
     getSettings: () => ({
-      workspaceDir: '/workspace'
+      workspaceDir: WORKSPACE_DIR
     })
   }
 
@@ -122,7 +129,7 @@ describe('registerFilesystemHandlers', () => {
     realpathMock.mockImplementation(async (targetPath: string) => targetPath)
     listWorktreesMock.mockResolvedValue([
       {
-        path: '/workspace/repo-feature',
+        path: WORKTREE_FEATURE_PATH,
         head: 'abc',
         branch: '',
         isBare: false,
@@ -135,9 +142,10 @@ describe('registerFilesystemHandlers', () => {
   })
 
   it('rejects readFile when the real path escapes allowed roots', async () => {
+    const linkPath = path.resolve('/workspace/repo/link.txt')
     realpathMock.mockImplementation(async (targetPath: string) => {
-      if (targetPath === '/workspace/repo/link.txt') {
-        return '/private/secret.txt'
+      if (targetPath === linkPath) {
+        return path.resolve('/private/secret.txt')
       }
       return targetPath
     })
@@ -145,7 +153,7 @@ describe('registerFilesystemHandlers', () => {
     registerFilesystemHandlers(store as never)
 
     await expect(
-      handlers.get('fs:readFile')!(null, { filePath: '/workspace/repo/link.txt' })
+      handlers.get('fs:readFile')!(null, { filePath: linkPath })
     ).rejects.toThrow('Access denied: path resolves outside allowed directories')
 
     expect(readFileMock).not.toHaveBeenCalled()
@@ -158,7 +166,7 @@ describe('registerFilesystemHandlers', () => {
 
     await expect(
       handlers.get('fs:writeFile')!(null, {
-        filePath: '/workspace/repo/folder',
+        filePath: path.resolve('/workspace/repo/folder'),
         content: 'data'
       })
     ).rejects.toThrow('Cannot write to a directory')
@@ -180,7 +188,7 @@ describe('registerFilesystemHandlers', () => {
     readFileMock.mockResolvedValue(buf)
     registerFilesystemHandlers(store as never)
     await expect(
-      handlers.get('fs:readFile')!(null, { filePath: `/workspace/repo/file.${ext}` })
+      handlers.get('fs:readFile')!(null, { filePath: path.resolve(`/workspace/repo/file.${ext}`) })
     ).resolves.toEqual({
       content: buf.toString('base64'),
       isBinary: true,
@@ -191,10 +199,11 @@ describe('registerFilesystemHandlers', () => {
 
   it('moves files to trash', async () => {
     registerFilesystemHandlers(store as never)
+    const targetPath = path.resolve('/workspace/repo/file.txt')
 
-    await handlers.get('fs:deletePath')!(null, { targetPath: '/workspace/repo/file.txt' })
+    await handlers.get('fs:deletePath')!(null, { targetPath })
 
-    expect(trashItemMock).toHaveBeenCalledWith('/workspace/repo/file.txt')
+    expect(trashItemMock).toHaveBeenCalledWith(targetPath)
   })
 
   it('keeps non-image binaries hidden from the editor payload', async () => {
@@ -204,7 +213,7 @@ describe('registerFilesystemHandlers', () => {
     registerFilesystemHandlers(store as never)
 
     await expect(
-      handlers.get('fs:readFile')!(null, { filePath: '/workspace/repo/archive.zip' })
+      handlers.get('fs:readFile')!(null, { filePath: path.resolve('/workspace/repo/archive.zip') })
     ).resolves.toEqual({
       content: '',
       isBinary: true
@@ -217,11 +226,13 @@ describe('registerFilesystemHandlers', () => {
     registerFilesystemHandlers(store as never)
 
     await handlers.get('git:stage')!(null, {
-      worktreePath: '/workspace/repo-feature',
+      worktreePath: WORKTREE_FEATURE_PATH,
       filePath: './src/../src/file.ts'
     })
 
-    expect(stageFileMock).toHaveBeenCalledWith('/workspace/repo-feature', 'src/file.ts')
+    // Why: validateGitRelativeFilePath uses path.relative() which produces
+    // platform-specific separators (backslashes on Windows).
+    expect(stageFileMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, path.join('src', 'file.ts'))
   })
 
   it('rejects git file paths that escape the selected worktree', async () => {
@@ -229,7 +240,7 @@ describe('registerFilesystemHandlers', () => {
 
     await expect(
       handlers.get('git:discard')!(null, {
-        worktreePath: '/workspace/repo-feature',
+        worktreePath: WORKTREE_FEATURE_PATH,
         filePath: '../outside.txt'
       })
     ).rejects.toThrow('Access denied: git file path escapes the selected worktree')
@@ -244,7 +255,7 @@ describe('registerFilesystemHandlers', () => {
 
     await expect(
       handlers.get('git:status')!(null, {
-        worktreePath: '/workspace/repo-feature'
+        worktreePath: WORKTREE_FEATURE_PATH
       })
     ).rejects.toThrow('Access denied: unknown repository or worktree path')
 
@@ -268,11 +279,11 @@ describe('registerFilesystemHandlers', () => {
     registerFilesystemHandlers(store as never)
 
     await handlers.get('git:branchCompare')!(null, {
-      worktreePath: '/workspace/repo-feature',
+      worktreePath: WORKTREE_FEATURE_PATH,
       baseRef: 'origin/main'
     })
 
-    expect(getBranchCompareMock).toHaveBeenCalledWith('/workspace/repo-feature', 'origin/main')
+    expect(getBranchCompareMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, 'origin/main')
   })
 
   it('allows git operations on worktrees outside repo/workspace roots', async () => {
@@ -280,16 +291,17 @@ describe('registerFilesystemHandlers', () => {
     // As long as the path matches a worktree reported by `git worktree list`
     // for a registered repo, it should be allowed — the security boundary is
     // worktree registration, not directory containment.
+    const externalWorktreePath = path.resolve('/external/worktrees/feature')
     listWorktreesMock.mockResolvedValue([
       {
-        path: '/workspace/repo',
+        path: REPO_PATH,
         head: 'abc',
         branch: 'refs/heads/main',
         isBare: false,
         isMainWorktree: true
       },
       {
-        path: '/external/worktrees/feature',
+        path: externalWorktreePath,
         head: 'def',
         branch: 'refs/heads/feature',
         isBare: false,
@@ -312,13 +324,12 @@ describe('registerFilesystemHandlers', () => {
 
     registerFilesystemHandlers(store as never)
 
-    // /external/worktrees/feature is outside both /workspace/repo and /workspace
     await handlers.get('git:branchCompare')!(null, {
-      worktreePath: '/external/worktrees/feature',
+      worktreePath: externalWorktreePath,
       baseRef: 'origin/main'
     })
 
-    expect(getBranchCompareMock).toHaveBeenCalledWith('/external/worktrees/feature', 'origin/main')
+    expect(getBranchCompareMock).toHaveBeenCalledWith(externalWorktreePath, 'origin/main')
   })
 
   it('routes branch diff queries through the pinned branch diff helper', async () => {
@@ -333,7 +344,7 @@ describe('registerFilesystemHandlers', () => {
     registerFilesystemHandlers(store as never)
 
     await handlers.get('git:branchDiff')!(null, {
-      worktreePath: '/workspace/repo-feature',
+      worktreePath: WORKTREE_FEATURE_PATH,
       compare: {
         baseRef: 'origin/main',
         baseOid: 'base-oid',
@@ -344,11 +355,13 @@ describe('registerFilesystemHandlers', () => {
       oldPath: 'src/old-file.ts'
     })
 
-    expect(getBranchDiffMock).toHaveBeenCalledWith('/workspace/repo-feature', {
+    // Why: validateGitRelativeFilePath uses path.relative() which produces
+    // platform-specific separators (backslashes on Windows).
+    expect(getBranchDiffMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, {
       headOid: 'head-oid',
       mergeBase: 'merge-base-oid',
-      filePath: 'src/file.ts',
-      oldPath: 'src/old-file.ts'
+      filePath: path.join('src', 'file.ts'),
+      oldPath: path.join('src', 'old-file.ts')
     })
   })
 })

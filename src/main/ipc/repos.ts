@@ -6,8 +6,9 @@ import type { Repo } from '../../shared/types'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { REPO_COLORS } from '../../shared/constants'
 import { rebuildAuthorizedRootsCache } from './filesystem-auth'
-import { spawn } from 'child_process'
+import type { ChildProcess } from 'child_process'
 import { rm } from 'fs/promises'
+import { gitSpawn } from '../git/runner'
 import { join, basename } from 'path'
 import {
   isGitRepo,
@@ -20,7 +21,7 @@ import {
 // Why: module-scoped so the abort handle survives window re-creation on macOS.
 // registerRepoHandlers is called again when a new BrowserWindow is created,
 // and a function-scoped variable would lose the reference to an in-flight clone.
-let activeCloneProc: ReturnType<typeof spawn> | null = null
+let activeCloneProc: ChildProcess | null = null
 let activeClonePath: string | null = null
 
 export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): void {
@@ -154,14 +155,18 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       // Why: use --progress to force git to emit progress even when stderr
       // is not a TTY. Without it, git suppresses progress output when piped.
       await new Promise<void>((resolve, reject) => {
-        const proc = spawn('git', ['clone', '--progress', args.url, clonePath], {
+        // Why: clone destination may be a WSL path (e.g. user picks a WSL
+        // directory). Use the parent destination as the cwd so the runner
+        // detects WSL and routes through wsl.exe.
+        const proc = gitSpawn(['clone', '--progress', args.url, clonePath], {
+          cwd: args.destination,
           stdio: ['ignore', 'ignore', 'pipe']
         })
         activeCloneProc = proc
         activeClonePath = clonePath
 
         let stderrTail = ''
-        proc.stderr.on('data', (chunk: Buffer) => {
+        proc.stderr!.on('data', (chunk: Buffer) => {
           const text = chunk.toString()
           stderrTail = (stderrTail + text).slice(-4096)
 

@@ -1,3 +1,4 @@
+import path from 'path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const handlers = new Map<string, (_event: unknown, args: unknown) => Promise<unknown>>()
@@ -26,11 +27,16 @@ vi.mock('fs/promises', () => ({
 
 import { registerFilesystemMutationHandlers } from './filesystem-mutations'
 
+// Why: paths are resolved via path.resolve() in production code, so test
+// data must use resolved paths to avoid Unix-vs-Windows mismatches.
+const REPO_PATH = path.resolve('/workspace/repo')
+const WORKSPACE_DIR = path.resolve('/workspace')
+
 const store = {
   getRepos: () => [
-    { id: 'repo-1', path: '/workspace/repo', displayName: 'repo', badgeColor: '#000', addedAt: 0 }
+    { id: 'repo-1', path: REPO_PATH, displayName: 'repo', badgeColor: '#000', addedAt: 0 }
   ],
-  getSettings: () => ({ workspaceDir: '/workspace' })
+  getSettings: () => ({ workspaceDir: WORKSPACE_DIR })
 }
 
 function enoent(): Error {
@@ -73,10 +79,11 @@ describe('registerFilesystemMutationHandlers', () => {
   // ── fs:createFile ──────────────────────────────────────────────
 
   it('creates an empty file and its parent directories', async () => {
-    await handlers.get('fs:createFile')!(null, { filePath: '/workspace/repo/src/new.ts' })
+    const filePath = path.resolve('/workspace/repo/src/new.ts')
+    await handlers.get('fs:createFile')!(null, { filePath })
 
-    expect(mkdirMock).toHaveBeenCalledWith('/workspace/repo/src', { recursive: true })
-    expect(writeFileMock).toHaveBeenCalledWith('/workspace/repo/src/new.ts', '', {
+    expect(mkdirMock).toHaveBeenCalledWith(path.resolve('/workspace/repo/src'), { recursive: true })
+    expect(writeFileMock).toHaveBeenCalledWith(filePath, '', {
       encoding: 'utf-8',
       flag: 'wx'
     })
@@ -88,17 +95,17 @@ describe('registerFilesystemMutationHandlers', () => {
     writeFileMock.mockRejectedValue(Object.assign(new Error('EEXIST'), { code: 'EEXIST' }))
 
     await expect(
-      handlers.get('fs:createFile')!(null, { filePath: '/workspace/repo/existing.ts' })
+      handlers.get('fs:createFile')!(null, { filePath: path.resolve('/workspace/repo/existing.ts') })
     ).rejects.toThrow("A file or folder named 'existing.ts' already exists in this location")
   })
 
   it('rejects file creation outside allowed roots', async () => {
     mockRealpath({
-      '/workspace/repo/link.ts': '/private/secret.ts'
+      [path.resolve('/workspace/repo/link.ts')]: path.resolve('/private/secret.ts')
     })
 
     await expect(
-      handlers.get('fs:createFile')!(null, { filePath: '/workspace/repo/link.ts' })
+      handlers.get('fs:createFile')!(null, { filePath: path.resolve('/workspace/repo/link.ts') })
     ).rejects.toThrow('Access denied')
 
     expect(writeFileMock).not.toHaveBeenCalled()
@@ -107,16 +114,17 @@ describe('registerFilesystemMutationHandlers', () => {
   // ── fs:createDir ───────────────────────────────────────────────
 
   it('creates a directory recursively', async () => {
-    await handlers.get('fs:createDir')!(null, { dirPath: '/workspace/repo/src/components' })
+    const dirPath = path.resolve('/workspace/repo/src/components')
+    await handlers.get('fs:createDir')!(null, { dirPath })
 
-    expect(mkdirMock).toHaveBeenCalledWith('/workspace/repo/src/components', { recursive: true })
+    expect(mkdirMock).toHaveBeenCalledWith(dirPath, { recursive: true })
   })
 
   it('rejects directory creation when path already exists', async () => {
     lstatMock.mockResolvedValue({ isDirectory: () => true })
 
     await expect(
-      handlers.get('fs:createDir')!(null, { dirPath: '/workspace/repo/src' })
+      handlers.get('fs:createDir')!(null, { dirPath: path.resolve('/workspace/repo/src') })
     ).rejects.toThrow("A file or folder named 'src' already exists in this location")
 
     expect(mkdirMock).not.toHaveBeenCalled()
@@ -124,11 +132,11 @@ describe('registerFilesystemMutationHandlers', () => {
 
   it('rejects directory creation outside allowed roots', async () => {
     mockRealpath({
-      '/workspace/repo/escape': '/etc/evil'
+      [path.resolve('/workspace/repo/escape')]: path.resolve('/etc/evil')
     })
 
     await expect(
-      handlers.get('fs:createDir')!(null, { dirPath: '/workspace/repo/escape' })
+      handlers.get('fs:createDir')!(null, { dirPath: path.resolve('/workspace/repo/escape') })
     ).rejects.toThrow('Access denied')
 
     expect(mkdirMock).not.toHaveBeenCalled()
@@ -137,17 +145,17 @@ describe('registerFilesystemMutationHandlers', () => {
   // ── fs:rename ──────────────────────────────────────────────────
 
   it('renames a file within the same directory', async () => {
-    await handlers.get('fs:rename')!(null, {
-      oldPath: '/workspace/repo/old.ts',
-      newPath: '/workspace/repo/new.ts'
-    })
+    const oldPath = path.resolve('/workspace/repo/old.ts')
+    const newPath = path.resolve('/workspace/repo/new.ts')
+    await handlers.get('fs:rename')!(null, { oldPath, newPath })
 
-    expect(renameMock).toHaveBeenCalledWith('/workspace/repo/old.ts', '/workspace/repo/new.ts')
+    expect(renameMock).toHaveBeenCalledWith(oldPath, newPath)
   })
 
   it('rejects rename when destination already exists', async () => {
+    const resolvedNewPath = path.resolve('/workspace/repo/new.ts')
     lstatMock.mockImplementation(async (p: string) => {
-      if (p === '/workspace/repo/new.ts') {
+      if (p === resolvedNewPath) {
         return { isDirectory: () => false }
       }
       throw enoent()
@@ -155,8 +163,8 @@ describe('registerFilesystemMutationHandlers', () => {
 
     await expect(
       handlers.get('fs:rename')!(null, {
-        oldPath: '/workspace/repo/old.ts',
-        newPath: '/workspace/repo/new.ts'
+        oldPath: path.resolve('/workspace/repo/old.ts'),
+        newPath: resolvedNewPath
       })
     ).rejects.toThrow("A file or folder named 'new.ts' already exists in this location")
 
@@ -165,13 +173,13 @@ describe('registerFilesystemMutationHandlers', () => {
 
   it('rejects rename when new path escapes allowed roots', async () => {
     mockRealpath({
-      '/workspace/repo/escape.ts': '/private/escape.ts'
+      [path.resolve('/workspace/repo/escape.ts')]: path.resolve('/private/escape.ts')
     })
 
     await expect(
       handlers.get('fs:rename')!(null, {
-        oldPath: '/workspace/repo/old.ts',
-        newPath: '/workspace/repo/escape.ts'
+        oldPath: path.resolve('/workspace/repo/old.ts'),
+        newPath: path.resolve('/workspace/repo/escape.ts')
       })
     ).rejects.toThrow('Access denied')
 
@@ -180,13 +188,13 @@ describe('registerFilesystemMutationHandlers', () => {
 
   it('rejects rename when old path escapes allowed roots', async () => {
     mockRealpath({
-      '/workspace/repo/symlink.ts': '/private/secret.ts'
+      [path.resolve('/workspace/repo/symlink.ts')]: path.resolve('/private/secret.ts')
     })
 
     await expect(
       handlers.get('fs:rename')!(null, {
-        oldPath: '/workspace/repo/symlink.ts',
-        newPath: '/workspace/repo/new.ts'
+        oldPath: path.resolve('/workspace/repo/symlink.ts'),
+        newPath: path.resolve('/workspace/repo/new.ts')
       })
     ).rejects.toThrow('Access denied')
 
@@ -199,7 +207,7 @@ describe('registerFilesystemMutationHandlers', () => {
     lstatMock.mockRejectedValue(new Error('EPERM: operation not permitted'))
 
     await expect(
-      handlers.get('fs:createDir')!(null, { dirPath: '/workspace/repo/locked' })
+      handlers.get('fs:createDir')!(null, { dirPath: path.resolve('/workspace/repo/locked') })
     ).rejects.toThrow('EPERM')
 
     expect(mkdirMock).not.toHaveBeenCalled()
@@ -209,7 +217,9 @@ describe('registerFilesystemMutationHandlers', () => {
     mkdirMock.mockRejectedValue(new Error('EACCES: permission denied'))
 
     await expect(
-      handlers.get('fs:createFile')!(null, { filePath: '/workspace/repo/nowrite/file.ts' })
+      handlers.get('fs:createFile')!(null, {
+        filePath: path.resolve('/workspace/repo/nowrite/file.ts')
+      })
     ).rejects.toThrow('EACCES')
 
     expect(writeFileMock).not.toHaveBeenCalled()
@@ -220,8 +230,8 @@ describe('registerFilesystemMutationHandlers', () => {
 
     await expect(
       handlers.get('fs:rename')!(null, {
-        oldPath: '/workspace/repo/gone.ts',
-        newPath: '/workspace/repo/new.ts'
+        oldPath: path.resolve('/workspace/repo/gone.ts'),
+        newPath: path.resolve('/workspace/repo/new.ts')
       })
     ).rejects.toThrow('ENOENT')
   })

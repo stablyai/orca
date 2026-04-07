@@ -1,8 +1,10 @@
 /* eslint-disable max-lines -- Why: the Orca runtime is the authoritative live control plane for the CLI, so handle validation, selector resolution, wait state, and summaries are kept together to avoid split-brain behavior. */
 /* eslint-disable unicorn/no-useless-spread -- Why: waiter sets and handle keys are cloned intentionally before mutation so resolution and rejection can safely remove entries while iterating. */
 /* eslint-disable no-control-regex -- Why: terminal normalization must strip ANSI and OSC control sequences from PTY output before returning bounded text to agents. */
-import { execFileSync } from 'child_process'
+import { gitExecFileSync } from '../git/runner'
+import { isWslPath, parseWslPath, getWslHome } from '../wsl'
 import { randomUUID } from 'crypto'
+import { join } from 'path'
 import { rm } from 'fs/promises'
 import type { CreateWorktreeResult, Repo } from '../../shared/types'
 import { isFolderRepo } from '../../shared/repo-kind'
@@ -595,16 +597,25 @@ export class OrcaRuntimeService {
     }
 
     let worktreePath = computeWorktreePath(sanitizedName, repo.path, settings)
-    worktreePath = ensurePathWithinWorkspace(worktreePath, settings.workspaceDir)
+    if (isWslPath(repo.path)) {
+      const wslInfo = parseWslPath(repo.path)
+      const wslHome = wslInfo ? getWslHome(wslInfo.distro) : null
+      if (wslHome) {
+        worktreePath = ensurePathWithinWorkspace(
+          worktreePath,
+          join(wslHome, 'orca', 'workspaces')
+        )
+      } else {
+        worktreePath = ensurePathWithinWorkspace(worktreePath, settings.workspaceDir)
+      }
+    } else {
+      worktreePath = ensurePathWithinWorkspace(worktreePath, settings.workspaceDir)
+    }
     const baseBranch = args.baseBranch || repo.worktreeBaseRef || getDefaultBaseRef(repo.path)
 
     const remote = baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'
     try {
-      execFileSync('git', ['fetch', remote], {
-        cwd: repo.path,
-        encoding: 'utf-8',
-        stdio: ['pipe', 'pipe', 'pipe']
-      })
+      gitExecFileSync(['fetch', remote], { cwd: repo.path })
     } catch {
       // Why: matching the editor behavior keeps CLI creation usable offline.
     }

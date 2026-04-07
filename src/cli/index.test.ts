@@ -1,3 +1,4 @@
+import path from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
@@ -46,12 +47,15 @@ describe('orca cli worktree awareness', () => {
   })
 
   it('builds the current worktree selector from cwd', () => {
-    expect(buildCurrentWorktreeSelector('/tmp/repo/feature')).toBe('path:/tmp/repo/feature')
+    expect(buildCurrentWorktreeSelector('/tmp/repo/feature')).toBe(
+      `path:${path.resolve('/tmp/repo/feature')}`
+    )
   })
 
   it('normalizes active/current worktree selectors to cwd', () => {
-    expect(normalizeWorktreeSelector('active', '/tmp/repo/feature')).toBe('path:/tmp/repo/feature')
-    expect(normalizeWorktreeSelector('current', '/tmp/repo/feature')).toBe('path:/tmp/repo/feature')
+    const resolved = path.resolve('/tmp/repo/feature')
+    expect(normalizeWorktreeSelector('active', '/tmp/repo/feature')).toBe(`path:${resolved}`)
+    expect(normalizeWorktreeSelector('current', '/tmp/repo/feature')).toBe(`path:${resolved}`)
     expect(normalizeWorktreeSelector('branch:feature/foo', '/tmp/repo/feature')).toBe(
       'branch:feature/foo'
     )
@@ -110,7 +114,7 @@ describe('orca cli worktree awareness', () => {
       limit: 10_000
     })
     expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.show', {
-      worktree: 'path:/tmp/repo/feature'
+      worktree: `path:${path.resolve('/tmp/repo/feature')}`
     })
     expect(logSpy).toHaveBeenCalledTimes(1)
   })
@@ -185,7 +189,7 @@ describe('orca cli worktree awareness', () => {
     )
 
     expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.set', {
-      worktree: 'path:/tmp/repo/feature',
+      worktree: `path:${path.resolve('/tmp/repo/feature')}`,
       displayName: undefined,
       linkedIssue: undefined,
       comment: 'hello'
@@ -242,7 +246,7 @@ describe('orca cli worktree awareness', () => {
     await main(['worktree', 'show', '--worktree', 'current', '--json'], '/tmp/repo/feature/src')
 
     expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.show', {
-      worktree: 'path:/tmp/repo/feature'
+      worktree: `path:${path.resolve('/tmp/repo/feature')}`
     })
   })
 
@@ -294,7 +298,7 @@ describe('orca cli worktree awareness', () => {
     await main(['terminal', 'list', '--worktree', 'active', '--json'], '/tmp/repo/feature/src')
 
     expect(callMock).toHaveBeenNthCalledWith(2, 'terminal.list', {
-      worktree: 'path:/tmp/repo/feature',
+      worktree: `path:${path.resolve('/tmp/repo/feature')}`,
       limit: undefined
     })
   })

@@ -3,6 +3,7 @@ import { existsSync, accessSync, statSync, constants as fsConstants } from 'fs'
 import { type BrowserWindow, ipcMain } from 'electron'
 import * as pty from 'node-pty'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { parseWslPath } from '../wsl'
 
 let ptyCounter = 0
 const ptyProcesses = new Map<string, pty.IPty>()
@@ -79,22 +80,42 @@ export function registerPtyHandlers(mainWindow: BrowserWindow, runtime?: OrcaRun
     (_event, args: { cols: number; rows: number; cwd?: string; env?: Record<string, string> }) => {
       const id = String(++ptyCounter)
 
-      let shellPath: string
-      let shellArgs: string[]
-      if (process.platform === 'win32') {
-        shellPath = process.env.COMSPEC || 'powershell.exe'
-        shellArgs = []
-      } else {
-        shellPath = process.env.SHELL || '/bin/zsh'
-        shellArgs = ['-l']
-      }
-
       const defaultCwd =
         process.platform === 'win32'
           ? process.env.USERPROFILE || process.env.HOMEPATH || 'C:\\'
           : process.env.HOME || '/'
 
       const cwd = args.cwd || defaultCwd
+
+      // Why: when the working directory is inside a WSL filesystem, spawn a
+      // WSL shell (wsl.exe) instead of a native Windows shell. This gives the
+      // user a Linux environment with access to their WSL-installed tools
+      // (git, node, etc.) rather than a PowerShell with no WSL toolchain.
+      const wslInfo = process.platform === 'win32' ? parseWslPath(cwd) : null
+
+      let shellPath: string
+      let shellArgs: string[]
+      let effectiveCwd: string
+      if (wslInfo) {
+        // Why: use `bash -c "cd ... && exec bash -l"` instead of `--cd` because
+        // wsl.exe's --cd flag fails with ERROR_PATH_NOT_FOUND in some Node
+        // spawn configurations. The exec replaces the outer bash with a login
+        // shell so the user gets their normal shell environment.
+        const escapedCwd = wslInfo.linuxPath.replace(/'/g, "'\\''")
+        shellPath = 'wsl.exe'
+        shellArgs = ['-d', wslInfo.distro, '--', 'bash', '-c', `cd '${escapedCwd}' && exec bash -l`]
+        // Why: set cwd to a valid Windows directory so node-pty's native
+        // spawn doesn't fail on the UNC path.
+        effectiveCwd = process.env.USERPROFILE || process.env.HOMEPATH || 'C:\\'
+      } else if (process.platform === 'win32') {
+        shellPath = process.env.COMSPEC || 'powershell.exe'
+        shellArgs = []
+        effectiveCwd = cwd
+      } else {
+        shellPath = process.env.SHELL || '/bin/zsh'
+        shellArgs = ['-l']
+        effectiveCwd = cwd
+      }
 
       // Why: node-pty's posix_spawnp error is opaque (no errno). Pre-validate
       // the shell binary and cwd so we can surface actionable diagnostics
@@ -115,14 +136,14 @@ export function registerPtyHandlers(mainWindow: BrowserWindow, runtime?: OrcaRun
         }
       }
 
-      if (!existsSync(cwd)) {
+      if (!existsSync(effectiveCwd)) {
         throw new Error(
-          `Working directory "${cwd}" does not exist. ` +
+          `Working directory "${effectiveCwd}" does not exist. ` +
             `It may have been deleted or is on an unmounted volume.`
         )
       }
-      if (!statSync(cwd).isDirectory()) {
-        throw new Error(`Working directory "${cwd}" is not a directory.`)
+      if (!statSync(effectiveCwd).isDirectory()) {
+        throw new Error(`Working directory "${effectiveCwd}" is not a directory.`)
       }
 
       const spawnEnv = {
@@ -140,7 +161,7 @@ export function registerPtyHandlers(mainWindow: BrowserWindow, runtime?: OrcaRun
           name: 'xterm-256color',
           cols: args.cols,
           rows: args.rows,
-          cwd,
+          cwd: effectiveCwd,
           env: spawnEnv
         })
       } catch (err) {
@@ -166,7 +187,7 @@ export function registerPtyHandlers(mainWindow: BrowserWindow, runtime?: OrcaRun
                 name: 'xterm-256color',
                 cols: args.cols,
                 rows: args.rows,
-                cwd,
+                cwd: effectiveCwd,
                 env: spawnEnv
               })
               // Fallback succeeded — update shellPath for the basename tracking below.
@@ -184,7 +205,7 @@ export function registerPtyHandlers(mainWindow: BrowserWindow, runtime?: OrcaRun
         if (!ptyProcess) {
           const diag = [
             `shell: ${shellPath}`,
-            `cwd: ${cwd}`,
+            `cwd: ${effectiveCwd}`,
             `arch: ${process.arch}`,
             `platform: ${process.platform} ${process.getSystemVersion?.() ?? ''}`
           ].join(', ')

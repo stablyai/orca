@@ -1,6 +1,5 @@
 import type { BrowserWindow } from 'electron'
 import { ipcMain } from 'electron'
-import { execFileSync } from 'child_process'
 import { rm } from 'fs/promises'
 import type { Store } from '../persistence'
 import { isFolderRepo } from '../../shared/repo-kind'
@@ -13,6 +12,9 @@ import type {
 import { getPRForBranch } from '../github/client'
 import { listWorktrees, addWorktree, removeWorktree } from '../git/worktree'
 import { getGitUsername, getDefaultBaseRef, getBranchConflictKind } from '../git/repo'
+import { gitExecFileSync } from '../git/runner'
+import { isWslPath, parseWslPath, getWslHome } from '../wsl'
+import { join } from 'path'
 import { listRepoWorktrees } from '../repo-worktrees'
 import {
   createSetupRunnerScript,
@@ -130,7 +132,25 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
 
       // Compute worktree path
       let worktreePath = computeWorktreePath(sanitizedName, repo.path, settings)
-      worktreePath = ensurePathWithinWorkspace(worktreePath, settings.workspaceDir)
+      if (isWslPath(repo.path)) {
+        // Why: WSL worktrees live under ~/orca/workspaces inside the WSL
+        // filesystem. Validate against that root, not the Windows workspace dir.
+        const wslInfo = parseWslPath(repo.path)
+        const wslHome = wslInfo ? getWslHome(wslInfo.distro) : null
+        if (wslHome) {
+          worktreePath = ensurePathWithinWorkspace(
+            worktreePath,
+            join(wslHome, 'orca', 'workspaces')
+          )
+        } else {
+          // Why: if WSL home resolution fails (distro unresponsive, etc.),
+          // computeWorktreePath falls back to the Windows workspace dir.
+          // Still validate against it so the path check is never skipped.
+          worktreePath = ensurePathWithinWorkspace(worktreePath, settings.workspaceDir)
+        }
+      } else {
+        worktreePath = ensurePathWithinWorkspace(worktreePath, settings.workspaceDir)
+      }
 
       // Determine base branch
       const baseBranch = args.baseBranch || repo.worktreeBaseRef || getDefaultBaseRef(repo.path)
@@ -145,11 +165,7 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
       // Fetch latest from remote so the worktree starts with up-to-date content
       const remote = baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'
       try {
-        execFileSync('git', ['fetch', remote], {
-          cwd: repo.path,
-          encoding: 'utf-8',
-          stdio: ['pipe', 'pipe', 'pipe']
-        })
+        gitExecFileSync(['fetch', remote], { cwd: repo.path })
       } catch {
         // Fetch is best-effort — don't block worktree creation if offline
       }

@@ -1,5 +1,6 @@
 import { basename, join, resolve, relative, isAbsolute, posix, win32 } from 'path'
 import type { GitWorktreeInfo, Worktree, WorktreeMeta } from '../../shared/types'
+import { getWslHome, parseWslPath } from '../wsl'
 
 /**
  * Sanitize a worktree name for use in branch names and directory paths.
@@ -56,12 +57,32 @@ export function computeBranchName(
 
 /**
  * Compute the filesystem path where the worktree directory will be created.
+ *
+ * Why WSL special case: when the repo lives on a WSL filesystem, worktrees
+ * must also live on the WSL filesystem. Creating them on the Windows side
+ * (/mnt/c/...) would be extremely slow due to cross-filesystem I/O and
+ * the terminal would open a Windows shell instead of WSL. We mirror the
+ * Windows workspace layout inside ~/orca/workspaces on the WSL filesystem
+ * (e.g. \\wsl.localhost\Ubuntu\home\user\orca\workspaces\repo\feature).
  */
 export function computeWorktreePath(
   sanitizedName: string,
   repoPath: string,
   settings: { nestWorkspaces: boolean; workspaceDir: string }
 ): string {
+  const wsl = parseWslPath(repoPath)
+  if (wsl) {
+    const wslHome = getWslHome(wsl.distro)
+    if (wslHome) {
+      const wslWorkspaceDir = join(wslHome, 'orca', 'workspaces')
+      if (settings.nestWorkspaces) {
+        const repoName = basename(repoPath).replace(/\.git$/, '')
+        return join(wslWorkspaceDir, repoName, sanitizedName)
+      }
+      return join(wslWorkspaceDir, sanitizedName)
+    }
+  }
+
   if (settings.nestWorkspaces) {
     const repoName = basename(repoPath).replace(/\.git$/, '')
     return join(settings.workspaceDir, repoName, sanitizedName)
