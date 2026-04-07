@@ -52,6 +52,21 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         }
         return { repos: [...s.repos, repo] }
       })
+
+      // Why: auto-select the newly added repo only when no repo is currently selected
+      // so first-time users land on the repo onboarding panel immediately, while users
+      // staging multiple repos in sequence are not forced through a dismiss cycle.
+      // Defensive: treat a stale activeRepoId (pointing to a removed repo) as null.
+      const state = get()
+      const currentActiveId = state.activeRepoId
+      const activeRepoStillExists =
+        currentActiveId !== null && state.repos.some((r) => r.id === currentActiveId)
+      if (!activeRepoStillExists) {
+        set({ activeRepoId: repo.id })
+        // Fetch worktrees so the onboarding panel can show linked worktrees immediately
+        void get().fetchWorktrees(repo.id)
+      }
+
       if (alreadyAdded) {
         toast.info('Repo already added', { description: repo.displayName })
       } else {
