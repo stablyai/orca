@@ -174,9 +174,17 @@ export function useTerminalKeyboardShortcuts({
       }
 
       // Cmd+D / Cmd+Shift+D split the active pane in the focused tab only.
+      // Exit expanded mode first so the new split gets proper dimensions
+      // (matches Ghostty behavior).
       if (e.key.toLowerCase() === 'd') {
         e.preventDefault()
         e.stopPropagation()
+        if (expandedPaneIdRef.current !== null) {
+          setExpandedPane(null)
+          restoreExpandedLayout()
+          refreshPaneSizes(true)
+          persistLayoutSnapshot()
+        }
         const pane = manager.getActivePane() ?? manager.getPanes()[0]
         if (!pane) {
           return
