@@ -17,6 +17,7 @@ import { useFileExplorerReveal } from './useFileExplorerReveal'
 import { useFileExplorerInlineInput } from './useFileExplorerInlineInput'
 import { useFileExplorerKeys } from './useFileExplorerKeys'
 import { useActiveWorktreePath } from './useActiveWorktreePath'
+import { useFileDuplicate } from './useFileDuplicate'
 import { useFileExplorerDragDrop } from './useFileExplorerDragDrop'
 import { useFileExplorerTree } from './useFileExplorerTree'
 
@@ -236,6 +237,8 @@ export default function FileExplorer(): React.JSX.Element {
     [activeWorktreeId, pinFile]
   )
 
+  const handleDuplicate = useFileDuplicate({ worktreePath, refreshDir })
+
   const handleWheelCapture = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
     const container = scrollRef.current
     if (!container || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) {
@@ -385,6 +388,7 @@ export default function FileExplorer(): React.JSX.Element {
                   onSelect={() => setSelectedPath(n.path)}
                   onStartNew={startNew}
                   onStartRename={startRename}
+                  onDuplicate={handleDuplicate}
                   onRequestDelete={() => requestDelete(n)}
                   onMoveDrop={handleMoveDrop}
                   onDragTargetChange={setDropTargetDir}

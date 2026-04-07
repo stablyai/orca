@@ -4,6 +4,7 @@ import {
   Copy,
   File,
   FilePlus,
+  Files,
   Folder,
   FolderOpen,
   FolderPlus,
@@ -190,6 +191,7 @@ type FileExplorerRowProps = {
   onSelect: () => void
   onStartNew: (type: 'file' | 'folder', dir: string, depth: number) => void
   onStartRename: (node: TreeNode) => void
+  onDuplicate: (node: TreeNode) => void
   onRequestDelete: () => void
   onMoveDrop: (sourcePath: string, destDir: string) => void
   onDragTargetChange: (dir: string | null) => void
@@ -215,6 +217,7 @@ export function FileExplorerRow({
   onSelect,
   onStartNew,
   onStartRename,
+  onDuplicate,
   onRequestDelete,
   onMoveDrop,
   onDragTargetChange,
@@ -384,6 +387,12 @@ export function FileExplorerRow({
           Copy Relative Path
           <ContextMenuShortcut>{isMac ? '⌥⇧⌘C' : 'Ctrl+Shift+Alt+C'}</ContextMenuShortcut>
         </ContextMenuItem>
+        {!node.isDirectory && (
+          <ContextMenuItem onSelect={() => onDuplicate(node)}>
+            <Files />
+            Duplicate
+          </ContextMenuItem>
+        )}
         <ContextMenuSeparator />
         <ContextMenuItem onSelect={() => onStartRename(node)}>
           <Pencil />

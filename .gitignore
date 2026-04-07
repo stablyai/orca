@@ -53,3 +53,4 @@ design-docs/
 .stably/*
 !.stably/docs/
 .playwright-cli
+.validate-ui-screenshots/
