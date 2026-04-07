@@ -144,7 +144,7 @@ export default function TabBar({
 
   return (
     <div
-      className="flex items-stretch h-9 bg-card border-b border-border overflow-hidden shrink-0"
+      className="flex items-stretch h-full overflow-hidden flex-1 min-w-0"
       // Why: only drops aimed at the top tab/session strip should open files in
       // Orca's editor. Terminal-pane drops need to keep inserting file paths
       // into the active coding CLI, so preload routes native OS drops based on
@@ -154,9 +154,13 @@ export default function TabBar({
     >
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={sortableIds} strategy={horizontalListSortingStrategy}>
+          {/* Why: no-drag lets tab interactions work inside the titlebar's drag
+              region. The outer container inherits drag so empty space after the
+              "+" button remains window-draggable. */}
           <div
             ref={tabStripRef}
             className="terminal-tab-strip flex items-stretch overflow-x-auto overflow-y-hidden"
+            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           >
             {orderedItems.map((item, index) => {
               if (item.type === 'terminal') {
@@ -198,6 +202,7 @@ export default function TabBar({
       </DndContext>
       <button
         className="flex items-center justify-center w-9 h-full shrink-0 text-muted-foreground hover:text-foreground hover:bg-accent/50"
+        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         onClick={onNewTab}
         title="New terminal (Cmd+T)"
       >

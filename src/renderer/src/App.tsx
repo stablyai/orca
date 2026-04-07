@@ -103,6 +103,7 @@ function App(): React.JSX.Element {
   const openModal = useAppStore((s) => s.openModal)
   const repos = useAppStore((s) => s.repos)
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
+  const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const groupBy = useAppStore((s) => s.groupBy)
   const sortBy = useAppStore((s) => s.sortBy)
   const showActiveOnly = useAppStore((s) => s.showActiveOnly)
@@ -480,18 +481,32 @@ function App(): React.JSX.Element {
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden">
       <div className="titlebar">
-        <div className={isMac && !isFullScreen ? 'titlebar-traffic-light-pad' : 'pl-2'} />
-        <button
-          className="sidebar-toggle"
-          onClick={toggleSidebar}
-          title={showSidebar ? 'Toggle sidebar' : 'Sidebar unavailable in settings'}
-          aria-label={showSidebar ? 'Toggle sidebar' : 'Sidebar unavailable in settings'}
-          disabled={!showSidebar}
+        {/* Why: the left section of the titlebar matches the sidebar width so
+            tabs start exactly where the sidebar ends, creating a clean vertical
+            alignment between the sidebar edge and the first tab. */}
+        <div
+          className="flex items-center shrink-0 overflow-hidden"
+          style={{ width: showSidebar && sidebarOpen ? sidebarWidth : undefined }}
         >
-          <PanelLeft size={16} />
-        </button>
-        <div className="titlebar-title">Orca</div>
-        <div className="titlebar-spacer" />
+          <div className={isMac && !isFullScreen ? 'titlebar-traffic-light-pad' : 'pl-2'} />
+          <button
+            className="sidebar-toggle"
+            onClick={toggleSidebar}
+            title={showSidebar ? 'Toggle sidebar' : 'Sidebar unavailable in settings'}
+            aria-label={showSidebar ? 'Toggle sidebar' : 'Sidebar unavailable in settings'}
+            disabled={!showSidebar}
+          >
+            <PanelLeft size={16} />
+          </button>
+          <div className="titlebar-title">Orca</div>
+        </div>
+        {/* Why: portal target for the TabBar rendered by Terminal.tsx.
+            Hidden when tabs should not be visible (settings view, no active worktree)
+            so the portal content does not leak through. */}
+        <div
+          id="titlebar-tabs"
+          className={`flex flex-1 min-w-0 self-stretch${activeView === 'settings' || !activeWorktreeId ? ' hidden' : ''}`}
+        />
         {showTitlebarExpandButton && (
           <button
             className="titlebar-icon-button"

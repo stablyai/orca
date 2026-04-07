@@ -1,6 +1,7 @@
 /* eslint-disable max-lines */
 
 import { useEffect, useCallback, useRef, useState, lazy, Suspense } from 'react'
+import { createPortal } from 'react-dom'
 import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
 import { useAppStore } from '../store'
 import {
@@ -54,6 +55,14 @@ export default function Terminal(): React.JSX.Element | null {
 
   const tabs = activeWorktreeId ? (tabsByWorktree[activeWorktreeId] ?? []) : []
   const allWorktrees = Object.values(worktreesByRepo).flat()
+
+  // Why: the TabBar is rendered into the titlebar via a portal so tabs share
+  // the same row as the "Orca" title. The target element is created by App.tsx.
+  // Uses useEffect because the DOM element doesn't exist during the render phase.
+  const [titlebarTabsTarget, setTitlebarTabsTarget] = useState<HTMLElement | null>(null)
+  useEffect(() => {
+    setTitlebarTabsTarget(document.getElementById('titlebar-tabs'))
+  }, [])
 
   // Filter editor files to only show those belonging to the active worktree
   const worktreeFiles = activeWorktreeId
@@ -426,42 +435,40 @@ export default function Terminal(): React.JSX.Element | null {
     >
       <EditorAutosaveController />
 
-      {/* Animated tab bar container using CSS grid for smooth height animation */}
-      <div
-        className="grid transition-[grid-template-rows] duration-200 ease-in-out"
-        style={{ gridTemplateRows: activeWorktreeId ? '1fr' : '0fr' }}
-      >
-        <div className="overflow-hidden">
-          {activeWorktreeId && (
-            <TabBar
-              tabs={tabs}
-              activeTabId={activeTabId}
-              worktreeId={activeWorktreeId}
-              onActivate={handleActivateTab}
-              onClose={handleCloseTab}
-              onCloseOthers={handleCloseOthers}
-              onCloseToRight={handleCloseTabsToRight}
-              onReorder={setTabBarOrder}
-              onNewTab={handleNewTab}
-              onSetCustomTitle={setTabCustomTitle}
-              onSetTabColor={setTabColor}
-              expandedPaneByTabId={expandedPaneByTabId}
-              onTogglePaneExpand={handleTogglePaneExpand}
-              editorFiles={worktreeFiles}
-              activeFileId={activeFileId}
-              activeTabType={activeTabType}
-              onActivateFile={(fileId) => {
-                setActiveFile(fileId)
-                setActiveTabType('editor')
-              }}
-              onCloseFile={handleCloseFile}
-              onCloseAllFiles={closeAllFiles}
-              onPinFile={pinFile}
-              tabBarOrder={tabBarOrder}
-            />
-          )}
-        </div>
-      </div>
+      {/* Why: the tab bar is rendered into the titlebar via a portal so it
+          shares the same visual row as the "Orca" title. The portal target
+          (#titlebar-tabs) lives in App.tsx's titlebar. */}
+      {activeWorktreeId &&
+        titlebarTabsTarget &&
+        createPortal(
+          <TabBar
+            tabs={tabs}
+            activeTabId={activeTabId}
+            worktreeId={activeWorktreeId}
+            onActivate={handleActivateTab}
+            onClose={handleCloseTab}
+            onCloseOthers={handleCloseOthers}
+            onCloseToRight={handleCloseTabsToRight}
+            onReorder={setTabBarOrder}
+            onNewTab={handleNewTab}
+            onSetCustomTitle={setTabCustomTitle}
+            onSetTabColor={setTabColor}
+            expandedPaneByTabId={expandedPaneByTabId}
+            onTogglePaneExpand={handleTogglePaneExpand}
+            editorFiles={worktreeFiles}
+            activeFileId={activeFileId}
+            activeTabType={activeTabType}
+            onActivateFile={(fileId) => {
+              setActiveFile(fileId)
+              setActiveTabType('editor')
+            }}
+            onCloseFile={handleCloseFile}
+            onCloseAllFiles={closeAllFiles}
+            onPinFile={pinFile}
+            tabBarOrder={tabBarOrder}
+          />,
+          titlebarTabsTarget
+        )}
 
       {/* Terminal panes container - hidden when editor tab active */}
       <div
