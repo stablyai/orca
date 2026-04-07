@@ -1,6 +1,7 @@
 /* eslint-disable max-lines */
 import { useEffect } from 'react'
 import { DEFAULT_WORKTREE_CARD_PROPERTIES } from '../../shared/constants'
+import { isGitRepoKind } from '../../shared/repo-kind'
 
 import { Minimize2, PanelLeft, PanelRight } from 'lucide-react'
 import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
@@ -381,7 +382,7 @@ function App(): React.JSX.Element {
 
       // Cmd/Ctrl+N — create worktree
       if (!e.altKey && !e.shiftKey && e.key.toLowerCase() === 'n') {
-        if (repos.length === 0) {
+        if (!repos.some((repo) => isGitRepoKind(repo))) {
           return
         }
         e.preventDefault()
@@ -419,7 +420,7 @@ function App(): React.JSX.Element {
     activeView,
     activeWorktreeId,
     openModal,
-    repos.length,
+    repos,
     toggleSidebar,
     toggleRightSidebar,
     setRightSidebarTab,

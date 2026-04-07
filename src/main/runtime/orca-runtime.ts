@@ -5,6 +5,7 @@ import { execFileSync } from 'child_process'
 import { randomUUID } from 'crypto'
 import { rm } from 'fs/promises'
 import type { CreateWorktreeResult, Repo } from '../../shared/types'
+import { isFolderRepo } from '../../shared/repo-kind'
 import type {
   RuntimeGraphStatus,
   RuntimeRepoSearchRefs,
@@ -22,13 +23,19 @@ import type {
   RuntimeSyncWindowGraph,
   RuntimeWorktreeListResult
 } from '../../shared/runtime-types'
-import { listWorktrees } from '../git/worktree'
 import { getPRForBranch } from '../github/client'
-import { getGitUsername, getDefaultBaseRef, getBranchConflictKind } from '../git/repo'
-import { addWorktree, removeWorktree } from '../git/worktree'
+import {
+  getGitUsername,
+  getDefaultBaseRef,
+  getBranchConflictKind,
+  isGitRepo,
+  getRepoName,
+  searchBaseRefs
+} from '../git/repo'
+import { listWorktrees, addWorktree, removeWorktree } from '../git/worktree'
 import { createSetupRunnerScript, getEffectiveHooks, runHook } from '../hooks'
 import { REPO_COLORS } from '../../shared/constants'
-import { isGitRepo, getRepoName, searchBaseRefs } from '../git/repo'
+import { listRepoWorktrees } from '../repo-worktrees'
 import type { Store } from '../persistence'
 import {
   computeBranchName,
@@ -456,11 +463,11 @@ export class OrcaRuntimeService {
     return this.store?.getRepos() ?? []
   }
 
-  async addRepo(path: string): Promise<Repo> {
+  async addRepo(path: string, kind: 'git' | 'folder' = 'git'): Promise<Repo> {
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
-    if (!isGitRepo(path)) {
+    if (kind === 'git' && !isGitRepo(path)) {
       throw new Error(`Not a valid git repository: ${path}`)
     }
 
@@ -474,7 +481,8 @@ export class OrcaRuntimeService {
       path,
       displayName: getRepoName(path),
       badgeColor: REPO_COLORS[this.store.getRepos().length % REPO_COLORS.length],
-      addedAt: Date.now()
+      addedAt: Date.now(),
+      kind
     }
     this.store.addRepo(repo)
     this.invalidateResolvedWorktreeCache()
@@ -491,6 +499,9 @@ export class OrcaRuntimeService {
       throw new Error('runtime_unavailable')
     }
     const repo = await this.resolveRepoSelector(repoSelector)
+    if (isFolderRepo(repo)) {
+      throw new Error('Folder mode does not support base refs.')
+    }
     const updated = this.store.updateRepo(repo.id, { worktreeBaseRef: baseRef })
     if (!updated) {
       throw new Error('repo_not_found')
@@ -509,6 +520,12 @@ export class OrcaRuntimeService {
       throw new Error('invalid_limit')
     }
     const repo = await this.resolveRepoSelector(repoSelector)
+    if (isFolderRepo(repo)) {
+      return {
+        refs: [],
+        truncated: false
+      }
+    }
     const refs = await searchBaseRefs(repo.path, query, limit + 1)
     return {
       refs: refs.slice(0, limit),
@@ -549,6 +566,9 @@ export class OrcaRuntimeService {
     }
 
     const repo = await this.resolveRepoSelector(args.repoSelector)
+    if (isFolderRepo(repo)) {
+      throw new Error('Folder mode does not support creating worktrees.')
+    }
     const settings = this.store.getSettings()
     const requestedName = args.name
     const sanitizedName = sanitizeWorktreeName(args.name)
@@ -677,6 +697,9 @@ export class OrcaRuntimeService {
     const repo = this.store.getRepo(worktree.repoId)
     if (!repo) {
       throw new Error('repo_not_found')
+    }
+    if (isFolderRepo(repo)) {
+      throw new Error('Folder mode does not support deleting worktrees.')
     }
 
     const hooks = getEffectiveHooks(repo)
@@ -868,10 +891,10 @@ export class OrcaRuntimeService {
     const metaById = this.store.getAllWorktreeMeta()
     const worktrees: ResolvedWorktree[] = []
     for (const repo of this.store.getRepos()) {
-      const gitWorktrees = await listWorktrees(repo.path)
+      const gitWorktrees = await listRepoWorktrees(repo)
       for (const gitWorktree of gitWorktrees) {
         const worktreeId = `${repo.id}::${gitWorktree.path}`
-        const merged = mergeWorktree(repo.id, gitWorktree, metaById[worktreeId])
+        const merged = mergeWorktree(repo.id, gitWorktree, metaById[worktreeId], repo.displayName)
         worktrees.push({
           id: merged.id,
           repoId: repo.id,

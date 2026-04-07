@@ -3,6 +3,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync } from '
 import { join, dirname } from 'path'
 import { homedir } from 'os'
 import type { PersistedState, Repo, WorktreeMeta, GlobalSettings } from '../shared/types'
+import { isFolderRepo } from '../shared/repo-kind'
 import { getGitUsername } from './git/repo'
 import {
   getDefaultPersistedState,
@@ -125,7 +126,9 @@ export class Store {
 
   updateRepo(
     id: string,
-    updates: Partial<Pick<Repo, 'displayName' | 'badgeColor' | 'hookSettings' | 'worktreeBaseRef'>>
+    updates: Partial<
+      Pick<Repo, 'displayName' | 'badgeColor' | 'hookSettings' | 'worktreeBaseRef' | 'kind'>
+    >
   ): Repo | null {
     const repo = this.state.repos.find((r) => r.id === id)
     if (!repo) {
@@ -137,16 +140,18 @@ export class Store {
   }
 
   private hydrateRepo(repo: Repo): Repo {
-    const gitUsername =
-      this.gitUsernameCache.get(repo.path) ??
-      (() => {
-        const username = getGitUsername(repo.path)
-        this.gitUsernameCache.set(repo.path, username)
-        return username
-      })()
+    const gitUsername = isFolderRepo(repo)
+      ? ''
+      : (this.gitUsernameCache.get(repo.path) ??
+        (() => {
+          const username = getGitUsername(repo.path)
+          this.gitUsernameCache.set(repo.path, username)
+          return username
+        })())
 
     return {
       ...repo,
+      kind: isFolderRepo(repo) ? 'folder' : 'git',
       gitUsername,
       hookSettings: {
         ...getDefaultRepoHookSettings(),

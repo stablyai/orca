@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -204,6 +205,42 @@ describe('registerWorktreeHandlers', () => {
 
     expect(getPRForBranchMock).not.toHaveBeenCalled()
     expect(addWorktreeMock).not.toHaveBeenCalled()
+  })
+
+  it('lists a synthetic worktree for folder-mode repos', async () => {
+    store.getRepos.mockReturnValue([
+      {
+        id: 'repo-1',
+        path: '/workspace/folder',
+        displayName: 'folder',
+        badgeColor: '#000',
+        addedAt: 0,
+        kind: 'folder'
+      }
+    ])
+    store.getRepo.mockReturnValue({
+      id: 'repo-1',
+      path: '/workspace/folder',
+      displayName: 'folder',
+      badgeColor: '#000',
+      addedAt: 0,
+      kind: 'folder'
+    })
+
+    const listed = await handlers['worktrees:list'](null, { repoId: 'repo-1' })
+
+    expect(listed).toEqual([
+      expect.objectContaining({
+        id: 'repo-1::/workspace/folder',
+        repoId: 'repo-1',
+        path: '/workspace/folder',
+        displayName: 'folder',
+        branch: '',
+        head: '',
+        isMainWorktree: true
+      })
+    ])
+    expect(listWorktreesMock).not.toHaveBeenCalled()
   })
 
   it('rejects worktree creation when the branch name already belongs to a PR', async () => {

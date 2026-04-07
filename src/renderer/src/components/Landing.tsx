@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, ExternalLink, FolderPlus, GitBranchPlus } from 'lucide-react'
 import { useAppStore } from '../store'
+import { isGitRepoKind } from '../../../shared/repo-kind'
 import logo from '../../../../resources/logo.svg'
 
 type ShortcutItem = {
@@ -58,7 +59,7 @@ export default function Landing(): React.JSX.Element {
   const addRepo = useAppStore((s) => s.addRepo)
   const openModal = useAppStore((s) => s.openModal)
 
-  const canCreateWorktree = repos.length > 0
+  const canCreateWorktree = repos.some((repo) => isGitRepoKind(repo))
 
   const [preflightIssues, setPreflightIssues] = useState<PreflightIssue[]>([])
 
@@ -76,7 +77,8 @@ export default function Landing(): React.JSX.Element {
         issues.push({
           id: 'git',
           title: 'Git is not installed',
-          description: 'Orca requires Git to manage repositories and worktrees.',
+          description:
+            'Git is required for Git repositories, source control, and worktree management.',
           fixLabel: 'Install Git',
           fixUrl: 'https://git-scm.com/downloads'
         })
@@ -149,7 +151,7 @@ export default function Landing(): React.JSX.Element {
             <button
               className="inline-flex items-center gap-1.5 bg-secondary/70 border border-border/80 text-foreground font-medium text-sm px-4 py-2 rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed enabled:cursor-pointer enabled:hover:bg-accent"
               disabled={!canCreateWorktree}
-              title={!canCreateWorktree ? 'Add a repo first' : undefined}
+              title={!canCreateWorktree ? 'Add a Git repo first' : undefined}
               onClick={() => openModal('create-worktree')}
             >
               <GitBranchPlus className="size-3.5" />

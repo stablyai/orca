@@ -3,6 +3,7 @@ import { dialog, ipcMain } from 'electron'
 import { randomUUID } from 'crypto'
 import type { Store } from '../persistence'
 import type { Repo } from '../../shared/types'
+import { isFolderRepo } from '../../shared/repo-kind'
 import { REPO_COLORS } from '../../shared/constants'
 import { rebuildAuthorizedRootsCache } from './filesystem-auth'
 import {
@@ -29,8 +30,9 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     return store.getRepos()
   })
 
-  ipcMain.handle('repos:add', async (_event, args: { path: string }) => {
-    if (!isGitRepo(args.path)) {
+  ipcMain.handle('repos:add', async (_event, args: { path: string; kind?: 'git' | 'folder' }) => {
+    const repoKind = args.kind === 'folder' ? 'folder' : 'git'
+    if (repoKind === 'git' && !isGitRepo(args.path)) {
       throw new Error(`Not a valid git repository: ${args.path}`)
     }
 
@@ -45,7 +47,8 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       path: args.path,
       displayName: getRepoName(args.path),
       badgeColor: REPO_COLORS[store.getRepos().length % REPO_COLORS.length],
-      addedAt: Date.now()
+      addedAt: Date.now(),
+      kind: repoKind
     }
 
     store.addRepo(repo)
@@ -67,7 +70,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       args: {
         repoId: string
         updates: Partial<
-          Pick<Repo, 'displayName' | 'badgeColor' | 'hookSettings' | 'worktreeBaseRef'>
+          Pick<Repo, 'displayName' | 'badgeColor' | 'hookSettings' | 'worktreeBaseRef' | 'kind'>
         >
       }
     ) => {
@@ -91,7 +94,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
 
   ipcMain.handle('repos:getGitUsername', (_event, args: { repoId: string }) => {
     const repo = store.getRepo(args.repoId)
-    if (!repo) {
+    if (!repo || isFolderRepo(repo)) {
       return ''
     }
     return getGitUsername(repo.path)
@@ -99,7 +102,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
 
   ipcMain.handle('repos:getBaseRefDefault', async (_event, args: { repoId: string }) => {
     const repo = store.getRepo(args.repoId)
-    if (!repo) {
+    if (!repo || isFolderRepo(repo)) {
       return 'origin/main'
     }
     return getBaseRefDefault(repo.path)
@@ -109,7 +112,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     'repos:searchBaseRefs',
     async (_event, args: { repoId: string; query: string; limit?: number }) => {
       const repo = store.getRepo(args.repoId)
-      if (!repo) {
+      if (!repo || isFolderRepo(repo)) {
         return []
       }
       return searchBaseRefs(repo.path, args.query, args.limit ?? 25)

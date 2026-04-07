@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Keyboard, Palette, SlidersHorizontal, SquareTerminal } from 'lucide-react'
 import type { OrcaHooks } from '../../../../shared/types'
+import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
 import { useAppStore } from '../../store'
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
 import { SCROLLBACK_PRESETS_MB, getFallbackTerminalFonts } from './SettingsConstants'
@@ -144,6 +145,9 @@ function Settings(): React.JSX.Element {
     const checkHooks = async (): Promise<void> => {
       const results = await Promise.all(
         repos.map(async (repo) => {
+          if (isFolderRepo(repo)) {
+            return [repo.id, { hasHooks: false, hooks: null }] as const
+          }
           try {
             const result = await window.api.hooks.check({ repoId: repo.id })
             return [repo.id, result] as const
@@ -220,7 +224,7 @@ function Settings(): React.JSX.Element {
       ...repos.map((repo) => ({
         id: `repo-${repo.id}`,
         title: repo.displayName,
-        description: repo.path,
+        description: `${getRepoKindLabel(repo)} • ${repo.path}`,
         icon: SlidersHorizontal,
         searchEntries: getRepositoryPaneSearchEntries(repo)
       }))

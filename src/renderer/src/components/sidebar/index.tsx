@@ -11,6 +11,8 @@ import SidebarToolbar from './SidebarToolbar'
 import AddWorktreeDialog from './AddWorktreeDialog'
 import WorktreeMetaDialog from './WorktreeMetaDialog'
 import DeleteWorktreeDialog from './DeleteWorktreeDialog'
+import NonGitFolderDialog from './NonGitFolderDialog'
+import RemoveFolderDialog from './RemoveFolderDialog'
 
 const MIN_WIDTH = 220
 const MAX_WIDTH = 500
@@ -73,6 +75,8 @@ export default function Sidebar(): React.JSX.Element {
       <AddWorktreeDialog />
       <WorktreeMetaDialog />
       <DeleteWorktreeDialog />
+      <NonGitFolderDialog />
+      <RemoveFolderDialog />
     </TooltipProvider>
   )
 }

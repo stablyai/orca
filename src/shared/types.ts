@@ -1,12 +1,15 @@
 /* eslint-disable max-lines */
 
 // ─── Repo ────────────────────────────────────────────────────────────
+export type RepoKind = 'git' | 'folder'
+
 export type Repo = {
   id: string
   path: string
   displayName: string
   badgeColor: string
   addedAt: number
+  kind?: RepoKind
   gitUsername?: string
   worktreeBaseRef?: string
   hookSettings?: RepoHookSettings

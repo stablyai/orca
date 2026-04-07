@@ -9,6 +9,7 @@ import StatusIndicator from './StatusIndicator'
 import WorktreeContextMenu from './WorktreeContextMenu'
 import { cn } from '@/lib/utils'
 import { detectAgentStatusFromTitle } from '@/lib/agent-status'
+import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
 import type {
   Worktree,
   Repo,
@@ -135,6 +136,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const tabs = useAppStore((s) => s.tabsByWorktree[worktree.id] ?? EMPTY_TABS)
 
   const branch = branchDisplayName(worktree.branch)
+  const isFolder = repo ? isFolderRepo(repo) : false
   const prCacheKey = repo && branch ? `${repo.path}::${branch}` : ''
   const issueCacheKey = repo && worktree.linkedIssue ? `${repo.path}::${worktree.linkedIssue}` : ''
 
@@ -175,15 +177,15 @@ const WorktreeCard = React.memo(function WorktreeCard({
   // This preference is purely presentational, so background refreshes would
   // spend rate limit budget on data the user cannot see.
   useEffect(() => {
-    if (repo && !worktree.isBare && prCacheKey && (showPR || showCI)) {
+    if (repo && !isFolder && !worktree.isBare && prCacheKey && (showPR || showCI)) {
       fetchPRForBranch(repo.path, branch)
     }
-  }, [repo, worktree.isBare, fetchPRForBranch, branch, prCacheKey, showPR, showCI])
+  }, [repo, isFolder, worktree.isBare, fetchPRForBranch, branch, prCacheKey, showPR, showCI])
 
   // Same rationale for issues: once that section is hidden, polling only burns
   // GitHub calls and keeps stale-but-invisible data warm for no user benefit.
   useEffect(() => {
-    if (!repo || !worktree.linkedIssue || !issueCacheKey || !showIssue) {
+    if (!repo || isFolder || !worktree.linkedIssue || !issueCacheKey || !showIssue) {
       return
     }
 
@@ -195,7 +197,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
     }, 5 * 60_000) // 5 minutes
 
     return () => clearInterval(interval)
-  }, [repo, worktree.linkedIssue, fetchIssue, issueCacheKey, showIssue])
+  }, [repo, isFolder, worktree.linkedIssue, fetchIssue, issueCacheKey, showIssue])
 
   // Stable click handler – ignore clicks that are really text selections
   const handleClick = useCallback(() => {
@@ -329,7 +331,14 @@ const WorktreeCard = React.memo(function WorktreeCard({
               </div>
             )}
 
-            {isPrimaryBranch(worktree.branch) ? (
+            {isFolder ? (
+              <Badge
+                variant="secondary"
+                className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 text-muted-foreground bg-accent border border-border dark:bg-accent/80 dark:border-border/50 leading-none"
+              >
+                {repo ? getRepoKindLabel(repo) : 'Folder'}
+              </Badge>
+            ) : isPrimaryBranch(worktree.branch) ? (
               <Badge
                 variant="secondary"
                 className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 text-muted-foreground bg-accent border border-border dark:bg-accent/80 dark:border-border/50 leading-none"

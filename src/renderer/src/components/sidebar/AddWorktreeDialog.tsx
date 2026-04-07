@@ -26,6 +26,7 @@ import RepoDotLabel from '@/components/repo/RepoDotLabel'
 import { parseGitHubIssueOrPRNumber } from '@/lib/github-links'
 import { SPACE_NAMES } from '@/constants/space-names'
 import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-activation'
+import { isGitRepoKind } from '../../../../shared/repo-kind'
 
 const DIALOG_CLOSE_RESET_DELAY_MS = 200
 
@@ -52,6 +53,7 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
   const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const settings = useAppStore((s) => s.settings)
+  const eligibleRepos = useMemo(() => repos.filter((repo) => isGitRepoKind(repo)), [repos])
 
   const [repoId, setRepoId] = useState<string>('')
   const [name, setName] = useState('')
@@ -75,7 +77,7 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
     () => findRepoIdForWorktree(activeWorktreeId, worktreesByRepo),
     [activeWorktreeId, worktreesByRepo]
   )
-  const selectedRepo = repos.find((r) => r.id === repoId)
+  const selectedRepo = eligibleRepos.find((r) => r.id === repoId)
   const setupConfig = useMemo(
     () => getSetupConfig(selectedRepo, yamlHooks),
     [selectedRepo, yamlHooks]
@@ -103,15 +105,18 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
   const shouldWaitForSetupCheck = Boolean(selectedRepo) && isSetupCheckPending
 
   // Auto-select repo when dialog opens (adjusting state during render)
-  if (isOpen && !prevIsOpenRef.current && repos.length > 0) {
-    if (preselectedRepoId && repos.some((repo) => repo.id === preselectedRepoId)) {
+  if (isOpen && !prevIsOpenRef.current && eligibleRepos.length > 0) {
+    if (preselectedRepoId && eligibleRepos.some((repo) => repo.id === preselectedRepoId)) {
       setRepoId(preselectedRepoId)
-    } else if (activeWorktreeRepoId && repos.some((repo) => repo.id === activeWorktreeRepoId)) {
+    } else if (
+      activeWorktreeRepoId &&
+      eligibleRepos.some((repo) => repo.id === activeWorktreeRepoId)
+    ) {
       setRepoId(activeWorktreeRepoId)
-    } else if (activeRepoId && repos.some((repo) => repo.id === activeRepoId)) {
+    } else if (activeRepoId && eligibleRepos.some((repo) => repo.id === activeRepoId)) {
       setRepoId(activeRepoId)
     } else {
-      setRepoId(repos[0].id)
+      setRepoId(eligibleRepos[0].id)
     }
   }
   prevIsOpenRef.current = isOpen
@@ -139,7 +144,7 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
   )
 
   const handleCreate = useCallback(async () => {
-    if (!repoId || !name.trim() || shouldWaitForSetupCheck) {
+    if (!repoId || !name.trim() || shouldWaitForSetupCheck || !selectedRepo) {
       return
     }
     setCreateError(null)
@@ -217,6 +222,7 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
     settings?.rightSidebarOpenByDefault,
     handleOpenChange,
     resolvedSetupDecision,
+    selectedRepo,
     setupConfig,
     shouldWaitForSetupCheck
   ])
@@ -309,7 +315,7 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
     if (isOpen && repos.length === 0) {
       handleOpenChange(false)
     }
-  }, [isOpen, repos.length, handleOpenChange])
+  }, [eligibleRepos.length, handleOpenChange, isOpen, repos.length])
 
   React.useEffect(() => {
     if (!isOpen || !repoId) {
@@ -405,7 +411,7 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                {repos.map((r) => (
+                {eligibleRepos.map((r) => (
                   <SelectItem key={r.id} value={r.id}>
                     <RepoDotLabel name={r.displayName} color={r.badgeColor} />
                   </SelectItem>
@@ -570,6 +576,7 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
               !name.trim() ||
               creating ||
               shouldWaitForSetupCheck ||
+              !selectedRepo ||
               (requiresExplicitSetupChoice && !setupDecision)
             }
             className="text-xs"

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo } from 'react'
 import { useAppStore } from '@/store'
 import type { GitConflictOperation, GitStatusResult } from '../../../../shared/types'
+import { isGitRepoKind } from '../../../../shared/repo-kind'
 
 const POLL_INTERVAL_MS = 3000
 
@@ -36,6 +37,8 @@ export function useGitStatusPolling(): void {
     }
     return null
   }, [activeWorktreeId, worktreesByRepo])
+  const activeRepo = useAppStore((s) => s.repos.find((repo) => repo.id === activeRepoId) ?? null)
+  const activeRepoSupportsGit = activeRepo ? isGitRepoKind(activeRepo) : false
 
   // Why: build a list of non-active worktrees that still have a known conflict
   // operation (merge/rebase/cherry-pick). These need lightweight polling so
@@ -50,6 +53,10 @@ export function useGitStatusPolling(): void {
       for (const worktrees of Object.values(worktreesByRepo)) {
         const wt = worktrees.find((w) => w.id === worktreeId)
         if (wt) {
+          const repo = useAppStore.getState().repos.find((entry) => entry.id === wt.repoId)
+          if (repo && !isGitRepoKind(repo)) {
+            break
+          }
           result.push({ id: wt.id, path: wt.path })
           break
         }
@@ -59,7 +66,7 @@ export function useGitStatusPolling(): void {
   }, [conflictOperationByWorktree, activeWorktreeId, worktreesByRepo])
 
   const fetchStatus = useCallback(async () => {
-    if (!activeWorktreeId || !worktreePath) {
+    if (!activeWorktreeId || !worktreePath || !activeRepoSupportsGit) {
       return
     }
     try {
@@ -68,7 +75,7 @@ export function useGitStatusPolling(): void {
     } catch {
       // ignore
     }
-  }, [activeWorktreeId, worktreePath, setGitStatus])
+  }, [activeRepoSupportsGit, activeWorktreeId, worktreePath, setGitStatus])
 
   useEffect(() => {
     void fetchStatus()
@@ -77,7 +84,7 @@ export function useGitStatusPolling(): void {
   }, [fetchStatus])
 
   useEffect(() => {
-    if (!activeRepoId) {
+    if (!activeRepoId || !activeRepoSupportsGit) {
       return
     }
 
@@ -88,7 +95,7 @@ export function useGitStatusPolling(): void {
     void fetchWorktrees(activeRepoId)
     const intervalId = setInterval(() => void fetchWorktrees(activeRepoId), POLL_INTERVAL_MS)
     return () => clearInterval(intervalId)
-  }, [activeRepoId, fetchWorktrees])
+  }, [activeRepoId, activeRepoSupportsGit, fetchWorktrees])
 
   // Why: poll conflict operation for non-active worktrees that have a stale
   // non-unknown operation. This is a lightweight fs-only check (no git status)
