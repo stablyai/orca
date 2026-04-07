@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: the updater test suite covers event-handler interactions (RC rejection, fallback, version comparison, retry scheduling) that share mocking infrastructure and are easiest to reason about in one file. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -7,7 +8,8 @@ const {
   autoUpdaterMock,
   shellMock,
   isMock,
-  killAllPtyMock
+  killAllPtyMock,
+  findFallbackReleaseVersionMock
 } = vi.hoisted(() => {
   const appEventHandlers = new Map<string, ((...args: unknown[]) => void)[]>()
   const eventHandlers = new Map<string, ((...args: unknown[]) => void)[]>()
@@ -79,7 +81,8 @@ const {
       openExternal: vi.fn()
     },
     isMock: { dev: false },
-    killAllPtyMock: vi.fn()
+    killAllPtyMock: vi.fn(),
+    findFallbackReleaseVersionMock: vi.fn()
   }
 })
 
@@ -102,6 +105,14 @@ vi.mock('./ipc/pty', () => ({
   killAllPty: killAllPtyMock
 }))
 
+vi.mock('./updater-fallback', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>
+  return {
+    ...actual,
+    findFallbackReleaseVersion: findFallbackReleaseVersionMock
+  }
+})
+
 describe('updater', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -116,6 +127,7 @@ describe('updater', () => {
     appMock.isPackaged = true
     isMock.dev = false
     killAllPtyMock.mockReset()
+    findFallbackReleaseVersionMock.mockReset().mockResolvedValue(null)
     vi.unstubAllGlobals()
     vi.useRealTimers()
   })
@@ -258,7 +270,8 @@ describe('updater', () => {
     expect(setLastUpdateCheckAt).not.toHaveBeenCalled()
   })
 
-  it('treats an RC version from update-available as not-available', async () => {
+  it('treats an RC version from update-available as not-available when no stable fallback exists', async () => {
+    findFallbackReleaseVersionMock.mockResolvedValueOnce(null)
     autoUpdaterMock.checkForUpdates.mockResolvedValueOnce(undefined).mockImplementationOnce(() => {
       autoUpdaterMock.emit('checking-for-update')
       queueMicrotask(() => {
@@ -286,6 +299,51 @@ describe('updater', () => {
       .map(([, status]) => status)
 
     expect(statuses).not.toContainEqual(expect.objectContaining({ state: 'available' }))
+  })
+
+  it('falls back to a stable release when update-available reports an RC', async () => {
+    findFallbackReleaseVersionMock.mockResolvedValueOnce({
+      version: '1.0.52',
+      releaseUrl: 'https://github.com/stablyai/orca/releases/tag/v1.0.52',
+      manualDownloadUrl: 'https://github.com/stablyai/orca/releases/download/v1.0.52/Orca.dmg'
+    })
+    autoUpdaterMock.checkForUpdates.mockResolvedValueOnce(undefined).mockImplementationOnce(() => {
+      autoUpdaterMock.emit('checking-for-update')
+      queueMicrotask(() => {
+        autoUpdaterMock.emit('update-available', { version: '1.0.53-rc.1' })
+      })
+      return Promise.resolve(null)
+    })
+
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never)
+    checkForUpdatesFromMenu()
+    await vi.waitFor(() => {
+      const statuses = sendMock.mock.calls
+        .filter(([channel]) => channel === 'updater:status')
+        .map(([, status]) => status)
+      expect(statuses).toContainEqual(
+        expect.objectContaining({ state: 'available', version: '1.0.52' })
+      )
+    })
+
+    const statuses = sendMock.mock.calls
+      .filter(([channel]) => channel === 'updater:status')
+      .map(([, status]) => status)
+
+    // Should offer the stable fallback, not the RC
+    expect(statuses).toContainEqual(
+      expect.objectContaining({
+        state: 'available',
+        version: '1.0.52',
+        releaseUrl: 'https://github.com/stablyai/orca/releases/tag/v1.0.52',
+        manualDownloadUrl: 'https://github.com/stablyai/orca/releases/download/v1.0.52/Orca.dmg'
+      })
+    )
   })
 
   it('treats an RC version from update-downloaded as not-available', async () => {

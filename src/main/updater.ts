@@ -288,7 +288,9 @@ export function setupAutoUpdater(
   // Use allowPrerelease to bypass broken /releases/latest endpoint (returns 406)
   // and instead parse the version directly from the atom feed which works reliably.
   // RC/prerelease versions are filtered out in the update-available and
-  // update-downloaded event handlers so they are never offered to the user.
+  // update-downloaded event handlers. When an RC is the latest release, the
+  // update-available handler falls back to the GitHub releases API to find the
+  // newest stable version so that real updates are not silently skipped.
   autoUpdater.allowPrerelease = true
 
   if (autoUpdaterInitialized) {

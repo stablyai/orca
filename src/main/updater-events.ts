@@ -9,7 +9,7 @@ import {
   isMacQuitAndInstallInFlight,
   resetMacInstallState
 } from './updater-mac-install'
-import { compareVersions, isPrerelease } from './updater-fallback'
+import { compareVersions, findFallbackReleaseVersion, isPrerelease } from './updater-fallback'
 
 type UpdaterHandlerContext = {
   clearAvailableUpdateContext: () => void
@@ -99,9 +99,48 @@ export function registerAutoUpdaterHandlers({
     // never offer them. We need this guard because allowPrerelease is enabled on
     // electron-updater to work around a broken GitHub endpoint, which causes
     // prerelease versions to slip through its normal filter.
+    //
+    // When the latest GitHub release is an RC, electron-updater will pick it as
+    // the available version and never report any older stable releases. We fall
+    // back to the GitHub releases API (which filters out prereleases/drafts) so
+    // that a stable release newer than the running version is still offered.
     if (isPrerelease(info.version)) {
-      clearAvailableUpdateContext()
-      sendStatus({ state: 'not-available', userInitiated: wasUserInitiated || undefined })
+      findFallbackReleaseVersion()
+        .then((fallback) => {
+          if (fallback) {
+            setAvailableVersion(fallback.version)
+            setAvailableReleaseUrl(fallback.releaseUrl)
+            recordCompletedUpdateCheck()
+            if (!wasUserInitiated) {
+              scheduleAutomaticUpdateCheck(36 * 60 * 60 * 1000)
+            }
+            sendStatus({
+              state: 'available',
+              version: fallback.version,
+              releaseUrl: fallback.releaseUrl,
+              manualDownloadUrl: fallback.manualDownloadUrl
+            })
+          } else {
+            clearAvailableUpdateContext()
+            recordCompletedUpdateCheck()
+            if (!wasUserInitiated) {
+              scheduleAutomaticUpdateCheck(36 * 60 * 60 * 1000)
+            }
+            sendStatus({ state: 'not-available', userInitiated: wasUserInitiated || undefined })
+          }
+        })
+        .catch((err) => {
+          console.warn(
+            '[updater] fallback lookup after RC rejection failed:',
+            String(err?.message ?? err)
+          )
+          clearAvailableUpdateContext()
+          recordCompletedUpdateCheck()
+          if (!wasUserInitiated) {
+            scheduleAutomaticUpdateCheck(36 * 60 * 60 * 1000)
+          }
+          sendStatus({ state: 'not-available', userInitiated: wasUserInitiated || undefined })
+        })
       return
     }
     // Guard against showing an update that isn't actually newer than what's running.
