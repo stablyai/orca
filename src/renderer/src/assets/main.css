@@ -655,21 +655,68 @@
   list-style: none;
 }
 
+/* Why: nested task lists inside a task item need left padding so they indent
+   under the parent checkbox, matching how nested bullet/ordered lists look. */
+.rich-markdown-editor ul[data-type='taskList'] ul[data-type='taskList'] {
+  padding-left: 1.5em;
+}
+
 .rich-markdown-editor ul[data-type='taskList'] li {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
+  gap: 6px;
 }
 
 .rich-markdown-editor ul[data-type='taskList'] li > label {
-  /* Vertically center the checkbox with the first line of text. */
   flex-shrink: 0;
-  margin-top: 0.3em;
+  display: flex;
+  align-items: center;
+  height: 1.55em;
+  cursor: pointer;
+  user-select: none;
 }
 
-/* Remove paragraph margin inside task items so the text sits flush with the checkbox. */
+.rich-markdown-editor ul[data-type='taskList'] li > label input[type='checkbox'] {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid color-mix(in srgb, var(--foreground) 35%, transparent);
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.rich-markdown-editor ul[data-type='taskList'] li > label input[type='checkbox']:checked {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.rich-markdown-editor ul[data-type='taskList'] li > label input[type='checkbox']:checked::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 5px;
+  height: 9px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.rich-markdown-editor ul[data-type='taskList'] li > div {
+  flex: 1;
+  min-width: 0;
+}
+
 .rich-markdown-editor ul[data-type='taskList'] li > div > p {
   margin: 0;
+}
+
+.rich-markdown-editor ul[data-type='taskList'] li[data-checked='true'] > div {
+  text-decoration: line-through;
+  color: var(--muted-foreground);
 }
 
 .rich-markdown-editor blockquote {
