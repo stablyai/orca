@@ -87,6 +87,15 @@ export function registerNotificationHandlers(store: Store): void {
       }
       recentNotifications.set(dedupeKey, now)
 
+      // Evict stale entries so the map doesn't grow unbounded.
+      if (recentNotifications.size > 50) {
+        for (const [key, ts] of recentNotifications) {
+          if (now - ts >= NOTIFICATION_COOLDOWN_MS) {
+            recentNotifications.delete(key)
+          }
+        }
+      }
+
       const notification = new Notification(buildNotificationOptions(args))
 
       // Why: clicking a notification should bring Orca to the foreground and
