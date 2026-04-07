@@ -658,7 +658,7 @@
 /* Why: nested task lists inside a task item need left padding so they indent
    under the parent checkbox, matching how nested bullet/ordered lists look. */
 .rich-markdown-editor ul[data-type='taskList'] ul[data-type='taskList'] {
-  padding-left: 1.5em;
+  padding-left: 0.75em;
 }
 
 .rich-markdown-editor ul[data-type='taskList'] li {
