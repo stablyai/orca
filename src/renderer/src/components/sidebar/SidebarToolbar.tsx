@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 
 const SidebarToolbar = React.memo(function SidebarToolbar() {
-  const addRepo = useAppStore((s) => s.addRepo)
+  const openModal = useAppStore((s) => s.openModal)
   const setActiveView = useAppStore((s) => s.setActiveView)
 
   return (
@@ -16,7 +16,7 @@ const SidebarToolbar = React.memo(function SidebarToolbar() {
             <Button
               variant="ghost"
               size="xs"
-              onClick={() => addRepo()}
+              onClick={() => openModal('add-repo')}
               className="gap-1.5 text-muted-foreground"
             >
               <FolderPlus className="size-3.5" />

@@ -13,6 +13,7 @@ import WorktreeMetaDialog from './WorktreeMetaDialog'
 import DeleteWorktreeDialog from './DeleteWorktreeDialog'
 import NonGitFolderDialog from './NonGitFolderDialog'
 import RemoveFolderDialog from './RemoveFolderDialog'
+import AddRepoDialog from './AddRepoDialog'
 
 const MIN_WIDTH = 220
 const MAX_WIDTH = 500
@@ -77,6 +78,7 @@ export default function Sidebar(): React.JSX.Element {
       <DeleteWorktreeDialog />
       <NonGitFolderDialog />
       <RemoveFolderDialog />
+      <AddRepoDialog />
     </TooltipProvider>
   )
 }

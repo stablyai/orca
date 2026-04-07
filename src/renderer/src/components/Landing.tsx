@@ -117,7 +117,6 @@ function PreflightBanner({ issues }: { issues: PreflightIssue[] }): React.JSX.El
 
 export default function Landing(): React.JSX.Element {
   const repos = useAppStore((s) => s.repos)
-  const addRepo = useAppStore((s) => s.addRepo)
   const openModal = useAppStore((s) => s.openModal)
 
   const canCreateWorktree = repos.some((repo) => isGitRepoKind(repo))
@@ -205,7 +204,7 @@ export default function Landing(): React.JSX.Element {
           <div className="flex items-center justify-center gap-2.5 flex-wrap">
             <button
               className="inline-flex items-center gap-1.5 bg-secondary/70 border border-border/80 text-foreground font-medium text-sm px-4 py-2 rounded-md cursor-pointer hover:bg-accent transition-colors"
-              onClick={addRepo}
+              onClick={() => openModal('add-repo')}
             >
               <FolderPlus className="size-3.5" />
               Add Repo

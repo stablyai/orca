@@ -36,6 +36,7 @@ export type UISlice = {
     | 'delete-worktree'
     | 'confirm-non-git-folder'
     | 'confirm-remove-folder'
+    | 'add-repo'
   modalData: Record<string, unknown>
   openModal: (modal: UISlice['activeModal'], data?: Record<string, unknown>) => void
   closeModal: () => void

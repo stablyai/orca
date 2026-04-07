@@ -107,6 +107,22 @@ const api = {
 
     pickFolder: (): Promise<string | null> => ipcRenderer.invoke('repos:pickFolder'),
 
+    pickDirectory: (): Promise<string | null> => ipcRenderer.invoke('repos:pickDirectory'),
+
+    clone: (args: { url: string; destination: string }): Promise<unknown> =>
+      ipcRenderer.invoke('repos:clone', args),
+
+    onCloneProgress: (
+      callback: (data: { phase: string; percent: number }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { phase: string; percent: number }
+      ) => callback(data)
+      ipcRenderer.on('repos:clone-progress', listener)
+      return () => ipcRenderer.removeListener('repos:clone-progress', listener)
+    },
+
     getGitUsername: (args: { repoId: string }): Promise<string> =>
       ipcRenderer.invoke('repos:getGitUsername', args),
 
