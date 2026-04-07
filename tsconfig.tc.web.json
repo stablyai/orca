@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.web.json",
+  "compilerOptions": {
+    "baseUrl": null,
+    "paths": {
+      "@renderer/*": ["./src/renderer/src/*"],
+      "@/*": ["./src/renderer/src/*"]
+    }
+  }
+}
