@@ -2,6 +2,7 @@ import type { StateCreator } from 'zustand'
 import { toast } from 'sonner'
 import type { AppState } from '../types'
 import type { Repo } from '../../../../shared/types'
+import { isGitRepoKind } from '../../../../shared/repo-kind'
 
 const ERROR_TOAST_DURATION = 60_000
 
@@ -10,10 +11,13 @@ export type RepoSlice = {
   activeRepoId: string | null
   fetchRepos: () => Promise<void>
   addRepo: () => Promise<Repo | null>
+  addNonGitFolder: (path: string) => Promise<Repo | null>
   removeRepo: (repoId: string) => Promise<void>
   updateRepo: (
     repoId: string,
-    updates: Partial<Pick<Repo, 'displayName' | 'badgeColor' | 'hookSettings' | 'worktreeBaseRef'>>
+    updates: Partial<
+      Pick<Repo, 'displayName' | 'badgeColor' | 'hookSettings' | 'worktreeBaseRef' | 'kind'>
+    >
   ) => Promise<void>
   setActiveRepo: (repoId: string | null) => void
 }
@@ -44,7 +48,22 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       if (!path) {
         return null
       }
-      const repo = await window.api.repos.add({ path })
+      let repo: Repo
+      try {
+        repo = await window.api.repos.add({ path })
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        if (!message.includes('Not a valid git repository')) {
+          throw err
+        }
+        // Why: folder mode is a capability downgrade, not a silent fallback.
+        // Show an in-app confirmation dialog so users understand that worktrees,
+        // SCM, PRs, and checks will be unavailable for this root. The dialog's
+        // OK handler calls addNonGitFolder to complete the flow.
+        const { openModal } = get()
+        openModal('confirm-non-git-folder', { folderPath: path })
+        return null
+      }
       const alreadyAdded = get().repos.some((r) => r.id === repo.id)
       set((s) => {
         if (s.repos.some((r) => r.id === repo.id)) {
@@ -55,24 +74,43 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       if (alreadyAdded) {
         toast.info('Repo already added', { description: repo.displayName })
       } else {
-        toast.success('Repo added', { description: repo.displayName })
+        toast.success(isGitRepoKind(repo) ? 'Repo added' : 'Folder added', {
+          description: repo.displayName
+        })
       }
       return repo
     } catch (err) {
       console.error('Failed to add repo:', err)
       const message = err instanceof Error ? err.message : String(err)
       const duration = ERROR_TOAST_DURATION
-      if (message.includes('Not a valid git repository')) {
-        toast.error('Not a git repository', {
-          description: 'Only git repositories can be added. Initialize one with git init first.',
-          duration
-        })
+      toast.error('Failed to add repo', {
+        description: message,
+        duration
+      })
+      return null
+    }
+  },
+
+  addNonGitFolder: async (path) => {
+    try {
+      const repo = await window.api.repos.add({ path, kind: 'folder' })
+      const alreadyAdded = get().repos.some((r) => r.id === repo.id)
+      set((s) => {
+        if (s.repos.some((r) => r.id === repo.id)) {
+          return s
+        }
+        return { repos: [...s.repos, repo] }
+      })
+      if (alreadyAdded) {
+        toast.info('Repo already added', { description: repo.displayName })
       } else {
-        toast.error('Failed to add repo', {
-          description: message,
-          duration
-        })
+        toast.success('Folder added', { description: repo.displayName })
       }
+      return repo
+    } catch (err) {
+      console.error('Failed to add folder:', err)
+      const message = err instanceof Error ? err.message : String(err)
+      toast.error('Failed to add folder', { description: message, duration: ERROR_TOAST_DURATION })
       return null
     }
   },

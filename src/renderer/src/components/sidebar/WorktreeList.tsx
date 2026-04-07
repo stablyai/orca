@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import type { Worktree, Repo } from '../../../../shared/types'
+import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { buildWorktreeComparator } from './smart-sort'
 import { matchesSearch, type Row, buildRows, getGroupKeyForWorktree } from './worktree-list-groups'
 import { estimateRowHeight } from './worktree-list-estimate'
@@ -437,16 +438,19 @@ const WorktreeList = React.memo(function WorktreeList() {
                           onClick={(event) => {
                             event.preventDefault()
                             event.stopPropagation()
-                            if (row.repo) {
+                            if (row.repo && isGitRepoKind(row.repo)) {
                               handleCreateForRepo(row.repo.id)
                             }
                           }}
+                          disabled={row.repo ? !isGitRepoKind(row.repo) : false}
                         >
                           <Plus className="size-3" />
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent side="bottom" sideOffset={6}>
-                        Create worktree for {row.label}
+                        {row.repo && !isGitRepoKind(row.repo)
+                          ? `${row.label} is opened as a folder`
+                          : `Create worktree for ${row.label}`}
                       </TooltipContent>
                     </Tooltip>
                   ) : null}

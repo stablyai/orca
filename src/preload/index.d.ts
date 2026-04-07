@@ -27,11 +27,13 @@ import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../../shared/runtime
 
 type ReposApi = {
   list: () => Promise<Repo[]>
-  add: (args: { path: string }) => Promise<Repo>
+  add: (args: { path: string; kind?: 'git' | 'folder' }) => Promise<Repo>
   remove: (args: { repoId: string }) => Promise<void>
   update: (args: {
     repoId: string
-    updates: Partial<Pick<Repo, 'displayName' | 'badgeColor' | 'hookSettings' | 'worktreeBaseRef'>>
+    updates: Partial<
+      Pick<Repo, 'displayName' | 'badgeColor' | 'hookSettings' | 'worktreeBaseRef' | 'kind'>
+    >
   }) => Promise<Repo>
   pickFolder: () => Promise<string | null>
   getGitUsername: (args: { repoId: string }) => Promise<string>

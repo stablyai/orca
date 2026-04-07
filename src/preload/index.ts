@@ -97,7 +97,8 @@ const api = {
   repos: {
     list: (): Promise<unknown[]> => ipcRenderer.invoke('repos:list'),
 
-    add: (args: { path: string }): Promise<unknown> => ipcRenderer.invoke('repos:add', args),
+    add: (args: { path: string; kind?: 'git' | 'folder' }): Promise<unknown> =>
+      ipcRenderer.invoke('repos:add', args),
 
     remove: (args: { repoId: string }): Promise<void> => ipcRenderer.invoke('repos:remove', args),
 

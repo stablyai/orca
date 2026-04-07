@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import type { Worktree } from '../../../../shared/types'
+import { isFolderRepo } from '../../../../shared/repo-kind'
 
 type Props = {
   worktree: Worktree
@@ -30,6 +31,7 @@ const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 const WorktreeContextMenu = React.memo(function WorktreeContextMenu({ worktree, children }: Props) {
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const openModal = useAppStore((s) => s.openModal)
+  const repos = useAppStore((s) => s.repos)
   const shutdownWorktreeTerminals = useAppStore((s) => s.shutdownWorktreeTerminals)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
@@ -38,6 +40,8 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({ worktree, 
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
   const isDeleting = deleteState?.isDeleting ?? false
+  const repo = repos.find((entry) => entry.id === worktree.repoId)
+  const isFolder = repo ? isFolderRepo(repo) : false
 
   useEffect(() => {
     const closeMenu = (): void => setMenuOpen(false)
@@ -96,9 +100,26 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({ worktree, 
 
   const handleDelete = useCallback(() => {
     setMenuOpen(false)
+    if (isFolder) {
+      // Why: folder mode reuses the worktree row UI for a synthetic root entry,
+      // but users still expect "remove" to disconnect the folder from Orca,
+      // not to run git-style delete semantics against the real folder on disk.
+      openModal('confirm-remove-folder', {
+        repoId: worktree.repoId,
+        displayName: worktree.displayName
+      })
+      return
+    }
     clearWorktreeDeleteState(worktree.id)
     openModal('delete-worktree', { worktreeId: worktree.id })
-  }, [worktree.id, clearWorktreeDeleteState, openModal])
+  }, [
+    worktree.id,
+    worktree.repoId,
+    worktree.displayName,
+    clearWorktreeDeleteState,
+    isFolder,
+    openModal
+  ])
 
   return (
     <>
@@ -157,7 +178,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({ worktree, 
           </DropdownMenuItem>
           <DropdownMenuItem variant="destructive" onSelect={handleDelete} disabled={isDeleting}>
             <Trash2 className="size-3.5" />
-            {isDeleting ? 'Deleting…' : 'Delete'}
+            {isDeleting ? 'Deleting…' : isFolder ? 'Remove Folder from Orca' : 'Delete'}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

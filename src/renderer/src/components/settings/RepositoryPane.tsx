@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { OrcaHooks, Repo, RepoHookSettings, SetupRunPolicy } from '../../../../shared/types'
+import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
 import { REPO_COLORS } from '../../../../shared/constants'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
@@ -22,6 +23,7 @@ type RepositoryPaneProps = {
 }
 
 export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[] {
+  const isFolder = isFolderRepo(repo)
   return [
     {
       title: 'Display Name',
@@ -33,31 +35,45 @@ export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[
       description: 'Repo color used in the sidebar and tabs.',
       keywords: [repo.displayName, 'color', 'badge']
     },
-    {
-      title: 'Default Worktree Base',
-      description: 'Default base branch or ref when creating worktrees.',
-      keywords: [repo.displayName, 'base ref', 'branch']
-    },
+    ...(isFolder
+      ? []
+      : [
+          {
+            title: 'Default Worktree Base',
+            description: 'Default base branch or ref when creating worktrees.',
+            keywords: [repo.displayName, 'base ref', 'branch']
+          }
+        ]),
     {
       title: 'Remove Repo',
       description: 'Remove this repository from Orca.',
       keywords: [repo.displayName, 'delete', 'repository']
     },
-    {
-      title: 'orca.yaml hooks',
-      description: 'Shared setup and archive hook commands for this repository.',
-      keywords: [repo.displayName, 'hooks', 'setup', 'archive', 'yaml']
-    },
-    {
-      title: 'Legacy Repo-Local Hooks',
-      description: 'Older setup and archive hook scripts stored in local repo settings.',
-      keywords: [repo.displayName, 'legacy', 'fallback', 'hooks']
-    },
-    {
-      title: 'When to Run Setup',
-      description: 'Choose the default behavior when a setup command is available.',
-      keywords: [repo.displayName, 'setup run policy', 'ask', 'run by default', 'skip by default']
-    }
+    ...(isFolder
+      ? []
+      : [
+          {
+            title: 'orca.yaml hooks',
+            description: 'Shared setup and archive hook commands for this repository.',
+            keywords: [repo.displayName, 'hooks', 'setup', 'archive', 'yaml']
+          },
+          {
+            title: 'Legacy Repo-Local Hooks',
+            description: 'Older setup and archive hook scripts stored in local repo settings.',
+            keywords: [repo.displayName, 'legacy', 'fallback', 'hooks']
+          },
+          {
+            title: 'When to Run Setup',
+            description: 'Choose the default behavior when a setup command is available.',
+            keywords: [
+              repo.displayName,
+              'setup run policy',
+              'ask',
+              'run by default',
+              'skip by default'
+            ]
+          }
+        ])
   ]
 }
 
@@ -68,6 +84,7 @@ export function RepositoryPane({
   updateRepo,
   removeRepo
 }: RepositoryPaneProps): React.JSX.Element {
+  const isFolder = isFolderRepo(repo)
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const [confirmingRemove, setConfirmingRemove] = useState<string | null>(null)
   const [copiedTemplate, setCopiedTemplate] = useState(false)
@@ -128,8 +145,12 @@ export function RepositoryPane({
   }
 
   const allEntries = getRepositoryPaneSearchEntries(repo)
-  const identityEntries = allEntries.slice(0, 4)
-  const hooksEntries = allEntries.slice(4)
+  const identityEntries = allEntries.filter((entry) =>
+    ['Display Name', 'Badge Color', 'Default Worktree Base', 'Remove Repo'].includes(entry.title)
+  )
+  const hooksEntries = allEntries.filter((entry) =>
+    ['orca.yaml hooks', 'Legacy Repo-Local Hooks', 'When to Run Setup'].includes(entry.title)
+  )
 
   const visibleSections = [
     matchesSettingsSearch(searchQuery, identityEntries) ? (
@@ -140,8 +161,15 @@ export function RepositoryPane({
             <p className="text-xs text-muted-foreground">
               Repo-specific display details for the sidebar and tabs.
             </p>
+            <p className="text-xs text-muted-foreground">
+              Type: <span className="text-foreground">{getRepoKindLabel(repo)}</span>
+            </p>
+            {isFolder ? (
+              <p className="text-xs text-muted-foreground">
+                Opened as folder. Git features are unavailable for this workspace.
+              </p>
+            ) : null}
           </div>
-
           <SearchableSetting
             title="Remove Repo"
             description="Remove this repository from Orca."
@@ -202,23 +230,25 @@ export function RepositoryPane({
           </div>
         </SearchableSetting>
 
-        <SearchableSetting
-          title="Default Worktree Base"
-          description="Default base branch or ref when creating worktrees."
-          keywords={[repo.displayName, 'base ref', 'branch']}
-          className="space-y-3"
-        >
-          <Label>Default Worktree Base</Label>
-          <BaseRefPicker
-            repoId={repo.id}
-            currentBaseRef={repo.worktreeBaseRef}
-            onSelect={(ref) => updateRepo(repo.id, { worktreeBaseRef: ref })}
-            onUsePrimary={() => updateRepo(repo.id, { worktreeBaseRef: undefined })}
-          />
-        </SearchableSetting>
+        {!isFolder ? (
+          <SearchableSetting
+            title="Default Worktree Base"
+            description="Default base branch or ref when creating worktrees."
+            keywords={[repo.displayName, 'base ref', 'branch']}
+            className="space-y-3"
+          >
+            <Label>Default Worktree Base</Label>
+            <BaseRefPicker
+              repoId={repo.id}
+              currentBaseRef={repo.worktreeBaseRef}
+              onSelect={(ref) => updateRepo(repo.id, { worktreeBaseRef: ref })}
+              onUsePrimary={() => updateRepo(repo.id, { worktreeBaseRef: undefined })}
+            />
+          </SearchableSetting>
+        ) : null}
       </section>
     ) : null,
-    matchesSettingsSearch(searchQuery, hooksEntries) ? (
+    !isFolder && matchesSettingsSearch(searchQuery, hooksEntries) ? (
       <RepositoryHooksSection
         key="hooks"
         repo={repo}

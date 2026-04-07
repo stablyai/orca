@@ -29,7 +29,13 @@ export type UISlice = {
   } | null
   openSettingsTarget: (target: NonNullable<UISlice['settingsNavigationTarget']>) => void
   clearSettingsTarget: () => void
-  activeModal: 'none' | 'create-worktree' | 'edit-meta' | 'delete-worktree'
+  activeModal:
+    | 'none'
+    | 'create-worktree'
+    | 'edit-meta'
+    | 'delete-worktree'
+    | 'confirm-non-git-folder'
+    | 'confirm-remove-folder'
   modalData: Record<string, unknown>
   openModal: (modal: UISlice['activeModal'], data?: Record<string, unknown>) => void
   closeModal: () => void

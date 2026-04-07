@@ -3,6 +3,7 @@ import { ipcMain } from 'electron'
 import { execFileSync } from 'child_process'
 import { rm } from 'fs/promises'
 import type { Store } from '../persistence'
+import { isFolderRepo } from '../../shared/repo-kind'
 import type {
   CreateWorktreeArgs,
   CreateWorktreeResult,
@@ -12,6 +13,7 @@ import type {
 import { getPRForBranch } from '../github/client'
 import { listWorktrees, addWorktree, removeWorktree } from '../git/worktree'
 import { getGitUsername, getDefaultBaseRef, getBranchConflictKind } from '../git/repo'
+import { listRepoWorktrees } from '../repo-worktrees'
 import {
   createSetupRunnerScript,
   getEffectiveHooks,
@@ -54,11 +56,11 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
     const allWorktrees: Worktree[] = []
 
     for (const repo of repos) {
-      const gitWorktrees = await listWorktrees(repo.path)
+      const gitWorktrees = await listRepoWorktrees(repo)
       for (const gw of gitWorktrees) {
         const worktreeId = `${repo.id}::${gw.path}`
         const meta = store.getWorktreeMeta(worktreeId)
-        allWorktrees.push(mergeWorktree(repo.id, gw, meta))
+        allWorktrees.push(mergeWorktree(repo.id, gw, meta, repo.displayName))
       }
     }
 
@@ -75,11 +77,11 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
       return []
     }
 
-    const gitWorktrees = await listWorktrees(repo.path)
+    const gitWorktrees = await listRepoWorktrees(repo)
     return gitWorktrees.map((gw) => {
       const worktreeId = `${repo.id}::${gw.path}`
       const meta = store.getWorktreeMeta(worktreeId)
-      return mergeWorktree(repo.id, gw, meta)
+      return mergeWorktree(repo.id, gw, meta, repo.displayName)
     })
   })
 
@@ -89,6 +91,9 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
       const repo = store.getRepo(args.repoId)
       if (!repo) {
         throw new Error(`Repo not found: ${args.repoId}`)
+      }
+      if (isFolderRepo(repo)) {
+        throw new Error('Folder mode does not support creating worktrees.')
       }
 
       const settings = store.getSettings()
@@ -206,6 +211,9 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
       if (!repo) {
         throw new Error(`Repo not found: ${repoId}`)
       }
+      if (isFolderRepo(repo)) {
+        throw new Error('Folder mode does not support deleting worktrees.')
+      }
 
       // Run archive hook before removal
       const hooks = getEffectiveHooks(repo)
@@ -272,7 +280,7 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
 
   ipcMain.handle('hooks:check', (_event, args: { repoId: string }) => {
     const repo = store.getRepo(args.repoId)
-    if (!repo) {
+    if (!repo || isFolderRepo(repo)) {
       return { hasHooks: false, hooks: null }
     }
 

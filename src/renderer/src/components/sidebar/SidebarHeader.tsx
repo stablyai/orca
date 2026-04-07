@@ -3,6 +3,7 @@ import { Plus, SlidersHorizontal } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { isGitRepoKind } from '../../../../shared/repo-kind'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,7 +37,7 @@ const newWorktreeShortcutLabel = isMac ? '⌘N' : 'Ctrl+N'
 const SidebarHeader = React.memo(function SidebarHeader() {
   const openModal = useAppStore((s) => s.openModal)
   const repos = useAppStore((s) => s.repos)
-  const canCreateWorktree = repos.length > 0
+  const canCreateWorktree = repos.some((repo) => isGitRepoKind(repo))
 
   const worktreeCardProperties = useAppStore((s) => s.worktreeCardProperties)
   const toggleWorktreeCardProperty = useAppStore((s) => s.toggleWorktreeCardProperty)
@@ -121,7 +122,7 @@ const SidebarHeader = React.memo(function SidebarHeader() {
           <TooltipContent side="right" sideOffset={6}>
             {canCreateWorktree
               ? `New worktree (${newWorktreeShortcutLabel})`
-              : 'Add a repo to create worktrees'}
+              : 'Add a Git repo to create worktrees'}
           </TooltipContent>
         </Tooltip>
       </div>

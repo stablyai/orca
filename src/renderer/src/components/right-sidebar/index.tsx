@@ -1,10 +1,11 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { Files, Search, GitBranch, ListChecks } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
 import type { RightSidebarTab, ActivityBarPosition } from '@/store/slices/editor'
 import type { CheckStatus } from '../../../../shared/types'
+import { isFolderRepo } from '../../../../shared/repo-kind'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import {
   ContextMenu,
@@ -71,6 +72,8 @@ type ActivityBarItem = {
   icon: React.ComponentType<{ size?: number; className?: string }>
   title: string
   shortcut: string
+  /** When true, hidden for non-git (folder-mode) repos. */
+  gitOnly?: boolean
 }
 
 const isMac = navigator.userAgent.includes('Mac')
@@ -93,13 +96,15 @@ const ACTIVITY_ITEMS: ActivityBarItem[] = [
     id: 'source-control',
     icon: GitBranch,
     title: 'Source Control',
-    shortcut: `${isMac ? '\u21E7' : 'Shift+'}${mod}G`
+    shortcut: `${isMac ? '\u21E7' : 'Shift+'}${mod}G`,
+    gitOnly: true
   },
   {
     id: 'checks',
     icon: ListChecks,
     title: 'Checks',
-    shortcut: `${isMac ? '\u21E7' : 'Shift+'}${mod}K`
+    shortcut: `${isMac ? '\u21E7' : 'Shift+'}${mod}K`,
+    gitOnly: true
   }
 ]
 
@@ -114,6 +119,24 @@ export default function RightSidebar(): React.JSX.Element {
   const activityBarPosition = useAppStore((s) => s.activityBarPosition)
   const setActivityBarPosition = useAppStore((s) => s.setActivityBarPosition)
 
+  // Why: source control and checks are meaningless for non-git folders.
+  // Hide those tabs so the activity bar only shows relevant actions.
+  const activeRepo = useAppStore((s) => {
+    const wt = findWorktreeById(s.worktreesByRepo, s.activeWorktreeId)
+    return wt ? (s.repos.find((r) => r.id === wt.repoId) ?? null) : null
+  })
+  const isFolder = activeRepo ? isFolderRepo(activeRepo) : false
+  const visibleItems = useMemo(
+    () => (isFolder ? ACTIVITY_ITEMS.filter((item) => !item.gitOnly) : ACTIVITY_ITEMS),
+    [isFolder]
+  )
+
+  // If the active tab is hidden (e.g. switched from a git repo to a folder),
+  // fall back to the first visible tab.
+  const effectiveTab = visibleItems.some((item) => item.id === rightSidebarTab)
+    ? rightSidebarTab
+    : visibleItems[0].id
+
   const activityBarSideWidth = activityBarPosition === 'side' ? ACTIVITY_BAR_SIDE_WIDTH : 0
   const { containerRef, isResizing, onResizeStart } = useSidebarResize<HTMLDivElement>({
     isOpen: rightSidebarOpen,
@@ -127,18 +150,18 @@ export default function RightSidebar(): React.JSX.Element {
 
   const panelContent = (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden scrollbar-sleek-parent">
-      {rightSidebarTab === 'explorer' && <FileExplorer key={activeWorktreeId ?? 'none'} />}
-      {rightSidebarTab === 'search' && <SearchPanel key={activeWorktreeId ?? 'none'} />}
-      {rightSidebarTab === 'source-control' && <SourceControl key={activeWorktreeId ?? 'none'} />}
-      {rightSidebarTab === 'checks' && <ChecksPanel key={activeWorktreeId ?? 'none'} />}
+      {effectiveTab === 'explorer' && <FileExplorer key={activeWorktreeId ?? 'none'} />}
+      {effectiveTab === 'search' && <SearchPanel key={activeWorktreeId ?? 'none'} />}
+      {effectiveTab === 'source-control' && <SourceControl key={activeWorktreeId ?? 'none'} />}
+      {effectiveTab === 'checks' && <ChecksPanel key={activeWorktreeId ?? 'none'} />}
     </div>
   )
 
-  const activityBarIcons = ACTIVITY_ITEMS.map((item) => (
+  const activityBarIcons = visibleItems.map((item) => (
     <ActivityBarButton
       key={item.id}
       item={item}
-      active={rightSidebarTab === item.id}
+      active={effectiveTab === item.id}
       onClick={() => setRightSidebarTab(item.id)}
       layout={activityBarPosition}
       statusIndicator={item.id === 'checks' ? checksStatus : null}
@@ -177,7 +200,7 @@ export default function RightSidebar(): React.JSX.Element {
           /* ── Side layout: static title header ── */
           <div className="flex items-center h-[33px] min-h-[33px] px-3 border-b border-border">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground">
-              {ACTIVITY_ITEMS.find((item) => item.id === rightSidebarTab)?.title ?? ''}
+              {visibleItems.find((item) => item.id === effectiveTab)?.title ?? ''}
             </span>
           </div>
         )}

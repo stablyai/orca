@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { LoaderCircle, ExternalLink, RefreshCw, Check, X, Pencil } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
+import { isFolderRepo } from '../../../../shared/repo-kind'
 import PRActions from './PRActions'
 import {
   PullRequestIcon,
@@ -51,6 +52,7 @@ export default function ChecksPanel(): React.JSX.Element {
   }, [activeWorktreeId, worktreesByRepo, repos])
 
   const branch = worktree ? worktree.branch.replace(/^refs\/heads\//, '') : ''
+  const isFolder = repo ? isFolderRepo(repo) : false
   const prCacheKey = repo && branch ? `${repo.path}::${branch}` : ''
   const pr: PRInfo | null = prCacheKey ? (prCache[prCacheKey]?.data ?? null) : null
   const prNumber = pr?.number ?? null
@@ -60,13 +62,13 @@ export default function ChecksPanel(): React.JSX.Element {
 
   // Fetch PR data when the active worktree/branch changes
   useEffect(() => {
-    if (repo && branch) {
+    if (repo && !isFolder && branch) {
       void fetchPRForBranch(repo.path, branch)
     }
-  }, [repo, branch, fetchPRForBranch])
+  }, [repo, isFolder, branch, fetchPRForBranch])
 
   useEffect(() => {
-    if (!repo || !branch || !pr || pr.mergeable !== 'CONFLICTING') {
+    if (!repo || isFolder || !branch || !pr || pr.mergeable !== 'CONFLICTING') {
       conflictSummaryRefreshKeyRef.current = null
       return
     }
@@ -82,7 +84,7 @@ export default function ChecksPanel(): React.JSX.Element {
     // lists from an older payload.
     conflictSummaryRefreshKeyRef.current = refreshKey
     void fetchPRForBranch(repo.path, branch, { force: true })
-  }, [repo, branch, pr, fetchPRForBranch])
+  }, [repo, isFolder, branch, pr, fetchPRForBranch])
 
   // Fetch checks via cached store method
   const fetchChecks = useCallback(
@@ -237,6 +239,16 @@ export default function ChecksPanel(): React.JSX.Element {
         <div className="text-sm font-medium text-foreground">No worktree selected</div>
         <div className="mt-1 text-xs text-muted-foreground">
           Select a worktree to view PR checks
+        </div>
+      </div>
+    )
+  }
+  if (isFolder) {
+    return (
+      <div className="px-4 py-6">
+        <div className="text-sm font-medium text-foreground">Checks unavailable</div>
+        <div className="mt-1 text-xs text-muted-foreground">
+          Checks require a Git branch and pull request context
         </div>
       </div>
     )

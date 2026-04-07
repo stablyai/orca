@@ -1,7 +1,7 @@
 import { realpath } from 'fs/promises'
 import { resolve, relative, dirname, basename, isAbsolute } from 'path'
 import type { Store } from '../persistence'
-import { listWorktrees } from '../git/worktree'
+import { listRepoWorktrees } from '../repo-worktrees'
 
 export const PATH_ACCESS_DENIED_MESSAGE =
   'Access denied: path resolves outside allowed directories. If this blocks a legitimate workflow, please file a GitHub issue.'
@@ -68,7 +68,7 @@ export async function rebuildAuthorizedRootsCache(store: Store): Promise<void> {
     try {
       nextRoots.add(await normalizeExistingPath(repo.path))
 
-      const worktrees = await listWorktrees(repo.path)
+      const worktrees = await listRepoWorktrees(repo)
       for (const worktree of worktrees) {
         nextRoots.add(await normalizeExistingPath(worktree.path))
       }

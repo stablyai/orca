@@ -22,6 +22,7 @@ import { useAppStore } from '@/store'
 import { detectLanguage } from '@/lib/language-detect'
 import { basename, dirname, joinPath } from '@/lib/path'
 import { cn } from '@/lib/utils'
+import { isFolderRepo } from '../../../../shared/repo-kind'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
 import {
@@ -135,6 +136,7 @@ export default function SourceControl(): React.JSX.Element {
     () => repos.find((repo) => repo.id === activeWorktree?.repoId) ?? null,
     [activeWorktree?.repoId, repos]
   )
+  const isFolder = activeRepo ? isFolderRepo(activeRepo) : false
   const worktreePath = activeWorktree?.path ?? null
   const entries = useMemo(
     () => (activeWorktreeId ? (gitStatusByWorktree[activeWorktreeId] ?? []) : []),
@@ -153,7 +155,7 @@ export default function SourceControl(): React.JSX.Element {
   const isBranchVisible = rightSidebarTab === 'source-control'
 
   useEffect(() => {
-    if (!activeRepo) {
+    if (!activeRepo || isFolder) {
       return
     }
 
@@ -174,7 +176,7 @@ export default function SourceControl(): React.JSX.Element {
     return () => {
       stale = true
     }
-  }, [activeRepo])
+  }, [activeRepo, isFolder])
 
   const effectiveBaseRef = activeRepo?.worktreeBaseRef ?? defaultBaseRef
   const hasUncommittedEntries = entries.length > 0
@@ -185,7 +187,7 @@ export default function SourceControl(): React.JSX.Element {
   const prInfo: PRInfo | null = prCacheKey ? (prCache[prCacheKey]?.data ?? null) : null
 
   useEffect(() => {
-    if (!isBranchVisible || !activeRepo || !branchName || branchName === 'HEAD') {
+    if (!isBranchVisible || !activeRepo || isFolder || !branchName || branchName === 'HEAD') {
       return
     }
 
@@ -194,7 +196,7 @@ export default function SourceControl(): React.JSX.Element {
     // to fetch that branch's PR immediately instead of waiting for the user to
     // reselect the worktree or open the separate Checks panel.
     void fetchPRForBranch(activeRepo.path, branchName)
-  }, [activeRepo, branchName, fetchPRForBranch, isBranchVisible])
+  }, [activeRepo, branchName, fetchPRForBranch, isBranchVisible, isFolder])
 
   const grouped = useMemo(() => {
     const groups = {
@@ -225,7 +227,7 @@ export default function SourceControl(): React.JSX.Element {
   )
 
   const refreshBranchCompare = useCallback(async () => {
-    if (!activeWorktreeId || !worktreePath || !effectiveBaseRef) {
+    if (!activeWorktreeId || !worktreePath || !effectiveBaseRef || isFolder) {
       return
     }
 
@@ -271,6 +273,7 @@ export default function SourceControl(): React.JSX.Element {
     beginGitBranchCompareRequest,
     branchName,
     effectiveBaseRef,
+    isFolder,
     setGitBranchCompareResult,
     worktreePath
   ])
@@ -279,7 +282,7 @@ export default function SourceControl(): React.JSX.Element {
   refreshBranchCompareRef.current = refreshBranchCompare
 
   useEffect(() => {
-    if (!activeWorktreeId || !worktreePath || !isBranchVisible || !effectiveBaseRef) {
+    if (!activeWorktreeId || !worktreePath || !isBranchVisible || !effectiveBaseRef || isFolder) {
       return
     }
 
@@ -289,7 +292,7 @@ export default function SourceControl(): React.JSX.Element {
       BRANCH_REFRESH_INTERVAL_MS
     )
     return () => window.clearInterval(intervalId)
-  }, [activeWorktreeId, effectiveBaseRef, isBranchVisible, worktreePath])
+  }, [activeWorktreeId, effectiveBaseRef, isBranchVisible, isFolder, worktreePath])
 
   const toggleSection = useCallback((section: string) => {
     setCollapsedSections((prev) => {
@@ -412,6 +415,13 @@ export default function SourceControl(): React.JSX.Element {
     return (
       <div className="flex items-center justify-center h-full text-xs text-muted-foreground px-4 text-center">
         Select a worktree to view changes
+      </div>
+    )
+  }
+  if (isFolder) {
+    return (
+      <div className="flex items-center justify-center h-full text-xs text-muted-foreground px-4 text-center">
+        Source Control is only available for Git repositories
       </div>
     )
   }
