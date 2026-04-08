@@ -2,18 +2,17 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Loader2 } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { detectLanguage } from '@/lib/language-detect'
 import { dirname, normalizeRelativePath } from '@/lib/path'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 import { FileDeleteDialog } from './FileDeleteDialog'
 import { FileExplorerBackgroundMenu } from './FileExplorerBackgroundMenu'
 import { FileExplorerRow, InlineInputRow } from './FileExplorerRow'
-import type { TreeNode } from './file-explorer-types'
 import { splitPathSegments } from './path-tree'
 import { buildFolderStatusMap, buildStatusMap, STATUS_COLORS } from './status-display'
 import { useFileDeletion } from './useFileDeletion'
 import { useFileExplorerAutoReveal } from './useFileExplorerAutoReveal'
+import { useFileExplorerHandlers } from './useFileExplorerHandlers'
 import { useFileExplorerReveal } from './useFileExplorerReveal'
 import { useFileExplorerInlineInput } from './useFileExplorerInlineInput'
 import { useFileExplorerKeys } from './useFileExplorerKeys'
@@ -219,54 +218,16 @@ export default function FileExplorer(): React.JSX.Element {
     requestDelete
   })
 
-  const handleClick = useCallback(
-    (node: TreeNode) => {
-      if (!activeWorktreeId) {
-        return
-      }
-      setSelectedPath(node.path)
-      if (node.isDirectory) {
-        toggleDir(activeWorktreeId, node.path)
-        return
-      }
-      openFile({
-        filePath: node.path,
-        relativePath: node.relativePath,
-        worktreeId: activeWorktreeId,
-        language: detectLanguage(node.name),
-        mode: 'edit'
-      })
-    },
-    [activeWorktreeId, openFile, toggleDir]
-  )
-
-  const handleDoubleClick = useCallback(
-    (node: TreeNode) => {
-      if (!activeWorktreeId || node.isDirectory) {
-        return
-      }
-      pinFile(node.path)
-    },
-    [activeWorktreeId, pinFile]
-  )
+  const { handleClick, handleDoubleClick, handleWheelCapture } = useFileExplorerHandlers({
+    activeWorktreeId,
+    openFile,
+    pinFile,
+    toggleDir,
+    setSelectedPath,
+    scrollRef
+  })
 
   const handleDuplicate = useFileDuplicate({ worktreePath, refreshDir })
-
-  const handleWheelCapture = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
-    const container = scrollRef.current
-    if (!container || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) {
-      return
-    }
-    const target = e.target
-    if (!(target instanceof Element) || !target.closest('[data-explorer-draggable="true"]')) {
-      return
-    }
-    if (container.scrollHeight <= container.clientHeight) {
-      return
-    }
-    e.preventDefault()
-    container.scrollTop += e.deltaY
-  }, [])
 
   if (!worktreePath) {
     return (
