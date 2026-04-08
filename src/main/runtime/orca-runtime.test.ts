@@ -683,6 +683,7 @@ describe('OrcaRuntimeService', () => {
       getSettings: () => ({
         workspaceDir: 'C:\\workspaces',
         nestWorkspaces: false,
+        refreshLocalBaseRefOnWorktreeCreate: false,
         branchPrefix: 'none',
         branchPrefixCustom: ''
       })

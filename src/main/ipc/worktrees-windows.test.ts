@@ -154,6 +154,7 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     store.getSettings.mockReturnValue({
       branchPrefix: 'none',
       nestWorkspaces: false,
+      refreshLocalBaseRefOnWorktreeCreate: false,
       workspaceDir: 'C:\\workspaces'
     })
     store.getWorktreeMeta.mockReturnValue(undefined)
@@ -191,7 +192,8 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
       'C:\\repo',
       'C:\\workspaces\\improve-dashboard',
       'improve-dashboard',
-      'origin/main'
+      'origin/main',
+      false
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       'repo-1::C:/workspaces/improve-dashboard',

@@ -130,21 +130,39 @@ export function addWorktree(
           encoding: 'utf-8',
           stdio: ['pipe', 'pipe', 'pipe']
         })
-        // Why: If the worktree that has localBranch checked out has uncommitted
-        // changes, moving the ref with update-ref would shift the baseline commit
-        // and muddle their diffs. Only update if the working tree is clean.
-        const status = execFileSync('git', ['status', '--porcelain', '--untracked-files=no'], {
+        // Why: We need to find which worktree (if any) has localBranch checked
+        // out, because moving the ref without updating that worktree's files would
+        // leave it looking massively dirty. A sibling worktree we don't control is
+        // just as vulnerable as the primary one.
+        const worktreeListOutput = execFileSync('git', ['worktree', 'list', '--porcelain'], {
           cwd: repoPath,
           encoding: 'utf-8',
           stdio: ['pipe', 'pipe', 'pipe']
         })
-        if (!status.trim()) {
-          // Safe fast-forward: local branch is behind (or equal to) the remote ref.
-          // Why: `git branch -f` refuses to update a branch checked out in another
-          // worktree. `git update-ref` writes the ref directly, bypassing that
-          // restriction. This is the common case — master/main is almost always
-          // checked out in the main worktree.
-          execFileSync('git', ['update-ref', `refs/heads/${localBranch}`, baseBranch], {
+        const worktrees = parseWorktreeList(worktreeListOutput)
+        const fullRef = `refs/heads/${localBranch}`
+        const ownerWorktree = worktrees.find((wt) => wt.branch === fullRef)
+
+        if (ownerWorktree) {
+          // Why: localBranch is checked out in a worktree. We can only safely
+          // update if that worktree is clean, and we must use `reset --hard`
+          // (run inside that worktree) so the files move with the ref.
+          const status = execFileSync('git', ['status', '--porcelain', '--untracked-files=no'], {
+            cwd: ownerWorktree.path,
+            encoding: 'utf-8',
+            stdio: ['pipe', 'pipe', 'pipe']
+          })
+          if (!status.trim()) {
+            execFileSync('git', ['reset', '--hard', baseBranch], {
+              cwd: ownerWorktree.path,
+              encoding: 'utf-8',
+              stdio: ['pipe', 'pipe', 'pipe']
+            })
+          }
+        } else {
+          // Why: localBranch is not checked out anywhere, so there is no working
+          // tree to desync. `update-ref` is safe here.
+          execFileSync('git', ['update-ref', fullRef, baseBranch], {
             cwd: repoPath,
             encoding: 'utf-8',
             stdio: ['pipe', 'pipe', 'pipe']

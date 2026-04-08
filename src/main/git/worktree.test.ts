@@ -1,3 +1,7 @@
+/* eslint-disable max-lines -- Why: addWorktree has multiple code paths (no refresh,
+   reset --hard vs update-ref, dirty worktree, diverged branch, custom remote) that each
+   need dedicated test coverage. Splitting into separate files would scatter related tests
+   without a meaningful boundary. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { execFileMock, execFileSyncMock } = vi.hoisted(() => ({
@@ -211,12 +215,15 @@ describe('addWorktree', () => {
     ])
   })
 
-  it('fast-forwards the local base branch before creating the worktree when safe', () => {
+  it('fast-forwards with reset --hard when localBranch is checked out in primary worktree', () => {
+    const worktreeListOutput =
+      'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\nworktree /repo-other\nHEAD def456\nbranch refs/heads/feature\n'
     execFileSyncMock
-      .mockReturnValueOnce('')
-      .mockReturnValueOnce('')
-      .mockReturnValueOnce(undefined)
-      .mockReturnValueOnce(undefined)
+      .mockReturnValueOnce('') // merge-base --is-ancestor
+      .mockReturnValueOnce(worktreeListOutput) // worktree list --porcelain
+      .mockReturnValueOnce('') // status --porcelain (in /repo)
+      .mockReturnValueOnce(undefined) // reset --hard (in /repo)
+      .mockReturnValueOnce(undefined) // worktree add
 
     addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
 
@@ -226,16 +233,13 @@ describe('addWorktree', () => {
         ['merge-base', '--is-ancestor', 'main', 'origin/main'],
         expect.objectContaining({ cwd: '/repo' })
       ],
+      ['git', ['worktree', 'list', '--porcelain'], expect.objectContaining({ cwd: '/repo' })],
       [
         'git',
         ['status', '--porcelain', '--untracked-files=no'],
         expect.objectContaining({ cwd: '/repo' })
       ],
-      [
-        'git',
-        ['update-ref', 'refs/heads/main', 'origin/main'],
-        expect.objectContaining({ cwd: '/repo' })
-      ],
+      ['git', ['reset', '--hard', 'origin/main'], expect.objectContaining({ cwd: '/repo' })],
       [
         'git',
         ['worktree', 'add', '-b', 'feature/test', '/repo-feature', 'origin/main'],
@@ -244,34 +248,70 @@ describe('addWorktree', () => {
     ])
   })
 
-  it('skips updating the local branch when the main worktree is dirty', () => {
+  it('fast-forwards with reset --hard in sibling worktree when localBranch is checked out there', () => {
+    const worktreeListOutput =
+      'worktree /repo\nHEAD abc123\nbranch refs/heads/develop\n\nworktree /repo-main-wt\nHEAD def456\nbranch refs/heads/main\n'
     execFileSyncMock
-      .mockReturnValueOnce('')
-      .mockReturnValueOnce(' M package.json\n')
-      .mockReturnValueOnce(undefined)
+      .mockReturnValueOnce('') // merge-base --is-ancestor
+      .mockReturnValueOnce(worktreeListOutput) // worktree list --porcelain
+      .mockReturnValueOnce('') // status --porcelain (in /repo-main-wt)
+      .mockReturnValueOnce(undefined) // reset --hard (in /repo-main-wt)
+      .mockReturnValueOnce(undefined) // worktree add
 
     addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
 
-    expect(execFileSyncMock.mock.calls).toEqual([
-      [
-        'git',
-        ['merge-base', '--is-ancestor', 'main', 'origin/main'],
-        expect.objectContaining({ cwd: '/repo' })
-      ],
-      [
-        'git',
-        ['status', '--porcelain', '--untracked-files=no'],
-        expect.objectContaining({ cwd: '/repo' })
-      ],
-      [
-        'git',
-        ['worktree', 'add', '-b', 'feature/test', '/repo-feature', 'origin/main'],
-        expect.objectContaining({ cwd: '/repo' })
-      ]
+    expect(execFileSyncMock.mock.calls[2]).toEqual([
+      'git',
+      ['status', '--porcelain', '--untracked-files=no'],
+      expect.objectContaining({ cwd: '/repo-main-wt' })
+    ])
+    expect(execFileSyncMock.mock.calls[3]).toEqual([
+      'git',
+      ['reset', '--hard', 'origin/main'],
+      expect.objectContaining({ cwd: '/repo-main-wt' })
     ])
   })
 
-  it('skips updating the local branch when it has diverged and still creates the worktree', () => {
+  it('uses update-ref when localBranch is not checked out in any worktree', () => {
+    const worktreeListOutput = 'worktree /repo\nHEAD abc123\nbranch refs/heads/develop\n'
+    execFileSyncMock
+      .mockReturnValueOnce('') // merge-base --is-ancestor
+      .mockReturnValueOnce(worktreeListOutput) // worktree list --porcelain
+      .mockReturnValueOnce(undefined) // update-ref
+      .mockReturnValueOnce(undefined) // worktree add
+
+    addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
+
+    expect(execFileSyncMock.mock.calls[2]).toEqual([
+      'git',
+      ['update-ref', 'refs/heads/main', 'origin/main'],
+      expect.objectContaining({ cwd: '/repo' })
+    ])
+  })
+
+  it('skips update when the owning worktree is dirty', () => {
+    const worktreeListOutput = 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n'
+    execFileSyncMock
+      .mockReturnValueOnce('') // merge-base --is-ancestor
+      .mockReturnValueOnce(worktreeListOutput) // worktree list --porcelain
+      .mockReturnValueOnce(' M package.json\n') // status --porcelain (dirty)
+      .mockReturnValueOnce(undefined) // worktree add
+
+    addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
+
+    // No reset --hard or update-ref — just merge-base, worktree list, status, worktree add
+    expect(execFileSyncMock.mock.calls).toHaveLength(4)
+    expect(execFileSyncMock.mock.calls[3]?.[1]).toEqual([
+      'worktree',
+      'add',
+      '-b',
+      'feature/test',
+      '/repo-feature',
+      'origin/main'
+    ])
+  })
+
+  it('skips updating the local branch when it has diverged', () => {
     execFileSyncMock.mockImplementationOnce(() => {
       throw new Error('not a fast-forward')
     })
@@ -294,11 +334,13 @@ describe('addWorktree', () => {
   })
 
   it('uses the remote name from the base ref instead of hardcoding origin', () => {
+    const worktreeListOutput = 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n'
     execFileSyncMock
-      .mockReturnValueOnce('')
-      .mockReturnValueOnce('')
-      .mockReturnValueOnce(undefined)
-      .mockReturnValueOnce(undefined)
+      .mockReturnValueOnce('') // merge-base --is-ancestor
+      .mockReturnValueOnce(worktreeListOutput) // worktree list --porcelain
+      .mockReturnValueOnce('') // status --porcelain
+      .mockReturnValueOnce(undefined) // reset --hard
+      .mockReturnValueOnce(undefined) // worktree add
 
     addWorktree('/repo', '/repo-feature', 'feature/test', 'upstream/main', true)
 
@@ -308,10 +350,6 @@ describe('addWorktree', () => {
       'main',
       'upstream/main'
     ])
-    expect(execFileSyncMock.mock.calls[2]?.[1]).toEqual([
-      'update-ref',
-      'refs/heads/main',
-      'upstream/main'
-    ])
+    expect(execFileSyncMock.mock.calls[3]?.[1]).toEqual(['reset', '--hard', 'upstream/main'])
   })
 })
