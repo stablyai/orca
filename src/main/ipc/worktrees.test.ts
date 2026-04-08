@@ -17,8 +17,7 @@ const {
   runHookMock,
   hasHooksFileMock,
   loadHooksMock,
-  computeWorktreePathMock,
-  ensurePathWithinWorkspaceMock
+  computeWorktreePathMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   removeHandlerMock: vi.fn(),
@@ -35,8 +34,7 @@ const {
   runHookMock: vi.fn(),
   hasHooksFileMock: vi.fn(),
   loadHooksMock: vi.fn(),
-  computeWorktreePathMock: vi.fn(),
-  ensurePathWithinWorkspaceMock: vi.fn()
+  computeWorktreePathMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -75,8 +73,7 @@ vi.mock('./worktree-logic', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
   return {
     ...actual,
-    computeWorktreePath: computeWorktreePathMock,
-    ensurePathWithinWorkspace: ensurePathWithinWorkspaceMock
+    computeWorktreePath: computeWorktreePathMock
   }
 })
 
@@ -119,7 +116,6 @@ describe('registerWorktreeHandlers', () => {
       hasHooksFileMock,
       loadHooksMock,
       computeWorktreePathMock,
-      ensurePathWithinWorkspaceMock,
       mainWindow.webContents.send,
       store.getRepos,
       store.getRepo,
@@ -186,7 +182,6 @@ describe('registerWorktreeHandlers', () => {
         return `${settings.workspaceDir}/${sanitizedName}`
       }
     )
-    ensurePathWithinWorkspaceMock.mockImplementation((targetPath: string) => targetPath)
     listWorktreesMock.mockResolvedValue([])
 
     registerWorktreeHandlers(mainWindow as never, store as never)

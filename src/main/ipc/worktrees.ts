@@ -13,8 +13,6 @@ import { getPRForBranch } from '../github/client'
 import { listWorktrees, addWorktree, removeWorktree } from '../git/worktree'
 import { getGitUsername, getDefaultBaseRef, getBranchConflictKind } from '../git/repo'
 import { gitExecFileSync } from '../git/runner'
-import { isWslPath, parseWslPath, getWslHome } from '../wsl'
-import { join } from 'path'
 import { listRepoWorktrees } from '../repo-worktrees'
 import {
   createSetupRunnerScript,
@@ -28,7 +26,6 @@ import {
   sanitizeWorktreeName,
   computeBranchName,
   computeWorktreePath,
-  ensurePathWithinWorkspace,
   shouldSetDisplayName,
   mergeWorktree,
   parseWorktreeId,
@@ -130,16 +127,10 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
         )
       }
 
-      // Compute worktree path
-      let worktreePath = computeWorktreePath(sanitizedName, repo.path, settings)
-      // Why: WSL worktrees live under ~/orca/workspaces inside the WSL
-      // filesystem. Validate against that root, not the Windows workspace dir.
-      // If WSL home lookup fails, keep using the configured workspace root so
-      // the path traversal guard still runs on the fallback path.
-      const wslInfo = isWslPath(repo.path) ? parseWslPath(repo.path) : null
-      const wslHome = wslInfo ? getWslHome(wslInfo.distro) : null
-      const workspaceRoot = wslHome ? join(wslHome, 'orca', 'workspaces') : settings.workspaceDir
-      worktreePath = ensurePathWithinWorkspace(worktreePath, workspaceRoot)
+      // Compute worktree path. computeWorktreePath now handles WSL, in-repo,
+      // and external modes internally and runs path-traversal validation
+      // against the correct root for each mode.
+      const worktreePath = computeWorktreePath(sanitizedName, repo.path, settings)
 
       // Determine base branch
       const baseBranch = args.baseBranch || repo.worktreeBaseRef || getDefaultBaseRef(repo.path)
