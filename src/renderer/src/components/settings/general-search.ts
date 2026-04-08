@@ -10,6 +10,11 @@ export const GENERAL_WORKSPACE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     title: 'Nest Workspaces',
     description: 'Create worktrees inside a repo-named subfolder.',
     keywords: ['nested', 'subfolder', 'directory']
+  },
+  {
+    title: 'Refresh Local Base Ref',
+    description: 'Optionally fast-forward local main or master when creating worktrees.',
+    keywords: ['main', 'master', 'origin/main', 'git diff', 'base ref', 'worktree']
   }
 ]
 

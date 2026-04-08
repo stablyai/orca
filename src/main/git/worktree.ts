@@ -107,13 +107,14 @@ export function addWorktree(
   repoPath: string,
   worktreePath: string,
   branch: string,
-  baseBranch?: string
+  baseBranch?: string,
+  refreshLocalBaseRef = false
 ): void {
-  // Why: Fast-forward the local branch (e.g. master) to match its remote tracking
-  // branch (e.g. origin/master) so that `git diff master...HEAD` works correctly
-  // inside worktrees. Callers are responsible for fetching the remote before
-  // calling addWorktree(), so we do not fetch here.
-  if (baseBranch) {
+  // Why: Some users want Orca-created worktrees to make plain commands like
+  // `git diff main...HEAD` work out of the box, while others do not want
+  // worktree creation to mutate their local main/master ref at all. Keep this
+  // behavior behind an explicit setting so the default stays conservative.
+  if (baseBranch && refreshLocalBaseRef) {
     // Why: We split on '/' instead of matching a hardcoded 'origin/' prefix because
     // callers may pass arbitrary remotes (e.g. 'upstream/main'), not just 'origin'.
     const slashIndex = baseBranch.indexOf('/')

@@ -162,6 +162,43 @@ export function GeneralPane({
             />
           </button>
         </SearchableSetting>
+
+        <SearchableSetting
+          title="Refresh Local Base Ref"
+          description="Optionally fast-forward local main or master when creating worktrees."
+          keywords={['main', 'master', 'origin/main', 'git diff', 'base ref', 'worktree']}
+          className="flex items-center justify-between gap-4 px-1 py-2"
+        >
+          <div className="space-y-0.5">
+            <Label>Refresh Local Base Ref</Label>
+            <p className="text-xs text-muted-foreground">
+              Why: enabling this makes plain commands like <code>git diff main...HEAD</code> work
+              naturally in new worktrees, but it also mutates your local main or master ref in the
+              primary worktree. Orca only does that fast-forward when the local branch is clean and
+              safely behind the remote-tracking ref.
+            </p>
+          </div>
+          <button
+            role="switch"
+            aria-checked={settings.refreshLocalBaseRefOnWorktreeCreate}
+            onClick={() =>
+              updateSettings({
+                refreshLocalBaseRefOnWorktreeCreate: !settings.refreshLocalBaseRefOnWorktreeCreate
+              })
+            }
+            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
+              settings.refreshLocalBaseRefOnWorktreeCreate
+                ? 'bg-foreground'
+                : 'bg-muted-foreground/30'
+            }`}
+          >
+            <span
+              className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
+                settings.refreshLocalBaseRefOnWorktreeCreate ? 'translate-x-4' : 'translate-x-0.5'
+              }`}
+            />
+          </button>
+        </SearchableSetting>
       </section>
     ) : null,
     matchesSettingsSearch(searchQuery, GENERAL_EDITOR_SEARCH_ENTRIES) ? (

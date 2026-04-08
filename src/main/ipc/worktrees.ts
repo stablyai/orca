@@ -154,7 +154,13 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
         // Fetch is best-effort — don't block worktree creation if offline
       }
 
-      addWorktree(repo.path, worktreePath, branchName, baseBranch)
+      addWorktree(
+        repo.path,
+        worktreePath,
+        branchName,
+        baseBranch,
+        settings.refreshLocalBaseRefOnWorktreeCreate
+      )
 
       // Re-list to get the freshly created worktree info
       const gitWorktrees = await listWorktrees(repo.path)

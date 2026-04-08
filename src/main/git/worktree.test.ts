@@ -197,6 +197,20 @@ describe('addWorktree', () => {
     execFileSyncMock.mockReset()
   })
 
+  it('creates the worktree without touching the local base ref by default', () => {
+    execFileSyncMock.mockReturnValueOnce(undefined)
+
+    addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main')
+
+    expect(execFileSyncMock.mock.calls).toEqual([
+      [
+        'git',
+        ['worktree', 'add', '-b', 'feature/test', '/repo-feature', 'origin/main'],
+        expect.objectContaining({ cwd: '/repo' })
+      ]
+    ])
+  })
+
   it('fast-forwards the local base branch before creating the worktree when safe', () => {
     execFileSyncMock
       .mockReturnValueOnce('')
@@ -204,7 +218,7 @@ describe('addWorktree', () => {
       .mockReturnValueOnce(undefined)
       .mockReturnValueOnce(undefined)
 
-    addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main')
+    addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
 
     expect(execFileSyncMock.mock.calls).toEqual([
       [
@@ -236,7 +250,7 @@ describe('addWorktree', () => {
       .mockReturnValueOnce(' M package.json\n')
       .mockReturnValueOnce(undefined)
 
-    addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main')
+    addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
 
     expect(execFileSyncMock.mock.calls).toEqual([
       [
@@ -263,7 +277,7 @@ describe('addWorktree', () => {
     })
     execFileSyncMock.mockReturnValueOnce(undefined)
 
-    addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main')
+    addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
 
     expect(execFileSyncMock.mock.calls).toEqual([
       [
@@ -286,7 +300,7 @@ describe('addWorktree', () => {
       .mockReturnValueOnce(undefined)
       .mockReturnValueOnce(undefined)
 
-    addWorktree('/repo', '/repo-feature', 'feature/test', 'upstream/main')
+    addWorktree('/repo', '/repo-feature', 'feature/test', 'upstream/main', true)
 
     expect(execFileSyncMock.mock.calls[0]?.[1]).toEqual([
       'merge-base',

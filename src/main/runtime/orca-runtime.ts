@@ -61,6 +61,7 @@ type RuntimeStore = {
   getSettings(): {
     workspaceDir: string
     nestWorkspaces: boolean
+    refreshLocalBaseRefOnWorktreeCreate: boolean
     branchPrefix: string
     branchPrefixCustom: string
   }
@@ -609,7 +610,13 @@ export class OrcaRuntimeService {
       // Why: matching the editor behavior keeps CLI creation usable offline.
     }
 
-    addWorktree(repo.path, worktreePath, branchName, baseBranch)
+    addWorktree(
+      repo.path,
+      worktreePath,
+      branchName,
+      baseBranch,
+      settings.refreshLocalBaseRefOnWorktreeCreate
+    )
     const gitWorktrees = await listWorktrees(repo.path)
     const created = gitWorktrees.find((gw) => areWorktreePathsEqual(gw.path, worktreePath))
     if (!created) {

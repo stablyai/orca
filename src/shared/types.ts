@@ -267,6 +267,7 @@ export type NotificationSettings = {
 export type GlobalSettings = {
   workspaceDir: string
   nestWorkspaces: boolean
+  refreshLocalBaseRefOnWorktreeCreate: boolean
   branchPrefix: 'git-username' | 'custom' | 'none'
   branchPrefixCustom: string
   theme: 'system' | 'dark' | 'light'
