@@ -70,24 +70,35 @@ export function computeWorktreePath(
   repoPath: string,
   settings: { nestWorkspaces: boolean; workspaceDir: string }
 ): string {
+  const pathOps =
+    looksLikeWindowsPath(repoPath) || looksLikeWindowsPath(settings.workspaceDir)
+      ? win32
+      : { basename, join }
+
   const wsl = parseWslPath(repoPath)
   if (wsl) {
     const wslHome = getWslHome(wsl.distro)
     if (wslHome) {
-      const wslWorkspaceDir = join(wslHome, 'orca', 'workspaces')
+      // Why: WSL UNC paths are still Windows paths from Node's perspective.
+      // On Linux CI, the default path helpers use POSIX semantics and would
+      // treat `\\wsl.localhost\...` as a plain string, producing mixed-separator
+      // paths like `\\wsl.localhost\Ubuntu\home\jin/orca/...`. Use win32 path
+      // operations whenever a Windows/UNC path is involved so behavior matches
+      // the Windows production runtime.
+      const wslWorkspaceDir = win32.join(wslHome, 'orca', 'workspaces')
       if (settings.nestWorkspaces) {
-        const repoName = basename(repoPath).replace(/\.git$/, '')
-        return join(wslWorkspaceDir, repoName, sanitizedName)
+        const repoName = win32.basename(repoPath).replace(/\.git$/, '')
+        return win32.join(wslWorkspaceDir, repoName, sanitizedName)
       }
-      return join(wslWorkspaceDir, sanitizedName)
+      return win32.join(wslWorkspaceDir, sanitizedName)
     }
   }
 
   if (settings.nestWorkspaces) {
-    const repoName = basename(repoPath).replace(/\.git$/, '')
-    return join(settings.workspaceDir, repoName, sanitizedName)
+    const repoName = pathOps.basename(repoPath).replace(/\.git$/, '')
+    return pathOps.join(settings.workspaceDir, repoName, sanitizedName)
   }
-  return join(settings.workspaceDir, sanitizedName)
+  return pathOps.join(settings.workspaceDir, sanitizedName)
 }
 
 export function areWorktreePathsEqual(
