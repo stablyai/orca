@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import React, { useMemo, useCallback, useRef, useState, useEffect } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { ChevronDown, CircleX, Plus } from 'lucide-react'
@@ -9,8 +10,10 @@ import { cn } from '@/lib/utils'
 import type { Worktree, Repo } from '../../../../shared/types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { buildWorktreeComparator } from './smart-sort'
-import { matchesSearch, type Row, buildRows, getGroupKeyForWorktree } from './worktree-list-groups'
+import { type Row, buildRows, getGroupKeyForWorktree } from './worktree-list-groups'
+import { computeVisibleWorktreeIds } from './visible-worktrees'
 import { estimateRowHeight } from './worktree-list-estimate'
+import { useModifierHint } from '@/hooks/useModifierHint'
 
 const WorktreeList = React.memo(function WorktreeList() {
   // ── Granular selectors (each is a primitive or shallow-stable ref) ──
@@ -120,44 +123,26 @@ const WorktreeList = React.memo(function WorktreeList() {
     void window.api.worktrees.persistSortOrder({ orderedIds: sortedIds })
   }, [sortedIds, sortBy])
 
-  // Flatten, filter, and apply stable sort order
+  // Flatten, filter, and apply stable sort order via the shared utility so
+  // the card order always matches the Cmd+1–9 shortcut numbering.
   const visibleWorktrees = useMemo(() => {
-    let all: Worktree[] = Object.values(worktreesByRepo).flat()
-
-    // Filter archived
-    all = all.filter((w) => !w.isArchived)
-
-    // Filter by repo
-    if (filterRepoIds.length > 0) {
-      const selectedRepoIds = new Set(filterRepoIds)
-      all = all.filter((w) => selectedRepoIds.has(w.repoId))
-    }
-
-    // Filter by search — matches against displayName, branch, repo, comment,
-    // PR number/title, and issue number/title (see matchesSearch).
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase()
-      all = all.filter((w) => matchesSearch(w, q, repoMap, prCache, issueCache))
-    }
-
-    // Filter active only
-    if (showActiveOnly) {
-      all = all.filter((w) => {
-        const tabs = tabsByWorktree?.[w.id] ?? []
-        return tabs.some((t) => t.ptyId)
-      })
-    }
-
-    // Apply cached sort order. Items not yet in the cache (e.g. brand-new
-    // worktrees before the next sortEpoch bump) are appended at the end.
-    const orderIndex = new Map(sortedIds.map((id, i) => [id, i]))
-    all.sort((a, b) => {
-      const ai = orderIndex.get(a.id) ?? Infinity
-      const bi = orderIndex.get(b.id) ?? Infinity
-      return ai - bi
+    const ids = computeVisibleWorktreeIds(worktreesByRepo, sortedIds, {
+      filterRepoIds,
+      searchQuery,
+      showActiveOnly,
+      tabsByWorktree,
+      repoMap,
+      prCache,
+      issueCache
     })
-
-    return all
+    // Resolve IDs back to Worktree objects for rendering
+    const allMap = new Map<string, Worktree>()
+    for (const ws of Object.values(worktreesByRepo)) {
+      for (const w of ws) {
+        allMap.set(w.id, w)
+      }
+    }
+    return ids.map((id) => allMap.get(id)!).filter(Boolean)
   }, [
     worktreesByRepo,
     filterRepoIds,
@@ -171,6 +156,21 @@ const WorktreeList = React.memo(function WorktreeList() {
   ])
 
   const worktrees = visibleWorktrees
+
+  // Cmd+1–9 hint overlay: map worktree ID → hint number (1–9) for the first
+  // 9 visible worktrees. Only populated while the user holds the modifier key.
+  const { showHints } = useModifierHint()
+  const hintByWorktreeId = useMemo(() => {
+    if (!showHints) {
+      return null
+    }
+    const map = new Map<string, number>()
+    const limit = Math.min(worktrees.length, 9)
+    for (let i = 0; i < limit; i++) {
+      map.set(worktrees[i].id, i + 1)
+    }
+    return map
+  }, [showHints, worktrees])
 
   // Collapsed group state
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
@@ -485,6 +485,7 @@ const WorktreeList = React.memo(function WorktreeList() {
                 repo={row.repo}
                 isActive={activeWorktreeId === row.worktree.id}
                 hideRepoBadge={groupBy === 'repo'}
+                hintNumber={hintByWorktreeId?.get(row.worktree.id)}
               />
             </div>
           )

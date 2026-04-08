@@ -21,6 +21,7 @@ import {
   setRuntimeGraphStoreStateGetter,
   setRuntimeGraphSyncEnabled
 } from './runtime/sync-runtime-graph'
+import { getVisibleWorktreeIds } from './components/sidebar/visible-worktrees'
 import { useGlobalFileDrop } from './hooks/useGlobalFileDrop'
 import { registerUpdaterBeforeUnloadBypass } from './lib/updater-beforeunload'
 import type { PersistedOpenFile } from '../../shared/types'
@@ -406,6 +407,24 @@ function App(): React.JSX.Element {
       ) {
         e.preventDefault()
         setQuickOpenVisible(true)
+        return
+      }
+
+      // Why: Cmd/Ctrl+1–9 must be handled before the isEditableTarget guard so
+      // the shortcut fires from any focus context — including sidebar search
+      // input, Monaco editor, and contentEditable elements. This follows the
+      // same pattern as Cmd+P above.
+      if (mod && !e.altKey && !e.shiftKey && e.key >= '1' && e.key <= '9') {
+        const index = parseInt(e.key, 10) - 1
+        const visibleIds = getVisibleWorktreeIds()
+        if (index < visibleIds.length) {
+          // Prevent the digit from being typed into the focused input/editor
+          e.preventDefault()
+          const store = useAppStore.getState()
+          store.setActiveWorktree(visibleIds[index])
+          // Scroll sidebar to reveal the activated card
+          store.revealWorktreeInSidebar(visibleIds[index])
+        }
         return
       }
 

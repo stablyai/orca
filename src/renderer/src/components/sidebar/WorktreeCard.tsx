@@ -63,6 +63,8 @@ type WorktreeCardProps = {
   repo: Repo | undefined
   isActive: boolean
   hideRepoBadge?: boolean
+  /** 1–9 hint badge shown when the user holds the platform modifier key. */
+  hintNumber?: number
 }
 
 function FilledBellIcon({ className }: { className?: string }): React.JSX.Element {
@@ -93,7 +95,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
   worktree,
   repo,
   isActive,
-  hideRepoBadge
+  hideRepoBadge,
+  hintNumber
 }: WorktreeCardProps) {
   const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
   const openModal = useAppStore((s) => s.openModal)
@@ -248,6 +251,17 @@ const WorktreeCard = React.memo(function WorktreeCard({
               <LoaderCircle className="size-3.5 animate-spin text-muted-foreground" />
               Deleting…
             </div>
+          </div>
+        )}
+
+        {/* Cmd+N hint badge — decorative only, shown when the user holds the
+            platform modifier key for discoverability of Cmd+1–9 shortcuts. */}
+        {hintNumber != null && (
+          <div
+            aria-hidden="true"
+            className="absolute -left-1 -top-1 z-20 flex h-4 w-4 items-center justify-center rounded bg-foreground text-[10px] font-semibold text-background shadow-sm animate-in fade-in zoom-in-75 duration-150"
+          >
+            {hintNumber}
           </div>
         )}
 
