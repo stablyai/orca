@@ -7,8 +7,37 @@ const { execFileMock, execFileSyncMock } = vi.hoisted(() => ({
 
 vi.mock('child_process', () => ({
   execFile: execFileMock,
-  execFileSync: execFileSyncMock
+  execFileSync: execFileSyncMock,
+  // runner.ts imports spawn from child_process; stub prevents
+  // "missing export" errors when the mock is resolved transitively.
+  spawn: vi.fn()
 }))
+
+// Why: runner.ts uses promisify(execFile). The default promisify of a test
+// mock doesn't return { stdout, stderr } because the mock lacks Node's
+// util.promisify.custom symbol. Return a wrapper that invokes the callback-
+// style execFileMock and shapes the result correctly.
+vi.mock('util', async () => {
+  const actual = await vi.importActual('util')
+  return {
+    ...actual,
+    promisify: vi.fn(() =>
+      (...args: unknown[]) =>
+        new Promise((resolve, reject) => {
+          execFileMock(
+            ...args,
+            (error: Error | null, stdout: string, stderr: string) => {
+              if (error) {
+                reject(Object.assign(error, { stdout, stderr }))
+                return
+              }
+              resolve({ stdout, stderr })
+            }
+          )
+        })
+    )
+  }
+})
 
 import { removeWorktree } from './worktree'
 

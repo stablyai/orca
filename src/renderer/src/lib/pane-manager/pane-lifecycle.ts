@@ -17,7 +17,6 @@ import { safeFit } from './pane-tree-ops'
 // Pane creation, terminal open/close, addon management
 // ---------------------------------------------------------------------------
 
-const TERMINAL_PADDING = 4
 const ENABLE_WEBGL_RENDERER = true
 
 export function createPaneDOM(
@@ -32,14 +31,11 @@ export function createPaneDOM(
   container.className = 'pane'
   container.dataset.paneId = String(id)
 
-  // Create .xterm-container with small inset padding
+  // Create .xterm-container — baseline layout (position, width, height, margin)
+  // is CSS-driven (see main.css .xterm-container) so that the data-has-title
+  // attribute override can shift the terminal down without racing safeFit().
   const xtermContainer = document.createElement('div')
   xtermContainer.className = 'xterm-container'
-  xtermContainer.style.width = `calc(100% - ${TERMINAL_PADDING}px)`
-  xtermContainer.style.height = `calc(100% - ${TERMINAL_PADDING}px)`
-  xtermContainer.style.marginTop = `${TERMINAL_PADDING}px`
-  xtermContainer.style.marginLeft = `${TERMINAL_PADDING}px`
-  xtermContainer.style.position = 'relative'
   container.appendChild(xtermContainer)
 
   // Build terminal options

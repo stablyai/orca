@@ -1,3 +1,6 @@
+/* eslint-disable max-lines -- Why: co-locating all checks-panel sub-components (checks list,
+conflict sections, threaded PR comments) keeps the shared icon/color maps in one place. */
+import React, { useCallback, useState } from 'react'
 import {
   CircleCheck,
   CircleX,
@@ -5,11 +8,14 @@ import {
   CircleDashed,
   CircleMinus,
   GitPullRequest,
-  Files
+  Files,
+  Copy,
+  Check,
+  MessageSquare
 } from 'lucide-react'
 import { ExternalLink } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import type { PRInfo, PRCheckDetail } from '../../../../shared/types'
+import type { PRInfo, PRCheckDetail, PRComment } from '../../../../shared/types'
 
 export const PullRequestIcon = GitPullRequest
 
@@ -182,6 +188,285 @@ export function ChecksList({
         </div>
       )}
     </>
+  )
+}
+
+function CopyButton({ text }: { text: string }): React.JSX.Element {
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation()
+      void window.api.ui.writeClipboardText(text).then(() => {
+        setCopied(true)
+        setTimeout(() => setCopied(false), 1500)
+      })
+    },
+    [text]
+  )
+
+  return (
+    <button
+      className="p-1 rounded hover:bg-accent text-muted-foreground/40 hover:text-foreground transition-colors shrink-0"
+      title="Copy comment"
+      onClick={handleCopy}
+    >
+      {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
+    </button>
+  )
+}
+
+function ResolveButton({
+  threadId,
+  isResolved,
+  onResolve
+}: {
+  threadId: string
+  isResolved: boolean
+  onResolve: (threadId: string, resolve: boolean) => void
+}): React.JSX.Element {
+  const [loading, setLoading] = useState(false)
+
+  const handleClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation()
+      setLoading(true)
+      onResolve(threadId, !isResolved)
+      setTimeout(() => setLoading(false), 300)
+    },
+    [threadId, isResolved, onResolve]
+  )
+
+  if (loading) {
+    return <LoaderCircle className="size-3 animate-spin text-muted-foreground shrink-0" />
+  }
+
+  return (
+    <button
+      className="text-[10px] px-1.5 py-0.5 rounded transition-colors shrink-0 text-muted-foreground hover:text-foreground hover:bg-accent"
+      onClick={handleClick}
+    >
+      {isResolved ? 'Unresolve' : 'Resolve'}
+    </button>
+  )
+}
+
+/** Format a line range string like "L12" or "L5-L12". */
+function formatLineRange(comment: PRComment): string | null {
+  if (!comment.line) {
+    return null
+  }
+  if (comment.startLine && comment.startLine !== comment.line) {
+    return `L${comment.startLine}-L${comment.line}`
+  }
+  return `L${comment.line}`
+}
+
+/** Build copy text that includes file location context for review comments. */
+function buildCopyText(comment: PRComment): string {
+  if (!comment.path) {
+    return comment.body
+  }
+  const lineRange = formatLineRange(comment)
+  const location = lineRange ? `${comment.path}:${lineRange}` : comment.path
+  return `File: ${location}\n\n${comment.body}`
+}
+
+/** A single comment row — used for both root and reply comments. */
+function CommentRow({
+  comment,
+  isReply,
+  showResolve,
+  onResolve
+}: {
+  comment: PRComment
+  isReply: boolean
+  showResolve: boolean
+  onResolve?: (threadId: string, resolve: boolean) => void
+}): React.JSX.Element {
+  return (
+    <div
+      className={cn(
+        'flex items-start gap-2 py-1.5 hover:bg-accent/40 transition-colors cursor-pointer group/comment',
+        isReply ? 'pl-7 pr-3' : 'px-3',
+        comment.isResolved && 'opacity-50'
+      )}
+      onClick={() => {
+        if (comment.url) {
+          window.api.shell.openUrl(comment.url)
+        }
+      }}
+    >
+      <div className="flex-1 min-w-0">
+        {/* Author line: avatar + name + file badge aligned on center */}
+        <div className="flex items-center gap-1.5 min-w-0">
+          {comment.authorAvatarUrl ? (
+            <img
+              src={comment.authorAvatarUrl}
+              alt={comment.author}
+              className={cn('rounded-full shrink-0', isReply ? 'size-3.5' : 'size-4')}
+            />
+          ) : (
+            <div
+              className={cn('rounded-full bg-muted shrink-0', isReply ? 'size-3.5' : 'size-4')}
+            />
+          )}
+          <span
+            className={cn(
+              'text-[11px] font-semibold shrink-0',
+              comment.isResolved ? 'text-muted-foreground' : 'text-foreground'
+            )}
+          >
+            {comment.author}
+          </span>
+          {!isReply && comment.path && (
+            <span className="text-[10px] font-mono text-muted-foreground/60 truncate min-w-0">
+              {comment.path.split('/').pop()}
+              {formatLineRange(comment) && `:${formatLineRange(comment)}`}
+            </span>
+          )}
+          <div className="flex-1" />
+          <div className="flex items-center gap-0.5 opacity-0 group-hover/comment:opacity-100 transition-opacity">
+            {showResolve && comment.threadId != null && onResolve && (
+              <ResolveButton
+                threadId={comment.threadId}
+                isResolved={comment.isResolved ?? false}
+                onResolve={onResolve}
+              />
+            )}
+            <CopyButton text={buildCopyText(comment)} />
+          </div>
+        </div>
+        {/* Comment body */}
+        <p
+          className={cn(
+            'text-[11px] text-muted-foreground leading-snug mt-0.5',
+            isReply ? 'pl-5 line-clamp-1' : 'pl-[22px] line-clamp-2'
+          )}
+        >
+          {comment.body}
+        </p>
+      </div>
+    </div>
+  )
+}
+
+/** Group structure for organizing comments by thread. */
+type CommentGroup =
+  | { kind: 'standalone'; comment: PRComment }
+  | { kind: 'thread'; threadId: string; root: PRComment; replies: PRComment[] }
+
+/** Groups comments by threadId. Comments without a threadId are standalone. */
+function groupComments(comments: PRComment[]): CommentGroup[] {
+  const groups: CommentGroup[] = []
+  const threadMap = new Map<string, { root: PRComment; replies: PRComment[] }>()
+  // Why: preserve insertion order so threads appear in the order their first
+  // comment was created (the comments array is already sorted by createdAt).
+  const threadOrder: string[] = []
+
+  for (const comment of comments) {
+    if (!comment.threadId) {
+      groups.push({ kind: 'standalone', comment })
+      continue
+    }
+    const existing = threadMap.get(comment.threadId)
+    if (existing) {
+      existing.replies.push(comment)
+    } else {
+      threadMap.set(comment.threadId, { root: comment, replies: [] })
+      threadOrder.push(comment.threadId)
+    }
+  }
+
+  // Interleave threads at the position of their first comment.
+  // Walk the original comment list and emit each thread/standalone once.
+  const emitted = new Set<string>()
+  const result: CommentGroup[] = []
+  for (const comment of comments) {
+    if (!comment.threadId) {
+      result.push({ kind: 'standalone', comment })
+    } else if (!emitted.has(comment.threadId)) {
+      emitted.add(comment.threadId)
+      const thread = threadMap.get(comment.threadId)!
+      result.push({ kind: 'thread', threadId: comment.threadId, ...thread })
+    }
+  }
+  return result
+}
+
+/** Renders the PR comments section below checks. */
+export function PRCommentsList({
+  comments,
+  commentsLoading,
+  onResolve
+}: {
+  comments: PRComment[]
+  commentsLoading: boolean
+  onResolve?: (threadId: string, resolve: boolean) => void
+}): React.JSX.Element {
+  const groups = React.useMemo(() => groupComments(comments), [comments])
+
+  return (
+    <div className="border-t border-border">
+      {/* Header */}
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
+        <MessageSquare className="size-3.5 text-muted-foreground" />
+        <span className="text-[11px] font-medium text-foreground">Comments</span>
+        {comments.length > 0 && (
+          <span className="text-[10px] text-muted-foreground">{comments.length}</span>
+        )}
+      </div>
+
+      {/* List */}
+      {commentsLoading && comments.length === 0 ? (
+        <div className="flex items-center justify-center py-6">
+          <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
+        </div>
+      ) : comments.length === 0 ? (
+        <div className="flex items-center justify-center py-6 text-[11px] text-muted-foreground">
+          No comments
+        </div>
+      ) : (
+        <div className="py-1">
+          {groups.map((group) => {
+            if (group.kind === 'standalone') {
+              return (
+                <CommentRow
+                  key={group.comment.id}
+                  comment={group.comment}
+                  isReply={false}
+                  showResolve={false}
+                  onResolve={onResolve}
+                />
+              )
+            }
+            return (
+              <div key={group.threadId} className="py-0.5">
+                <CommentRow
+                  comment={group.root}
+                  isReply={false}
+                  showResolve={true}
+                  onResolve={onResolve}
+                />
+                {group.replies.length > 0 && (
+                  <div className="ml-3 border-l-2 border-border/50">
+                    {group.replies.map((reply) => (
+                      <CommentRow
+                        key={reply.id}
+                        comment={reply}
+                        isReply={true}
+                        showResolve={false}
+                        onResolve={onResolve}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
   )
 }
 

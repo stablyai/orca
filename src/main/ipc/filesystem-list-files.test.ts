@@ -7,7 +7,11 @@ const { spawnMock, resolveAuthorizedPathMock, checkRgAvailableMock } = vi.hoiste
 }))
 
 vi.mock('child_process', () => ({
-  spawn: spawnMock
+  spawn: spawnMock,
+  // runner.ts imports these from child_process; stubs prevent
+  // "missing export" errors when the mock is resolved transitively.
+  execFile: vi.fn(),
+  execFileSync: vi.fn()
 }))
 
 vi.mock('./filesystem-auth', () => ({

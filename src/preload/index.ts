@@ -228,6 +228,18 @@ const api = {
       noCache?: boolean
     }): Promise<unknown[]> => ipcRenderer.invoke('gh:prChecks', args),
 
+    prComments: (args: {
+      repoPath: string
+      prNumber: number
+      noCache?: boolean
+    }): Promise<unknown[]> => ipcRenderer.invoke('gh:prComments', args),
+
+    resolveReviewThread: (args: {
+      repoPath: string
+      threadId: string
+      resolve: boolean
+    }): Promise<boolean> => ipcRenderer.invoke('gh:resolveReviewThread', args),
+
     updatePRTitle: (args: {
       repoPath: string
       prNumber: number

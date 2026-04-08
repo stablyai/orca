@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: hook parsing, shell selection, and execution-path regressions are tightly coupled, so these cases stay in one file to preserve the behavior matrix across platforms. */
 import type { Repo } from '../shared/types'
 
 import { describe, expect, it, vi } from 'vitest'
@@ -9,13 +10,17 @@ vi.mock('fs', () => ({
   existsSync: vi.fn()
 }))
 
-const { execMock } = vi.hoisted(() => ({
-  execMock: vi.fn()
+const { execMock, execFileMock } = vi.hoisted(() => ({
+  execMock: vi.fn(),
+  execFileMock: vi.fn()
 }))
 
 vi.mock('child_process', () => ({
   exec: execMock,
-  execFileSync: vi.fn()
+  execFile: execFileMock,
+  execFileSync: vi.fn(),
+  // runner.ts imports spawn from child_process transitively.
+  spawn: vi.fn()
 }))
 
 describe('parseOrcaYaml', () => {
@@ -309,6 +314,68 @@ describe('runHook', () => {
       } else {
         process.env.SHELL = originalShell
       }
+    }
+  })
+
+  it('runs WSL hooks through wsl.exe and translates env paths to Linux', async () => {
+    execMock.mockReset()
+    execFileMock.mockReset()
+    execFileMock.mockImplementation((_file, _args, options, callback) => {
+      callback?.(null, '', '')
+      expect(options).toEqual(
+        expect.objectContaining({
+          env: expect.objectContaining({
+            ORCA_ROOT_PATH: '/mnt/c/Users/jinwo/git/orca',
+            ORCA_WORKTREE_PATH: '/home/jin/feature',
+            CONDUCTOR_ROOT_PATH: '/mnt/c/Users/jinwo/git/orca',
+            GHOSTX_ROOT_PATH: '/mnt/c/Users/jinwo/git/orca'
+          })
+        })
+      )
+      return {} as never
+    })
+
+    const fs = await import('fs')
+    vi.mocked(fs.existsSync).mockReturnValue(true)
+    vi.mocked(fs.readFileSync).mockReturnValue('scripts:\n  setup: |\n    echo hello\n')
+
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+
+    try {
+      const { runHook } = await import('./hooks')
+      const result = await runHook(
+        'setup',
+        '\\\\wsl.localhost\\Ubuntu\\home\\jin\\feature',
+        {
+          ...makeRepo(),
+          path: 'C:\\Users\\jinwo\\git\\orca'
+        }
+      )
+
+      expect(result).toEqual({ success: true, output: '' })
+      expect(execFileMock).toHaveBeenCalledWith(
+        'wsl.exe',
+        [
+          '-d',
+          'Ubuntu',
+          '--',
+          'bash',
+          '-c',
+          "cd '/home/jin/feature' && echo hello"
+        ],
+        expect.any(Object),
+        expect.any(Function)
+      )
+      expect(execMock).not.toHaveBeenCalled()
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
     }
   })
 })

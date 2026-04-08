@@ -1,24 +1,6 @@
-import { execFile, execFileSync } from 'child_process'
 import { posix, win32 } from 'path'
 import type { GitWorktreeInfo } from '../../shared/types'
-
-function runGit(
-  repoPath: string,
-  args: string[]
-): Promise<{
-  stdout: string
-  stderr: string
-}> {
-  return new Promise((resolve, reject) => {
-    execFile('git', args, { cwd: repoPath, encoding: 'utf-8' }, (error, stdout, stderr) => {
-      if (error) {
-        reject(Object.assign(error, { stdout, stderr }))
-        return
-      }
-      resolve({ stdout, stderr })
-    })
-  })
-}
+import { gitExecFileAsync, gitExecFileSync, translateWslOutputPaths } from './runner'
 
 function normalizeLocalBranchRef(branch: string): string {
   return branch.replace(/^refs\/heads\//, '')
@@ -89,8 +71,14 @@ export function parseWorktreeList(output: string): GitWorktreeInfo[] {
  */
 export async function listWorktrees(repoPath: string): Promise<GitWorktreeInfo[]> {
   try {
-    const { stdout } = await runGit(repoPath, ['worktree', 'list', '--porcelain'])
-    return parseWorktreeList(stdout)
+    const { stdout } = await gitExecFileAsync(['worktree', 'list', '--porcelain'], {
+      cwd: repoPath
+    })
+    // Why: when git runs inside WSL, worktree paths are Linux-native
+    // (e.g. /home/user/repo). Translate them back to Windows UNC paths
+    // so the rest of Orca can access them via Node fs APIs.
+    const translated = translateWslOutputPaths(stdout, repoPath)
+    return parseWorktreeList(translated)
   } catch {
     return []
   }
@@ -180,11 +168,7 @@ export function addWorktree(
   if (baseBranch) {
     args.push(baseBranch)
   }
-  execFileSync('git', args, {
-    cwd: repoPath,
-    encoding: 'utf-8',
-    stdio: ['pipe', 'pipe', 'pipe']
-  })
+  gitExecFileSync(args, { cwd: repoPath })
 }
 
 /**
@@ -206,8 +190,8 @@ export async function removeWorktree(
     args.push('--force')
   }
   args.push(worktreePath)
-  await runGit(repoPath, args)
-  await runGit(repoPath, ['worktree', 'prune'])
+  await gitExecFileAsync(args, { cwd: repoPath })
+  await gitExecFileAsync(['worktree', 'prune'], { cwd: repoPath })
 
   if (!branchName) {
     return
@@ -228,7 +212,7 @@ export async function removeWorktree(
     // Why: `git worktree remove` only detaches the filesystem entry. Orca also
     // drops the now-unused local branch here so delete-worktree does not leave
     // behind orphaned feature branches unless another worktree still points at it.
-    await runGit(repoPath, ['branch', '-D', branchName])
+    await gitExecFileAsync(['branch', '-D', branchName], { cwd: repoPath })
   } catch (error) {
     console.warn(
       `[git] Failed to delete local branch "${branchName}" after removing worktree`,

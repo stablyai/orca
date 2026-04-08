@@ -1,7 +1,9 @@
 import { readFileSync, existsSync, mkdirSync, writeFileSync, chmodSync } from 'fs'
 import { dirname, join } from 'path'
-import { exec, execFileSync } from 'child_process'
+import { exec, execFile } from 'child_process'
 import { getDefaultRepoHookSettings } from '../shared/constants'
+import { gitExecFileSync } from './git/runner'
+import { isWslPath, parseWslPath, toWindowsWslPath, toLinuxPath } from './wsl'
 import type {
   OrcaHooks,
   Repo,
@@ -164,10 +166,8 @@ function getSetupEnvVars(repo: Repo, worktreePath: string): Record<string, strin
 }
 
 function getGitPath(cwd: string, relativePath: string): string {
-  return execFileSync('git', ['rev-parse', '--git-path', relativePath], {
-    cwd,
-    encoding: 'utf-8',
-    stdio: ['pipe', 'pipe', 'pipe']
+  return gitExecFileSync(['rev-parse', '--git-path', relativePath], {
+    cwd
   }).trim()
 }
 
@@ -200,25 +200,47 @@ export function createSetupRunnerScript(
   script: string
 ): WorktreeSetupLaunch {
   const envVars = getSetupEnvVars(repo, worktreePath)
-  const isWindows = process.platform === 'win32'
-  const normalizedScript = isWindows
+  // Why: WSL worktrees run on a Linux filesystem even though process.platform
+  // is 'win32'. Use bash scripts for WSL, .cmd for native Windows.
+  const wslWorktree = isWslPath(worktreePath)
+  const useWindowsFormat = process.platform === 'win32' && !wslWorktree
+  const normalizedScript = useWindowsFormat
     ? script.replace(/\r?\n/g, '\r\n')
     : script.replace(/\r\n/g, '\n')
   // Why: linked git worktrees use a `.git` file that points at the real gitdir,
   // so writing under `${worktreePath}/.git/...` fails. `git rev-parse --git-path`
   // resolves the actual per-worktree git storage path safely across platforms.
-  const runnerScriptPath = getGitPath(
-    worktreePath,
-    isWindows ? 'orca/setup-runner.cmd' : 'orca/setup-runner.sh'
-  )
+  const gitRelPath = useWindowsFormat ? 'orca/setup-runner.cmd' : 'orca/setup-runner.sh'
+  let runnerScriptPath = getGitPath(worktreePath, gitRelPath)
+
+  // Why: for WSL worktrees, getGitPath returns a Linux path (e.g. /home/user/...)
+  // because git runs inside WSL. Convert it to a Windows UNC path so mkdirSync
+  // and writeFileSync (which run on Windows) can access it.
+  if (wslWorktree) {
+    const wslInfo = parseWslPath(worktreePath)
+    if (wslInfo) {
+      runnerScriptPath = toWindowsWslPath(runnerScriptPath.trim(), wslInfo.distro)
+    }
+  }
 
   mkdirSync(dirname(runnerScriptPath), { recursive: true })
 
-  if (isWindows) {
+  if (useWindowsFormat) {
     writeFileSync(runnerScriptPath, buildWindowsRunnerScript(normalizedScript), 'utf-8')
   } else {
     writeFileSync(runnerScriptPath, `#!/usr/bin/env bash\nset -e\n${normalizedScript}\n`, 'utf-8')
+    // Why: chmod via UNC paths to WSL filesystem is supported by Windows and
+    // sets the execute bit correctly inside WSL.
     chmodSync(runnerScriptPath, 0o755)
+  }
+
+  // Why: when the worktree is on WSL, env vars like ORCA_ROOT_PATH and
+  // ORCA_WORKTREE_PATH contain Windows UNC paths. The setup script runs
+  // inside WSL bash, so translate them to Linux paths.
+  if (wslWorktree) {
+    for (const key of Object.keys(envVars)) {
+      envVars[key] = toLinuxPath(envVars[key])
+    }
   }
 
   return { runnerScriptPath, envVars }
@@ -237,6 +259,53 @@ export function runHook(
 
   if (!script) {
     return Promise.resolve({ success: true, output: '' })
+  }
+
+  const wslInfo = parseWslPath(cwd)
+
+  if (wslInfo) {
+    // Why: use execFile('wsl.exe', [...]) instead of exec() to bypass the
+    // Windows shell (cmd.exe). exec() always routes through a shell, and
+    // cmd.exe doesn't understand single-quote escaping — it would mangle
+    // paths/scripts containing %, ^, &, |, etc.
+    const escapedCwd = wslInfo.linuxPath.replace(/'/g, "'\\''")
+    const escapedScript = script.replace(/'/g, "'\\''")
+    const bashCmd = `cd '${escapedCwd}' && ${escapedScript}`
+    // Why: translate ORCA_ROOT_PATH / ORCA_WORKTREE_PATH to Linux paths so
+    // hook scripts that reference $ORCA_WORKTREE_PATH get usable paths
+    // inside WSL, not Windows UNC paths.
+    const envVars = getSetupEnvVars(repo, cwd)
+    const wslEnv: Record<string, string> = {}
+    for (const [key, value] of Object.entries(envVars)) {
+      wslEnv[key] = toLinuxPath(value)
+    }
+
+    return new Promise((resolve) => {
+      execFile(
+        'wsl.exe',
+        ['-d', wslInfo.distro, '--', 'bash', '-c', bashCmd],
+        {
+          timeout: HOOK_TIMEOUT,
+          encoding: 'utf-8',
+          env: { ...process.env, ...wslEnv }
+        },
+        (error, stdout, stderr) => {
+          if (error) {
+            console.error(`[hooks] ${hookName} hook failed in ${cwd}:`, error.message)
+            resolve({
+              success: false,
+              output: `${stdout}\n${stderr}\n${error.message}`.trim()
+            })
+          } else {
+            console.log(`[hooks] ${hookName} hook completed in ${cwd}`)
+            resolve({
+              success: true,
+              output: `${stdout}\n${stderr}`.trim()
+            })
+          }
+        }
+      )
+    })
   }
 
   return new Promise((resolve) => {

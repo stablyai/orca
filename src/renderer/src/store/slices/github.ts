@@ -1,6 +1,14 @@
+/* eslint-disable max-lines -- Why: the GitHub slice co-locates all cache + fetch logic for
+PR, issue, checks, and comments data so the dedup and invalidation patterns stay consistent. */
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { PRInfo, IssueInfo, PRCheckDetail, Worktree } from '../../../../shared/types'
+import type {
+  PRInfo,
+  IssueInfo,
+  PRCheckDetail,
+  PRComment,
+  Worktree
+} from '../../../../shared/types'
 import { syncPRChecksStatus } from './github-checks'
 
 export type CacheEntry<T> = {
@@ -21,6 +29,7 @@ const inflightPRRequests = new Map<
 >()
 const inflightIssueRequests = new Map<string, Promise<IssueInfo | null>>()
 const inflightChecksRequests = new Map<string, Promise<PRCheckDetail[]>>()
+const inflightCommentsRequests = new Map<string, Promise<PRComment[]>>()
 const prRequestGenerations = new Map<string, number>()
 
 function isFresh<T>(entry: CacheEntry<T> | undefined, ttl = CACHE_TTL): entry is CacheEntry<T> {
@@ -48,6 +57,7 @@ export type GitHubSlice = {
   prCache: Record<string, CacheEntry<PRInfo>>
   issueCache: Record<string, CacheEntry<IssueInfo>>
   checksCache: Record<string, CacheEntry<PRCheckDetail[]>>
+  commentsCache: Record<string, CacheEntry<PRComment[]>>
   fetchPRForBranch: (
     repoPath: string,
     branch: string,
@@ -61,6 +71,17 @@ export type GitHubSlice = {
     headSha?: string,
     options?: FetchOptions
   ) => Promise<PRCheckDetail[]>
+  fetchPRComments: (
+    repoPath: string,
+    prNumber: number,
+    options?: FetchOptions
+  ) => Promise<PRComment[]>
+  resolveReviewThread: (
+    repoPath: string,
+    prNumber: number,
+    threadId: string,
+    resolve: boolean
+  ) => Promise<boolean>
   initGitHubCache: () => Promise<void>
   refreshAllGitHub: () => void
   refreshGitHubForWorktree: (worktreeId: string) => void
@@ -70,6 +91,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   prCache: {},
   issueCache: {},
   checksCache: {},
+  commentsCache: {},
 
   initGitHubCache: async () => {
     try {
@@ -223,9 +245,78 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     return request
   },
 
+  fetchPRComments: async (repoPath, prNumber, options): Promise<PRComment[]> => {
+    const cacheKey = `${repoPath}::pr-comments::${prNumber}`
+    const cached = get().commentsCache[cacheKey]
+    if (!options?.force && isFresh(cached)) {
+      return cached.data ?? []
+    }
+
+    const inflightRequest = inflightCommentsRequests.get(cacheKey)
+    if (inflightRequest) {
+      return inflightRequest
+    }
+
+    const request = (async () => {
+      try {
+        const comments = (await window.api.gh.prComments({
+          repoPath,
+          prNumber,
+          noCache: options?.force
+        })) as PRComment[]
+        set((s) => ({
+          commentsCache: {
+            ...s.commentsCache,
+            [cacheKey]: { data: comments, fetchedAt: Date.now() }
+          }
+        }))
+        return comments
+      } catch (err) {
+        console.error('Failed to fetch PR comments:', err)
+        return get().commentsCache[cacheKey]?.data ?? []
+      } finally {
+        inflightCommentsRequests.delete(cacheKey)
+      }
+    })()
+
+    inflightCommentsRequests.set(cacheKey, request)
+    return request
+  },
+
+  resolveReviewThread: async (repoPath, prNumber, threadId, resolve) => {
+    const cacheKey = `${repoPath}::pr-comments::${prNumber}`
+
+    // Optimistic update: toggle isResolved on all comments in this thread immediately
+    // so the UI feels instant. Reverts if the API call fails.
+    const prev = get().commentsCache[cacheKey]?.data
+    if (prev) {
+      set((s) => ({
+        commentsCache: {
+          ...s.commentsCache,
+          [cacheKey]: {
+            ...s.commentsCache[cacheKey],
+            data: prev.map((c) => (c.threadId === threadId ? { ...c, isResolved: resolve } : c))
+          }
+        }
+      }))
+    }
+
+    const ok = await window.api.gh.resolveReviewThread({ repoPath, threadId, resolve })
+    if (!ok && prev) {
+      // Revert optimistic update on failure
+      set((s) => ({
+        commentsCache: {
+          ...s.commentsCache,
+          [cacheKey]: { ...s.commentsCache[cacheKey], data: prev }
+        }
+      }))
+    }
+    return ok
+  },
+
   refreshAllGitHub: () => {
-    // Invalidate checks cache so it refreshes on next access
-    set({ checksCache: {} })
+    // Invalidate checks and comments caches so they refresh on next access
+    set({ checksCache: {}, commentsCache: {} })
 
     // Only re-fetch PR/issue entries that are already stale — skip fresh ones
     const state = get()

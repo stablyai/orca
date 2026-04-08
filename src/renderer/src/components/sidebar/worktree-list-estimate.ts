@@ -2,8 +2,9 @@ import type { Repo } from '../../../../shared/types'
 import type { Row } from './worktree-list-groups'
 
 // Estimate the pixel height of a virtualizer row based on which metadata lines
-// will render. Pixel constants (52, 22, 2, 4) are coupled to WorktreeCard's
+// will render. Pixel constants (52, 22, 2) are coupled to WorktreeCard's
 // Tailwind classes — see the coupling comment in WorktreeCard's meta section.
+// The inter-card gap is handled by the virtualizer's `gap` option, not here.
 //
 // Uses prCache (not wt.linkedPR) because prCache is the actual data source
 // WorktreeCard checks when deciding to show the PR row.
@@ -14,7 +15,7 @@ export function estimateRowHeight(
   prCache: Record<string, { data: unknown }> | null
 ): number {
   if (row.type === 'header') {
-    return 42
+    return 38
   }
   const wt = row.worktree
   let h = 52 // base: py-2 + title + subtitle + gaps
@@ -35,5 +36,5 @@ export function estimateRowHeight(
   if (h > 52) {
     h += 2
   }
-  return h + 4
+  return h
 }

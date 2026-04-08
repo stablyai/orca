@@ -1704,6 +1704,145 @@
     height 80ms ease;
 }
 
+/* ── Pane title bar ──────────────────────────────────── */
+
+/* Floating tab style — no full-width background bar. The title sits as a
+   lightweight inline label so the terminal content isn't visually "capped."
+   Uses muted grey + monospace to read as metadata, not actionable text. */
+.pane-title-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 20px;
+  z-index: 5; /* below drag handle (z:10) */
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  font-size: 13px;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  color: rgba(255, 255, 255, 0.52);
+  background: transparent;
+  border-bottom: none;
+  cursor: pointer; /* click to edit title */
+  user-select: none;
+}
+
+.pane-title-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.pane-title-close {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 14px;
+  line-height: 14px;
+  transform: translateY(-1px);
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity 120ms ease,
+    color 120ms ease;
+}
+
+.pane-title-bar:hover .pane-title-close {
+  opacity: 1;
+}
+
+.pane-title-close:hover {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* Inline edit input — matches the title text styling exactly to prevent
+   layout shift. A subtle bottom border indicates active edit mode. */
+/* When inline-editing, remove the bar's side padding so the input
+   stretches edge-to-edge; the input carries its own left padding. */
+.pane-title-bar[data-editing] {
+  padding: 0;
+}
+
+.pane-title-input {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  height: 20px;
+  box-sizing: border-box;
+  padding: 0 8px;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  outline: none;
+  font-size: 13px;
+  line-height: 20px;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  color: rgba(255, 255, 255, 0.7);
+  caret-color: rgba(255, 255, 255, 0.6);
+}
+
+/* Baseline xterm-container layout — the 4px inset padding that pane-lifecycle.ts
+   previously set as inline styles now lives here so that the data-has-title
+   CSS attribute selector override can take effect (CSS attribute selectors
+   cannot override inline styles). */
+.xterm-container {
+  position: relative;
+  width: calc(100% - 4px);
+  height: calc(100% - 4px);
+  margin-top: 4px;
+  margin-left: 4px;
+}
+
+/* When a pane has a title, shift the terminal content down to make room.
+   The .pane container uses position: relative, so the absolutely-positioned
+   title bar occupies the top 20px. Height is reduced by the full 24px
+   (20px title bar + 4px base margin-top) to prevent overflow/clipping. */
+.pane[data-has-title] .xterm-container {
+  margin-top: 24px; /* 20px title bar + 4px base margin-top */
+  height: calc(100% - 24px); /* must match margin-top to avoid overflow */
+}
+
+/* Override the inline overflow:hidden set by pane-manager so the title
+   separator line can extend into the divider hit-padding zone.
+   overflow:clip behaves identically to overflow:hidden for content
+   clipping but supports overflow-clip-margin to widen the clip region.
+   The 5px margin matches the divider's hit-padding (10px total / 2). */
+.pane[data-has-title] {
+  overflow: clip !important;
+  overflow-clip-margin: 5px;
+}
+
+/* Title separator line — rendered on the .pane itself (not the portaled
+   title bar) so the line spans the full pane width into the divider zone. */
+.pane[data-has-title]::after {
+  content: '';
+  position: absolute;
+  top: 20px;
+  left: -5px;
+  right: -5px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.06);
+  z-index: 6;
+  pointer-events: none;
+}
+
+/* Hide the drag handle on titled panes — the title bar already provides
+   visual identification, and a grab-cursor strip right at the border
+   creates a confusing "looks draggable" affordance that misleads users. */
+.pane[data-has-title] .pane-drag-handle {
+  display: none;
+}
+
 .number-input-clean {
   appearance: textfield;
 }

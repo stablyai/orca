@@ -36,7 +36,7 @@ function itemRow(wt: Worktree): Row {
 }
 
 describe('estimateRowHeight', () => {
-  it('returns 42 for header rows', () => {
+  it('returns 38 for header rows', () => {
     const header: Row = {
       type: 'header',
       key: 'test',
@@ -45,11 +45,11 @@ describe('estimateRowHeight', () => {
       icon: () => null,
       tone: ''
     }
-    expect(estimateRowHeight(header, [], repoMap, null)).toBe(42)
+    expect(estimateRowHeight(header, [], repoMap, null)).toBe(38)
   })
 
-  it('returns base height (56) for items with no metadata', () => {
-    expect(estimateRowHeight(itemRow(worktree), [], repoMap, null)).toBe(56)
+  it('returns base height (52) for items with no metadata', () => {
+    expect(estimateRowHeight(itemRow(worktree), [], repoMap, null)).toBe(52)
   })
 
   it('adds 22px for issue row when linkedIssue is set', () => {
@@ -61,7 +61,7 @@ describe('estimateRowHeight', () => {
 
   it('does not add issue height when cardProps excludes issue', () => {
     const wt = { ...worktree, linkedIssue: 42 }
-    expect(estimateRowHeight(itemRow(wt), [], repoMap, null)).toBe(56)
+    expect(estimateRowHeight(itemRow(wt), [], repoMap, null)).toBe(52)
   })
 
   it('adds 22px for PR row when prCache has data', () => {
@@ -74,14 +74,14 @@ describe('estimateRowHeight', () => {
   })
 
   it('does not add PR height when prCache is null', () => {
-    expect(estimateRowHeight(itemRow(worktree), ['pr'], repoMap, null)).toBe(56)
+    expect(estimateRowHeight(itemRow(worktree), ['pr'], repoMap, null)).toBe(52)
   })
 
   it('does not add PR height when prCache entry has no data', () => {
     const prCache = {
       '/tmp/orca::feature/cool': { data: null }
     }
-    expect(estimateRowHeight(itemRow(worktree), ['pr'], repoMap, prCache)).toBe(56)
+    expect(estimateRowHeight(itemRow(worktree), ['pr'], repoMap, prCache)).toBe(52)
   })
 
   it('adds 22px for comment row', () => {
@@ -97,8 +97,9 @@ describe('estimateRowHeight', () => {
       '/tmp/orca::feature/cool': { data: { number: 1 } }
     }
     const h = estimateRowHeight(itemRow(wt), ['issue', 'pr', 'comment'], repoMap, prCache)
-    // 52 base + 22 issue + 22 pr + 22 comment + 2 mt-0.5 + 4 pb-1 = 124
-    expect(h).toBe(124)
+    // 52 base + 22 issue + 22 pr + 22 comment + 2 mt-0.5 = 120
+    // (inter-card gap is handled by the virtualizer's `gap` option, not here)
+    expect(h).toBe(120)
   })
 
   it('strips refs/heads/ prefix when building PR cache key', () => {
@@ -107,6 +108,6 @@ describe('estimateRowHeight', () => {
       '/tmp/orca::my-branch': { data: { number: 5 } }
     }
     const h = estimateRowHeight(itemRow(wt), ['pr'], repoMap, prCache)
-    expect(h).toBe(80) // 52 + 22 + 2 + 4
+    expect(h).toBe(76) // 52 + 22 + 2
   })
 })

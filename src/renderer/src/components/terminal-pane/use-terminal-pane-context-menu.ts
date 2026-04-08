@@ -6,6 +6,7 @@ const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 type UseTerminalPaneContextMenuDeps = {
   managerRef: React.RefObject<PaneManager | null>
   toggleExpandPane: (paneId: number) => void
+  onSetTitle: (paneId: number) => void
 }
 
 type TerminalMenuState = {
@@ -23,11 +24,13 @@ type TerminalMenuState = {
   onClosePane: () => void
   onClearScreen: () => void
   onToggleExpand: () => void
+  onSetTitle: () => void
 }
 
 export function useTerminalPaneContextMenu({
   managerRef,
-  toggleExpandPane
+  toggleExpandPane,
+  onSetTitle
 }: UseTerminalPaneContextMenuDeps): TerminalMenuState {
   const contextPaneIdRef = useRef<number | null>(null)
   const menuOpenedAtRef = useRef(0)
@@ -117,6 +120,13 @@ export function useTerminalPaneContextMenu({
     }
   }
 
+  const handleSetTitle = (): void => {
+    const pane = resolveMenuPane()
+    if (pane) {
+      onSetTitle(pane.id)
+    }
+  }
+
   const onContextMenuCapture = (event: React.MouseEvent<HTMLDivElement>): void => {
     event.preventDefault()
     menuOpenedAtRef.current = Date.now()
@@ -155,6 +165,7 @@ export function useTerminalPaneContextMenu({
     onSplitDown,
     onClosePane,
     onClearScreen,
-    onToggleExpand
+    onToggleExpand,
+    onSetTitle: handleSetTitle
   }
 }

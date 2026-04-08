@@ -2,9 +2,9 @@
 import { ipcMain, shell } from 'electron'
 import { readdir, readFile, writeFile, stat, lstat } from 'fs/promises'
 import { extname, relative } from 'path'
-import { spawn } from 'child_process'
-import type { ChildProcessByStdio } from 'child_process'
-import type { Readable } from 'stream'
+import type { ChildProcess } from 'child_process'
+import { wslAwareSpawn } from '../git/runner'
+import { parseWslPath, toWindowsWslPath } from '../wsl'
 import type { Store } from '../persistence'
 import type {
   DirEntry,
@@ -75,7 +75,7 @@ function isBinaryBuffer(buffer: Buffer): boolean {
 
 export function registerFilesystemHandlers(store: Store): void {
   void rebuildAuthorizedRootsCache(store)
-  const activeTextSearches = new Map<string, ChildProcessByStdio<null, Readable, Readable>>()
+  const activeTextSearches = new Map<string, ChildProcess>()
 
   // ─── Filesystem ─────────────────────────────────────────
   ipcMain.handle('fs:readDir', async (_event, args: { dirPath: string }): Promise<DirEntry[]> => {
@@ -193,7 +193,7 @@ export function registerFilesystemHandlers(store: Store): void {
     // spawn('rg') emits 'close' before 'error' on some platforms, causing
     // the handler to resolve with empty results before the git-grep
     // fallback can run. The result is cached after the first check.
-    const rgAvailable = await checkRgAvailable()
+    const rgAvailable = await checkRgAvailable(rootPath)
     if (!rgAvailable) {
       return searchWithGitGrep(rootPath, args, maxResults)
     }
@@ -250,7 +250,7 @@ export function registerFilesystemHandlers(store: Store): void {
       let truncated = false
       let stdoutBuffer = ''
       let resolved = false
-      let child: ChildProcessByStdio<null, Readable, Readable> | null = null
+      let child: ChildProcess | null = null
 
       const resolveOnce = (): void => {
         if (resolved) {
@@ -280,7 +280,13 @@ export function registerFilesystemHandlers(store: Store): void {
           }
 
           const data = msg.data
-          const absPath: string = data.path.text
+          // Why: when rg runs inside WSL, output paths are Linux-native
+          // (e.g. /home/user/repo/src/file.ts). Translate them back to
+          // Windows UNC paths so path.relative() and Node fs APIs work.
+          const wslInfo = parseWslPath(rootPath)
+          const absPath: string = wslInfo
+            ? toWindowsWslPath(data.path.text, wslInfo.distro)
+            : data.path.text
           const relPath = normalizeRelativePath(relative(rootPath, absPath))
 
           let fileResult = fileMap.get(absPath)
@@ -308,12 +314,15 @@ export function registerFilesystemHandlers(store: Store): void {
         }
       }
 
-      const nextChild = spawn('rg', rgArgs, { stdio: ['ignore', 'pipe', 'pipe'] })
+      const nextChild = wslAwareSpawn('rg', rgArgs, {
+        cwd: rootPath,
+        stdio: ['ignore', 'pipe', 'pipe']
+      })
       child = nextChild
       activeTextSearches.set(searchKey, nextChild)
 
-      nextChild.stdout.setEncoding('utf-8')
-      nextChild.stdout.on('data', (chunk: string) => {
+      nextChild.stdout!.setEncoding('utf-8')
+      nextChild.stdout!.on('data', (chunk: string) => {
         stdoutBuffer += chunk
         const lines = stdoutBuffer.split('\n')
         stdoutBuffer = lines.pop() ?? ''
@@ -321,7 +330,7 @@ export function registerFilesystemHandlers(store: Store): void {
           processLine(line)
         }
       })
-      nextChild.stderr.on('data', () => {
+      nextChild.stderr!.on('data', () => {
         // Drain stderr so rg cannot block on a full pipe.
       })
 

@@ -8,7 +8,12 @@ import type { DirCache, TreeNode } from './file-explorer-types'
 type UseFileExplorerRevealParams = {
   activeWorktreeId: string | null
   worktreePath: string | null
-  pendingExplorerReveal: { worktreeId: string; filePath: string; requestId: number } | null
+  pendingExplorerReveal: {
+    worktreeId: string
+    filePath: string
+    requestId: number
+    flash?: boolean
+  } | null
   clearPendingExplorerReveal: () => void
   expanded: Set<string>
   dirCache: Record<string, DirCache>
@@ -145,14 +150,19 @@ export function useFileExplorerReveal({
 
     clearPendingExplorerReveal()
     setSelectedPath(revealPath)
-    setFlashingPath(revealPath)
-    if (flashTimeoutRef.current !== null) {
-      window.clearTimeout(flashTimeoutRef.current)
+
+    // Only flash when explicitly requested (e.g. "Reveal in Explorer" from Source Control).
+    // Auto-reveals on tab switch skip the flash to avoid visual noise.
+    if (pendingExplorerReveal.flash !== false) {
+      setFlashingPath(revealPath)
+      if (flashTimeoutRef.current !== null) {
+        window.clearTimeout(flashTimeoutRef.current)
+      }
+      flashTimeoutRef.current = window.setTimeout(() => {
+        setFlashingPath((current) => (current === revealPath ? null : current))
+        flashTimeoutRef.current = null
+      }, 2000)
     }
-    flashTimeoutRef.current = window.setTimeout(() => {
-      setFlashingPath((current) => (current === revealPath ? null : current))
-      flashTimeoutRef.current = null
-    }, 2000)
 
     requestAnimationFrame(() => {
       window.setTimeout(() => {

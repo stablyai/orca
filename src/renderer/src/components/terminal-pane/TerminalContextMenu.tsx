@@ -6,6 +6,7 @@ import {
   Minimize2,
   PanelBottomOpen,
   PanelRightOpen,
+  Pencil,
   X
 } from 'lucide-react'
 import {
@@ -32,6 +33,7 @@ type TerminalContextMenuProps = {
   onClosePane: () => void
   onClearScreen: () => void
   onToggleExpand: () => void
+  onSetTitle: () => void
 }
 
 export default function TerminalContextMenu({
@@ -48,7 +50,8 @@ export default function TerminalContextMenu({
   onSplitDown,
   onClosePane,
   onClearScreen,
-  onToggleExpand
+  onToggleExpand,
+  onSetTitle
 }: TerminalContextMenuProps): React.JSX.Element {
   const isMac = navigator.userAgent.includes('Mac')
   const mod = isMac ? '⌘' : 'Ctrl+'
@@ -116,11 +119,19 @@ export default function TerminalContextMenu({
             <DropdownMenuShortcut>{`${mod}${shift}↩`}</DropdownMenuShortcut>
           </DropdownMenuItem>
         )}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={onSetTitle}>
+          <Pencil />
+          Set Title…
+        </DropdownMenuItem>
         {canClosePane && (
-          <DropdownMenuItem variant="destructive" onSelect={onClosePane}>
-            <X />
-            Close Pane
-          </DropdownMenuItem>
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem variant="destructive" onSelect={onClosePane}>
+              <X />
+              Close Pane
+            </DropdownMenuItem>
+          </>
         )}
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onClearScreen}>

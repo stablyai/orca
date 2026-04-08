@@ -1,8 +1,5 @@
-import { execFile } from 'child_process'
-import { promisify } from 'util'
 import type { PRConflictSummary } from '../../shared/types'
-
-const execFileAsync = promisify(execFile)
+import { gitExecFileAsync } from '../git/runner'
 
 export async function getPRConflictSummary(
   repoPath: string,
@@ -47,9 +44,8 @@ async function resolveLatestBaseOid(
   try {
     // Why: cap the fetch at 10 s so slow or unreachable remotes don't block
     // the conflict-summary derivation indefinitely.
-    await execFileAsync('git', ['fetch', '--quiet', remoteName, baseRefName], {
+    await gitExecFileAsync(['fetch', '--quiet', remoteName, baseRefName], {
       cwd: repoPath,
-      encoding: 'utf-8',
       timeout: 10_000
     })
   } catch {
@@ -60,9 +56,8 @@ async function resolveLatestBaseOid(
 
   for (const ref of [`refs/remotes/${remoteName}/${baseRefName}`, `${remoteName}/${baseRefName}`]) {
     try {
-      const { stdout } = await execFileAsync('git', ['rev-parse', '--verify', ref], {
-        cwd: repoPath,
-        encoding: 'utf-8'
+      const { stdout } = await gitExecFileAsync(['rev-parse', '--verify', ref], {
+        cwd: repoPath
       })
       const oid = stdout.trim()
       if (oid) {
@@ -81,17 +76,15 @@ async function resolveMergeBase(
   headOid: string,
   baseOid: string
 ): Promise<string> {
-  const { stdout } = await execFileAsync('git', ['merge-base', headOid, baseOid], {
-    cwd: repoPath,
-    encoding: 'utf-8'
+  const { stdout } = await gitExecFileAsync(['merge-base', headOid, baseOid], {
+    cwd: repoPath
   })
   return stdout.trim()
 }
 
 async function countCommits(repoPath: string, range: string): Promise<number> {
-  const { stdout } = await execFileAsync('git', ['rev-list', '--count', range], {
-    cwd: repoPath,
-    encoding: 'utf-8'
+  const { stdout } = await gitExecFileAsync(['rev-list', '--count', range], {
+    cwd: repoPath
   })
   return Number.parseInt(stdout.trim(), 10) || 0
 }
@@ -104,8 +97,7 @@ async function loadConflictingFiles(
 ): Promise<string[]> {
   let stdout = ''
   try {
-    const result = await execFileAsync(
-      'git',
+    const result = await gitExecFileAsync(
       [
         'merge-tree',
         '--write-tree',
@@ -117,10 +109,7 @@ async function loadConflictingFiles(
         headOid,
         baseOid
       ],
-      {
-        cwd: repoPath,
-        encoding: 'utf-8'
-      }
+      { cwd: repoPath }
     )
     stdout = result.stdout
   } catch (error) {

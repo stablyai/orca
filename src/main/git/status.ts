@@ -1,8 +1,6 @@
 /* eslint-disable max-lines */
-import { execFile } from 'child_process'
 import { existsSync } from 'fs'
 import { readFile, rm } from 'fs/promises'
-import { promisify } from 'util'
 import * as path from 'path'
 import type {
   GitBranchChangeEntry,
@@ -16,8 +14,8 @@ import type {
   GitStatusEntry,
   GitStatusResult
 } from '../../shared/types'
+import { gitExecFileAsync, gitExecFileAsyncBuffer } from './runner'
 
-const execFileAsync = promisify(execFile)
 const MAX_GIT_SHOW_BYTES = 10 * 1024 * 1024
 
 /**
@@ -28,10 +26,9 @@ export async function getStatus(worktreePath: string): Promise<GitStatusResult> 
   const conflictOperation = await detectConflictOperation(worktreePath)
 
   try {
-    const { stdout } = await execFileAsync(
-      'git',
+    const { stdout } = await gitExecFileAsync(
       ['status', '--porcelain=v2', '--untracked-files=all'],
-      { cwd: worktreePath, encoding: 'utf-8' }
+      { cwd: worktreePath }
     )
 
     // [Fix]: Split by /\r?\n/ instead of '\n' to correctly parse git output on Windows,
@@ -424,14 +421,9 @@ async function loadBranchChanges(
   mergeBase: string,
   headOid: string
 ): Promise<GitBranchChangeEntry[]> {
-  const { stdout } = await execFileAsync(
-    'git',
+  const { stdout } = await gitExecFileAsync(
     ['diff', '--name-status', '-M', '-C', mergeBase, headOid],
-    {
-      cwd: worktreePath,
-      encoding: 'utf-8',
-      maxBuffer: MAX_GIT_SHOW_BYTES
-    }
+    { cwd: worktreePath, maxBuffer: MAX_GIT_SHOW_BYTES }
   )
 
   const entries: GitBranchChangeEntry[] = []
@@ -473,9 +465,8 @@ function parseBranchChangeLine(line: string): GitBranchChangeEntry | null {
 
 async function resolveCompareRef(worktreePath: string): Promise<string> {
   try {
-    const { stdout } = await execFileAsync('git', ['branch', '--show-current'], {
-      cwd: worktreePath,
-      encoding: 'utf-8'
+    const { stdout } = await gitExecFileAsync(['branch', '--show-current'], {
+      cwd: worktreePath
     })
     const branch = stdout.trim()
     return branch || 'HEAD'
@@ -485,9 +476,8 @@ async function resolveCompareRef(worktreePath: string): Promise<string> {
 }
 
 async function resolveRefOid(worktreePath: string, ref: string): Promise<string> {
-  const { stdout } = await execFileAsync('git', ['rev-parse', '--verify', ref], {
-    cwd: worktreePath,
-    encoding: 'utf-8'
+  const { stdout } = await gitExecFileAsync(['rev-parse', '--verify', ref], {
+    cwd: worktreePath
   })
   return stdout.trim()
 }
@@ -497,9 +487,8 @@ async function resolveMergeBase(
   baseOid: string,
   headOid: string
 ): Promise<string> {
-  const { stdout } = await execFileAsync('git', ['merge-base', baseOid, headOid], {
-    cwd: worktreePath,
-    encoding: 'utf-8'
+  const { stdout } = await gitExecFileAsync(['merge-base', baseOid, headOid], {
+    cwd: worktreePath
   })
   return stdout.trim()
 }
@@ -509,9 +498,8 @@ async function countAheadCommits(
   baseOid: string,
   headOid: string
 ): Promise<number> {
-  const { stdout } = await execFileAsync('git', ['rev-list', '--count', `${baseOid}..${headOid}`], {
-    cwd: worktreePath,
-    encoding: 'utf-8'
+  const { stdout } = await gitExecFileAsync(['rev-list', '--count', `${baseOid}..${headOid}`], {
+    cwd: worktreePath
   })
   return Number.parseInt(stdout.trim(), 10) || 0
 }
@@ -533,11 +521,10 @@ async function readGitBlobAtIndexPath(
   filePath: string
 ): Promise<GitBlobReadResult> {
   try {
-    const { stdout } = (await execFileAsync('git', ['show', `:${filePath}`], {
+    const { stdout } = await gitExecFileAsyncBuffer(['show', `:${filePath}`], {
       cwd: worktreePath,
-      encoding: 'buffer',
       maxBuffer: MAX_GIT_SHOW_BYTES
-    })) as { stdout: Buffer }
+    })
 
     return { ...bufferToBlob(stdout, filePath), exists: true }
   } catch {
@@ -551,11 +538,10 @@ async function readGitBlobAtOidPath(
   filePath: string
 ): Promise<GitBlobReadResult> {
   try {
-    const { stdout } = (await execFileAsync('git', ['show', `${oid}:${filePath}`], {
+    const { stdout } = await gitExecFileAsyncBuffer(['show', `${oid}:${filePath}`], {
       cwd: worktreePath,
-      encoding: 'buffer',
       maxBuffer: MAX_GIT_SHOW_BYTES
-    })) as { stdout: Buffer }
+    })
 
     return { ...bufferToBlob(stdout, filePath), exists: true }
   } catch {
@@ -654,20 +640,14 @@ const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
  * Stage a file.
  */
 export async function stageFile(worktreePath: string, filePath: string): Promise<void> {
-  await execFileAsync('git', ['add', '--', filePath], {
-    cwd: worktreePath,
-    encoding: 'utf-8'
-  })
+  await gitExecFileAsync(['add', '--', filePath], { cwd: worktreePath })
 }
 
 /**
  * Unstage a file.
  */
 export async function unstageFile(worktreePath: string, filePath: string): Promise<void> {
-  await execFileAsync('git', ['restore', '--staged', '--', filePath], {
-    cwd: worktreePath,
-    encoding: 'utf-8'
-  })
+  await gitExecFileAsync(['restore', '--staged', '--', filePath], { cwd: worktreePath })
 }
 
 /**
@@ -682,9 +662,8 @@ export async function discardChanges(worktreePath: string, filePath: string): Pr
 
   let tracked = false
   try {
-    await execFileAsync('git', ['ls-files', '--error-unmatch', '--', filePath], {
-      cwd: worktreePath,
-      encoding: 'utf-8'
+    await gitExecFileAsync(['ls-files', '--error-unmatch', '--', filePath], {
+      cwd: worktreePath
     })
     tracked = true
   } catch {
@@ -692,9 +671,8 @@ export async function discardChanges(worktreePath: string, filePath: string): Pr
   }
 
   await (tracked
-    ? execFileAsync('git', ['restore', '--worktree', '--source=HEAD', '--', filePath], {
-        cwd: worktreePath,
-        encoding: 'utf-8'
+    ? gitExecFileAsync(['restore', '--worktree', '--source=HEAD', '--', filePath], {
+        cwd: worktreePath
       })
     : rm(resolvedTarget, { force: true, recursive: true }))
 }

@@ -1,3 +1,4 @@
+import { join } from 'path'
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => {
@@ -22,7 +23,9 @@ describe('configureDevUserDataPath', () => {
 
     configureDevUserDataPath(true)
 
-    expect(app.setPath).toHaveBeenCalledWith('userData', '/tmp/app-data/orca-dev')
+    // Why: production code uses path.join(app.getPath('appData'), 'orca-dev')
+    // which produces platform-specific separators.
+    expect(app.setPath).toHaveBeenCalledWith('userData', join('/tmp/app-data', 'orca-dev'))
   })
 
   it('leaves packaged runs on the default userData path', async () => {

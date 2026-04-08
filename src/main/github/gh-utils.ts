@@ -1,7 +1,12 @@
 import { execFile } from 'child_process'
 import { promisify } from 'util'
+import { gitExecFileAsync, ghExecFileAsync } from '../git/runner'
 
+// Why: legacy generic execFile wrapper — only used by callers that don't need
+// WSL-aware routing (e.g. non-repo-scoped gh commands). Repo-scoped callers
+// should use ghExecFileAsync or gitExecFileAsync from the runner instead.
 export const execFileAsync = promisify(execFile)
+export { ghExecFileAsync, gitExecFileAsync }
 
 // Concurrency limiter - max 4 parallel gh processes
 const MAX_CONCURRENT = 4
@@ -44,9 +49,8 @@ export async function getOwnerRepo(
     return ownerRepoCache.get(repoPath)!
   }
   try {
-    const { stdout } = await execFileAsync('git', ['remote', 'get-url', 'origin'], {
-      cwd: repoPath,
-      encoding: 'utf-8'
+    const { stdout } = await gitExecFileAsync(['remote', 'get-url', 'origin'], {
+      cwd: repoPath
     })
     const match = stdout.trim().match(/github\.com[:/]([^/]+)\/([^/.]+?)(?:\.git)?$/)
     if (match) {

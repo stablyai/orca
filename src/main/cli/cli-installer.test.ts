@@ -32,7 +32,8 @@ describe('CliInstaller', () => {
     vi.restoreAllMocks()
   })
 
-  it('creates a dev launcher and installs a macOS symlink in the requested path', async () => {
+  // Why: this test creates Unix symlinks and shell scripts that only apply on macOS.
+  it.skipIf(process.platform === 'win32')('creates a dev launcher and installs a macOS symlink in the requested path', async () => {
     const fixture = await makeFixture()
     const installPath = join(fixture.root, 'bin', 'orca')
     const installer = new CliInstaller({
@@ -61,7 +62,8 @@ describe('CliInstaller', () => {
     expect(removed.state).toBe('not_installed')
   })
 
-  it('creates a linux symlink under the requested path and warns when PATH is missing', async () => {
+  // Why: this test creates Unix symlinks and shell scripts that only apply on Linux.
+  it.skipIf(process.platform === 'win32')('creates a linux symlink under the requested path and warns when PATH is missing', async () => {
     const fixture = await makeFixture()
     const installPath = join(fixture.root, '.local', 'bin', 'orca')
     const installer = new CliInstaller({
@@ -117,7 +119,8 @@ describe('CliInstaller', () => {
     expect(userPath).not.toContain(join(fixture.root, 'Programs', 'Orca', 'bin'))
   })
 
-  it('reports stale when a different symlink already exists', async () => {
+  // Why: this test creates a Unix symlink to /tmp/not-orca, which only applies on macOS/Linux.
+  it.skipIf(process.platform === 'win32')('reports stale when a different symlink already exists', async () => {
     const fixture = await makeFixture()
     const installPath = join(fixture.root, 'bin', 'orca')
     await mkdir(join(fixture.root, 'bin'), { recursive: true })

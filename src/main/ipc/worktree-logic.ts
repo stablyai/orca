@@ -1,5 +1,6 @@
 import { basename, join, resolve, relative, isAbsolute, posix, win32 } from 'path'
 import type { GitWorktreeInfo, Worktree, WorktreeMeta } from '../../shared/types'
+import { getWslHome, parseWslPath } from '../wsl'
 
 /**
  * Sanitize a worktree name for use in branch names and directory paths.
@@ -56,17 +57,48 @@ export function computeBranchName(
 
 /**
  * Compute the filesystem path where the worktree directory will be created.
+ *
+ * Why WSL special case: when the repo lives on a WSL filesystem, worktrees
+ * must also live on the WSL filesystem. Creating them on the Windows side
+ * (/mnt/c/...) would be extremely slow due to cross-filesystem I/O and
+ * the terminal would open a Windows shell instead of WSL. We mirror the
+ * Windows workspace layout inside ~/orca/workspaces on the WSL filesystem
+ * (e.g. \\wsl.localhost\Ubuntu\home\user\orca\workspaces\repo\feature).
  */
 export function computeWorktreePath(
   sanitizedName: string,
   repoPath: string,
   settings: { nestWorkspaces: boolean; workspaceDir: string }
 ): string {
-  if (settings.nestWorkspaces) {
-    const repoName = basename(repoPath).replace(/\.git$/, '')
-    return join(settings.workspaceDir, repoName, sanitizedName)
+  const pathOps =
+    looksLikeWindowsPath(repoPath) || looksLikeWindowsPath(settings.workspaceDir)
+      ? win32
+      : { basename, join }
+
+  const wsl = parseWslPath(repoPath)
+  if (wsl) {
+    const wslHome = getWslHome(wsl.distro)
+    if (wslHome) {
+      // Why: WSL UNC paths are still Windows paths from Node's perspective.
+      // On Linux CI, the default path helpers use POSIX semantics and would
+      // treat `\\wsl.localhost\...` as a plain string, producing mixed-separator
+      // paths like `\\wsl.localhost\Ubuntu\home\jin/orca/...`. Use win32 path
+      // operations whenever a Windows/UNC path is involved so behavior matches
+      // the Windows production runtime.
+      const wslWorkspaceDir = win32.join(wslHome, 'orca', 'workspaces')
+      if (settings.nestWorkspaces) {
+        const repoName = win32.basename(repoPath).replace(/\.git$/, '')
+        return win32.join(wslWorkspaceDir, repoName, sanitizedName)
+      }
+      return win32.join(wslWorkspaceDir, sanitizedName)
+    }
   }
-  return join(settings.workspaceDir, sanitizedName)
+
+  if (settings.nestWorkspaces) {
+    const repoName = pathOps.basename(repoPath).replace(/\.git$/, '')
+    return pathOps.join(settings.workspaceDir, repoName, sanitizedName)
+  }
+  return pathOps.join(settings.workspaceDir, sanitizedName)
 }
 
 export function areWorktreePathsEqual(

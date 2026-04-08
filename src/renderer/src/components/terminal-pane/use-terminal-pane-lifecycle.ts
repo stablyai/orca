@@ -53,6 +53,9 @@ type UseTerminalPaneLifecycleDeps = {
   setExpandedPane: (paneId: number | null) => void
   syncExpandedLayout: () => void
   persistLayoutSnapshot: () => void
+  setPaneTitles: React.Dispatch<React.SetStateAction<Record<number, string>>>
+  paneTitlesRef: React.RefObject<Record<number, string>>
+  setRenamingPaneId: React.Dispatch<React.SetStateAction<number | null>>
 }
 
 export function useTerminalPaneLifecycle({
@@ -83,7 +86,10 @@ export function useTerminalPaneLifecycle({
   setTabCanExpandPane,
   setExpandedPane,
   syncExpandedLayout,
-  persistLayoutSnapshot
+  persistLayoutSnapshot,
+  setPaneTitles,
+  paneTitlesRef,
+  setRenamingPaneId
 }: UseTerminalPaneLifecycleDeps): void {
   const systemPrefersDarkRef = useRef(systemPrefersDark)
   systemPrefersDarkRef.current = systemPrefersDark
@@ -226,6 +232,26 @@ export function useTerminalPaneLifecycle({
         }
         paneFontSizesRef.current.delete(paneId)
         pendingWritesRef.current.delete(paneId)
+        // Clean up pane title state so closed panes don't leave stale entries.
+        setPaneTitles((prev) => {
+          if (!(paneId in prev)) {
+            return prev
+          }
+          const next = { ...prev }
+          delete next[paneId]
+          return next
+        })
+        // Eagerly update the ref so persistLayoutSnapshot (called from
+        // onLayoutChanged which fires right after onPaneClosed) reads the
+        // correct titles without waiting for React's async state flush.
+        if (paneId in paneTitlesRef.current) {
+          const next = { ...paneTitlesRef.current }
+          delete next[paneId]
+          paneTitlesRef.current = next
+        }
+        // Dismiss the rename dialog if it was open for the closed pane,
+        // otherwise it would submit against a non-existent pane.
+        setRenamingPaneId((prev) => (prev === paneId ? null : prev))
         scheduleRuntimeGraphSync()
       },
       onActivePaneChange: () => {
@@ -278,6 +304,24 @@ export function useTerminalPaneLifecycle({
       initialLayoutRef.current.buffersByLeafId,
       restoredPaneByLeafId
     )
+
+    // Seed pane titles from the persisted snapshot using the same
+    // old-leafId → new-paneId mapping used for buffer restore.
+    const savedTitles = initialLayoutRef.current.titlesByLeafId
+    if (savedTitles) {
+      const restored: Record<number, string> = {}
+      for (const [oldLeafId, title] of Object.entries(savedTitles)) {
+        const newPaneId = restoredPaneByLeafId.get(oldLeafId)
+        if (newPaneId != null && title) {
+          restored[newPaneId] = title
+        }
+      }
+      if (Object.keys(restored).length > 0) {
+        // Merge (not replace) so we don't discard any concurrent state
+        // updates from onPaneClosed that React may have batched.
+        setPaneTitles((prev) => ({ ...prev, ...restored }))
+      }
+    }
 
     const restoredActivePaneId =
       (initialLayoutRef.current.activeLeafId

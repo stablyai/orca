@@ -132,6 +132,7 @@ export type EditorSlice = {
     worktreeId: string
     filePath: string
     requestId: number
+    flash?: boolean
   } | null
   revealInExplorer: (worktreeId: string, filePath: string) => void
   clearPendingExplorerReveal: () => void

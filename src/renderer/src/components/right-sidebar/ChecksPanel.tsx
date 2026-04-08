@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- Why: the checks panel co-locates PR header, checks, comments,
+merge actions, and conflict state in one component to keep the data flow straightforward. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { LoaderCircle, ExternalLink, RefreshCw, Check, X, Pencil } from 'lucide-react'
 import { useAppStore } from '@/store'
@@ -9,9 +11,10 @@ import {
   prStateColor,
   ConflictingFilesSection,
   MergeConflictNotice,
-  ChecksList
+  ChecksList,
+  PRCommentsList
 } from './checks-helpers'
-import type { PRInfo, PRCheckDetail } from '../../../../shared/types'
+import type { PRInfo, PRCheckDetail, PRComment } from '../../../../shared/types'
 
 export default function ChecksPanel(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
@@ -22,9 +25,13 @@ export default function ChecksPanel(): React.JSX.Element {
   const gitConflictOperationByWorktree = useAppStore((s) => s.gitConflictOperationByWorktree)
 
   const fetchPRChecks = useAppStore((s) => s.fetchPRChecks)
+  const fetchPRComments = useAppStore((s) => s.fetchPRComments)
+  const resolveReviewThread = useAppStore((s) => s.resolveReviewThread)
 
   const [checks, setChecks] = useState<PRCheckDetail[]>([])
   const [checksLoading, setChecksLoading] = useState(false)
+  const [comments, setComments] = useState<PRComment[]>([])
+  const [commentsLoading, setCommentsLoading] = useState(false)
   const [emptyRefreshing, setEmptyRefreshing] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [editingTitle, setEditingTitle] = useState(false)
@@ -153,6 +160,60 @@ export default function ChecksPanel(): React.JSX.Element {
     }
   }, [fetchChecks, prNumber])
 
+  // Fetch comments once when PR changes (no polling — comments change infrequently).
+  // The manual refresh path calls this directly; the auto-fetch effect below uses
+  // its own cancellation guard to discard stale responses after PR switches.
+  const fetchComments = useCallback(
+    async ({
+      force = false,
+      prNumberOverride
+    }: { force?: boolean; prNumberOverride?: number | null } = {}) => {
+      const targetPRNumber = prNumberOverride ?? prNumber
+      if (!repo || !targetPRNumber) {
+        return
+      }
+      setCommentsLoading(true)
+      try {
+        const result = await fetchPRComments(repo.path, targetPRNumber, { force })
+        setComments(result)
+      } catch (err) {
+        console.warn('Failed to fetch PR comments:', err)
+        setComments([])
+      } finally {
+        setCommentsLoading(false)
+      }
+    },
+    [repo, prNumber, fetchPRComments]
+  )
+
+  useEffect(() => {
+    if (!repo || !prNumber) {
+      setComments([])
+      return
+    }
+    // Why: without this guard a slow response from a previous PR can overwrite
+    // state after the user switches worktrees, showing the wrong PR's comments.
+    let cancelled = false
+    setCommentsLoading(true)
+    void fetchPRComments(repo.path, prNumber).then(
+      (result) => {
+        if (!cancelled) {
+          setComments(result)
+          setCommentsLoading(false)
+        }
+      },
+      () => {
+        if (!cancelled) {
+          setComments([])
+          setCommentsLoading(false)
+        }
+      }
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [repo, prNumber, fetchPRComments])
+
   const handleRefresh = useCallback(async () => {
     if (!repo || !branch) {
       return
@@ -161,14 +222,18 @@ export default function ChecksPanel(): React.JSX.Element {
     try {
       const refreshedPR = await fetchPRForBranch(repo.path, branch, { force: true })
       if (refreshedPR) {
-        await fetchChecks({ force: true, prNumberOverride: refreshedPR.number })
+        await Promise.all([
+          fetchChecks({ force: true, prNumberOverride: refreshedPR.number }),
+          fetchComments({ force: true, prNumberOverride: refreshedPR.number })
+        ])
       } else {
         setChecks([])
+        setComments([])
       }
     } finally {
       setIsRefreshing(false)
     }
-  }, [repo, branch, fetchPRForBranch, fetchChecks])
+  }, [repo, branch, fetchPRForBranch, fetchChecks, fetchComments])
 
   const handleStartEdit = useCallback(() => {
     if (!pr) {
@@ -216,6 +281,23 @@ export default function ChecksPanel(): React.JSX.Element {
       }
     },
     [handleSaveTitle, handleCancelEdit]
+  )
+
+  const handleResolve = useCallback(
+    (threadId: string, resolve: boolean) => {
+      if (!repo || !prNumber) {
+        return
+      }
+      void resolveReviewThread(repo.path, prNumber, threadId, resolve).then((ok) => {
+        if (ok) {
+          // Update local state to match the optimistic store update
+          setComments((prev) =>
+            prev.map((c) => (c.threadId === threadId ? { ...c, isResolved: resolve } : c))
+          )
+        }
+      })
+    },
+    [repo, prNumber, resolveReviewThread]
   )
 
   // Refresh PR (passed to PRActions)
@@ -397,6 +479,11 @@ export default function ChecksPanel(): React.JSX.Element {
       {!(pr.mergeable === 'CONFLICTING' && checks.length === 0 && !checksLoading) && (
         <ChecksList checks={checks} checksLoading={checksLoading} />
       )}
+      <PRCommentsList
+        comments={comments}
+        commentsLoading={commentsLoading}
+        onResolve={handleResolve}
+      />
     </div>
   )
 }

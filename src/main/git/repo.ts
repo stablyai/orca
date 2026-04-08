@@ -1,10 +1,8 @@
-import { execFile, execSync } from 'child_process'
+import { execSync } from 'child_process'
 import { existsSync, statSync } from 'fs'
 import { join, basename } from 'path'
-import { promisify } from 'util'
 import hostedGitInfo from 'hosted-git-info'
-
-const execFileAsync = promisify(execFile)
+import { gitExecFileSync, gitExecFileAsync } from './runner'
 
 /**
  * Check if a path is a valid git repository (regular or bare).
@@ -19,19 +17,15 @@ export function isGitRepo(path: string): boolean {
       return true
     }
     // Might be a bare repo — ask git
-    const result = execSync('git rev-parse --is-inside-work-tree', {
-      cwd: path,
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe']
+    const result = gitExecFileSync(['rev-parse', '--is-inside-work-tree'], {
+      cwd: path
     }).trim()
     return result === 'true'
   } catch {
     // Also check if it's a bare repo
     try {
-      const result = execSync('git rev-parse --is-bare-repository', {
-        cwd: path,
-        encoding: 'utf-8',
-        stdio: ['pipe', 'pipe', 'pipe']
+      const result = gitExecFileSync(['rev-parse', '--is-bare-repository'], {
+        cwd: path
       }).trim()
       return result === 'true'
     } catch {
@@ -54,10 +48,8 @@ export function getRepoName(path: string): string {
  */
 export function getRemoteUrl(path: string): string | null {
   try {
-    return execSync('git remote get-url origin', {
-      cwd: path,
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe']
+    return gitExecFileSync(['remote', 'get-url', 'origin'], {
+      cwd: path
     }).trim()
   } catch {
     return null
@@ -66,10 +58,8 @@ export function getRemoteUrl(path: string): string | null {
 
 function getGitConfigValue(path: string, key: string): string {
   try {
-    return execSync(`git config --get ${key}`, {
-      cwd: path,
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe']
+    return gitExecFileSync(['config', '--get', key], {
+      cwd: path
     }).trim()
   } catch {
     return ''
@@ -107,9 +97,11 @@ function getGhLogin(): string {
   }
 
   try {
+    // Why: gh auth status writes to stderr; redirect via shell so we can capture it.
+    // Use platform-appropriate shell — /bin/bash does not exist on Windows.
     const output = execSync('gh auth status 2>&1', {
       encoding: 'utf-8',
-      shell: '/bin/bash',
+      shell: process.platform === 'win32' ? process.env.ComSpec || 'cmd.exe' : '/bin/bash',
       stdio: ['pipe', 'pipe', 'pipe']
     })
 
@@ -148,10 +140,8 @@ export function getGitUsername(path: string): string {
 
 function hasGitRef(path: string, ref: string): boolean {
   try {
-    execSync(`git rev-parse --verify ${ref}`, {
-      cwd: path,
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe']
+    gitExecFileSync(['rev-parse', '--verify', ref], {
+      cwd: path
     })
     return true
   } catch {
@@ -165,10 +155,8 @@ function hasGitRef(path: string, ref: string): boolean {
  */
 export function getDefaultBaseRef(path: string): string {
   try {
-    const ref = execSync('git symbolic-ref --quiet refs/remotes/origin/HEAD', {
-      cwd: path,
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe']
+    const ref = gitExecFileSync(['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'], {
+      cwd: path
     }).trim()
 
     if (ref) {
@@ -200,13 +188,9 @@ export async function getBaseRefDefault(path: string): Promise<string> {
 
 async function getDefaultBaseRefAsync(path: string): Promise<string> {
   try {
-    const { stdout } = await execFileAsync(
-      'git',
+    const { stdout } = await gitExecFileAsync(
       ['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'],
-      {
-        cwd: path,
-        encoding: 'utf-8'
-      }
+      { cwd: path }
     )
     const ref = stdout.trim()
     if (ref) {
@@ -239,8 +223,7 @@ export async function searchBaseRefs(path: string, query: string, limit = 25): P
   }
 
   try {
-    const { stdout } = await execFileAsync(
-      'git',
+    const { stdout } = await gitExecFileAsync(
       [
         'for-each-ref',
         '--format=%(refname:short)',
@@ -248,10 +231,7 @@ export async function searchBaseRefs(path: string, query: string, limit = 25): P
         `refs/remotes/origin/*${normalizedQuery}*`,
         `refs/heads/*${normalizedQuery}*`
       ],
-      {
-        cwd: path,
-        encoding: 'utf-8'
-      }
+      { cwd: path }
     )
 
     const seen = new Set<string>()
@@ -280,10 +260,7 @@ function normalizeRefSearchQuery(query: string): string {
 
 async function hasGitRefAsync(path: string, ref: string): Promise<boolean> {
   try {
-    await execFileAsync('git', ['rev-parse', '--verify', ref], {
-      cwd: path,
-      encoding: 'utf-8'
-    })
+    await gitExecFileAsync(['rev-parse', '--verify', ref], { cwd: path })
     return true
   } catch {
     return false
@@ -301,13 +278,9 @@ export async function getBranchConflictKind(
   }
 
   try {
-    const { stdout } = await execFileAsync(
-      'git',
+    const { stdout } = await gitExecFileAsync(
       ['for-each-ref', '--format=%(refname)', 'refs/remotes'],
-      {
-        cwd: path,
-        encoding: 'utf-8'
-      }
+      { cwd: path }
     )
     // Why: refs have the form refs/remotes/<remote>/<branch>. We strip the
     // first three segments so that e.g. "feature/dashboard" only matches

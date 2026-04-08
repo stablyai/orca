@@ -6,6 +6,8 @@ import {
   getIssue,
   listIssues,
   getPRChecks,
+  getPRComments,
+  resolveReviewThread,
   updatePRTitle,
   mergePR,
   checkOrcaStarred,
@@ -52,6 +54,22 @@ export function registerGitHubHandlers(store: Store): void {
       return getPRChecks(repoPath, args.prNumber, args.headSha, {
         noCache: args.noCache
       })
+    }
+  )
+
+  ipcMain.handle(
+    'gh:prComments',
+    (_event, args: { repoPath: string; prNumber: number; noCache?: boolean }) => {
+      const repoPath = assertRegisteredRepoPath(args.repoPath, store)
+      return getPRComments(repoPath, args.prNumber, { noCache: args.noCache })
+    }
+  )
+
+  ipcMain.handle(
+    'gh:resolveReviewThread',
+    (_event, args: { repoPath: string; threadId: string; resolve: boolean }) => {
+      const repoPath = assertRegisteredRepoPath(args.repoPath, store)
+      return resolveReviewThread(repoPath, args.threadId, args.resolve)
     }
   )
 

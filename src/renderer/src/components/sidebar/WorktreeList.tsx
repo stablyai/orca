@@ -201,6 +201,10 @@ const WorktreeList = React.memo(function WorktreeList() {
     // Tailwind classes (see coupling comment in WorktreeCard meta section).
     estimateSize: (index) => estimateRowHeight(rows[index], cardProps, repoMap, prCache),
     overscan: 10,
+    // Why gap instead of padding on the wrapper: the virtualizer accounts for
+    // the gap in its position calculations, guaranteeing consistent spacing
+    // between cards regardless of estimation/measurement mismatches.
+    gap: 6,
     getItemKey: (index) => {
       const row = rows[index]
       return row.type === 'header' ? `hdr:${row.key}` : `wt:${row.worktree.id}`
@@ -400,7 +404,7 @@ const WorktreeList = React.memo(function WorktreeList() {
               >
                 <button
                   className={cn(
-                    'group mb-1 mt-2 flex h-7 w-full items-center gap-1.5 px-1.5 text-left transition-all',
+                    'group mt-2 flex h-7 w-full items-center gap-1.5 px-1.5 text-left transition-all',
                     row.repo ? 'overflow-hidden' : row.tone
                   )}
                   onClick={() => toggleGroup(row.key)}
@@ -473,7 +477,7 @@ const WorktreeList = React.memo(function WorktreeList() {
               key={vItem.key}
               data-index={vItem.index}
               ref={virtualizer.measureElement}
-              className="absolute left-0 right-0 pb-1"
+              className="absolute left-0 right-0"
               style={{ transform: `translateY(${vItem.start}px)` }}
             >
               <WorktreeCard

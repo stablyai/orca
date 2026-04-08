@@ -1,6 +1,6 @@
-import { spawn } from 'child_process'
 import { join } from 'path'
 import type { SearchOptions, SearchResult, SearchFileResult } from '../../shared/types'
+import { gitSpawn } from '../git/runner'
 
 const SEARCH_TIMEOUT_MS = 15000
 
@@ -186,12 +186,12 @@ export function searchWithGitGrep(
       }
     }
 
-    const child = spawn('git', gitArgs, {
+    const child = gitSpawn(gitArgs, {
       cwd: rootPath,
       stdio: ['ignore', 'pipe', 'pipe']
     })
-    child.stdout.setEncoding('utf-8')
-    child.stdout.on('data', (chunk: string) => {
+    child.stdout!.setEncoding('utf-8')
+    child.stdout!.on('data', (chunk: string) => {
       stdoutBuffer += chunk
       const lines = stdoutBuffer.split('\n')
       stdoutBuffer = lines.pop() ?? ''
@@ -199,7 +199,7 @@ export function searchWithGitGrep(
         processLine(l)
       }
     })
-    child.stderr.on('data', () => {
+    child.stderr!.on('data', () => {
       /* drain */
     })
     child.once('error', () => {

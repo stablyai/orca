@@ -8,6 +8,7 @@ import type {
   CreateWorktreeResult,
   PRInfo,
   PRCheckDetail,
+  PRComment,
   IssueInfo,
   GlobalSettings,
   NotificationDispatchRequest,
@@ -82,6 +83,16 @@ type GhApi = {
     headSha?: string
     noCache?: boolean
   }) => Promise<PRCheckDetail[]>
+  prComments: (args: {
+    repoPath: string
+    prNumber: number
+    noCache?: boolean
+  }) => Promise<PRComment[]>
+  resolveReviewThread: (args: {
+    repoPath: string
+    threadId: string
+    resolve: boolean
+  }) => Promise<boolean>
   updatePRTitle: (args: { repoPath: string; prNumber: number; title: string }) => Promise<boolean>
   mergePR: (args: {
     repoPath: string
