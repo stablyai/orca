@@ -1,5 +1,14 @@
+import { mkdtemp, readFile as fsReadFile, writeFile as fsWriteFile, rm } from 'fs/promises'
+import { tmpdir } from 'os'
+import { join as pathJoin } from 'path'
 import { describe, expect, it } from 'vitest'
-import { isWorktreesDirIgnoredByGitignore, appendWorktreesEntry } from './gitignore'
+import {
+  isWorktreesDirIgnoredByGitignore,
+  appendWorktreesEntry,
+  readGitignore,
+  isWorktreesDirIgnored,
+  addWorktreesDirToGitignore
+} from './gitignore'
 
 describe('isWorktreesDirIgnoredByGitignore', () => {
   it('returns false for null content (no .gitignore file)', () => {
@@ -77,5 +86,84 @@ describe('appendWorktreesEntry', () => {
 
   it('does not add a duplicate newline when prior content ends with one', () => {
     expect(appendWorktreesEntry('node_modules/\n')).toBe('node_modules/\n.worktrees/\n')
+  })
+})
+
+describe('readGitignore', () => {
+  it('returns the file contents when .gitignore exists', async () => {
+    const dir = await mkdtemp(pathJoin(tmpdir(), 'orca-gitignore-test-'))
+    try {
+      await fsWriteFile(pathJoin(dir, '.gitignore'), 'node_modules/\n', 'utf-8')
+      expect(await readGitignore(dir)).toBe('node_modules/\n')
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('returns null when .gitignore does not exist', async () => {
+    const dir = await mkdtemp(pathJoin(tmpdir(), 'orca-gitignore-test-'))
+    try {
+      expect(await readGitignore(dir)).toBeNull()
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('isWorktreesDirIgnored', () => {
+  it('returns true when the file contains .worktrees/', async () => {
+    const dir = await mkdtemp(pathJoin(tmpdir(), 'orca-gitignore-test-'))
+    try {
+      await fsWriteFile(pathJoin(dir, '.gitignore'), '.worktrees/\n', 'utf-8')
+      expect(await isWorktreesDirIgnored(dir)).toBe(true)
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('returns false when the file is missing', async () => {
+    const dir = await mkdtemp(pathJoin(tmpdir(), 'orca-gitignore-test-'))
+    try {
+      expect(await isWorktreesDirIgnored(dir)).toBe(false)
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('addWorktreesDirToGitignore', () => {
+  it('creates .gitignore with the entry when missing', async () => {
+    const dir = await mkdtemp(pathJoin(tmpdir(), 'orca-gitignore-test-'))
+    try {
+      await addWorktreesDirToGitignore(dir)
+      const content = await fsReadFile(pathJoin(dir, '.gitignore'), 'utf-8')
+      expect(content).toBe('.worktrees/\n')
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('appends the entry to an existing .gitignore', async () => {
+    const dir = await mkdtemp(pathJoin(tmpdir(), 'orca-gitignore-test-'))
+    try {
+      await fsWriteFile(pathJoin(dir, '.gitignore'), 'node_modules/\n', 'utf-8')
+      await addWorktreesDirToGitignore(dir)
+      const content = await fsReadFile(pathJoin(dir, '.gitignore'), 'utf-8')
+      expect(content).toBe('node_modules/\n.worktrees/\n')
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('is idempotent — does not duplicate when entry already present', async () => {
+    const dir = await mkdtemp(pathJoin(tmpdir(), 'orca-gitignore-test-'))
+    try {
+      await fsWriteFile(pathJoin(dir, '.gitignore'), 'node_modules/\n.worktrees/\n', 'utf-8')
+      await addWorktreesDirToGitignore(dir)
+      const content = await fsReadFile(pathJoin(dir, '.gitignore'), 'utf-8')
+      expect(content).toBe('node_modules/\n.worktrees/\n')
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
   })
 })
