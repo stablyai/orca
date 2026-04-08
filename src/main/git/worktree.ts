@@ -95,8 +95,61 @@ export function addWorktree(
   repoPath: string,
   worktreePath: string,
   branch: string,
-  baseBranch?: string
+  baseBranch?: string,
+  refreshLocalBaseRef = false
 ): void {
+  // Why: Some users want Orca-created worktrees to make plain commands like
+  // `git diff main...HEAD` work out of the box, while others do not want
+  // worktree creation to mutate their local main/master ref at all. Keep this
+  // behavior behind an explicit setting so the default stays conservative.
+  if (baseBranch && refreshLocalBaseRef) {
+    // Why: We split on '/' instead of matching a hardcoded 'origin/' prefix because
+    // callers may pass arbitrary remotes (e.g. 'upstream/main'), not just 'origin'.
+    const slashIndex = baseBranch.indexOf('/')
+    if (slashIndex > 0) {
+      const localBranch = baseBranch.slice(slashIndex + 1)
+      try {
+        // Why: We only fast-forward the local branch pointer. A force-move (`branch -f`)
+        // would silently destroy unpushed local commits if the branch has diverged from
+        // remote. `merge-base --is-ancestor` returns exit 0 when localBranch is an
+        // ancestor of baseBranch — i.e. the update is a safe fast-forward.
+        gitExecFileSync(['merge-base', '--is-ancestor', localBranch, baseBranch], {
+          cwd: repoPath
+        })
+        // Why: We need to find which worktree (if any) has localBranch checked
+        // out, because moving the ref without updating that worktree's files would
+        // leave it looking massively dirty. A sibling worktree we don't control is
+        // just as vulnerable as the primary one.
+        const worktreeListOutput = gitExecFileSync(['worktree', 'list', '--porcelain'], {
+          cwd: repoPath
+        })
+        const worktrees = parseWorktreeList(translateWslOutputPaths(worktreeListOutput, repoPath))
+        const fullRef = `refs/heads/${localBranch}`
+        const ownerWorktree = worktrees.find((wt) => wt.branch === fullRef)
+
+        if (ownerWorktree) {
+          // Why: localBranch is checked out in a worktree. We can only safely
+          // update if that worktree is clean, and we must use `reset --hard`
+          // (run inside that worktree) so the files move with the ref.
+          const status = gitExecFileSync(['status', '--porcelain', '--untracked-files=no'], {
+            cwd: ownerWorktree.path
+          })
+          if (!status.trim()) {
+            gitExecFileSync(['reset', '--hard', baseBranch], { cwd: ownerWorktree.path })
+          }
+        } else {
+          // Why: localBranch is not checked out anywhere, so there is no working
+          // tree to desync. `update-ref` is safe here.
+          gitExecFileSync(['update-ref', fullRef, baseBranch], { cwd: repoPath })
+        }
+      } catch {
+        // merge-base fails if the local branch doesn't exist or has diverged;
+        // update-ref fails on locked/corrupted refs or filesystem errors.
+        // Both cases are non-fatal — skip the update silently.
+      }
+    }
+  }
+
   const args = ['worktree', 'add', '-b', branch, worktreePath]
   if (baseBranch) {
     args.push(baseBranch)

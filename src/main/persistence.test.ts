@@ -70,6 +70,7 @@ describe('Store', () => {
     const store = await createStore()
     const settings = store.getSettings()
     expect(settings.branchPrefix).toBe('git-username')
+    expect(settings.refreshLocalBaseRefOnWorktreeCreate).toBe(false)
     expect(settings.theme).toBe('system')
     expect(settings.editorAutoSave).toBe(false)
     expect(settings.editorAutoSaveDelayMs).toBe(1000)
@@ -141,6 +142,7 @@ describe('Store', () => {
     // new fields get defaults when missing from persisted data
     expect(store.getSettings().editorAutoSave).toBe(false)
     expect(store.getSettings().editorAutoSaveDelayMs).toBe(1000)
+    expect(store.getSettings().refreshLocalBaseRefOnWorktreeCreate).toBe(false)
     expect(store.getSettings().rightSidebarOpenByDefault).toBe(true)
     // repos should be loaded
     expect(store.getRepos()).toHaveLength(1)

@@ -151,6 +151,7 @@ describe('registerWorktreeHandlers', () => {
     store.getSettings.mockReturnValue({
       branchPrefix: 'none',
       nestWorkspaces: false,
+      refreshLocalBaseRefOnWorktreeCreate: false,
       workspaceDir: '/workspace'
     })
     store.getWorktreeMeta.mockReturnValue(undefined)
@@ -310,6 +311,13 @@ describe('registerWorktreeHandlers', () => {
         }
       }
     })
+    expect(addWorktreeMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      '/workspace/improve-dashboard',
+      'improve-dashboard',
+      'origin/main',
+      false
+    )
   })
 
   it('still returns the created worktree when setup runner generation fails', async () => {

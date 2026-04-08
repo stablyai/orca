@@ -44,14 +44,6 @@ export const GENERAL_CLI_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   }
 ]
 
-export const GENERAL_BRANCH_SEARCH_ENTRIES: SettingsSearchEntry[] = [
-  {
-    title: 'Branch Prefix',
-    description: 'Prefix added to branch names when creating worktrees.',
-    keywords: ['branch naming', 'git username', 'custom']
-  }
-]
-
 export const GENERAL_UPDATE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Check for Updates',
@@ -72,7 +64,6 @@ export const GENERAL_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   ...GENERAL_WORKSPACE_SEARCH_ENTRIES,
   ...GENERAL_EDITOR_SEARCH_ENTRIES,
   ...GENERAL_CLI_SEARCH_ENTRIES,
-  ...GENERAL_BRANCH_SEARCH_ENTRIES,
   ...GENERAL_UPDATE_SEARCH_ENTRIES,
   ...GENERAL_CACHE_TIMER_SEARCH_ENTRIES
 ]

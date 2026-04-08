@@ -1,6 +1,6 @@
 /* eslint-disable max-lines */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Bell, Keyboard, Palette, SlidersHorizontal, SquareTerminal } from 'lucide-react'
+import { Bell, GitBranch, Keyboard, Palette, SlidersHorizontal, SquareTerminal } from 'lucide-react'
 import type { OrcaHooks } from '../../../../shared/types'
 import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
 import { useAppStore } from '../../store'
@@ -11,6 +11,7 @@ import { AppearancePane, APPEARANCE_PANE_SEARCH_ENTRIES } from './AppearancePane
 import { ShortcutsPane, SHORTCUTS_PANE_SEARCH_ENTRIES } from './ShortcutsPane'
 import { TerminalPane, TERMINAL_PANE_SEARCH_ENTRIES } from './TerminalPane'
 import { RepositoryPane, getRepositoryPaneSearchEntries } from './RepositoryPane'
+import { GitPane, GIT_PANE_SEARCH_ENTRIES } from './GitPane'
 import { NotificationsPane, NOTIFICATIONS_PANE_SEARCH_ENTRIES } from './NotificationsPane'
 import { SettingsSidebar } from './SettingsSidebar'
 import { SettingsSection } from './SettingsSection'
@@ -18,6 +19,7 @@ import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-sear
 
 type SettingsNavTarget =
   | 'general'
+  | 'git'
   | 'appearance'
   | 'terminal'
   | 'notifications'
@@ -193,9 +195,16 @@ function Settings(): React.JSX.Element {
       {
         id: 'general',
         title: 'General',
-        description: 'Workspace, editor, naming, and updates.',
+        description: 'Workspace, editor, and updates.',
         icon: SlidersHorizontal,
         searchEntries: GENERAL_PANE_SEARCH_ENTRIES
+      },
+      {
+        id: 'git',
+        title: 'Git',
+        description: 'Branch naming and local ref behavior.',
+        icon: GitBranch,
+        searchEntries: GIT_PANE_SEARCH_ENTRIES
       },
       {
         id: 'appearance',
@@ -361,10 +370,19 @@ function Settings(): React.JSX.Element {
                 <SettingsSection
                   id="general"
                   title="General"
-                  description="Workspace, editor, naming, and updates."
+                  description="Workspace, editor, and updates."
                   searchEntries={GENERAL_PANE_SEARCH_ENTRIES}
                 >
-                  <GeneralPane
+                  <GeneralPane settings={settings} updateSettings={updateSettings} />
+                </SettingsSection>
+
+                <SettingsSection
+                  id="git"
+                  title="Git"
+                  description="Branch naming and local ref behavior."
+                  searchEntries={GIT_PANE_SEARCH_ENTRIES}
+                >
+                  <GitPane
                     settings={settings}
                     updateSettings={updateSettings}
                     displayedGitUsername={displayedGitUsername}

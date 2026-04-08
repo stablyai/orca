@@ -18,7 +18,6 @@ import {
 } from '../../../../shared/constants'
 import { clampNumber } from '@/lib/terminal-theme'
 import {
-  GENERAL_BRANCH_SEARCH_ENTRIES,
   GENERAL_CACHE_TIMER_SEARCH_ENTRIES,
   GENERAL_CLI_SEARCH_ENTRIES,
   GENERAL_EDITOR_SEARCH_ENTRIES,
@@ -35,14 +34,9 @@ export { GENERAL_PANE_SEARCH_ENTRIES }
 type GeneralPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
-  displayedGitUsername: string
 }
 
-export function GeneralPane({
-  settings,
-  updateSettings,
-  displayedGitUsername
-}: GeneralPaneProps): React.JSX.Element {
+export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const updateStatus = useAppStore((s) => s.updateStatus)
   const [appVersion, setAppVersion] = useState<string | null>(null)
@@ -353,60 +347,6 @@ export function GeneralPane({
             </Select>
           </SearchableSetting>
         )}
-      </section>
-    ) : null,
-    matchesSettingsSearch(searchQuery, GENERAL_BRANCH_SEARCH_ENTRIES) ? (
-      <section key="branch-prefix" className="space-y-4">
-        <div className="space-y-1">
-          <h3 className="text-sm font-semibold">Branch Naming</h3>
-          <p className="text-xs text-muted-foreground">
-            Prefix added to branch names when creating worktrees.
-          </p>
-        </div>
-
-        <SearchableSetting
-          title="Branch Prefix"
-          description="Prefix added to branch names when creating worktrees."
-          keywords={['branch naming', 'git username', 'custom']}
-          className="space-y-3"
-        >
-          <div className="flex w-fit gap-1 rounded-md border border-border/50 p-1">
-            {(['git-username', 'custom', 'none'] as const).map((option) => (
-              <button
-                key={option}
-                onClick={() => updateSettings({ branchPrefix: option })}
-                className={`rounded-sm px-3 py-1 text-sm transition-colors ${
-                  settings.branchPrefix === option
-                    ? 'bg-accent font-medium text-accent-foreground'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {option === 'git-username'
-                  ? 'Git Username'
-                  : option === 'custom'
-                    ? 'Custom'
-                    : 'None'}
-              </button>
-            ))}
-          </div>
-          {(settings.branchPrefix === 'custom' || settings.branchPrefix === 'git-username') && (
-            <Input
-              value={
-                settings.branchPrefix === 'git-username'
-                  ? displayedGitUsername
-                  : settings.branchPrefixCustom
-              }
-              onChange={(e) => updateSettings({ branchPrefixCustom: e.target.value })}
-              placeholder={
-                settings.branchPrefix === 'git-username'
-                  ? 'No git username configured'
-                  : 'e.g. feature'
-              }
-              className="max-w-xs"
-              readOnly={settings.branchPrefix === 'git-username'}
-            />
-          )}
-        </SearchableSetting>
       </section>
     ) : null,
     matchesSettingsSearch(searchQuery, GENERAL_UPDATE_SEARCH_ENTRIES) ? (

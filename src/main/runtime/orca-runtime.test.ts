@@ -105,6 +105,7 @@ const store = {
   getSettings: () => ({
     workspaceDir: '/tmp/workspaces',
     nestWorkspaces: false,
+    refreshLocalBaseRefOnWorktreeCreate: false,
     branchPrefix: 'none',
     branchPrefixCustom: ''
   })
@@ -622,6 +623,13 @@ describe('OrcaRuntimeService', () => {
       'pnpm worktree:setup'
     )
     expect(runHook).not.toHaveBeenCalled()
+    expect(addWorktree).toHaveBeenCalledWith(
+      '/tmp/repo',
+      '/tmp/workspaces/runtime-hook-test',
+      'runtime-hook-test',
+      'origin/main',
+      false
+    )
     expect(result).toEqual({
       worktree: expect.objectContaining({
         repoId: 'repo-1',
@@ -675,6 +683,7 @@ describe('OrcaRuntimeService', () => {
       getSettings: () => ({
         workspaceDir: 'C:\\workspaces',
         nestWorkspaces: false,
+        refreshLocalBaseRefOnWorktreeCreate: false,
         branchPrefix: 'none',
         branchPrefixCustom: ''
       })
