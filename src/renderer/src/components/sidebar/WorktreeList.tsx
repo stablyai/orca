@@ -204,7 +204,7 @@ const WorktreeList = React.memo(function WorktreeList() {
     // Why gap instead of padding on the wrapper: the virtualizer accounts for
     // the gap in its position calculations, guaranteeing consistent spacing
     // between cards regardless of estimation/measurement mismatches.
-    gap: 8,
+    gap: 6,
     getItemKey: (index) => {
       const row = rows[index]
       return row.type === 'header' ? `hdr:${row.key}` : `wt:${row.worktree.id}`
