@@ -83,12 +83,9 @@ export function GitPane({
         <div className="space-y-0.5">
           <Label>Refresh Local Base Ref</Label>
           <p className="text-xs text-muted-foreground">
-            When off, your local main/master ref stays untouched — but{' '}
-            <code>git diff main...HEAD</code> may include changes that aren&apos;t part of your
-            branch, which can confuse AI coding agents that rely on that diff to understand what you
-            changed. When on, Orca fast-forwards the local ref to match the remote before creating
-            the worktree, so the diff is accurate. Only applied when the local branch is clean and
-            safely behind the remote-tracking ref.
+            When enabled, Orca updates your local <code>main</code> or <code>master</code> before
+            creating a worktree. This helps AI tools and diffs compare your branch against the
+            latest base branch. Orca only does this when it is safe.
           </p>
         </div>
         <button
