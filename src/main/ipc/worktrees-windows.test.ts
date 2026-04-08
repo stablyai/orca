@@ -154,7 +154,8 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     store.getSettings.mockReturnValue({
       branchPrefix: 'none',
       nestWorkspaces: false,
-      workspaceDir: 'C:\\workspaces'
+      workspaceDir: 'C:\\workspaces',
+      worktreeLocation: 'external'
     })
     store.getWorktreeMeta.mockReturnValue(undefined)
     store.setWorktreeMeta.mockReturnValue({})

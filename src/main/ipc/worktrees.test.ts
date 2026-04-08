@@ -151,7 +151,8 @@ describe('registerWorktreeHandlers', () => {
     store.getSettings.mockReturnValue({
       branchPrefix: 'none',
       nestWorkspaces: false,
-      workspaceDir: '/workspace'
+      workspaceDir: '/workspace',
+      worktreeLocation: 'external'
     })
     store.getWorktreeMeta.mockReturnValue(undefined)
     store.setWorktreeMeta.mockReturnValue({})
