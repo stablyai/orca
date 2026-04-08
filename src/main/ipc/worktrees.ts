@@ -11,10 +11,9 @@ import type {
 } from '../../shared/types'
 import { getPRForBranch } from '../github/client'
 import { listWorktrees, addWorktree, removeWorktree } from '../git/worktree'
-import { getGitUsername, getDefaultBaseRef, getBranchConflictKind } from '../git/repo'
+import { getGitUsername, getDefaultBaseRef, getBranchConflictKind, isBareRepo } from '../git/repo'
+import { isWorktreesDirIgnored, addWorktreesDirToGitignore } from '../git/gitignore'
 import { gitExecFileSync } from '../git/runner'
-import { isWslPath, parseWslPath, getWslHome } from '../wsl'
-import { join } from 'path'
 import { listRepoWorktrees } from '../repo-worktrees'
 import {
   createSetupRunnerScript,
@@ -28,7 +27,6 @@ import {
   sanitizeWorktreeName,
   computeBranchName,
   computeWorktreePath,
-  ensurePathWithinWorkspace,
   shouldSetDisplayName,
   mergeWorktree,
   parseWorktreeId,
@@ -48,6 +46,8 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
   ipcMain.removeHandler('worktrees:updateMeta')
   ipcMain.removeHandler('worktrees:persistSortOrder')
   ipcMain.removeHandler('hooks:check')
+  ipcMain.removeHandler('gitignore:checkWorktreesIgnored')
+  ipcMain.removeHandler('gitignore:addWorktreesEntry')
 
   ipcMain.handle('worktrees:listAll', async () => {
     // Why: use ensureAuthorizedRootsCache (not rebuild) to avoid redundantly
@@ -130,16 +130,10 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
         )
       }
 
-      // Compute worktree path
-      let worktreePath = computeWorktreePath(sanitizedName, repo.path, settings)
-      // Why: WSL worktrees live under ~/orca/workspaces inside the WSL
-      // filesystem. Validate against that root, not the Windows workspace dir.
-      // If WSL home lookup fails, keep using the configured workspace root so
-      // the path traversal guard still runs on the fallback path.
-      const wslInfo = isWslPath(repo.path) ? parseWslPath(repo.path) : null
-      const wslHome = wslInfo ? getWslHome(wslInfo.distro) : null
-      const workspaceRoot = wslHome ? join(wslHome, 'orca', 'workspaces') : settings.workspaceDir
-      worktreePath = ensurePathWithinWorkspace(worktreePath, workspaceRoot)
+      // Compute worktree path. computeWorktreePath now handles WSL, in-repo,
+      // and external modes internally and runs path-traversal validation
+      // against the correct root for each mode.
+      const worktreePath = computeWorktreePath(sanitizedName, repo.path, settings)
 
       // Determine base branch
       const baseBranch = args.baseBranch || repo.worktreeBaseRef || getDefaultBaseRef(repo.path)
@@ -295,6 +289,35 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
       hasHooks: has,
       hooks
     }
+  })
+
+  ipcMain.handle('gitignore:checkWorktreesIgnored', async (_event, args: { repoId: string }) => {
+    const repo = store.getRepo(args.repoId)
+    // Folder repos can't have worktrees, and bare repos have no working tree
+    // to dirty. In both cases, treat as already-handled to short-circuit any
+    // UI gating in the renderer. Missing repo also returns ignored: true so
+    // the UI can't leak error detail via this handler.
+    if (!repo || isFolderRepo(repo) || isBareRepo(repo.path)) {
+      return { ignored: true }
+    }
+    try {
+      return { ignored: await isWorktreesDirIgnored(repo.path) }
+    } catch (error) {
+      console.warn('[gitignore] read failed for', repo.path, error)
+      // Why fail-open (return ignored: false) instead of fail-closed: a closed
+      // failure would silently suppress the prompt and the user could end up
+      // with thousands of untracked worktree files in `git status` without
+      // ever knowing why. Open failure shows the prompt; user decides.
+      return { ignored: false }
+    }
+  })
+
+  ipcMain.handle('gitignore:addWorktreesEntry', async (_event, args: { repoId: string }) => {
+    const repo = store.getRepo(args.repoId)
+    if (!repo || isFolderRepo(repo)) {
+      throw new Error('Cannot modify .gitignore for this repo type.')
+    }
+    await addWorktreesDirToGitignore(repo.path)
   })
 }
 

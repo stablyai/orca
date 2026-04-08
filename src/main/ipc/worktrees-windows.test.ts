@@ -16,8 +16,7 @@ const {
   runHookMock,
   hasHooksFileMock,
   loadHooksMock,
-  computeWorktreePathMock,
-  ensurePathWithinWorkspaceMock
+  computeWorktreePathMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   removeHandlerMock: vi.fn(),
@@ -34,8 +33,7 @@ const {
   runHookMock: vi.fn(),
   hasHooksFileMock: vi.fn(),
   loadHooksMock: vi.fn(),
-  computeWorktreePathMock: vi.fn(),
-  ensurePathWithinWorkspaceMock: vi.fn()
+  computeWorktreePathMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -74,8 +72,7 @@ vi.mock('./worktree-logic', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
   return {
     ...actual,
-    computeWorktreePath: computeWorktreePathMock,
-    ensurePathWithinWorkspace: ensurePathWithinWorkspaceMock
+    computeWorktreePath: computeWorktreePathMock
   }
 })
 
@@ -117,7 +114,6 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     hasHooksFileMock.mockReset()
     loadHooksMock.mockReset()
     computeWorktreePathMock.mockReset()
-    ensurePathWithinWorkspaceMock.mockReset()
     mainWindow.webContents.send.mockReset()
     store.getRepos.mockReset()
     store.getRepo.mockReset()
@@ -154,7 +150,8 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     store.getSettings.mockReturnValue({
       branchPrefix: 'none',
       nestWorkspaces: false,
-      workspaceDir: 'C:\\workspaces'
+      workspaceDir: 'C:\\workspaces',
+      worktreeLocation: 'external'
     })
     store.getWorktreeMeta.mockReturnValue(undefined)
     store.setWorktreeMeta.mockReturnValue({})
@@ -165,7 +162,6 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     getEffectiveHooksMock.mockReturnValue(null)
     shouldRunSetupForCreateMock.mockReturnValue(false)
     computeWorktreePathMock.mockReturnValue('C:\\workspaces\\improve-dashboard')
-    ensurePathWithinWorkspaceMock.mockReturnValue('C:\\workspaces\\improve-dashboard')
     listWorktreesMock.mockResolvedValue([])
 
     registerWorktreeHandlers(mainWindow as never, store as never)

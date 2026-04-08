@@ -104,64 +104,116 @@ export function GeneralPane({
         </div>
 
         <SearchableSetting
-          title="Workspace Directory"
-          description="Root directory where worktree folders are created."
-          keywords={['workspace', 'folder', 'path', 'worktree']}
+          title="Worktree Location"
+          description="Where Orca creates new worktree directories."
+          keywords={[
+            'worktree',
+            'location',
+            'in-repo',
+            '.worktrees',
+            'external',
+            'workspace',
+            'gitignore'
+          ]}
           className="space-y-2"
         >
-          <Label>Workspace Directory</Label>
-          <div className="flex gap-2">
-            <Input
-              value={settings.workspaceDir}
-              onChange={(e) => updateSettings({ workspaceDir: e.target.value })}
-              className="flex-1 text-xs"
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleBrowseWorkspace}
-              className="shrink-0 gap-1.5"
-            >
-              <FolderOpen className="size-3.5" />
-              Browse
-            </Button>
+          <Label>Worktree Location</Label>
+          <div className="flex w-fit gap-1 rounded-md border border-border/50 p-1">
+            {(
+              [
+                ['external', 'External directory'],
+                ['in-repo', 'In-repo .worktrees/']
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                onClick={() => updateSettings({ worktreeLocation: value })}
+                className={`rounded-sm px-3 py-1 text-sm transition-colors ${
+                  settings.worktreeLocation === value
+                    ? 'bg-accent font-medium text-accent-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
           <p className="text-xs text-muted-foreground">
-            Root directory where worktree folders are created.
+            {settings.worktreeLocation === 'in-repo' ? (
+              <>
+                New worktrees will be created at <code>&lt;repo&gt;/.worktrees/&lt;name&gt;</code>.
+                Orca will offer to add <code>.worktrees/</code> to each repo&apos;s{' '}
+                <code>.gitignore</code> on first create.
+              </>
+            ) : (
+              'New worktrees will be created in the workspace directory below.'
+            )}
           </p>
         </SearchableSetting>
 
-        <SearchableSetting
-          title="Nest Workspaces"
-          description="Create worktrees inside a repo-named subfolder."
-          keywords={['nested', 'subfolder', 'directory']}
-          className="flex items-center justify-between gap-4 px-1 py-2"
-        >
-          <div className="space-y-0.5">
-            <Label>Nest Workspaces</Label>
-            <p className="text-xs text-muted-foreground">
-              Create worktrees inside a repo-named subfolder.
-            </p>
-          </div>
-          <button
-            role="switch"
-            aria-checked={settings.nestWorkspaces}
-            onClick={() =>
-              updateSettings({
-                nestWorkspaces: !settings.nestWorkspaces
-              })
-            }
-            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-              settings.nestWorkspaces ? 'bg-foreground' : 'bg-muted-foreground/30'
-            }`}
-          >
-            <span
-              className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-                settings.nestWorkspaces ? 'translate-x-4' : 'translate-x-0.5'
-              }`}
-            />
-          </button>
-        </SearchableSetting>
+        {settings.worktreeLocation === 'external' ? (
+          <>
+            <SearchableSetting
+              title="Workspace Directory"
+              description="Root directory where worktree folders are created."
+              keywords={['workspace', 'folder', 'path', 'worktree']}
+              className="space-y-2"
+            >
+              <Label>Workspace Directory</Label>
+              <div className="flex gap-2">
+                <Input
+                  value={settings.workspaceDir}
+                  onChange={(e) => updateSettings({ workspaceDir: e.target.value })}
+                  className="flex-1 text-xs"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleBrowseWorkspace}
+                  className="shrink-0 gap-1.5"
+                >
+                  <FolderOpen className="size-3.5" />
+                  Browse
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Root directory where worktree folders are created.
+              </p>
+            </SearchableSetting>
+
+            <SearchableSetting
+              title="Nest Workspaces"
+              description="Create worktrees inside a repo-named subfolder."
+              keywords={['nested', 'subfolder', 'directory']}
+              className="flex items-center justify-between gap-4 px-1 py-2"
+            >
+              <div className="space-y-0.5">
+                <Label>Nest Workspaces</Label>
+                <p className="text-xs text-muted-foreground">
+                  Create worktrees inside a repo-named subfolder.
+                </p>
+              </div>
+              <button
+                role="switch"
+                aria-checked={settings.nestWorkspaces}
+                onClick={() =>
+                  updateSettings({
+                    nestWorkspaces: !settings.nestWorkspaces
+                  })
+                }
+                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
+                  settings.nestWorkspaces ? 'bg-foreground' : 'bg-muted-foreground/30'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
+                    settings.nestWorkspaces ? 'translate-x-4' : 'translate-x-0.5'
+                  }`}
+                />
+              </button>
+            </SearchableSetting>
+          </>
+        ) : null}
       </section>
     ) : null,
     matchesSettingsSearch(searchQuery, GENERAL_EDITOR_SEARCH_ENTRIES) ? (

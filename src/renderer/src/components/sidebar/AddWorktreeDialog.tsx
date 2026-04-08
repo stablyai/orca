@@ -64,6 +64,7 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
   const [setupDecision, setSetupDecision] = useState<'run' | 'skip' | null>(null)
   const [createError, setCreateError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
+  const [pendingGitignoreConfirm, setPendingGitignoreConfirm] = useState(false)
   const nameInputRef = useRef<HTMLInputElement>(null)
   const lastSuggestedNameRef = useRef('')
   const resetTimeoutRef = useRef<number | null>(null)
@@ -91,9 +92,13 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
       : setupPolicy === 'run-by-default'
         ? 'run'
         : 'skip')
+  // In-repo mode and nested external mode both have per-repo name pools.
+  // Only flat external mode shares names across all repos.
+  const namePoolIsPerRepo =
+    settings?.worktreeLocation === 'in-repo' || (settings?.nestWorkspaces ?? false)
   const suggestedName = useMemo(
-    () => getSuggestedSpaceName(repoId, worktreesByRepo, settings?.nestWorkspaces ?? false),
-    [repoId, worktreesByRepo, settings?.nestWorkspaces]
+    () => getSuggestedSpaceName(repoId, worktreesByRepo, namePoolIsPerRepo),
+    [repoId, worktreesByRepo, namePoolIsPerRepo]
   )
   // Why: setup visibility is part of the create decision no matter which default
   // policy the repo uses. If we let create proceed before the async hook lookup
@@ -143,88 +148,137 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
     [closeModal]
   )
 
+  const performCreate = useCallback(
+    async ({ addGitignoreEntry }: { addGitignoreEntry: boolean }) => {
+      setCreateError(null)
+      setCreating(true)
+      try {
+        if (addGitignoreEntry) {
+          try {
+            await window.api.gitignore.addWorktreesEntry({ repoId })
+          } catch (error) {
+            // Why degrade to a warning instead of failing: the worktree create
+            // hasn't happened yet, but failing here would strand the user
+            // without any worktree at all over a non-fatal file write. A
+            // warning toast is honest and lets the create proceed.
+            toast.warning('Could not update .gitignore — creating worktree anyway.', {
+              description: error instanceof Error ? error.message : undefined
+            })
+          }
+        }
+
+        const result = await createWorktree(
+          repoId,
+          name.trim(),
+          undefined,
+          setupConfig ? ((resolvedSetupDecision ?? 'inherit') as SetupDecision) : 'inherit'
+        )
+        const wt = result.worktree
+        // Meta update is best-effort — the worktree already exists, so don't
+        // block the success path if only the metadata write fails.
+        try {
+          const metaUpdates: Record<string, unknown> = {}
+          if (linkedIssue.trim()) {
+            const linkedIssueNumber = parseGitHubIssueOrPRNumber(linkedIssue)
+            if (linkedIssueNumber !== null) {
+              ;(metaUpdates as { linkedIssue: number }).linkedIssue = linkedIssueNumber
+            }
+          }
+          if (comment.trim()) {
+            ;(metaUpdates as { comment: string }).comment = comment.trim()
+          }
+          if (Object.keys(metaUpdates).length > 0) {
+            await updateWorktreeMeta(
+              wt.id,
+              metaUpdates as { linkedIssue?: number; comment?: string }
+            )
+          }
+        } catch {
+          console.error('Failed to update worktree meta after creation')
+        }
+
+        setActiveRepo(repoId)
+        setActiveView('terminal')
+        setSidebarOpen(true)
+        if (searchQuery) {
+          setSearchQuery('')
+        }
+        if (filterRepoIds.length > 0 && !filterRepoIds.includes(repoId)) {
+          setFilterRepoIds([])
+        }
+        setActiveWorktree(wt.id)
+        ensureWorktreeHasInitialTerminal(useAppStore.getState(), wt.id, result.setup)
+        revealWorktreeInSidebar(wt.id)
+        if (settings?.rightSidebarOpenByDefault) {
+          setRightSidebarTab('explorer')
+          setRightSidebarOpen(true)
+        }
+        handleOpenChange(false)
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to create worktree.'
+        setCreateError(message)
+        toast.error(message)
+      } finally {
+        setCreating(false)
+        setPendingGitignoreConfirm(false)
+      }
+    },
+    [
+      repoId,
+      name,
+      linkedIssue,
+      comment,
+      createWorktree,
+      updateWorktreeMeta,
+      setActiveRepo,
+      setActiveView,
+      setSidebarOpen,
+      searchQuery,
+      setSearchQuery,
+      filterRepoIds,
+      setFilterRepoIds,
+      setActiveWorktree,
+      revealWorktreeInSidebar,
+      setRightSidebarOpen,
+      setRightSidebarTab,
+      settings?.rightSidebarOpenByDefault,
+      handleOpenChange,
+      resolvedSetupDecision,
+      setupConfig
+    ]
+  )
+
   const handleCreate = useCallback(async () => {
     if (!repoId || !name.trim() || shouldWaitForSetupCheck || !selectedRepo) {
       return
     }
-    setCreateError(null)
-    setCreating(true)
-    try {
-      const result = await createWorktree(
-        repoId,
-        name.trim(),
-        undefined,
-        setupConfig ? ((resolvedSetupDecision ?? 'inherit') as SetupDecision) : 'inherit'
-      )
-      const wt = result.worktree
-      // Meta update is best-effort — the worktree already exists, so don't
-      // block the success path if only the metadata write fails.
-      try {
-        const metaUpdates: Record<string, unknown> = {}
-        if (linkedIssue.trim()) {
-          const linkedIssueNumber = parseGitHubIssueOrPRNumber(linkedIssue)
-          if (linkedIssueNumber !== null) {
-            ;(metaUpdates as { linkedIssue: number }).linkedIssue = linkedIssueNumber
-          }
-        }
-        if (comment.trim()) {
-          ;(metaUpdates as { comment: string }).comment = comment.trim()
-        }
-        if (Object.keys(metaUpdates).length > 0) {
-          await updateWorktreeMeta(wt.id, metaUpdates as { linkedIssue?: number; comment?: string })
-        }
-      } catch {
-        console.error('Failed to update worktree meta after creation')
-      }
 
-      setActiveRepo(repoId)
-      setActiveView('terminal')
-      setSidebarOpen(true)
-      if (searchQuery) {
-        setSearchQuery('')
+    // In-repo mode is the only mode that touches .gitignore. External mode
+    // creates worktrees outside the repo, so the file is irrelevant.
+    if (settings?.worktreeLocation === 'in-repo') {
+      try {
+        const { ignored } = await window.api.gitignore.checkWorktreesIgnored({ repoId })
+        if (!ignored) {
+          setPendingGitignoreConfirm(true)
+          return
+        }
+      } catch (error) {
+        // Why: a failed check must NOT block create. Falling through is the
+        // same outcome as "ignored: true" — the worktree gets created and
+        // .gitignore stays untouched. Worst case: untracked files in git
+        // status, which the user can fix manually.
+        console.warn('[create] gitignore check failed, proceeding:', error)
       }
-      if (filterRepoIds.length > 0 && !filterRepoIds.includes(repoId)) {
-        setFilterRepoIds([])
-      }
-      setActiveWorktree(wt.id)
-      ensureWorktreeHasInitialTerminal(useAppStore.getState(), wt.id, result.setup)
-      revealWorktreeInSidebar(wt.id)
-      if (settings?.rightSidebarOpenByDefault) {
-        setRightSidebarTab('explorer')
-        setRightSidebarOpen(true)
-      }
-      handleOpenChange(false)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to create worktree.'
-      setCreateError(message)
-      toast.error(message)
-    } finally {
-      setCreating(false)
     }
+
+    await performCreate({ addGitignoreEntry: false })
   }, [
     repoId,
     name,
-    linkedIssue,
-    comment,
-    createWorktree,
-    updateWorktreeMeta,
-    setActiveRepo,
-    setActiveView,
-    setSidebarOpen,
-    searchQuery,
-    setSearchQuery,
-    filterRepoIds,
-    setFilterRepoIds,
-    setActiveWorktree,
-    revealWorktreeInSidebar,
-    setRightSidebarOpen,
-    setRightSidebarTab,
-    settings?.rightSidebarOpenByDefault,
-    handleOpenChange,
-    resolvedSetupDecision,
+    shouldWaitForSetupCheck,
     selectedRepo,
-    setupConfig,
-    shouldWaitForSetupCheck
+    settings?.worktreeLocation,
+    performCreate
   ])
 
   const handleNameChange = useCallback(
@@ -283,6 +337,7 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
       setCheckedHooksRepoId(null)
       setSetupDecision(null)
       setCreateError(null)
+      setPendingGitignoreConfirm(false)
       lastSuggestedNameRef.current = ''
       resetTimeoutRef.current = null
     }, DIALOG_CLOSE_RESET_DELAY_MS)
@@ -383,6 +438,51 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
       shouldWaitForSetupCheck
     ]
   )
+
+  if (pendingGitignoreConfirm) {
+    return (
+      <Dialog open={isOpen} onOpenChange={handleOpenChange}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-sm">
+              Add <code>.worktrees/</code> to <code>.gitignore</code>?
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              This repo doesn&apos;t ignore <code>.worktrees/</code>. Without this entry, every file
+              in your new worktree will appear as untracked changes in <code>git status</code>.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPendingGitignoreConfirm(false)}
+              className="text-xs"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => performCreate({ addGitignoreEntry: false })}
+              disabled={creating}
+              className="text-xs"
+            >
+              {creating ? 'Creating...' : 'Create anyway'}
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => performCreate({ addGitignoreEntry: true })}
+              disabled={creating}
+              className="text-xs"
+            >
+              {creating ? 'Creating...' : 'Add and create'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    )
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
@@ -594,7 +694,7 @@ export default AddWorktreeDialog
 function getSuggestedSpaceName(
   repoId: string,
   worktreesByRepo: Record<string, { path: string }[]>,
-  nestWorkspaces: boolean
+  perRepoNamePool: boolean
 ): string {
   if (!repoId) {
     return SPACE_NAMES[0]
@@ -607,7 +707,7 @@ function getSuggestedSpaceName(
     usedNames.add(normalizeSpaceName(lastPathSegment(worktree.path)))
   }
 
-  if (!nestWorkspaces) {
+  if (!perRepoNamePool) {
     for (const worktrees of Object.values(worktreesByRepo)) {
       for (const worktree of worktrees) {
         usedNames.add(normalizeSpaceName(lastPathSegment(worktree.path)))

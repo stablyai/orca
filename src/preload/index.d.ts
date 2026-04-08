@@ -137,6 +137,11 @@ type HooksApi = {
   check: (args: { repoId: string }) => Promise<{ hasHooks: boolean; hooks: OrcaHooks | null }>
 }
 
+type GitignoreApi = {
+  checkWorktreesIgnored: (args: { repoId: string }) => Promise<{ ignored: boolean }>
+  addWorktreesEntry: (args: { repoId: string }) => Promise<void>
+}
+
 type CacheApi = {
   getGitHub: () => Promise<{
     pr: Record<string, { data: PRInfo | null; fetchedAt: number }>
@@ -262,6 +267,7 @@ type Api = {
   notifications: NotificationsApi
   shell: ShellApi
   hooks: HooksApi
+  gitignore: GitignoreApi
   cache: CacheApi
   session: SessionApi
   updater: UpdaterApi

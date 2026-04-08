@@ -1,5 +1,5 @@
 import { basename, join, resolve, relative, isAbsolute, posix, win32 } from 'path'
-import type { GitWorktreeInfo, Worktree, WorktreeMeta } from '../../shared/types'
+import type { GitWorktreeInfo, Worktree, WorktreeMeta, WorktreeLocation } from '../../shared/types'
 import { getWslHome, parseWslPath } from '../wsl'
 
 /**
@@ -22,19 +22,38 @@ export function sanitizeWorktreeName(input: string): string {
   return sanitized
 }
 
-/**
- * Ensure a target path is within the workspace directory (prevent path traversal).
- */
-export function ensurePathWithinWorkspace(targetPath: string, workspaceDir: string): string {
-  const resolvedWorkspaceDir = resolve(workspaceDir)
-  const resolvedTargetPath = resolve(targetPath)
-  const rel = relative(resolvedWorkspaceDir, resolvedTargetPath)
+// Internal helper: same logic as ensurePathWithinWorkspace, but takes
+// explicit path operations so UNC paths can be validated correctly on
+// Linux CI (where platform-default posix.resolve mangles backslashes).
+type PathOps = Pick<typeof win32, 'basename' | 'join' | 'resolve' | 'relative' | 'isAbsolute'>
 
-  if (isAbsolute(rel) || rel.startsWith('..')) {
+function ensureWithinRoot(targetPath: string, root: string, ops: PathOps): string {
+  const resolvedRoot = ops.resolve(root)
+  const resolvedTarget = ops.resolve(targetPath)
+  const rel = ops.relative(resolvedRoot, resolvedTarget)
+  if (ops.isAbsolute(rel) || rel.startsWith('..')) {
     throw new Error('Invalid worktree path')
   }
+  return resolvedTarget
+}
 
-  return resolvedTargetPath
+function pickPathOps(...paths: string[]): PathOps {
+  // Any Windows-looking path forces win32 so UNC paths validate correctly
+  // on Linux CI. Otherwise we use platform default. This matches the
+  // existing pathOps trick used elsewhere in this file.
+  if (paths.some(looksLikeWindowsPath)) {
+    return win32
+  }
+  return { basename, join, resolve, relative, isAbsolute }
+}
+
+/**
+ * Ensure a target path is within the workspace directory (prevent path traversal).
+ * Kept exported for backward compatibility with the existing test file; new code
+ * should call ensureWithinRoot directly with explicit path operations.
+ */
+export function ensurePathWithinWorkspace(targetPath: string, workspaceDir: string): string {
+  return ensureWithinRoot(targetPath, workspaceDir, pickPathOps(targetPath, workspaceDir))
 }
 
 /**
@@ -58,47 +77,63 @@ export function computeBranchName(
 /**
  * Compute the filesystem path where the worktree directory will be created.
  *
- * Why WSL special case: when the repo lives on a WSL filesystem, worktrees
- * must also live on the WSL filesystem. Creating them on the Windows side
- * (/mnt/c/...) would be extremely slow due to cross-filesystem I/O and
- * the terminal would open a Windows shell instead of WSL. We mirror the
- * Windows workspace layout inside ~/orca/workspaces on the WSL filesystem
- * (e.g. \\wsl.localhost\Ubuntu\home\user\orca\workspaces\repo\feature).
+ * Three modes:
+ * - in-repo: <repoPath>/.worktrees/<name> — co-located with the repo, opt-in.
+ * - WSL: <wslHome>/orca/workspaces/... — keeps worktrees on the WSL filesystem
+ *   when the repo lives there, avoiding cross-filesystem performance traps.
+ * - external: <workspaceDir>/[<repo>]/<name> — the legacy default.
+ *
+ * Each branch wraps its result in ensureWithinRoot against the appropriate
+ * workspace root for that mode. The validation lives inside this function so
+ * the calling code does not need to know about WSL paths or mode-specific
+ * roots.
  */
 export function computeWorktreePath(
   sanitizedName: string,
   repoPath: string,
-  settings: { nestWorkspaces: boolean; workspaceDir: string }
+  settings: {
+    nestWorkspaces: boolean
+    workspaceDir: string
+    worktreeLocation: WorktreeLocation
+  }
 ): string {
-  const pathOps =
-    looksLikeWindowsPath(repoPath) || looksLikeWindowsPath(settings.workspaceDir)
-      ? win32
-      : { basename, join }
+  // In-repo mode runs first. Why: it bypasses both the WSL special case
+  // (worktrees inherit the repo's filesystem automatically because they
+  // live inside it) and the user-configured workspaceDir (which is
+  // irrelevant when worktrees live inside the repo). Skipping straight
+  // to this branch means the WSL override never fires for in-repo mode.
+  if (settings.worktreeLocation === 'in-repo') {
+    const ops = pickPathOps(repoPath)
+    const worktreesRoot = ops.join(repoPath, '.worktrees')
+    const candidate = ops.join(worktreesRoot, sanitizedName)
+    return ensureWithinRoot(candidate, worktreesRoot, ops)
+  }
 
   const wsl = parseWslPath(repoPath)
   if (wsl) {
     const wslHome = getWslHome(wsl.distro)
     if (wslHome) {
-      // Why: WSL UNC paths are still Windows paths from Node's perspective.
-      // On Linux CI, the default path helpers use POSIX semantics and would
-      // treat `\\wsl.localhost\...` as a plain string, producing mixed-separator
-      // paths like `\\wsl.localhost\Ubuntu\home\jin/orca/...`. Use win32 path
-      // operations whenever a Windows/UNC path is involved so behavior matches
-      // the Windows production runtime.
+      // Why WSL special case: when the repo lives on a WSL filesystem,
+      // worktrees must also live on the WSL filesystem. Creating them on
+      // the Windows side (/mnt/c/...) would be extremely slow due to
+      // cross-filesystem I/O and the terminal would open a Windows shell
+      // instead of WSL. We mirror the Windows workspace layout inside
+      // ~/orca/workspaces on the WSL filesystem. All path operations here
+      // use win32 because WSL UNC paths are still Windows paths from
+      // Node's perspective, and posix.resolve on Linux CI would mangle them.
       const wslWorkspaceDir = win32.join(wslHome, 'orca', 'workspaces')
-      if (settings.nestWorkspaces) {
-        const repoName = win32.basename(repoPath).replace(/\.git$/, '')
-        return win32.join(wslWorkspaceDir, repoName, sanitizedName)
-      }
-      return win32.join(wslWorkspaceDir, sanitizedName)
+      const candidate = settings.nestWorkspaces
+        ? win32.join(wslWorkspaceDir, win32.basename(repoPath).replace(/\.git$/, ''), sanitizedName)
+        : win32.join(wslWorkspaceDir, sanitizedName)
+      return ensureWithinRoot(candidate, wslWorkspaceDir, win32)
     }
   }
 
-  if (settings.nestWorkspaces) {
-    const repoName = pathOps.basename(repoPath).replace(/\.git$/, '')
-    return pathOps.join(settings.workspaceDir, repoName, sanitizedName)
-  }
-  return pathOps.join(settings.workspaceDir, sanitizedName)
+  const ops = pickPathOps(repoPath, settings.workspaceDir)
+  const candidate = settings.nestWorkspaces
+    ? ops.join(settings.workspaceDir, ops.basename(repoPath).replace(/\.git$/, ''), sanitizedName)
+    : ops.join(settings.workspaceDir, sanitizedName)
+  return ensureWithinRoot(candidate, settings.workspaceDir, ops)
 }
 
 export function areWorktreePathsEqual(

@@ -309,6 +309,13 @@ const api = {
       ipcRenderer.invoke('hooks:check', args)
   },
 
+  gitignore: {
+    checkWorktreesIgnored: (args: { repoId: string }): Promise<{ ignored: boolean }> =>
+      ipcRenderer.invoke('gitignore:checkWorktreesIgnored', args),
+    addWorktreesEntry: (args: { repoId: string }): Promise<void> =>
+      ipcRenderer.invoke('gitignore:addWorktreesEntry', args)
+  },
+
   cache: {
     getGitHub: () => ipcRenderer.invoke('cache:getGitHub'),
     setGitHub: (args: { cache: unknown }) => ipcRenderer.invoke('cache:setGitHub', args)

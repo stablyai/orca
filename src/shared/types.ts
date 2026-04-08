@@ -258,9 +258,12 @@ export type NotificationSettings = {
   suppressWhenFocused: boolean
 }
 
+export type WorktreeLocation = 'external' | 'in-repo'
+
 export type GlobalSettings = {
   workspaceDir: string
   nestWorkspaces: boolean
+  worktreeLocation: WorktreeLocation
   branchPrefix: 'git-username' | 'custom' | 'none'
   branchPrefixCustom: string
   theme: 'system' | 'dark' | 'light'

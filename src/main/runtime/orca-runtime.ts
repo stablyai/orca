@@ -2,11 +2,9 @@
 /* eslint-disable unicorn/no-useless-spread -- Why: waiter sets and handle keys are cloned intentionally before mutation so resolution and rejection can safely remove entries while iterating. */
 /* eslint-disable no-control-regex -- Why: terminal normalization must strip ANSI and OSC control sequences from PTY output before returning bounded text to agents. */
 import { gitExecFileSync } from '../git/runner'
-import { isWslPath, parseWslPath, getWslHome } from '../wsl'
 import { randomUUID } from 'crypto'
-import { join } from 'path'
 import { rm } from 'fs/promises'
-import type { CreateWorktreeResult, Repo } from '../../shared/types'
+import type { CreateWorktreeResult, Repo, WorktreeLocation } from '../../shared/types'
 import { isFolderRepo } from '../../shared/repo-kind'
 import type {
   RuntimeGraphStatus,
@@ -42,7 +40,6 @@ import type { Store } from '../persistence'
 import {
   computeBranchName,
   computeWorktreePath,
-  ensurePathWithinWorkspace,
   formatWorktreeRemovalError,
   isOrphanedWorktreeError,
   mergeWorktree,
@@ -63,6 +60,7 @@ type RuntimeStore = {
   getSettings(): {
     workspaceDir: string
     nestWorkspaces: boolean
+    worktreeLocation: WorktreeLocation
     branchPrefix: string
     branchPrefixCustom: string
   }
@@ -596,14 +594,11 @@ export class OrcaRuntimeService {
       throw new Error(`Branch "${branchName}" already has PR #${existingPR.number}.`)
     }
 
-    let worktreePath = computeWorktreePath(sanitizedName, repo.path, settings)
-    // Why: CLI-managed WSL worktrees live under ~/orca/workspaces inside the
-    // distro filesystem. If home lookup fails, still validate against the
-    // configured workspace dir so the traversal guard is never bypassed.
-    const wslInfo = isWslPath(repo.path) ? parseWslPath(repo.path) : null
-    const wslHome = wslInfo ? getWslHome(wslInfo.distro) : null
-    const workspaceRoot = wslHome ? join(wslHome, 'orca', 'workspaces') : settings.workspaceDir
-    worktreePath = ensurePathWithinWorkspace(worktreePath, workspaceRoot)
+    // computeWorktreePath now handles WSL, in-repo, and external modes
+    // internally and runs path-traversal validation against the correct
+    // root for each mode — the calling code does not need to know which
+    // mode is active.
+    const worktreePath = computeWorktreePath(sanitizedName, repo.path, settings)
     const baseBranch = args.baseBranch || repo.worktreeBaseRef || getDefaultBaseRef(repo.path)
 
     const remote = baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'

@@ -5,12 +5,7 @@ import { addWorktree, listWorktrees } from '../git/worktree'
 import { createSetupRunnerScript, getEffectiveHooks, runHook } from '../hooks'
 import { OrcaRuntimeService } from './orca-runtime'
 
-const {
-  MOCK_GIT_WORKTREES,
-  addWorktreeMock,
-  computeWorktreePathMock,
-  ensurePathWithinWorkspaceMock
-} = vi.hoisted(() => ({
+const { MOCK_GIT_WORKTREES, addWorktreeMock, computeWorktreePathMock } = vi.hoisted(() => ({
   MOCK_GIT_WORKTREES: [
     {
       path: '/tmp/worktree-a',
@@ -21,8 +16,7 @@ const {
     }
   ],
   addWorktreeMock: vi.fn(),
-  computeWorktreePathMock: vi.fn(),
-  ensurePathWithinWorkspaceMock: vi.fn()
+  computeWorktreePathMock: vi.fn()
 }))
 
 vi.mock('../git/worktree', () => ({
@@ -40,8 +34,7 @@ vi.mock('../ipc/worktree-logic', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
   return {
     ...actual,
-    computeWorktreePath: computeWorktreePathMock,
-    ensurePathWithinWorkspace: ensurePathWithinWorkspaceMock
+    computeWorktreePath: computeWorktreePathMock
   }
 })
 
@@ -53,7 +46,6 @@ afterEach(() => {
   vi.mocked(runHook).mockReset()
   vi.mocked(getEffectiveHooks).mockReturnValue(null)
   computeWorktreePathMock.mockReset()
-  ensurePathWithinWorkspaceMock.mockReset()
 })
 
 const TEST_WINDOW_ID = 1
@@ -105,6 +97,7 @@ const store = {
   getSettings: () => ({
     workspaceDir: '/tmp/workspaces',
     nestWorkspaces: false,
+    worktreeLocation: 'external' as const,
     branchPrefix: 'none',
     branchPrefixCustom: ''
   })
@@ -127,7 +120,6 @@ computeWorktreePathMock.mockImplementation(
     return `${settings.workspaceDir}/${sanitizedName}`
   }
 )
-ensurePathWithinWorkspaceMock.mockImplementation((targetPath: string) => targetPath)
 
 describe('OrcaRuntimeService', () => {
   it('starts unavailable with no authoritative window', () => {
@@ -588,7 +580,6 @@ describe('OrcaRuntimeService', () => {
     runtime.attachWindow(1)
 
     computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-hook-test')
-    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-hook-test')
     vi.mocked(getEffectiveHooks).mockReturnValue({
       scripts: {
         setup: 'pnpm worktree:setup'
@@ -675,12 +666,12 @@ describe('OrcaRuntimeService', () => {
       getSettings: () => ({
         workspaceDir: 'C:\\workspaces',
         nestWorkspaces: false,
+        worktreeLocation: 'external' as const,
         branchPrefix: 'none',
         branchPrefixCustom: ''
       })
     }
     computeWorktreePathMock.mockReturnValue('C:\\workspaces\\improve-dashboard')
-    ensurePathWithinWorkspaceMock.mockReturnValue('C:\\workspaces\\improve-dashboard')
     vi.mocked(listWorktrees)
       .mockResolvedValueOnce([
         {

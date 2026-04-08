@@ -1,4 +1,7 @@
 /* eslint-disable max-lines */
+import { mkdtemp, writeFile as fsWriteFile, readFile, rm } from 'fs/promises'
+import { tmpdir } from 'os'
+import { join as pathJoin } from 'path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -17,8 +20,7 @@ const {
   runHookMock,
   hasHooksFileMock,
   loadHooksMock,
-  computeWorktreePathMock,
-  ensurePathWithinWorkspaceMock
+  computeWorktreePathMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   removeHandlerMock: vi.fn(),
@@ -35,8 +37,7 @@ const {
   runHookMock: vi.fn(),
   hasHooksFileMock: vi.fn(),
   loadHooksMock: vi.fn(),
-  computeWorktreePathMock: vi.fn(),
-  ensurePathWithinWorkspaceMock: vi.fn()
+  computeWorktreePathMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -55,7 +56,8 @@ vi.mock('../git/worktree', () => ({
 vi.mock('../git/repo', () => ({
   getGitUsername: getGitUsernameMock,
   getDefaultBaseRef: getDefaultBaseRefMock,
-  getBranchConflictKind: getBranchConflictKindMock
+  getBranchConflictKind: getBranchConflictKindMock,
+  isBareRepo: vi.fn().mockReturnValue(false)
 }))
 
 vi.mock('../github/client', () => ({
@@ -75,8 +77,7 @@ vi.mock('./worktree-logic', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
   return {
     ...actual,
-    computeWorktreePath: computeWorktreePathMock,
-    ensurePathWithinWorkspace: ensurePathWithinWorkspaceMock
+    computeWorktreePath: computeWorktreePathMock
   }
 })
 
@@ -119,7 +120,6 @@ describe('registerWorktreeHandlers', () => {
       hasHooksFileMock,
       loadHooksMock,
       computeWorktreePathMock,
-      ensurePathWithinWorkspaceMock,
       mainWindow.webContents.send,
       store.getRepos,
       store.getRepo,
@@ -151,7 +151,8 @@ describe('registerWorktreeHandlers', () => {
     store.getSettings.mockReturnValue({
       branchPrefix: 'none',
       nestWorkspaces: false,
-      workspaceDir: '/workspace'
+      workspaceDir: '/workspace',
+      worktreeLocation: 'external'
     })
     store.getWorktreeMeta.mockReturnValue(undefined)
     store.setWorktreeMeta.mockReturnValue({})
@@ -185,7 +186,6 @@ describe('registerWorktreeHandlers', () => {
         return `${settings.workspaceDir}/${sanitizedName}`
       }
     )
-    ensurePathWithinWorkspaceMock.mockImplementation((targetPath: string) => targetPath)
     listWorktreesMock.mockResolvedValue([])
 
     registerWorktreeHandlers(mainWindow as never, store as never)
@@ -362,5 +362,139 @@ describe('registerWorktreeHandlers', () => {
     expect(addWorktreeMock).not.toHaveBeenCalled()
     expect(store.setWorktreeMeta).not.toHaveBeenCalled()
     expect(createSetupRunnerScriptMock).not.toHaveBeenCalled()
+  })
+
+  describe('gitignore:checkWorktreesIgnored handler', () => {
+    function getCheckHandler(): (event: unknown, args: unknown) => Promise<unknown> {
+      const entry = handleMock.mock.calls.find(
+        (call) => call[0] === 'gitignore:checkWorktreesIgnored'
+      )
+      if (!entry) {
+        throw new Error('gitignore:checkWorktreesIgnored not registered')
+      }
+      return entry[1] as (event: unknown, args: unknown) => Promise<unknown>
+    }
+
+    it('returns ignored: true when .gitignore contains .worktrees/', async () => {
+      const dir = await mkdtemp(pathJoin(tmpdir(), 'orca-gi-handler-'))
+      try {
+        await fsWriteFile(pathJoin(dir, '.gitignore'), '.worktrees/\n', 'utf-8')
+        store.getRepo.mockReturnValue({
+          id: 'r1',
+          path: dir,
+          displayName: 'r',
+          badgeColor: '#000',
+          addedAt: 0
+        })
+        const handler = getCheckHandler()
+        const result = await handler(null, { repoId: 'r1' })
+        expect(result).toEqual({ ignored: true })
+      } finally {
+        await rm(dir, { recursive: true, force: true })
+      }
+    })
+
+    it('returns ignored: false when .gitignore is missing', async () => {
+      const dir = await mkdtemp(pathJoin(tmpdir(), 'orca-gi-handler-'))
+      try {
+        store.getRepo.mockReturnValue({
+          id: 'r1',
+          path: dir,
+          displayName: 'r',
+          badgeColor: '#000',
+          addedAt: 0
+        })
+        const handler = getCheckHandler()
+        const result = await handler(null, { repoId: 'r1' })
+        expect(result).toEqual({ ignored: false })
+      } finally {
+        await rm(dir, { recursive: true, force: true })
+      }
+    })
+
+    it('returns ignored: true for folder repos (short-circuit)', async () => {
+      store.getRepo.mockReturnValue({
+        id: 'r1',
+        path: '/fake',
+        displayName: 'r',
+        badgeColor: '#000',
+        addedAt: 0,
+        kind: 'folder'
+      })
+      const handler = getCheckHandler()
+      const result = await handler(null, { repoId: 'r1' })
+      expect(result).toEqual({ ignored: true })
+    })
+
+    it('returns ignored: true when the repo is not found (guard)', async () => {
+      store.getRepo.mockReturnValue(undefined)
+      const handler = getCheckHandler()
+      const result = await handler(null, { repoId: 'missing' })
+      expect(result).toEqual({ ignored: true })
+    })
+  })
+
+  describe('gitignore:addWorktreesEntry handler', () => {
+    function getAddHandler(): (event: unknown, args: unknown) => Promise<void> {
+      const entry = handleMock.mock.calls.find((call) => call[0] === 'gitignore:addWorktreesEntry')
+      if (!entry) {
+        throw new Error('gitignore:addWorktreesEntry not registered')
+      }
+      return entry[1] as (event: unknown, args: unknown) => Promise<void>
+    }
+
+    it('creates .gitignore with the entry when it did not exist', async () => {
+      const dir = await mkdtemp(pathJoin(tmpdir(), 'orca-gi-add-'))
+      try {
+        store.getRepo.mockReturnValue({
+          id: 'r1',
+          path: dir,
+          displayName: 'r',
+          badgeColor: '#000',
+          addedAt: 0
+        })
+        const handler = getAddHandler()
+        await handler(null, { repoId: 'r1' })
+        const content = await readFile(pathJoin(dir, '.gitignore'), 'utf-8')
+        expect(content).toBe('.worktrees/\n')
+      } finally {
+        await rm(dir, { recursive: true, force: true })
+      }
+    })
+
+    it('appends to an existing .gitignore', async () => {
+      const dir = await mkdtemp(pathJoin(tmpdir(), 'orca-gi-add-'))
+      try {
+        await fsWriteFile(pathJoin(dir, '.gitignore'), 'node_modules/\n', 'utf-8')
+        store.getRepo.mockReturnValue({
+          id: 'r1',
+          path: dir,
+          displayName: 'r',
+          badgeColor: '#000',
+          addedAt: 0
+        })
+        const handler = getAddHandler()
+        await handler(null, { repoId: 'r1' })
+        const content = await readFile(pathJoin(dir, '.gitignore'), 'utf-8')
+        expect(content).toBe('node_modules/\n.worktrees/\n')
+      } finally {
+        await rm(dir, { recursive: true, force: true })
+      }
+    })
+
+    it('throws for folder repos', async () => {
+      store.getRepo.mockReturnValue({
+        id: 'r1',
+        path: '/fake',
+        displayName: 'r',
+        badgeColor: '#000',
+        addedAt: 0,
+        kind: 'folder'
+      })
+      const handler = getAddHandler()
+      await expect(handler(null, { repoId: 'r1' })).rejects.toThrow(
+        'Cannot modify .gitignore for this repo type.'
+      )
+    })
   })
 })
