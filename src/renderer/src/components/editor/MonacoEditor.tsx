@@ -151,20 +151,10 @@ export default function MonacoEditor({
           // the editor is focused at scroll position 0 before restoration.
           requestAnimationFrame(() => {
             editorInstance.setScrollTop(savedScrollTop)
-            // Why: With keep-alive, all open editors mount simultaneously. Without
-            // this guard every inactive editor's handleMount would call focus(),
-            // stealing focus from the active tab. We read activeFileId at call time
-            // (inside the RAF) so the check reflects the latest store state.
-            if (useAppStore.getState().activeFileId === filePath) {
-              editorInstance.focus()
-            }
+            editorInstance.focus()
           })
         } else {
-          // Why: Same keep-alive guard as above — only the active file's editor
-          // should claim focus on mount. Inactive editors must stay unfocused.
-          if (useAppStore.getState().activeFileId === filePath) {
-            editorInstance.focus()
-          }
+          editorInstance.focus()
         }
       }
     },

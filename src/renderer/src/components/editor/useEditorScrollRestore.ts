@@ -32,16 +32,8 @@ export function useEditorScrollRestore(
 
     container.addEventListener('scroll', onScroll, { passive: true })
     return () => {
-      // Why: During React StrictMode double-mount (or rapid mount/unmount before
-      // Tiptap renders content), the container has zero scrollable height and
-      // scrollTop is 0. Saving that would clobber a valid cached position from
-      // the previous session. MonacoEditor avoids this because its save guard
-      // checks `if (editorRef.current)` which is null before mount completes.
-      // Here we use the equivalent: only save when the container was scrollable
-      // (content was rendered) or the user had scrolled.
-      if (container.scrollHeight > container.clientHeight || container.scrollTop > 0) {
-        setWithLRU(scrollTopCache, scrollCacheKey, container.scrollTop)
-      }
+      // Snapshot final position synchronously before detach.
+      setWithLRU(scrollTopCache, scrollCacheKey, container.scrollTop)
       if (throttleTimer !== null) {
         clearTimeout(throttleTimer)
       }

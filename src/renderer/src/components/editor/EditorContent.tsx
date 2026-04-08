@@ -26,9 +26,9 @@ type MarkdownViewMode = 'source' | 'rich'
 
 export function EditorContent({
   activeFile,
-  fileContent,
-  diffContent,
-  editBuffer,
+  fileContents,
+  diffContents,
+  editBuffers,
   worktreeEntries,
   resolvedLanguage,
   isMarkdown,
@@ -39,9 +39,9 @@ export function EditorContent({
   handleSave
 }: {
   activeFile: OpenFile
-  fileContent: FileContent | undefined
-  diffContent: GitDiffResult | undefined
-  editBuffer: string | undefined
+  fileContents: Record<string, FileContent>
+  diffContents: Record<string, GitDiffResult>
+  editBuffers: Record<string, string>
   worktreeEntries: GitStatusEntry[]
   resolvedLanguage: string
   isMarkdown: boolean
@@ -78,7 +78,7 @@ export function EditorContent({
       key={activeFile.id}
       filePath={activeFile.filePath}
       relativePath={activeFile.relativePath}
-      content={editBuffer ?? fc.content}
+      content={editBuffers[activeFile.id] ?? fc.content}
       language={resolvedLanguage}
       onContentChange={handleContentChange}
       onSave={handleSave}
@@ -99,7 +99,7 @@ export function EditorContent({
   )
 
   const renderMarkdownContent = (fc: FileContent): React.JSX.Element => {
-    const currentContent = editBuffer ?? fc.content
+    const currentContent = editBuffers[activeFile.id] ?? fc.content
     const richModeUnsupportedMessage = getMarkdownRichModeUnsupportedMessage(currentContent)
     const renderMode = getMarkdownRenderMode({
       hasRichModeUnsupportedContent: richModeUnsupportedMessage !== null,
@@ -187,7 +187,7 @@ export function EditorContent({
     if (activeFile.conflict?.kind === 'conflict-placeholder') {
       return <ConflictPlaceholderView file={activeFile} />
     }
-    const fc = fileContent
+    const fc = fileContents[activeFile.id]
     if (!fc) {
       return (
         <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
@@ -218,7 +218,7 @@ export function EditorContent({
   }
 
   // Diff mode
-  const dc = diffContent
+  const dc = diffContents[activeFile.id]
   if (!dc) {
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
@@ -255,7 +255,7 @@ export function EditorContent({
   return (
     <DiffViewer
       originalContent={dc.originalContent}
-      modifiedContent={editBuffer ?? dc.modifiedContent}
+      modifiedContent={editBuffers[activeFile.id] ?? dc.modifiedContent}
       language={resolvedLanguage}
       sideBySide={sideBySide}
       editable={isEditable}

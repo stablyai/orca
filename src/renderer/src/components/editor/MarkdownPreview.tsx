@@ -70,12 +70,8 @@ export default function MarkdownPreview({
 
     container.addEventListener('scroll', onScroll, { passive: true })
     return () => {
-      // Why: same guard as useEditorScrollRestore — during StrictMode double-mount
-      // or rapid remount before content renders, scrollHeight equals clientHeight
-      // and scrollTop is 0. Saving would clobber a valid cached position.
-      if (container.scrollHeight > container.clientHeight || container.scrollTop > 0) {
-        setWithLRU(scrollTopCache, scrollCacheKey, container.scrollTop)
-      }
+      // Snapshot final position synchronously before detach.
+      setWithLRU(scrollTopCache, scrollCacheKey, container.scrollTop)
       if (throttleTimer !== null) {
         clearTimeout(throttleTimer)
       }
