@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: this file is the single home for unit tests of every helper in worktree-logic.ts; splitting by helper would scatter related coverage without a meaningful boundary. */
 import { join, resolve } from 'path'
 import { describe, expect, it } from 'vitest'
 import {
@@ -97,7 +98,8 @@ describe('computeWorktreePath', () => {
     expect(
       computeWorktreePath('feature', '/repos/my-project', {
         nestWorkspaces: true,
-        workspaceDir: '/workspaces'
+        workspaceDir: '/workspaces',
+        worktreeLocation: 'external'
       })
     ).toBe(join('/workspaces', 'my-project', 'feature'))
   })
@@ -106,7 +108,8 @@ describe('computeWorktreePath', () => {
     expect(
       computeWorktreePath('feature', '/repos/my-project', {
         nestWorkspaces: false,
-        workspaceDir: '/workspaces'
+        workspaceDir: '/workspaces',
+        worktreeLocation: 'external'
       })
     ).toBe(join('/workspaces', 'feature'))
   })
@@ -115,9 +118,54 @@ describe('computeWorktreePath', () => {
     expect(
       computeWorktreePath('feature', '/repos/my-project.git', {
         nestWorkspaces: true,
-        workspaceDir: '/workspaces'
+        workspaceDir: '/workspaces',
+        worktreeLocation: 'external'
       })
     ).toBe(join('/workspaces', 'my-project', 'feature'))
+  })
+})
+
+describe('computeWorktreePath in in-repo mode', () => {
+  it('places worktree under <repo>/.worktrees/<name>', () => {
+    expect(
+      computeWorktreePath('feature', '/repos/my-project', {
+        nestWorkspaces: true,
+        workspaceDir: '/workspaces',
+        worktreeLocation: 'in-repo'
+      })
+    ).toBe(join('/repos/my-project', '.worktrees', 'feature'))
+  })
+
+  it('ignores nestWorkspaces and workspaceDir when in-repo mode is on', () => {
+    // Regression guard: in-repo must short-circuit before any external-mode logic.
+    expect(
+      computeWorktreePath('feature', '/repos/my-project', {
+        nestWorkspaces: false,
+        workspaceDir: '/some/other/path',
+        worktreeLocation: 'in-repo'
+      })
+    ).toBe(join('/repos/my-project', '.worktrees', 'feature'))
+  })
+
+  it('uses Windows path operations for a Windows repo path', () => {
+    expect(
+      computeWorktreePath('feature', 'C:\\repos\\my-project', {
+        nestWorkspaces: true,
+        workspaceDir: 'C:\\workspaces',
+        worktreeLocation: 'in-repo'
+      })
+    ).toBe('C:\\repos\\my-project\\.worktrees\\feature')
+  })
+
+  it('throws on path traversal attempts in in-repo mode', () => {
+    // sanitizeWorktreeName already strips traversal, but defense-in-depth.
+    expect(() =>
+      computeWorktreePath('../escape', '/repos/my-project', {
+        nestWorkspaces: true,
+        workspaceDir: '/workspaces',
+        worktreeLocation: 'in-repo'
+      })
+    ).toThrow('Invalid worktree path')
   })
 })
 

@@ -105,6 +105,7 @@ const store = {
   getSettings: () => ({
     workspaceDir: '/tmp/workspaces',
     nestWorkspaces: false,
+    worktreeLocation: 'external' as const,
     branchPrefix: 'none',
     branchPrefixCustom: ''
   })
@@ -675,6 +676,7 @@ describe('OrcaRuntimeService', () => {
       getSettings: () => ({
         workspaceDir: 'C:\\workspaces',
         nestWorkspaces: false,
+        worktreeLocation: 'external' as const,
         branchPrefix: 'none',
         branchPrefixCustom: ''
       })
