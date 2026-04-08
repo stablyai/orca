@@ -13,6 +13,7 @@ import type { TreeNode } from './file-explorer-types'
 import { splitPathSegments } from './path-tree'
 import { buildFolderStatusMap, buildStatusMap, STATUS_COLORS } from './status-display'
 import { useFileDeletion } from './useFileDeletion'
+import { useFileExplorerAutoReveal } from './useFileExplorerAutoReveal'
 import { useFileExplorerReveal } from './useFileExplorerReveal'
 import { useFileExplorerInlineInput } from './useFileExplorerInlineInput'
 import { useFileExplorerKeys } from './useFileExplorerKeys'
@@ -187,6 +188,18 @@ export default function FileExplorer(): React.JSX.Element {
     setSelectedPath,
     setFlashingPath,
     flashTimeoutRef,
+    virtualizer
+  })
+
+  useFileExplorerAutoReveal({
+    activeFileId,
+    activeWorktreeId,
+    worktreePath,
+    pendingExplorerReveal,
+    openFiles,
+    rowsByPath,
+    flatRows,
+    setSelectedPath,
     virtualizer
   })
 
