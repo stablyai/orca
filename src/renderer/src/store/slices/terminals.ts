@@ -8,6 +8,7 @@ import type {
 } from '../../../../shared/types'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { clearTransientTerminalState, emptyLayoutSnapshot } from './terminal-helpers'
+import { isClaudeAgent, detectAgentStatusFromTitle } from '@/lib/agent-status'
 import {
   registerEagerPtyBuffer,
   ensurePtyDispatcher
@@ -48,6 +49,14 @@ export type TerminalSlice = {
   consumeTabStartupCommand: (
     tabId: string
   ) => { command: string; env?: Record<string, string> } | null
+  /** Per-pane timestamp (ms) when the prompt-cache countdown started (agent became idle).
+   *  Keys are `${tabId}:${paneId}` composites so split-pane tabs can track each pane
+   *  independently. null means no active timer for that pane. */
+  cacheTimerByKey: Record<string, number | null>
+  setCacheTimerStartedAt: (key: string, ts: number | null) => void
+  /** Scan all tabs and seed cache timers for any idle Claude sessions that don't
+   *  already have a timer. Called when the feature is enabled mid-session. */
+  seedCacheTimersForIdleTabs: () => void
   hydrateWorkspaceSession: (session: WorkspaceSessionState) => void
   reconnectPersistedTerminals: (signal?: AbortSignal) => Promise<void>
 }
@@ -65,6 +74,60 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   workspaceSessionReady: false,
   pendingReconnectWorktreeIds: [],
   pendingReconnectTabByWorktree: {},
+  cacheTimerByKey: {},
+
+  setCacheTimerStartedAt: (key, ts) => {
+    set((s) => {
+      const next = { ...s.cacheTimerByKey, [key]: ts }
+      // Why: when a real pane transition writes a key like `${tabId}:${paneId}`,
+      // clean up any `${tabId}:seed` sentinel left by seedCacheTimersForIdleTabs.
+      // This prevents phantom timers when the seeded key doesn't match the real
+      // pane ID (e.g., idle Claude in pane 2 of a split tab).
+      const colonIdx = key.indexOf(':')
+      if (colonIdx !== -1) {
+        const tabId = key.slice(0, colonIdx)
+        const suffix = key.slice(colonIdx + 1)
+        if (suffix !== 'seed') {
+          delete next[`${tabId}:seed`]
+        }
+      }
+      return { cacheTimerByKey: next }
+    })
+  },
+
+  seedCacheTimersForIdleTabs: () => {
+    // Why: when the user enables the cache timer feature mid-session, any Claude
+    // tabs that are already idle won't have a timer because the working→idle
+    // transition already happened. Scan all tabs and seed timers for idle Claude
+    // sessions that don't already have one.
+    const s = get()
+    const now = Date.now()
+    const updates: Record<string, number> = {}
+    for (const tabs of Object.values(s.tabsByWorktree)) {
+      for (const tab of tabs) {
+        if (!tab.title || !isClaudeAgent(tab.title)) {
+          continue
+        }
+        const status = detectAgentStatusFromTitle(tab.title)
+        if (status === null || status === 'working') {
+          continue
+        }
+        // Why: the store doesn't know which pane holds the idle Claude session,
+        // so we use a sentinel suffix. The `setCacheTimerStartedAt` action
+        // automatically cleans up `:seed` entries when any real pane transition
+        // writes to the same tab, preventing phantom timers.
+        const key = `${tab.id}:seed`
+        if (s.cacheTimerByKey[key] == null) {
+          updates[key] = now
+        }
+      }
+    }
+    if (Object.keys(updates).length > 0) {
+      set((s) => ({
+        cacheTimerByKey: { ...s.cacheTimerByKey, ...updates }
+      }))
+    }
+  },
 
   createTab: (worktreeId) => {
     const id = globalThis.crypto.randomUUID()
@@ -114,6 +177,14 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       delete nextPtyIdsByTabId[tabId]
       const nextPendingStartupByTabId = { ...s.pendingStartupByTabId }
       delete nextPendingStartupByTabId[tabId]
+      const nextCacheTimer = { ...s.cacheTimerByKey }
+      // Why: cache timer keys are `${tabId}:${paneId}` composites. Remove all
+      // entries for the closing tab, regardless of how many panes it had.
+      for (const key of Object.keys(nextCacheTimer)) {
+        if (key.startsWith(`${tabId}:`)) {
+          delete nextCacheTimer[key]
+        }
+      }
       return {
         tabsByWorktree: next,
         activeTabId: s.activeTabId === tabId ? null : s.activeTabId,
@@ -121,7 +192,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         expandedPaneByTabId: nextExpanded,
         canExpandPaneByTabId: nextCanExpand,
         terminalLayoutsByTabId: nextLayouts,
-        pendingStartupByTabId: nextPendingStartupByTabId
+        pendingStartupByTabId: nextPendingStartupByTabId,
+        cacheTimerByKey: nextCacheTimer
       }
     })
   },

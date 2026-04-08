@@ -52,9 +52,18 @@ export const GENERAL_UPDATE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   }
 ]
 
+export const GENERAL_CACHE_TIMER_SEARCH_ENTRIES: SettingsSearchEntry[] = [
+  {
+    title: 'Prompt Cache Timer',
+    description: 'Countdown timer showing time until prompt cache expires (Claude agents).',
+    keywords: ['cache', 'timer', 'prompt', 'ttl', 'claude', 'cost', 'tokens']
+  }
+]
+
 export const GENERAL_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   ...GENERAL_WORKSPACE_SEARCH_ENTRIES,
   ...GENERAL_EDITOR_SEARCH_ENTRIES,
   ...GENERAL_CLI_SEARCH_ENTRIES,
-  ...GENERAL_UPDATE_SEARCH_ENTRIES
+  ...GENERAL_UPDATE_SEARCH_ENTRIES,
+  ...GENERAL_CACHE_TIMER_SEARCH_ENTRIES
 ]

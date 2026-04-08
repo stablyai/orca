@@ -81,7 +81,11 @@ export function clearWorkingIndicators(title: string): string {
  * Fires `onBecameIdle` when an agent transitions from working to idle/permission,
  * like haunt's attention flag — the key trigger for unread notifications.
  */
-export function createAgentStatusTracker(onBecameIdle: (title: string) => void): {
+export function createAgentStatusTracker(
+  onBecameIdle: (title: string) => void,
+  onBecameWorking?: () => void,
+  onAgentExited?: () => void
+): {
   handleTitle: (title: string) => void
 } {
   let lastStatus: AgentStatus | null = null
@@ -91,6 +95,19 @@ export function createAgentStatusTracker(onBecameIdle: (title: string) => void):
       const newStatus = detectAgentStatusFromTitle(title)
       if (lastStatus === 'working' && newStatus !== null && newStatus !== 'working') {
         onBecameIdle(title)
+      }
+      if (lastStatus !== 'working' && newStatus === 'working') {
+        onBecameWorking?.()
+      }
+      // Why: when the title reverts to a plain shell prompt (e.g., "bash", "zsh"),
+      // detectAgentStatusFromTitle returns null. If we were idle or in a permission
+      // prompt, this means the user exited the agent — clear session-tied state
+      // (like the prompt-cache countdown). We intentionally do NOT fire this when
+      // lastStatus is 'working', because active agents can briefly flash shell
+      // titles during internal operations without actually exiting.
+      if (lastStatus !== null && lastStatus !== 'working' && newStatus === null) {
+        lastStatus = null
+        onAgentExited?.()
       }
       if (newStatus !== null) {
         lastStatus = newStatus
@@ -123,6 +140,46 @@ export function normalizeTerminalTitle(title: string): string {
   }
 
   return title
+}
+
+/**
+ * Returns true when the terminal title matches Claude Code's title conventions.
+ * Used to scope prompt-cache-timer behavior to Claude sessions only — other
+ * agents have different (or no) caching semantics.
+ */
+export function isClaudeAgent(title: string): boolean {
+  if (!title) {
+    return false
+  }
+
+  // Why: Claude Code titles are prefixed with status indicators (✳, ". ", "* ",
+  // braille spinners) followed by the *task description*. The task text can
+  // legitimately mention other agents (e.g., "✳ Compare Claude and Gemini pricing").
+  // We check Claude-specific prefixes first — if the prefix matches, the terminal
+  // is definitively Claude regardless of what the task description says.
+  if (title.startsWith(`${CLAUDE_IDLE} `) || title === CLAUDE_IDLE) {
+    return true
+  }
+  // Why: ". " (working) and "* " (idle) are Claude Code title conventions. In theory
+  // another agent could use them, but in practice none of the agents Orca supports
+  // do. Rejecting titles that mention other agent names here caused false negatives
+  // for legitimate Claude sessions whose task text references another agent
+  // (e.g., "* Compare Claude and Gemini pricing").
+  if (title.startsWith('. ') || title.startsWith('* ')) {
+    return true
+  }
+  if (containsBrailleSpinner(title)) {
+    return true
+  }
+  // Why: Claude can also show permission/action-required titles without the usual
+  // status prefixes (e.g., "Claude Code - action required"). We require "claude"
+  // at the start of the title to avoid false positives from other agents whose
+  // task text merely mentions Claude (e.g., a Codex task "review claude prompt").
+  if (title.toLowerCase().startsWith('claude')) {
+    return true
+  }
+
+  return false
 }
 
 export function detectAgentStatusFromTitle(title: string): AgentStatus | null {

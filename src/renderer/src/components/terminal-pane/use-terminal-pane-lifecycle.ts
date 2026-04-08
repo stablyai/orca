@@ -48,6 +48,7 @@ type UseTerminalPaneLifecycleDeps = {
     source: 'agent-task-complete' | 'terminal-bell'
     terminalTitle?: string
   }) => void
+  setCacheTimerStartedAt: (key: string, ts: number | null) => void
   setTabPaneExpanded: (tabId: string, expanded: boolean) => void
   setTabCanExpandPane: (tabId: string, canExpand: boolean) => void
   setExpandedPane: (paneId: number | null) => void
@@ -82,6 +83,7 @@ export function useTerminalPaneLifecycle({
   updateTabPtyId,
   markWorktreeUnread,
   dispatchNotification,
+  setCacheTimerStartedAt,
   setTabPaneExpanded,
   setTabCanExpandPane,
   setExpandedPane,
@@ -176,7 +178,8 @@ export function useTerminalPaneLifecycle({
       updateTabTitle,
       updateTabPtyId,
       markWorktreeUnread,
-      dispatchNotification
+      dispatchNotification,
+      setCacheTimerStartedAt
     }
 
     const unregisterRuntimeTab = registerRuntimeTerminalTab({

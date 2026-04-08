@@ -7,7 +7,7 @@ import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Separator } from '../ui/separator'
-import { Download, FolderOpen, Loader2, RefreshCw } from 'lucide-react'
+import { Download, FolderOpen, Loader2, RefreshCw, Timer } from 'lucide-react'
 import { useAppStore } from '../../store'
 import { CliSection } from './CliSection'
 import { toast } from 'sonner'
@@ -18,12 +18,14 @@ import {
 } from '../../../../shared/constants'
 import { clampNumber } from '@/lib/terminal-theme'
 import {
+  GENERAL_CACHE_TIMER_SEARCH_ENTRIES,
   GENERAL_CLI_SEARCH_ENTRIES,
   GENERAL_EDITOR_SEARCH_ENTRIES,
   GENERAL_PANE_SEARCH_ENTRIES,
   GENERAL_UPDATE_SEARCH_ENTRIES,
   GENERAL_WORKSPACE_SEARCH_ENTRIES
 } from './general-search'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
 
@@ -265,6 +267,87 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
         key="cli"
         currentPlatform={navigator.userAgent.includes('Mac') ? 'darwin' : 'other'}
       />
+    ) : null,
+    matchesSettingsSearch(searchQuery, GENERAL_CACHE_TIMER_SEARCH_ENTRIES) ? (
+      <section key="cache-timer" className="space-y-4">
+        <div className="space-y-1">
+          <h3 className="text-sm font-semibold">Prompt Cache Timer</h3>
+          <p className="text-xs text-muted-foreground">
+            Claude caches your conversation to reduce costs. When idle too long the cache expires
+            and the next message resends full context at higher cost. This shows a countdown so you
+            know when to resume.
+          </p>
+        </div>
+
+        <SearchableSetting
+          title="Cache Timer"
+          description="Show a countdown after a Claude agent becomes idle."
+          keywords={['cache', 'timer', 'prompt', 'ttl', 'claude']}
+          className="flex items-center justify-between gap-4 px-1 py-2"
+        >
+          <div className="space-y-0.5">
+            <div className="flex items-center gap-2">
+              <Timer className="size-4" />
+              <Label>Cache Timer</Label>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Show a countdown in the sidebar after a Claude agent becomes idle.
+            </p>
+          </div>
+          <button
+            role="switch"
+            aria-checked={settings.promptCacheTimerEnabled}
+            aria-label="Cache Timer"
+            onClick={() => {
+              const enabling = !settings.promptCacheTimerEnabled
+              updateSettings({ promptCacheTimerEnabled: enabling })
+              // Why: if enabling mid-session, seed timers for any Claude tabs that
+              // are already idle — their working→idle transition already happened
+              // and won't re-fire.
+              if (enabling) {
+                useAppStore.getState().seedCacheTimersForIdleTabs()
+              }
+            }}
+            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
+              settings.promptCacheTimerEnabled ? 'bg-foreground' : 'bg-muted-foreground/30'
+            }`}
+          >
+            <span
+              className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
+                settings.promptCacheTimerEnabled ? 'translate-x-4' : 'translate-x-0.5'
+              }`}
+            />
+          </button>
+        </SearchableSetting>
+
+        {settings.promptCacheTimerEnabled && (
+          <SearchableSetting
+            title="Timer Duration"
+            description="Match this to your provider's cache TTL."
+            keywords={['cache', 'timer', 'duration', 'ttl']}
+            className="flex items-center justify-between gap-4 px-1 py-2 pl-7"
+          >
+            <div className="space-y-0.5">
+              <Label>Timer Duration</Label>
+              <p className="text-xs text-muted-foreground">
+                Match this to your provider&apos;s cache TTL. The default is 5 minutes.
+              </p>
+            </div>
+            <Select
+              value={String(settings.promptCacheTtlMs)}
+              onValueChange={(v) => updateSettings({ promptCacheTtlMs: Number(v) })}
+            >
+              <SelectTrigger size="sm" className="h-7 text-xs w-[120px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="300000">5 minutes</SelectItem>
+                <SelectItem value="3600000">1 hour</SelectItem>
+              </SelectContent>
+            </Select>
+          </SearchableSetting>
+        )}
+      </section>
     ) : null,
     matchesSettingsSearch(searchQuery, GENERAL_UPDATE_SEARCH_ENTRIES) ? (
       <section key="updates" className="space-y-4">

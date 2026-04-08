@@ -6,6 +6,7 @@ import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/h
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Bell, GitMerge, LoaderCircle, CircleDot, CircleCheck, CircleX } from 'lucide-react'
 import StatusIndicator from './StatusIndicator'
+import CacheTimer from './CacheTimer'
 import WorktreeContextMenu from './WorktreeContextMenu'
 import { cn } from '@/lib/utils'
 import { detectAgentStatusFromTitle } from '@/lib/agent-status'
@@ -364,6 +365,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
                 {CONFLICT_OPERATION_LABELS[conflictOperation]}
               </Badge>
             )}
+
+            <CacheTimer worktreeId={worktree.id} />
           </div>
 
           {/* Meta section: Issue / PR Links / Comment

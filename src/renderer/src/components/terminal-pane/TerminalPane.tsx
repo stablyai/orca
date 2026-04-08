@@ -171,10 +171,15 @@ export default function TerminalPane({
       if (manager.getPanes().length <= 1) {
         onCloseTab()
       } else {
+        // Why: clear the cache timer for this specific pane before closing it,
+        // so the sidebar doesn't show a stale countdown for a pane that no
+        // longer exists. The closeTab path handles bulk cleanup, but closing
+        // a single split pane doesn't go through closeTab.
+        useAppStore.getState().setCacheTimerStartedAt(`${tabId}:${paneId}`, null)
         manager.closePane(paneId)
       }
     },
-    [onCloseTab]
+    [onCloseTab, tabId]
   )
 
   // Cmd+W handler — shows a Ghostty-style confirmation dialog when the
@@ -232,6 +237,7 @@ export default function TerminalPane({
     updateTabPtyId,
     markWorktreeUnread,
     dispatchNotification,
+    setCacheTimerStartedAt: useAppStore((store) => store.setCacheTimerStartedAt),
     setTabPaneExpanded,
     setTabCanExpandPane,
     setExpandedPane,
@@ -487,7 +493,8 @@ export default function TerminalPane({
   const contextMenu = useTerminalPaneContextMenu({
     managerRef,
     toggleExpandPane,
-    onSetTitle: handleStartRename
+    onSetTitle: handleStartRename,
+    tabId
   })
 
   const effectiveAppearance = settings

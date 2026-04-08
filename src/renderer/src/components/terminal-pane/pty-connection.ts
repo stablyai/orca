@@ -1,5 +1,9 @@
 import type { PaneManager, ManagedPane } from '@/lib/pane-manager/pane-manager'
-import { isGeminiTerminalTitle } from '@/lib/agent-status'
+import {
+  isGeminiTerminalTitle,
+  isClaudeAgent,
+  detectAgentStatusFromTitle
+} from '@/lib/agent-status'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
 import type { PtyTransport } from './pty-transport'
@@ -23,6 +27,7 @@ type PtyConnectionDeps = {
     source: 'agent-task-complete' | 'terminal-bell'
     terminalTitle?: string
   }) => void
+  setCacheTimerStartedAt: (key: string, ts: number | null) => void
 }
 
 export function connectPanePty(
@@ -40,8 +45,16 @@ export function connectPanePty(
   const paneStartup = deps.startup ?? null
   deps.startup = undefined
 
+  // Why: cache timer state is keyed per-pane (not per-tab) so split-pane tabs
+  // can track each Claude session independently without overwriting each other.
+  const cacheKey = `${deps.tabId}:${pane.id}`
+
   const onExit = (ptyId: string): void => {
     deps.clearTabPtyId(deps.tabId, ptyId)
+    // Why: if the PTY exits abruptly (Ctrl-D, crash, shell termination) without
+    // first emitting a non-agent title, the cache timer would persist as stale
+    // state. Clear it unconditionally on PTY exit.
+    deps.setCacheTimerStartedAt(cacheKey, null)
     // The runtime graph is the CLI's source for live terminal bindings, so
     // we must republish when a pane loses its PTY instead of waiting for a
     // broader layout change that may never happen.
@@ -55,9 +68,29 @@ export function connectPanePty(
     manager.closePane(pane.id)
   }
 
+  // Why: on app restart, restored Claude tabs may already be idle when we first
+  // see their title. The agent status tracker only fires onBecameIdle for
+  // working→idle transitions, so the cache timer would never start for these
+  // sessions. This one-time flag seeds the timer on the first idle Claude title.
+  let hasSeededCacheTimer = false
+
   const onTitleChange = (title: string, rawTitle: string): void => {
     manager.setPaneGpuRendering(pane.id, !isGeminiTerminalTitle(rawTitle))
     deps.updateTabTitle(deps.tabId, title)
+
+    if (!hasSeededCacheTimer && isClaudeAgent(rawTitle)) {
+      hasSeededCacheTimer = true
+      const status = detectAgentStatusFromTitle(rawTitle)
+      if (status !== null && status !== 'working') {
+        const existing = useAppStore.getState().cacheTimerByKey[cacheKey]
+        if (existing == null) {
+          const settings = useAppStore.getState().settings
+          if (settings === null || settings.promptCacheTimerEnabled) {
+            deps.setCacheTimerStartedAt(cacheKey, Date.now())
+          }
+        }
+      }
+    }
   }
 
   const onPtySpawn = (ptyId: string): void => {
@@ -73,6 +106,30 @@ export function connectPanePty(
   const onAgentBecameIdle = (title: string): void => {
     deps.markWorktreeUnread(deps.worktreeId)
     deps.dispatchNotification({ source: 'agent-task-complete', terminalTitle: title })
+    // Why: only start the prompt-cache countdown for Claude agents — other agents
+    // have different (or no) prompt-caching semantics and showing a timer for them
+    // would be misleading.
+    // Why we check `settings !== null` separately: during startup, settings hydrate
+    // asynchronously after terminals reconnect. If we treat null as disabled, the
+    // first working→idle transition on a restored Claude tab silently drops the
+    // timer. Writing a timestamp is cheap and the CacheTimer component already
+    // gates rendering on the enabled flag, so a spurious write when the feature
+    // turns out to be disabled is harmless.
+    const settings = useAppStore.getState().settings
+    if (isClaudeAgent(title) && (settings === null || settings.promptCacheTimerEnabled)) {
+      deps.setCacheTimerStartedAt(cacheKey, Date.now())
+    }
+  }
+  const onAgentBecameWorking = (): void => {
+    // Why: a new API call refreshes the prompt-cache TTL, so clear any running
+    // countdown. The timer will restart when the agent becomes idle again.
+    deps.setCacheTimerStartedAt(cacheKey, null)
+  }
+  const onAgentExited = (): void => {
+    // Why: when the terminal title reverts to a plain shell (e.g., "bash", "zsh"),
+    // the agent has exited. Clear any running cache timer so the sidebar doesn't
+    // show a stale countdown for a tab that no longer has an active Claude session.
+    deps.setCacheTimerStartedAt(cacheKey, null)
   }
 
   const transport = createIpcPtyTransport({
@@ -82,7 +139,9 @@ export function connectPanePty(
     onTitleChange,
     onPtySpawn,
     onBell,
-    onAgentBecameIdle
+    onAgentBecameIdle,
+    onAgentBecameWorking,
+    onAgentExited
   })
   deps.paneTransportsRef.current.set(pane.id, transport)
 

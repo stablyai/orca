@@ -314,6 +314,13 @@ export type GlobalSettings = {
   rightSidebarOpenByDefault: boolean
   diffDefaultView: 'inline' | 'side-by-side'
   notifications: NotificationSettings
+  /** When true, a countdown timer is shown after a Claude agent becomes idle,
+   *  indicating time remaining before the prompt cache expires. Disabled by default. */
+  promptCacheTimerEnabled: boolean
+  /** Prompt-cache TTL in milliseconds. Only two values are supported:
+   *  300 000 (5 min, the standard Anthropic API / Bedrock TTL) and
+   *  3 600 000 (1 hr, for extended-TTL plans). */
+  promptCacheTtlMs: number
 }
 
 export type NotificationEventSource = 'agent-task-complete' | 'terminal-bell' | 'test'

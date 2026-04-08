@@ -158,10 +158,22 @@ export type IpcPtyTransportOptions = {
   onPtySpawn?: (ptyId: string) => void
   onBell?: () => void
   onAgentBecameIdle?: (title: string) => void
+  onAgentBecameWorking?: () => void
+  onAgentExited?: () => void
 }
 
 export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTransport {
-  const { cwd, env, onPtyExit, onTitleChange, onPtySpawn, onBell, onAgentBecameIdle } = opts
+  const {
+    cwd,
+    env,
+    onPtyExit,
+    onTitleChange,
+    onPtySpawn,
+    onBell,
+    onAgentBecameIdle,
+    onAgentBecameWorking,
+    onAgentExited
+  } = opts
   let connected = false
   let destroyed = false
   let ptyId: string | null = null
@@ -170,7 +182,14 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   let pendingOscEscape = false
   let lastEmittedTitle: string | null = null
   let staleTitleTimer: ReturnType<typeof setTimeout> | null = null
-  const agentTracker = onAgentBecameIdle ? createAgentStatusTracker(onAgentBecameIdle) : null
+  const agentTracker =
+    onAgentBecameIdle || onAgentBecameWorking || onAgentExited
+      ? createAgentStatusTracker(
+          onAgentBecameIdle ?? (() => {}),
+          onAgentBecameWorking,
+          onAgentExited
+        )
+      : null
 
   // How long data must flow without a title update before we consider
   // the last agent-working title stale and clear it (ms).

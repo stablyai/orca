@@ -84,7 +84,9 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalScrollbackBytes: 10_000_000,
     rightSidebarOpenByDefault: true,
     notifications: getDefaultNotificationSettings(),
-    diffDefaultView: 'inline'
+    diffDefaultView: 'inline',
+    promptCacheTimerEnabled: false,
+    promptCacheTtlMs: 300_000
   }
 }
 
