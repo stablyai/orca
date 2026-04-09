@@ -99,6 +99,7 @@
     "electron-builder": "^26.8.1",
     "electron-vite": "^5.0.0",
     "husky": "^9.1.7",
+    "jsdom": "^29.0.2",
     "lint-staged": "^16.4.0",
     "oxfmt": "^0.41.0",
     "oxlint": "^1.56.0",

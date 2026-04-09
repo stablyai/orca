@@ -10,6 +10,7 @@ describe('shouldFollowMouseFocus', () => {
     hoveredPaneId: 2,
     mouseButtons: 0,
     windowHasFocus: true,
+    interactiveElementFocused: false,
     managerDestroyed: false
   }
 
@@ -43,6 +44,10 @@ describe('shouldFollowMouseFocus', () => {
 
   it('blocks when the window does not have OS focus', () => {
     expect(shouldFollowMouseFocus({ ...base, windowHasFocus: false })).toBe(false)
+  })
+
+  it('blocks when a pane-local interactive control is focused', () => {
+    expect(shouldFollowMouseFocus({ ...base, interactiveElementFocused: true })).toBe(false)
   })
 
   // Defensive case: createInitialPane always sets activePaneId before any

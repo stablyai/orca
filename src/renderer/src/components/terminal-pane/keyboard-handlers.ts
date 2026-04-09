@@ -138,7 +138,7 @@ export function useTerminalKeyboardShortcuts({
 
         const dir = e.code === 'BracketRight' ? 1 : -1
         const nextPane = panes[(currentIdx + dir + panes.length) % panes.length]
-        manager.setActivePane(nextPane.id, { focus: true })
+        manager.setActivePane(nextPane.id, { focus: true, reason: 'keyboard' })
         return
       }
 

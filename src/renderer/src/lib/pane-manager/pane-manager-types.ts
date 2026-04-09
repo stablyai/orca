@@ -14,11 +14,19 @@ import type { SerializeAddon } from '@xterm/addon-serialize'
 export type PaneManagerOptions = {
   onPaneCreated?: (pane: ManagedPane) => void | Promise<void>
   onPaneClosed?: (paneId: number) => void
-  onActivePaneChange?: (pane: ManagedPane) => void
+  onActivePaneChange?: (pane: ManagedPane, reason: ActivePaneChangeReason) => void
   onLayoutChanged?: () => void
   terminalOptions?: (paneId: number) => Partial<ITerminalOptions>
   onLinkClick?: (event: MouseEvent | undefined, url: string) => void
 }
+
+export type ActivePaneChangeReason =
+  | 'pointer'
+  | 'hover'
+  | 'keyboard'
+  | 'expand'
+  | 'restore'
+  | 'programmatic'
 
 export type PaneStyleOptions = {
   splitBackground?: string

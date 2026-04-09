@@ -11,6 +11,7 @@ export type FocusFollowsMouseInput = {
   hoveredPaneId: number
   mouseButtons: number // MouseEvent.buttons bitmask
   windowHasFocus: boolean // document.hasFocus()
+  interactiveElementFocused: boolean
   managerDestroyed: boolean
 }
 
@@ -39,6 +40,13 @@ export function shouldFollowMouseFocus(input: FocusFollowsMouseInput): boolean {
   // separate WebContents) — accepted. Users close DevTools or click to
   // resume normal behavior.
   if (!input.windowHasFocus) {
+    return false
+  }
+  // Why pane-local text entry blocks hover focus: Orca already renders some
+  // controls inside pane containers (for example inline title rename and
+  // terminal search). If hover switched focus while one of those controls was
+  // active, moving the mouse across panes would blur or submit the control.
+  if (input.interactiveElementFocused) {
     return false
   }
   return true

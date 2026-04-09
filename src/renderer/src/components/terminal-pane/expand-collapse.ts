@@ -159,7 +159,7 @@ export function createExpandCollapseActions(state: ExpandCollapseState) {
       state.persistLayoutSnapshot()
       return
     }
-    manager.setActivePane(paneId, { focus: true })
+    manager.setActivePane(paneId, { focus: true, reason: 'expand' })
     refreshPaneSizes(true)
     state.persistLayoutSnapshot()
   }

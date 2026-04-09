@@ -1,9 +1,13 @@
+/* eslint-disable max-lines -- Why: PaneManager is the single runtime owner for pane focus,
+   split-tree mutations, drag-reorder coordination, and appearance application. Extracting
+   one of those flows just to satisfy line count would scatter tightly-coupled pane state. */
 import type {
   PaneManagerOptions,
   PaneStyleOptions,
   ManagedPane,
   ManagedPaneInternal,
-  DropZone
+  DropZone,
+  ActivePaneChangeReason
 } from './pane-manager-types'
 import {
   createDivider,
@@ -28,7 +32,7 @@ import {
   refitPanesUnder
 } from './pane-tree-ops'
 
-export type { PaneManagerOptions, PaneStyleOptions, ManagedPane, DropZone }
+export type { PaneManagerOptions, PaneStyleOptions, ManagedPane, DropZone, ActivePaneChangeReason }
 
 export class PaneManager {
   private root: HTMLElement
@@ -184,7 +188,7 @@ export class PaneManager {
     return pane ? this.toPublic(pane) : null
   }
 
-  setActivePane(paneId: number, opts?: { focus?: boolean }): void {
+  setActivePane(paneId: number, opts?: { focus?: boolean; reason?: ActivePaneChangeReason }): void {
     const pane = this.panes.get(paneId)
     if (!pane) {
       return
@@ -199,7 +203,7 @@ export class PaneManager {
     }
 
     if (changed) {
-      this.options.onActivePaneChange?.(this.toPublic(pane))
+      this.options.onActivePaneChange?.(this.toPublic(pane), opts?.reason ?? 'programmatic')
     }
   }
 
@@ -294,7 +298,7 @@ export class PaneManager {
       this.getDragCallbacks(),
       (paneId) => {
         if (!this.destroyed && this.activePaneId !== paneId) {
-          this.setActivePane(paneId, { focus: true })
+          this.setActivePane(paneId, { focus: true, reason: 'pointer' })
         }
       },
       (paneId, event) => {
@@ -309,11 +313,10 @@ export class PaneManager {
    * Focus-follows-mouse entry point. Collects gate inputs from the manager
    * and delegates to the pure gate helper.
    *
-   * Invariant for future contributors: modal overlays (context menus, close
-   * dialogs, command palette) must be rendered as portals/siblings OUTSIDE
-   * the pane container. If a future overlay is ever rendered inside a .pane
-   * element, mouseenter will still fire on the pane underneath and this
-   * handler will incorrectly switch focus. Keep overlays out of the pane.
+   * Why pane-local text entry blocks hover focus: Orca already has some UI
+   * rendered inside panes (for example terminal search and inline title edit).
+   * Those controls must keep focus while the user types, so hover activation
+   * pauses until that text entry finishes instead of blurring/submitting it.
    */
   private handlePaneMouseEnter(paneId: number, event: MouseEvent): void {
     if (
@@ -323,11 +326,41 @@ export class PaneManager {
         hoveredPaneId: paneId,
         mouseButtons: event.buttons,
         windowHasFocus: document.hasFocus(),
+        interactiveElementFocused: this.hasPaneLocalInteractiveFocus(),
         managerDestroyed: this.destroyed
       })
     ) {
-      this.setActivePane(paneId, { focus: true })
+      // Why hover uses its own reason: active-pane hover changes are transient
+      // UI state, not an intentional layout-selection action, so downstream
+      // persistence/sync code can skip serializing on every mouse sweep.
+      this.setActivePane(paneId, { focus: true, reason: 'hover' })
     }
+  }
+
+  private hasPaneLocalInteractiveFocus(): boolean {
+    const activeElement = document.activeElement
+    if (!(activeElement instanceof HTMLElement)) {
+      return false
+    }
+    if (!this.root.contains(activeElement)) {
+      return false
+    }
+    // xterm keeps a hidden helper textarea focused for normal terminal input.
+    // That must not disable focus-follows-mouse, or the feature would never
+    // work while the current pane is active.
+    if (activeElement.classList.contains('xterm-helper-textarea')) {
+      return false
+    }
+    if (activeElement.closest('[data-terminal-search-root], .pane-title-bar')) {
+      return true
+    }
+    return (
+      activeElement instanceof HTMLInputElement ||
+      activeElement instanceof HTMLTextAreaElement ||
+      activeElement instanceof HTMLSelectElement ||
+      activeElement.isContentEditable ||
+      activeElement.getAttribute('role') === 'textbox'
+    )
   }
 
   private createDividerWrapped(isVertical: boolean): HTMLElement {

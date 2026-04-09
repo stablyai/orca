@@ -254,9 +254,11 @@ export function useTerminalPaneLifecycle({
         setRenamingPaneId((prev) => (prev === paneId ? null : prev))
         scheduleRuntimeGraphSync()
       },
-      onActivePaneChange: () => {
-        scheduleRuntimeGraphSync()
-        if (shouldPersistLayout) {
+      onActivePaneChange: (_pane, reason) => {
+        if (reason !== 'hover') {
+          scheduleRuntimeGraphSync()
+        }
+        if (shouldPersistLayout && reason !== 'hover') {
           persistLayoutSnapshot()
         }
       },
@@ -331,7 +333,7 @@ export function useTerminalPaneLifecycle({
       manager.getPanes()[0]?.id ??
       null
     if (restoredActivePaneId !== null) {
-      manager.setActivePane(restoredActivePaneId, { focus: isActive })
+      manager.setActivePane(restoredActivePaneId, { focus: isActive, reason: 'restore' })
     }
     const restoredExpandedPaneId = initialLayoutRef.current.expandedLeafId
       ? (restoredPaneByLeafId.get(initialLayoutRef.current.expandedLeafId) ?? null)
