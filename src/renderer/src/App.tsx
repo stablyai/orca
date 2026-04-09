@@ -414,7 +414,14 @@ function App(): React.JSX.Element {
       // the shortcut fires from any focus context — including sidebar search
       // input, Monaco editor, and contentEditable elements. This follows the
       // same pattern as Cmd+P above.
-      if (mod && !e.altKey && !e.shiftKey && e.key >= '1' && e.key <= '9') {
+      if (
+        mod &&
+        !e.altKey &&
+        !e.shiftKey &&
+        e.key >= '1' &&
+        e.key <= '9' &&
+        activeView !== 'settings'
+      ) {
         const index = parseInt(e.key, 10) - 1
         const visibleIds = getVisibleWorktreeIds()
         if (index < visibleIds.length) {

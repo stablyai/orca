@@ -11,7 +11,7 @@ import type { Worktree, Repo } from '../../../../shared/types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { buildWorktreeComparator } from './smart-sort'
 import { type Row, buildRows, getGroupKeyForWorktree } from './worktree-list-groups'
-import { computeVisibleWorktreeIds } from './visible-worktrees'
+import { computeVisibleWorktreeIds, setVisibleWorktreeIds } from './visible-worktrees'
 import { estimateRowHeight } from './worktree-list-estimate'
 import { useModifierHint } from '@/hooks/useModifierHint'
 
@@ -142,7 +142,7 @@ const WorktreeList = React.memo(function WorktreeList() {
         allMap.set(w.id, w)
       }
     }
-    return ids.map((id) => allMap.get(id)!).filter(Boolean)
+    return ids.map((id) => allMap.get(id)).filter((w): w is Worktree => w != null)
   }, [
     worktreesByRepo,
     filterRepoIds,
@@ -156,6 +156,14 @@ const WorktreeList = React.memo(function WorktreeList() {
   ])
 
   const worktrees = visibleWorktrees
+
+  // Why: publish the rendered visible worktree IDs to the module-level cache so
+  // the App-level Cmd+1–9 handler reads the same frozen order as the sidebar
+  // renders, preventing ordering divergence between shortcut numbering and the
+  // displayed card positions.
+  useEffect(() => {
+    setVisibleWorktreeIds(worktrees.map((w) => w.id))
+  }, [worktrees])
 
   // Cmd+1–9 hint overlay: map worktree ID → hint number (1–9) for the first
   // 9 visible worktrees. Only populated while the user holds the modifier key.

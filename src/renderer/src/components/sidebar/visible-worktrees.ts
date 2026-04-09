@@ -66,23 +66,49 @@ export function computeVisibleWorktreeIds(
 }
 
 /**
+ * Module-level cache of the visible worktree IDs as last computed by
+ * WorktreeList's render pipeline.
+ *
+ * Why: WorktreeList freezes its sort order via sortedIds / sortEpoch useMemo
+ * and only re-sorts when sortEpoch bumps. If getVisibleWorktreeIds()
+ * recomputes sort order from a live Zustand snapshot, the Cmd+1–9 shortcut
+ * could target a different worktree than what's rendered at that sidebar
+ * position. By caching the IDs that WorktreeList actually rendered, the
+ * shortcut numbering always matches the sidebar card order.
+ */
+let _cachedVisibleIds: string[] = []
+
+/**
+ * Called by WorktreeList after computing visible worktrees so the Cmd+1–9
+ * handler can read the exact same ordering the user sees on screen.
+ */
+export function setVisibleWorktreeIds(ids: string[]): void {
+  _cachedVisibleIds = ids
+}
+
+/**
  * Compute the visible worktree IDs on-demand from the current Zustand store
  * state. Called by the App-level Cmd+1–9 handler (not a React hook — reads
  * store snapshot at call time).
  *
- * Why compute sort order here: WorktreeList caches sortedIds in a useMemo and
- * uses a sessionHasHadPty latch for cold-start detection. This function
- * approximates the same logic by checking if any live PTY exists. The only
- * divergence is the edge case where a user closes ALL terminals mid-session
- * (latch stays true in WorktreeList, but this check sees no PTYs). In
- * practice the persisted sortOrder is close to the live order so the
- * mismatch is negligible.
+ * If WorktreeList has rendered at least once, returns the cached IDs so the
+ * shortcut numbering matches the sidebar. Falls back to a live recomputation
+ * only before WorktreeList's first render (e.g. app startup).
  */
 export function getVisibleWorktreeIds(): string[] {
+  // Prefer the cached IDs that mirror the rendered sidebar order.
+  if (_cachedVisibleIds.length > 0) {
+    return _cachedVisibleIds
+  }
+
+  // Fallback: live recomputation for the window before WorktreeList renders.
   const state = useAppStore.getState()
   const allWorktrees: Worktree[] = Object.values(state.worktreesByRepo)
     .flat()
     .filter((w) => !w.isArchived)
+
+  // Hoist repoMap so it's built once and reused across all branches below.
+  const repoMap = new Map(state.repos.map((r) => [r.id, r]))
 
   let sortedIds: string[]
 
@@ -98,7 +124,6 @@ export function getVisibleWorktreeIds(): string[] {
       )
       sortedIds = sorted.map((w) => w.id)
     } else {
-      const repoMap = new Map(state.repos.map((r) => [r.id, r]))
       const sorted = [...allWorktrees].sort(
         buildWorktreeComparator(
           state.sortBy,
@@ -111,7 +136,6 @@ export function getVisibleWorktreeIds(): string[] {
       sortedIds = sorted.map((w) => w.id)
     }
   } else {
-    const repoMap = new Map(state.repos.map((r) => [r.id, r]))
     const sorted = [...allWorktrees].sort(
       buildWorktreeComparator(
         state.sortBy,
@@ -124,7 +148,6 @@ export function getVisibleWorktreeIds(): string[] {
     sortedIds = sorted.map((w) => w.id)
   }
 
-  const repoMap = new Map(state.repos.map((r) => [r.id, r]))
   return computeVisibleWorktreeIds(state.worktreesByRepo, sortedIds, {
     filterRepoIds: state.filterRepoIds,
     searchQuery: state.searchQuery,
