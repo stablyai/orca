@@ -3,8 +3,9 @@ import { createStore, type StoreApi } from 'zustand/vanilla'
 import { createEditorSlice } from '@/store/slices/editor'
 import type { AppState } from '@/store'
 import { ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT } from '../../../../shared/editor-save-events'
-import { requestEditorSaveQuiesce } from './editor-autosave'
+import { requestEditorFileSave, requestEditorSaveQuiesce } from './editor-autosave'
 import { attachEditorAutosaveController } from './editor-autosave-controller'
+import { registerPendingEditorFlush } from './editor-pending-flush'
 
 type WindowStub = {
   addEventListener: Window['addEventListener']
@@ -104,6 +105,51 @@ describe('attachEditorAutosaveController', () => {
     }
   })
 
+  it('flushes mounted rich-editor changes before restart-driven dirty-file saves', async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined)
+    const eventTarget = new EventTarget()
+    vi.stubGlobal('window', {
+      addEventListener: eventTarget.addEventListener.bind(eventTarget),
+      removeEventListener: eventTarget.removeEventListener.bind(eventTarget),
+      dispatchEvent: eventTarget.dispatchEvent.bind(eventTarget),
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
+      api: {
+        fs: {
+          writeFile
+        }
+      }
+    } satisfies WindowStub)
+
+    const store = createEditorStore()
+    store.getState().openFile({
+      filePath: '/repo/file.md',
+      relativePath: 'file.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit'
+    })
+    store.getState().markFileDirty('/repo/file.md', true)
+
+    const unregisterFlush = registerPendingEditorFlush('/repo/file.md', () => {
+      store.getState().setEditorDraft('/repo/file.md', 'pending rich edit')
+    })
+    const cleanup = attachEditorAutosaveController(store)
+    try {
+      await requestDirtyFileSave()
+
+      expect(writeFile).toHaveBeenCalledWith({
+        filePath: '/repo/file.md',
+        content: 'pending rich edit'
+      })
+      expect(store.getState().openFiles[0]?.isDirty).toBe(false)
+      expect(store.getState().editorDrafts).toEqual({})
+    } finally {
+      cleanup()
+      unregisterFlush()
+    }
+  })
+
   it('quiesces pending autosave timers without needing the editor UI tree', async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined)
     const eventTarget = new EventTarget()
@@ -142,6 +188,57 @@ describe('attachEditorAutosaveController', () => {
       expect(store.getState().editorDrafts['/repo/file.ts']).toBe('edited')
     } finally {
       cleanup()
+    }
+  })
+
+  it('flushes mounted rich-editor changes before quiescing or direct saves', async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined)
+    const eventTarget = new EventTarget()
+    vi.stubGlobal('window', {
+      addEventListener: eventTarget.addEventListener.bind(eventTarget),
+      removeEventListener: eventTarget.removeEventListener.bind(eventTarget),
+      dispatchEvent: eventTarget.dispatchEvent.bind(eventTarget),
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
+      api: {
+        fs: {
+          writeFile
+        }
+      }
+    } satisfies WindowStub)
+
+    const store = createEditorStore()
+    store.getState().openFile({
+      filePath: '/repo/file.md',
+      relativePath: 'file.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit'
+    })
+    store.getState().markFileDirty('/repo/file.md', true)
+
+    const drafts = ['after quiesce', 'after save']
+    const unregisterFlush = registerPendingEditorFlush('/repo/file.md', () => {
+      const nextDraft = drafts.shift()
+      if (nextDraft) {
+        store.getState().setEditorDraft('/repo/file.md', nextDraft)
+      }
+    })
+    const cleanup = attachEditorAutosaveController(store)
+    try {
+      await requestEditorSaveQuiesce({ fileId: '/repo/file.md' })
+      expect(store.getState().editorDrafts['/repo/file.md']).toBe('after quiesce')
+      expect(writeFile).not.toHaveBeenCalled()
+
+      await requestEditorFileSave({ fileId: '/repo/file.md' })
+      expect(writeFile).toHaveBeenCalledWith({
+        filePath: '/repo/file.md',
+        content: 'after save'
+      })
+      expect(store.getState().openFiles[0]?.isDirty).toBe(false)
+    } finally {
+      cleanup()
+      unregisterFlush()
     }
   })
 })

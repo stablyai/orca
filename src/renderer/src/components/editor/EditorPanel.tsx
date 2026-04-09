@@ -183,6 +183,21 @@ export default function EditorPanel(): React.JSX.Element | null {
     [activeFile, diffContents, fileContents, markFileDirty, setEditorDraft]
   )
 
+  const handleDirtyStateHint = useCallback(
+    (dirty: boolean) => {
+      if (!activeFile) {
+        return
+      }
+
+      // Why: RichMarkdownEditor debounces markdown serialization to keep
+      // typing responsive on large documents. The store still needs an
+      // immediate dirty signal so close prompts and window-unload guards do
+      // not miss edits made in the last debounce window.
+      markFileDirty(activeFile.id, dirty)
+    },
+    [activeFile, markFileDirty]
+  )
+
   const handleSave = useCallback(
     async (content: string) => {
       if (!activeFile) {
@@ -466,6 +481,7 @@ export default function EditorPanel(): React.JSX.Element | null {
           sideBySide={sideBySide}
           pendingEditorReveal={pendingEditorReveal}
           handleContentChange={handleContentChange}
+          handleDirtyStateHint={handleDirtyStateHint}
           handleSave={handleSave}
         />
       </Suspense>

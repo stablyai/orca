@@ -16,6 +16,7 @@ import {
   type EditorSaveFileDetail,
   type EditorSaveQuiesceDetail
 } from './editor-autosave'
+import { flushPendingEditorChange } from './editor-pending-flush'
 import {
   ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT,
   type EditorSaveDirtyFilesDetail
@@ -103,6 +104,10 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
   }
 
   const quiesceFileSave = async (fileId: string): Promise<void> => {
+    // Why: rich markdown debounces serialization for typing performance, so a
+    // quiesce request must force any mounted editor to publish its pending
+    // draft before we cancel timers for rename/delete/discard flows.
+    flushPendingEditorChange(fileId)
     const pendingSave = saveQueue.get(fileId)
     clearAutoSaveTimer(fileId)
     bumpSaveGeneration(fileId)
@@ -178,6 +183,10 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
         return
       }
 
+      for (const file of dirtyFiles) {
+        flushPendingEditorChange(file.id)
+      }
+
       const duplicateDirtySavePaths = getDuplicateDirtySavePaths(dirtyFiles)
       if (duplicateDirtySavePaths.length > 0) {
         // Why: a hidden autosave controller still has to respect that edit tabs
@@ -212,6 +221,7 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
       return
     }
 
+    flushPendingEditorChange(file.id)
     const draft = store.getState().editorDrafts[fileId]
     if (draft !== undefined) {
       try {
@@ -236,6 +246,8 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
         detail.resolve()
         return
       }
+
+      flushPendingEditorChange(file.id)
 
       const content = store.getState().editorDrafts[file.id] ?? detail.fallbackContent
       if (content === undefined) {
