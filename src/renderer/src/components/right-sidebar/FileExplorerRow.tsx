@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef } from 'react'
 import {
   ChevronRight,
   Copy,
+  ExternalLink,
   File,
   FilePlus,
   Files,
@@ -28,6 +29,14 @@ import type { TreeNode } from './file-explorer-types'
 const ORCA_PATH_MIME = 'text/x-orca-file-path'
 
 const isMac = navigator.userAgent.includes('Mac')
+const isLinux = navigator.userAgent.includes('Linux')
+
+/** Platform-appropriate label: macOS → Finder, Windows → File Explorer, Linux → Files */
+const revealLabel = isMac
+  ? 'Reveal in Finder'
+  : isLinux
+    ? 'Open Containing Folder'
+    : 'Reveal in File Explorer'
 
 export type InlineInput = {
   parentPath: string
@@ -393,6 +402,10 @@ export function FileExplorerRow({
             Duplicate
           </ContextMenuItem>
         )}
+        <ContextMenuItem onSelect={() => window.api.shell.openPath(node.path)}>
+          <ExternalLink />
+          {revealLabel}
+        </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem onSelect={() => onStartRename(node)}>
           <Pencil />
