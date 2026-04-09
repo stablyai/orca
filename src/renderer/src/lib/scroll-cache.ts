@@ -33,3 +33,7 @@ export function setWithLRU<K, V>(
 // React re-renders (unlike Zustand, which would broadcast state changes on
 // every scroll event even though no component renders from scroll position).
 export const scrollTopCache = new Map<string, number>()
+
+// Why: Same rationale as scrollTopCache — module-scoped avoids Zustand
+// re-renders on every cursor move.
+export const cursorPositionCache = new Map<string, { lineNumber: number; column: number }>()
