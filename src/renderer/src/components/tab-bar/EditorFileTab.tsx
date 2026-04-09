@@ -123,9 +123,6 @@ export default function EditorFileTab({
               className={`w-3.5 h-3.5 mr-1.5 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
             />
           )}
-          {file.isDirty && (
-            <span className="mr-1 size-1.5 rounded-full bg-foreground/60 shrink-0" />
-          )}
           <span className="mr-1.5 flex min-w-0 items-baseline gap-1.5">
             <span
               className={`truncate max-w-[130px]${file.isPreview ? ' italic' : ''}`}
@@ -142,20 +139,30 @@ export default function EditorFileTab({
               </span>
             )}
           </span>
-          <button
-            className={`flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${
-              isActive
-                ? 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted'
-            }`}
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation()
-              onClose()
-            }}
-          >
-            <X className="w-3 h-3" />
-          </button>
+          {/* Dirty dot and close button share the same slot to prevent tab width shift during auto-save.
+             When dirty: dot is shown, close button appears on hover (replacing the dot).
+             When clean: close button is shown normally (visible on active tab, on hover for others). */}
+          <div className="relative flex items-center justify-center w-4 h-4 shrink-0">
+            {file.isDirty && (
+              <span className="absolute size-1.5 rounded-full bg-foreground/60 group-hover:hidden" />
+            )}
+            <button
+              className={`flex items-center justify-center w-4 h-4 rounded-sm ${
+                file.isDirty
+                  ? 'hidden group-hover:flex text-muted-foreground hover:text-foreground hover:bg-muted'
+                  : isActive
+                    ? 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                    : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted'
+              }`}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation()
+                onClose()
+              }}
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
         </div>
       </div>
 
