@@ -304,8 +304,7 @@ const api = {
   },
 
   hooks: {
-    check: (args: { repoId: string }): Promise<{ hasHooks: boolean; hooks: unknown }> =>
-      ipcRenderer.invoke('hooks:check', args)
+    check: (args: { repoId: string }): Promise<unknown> => ipcRenderer.invoke('hooks:check', args)
   },
 
   cache: {

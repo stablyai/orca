@@ -1,4 +1,5 @@
 import type { OrcaHooks, Repo, SetupRunPolicy } from '../../../../shared/types'
+import { AlertTriangle } from 'lucide-react'
 import { Button } from '../ui/button'
 import { DEFAULT_REPO_HOOK_SETTINGS } from './SettingsConstants'
 import { SearchableSetting } from './SearchableSetting'
@@ -40,6 +41,38 @@ const EXAMPLE_TEMPLATE = `scripts:
     pnpm worktree:setup
   archive: |
     echo "Cleaning up before archive"`
+
+function ExampleTemplateCard({
+  copiedTemplate,
+  onCopyTemplate
+}: {
+  copiedTemplate: boolean
+  onCopyTemplate: () => void
+}): React.JSX.Element {
+  return (
+    <div className="space-y-2">
+      <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+        Example `orca.yaml` template
+      </p>
+      <div className="relative rounded-lg border border-border/50 bg-background/70">
+        <Button
+          type="button"
+          variant={copiedTemplate ? 'secondary' : 'ghost'}
+          size="sm"
+          className={`absolute right-2 top-2 z-10 h-6 px-2 text-[11px] ${
+            copiedTemplate ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+          }`}
+          onClick={onCopyTemplate}
+        >
+          {copiedTemplate ? 'Copied' : 'Copy'}
+        </Button>
+        <pre className="overflow-x-auto whitespace-pre-wrap break-words p-3 pr-16 font-mono text-[11px] leading-5 text-muted-foreground">
+          {EXAMPLE_TEMPLATE}
+        </pre>
+      </div>
+    </div>
+  )
+}
 
 export function RepositoryHooksSection({
   repo,
@@ -101,7 +134,7 @@ export function RepositoryHooksSection({
               {yamlState === 'loaded'
                 ? 'Hook commands are defined in the repo and shared with everyone who uses it.'
                 : yamlState === 'invalid'
-                  ? 'The file exists, but Orca could not read valid setup or archive commands from it yet.'
+                  ? 'The core configuration file exists in the repo root, but Orca could not parse the supported hook definitions yet.'
                   : 'Add an `orca.yaml` file to enable setup or archive hooks for this repo. Example template:'}
             </p>
           </div>
@@ -118,35 +151,50 @@ export function RepositoryHooksSection({
               </p>
             </div>
           ) : yamlState === 'invalid' ? (
-            <p className="text-[10px] text-muted-foreground">
-              Fix the file format in `orca.yaml` to restore shared hook behavior.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                Example `orca.yaml` template
-              </p>
-              <div className="rounded-lg border border-border/50 bg-background/70">
-                <div className="flex items-center justify-end border-b border-border/40 px-2 py-1.5">
-                  <Button
-                    type="button"
-                    variant={copiedTemplate ? 'secondary' : 'ghost'}
-                    size="sm"
-                    className={`h-6 px-2 text-[11px] ${
-                      copiedTemplate
-                        ? 'text-foreground'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                    onClick={onCopyTemplate}
-                  >
-                    {copiedTemplate ? 'Copied' : 'Copy'}
-                  </Button>
+            <div className="space-y-5">
+              <div className="flex items-start gap-3 rounded-xl border border-amber-500/20 bg-background/60 p-4">
+                <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-amber-500/12 text-amber-600 dark:text-amber-300">
+                  <AlertTriangle className="size-5" />
                 </div>
-                <pre className="overflow-x-auto whitespace-pre-wrap break-words p-3 font-mono text-[11px] leading-5 text-muted-foreground">
-                  {EXAMPLE_TEMPLATE}
-                </pre>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <p className="text-base font-semibold text-amber-900 dark:text-amber-100">
+                      `orca.yaml` could not be parsed
+                    </p>
+                    <p className="text-sm leading-6 text-muted-foreground">
+                      {/* Why: once a repo has an `orca.yaml`, the failure mode is usually bad shape
+                      rather than a missing concept. Showing a repair-oriented explanation and
+                      template here lets maintainers fix the committed file without needing the doc. */}
+                      The file is present, but Orca could not find valid `setup` or `archive` hook
+                      definitions in the expected format.
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                      Recommended fixes
+                    </p>
+                    <ol className="space-y-2.5 text-sm text-muted-foreground">
+                      {PARSE_ERROR_FIXES.map((fix, index) => (
+                        <li key={fix} className="flex items-start gap-3">
+                          <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-medium text-foreground">
+                            {index + 1}
+                          </span>
+                          <span className="leading-6">{fix}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                </div>
               </div>
+
+              <ExampleTemplateCard
+                copiedTemplate={copiedTemplate}
+                onCopyTemplate={onCopyTemplate}
+              />
             </div>
+          ) : (
+            <ExampleTemplateCard copiedTemplate={copiedTemplate} onCopyTemplate={onCopyTemplate} />
           )}
         </div>
       </SearchableSetting>
@@ -237,6 +285,12 @@ export function RepositoryHooksSection({
     </section>
   )
 }
+
+const PARSE_ERROR_FIXES = [
+  'Check the indentation under `scripts:`. Hook keys should use two spaces, and command lines should use four.',
+  'Define only the supported hook keys: `setup` and `archive`.',
+  'Compare your file against the working template below and copy that shape if needed.'
+]
 
 function renderYamlScriptPreview(yamlHooks: OrcaHooks | null): string {
   return `scripts:${

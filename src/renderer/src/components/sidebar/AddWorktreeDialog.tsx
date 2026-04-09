@@ -154,7 +154,11 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
         repoId,
         name.trim(),
         undefined,
-        setupConfig ? ((resolvedSetupDecision ?? 'inherit') as SetupDecision) : 'inherit'
+        // Why: the renderer-side hook lookup only exists to preview setup and collect an `ask`
+        // choice before create. The main process is still the source of truth for whether a repo
+        // has setup and whether it should launch. Always pass the resolved decision through so a
+        // stale or failed preview lookup cannot silently suppress setup for a newly created worktree.
+        (resolvedSetupDecision ?? 'inherit') as SetupDecision
       )
       const wt = result.worktree
       // Meta update is best-effort — the worktree already exists, so don't
