@@ -10,7 +10,7 @@ const MOD_KEY = isMac ? 'Meta' : 'Control'
  *
  * Rules:
  * - Timer starts on modifier keydown (alone, no other modifiers pressed).
- * - After 1 second of uninterrupted hold, `showHints` becomes true.
+ * - After 750 ms of uninterrupted hold, `showHints` becomes true.
  * - Any other key pressed while the modifier is held cancels the timer —
  *   the user is executing a shortcut, not looking for help.
  * - Hints vanish instantly on keyup (no fade-out delay).
@@ -42,7 +42,7 @@ export function useModifierHint(): { showHints: boolean } {
       // false-positive hint activation during these combos.
       if (e.key === MOD_KEY && !e.altKey && !e.shiftKey && (isMac ? !e.ctrlKey : !e.metaKey)) {
         if (!timerRef.current) {
-          timerRef.current = setTimeout(() => setShowHints(true), 1000)
+          timerRef.current = setTimeout(() => setShowHints(true), 750)
         }
         return
       }
