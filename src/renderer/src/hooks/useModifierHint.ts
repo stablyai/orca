@@ -36,7 +36,11 @@ export function useModifierHint(): { showHints: boolean } {
       }
 
       // If the modifier key itself was pressed (not as part of a combo)
-      if (e.key === MOD_KEY && !e.altKey && !e.shiftKey) {
+      // Why cross-modifier exclusion: on Mac, Ctrl+Cmd is often a system shortcut
+      // (e.g. Ctrl+Cmd+Q to lock screen); on non-Mac, Meta+Ctrl is similarly not
+      // an intentional hint request. Exclude the other platform modifier to avoid
+      // false-positive hint activation during these combos.
+      if (e.key === MOD_KEY && !e.altKey && !e.shiftKey && (isMac ? !e.ctrlKey : !e.metaKey)) {
         if (!timerRef.current) {
           timerRef.current = setTimeout(() => setShowHints(true), 1000)
         }

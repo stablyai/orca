@@ -1,5 +1,5 @@
 /* eslint-disable max-lines */
-import React, { useMemo, useCallback, useRef, useState, useEffect } from 'react'
+import React, { useMemo, useCallback, useRef, useState, useEffect, useLayoutEffect } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { ChevronDown, CircleX, Plus } from 'lucide-react'
 import { useAppStore } from '@/store'
@@ -157,28 +157,9 @@ const WorktreeList = React.memo(function WorktreeList() {
 
   const worktrees = visibleWorktrees
 
-  // Why: publish the rendered visible worktree IDs to the module-level cache so
-  // the App-level Cmd+1–9 handler reads the same frozen order as the sidebar
-  // renders, preventing ordering divergence between shortcut numbering and the
-  // displayed card positions.
-  useEffect(() => {
-    setVisibleWorktreeIds(worktrees.map((w) => w.id))
-  }, [worktrees])
-
   // Cmd+1–9 hint overlay: map worktree ID → hint number (1–9) for the first
   // 9 visible worktrees. Only populated while the user holds the modifier key.
   const { showHints } = useModifierHint()
-  const hintByWorktreeId = useMemo(() => {
-    if (!showHints) {
-      return null
-    }
-    const map = new Map<string, number>()
-    const limit = Math.min(worktrees.length, 9)
-    for (let i = 0; i < limit; i++) {
-      map.set(worktrees[i].id, i + 1)
-    }
-    return map
-  }, [showHints, worktrees])
 
   // Collapsed group state
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
@@ -200,6 +181,39 @@ const WorktreeList = React.memo(function WorktreeList() {
     () => buildRows(groupBy, worktrees, repoMap, prCache, collapsedGroups),
     [groupBy, worktrees, repoMap, prCache, collapsedGroups]
   )
+
+  // Why: derive the rendered item order from the post-buildRows() row list,
+  // not the flat `worktrees` array, because grouping (groupBy: 'repo' or
+  // 'pr-status') can reorder cards into grouped sections. Using the flat
+  // order would cause badge numbers and Cmd+1–9 shortcuts to not match
+  // the visual card positions when grouping is active.
+  const renderedWorktrees = useMemo(
+    () =>
+      rows
+        .filter((r): r is Extract<Row, { type: 'item' }> => r.type === 'item')
+        .map((r) => r.worktree),
+    [rows]
+  )
+
+  // Why layout effect instead of effect: the global Cmd/Ctrl+1–9 key handler
+  // can fire immediately after React commits the new grouped/collapsed order.
+  // Publishing after paint leaves a brief window where the sidebar shows the
+  // new numbering but the shortcut cache still points at the previous order.
+  useLayoutEffect(() => {
+    setVisibleWorktreeIds(renderedWorktrees.map((w) => w.id))
+  }, [renderedWorktrees])
+
+  const hintByWorktreeId = useMemo(() => {
+    if (!showHints) {
+      return null
+    }
+    const map = new Map<string, number>()
+    const limit = Math.min(renderedWorktrees.length, 9)
+    for (let i = 0; i < limit; i++) {
+      map.set(renderedWorktrees[i].id, i + 1)
+    }
+    return map
+  }, [showHints, renderedWorktrees])
 
   // ── TanStack Virtual ──────────────────────────────────────────
   const virtualizer = useVirtualizer({
