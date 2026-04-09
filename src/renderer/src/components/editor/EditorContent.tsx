@@ -4,6 +4,7 @@ import { useAppStore } from '@/store'
 import { ConflictBanner, ConflictPlaceholderView, ConflictReviewPanel } from './ConflictComponents'
 import type { OpenFile } from '@/store/slices/editor'
 import type { GitStatusEntry, GitDiffResult } from '../../../../shared/types'
+import { RICH_MARKDOWN_MAX_SIZE_BYTES } from '../../../../shared/constants'
 import { getMarkdownRenderMode } from './markdown-render-mode'
 import { getMarkdownRichModeUnsupportedMessage } from './markdown-rich-mode'
 
@@ -14,6 +15,11 @@ const RichMarkdownEditor = lazy(() => import('./RichMarkdownEditor'))
 const MarkdownPreview = lazy(() => import('./MarkdownPreview'))
 const ImageViewer = lazy(() => import('./ImageViewer'))
 const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
+
+const richMarkdownSizeEncoder = new TextEncoder()
+// Why: encodeInto() with a pre-allocated buffer avoids creating a new
+// Uint8Array on every render, reducing GC pressure for large files.
+const richMarkdownSizeBuffer = new Uint8Array(RICH_MARKDOWN_MAX_SIZE_BYTES + 1)
 
 type FileContent = {
   content: string
@@ -36,6 +42,7 @@ export function EditorContent({
   sideBySide,
   pendingEditorReveal,
   handleContentChange,
+  handleDirtyStateHint,
   handleSave
 }: {
   activeFile: OpenFile
@@ -54,6 +61,7 @@ export function EditorContent({
     matchLength?: number
   } | null
   handleContentChange: (content: string) => void
+  handleDirtyStateHint: (dirty: boolean) => void
   handleSave: (content: string) => Promise<void>
 }): React.JSX.Element {
   const openConflictFile = useAppStore((s) => s.openConflictFile)
@@ -102,18 +110,40 @@ export function EditorContent({
     const currentContent = editBuffers[activeFile.id] ?? fc.content
     const richModeUnsupportedMessage = getMarkdownRichModeUnsupportedMessage(currentContent)
     const renderMode = getMarkdownRenderMode({
+      // Why: the threshold is defined in bytes because large pasted Unicode
+      // documents can exceed ProseMirror's performance envelope long before
+      // JS string length reaches the same numeric value.
+      exceedsRichModeSizeLimit:
+        richMarkdownSizeEncoder.encodeInto(currentContent, richMarkdownSizeBuffer).written >
+        RICH_MARKDOWN_MAX_SIZE_BYTES,
       hasRichModeUnsupportedContent: richModeUnsupportedMessage !== null,
       viewMode: mdViewMode
     })
+
+    // Why: the render-mode helper already folded size into the mode decision.
+    // Keep the explanatory banner here so the user understands why "rich" view
+    // currently shows Monaco instead.
+    if (renderMode === 'source' && mdViewMode === 'rich') {
+      return (
+        <div className="flex h-full min-h-0 flex-col">
+          <div className="border-b border-border/60 bg-blue-500/10 px-3 py-2 text-xs text-blue-950 dark:text-blue-100">
+            File is too large for rich editing. Showing source mode instead.
+          </div>
+          <div className="min-h-0 flex-1 h-full">{renderMonacoEditor(fc)}</div>
+        </div>
+      )
+    }
 
     if (renderMode === 'rich-editor') {
       return (
         // Why: same remount reasoning as MonacoEditor — see renderMonacoEditor.
         <RichMarkdownEditor
           key={activeFile.id}
+          fileId={activeFile.id}
           content={currentContent}
           filePath={activeFile.filePath}
           onContentChange={handleContentChange}
+          onDirtyStateHint={handleDirtyStateHint}
           onSave={handleSave}
         />
       )

@@ -5,11 +5,10 @@ import { toast } from 'sonner'
 import { RichMarkdownSlashMenu } from './RichMarkdownSlashMenu'
 import { useAppStore } from '@/store'
 import { RichMarkdownToolbar } from './RichMarkdownToolbar'
-import { isMarkdownPreviewFindShortcut } from './markdown-preview-search'
 import { extractIpcErrorMessage, getImageCopyDestination } from './rich-markdown-image-utils'
 import { encodeRawMarkdownHtmlForRichEditor } from './raw-markdown-html'
 import { createRichMarkdownExtensions } from './rich-markdown-extensions'
-import { runSlashCommand, slashCommands, syncSlashMenu } from './rich-markdown-commands'
+import { slashCommands, syncSlashMenu } from './rich-markdown-commands'
 import type { SlashCommand, SlashMenuState } from './rich-markdown-commands'
 import { RichMarkdownSearchBar } from './RichMarkdownSearchBar'
 import { useRichMarkdownSearch } from './useRichMarkdownSearch'
@@ -20,11 +19,15 @@ import {
 } from './RichMarkdownLinkBubble'
 import { useLinkBubble } from './useLinkBubble'
 import { useEditorScrollRestore } from './useEditorScrollRestore'
+import { registerPendingEditorFlush } from './editor-pending-flush'
+import { createRichMarkdownKeyHandler } from './rich-markdown-key-handler'
 
 type RichMarkdownEditorProps = {
+  fileId: string
   content: string
   filePath: string
   onContentChange: (content: string) => void
+  onDirtyStateHint: (dirty: boolean) => void
   onSave: (content: string) => void
 }
 
@@ -33,9 +36,11 @@ const richMarkdownExtensions = createRichMarkdownExtensions({
 })
 
 export default function RichMarkdownEditor({
+  fileId,
   content,
   filePath,
   onContentChange,
+  onDirtyStateHint,
   onSave
 }: RichMarkdownEditorProps): React.JSX.Element {
   const rootRef = useRef<HTMLDivElement | null>(null)
@@ -49,11 +54,14 @@ export default function RichMarkdownEditor({
   const filteredSlashCommandsRef = useRef<SlashCommand[]>(slashCommands)
   const selectedCommandIndexRef = useRef(0)
   const onContentChangeRef = useRef(onContentChange)
+  const onDirtyStateHintRef = useRef(onDirtyStateHint)
   const onSaveRef = useRef(onSave)
   const handleLocalImagePickRef = useRef<() => void>(() => {})
+  const openSearchRef = useRef<() => void>(() => {})
   // Why: ProseMirror keeps the initial handleKeyDown closure, so `editor` stays
   // stuck at the first-render null value unless we read the live instance here.
   const editorRef = useRef<Editor | null>(null)
+  const serializeTimerRef = useRef<number | null>(null)
   const [linkBubble, setLinkBubble] = useState<LinkBubbleState | null>(null)
   const [isEditingLink, setIsEditingLink] = useState(false)
   const isEditingLinkRef = useRef(false)
@@ -62,11 +70,39 @@ export default function RichMarkdownEditor({
     onContentChangeRef.current = onContentChange
   }, [onContentChange])
   useEffect(() => {
+    onDirtyStateHintRef.current = onDirtyStateHint
+  }, [onDirtyStateHint])
+  useEffect(() => {
     onSaveRef.current = onSave
   }, [onSave])
   useEffect(() => {
     isEditingLinkRef.current = isEditingLink
   }, [isEditingLink])
+
+  const flushPendingSerialization = useCallback(() => {
+    if (serializeTimerRef.current === null) {
+      return
+    }
+    window.clearTimeout(serializeTimerRef.current)
+    serializeTimerRef.current = null
+    try {
+      const markdown = editorRef.current?.getMarkdown()
+      if (markdown !== undefined) {
+        lastCommittedMarkdownRef.current = markdown
+        onContentChangeRef.current(markdown)
+      }
+    } catch {
+      // Why: save/restart flows should never crash the UI just because the
+      // editor was torn down between scheduling and flushing a debounced sync.
+    }
+  }, [])
+
+  useEffect(() => {
+    // Why: autosave/restart paths live outside the editor component tree, so a
+    // mounted rich editor must expose a synchronous "flush now" hook to avoid
+    // a dirty-without-draft window during the debounce period.
+    return registerPendingEditorFlush(fileId, flushPendingSerialization)
+  }, [fileId, flushPendingSerialization])
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -77,139 +113,25 @@ export default function RichMarkdownEditor({
       attributes: {
         class: 'rich-markdown-editor'
       },
-      handleKeyDown: (_view, event) => {
-        const mod = isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
-        if (isMarkdownPreviewFindShortcut(event, isMac)) {
-          event.preventDefault()
-          openSearch()
-          return true
-        }
-        if (mod && event.key.toLowerCase() === 's') {
-          event.preventDefault()
-          const markdown = editorRef.current?.getMarkdown() ?? lastCommittedMarkdownRef.current
-          onSaveRef.current(markdown)
-          return true
-        }
-
-        // Strikethrough: Cmd/Ctrl+Shift+X (standard shortcut used by Google
-        // Docs, Notion, etc. — supplements Tiptap's built-in Mod+Shift+S).
-        if (mod && event.shiftKey && event.key.toLowerCase() === 'x') {
-          event.preventDefault()
-          editorRef.current?.chain().focus().toggleStrike().run()
-          return true
-        }
-
-        // Link: Cmd/Ctrl+K — insert or edit a hyperlink.
-        if (mod && event.key.toLowerCase() === 'k') {
-          event.preventDefault()
-          const ed = editorRef.current
-          if (!ed) {
-            return true
-          }
-
-          if (isEditingLinkRef.current) {
-            setIsEditingLink(false)
-            if (!ed.isActive('link')) {
-              setLinkBubble(null)
-            }
-            ed.commands.focus()
-            return true
-          }
-
-          const pos = getLinkBubblePosition(ed, rootRef.current)
-          if (pos) {
-            const href = ed.isActive('link') ? (ed.getAttributes('link').href as string) || '' : ''
-            setLinkBubble({ href, ...pos })
-            setIsEditingLink(true)
-          }
-          return true
-        }
-
-        // Tab/Shift-Tab: indent/outdent lists, insert spaces in code blocks,
-        // and prevent focus from escaping the editor. When the slash menu is
-        // open, Tab selects a command instead (handled in the slash-menu block
-        // below).
-        if (event.key === 'Tab' && !slashMenuRef.current) {
-          event.preventDefault()
-          const ed = editorRef.current
-          if (!ed) {
-            return true
-          }
-
-          if (event.shiftKey) {
-            if (!ed.commands.liftListItem('listItem')) {
-              ed.commands.liftListItem('taskItem')
-            }
-            return true
-          }
-
-          if (ed.isActive('codeBlock')) {
-            ed.commands.insertContent('  ')
-            return true
-          }
-
-          // Why: sinkListItem succeeds when cursor is in a non-first list item;
-          // otherwise it no-ops. Either way we consume Tab to prevent focus escape.
-          if (!ed.commands.sinkListItem('listItem')) {
-            ed.commands.sinkListItem('taskItem')
-          }
-          return true
-        }
-
-        // ── Slash menu navigation ─────────────────────────
-        const currentSlashMenu = slashMenuRef.current
-        if (!currentSlashMenu) {
-          return false
-        }
-
-        const currentFilteredSlashCommands = filteredSlashCommandsRef.current
-        if (currentFilteredSlashCommands.length === 0) {
-          return false
-        }
-
-        // Why: handleKeyDown is frozen from the first render, so this closure
-        // must read editorRef to get the live editor instance.
-        const activeEditor = editorRef.current
-        if (!activeEditor) {
-          return false
-        }
-
-        if (event.key === 'ArrowDown') {
-          event.preventDefault()
-          setSelectedCommandIndex(
-            (currentIndex) => (currentIndex + 1) % currentFilteredSlashCommands.length
-          )
-          return true
-        }
-        if (event.key === 'ArrowUp') {
-          event.preventDefault()
-          setSelectedCommandIndex(
-            (currentIndex) =>
-              (currentIndex - 1 + currentFilteredSlashCommands.length) %
-              currentFilteredSlashCommands.length
-          )
-          return true
-        }
-        if (event.key === 'Enter' || event.key === 'Tab') {
-          event.preventDefault()
-          // Why: this key handler is stable for the editor lifetime, so the ref
-          // mirrors the latest highlighted slash-menu item for keyboard picks.
-          const selectedCommand = currentFilteredSlashCommands[selectedCommandIndexRef.current]
-          if (selectedCommand) {
-            runSlashCommand(activeEditor, currentSlashMenu, selectedCommand, () =>
-              handleLocalImagePickRef.current()
-            )
-          }
-          return true
-        }
-        if (event.key === 'Escape') {
-          event.preventDefault()
-          setSlashMenu(null)
-          return true
-        }
-
-        return false
-      },
+      handleKeyDown: createRichMarkdownKeyHandler({
+        isMac,
+        editorRef,
+        rootRef,
+        lastCommittedMarkdownRef,
+        onContentChangeRef,
+        onSaveRef,
+        isEditingLinkRef,
+        slashMenuRef,
+        filteredSlashCommandsRef,
+        selectedCommandIndexRef,
+        handleLocalImagePickRef,
+        flushPendingSerialization,
+        openSearchRef,
+        setIsEditingLink,
+        setLinkBubble,
+        setSelectedCommandIndex,
+        setSlashMenu
+      }),
       // Why: Cmd/Ctrl+click on a link opens it in the system browser, matching
       // VS Code and other editor conventions. Without the modifier, clicks just
       // position the cursor normally for editing.
@@ -233,10 +155,33 @@ export default function RichMarkdownEditor({
       lastCommittedMarkdownRef.current = nextEditor.getMarkdown()
     },
     onUpdate: ({ editor: nextEditor }) => {
-      const markdown = nextEditor.getMarkdown()
-      lastCommittedMarkdownRef.current = markdown
-      onContentChangeRef.current(markdown)
       syncSlashMenu(nextEditor, rootRef.current, setSlashMenu)
+
+      // Why: full markdown serialization is debounced for typing performance,
+      // but close-confirmation and beforeunload checks still need to know
+      // immediately that the document changed. Optimistically mark the tab
+      // dirty here, then let the debounced content sync compute the exact
+      // saved-vs-draft comparison a moment later.
+      onDirtyStateHintRef.current(true)
+
+      // Why: getMarkdown() serializes the entire ProseMirror document tree on
+      // every keystroke, which is the dominant typing-speed bottleneck for large
+      // files. Debouncing it to 300ms keeps the draft store and autosave pipeline
+      // fed without blocking the input path.
+      if (serializeTimerRef.current !== null) {
+        window.clearTimeout(serializeTimerRef.current)
+      }
+      serializeTimerRef.current = window.setTimeout(() => {
+        serializeTimerRef.current = null
+        try {
+          const markdown = nextEditor.getMarkdown()
+          lastCommittedMarkdownRef.current = markdown
+          onContentChangeRef.current(markdown)
+        } catch {
+          // Why: save/restart flows should never crash the UI just because the
+          // editor was torn down between scheduling and flushing a debounced sync.
+        }
+      }, 300)
     },
     onSelectionUpdate: ({ editor: nextEditor }) => {
       syncSlashMenu(nextEditor, rootRef.current, setSlashMenu)
@@ -259,6 +204,17 @@ export default function RichMarkdownEditor({
   useEffect(() => {
     editorRef.current = editor ?? null
   }, [editor])
+
+  // Why: when the component unmounts (tab switch, mode change), flush any
+  // pending serialization so the autosave controller's draft store has the
+  // latest content and the scroll-position cache captures the right state.
+  // This must run before useEditor's cleanup destroys the editor instance,
+  // so we use useLayoutEffect (synchronous cleanup) instead of useEffect.
+  // React runs layout-effect cleanups before effect cleanups, guaranteeing
+  // the editor is still alive when we serialize.
+  React.useLayoutEffect(() => {
+    return flushPendingSerialization
+  }, [flushPendingSerialization])
 
   useEditorScrollRestore(scrollContainerRef, `${filePath}:rich`, editor)
 
@@ -334,6 +290,9 @@ export default function RichMarkdownEditor({
     isMac,
     rootRef
   })
+  useEffect(() => {
+    openSearchRef.current = openSearch
+  }, [openSearch])
 
   const filteredSlashCommands = useMemo(() => {
     const query = slashMenu?.query.trim().toLowerCase() ?? ''
