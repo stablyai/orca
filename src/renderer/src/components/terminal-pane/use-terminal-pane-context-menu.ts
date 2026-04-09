@@ -1,14 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
-import { useAppStore } from '@/store'
 
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 
 type UseTerminalPaneContextMenuDeps = {
   managerRef: React.RefObject<PaneManager | null>
   toggleExpandPane: (paneId: number) => void
+  onRequestClosePane: (paneId: number) => void
   onSetTitle: (paneId: number) => void
-  tabId: string
 }
 
 type TerminalMenuState = {
@@ -32,8 +31,8 @@ type TerminalMenuState = {
 export function useTerminalPaneContextMenu({
   managerRef,
   toggleExpandPane,
-  onSetTitle,
-  tabId
+  onRequestClosePane,
+  onSetTitle
 }: UseTerminalPaneContextMenuDeps): TerminalMenuState {
   const contextPaneIdRef = useRef<number | null>(null)
   const menuOpenedAtRef = useRef(0)
@@ -105,10 +104,7 @@ export function useTerminalPaneContextMenu({
   const onClosePane = (): void => {
     const pane = resolveMenuPane()
     if (pane && (managerRef.current?.getPanes().length ?? 0) > 1) {
-      // Why: clear the cache timer for this pane before closing, so the sidebar
-      // doesn't show a stale countdown for a pane that no longer exists.
-      useAppStore.getState().setCacheTimerStartedAt(`${tabId}:${pane.id}`, null)
-      managerRef.current?.closePane(pane.id)
+      onRequestClosePane(pane.id)
     }
   }
 

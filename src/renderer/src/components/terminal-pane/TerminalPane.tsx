@@ -503,8 +503,8 @@ export default function TerminalPane({
   const contextMenu = useTerminalPaneContextMenu({
     managerRef,
     toggleExpandPane,
-    onSetTitle: handleStartRename,
-    tabId
+    onRequestClosePane: handleRequestClosePane,
+    onSetTitle: handleStartRename
   })
 
   const effectiveAppearance = settings
