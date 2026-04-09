@@ -164,6 +164,14 @@ export function registerPtyHandlers(mainWindow: BrowserWindow, runtime?: OrcaRun
         FORCE_HYPERLINK: '1'
       } as Record<string, string>
 
+      // Why: When Electron is launched from Finder (not a terminal), the process
+      // does not inherit the user's shell locale settings. Without an explicit
+      // UTF-8 locale, multi-byte characters (e.g. em dashes U+2014) are
+      // misinterpreted by the PTY and rendered as garbled sequences like "�~@~T".
+      // We default LANG to en_US.UTF-8 but let the inherited or caller-provided
+      // env override it so user locale preferences are respected.
+      spawnEnv.LANG ??= 'en_US.UTF-8'
+
       let ptyProcess: pty.IPty | undefined
       try {
         ptyProcess = pty.spawn(shellPath, shellArgs, {
