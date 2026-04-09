@@ -17,7 +17,6 @@ type PtyConnectionDeps = {
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
   pendingWritesRef: React.RefObject<Map<number, string>>
   isActiveRef: React.RefObject<boolean>
-  effectiveVisibleRef: React.RefObject<boolean>
   onPtyExitRef: React.RefObject<(ptyId: string) => void>
   onPtyErrorRef?: React.RefObject<(paneId: number, message: string) => void>
   clearTabPtyId: (tabId: string, ptyId: string) => void
@@ -181,11 +180,7 @@ export function connectPanePty(
     }
 
     const dataCallback = (data: string): void => {
-      // Why: in split-group mode, a non-focused group's terminal is visible
-      // (display:flex) but not active (no keyboard focus). PTY output must
-      // still be written to xterm so the user sees content. Only buffer
-      // output when the terminal is truly hidden (e.g., a background tab).
-      if (deps.effectiveVisibleRef.current) {
+      if (deps.isActiveRef.current) {
         pane.terminal.write(data)
       } else {
         const pending = deps.pendingWritesRef.current

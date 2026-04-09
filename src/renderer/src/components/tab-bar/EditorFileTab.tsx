@@ -1,17 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import {
-  X,
-  FileCode,
-  GitCompareArrows,
-  Copy,
-  ShieldAlert,
-  PanelLeft,
-  PanelRight,
-  PanelTop,
-  PanelBottom
-} from 'lucide-react'
+import { X, FileCode, GitCompareArrows, Copy, ShieldAlert } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,8 +25,7 @@ export default function EditorFileTab({
   onClose,
   onCloseToRight,
   onCloseAll,
-  onPin,
-  onSplitTab
+  onPin
 }: {
   file: OpenFile
   isActive: boolean
@@ -47,7 +36,6 @@ export default function EditorFileTab({
   onCloseToRight: () => void
   onCloseAll: () => void
   onPin?: () => void
-  onSplitTab?: (direction: 'left' | 'right' | 'up' | 'down') => void
 }): React.JSX.Element {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: file.id
@@ -186,23 +174,6 @@ export default function EditorFileTab({
             Close Tabs To The Right
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={onCloseAll}>Close All Editor Tabs</DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => onSplitTab?.('left')}>
-            <PanelLeft className="w-3.5 h-3.5 mr-1.5" />
-            Split Left
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => onSplitTab?.('right')}>
-            <PanelRight className="w-3.5 h-3.5 mr-1.5" />
-            Split Right
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => onSplitTab?.('up')}>
-            <PanelTop className="w-3.5 h-3.5 mr-1.5" />
-            Split Up
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => onSplitTab?.('down')}>
-            <PanelBottom className="w-3.5 h-3.5 mr-1.5" />
-            Split Down
-          </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onSelect={() => {

@@ -1,6 +1,6 @@
 /* eslint-disable max-lines */
 
-import { useEffect, useCallback, useRef, useState } from 'react'
+import { useEffect, useCallback, useRef, useState, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
 import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
 import { useAppStore } from '../store'
@@ -15,7 +15,6 @@ import {
 import { Button } from '@/components/ui/button'
 import TabBar from './tab-bar/TabBar'
 import TerminalPane from './terminal-pane/TerminalPane'
-import TabGroupSplitLayout from './tab-group/TabGroupSplitLayout'
 import {
   ORCA_EDITOR_SAVE_AND_CLOSE_EVENT,
   requestEditorSaveQuiesce
@@ -23,9 +22,11 @@ import {
 import { isUpdaterQuitAndInstallInProgress } from '@/lib/updater-beforeunload'
 import EditorAutosaveController from './editor/EditorAutosaveController'
 
+const EditorPanel = lazy(() => import('./editor/EditorPanel'))
+
 export default function Terminal(): React.JSX.Element | null {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
-
+  const activeView = useAppStore((s) => s.activeView)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const activeTabId = useAppStore((s) => s.activeTabId)
@@ -51,18 +52,6 @@ export default function Terminal(): React.JSX.Element | null {
   const setTabBarOrder = useAppStore((s) => s.setTabBarOrder)
   const tabBarOrderByWorktree = useAppStore((s) => s.tabBarOrderByWorktree)
   const tabBarOrder = activeWorktreeId ? tabBarOrderByWorktree[activeWorktreeId] : undefined
-
-  // Tab group split state
-  const layout = useAppStore((s) =>
-    activeWorktreeId ? s.layoutByWorktree[activeWorktreeId] : undefined
-  )
-  const hasSplitGroups = layout?.type === 'split'
-  const focusedGroupId = useAppStore((s) =>
-    activeWorktreeId ? s.activeGroupIdByWorktree[activeWorktreeId] : undefined
-  )
-  const splitTabToGroup = useAppStore((s) => s.splitTabToGroup)
-  const createUnifiedTab = useAppStore((s) => s.createUnifiedTab)
-  const closeUnifiedTab = useAppStore((s) => s.closeUnifiedTab)
 
   const tabs = activeWorktreeId ? (tabsByWorktree[activeWorktreeId] ?? []) : []
   const allWorktrees = Object.values(worktreesByRepo).flat()
@@ -96,9 +85,8 @@ export default function Terminal(): React.JSX.Element | null {
         return
       }
       closeFile(fileId)
-      closeUnifiedTab(fileId)
     },
-    [closeFile, closeUnifiedTab]
+    [closeFile]
   )
 
   const handleSaveDialogSave = useCallback(async () => {
@@ -129,9 +117,8 @@ export default function Terminal(): React.JSX.Element | null {
     await requestEditorSaveQuiesce({ fileId: saveDialogFileId })
     markFileDirty(saveDialogFileId, false)
     closeFile(saveDialogFileId)
-    closeUnifiedTab(saveDialogFileId)
     setSaveDialogFileId(null)
-  }, [saveDialogFileId, closeFile, closeUnifiedTab, markFileDirty])
+  }, [saveDialogFileId, closeFile, markFileDirty])
 
   const handleSaveDialogCancel = useCallback(() => {
     setSaveDialogFileId(null)
@@ -190,25 +177,14 @@ export default function Terminal(): React.JSX.Element | null {
       return
     }
     initialTabCreationGuardRef.current = activeWorktreeId
-    const newTab = createTab(activeWorktreeId)
-    // Why: keep TabsSlice in sync so tab group splits can find this tab.
-    createUnifiedTab(activeWorktreeId, 'terminal', { id: newTab.id, label: newTab.title })
-  }, [
-    workspaceSessionReady,
-    activeWorktreeId,
-    tabs.length,
-    worktreeFiles.length,
-    createTab,
-    createUnifiedTab
-  ])
+    createTab(activeWorktreeId)
+  }, [workspaceSessionReady, activeWorktreeId, tabs.length, worktreeFiles.length, createTab])
 
   const handleNewTab = useCallback(() => {
     if (!activeWorktreeId) {
       return
     }
     const newTab = createTab(activeWorktreeId)
-    // Why: keep TabsSlice in sync so tab group splits can find this tab.
-    createUnifiedTab(activeWorktreeId, 'terminal', { id: newTab.id, label: newTab.title })
     setActiveTabType('terminal')
     // Why: persist the tab bar order with the new terminal at the end of the
     // current visual order. Without this, reconcileOrder falls back to
@@ -233,7 +209,7 @@ export default function Terminal(): React.JSX.Element | null {
     const order = base.filter((id) => id !== newTab.id)
     order.push(newTab.id)
     setTabBarOrder(activeWorktreeId, order)
-  }, [activeWorktreeId, createTab, createUnifiedTab, setActiveTabType, setTabBarOrder])
+  }, [activeWorktreeId, createTab, setActiveTabType, setTabBarOrder])
 
   const handleCloseTab = useCallback(
     (tabId: string) => {
@@ -250,7 +226,6 @@ export default function Terminal(): React.JSX.Element | null {
       const currentTabs = state.tabsByWorktree[owningWorktreeId] ?? []
       if (currentTabs.length <= 1) {
         closeTab(tabId)
-        closeUnifiedTab(tabId)
         if (state.activeWorktreeId === owningWorktreeId) {
           // Why: only deactivate the worktree when no tabs of any kind remain.
           // Editor files are a separate tab type; closing the last terminal tab
@@ -275,9 +250,8 @@ export default function Terminal(): React.JSX.Element | null {
         }
       }
       closeTab(tabId)
-      closeUnifiedTab(tabId)
     },
-    [closeTab, closeUnifiedTab, setActiveTab, setActiveFile, setActiveTabType, setActiveWorktree]
+    [closeTab, setActiveTab, setActiveFile, setActiveTabType, setActiveWorktree]
   )
 
   const handlePtyExit = useCallback(
@@ -300,11 +274,10 @@ export default function Terminal(): React.JSX.Element | null {
       for (const tab of currentTabs) {
         if (tab.id !== tabId) {
           closeTab(tab.id)
-          closeUnifiedTab(tab.id)
         }
       }
     },
-    [activeWorktreeId, closeTab, closeUnifiedTab, setActiveTab]
+    [activeWorktreeId, closeTab, setActiveTab]
   )
 
   const handleCloseTabsToRight = useCallback(
@@ -320,10 +293,9 @@ export default function Terminal(): React.JSX.Element | null {
       const rightTabs = currentTabs.slice(index + 1)
       for (const tab of rightTabs) {
         closeTab(tab.id)
-        closeUnifiedTab(tab.id)
       }
     },
-    [activeWorktreeId, closeTab, closeUnifiedTab]
+    [activeWorktreeId, closeTab]
   )
 
   const handleActivateTab = useCallback(
@@ -346,31 +318,6 @@ export default function Terminal(): React.JSX.Element | null {
       })
     },
     [setActiveTab]
-  )
-
-  const handleSplitTab = useCallback(
-    (tabId: string, direction: 'left' | 'right' | 'up' | 'down') => {
-      splitTabToGroup(tabId, direction)
-      // Why: after splitting, the new group's terminal tab needs a PTY.
-      // The new tab was created in TabsSlice but TerminalSlice also needs
-      // a matching entry for PTY lifecycle. We create it in TerminalSlice
-      // so TerminalPane can mount and spawn a PTY.
-      if (activeWorktreeId) {
-        const state = useAppStore.getState()
-        const newGroupId = state.activeGroupIdByWorktree[activeWorktreeId]
-        const newGroupTabs = (state.unifiedTabsByWorktree[activeWorktreeId] ?? []).filter(
-          (t) => t.groupId === newGroupId && t.contentType === 'terminal'
-        )
-        // The newest terminal tab in the new group needs a TerminalSlice entry
-        for (const ut of newGroupTabs) {
-          const exists = (state.tabsByWorktree[activeWorktreeId] ?? []).some((t) => t.id === ut.id)
-          if (!exists) {
-            createTab(activeWorktreeId, ut.id)
-          }
-        }
-      }
-    },
-    [splitTabToGroup, activeWorktreeId, createTab]
   )
 
   // Keyboard shortcuts
@@ -406,36 +353,16 @@ export default function Terminal(): React.JSX.Element | null {
       // Cmd/Ctrl+Shift+] and Cmd/Ctrl+Shift+[ - switch tabs
       if (mod && e.shiftKey && (e.key === ']' || e.key === '[') && !e.repeat) {
         const state = useAppStore.getState()
+        const currentTerminalTabs = state.tabsByWorktree[activeWorktreeId] ?? []
+        const currentEditorFiles = activeWorktreeId
+          ? state.openFiles.filter((f) => f.worktreeId === activeWorktreeId)
+          : []
 
-        // Why: when splits are active, tab cycling must stay within the
-        // focused group so the user doesn't jump between panels unexpectedly.
-        const currentGroupId = state.activeGroupIdByWorktree[activeWorktreeId]
-        const hasLayout = state.layoutByWorktree[activeWorktreeId]?.type === 'split'
-        const groupFilter =
-          hasLayout && currentGroupId
-            ? (t: { groupId?: string }) => t.groupId === currentGroupId
-            : () => true
-
-        const unifiedTabs = (state.unifiedTabsByWorktree[activeWorktreeId] ?? []).filter(
-          groupFilter
-        )
-
-        const allTabIds: { type: 'terminal' | 'editor'; id: string }[] = unifiedTabs.map((t) => ({
-          type: t.contentType === 'terminal' ? ('terminal' as const) : ('editor' as const),
-          id: t.id
-        }))
-
-        // Fallback for single-group mode without unified tabs populated
-        if (allTabIds.length === 0) {
-          const currentTerminalTabs = state.tabsByWorktree[activeWorktreeId] ?? []
-          const currentEditorFiles = activeWorktreeId
-            ? state.openFiles.filter((f) => f.worktreeId === activeWorktreeId)
-            : []
-          allTabIds.push(
-            ...currentTerminalTabs.map((t) => ({ type: 'terminal' as const, id: t.id })),
-            ...currentEditorFiles.map((f) => ({ type: 'editor' as const, id: f.id }))
-          )
-        }
+        // Build unified tab list: terminal tabs then editor tabs
+        const allTabIds: { type: 'terminal' | 'editor'; id: string }[] = [
+          ...currentTerminalTabs.map((t) => ({ type: 'terminal' as const, id: t.id })),
+          ...currentEditorFiles.map((f) => ({ type: 'editor' as const, id: f.id }))
+        ]
 
         if (allTabIds.length > 1) {
           e.preventDefault()
@@ -508,11 +435,10 @@ export default function Terminal(): React.JSX.Element | null {
     >
       <EditorAutosaveController />
 
-      {/* Why: when tab groups are split, each group renders its own inline
-          tab bar inside TabGroupPanel. The titlebar portal is skipped so it
-          doesn't show a duplicate set of tabs. */}
-      {!hasSplitGroups &&
-        activeWorktreeId &&
+      {/* Why: the tab bar is rendered into the titlebar via a portal so it
+          shares the same visual row as the "Orca" title. The portal target
+          (#titlebar-tabs) lives in App.tsx's titlebar. */}
+      {activeWorktreeId &&
         titlebarTabsTarget &&
         createPortal(
           <TabBar
@@ -540,47 +466,57 @@ export default function Terminal(): React.JSX.Element | null {
             onCloseAllFiles={closeAllFiles}
             onPinFile={pinFile}
             tabBarOrder={tabBarOrder}
-            onSplitTab={handleSplitTab}
           />,
           titlebarTabsTarget
         )}
 
-      {/* Why: always render through TabGroupSplitLayout — even for a single
-          group — so that splitting never unmounts the original TabGroupPanel.
-          The CSS Grid flat rendering in TabGroupSplitLayout keeps all
-          TabGroupPanels as stable keyed siblings, preserving xterm instances
-          and PTY connections across layout changes. */}
-      {activeWorktreeId && layout && (
-        <TabGroupSplitLayout
-          layout={layout}
-          worktreeId={activeWorktreeId}
-          focusedGroupId={focusedGroupId}
-          hasSplitGroups={hasSplitGroups}
-          onSplitTab={handleSplitTab}
-        />
-      )}
-
-      {/* Why: non-active worktrees keep their TerminalPanes mounted (hidden)
-          so PTY connections survive worktree switches. The active worktree's
-          terminals are rendered by TabGroupPanel inside TabGroupSplitLayout. */}
-      <div className="hidden">
+      {/* Terminal panes container - hidden when editor tab active */}
+      <div
+        className={`relative flex-1 min-h-0 overflow-hidden ${activeTabType === 'editor' && worktreeFiles.length > 0 ? 'hidden' : ''}`}
+      >
         {allWorktrees
-          .filter((wt) => mountedWorktreeIdsRef.current.has(wt.id) && wt.id !== activeWorktreeId)
+          .filter((wt) => mountedWorktreeIdsRef.current.has(wt.id))
           .map((worktree) => {
             const worktreeTabs = tabsByWorktree[worktree.id] ?? []
-            return worktreeTabs.map((tab) => (
-              <TerminalPane
-                key={`${tab.id}-${tab.generation ?? 0}`}
-                tabId={tab.id}
-                worktreeId={worktree.id}
-                cwd={worktree.path}
-                isActive={false}
-                onPtyExit={(ptyId) => handlePtyExit(tab.id, ptyId)}
-                onCloseTab={() => handleCloseTab(tab.id)}
-              />
-            ))
+            const isVisible = activeView !== 'settings' && worktree.id === activeWorktreeId
+
+            return (
+              <div
+                key={worktree.id}
+                className={isVisible ? 'absolute inset-0' : 'absolute inset-0 hidden'}
+                aria-hidden={!isVisible}
+              >
+                {worktreeTabs.map((tab) => (
+                  <TerminalPane
+                    key={`${tab.id}-${tab.generation ?? 0}`}
+                    tabId={tab.id}
+                    worktreeId={worktree.id}
+                    cwd={worktree.path}
+                    isActive={isVisible && tab.id === activeTabId && activeTabType === 'terminal'}
+                    onPtyExit={(ptyId) => handlePtyExit(tab.id, ptyId)}
+                    onCloseTab={() => handleCloseTab(tab.id)}
+                  />
+                ))}
+              </div>
+            )
           })}
       </div>
+
+      {/* Why: v1.0.85 only mounted the visible editor surface, which kept
+          hidden editor effects out of app shutdown. Autosave now lives in the
+          narrow EditorAutosaveController above, so the full EditorPanel can go
+          back to the safer "mount only while visible" lifecycle. */}
+      {activeWorktreeId && activeTabType === 'editor' && worktreeFiles.length > 0 && (
+        <Suspense
+          fallback={
+            <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
+              Loading editor...
+            </div>
+          }
+        >
+          <EditorPanel />
+        </Suspense>
+      )}
 
       {/* Save confirmation dialog */}
       <Dialog

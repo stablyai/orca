@@ -1,16 +1,9 @@
-import type {
-  Tab,
-  TabGroup,
-  TabGroupLayoutNode,
-  WorkspaceSessionState
-} from '../../../../shared/types'
-import { collectGroupIds } from './tab-group-layout-ops'
+import type { Tab, TabGroup, WorkspaceSessionState } from '../../../../shared/types'
 
 type HydratedTabState = {
   unifiedTabsByWorktree: Record<string, Tab[]>
   groupsByWorktree: Record<string, TabGroup[]>
   activeGroupIdByWorktree: Record<string, string>
-  layoutByWorktree: Record<string, TabGroupLayoutNode>
 }
 
 function hydrateUnifiedFormat(
@@ -52,31 +45,7 @@ function hydrateUnifiedFormat(
     activeGroupIdByWorktree[worktreeId] = validatedGroups[0].id
   }
 
-  // Restore layout trees with validation
-  const layoutByWorktree: Record<string, TabGroupLayoutNode> = {}
-  if (session.tabGroupLayouts) {
-    for (const [worktreeId, layout] of Object.entries(session.tabGroupLayouts)) {
-      if (!validWorktreeIds.has(worktreeId)) {
-        continue
-      }
-      const validGroupIds = new Set((groupsByWorktree[worktreeId] ?? []).map((g) => g.id))
-      const layoutGroupIds = collectGroupIds(layout)
-      // Why: if any group ID in the layout tree is invalid (e.g. from a
-      // corrupted session), discard the entire layout. The groups and tabs
-      // still exist — the user just loses the split arrangement, which is
-      // safer than rendering a broken tree.
-      if (layoutGroupIds.every((id) => validGroupIds.has(id))) {
-        layoutByWorktree[worktreeId] = layout
-      }
-    }
-  }
-
-  return {
-    unifiedTabsByWorktree: tabsByWorktree,
-    groupsByWorktree,
-    activeGroupIdByWorktree,
-    layoutByWorktree
-  }
+  return { unifiedTabsByWorktree: tabsByWorktree, groupsByWorktree, activeGroupIdByWorktree }
 }
 
 function hydrateLegacyFormat(
@@ -149,12 +118,7 @@ function hydrateLegacyFormat(
     activeGroupIdByWorktree[worktreeId] = groupId
   }
 
-  return {
-    unifiedTabsByWorktree: tabsByWorktree,
-    groupsByWorktree,
-    activeGroupIdByWorktree,
-    layoutByWorktree: {}
-  }
+  return { unifiedTabsByWorktree: tabsByWorktree, groupsByWorktree, activeGroupIdByWorktree }
 }
 
 export function buildHydratedTabState(

@@ -254,7 +254,7 @@ export type EditorSlice = {
   hydrateEditorSession: (session: WorkspaceSessionState) => void
 }
 
-export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (set, get) => ({
+export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (set) => ({
   editorDrafts: {},
   setEditorDraft: (fileId, content) =>
     set((s) => ({
@@ -342,7 +342,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       }
     }),
 
-  openFile: (file, options) => {
+  openFile: (file, options) =>
     set((s) => {
       const id = file.filePath
       const existing = s.openFiles.find((f) => f.id === id)
@@ -393,13 +393,9 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         }
       }
 
-      // If opening as preview, replace the existing preview tab for this worktree.
-      // Why: in multi-group (split) mode, the worktree-wide preview replacement
-      // would remove an OpenFile still displayed in another group's EditorPanel.
-      // Unified tabs handle per-group preview replacement, so skip it here.
+      // If opening as preview, replace the existing preview tab for this worktree
       let newFiles = s.openFiles
-      const hasMultipleGroups = Boolean(s.layoutByWorktree?.[worktreeId])
-      if (isPreview && !hasMultipleGroups) {
+      if (isPreview) {
         const existingPreviewIdx = s.openFiles.findIndex(
           (f) => f.worktreeId === worktreeId && f.isPreview
         )
@@ -475,34 +471,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         ...tabBarUpdate,
         ...activeResult
       }
-    })
-
-    // Why: keep TabsSlice in sync so tab group splits can find and display
-    // editor tabs. The unified tab's ID matches the file's ID (filePath)
-    // so TabGroupPanel can correlate them.
-    const state = get()
-    if (state.createUnifiedTab) {
-      const contentType = file.mode === 'edit' ? 'editor' : file.mode
-      const fileId = file.filePath
-      const focusedGroupId = state.activeGroupIdByWorktree?.[file.worktreeId]
-      // Why: check if the file already has a unified tab in the FOCUSED group.
-      // Editor tabs can exist in multiple groups (via splits), so we must check
-      // the specific group rather than the whole worktree. If the file is open
-      // in group A but the user opens it from group B, we create a new tab in B.
-      const existingInFocusedGroup = (state.unifiedTabsByWorktree[file.worktreeId] ?? []).find(
-        (t) => t.id === fileId && t.groupId === focusedGroupId
-      )
-      if (!existingInFocusedGroup) {
-        state.createUnifiedTab(file.worktreeId, contentType, {
-          id: fileId,
-          label: file.relativePath,
-          isPreview: options?.preview
-        })
-      } else {
-        state.activateTab(fileId)
-      }
-    }
-  },
+    }),
 
   pinFile: (fileId) =>
     set((s) => {
@@ -520,7 +489,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   // remain visible until the file leaves the sidebar, the session resets, or
   // the file becomes live-unresolved again. trackedConflictPaths is tied to
   // sidebar presence, not tab lifecycle.
-  closeFile: (fileId) => {
+  closeFile: (fileId) =>
     set((s) => {
       const closedFile = s.openFiles.find((f) => f.id === fileId)
       const idx = s.openFiles.findIndex((f) => f.id === fileId)
@@ -578,18 +547,12 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         markdownViewMode: newMarkdownViewMode,
         pendingEditorReveal: null
       }
-    })
+    }),
 
-    // Why: keep TabsSlice in sync — remove the unified tab for this editor file.
-    get().closeUnifiedTab?.(fileId)
-  },
-
-  closeAllFiles: () => {
-    const closedFileIds: string[] = []
+  closeAllFiles: () =>
     set((s) => {
       const activeWorktreeId = s.activeWorktreeId
       if (!activeWorktreeId) {
-        closedFileIds.push(...s.openFiles.map((f) => f.id))
         return {
           openFiles: [],
           editorDrafts: {},
@@ -600,8 +563,6 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         }
       }
       // Only close files for the current worktree
-      const closing = s.openFiles.filter((f) => f.worktreeId === activeWorktreeId)
-      closedFileIds.push(...closing.map((f) => f.id))
       const newFiles = s.openFiles.filter((f) => f.worktreeId !== activeWorktreeId)
       const remainingFileIds = new Set(newFiles.map((f) => f.id))
       const newEditorDrafts = Object.fromEntries(
@@ -628,16 +589,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         // to an old match unexpectedly.
         pendingEditorReveal: null
       }
-    })
-
-    // Why: keep TabsSlice in sync — remove unified tabs for closed editor files.
-    const state = get()
-    if (state.closeUnifiedTab) {
-      for (const fileId of closedFileIds) {
-        state.closeUnifiedTab(fileId)
-      }
-    }
-  },
+    }),
 
   setActiveFile: (fileId) =>
     set((s) => {

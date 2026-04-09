@@ -55,20 +55,6 @@ export type WorktreeMeta = {
   lastActivityAt: number
 }
 
-// ─── Tab Group Layout ─────────────────────────────────────────────
-export type TabGroupSplitDirection = 'horizontal' | 'vertical'
-
-/** Recursive binary tree describing how tab groups are arranged in the workspace.
- *  Mirrors the TerminalPaneLayoutNode pattern used for intra-tab pane splits. */
-export type TabGroupLayoutNode =
-  | { type: 'leaf'; groupId: string }
-  | {
-      type: 'split'
-      direction: TabGroupSplitDirection
-      first: TabGroupLayoutNode
-      second: TabGroupLayoutNode
-    }
-
 // ─── Unified Tab ────────────────────────────────────────────────────
 export type TabContentType = 'terminal' | 'editor' | 'diff' | 'conflict-review'
 
@@ -170,9 +156,6 @@ export type WorkspaceSessionState = {
   unifiedTabs?: Record<string, Tab[]>
   /** Tab group model — present alongside unifiedTabs. */
   tabGroups?: Record<string, TabGroup[]>
-  /** Layout tree for tab group splits, keyed by worktree ID.
-   *  Absent when all worktrees use the default single-group layout. */
-  tabGroupLayouts?: Record<string, TabGroupLayoutNode>
 }
 
 // ─── GitHub ──────────────────────────────────────────────────────────

@@ -182,8 +182,7 @@ describe('TabsSlice', () => {
 
       expect(result?.wasLastTab).toBe(true)
       expect(store.getState().unifiedTabsByWorktree[WT]).toHaveLength(0)
-      // Why: closeGroupIfEmpty removes the empty group in single-group mode
-      expect(store.getState().groupsByWorktree[WT]).toHaveLength(0)
+      expect(store.getState().groupsByWorktree[WT][0].activeTabId).toBeNull()
     })
 
     it('does not change active tab when closing a non-active tab', () => {

@@ -1,12 +1,6 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type {
-  Tab,
-  TabGroup,
-  TabContentType,
-  TabGroupLayoutNode,
-  WorkspaceSessionState
-} from '../../../../shared/types'
+import type { Tab, TabGroup, TabContentType, WorkspaceSessionState } from '../../../../shared/types'
 import {
   findTabAndWorktree,
   findGroupForTab,
@@ -16,21 +10,12 @@ import {
   patchTab
 } from './tabs-helpers'
 import { buildHydratedTabState } from './tabs-hydration'
-import {
-  createSplitTabToGroup,
-  createFocusGroup,
-  createCloseGroupIfEmpty
-} from './tabs-split-actions'
-import { createCloseOtherTabs, createCloseTabsToRight } from './tabs-bulk-actions'
-
-export type TabSplitDirection = 'left' | 'right' | 'up' | 'down'
 
 export type TabsSlice = {
   // ─── State ──────────────────────────────────────────────────────────
   unifiedTabsByWorktree: Record<string, Tab[]>
   groupsByWorktree: Record<string, TabGroup[]>
   activeGroupIdByWorktree: Record<string, string>
-  layoutByWorktree: Record<string, TabGroupLayoutNode>
 
   // ─── Actions ────────────────────────────────────────────────────────
   createUnifiedTab: (
@@ -39,8 +24,7 @@ export type TabsSlice = {
     init?: Partial<Pick<Tab, 'id' | 'label' | 'customLabel' | 'color' | 'isPreview' | 'isPinned'>>
   ) => Tab
   closeUnifiedTab: (
-    tabId: string,
-    groupId?: string
+    tabId: string
   ) => { closedTabId: string; wasLastTab: boolean; worktreeId: string } | null
   activateTab: (tabId: string) => void
   reorderUnifiedTabs: (groupId: string, tabIds: string[]) => void
@@ -54,30 +38,23 @@ export type TabsSlice = {
   getActiveTab: (worktreeId: string) => Tab | null
   getTab: (tabId: string) => Tab | null
   hydrateTabsSession: (session: WorkspaceSessionState) => void
-  splitTabToGroup: (tabId: string, direction: TabSplitDirection) => void
-  focusGroup: (worktreeId: string, groupId: string) => void
-  closeGroupIfEmpty: (worktreeId: string, groupId: string) => void
 }
 
 export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, get) => ({
   unifiedTabsByWorktree: {},
   groupsByWorktree: {},
   activeGroupIdByWorktree: {},
-  layoutByWorktree: {},
 
   createUnifiedTab: (worktreeId, contentType, init) => {
     const id = init?.id ?? globalThis.crypto.randomUUID()
     let tab!: Tab
 
     set((s) => {
-      // Why: pass the active (focused) group so new tabs land in the group
-      // the user is interacting with, not an arbitrary first group.
-      const targetGroupId = s.activeGroupIdByWorktree[worktreeId]
       const {
         group,
         groupsByWorktree: nextGroups,
         activeGroupIdByWorktree: nextActiveGroups
-      } = ensureGroup(s.groupsByWorktree, s.activeGroupIdByWorktree, worktreeId, targetGroupId)
+      } = ensureGroup(s.groupsByWorktree, s.activeGroupIdByWorktree, worktreeId)
 
       const existing = s.unifiedTabsByWorktree[worktreeId] ?? []
 
@@ -87,11 +64,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       if (init?.isPreview) {
         const existingPreview = existing.find((t) => t.isPreview && t.groupId === group.id)
         if (existingPreview) {
-          // Why: filter by both id AND groupId so editor tabs with the same
-          // filePath ID in other groups are not accidentally removed.
-          filtered = existing.filter(
-            (t) => !(t.id === existingPreview.id && t.groupId === existingPreview.groupId)
-          )
+          filtered = existing.filter((t) => t.id !== existingPreview.id)
           removedPreviewId = existingPreview.id
         }
       }
@@ -117,30 +90,22 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
 
       const updatedGroupObj: TabGroup = { ...group, activeTabId: tab.id, tabOrder: newTabOrder }
 
-      // Why: always ensure a layout exists so TabGroupSplitLayout can render
-      // for every worktree, even before a split. This avoids the single-group
-      // → split-group rendering transition that would unmount TerminalPanes.
-      const nextLayout = s.layoutByWorktree[worktreeId]
-        ? s.layoutByWorktree
-        : { ...s.layoutByWorktree, [worktreeId]: { type: 'leaf' as const, groupId: group.id } }
-
       return {
         unifiedTabsByWorktree: { ...s.unifiedTabsByWorktree, [worktreeId]: [...filtered, tab] },
         groupsByWorktree: {
           ...nextGroups,
           [worktreeId]: updateGroup(nextGroups[worktreeId] ?? [], updatedGroupObj)
         },
-        activeGroupIdByWorktree: nextActiveGroups,
-        layoutByWorktree: nextLayout
+        activeGroupIdByWorktree: nextActiveGroups
       }
     })
 
     return tab
   },
 
-  closeUnifiedTab: (tabId, groupId?) => {
+  closeUnifiedTab: (tabId) => {
     const state = get()
-    const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId, groupId)
+    const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
     if (!found) {
       return null
     }
@@ -161,9 +126,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
 
     set((s) => {
       const tabs = s.unifiedTabsByWorktree[worktreeId] ?? []
-      // Why: editor tabs can share the same ID (filePath) across groups.
-      // Filter by both id and groupId to only remove the tab from this group.
-      const nextTabs = tabs.filter((t) => !(t.id === tabId && t.groupId === tab.groupId))
+      const nextTabs = tabs.filter((t) => t.id !== tabId)
       const updatedGroupObj: TabGroup = {
         ...group,
         activeTabId: newActiveTabId,
@@ -179,33 +142,12 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       }
     })
 
-    // Why: when the last tab in a group is closed, collapse the layout tree
-    // so the empty group disappears and its sibling fills the space.
-    if (wasLastTab) {
-      get().closeGroupIfEmpty(worktreeId, tab.groupId)
-    }
-
     return { closedTabId: tabId, wasLastTab, worktreeId }
   },
 
   activateTab: (tabId) => {
     set((s) => {
-      // Why: editor/diff tabs share the same ID (filePath) across groups.
-      // Prefer the focused group so we activate the correct group's tab.
-      let found: { tab: Tab; worktreeId: string } | null = null
-      for (const [wId, tabs] of Object.entries(s.unifiedTabsByWorktree)) {
-        const focusedGroupId = s.activeGroupIdByWorktree[wId]
-        if (focusedGroupId) {
-          const tab = tabs.find((t) => t.id === tabId && t.groupId === focusedGroupId)
-          if (tab) {
-            found = { tab, worktreeId: wId }
-            break
-          }
-        }
-      }
-      if (!found) {
-        found = findTabAndWorktree(s.unifiedTabsByWorktree, tabId)
-      }
+      const found = findTabAndWorktree(s.unifiedTabsByWorktree, tabId)
       if (!found) {
         return {}
       }
@@ -276,8 +218,104 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
     set((s) => patchTab(s.unifiedTabsByWorktree, tabId, { isPinned: false }) ?? {})
   },
 
-  closeOtherTabs: createCloseOtherTabs({ set, get }),
-  closeTabsToRight: createCloseTabsToRight({ set, get }),
+  closeOtherTabs: (tabId) => {
+    const state = get()
+    const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
+    if (!found) {
+      return []
+    }
+
+    const { tab, worktreeId } = found
+    const group = findGroupForTab(state.groupsByWorktree, worktreeId, tab.groupId)
+    if (!group) {
+      return []
+    }
+
+    const tabs = state.unifiedTabsByWorktree[worktreeId] ?? []
+    const closedIds = tabs
+      .filter((t) => t.id !== tabId && !t.isPinned && t.groupId === group.id)
+      .map((t) => t.id)
+
+    if (closedIds.length === 0) {
+      return []
+    }
+
+    const closedSet = new Set(closedIds)
+
+    set((s) => {
+      const currentTabs = s.unifiedTabsByWorktree[worktreeId] ?? []
+      const remainingTabs = currentTabs.filter((t) => !closedSet.has(t.id))
+      const remainingOrder = group.tabOrder.filter((tid) => !closedSet.has(tid))
+      const updatedGroupObj: TabGroup = { ...group, activeTabId: tabId, tabOrder: remainingOrder }
+
+      return {
+        unifiedTabsByWorktree: { ...s.unifiedTabsByWorktree, [worktreeId]: remainingTabs },
+        groupsByWorktree: {
+          ...s.groupsByWorktree,
+          [worktreeId]: updateGroup(s.groupsByWorktree[worktreeId] ?? [], updatedGroupObj)
+        }
+      }
+    })
+
+    return closedIds
+  },
+
+  closeTabsToRight: (tabId) => {
+    const state = get()
+    const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
+    if (!found) {
+      return []
+    }
+
+    const { tab, worktreeId } = found
+    const group = findGroupForTab(state.groupsByWorktree, worktreeId, tab.groupId)
+    if (!group) {
+      return []
+    }
+
+    const idx = group.tabOrder.indexOf(tabId)
+    if (idx === -1) {
+      return []
+    }
+
+    const idsToRight = group.tabOrder.slice(idx + 1)
+    const tabs = state.unifiedTabsByWorktree[worktreeId] ?? []
+    const tabMap = new Map(tabs.map((t) => [t.id, t]))
+
+    const closedIds = idsToRight.filter((tid) => {
+      const t = tabMap.get(tid)
+      return t && !t.isPinned
+    })
+
+    if (closedIds.length === 0) {
+      return []
+    }
+
+    const closedSet = new Set(closedIds)
+
+    set((s) => {
+      const currentTabs = s.unifiedTabsByWorktree[worktreeId] ?? []
+      const remainingTabs = currentTabs.filter((t) => !closedSet.has(t.id))
+      const remainingOrder = group.tabOrder.filter((tid) => !closedSet.has(tid))
+
+      const newActiveTabId = closedSet.has(group.activeTabId ?? '') ? tabId : group.activeTabId
+      const updatedGroupObj: TabGroup = {
+        ...group,
+        activeTabId: newActiveTabId,
+        tabOrder: remainingOrder
+      }
+
+      return {
+        unifiedTabsByWorktree: { ...s.unifiedTabsByWorktree, [worktreeId]: remainingTabs },
+        groupsByWorktree: {
+          ...s.groupsByWorktree,
+          [worktreeId]: updateGroup(s.groupsByWorktree[worktreeId] ?? [], updatedGroupObj)
+        }
+      }
+    })
+
+    return closedIds
+  },
 
   getActiveTab: (worktreeId) => {
     const state = get()
@@ -310,9 +348,5 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         .map((w) => w.id)
     )
     set(buildHydratedTabState(session, validWorktreeIds))
-  },
-
-  splitTabToGroup: createSplitTabToGroup({ set, get }),
-  focusGroup: createFocusGroup({ set }),
-  closeGroupIfEmpty: createCloseGroupIfEmpty({ set, get })
+  }
 })

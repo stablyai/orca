@@ -30,7 +30,7 @@ export type TerminalSlice = {
   workspaceSessionReady: boolean
   pendingReconnectWorktreeIds: string[]
   pendingReconnectTabByWorktree: Record<string, string[]>
-  createTab: (worktreeId: string, tabId?: string) => TerminalTab
+  createTab: (worktreeId: string) => TerminalTab
   closeTab: (tabId: string) => void
   reorderTabs: (worktreeId: string, tabIds: string[]) => void
   setTabBarOrder: (worktreeId: string, order: string[]) => void
@@ -133,8 +133,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     }
   },
 
-  createTab: (worktreeId, tabId) => {
-    const id = tabId ?? globalThis.crypto.randomUUID()
+  createTab: (worktreeId) => {
+    const id = globalThis.crypto.randomUUID()
     let tab!: TerminalTab
     set((s) => {
       const existing = s.tabsByWorktree[worktreeId] ?? []

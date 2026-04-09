@@ -2,14 +2,10 @@ import type { Tab, TabGroup } from '../../../../shared/types'
 
 export function findTabAndWorktree(
   tabsByWorktree: Record<string, Tab[]>,
-  tabId: string,
-  // Why: editor tabs can share the same ID (filePath) across groups when split.
-  // When provided, groupId narrows the search to a specific group so operations
-  // like close/activate target the correct group's tab, not the first match.
-  groupId?: string
+  tabId: string
 ): { tab: Tab; worktreeId: string } | null {
   for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
-    const tab = tabs.find((t) => t.id === tabId && (!groupId || t.groupId === groupId))
+    const tab = tabs.find((t) => t.id === tabId)
     if (tab) {
       return { tab, worktreeId }
     }
@@ -29,23 +25,12 @@ export function findGroupForTab(
 export function ensureGroup(
   groupsByWorktree: Record<string, TabGroup[]>,
   activeGroupIdByWorktree: Record<string, string>,
-  worktreeId: string,
-  targetGroupId?: string
+  worktreeId: string
 ): {
   group: TabGroup
   groupsByWorktree: Record<string, TabGroup[]>
   activeGroupIdByWorktree: Record<string, string>
 } {
-  // Why: in multi-group mode, new tabs must go to the group the user is
-  // interacting with. targetGroupId is checked first so the caller can
-  // direct creation into a specific group rather than always landing in [0].
-  if (targetGroupId) {
-    const target = groupsByWorktree[worktreeId]?.find((g) => g.id === targetGroupId)
-    if (target) {
-      return { group: target, groupsByWorktree, activeGroupIdByWorktree }
-    }
-  }
-
   const existing = groupsByWorktree[worktreeId]?.[0]
   if (existing) {
     return { group: existing, groupsByWorktree, activeGroupIdByWorktree }

@@ -38,7 +38,6 @@ type UseTerminalPaneLifecycleDeps = {
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
   pendingWritesRef: React.RefObject<Map<number, string>>
   isActiveRef: React.RefObject<boolean>
-  effectiveVisibleRef: React.RefObject<boolean>
   onPtyExitRef: React.RefObject<(ptyId: string) => void>
   onPtyErrorRef?: React.RefObject<(paneId: number, message: string) => void>
   clearTabPtyId: (tabId: string, ptyId: string) => void
@@ -77,7 +76,6 @@ export function useTerminalPaneLifecycle({
   paneTransportsRef,
   pendingWritesRef,
   isActiveRef,
-  effectiveVisibleRef,
   onPtyExitRef,
   onPtyErrorRef,
   clearTabPtyId,
@@ -174,7 +172,6 @@ export function useTerminalPaneLifecycle({
       paneTransportsRef,
       pendingWritesRef,
       isActiveRef,
-      effectiveVisibleRef,
       onPtyExitRef,
       onPtyErrorRef,
       clearTabPtyId,

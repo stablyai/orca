@@ -39,7 +39,6 @@ type TabBarProps = {
   onCloseAllFiles?: () => void
   onPinFile?: (fileId: string) => void
   tabBarOrder?: string[]
-  onSplitTab?: (tabId: string, direction: 'left' | 'right' | 'up' | 'down') => void
 }
 
 type TabItem =
@@ -67,8 +66,7 @@ export default function TabBar({
   onCloseFile,
   onCloseAllFiles,
   onPinFile,
-  tabBarOrder,
-  onSplitTab
+  tabBarOrder
 }: TabBarProps): React.JSX.Element {
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -181,7 +179,6 @@ export default function TabBar({
                     onSetCustomTitle={onSetCustomTitle}
                     onSetTabColor={onSetTabColor}
                     onToggleExpand={onTogglePaneExpand}
-                    onSplitTab={onSplitTab}
                   />
                 )
               }
@@ -197,9 +194,6 @@ export default function TabBar({
                   onCloseToRight={() => onCloseToRight(item.id)}
                   onCloseAll={() => onCloseAllFiles?.()}
                   onPin={() => onPinFile?.(item.id)}
-                  onSplitTab={
-                    onSplitTab ? (direction) => onSplitTab(item.id, direction) : undefined
-                  }
                 />
               )
             })}

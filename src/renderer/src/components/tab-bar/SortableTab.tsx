@@ -1,15 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import {
-  X,
-  Terminal as TerminalIcon,
-  Minimize2,
-  PanelLeft,
-  PanelRight,
-  PanelTop,
-  PanelBottom
-} from 'lucide-react'
+import { X, Terminal as TerminalIcon, Minimize2 } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,7 +34,6 @@ type SortableTabProps = {
   onSetCustomTitle: (tabId: string, title: string | null) => void
   onSetTabColor: (tabId: string, color: string | null) => void
   onToggleExpand: (tabId: string) => void
-  onSplitTab?: (tabId: string, direction: 'left' | 'right' | 'up' | 'down') => void
 }
 
 export const TAB_COLORS = [
@@ -72,8 +63,7 @@ export default function SortableTab({
   onCloseToRight,
   onSetCustomTitle,
   onSetTabColor,
-  onToggleExpand,
-  onSplitTab
+  onToggleExpand
 }: SortableTabProps): React.JSX.Element {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: tab.id
@@ -226,23 +216,6 @@ export default function SortableTab({
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => onCloseToRight(tab.id)} disabled={!hasTabsToRight}>
             Close Tabs To The Right
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => onSplitTab?.(tab.id, 'left')}>
-            <PanelLeft className="w-3.5 h-3.5 mr-1.5" />
-            Split Left
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => onSplitTab?.(tab.id, 'right')}>
-            <PanelRight className="w-3.5 h-3.5 mr-1.5" />
-            Split Right
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => onSplitTab?.(tab.id, 'up')}>
-            <PanelTop className="w-3.5 h-3.5 mr-1.5" />
-            Split Up
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => onSplitTab?.(tab.id, 'down')}>
-            <PanelBottom className="w-3.5 h-3.5 mr-1.5" />
-            Split Down
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={handleRenameOpen}>Change Title</DropdownMenuItem>
