@@ -4,7 +4,6 @@ review and type drift checks easier than scattering these bindings across module
 import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { CliInstallStatus } from '../shared/cli-install-types'
-import type { NotificationDispatchResult } from '../shared/types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../shared/runtime-types'
 import {
   ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT,
@@ -281,10 +280,8 @@ const api = {
   },
 
   notifications: {
-    dispatch: (args: Record<string, unknown>): Promise<NotificationDispatchResult> =>
+    dispatch: (args: Record<string, unknown>): Promise<{ delivered: boolean; reason?: string }> =>
       ipcRenderer.invoke('notifications:dispatch', args),
-    getPermissionStatus: (): Promise<string> =>
-      ipcRenderer.invoke('notifications:getPermissionStatus'),
     openSystemSettings: (): Promise<void> => ipcRenderer.invoke('notifications:openSystemSettings')
   },
 

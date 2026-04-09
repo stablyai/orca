@@ -356,13 +356,7 @@ export type NotificationDispatchRequest = {
 export type NotificationDispatchResult = {
   delivered: boolean
   /** Present when delivered is false. Tells the caller why delivery was skipped. */
-  reason?:
-    | 'disabled'
-    | 'source-disabled'
-    | 'suppressed-focus'
-    | 'cooldown'
-    | 'not-supported'
-    | 'system-denied'
+  reason?: 'disabled' | 'source-disabled' | 'suppressed-focus' | 'cooldown' | 'not-supported'
 }
 
 export type WorktreeCardProperty = 'status' | 'unread' | 'ci' | 'issue' | 'pr' | 'comment'

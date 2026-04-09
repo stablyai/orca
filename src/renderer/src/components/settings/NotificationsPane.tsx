@@ -1,10 +1,10 @@
-import { type ReactNode, useCallback, useEffect, useState } from 'react'
+import { type ReactNode } from 'react'
 import { toast } from 'sonner'
 import type { GlobalSettings } from '../../../../shared/types'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { Separator } from '../ui/separator'
-import { BellRing, Bot, Siren, TriangleAlert } from 'lucide-react'
+import { BellRing, Bot, Siren } from 'lucide-react'
 import type { SettingsSearchEntry } from './settings-search'
 
 export const NOTIFICATIONS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
@@ -45,25 +45,6 @@ export function NotificationsPane({
   updateSettings
 }: NotificationsPaneProps): React.JSX.Element {
   const notificationSettings = settings.notifications
-  const [permissionBlocked, setPermissionBlocked] = useState(false)
-
-  const recheckPermission = useCallback(() => {
-    void window.api.notifications.getPermissionStatus().then((status) => {
-      // Why: only flag 'denied', not 'not-determined'. 'not-determined' means
-      // macOS hasn't prompted the user yet — the startup registration or the
-      // next notification dispatch will trigger that dialog. Showing "blocked"
-      // for a permission that was never asked would be misleading.
-      setPermissionBlocked(status === 'denied')
-    })
-  }, [])
-
-  useEffect(() => {
-    if (!notificationSettings.enabled) {
-      setPermissionBlocked(false)
-      return
-    }
-    recheckPermission()
-  }, [notificationSettings.enabled, recheckPermission])
 
   const updateNotificationSettings = (updates: Partial<GlobalSettings['notifications']>): void => {
     updateSettings({
@@ -76,40 +57,13 @@ export function NotificationsPane({
 
   const handleSendTestNotification = async (): Promise<void> => {
     const result = await window.api.notifications.dispatch({ source: 'test' })
-    if (!result.delivered && result.reason === 'system-denied') {
-      // Why: don't auto-open System Settings — the yellow banner above already
-      // provides the "Open Notification Settings" button. Just tell the user
-      // what happened so the silent failure isn't confusing.
-      toast.error('Notification blocked by macOS', {
-        description: 'Allow notifications for Orca in System Settings → Notifications.'
-      })
+    if (result.delivered) {
+      toast.success('Test notification sent')
     }
-    // Why: the macOS permission dialog may have appeared (for 'not-determined'
-    // status), so re-check to update the banner accordingly.
-    recheckPermission()
   }
 
   return (
     <div className="space-y-1">
-      {notificationSettings.enabled && permissionBlocked && (
-        <div className="mx-1 mb-2 flex items-start gap-2.5 rounded-md border border-yellow-500/30 bg-yellow-500/10 px-3 py-2.5">
-          <TriangleAlert className="mt-0.5 size-3.5 shrink-0 text-yellow-500" />
-          <div className="space-y-1.5">
-            <p className="text-xs text-foreground">
-              Notifications are blocked by your system settings.
-            </p>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-6 text-xs"
-              onClick={() => void window.api.notifications.openSystemSettings()}
-            >
-              Open Notification Settings
-            </Button>
-          </div>
-        </div>
-      )}
-
       <SettingToggle
         label="Enable Notifications"
         description="Native system notifications for background events."

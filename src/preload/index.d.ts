@@ -116,11 +116,8 @@ type CliApi = {
   remove: () => Promise<CliInstallStatus>
 }
 
-type NotificationPermissionStatus = 'authorized' | 'denied' | 'not-determined' | 'unknown'
-
 type NotificationsApi = {
   dispatch: (args: NotificationDispatchRequest) => Promise<NotificationDispatchResult>
-  getPermissionStatus: () => Promise<NotificationPermissionStatus>
   openSystemSettings: () => Promise<void>
 }
 

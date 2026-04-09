@@ -1,44 +1,11 @@
-import { app, BrowserWindow, Notification, ipcMain, systemPreferences, shell } from 'electron'
+import { app, BrowserWindow, Notification, ipcMain, shell } from 'electron'
 import type { Store } from '../persistence'
 import type { NotificationDispatchRequest, NotificationDispatchResult } from '../../shared/types'
 
 const NOTIFICATION_COOLDOWN_MS = 5000
 
-export type NotificationPermissionStatus = 'authorized' | 'denied' | 'not-determined' | 'unknown'
-
-export function getPermissionStatus(): NotificationPermissionStatus {
-  if (process.platform !== 'darwin') {
-    // Windows/Linux don't have a per-app notification permission gate.
-    return Notification.isSupported() ? 'authorized' : 'denied'
-  }
-  // Why: getNotificationSettings() is macOS-only and absent from Electron's
-  // cross-platform type definitions, so we need the cast.
-  const getSettings = (systemPreferences as unknown as Record<string, unknown>)
-    .getNotificationSettings as (() => { authorizationStatus: string }) | undefined
-  if (!getSettings) {
-    return 'unknown'
-  }
-  const settings = getSettings()
-  switch (settings.authorizationStatus) {
-    case 'authorized':
-    case 'provisional':
-      return 'authorized'
-    case 'denied':
-      return 'denied'
-    case 'not determined':
-      return 'not-determined'
-    default:
-      return 'unknown'
-  }
-}
-
 export function registerNotificationHandlers(store: Store): void {
   const recentNotifications = new Map<string, number>()
-
-  ipcMain.removeHandler('notifications:getPermissionStatus')
-  ipcMain.handle('notifications:getPermissionStatus', (): NotificationPermissionStatus => {
-    return getPermissionStatus()
-  })
 
   ipcMain.removeHandler('notifications:openSystemSettings')
   ipcMain.handle('notifications:openSystemSettings', (): void => {
@@ -61,16 +28,6 @@ export function registerNotificationHandlers(store: Store): void {
       const settings = store.getSettings().notifications
       if (!settings.enabled) {
         return { delivered: false, reason: 'disabled' }
-      }
-
-      // Why: even when in-app notifications are enabled, macOS can independently
-      // block them at the system level. Checking here prevents a silent no-op
-      // and lets the renderer show actionable feedback. We only block on 'denied'
-      // — 'not-determined' is allowed through because posting the notification is
-      // what triggers the macOS permission dialog for the first time.
-      const permissionStatus = getPermissionStatus()
-      if (permissionStatus === 'denied') {
-        return { delivered: false, reason: 'system-denied' }
       }
 
       if (
@@ -156,10 +113,6 @@ export function registerNotificationHandlers(store: Store): void {
  */
 export function triggerStartupNotificationRegistration(store: Store): void {
   if (process.platform !== 'darwin' || !Notification.isSupported()) {
-    return
-  }
-  const status = getPermissionStatus()
-  if (status !== 'not-determined') {
     return
   }
   // Why: only fire once per install — not on every launch where status stays
