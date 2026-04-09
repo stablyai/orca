@@ -51,7 +51,7 @@ function ExampleTemplateCard({
 }): React.JSX.Element {
   return (
     <div className="space-y-2">
-      <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+      <p className="text-[10px] tracking-[0.18em] text-muted-foreground">
         Example `orca.yaml` template
       </p>
       <div className="relative rounded-lg border border-border/50 bg-background/70">
