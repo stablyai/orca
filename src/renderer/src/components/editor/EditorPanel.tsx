@@ -31,9 +31,26 @@ type FileContent = {
 
 type DiffContent = GitDiffResult
 
-export default function EditorPanel(): React.JSX.Element | null {
+// Why: when the layout tree changes (e.g., a split creates a new branch), React
+// unmounts and remounts TabGroupPanel instances in the restructured subtree. The
+// remounted EditorPanel loses its local fileContents/diffContents state and would
+// show a blank flash while the IPC re-load completes. This module-level cache
+// lets remounted instances recover content instantly without another IPC round-trip.
+const fileContentCache = new Map<string, FileContent>()
+const diffContentCache = new Map<string, DiffContent>()
+
+type EditorPanelProps = {
+  /** When provided, overrides the global activeFileId from EditorSlice.
+   *  Used by TabGroupPanel so each split group shows its own active file. */
+  activeFileId?: string | null
+}
+
+export default function EditorPanel({
+  activeFileId: activeFileIdProp
+}: EditorPanelProps = {}): React.JSX.Element | null {
   const openFiles = useAppStore((s) => s.openFiles)
-  const activeFileId = useAppStore((s) => s.activeFileId)
+  const globalActiveFileId = useAppStore((s) => s.activeFileId)
+  const activeFileId = activeFileIdProp ?? globalActiveFileId
   const markFileDirty = useAppStore((s) => s.markFileDirty)
   const pendingEditorReveal = useAppStore((s) => s.pendingEditorReveal)
   const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
@@ -47,8 +64,44 @@ export default function EditorPanel(): React.JSX.Element | null {
 
   const activeFile = openFiles.find((f) => f.id === activeFileId) ?? null
 
-  const [fileContents, setFileContents] = useState<Record<string, FileContent>>({})
-  const [diffContents, setDiffContents] = useState<Record<string, DiffContent>>({})
+  const [fileContents, setFileContentsRaw] = useState<Record<string, FileContent>>(() =>
+    Object.fromEntries(fileContentCache)
+  )
+  const [diffContents, setDiffContentsRaw] = useState<Record<string, DiffContent>>(() =>
+    Object.fromEntries(diffContentCache)
+  )
+
+  // Wrapper that keeps the module-level cache in sync with local state
+  const setFileContents: typeof setFileContentsRaw = useCallback((update) => {
+    setFileContentsRaw((prev) => {
+      const next = typeof update === 'function' ? update(prev) : update
+      for (const [id, content] of Object.entries(next)) {
+        fileContentCache.set(id, content)
+      }
+      // Remove entries deleted from state
+      for (const id of Object.keys(prev)) {
+        if (!(id in next)) {
+          fileContentCache.delete(id)
+        }
+      }
+      return next
+    })
+  }, [])
+
+  const setDiffContents: typeof setDiffContentsRaw = useCallback((update) => {
+    setDiffContentsRaw((prev) => {
+      const next = typeof update === 'function' ? update(prev) : update
+      for (const [id, content] of Object.entries(next)) {
+        diffContentCache.set(id, content)
+      }
+      for (const id of Object.keys(prev)) {
+        if (!(id in next)) {
+          diffContentCache.delete(id)
+        }
+      }
+      return next
+    })
+  }, [])
   const [copiedPathToast, setCopiedPathToast] = useState<{ fileId: string; token: number } | null>(
     null
   )

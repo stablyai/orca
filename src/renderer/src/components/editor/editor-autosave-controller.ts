@@ -221,6 +221,7 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
       }
     }
     store.getState().closeFile(fileId)
+    store.getState().closeUnifiedTab(fileId)
   }
 
   const handleSaveFile = async (event: Event): Promise<void> => {

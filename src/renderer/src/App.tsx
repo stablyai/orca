@@ -99,6 +99,7 @@ function App(): React.JSX.Element {
   const refreshAllGitHub = useAppStore((s) => s.refreshAllGitHub)
   const hydrateWorkspaceSession = useAppStore((s) => s.hydrateWorkspaceSession)
   const hydrateEditorSession = useAppStore((s) => s.hydrateEditorSession)
+  const hydrateTabsSession = useAppStore((s) => s.hydrateTabsSession)
   const reconnectPersistedTerminals = useAppStore((s) => s.reconnectPersistedTerminals)
   const hydratePersistedUI = useAppStore((s) => s.hydratePersistedUI)
   const openModal = useAppStore((s) => s.openModal)
@@ -117,6 +118,10 @@ function App(): React.JSX.Element {
   const activeTabTypeByWorktree = useAppStore((s) => s.activeTabTypeByWorktree)
   const activeTabIdByWorktree = useAppStore((s) => s.activeTabIdByWorktree)
 
+  // Unified tab state for session persistence and titlebar hiding
+  const unifiedTabsByWorktree = useAppStore((s) => s.unifiedTabsByWorktree)
+  const groupsByWorktree = useAppStore((s) => s.groupsByWorktree)
+  const layoutByWorktree = useAppStore((s) => s.layoutByWorktree)
   // Right sidebar + editor state
   const toggleRightSidebar = useAppStore((s) => s.toggleRightSidebar)
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
@@ -155,6 +160,7 @@ function App(): React.JSX.Element {
           hydratePersistedUI(persistedUI)
           hydrateWorkspaceSession(session)
           hydrateEditorSession(session)
+          hydrateTabsSession(session)
           await reconnectPersistedTerminals(abortController.signal)
           syncZoomCSSVar()
         }
@@ -205,6 +211,7 @@ function App(): React.JSX.Element {
     hydratePersistedUI,
     hydrateWorkspaceSession,
     hydrateEditorSession,
+    hydrateTabsSession,
     reconnectPersistedTerminals
   ])
 
@@ -243,7 +250,10 @@ function App(): React.JSX.Element {
         terminalLayoutsByTabId,
         activeWorktreeIdsOnShutdown,
         activeTabIdByWorktree,
-        ...buildEditorSessionData(openFiles, activeFileIdByWorktree, activeTabTypeByWorktree)
+        ...buildEditorSessionData(openFiles, activeFileIdByWorktree, activeTabTypeByWorktree),
+        unifiedTabs: unifiedTabsByWorktree,
+        tabGroups: groupsByWorktree,
+        tabGroupLayouts: layoutByWorktree
       })
     }, 150)
 
@@ -258,7 +268,10 @@ function App(): React.JSX.Element {
     openFiles,
     activeFileIdByWorktree,
     activeTabTypeByWorktree,
-    activeTabIdByWorktree
+    activeTabIdByWorktree,
+    unifiedTabsByWorktree,
+    groupsByWorktree,
+    layoutByWorktree
   ])
 
   // On shutdown, capture terminal scrollback buffers and flush to disk.
@@ -291,7 +304,10 @@ function App(): React.JSX.Element {
           state.openFiles,
           state.activeFileIdByWorktree,
           state.activeTabTypeByWorktree
-        )
+        ),
+        unifiedTabs: state.unifiedTabsByWorktree,
+        tabGroups: state.groupsByWorktree,
+        tabGroupLayouts: state.layoutByWorktree
       })
     }
     window.addEventListener('beforeunload', captureAndFlush)
@@ -532,7 +548,10 @@ function App(): React.JSX.Element {
         </div>
         {/* Why: portal target for the TabBar rendered by Terminal.tsx.
             Hidden when tabs should not be visible (settings view, no active worktree)
-            so the portal content does not leak through. */}
+            so the portal content does not leak through. When splits are active,
+            Terminal.tsx skips the portal so the div stays empty, but it must
+            remain visible as a flex-1 spacer to keep the right sidebar toggle
+            pushed to the far right. */}
         <div
           id="titlebar-tabs"
           className={`flex flex-1 min-w-0 self-stretch${activeView === 'settings' || !activeWorktreeId ? ' hidden' : ''}`}

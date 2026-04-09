@@ -36,6 +36,11 @@ type TerminalPaneProps = {
   worktreeId: string
   cwd?: string
   isActive: boolean
+  // Why: in multi-group splits, the active tab in each group must be visible
+  // (display: flex) but only the focused group's terminal should receive
+  // keyboard input. When provided, isVisible controls display independently
+  // of isActive. When omitted, isActive controls both (single-group behavior).
+  isVisible?: boolean
   onPtyExit: (ptyId: string) => void
   onCloseTab: () => void
 }
@@ -45,6 +50,7 @@ export default function TerminalPane({
   worktreeId,
   cwd,
   isActive,
+  isVisible,
   onPtyExit,
   onCloseTab
 }: TerminalPaneProps): React.JSX.Element {
@@ -57,8 +63,11 @@ export default function TerminalPane({
   )
   const paneTransportsRef = useRef<Map<number, PtyTransport>>(new Map())
   const pendingWritesRef = useRef<Map<number, string>>(new Map())
+  const effectiveVisible = isVisible ?? isActive
   const isActiveRef = useRef(isActive)
   isActiveRef.current = isActive
+  const effectiveVisibleRef = useRef(effectiveVisible)
+  effectiveVisibleRef.current = effectiveVisible
 
   const [expandedPaneId, setExpandedPaneId] = useState<number | null>(null)
   const [searchOpen, setSearchOpen] = useState(false)
@@ -230,6 +239,7 @@ export default function TerminalPane({
     paneTransportsRef,
     pendingWritesRef,
     isActiveRef,
+    effectiveVisibleRef,
     onPtyExitRef,
     onPtyErrorRef,
     clearTabPtyId,
@@ -251,7 +261,7 @@ export default function TerminalPane({
   useTerminalFontZoom({ isActive, managerRef, paneFontSizesRef, settingsRef })
 
   useTerminalKeyboardShortcuts({
-    isActive,
+    isActive: isActive,
     managerRef,
     paneTransportsRef,
     expandedPaneIdRef,
@@ -267,6 +277,7 @@ export default function TerminalPane({
   useTerminalPaneGlobalEffects({
     tabId,
     isActive,
+    isVisible: effectiveVisible,
     managerRef,
     containerRef,
     paneTransportsRef,
@@ -502,7 +513,7 @@ export default function TerminalPane({
     : null
 
   const terminalContainerStyle: CSSProperties = {
-    display: isActive ? 'flex' : 'none',
+    display: effectiveVisible ? 'flex' : 'none',
     ['--orca-terminal-divider-color' as string]:
       effectiveAppearance?.dividerColor ?? DEFAULT_TERMINAL_DIVIDER_DARK,
     ['--orca-terminal-divider-color-strong' as string]: normalizeColor(
@@ -549,7 +560,7 @@ export default function TerminalPane({
           transport.sendInput(shellEscapePath(filePath))
         }}
       />
-      {terminalError && isActive && (
+      {terminalError && effectiveVisible && (
         <TerminalErrorToast error={terminalError} onDismiss={() => setTerminalError(null)} />
       )}
       {activePane?.container &&
