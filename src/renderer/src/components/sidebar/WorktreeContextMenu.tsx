@@ -176,7 +176,20 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({ worktree, 
             <XCircle className="size-3.5" />
             Shutdown
           </DropdownMenuItem>
-          <DropdownMenuItem variant="destructive" onSelect={handleDelete} disabled={isDeleting}>
+          {/* Why: `git worktree remove` always rejects the main worktree, so we
+             disable the item upfront. Radix forwards unknown props to the DOM
+             element, so `title` works directly without a wrapper span — this
+             preserves Radix's flat roving-tabindex keyboard navigation. */}
+          <DropdownMenuItem
+            variant="destructive"
+            onSelect={handleDelete}
+            disabled={isDeleting || (!isFolder && worktree.isMainWorktree)}
+            title={
+              !isFolder && worktree.isMainWorktree
+                ? 'The main worktree cannot be deleted'
+                : undefined
+            }
+          >
             <Trash2 className="size-3.5" />
             {isDeleting ? 'Deleting…' : isFolder ? 'Remove Folder from Orca' : 'Delete'}
           </DropdownMenuItem>
