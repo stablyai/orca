@@ -3,7 +3,8 @@ save/load/render lifecycle for many modes (edit, diff, conflict review), and
 keeping that UI state together is easier to reason about than scattering it
 across multiple components. Autosave now lives in a smaller headless controller
 so hidden editor UI no longer participates in shutdown. */
-import React, { useCallback, useEffect, useState, Suspense } from 'react'
+import React, { useCallback, useEffect, useRef, useState, Suspense } from 'react'
+import * as monaco from 'monaco-editor'
 import { Columns2, FileText, Rows2 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { detectLanguage } from '@/lib/language-detect'
@@ -12,6 +13,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor'
 import MarkdownViewToggle from './MarkdownViewToggle'
 import { EditorContent } from './EditorContent'
+import { scrollTopCache, cursorPositionCache, diffViewStateCache } from '@/lib/scroll-cache'
 import type { GitDiffResult } from '../../../../shared/types'
 import {
   getOpenFilesForExternalFileChange,
@@ -69,8 +71,47 @@ export default function EditorPanel({
     }
   }
 
-  const openFilesRef = React.useRef(openFiles)
+  const openFilesRef = useRef(openFiles)
   openFilesRef.current = openFiles
+
+  // Why: keepCurrentModel / keepCurrent*Model retain Monaco models after unmount
+  // so undo history survives tab switches. When a tab is *closed*, the user has
+  // signalled they're done with the file — dispose the models to reclaim memory
+  // and delete cache entries so a reopened file starts fresh.
+  const prevOpenFilesRef = useRef<Map<string, OpenFile>>(new Map())
+
+  useEffect(() => {
+    const currentFilesById = new Map(openFiles.map((f) => [f.id, f]))
+    for (const [prevId, prevFile] of prevOpenFilesRef.current) {
+      if (!currentFilesById.has(prevId)) {
+        // Dispose only the kept-alive Monaco state that this tab mode owns.
+        // Why: edit and diff tabs use different retained-model keys, while the
+        // conflict-review surface does not create kept Monaco models today. An
+        // explicit switch makes that ownership boundary visible so future mode
+        // additions do not silently fall through without considering cleanup.
+        switch (prevFile.mode) {
+          case 'edit':
+            // Why: the edit model URI is constructed via monaco.Uri.parse(filePath)
+            // to match what @monaco-editor/react creates internally when the `path`
+            // prop is provided. This convention is version-dependent.
+            monaco.editor.getModel(monaco.Uri.parse(prevFile.filePath))?.dispose()
+            scrollTopCache.delete(prevFile.filePath)
+            cursorPositionCache.delete(prevFile.filePath)
+            break
+          case 'diff':
+            // Why: kept diff models are keyed by tab id, not file path, because the
+            // same file can appear in multiple diff tabs with different contents.
+            monaco.editor.getModel(monaco.Uri.parse(`diff:original:${prevId}`))?.dispose()
+            monaco.editor.getModel(monaco.Uri.parse(`diff:modified:${prevId}`))?.dispose()
+            diffViewStateCache.delete(prevId)
+            break
+          case 'conflict-review':
+            break
+        }
+      }
+    }
+    prevOpenFilesRef.current = currentFilesById
+  }, [openFiles])
 
   // Load file content when active file changes
   useEffect(() => {
