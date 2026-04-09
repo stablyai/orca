@@ -25,10 +25,15 @@ export default function CodeBlockCopyButton({
       }
     })
 
-    void window.api.ui.writeClipboardText(text).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
-    })
+    void window.api.ui
+      .writeClipboardText(text)
+      .then(() => {
+        setCopied(true)
+        setTimeout(() => setCopied(false), 1500)
+      })
+      .catch(() => {
+        // Silently swallow clipboard write failures (e.g. permission denied).
+      })
   }, [children])
 
   return (

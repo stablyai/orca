@@ -1,12 +1,17 @@
 import React, { useEffect, useId, useRef, useState } from 'react'
 import mermaid from 'mermaid'
+import DOMPurify from 'dompurify'
 
 type MermaidBlockProps = {
   content: string
   isDark: boolean
 }
 
-let initialized = false
+// Why: mermaid.render() manipulates global DOM state (element IDs, internal
+// parser state). Running multiple renders concurrently causes race conditions
+// where one render can clobber another's temporary DOM node. Serializing all
+// render calls through a single promise chain avoids this.
+let renderQueue: Promise<void> = Promise.resolve()
 
 /**
  * Renders a mermaid diagram string as SVG. Falls back to raw source with an
@@ -18,15 +23,10 @@ export default function MermaidBlock({ content, isDark }: MermaidBlockProps): Re
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    // Lazy init: configure mermaid once on first render rather than at import
-    // time to avoid slowing down app startup.
     const theme = isDark ? 'dark' : 'default'
-    if (!initialized) {
-      mermaid.initialize({ startOnLoad: false, theme })
-      initialized = true
-    } else {
-      mermaid.initialize({ startOnLoad: false, theme })
-    }
+    // Re-initialize on every effect so the theme stays in sync with the
+    // current appearance. mermaid.initialize() is cheap and idempotent.
+    mermaid.initialize({ startOnLoad: false, theme })
 
     let cancelled = false
 
@@ -34,7 +34,12 @@ export default function MermaidBlock({ content, isDark }: MermaidBlockProps): Re
       try {
         const { svg } = await mermaid.render(`mermaid-${id}`, content)
         if (!cancelled && containerRef.current) {
-          containerRef.current.innerHTML = svg
+          // Why: although mermaid uses DOMPurify internally, we add an explicit
+          // sanitization pass as defense-in-depth against XSS in case upstream
+          // behaviour changes or a mermaid version ships without sanitization.
+          containerRef.current.innerHTML = DOMPurify.sanitize(svg, {
+            USE_PROFILES: { svg: true }
+          })
           setError(null)
         }
       } catch (err) {
@@ -47,7 +52,9 @@ export default function MermaidBlock({ content, isDark }: MermaidBlockProps): Re
       }
     }
 
-    void render()
+    // Serialize render calls through a module-level queue to avoid race
+    // conditions from concurrent mermaid.render() invocations.
+    renderQueue = renderQueue.then(render, render)
     return () => {
       cancelled = true
     }

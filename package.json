@@ -69,6 +69,7 @@
     "@xterm/xterm": "^6.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "dompurify": "^3.3.3",
     "electron-updater": "^6.8.3",
     "hosted-git-info": "^9.0.2",
     "lowlight": "^3.3.0",

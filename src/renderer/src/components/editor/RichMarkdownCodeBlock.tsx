@@ -62,10 +62,15 @@ export function RichMarkdownCodeBlock({
     (e: React.MouseEvent) => {
       e.stopPropagation()
       const text = node.textContent
-      void window.api.ui.writeClipboardText(text).then(() => {
-        setCopied(true)
-        setTimeout(() => setCopied(false), 1500)
-      })
+      void window.api.ui
+        .writeClipboardText(text)
+        .then(() => {
+          setCopied(true)
+          setTimeout(() => setCopied(false), 1500)
+        })
+        .catch(() => {
+          // Silently swallow clipboard write failures (e.g. permission denied).
+        })
     },
     [node]
   )

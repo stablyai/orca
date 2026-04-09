@@ -276,11 +276,17 @@ export default function MarkdownPreview({
       )
     },
     // Why: Wrap <pre> blocks with a positioned container so a copy button can
-    // overlay the code block. Mermaid diagrams are excluded because MermaidBlock
-    // replaces the <code> child — the <pre> wrapper never receives diagram content.
-    pre: ({ children, ...props }) => (
-      <CodeBlockCopyButton {...props}>{children}</CodeBlockCopyButton>
-    )
+    // overlay the code block. Mermaid diagrams are detected and passed through
+    // unwrapped — MermaidBlock renders via useEffect/innerHTML, not React children,
+    // so CodeBlockCopyButton's extractText() would copy an empty string, and a
+    // <div> inside <pre> produces invalid HTML.
+    pre: ({ children, ...props }) => {
+      const child = React.Children.toArray(children)[0]
+      if (React.isValidElement(child) && child.type === MermaidBlock) {
+        return <>{children}</>
+      }
+      return <CodeBlockCopyButton {...props}>{children}</CodeBlockCopyButton>
+    }
   }
 
   return (
