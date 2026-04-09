@@ -227,7 +227,6 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
     handleOpenChange,
     resolvedSetupDecision,
     selectedRepo,
-    setupConfig,
     shouldWaitForSetupCheck
   ])
 
