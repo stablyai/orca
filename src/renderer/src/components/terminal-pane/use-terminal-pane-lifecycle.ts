@@ -205,7 +205,7 @@ export function useTerminalPaneLifecycle({
         linkProviderDisposablesRef.current.set(pane.id, linkProviderDisposable)
         pane.terminal.options.linkHandler = {
           allowNonHttpProtocols: true,
-          activate: (event, text) => handleOscLink(text, event as MouseEvent | undefined),
+          activate: (event, text) => handleOscLink(text, event as MouseEvent | undefined, linkDeps),
           // Show bottom-left tooltip on hover for OSC 8 hyperlinks (e.g.
           // GitHub owner/repo#issue references emitted by CLI tools) — same
           // behaviour as the WebLinksAddon provides for plain-text URLs.
@@ -299,7 +299,7 @@ export function useTerminalPaneLifecycle({
         if (!event) {
           return
         }
-        void handleOscLink(url, event)
+        void handleOscLink(url, event, linkDeps)
       }
     })
 

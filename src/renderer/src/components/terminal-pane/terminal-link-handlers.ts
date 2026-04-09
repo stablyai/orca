@@ -158,7 +158,8 @@ export function isTerminalLinkActivation(
 
 export function handleOscLink(
   rawText: string,
-  event: Pick<MouseEvent, 'metaKey' | 'ctrlKey'> | undefined
+  event: Pick<MouseEvent, 'metaKey' | 'ctrlKey'> | undefined,
+  deps: Pick<LinkHandlerDeps, 'worktreeId' | 'worktreePath'>
 ): void {
   if (!isTerminalLinkActivation(event)) {
     return
@@ -177,6 +178,20 @@ export function handleOscLink(
   }
 
   if (parsed.protocol === 'file:') {
-    void window.api.shell.openFileUri(parsed.toString())
+    // Why: file:// URIs should open inside Orca, not via the OS default editor
+    // (shell.openPath). We extract the path from the URI and route it through
+    // the same openDetectedFilePath logic used for detected file-path links.
+    // Only local files are supported — remote hosts (file://remote/…) are rejected
+    // because we cannot open them as local paths.
+    if (parsed.hostname && parsed.hostname !== 'localhost') {
+      return
+    }
+    let filePath = decodeURIComponent(parsed.pathname)
+    // Why: on Windows, file:///C:/foo yields pathname "/C:/foo". The leading
+    // slash must be stripped to produce a valid Windows path ("C:/foo").
+    if (/^\/[A-Za-z]:/.test(filePath)) {
+      filePath = filePath.slice(1)
+    }
+    openDetectedFilePath(filePath, null, null, deps)
   }
 }
