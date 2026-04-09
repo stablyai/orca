@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <img src="file-drag.gif" alt="Orca Screenshot" width="800" />
+  <img src="docs/assets/file-drag.gif" alt="Orca Screenshot" width="800" />
 </p>
 
 ## Introducing the Orca CLI
