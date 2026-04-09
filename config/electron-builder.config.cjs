@@ -5,7 +5,7 @@ module.exports = {
   appId: 'com.stablyai.orca',
   productName: 'Orca',
   directories: {
-    buildResources: 'build'
+    buildResources: 'resources/build'
   },
   files: [
     '!**/.vscode/*',
@@ -37,9 +37,9 @@ module.exports = {
     createDesktopShortcut: 'always'
   },
   mac: {
-    icon: 'build/icon.icns',
-    entitlements: 'build/entitlements.mac.plist',
-    entitlementsInherit: 'build/entitlements.mac.plist',
+    icon: 'resources/build/icon.icns',
+    entitlements: 'resources/build/entitlements.mac.plist',
+    entitlementsInherit: 'resources/build/entitlements.mac.plist',
     extendInfo: {
       NSCameraUsageDescription: "Application requests access to the device's camera.",
       NSMicrophoneUsageDescription: "Application requests access to the device's microphone.",

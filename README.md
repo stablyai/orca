@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://onOrca.dev"><img src="build/icon.png" alt="Orca" width="128" /></a>
+  <a href="https://onOrca.dev"><img src="resources/build/icon.png" alt="Orca" width="128" /></a>
 </p>
 
 <h1 align="center">Orca</h1>

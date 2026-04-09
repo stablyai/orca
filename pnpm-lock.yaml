@@ -7,7 +7,7 @@ settings:
 patchedDependencies:
   '@xterm/addon-fit@0.11.0':
     hash: 12b1dc2811a859b6703ebb63be654d1682ff1bb6045713a54e7d47e28deb7776
-    path: patches/@xterm__addon-fit@0.11.0.patch
+    path: config/patches/@xterm__addon-fit@0.11.0.patch
 
 importers:
 

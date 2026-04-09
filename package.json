@@ -24,14 +24,14 @@
     "start": "electron-vite preview",
     "dev": "electron-vite dev",
     "build:cli": "tsc -p config/tsconfig.cli.json --outDir out --composite false --incremental false",
-    "build:electron-vite": "node scripts/run-electron-vite-build.mjs",
+    "build:electron-vite": "node config/scripts/run-electron-vite-build.mjs",
     "build": "pnpm run typecheck && pnpm run build:electron-vite && pnpm run build:cli",
     "postinstall": "pnpm rebuild electron && electron-builder install-app-deps",
     "build:unpack": "pnpm run build && electron-builder --config config/electron-builder.config.cjs --dir",
     "build:win": "pnpm run build && electron-builder --config config/electron-builder.config.cjs --win",
-    "build:icons": "bash icon/generate.sh",
+    "build:icons": "bash resources/icon-source/generate.sh",
     "build:mac": "pnpm run build && electron-builder --config config/electron-builder.config.cjs --mac",
-    "build:mac:release": "node scripts/verify-macos-release-env.mjs && ORCA_MAC_RELEASE=1 pnpm run build && ORCA_MAC_RELEASE=1 electron-builder --config config/electron-builder.config.cjs --mac",
+    "build:mac:release": "node config/scripts/verify-macos-release-env.mjs && ORCA_MAC_RELEASE=1 pnpm run build && ORCA_MAC_RELEASE=1 electron-builder --config config/electron-builder.config.cjs --mac",
     "build:linux": "pnpm run build && electron-builder --config config/electron-builder.config.cjs --linux",
     "release:rc": "npm version prerelease --preid=rc && git push --follow-tags",
     "release:patch": "npm version patch && git push --follow-tags",
@@ -127,7 +127,7 @@
       "node-pty"
     ],
     "patchedDependencies": {
-      "@xterm/addon-fit@0.11.0": "patches/@xterm__addon-fit@0.11.0.patch"
+      "@xterm/addon-fit@0.11.0": "config/patches/@xterm__addon-fit@0.11.0.patch"
     }
   }
 }
