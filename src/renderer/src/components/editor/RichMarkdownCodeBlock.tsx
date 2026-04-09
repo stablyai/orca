@@ -1,6 +1,9 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, useState } from 'react'
 import { NodeViewContent, NodeViewWrapper } from '@tiptap/react'
 import type { NodeViewProps } from '@tiptap/react'
+import { Copy, Check } from 'lucide-react'
+import { useAppStore } from '@/store'
+import MermaidBlock from './MermaidBlock'
 
 /**
  * Common languages shown in the selector. The user can also type a language
@@ -22,6 +25,7 @@ const LANGUAGES = [
   { value: 'json', label: 'JSON' },
   { value: 'kotlin', label: 'Kotlin' },
   { value: 'markdown', label: 'Markdown' },
+  { value: 'mermaid', label: 'Mermaid' },
   { value: 'python', label: 'Python' },
   { value: 'ruby', label: 'Ruby' },
   { value: 'rust', label: 'Rust' },
@@ -39,12 +43,31 @@ export function RichMarkdownCodeBlock({
   updateAttributes
 }: NodeViewProps): React.JSX.Element {
   const language = (node.attrs.language as string) || ''
+  const [copied, setCopied] = useState(false)
+  const settings = useAppStore((s) => s.settings)
+  const isDark =
+    settings?.theme === 'dark' ||
+    (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+
+  const isMermaid = language === 'mermaid'
 
   const onChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement>) => {
       updateAttributes({ language: e.target.value })
     },
     [updateAttributes]
+  )
+
+  const handleCopy = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation()
+      const text = node.textContent
+      void window.api.ui.writeClipboardText(text).then(() => {
+        setCopied(true)
+        setTimeout(() => setCopied(false), 1500)
+      })
+    },
+    [node]
   )
 
   return (
@@ -65,7 +88,32 @@ export function RichMarkdownCodeBlock({
           <option value={language}>{language}</option>
         ) : null}
       </select>
+      <button
+        type="button"
+        className="code-block-copy-btn"
+        contentEditable={false}
+        onClick={handleCopy}
+        aria-label="Copy code"
+        title="Copy code"
+      >
+        {copied ? (
+          <>
+            <Check size={14} />
+            <span className="code-block-copy-label">Copied</span>
+          </>
+        ) : (
+          <Copy size={14} />
+        )}
+      </button>
       <NodeViewContent<'pre'> as="pre" />
+      {/* Why: mermaid diagrams render as a live SVG preview below the editable
+          source so users can see the result while editing. The code block stays
+          editable — the diagram is read-only output. */}
+      {isMermaid && node.textContent.trim() && (
+        <div contentEditable={false} className="mermaid-preview">
+          <MermaidBlock content={node.textContent.trim()} isDark={isDark} />
+        </div>
+      )}
     </NodeViewWrapper>
   )
 }

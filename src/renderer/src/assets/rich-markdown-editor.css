@@ -1,0 +1,611 @@
+/* ── Rich Markdown Editor ─────────────────────────────── */
+
+.rich-markdown-editor-shell {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  height: 100%;
+  flex-direction: column;
+  background: var(--editor-surface);
+}
+
+.rich-markdown-editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  background: color-mix(in srgb, var(--background) 84%, transparent);
+}
+
+.rich-markdown-toolbar-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.rich-markdown-toolbar-separator {
+  width: 1px;
+  height: 18px;
+  background: color-mix(in srgb, var(--border) 72%, transparent);
+  flex-shrink: 0;
+}
+
+.rich-markdown-toolbar-button:hover,
+.rich-markdown-toolbar-button.is-active {
+  border-color: color-mix(in srgb, var(--border) 82%, transparent);
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+.rich-markdown-search {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  width: fit-content;
+  max-width: min(100%, 460px);
+  margin-left: auto;
+  margin-right: 12px;
+  margin-top: 8px;
+  margin-bottom: 6px;
+  padding: 0 2px 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--background);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
+}
+
+.rich-markdown-search-field {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  width: 220px;
+  border: 1px solid var(--ring);
+  background: var(--background);
+  flex: 0 1 auto;
+}
+
+.rich-markdown-search-status {
+  min-width: 0;
+  padding: 0 6px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+
+.rich-markdown-search-divider {
+  width: 1px;
+  height: 16px;
+  margin: 0 2px;
+  background: var(--border);
+}
+
+.rich-markdown-search-input {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.rich-markdown-search-button {
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  padding: 0;
+  border-radius: 2px;
+  color: var(--muted-foreground);
+}
+
+.rich-markdown-search-button:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+.rich-markdown-search-match {
+  padding: 0;
+  border-radius: 2px;
+  background: color-mix(in srgb, #facc15 50%, transparent);
+}
+
+.rich-markdown-search-match[data-active='true'] {
+  background: color-mix(in srgb, #fb923c 60%, transparent);
+}
+
+.rich-markdown-editor {
+  min-height: 100%;
+  padding: 24px 32px 96px;
+  font-size: calc(14px + (var(--editor-font-zoom-level, 0) * 1px));
+  line-height: 1.7;
+  outline: none;
+}
+
+.rich-markdown-editor p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  color: var(--muted-foreground);
+}
+
+.rich-markdown-editor h1,
+.rich-markdown-editor h2,
+.rich-markdown-editor h3,
+.rich-markdown-editor h4,
+.rich-markdown-editor h5,
+.rich-markdown-editor h6 {
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.rich-markdown-editor > :first-child {
+  margin-top: 0;
+}
+
+.rich-markdown-editor h1 {
+  font-size: 1.85em;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.rich-markdown-editor h2 {
+  font-size: 1.4em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--border);
+}
+
+.rich-markdown-editor h3 {
+  font-size: 1.15em;
+}
+
+.rich-markdown-editor p,
+.rich-markdown-editor ul,
+.rich-markdown-editor ol,
+.rich-markdown-editor blockquote {
+  margin: 0.75em 0;
+}
+
+.rich-markdown-editor ul,
+.rich-markdown-editor ol {
+  padding-left: 1.5em;
+}
+
+.rich-markdown-editor ul {
+  list-style: disc;
+}
+
+.rich-markdown-editor ol {
+  list-style: decimal;
+}
+
+/* Tiptap wraps each list item's content in a <p>, which inherits the global
+   paragraph margin and bloats inter-item spacing. Suppress it so lists render
+   tight, matching the preview surface. */
+.rich-markdown-editor li > p {
+  margin: 0;
+}
+
+.rich-markdown-editor li {
+  margin: 0.15em 0;
+}
+
+.rich-markdown-editor ul[data-type='taskList'] {
+  padding-left: 0;
+  list-style: none;
+}
+
+/* Why: nested task lists inside a task item need left padding so they indent
+   under the parent checkbox, matching how nested bullet/ordered lists look. */
+.rich-markdown-editor ul[data-type='taskList'] ul[data-type='taskList'] {
+  padding-left: 0.75em;
+}
+
+.rich-markdown-editor ul[data-type='taskList'] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.rich-markdown-editor ul[data-type='taskList'] li > label {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  height: 1.55em;
+  cursor: pointer;
+  user-select: none;
+}
+
+.rich-markdown-editor ul[data-type='taskList'] li > label input[type='checkbox'] {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid color-mix(in srgb, var(--foreground) 35%, transparent);
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.rich-markdown-editor ul[data-type='taskList'] li > label input[type='checkbox']:checked {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.rich-markdown-editor ul[data-type='taskList'] li > label input[type='checkbox']:checked::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 5px;
+  height: 9px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.rich-markdown-editor ul[data-type='taskList'] li > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.rich-markdown-editor ul[data-type='taskList'] li > div > p {
+  margin: 0;
+}
+
+.rich-markdown-editor ul[data-type='taskList'] li[data-checked='true'] > div {
+  text-decoration: line-through;
+  color: var(--muted-foreground);
+}
+
+.rich-markdown-editor blockquote {
+  padding: 0.5em 1em;
+  border-left: 3px solid var(--border);
+  border-radius: 0 6px 6px 0;
+  color: var(--muted-foreground);
+  background: color-mix(in srgb, var(--foreground) 2%, transparent);
+}
+
+.rich-markdown-editor code {
+  padding: 0.2em 0.4em;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+  font-size: 0.88em;
+  font-family: var(--font-mono, monospace);
+}
+
+.rich-markdown-code-block-wrapper {
+  position: relative;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--foreground) 6%, transparent);
+  margin: 0.75em 0;
+}
+
+.rich-markdown-code-block-lang {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 1;
+  padding: 1px 4px;
+  border-radius: 4px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+  background: color-mix(in srgb, var(--background) 80%, transparent);
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+  cursor: pointer;
+}
+
+/* Copy button inside rich-mode code blocks — sits to the left of the
+   language selector, appears on hover. */
+.rich-markdown-code-block-wrapper .code-block-copy-btn {
+  position: absolute;
+  top: 6px;
+  right: 115px;
+  z-index: 1;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 2px;
+  cursor: pointer;
+  color: var(--muted-foreground);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.rich-markdown-code-block-wrapper:hover .code-block-copy-btn {
+  opacity: 1;
+}
+.rich-markdown-code-block-wrapper .code-block-copy-btn:hover {
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+/* Live mermaid diagram preview rendered below the editable source */
+.mermaid-preview {
+  padding: 12px 18px;
+  border-top: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+
+.rich-markdown-editor pre {
+  padding: 14px 18px;
+  border-radius: 8px;
+  overflow-x: auto;
+  line-height: 1.55;
+  background: transparent;
+}
+
+.rich-markdown-editor pre code {
+  padding: 0;
+  background: transparent;
+}
+
+/* Why: CodeBlockLowlight's decoration plugin adds hljs class spans directly
+   inside the <pre> contentDOM — there is no <code> wrapper when using a
+   React NodeView, so selectors must target pre > .hljs-* directly. */
+.rich-markdown-code-block-wrapper .hljs-keyword {
+  color: #cf222e;
+}
+.rich-markdown-code-block-wrapper .hljs-string {
+  color: #0a3069;
+}
+.rich-markdown-code-block-wrapper .hljs-number {
+  color: #0550ae;
+}
+.rich-markdown-code-block-wrapper .hljs-comment {
+  color: #6e7781;
+  font-style: italic;
+}
+.rich-markdown-code-block-wrapper .hljs-function {
+  color: #8250df;
+}
+.rich-markdown-code-block-wrapper .hljs-title {
+  color: #8250df;
+}
+.rich-markdown-code-block-wrapper .hljs-built_in {
+  color: #0550ae;
+}
+.rich-markdown-code-block-wrapper .hljs-type {
+  color: #0550ae;
+}
+.rich-markdown-code-block-wrapper .hljs-attr {
+  color: #0550ae;
+}
+.rich-markdown-code-block-wrapper .hljs-selector-class {
+  color: #0550ae;
+}
+.rich-markdown-code-block-wrapper .hljs-variable {
+  color: #953800;
+}
+.rich-markdown-code-block-wrapper .hljs-meta {
+  color: #6e7781;
+}
+.rich-markdown-code-block-wrapper .hljs-tag {
+  color: #116329;
+}
+.rich-markdown-code-block-wrapper .hljs-name {
+  color: #116329;
+}
+.rich-markdown-code-block-wrapper .hljs-params {
+  color: #953800;
+}
+.rich-markdown-code-block-wrapper .hljs-literal {
+  color: #0550ae;
+}
+.rich-markdown-code-block-wrapper .hljs-regexp {
+  color: #0a3069;
+}
+.rich-markdown-code-block-wrapper .hljs-operator {
+  color: #cf222e;
+}
+.rich-markdown-code-block-wrapper .hljs-property {
+  color: #0550ae;
+}
+
+.dark .rich-markdown-code-block-wrapper .hljs-keyword {
+  color: #ff7b72;
+}
+.dark .rich-markdown-code-block-wrapper .hljs-string {
+  color: #a5d6ff;
+}
+.dark .rich-markdown-code-block-wrapper .hljs-number {
+  color: #79c0ff;
+}
+.dark .rich-markdown-code-block-wrapper .hljs-comment {
+  color: #8b949e;
+  font-style: italic;
+}
+.dark .rich-markdown-code-block-wrapper .hljs-function {
+  color: #d2a8ff;
+}
+.dark .rich-markdown-code-block-wrapper .hljs-title {
+  color: #d2a8ff;
+}
+.dark .rich-markdown-code-block-wrapper .hljs-built_in {
+  color: #79c0ff;
+}
+.dark .rich-markdown-code-block-wrapper .hljs-type {
+  color: #79c0ff;
+}
+.dark .rich-markdown-code-block-wrapper .hljs-attr {
+  color: #79c0ff;
+}
+.dark .rich-markdown-code-block-wrapper .hljs-selector-class {
+  color: #79c0ff;
+}
+.dark .rich-markdown-code-block-wrapper .hljs-variable {
+  color: #ffa657;
+}
+.dark .rich-markdown-code-block-wrapper .hljs-meta {
+  color: #8b949e;
+}
+.dark .rich-markdown-code-block-wrapper .hljs-tag {
+  color: #7ee787;
+}
+.dark .rich-markdown-code-block-wrapper .hljs-name {
+  color: #7ee787;
+}
+.dark .rich-markdown-code-block-wrapper .hljs-params {
+  color: #ffa657;
+}
+.dark .rich-markdown-code-block-wrapper .hljs-literal {
+  color: #79c0ff;
+}
+.dark .rich-markdown-code-block-wrapper .hljs-regexp {
+  color: #a5d6ff;
+}
+.dark .rich-markdown-code-block-wrapper .hljs-operator {
+  color: #ff7b72;
+}
+.dark .rich-markdown-code-block-wrapper .hljs-property {
+  color: #79c0ff;
+}
+
+.rich-markdown-editor hr {
+  margin: 1.5em 0;
+  border: none;
+  border-top: 1px solid var(--border);
+}
+
+.rich-markdown-editor a {
+  color: #0969da;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+  text-underline-offset: 2px;
+}
+
+.dark .rich-markdown-editor a {
+  color: #58a6ff;
+}
+
+.rich-markdown-editor img {
+  max-width: 100%;
+  border-radius: 8px;
+}
+
+.rich-markdown-editor .ProseMirror-selectednode {
+  outline: 2px solid color-mix(in srgb, var(--ring) 78%, transparent);
+  outline-offset: 2px;
+}
+
+.rich-markdown-slash-menu {
+  position: absolute;
+  z-index: 30;
+  display: flex;
+  width: min(320px, calc(100% - 24px));
+  max-height: 280px;
+  flex-direction: column;
+  overflow-y: auto;
+  border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--background) 92%, transparent);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(16px);
+}
+
+.rich-markdown-slash-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.rich-markdown-slash-item:hover,
+.rich-markdown-slash-item.is-active {
+  background: var(--accent);
+}
+
+.rich-markdown-slash-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+  color: var(--muted-foreground);
+}
+
+/* ── Link Bubble ──────────────────────────────────────── */
+
+.rich-markdown-link-bubble {
+  position: absolute;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px;
+  border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--background) 92%, transparent);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  backdrop-filter: blur(16px);
+}
+
+.rich-markdown-link-url {
+  padding: 2px 6px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono, monospace);
+}
+
+.rich-markdown-link-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted-foreground);
+}
+
+.rich-markdown-link-button:hover {
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+.rich-markdown-link-input {
+  font-size: 13px;
+  width: 280px;
+  padding: 4px 8px;
+  border: none;
+  background: transparent;
+  color: var(--foreground);
+  outline: none;
+  font-family: var(--font-mono, monospace);
+}
+
+.rich-markdown-link-input::placeholder {
+  color: var(--muted-foreground);
+}

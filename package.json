@@ -73,6 +73,7 @@
     "hosted-git-info": "^9.0.2",
     "lowlight": "^3.3.0",
     "lucide-react": "^0.577.0",
+    "mermaid": "^11.14.0",
     "monaco-editor": "^0.55.1",
     "node-pty": "^1.1.0",
     "radix-ui": "^1.4.3",

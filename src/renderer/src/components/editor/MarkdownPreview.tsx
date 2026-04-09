@@ -12,6 +12,8 @@ import { computeEditorFontSize } from '@/lib/editor-font-zoom'
 import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
 import { getMarkdownPreviewLinkTarget } from './markdown-preview-links'
 import { useLocalImageSrc } from './useLocalImageSrc'
+import CodeBlockCopyButton from './CodeBlockCopyButton'
+import MermaidBlock from './MermaidBlock'
 import {
   applyMarkdownPreviewSearchHighlights,
   clearMarkdownPreviewSearchHighlights,
@@ -259,7 +261,26 @@ export default function MarkdownPreview({
       // are valid here despite the lowercase function name.
       const resolvedSrc = useLocalImageSrc(src, filePath)
       return <img {...props} src={resolvedSrc} alt={alt ?? ''} />
-    }
+    },
+    // Why: Intercept code elements to detect mermaid fenced blocks. rehype-highlight
+    // sets className="language-mermaid" on the <code> inside <pre> for ```mermaid blocks.
+    // We render those as SVG diagrams instead of highlighted source.
+    code: ({ className, children, ...props }) => {
+      if (/language-mermaid/.test(className || '')) {
+        return <MermaidBlock content={String(children).trimEnd()} isDark={isDark} />
+      }
+      return (
+        <code className={className} {...props}>
+          {children}
+        </code>
+      )
+    },
+    // Why: Wrap <pre> blocks with a positioned container so a copy button can
+    // overlay the code block. Mermaid diagrams are excluded because MermaidBlock
+    // replaces the <code> child — the <pre> wrapper never receives diagram content.
+    pre: ({ children, ...props }) => (
+      <CodeBlockCopyButton {...props}>{children}</CodeBlockCopyButton>
+    )
   }
 
   return (
