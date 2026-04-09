@@ -4,6 +4,13 @@ import type { NotificationDispatchRequest, NotificationDispatchResult } from '..
 
 const NOTIFICATION_COOLDOWN_MS = 5000
 
+// Why: Electron Notification objects are normal JS objects — if the only
+// reference is a local variable inside the ipcMain handler, the GC can
+// collect them (and their click handlers) before the user interacts with
+// the notification in macOS Notification Center. Prevent this by keeping a
+// strong reference until the notification is clicked or closed.
+const activeNotifications = new Set<Notification>()
+
 export function registerNotificationHandlers(store: Store): void {
   const recentNotifications = new Map<string, number>()
 
@@ -69,15 +76,30 @@ export function registerNotificationHandlers(store: Store): void {
 
       const notification = new Notification(buildNotificationOptions(args))
 
+      // Why: prevent GC from collecting the notification (and its click
+      // handler) while it's still visible in macOS Notification Center.
+      activeNotifications.add(notification)
+      const release = (): void => {
+        activeNotifications.delete(notification)
+      }
+      notification.on('close', release)
+      // Why: on macOS the 'close' event may never fire if the OS silently
+      // discards the notification (e.g. DND, Notification Center cleared).
+      // A timeout fallback guarantees the reference is eventually freed.
+      setTimeout(release, 5 * 60 * 1000)
+
       // Why: clicking a notification should bring Orca to the foreground and
       // switch to the worktree that triggered it. We reuse the existing
       // ui:activateWorktree IPC channel that the renderer already handles
       // (setActiveRepo, setActiveView, setActiveWorktree, revealInSidebar).
-      if (args.worktreeId) {
-        const repoId = args.worktreeId.includes('::')
-          ? args.worktreeId.slice(0, args.worktreeId.indexOf('::'))
-          : ''
+      // Why: worktreeId is formatted as "repoId::worktreePath".  If the
+      // separator is missing we cannot reliably extract a repoId, so skip
+      // the click-to-navigate binding — the notification still fires but
+      // clicking it will not attempt to switch to an unknown worktree.
+      if (args.worktreeId && args.worktreeId.includes('::')) {
+        const repoId = args.worktreeId.slice(0, args.worktreeId.indexOf('::'))
         notification.on('click', () => {
+          release()
           const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed())
           if (!win) {
             return
