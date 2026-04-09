@@ -24,6 +24,9 @@ type UseTerminalPaneLifecycleDeps = {
   worktreeId: string
   cwd?: string
   startup?: { command: string; env?: Record<string, string> } | null
+  /** When present, the initial pane boots clean and a right-side split pane is
+   *  created to run the setup command — keeping the main terminal interactive. */
+  setupSplit?: { command: string; env?: Record<string, string> } | null
   isActive: boolean
   systemPrefersDark: boolean
   settings: GlobalSettings | null | undefined
@@ -64,6 +67,7 @@ export function useTerminalPaneLifecycle({
   worktreeId,
   cwd,
   startup,
+  setupSplit,
   isActive,
   systemPrefersDark,
   settings,
@@ -349,6 +353,22 @@ export function useTerminalPaneLifecycle({
     } else {
       setExpandedPane(null)
     }
+    // Why: setup split creates a right-side pane for the setup script so the
+    // main (left) terminal stays immediately usable. We inject the setup command
+    // into ptyDeps.startup right before splitting — connectPanePty (called from
+    // onPaneCreated) reads it synchronously and clears it, so only the new pane
+    // gets the command. The initial pane already consumed startup=null above.
+    if (setupSplit) {
+      const initialPane = manager.getActivePane() ?? manager.getPanes()[0]
+      if (initialPane) {
+        ptyDeps.startup = { command: setupSplit.command, env: setupSplit.env }
+        manager.splitPane(initialPane.id, 'vertical')
+        // Restore focus to the main (left) pane so the user's terminal
+        // receives keyboard input — the setup pane runs unattended.
+        manager.setActivePane(initialPane.id, { focus: isActive })
+      }
+    }
+
     shouldPersistLayout = true
     syncCanExpandState()
     applyAppearance(manager)

@@ -26,6 +26,10 @@ export type TerminalSlice = {
   canExpandPaneByTabId: Record<string, boolean>
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>
   pendingStartupByTabId: Record<string, { command: string; env?: Record<string, string> }>
+  /** Queued setup-split requests — when present, TerminalPane creates the
+   *  initial pane clean, then splits right and runs the command in the new pane
+   *  so the main terminal stays immediately interactive. */
+  pendingSetupSplitByTabId: Record<string, { command: string; env?: Record<string, string> }>
   tabBarOrderByWorktree: Record<string, string[]>
   workspaceSessionReady: boolean
   pendingReconnectWorktreeIds: string[]
@@ -52,6 +56,11 @@ export type TerminalSlice = {
   consumeTabStartupCommand: (
     tabId: string
   ) => { command: string; env?: Record<string, string> } | null
+  queueTabSetupSplit: (
+    tabId: string,
+    startup: { command: string; env?: Record<string, string> }
+  ) => void
+  consumeTabSetupSplit: (tabId: string) => { command: string; env?: Record<string, string> } | null
   /** Per-pane timestamp (ms) when the prompt-cache countdown started (agent became idle).
    *  Keys are `${tabId}:${paneId}` composites so split-pane tabs can track each pane
    *  independently. null means no active timer for that pane. */
@@ -74,6 +83,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   canExpandPaneByTabId: {},
   terminalLayoutsByTabId: {},
   pendingStartupByTabId: {},
+  pendingSetupSplitByTabId: {},
   tabBarOrderByWorktree: {},
   workspaceSessionReady: false,
   pendingReconnectWorktreeIds: [],
@@ -182,6 +192,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       delete nextPtyIdsByTabId[tabId]
       const nextPendingStartupByTabId = { ...s.pendingStartupByTabId }
       delete nextPendingStartupByTabId[tabId]
+      const nextPendingSetupSplitByTabId = { ...s.pendingSetupSplitByTabId }
+      delete nextPendingSetupSplitByTabId[tabId]
       const nextCacheTimer = { ...s.cacheTimerByKey }
       // Why: cache timer keys are `${tabId}:${paneId}` composites. Remove all
       // entries for the closing tab, regardless of how many panes it had.
@@ -209,6 +221,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         canExpandPaneByTabId: nextCanExpand,
         terminalLayoutsByTabId: nextLayouts,
         pendingStartupByTabId: nextPendingStartupByTabId,
+        pendingSetupSplitByTabId: nextPendingSetupSplitByTabId,
         cacheTimerByKey: nextCacheTimer
       }
     })
@@ -485,6 +498,30 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const next = { ...s.pendingStartupByTabId }
       delete next[tabId]
       return { pendingStartupByTabId: next }
+    })
+
+    return pending
+  },
+
+  queueTabSetupSplit: (tabId, startup) => {
+    set((s) => ({
+      pendingSetupSplitByTabId: {
+        ...s.pendingSetupSplitByTabId,
+        [tabId]: startup
+      }
+    }))
+  },
+
+  consumeTabSetupSplit: (tabId) => {
+    const pending = get().pendingSetupSplitByTabId[tabId]
+    if (!pending) {
+      return null
+    }
+
+    set((s) => {
+      const next = { ...s.pendingSetupSplitByTabId }
+      delete next[tabId]
+      return { pendingSetupSplitByTabId: next }
     })
 
     return pending

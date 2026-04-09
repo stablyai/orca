@@ -95,12 +95,20 @@ export default function TerminalPane({
   const settings = useAppStore((store) => store.settings)
   const [startup] = useState(() => useAppStore.getState().pendingStartupByTabId[tabId])
   const consumeTabStartupCommand = useAppStore((store) => store.consumeTabStartupCommand)
+  const [setupSplit] = useState(() => useAppStore.getState().pendingSetupSplitByTabId[tabId])
+  const consumeTabSetupSplit = useAppStore((store) => store.consumeTabSetupSplit)
 
   useEffect(() => {
     if (startup) {
       consumeTabStartupCommand(tabId)
     }
   }, [startup, tabId, consumeTabStartupCommand])
+
+  useEffect(() => {
+    if (setupSplit) {
+      consumeTabSetupSplit(tabId)
+    }
+  }, [setupSplit, tabId, consumeTabSetupSplit])
 
   const settingsRef = useRef(settings)
   settingsRef.current = settings
@@ -219,6 +227,7 @@ export default function TerminalPane({
     worktreeId,
     cwd,
     startup,
+    setupSplit,
     isActive,
     systemPrefersDark,
     settings,

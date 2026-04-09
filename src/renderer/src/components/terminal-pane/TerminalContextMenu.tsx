@@ -130,6 +130,7 @@ export default function TerminalContextMenu({
             <DropdownMenuItem variant="destructive" onSelect={onClosePane}>
               <X />
               Close Pane
+              <DropdownMenuShortcut>{mod}W</DropdownMenuShortcut>
             </DropdownMenuItem>
           </>
         )}
