@@ -1,12 +1,12 @@
 import { app, BrowserWindow, Notification, ipcMain, systemPreferences, shell } from 'electron'
 import type { Store } from '../persistence'
-import type { NotificationDispatchRequest } from '../../shared/types'
+import type { NotificationDispatchRequest, NotificationDispatchResult } from '../../shared/types'
 
 const NOTIFICATION_COOLDOWN_MS = 5000
 
 export type NotificationPermissionStatus = 'authorized' | 'denied' | 'not-determined' | 'unknown'
 
-function getPermissionStatus(): NotificationPermissionStatus {
+export function getPermissionStatus(): NotificationPermissionStatus {
   if (process.platform !== 'darwin') {
     // Windows/Linux don't have a per-app notification permission gate.
     return Notification.isSupported() ? 'authorized' : 'denied'
@@ -53,17 +53,31 @@ export function registerNotificationHandlers(store: Store): void {
   ipcMain.removeHandler('notifications:dispatch')
   ipcMain.handle(
     'notifications:dispatch',
-    (_event, args: NotificationDispatchRequest): { delivered: boolean } => {
+    (_event, args: NotificationDispatchRequest): NotificationDispatchResult => {
+      if (!Notification.isSupported()) {
+        return { delivered: false, reason: 'not-supported' }
+      }
+
       const settings = store.getSettings().notifications
-      if (!settings.enabled || !Notification.isSupported()) {
-        return { delivered: false }
+      if (!settings.enabled) {
+        return { delivered: false, reason: 'disabled' }
+      }
+
+      // Why: even when in-app notifications are enabled, macOS can independently
+      // block them at the system level. Checking here prevents a silent no-op
+      // and lets the renderer show actionable feedback. We only block on 'denied'
+      // — 'not-determined' is allowed through because posting the notification is
+      // what triggers the macOS permission dialog for the first time.
+      const permissionStatus = getPermissionStatus()
+      if (permissionStatus === 'denied') {
+        return { delivered: false, reason: 'system-denied' }
       }
 
       if (
         (args.source === 'agent-task-complete' && !settings.agentTaskComplete) ||
         (args.source === 'terminal-bell' && !settings.terminalBell)
       ) {
-        return { delivered: false }
+        return { delivered: false, reason: 'source-disabled' }
       }
 
       const browserWindow =
@@ -74,7 +88,7 @@ export function registerNotificationHandlers(store: Store): void {
         browserWindow &&
         browserWindow.isFocused()
       ) {
-        return { delivered: false }
+        return { delivered: false, reason: 'suppressed-focus' }
       }
 
       // Dedupe by worktree, not by source — an agent finishing and a terminal bell
@@ -83,7 +97,7 @@ export function registerNotificationHandlers(store: Store): void {
       const now = Date.now()
       const lastSentAt = recentNotifications.get(dedupeKey) ?? 0
       if (now - lastSentAt < NOTIFICATION_COOLDOWN_MS) {
-        return { delivered: false }
+        return { delivered: false, reason: 'cooldown' }
       }
       recentNotifications.set(dedupeKey, now)
 
@@ -129,6 +143,58 @@ export function registerNotificationHandlers(store: Store): void {
       return { delivered: true }
     }
   )
+}
+
+/**
+ * On first launch, when macOS notification permission is 'not-determined',
+ * show a welcome notification to trigger the system permission dialog.
+ *
+ * Why: macOS requires at least one notification attempt before the system
+ * will prompt the user to allow/deny. Doing this at startup with meaningful
+ * content avoids a confusing blank notification later. The notification is
+ * closed shortly after to avoid lingering in Notification Center.
+ */
+export function triggerStartupNotificationRegistration(store: Store): void {
+  if (process.platform !== 'darwin' || !Notification.isSupported()) {
+    return
+  }
+  const status = getPermissionStatus()
+  if (status !== 'not-determined') {
+    return
+  }
+  // Why: only fire once per install — not on every launch where status stays
+  // not-determined (e.g. if the user dismisses the macOS dialog without choosing).
+  const ui = store.getUI()
+  if (ui.notificationPermissionRequested) {
+    return
+  }
+  store.updateUI({ notificationPermissionRequested: true })
+
+  const notification = new Notification({
+    title: 'Orca is ready to notify you',
+    body: 'Allow notifications so Orca can alert you when agents finish or terminals need attention.'
+  })
+
+  let handled = false
+  const cleanup = (): void => {
+    if (handled) {
+      return
+    }
+    handled = true
+    notification.close()
+  }
+
+  notification.on('show', () => {
+    // Why: close after a short delay so the notification doesn't linger in
+    // Notification Center. The macOS permission dialog is a system-level sheet
+    // that appears independently and is not dismissed by closing this notification.
+    setTimeout(cleanup, 8000)
+  })
+
+  // Fallback in case macOS doesn't fire the 'show' event (e.g. user denies).
+  setTimeout(cleanup, 10_000)
+
+  notification.show()
 }
 
 function buildNotificationOptions(args: NotificationDispatchRequest): {

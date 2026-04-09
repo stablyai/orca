@@ -12,6 +12,7 @@ import type {
   IssueInfo,
   GlobalSettings,
   NotificationDispatchRequest,
+  NotificationDispatchResult,
   OrcaHooks,
   PersistedUIState,
   WorkspaceSessionState,
@@ -118,7 +119,7 @@ type CliApi = {
 type NotificationPermissionStatus = 'authorized' | 'denied' | 'not-determined' | 'unknown'
 
 type NotificationsApi = {
-  dispatch: (args: NotificationDispatchRequest) => Promise<{ delivered: boolean }>
+  dispatch: (args: NotificationDispatchRequest) => Promise<NotificationDispatchResult>
   getPermissionStatus: () => Promise<NotificationPermissionStatus>
   openSystemSettings: () => Promise<void>
 }

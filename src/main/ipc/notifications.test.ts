@@ -1,31 +1,42 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+/* eslint-disable max-lines */
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   removeHandlerMock,
   handleMock,
   notificationShowMock,
+  notificationCloseMock,
+  notificationOnMock,
   notificationCtorMock,
   notificationIsSupportedMock,
-  getAllWindowsMock
+  getAllWindowsMock,
+  getNotificationSettingsMock
 } = vi.hoisted(() => {
   const removeHandlerMock = vi.fn()
   const handleMock = vi.fn()
   const notificationShowMock = vi.fn()
+  const notificationCloseMock = vi.fn()
+  const notificationOnMock = vi.fn()
   const notificationCtorMock = vi.fn(function () {
     return {
       show: notificationShowMock,
-      on: vi.fn()
+      close: notificationCloseMock,
+      on: notificationOnMock
     }
   })
   const notificationIsSupportedMock = vi.fn(() => true)
   const getAllWindowsMock = vi.fn(() => [])
+  const getNotificationSettingsMock = vi.fn(() => ({ authorizationStatus: 'authorized' }))
   return {
     removeHandlerMock,
     handleMock,
     notificationShowMock,
+    notificationCloseMock,
+    notificationOnMock,
     notificationCtorMock,
     notificationIsSupportedMock,
-    getAllWindowsMock
+    getAllWindowsMock,
+    getNotificationSettingsMock
   }
 })
 
@@ -44,14 +55,18 @@ vi.mock('electron', () => ({
     focus: vi.fn()
   },
   systemPreferences: {
-    getNotificationSettings: vi.fn(() => ({ authorizationStatus: 'authorized' }))
+    getNotificationSettings: getNotificationSettingsMock
   },
   shell: {
     openExternal: vi.fn()
   }
 }))
 
-import { registerNotificationHandlers } from './notifications'
+import {
+  registerNotificationHandlers,
+  triggerStartupNotificationRegistration,
+  getPermissionStatus
+} from './notifications'
 
 describe('registerNotificationHandlers', () => {
   beforeEach(() => {
@@ -61,10 +76,14 @@ describe('registerNotificationHandlers', () => {
     handleMock.mockReset()
     notificationCtorMock.mockClear()
     notificationShowMock.mockClear()
+    notificationCloseMock.mockClear()
+    notificationOnMock.mockClear()
     notificationIsSupportedMock.mockReset()
     notificationIsSupportedMock.mockReturnValue(true)
     getAllWindowsMock.mockReset()
     getAllWindowsMock.mockReturnValue([])
+    getNotificationSettingsMock.mockReset()
+    getNotificationSettingsMock.mockReturnValue({ authorizationStatus: 'authorized' })
   })
 
   function getDispatchHandler(): (event: unknown, args: unknown) => unknown {
@@ -104,7 +123,32 @@ describe('registerNotificationHandlers', () => {
     } as never)
 
     const handler = getDispatchHandler()
-    expect(handler({}, { source: 'agent-task-complete' })).toEqual({ delivered: false })
+    expect(handler({}, { source: 'agent-task-complete' })).toEqual({
+      delivered: false,
+      reason: 'disabled'
+    })
+    expect(notificationCtorMock).not.toHaveBeenCalled()
+  })
+
+  it('returns system-denied when macOS permission is denied', () => {
+    getNotificationSettingsMock.mockReturnValue({ authorizationStatus: 'denied' })
+
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: true,
+          suppressWhenFocused: true
+        }
+      })
+    } as never)
+
+    const handler = getDispatchHandler()
+    expect(handler({}, { source: 'test' })).toEqual({
+      delivered: false,
+      reason: 'system-denied'
+    })
     expect(notificationCtorMock).not.toHaveBeenCalled()
   })
 
@@ -129,7 +173,8 @@ describe('registerNotificationHandlers', () => {
 
     const handler = getDispatchHandler()
     expect(handler({}, { source: 'agent-task-complete', isActiveWorktree: true })).toEqual({
-      delivered: false
+      delivered: false,
+      reason: 'suppressed-focus'
     })
     expect(notificationCtorMock).not.toHaveBeenCalled()
   })
@@ -157,6 +202,25 @@ describe('registerNotificationHandlers', () => {
     expect(notificationShowMock).toHaveBeenCalledTimes(1)
   })
 
+  it('returns source-disabled when the specific source toggle is off', () => {
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: false,
+          terminalBell: true,
+          suppressWhenFocused: true
+        }
+      })
+    } as never)
+
+    const handler = getDispatchHandler()
+    expect(handler({}, { source: 'agent-task-complete' })).toEqual({
+      delivered: false,
+      reason: 'source-disabled'
+    })
+  })
+
   it('deduplicates repeated notifications for the same worktree', () => {
     registerNotificationHandlers({
       getSettings: () => ({
@@ -174,7 +238,8 @@ describe('registerNotificationHandlers', () => {
       delivered: true
     })
     expect(handler({}, { source: 'terminal-bell', worktreeId: 'repo::wt1' })).toEqual({
-      delivered: false
+      delivered: false,
+      reason: 'cooldown'
     })
 
     vi.advanceTimersByTime(5001)
@@ -205,8 +270,128 @@ describe('registerNotificationHandlers', () => {
     })
     // Bell fires immediately after for the same worktree — should be suppressed
     expect(handler({}, { source: 'terminal-bell', worktreeId: 'repo::wt1' })).toEqual({
-      delivered: false
+      delivered: false,
+      reason: 'cooldown'
     })
     expect(notificationShowMock).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('triggerStartupNotificationRegistration', () => {
+  const originalPlatform = process.platform
+
+  beforeEach(() => {
+    notificationCtorMock.mockClear()
+    notificationShowMock.mockClear()
+    notificationCloseMock.mockClear()
+    notificationOnMock.mockClear()
+    notificationIsSupportedMock.mockReset()
+    notificationIsSupportedMock.mockReturnValue(true)
+    getNotificationSettingsMock.mockReset()
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+  })
+
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
+  })
+
+  it('shows welcome notification when permission is not-determined and not yet requested', () => {
+    getNotificationSettingsMock.mockReturnValue({ authorizationStatus: 'not determined' })
+
+    const store = {
+      getUI: () => ({ notificationPermissionRequested: undefined }),
+      updateUI: vi.fn()
+    }
+
+    triggerStartupNotificationRegistration(store as never)
+
+    expect(store.updateUI).toHaveBeenCalledWith({ notificationPermissionRequested: true })
+    expect(notificationCtorMock).toHaveBeenCalledWith({
+      title: 'Orca is ready to notify you',
+      body: 'Allow notifications so Orca can alert you when agents finish or terminals need attention.'
+    })
+    expect(notificationShowMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not fire when permission is already authorized', () => {
+    getNotificationSettingsMock.mockReturnValue({ authorizationStatus: 'authorized' })
+
+    const store = {
+      getUI: () => ({ notificationPermissionRequested: undefined }),
+      updateUI: vi.fn()
+    }
+
+    triggerStartupNotificationRegistration(store as never)
+
+    expect(notificationCtorMock).not.toHaveBeenCalled()
+    expect(store.updateUI).not.toHaveBeenCalled()
+  })
+
+  it('does not fire when notificationPermissionRequested flag is set', () => {
+    getNotificationSettingsMock.mockReturnValue({ authorizationStatus: 'not determined' })
+
+    const store = {
+      getUI: () => ({ notificationPermissionRequested: true }),
+      updateUI: vi.fn()
+    }
+
+    triggerStartupNotificationRegistration(store as never)
+
+    expect(notificationCtorMock).not.toHaveBeenCalled()
+  })
+
+  it('does nothing on non-darwin platforms', () => {
+    Object.defineProperty(process, 'platform', { value: 'linux', configurable: true })
+    getNotificationSettingsMock.mockReturnValue({ authorizationStatus: 'not determined' })
+
+    const store = {
+      getUI: () => ({ notificationPermissionRequested: undefined }),
+      updateUI: vi.fn()
+    }
+
+    triggerStartupNotificationRegistration(store as never)
+
+    expect(notificationCtorMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('getPermissionStatus', () => {
+  const originalPlatform = process.platform
+
+  beforeEach(() => {
+    getNotificationSettingsMock.mockReset()
+    notificationIsSupportedMock.mockReset()
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+  })
+
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
+  })
+
+  it('returns authorized when macOS reports authorized', () => {
+    getNotificationSettingsMock.mockReturnValue({ authorizationStatus: 'authorized' })
+    expect(getPermissionStatus()).toBe('authorized')
+  })
+
+  it('returns denied when macOS reports denied', () => {
+    getNotificationSettingsMock.mockReturnValue({ authorizationStatus: 'denied' })
+    expect(getPermissionStatus()).toBe('denied')
+  })
+
+  it('returns not-determined when macOS reports not determined', () => {
+    getNotificationSettingsMock.mockReturnValue({ authorizationStatus: 'not determined' })
+    expect(getPermissionStatus()).toBe('not-determined')
+  })
+
+  it('returns authorized on non-darwin when Notification is supported', () => {
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
+    notificationIsSupportedMock.mockReturnValue(true)
+    expect(getPermissionStatus()).toBe('authorized')
+  })
+
+  it('returns denied on non-darwin when Notification is not supported', () => {
+    Object.defineProperty(process, 'platform', { value: 'linux', configurable: true })
+    notificationIsSupportedMock.mockReturnValue(false)
+    expect(getPermissionStatus()).toBe('denied')
   })
 })

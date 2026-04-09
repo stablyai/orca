@@ -4,6 +4,7 @@ import devIcon from '../../resources/icon-dev.png?asset'
 import { Store, initDataPath } from './persistence'
 import { killAllPty } from './ipc/pty'
 import { registerCoreHandlers } from './ipc/register-core-handlers'
+import { triggerStartupNotificationRegistration } from './ipc/notifications'
 import { OrcaRuntimeService } from './runtime/orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime/runtime-rpc'
 import { registerAppMenu } from './menu/register-app-menu'
@@ -83,6 +84,7 @@ app.whenReady().then(async () => {
     }
   })
   registerCoreHandlers(store, runtime)
+  triggerStartupNotificationRegistration(store)
   runtimeRpc = new OrcaRuntimeRpcServer({
     runtime,
     userDataPath: app.getPath('userData')

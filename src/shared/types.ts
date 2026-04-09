@@ -353,6 +353,18 @@ export type NotificationDispatchRequest = {
   isActiveWorktree?: boolean
 }
 
+export type NotificationDispatchResult = {
+  delivered: boolean
+  /** Present when delivered is false. Tells the caller why delivery was skipped. */
+  reason?:
+    | 'disabled'
+    | 'source-disabled'
+    | 'suppressed-focus'
+    | 'cooldown'
+    | 'not-supported'
+    | 'system-denied'
+}
+
 export type WorktreeCardProperty = 'status' | 'unread' | 'ci' | 'issue' | 'pr' | 'comment'
 
 export type PersistedUIState = {
@@ -369,6 +381,10 @@ export type PersistedUIState = {
   worktreeCardProperties: WorktreeCardProperty[]
   dismissedUpdateVersion: string | null
   lastUpdateCheckAt: number | null
+  /** Whether Orca has already attempted to trigger the macOS notification
+   *  permission dialog via a startup notification. Prevents re-firing on
+   *  every launch. */
+  notificationPermissionRequested?: boolean
 }
 
 // ─── Persistence shape ──────────────────────────────────────────────
