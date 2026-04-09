@@ -1,0 +1,65 @@
+diff --git a/lib/addon-fit.js b/lib/addon-fit.js
+index 9b25be35bbc0a6826b769e9bbc09f0d8ea1816e4..8c11959d05e8d51350ee79b7be415fa85e0b1468 100644
+--- a/lib/addon-fit.js
++++ b/lib/addon-fit.js
+@@ -1,2 +1,2 @@
+-!function(e,t){"object"==typeof exports&&"object"==typeof module?module.exports=t():"function"==typeof define&&define.amd?define([],t):"object"==typeof exports?exports.FitAddon=t():e.FitAddon=t()}(globalThis,(()=>(()=>{"use strict";var e={};return(()=>{var t=e;Object.defineProperty(t,"__esModule",{value:!0}),t.FitAddon=void 0,t.FitAddon=class{activate(e){this._terminal=e}dispose(){}fit(){const e=this.proposeDimensions();if(!e||!this._terminal||isNaN(e.cols)||isNaN(e.rows))return;const t=this._terminal._core;this._terminal.rows===e.rows&&this._terminal.cols===e.cols||(t._renderService.clear(),this._terminal.resize(e.cols,e.rows))}proposeDimensions(){if(!this._terminal)return;if(!this._terminal.element||!this._terminal.element.parentElement)return;const e=this._terminal._core._renderService.dimensions;if(0===e.css.cell.width||0===e.css.cell.height)return;const t=0===this._terminal.options.scrollback?0:this._terminal.options.overviewRuler?.width||14,r=window.getComputedStyle(this._terminal.element.parentElement),i=parseInt(r.getPropertyValue("height")),o=Math.max(0,parseInt(r.getPropertyValue("width"))),s=window.getComputedStyle(this._terminal.element),n=i-(parseInt(s.getPropertyValue("padding-top"))+parseInt(s.getPropertyValue("padding-bottom"))),l=o-(parseInt(s.getPropertyValue("padding-right"))+parseInt(s.getPropertyValue("padding-left")))-t;return{cols:Math.max(2,Math.floor(l/e.css.cell.width)),rows:Math.max(1,Math.floor(n/e.css.cell.height))}}}})(),e})()));
++!function(e,t){"object"==typeof exports&&"object"==typeof module?module.exports=t():"function"==typeof define&&define.amd?define([],t):"object"==typeof exports?exports.FitAddon=t():e.FitAddon=t()}(globalThis,(()=>(()=>{"use strict";var e={};return(()=>{var t=e;Object.defineProperty(t,"__esModule",{value:!0}),t.FitAddon=void 0,t.FitAddon=class{activate(e){this._terminal=e}dispose(){}fit(){const e=this.proposeDimensions();if(!e||!this._terminal||isNaN(e.cols)||isNaN(e.rows))return;const t=this._terminal._core;const i=this._terminal.cols!==e.cols,r2=this._terminal.rows!==e.rows,b=this._terminal.buffer.active,w=b.viewportY>=b.baseY;t._renderService.clear();(i||r2)&&(this._terminal.resize(e.cols,e.rows),this._terminal.refresh(0,this._terminal.rows-1),w&&this._terminal.scrollToBottom())}proposeDimensions(){if(!this._terminal)return;if(!this._terminal.element||!this._terminal.element.parentElement)return;const e=this._terminal._core._renderService.dimensions;if(0===e.css.cell.width||0===e.css.cell.height)return;const t=0===this._terminal.options.scrollback?0:this._terminal.options.overviewRuler?.width||14,r=window.getComputedStyle(this._terminal.element.parentElement),i=parseInt(r.getPropertyValue("height")),o=Math.max(0,parseInt(r.getPropertyValue("width"))),s=window.getComputedStyle(this._terminal.element),n=i-(parseInt(s.getPropertyValue("padding-top"))+parseInt(s.getPropertyValue("padding-bottom"))),l=o-(parseInt(s.getPropertyValue("padding-right"))+parseInt(s.getPropertyValue("padding-left")))-t;return{cols:Math.max(2,Math.floor(l/e.css.cell.width)),rows:Math.max(1,Math.floor(n/e.css.cell.height))}}}})(),e})()));
+ //# sourceMappingURL=addon-fit.js.map
+\ No newline at end of file
+diff --git a/lib/addon-fit.mjs b/lib/addon-fit.mjs
+index 24d4f61877d369edb7f2773570575a1c10edf832..a6a841b9fb2e03082f417bde57a8e74376e4c22f 100644
+--- a/lib/addon-fit.mjs
++++ b/lib/addon-fit.mjs
+@@ -14,5 +14,5 @@
+  *  Copyright (c) Microsoft Corporation. All rights reserved.
+  *  Licensed under the MIT License. See License.txt in the project root for license information.
+  *--------------------------------------------------------------------------------------------*/
+-var h=2,_=1,o=class{activate(e){this._terminal=e}dispose(){}fit(){let e=this.proposeDimensions();if(!e||!this._terminal||isNaN(e.cols)||isNaN(e.rows))return;let t=this._terminal._core;(this._terminal.rows!==e.rows||this._terminal.cols!==e.cols)&&(t._renderService.clear(),this._terminal.resize(e.cols,e.rows))}proposeDimensions(){if(!this._terminal||!this._terminal.element||!this._terminal.element.parentElement)return;let t=this._terminal._core._renderService.dimensions;if(t.css.cell.width===0||t.css.cell.height===0)return;let s=this._terminal.options.scrollback===0?0:this._terminal.options.overviewRuler?.width||14,r=window.getComputedStyle(this._terminal.element.parentElement),l=parseInt(r.getPropertyValue("height")),a=Math.max(0,parseInt(r.getPropertyValue("width"))),i=window.getComputedStyle(this._terminal.element),n={top:parseInt(i.getPropertyValue("padding-top")),bottom:parseInt(i.getPropertyValue("padding-bottom")),right:parseInt(i.getPropertyValue("padding-right")),left:parseInt(i.getPropertyValue("padding-left"))},m=n.top+n.bottom,d=n.right+n.left,c=l-m,p=a-d-s;return{cols:Math.max(h,Math.floor(p/t.css.cell.width)),rows:Math.max(_,Math.floor(c/t.css.cell.height))}}};export{o as FitAddon};
++var h=2,_=1,o=class{activate(e){this._terminal=e}dispose(){}fit(){let e=this.proposeDimensions();if(!e||!this._terminal||isNaN(e.cols)||isNaN(e.rows))return;let t=this._terminal._core,i=this._terminal.cols!==e.cols,r=this._terminal.rows!==e.rows,b=this._terminal.buffer.active,w=b.viewportY>=b.baseY;t._renderService.clear();(i||r)&&(this._terminal.resize(e.cols,e.rows),this._terminal.refresh(0,this._terminal.rows-1),w&&this._terminal.scrollToBottom())}proposeDimensions(){if(!this._terminal||!this._terminal.element||!this._terminal.element.parentElement)return;let t=this._terminal._core._renderService.dimensions;if(t.css.cell.width===0||t.css.cell.height===0)return;let s=this._terminal.options.scrollback===0?0:this._terminal.options.overviewRuler?.width||14,r=window.getComputedStyle(this._terminal.element.parentElement),l=parseInt(r.getPropertyValue("height")),a=Math.max(0,parseInt(r.getPropertyValue("width"))),i=window.getComputedStyle(this._terminal.element),n={top:parseInt(i.getPropertyValue("padding-top")),bottom:parseInt(i.getPropertyValue("padding-bottom")),right:parseInt(i.getPropertyValue("padding-right")),left:parseInt(i.getPropertyValue("padding-left"))},m=n.top+n.bottom,d=n.right+n.left,c=l-m,p=a-d-s;return{cols:Math.max(h,Math.floor(p/t.css.cell.width)),rows:Math.max(_,Math.floor(c/t.css.cell.height))}}};export{o as FitAddon};
+ //# sourceMappingURL=addon-fit.mjs.map
+diff --git a/src/FitAddon.ts b/src/FitAddon.ts
+index a282ed3f8c607f5d073af3d0f1585e8cbc7b9f63..63796e8cc23f5d3dff61f322ee9a16747da51c4c 100644
+--- a/src/FitAddon.ts
++++ b/src/FitAddon.ts
+@@ -41,10 +41,37 @@ export class FitAddon implements ITerminalAddon , IFitApi {
+     // TODO: Remove reliance on private API
+     const core = (this._terminal as any)._core;
+ 
+-    // Force a full render
+-    if (this._terminal.rows !== dims.rows || this._terminal.cols !== dims.cols) {
+-      core._renderService.clear();
++    const colsChanged = this._terminal.cols !== dims.cols;
++    const rowsChanged = this._terminal.rows !== dims.rows;
++
++    // Capture viewport scroll position before resize so we can restore it
++    // after xterm.js reflows the scrollback buffer. `baseY` is the number
++    // of rows scrolled into the scrollback; `viewportY === baseY` means the
++    // viewport is pinned to the bottom (the common interactive-shell case).
++    const buf = this._terminal.buffer.active;
++    const wasAtBottom = buf.viewportY >= buf.baseY;
++
++    // Always clear the renderer — even same-dimension refits may need a
++    // repaint when the container's pixel size changed by less than one cell
++    // (upstream fix: xtermjs/xterm.js#5777).
++    core._renderService.clear();
++
++    if (colsChanged || rowsChanged) {
+       this._terminal.resize(dims.cols, dims.rows);
++
++      // xterm.js v6 rewraps the entire scrollback on column-count changes.
++      // The WebGL renderer's dirty-row tracking may not repaint the full
++      // viewport afterward, leaving blank space at the top or stale content.
++      // Force a full refresh so every visible row is redrawn.
++      this._terminal.refresh(0, this._terminal.rows - 1);
++
++      // After reflow the viewport can land at a stale scroll offset — the
++      // scrollback appears to vanish (blank rows at top, recent output at
++      // bottom). Snap back to the bottom if the user was following output;
++      // otherwise preserve their scroll-up position.
++      if (wasAtBottom) {
++        this._terminal.scrollToBottom();
++      }
+     }
+   }
+ 

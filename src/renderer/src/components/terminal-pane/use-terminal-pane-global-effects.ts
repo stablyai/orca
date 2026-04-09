@@ -101,15 +101,37 @@ export function useTerminalPaneGlobalEffects({
     if (!container) {
       return
     }
+    // Why: ResizeObserver fires on every incremental size change during
+    // continuous window resizes or layout animations.  Each fitPanes() call
+    // triggers fitAddon.fit() → terminal.resize() which, when the column
+    // count changes, reflows the entire scrollback buffer and recalculates
+    // the viewport scroll position.  Rapid-fire reflows can leave the
+    // viewport at a stale scroll offset, causing the terminal to appear
+    // scrolled to the top or to show blank space where scrollback should be.
+    // Batching through requestAnimationFrame coalesces bursts into a single
+    // reflow per paint frame — the same pattern used by queueResizeAll in
+    // use-terminal-pane-lifecycle.ts.
+    let rafId: number | null = null
     const resizeObserver = new ResizeObserver(() => {
-      const manager = managerRef.current
-      if (!manager) {
+      if (rafId !== null) {
         return
       }
-      fitPanes(manager)
+      rafId = requestAnimationFrame(() => {
+        rafId = null
+        const manager = managerRef.current
+        if (!manager) {
+          return
+        }
+        fitPanes(manager)
+      })
     })
     resizeObserver.observe(container)
-    return () => resizeObserver.disconnect()
+    return () => {
+      resizeObserver.disconnect()
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId)
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isActive, isVisible])
 

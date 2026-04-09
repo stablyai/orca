@@ -179,6 +179,23 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
       )
       webglAddon.dispose()
       pane.webglAddon = null
+      // Why: when the WebGL context is lost (GPU memory pressure, Chromium
+      // context limit, driver hiccup), the GPU-rendered canvas goes blank
+      // instantly — this is standard browser behaviour. After disposing the
+      // addon, xterm.js falls back to the DOM renderer, but it may not
+      // redraw the viewport unprompted.  Without an explicit
+      // refresh + refit, the scrollback area appears as blank space at the
+      // top of the terminal while only the most recent output is visible at
+      // the bottom. Deferring to the next frame gives the DOM renderer time
+      // to initialise before we ask it to repaint.
+      requestAnimationFrame(() => {
+        try {
+          pane.fitAddon.fit()
+          pane.terminal.refresh(0, pane.terminal.rows - 1)
+        } catch {
+          /* ignore — pane may have been disposed in the meantime */
+        }
+      })
     })
     pane.terminal.loadAddon(webglAddon)
     pane.webglAddon = webglAddon

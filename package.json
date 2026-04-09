@@ -125,6 +125,9 @@
       "electron",
       "esbuild",
       "node-pty"
-    ]
+    ],
+    "patchedDependencies": {
+      "@xterm/addon-fit@0.11.0": "patches/@xterm__addon-fit@0.11.0.patch"
+    }
   }
 }
