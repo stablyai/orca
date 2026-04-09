@@ -2,9 +2,11 @@ import { useEffect } from 'react'
 import { useAppStore } from '../store'
 import { applyUIZoom } from '@/lib/ui-zoom'
 import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-activation'
-import { nextEditorFontZoomLevel } from '@/lib/editor-font-zoom'
+import { nextEditorFontZoomLevel, computeEditorFontSize } from '@/lib/editor-font-zoom'
 import type { UpdateStatus } from '../../../shared/types'
 import { createUpdateToastController } from './update-toast-controller'
+import { zoomLevelToPercent, ZOOM_MIN, ZOOM_MAX } from '@/components/settings/SettingsConstants'
+import { dispatchZoomLevelChanged } from '@/lib/zoom-events'
 
 const ZOOM_STEP = 0.5
 
@@ -120,7 +122,7 @@ export function useIpcEvents(): void {
     // Zoom handling for menu accelerators and keyboard fallback paths.
     unsubs.push(
       window.api.ui.onTerminalZoom((direction) => {
-        const { activeView, activeTabType, editorFontZoomLevel, setEditorFontZoomLevel } =
+        const { activeView, activeTabType, editorFontZoomLevel, setEditorFontZoomLevel, settings } =
           useAppStore.getState()
         const target = resolveZoomTarget({
           activeView,
@@ -134,14 +136,26 @@ export function useIpcEvents(): void {
           const next = nextEditorFontZoomLevel(editorFontZoomLevel, direction)
           setEditorFontZoomLevel(next)
           void window.api.ui.set({ editorFontZoomLevel: next })
+
+          // Why: use the same base font size the editor surfaces use (terminalFontSize)
+          // and computeEditorFontSize to account for clamping, so the overlay percent
+          // matches the actual rendered size.
+          const baseFontSize = settings?.terminalFontSize ?? 13
+          const actual = computeEditorFontSize(baseFontSize, next)
+          const percent = Math.round((actual / baseFontSize) * 100)
+          dispatchZoomLevelChanged('editor', percent)
           return
         }
 
         const current = window.api.ui.getZoomLevel()
-        const next =
+        const rawNext =
           direction === 'in' ? current + ZOOM_STEP : direction === 'out' ? current - ZOOM_STEP : 0
+        const next = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, rawNext))
+
         applyUIZoom(next)
         void window.api.ui.set({ uiZoomLevel: next })
+
+        dispatchZoomLevelChanged('ui', zoomLevelToPercent(next))
       })
     )
 

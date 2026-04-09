@@ -209,20 +209,17 @@ export function useTerminalKeyboardShortcuts({
       if (isEditableTarget(e.target)) {
         return
       }
-
       const manager = managerRef.current
       if (!manager) {
         return
       }
-
       e.preventDefault()
       e.stopPropagation()
       const pane = manager.getActivePane() ?? manager.getPanes()[0]
       if (!pane) {
         return
       }
-      const transport = paneTransportsRef.current.get(pane.id)
-      transport?.sendInput('\x1b[13;2u')
+      paneTransportsRef.current.get(pane.id)?.sendInput('\x1b[13;2u')
     }
 
     // Ctrl+Backspace → send \x17 (backward-kill-word) to PTY.
@@ -237,20 +234,17 @@ export function useTerminalKeyboardShortcuts({
       if (isEditableTarget(e.target)) {
         return
       }
-
       const manager = managerRef.current
       if (!manager) {
         return
       }
-
       e.preventDefault()
       e.stopPropagation()
       const pane = manager.getActivePane() ?? manager.getPanes()[0]
       if (!pane) {
         return
       }
-      const transport = paneTransportsRef.current.get(pane.id)
-      transport?.sendInput('\x17')
+      paneTransportsRef.current.get(pane.id)?.sendInput('\x17')
     }
 
     // Alt+Backspace → send ESC + DEL (\x1b\x7f, backward-kill-word) to PTY.
@@ -265,20 +259,17 @@ export function useTerminalKeyboardShortcuts({
       if (isEditableTarget(e.target)) {
         return
       }
-
       const manager = managerRef.current
       if (!manager) {
         return
       }
-
       e.preventDefault()
       e.stopPropagation()
       const pane = manager.getActivePane() ?? manager.getPanes()[0]
       if (!pane) {
         return
       }
-      const transport = paneTransportsRef.current.get(pane.id)
-      transport?.sendInput('\x1b\x7f')
+      paneTransportsRef.current.get(pane.id)?.sendInput('\x1b\x7f')
     }
 
     window.addEventListener('keydown', onKeyDown, { capture: true })
@@ -304,60 +295,4 @@ export function useTerminalKeyboardShortcuts({
     setSearchOpen,
     onRequestClosePane
   ])
-}
-
-type FontZoomDeps = {
-  isActive: boolean
-  managerRef: React.RefObject<PaneManager | null>
-  paneFontSizesRef: React.RefObject<Map<number, number>>
-  settingsRef: React.RefObject<{ terminalFontSize?: number } | null>
-}
-
-export function useTerminalFontZoom({
-  isActive,
-  managerRef,
-  paneFontSizesRef,
-  settingsRef
-}: FontZoomDeps): void {
-  useEffect(() => {
-    if (!isActive) {
-      return
-    }
-    const MIN_FONT_SIZE = 8
-    const MAX_FONT_SIZE = 32
-    const FONT_SIZE_STEP = 1
-
-    return window.api.ui.onTerminalZoom((direction) => {
-      const manager = managerRef.current
-      if (!manager) {
-        return
-      }
-      const pane = manager.getActivePane()
-      if (!pane) {
-        return
-      }
-
-      const globalSize = settingsRef.current?.terminalFontSize ?? 14
-      const currentSize = paneFontSizesRef.current.get(pane.id) ?? globalSize
-
-      let nextSize: number
-      if (direction === 'reset') {
-        nextSize = globalSize
-        paneFontSizesRef.current.delete(pane.id)
-      } else if (direction === 'in') {
-        nextSize = Math.min(MAX_FONT_SIZE, currentSize + FONT_SIZE_STEP)
-        paneFontSizesRef.current.set(pane.id, nextSize)
-      } else {
-        nextSize = Math.max(MIN_FONT_SIZE, currentSize - FONT_SIZE_STEP)
-        paneFontSizesRef.current.set(pane.id, nextSize)
-      }
-
-      pane.terminal.options.fontSize = nextSize
-      try {
-        pane.fitAddon.fit()
-      } catch {
-        /* ignore */
-      }
-    })
-  }, [isActive, managerRef, paneFontSizesRef, settingsRef])
 }
