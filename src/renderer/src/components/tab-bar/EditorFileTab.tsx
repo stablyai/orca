@@ -128,7 +128,7 @@ export default function EditorFileTab({
           )}
           <span className="mr-1.5 flex min-w-0 items-baseline gap-1.5">
             <span
-              className={`truncate max-w-[130px]${file.isPreview ? ' italic' : ''}${isActive ? ' font-medium' : ''}`}
+              className={`truncate max-w-[130px]${file.isPreview ? ' italic' : ''}`}
               style={tabStatusColor ? { color: tabStatusColor } : undefined}
             >
               {getEditorDisplayLabel(file)}

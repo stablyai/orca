@@ -280,8 +280,8 @@
 /* ── Titlebar ────────────────────────────────────────── */
 
 .titlebar {
-  height: 38px;
-  min-height: 38px;
+  height: 42px;
+  min-height: 42px;
   display: flex;
   flex-direction: row;
   align-items: center;

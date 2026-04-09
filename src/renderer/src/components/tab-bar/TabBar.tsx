@@ -201,12 +201,12 @@ export default function TabBar({
         </SortableContext>
       </DndContext>
       <button
-        className="flex items-center justify-center w-9 h-full shrink-0 text-muted-foreground hover:text-foreground hover:bg-accent/50"
+        className="flex items-center justify-center w-7 h-7 my-auto mx-1 shrink-0 rounded text-muted-foreground hover:text-foreground hover:bg-accent/50"
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         onClick={onNewTab}
         title="New terminal (Cmd+T)"
       >
-        <Plus className="w-4 h-4" />
+        <Plus className="w-3.5 h-3.5" />
       </button>
     </div>
   )

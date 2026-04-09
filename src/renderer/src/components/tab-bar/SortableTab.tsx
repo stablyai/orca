@@ -156,9 +156,7 @@ export default function SortableTab({
           <TerminalIcon
             className={`w-3.5 h-3.5 mr-1.5 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
           />
-          <span className={`truncate max-w-[130px] mr-1.5${isActive ? ' font-medium' : ''}`}>
-            {tab.customTitle ?? tab.title}
-          </span>
+          <span className="truncate max-w-[130px] mr-1.5">{tab.customTitle ?? tab.title}</span>
           {tab.color && (
             <span
               className="mr-1.5 size-2 rounded-full shrink-0"
