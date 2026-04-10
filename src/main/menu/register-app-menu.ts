@@ -1,4 +1,4 @@
-import { Menu, app } from 'electron'
+import { BrowserWindow, Menu, app } from 'electron'
 
 type RegisterAppMenuOptions = {
   onOpenSettings: () => void
@@ -15,6 +15,20 @@ export function registerAppMenu({
   onZoomOut,
   onZoomReset
 }: RegisterAppMenuOptions): void {
+  const reloadFocusedWindow = (ignoreCache: boolean): void => {
+    const webContents = BrowserWindow.getFocusedWindow()?.webContents
+    if (!webContents) {
+      return
+    }
+
+    if (ignoreCache) {
+      webContents.reloadIgnoringCache()
+      return
+    }
+
+    webContents.reload()
+  }
+
   const template: Electron.MenuItemConstructorOptions[] = [
     {
       label: app.name,
@@ -54,8 +68,15 @@ export function registerAppMenu({
     {
       label: 'View',
       submenu: [
-        { role: 'reload' },
-        { role: 'forceReload' },
+        {
+          label: 'Reload',
+          click: () => reloadFocusedWindow(false)
+        },
+        {
+          label: 'Force Reload',
+          accelerator: 'Shift+CmdOrCtrl+R',
+          click: () => reloadFocusedWindow(true)
+        },
         { role: 'toggleDevTools' },
         { type: 'separator' },
         {

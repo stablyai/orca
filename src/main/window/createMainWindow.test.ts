@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { browserWindowMock, openExternalMock, attachGuestPoliciesMock } = vi.hoisted(() => ({
+const { browserWindowMock, openExternalMock, attachGuestPoliciesMock, isMock } = vi.hoisted(() => ({
   browserWindowMock: vi.fn(),
   openExternalMock: vi.fn(),
-  attachGuestPoliciesMock: vi.fn()
+  attachGuestPoliciesMock: vi.fn(),
+  isMock: { dev: false }
 }))
 
 vi.mock('electron', () => ({
@@ -14,7 +15,7 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('@electron-toolkit/utils', () => ({
-  is: { dev: false }
+  is: isMock
 }))
 
 vi.mock('../../../resources/icon.png?asset', () => ({
@@ -38,6 +39,7 @@ describe('createMainWindow', () => {
     browserWindowMock.mockReset()
     openExternalMock.mockReset()
     attachGuestPoliciesMock.mockReset()
+    isMock.dev = false
   })
 
   it('enables renderer sandboxing and opens external links safely', () => {
@@ -52,7 +54,10 @@ describe('createMainWindow', () => {
       setWindowOpenHandler: vi.fn((handler) => {
         windowHandlers.windowOpen = handler
       }),
-      send: vi.fn()
+      send: vi.fn(),
+      isDevToolsOpened: vi.fn(),
+      openDevTools: vi.fn(),
+      closeDevTools: vi.fn()
     }
     const browserWindowInstance = {
       webContents,
@@ -228,5 +233,96 @@ describe('createMainWindow', () => {
     expect(webContents.send).toHaveBeenCalledTimes(2)
     expect(webContents.send).toHaveBeenNthCalledWith(1, 'terminal:zoom', 'out')
     expect(webContents.send).toHaveBeenNthCalledWith(2, 'terminal:zoom', 'in')
+  })
+
+  it('does not intercept ctrl/cmd+r in before-input-event', () => {
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isDevToolsOpened: vi.fn(),
+      openDevTools: vi.fn(),
+      closeDevTools: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    createMainWindow(null)
+
+    const preventDefault = vi.fn()
+    windowHandlers['before-input-event'](
+      { preventDefault } as never,
+      { type: 'keyDown', code: 'KeyR', key: 'r', meta: false, control: true, alt: false } as never
+    )
+
+    expect(preventDefault).not.toHaveBeenCalled()
+    expect(webContents.send).not.toHaveBeenCalled()
+  })
+
+  it('toggles devtools on F12 in development', () => {
+    isMock.dev = true
+
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isDevToolsOpened: vi.fn(() => false),
+      openDevTools: vi.fn(),
+      closeDevTools: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    createMainWindow(null)
+
+    const preventDefault = vi.fn()
+    windowHandlers['before-input-event'](
+      { preventDefault } as never,
+      { type: 'keyDown', code: 'F12', key: 'F12', meta: false, control: false, alt: false } as never
+    )
+
+    expect(preventDefault).toHaveBeenCalledTimes(1)
+    expect(webContents.openDevTools).toHaveBeenCalledWith({ mode: 'undocked' })
+    expect(webContents.closeDevTools).not.toHaveBeenCalled()
   })
 })

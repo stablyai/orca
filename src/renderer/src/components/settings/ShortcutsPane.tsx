@@ -87,6 +87,11 @@ const SHORTCUT_GROUP_DEFINITIONS: ShortcutGroupDefinition[] = [
         action: 'Reset Size',
         searchKeywords: ['shortcut', 'zoom', 'reset', 'size', 'actual'],
         keys: ({ mod }) => [mod, '0']
+      },
+      {
+        action: 'Force Reload',
+        searchKeywords: ['shortcut', 'reload', 'refresh', 'force'],
+        keys: ({ mod, shift }) => [mod, shift, 'R']
       }
     ]
   },

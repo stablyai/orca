@@ -1,5 +1,5 @@
 import { app, BrowserWindow, nativeImage, nativeTheme } from 'electron'
-import { electronApp, optimizer, is } from '@electron-toolkit/utils'
+import { electronApp, is } from '@electron-toolkit/utils'
 import devIcon from '../../resources/icon-dev.png?asset'
 import { Store, initDataPath } from './persistence'
 import { StatsCollector, initStatsPath } from './stats/collector'
@@ -84,10 +84,6 @@ app.whenReady().then(async () => {
     const dockIcon = nativeImage.createFromPath(devIcon)
     app.dock?.setIcon(dockIcon)
   }
-
-  app.on('browser-window-created', (_, window) => {
-    optimizer.watchWindowShortcuts(window)
-  })
 
   store = new Store()
   stats = new StatsCollector()

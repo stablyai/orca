@@ -176,6 +176,16 @@ export function createMainWindow(store: Store | null): BrowserWindow {
       return
     }
 
+    if (is.dev && input.code === 'F12') {
+      event.preventDefault()
+      if (mainWindow.webContents.isDevToolsOpened()) {
+        mainWindow.webContents.closeDevTools()
+      } else {
+        mainWindow.webContents.openDevTools({ mode: 'undocked' })
+      }
+      return
+    }
+
     const modifierPressed = process.platform === 'darwin' ? input.meta : input.control
     if (!modifierPressed || input.alt) {
       return
