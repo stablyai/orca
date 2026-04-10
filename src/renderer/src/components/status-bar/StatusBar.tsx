@@ -3,6 +3,7 @@ import { useCallback, useRef, useState } from 'react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '../../store'
 import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
+import { ProviderIcon, ProviderTooltip } from './tooltip'
 
 // ---------------------------------------------------------------------------
 // Mini progress bar (shows remaining capacity, grey)
@@ -33,134 +34,6 @@ function WindowLabel({ w, label }: { w: RateLimitWindow; label: string }): React
 }
 
 // ---------------------------------------------------------------------------
-// Tooltip helpers
-// ---------------------------------------------------------------------------
-
-function formatTimeAgo(ts: number): string {
-  const diff = Date.now() - ts
-  if (diff < 60_000) {
-    return 'just now'
-  }
-  const mins = Math.floor(diff / 60_000)
-  if (mins < 60) {
-    return `${mins}m ago`
-  }
-  const hours = Math.floor(mins / 60)
-  return `${hours}h ago`
-}
-
-function formatDuration(ms: number): string {
-  if (ms <= 0) {
-    return 'now'
-  }
-  const totalMins = Math.floor(ms / 60_000)
-  if (totalMins < 60) {
-    return `${totalMins}m`
-  }
-  const hours = Math.floor(totalMins / 60)
-  const mins = totalMins % 60
-  if (hours >= 24) {
-    const days = Math.floor(hours / 24)
-    const remHours = hours % 24
-    return remHours > 0 ? `${days}d ${remHours}h` : `${days}d`
-  }
-  return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`
-}
-
-// ---------------------------------------------------------------------------
-// Tooltip — progress bar section for a single window
-// ---------------------------------------------------------------------------
-
-// Why: the base tooltip component uses `bg-foreground text-background` which
-// inverts the color scheme (light bg in dark mode). These rich tooltips use
-// `text-background` for primary text and `text-background/50` for secondary
-// to stay readable inside the inverted tooltip container.
-
-function TooltipWindowSection({
-  w,
-  label
-}: {
-  w: RateLimitWindow | null
-  label: string
-}): React.JSX.Element | null {
-  if (!w) {
-    return null
-  }
-  const leftPct = Math.max(0, Math.round(100 - w.usedPercent))
-  const resetIn = w.resetsAt ? formatDuration(w.resetsAt - Date.now()) : null
-
-  return (
-    <div className="space-y-1">
-      <div className="font-medium text-background">{label}</div>
-      <div className="w-full h-[6px] rounded-full bg-background/20 overflow-hidden">
-        <div
-          className="h-full rounded-full bg-background/50 transition-all duration-300"
-          style={{ width: `${Math.min(100, Math.max(0, leftPct))}%` }}
-        />
-      </div>
-      <div className="flex justify-between text-background/60">
-        <span>{leftPct}% left</span>
-        {resetIn && <span>Resets in {resetIn}</span>}
-      </div>
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Tooltip content
-// ---------------------------------------------------------------------------
-
-function ProviderTooltip({ p }: { p: ProviderRateLimits | null }): React.JSX.Element {
-  if (!p) {
-    return <span className="text-xs text-background/60">No data available</span>
-  }
-
-  const name = p.provider === 'claude' ? 'Claude' : 'Codex'
-
-  if (p.status === 'unavailable') {
-    return (
-      <div className="text-xs w-[200px]">
-        <div className="font-medium text-background">{name}</div>
-        <div className="text-background/60">{p.error ?? 'CLI not found'}</div>
-      </div>
-    )
-  }
-
-  if (p.status === 'error' && !p.session && !p.weekly) {
-    return (
-      <div className="text-xs w-[200px]">
-        <div className="font-medium text-background">{name}</div>
-        <div className="text-background/60">{p.error ?? 'Unable to fetch usage'}</div>
-      </div>
-    )
-  }
-
-  const updatedAgo = p.updatedAt ? `Updated ${formatTimeAgo(p.updatedAt)}` : 'Not yet updated'
-
-  return (
-    <div className="text-xs w-[200px] space-y-3">
-      {/* Header */}
-      <div>
-        <div className="font-medium text-background text-[13px]">{name}</div>
-        <div className="text-background/50">{updatedAgo}</div>
-      </div>
-
-      {/* Divider */}
-      <div className="border-t border-background/15" />
-
-      {/* Session window */}
-      <TooltipWindowSection w={p.session} label="Session" />
-
-      {/* Weekly window */}
-      <TooltipWindowSection w={p.weekly} label="Weekly" />
-
-      {/* Stale data warning */}
-      {p.error && <div className="text-background/40 italic">Stale — {p.error}</div>}
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
 // Provider segment
 // ---------------------------------------------------------------------------
 
@@ -171,13 +44,14 @@ function ProviderSegment({
   p: ProviderRateLimits | null
   compact: boolean
 }): React.JSX.Element {
-  const name = p?.provider === 'codex' ? 'Codex' : 'Claude'
+  const provider = p?.provider ?? 'claude'
 
   // Idle / initial load
   if (!p || p.status === 'idle') {
     return (
-      <span className="text-muted-foreground">
-        {name}: <span className="animate-pulse">&middot;&middot;&middot;</span>
+      <span className="inline-flex items-center gap-1 text-muted-foreground">
+        <ProviderIcon provider={provider} />
+        <span className="animate-pulse">&middot;&middot;&middot;</span>
       </span>
     )
   }
@@ -185,22 +59,28 @@ function ProviderSegment({
   // Fetching with no prior data
   if (p.status === 'fetching' && !p.session && !p.weekly) {
     return (
-      <span className="text-muted-foreground">
-        {name}: <span className="animate-pulse">&middot;&middot;&middot;</span>
+      <span className="inline-flex items-center gap-1 text-muted-foreground">
+        <ProviderIcon provider={provider} />
+        <span className="animate-pulse">&middot;&middot;&middot;</span>
       </span>
     )
   }
 
   // Unavailable (CLI not installed)
   if (p.status === 'unavailable') {
-    return <span className="text-muted-foreground/50">{name}: --</span>
+    return (
+      <span className="inline-flex items-center gap-1 text-muted-foreground/50">
+        <ProviderIcon provider={provider} /> --
+      </span>
+    )
   }
 
   // Error with no data
   if (p.status === 'error' && !p.session && !p.weekly) {
     return (
-      <span className="text-muted-foreground/70">
-        {name}: <span className="text-yellow-500">&loz;</span>
+      <span className="inline-flex items-center gap-1 text-muted-foreground/70">
+        <ProviderIcon provider={provider} />
+        <span className="text-yellow-500">&loz;</span>
       </span>
     )
   }
@@ -211,7 +91,7 @@ function ProviderSegment({
 
   return (
     <span className={`inline-flex items-center gap-1.5 ${isStale ? 'opacity-60' : ''}`}>
-      <span className="font-medium">{name}</span>
+      <ProviderIcon provider={provider} />
       {p.session && !compact && <MiniBar leftPct={Math.max(0, 100 - p.session.usedPercent)} />}
       {p.session && <WindowLabel w={p.session} label="5h" />}
       {p.session && p.weekly && <span className="text-muted-foreground">&middot;</span>}
