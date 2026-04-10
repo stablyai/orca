@@ -1,7 +1,7 @@
 /* eslint-disable max-lines */
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { Worktree } from '../../../../shared/types'
+import type { Worktree, WorkspaceVisibleTabType } from '../../../../shared/types'
 import {
   findWorktreeById,
   applyWorktreeUpdates,
@@ -124,14 +124,19 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         delete nextDeleteState[worktreeId]
         // Clean up editor files belonging to this worktree
         const newOpenFiles = s.openFiles.filter((f) => f.worktreeId !== worktreeId)
+        const nextBrowserTabsByWorktree = { ...s.browserTabsByWorktree }
+        delete nextBrowserTabsByWorktree[worktreeId]
         const nextActiveFileIdByWorktree = { ...s.activeFileIdByWorktree }
         delete nextActiveFileIdByWorktree[worktreeId]
+        const nextActiveBrowserTabIdByWorktree = { ...s.activeBrowserTabIdByWorktree }
+        delete nextActiveBrowserTabIdByWorktree[worktreeId]
         const nextActiveTabTypeByWorktree = { ...s.activeTabTypeByWorktree }
         delete nextActiveTabTypeByWorktree[worktreeId]
         // If the active file belonged to the removed worktree, clear it
         const activeFileCleared = s.activeFileId
           ? s.openFiles.some((f) => f.id === s.activeFileId && f.worktreeId === worktreeId)
           : false
+        const removedActiveWorktree = s.activeWorktreeId === worktreeId
         return {
           worktreesByRepo: next,
           tabsByWorktree: nextTabs,
@@ -146,13 +151,16 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             delete nextSearch[worktreeId]
             return nextSearch
           })(),
-          activeWorktreeId: s.activeWorktreeId === worktreeId ? null : s.activeWorktreeId,
+          activeWorktreeId: removedActiveWorktree ? null : s.activeWorktreeId,
           activeTabId: s.activeTabId && tabIds.has(s.activeTabId) ? null : s.activeTabId,
           openFiles: newOpenFiles,
+          browserTabsByWorktree: nextBrowserTabsByWorktree,
           activeFileIdByWorktree: nextActiveFileIdByWorktree,
+          activeBrowserTabIdByWorktree: nextActiveBrowserTabIdByWorktree,
           activeTabTypeByWorktree: nextActiveTabTypeByWorktree,
           activeFileId: activeFileCleared ? null : s.activeFileId,
-          activeTabType: activeFileCleared ? 'terminal' : s.activeTabType,
+          activeBrowserTabId: removedActiveWorktree ? null : s.activeBrowserTabId,
+          activeTabType: removedActiveWorktree || activeFileCleared ? 'terminal' : s.activeTabType,
           sortEpoch: s.sortEpoch + 1
         }
       })
@@ -283,22 +291,47 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
 
       // Restore per-worktree editor state
       const restoredFileId = s.activeFileIdByWorktree[worktreeId] ?? null
+      const restoredBrowserTabId = s.activeBrowserTabIdByWorktree[worktreeId] ?? null
       const restoredTabType = s.activeTabTypeByWorktree[worktreeId] ?? 'terminal'
       // Verify the restored file still exists in openFiles
       const fileStillOpen = restoredFileId
-        ? s.openFiles.some((f) => f.id === restoredFileId)
+        ? s.openFiles.some((f) => f.id === restoredFileId && f.worktreeId === worktreeId)
+        : false
+      const browserTabs = s.browserTabsByWorktree[worktreeId] ?? []
+      const browserTabStillOpen = restoredBrowserTabId
+        ? browserTabs.some((tab) => tab.id === restoredBrowserTabId)
         : false
 
       // If restored file is gone, fall back to another open file for this worktree
       let activeFileId: string | null
-      let activeTabType: 'terminal' | 'editor'
-      if (fileStillOpen) {
+      let activeBrowserTabId: string | null
+      let activeTabType: WorkspaceVisibleTabType
+      if (restoredTabType === 'browser' && browserTabStillOpen) {
+        activeFileId = fileStillOpen ? restoredFileId : null
+        activeBrowserTabId = restoredBrowserTabId
+        activeTabType = 'browser'
+      } else if (restoredTabType === 'editor' && fileStillOpen) {
         activeFileId = restoredFileId
-        activeTabType = restoredTabType
+        activeBrowserTabId = browserTabStillOpen
+          ? restoredBrowserTabId
+          : (browserTabs[0]?.id ?? null)
+        activeTabType = 'editor'
+      } else if (browserTabStillOpen) {
+        activeFileId = null
+        activeBrowserTabId = restoredBrowserTabId
+        activeTabType = 'browser'
+      } else if (fileStillOpen) {
+        activeFileId = restoredFileId
+        activeBrowserTabId = browserTabs[0]?.id ?? null
+        activeTabType = 'editor'
       } else {
         const fallbackFile = s.openFiles.find((f) => f.worktreeId === worktreeId)
+        const fallbackBrowserTab = browserTabs[0] ?? null
         activeFileId = fallbackFile?.id ?? null
-        activeTabType = fallbackFile ? 'editor' : 'terminal'
+        activeBrowserTabId = browserTabStillOpen
+          ? restoredBrowserTabId
+          : (fallbackBrowserTab?.id ?? null)
+        activeTabType = fallbackFile ? 'editor' : fallbackBrowserTab ? 'browser' : 'terminal'
       }
 
       // Why: restore the last-active terminal tab for this worktree so the
@@ -313,6 +346,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       return {
         activeWorktreeId: worktreeId,
         activeFileId,
+        activeBrowserTabId,
         activeTabType,
         activeTabId,
         worktreesByRepo: applyWorktreeUpdates(

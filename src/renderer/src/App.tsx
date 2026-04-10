@@ -25,7 +25,7 @@ import {
 import { getVisibleWorktreeIds } from './components/sidebar/visible-worktrees'
 import { useGlobalFileDrop } from './hooks/useGlobalFileDrop'
 import { registerUpdaterBeforeUnloadBypass } from './lib/updater-beforeunload'
-import type { PersistedOpenFile } from '../../shared/types'
+import type { BrowserTab, PersistedOpenFile, WorkspaceVisibleTabType } from '../../shared/types'
 import type { OpenFile } from './store/slices/editor'
 
 const isMac = navigator.userAgent.includes('Mac')
@@ -35,11 +35,11 @@ const isMac = navigator.userAgent.includes('Mac')
 function buildEditorSessionData(
   openFiles: OpenFile[],
   activeFileIdByWorktree: Record<string, string | null>,
-  activeTabTypeByWorktree: Record<string, 'terminal' | 'editor'>
+  activeTabTypeByWorktree: Record<string, WorkspaceVisibleTabType>
 ): {
   openFilesByWorktree: Record<string, PersistedOpenFile[]>
   activeFileIdByWorktree: Record<string, string | null>
-  activeTabTypeByWorktree: Record<string, 'terminal' | 'editor'>
+  activeTabTypeByWorktree: Record<string, WorkspaceVisibleTabType>
 } {
   const editFiles = openFiles.filter((f) => f.mode === 'edit')
   const byWorktree: Record<string, PersistedOpenFile[]> = {}
@@ -57,6 +57,27 @@ function buildEditorSessionData(
     openFilesByWorktree: byWorktree,
     activeFileIdByWorktree,
     activeTabTypeByWorktree
+  }
+}
+
+function buildBrowserSessionData(
+  browserTabsByWorktree: Record<string, BrowserTab[]>,
+  activeBrowserTabIdByWorktree: Record<string, string | null>
+): {
+  browserTabsByWorktree: Record<string, BrowserTab[]>
+  activeBrowserTabIdByWorktree: Record<string, string | null>
+} {
+  return {
+    // Why: browser tabs persist only lightweight chrome state. Live guest
+    // webContents are recreated on restore, so loading is reset to false and
+    // transient errors are preserved only as last-known tab metadata.
+    browserTabsByWorktree: Object.fromEntries(
+      Object.entries(browserTabsByWorktree).map(([worktreeId, tabs]) => [
+        worktreeId,
+        tabs.map((tab) => ({ ...tab, loading: false }))
+      ])
+    ),
+    activeBrowserTabIdByWorktree
   }
 }
 
@@ -100,6 +121,7 @@ function App(): React.JSX.Element {
   const refreshAllGitHub = useAppStore((s) => s.refreshAllGitHub)
   const hydrateWorkspaceSession = useAppStore((s) => s.hydrateWorkspaceSession)
   const hydrateEditorSession = useAppStore((s) => s.hydrateEditorSession)
+  const hydrateBrowserSession = useAppStore((s) => s.hydrateBrowserSession)
   const reconnectPersistedTerminals = useAppStore((s) => s.reconnectPersistedTerminals)
   const hydratePersistedUI = useAppStore((s) => s.hydratePersistedUI)
   const openModal = useAppStore((s) => s.openModal)
@@ -117,6 +139,8 @@ function App(): React.JSX.Element {
   const activeFileIdByWorktree = useAppStore((s) => s.activeFileIdByWorktree)
   const activeTabTypeByWorktree = useAppStore((s) => s.activeTabTypeByWorktree)
   const activeTabIdByWorktree = useAppStore((s) => s.activeTabIdByWorktree)
+  const browserTabsByWorktree = useAppStore((s) => s.browserTabsByWorktree)
+  const activeBrowserTabIdByWorktree = useAppStore((s) => s.activeBrowserTabIdByWorktree)
 
   // Right sidebar + editor state
   const toggleRightSidebar = useAppStore((s) => s.toggleRightSidebar)
@@ -156,6 +180,7 @@ function App(): React.JSX.Element {
           hydratePersistedUI(persistedUI)
           hydrateWorkspaceSession(session)
           hydrateEditorSession(session)
+          hydrateBrowserSession(session)
           await reconnectPersistedTerminals(abortController.signal)
           syncZoomCSSVar()
         }
@@ -206,6 +231,7 @@ function App(): React.JSX.Element {
     hydratePersistedUI,
     hydrateWorkspaceSession,
     hydrateEditorSession,
+    hydrateBrowserSession,
     reconnectPersistedTerminals
   ])
 
@@ -244,7 +270,8 @@ function App(): React.JSX.Element {
         terminalLayoutsByTabId,
         activeWorktreeIdsOnShutdown,
         activeTabIdByWorktree,
-        ...buildEditorSessionData(openFiles, activeFileIdByWorktree, activeTabTypeByWorktree)
+        ...buildEditorSessionData(openFiles, activeFileIdByWorktree, activeTabTypeByWorktree),
+        ...buildBrowserSessionData(browserTabsByWorktree, activeBrowserTabIdByWorktree)
       })
     }, 150)
 
@@ -259,7 +286,9 @@ function App(): React.JSX.Element {
     openFiles,
     activeFileIdByWorktree,
     activeTabTypeByWorktree,
-    activeTabIdByWorktree
+    activeTabIdByWorktree,
+    browserTabsByWorktree,
+    activeBrowserTabIdByWorktree
   ])
 
   // On shutdown, capture terminal scrollback buffers and flush to disk.
@@ -292,7 +321,8 @@ function App(): React.JSX.Element {
           state.openFiles,
           state.activeFileIdByWorktree,
           state.activeTabTypeByWorktree
-        )
+        ),
+        ...buildBrowserSessionData(state.browserTabsByWorktree, state.activeBrowserTabIdByWorktree)
       })
     }
     window.addEventListener('beforeunload', captureAndFlush)

@@ -4,11 +4,19 @@ import { is } from '@electron-toolkit/utils'
 import icon from '../../../resources/icon.png?asset'
 import devIcon from '../../../resources/icon-dev.png?asset'
 import type { Store } from '../persistence'
+import { ORCA_BROWSER_BLANK_URL, ORCA_BROWSER_PARTITION } from '../../shared/constants'
 
 const LOCAL_ADDRESS_PATTERN =
   /^(?:localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|\[[0-9a-f:]+\])(?::\d+)?(?:\/.*)?$/i
 
 function normalizeExternalUrl(rawUrl: string): string | null {
+  if (rawUrl === 'about:blank') {
+    return rawUrl
+  }
+  if (rawUrl === ORCA_BROWSER_BLANK_URL) {
+    return rawUrl
+  }
+
   if (LOCAL_ADDRESS_PATTERN.test(rawUrl)) {
     try {
       return new URL(`http://${rawUrl}`).toString()
@@ -19,7 +27,7 @@ function normalizeExternalUrl(rawUrl: string): string | null {
 
   try {
     const parsed = new URL(rawUrl)
-    return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? rawUrl : null
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? parsed.toString() : null
   } catch {
     return null
   }
@@ -46,6 +54,23 @@ function isZoomOutShortcut(input: Electron.Input): boolean {
   )
 }
 
+function forceRepaint(window: BrowserWindow): void {
+  if (window.isDestroyed()) {
+    return
+  }
+  window.webContents.invalidate()
+  if (window.isMaximized() || window.isFullScreen()) {
+    return
+  }
+  const [width, height] = window.getSize()
+  window.setSize(width + 1, height)
+  setTimeout(() => {
+    if (!window.isDestroyed()) {
+      window.setSize(width, height)
+    }
+  }, 32)
+}
+
 export function createMainWindow(store: Store | null): BrowserWindow {
   const mainWindow = new BrowserWindow({
     width: 1200,
@@ -60,9 +85,25 @@ export function createMainWindow(store: Store | null): BrowserWindow {
     icon: is.dev ? devIcon : icon,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: true
+      sandbox: true,
+      webviewTag: true
     }
   })
+
+  if (process.platform === 'darwin') {
+    // Why: persistent parked webviews use separate compositor layers, and on
+    // recent macOS releases those layers can fail to repaint after occlusion or
+    // restore. Disabling main-window throttling and forcing a repaint on
+    // visibility transitions matches the hardening Superset needed for the same
+    // black-surface failure mode.
+    mainWindow.webContents.setBackgroundThrottling(false)
+    mainWindow.on('restore', () => {
+      forceRepaint(mainWindow)
+    })
+    mainWindow.on('show', () => {
+      forceRepaint(mainWindow)
+    })
+  }
 
   mainWindow.webContents.on('dom-ready', () => {
     mainWindow.webContents.setZoomLevel(store?.getUI().uiZoomLevel ?? 0)
@@ -83,10 +124,40 @@ export function createMainWindow(store: Store | null): BrowserWindow {
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
     const externalUrl = normalizeExternalUrl(details.url)
-    if (externalUrl) {
+    if (externalUrl && externalUrl !== 'about:blank') {
       shell.openExternal(externalUrl)
     }
     return { action: 'deny' }
+  })
+
+  mainWindow.webContents.on('will-attach-webview', (event, webPreferences, params) => {
+    const src = typeof params.src === 'string' ? params.src : ''
+    const normalizedSrc = normalizeExternalUrl(src)
+    const partition = typeof webPreferences.partition === 'string' ? webPreferences.partition : ''
+
+    // Why: arbitrary sites must stay inside an unprivileged guest surface. We
+    // fail closed here so a renderer bug cannot smuggle preload, Node, or a
+    // non-browser partition into the guest and widen the app privilege boundary.
+    // The one allowed data URL is Orca's inert blank-tab bootstrap page; deny
+    // every other data URL so the renderer cannot inject arbitrary inline HTML.
+    if (!normalizedSrc || partition !== ORCA_BROWSER_PARTITION) {
+      event.preventDefault()
+      return
+    }
+
+    delete webPreferences.preload
+    // Why: older Electron builds expose preloadURL alongside preload; delete
+    // both so the guest surface cannot inherit the main preload bridge.
+    delete (webPreferences as Record<string, unknown>).preloadURL
+    webPreferences.nodeIntegration = false
+    webPreferences.nodeIntegrationInSubFrames = false
+    webPreferences.enableBlinkFeatures = ''
+    webPreferences.disableBlinkFeatures = ''
+    webPreferences.webSecurity = true
+    webPreferences.allowRunningInsecureContent = false
+    webPreferences.contextIsolation = true
+    webPreferences.sandbox = true
+    webPreferences.partition = ORCA_BROWSER_PARTITION
   })
 
   // Block ALL in-window navigations to prevent remote pages from inheriting

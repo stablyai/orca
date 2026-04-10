@@ -29,7 +29,8 @@ type TerminalShellProps = {
   onCloseOthers: (tabId: string) => void
   onCloseTabsToRight: (tabId: string) => void
   onReorderTabs: (worktreeId: string, tabIds: string[]) => void
-  onNewTab: () => void
+  onNewTerminalTab: () => void
+  onNewBrowserTab: () => void
   onSetCustomTitle: (tabId: string, title: string | null) => void
   onSetTabColor: (tabId: string, color: string | null) => void
   onTogglePaneExpand: (tabId: string) => void
@@ -64,7 +65,8 @@ export function TerminalShell({
   onCloseOthers,
   onCloseTabsToRight,
   onReorderTabs,
-  onNewTab,
+  onNewTerminalTab,
+  onNewBrowserTab,
   onSetCustomTitle,
   onSetTabColor,
   onTogglePaneExpand,
@@ -101,7 +103,8 @@ export function TerminalShell({
               onCloseOthers={onCloseOthers}
               onCloseToRight={onCloseTabsToRight}
               onReorder={onReorderTabs}
-              onNewTab={onNewTab}
+              onNewTerminalTab={onNewTerminalTab}
+              onNewBrowserTab={onNewBrowserTab}
               onSetCustomTitle={onSetCustomTitle}
               onSetTabColor={onSetTabColor}
               expandedPaneByTabId={expandedPaneByTabId}

@@ -142,6 +142,12 @@ type ShellApi = {
   copyFile: (args: { srcPath: string; destPath: string }) => Promise<void>
 }
 
+type BrowserApi = {
+  registerGuest: (args: { browserTabId: string; webContentsId: number }) => Promise<void>
+  unregisterGuest: (args: { browserTabId: string }) => Promise<void>
+  openDevTools: (args: { browserTabId: string }) => Promise<boolean>
+}
+
 type HooksApi = {
   check: (args: { repoId: string }) => Promise<{ hasHooks: boolean; hooks: OrcaHooks | null }>
 }
@@ -300,6 +306,7 @@ type Api = {
   preflight: PreflightApi
   notifications: NotificationsApi
   shell: ShellApi
+  browser: BrowserApi
   hooks: HooksApi
   cache: CacheApi
   session: SessionApi

@@ -73,6 +73,7 @@ import { createGitHubSlice } from './github'
 import { createEditorSlice } from './editor'
 import { createStatsSlice } from './stats'
 import { createClaudeUsageSlice } from './claude-usage'
+import { createBrowserSlice } from './browser'
 
 const WT = 'repo1::/tmp/feature'
 
@@ -87,7 +88,8 @@ function createTestStore() {
     ...createGitHubSlice(...a),
     ...createEditorSlice(...a),
     ...createStatsSlice(...a),
-    ...createClaudeUsageSlice(...a)
+    ...createClaudeUsageSlice(...a),
+    ...createBrowserSlice(...a)
   }))
 }
 

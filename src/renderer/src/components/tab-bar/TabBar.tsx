@@ -8,14 +8,25 @@ import {
   type DragEndEvent
 } from '@dnd-kit/core'
 import { SortableContext, horizontalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
-import { Plus } from 'lucide-react'
-import type { TerminalTab } from '../../../../shared/types'
+import { Globe, Plus, TerminalSquare } from 'lucide-react'
+import type {
+  BrowserTab as BrowserTabState,
+  TerminalTab,
+  WorkspaceVisibleTabType
+} from '../../../../shared/types'
 import { useAppStore } from '../../store'
 import { buildStatusMap } from '../right-sidebar/status-display'
 import type { OpenFile } from '../../store/slices/editor'
 import SortableTab from './SortableTab'
 import EditorFileTab from './EditorFileTab'
+import BrowserTab from './BrowserTab'
 import { reconcileTabOrder } from './reconcile-order'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 
 type TabBarProps = {
   tabs: TerminalTab[]
@@ -27,15 +38,20 @@ type TabBarProps = {
   onCloseOthers: (tabId: string) => void
   onCloseToRight: (tabId: string) => void
   onReorder: (worktreeId: string, order: string[]) => void
-  onNewTab: () => void
+  onNewTerminalTab: () => void
+  onNewBrowserTab: () => void
   onSetCustomTitle: (tabId: string, title: string | null) => void
   onSetTabColor: (tabId: string, color: string | null) => void
   onTogglePaneExpand: (tabId: string) => void
   editorFiles?: OpenFile[]
+  browserTabs?: BrowserTabState[]
   activeFileId?: string | null
-  activeTabType?: 'terminal' | 'editor'
+  activeBrowserTabId?: string | null
+  activeTabType?: WorkspaceVisibleTabType
   onActivateFile?: (fileId: string) => void
   onCloseFile?: (fileId: string) => void
+  onActivateBrowserTab?: (tabId: string) => void
+  onCloseBrowserTab?: (tabId: string) => void
   onCloseAllFiles?: () => void
   onPinFile?: (fileId: string) => void
   tabBarOrder?: string[]
@@ -44,6 +60,7 @@ type TabBarProps = {
 type TabItem =
   | { type: 'terminal'; id: string; data: TerminalTab }
   | { type: 'editor'; id: string; data: OpenFile }
+  | { type: 'browser'; id: string; data: BrowserTabState }
 
 export default function TabBar({
   tabs,
@@ -55,15 +72,20 @@ export default function TabBar({
   onCloseOthers,
   onCloseToRight,
   onReorder,
-  onNewTab,
+  onNewTerminalTab,
+  onNewBrowserTab,
   onSetCustomTitle,
   onSetTabColor,
   onTogglePaneExpand,
   editorFiles,
+  browserTabs,
   activeFileId,
+  activeBrowserTabId,
   activeTabType,
   onActivateFile,
   onCloseFile,
+  onActivateBrowserTab,
+  onCloseBrowserTab,
   onCloseAllFiles,
   onPinFile,
   tabBarOrder
@@ -82,13 +104,18 @@ export default function TabBar({
 
   const terminalMap = useMemo(() => new Map(tabs.map((t) => [t.id, t])), [tabs])
   const editorMap = useMemo(() => new Map((editorFiles ?? []).map((f) => [f.id, f])), [editorFiles])
+  const browserMap = useMemo(
+    () => new Map((browserTabs ?? []).map((t) => [t.id, t])),
+    [browserTabs]
+  )
 
   const terminalIds = useMemo(() => tabs.map((t) => t.id), [tabs])
   const editorFileIds = useMemo(() => editorFiles?.map((f) => f.id) ?? [], [editorFiles])
+  const browserTabIds = useMemo(() => browserTabs?.map((tab) => tab.id) ?? [], [browserTabs])
 
   // Build the unified ordered list, reconciling stored order with current items
   const orderedItems = useMemo(() => {
-    const ids = reconcileTabOrder(tabBarOrder, terminalIds, editorFileIds)
+    const ids = reconcileTabOrder(tabBarOrder, terminalIds, editorFileIds, browserTabIds)
     const items: TabItem[] = []
     for (const id of ids) {
       const terminal = terminalMap.get(id)
@@ -99,10 +126,15 @@ export default function TabBar({
       const file = editorMap.get(id)
       if (file) {
         items.push({ type: 'editor', id, data: file })
+        continue
+      }
+      const browserTab = browserMap.get(id)
+      if (browserTab) {
+        items.push({ type: 'browser', id, data: browserTab })
       }
     }
     return items
-  }, [tabBarOrder, terminalIds, editorFileIds, terminalMap, editorMap])
+  }, [tabBarOrder, terminalIds, editorFileIds, browserTabIds, terminalMap, editorMap, browserMap])
 
   const sortableIds = useMemo(() => orderedItems.map((item) => item.id), [orderedItems])
 
@@ -182,6 +214,19 @@ export default function TabBar({
                   />
                 )
               }
+              if (item.type === 'browser') {
+                return (
+                  <BrowserTab
+                    key={item.id}
+                    tab={item.data}
+                    isActive={activeTabType === 'browser' && activeBrowserTabId === item.id}
+                    hasTabsToRight={index < orderedItems.length - 1}
+                    onActivate={() => onActivateBrowserTab?.(item.id)}
+                    onClose={() => onCloseBrowserTab?.(item.id)}
+                    onCloseToRight={() => onCloseToRight(item.id)}
+                  />
+                )
+              }
               return (
                 <EditorFileTab
                   key={item.id}
@@ -200,14 +245,27 @@ export default function TabBar({
           </div>
         </SortableContext>
       </DndContext>
-      <button
-        className="flex items-center justify-center w-7 h-7 my-auto mx-1 shrink-0 rounded text-muted-foreground hover:text-foreground hover:bg-accent/50"
-        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-        onClick={onNewTab}
-        title="New terminal (Cmd+T)"
-      >
-        <Plus className="w-3.5 h-3.5" />
-      </button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            className="flex items-center justify-center w-7 h-7 my-auto mx-1 shrink-0 rounded text-muted-foreground hover:text-foreground hover:bg-accent/50"
+            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+            title="New tab"
+          >
+            <Plus className="w-3.5 h-3.5" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onSelect={onNewTerminalTab}>
+            <TerminalSquare className="w-3.5 h-3.5" />
+            New Terminal
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={onNewBrowserTab}>
+            <Globe className="w-3.5 h-3.5" />
+            New Browser
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   )
 }

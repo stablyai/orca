@@ -10,6 +10,12 @@ import type {
 import { DEFAULT_TERMINAL_FONT_WEIGHT } from './terminal-fonts'
 
 export const SCHEMA_VERSION = 1
+export const ORCA_BROWSER_PARTITION = 'persist:orca-browser'
+// Why: blank browser tabs must start from an inert guest URL that does not
+// navigate the privileged main window to about:blank. Renderer and main both
+// need the exact same value so the attach policy can allow only this one safe
+// data URL while still rejecting arbitrary renderer-provided data URLs.
+export const ORCA_BROWSER_BLANK_URL = 'data:text/html,'
 
 // Pick a default terminal font that is likely to exist on the current OS.
 // buildFontFamily() adds the full cross-platform fallback chain, so this only
@@ -95,6 +101,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     // focus-follows-mouse never happens unexpectedly.
     terminalFocusFollowsMouse: false,
     terminalScrollbackBytes: 10_000_000,
+    openLinksInApp: false,
     rightSidebarOpenByDefault: true,
     notifications: getDefaultNotificationSettings(),
     diffDefaultView: 'inline',
@@ -152,6 +159,8 @@ export function getDefaultWorkspaceSession(): WorkspaceSessionState {
     tabsByWorktree: {},
     terminalLayoutsByTabId: {},
     openFilesByWorktree: {},
+    browserTabsByWorktree: {},
+    activeBrowserTabIdByWorktree: {},
     activeFileIdByWorktree: {},
     activeTabTypeByWorktree: {}
   }

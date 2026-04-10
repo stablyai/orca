@@ -10,6 +10,7 @@ import { createGitHubSlice } from './slices/github'
 import { createEditorSlice } from './slices/editor'
 import { createStatsSlice } from './slices/stats'
 import { createClaudeUsageSlice } from './slices/claude-usage'
+import { createBrowserSlice } from './slices/browser'
 
 export const useAppStore = create<AppState>()((...a) => ({
   ...createRepoSlice(...a),
@@ -21,7 +22,8 @@ export const useAppStore = create<AppState>()((...a) => ({
   ...createGitHubSlice(...a),
   ...createEditorSlice(...a),
   ...createStatsSlice(...a),
-  ...createClaudeUsageSlice(...a)
+  ...createClaudeUsageSlice(...a),
+  ...createBrowserSlice(...a)
 }))
 
 export type { AppState } from './types'

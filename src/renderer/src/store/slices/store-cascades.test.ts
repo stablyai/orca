@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // Mock sonner (imported by repos.ts)
@@ -314,5 +315,50 @@ describe('setActiveWorktree', () => {
     const worktree = store.getState().worktreesByRepo.repo1[0]
     expect(worktree.sortOrder).toBe(123)
     expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
+  })
+
+  it('falls back to the worktree browser tab when the restored editor id belongs to a different worktree', () => {
+    const store = createTestStore()
+    const wt1 = 'repo1::/path/wt1'
+    const wt2 = 'repo1::/path/wt2'
+    const otherFileId = '/path/wt2/file.ts'
+    const browserTabId = 'browser-1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: wt1, repoId: 'repo1', path: '/path/wt1' }),
+          makeWorktree({ id: wt2, repoId: 'repo1', path: '/path/wt2' })
+        ]
+      },
+      openFiles: [makeOpenFile({ id: otherFileId, worktreeId: wt2 })],
+      activeFileIdByWorktree: { [wt1]: otherFileId },
+      browserTabsByWorktree: {
+        [wt1]: [
+          {
+            id: browserTabId,
+            worktreeId: wt1,
+            url: 'https://example.com',
+            title: 'Example',
+            loading: false,
+            faviconUrl: null,
+            canGoBack: false,
+            canGoForward: false,
+            loadError: null,
+            createdAt: 0
+          }
+        ]
+      },
+      activeBrowserTabIdByWorktree: { [wt1]: browserTabId },
+      activeTabTypeByWorktree: { [wt1]: 'editor' }
+    })
+
+    store.getState().setActiveWorktree(wt1)
+
+    const s = store.getState()
+    expect(s.activeWorktreeId).toBe(wt1)
+    expect(s.activeBrowserTabId).toBe(browserTabId)
+    expect(s.activeTabType).toBe('browser')
+    expect(s.activeFileId).toBeNull()
   })
 })

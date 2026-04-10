@@ -1,10 +1,12 @@
-import { app, clipboard, ipcMain } from 'electron'
+import { app, clipboard, ipcMain, session } from 'electron'
 import type { BrowserWindow } from 'electron'
 import type { Store } from '../persistence'
 import type { CreateWorktreeResult } from '../../shared/types'
+import { ORCA_BROWSER_PARTITION } from '../../shared/constants'
 import { registerRepoHandlers } from '../ipc/repos'
 import { registerWorktreeHandlers } from '../ipc/worktrees'
 import { registerPtyHandlers } from '../ipc/pty'
+import { browserManager } from '../browser/browser-manager'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import {
   checkForUpdatesFromMenu,
@@ -38,6 +40,39 @@ export function attachMainWindowServices(
       callback(allowedPermissions.has(permission))
     }
   )
+
+  const browserSession = session.fromPartition(ORCA_BROWSER_PARTITION)
+  browserSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+    // Why: the in-app browser is for dev previews and lightweight browsing, not
+    // trusted desktop-app privileges. Denying by default keeps arbitrary sites
+    // from silently escalating into camera/mic/notification prompts inside Orca.
+    callback(permission === 'fullscreen')
+  })
+  browserSession.setPermissionCheckHandler((_webContents, permission) => {
+    return permission === 'fullscreen'
+  })
+  browserSession.setDisplayMediaRequestHandler((_request, callback) => {
+    // Why: arbitrary sites inside Orca should never be able to capture the
+    // desktop or application windows until there is explicit product UX for
+    // selecting a source and surfacing that choice to the user.
+    // Why: pass undefined (not null) to satisfy Electron's typed callback
+    // signature while still denying the request.
+    callback({ video: undefined, audio: undefined })
+  })
+  browserSession.on('will-download', (event) => {
+    // Why: browser-tab downloads need explicit product UX before arbitrary sites
+    // can write files through Orca. Until that exists, cancel downloads instead
+    // of inheriting Electron's default save behavior invisibly.
+    event.preventDefault()
+  })
+
+  mainWindow.on('closed', () => {
+    // Why: parked browser webviews can outlive the visible tab body until the
+    // renderer process exits. Clearing main-owned guest registrations on window
+    // close prevents stale tab→webContents ids from leaking across app relaunch
+    // or hot-reload cycles.
+    browserManager.unregisterAll()
+  })
 }
 
 function registerRuntimeWindowLifecycle(

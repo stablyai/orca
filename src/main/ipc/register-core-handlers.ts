@@ -11,6 +11,7 @@ import { registerRuntimeHandlers } from './runtime'
 import { registerNotificationHandlers } from './notifications'
 import { registerSessionHandlers } from './session'
 import { registerSettingsHandlers } from './settings'
+import { registerBrowserHandlers } from './browser'
 import { registerShellHandlers } from './shell'
 import { registerUIHandlers } from './ui'
 import { warmSystemFontFamilies } from '../system-fonts'
@@ -33,6 +34,7 @@ export function registerCoreHandlers(
   registerStatsHandlers(stats)
   registerNotificationHandlers(store)
   registerSettingsHandlers(store)
+  registerBrowserHandlers()
   registerShellHandlers()
   registerSessionHandlers(store)
   registerUIHandlers(store)

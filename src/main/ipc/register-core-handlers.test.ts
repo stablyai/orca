@@ -14,7 +14,8 @@ const {
   registerFilesystemHandlersMock,
   registerRuntimeHandlersMock,
   registerClipboardHandlersMock,
-  registerUpdaterHandlersMock
+  registerUpdaterHandlersMock,
+  registerBrowserHandlersMock
 } = vi.hoisted(() => ({
   registerCliHandlersMock: vi.fn(),
   registerPreflightHandlersMock: vi.fn(),
@@ -29,7 +30,8 @@ const {
   registerFilesystemHandlersMock: vi.fn(),
   registerRuntimeHandlersMock: vi.fn(),
   registerClipboardHandlersMock: vi.fn(),
-  registerUpdaterHandlersMock: vi.fn()
+  registerUpdaterHandlersMock: vi.fn(),
+  registerBrowserHandlersMock: vi.fn()
 }))
 
 vi.mock('./cli', () => ({
@@ -85,6 +87,10 @@ vi.mock('../window/attach-main-window-services', () => ({
   registerUpdaterHandlers: registerUpdaterHandlersMock
 }))
 
+vi.mock('./browser', () => ({
+  registerBrowserHandlers: registerBrowserHandlersMock
+}))
+
 import { registerCoreHandlers } from './register-core-handlers'
 
 describe('registerCoreHandlers', () => {
@@ -103,6 +109,7 @@ describe('registerCoreHandlers', () => {
     registerRuntimeHandlersMock.mockReset()
     registerClipboardHandlersMock.mockReset()
     registerUpdaterHandlersMock.mockReset()
+    registerBrowserHandlersMock.mockReset()
   })
 
   it('passes the store through to handler registrars that need it', () => {
@@ -127,5 +134,6 @@ describe('registerCoreHandlers', () => {
     expect(registerShellHandlersMock).toHaveBeenCalled()
     expect(registerClipboardHandlersMock).toHaveBeenCalled()
     expect(registerUpdaterHandlersMock).toHaveBeenCalled()
+    expect(registerBrowserHandlersMock).toHaveBeenCalled()
   })
 })

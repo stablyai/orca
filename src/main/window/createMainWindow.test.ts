@@ -39,6 +39,8 @@ describe('createMainWindow', () => {
         windowHandlers[event] = handler
       }),
       setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn((handler) => {
         windowHandlers.windowOpen = handler
       }),
@@ -47,6 +49,11 @@ describe('createMainWindow', () => {
     const browserWindowInstance = {
       webContents,
       on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
       loadFile: vi.fn(),
@@ -70,7 +77,7 @@ describe('createMainWindow', () => {
     expect(windowHandlers.windowOpen({ url: 'not a url' })).toEqual({ action: 'deny' })
 
     expect(openExternalMock).toHaveBeenCalledTimes(2)
-    expect(openExternalMock).toHaveBeenCalledWith('https://example.com')
+    expect(openExternalMock).toHaveBeenCalledWith('https://example.com/')
     expect(openExternalMock).toHaveBeenCalledWith('http://localhost:3000/')
 
     const preventDefault = vi.fn()
@@ -95,6 +102,23 @@ describe('createMainWindow', () => {
     )
     expect(fileNavigationPreventDefault).toHaveBeenCalledTimes(1)
     expect(openExternalMock).toHaveBeenCalledTimes(4)
+
+    const allowBlankEvent = { preventDefault: vi.fn() }
+    const allowBlankPrefs = { partition: 'persist:orca-browser' }
+    windowHandlers['will-attach-webview'](
+      allowBlankEvent as never,
+      allowBlankPrefs as never,
+      { src: 'data:text/html,' } as never
+    )
+    expect(allowBlankEvent.preventDefault).not.toHaveBeenCalled()
+
+    const denyInlineHtmlEvent = { preventDefault: vi.fn() }
+    windowHandlers['will-attach-webview'](
+      denyInlineHtmlEvent as never,
+      { partition: 'persist:orca-browser' } as never,
+      { src: 'data:text/html,<script>alert(1)</script>' } as never
+    )
+    expect(denyInlineHtmlEvent.preventDefault).toHaveBeenCalledTimes(1)
   })
 
   it('supports all minus key variants for terminal zoom out', () => {
@@ -104,12 +128,19 @@ describe('createMainWindow', () => {
         windowHandlers[event] = handler
       }),
       setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn()
     }
     const browserWindowInstance = {
       webContents,
       on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
       loadFile: vi.fn(),
@@ -152,12 +183,19 @@ describe('createMainWindow', () => {
         windowHandlers[event] = handler
       }),
       setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn()
     }
     const browserWindowInstance = {
       webContents,
       on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
       loadFile: vi.fn(),

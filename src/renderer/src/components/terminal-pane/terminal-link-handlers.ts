@@ -173,6 +173,15 @@ export function handleOscLink(
   }
 
   if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+    const store = useAppStore.getState()
+    // Why: when the user opts into Orca's browser tabs, terminal links should
+    // stay worktree-scoped instead of escaping to the system browser. We still
+    // fall back externally when the setting is off or no worktree owns the pane.
+    if (store.settings?.openLinksInApp && deps.worktreeId) {
+      store.setActiveWorktree(deps.worktreeId)
+      store.createBrowserTab(deps.worktreeId, parsed.toString())
+      return
+    }
     void window.api.shell.openUrl(parsed.toString())
     return
   }

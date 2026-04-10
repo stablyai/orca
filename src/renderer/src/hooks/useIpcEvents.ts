@@ -12,7 +12,7 @@ const ZOOM_STEP = 0.5
 
 export function resolveZoomTarget(args: {
   activeView: 'terminal' | 'settings'
-  activeTabType: 'terminal' | 'editor'
+  activeTabType: 'terminal' | 'editor' | 'browser'
   activeElement: unknown
 }): 'terminal' | 'editor' | 'ui' {
   const { activeView, activeTabType, activeElement } = args

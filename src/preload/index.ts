@@ -303,6 +303,17 @@ const api = {
       ipcRenderer.invoke('shell:copyFile', args)
   },
 
+  browser: {
+    registerGuest: (args: { browserTabId: string; webContentsId: number }): Promise<void> =>
+      ipcRenderer.invoke('browser:registerGuest', args),
+
+    unregisterGuest: (args: { browserTabId: string }): Promise<void> =>
+      ipcRenderer.invoke('browser:unregisterGuest', args),
+
+    openDevTools: (args: { browserTabId: string }): Promise<boolean> =>
+      ipcRenderer.invoke('browser:openDevTools', args)
+  },
+
   hooks: {
     check: (args: { repoId: string }): Promise<{ hasHooks: boolean; hooks: unknown }> =>
       ipcRenderer.invoke('hooks:check', args)

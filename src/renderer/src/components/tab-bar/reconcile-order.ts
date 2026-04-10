@@ -6,12 +6,13 @@
 export function reconcileTabOrder(
   storedOrder: string[] | undefined,
   terminalIds: string[],
-  editorIds: string[]
+  editorIds: string[],
+  browserIds: string[] = []
 ): string[] {
-  const validIds = new Set([...terminalIds, ...editorIds])
+  const validIds = new Set([...terminalIds, ...editorIds, ...browserIds])
   const result: string[] = (storedOrder ?? []).filter((id) => validIds.has(id))
   const inResult = new Set(result)
-  for (const id of [...terminalIds, ...editorIds]) {
+  for (const id of [...terminalIds, ...editorIds, ...browserIds]) {
     if (!inResult.has(id)) {
       result.push(id)
       inResult.add(id)

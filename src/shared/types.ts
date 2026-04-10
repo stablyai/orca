@@ -56,7 +56,9 @@ export type WorktreeMeta = {
 }
 
 // ─── Unified Tab ────────────────────────────────────────────────────
-export type TabContentType = 'terminal' | 'editor' | 'diff' | 'conflict-review'
+export type TabContentType = 'terminal' | 'editor' | 'diff' | 'conflict-review' | 'browser'
+
+export type WorkspaceVisibleTabType = 'terminal' | 'editor' | 'browser'
 
 export type Tab = {
   id: string // UUID for terminals, filePath for editors (preserves current convention)
@@ -91,6 +93,25 @@ export type TerminalTab = {
   createdAt: number
   /** Bumped on shutdown so TerminalPane remounts with a fresh PTY. */
   generation?: number
+}
+
+export type BrowserLoadError = {
+  code: number
+  description: string
+  validatedUrl: string
+}
+
+export type BrowserTab = {
+  id: string
+  worktreeId: string
+  url: string
+  title: string
+  loading: boolean
+  faviconUrl: string | null
+  canGoBack: boolean
+  canGoForward: boolean
+  loadError: BrowserLoadError | null
+  createdAt: number
 }
 
 export type TerminalPaneSplitDirection = 'vertical' | 'horizontal'
@@ -147,8 +168,12 @@ export type WorkspaceSessionState = {
   openFilesByWorktree?: Record<string, PersistedOpenFile[]>
   /** Per-worktree active editor file ID (filePath) at shutdown. */
   activeFileIdByWorktree?: Record<string, string | null>
-  /** Per-worktree active tab type (terminal vs editor) at shutdown. */
-  activeTabTypeByWorktree?: Record<string, 'terminal' | 'editor'>
+  /** Persisted browser tabs, keyed by worktree ID. */
+  browserTabsByWorktree?: Record<string, BrowserTab[]>
+  /** Per-worktree active browser tab ID at shutdown. */
+  activeBrowserTabIdByWorktree?: Record<string, string | null>
+  /** Per-worktree active tab type (terminal vs editor vs browser) at shutdown. */
+  activeTabTypeByWorktree?: Record<string, WorkspaceVisibleTabType>
   /** Per-worktree last-active terminal tab ID at shutdown. */
   activeTabIdByWorktree?: Record<string, string | null>
   /** Unified tab model — present when saved by a build that includes TabsSlice.
@@ -314,6 +339,10 @@ export type GlobalSettings = {
   terminalDividerThicknessPx: number
   terminalFocusFollowsMouse: boolean
   terminalScrollbackBytes: number
+  /** Why: opening arbitrary links inside Orca uses an isolated guest browser surface.
+   *  The setting stays opt-in so existing workflows continue to use the system browser
+   *  until the user explicitly wants worktree-scoped in-app browsing. */
+  openLinksInApp: boolean
   rightSidebarOpenByDefault: boolean
   diffDefaultView: 'inline' | 'side-by-side'
   notifications: NotificationSettings

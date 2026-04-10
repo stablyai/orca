@@ -2,7 +2,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
-import type { Worktree, TerminalTab, TerminalLayoutSnapshot } from '../../../../shared/types'
+import type {
+  BrowserTab,
+  TerminalLayoutSnapshot,
+  TerminalTab,
+  Worktree
+} from '../../../../shared/types'
 
 // Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -73,6 +78,7 @@ import { createGitHubSlice } from './github'
 import { createEditorSlice } from './editor'
 import { createStatsSlice } from './stats'
 import { createClaudeUsageSlice } from './claude-usage'
+import { createBrowserSlice } from './browser'
 
 function createTestStore() {
   return create<AppState>()((...a) => ({
@@ -85,7 +91,8 @@ function createTestStore() {
     ...createGitHubSlice(...a),
     ...createEditorSlice(...a),
     ...createStatsSlice(...a),
-    ...createClaudeUsageSlice(...a)
+    ...createClaudeUsageSlice(...a),
+    ...createBrowserSlice(...a)
   }))
 }
 
@@ -126,6 +133,21 @@ function makeTab(
 
 function makeLayout(): TerminalLayoutSnapshot {
   return { root: null, activeLeafId: null, expandedLeafId: null }
+}
+
+function makeBrowserTab(
+  overrides: Partial<BrowserTab> & { id: string; worktreeId: string; url: string }
+): BrowserTab {
+  return {
+    title: overrides.url,
+    loading: false,
+    faviconUrl: null,
+    canGoBack: false,
+    canGoForward: false,
+    loadError: null,
+    createdAt: Date.now(),
+    ...overrides
+  }
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────
@@ -281,6 +303,204 @@ describe('hydrateWorkspaceSession', () => {
     expect(s.activeWorktreeId).toBe(validWt)
     expect(s.activeTabId).toBe('tab1')
     expect(s.activeRepoId).toBe('repo1')
+  })
+})
+
+describe('hydrateBrowserSession', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('falls back to the first valid browser tab when the persisted active browser tab is missing', () => {
+    const store = createTestStore()
+    const validWt = 'repo1::/path/wt1'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: validWt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      activeWorktreeId: validWt
+    })
+
+    store.getState().hydrateBrowserSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: validWt,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      browserTabsByWorktree: {
+        [validWt]: [
+          makeBrowserTab({ id: 'browser-1', worktreeId: validWt, url: 'https://example.com' }),
+          makeBrowserTab({ id: 'browser-2', worktreeId: validWt, url: 'https://openai.com' })
+        ]
+      },
+      activeBrowserTabIdByWorktree: {
+        [validWt]: 'missing-browser-id'
+      },
+      activeTabTypeByWorktree: {
+        [validWt]: 'browser'
+      }
+    })
+
+    const s = store.getState()
+    expect(s.browserTabsByWorktree[validWt]).toHaveLength(2)
+    expect(s.activeBrowserTabIdByWorktree[validWt]).toBe('browser-1')
+    expect(s.activeBrowserTabId).toBe('browser-1')
+  })
+
+  it('restores activeTabTypeByWorktree for browser worktrees when hydrateEditorSession was a no-op', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      activeWorktreeId: wt,
+      // Simulate hydrateEditorSession returning {} (no editor files) —
+      // activeTabTypeByWorktree stays at the initial empty object
+      activeTabTypeByWorktree: {}
+    })
+
+    store.getState().hydrateBrowserSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: wt,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      browserTabsByWorktree: {
+        [wt]: [makeBrowserTab({ id: 'browser-1', worktreeId: wt, url: 'https://example.com' })]
+      },
+      activeBrowserTabIdByWorktree: { [wt]: 'browser-1' },
+      activeTabTypeByWorktree: { [wt]: 'browser' }
+    })
+
+    const s = store.getState()
+    // hydrateBrowserSession must merge 'browser' entries into activeTabTypeByWorktree
+    // so setActiveWorktree doesn't default to 'terminal' and cause a blank screen
+    expect(s.activeTabTypeByWorktree[wt]).toBe('browser')
+    expect(s.activeTabType).toBe('browser')
+    expect(s.activeBrowserTabId).toBe('browser-1')
+  })
+
+  it('does not overwrite existing activeTabTypeByWorktree entries from hydrateEditorSession', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      activeWorktreeId: wt,
+      // Simulate hydrateEditorSession having already set this to 'editor'
+      activeTabTypeByWorktree: { [wt]: 'editor' }
+    })
+
+    store.getState().hydrateBrowserSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: wt,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      browserTabsByWorktree: {
+        [wt]: [makeBrowserTab({ id: 'browser-1', worktreeId: wt, url: 'https://example.com' })]
+      },
+      activeBrowserTabIdByWorktree: { [wt]: 'browser-1' },
+      activeTabTypeByWorktree: { [wt]: 'browser' }
+    })
+
+    const s = store.getState()
+    // The existing 'editor' entry set by hydrateEditorSession must not be overwritten
+    expect(s.activeTabTypeByWorktree[wt]).toBe('editor')
+  })
+
+  it('drops browser tabs for invalid worktrees', () => {
+    const store = createTestStore()
+    const validWt = 'repo1::/path/wt1'
+    const invalidWt = 'repo1::/path/gone'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: validWt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      activeWorktreeId: validWt
+    })
+
+    store.getState().hydrateBrowserSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: validWt,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      browserTabsByWorktree: {
+        [validWt]: [
+          makeBrowserTab({ id: 'browser-1', worktreeId: validWt, url: 'https://example.com' })
+        ],
+        [invalidWt]: [
+          makeBrowserTab({ id: 'browser-bad', worktreeId: invalidWt, url: 'https://bad.invalid' })
+        ]
+      },
+      activeBrowserTabIdByWorktree: {
+        [validWt]: 'browser-1',
+        [invalidWt]: 'browser-bad'
+      }
+    })
+
+    const s = store.getState()
+    expect(s.browserTabsByWorktree[validWt]).toHaveLength(1)
+    expect(s.browserTabsByWorktree[invalidWt]).toBeUndefined()
+    expect(s.activeBrowserTabIdByWorktree[invalidWt]).toBeUndefined()
+  })
+
+  it('normalizes stale browser tab-type restores when the worktree has no browser tabs', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      activeWorktreeId: wt,
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'terminal-1', worktreeId: wt })]
+      },
+      activeTabTypeByWorktree: { [wt]: 'browser' },
+      activeTabType: 'browser'
+    })
+
+    store.getState().hydrateBrowserSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: wt,
+      activeTabId: 'terminal-1',
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'terminal-1', worktreeId: wt })]
+      },
+      terminalLayoutsByTabId: {},
+      browserTabsByWorktree: {},
+      activeBrowserTabIdByWorktree: {},
+      activeTabTypeByWorktree: { [wt]: 'browser' }
+    })
+
+    const s = store.getState()
+    expect(s.activeTabTypeByWorktree[wt]).toBe('terminal')
+    expect(s.activeTabType).toBe('terminal')
+    expect(s.activeBrowserTabIdByWorktree[wt]).toBeUndefined()
+    expect(s.activeBrowserTabId).toBeNull()
   })
 })
 

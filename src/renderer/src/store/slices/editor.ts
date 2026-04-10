@@ -12,7 +12,8 @@ import type {
   GitStatusEntry,
   GitStatusResult,
   SearchResult,
-  WorkspaceSessionState
+  WorkspaceSessionState,
+  WorkspaceVisibleTabType
 } from '../../../../shared/types'
 
 export type DiffSource =
@@ -141,9 +142,9 @@ export type EditorSlice = {
   openFiles: OpenFile[]
   activeFileId: string | null
   activeFileIdByWorktree: Record<string, string | null> // worktreeId -> last active file
-  activeTabTypeByWorktree: Record<string, 'terminal' | 'editor'> // worktreeId -> last active tab type
-  activeTabType: 'terminal' | 'editor'
-  setActiveTabType: (type: 'terminal' | 'editor') => void
+  activeTabTypeByWorktree: Record<string, WorkspaceVisibleTabType> // worktreeId -> last active tab type
+  activeTabType: WorkspaceVisibleTabType
+  setActiveTabType: (type: WorkspaceVisibleTabType) => void
   openFile: (file: Omit<OpenFile, 'id' | 'isDirty'>, options?: { preview?: boolean }) => void
   pinFile: (fileId: string) => void
   closeFile: (fileId: string) => void
@@ -1296,7 +1297,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       // The file may have been removed due to worktree validation or the
       // persisted data may reference a stale path.
       const activeFileExists = activeFileId ? openFiles.some((f) => f.id === activeFileId) : false
-      const activeTabType =
+      const activeTabType: WorkspaceVisibleTabType =
         activeWorktreeId && persistedActiveTabTypeByWorktree[activeWorktreeId]
           ? persistedActiveTabTypeByWorktree[activeWorktreeId]
           : 'terminal'
