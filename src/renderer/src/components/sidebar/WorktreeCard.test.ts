@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { TerminalTab } from '../../../../shared/types'
 
 vi.mock('@/lib/agent-status', () => ({
   detectAgentStatusFromTitle: vi.fn((title: string) => {
@@ -14,6 +15,19 @@ vi.mock('@/lib/agent-status', () => ({
 
 import { getWorktreeStatus } from './WorktreeCard'
 
+function makeTerminalTab(title: string): TerminalTab {
+  return {
+    id: 'tab-1',
+    worktreeId: 'repo1::/tmp/wt',
+    ptyId: 'pty-1',
+    title,
+    customTitle: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 0
+  }
+}
+
 describe('getWorktreeStatus', () => {
   it('treats browser-only worktrees as active', () => {
     expect(getWorktreeStatus([], [{ id: 'browser-1' }])).toBe('active')
@@ -21,16 +35,10 @@ describe('getWorktreeStatus', () => {
 
   it('keeps terminal agent states higher priority than browser presence', () => {
     expect(
-      getWorktreeStatus(
-        [{ id: 'tab-1', ptyId: 'pty-1', title: 'permission needed' }],
-        [{ id: 'browser-1' }]
-      )
+      getWorktreeStatus([makeTerminalTab('permission needed')], [{ id: 'browser-1' }])
     ).toBe('permission')
     expect(
-      getWorktreeStatus(
-        [{ id: 'tab-1', ptyId: 'pty-1', title: 'working hard' }],
-        [{ id: 'browser-1' }]
-      )
+      getWorktreeStatus([makeTerminalTab('working hard')], [{ id: 'browser-1' }])
     ).toBe('working')
   })
 })
