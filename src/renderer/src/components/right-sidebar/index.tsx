@@ -171,8 +171,10 @@ export default function RightSidebar(): React.JSX.Element {
   return (
     <div
       ref={containerRef}
+      aria-hidden={!rightSidebarOpen}
       className={cn(
         'relative flex-shrink-0 flex flex-row overflow-visible',
+        !rightSidebarOpen && 'pointer-events-none',
         isResizing ? 'transition-none' : 'transition-[width] duration-200'
       )}
     >

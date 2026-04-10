@@ -120,7 +120,6 @@ function App(): React.JSX.Element {
 
   // Right sidebar + editor state
   const toggleRightSidebar = useAppStore((s) => s.toggleRightSidebar)
-  const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarWidth = useAppStore((s) => s.rightSidebarWidth)
   const setRightSidebarOpen = useAppStore((s) => s.setRightSidebarOpen)
   const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
@@ -575,7 +574,11 @@ function App(): React.JSX.Element {
             {activeView === 'settings' ? <Settings /> : !activeWorktreeId ? <Landing /> : null}
           </div>
         </div>
-        {showSidebar && rightSidebarOpen ? <RightSidebar /> : null}
+        {/* Why: the right sidebar stays mounted even while "closed" so its
+            width can animate from 0px to the saved width. Unmounting here made
+            the panel pop in abruptly instead of matching the left sidebar's
+            smooth expand/collapse behavior. */}
+        {showSidebar ? <RightSidebar /> : null}
       </div>
       <QuickOpen />
       <ZoomOverlay />
