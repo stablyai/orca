@@ -25,8 +25,13 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuShortcut,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+
+const isMac = navigator.userAgent.includes('Mac')
+const NEW_TERMINAL_SHORTCUT = isMac ? '⌘T' : 'Ctrl+T'
+const NEW_BROWSER_SHORTCUT = isMac ? '⌘⇧B' : 'Ctrl+Shift+B'
 
 type TabBarProps = {
   tabs: TerminalTab[]
@@ -248,21 +253,33 @@ export default function TabBar({
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
-            className="flex items-center justify-center w-7 h-7 my-auto mx-1 shrink-0 rounded text-muted-foreground hover:text-foreground hover:bg-accent/50"
+            className="mx-1 my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground"
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
             title="New tab"
           >
             <Plus className="w-3.5 h-3.5" />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onSelect={onNewTerminalTab}>
-            <TerminalSquare className="w-3.5 h-3.5" />
+        <DropdownMenuContent
+          align="end"
+          sideOffset={6}
+          className="min-w-[11rem] rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]"
+        >
+          <DropdownMenuItem
+            onSelect={onNewTerminalTab}
+            className="gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium"
+          >
+            <TerminalSquare className="size-4 text-muted-foreground" />
             New Terminal
+            <DropdownMenuShortcut>{NEW_TERMINAL_SHORTCUT}</DropdownMenuShortcut>
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={onNewBrowserTab}>
-            <Globe className="w-3.5 h-3.5" />
-            New Browser
+          <DropdownMenuItem
+            onSelect={onNewBrowserTab}
+            className="gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium"
+          >
+            <Globe className="size-4 text-muted-foreground" />
+            New Browser Tab
+            <DropdownMenuShortcut>{NEW_BROWSER_SHORTCUT}</DropdownMenuShortcut>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

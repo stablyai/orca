@@ -1,32 +1,12 @@
 import { clipboard, Menu, shell, webContents } from 'electron'
+import {
+  normalizeBrowserNavigationUrl,
+  normalizeExternalBrowserUrl
+} from '../../shared/browser-url'
 
 export type BrowserGuestRegistration = {
   browserTabId: string
   webContentsId: number
-}
-
-const LOCAL_ADDRESS_PATTERN =
-  /^(?:localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|\[[0-9a-f:]+\])(?::\d+)?(?:\/.*)?$/i
-
-function normalizeExternalUrl(rawUrl: string): string | null {
-  if (rawUrl === 'about:blank') {
-    return rawUrl
-  }
-
-  if (LOCAL_ADDRESS_PATTERN.test(rawUrl)) {
-    try {
-      return new URL(`http://${rawUrl}`).toString()
-    } catch {
-      return null
-    }
-  }
-
-  try {
-    const parsed = new URL(rawUrl)
-    return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? parsed.toString() : null
-  } catch {
-    return null
-  }
 }
 
 class BrowserManager {
@@ -34,10 +14,33 @@ class BrowserManager {
   private readonly contextMenuCleanupByTabId = new Map<string, () => void>()
 
   private openValidatedExternal(rawUrl: string): void {
-    const externalUrl = normalizeExternalUrl(rawUrl)
-    if (externalUrl && externalUrl !== 'about:blank') {
+    const externalUrl = normalizeExternalBrowserUrl(rawUrl)
+    if (externalUrl) {
       void shell.openExternal(externalUrl)
     }
+  }
+
+  attachGuestPolicies(guest: Electron.WebContents): void {
+    guest.setBackgroundThrottling(true)
+    guest.setWindowOpenHandler(({ url }) => {
+      // Why: popup-capable guests are required for OAuth and target=_blank
+      // flows, but Orca still does not host child windows itself. Convert those
+      // attempts into a controlled external-open path instead of letting them
+      // silently fail or spawn unmanaged windows.
+      this.openValidatedExternal(url)
+      return { action: 'deny' }
+    })
+
+    const navigationGuard = (event: Electron.Event, url: string): void => {
+      if (!normalizeBrowserNavigationUrl(url)) {
+        // Why: `will-attach-webview` only validates the initial src. Main must
+        // keep enforcing the same allowlist for later guest navigations too.
+        event.preventDefault()
+      }
+    }
+
+    guest.on('will-navigate', navigationGuard)
+    guest.on('will-redirect', navigationGuard)
   }
 
   registerGuest({ browserTabId, webContentsId }: BrowserGuestRegistration): void {
@@ -62,15 +65,6 @@ class BrowserManager {
 
     this.webContentsIdByTabId.set(browserTabId, webContentsId)
 
-    guest.setBackgroundThrottling(true)
-    guest.setWindowOpenHandler(({ url }) => {
-      // Why: browser tabs are still a scoped IDE surface, not a full popup
-      // manager. Falling back to the system browser for guest-created windows
-      // avoids orphan Electron windows until Orca has explicit new-tab/new-split
-      // UX for popup flows.
-      this.openValidatedExternal(url)
-      return { action: 'deny' }
-    })
     this.setupContextMenu(browserTabId, guest)
   }
 
@@ -118,7 +112,7 @@ class BrowserManager {
       const template: Electron.MenuItemConstructorOptions[] = []
 
       if (linkUrl) {
-        const externalLinkUrl = normalizeExternalUrl(linkUrl)
+        const externalLinkUrl = normalizeExternalBrowserUrl(linkUrl)
         template.push(
           {
             label: 'Open Link In Default Browser',
@@ -137,7 +131,7 @@ class BrowserManager {
         )
       }
 
-      const externalPageUrl = normalizeExternalUrl(pageUrl)
+      const externalPageUrl = normalizeExternalBrowserUrl(pageUrl)
 
       template.push(
         {

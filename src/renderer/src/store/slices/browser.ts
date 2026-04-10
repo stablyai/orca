@@ -44,10 +44,14 @@ function normalizeUrl(url: string): string {
 function getFallbackTabTypeForWorktree(
   worktreeId: string,
   openFiles: AppState['openFiles'],
-  terminalTabsByWorktree: AppState['tabsByWorktree']
+  terminalTabsByWorktree: AppState['tabsByWorktree'],
+  browserTabsByWorktree?: AppState['browserTabsByWorktree']
 ): AppState['activeTabType'] {
   if (openFiles.some((file) => file.worktreeId === worktreeId)) {
     return 'editor'
+  }
+  if ((browserTabsByWorktree?.[worktreeId] ?? []).length > 0) {
+    return 'browser'
   }
   if ((terminalTabsByWorktree[worktreeId] ?? []).length > 0) {
     return 'terminal'
@@ -167,12 +171,12 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
           : s.activeTabType
 
       const nextActiveTabTypeByWorktree = { ...s.activeTabTypeByWorktree }
-      if (
-        isActiveTabInOwningWorktree &&
-        remainingBrowserTabs.length === 0 &&
-        !s.openFiles.some((file) => file.worktreeId === owningWorktreeId)
-      ) {
-        nextActiveTabTypeByWorktree[owningWorktreeId] = 'terminal'
+      if (remainingBrowserTabs.length === 0) {
+        nextActiveTabTypeByWorktree[owningWorktreeId] = getFallbackTabTypeForWorktree(
+          owningWorktreeId,
+          s.openFiles,
+          s.tabsByWorktree
+        )
       }
 
       return {
@@ -326,7 +330,8 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
           nextActiveTabTypeByWorktree[worktreeId] = getFallbackTabTypeForWorktree(
             worktreeId,
             s.openFiles,
-            s.tabsByWorktree
+            s.tabsByWorktree,
+            browserTabsByWorktree
           )
         }
       }
@@ -345,7 +350,12 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         ) {
           return 'editor'
         }
-        return getFallbackTabTypeForWorktree(activeWorktreeId, s.openFiles, s.tabsByWorktree)
+        return getFallbackTabTypeForWorktree(
+          activeWorktreeId,
+          s.openFiles,
+          s.tabsByWorktree,
+          browserTabsByWorktree
+        )
       })()
 
       return {

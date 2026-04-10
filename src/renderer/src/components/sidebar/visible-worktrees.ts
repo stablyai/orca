@@ -22,6 +22,8 @@ export function computeVisibleWorktreeIds(
     searchQuery: string
     showActiveOnly: boolean
     tabsByWorktree: Record<string, TerminalTab[]> | null
+    browserTabsByWorktree?: Record<string, { id: string }[]> | null
+    activeWorktreeId?: string | null
     repoMap: Map<string, Repo>
     prCache: AppState['prCache'] | null
     issueCache: AppState['issueCache'] | null
@@ -49,7 +51,13 @@ export function computeVisibleWorktreeIds(
   if (opts.showActiveOnly) {
     all = all.filter((w) => {
       const tabs = opts.tabsByWorktree?.[w.id] ?? []
-      return tabs.some((t) => t.ptyId)
+      const hasLiveTerminal = tabs.some((t) => t.ptyId)
+      const hasBrowserTabs = (opts.browserTabsByWorktree?.[w.id] ?? []).length > 0
+      // Why: "Active only" should reflect the surfaces Orca can actually
+      // restore into, not just PTY-backed terminals. A browser-tab worktree is
+      // still active from the user's point of view even if it has no live PTY,
+      // and the currently selected worktree should never vanish from the list.
+      return hasLiveTerminal || hasBrowserTabs || opts.activeWorktreeId === w.id
     })
   }
 
@@ -153,6 +161,8 @@ export function getVisibleWorktreeIds(): string[] {
     searchQuery: state.searchQuery,
     showActiveOnly: state.showActiveOnly,
     tabsByWorktree: state.tabsByWorktree,
+    browserTabsByWorktree: state.browserTabsByWorktree,
+    activeWorktreeId: state.activeWorktreeId,
     repoMap,
     prCache: state.prCache,
     issueCache: state.issueCache

@@ -10,6 +10,9 @@ function createEditorStore(): StoreApi<AppState> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return createStore<any>()((...args: any[]) => ({
     activeWorktreeId: 'wt-1',
+    browserTabsByWorktree: {},
+    activeBrowserTabId: null,
+    activeBrowserTabIdByWorktree: {},
     ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
   })) as unknown as StoreApi<AppState>
 }
@@ -215,6 +218,80 @@ describe('createEditorSlice editor drafts', () => {
     )
 
     expect(store.getState().editorDrafts).toEqual({})
+  })
+
+  it('falls back to a browser tab when closing the last editor in the active worktree', () => {
+    const store = createEditorStore()
+
+    store.setState({
+      browserTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'browser-1',
+            worktreeId: 'wt-1',
+            url: 'https://example.com',
+            title: 'Example',
+            loading: false,
+            faviconUrl: null,
+            canGoBack: false,
+            canGoForward: false,
+            loadError: null,
+            createdAt: 0
+          }
+        ]
+      },
+      activeBrowserTabIdByWorktree: { 'wt-1': 'browser-1' }
+    })
+
+    store.getState().openFile({
+      filePath: '/repo/src/file.ts',
+      relativePath: 'src/file.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+
+    store.getState().closeFile('/repo/src/file.ts')
+
+    expect(store.getState().activeTabType).toBe('browser')
+    expect(store.getState().activeBrowserTabId).toBe('browser-1')
+  })
+
+  it('falls back to a browser tab when closing all editors in the active worktree', () => {
+    const store = createEditorStore()
+
+    store.setState({
+      browserTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'browser-1',
+            worktreeId: 'wt-1',
+            url: 'https://example.com',
+            title: 'Example',
+            loading: false,
+            faviconUrl: null,
+            canGoBack: false,
+            canGoForward: false,
+            loadError: null,
+            createdAt: 0
+          }
+        ]
+      },
+      activeBrowserTabIdByWorktree: { 'wt-1': 'browser-1' }
+    })
+
+    store.getState().openFile({
+      filePath: '/repo/src/file.ts',
+      relativePath: 'src/file.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+
+    store.getState().closeAllFiles()
+
+    expect(store.getState().activeTabType).toBe('browser')
+    expect(store.getState().activeBrowserTabId).toBe('browser-1')
   })
 })
 

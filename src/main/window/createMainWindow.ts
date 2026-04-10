@@ -4,34 +4,12 @@ import { is } from '@electron-toolkit/utils'
 import icon from '../../../resources/icon.png?asset'
 import devIcon from '../../../resources/icon-dev.png?asset'
 import type { Store } from '../persistence'
-import { ORCA_BROWSER_BLANK_URL, ORCA_BROWSER_PARTITION } from '../../shared/constants'
-
-const LOCAL_ADDRESS_PATTERN =
-  /^(?:localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|\[[0-9a-f:]+\])(?::\d+)?(?:\/.*)?$/i
-
-function normalizeExternalUrl(rawUrl: string): string | null {
-  if (rawUrl === 'about:blank') {
-    return rawUrl
-  }
-  if (rawUrl === ORCA_BROWSER_BLANK_URL) {
-    return rawUrl
-  }
-
-  if (LOCAL_ADDRESS_PATTERN.test(rawUrl)) {
-    try {
-      return new URL(`http://${rawUrl}`).toString()
-    } catch {
-      return null
-    }
-  }
-
-  try {
-    const parsed = new URL(rawUrl)
-    return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? parsed.toString() : null
-  } catch {
-    return null
-  }
-}
+import { browserManager } from '../browser/browser-manager'
+import { ORCA_BROWSER_PARTITION } from '../../shared/constants'
+import {
+  normalizeBrowserNavigationUrl,
+  normalizeExternalBrowserUrl
+} from '../../shared/browser-url'
 
 function isZoomInShortcut(input: Electron.Input): boolean {
   return input.key === '=' || input.key === '+' || input.code === 'NumpadAdd'
@@ -94,8 +72,8 @@ export function createMainWindow(store: Store | null): BrowserWindow {
     // Why: persistent parked webviews use separate compositor layers, and on
     // recent macOS releases those layers can fail to repaint after occlusion or
     // restore. Disabling main-window throttling and forcing a repaint on
-    // visibility transitions matches the hardening Superset needed for the same
-    // black-surface failure mode.
+    // visibility transitions hardens Orca against the same black-surface
+    // failure mode seen during browser-tab restore and tab switching.
     mainWindow.webContents.setBackgroundThrottling(false)
     mainWindow.on('restore', () => {
       forceRepaint(mainWindow)
@@ -123,8 +101,8 @@ export function createMainWindow(store: Store | null): BrowserWindow {
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
-    const externalUrl = normalizeExternalUrl(details.url)
-    if (externalUrl && externalUrl !== 'about:blank') {
+    const externalUrl = normalizeExternalBrowserUrl(details.url)
+    if (externalUrl) {
       shell.openExternal(externalUrl)
     }
     return { action: 'deny' }
@@ -132,7 +110,7 @@ export function createMainWindow(store: Store | null): BrowserWindow {
 
   mainWindow.webContents.on('will-attach-webview', (event, webPreferences, params) => {
     const src = typeof params.src === 'string' ? params.src : ''
-    const normalizedSrc = normalizeExternalUrl(src)
+    const normalizedSrc = normalizeBrowserNavigationUrl(src)
     const partition = typeof webPreferences.partition === 'string' ? webPreferences.partition : ''
 
     // Why: arbitrary sites must stay inside an unprivileged guest surface. We
@@ -160,11 +138,19 @@ export function createMainWindow(store: Store | null): BrowserWindow {
     webPreferences.partition = ORCA_BROWSER_PARTITION
   })
 
+  mainWindow.webContents.on('did-attach-webview', (_event, guest) => {
+    // Why: popup and navigation policy must attach as soon as Chromium creates
+    // the guest webContents. Waiting until renderer-driven registration leaves
+    // a race where target=_blank or early redirects can bypass Orca's intended
+    // fallback behavior.
+    browserManager.attachGuestPolicies(guest)
+  })
+
   // Block ALL in-window navigations to prevent remote pages from inheriting
   // the privileged preload bridge (PTY, filesystem, etc.).
   // In dev mode, allow navigations to the local dev server (e.g. HMR reloads).
   mainWindow.webContents.on('will-navigate', (event, url) => {
-    const externalUrl = normalizeExternalUrl(url)
+    const externalUrl = normalizeExternalBrowserUrl(url)
 
     if (externalUrl) {
       const target = new URL(externalUrl)

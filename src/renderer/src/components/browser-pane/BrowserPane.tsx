@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ArrowLeft,
@@ -13,6 +14,10 @@ import { Input } from '@/components/ui/input'
 import logo from '../../../../../resources/logo.svg'
 import { ORCA_BROWSER_BLANK_URL, ORCA_BROWSER_PARTITION } from '../../../../shared/constants'
 import type { BrowserLoadError, BrowserTab as BrowserTabState } from '../../../../shared/types'
+import {
+  normalizeBrowserNavigationUrl,
+  normalizeExternalBrowserUrl
+} from '../../../../shared/browser-url'
 
 type BrowserTabPageState = Partial<
   Pick<
@@ -23,8 +28,10 @@ type BrowserTabPageState = Partial<
 
 const webviewRegistry = new Map<string, Electron.WebviewTag>()
 const registeredWebContentsIds = new Map<string, number>()
+const parkedAtByTabId = new Map<string, number>()
 let hiddenContainer: HTMLDivElement | null = null
 const DRAG_LISTENER_KEY = '__orcaBrowserPaneDragListeners'
+const MAX_PARKED_WEBVIEWS = 6
 
 function getHiddenContainer(): HTMLDivElement {
   if (!hiddenContainer) {
@@ -78,28 +85,14 @@ export function destroyPersistentWebview(browserTabId: string): void {
   const webview = webviewRegistry.get(browserTabId)
   if (!webview) {
     registeredWebContentsIds.delete(browserTabId)
+    parkedAtByTabId.delete(browserTabId)
     return
   }
   void window.api.browser.unregisterGuest({ browserTabId })
   webview.remove()
   webviewRegistry.delete(browserTabId)
   registeredWebContentsIds.delete(browserTabId)
-}
-
-// Why: Electron webview elements with src="about:blank" can cause the main
-// window to navigate to about:blank, blanking the entire app. Using a minimal
-// data: URL for empty/blank pages avoids this Electron behaviour while still
-// producing an empty guest surface.
-function normalizeBrowserUrl(rawValue: string): string {
-  const value = rawValue.trim()
-  if (value.length === 0 || value === 'about:blank') {
-    return ORCA_BROWSER_BLANK_URL
-  }
-  try {
-    return new URL(value).toString()
-  } catch {
-    return new URL(`https://${value}`).toString()
-  }
+  parkedAtByTabId.delete(browserTabId)
 }
 
 function buildLoadError(event: {
@@ -112,6 +105,10 @@ function buildLoadError(event: {
     description: event.errorDescription ?? 'Unknown load failure',
     validatedUrl: event.validatedURL ?? 'about:blank'
   }
+}
+
+function toDisplayUrl(url: string): string {
+  return url === ORCA_BROWSER_BLANK_URL ? 'about:blank' : url
 }
 
 function getOpenableExternalUrl(
@@ -130,14 +127,32 @@ function getOpenableExternalUrl(
       currentUrl = fallbackUrl
     }
   }
-  try {
-    const parsed = new URL(currentUrl)
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      return null
+  return normalizeExternalBrowserUrl(currentUrl)
+}
+
+function evictParkedWebviews(excludedTabId: string | null = null): void {
+  if (webviewRegistry.size <= MAX_PARKED_WEBVIEWS) {
+    return
+  }
+
+  const hidden = getHiddenContainer()
+  const parkedBrowserTabIds = [...webviewRegistry.entries()]
+    .filter(
+      ([browserTabId, webview]) =>
+        browserTabId !== excludedTabId && webview.parentElement === hidden
+    )
+    .sort((a, b) => (parkedAtByTabId.get(a[0]) ?? 0) - (parkedAtByTabId.get(b[0]) ?? 0))
+    .map(([browserTabId]) => browserTabId)
+
+  while (webviewRegistry.size > MAX_PARKED_WEBVIEWS && parkedBrowserTabIds.length > 0) {
+    const browserTabId = parkedBrowserTabIds.shift()
+    if (browserTabId) {
+      // Why: browser tabs are persistent for fast switching, but hidden guests
+      // cannot grow without bound or long Orca sessions accumulate Chromium
+      // processes and GPU surfaces. Evict only parked webviews, never the
+      // currently visible guest.
+      destroyPersistentWebview(browserTabId)
     }
-    return parsed.toString()
-  } catch {
-    return null
   }
 }
 
@@ -159,7 +174,7 @@ export default function BrowserPane({
   const [addressBarValue, setAddressBarValue] = useState(browserTab.url)
 
   useEffect(() => {
-    setAddressBarValue(browserTab.url)
+    setAddressBarValue(toDisplayUrl(browserTab.url))
   }, [browserTab.url])
 
   useEffect(() => {
@@ -195,6 +210,7 @@ export default function BrowserPane({
     let webview = webviewRegistry.get(browserTab.id)
     if (webview) {
       container.appendChild(webview)
+      parkedAtByTabId.delete(browserTab.id)
       syncNavigationState(webview)
     } else {
       webview = document.createElement('webview') as Electron.WebviewTag
@@ -210,7 +226,8 @@ export default function BrowserPane({
       // belongs to guest creation; later store URL changes are synchronized by
       // the dedicated effect below so normal navigation never recreates the
       // guest just because React re-rendered this component.
-      webview.src = normalizeBrowserUrl(initialBrowserUrlRef.current)
+      webview.src =
+        normalizeBrowserNavigationUrl(initialBrowserUrlRef.current) ?? ORCA_BROWSER_BLANK_URL
 
       webviewRegistry.set(browserTab.id, webview)
       container.appendChild(webview)
@@ -241,7 +258,7 @@ export default function BrowserPane({
 
     const handleDidStopLoading = (): void => {
       const currentUrl = webview.getURL() || webview.src || 'about:blank'
-      setAddressBarValue(currentUrl)
+      setAddressBarValue(toDisplayUrl(currentUrl))
       onSetUrlRef.current(browserTab.id, currentUrl)
       onUpdatePageStateRef.current(browserTab.id, {
         loading: false,
@@ -258,7 +275,7 @@ export default function BrowserPane({
         return
       }
       const currentUrl = event.url ?? webview.getURL() ?? webview.src ?? 'about:blank'
-      setAddressBarValue(currentUrl)
+      setAddressBarValue(toDisplayUrl(currentUrl))
       onSetUrlRef.current(browserTab.id, currentUrl)
       onUpdatePageStateRef.current(browserTab.id, {
         title: webview.getTitle() || currentUrl,
@@ -274,7 +291,14 @@ export default function BrowserPane({
     }
 
     const handleFaviconUpdate = (event: { favicons?: string[] }): void => {
-      faviconUrlRef.current = event.favicons?.[0] ?? null
+      const faviconUrl = event.favicons?.[0] ?? null
+      faviconUrlRef.current =
+        faviconUrl &&
+        (faviconUrl.startsWith('https://') ||
+          faviconUrl.startsWith('http://') ||
+          faviconUrl.startsWith('data:image/'))
+          ? faviconUrl
+          : null
       onUpdatePageStateRef.current(browserTab.id, { faviconUrl: faviconUrlRef.current })
     }
 
@@ -285,6 +309,12 @@ export default function BrowserPane({
       isMainFrame?: boolean
     }): void => {
       if (event.isMainFrame === false) {
+        return
+      }
+      if (event.errorCode === -3) {
+        // Why: Chromium reports redirect/cancel races as ERR_ABORTED (-3) even
+        // when the replacement navigation succeeds. Ignore that noise so Orca
+        // does not show a false load failure for a working page.
         return
       }
       onUpdatePageStateRef.current(browserTab.id, {
@@ -318,6 +348,8 @@ export default function BrowserPane({
 
       if (webviewRegistry.get(browserTab.id) === webview) {
         getHiddenContainer().appendChild(webview)
+        parkedAtByTabId.set(browserTab.id, Date.now())
+        evictParkedWebviews(browserTab.id)
       }
     }
   }, [browserTab.id, syncNavigationState])
@@ -327,17 +359,25 @@ export default function BrowserPane({
     if (!webview) {
       return
     }
-    const normalizedUrl = normalizeBrowserUrl(browserTab.url)
+    const normalizedUrl = normalizeBrowserNavigationUrl(browserTab.url)
+    if (!normalizedUrl) {
+      return
+    }
     if (webview.src !== normalizedUrl && webview.getAttribute('src') !== normalizedUrl) {
       webview.src = normalizedUrl
     }
   }, [browserTab.url])
 
   const submitAddressBar = (): void => {
-    let nextUrl: string
-    try {
-      nextUrl = normalizeBrowserUrl(addressBarValue)
-    } catch {
+    const nextUrl = normalizeBrowserNavigationUrl(addressBarValue)
+    if (!nextUrl) {
+      onUpdatePageStateRef.current(browserTab.id, {
+        loadError: {
+          code: 0,
+          description: 'Enter a valid http(s) or localhost URL.',
+          validatedUrl: addressBarValue.trim() || 'about:blank'
+        }
+      })
       return
     }
 
@@ -446,6 +486,11 @@ export default function BrowserPane({
           <ExternalLink className="size-4" />
         </Button>
       </div>
+      {browserTab.loadError ? (
+        <div className="border-b border-border/60 bg-background px-3 py-1.5 text-xs text-amber-500/90">
+          {browserTab.loadError.description}
+        </div>
+      ) : null}
 
       <div
         ref={containerRef}

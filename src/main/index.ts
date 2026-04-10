@@ -47,8 +47,15 @@ function openMainWindow(): BrowserWindow {
   if (!runtime) {
     throw new Error('Runtime must be initialized before opening the main window')
   }
+  if (!stats) {
+    throw new Error('Stats must be initialized before opening the main window')
+  }
+  if (!claudeUsage) {
+    throw new Error('Claude usage store must be initialized before opening the main window')
+  }
 
   const window = createMainWindow(store)
+  registerCoreHandlers(store, runtime, stats, claudeUsage, window.webContents.id)
   attachMainWindowServices(window, store, runtime)
   window.on('closed', () => {
     if (mainWindow === window) {
@@ -93,7 +100,6 @@ app.whenReady().then(async () => {
       mainWindow?.webContents.send('terminal:zoom', 'reset')
     }
   })
-  registerCoreHandlers(store, runtime, stats, claudeUsage)
   runtimeRpc = new OrcaRuntimeRpcServer({
     runtime,
     userDataPath: app.getPath('userData')

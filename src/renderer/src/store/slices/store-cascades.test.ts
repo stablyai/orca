@@ -361,4 +361,42 @@ describe('setActiveWorktree', () => {
     expect(s.activeTabType).toBe('browser')
     expect(s.activeFileId).toBeNull()
   })
+
+  it('clears stale background browser tab type when closing the last browser tab', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      activeWorktreeId: null,
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'terminal-1', worktreeId: wt })]
+      },
+      browserTabsByWorktree: {
+        [wt]: [
+          {
+            id: 'browser-1',
+            worktreeId: wt,
+            url: 'https://example.com',
+            title: 'Example',
+            loading: false,
+            faviconUrl: null,
+            canGoBack: false,
+            canGoForward: false,
+            loadError: null,
+            createdAt: 0
+          }
+        ]
+      },
+      activeBrowserTabIdByWorktree: { [wt]: 'browser-1' },
+      activeTabTypeByWorktree: { [wt]: 'browser' }
+    })
+
+    store.getState().closeBrowserTab('browser-1')
+
+    expect(store.getState().activeTabTypeByWorktree[wt]).toBe('terminal')
+    expect(store.getState().activeBrowserTabIdByWorktree[wt]).toBeNull()
+  })
 })

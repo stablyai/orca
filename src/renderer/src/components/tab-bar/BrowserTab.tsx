@@ -8,8 +8,24 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
 import type { BrowserTab as BrowserTabState } from '../../../../shared/types'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from './SortableTab'
+
+function getBrowserTabLabel(tab: BrowserTabState): string {
+  if (
+    !tab.title ||
+    tab.title === tab.url ||
+    tab.title === ORCA_BROWSER_BLANK_URL ||
+    tab.title === 'about:blank'
+  ) {
+    if (tab.url === ORCA_BROWSER_BLANK_URL || tab.url === 'about:blank') {
+      return 'New Browser Tab'
+    }
+  }
+
+  return tab.title || tab.url
+}
 
 export default function BrowserTab({
   tab,
@@ -97,7 +113,7 @@ export default function BrowserTab({
           <Globe
             className={`w-3.5 h-3.5 mr-1.5 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
           />
-          <span className="truncate max-w-[180px] mr-1.5">{tab.title || tab.url}</span>
+          <span className="truncate max-w-[180px] mr-1.5">{getBrowserTabLabel(tab)}</span>
           {tab.loading && <span className="mr-1.5 size-1.5 rounded-full bg-sky-500/80 shrink-0" />}
           <button
             className={`flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${
@@ -125,7 +141,11 @@ export default function BrowserTab({
             style={{ left: menuPoint.x, top: menuPoint.y }}
           />
         </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-48" sideOffset={0} align="start">
+        <DropdownMenuContent
+          className="min-w-[11rem] rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]"
+          sideOffset={0}
+          align="start"
+        >
           <DropdownMenuItem onSelect={onClose}>Close</DropdownMenuItem>
           <DropdownMenuItem onSelect={onCloseToRight} disabled={!hasTabsToRight}>
             Close Tabs To The Right

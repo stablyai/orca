@@ -9,6 +9,7 @@ import { registerGitHubHandlers } from './github'
 import { registerStatsHandlers } from './stats'
 import { registerRuntimeHandlers } from './runtime'
 import { registerNotificationHandlers } from './notifications'
+import { setTrustedBrowserRendererWebContentsId } from './browser'
 import { registerSessionHandlers } from './session'
 import { registerSettingsHandlers } from './settings'
 import { registerBrowserHandlers } from './browser'
@@ -25,8 +26,10 @@ export function registerCoreHandlers(
   store: Store,
   runtime: OrcaRuntimeService,
   stats: StatsCollector,
-  claudeUsage: ClaudeUsageStore
+  claudeUsage: ClaudeUsageStore,
+  mainWindowWebContentsId: number | null = null
 ): void {
+  setTrustedBrowserRendererWebContentsId(mainWindowWebContentsId)
   registerCliHandlers()
   registerPreflightHandlers()
   registerClaudeUsageHandlers(claudeUsage)

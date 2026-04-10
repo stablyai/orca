@@ -33,6 +33,9 @@ const WorktreeList = React.memo(function WorktreeList() {
   // Read tabsByWorktree when needed for filtering or sorting
   const needsTabs = showActiveOnly || sortBy === 'recent'
   const tabsByWorktree = useAppStore((s) => (needsTabs ? s.tabsByWorktree : null))
+  const browserTabsByWorktree = useAppStore((s) =>
+    showActiveOnly ? s.browserTabsByWorktree : null
+  )
 
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
 
@@ -131,6 +134,8 @@ const WorktreeList = React.memo(function WorktreeList() {
       searchQuery,
       showActiveOnly,
       tabsByWorktree,
+      browserTabsByWorktree,
+      activeWorktreeId,
       repoMap,
       prCache,
       issueCache
@@ -148,8 +153,10 @@ const WorktreeList = React.memo(function WorktreeList() {
     filterRepoIds,
     searchQuery,
     showActiveOnly,
+    activeWorktreeId,
     repoMap,
     tabsByWorktree,
+    browserTabsByWorktree,
     sortedIds,
     prCache,
     issueCache

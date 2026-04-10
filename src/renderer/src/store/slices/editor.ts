@@ -527,21 +527,42 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         }
       }
 
-      // When last editor file for current worktree is closed, switch back to terminal
+      // Why: editor tabs share a mixed tab strip with browser tabs. Closing the
+      // last editor in a worktree should reveal an available browser tab before
+      // falling all the way back to a terminal surface.
       const activeWorktreeId = s.activeWorktreeId
       const remainingForWorktree = activeWorktreeId
         ? newFiles.filter((f) => f.worktreeId === activeWorktreeId)
         : newFiles
-      const newActiveTabType = remainingForWorktree.length === 0 ? 'terminal' : s.activeTabType
+      const browserTabsForWorktree = activeWorktreeId
+        ? (s.browserTabsByWorktree[activeWorktreeId] ?? [])
+        : []
+      const fallbackBrowserTabId =
+        activeWorktreeId && browserTabsForWorktree.length > 0
+          ? (s.activeBrowserTabIdByWorktree[activeWorktreeId] ??
+            browserTabsForWorktree[0]?.id ??
+            null)
+          : s.activeBrowserTabId
+      const newActiveTabType =
+        remainingForWorktree.length > 0
+          ? s.activeTabType
+          : browserTabsForWorktree.length > 0
+            ? 'browser'
+            : 'terminal'
       const newActiveTabTypeByWorktree = { ...s.activeTabTypeByWorktree }
       if (activeWorktreeId && remainingForWorktree.length === 0) {
-        newActiveTabTypeByWorktree[activeWorktreeId] = 'terminal'
+        newActiveTabTypeByWorktree[activeWorktreeId] =
+          browserTabsForWorktree.length > 0 ? 'browser' : 'terminal'
       }
 
       return {
         openFiles: newFiles,
         editorDrafts: newEditorDrafts,
         activeFileId: newActiveId,
+        activeBrowserTabId:
+          activeWorktreeId && remainingForWorktree.length === 0
+            ? fallbackBrowserTabId
+            : s.activeBrowserTabId,
         activeTabType: newActiveTabType,
         activeFileIdByWorktree: newActiveFileIdByWorktree,
         activeTabTypeByWorktree: newActiveTabTypeByWorktree,
@@ -575,12 +596,20 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const newActiveFileIdByWorktree = { ...s.activeFileIdByWorktree }
       delete newActiveFileIdByWorktree[activeWorktreeId]
       const newActiveTabTypeByWorktree = { ...s.activeTabTypeByWorktree }
-      newActiveTabTypeByWorktree[activeWorktreeId] = 'terminal'
+      const browserTabsForWorktree = s.browserTabsByWorktree[activeWorktreeId] ?? []
+      newActiveTabTypeByWorktree[activeWorktreeId] =
+        browserTabsForWorktree.length > 0 ? 'browser' : 'terminal'
       return {
         openFiles: newFiles,
         editorDrafts: newEditorDrafts,
         activeFileId: null,
-        activeTabType: 'terminal',
+        activeBrowserTabId:
+          browserTabsForWorktree.length > 0
+            ? (s.activeBrowserTabIdByWorktree[activeWorktreeId] ??
+              browserTabsForWorktree[0]?.id ??
+              null)
+            : s.activeBrowserTabId,
+        activeTabType: browserTabsForWorktree.length > 0 ? 'browser' : 'terminal',
         markdownViewMode: newMarkdownViewMode,
         activeFileIdByWorktree: newActiveFileIdByWorktree,
         activeTabTypeByWorktree: newActiveTabTypeByWorktree,

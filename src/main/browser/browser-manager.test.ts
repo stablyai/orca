@@ -58,7 +58,7 @@ describe('browserManager', () => {
     }
     webContentsFromIdMock.mockReturnValue(guest)
 
-    browserManager.registerGuest({ browserTabId: 'browser-1', webContentsId: 101 })
+    browserManager.attachGuestPolicies(guest as never)
 
     const handler = guestSetWindowOpenHandlerMock.mock.calls[0][0] as (details: {
       url: string
@@ -69,6 +69,30 @@ describe('browserManager', () => {
 
     expect(shellOpenExternalMock).toHaveBeenCalledTimes(1)
     expect(shellOpenExternalMock).toHaveBeenCalledWith('http://localhost:3000/')
+  })
+
+  it('blocks non-web guest navigations after attach', () => {
+    const guest = {
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    webContentsFromIdMock.mockReturnValue(guest)
+
+    browserManager.attachGuestPolicies(guest as never)
+
+    const willNavigateHandler = guestOnMock.mock.calls.find(
+      ([event]) => event === 'will-navigate'
+    )?.[1] as ((event: { preventDefault: () => void }, url: string) => void) | undefined
+
+    expect(willNavigateHandler).toBeTypeOf('function')
+    const preventDefault = vi.fn()
+    willNavigateHandler?.({ preventDefault }, 'file:///etc/passwd')
+    expect(preventDefault).toHaveBeenCalledTimes(1)
   })
 
   it('unregisterAll clears tracked guests and context-menu listeners', () => {
