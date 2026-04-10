@@ -18,6 +18,7 @@ type RepositoryPaneProps = {
   repo: Repo
   yamlHooks: OrcaHooks | null
   hasHooksFile: boolean
+  mayNeedUpdate: boolean
   updateRepo: (repoId: string, updates: Partial<Repo>) => void
   removeRepo: (repoId: string) => void
 }
@@ -95,6 +96,7 @@ export function RepositoryPane({
   repo,
   yamlHooks,
   hasHooksFile,
+  mayNeedUpdate,
   updateRepo,
   removeRepo
 }: RepositoryPaneProps): React.JSX.Element {
@@ -273,6 +275,7 @@ export function RepositoryPane({
         repo={repo}
         yamlHooks={yamlHooks}
         hasHooksFile={hasHooksFile}
+        mayNeedUpdate={mayNeedUpdate}
         copiedTemplate={copiedTemplate}
         onCopyTemplate={() => void handleCopyTemplate()}
         onClearLegacyHooks={handleClearLegacyHooks}

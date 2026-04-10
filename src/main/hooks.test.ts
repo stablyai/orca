@@ -144,6 +144,54 @@ describe('parseOrcaYaml', () => {
   })
 })
 
+describe('hasUnrecognizedOrcaYamlKeys', () => {
+  it('returns true when the file contains only keys this version does not handle', async () => {
+    const fs = await import('fs')
+    vi.mocked(fs.readFileSync).mockReturnValue('futureFeature: |\n  some config\n')
+
+    const { hasUnrecognizedOrcaYamlKeys } = await import('./hooks')
+    expect(hasUnrecognizedOrcaYamlKeys('/test/repo')).toBe(true)
+  })
+
+  it('returns true when the file mixes recognised and unrecognised keys', async () => {
+    const fs = await import('fs')
+    vi.mocked(fs.readFileSync).mockReturnValue(
+      'scripts:\n  setup: |\n    pnpm install\nnewFeature: enabled\n'
+    )
+
+    const { hasUnrecognizedOrcaYamlKeys } = await import('./hooks')
+    expect(hasUnrecognizedOrcaYamlKeys('/test/repo')).toBe(true)
+  })
+
+  it('returns false when the file contains only recognised keys', async () => {
+    const fs = await import('fs')
+    vi.mocked(fs.readFileSync).mockReturnValue(
+      'scripts:\n  setup: |\n    pnpm install\nissueCommand: |\n  claude -p "test"\n'
+    )
+
+    const { hasUnrecognizedOrcaYamlKeys } = await import('./hooks')
+    expect(hasUnrecognizedOrcaYamlKeys('/test/repo')).toBe(false)
+  })
+
+  it('returns false when the file is empty or has no top-level keys', async () => {
+    const fs = await import('fs')
+    vi.mocked(fs.readFileSync).mockReturnValue('# just a comment\n')
+
+    const { hasUnrecognizedOrcaYamlKeys } = await import('./hooks')
+    expect(hasUnrecognizedOrcaYamlKeys('/test/repo')).toBe(false)
+  })
+
+  it('returns false when the file cannot be read', async () => {
+    const fs = await import('fs')
+    vi.mocked(fs.readFileSync).mockImplementation(() => {
+      throw new Error('ENOENT')
+    })
+
+    const { hasUnrecognizedOrcaYamlKeys } = await import('./hooks')
+    expect(hasUnrecognizedOrcaYamlKeys('/test/repo')).toBe(false)
+  })
+})
+
 describe('readIssueCommand', () => {
   it('prefers the local override over the shared orca.yaml command', async () => {
     const fs = await import('fs')

@@ -357,7 +357,9 @@ const api = {
   },
 
   hooks: {
-    check: (args: { repoId: string }): Promise<{ hasHooks: boolean; hooks: unknown }> =>
+    check: (args: {
+      repoId: string
+    }): Promise<{ hasHooks: boolean; hooks: unknown; mayNeedUpdate: boolean }> =>
       ipcRenderer.invoke('hooks:check', args),
 
     readIssueCommand: (args: {
