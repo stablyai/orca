@@ -121,6 +121,56 @@ export function useTerminalPaneGlobalEffects({
   }, [isActive])
 
   useEffect(() => {
+    if (!isActive) {
+      return
+    }
+
+    let restoreTimer: number | null = null
+    const restoreGpuRendering = (): void => {
+      if (restoreTimer !== null) {
+        window.clearTimeout(restoreTimer)
+        restoreTimer = null
+      }
+      const manager = managerRef.current
+      if (!manager) {
+        return
+      }
+      manager.resumeRendering()
+      fitPanes(manager)
+    }
+
+    const onLayoutTransition = (event: Event): void => {
+      const durationMs = Math.max(
+        0,
+        ((event as CustomEvent<{ durationMs?: number }>).detail?.durationMs ?? 0) + 34
+      )
+      const manager = managerRef.current
+      if (!manager) {
+        return
+      }
+      // Why: xterm's WebGL renderer can briefly clear to the pane background
+      // during animated sidebar width changes even though the terminal itself
+      // is still alive. Suspending GPU rendering for just the transition window
+      // keeps the DOM renderer in charge while the layout is unstable, then we
+      // restore WebGL after the animation finishes.
+      manager.suspendRendering()
+      fitPanes(manager)
+      if (restoreTimer !== null) {
+        window.clearTimeout(restoreTimer)
+      }
+      restoreTimer = window.setTimeout(restoreGpuRendering, durationMs)
+    }
+
+    window.addEventListener('orca-layout-transition', onLayoutTransition)
+    return () => {
+      window.removeEventListener('orca-layout-transition', onLayoutTransition)
+      if (restoreTimer !== null) {
+        window.clearTimeout(restoreTimer)
+      }
+    }
+  }, [isActive, managerRef])
+
+  useEffect(() => {
     return window.api.ui.onFileDrop(({ path, target }) => {
       if (!isActiveRef.current || target !== 'terminal') {
         return

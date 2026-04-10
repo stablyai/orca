@@ -1,5 +1,5 @@
 /* eslint-disable max-lines */
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { DEFAULT_WORKTREE_CARD_PROPERTIES } from '../../shared/constants'
 import { isGitRepoKind } from '../../shared/repo-kind'
 
@@ -29,6 +29,7 @@ import type { PersistedOpenFile } from '../../shared/types'
 import type { OpenFile } from './store/slices/editor'
 
 const isMac = navigator.userAgent.includes('Mac')
+const SIDEBAR_TRANSITION_MS = 200
 
 /** Build the editor-file portion of the workspace session for persistence.
  *  Only edit-mode files are saved — diffs and conflict views are transient. */
@@ -120,11 +121,13 @@ function App(): React.JSX.Element {
 
   // Right sidebar + editor state
   const toggleRightSidebar = useAppStore((s) => s.toggleRightSidebar)
+  const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarWidth = useAppStore((s) => s.rightSidebarWidth)
   const setRightSidebarOpen = useAppStore((s) => s.setRightSidebarOpen)
   const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
   const setQuickOpenVisible = useAppStore((s) => s.setQuickOpenVisible)
   const isFullScreen = useAppStore((s) => s.isFullScreen)
+  const hasSeenInitialSidebarStateRef = useRef(false)
 
   // Subscribe to IPC push events
   useIpcEvents()
@@ -297,6 +300,27 @@ function App(): React.JSX.Element {
     window.addEventListener('beforeunload', captureAndFlush)
     return () => window.removeEventListener('beforeunload', captureAndFlush)
   }, [])
+
+  useEffect(() => {
+    if (!persistedUIReady) {
+      return
+    }
+
+    if (!hasSeenInitialSidebarStateRef.current) {
+      hasSeenInitialSidebarStateRef.current = true
+      return
+    }
+
+    // Why: the terminal's WebGL renderer can flash blank while the app shell
+    // animates sidebar widths. Broadcasting the transition window lets active
+    // terminals temporarily fall back to the DOM renderer just for that
+    // animation, then restore GPU rendering after the layout settles.
+    window.dispatchEvent(
+      new CustomEvent('orca-layout-transition', {
+        detail: { durationMs: SIDEBAR_TRANSITION_MS }
+      })
+    )
+  }, [persistedUIReady, sidebarOpen, rightSidebarOpen])
 
   useEffect(() => {
     if (!persistedUIReady) {
