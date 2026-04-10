@@ -18,6 +18,7 @@ import Settings from './components/settings/Settings'
 import RightSidebar from './components/right-sidebar'
 import QuickOpen from './components/QuickOpen'
 import WorktreeJumpPalette from './components/WorktreeJumpPalette'
+import { StatusBar } from './components/status-bar/StatusBar'
 import { ZoomOverlay } from './components/ZoomOverlay'
 import { useGitStatusPolling } from './components/right-sidebar/useGitStatusPolling'
 import {
@@ -532,25 +533,26 @@ function App(): React.JSX.Element {
             </Tooltip>
           ) : null}
         </div>
-      </TooltipProvider>
-      <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
-        {showSidebar ? <Sidebar /> : null}
-        <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
-          <div className="flex flex-1 min-w-0 min-h-0 flex-col">
-            <div
-              className={
-                activeView === 'settings' || !activeWorktreeId
-                  ? 'hidden flex-1 min-w-0 min-h-0'
-                  : 'flex flex-1 min-w-0 min-h-0'
-              }
-            >
-              <Terminal />
+        <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
+          {showSidebar ? <Sidebar /> : null}
+          <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
+            <div className="flex flex-1 min-w-0 min-h-0 flex-col">
+              <div
+                className={
+                  activeView === 'settings' || !activeWorktreeId
+                    ? 'hidden flex-1 min-w-0 min-h-0'
+                    : 'flex flex-1 min-w-0 min-h-0'
+                }
+              >
+                <Terminal />
+              </div>
+              {activeView === 'settings' ? <Settings /> : !activeWorktreeId ? <Landing /> : null}
             </div>
-            {activeView === 'settings' ? <Settings /> : !activeWorktreeId ? <Landing /> : null}
           </div>
+          {showSidebar && rightSidebarOpen ? <RightSidebar /> : null}
         </div>
-        {showSidebar && rightSidebarOpen ? <RightSidebar /> : null}
-      </div>
+        <StatusBar />
+      </TooltipProvider>
       <QuickOpen />
       <WorktreeJumpPalette />
       <ZoomOverlay />

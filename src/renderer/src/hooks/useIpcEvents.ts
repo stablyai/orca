@@ -8,6 +8,7 @@ import {
 import { getVisibleWorktreeIds } from '@/components/sidebar/visible-worktrees'
 import { nextEditorFontZoomLevel, computeEditorFontSize } from '@/lib/editor-font-zoom'
 import type { UpdateStatus } from '../../../shared/types'
+import type { RateLimitState } from '../../../shared/rate-limit-types'
 import { createUpdateToastController } from './update-toast-controller'
 import { zoomLevelToPercent, ZOOM_MIN, ZOOM_MAX } from '@/components/settings/SettingsConstants'
 import { dispatchZoomLevelChanged } from '@/lib/zoom-events'
@@ -279,6 +280,17 @@ export function useIpcEvents(): void {
             store.setActiveTabType('editor')
           }
         }
+      })
+    )
+
+    // Hydrate initial rate limit state then subscribe to push updates
+    window.api.rateLimits.get().then((state) => {
+      useAppStore.getState().setRateLimitsFromPush(state as RateLimitState)
+    })
+
+    unsubs.push(
+      window.api.rateLimits.onUpdate((state) => {
+        useAppStore.getState().setRateLimitsFromPush(state as RateLimitState)
       })
     )
 

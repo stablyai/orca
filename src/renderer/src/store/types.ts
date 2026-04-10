@@ -10,6 +10,7 @@ import type { StatsSlice } from './slices/stats'
 import type { ClaudeUsageSlice } from './slices/claude-usage'
 import type { CodexUsageSlice } from './slices/codex-usage'
 import type { BrowserSlice } from './slices/browser'
+import type { RateLimitSlice } from './slices/rate-limits'
 
 export type AppState = RepoSlice &
   WorktreeSlice &
@@ -22,4 +23,5 @@ export type AppState = RepoSlice &
   StatsSlice &
   ClaudeUsageSlice &
   CodexUsageSlice &
-  BrowserSlice
+  BrowserSlice &
+  RateLimitSlice

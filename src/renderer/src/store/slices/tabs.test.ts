@@ -91,6 +91,7 @@ import { createStatsSlice } from './stats'
 import { createClaudeUsageSlice } from './claude-usage'
 import { createCodexUsageSlice } from './codex-usage'
 import { createBrowserSlice } from './browser'
+import { createRateLimitSlice } from './rate-limits'
 
 const WT = 'repo1::/tmp/feature'
 
@@ -107,7 +108,8 @@ function createTestStore() {
     ...createStatsSlice(...a),
     ...createClaudeUsageSlice(...a),
     ...createCodexUsageSlice(...a),
-    ...createBrowserSlice(...a)
+    ...createBrowserSlice(...a),
+    ...createRateLimitSlice(...a)
   }))
 }
 

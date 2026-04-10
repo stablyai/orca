@@ -16,6 +16,7 @@ const {
   registerRuntimeHandlersMock,
   registerClipboardHandlersMock,
   registerUpdaterHandlersMock,
+  registerRateLimitHandlersMock,
   registerBrowserHandlersMock,
   setTrustedBrowserRendererWebContentsIdMock,
   registerFilesystemWatcherHandlersMock
@@ -35,6 +36,7 @@ const {
   registerRuntimeHandlersMock: vi.fn(),
   registerClipboardHandlersMock: vi.fn(),
   registerUpdaterHandlersMock: vi.fn(),
+  registerRateLimitHandlersMock: vi.fn(),
   registerBrowserHandlersMock: vi.fn(),
   setTrustedBrowserRendererWebContentsIdMock: vi.fn(),
   registerFilesystemWatcherHandlersMock: vi.fn()
@@ -92,6 +94,10 @@ vi.mock('./filesystem-watcher', () => ({
   registerFilesystemWatcherHandlers: registerFilesystemWatcherHandlersMock
 }))
 
+vi.mock('./rate-limits', () => ({
+  registerRateLimitHandlers: registerRateLimitHandlersMock
+}))
+
 vi.mock('./runtime', () => ({
   registerRuntimeHandlers: registerRuntimeHandlersMock
 }))
@@ -125,6 +131,7 @@ describe('registerCoreHandlers', () => {
     registerRuntimeHandlersMock.mockReset()
     registerClipboardHandlersMock.mockReset()
     registerUpdaterHandlersMock.mockReset()
+    registerRateLimitHandlersMock.mockReset()
     registerBrowserHandlersMock.mockReset()
     setTrustedBrowserRendererWebContentsIdMock.mockReset()
     registerFilesystemWatcherHandlersMock.mockReset()
@@ -136,17 +143,20 @@ describe('registerCoreHandlers', () => {
     const stats = { marker: 'stats' }
     const claudeUsage = { marker: 'claudeUsage' }
     const codexUsage = { marker: 'codexUsage' }
+    const rateLimits = { marker: 'rateLimits' }
 
     registerCoreHandlers(
       store as never,
       runtime as never,
       stats as never,
       claudeUsage as never,
-      codexUsage as never
+      codexUsage as never,
+      rateLimits as never
     )
 
     expect(registerClaudeUsageHandlersMock).toHaveBeenCalledWith(claudeUsage)
     expect(registerCodexUsageHandlersMock).toHaveBeenCalledWith(codexUsage)
+    expect(registerRateLimitHandlersMock).toHaveBeenCalledWith(rateLimits)
     expect(registerGitHubHandlersMock).toHaveBeenCalledWith(store, stats)
     expect(registerStatsHandlersMock).toHaveBeenCalledWith(stats)
     expect(registerNotificationHandlersMock).toHaveBeenCalledWith(store)

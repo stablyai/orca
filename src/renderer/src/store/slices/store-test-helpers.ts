@@ -20,6 +20,7 @@ import { createStatsSlice } from './stats'
 import { createClaudeUsageSlice } from './claude-usage'
 import { createCodexUsageSlice } from './codex-usage'
 import { createBrowserSlice } from './browser'
+import { createRateLimitSlice } from './rate-limits'
 
 export const TEST_REPO = {
   id: 'repo1',
@@ -42,7 +43,8 @@ export function createTestStore() {
     ...createStatsSlice(...a),
     ...createClaudeUsageSlice(...a),
     ...createCodexUsageSlice(...a),
-    ...createBrowserSlice(...a)
+    ...createBrowserSlice(...a),
+    ...createRateLimitSlice(...a)
   }))
 }
 

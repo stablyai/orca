@@ -21,6 +21,7 @@ import {
   installUncaughtPipeErrorGuard,
   patchPackagedProcessPath
 } from './startup/configure-process'
+import { RateLimitService } from './rate-limits/service'
 import { attachMainWindowServices } from './window/attach-main-window-services'
 import { createMainWindow } from './window/createMainWindow'
 
@@ -30,6 +31,7 @@ let stats: StatsCollector | null = null
 let claudeUsage: ClaudeUsageStore | null = null
 let codexUsage: CodexUsageStore | null = null
 let runtime: OrcaRuntimeService | null = null
+let rateLimits: RateLimitService | null = null
 let runtimeRpc: OrcaRuntimeRpcServer | null = null
 
 installUncaughtPipeErrorGuard()
@@ -64,10 +66,23 @@ function openMainWindow(): BrowserWindow {
   if (!codexUsage) {
     throw new Error('Codex usage store must be initialized before opening the main window')
   }
+  if (!rateLimits) {
+    throw new Error('Rate limit service must be initialized before opening the main window')
+  }
 
   const window = createMainWindow(store)
-  registerCoreHandlers(store, runtime, stats, claudeUsage, codexUsage, window.webContents.id)
+  registerCoreHandlers(
+    store,
+    runtime,
+    stats,
+    claudeUsage,
+    codexUsage,
+    rateLimits,
+    window.webContents.id
+  )
   attachMainWindowServices(window, store, runtime)
+  rateLimits.attach(window)
+  rateLimits.start()
   window.on('closed', () => {
     if (mainWindow === window) {
       mainWindow = null
@@ -90,6 +105,7 @@ app.whenReady().then(async () => {
   stats = new StatsCollector()
   claudeUsage = new ClaudeUsageStore(store)
   codexUsage = new CodexUsageStore(store)
+  rateLimits = new RateLimitService()
   runtime = new OrcaRuntimeService(store, stats)
   nativeTheme.themeSource = store.getSettings().theme ?? 'system'
 
@@ -145,6 +161,7 @@ app.on('before-quit', () => {
   // are still running. killAllPty() does not call runtime.onPtyExit(),
   // so without this ordering, running agents would produce orphaned
   // agent_start events with no matching stops.
+  rateLimits?.stop()
   stats?.flush()
   killAllPty()
   void closeAllWatchers()

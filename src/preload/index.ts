@@ -6,6 +6,7 @@ import { electronAPI } from '@electron-toolkit/preload'
 import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { FsChangedPayload, NotificationDispatchResult } from '../shared/types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../shared/runtime-types'
+import type { RateLimitState } from '../shared/rate-limit-types'
 import {
   ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT,
   type EditorSaveDirtyFilesDetail
@@ -704,6 +705,18 @@ const api = {
     syncWindowGraph: (graph: RuntimeSyncWindowGraph): Promise<RuntimeStatus> =>
       ipcRenderer.invoke('runtime:syncWindowGraph', graph),
     getStatus: (): Promise<RuntimeStatus> => ipcRenderer.invoke('runtime:getStatus')
+  },
+
+  rateLimits: {
+    get: (): Promise<RateLimitState> => ipcRenderer.invoke('rateLimits:get'),
+    refresh: (): Promise<RateLimitState> => ipcRenderer.invoke('rateLimits:refresh'),
+    setPollingInterval: (ms: number): Promise<void> =>
+      ipcRenderer.invoke('rateLimits:setPollingInterval', ms),
+    onUpdate: (callback: (state: RateLimitState) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, state: RateLimitState) => callback(state)
+      ipcRenderer.on('rateLimits:update', listener)
+      return () => ipcRenderer.removeListener('rateLimits:update', listener)
+    }
   }
 }
 

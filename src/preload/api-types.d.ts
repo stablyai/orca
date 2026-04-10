@@ -51,6 +51,7 @@ import type {
   ClaudeUsageSessionRow,
   ClaudeUsageSummary
 } from '../../shared/claude-usage-types'
+import type { RateLimitState } from '../../shared/rate-limit-types'
 import type {
   CodexUsageBreakdownKind,
   CodexUsageBreakdownRow,
@@ -369,5 +370,11 @@ export type PreloadApi = {
   runtime: {
     syncWindowGraph: (graph: RuntimeSyncWindowGraph) => Promise<RuntimeStatus>
     getStatus: () => Promise<RuntimeStatus>
+  }
+  rateLimits: {
+    get: () => Promise<RateLimitState>
+    refresh: () => Promise<RateLimitState>
+    setPollingInterval: (ms: number) => Promise<void>
+    onUpdate: (callback: (state: RateLimitState) => void) => () => void
   }
 }
