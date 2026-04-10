@@ -453,8 +453,12 @@ const api = {
     }): Promise<unknown> => ipcRenderer.invoke('git:branchDiff', args),
     stage: (args: { worktreePath: string; filePath: string }): Promise<void> =>
       ipcRenderer.invoke('git:stage', args),
+    bulkStage: (args: { worktreePath: string; filePaths: string[] }): Promise<void> =>
+      ipcRenderer.invoke('git:bulkStage', args),
     unstage: (args: { worktreePath: string; filePath: string }): Promise<void> =>
       ipcRenderer.invoke('git:unstage', args),
+    bulkUnstage: (args: { worktreePath: string; filePaths: string[] }): Promise<void> =>
+      ipcRenderer.invoke('git:bulkUnstage', args),
     discard: (args: { worktreePath: string; filePath: string }): Promise<void> =>
       ipcRenderer.invoke('git:discard', args),
     remoteFileUrl: (args: {

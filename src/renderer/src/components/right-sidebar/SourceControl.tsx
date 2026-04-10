@@ -25,6 +25,8 @@ import { cn } from '@/lib/utils'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
+import { BulkActionBar } from './BulkActionBar'
+import { useSourceControlSelection, type FlatEntry } from './useSourceControlSelection'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -92,6 +94,7 @@ const CONFLICT_KIND_LABELS: Record<GitConflictKind, string> = {
 }
 
 export default function SourceControl(): React.JSX.Element {
+  const sourceControlRef = useRef<HTMLDivElement>(null)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const repos = useAppStore((s) => s.repos)
@@ -213,6 +216,119 @@ export default function SourceControl(): React.JSX.Element {
     return groups
   }, [entries])
 
+  const flatEntries = useMemo(() => {
+    const arr: FlatEntry[] = []
+    for (const area of SECTION_ORDER) {
+      if (!collapsedSections.has(area)) {
+        for (const entry of grouped[area]) {
+          arr.push({ key: `${area}::${entry.path}`, entry, area })
+        }
+      }
+    }
+    return arr
+  }, [grouped, collapsedSections])
+
+  const [isExecutingBulk, setIsExecutingBulk] = useState(false)
+
+  const handleOpenDiff = useCallback(
+    (entry: GitStatusEntry) => {
+      if (!activeWorktreeId || !worktreePath) {
+        return
+      }
+      if (entry.conflictKind && entry.conflictStatus) {
+        if (entry.conflictStatus === 'unresolved') {
+          trackConflictPath(activeWorktreeId, entry.path, entry.conflictKind)
+        }
+        openConflictFile(activeWorktreeId, worktreePath, entry, detectLanguage(entry.path))
+        return
+      }
+      openDiff(
+        activeWorktreeId,
+        joinPath(worktreePath, entry.path),
+        entry.path,
+        detectLanguage(entry.path),
+        entry.area === 'staged'
+      )
+    },
+    [activeWorktreeId, worktreePath, trackConflictPath, openConflictFile, openDiff]
+  )
+
+  const { selectedKeys, handleSelect, handleContextMenu, clearSelection } =
+    useSourceControlSelection({
+      flatEntries,
+      onOpenDiff: handleOpenDiff,
+      containerRef: sourceControlRef
+    })
+
+  // clear selection on scope change
+  useEffect(() => {
+    clearSelection()
+  }, [scope, clearSelection])
+
+  // Clear selection on worktree or tab change
+  useEffect(() => {
+    clearSelection()
+  }, [activeWorktreeId, rightSidebarTab, clearSelection])
+
+  const flatEntriesByKey = useMemo(
+    () => new Map(flatEntries.map((entry) => [entry.key, entry])),
+    [flatEntries]
+  )
+
+  const selectedEntries = useMemo(
+    () =>
+      Array.from(selectedKeys)
+        .map((key) => flatEntriesByKey.get(key))
+        .filter((entry): entry is FlatEntry => Boolean(entry)),
+    [selectedKeys, flatEntriesByKey]
+  )
+
+  const bulkStagePaths = useMemo(
+    () =>
+      selectedEntries
+        .filter(
+          (entry) =>
+            (entry.area === 'unstaged' || entry.area === 'untracked') &&
+            entry.entry.conflictStatus !== 'unresolved'
+        )
+        .map((entry) => entry.entry.path),
+    [selectedEntries]
+  )
+
+  const bulkUnstagePaths = useMemo(
+    () =>
+      selectedEntries.filter((entry) => entry.area === 'staged').map((entry) => entry.entry.path),
+    [selectedEntries]
+  )
+
+  const selectedKeySet = selectedKeys
+
+  const handleBulkStage = useCallback(async () => {
+    if (!worktreePath || bulkStagePaths.length === 0) {
+      return
+    }
+    setIsExecutingBulk(true)
+    try {
+      await window.api.git.bulkStage({ worktreePath, filePaths: bulkStagePaths })
+      clearSelection()
+    } finally {
+      setIsExecutingBulk(false)
+    }
+  }, [worktreePath, bulkStagePaths, clearSelection])
+
+  const handleBulkUnstage = useCallback(async () => {
+    if (!worktreePath || bulkUnstagePaths.length === 0) {
+      return
+    }
+    setIsExecutingBulk(true)
+    try {
+      await window.api.git.bulkUnstage({ worktreePath, filePaths: bulkUnstagePaths })
+      clearSelection()
+    } finally {
+      setIsExecutingBulk(false)
+    }
+  }, [worktreePath, bulkUnstagePaths, clearSelection])
+
   const unresolvedConflicts = useMemo(
     () => entries.filter((entry) => entry.conflictStatus === 'unresolved' && entry.conflictKind),
     [entries]
@@ -305,35 +421,6 @@ export default function SourceControl(): React.JSX.Element {
       return next
     })
   }, [])
-
-  const openUncommittedDiff = useCallback(
-    (entry: GitStatusEntry) => {
-      if (!activeWorktreeId || !worktreePath) {
-        return
-      }
-      // Why: unresolved conflicts must NOT go through openDiff(). The current
-      // diff pipeline reads normal index and worktree content, not merge stages,
-      // so routing conflicts into the two-way diff viewer would show misleading
-      // content. Instead, we use the conflict-aware open path (openConflictFile)
-      // which opens an editable file view or a placeholder, depending on whether
-      // a working-tree file exists.
-      if (entry.conflictKind && entry.conflictStatus) {
-        if (entry.conflictStatus === 'unresolved') {
-          trackConflictPath(activeWorktreeId, entry.path, entry.conflictKind)
-        }
-        openConflictFile(activeWorktreeId, worktreePath, entry, detectLanguage(entry.path))
-        return
-      }
-      openDiff(
-        activeWorktreeId,
-        joinPath(worktreePath, entry.path),
-        entry.path,
-        detectLanguage(entry.path),
-        entry.area === 'staged'
-      )
-    },
-    [activeWorktreeId, openConflictFile, openDiff, trackConflictPath, worktreePath]
-  )
 
   const openCommittedDiff = useCallback(
     (entry: GitBranchChangeEntry) => {
@@ -432,7 +519,7 @@ export default function SourceControl(): React.JSX.Element {
 
   return (
     <>
-      <div className="flex h-full flex-col overflow-hidden">
+      <div ref={sourceControlRef} className="relative flex h-full flex-col overflow-hidden">
         <div className="flex items-center px-3 pt-2 border-b border-border">
           {(['all', 'uncommitted'] as const).map((value) => (
             <button
@@ -483,7 +570,10 @@ export default function SourceControl(): React.JSX.Element {
           </div>
         )}
 
-        <div className="flex-1 overflow-auto scrollbar-sleek py-1">
+        <div
+          className="relative flex-1 overflow-auto scrollbar-sleek py-1"
+          style={{ paddingBottom: selectedKeys.size > 0 ? 50 : undefined }}
+        >
           {unresolvedConflictReviewEntries.length > 0 && (
             <div className="px-3 pb-2">
               <ConflictSummaryCard
@@ -580,20 +670,26 @@ export default function SourceControl(): React.JSX.Element {
                       }
                     />
                     {!isCollapsed &&
-                      items.map((entry) => (
-                        <UncommittedEntryRow
-                          key={`${entry.area}:${entry.path}`}
-                          entry={entry}
-                          worktreePath={worktreePath}
-                          onRevealInExplorer={() =>
-                            revealInExplorer(currentWorktreeId, joinPath(worktreePath, entry.path))
-                          }
-                          onOpen={() => openUncommittedDiff(entry)}
-                          onStage={() => void handleStage(entry.path)}
-                          onUnstage={() => void handleUnstage(entry.path)}
-                          onDiscard={() => void handleDiscard(entry.path)}
-                        />
-                      ))}
+                      items.map((entry) => {
+                        const key = `${entry.area}::${entry.path}`
+                        return (
+                          <UncommittedEntryRow
+                            key={key}
+                            entryKey={key}
+                            entry={entry}
+                            currentWorktreeId={currentWorktreeId}
+                            worktreePath={worktreePath}
+                            selected={selectedKeySet.has(key)}
+                            onSelect={handleSelect}
+                            onContextMenu={handleContextMenu}
+                            onRevealInExplorer={revealInExplorer}
+                            onOpen={handleOpenDiff}
+                            onStage={handleStage}
+                            onUnstage={handleUnstage}
+                            onDiscard={handleDiscard}
+                          />
+                        )
+                      })}
                   </div>
                 )
               })}
@@ -640,16 +736,27 @@ export default function SourceControl(): React.JSX.Element {
                   <BranchEntryRow
                     key={`branch:${entry.path}`}
                     entry={entry}
+                    currentWorktreeId={currentWorktreeId}
                     worktreePath={worktreePath}
-                    onRevealInExplorer={() =>
-                      revealInExplorer(currentWorktreeId, joinPath(worktreePath, entry.path))
-                    }
+                    onRevealInExplorer={revealInExplorer}
                     onOpen={() => openCommittedDiff(entry)}
                   />
                 ))}
             </div>
           )}
         </div>
+
+        {selectedKeys.size > 0 && (
+          <BulkActionBar
+            selectedCount={selectedKeys.size}
+            stageableCount={bulkStagePaths.length}
+            unstageableCount={bulkUnstagePaths.length}
+            onStage={handleBulkStage}
+            onUnstage={handleBulkUnstage}
+            onClear={clearSelection}
+            isExecuting={isExecutingBulk}
+          />
+        )}
       </div>
 
       <Dialog open={baseRefDialogOpen} onOpenChange={setBaseRefDialogOpen}>
@@ -912,22 +1019,32 @@ function OperationBanner({
   )
 }
 
-function UncommittedEntryRow({
+const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
+  entryKey,
   entry,
+  currentWorktreeId,
   worktreePath,
+  selected,
+  onSelect,
+  onContextMenu,
   onRevealInExplorer,
   onOpen,
   onStage,
   onUnstage,
   onDiscard
 }: {
+  entryKey: string
   entry: GitStatusEntry
+  currentWorktreeId: string
   worktreePath: string
-  onRevealInExplorer: () => void
-  onOpen: () => void
-  onStage: () => void
-  onUnstage: () => void
-  onDiscard: () => void
+  selected?: boolean
+  onSelect?: (e: React.MouseEvent, key: string, entry: GitStatusEntry) => void
+  onContextMenu?: (key: string) => void
+  onRevealInExplorer: (worktreeId: string, absolutePath: string) => void
+  onOpen: (entry: GitStatusEntry) => void
+  onStage: (filePath: string) => Promise<void>
+  onUnstage: (filePath: string) => Promise<void>
+  onDiscard: (filePath: string) => Promise<void>
 }): React.JSX.Element {
   const StatusIcon = STATUS_ICONS[entry.status] ?? FileQuestion
   const fileName = basename(entry.path)
@@ -958,11 +1075,20 @@ function UncommittedEntryRow({
 
   return (
     <SourceControlEntryContextMenu
+      currentWorktreeId={currentWorktreeId}
       absolutePath={joinPath(worktreePath, entry.path)}
       onRevealInExplorer={onRevealInExplorer}
+      onOpenChange={(open) => {
+        if (open && onContextMenu) {
+          onContextMenu(entryKey)
+        }
+      }}
     >
       <div
-        className="group relative flex cursor-pointer items-center gap-1 pl-5 pr-3 py-1 transition-colors hover:bg-accent/40"
+        className={cn(
+          'group relative flex cursor-pointer items-center gap-1 pl-5 pr-3 py-1 transition-colors hover:bg-accent/40',
+          selected && 'bg-accent/60'
+        )}
         draggable
         onDragStart={(e) => {
           if (isUnresolvedConflict && entry.status === 'deleted') {
@@ -973,7 +1099,13 @@ function UncommittedEntryRow({
           e.dataTransfer.setData('text/x-orca-file-path', absolutePath)
           e.dataTransfer.effectAllowed = 'copy'
         }}
-        onClick={onOpen}
+        onClick={(e) => {
+          if (onSelect) {
+            onSelect(e, entryKey, entry)
+          } else {
+            onOpen(entry)
+          }
+        }}
       >
         <StatusIcon className="size-3.5 shrink-0" style={{ color: STATUS_COLORS[entry.status] }} />
         <div className="min-w-0 flex-1 text-xs">
@@ -1002,7 +1134,7 @@ function UncommittedEntryRow({
               title={entry.area === 'untracked' ? 'Revert untracked file' : 'Discard changes'}
               onClick={(event) => {
                 event.stopPropagation()
-                void onDiscard()
+                void onDiscard(entry.path)
               }}
             />
           )}
@@ -1012,7 +1144,7 @@ function UncommittedEntryRow({
               title="Stage"
               onClick={(event) => {
                 event.stopPropagation()
-                void onStage()
+                void onStage(entry.path)
               }}
             />
           )}
@@ -1022,7 +1154,7 @@ function UncommittedEntryRow({
               title="Unstage"
               onClick={(event) => {
                 event.stopPropagation()
-                void onUnstage()
+                void onUnstage(entry.path)
               }}
             />
           )}
@@ -1030,7 +1162,7 @@ function UncommittedEntryRow({
       </div>
     </SourceControlEntryContextMenu>
   )
-}
+})
 
 function ConflictBadge({ entry }: { entry: GitStatusEntry }): React.JSX.Element {
   const isUnresolvedConflict = entry.conflictStatus === 'unresolved'
@@ -1070,13 +1202,15 @@ function ConflictBadge({ entry }: { entry: GitStatusEntry }): React.JSX.Element 
 
 function BranchEntryRow({
   entry,
+  currentWorktreeId,
   worktreePath,
   onRevealInExplorer,
   onOpen
 }: {
   entry: GitBranchChangeEntry
+  currentWorktreeId: string
   worktreePath: string
-  onRevealInExplorer: () => void
+  onRevealInExplorer: (worktreeId: string, absolutePath: string) => void
   onOpen: () => void
 }): React.JSX.Element {
   const StatusIcon = STATUS_ICONS[entry.status] ?? FileQuestion
@@ -1086,6 +1220,7 @@ function BranchEntryRow({
 
   return (
     <SourceControlEntryContextMenu
+      currentWorktreeId={currentWorktreeId}
       absolutePath={joinPath(worktreePath, entry.path)}
       onRevealInExplorer={onRevealInExplorer}
     >
@@ -1110,23 +1245,27 @@ function BranchEntryRow({
 }
 
 function SourceControlEntryContextMenu({
+  currentWorktreeId,
   absolutePath,
   onRevealInExplorer,
+  onOpenChange,
   children
 }: {
+  currentWorktreeId: string
   absolutePath?: string
-  onRevealInExplorer: () => void
+  onRevealInExplorer: (worktreeId: string, absolutePath: string) => void
+  onOpenChange?: (open: boolean) => void
   children: React.ReactNode
 }): React.JSX.Element {
   const handleOpenInFileExplorer = useCallback(() => {
     if (!absolutePath) {
       return
     }
-    onRevealInExplorer()
-  }, [absolutePath, onRevealInExplorer])
+    onRevealInExplorer(currentWorktreeId, absolutePath)
+  }, [absolutePath, currentWorktreeId, onRevealInExplorer])
 
   return (
-    <ContextMenu>
+    <ContextMenu onOpenChange={onOpenChange}>
       <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
       <ContextMenuContent className="w-52">
         <ContextMenuItem onSelect={handleOpenInFileExplorer} disabled={!absolutePath}>

@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: git status/discard/chunking behavior is verified together here to keep the command contract readable in one place. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import path from 'path'
 
@@ -26,6 +27,8 @@ vi.mock('fs', () => ({
 }))
 
 import {
+  bulkStageFiles,
+  bulkUnstageFiles,
   detectConflictOperation,
   discardChanges,
   getBranchCompare,
@@ -93,6 +96,57 @@ describe('discardChanges', () => {
 
   it('accepts in-tree Windows paths when resolving containment', async () => {
     expect(isWithinWorktree(path.win32, 'C:\\repo', 'C:\\repo\\src\\file.ts')).toBe(true)
+  })
+})
+
+describe('bulk git helpers', () => {
+  beforeEach(() => {
+    execFileAsyncMock.mockReset()
+  })
+
+  it('chunks bulk stage requests to avoid oversized argv payloads', async () => {
+    execFileAsyncMock.mockResolvedValue({ stdout: '' })
+
+    const filePaths = Array.from({ length: 201 }, (_, i) => `src/file-${i}.ts`)
+    await bulkStageFiles('/repo', filePaths)
+
+    expect(execFileAsyncMock).toHaveBeenCalledTimes(3)
+    expect(execFileAsyncMock).toHaveBeenNthCalledWith(
+      1,
+      'git',
+      ['add', '--', ...filePaths.slice(0, 100)],
+      {
+        cwd: '/repo',
+        encoding: 'utf-8'
+      }
+    )
+    expect(execFileAsyncMock).toHaveBeenNthCalledWith(
+      3,
+      'git',
+      ['add', '--', ...filePaths.slice(200)],
+      {
+        cwd: '/repo',
+        encoding: 'utf-8'
+      }
+    )
+  })
+
+  it('chunks bulk unstage requests to avoid oversized argv payloads', async () => {
+    execFileAsyncMock.mockResolvedValue({ stdout: '' })
+
+    const filePaths = Array.from({ length: 101 }, (_, i) => `src/file-${i}.ts`)
+    await bulkUnstageFiles('/repo', filePaths)
+
+    expect(execFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(execFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      'git',
+      ['restore', '--staged', '--', ...filePaths.slice(100)],
+      {
+        cwd: '/repo',
+        encoding: 'utf-8'
+      }
+    )
   })
 })
 

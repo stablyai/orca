@@ -242,7 +242,9 @@ type GitApi = {
     oldPath?: string
   }) => Promise<GitDiffResult>
   stage: (args: { worktreePath: string; filePath: string }) => Promise<void>
+  bulkStage: (args: { worktreePath: string; filePaths: string[] }) => Promise<void>
   unstage: (args: { worktreePath: string; filePath: string }) => Promise<void>
+  bulkUnstage: (args: { worktreePath: string; filePaths: string[] }) => Promise<void>
   discard: (args: { worktreePath: string; filePath: string }) => Promise<void>
   remoteFileUrl: (args: {
     worktreePath: string

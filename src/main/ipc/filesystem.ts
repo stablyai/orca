@@ -22,6 +22,8 @@ import {
   getDiff,
   stageFile,
   unstageFile,
+  bulkStageFiles,
+  bulkUnstageFiles,
   discardChanges,
   getBranchCompare,
   getBranchDiff
@@ -458,6 +460,24 @@ export function registerFilesystemHandlers(store: Store): void {
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
       await discardChanges(worktreePath, filePath)
+    }
+  )
+
+  ipcMain.handle(
+    'git:bulkStage',
+    async (_event, args: { worktreePath: string; filePaths: string[] }): Promise<void> => {
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const filePaths = args.filePaths.map((p) => validateGitRelativeFilePath(worktreePath, p))
+      await bulkStageFiles(worktreePath, filePaths)
+    }
+  )
+
+  ipcMain.handle(
+    'git:bulkUnstage',
+    async (_event, args: { worktreePath: string; filePaths: string[] }): Promise<void> => {
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const filePaths = args.filePaths.map((p) => validateGitRelativeFilePath(worktreePath, p))
+      await bulkUnstageFiles(worktreePath, filePaths)
     }
   )
 

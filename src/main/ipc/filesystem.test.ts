@@ -17,7 +17,9 @@ const {
   getBranchCompareMock,
   getBranchDiffMock,
   stageFileMock,
+  bulkStageFilesMock,
   unstageFileMock,
+  bulkUnstageFilesMock,
   discardChangesMock,
   listWorktreesMock
 } = vi.hoisted(() => ({
@@ -34,7 +36,9 @@ const {
   getBranchCompareMock: vi.fn(),
   getBranchDiffMock: vi.fn(),
   stageFileMock: vi.fn(),
+  bulkStageFilesMock: vi.fn(),
   unstageFileMock: vi.fn(),
+  bulkUnstageFilesMock: vi.fn(),
   discardChangesMock: vi.fn(),
   listWorktreesMock: vi.fn()
 }))
@@ -63,7 +67,9 @@ vi.mock('../git/status', () => ({
   getBranchCompare: getBranchCompareMock,
   getBranchDiff: getBranchDiffMock,
   stageFile: stageFileMock,
+  bulkStageFiles: bulkStageFilesMock,
   unstageFile: unstageFileMock,
+  bulkUnstageFiles: bulkUnstageFilesMock,
   discardChanges: discardChangesMock
 }))
 
@@ -112,7 +118,9 @@ describe('registerFilesystemHandlers', () => {
       getBranchCompareMock,
       getBranchDiffMock,
       stageFileMock,
+      bulkStageFilesMock,
       unstageFileMock,
+      bulkUnstageFilesMock,
       discardChangesMock,
       listWorktreesMock
     ]) {
@@ -153,9 +161,9 @@ describe('registerFilesystemHandlers', () => {
 
     registerFilesystemHandlers(store as never)
 
-    await expect(
-      handlers.get('fs:readFile')!(null, { filePath: linkPath })
-    ).rejects.toThrow('Access denied: path resolves outside allowed directories')
+    await expect(handlers.get('fs:readFile')!(null, { filePath: linkPath })).rejects.toThrow(
+      'Access denied: path resolves outside allowed directories'
+    )
 
     expect(readFileMock).not.toHaveBeenCalled()
   })
@@ -261,6 +269,35 @@ describe('registerFilesystemHandlers', () => {
     ).rejects.toThrow('Access denied: unknown repository or worktree path')
 
     expect(getStatusMock).not.toHaveBeenCalled()
+  })
+
+  it('normalizes git file paths for bulk stage requests', async () => {
+    bulkStageFilesMock.mockResolvedValue(undefined)
+
+    registerFilesystemHandlers(store as never)
+
+    await handlers.get('git:bulkStage')!(null, {
+      worktreePath: WORKTREE_FEATURE_PATH,
+      filePaths: ['./src/../src/file.ts', 'nested//child.ts']
+    })
+
+    expect(bulkStageFilesMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, [
+      path.join('src', 'file.ts'),
+      path.join('nested', 'child.ts')
+    ])
+  })
+
+  it('rejects bulk unstage requests that escape the selected worktree', async () => {
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('git:bulkUnstage')!(null, {
+        worktreePath: WORKTREE_FEATURE_PATH,
+        filePaths: ['src/file.ts', '../outside.txt']
+      })
+    ).rejects.toThrow('Access denied: git file path escapes the selected worktree')
+
+    expect(bulkUnstageFilesMock).not.toHaveBeenCalled()
   })
 
   it('routes branch compare queries through the git compare helper', async () => {

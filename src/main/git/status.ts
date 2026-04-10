@@ -690,3 +690,31 @@ export function isWithinWorktree(
     pathApi.isAbsolute(relativeTarget)
   )
 }
+
+/**
+ * Bulk stage files in batches to avoid E2BIG.
+ */
+export async function bulkStageFiles(worktreePath: string, filePaths: string[]): Promise<void> {
+  if (filePaths.length === 0) {
+    return
+  }
+  const CHUNK_SIZE = 100
+  for (let i = 0; i < filePaths.length; i += CHUNK_SIZE) {
+    const chunk = filePaths.slice(i, i + CHUNK_SIZE)
+    await gitExecFileAsync(['add', '--', ...chunk], { cwd: worktreePath })
+  }
+}
+
+/**
+ * Bulk unstage files in batches to avoid E2BIG.
+ */
+export async function bulkUnstageFiles(worktreePath: string, filePaths: string[]): Promise<void> {
+  if (filePaths.length === 0) {
+    return
+  }
+  const CHUNK_SIZE = 100
+  for (let i = 0; i < filePaths.length; i += CHUNK_SIZE) {
+    const chunk = filePaths.slice(i, i + CHUNK_SIZE)
+    await gitExecFileAsync(['restore', '--staged', '--', ...chunk], { cwd: worktreePath })
+  }
+}
