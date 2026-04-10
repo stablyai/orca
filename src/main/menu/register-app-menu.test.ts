@@ -108,4 +108,19 @@ describe('registerAppMenu', () => {
     expect(reloadIgnoringCacheMock).toHaveBeenCalledTimes(1)
     expect(reloadMock).not.toHaveBeenCalled()
   })
+
+  it('does not throw when no window is focused', () => {
+    getFocusedWindowMock.mockReturnValue(null)
+
+    registerAppMenu(buildMenuOptions())
+
+    const template = buildFromTemplateMock.mock.calls[0][0] as Electron.MenuItemConstructorOptions[]
+    const viewMenu = template.find((item) => item.label === 'View')
+    const submenu = viewMenu?.submenu as Electron.MenuItemConstructorOptions[]
+    const reloadItem = submenu.find((item) => item.label === 'Reload')
+    const forceReloadItem = submenu.find((item) => item.label === 'Force Reload')
+
+    expect(() => reloadItem?.click?.({} as never, {} as never, {} as never)).not.toThrow()
+    expect(() => forceReloadItem?.click?.({} as never, {} as never, {} as never)).not.toThrow()
+  })
 })
