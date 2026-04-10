@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: the Orca runtime is the authoritative live control plane for the CLI, so handle validation, selector resolution, wait state, and summaries are kept together to avoid split-brain behavior. */
 /* eslint-disable unicorn/no-useless-spread -- Why: waiter sets and handle keys are cloned intentionally before mutation so resolution and rejection can safely remove entries while iterating. */
 /* eslint-disable no-control-regex -- Why: terminal normalization must strip ANSI and OSC control sequences from PTY output before returning bounded text to agents. */
-import { gitExecFileSync } from '../git/runner'
+import { gitExecFileAsync, gitExecFileSync } from '../git/runner'
 import { isWslPath, parseWslPath, getWslHome } from '../wsl'
 import { randomUUID } from 'crypto'
 import { join } from 'path'
@@ -738,6 +738,11 @@ export class OrcaRuntimeService {
     } catch (error) {
       if (isOrphanedWorktreeError(error)) {
         await rm(worktree.path, { recursive: true, force: true }).catch(() => {})
+        // Why: `git worktree remove` failed, so git's internal worktree tracking
+        // (`.git/worktrees/<name>`) is still intact. Without pruning, `git worktree
+        // list` continues to show the stale entry and the branch it had checked out
+        // remains locked — other worktrees cannot check it out.
+        await gitExecFileAsync(['worktree', 'prune'], { cwd: repo.path }).catch(() => {})
         this.store.removeWorktreeMeta(worktree.id)
         this.invalidateResolvedWorktreeCache()
         this.notifier?.worktreesChanged(repo.id)
