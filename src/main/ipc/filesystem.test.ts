@@ -370,6 +370,73 @@ describe('registerFilesystemHandlers', () => {
     expect(getBranchCompareMock).toHaveBeenCalledWith(externalWorktreePath, 'origin/main')
   })
 
+  it('rejects branchCompare for a worktree added after cache was built, then succeeds after invalidation', async () => {
+    // Reproduces the bug where CLI-created worktrees fail with
+    // "Access denied: unknown repository or worktree path" because the
+    // filesystem-auth cache was not invalidated after creation.
+    const cliWorktreePath = path.resolve('/external/cli-created-worktree')
+
+    // Step 1: register handlers and trigger initial cache build with only
+    // the original worktree in the listing.
+    registerFilesystemHandlers(store as never)
+
+    // Warm the cache by calling a git operation on the existing worktree.
+    getStatusMock.mockResolvedValue({ entries: [] })
+    await handlers.get('git:status')!(null, { worktreePath: WORKTREE_FEATURE_PATH })
+
+    // Step 2: simulate the CLI creating a new worktree — git now lists it,
+    // but the auth cache is stale.
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: WORKTREE_FEATURE_PATH,
+        head: 'abc',
+        branch: '',
+        isBare: false,
+        isMainWorktree: false
+      },
+      {
+        path: cliWorktreePath,
+        head: 'def',
+        branch: 'refs/heads/cli-feature',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    // Step 3: branchCompare on the new worktree should fail — this is the
+    // exact error the user reported.
+    await expect(
+      handlers.get('git:branchCompare')!(null, {
+        worktreePath: cliWorktreePath,
+        baseRef: 'origin/main'
+      })
+    ).rejects.toThrow('Access denied: unknown repository or worktree path')
+
+    // Step 4: invalidate the cache (what our fix does after CLI create).
+    invalidateAuthorizedRootsCache()
+
+    // Step 5: the same branchCompare should now succeed.
+    getBranchCompareMock.mockResolvedValue({
+      summary: {
+        baseRef: 'origin/main',
+        baseOid: 'base-oid',
+        compareRef: 'cli-feature',
+        headOid: 'head-oid',
+        mergeBase: 'merge-base-oid',
+        changedFiles: 0,
+        status: 'ready'
+      },
+      entries: []
+    })
+
+    await handlers.get('git:branchCompare')!(null, {
+      worktreePath: cliWorktreePath,
+      baseRef: 'origin/main'
+    })
+
+    expect(getBranchCompareMock).toHaveBeenCalledWith(cliWorktreePath, 'origin/main')
+  })
+
   it('routes branch diff queries through the pinned branch diff helper', async () => {
     getBranchDiffMock.mockResolvedValue({
       kind: 'text',

@@ -52,6 +52,7 @@ import {
   shouldSetDisplayName,
   areWorktreePathsEqual
 } from '../ipc/worktree-logic'
+import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
 
 type RuntimeStore = {
   getRepos: Store['getRepos']
@@ -682,6 +683,12 @@ export class OrcaRuntimeService {
     // disk without becoming the active workspace in the UI.
     this.notifier?.activateWorktree(repo.id, worktree.id, setup)
     this.invalidateResolvedWorktreeCache()
+    // Why: the filesystem-auth layer maintains a separate cache of registered
+    // worktree roots used by git IPC handlers (branchCompare, diff, status, etc.)
+    // to authorize paths. Without invalidating it here, CLI-created worktrees
+    // are not recognized and all git operations fail with "Access denied:
+    // unknown repository or worktree path".
+    invalidateAuthorizedRootsCache()
     return {
       worktree,
       ...(setup ? { setup } : {})
@@ -745,6 +752,7 @@ export class OrcaRuntimeService {
         await gitExecFileAsync(['worktree', 'prune'], { cwd: repo.path }).catch(() => {})
         this.store.removeWorktreeMeta(worktree.id)
         this.invalidateResolvedWorktreeCache()
+        invalidateAuthorizedRootsCache()
         this.notifier?.worktreesChanged(repo.id)
         return
       }
@@ -753,6 +761,7 @@ export class OrcaRuntimeService {
 
     this.store.removeWorktreeMeta(worktree.id)
     this.invalidateResolvedWorktreeCache()
+    invalidateAuthorizedRootsCache()
     this.notifier?.worktreesChanged(repo.id)
   }
 

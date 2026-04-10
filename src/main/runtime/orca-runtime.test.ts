@@ -9,7 +9,8 @@ const {
   MOCK_GIT_WORKTREES,
   addWorktreeMock,
   computeWorktreePathMock,
-  ensurePathWithinWorkspaceMock
+  ensurePathWithinWorkspaceMock,
+  invalidateAuthorizedRootsCacheMock
 } = vi.hoisted(() => ({
   MOCK_GIT_WORKTREES: [
     {
@@ -22,7 +23,8 @@ const {
   ],
   addWorktreeMock: vi.fn(),
   computeWorktreePathMock: vi.fn(),
-  ensurePathWithinWorkspaceMock: vi.fn()
+  ensurePathWithinWorkspaceMock: vi.fn(),
+  invalidateAuthorizedRootsCacheMock: vi.fn()
 }))
 
 vi.mock('../git/worktree', () => ({
@@ -45,6 +47,10 @@ vi.mock('../ipc/worktree-logic', async (importOriginal) => {
   }
 })
 
+vi.mock('../ipc/filesystem-auth', () => ({
+  invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock
+}))
+
 afterEach(() => {
   vi.mocked(listWorktrees).mockResolvedValue(MOCK_GIT_WORKTREES)
   vi.mocked(addWorktree).mockReset()
@@ -54,6 +60,7 @@ afterEach(() => {
   vi.mocked(getEffectiveHooks).mockReturnValue(null)
   computeWorktreePathMock.mockReset()
   ensurePathWithinWorkspaceMock.mockReset()
+  invalidateAuthorizedRootsCacheMock.mockReset()
 })
 
 const TEST_WINDOW_ID = 1
@@ -645,6 +652,37 @@ describe('OrcaRuntimeService', () => {
       }
     })
     expect(activateWorktree).toHaveBeenCalledWith('repo-1', expect.any(String), result.setup)
+  })
+
+  it('invalidates the filesystem-auth cache after CLI worktree creation', async () => {
+    // Reproduces: CLI-created worktrees fail with "Access denied: unknown
+    // repository or worktree path" because the filesystem-auth cache was
+    // not invalidated, so git:branchCompare could not resolve the new path.
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn()
+    })
+
+    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/cli-worktree')
+    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/cli-worktree')
+    vi.mocked(listWorktrees).mockResolvedValueOnce([
+      {
+        path: '/tmp/workspaces/cli-worktree',
+        head: 'abc',
+        branch: 'cli-worktree',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    await runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'cli-worktree'
+    })
+
+    expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
   })
 
   it('preserves create-time metadata on later runtime listings when Windows path formatting differs', async () => {
