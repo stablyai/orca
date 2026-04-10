@@ -1,3 +1,6 @@
+/* eslint-disable max-lines -- Why: TerminalPane is the single owner of all terminal settings UI;
+   splitting individual settings into separate files would scatter related controls without a
+   meaningful abstraction boundary. Mirrors the same decision made for GeneralPane.tsx. */
 import { useState } from 'react'
 import type { GlobalSettings } from '../../../../shared/types'
 import {
@@ -288,6 +291,39 @@ export function TerminalPane({
             />
           </SearchableSetting>
         </div>
+
+        <SearchableSetting
+          title="Focus Follows Mouse"
+          description="Hovering a terminal pane activates it without needing to click. Mirrors Ghostty's focus-follows-mouse setting. Selections and window switching stay safe."
+          keywords={['focus', 'follows', 'mouse', 'hover', 'pane', 'ghostty', 'active']}
+          className="flex items-center justify-between gap-4 px-1 py-2"
+        >
+          <div className="space-y-0.5">
+            <Label>Focus Follows Mouse</Label>
+            <p className="text-xs text-muted-foreground">
+              Hovering a terminal pane activates it without needing to click. Mirrors Ghostty&apos;s
+              focus-follows-mouse setting. Selections and window switching stay safe.
+            </p>
+          </div>
+          <button
+            role="switch"
+            aria-checked={settings.terminalFocusFollowsMouse}
+            onClick={() =>
+              updateSettings({
+                terminalFocusFollowsMouse: !settings.terminalFocusFollowsMouse
+              })
+            }
+            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
+              settings.terminalFocusFollowsMouse ? 'bg-foreground' : 'bg-muted-foreground/30'
+            }`}
+          >
+            <span
+              className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
+                settings.terminalFocusFollowsMouse ? 'translate-x-4' : 'translate-x-0.5'
+              }`}
+            />
+          </button>
+        </SearchableSetting>
       </section>
     ) : null,
     matchesSettingsSearch(searchQuery, TERMINAL_DARK_THEME_SEARCH_ENTRIES) ? (

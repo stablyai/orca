@@ -24,7 +24,8 @@ export function createPaneDOM(
   options: PaneManagerOptions,
   dragState: DragReorderState,
   dragCallbacks: DragReorderCallbacks,
-  onPointerDown: (id: number) => void
+  onPointerDown: (id: number) => void,
+  onMouseEnter: (id: number, event: MouseEvent) => void
 ): ManagedPaneInternal {
   // Create .pane container
   const container = document.createElement('div')
@@ -121,6 +122,14 @@ export function createPaneDOM(
   // native click-to-focus on its internal textarea may not fire reliably.
   container.addEventListener('pointerdown', () => {
     onPointerDown(id)
+  })
+
+  // Focus-follows-mouse handler: when the setting is enabled, hovering a
+  // pane makes it active. All gating (feature flag, drag-in-progress,
+  // window focus, etc.) lives in the PaneManager callback — this layer
+  // just forwards the event.
+  container.addEventListener('mouseenter', (event) => {
+    onMouseEnter(id, event)
   })
 
   return pane

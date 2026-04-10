@@ -107,13 +107,16 @@ export function resolvePaneStyleOptions(
     | 'terminalActivePaneOpacity'
     | 'terminalPaneOpacityTransitionMs'
     | 'terminalDividerThicknessPx'
+    | 'terminalFocusFollowsMouse'
   >
 ) {
   return {
     inactivePaneOpacity: clampNumber(settings.terminalInactivePaneOpacity, 0, 1),
     activePaneOpacity: clampNumber(settings.terminalActivePaneOpacity, 0, 1),
     opacityTransitionMs: clampNumber(settings.terminalPaneOpacityTransitionMs, 0, 5000),
-    dividerThicknessPx: clampNumber(settings.terminalDividerThicknessPx, 1, 32)
+    dividerThicknessPx: clampNumber(settings.terminalDividerThicknessPx, 1, 32),
+    // Why no clamping: boolean pass-through. Both true and false are valid.
+    focusFollowsMouse: settings.terminalFocusFollowsMouse
   }
 }
 

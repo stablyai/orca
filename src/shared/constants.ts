@@ -89,6 +89,11 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalActivePaneOpacity: 1,
     terminalPaneOpacityTransitionMs: 140,
     terminalDividerThicknessPx: 3,
+    // Default false: opt-in only (matches Ghostty's default). Existing users
+    // on upgrade inherit this default via persistence.ts's
+    // { ...defaults.settings, ...parsed.settings } merge, so enabling
+    // focus-follows-mouse never happens unexpectedly.
+    terminalFocusFollowsMouse: false,
     terminalScrollbackBytes: 10_000_000,
     rightSidebarOpenByDefault: true,
     notifications: getDefaultNotificationSettings(),

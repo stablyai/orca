@@ -312,6 +312,7 @@ export type GlobalSettings = {
   terminalActivePaneOpacity: number
   terminalPaneOpacityTransitionMs: number
   terminalDividerThicknessPx: number
+  terminalFocusFollowsMouse: boolean
   terminalScrollbackBytes: number
   rightSidebarOpenByDefault: boolean
   diffDefaultView: 'inline' | 'side-by-side'

@@ -41,6 +41,12 @@ export const TERMINAL_PANE_STYLE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     title: 'Divider Thickness',
     description: 'Thickness of the pane divider line.',
     keywords: ['pane', 'divider', 'thickness']
+  },
+  {
+    title: 'Focus Follows Mouse',
+    description:
+      "Hovering a terminal pane activates it without needing to click. Mirrors Ghostty's focus-follows-mouse setting. Selections and window switching stay safe.",
+    keywords: ['focus', 'follows', 'mouse', 'hover', 'pane', 'ghostty', 'active']
   }
 ]
 

@@ -51,6 +51,7 @@ export function applyTerminalAppearance(
     inactivePaneOpacity: paneStyles.inactivePaneOpacity,
     activePaneOpacity: paneStyles.activePaneOpacity,
     opacityTransitionMs: paneStyles.opacityTransitionMs,
-    dividerThicknessPx: paneStyles.dividerThicknessPx
+    dividerThicknessPx: paneStyles.dividerThicknessPx,
+    focusFollowsMouse: paneStyles.focusFollowsMouse
   })
 }

@@ -27,6 +27,11 @@ export type PaneStyleOptions = {
   activePaneOpacity?: number
   opacityTransitionMs?: number
   dividerThicknessPx?: number
+  // Why this behavior flag lives on "style" options: this type is already
+  // the single runtime-settings bag the PaneManager exposes. Splitting into
+  // separate style vs behavior types is a refactor worth its own change
+  // when a second behavior flag lands. See docs/focus-follows-mouse-design.md.
+  focusFollowsMouse?: boolean
 }
 
 export type ManagedPane = {

@@ -18,6 +18,7 @@ import {
   updateMultiPaneState
 } from './pane-drag-reorder'
 import { createPaneDOM, openTerminal, attachWebgl, disposePane } from './pane-lifecycle'
+import { shouldFollowMouseFocus } from './focus-follows-mouse'
 import {
   findPaneChildren,
   removeDividers,
@@ -295,10 +296,38 @@ export class PaneManager {
         if (!this.destroyed && this.activePaneId !== paneId) {
           this.setActivePane(paneId, { focus: true })
         }
+      },
+      (paneId, event) => {
+        this.handlePaneMouseEnter(paneId, event)
       }
     )
     this.panes.set(id, pane)
     return pane
+  }
+
+  /**
+   * Focus-follows-mouse entry point. Collects gate inputs from the manager
+   * and delegates to the pure gate helper.
+   *
+   * Invariant for future contributors: modal overlays (context menus, close
+   * dialogs, command palette) must be rendered as portals/siblings OUTSIDE
+   * the pane container. If a future overlay is ever rendered inside a .pane
+   * element, mouseenter will still fire on the pane underneath and this
+   * handler will incorrectly switch focus. Keep overlays out of the pane.
+   */
+  private handlePaneMouseEnter(paneId: number, event: MouseEvent): void {
+    if (
+      shouldFollowMouseFocus({
+        featureEnabled: this.styleOptions.focusFollowsMouse ?? false,
+        activePaneId: this.activePaneId,
+        hoveredPaneId: paneId,
+        mouseButtons: event.buttons,
+        windowHasFocus: document.hasFocus(),
+        managerDestroyed: this.destroyed
+      })
+    ) {
+      this.setActivePane(paneId, { focus: true })
+    }
   }
 
   private createDividerWrapped(isVertical: boolean): HTMLElement {
