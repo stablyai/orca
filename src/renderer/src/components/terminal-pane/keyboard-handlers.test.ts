@@ -62,6 +62,11 @@ describe('matchSearchNavigate', () => {
     expect(matchSearchNavigate(e, false, true, searchState)).toBe('next')
   })
 
+  it('returns "previous" for Ctrl+Shift+G on Linux/Windows', () => {
+    const e = makeKeyEvent({ ctrlKey: true, shiftKey: true })
+    expect(matchSearchNavigate(e, false, true, searchState)).toBe('previous')
+  })
+
   it('returns null for Ctrl+G on macOS (wrong modifier)', () => {
     const e = makeKeyEvent({ ctrlKey: true })
     expect(matchSearchNavigate(e, true, true, searchState)).toBeNull()
