@@ -269,13 +269,15 @@ describe('createMainWindow', () => {
 
     createMainWindow(null)
 
-    const preventDefault = vi.fn()
-    windowHandlers['before-input-event'](
-      { preventDefault } as never,
-      { type: 'keyDown', code: 'KeyR', key: 'r', meta: false, control: true, alt: false } as never
-    )
+    for (const input of [
+      { type: 'keyDown', code: 'KeyR', key: 'r', meta: false, control: true, alt: false },
+      { type: 'keyDown', code: 'KeyR', key: 'r', meta: true, control: false, alt: false }
+    ]) {
+      const preventDefault = vi.fn()
+      windowHandlers['before-input-event']({ preventDefault } as never, input as never)
+      expect(preventDefault).not.toHaveBeenCalled()
+    }
 
-    expect(preventDefault).not.toHaveBeenCalled()
     expect(webContents.send).not.toHaveBeenCalled()
   })
 
