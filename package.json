@@ -80,6 +80,7 @@
     "radix-ui": "^1.4.3",
     "react-markdown": "^10.1.0",
     "rehype-highlight": "^7.0.2",
+    "remark-breaks": "^4.0.0",
     "remark-frontmatter": "^5.0.0",
     "remark-gfm": "^4.0.1",
     "shadcn": "^4.1.0",

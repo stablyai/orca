@@ -7,6 +7,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import { Bell, GitMerge, LoaderCircle, CircleDot, CircleCheck, CircleX } from 'lucide-react'
 import StatusIndicator from './StatusIndicator'
 import CacheTimer from './CacheTimer'
+import CommentMarkdown from './CommentMarkdown'
 import WorktreeContextMenu from './WorktreeContextMenu'
 import { cn } from '@/lib/utils'
 import { detectAgentStatusFromTitle } from '@/lib/agent-status'
@@ -558,12 +559,11 @@ const WorktreeCard = React.memo(function WorktreeCard({
               )}
 
               {cardProps.includes('comment') && worktree.comment && (
-                <div
-                  className="text-[11px] text-muted-foreground whitespace-pre-wrap break-words cursor-pointer -mx-1.5 px-1.5 py-0.5 hover:bg-background/40 hover:text-foreground rounded transition-colors leading-normal"
+                <CommentMarkdown
+                  content={worktree.comment}
+                  className="text-[11px] text-muted-foreground break-words cursor-pointer -mx-1.5 px-1.5 py-0.5 hover:bg-background/40 hover:text-foreground rounded transition-colors leading-normal [&_.comment-md-p]:block [&_.comment-md-p+.comment-md-p]:mt-1"
                   onClick={handleEditComment}
-                >
-                  {worktree.comment}
-                </div>
+                />
               )}
             </div>
           )}
