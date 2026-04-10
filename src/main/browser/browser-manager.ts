@@ -7,12 +7,18 @@ import {
 export type BrowserGuestRegistration = {
   browserTabId: string
   webContentsId: number
+  rendererWebContentsId: number
 }
 
 class BrowserManager {
   private readonly webContentsIdByTabId = new Map<string, number>()
+  private readonly rendererWebContentsIdByTabId = new Map<string, number>()
   private readonly contextMenuCleanupByTabId = new Map<string, () => void>()
   private readonly policyAttachedGuestIds = new Set<number>()
+  private readonly pendingLoadFailuresByGuestId = new Map<
+    number,
+    { code: number; description: string; validatedUrl: string }
+  >()
 
   private openValidatedExternal(rawUrl: string): void {
     const externalUrl = normalizeExternalBrowserUrl(rawUrl)
@@ -46,9 +52,32 @@ class BrowserManager {
 
     guest.on('will-navigate', navigationGuard)
     guest.on('will-redirect', navigationGuard)
+    guest.on(
+      'did-fail-load',
+      (
+        _event: Electron.Event,
+        errorCode: number,
+        errorDescription: string,
+        validatedURL: string,
+        isMainFrame: boolean
+      ) => {
+        if (!isMainFrame || errorCode === -3) {
+          return
+        }
+        this.forwardOrQueueGuestLoadFailure(guest.id, {
+          code: errorCode,
+          description: errorDescription || 'This site could not be reached.',
+          validatedUrl: validatedURL || guest.getURL() || 'about:blank'
+        })
+      }
+    )
   }
 
-  registerGuest({ browserTabId, webContentsId }: BrowserGuestRegistration): void {
+  registerGuest({
+    browserTabId,
+    webContentsId,
+    rendererWebContentsId
+  }: BrowserGuestRegistration): void {
     const previousCleanup = this.contextMenuCleanupByTabId.get(browserTabId)
     if (previousCleanup) {
       previousCleanup()
@@ -76,8 +105,10 @@ class BrowserManager {
     }
 
     this.webContentsIdByTabId.set(browserTabId, webContentsId)
+    this.rendererWebContentsIdByTabId.set(browserTabId, rendererWebContentsId)
 
     this.setupContextMenu(browserTabId, guest)
+    this.flushPendingLoadFailure(browserTabId, webContentsId)
   }
 
   unregisterGuest(browserTabId: string): void {
@@ -87,6 +118,7 @@ class BrowserManager {
       this.contextMenuCleanupByTabId.delete(browserTabId)
     }
     this.webContentsIdByTabId.delete(browserTabId)
+    this.rendererWebContentsIdByTabId.delete(browserTabId)
   }
 
   unregisterAll(): void {
@@ -94,6 +126,7 @@ class BrowserManager {
       this.unregisterGuest(browserTabId)
     }
     this.policyAttachedGuestIds.clear()
+    this.pendingLoadFailuresByGuestId.clear()
   }
 
   getGuestWebContentsId(browserTabId: string): number | null {
@@ -197,6 +230,52 @@ class BrowserManager {
         // teardown. Cleanup should be best-effort instead of throwing while the
         // IDE is closing a tab.
       }
+    })
+  }
+
+  private forwardOrQueueGuestLoadFailure(
+    guestWebContentsId: number,
+    loadError: { code: number; description: string; validatedUrl: string }
+  ): void {
+    const browserTabId = [...this.webContentsIdByTabId.entries()].find(
+      ([, webContentsId]) => webContentsId === guestWebContentsId
+    )?.[0]
+    if (!browserTabId) {
+      // Why: some localhost failures happen before the renderer finishes
+      // registering which tab owns this guest. Queue the failure by guest ID so
+      // registerGuest can replay it instead of silently losing the error state.
+      this.pendingLoadFailuresByGuestId.set(guestWebContentsId, loadError)
+      return
+    }
+    this.sendGuestLoadFailure(browserTabId, loadError)
+  }
+
+  private flushPendingLoadFailure(browserTabId: string, guestWebContentsId: number): void {
+    const pending = this.pendingLoadFailuresByGuestId.get(guestWebContentsId)
+    if (!pending) {
+      return
+    }
+    this.pendingLoadFailuresByGuestId.delete(guestWebContentsId)
+    this.sendGuestLoadFailure(browserTabId, pending)
+  }
+
+  private sendGuestLoadFailure(
+    browserTabId: string,
+    loadError: { code: number; description: string; validatedUrl: string }
+  ): void {
+    const rendererWebContentsId = this.rendererWebContentsIdByTabId.get(browserTabId)
+    if (!rendererWebContentsId) {
+      return
+    }
+
+    const renderer = webContents.fromId(rendererWebContentsId)
+    if (!renderer || renderer.isDestroyed()) {
+      return
+    }
+
+    renderer.send('browser:guest-load-failed', {
+      browserTabId,
+      loadError
     })
   }
 }

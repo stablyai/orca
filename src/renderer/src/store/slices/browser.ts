@@ -2,6 +2,7 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { BrowserLoadError, BrowserTab, WorkspaceSessionState } from '../../../../shared/types'
+import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
 
 type CreateBrowserTabOptions = {
   activate?: boolean
@@ -76,7 +77,11 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         worktreeId,
         url: normalizedUrl,
         title: options?.title ?? normalizedUrl,
-        loading: true,
+        // Why: blank tabs mount a parked/inert guest surface first. Marking
+        // them as loading at creation time makes every about:blank tab flash
+        // the browser loading dot even when no navigation was requested.
+        // Real navigations still flip loading via the browser pane events.
+        loading: normalizedUrl !== 'about:blank' && normalizedUrl !== ORCA_BROWSER_BLANK_URL,
         faviconUrl: null,
         canGoBack: false,
         canGoForward: false,

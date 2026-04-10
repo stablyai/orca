@@ -1,4 +1,5 @@
 import type {
+  BrowserLoadError,
   CreateWorktreeResult,
   DirEntry,
   GlobalSettings,
@@ -41,6 +42,9 @@ export type BrowserApi = {
   registerGuest: (args: { browserTabId: string; webContentsId: number }) => Promise<void>
   unregisterGuest: (args: { browserTabId: string }) => Promise<void>
   openDevTools: (args: { browserTabId: string }) => Promise<boolean>
+  onGuestLoadFailed: (
+    callback: (args: { browserTabId: string; loadError: BrowserLoadError }) => void
+  ) => () => void
 }
 
 export type PreflightStatus = {
@@ -224,15 +228,24 @@ export type PreloadApi = {
     rename: (args: { oldPath: string; newPath: string }) => Promise<void>
     deletePath: (args: { targetPath: string }) => Promise<void>
     authorizeExternalPath: (args: { targetPath: string }) => Promise<void>
-    stat: (args: { filePath: string }) => Promise<{ size: number; isDirectory: boolean; mtime: number }>
+    stat: (args: {
+      filePath: string
+    }) => Promise<{ size: number; isDirectory: boolean; mtime: number }>
     listFiles: (args: { rootPath: string }) => Promise<string[]>
     search: (args: SearchOptions) => Promise<SearchResult>
   }
   git: {
     status: (args: { worktreePath: string }) => Promise<{ entries: GitStatusEntry[] }>
     conflictOperation: (args: { worktreePath: string }) => Promise<GitConflictOperation>
-    diff: (args: { worktreePath: string; filePath: string; staged: boolean }) => Promise<GitDiffResult>
-    branchCompare: (args: { worktreePath: string; baseRef: string }) => Promise<GitBranchCompareResult>
+    diff: (args: {
+      worktreePath: string
+      filePath: string
+      staged: boolean
+    }) => Promise<GitDiffResult>
+    branchCompare: (args: {
+      worktreePath: string
+      baseRef: string
+    }) => Promise<GitBranchCompareResult>
     branchDiff: (args: {
       worktreePath: string
       compare: {
@@ -249,7 +262,11 @@ export type PreloadApi = {
     unstage: (args: { worktreePath: string; filePath: string }) => Promise<void>
     bulkUnstage: (args: { worktreePath: string; filePaths: string[] }) => Promise<void>
     discard: (args: { worktreePath: string; filePath: string }) => Promise<void>
-    remoteFileUrl: (args: { worktreePath: string; relativePath: string; line: number }) => Promise<string | null>
+    remoteFileUrl: (args: {
+      worktreePath: string
+      relativePath: string
+      line: number
+    }) => Promise<string | null>
   }
   ui: {
     get: () => Promise<PersistedUIState>
@@ -261,7 +278,9 @@ export type PreloadApi = {
     onTerminalZoom: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void
     readClipboardText: () => Promise<string>
     writeClipboardText: (text: string) => Promise<void>
-    onFileDrop: (callback: (data: { path: string; target: 'editor' | 'terminal' }) => void) => () => void
+    onFileDrop: (
+      callback: (data: { path: string; target: 'editor' | 'terminal' }) => void
+    ) => () => void
     getZoomLevel: () => number
     setZoomLevel: (level: number) => void
     onFullscreenChanged: (callback: (isFullScreen: boolean) => void) => () => void

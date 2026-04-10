@@ -311,7 +311,24 @@ const api = {
       ipcRenderer.invoke('browser:unregisterGuest', args),
 
     openDevTools: (args: { browserTabId: string }): Promise<boolean> =>
-      ipcRenderer.invoke('browser:openDevTools', args)
+      ipcRenderer.invoke('browser:openDevTools', args),
+
+    onGuestLoadFailed: (
+      callback: (args: {
+        browserTabId: string
+        loadError: { code: number; description: string; validatedUrl: string }
+      }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: {
+          browserTabId: string
+          loadError: { code: number; description: string; validatedUrl: string }
+        }
+      ) => callback(data)
+      ipcRenderer.on('browser:guest-load-failed', listener)
+      return () => ipcRenderer.removeListener('browser:guest-load-failed', listener)
+    }
   },
 
   hooks: {

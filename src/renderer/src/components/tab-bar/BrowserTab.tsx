@@ -13,6 +13,18 @@ import type { BrowserTab as BrowserTabState } from '../../../../shared/types'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from './SortableTab'
 import { getLiveBrowserUrl } from '../browser-pane/browser-runtime'
 
+function formatBrowserTabUrlLabel(url: string): string {
+  if (url === ORCA_BROWSER_BLANK_URL || url === 'about:blank') {
+    return 'New Browser Tab'
+  }
+  try {
+    const parsed = new URL(url)
+    return `${parsed.host}${parsed.pathname === '/' ? '' : parsed.pathname}${parsed.search}${parsed.hash}`
+  } catch {
+    return url
+  }
+}
+
 function getBrowserTabLabel(tab: BrowserTabState): string {
   if (
     !tab.title ||
@@ -20,12 +32,14 @@ function getBrowserTabLabel(tab: BrowserTabState): string {
     tab.title === ORCA_BROWSER_BLANK_URL ||
     tab.title === 'about:blank'
   ) {
-    if (tab.url === ORCA_BROWSER_BLANK_URL || tab.url === 'about:blank') {
-      return 'New Browser Tab'
-    }
+    return formatBrowserTabUrlLabel(tab.url)
   }
 
   return tab.title || tab.url
+}
+
+function isBlankBrowserTab(tab: BrowserTabState): boolean {
+  return tab.url === ORCA_BROWSER_BLANK_URL || tab.url === 'about:blank'
 }
 
 export default function BrowserTab({
@@ -116,7 +130,9 @@ export default function BrowserTab({
             className={`w-3.5 h-3.5 mr-1.5 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
           />
           <span className="truncate max-w-[180px] mr-1.5">{getBrowserTabLabel(tab)}</span>
-          {tab.loading && <span className="mr-1.5 size-1.5 rounded-full bg-sky-500/80 shrink-0" />}
+          {tab.loading && !tab.loadError && !isBlankBrowserTab(tab) && (
+            <span className="mr-1.5 size-1.5 rounded-full bg-sky-500/80 shrink-0" />
+          )}
           <button
             className={`flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${
               isActive

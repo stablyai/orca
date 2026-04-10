@@ -119,6 +119,17 @@ export function useIpcEvents(): void {
       })
     )
 
+    unsubs.push(
+      window.api.browser.onGuestLoadFailed(({ browserTabId, loadError }) => {
+        useAppStore.getState().updateBrowserTabPageState(browserTabId, {
+          loading: false,
+          loadError,
+          canGoBack: false,
+          canGoForward: false
+        })
+      })
+    )
+
     // Zoom handling for menu accelerators and keyboard fallback paths.
     unsubs.push(
       window.api.ui.onTerminalZoom((direction) => {

@@ -38,7 +38,10 @@ export function registerBrowserHandlers(): void {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return false
       }
-      browserManager.registerGuest(args)
+      browserManager.registerGuest({
+        ...args,
+        rendererWebContentsId: event.sender.id
+      })
       return true
     }
   )

@@ -11,7 +11,6 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import logo from '../../../../../resources/logo.svg'
 import { ORCA_BROWSER_BLANK_URL, ORCA_BROWSER_PARTITION } from '../../../../shared/constants'
 import type { BrowserLoadError, BrowserTab as BrowserTabState } from '../../../../shared/types'
 import {
@@ -119,6 +118,42 @@ function toDisplayUrl(url: string): string {
   return url === ORCA_BROWSER_BLANK_URL ? 'about:blank' : url
 }
 
+function isChromiumErrorPage(url: string): boolean {
+  return url.startsWith('chrome-error://')
+}
+
+function getLoadErrorMetadata(loadError: BrowserLoadError | null): {
+  displayUrl: string
+  host: string | null
+  isLocalhostLike: boolean
+} {
+  const rawUrl = loadError?.validatedUrl ?? 'about:blank'
+  const displayUrl = toDisplayUrl(rawUrl)
+  try {
+    const parsed = new URL(rawUrl)
+    const host = parsed.host || null
+    const hostname = parsed.hostname
+    const isLocalhostLike =
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname === '0.0.0.0' ||
+      hostname === '::1'
+    return { displayUrl, host, isLocalhostLike }
+  } catch {
+    return { displayUrl, host: null, isLocalhostLike: false }
+  }
+}
+
+function getFriendlyLoadErrorDescription(loadError: BrowserLoadError | null): string {
+  if (!loadError) {
+    return 'The page did not respond.'
+  }
+  if (loadError.code === 0) {
+    return loadError.description
+  }
+  return "We couldn't connect to this page."
+}
+
 function getOpenableExternalUrl(
   webview: Electron.WebviewTag | null,
   fallbackUrl: string
@@ -136,6 +171,35 @@ function getOpenableExternalUrl(
     }
   }
   return normalizeExternalBrowserUrl(currentUrl)
+}
+
+function retryBrowserTabLoad(
+  webview: Electron.WebviewTag | null,
+  browserTab: BrowserTabState,
+  onUpdatePageState: (tabId: string, updates: BrowserTabPageState) => void
+): void {
+  if (!webview) {
+    return
+  }
+
+  const retryUrl = normalizeBrowserNavigationUrl(
+    browserTab.loadError?.validatedUrl ?? browserTab.url
+  )
+  if (!retryUrl) {
+    return
+  }
+
+  // Why: once Chromium lands on chrome-error://chromewebdata/, reload() can
+  // simply refresh the internal error page instead of retrying the original
+  // destination. Force navigation back to the attempted URL so Retry and the
+  // toolbar reload button actually re-attempt the failed page. Keep the last
+  // failure visible until a real success arrives so retry does not briefly
+  // drop the user back to a blank black guest surface.
+  onUpdatePageState(browserTab.id, {
+    loading: true,
+    title: retryUrl
+  })
+  webview.src = retryUrl
 }
 
 function evictParkedWebviews(excludedTabId: string | null = null): void {
@@ -179,14 +243,30 @@ export default function BrowserPane({
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
   const faviconUrlRef = useRef<string | null>(browserTab.faviconUrl)
   const initialBrowserUrlRef = useRef(browserTab.url)
+  const browserTabUrlRef = useRef(browserTab.url)
+  const activeLoadFailureRef = useRef<BrowserLoadError | null>(browserTab.loadError)
+  const trackNextLoadingEventRef = useRef(false)
   const onUpdatePageStateRef = useRef(onUpdatePageState)
   const onSetUrlRef = useRef(onSetUrl)
   const [addressBarValue, setAddressBarValue] = useState(browserTab.url)
+  const addressBarValueRef = useRef(browserTab.url)
   const [resourceNotice, setResourceNotice] = useState<string | null>(null)
 
   useEffect(() => {
     setAddressBarValue(toDisplayUrl(browserTab.url))
   }, [browserTab.url])
+
+  useEffect(() => {
+    browserTabUrlRef.current = browserTab.url
+  }, [browserTab.url])
+
+  useEffect(() => {
+    activeLoadFailureRef.current = browserTab.loadError
+  }, [browserTab.loadError])
+
+  useEffect(() => {
+    addressBarValueRef.current = addressBarValue
+  }, [addressBarValue])
 
   useEffect(() => {
     setResourceNotice(
@@ -206,10 +286,13 @@ export default function BrowserPane({
       try {
         onUpdatePageStateRef.current(browserTab.id, {
           title: webview.getTitle() || webview.getURL() || 'Browser',
-          loading: webview.isLoading(),
+          // Why: webview reclaim/attach can transiently report isLoading() even
+          // when no user-visible navigation happened. If we sync that into the
+          // tab model on every activation, switching tabs flashes the blue
+          // loading dot and makes parked tabs look like they are reloading.
+          // Only explicit navigation/load events should drive Orca's loading UI.
           canGoBack: webview.canGoBack(),
-          canGoForward: webview.canGoForward(),
-          loadError: null
+          canGoForward: webview.canGoForward()
         })
       } catch {
         // Why: Electron only exposes these getters after the guest fully
@@ -227,6 +310,7 @@ export default function BrowserPane({
     }
 
     let webview = webviewRegistry.get(browserTab.id)
+    let needsInitialNavigation = false
     if (webview) {
       container.appendChild(webview)
       parkedAtByTabId.delete(browserTab.id)
@@ -241,15 +325,9 @@ export default function BrowserPane({
       webview.style.height = '100%'
       webview.style.border = 'none'
       webview.style.background = 'transparent'
-      // Why: browser tabs persist a single guest per tab id. The initial URL
-      // belongs to guest creation; later store URL changes are synchronized by
-      // the dedicated effect below so normal navigation never recreates the
-      // guest just because React re-rendered this component.
-      webview.src =
-        normalizeBrowserNavigationUrl(initialBrowserUrlRef.current) ?? ORCA_BROWSER_BLANK_URL
-
       webviewRegistry.set(browserTab.id, webview)
       container.appendChild(webview)
+      needsInitialNavigation = true
     }
 
     webviewRef.current = webview
@@ -267,16 +345,57 @@ export default function BrowserPane({
     }
 
     const handleDidStartLoading = (): void => {
+      if (!trackNextLoadingEventRef.current) {
+        return
+      }
       faviconUrlRef.current = null
       onUpdatePageStateRef.current(browserTab.id, {
         loading: true,
-        loadError: null,
         faviconUrl: null
       })
     }
 
     const handleDidStopLoading = (): void => {
       const currentUrl = webview.getURL() || webview.src || 'about:blank'
+      const activeLoadFailure = activeLoadFailureRef.current
+      if (isChromiumErrorPage(currentUrl)) {
+        trackNextLoadingEventRef.current = false
+        const synthesizedFailure = {
+          code: -1,
+          description: 'This site could not be reached.',
+          validatedUrl: browserTabUrlRef.current || addressBarValueRef.current || 'about:blank'
+        }
+        activeLoadFailureRef.current = synthesizedFailure
+        onUpdatePageStateRef.current(browserTab.id, {
+          loading: false,
+          loadError: synthesizedFailure
+        })
+        return
+      }
+      if (activeLoadFailure) {
+        const normalizedAttemptedUrl =
+          normalizeBrowserNavigationUrl(activeLoadFailure.validatedUrl) ??
+          activeLoadFailure.validatedUrl
+        const normalizedCurrentUrl = normalizeBrowserNavigationUrl(currentUrl) ?? currentUrl
+        if (normalizedAttemptedUrl === normalizedCurrentUrl) {
+          trackNextLoadingEventRef.current = false
+          // Why: some webview failures still emit did-stop-loading on the
+          // original destination URL. If we clear loadError here, the failed
+          // navigation falls back to a blank Chromium surface even though Orca
+          // already knows this exact load failed.
+          onUpdatePageStateRef.current(browserTab.id, {
+            loading: false,
+            title: webview.getTitle() || currentUrl,
+            faviconUrl: faviconUrlRef.current,
+            canGoBack: webview.canGoBack(),
+            canGoForward: webview.canGoForward(),
+            loadError: activeLoadFailure
+          })
+          return
+        }
+      }
+      trackNextLoadingEventRef.current = false
+      activeLoadFailureRef.current = null
       rememberLiveBrowserUrl(browserTab.id, currentUrl)
       setAddressBarValue(toDisplayUrl(currentUrl))
       onSetUrlRef.current(browserTab.id, currentUrl)
@@ -295,6 +414,9 @@ export default function BrowserPane({
         return
       }
       const currentUrl = event.url ?? webview.getURL() ?? webview.src ?? 'about:blank'
+      if (isChromiumErrorPage(currentUrl)) {
+        return
+      }
       rememberLiveBrowserUrl(browserTab.id, currentUrl)
       setAddressBarValue(toDisplayUrl(currentUrl))
       onSetUrlRef.current(browserTab.id, currentUrl)
@@ -338,9 +460,12 @@ export default function BrowserPane({
         // does not show a false load failure for a working page.
         return
       }
+      trackNextLoadingEventRef.current = false
+      const loadError = buildLoadError(event)
+      activeLoadFailureRef.current = loadError
       onUpdatePageStateRef.current(browserTab.id, {
         loading: false,
-        loadError: buildLoadError(event)
+        loadError
       })
     }
 
@@ -352,6 +477,20 @@ export default function BrowserPane({
     webview.addEventListener('page-title-updated', handleTitleUpdate)
     webview.addEventListener('page-favicon-updated', handleFaviconUpdate)
     webview.addEventListener('did-fail-load', handleFailLoad)
+
+    if (needsInitialNavigation) {
+      // Why: connection-refused localhost tabs can fail before Electron wires up
+      // event delivery if src is assigned too early. Attach listeners first so
+      // Orca never misses the initial did-fail-load signal for a new tab.
+      // Only non-blank initial tabs should light up Orca's loading indicator;
+      // reclaiming/activating a parked about:blank tab is not a meaningful
+      // navigation and should not flash the tab-loading dot.
+      trackNextLoadingEventRef.current =
+        (normalizeBrowserNavigationUrl(initialBrowserUrlRef.current) ?? ORCA_BROWSER_BLANK_URL) !==
+        ORCA_BROWSER_BLANK_URL
+      webview.src =
+        normalizeBrowserNavigationUrl(initialBrowserUrlRef.current) ?? ORCA_BROWSER_BLANK_URL
+    }
 
     return () => {
       webview.removeEventListener('dom-ready', handleDomReady)
@@ -385,9 +524,54 @@ export default function BrowserPane({
       return
     }
     if (webview.src !== normalizedUrl && webview.getAttribute('src') !== normalizedUrl) {
+      // Why: browserTab.url changes are Orca-driven navigations (address bar,
+      // terminal link open, retry target update). Gate the next did-start-loading
+      // event so only real navigations, not tab activation churn, show loading UI.
+      trackNextLoadingEventRef.current = normalizedUrl !== ORCA_BROWSER_BLANK_URL
       webview.src = normalizedUrl
     }
   }, [browserTab.url])
+
+  useEffect(() => {
+    if (!browserTab.loading) {
+      return
+    }
+
+    const detectChromiumErrorPage = (): void => {
+      const webview = webviewRef.current
+      if (!webview) {
+        return
+      }
+      try {
+        const currentUrl = webview.getURL() || webview.src || ''
+        if (!isChromiumErrorPage(currentUrl)) {
+          return
+        }
+
+        const attemptedUrl = browserTabUrlRef.current || addressBarValueRef.current || 'about:blank'
+        onUpdatePageStateRef.current(browserTab.id, {
+          loading: false,
+          loadError: {
+            code: -1,
+            description: 'This site could not be reached.',
+            validatedUrl: attemptedUrl
+          }
+        })
+      } catch {
+        // Why: the guest can still be mid-attach while the loading spinner is
+        // visible. Polling is only a fallback for missed failure events, so
+        // transient getURL() errors should be ignored until the next tick.
+      }
+    }
+
+    // Why: some Electron builds paint Chromium's internal chrome-error page
+    // without delivering a timely did-fail-load event to the renderer webview.
+    // Polling only while the tab is "loading" gives Orca a last-resort path to
+    // swap the black guest surface for the explicit unreachable-page overlay.
+    detectChromiumErrorPage()
+    const intervalId = window.setInterval(detectChromiumErrorPage, 250)
+    return () => window.clearInterval(intervalId)
+  }, [browserTab.id, browserTab.loading])
 
   const submitAddressBar = (): void => {
     const nextUrl = normalizeBrowserNavigationUrl(addressBarValue)
@@ -411,6 +595,7 @@ export default function BrowserPane({
     if (!webview) {
       return
     }
+    trackNextLoadingEventRef.current = nextUrl !== ORCA_BROWSER_BLANK_URL
     webview.src = nextUrl
   }
 
@@ -419,6 +604,20 @@ export default function BrowserPane({
   // Match both so the "New Browser Tab" overlay stays visible for blank tabs.
   const isBlankTab = browserTab.url === 'about:blank' || browserTab.url === ORCA_BROWSER_BLANK_URL
   const externalUrl = getOpenableExternalUrl(webviewRef.current, browserTab.url)
+  const loadErrorMeta = getLoadErrorMetadata(browserTab.loadError)
+  const showFailureOverlay = Boolean(browserTab.loadError) && !isBlankTab
+
+  useEffect(() => {
+    const webview = webviewRef.current
+    if (!webview) {
+      return
+    }
+    // Why: Electron webviews render in their own compositor layer, so a React
+    // overlay can sit "under" a failed guest and still look like a black page.
+    // Fully removing the guest from layout is more reliable than visibility
+    // toggles here; some Electron builds keep painting a hidden guest layer.
+    webview.style.display = showFailureOverlay ? 'none' : 'flex'
+  }, [showFailureOverlay])
 
   return (
     <div className="relative flex h-full min-h-0 flex-1 flex-col">
@@ -452,6 +651,8 @@ export default function BrowserPane({
             }
             if (browserTab.loading) {
               webview.stop()
+            } else if (browserTab.loadError) {
+              retryBrowserTabLoad(webview, browserTab, onUpdatePageStateRef.current)
             } else {
               webview.reload()
             }
@@ -513,25 +714,55 @@ export default function BrowserPane({
           {resourceNotice}
         </div>
       ) : null}
-      {browserTab.loadError ? (
-        <div className="border-b border-border/60 bg-background px-3 py-1.5 text-xs text-amber-500/90">
-          {browserTab.loadError.description}
-        </div>
-      ) : null}
-
       <div
         ref={containerRef}
         className="relative flex min-h-0 flex-1 overflow-hidden bg-background"
       >
+        {showFailureOverlay ? (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.02),transparent_58%)] px-6">
+            <div className="flex max-w-sm flex-col items-center px-8 py-8 text-center opacity-70">
+              <div className="mb-4 rounded-full border border-border/70 bg-muted/30 p-3">
+                <Globe className="size-5 text-muted-foreground" />
+              </div>
+              <h2 className="text-base font-semibold text-foreground/85">
+                {loadErrorMeta.host ? `Can't reach ${loadErrorMeta.host}` : "Can't load this page"}
+              </h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {getFriendlyLoadErrorDescription(browserTab.loadError)}
+              </p>
+              <div className="mt-5 flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-9 gap-2 px-3"
+                  title="Retry"
+                  onClick={() => {
+                    const webview = webviewRef.current
+                    if (!webview) {
+                      return
+                    }
+                    onUpdatePageStateRef.current(browserTab.id, {
+                      loading: true
+                    })
+                    retryBrowserTabLoad(webview, browserTab, onUpdatePageStateRef.current)
+                  }}
+                >
+                  <RefreshCw className="size-4" />
+                  <span>Refresh</span>
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : null}
         {isBlankTab ? (
-          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.03),transparent_55%)]">
-            <div className="flex flex-col items-center gap-4 opacity-70">
-              <div className="rounded-[28px] border border-border/60 bg-background/80 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.22)] backdrop-blur-sm">
-                <img src={logo} alt="Orca logo" className="size-12" />
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.02),transparent_58%)] px-6">
+            <div className="flex flex-col items-center px-8 py-8 text-center opacity-70">
+              <div className="mb-4 rounded-full border border-border/70 bg-muted/30 p-3">
+                <Globe className="size-5 text-muted-foreground" />
               </div>
               <div className="text-center">
-                <p className="text-sm font-medium text-foreground/85">New Browser Tab</p>
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="text-base font-semibold text-foreground/85">New Browser Tab</p>
+                <p className="mt-2 text-sm text-muted-foreground">
                   Type a URL above to start browsing.
                 </p>
               </div>
