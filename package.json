@@ -22,7 +22,7 @@
     "typecheck:web": "tsc --noEmit -p config/tsconfig.web.json --composite false",
     "typecheck": "tsc --noEmit -p config/tsconfig.node.json --composite false && tsc --noEmit -p config/tsconfig.cli.json --composite false && tsc --noEmit -p config/tsconfig.web.json --composite false",
     "start": "electron-vite preview",
-    "dev": "electron-vite dev",
+    "dev": "node config/scripts/run-electron-vite-dev.mjs",
     "build:cli": "tsc -p config/tsconfig.cli.json --outDir out --composite false --incremental false",
     "build:electron-vite": "node config/scripts/run-electron-vite-build.mjs",
     "build": "pnpm run typecheck && pnpm run build:electron-vite && pnpm run build:cli",
