@@ -1,6 +1,14 @@
 import { RefreshCw } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import {
+  ContextMenu,
+  ContextMenuCheckboxItem,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger
+} from '@/components/ui/context-menu'
 import { useAppStore } from '../../store'
 import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
 import { ProviderIcon, ProviderTooltip } from './tooltip'
@@ -105,15 +113,16 @@ function ProviderSegment({
 // StatusBar
 // ---------------------------------------------------------------------------
 
-export function StatusBar(): React.JSX.Element {
+export function StatusBar(): React.JSX.Element | null {
   const rateLimits = useAppStore((s) => s.rateLimits)
   const refreshRateLimits = useAppStore((s) => s.refreshRateLimits)
+  const statusBarVisible = useAppStore((s) => s.statusBarVisible)
+  const setStatusBarVisible = useAppStore((s) => s.setStatusBarVisible)
+  const statusBarItems = useAppStore((s) => s.statusBarItems)
+  const toggleStatusBarItem = useAppStore((s) => s.toggleStatusBarItem)
   const containerRef = useRef<HTMLDivElement>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
 
-  // Why: we track container width via ResizeObserver to implement responsive
-  // breakpoints on the status bar's own width (not the window), so sidebar
-  // open/close correctly changes the layout.
   const [containerWidth, setContainerWidth] = useState(900)
   const resizeObserverRef = useRef<ResizeObserver | null>(null)
 
@@ -147,108 +156,132 @@ export function StatusBar(): React.JSX.Element {
     }
   }, [isRefreshing, refreshRateLimits])
 
+  if (!statusBarVisible) {
+    return null
+  }
+
   const { claude, codex } = rateLimits
 
-  // Why: providers that are unavailable (e.g. Claude for API key users) are
-  // hidden entirely to avoid wasting status bar space on a greyed-out label.
-  const showClaude = claude && claude.status !== 'unavailable'
-  const showCodex = codex && codex.status !== 'unavailable'
+  // Why: a provider is "showable" when it has data AND the user hasn't hidden
+  // it via the context menu. Unavailable providers (e.g. Claude for API key
+  // users) are always hidden regardless of the toggle.
+  const showClaude = claude && claude.status !== 'unavailable' && statusBarItems.includes('claude')
+  const showCodex = codex && codex.status !== 'unavailable' && statusBarItems.includes('codex')
   const anyVisible = showClaude || showCodex
 
   const compact = containerWidth < 900
   const iconOnly = containerWidth < 500
 
   return (
-    <div
-      ref={containerRefCallback}
-      className="flex items-center h-6 min-h-[24px] px-3 gap-4 border-t border-border bg-[var(--bg-titlebar,var(--card))] text-xs select-none shrink-0"
-    >
-      {iconOnly ? (
-        // Icon-only mode: dots
-        <>
-          {showClaude && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="inline-flex items-center gap-1 cursor-default">
-                  <span
-                    className={`inline-block w-2 h-2 rounded-full ${claude.session || claude.weekly ? 'bg-muted-foreground/60' : 'bg-muted-foreground/30'}`}
-                  />
-                  <span className="text-muted-foreground">C</span>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={6} collisionPadding={12}>
-                <ProviderTooltip p={claude} />
-              </TooltipContent>
-            </Tooltip>
-          )}
-          {showCodex && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="inline-flex items-center gap-1 cursor-default">
-                  <span
-                    className={`inline-block w-2 h-2 rounded-full ${codex.session || codex.weekly ? 'bg-muted-foreground/60' : 'bg-muted-foreground/30'}`}
-                  />
-                  <span className="text-muted-foreground">X</span>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={6} collisionPadding={12}>
-                <ProviderTooltip p={codex} />
-              </TooltipContent>
-            </Tooltip>
-          )}
-        </>
-      ) : (
-        // Full / compact modes
-        <>
-          {showClaude && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="inline-flex items-center cursor-default">
-                  <ProviderSegment p={claude} compact={compact} />
-                </span>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={6} collisionPadding={12}>
-                <ProviderTooltip p={claude} />
-              </TooltipContent>
-            </Tooltip>
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <div
+          ref={containerRefCallback}
+          className="flex items-center h-6 min-h-[24px] px-3 gap-4 border-t border-border bg-[var(--bg-titlebar,var(--card))] text-xs select-none shrink-0"
+        >
+          {iconOnly ? (
+            <>
+              {showClaude && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex items-center gap-1 cursor-default">
+                      <span
+                        className={`inline-block w-2 h-2 rounded-full ${claude.session || claude.weekly ? 'bg-muted-foreground/60' : 'bg-muted-foreground/30'}`}
+                      />
+                      <span className="text-muted-foreground">C</span>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" sideOffset={6} collisionPadding={12}>
+                    <ProviderTooltip p={claude} />
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              {showCodex && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex items-center gap-1 cursor-default">
+                      <span
+                        className={`inline-block w-2 h-2 rounded-full ${codex.session || codex.weekly ? 'bg-muted-foreground/60' : 'bg-muted-foreground/30'}`}
+                      />
+                      <span className="text-muted-foreground">X</span>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" sideOffset={6} collisionPadding={12}>
+                    <ProviderTooltip p={codex} />
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            </>
+          ) : (
+            <>
+              {showClaude && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex items-center cursor-default">
+                      <ProviderSegment p={claude} compact={compact} />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" sideOffset={6} collisionPadding={12}>
+                    <ProviderTooltip p={claude} />
+                  </TooltipContent>
+                </Tooltip>
+              )}
+
+              {showCodex && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex items-center cursor-default">
+                      <ProviderSegment p={codex} compact={compact} />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" sideOffset={6} collisionPadding={12}>
+                    <ProviderTooltip p={codex} />
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            </>
           )}
 
-          {showCodex && (
+          <div className="flex-1" />
+
+          {anyVisible && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <span className="inline-flex items-center cursor-default">
-                  <ProviderSegment p={codex} compact={compact} />
-                </span>
+                <button
+                  onClick={handleRefresh}
+                  disabled={isRefreshing}
+                  className="p-0.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
+                  aria-label="Refresh rate limits"
+                >
+                  <RefreshCw size={11} className={isRefreshing ? 'animate-spin' : ''} />
+                </button>
               </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={6} collisionPadding={12}>
-                <ProviderTooltip p={codex} />
+              <TooltipContent side="top" sideOffset={6}>
+                Refresh usage data
               </TooltipContent>
             </Tooltip>
           )}
-        </>
-      )}
+        </div>
+      </ContextMenuTrigger>
 
-      {/* Spacer */}
-      <div className="flex-1" />
-
-      {/* Manual refresh button */}
-      {anyVisible && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-              className="p-0.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
-              aria-label="Refresh rate limits"
-            >
-              <RefreshCw size={11} className={isRefreshing ? 'animate-spin' : ''} />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="top" sideOffset={6}>
-            Refresh usage data
-          </TooltipContent>
-        </Tooltip>
-      )}
-    </div>
+      <ContextMenuContent>
+        <ContextMenuItem onClick={() => setStatusBarVisible(false)}>
+          Hide Status Bar
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuCheckboxItem
+          checked={statusBarItems.includes('claude')}
+          onCheckedChange={() => toggleStatusBarItem('claude')}
+        >
+          Claude Usage
+        </ContextMenuCheckboxItem>
+        <ContextMenuCheckboxItem
+          checked={statusBarItems.includes('codex')}
+          onCheckedChange={() => toggleStatusBarItem('codex')}
+        >
+          Codex Usage
+        </ContextMenuCheckboxItem>
+      </ContextMenuContent>
+    </ContextMenu>
   )
 }

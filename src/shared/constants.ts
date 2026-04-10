@@ -4,6 +4,7 @@ import type {
   PersistedState,
   PersistedUIState,
   RepoHookSettings,
+  StatusBarItem,
   WorkspaceSessionState,
   WorktreeCardProperty
 } from './types'
@@ -50,6 +51,8 @@ export const DEFAULT_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = [
   'pr',
   'comment'
 ]
+
+export const DEFAULT_STATUS_BAR_ITEMS: StatusBarItem[] = ['claude', 'codex']
 
 export const REPO_COLORS = [
   '#737373', // neutral
@@ -146,6 +149,8 @@ export function getDefaultUIState(): PersistedUIState {
     uiZoomLevel: 0,
     editorFontZoomLevel: 0,
     worktreeCardProperties: [...DEFAULT_WORKTREE_CARD_PROPERTIES],
+    statusBarItems: [...DEFAULT_STATUS_BAR_ITEMS],
+    statusBarVisible: true,
     dismissedUpdateVersion: null,
     lastUpdateCheckAt: null
   }

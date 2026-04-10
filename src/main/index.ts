@@ -122,6 +122,9 @@ app.whenReady().then(async () => {
     },
     onZoomReset: () => {
       mainWindow?.webContents.send('terminal:zoom', 'reset')
+    },
+    onToggleStatusBar: () => {
+      mainWindow?.webContents.send('ui:toggleStatusBar')
     }
   })
   runtimeRpc = new OrcaRuntimeRpcServer({

@@ -1,6 +1,6 @@
 /* eslint-disable max-lines */
 import { useEffect } from 'react'
-import { DEFAULT_WORKTREE_CARD_PROPERTIES } from '../../shared/constants'
+import { DEFAULT_STATUS_BAR_ITEMS, DEFAULT_WORKTREE_CARD_PROPERTIES } from '../../shared/constants'
 import { isGitRepoKind } from '../../shared/repo-kind'
 
 import { Minimize2, PanelLeft, PanelRight } from 'lucide-react'
@@ -149,6 +149,8 @@ function App(): React.JSX.Element {
             uiZoomLevel: 0,
             editorFontZoomLevel: 0,
             worktreeCardProperties: [...DEFAULT_WORKTREE_CARD_PROPERTIES],
+            statusBarItems: [...DEFAULT_STATUS_BAR_ITEMS],
+            statusBarVisible: true,
             dismissedUpdateVersion: null,
             lastUpdateCheckAt: null
           })

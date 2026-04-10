@@ -119,6 +119,13 @@ export function useIpcEvents(): void {
     )
 
     unsubs.push(
+      window.api.ui.onToggleStatusBar(() => {
+        const store = useAppStore.getState()
+        store.setStatusBarVisible(!store.statusBarVisible)
+      })
+    )
+
+    unsubs.push(
       window.api.ui.onActivateWorktree(({ repoId, worktreeId, setup }) => {
         void (async () => {
           const store = useAppStore.getState()

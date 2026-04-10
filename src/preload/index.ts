@@ -599,6 +599,11 @@ const api = {
       ipcRenderer.on('ui:switchTab', listener)
       return () => ipcRenderer.removeListener('ui:switchTab', listener)
     },
+    onToggleStatusBar: (callback: () => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent) => callback()
+      ipcRenderer.on('ui:toggleStatusBar', listener)
+      return () => ipcRenderer.removeListener('ui:toggleStatusBar', listener)
+    },
     onActivateWorktree: (
       callback: (data: {
         repoId: string

@@ -1,7 +1,15 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { PersistedUIState, UpdateStatus, WorktreeCardProperty } from '../../../../shared/types'
-import { DEFAULT_WORKTREE_CARD_PROPERTIES } from '../../../../shared/constants'
+import type {
+  PersistedUIState,
+  StatusBarItem,
+  UpdateStatus,
+  WorktreeCardProperty
+} from '../../../../shared/types'
+import {
+  DEFAULT_STATUS_BAR_ITEMS,
+  DEFAULT_WORKTREE_CARD_PROPERTIES
+} from '../../../../shared/constants'
 
 type LegacyPersistedSortBy = PersistedUIState['sortBy'] | 'smart'
 
@@ -54,6 +62,10 @@ export type UISlice = {
   setFilterRepoIds: (ids: string[]) => void
   worktreeCardProperties: WorktreeCardProperty[]
   toggleWorktreeCardProperty: (prop: WorktreeCardProperty) => void
+  statusBarItems: StatusBarItem[]
+  toggleStatusBarItem: (item: StatusBarItem) => void
+  statusBarVisible: boolean
+  setStatusBarVisible: (v: boolean) => void
   pendingRevealWorktreeId: string | null
   revealWorktreeInSidebar: (worktreeId: string) => void
   clearPendingRevealWorktreeId: () => void
@@ -115,6 +127,23 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set) => (
       return { worktreeCardProperties: updated }
     }),
 
+  statusBarItems: [...DEFAULT_STATUS_BAR_ITEMS],
+  toggleStatusBarItem: (item) =>
+    set((s) => {
+      const current = s.statusBarItems || DEFAULT_STATUS_BAR_ITEMS
+      const updated = current.includes(item)
+        ? current.filter((i) => i !== item)
+        : [...current, item]
+      window.api.ui.set({ statusBarItems: updated }).catch(console.error)
+      return { statusBarItems: updated }
+    }),
+
+  statusBarVisible: true,
+  setStatusBarVisible: (v) => {
+    window.api.ui.set({ statusBarVisible: v }).catch(console.error)
+    set({ statusBarVisible: v })
+  },
+
   pendingRevealWorktreeId: null,
   revealWorktreeInSidebar: (worktreeId) => set({ pendingRevealWorktreeId: worktreeId }),
   clearPendingRevealWorktreeId: () => set({ pendingRevealWorktreeId: null }),
@@ -145,6 +174,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set) => (
         uiZoomLevel: ui.uiZoomLevel ?? 0,
         editorFontZoomLevel: ui.editorFontZoomLevel ?? 0,
         worktreeCardProperties: ui.worktreeCardProperties ?? [...DEFAULT_WORKTREE_CARD_PROPERTIES],
+        statusBarItems: ui.statusBarItems ?? [...DEFAULT_STATUS_BAR_ITEMS],
+        statusBarVisible: ui.statusBarVisible ?? true,
         dismissedUpdateVersion: ui.dismissedUpdateVersion ?? null,
         persistedUIReady: true
       }

@@ -380,6 +380,8 @@ export type NotificationDispatchResult = {
 
 export type WorktreeCardProperty = 'status' | 'unread' | 'ci' | 'issue' | 'pr' | 'comment'
 
+export type StatusBarItem = 'claude' | 'codex'
+
 export type PersistedUIState = {
   lastActiveRepoId: string | null
   lastActiveWorktreeId: string | null
@@ -392,6 +394,8 @@ export type PersistedUIState = {
   uiZoomLevel: number
   editorFontZoomLevel: number
   worktreeCardProperties: WorktreeCardProperty[]
+  statusBarItems: StatusBarItem[]
+  statusBarVisible: boolean
   dismissedUpdateVersion: string | null
   lastUpdateCheckAt: number | null
   /** Whether Orca has already attempted to trigger the macOS notification

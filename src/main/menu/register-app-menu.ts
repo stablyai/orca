@@ -6,6 +6,7 @@ type RegisterAppMenuOptions = {
   onZoomIn: () => void
   onZoomOut: () => void
   onZoomReset: () => void
+  onToggleStatusBar: () => void
 }
 
 export function registerAppMenu({
@@ -13,7 +14,8 @@ export function registerAppMenu({
   onCheckForUpdates,
   onZoomIn,
   onZoomOut,
-  onZoomReset
+  onZoomReset,
+  onToggleStatusBar
 }: RegisterAppMenuOptions): void {
   const reloadFocusedWindow = (ignoreCache: boolean): void => {
     const webContents = BrowserWindow.getFocusedWindow()?.webContents
@@ -116,7 +118,12 @@ export function registerAppMenu({
           label: `Open Worktree Palette\t${process.platform === 'darwin' ? 'Cmd+J' : 'Ctrl+Shift+J'}`
         },
         { type: 'separator' },
-        { role: 'togglefullscreen' }
+        { role: 'togglefullscreen' },
+        { type: 'separator' },
+        {
+          label: 'Toggle Status Bar',
+          click: () => onToggleStatusBar()
+        }
       ]
     },
     {
