@@ -1,5 +1,16 @@
 import { ipcMain } from 'electron'
 import { browserManager } from '../browser/browser-manager'
+import type {
+  BrowserSetGrabModeArgs,
+  BrowserSetGrabModeResult,
+  BrowserAwaitGrabSelectionArgs,
+  BrowserGrabResult,
+  BrowserCancelGrabArgs,
+  BrowserCaptureSelectionScreenshotArgs,
+  BrowserCaptureSelectionScreenshotResult,
+  BrowserExtractHoverArgs,
+  BrowserExtractHoverResult
+} from '../../shared/browser-grab-types'
 
 let trustedBrowserRendererWebContentsId: number | null = null
 
@@ -31,6 +42,11 @@ export function registerBrowserHandlers(): void {
   ipcMain.removeHandler('browser:registerGuest')
   ipcMain.removeHandler('browser:unregisterGuest')
   ipcMain.removeHandler('browser:openDevTools')
+  ipcMain.removeHandler('browser:setGrabMode')
+  ipcMain.removeHandler('browser:awaitGrabSelection')
+  ipcMain.removeHandler('browser:cancelGrab')
+  ipcMain.removeHandler('browser:captureSelectionScreenshot')
+  ipcMain.removeHandler('browser:extractHoverPayload')
 
   ipcMain.handle(
     'browser:registerGuest',
@@ -60,4 +76,96 @@ export function registerBrowserHandlers(): void {
     }
     return browserManager.openDevTools(args.browserTabId)
   })
+
+  // --- Browser Context Grab IPC ---
+
+  ipcMain.handle(
+    'browser:setGrabMode',
+    async (event, args: BrowserSetGrabModeArgs): Promise<BrowserSetGrabModeResult> => {
+      if (!isTrustedBrowserRenderer(event.sender)) {
+        return { ok: false, reason: 'not-authorized' }
+      }
+      const guest = browserManager.getAuthorizedGuest(args.browserTabId, event.sender.id)
+      if (!guest) {
+        return { ok: false, reason: 'not-ready' }
+      }
+      const success = await browserManager.setGrabMode(args.browserTabId, args.enabled, guest)
+      return success ? { ok: true } : { ok: false, reason: 'not-ready' }
+    }
+  )
+
+  ipcMain.handle(
+    'browser:awaitGrabSelection',
+    async (event, args: BrowserAwaitGrabSelectionArgs): Promise<BrowserGrabResult> => {
+      if (!isTrustedBrowserRenderer(event.sender)) {
+        return { opId: args.opId, kind: 'error', reason: 'Not authorized' }
+      }
+      const guest = browserManager.getAuthorizedGuest(args.browserTabId, event.sender.id)
+      if (!guest) {
+        return { opId: args.opId, kind: 'error', reason: 'Guest not ready' }
+      }
+      // Why: no hasActiveGrabOp guard here — awaitGrabSelection already handles
+      // the conflict by cancelling the previous op. Blocking at the IPC layer
+      // would create a race window where rearm() fails if the previous IPC call
+      // hasn't fully resolved yet.
+      return browserManager.awaitGrabSelection(args.browserTabId, args.opId, guest)
+    }
+  )
+
+  ipcMain.handle('browser:cancelGrab', (event, args: BrowserCancelGrabArgs): boolean => {
+    if (!isTrustedBrowserRenderer(event.sender)) {
+      return false
+    }
+    // Why: verify the sender actually owns this tab, consistent with the
+    // authorization check in setGrabMode/awaitGrabSelection/captureScreenshot.
+    const guest = browserManager.getAuthorizedGuest(args.browserTabId, event.sender.id)
+    if (!guest) {
+      return false
+    }
+    browserManager.cancelGrabOp(args.browserTabId, 'user')
+    return true
+  })
+
+  ipcMain.handle(
+    'browser:captureSelectionScreenshot',
+    async (
+      event,
+      args: BrowserCaptureSelectionScreenshotArgs
+    ): Promise<BrowserCaptureSelectionScreenshotResult> => {
+      if (!isTrustedBrowserRenderer(event.sender)) {
+        return { ok: false, reason: 'Not authorized' }
+      }
+      const guest = browserManager.getAuthorizedGuest(args.browserTabId, event.sender.id)
+      if (!guest) {
+        return { ok: false, reason: 'Guest not ready' }
+      }
+      const screenshot = await browserManager.captureSelectionScreenshot(
+        args.browserTabId,
+        args.rect,
+        guest
+      )
+      if (!screenshot) {
+        return { ok: false, reason: 'Screenshot capture failed' }
+      }
+      return { ok: true, screenshot }
+    }
+  )
+
+  ipcMain.handle(
+    'browser:extractHoverPayload',
+    async (event, args: BrowserExtractHoverArgs): Promise<BrowserExtractHoverResult> => {
+      if (!isTrustedBrowserRenderer(event.sender)) {
+        return { ok: false, reason: 'Not authorized' }
+      }
+      const guest = browserManager.getAuthorizedGuest(args.browserTabId, event.sender.id)
+      if (!guest) {
+        return { ok: false, reason: 'Guest not ready' }
+      }
+      const payload = await browserManager.extractHoverPayload(args.browserTabId, guest)
+      if (!payload) {
+        return { ok: false, reason: 'No element hovered' }
+      }
+      return { ok: true, payload }
+    }
+  )
 }

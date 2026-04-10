@@ -26,6 +26,17 @@ import type {
   WorktreeSetupLaunch,
   WorkspaceSessionState
 } from '../../shared/types'
+import type {
+  BrowserSetGrabModeArgs,
+  BrowserSetGrabModeResult,
+  BrowserAwaitGrabSelectionArgs,
+  BrowserGrabResult,
+  BrowserCancelGrabArgs,
+  BrowserCaptureSelectionScreenshotArgs,
+  BrowserCaptureSelectionScreenshotResult,
+  BrowserExtractHoverArgs,
+  BrowserExtractHoverResult
+} from '../../shared/browser-grab-types'
 import type { CliInstallStatus } from '../../shared/cli-install-types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../../shared/runtime-types'
 import type {
@@ -56,6 +67,13 @@ export type BrowserApi = {
   onGuestLoadFailed: (
     callback: (args: { browserTabId: string; loadError: BrowserLoadError }) => void
   ) => () => void
+  setGrabMode: (args: BrowserSetGrabModeArgs) => Promise<BrowserSetGrabModeResult>
+  awaitGrabSelection: (args: BrowserAwaitGrabSelectionArgs) => Promise<BrowserGrabResult>
+  cancelGrab: (args: BrowserCancelGrabArgs) => Promise<boolean>
+  captureSelectionScreenshot: (
+    args: BrowserCaptureSelectionScreenshotArgs
+  ) => Promise<BrowserCaptureSelectionScreenshotResult>
+  extractHoverPayload: (args: BrowserExtractHoverArgs) => Promise<BrowserExtractHoverResult>
 }
 
 export type PreflightStatus = {
@@ -322,6 +340,7 @@ export type PreloadApi = {
     onTerminalZoom: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void
     readClipboardText: () => Promise<string>
     writeClipboardText: (text: string) => Promise<void>
+    writeClipboardImage: (dataUrl: string) => Promise<void>
     onFileDrop: (
       callback: (data: { path: string; target: 'editor' | 'terminal' }) => void
     ) => () => void

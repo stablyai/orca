@@ -1,13 +1,221 @@
+/* eslint-disable max-lines -- Why: BrowserManager is the single owner of guest
+lifecycle, context menus, and grab operations. Splitting these into separate
+modules would scatter the guest authorization and tab-lookup logic that must
+stay consistent when new privileged operations are added. */
 import { clipboard, Menu, shell, webContents } from 'electron'
 import {
   normalizeBrowserNavigationUrl,
   normalizeExternalBrowserUrl
 } from '../../shared/browser-url'
+import type {
+  BrowserGrabCancelReason,
+  BrowserGrabPayload,
+  BrowserGrabRect,
+  BrowserGrabResult,
+  BrowserGrabScreenshot
+} from '../../shared/browser-grab-types'
+import {
+  GRAB_BUDGET,
+  GRAB_SAFE_ATTRIBUTE_NAMES,
+  GRAB_SECRET_PATTERNS
+} from '../../shared/browser-grab-types'
+import { buildGuestOverlayScript } from './grab-guest-script'
 
 export type BrowserGuestRegistration = {
   browserTabId: string
   webContentsId: number
   rendererWebContentsId: number
+}
+
+/** Tracks the lifecycle of a single grab operation on one browser tab. */
+type ActiveGrabOp = {
+  opId: string
+  browserTabId: string
+  guestWebContentsId: number
+  resolve: (result: BrowserGrabResult) => void
+  /** Cleanup listeners and optionally inject teardown.
+   *  @param preserveOverlay When true, skip teardown injection so the guest
+   *  overlay stays visible (used when a selection succeeds and the copy menu
+   *  is shown). */
+  cleanup: (preserveOverlay?: boolean) => void
+  /** When true, cleanup skips the teardown injection. Set by awaitGrabSelection
+   *  when replacing an existing op so the freshly-armed overlay is preserved. */
+  skipTeardown?: boolean
+}
+
+/** Hard timeout for an armed grab operation to prevent indefinite hangs. */
+const GRAB_OP_TIMEOUT_MS = 120_000
+
+/**
+ * Re-validate and clamp all string, array, and budget fields in a grab payload
+ * before forwarding to the renderer. This is the main-side safety net: even if
+ * the guest runtime is compromised, the payload that reaches renderer chrome
+ * respects the documented budgets.
+ *
+ * Returns null if the payload is structurally invalid (missing required fields).
+ */
+function clampGrabPayload(raw: unknown): BrowserGrabPayload | null {
+  // Why: the guest payload is completely untrusted. A compromised or
+  // malfunctioning guest could return anything. Validate structural shape
+  // before accessing nested properties to avoid unhandled TypeErrors.
+  if (!raw || typeof raw !== 'object') {
+    return null
+  }
+  const obj = raw as Record<string, unknown>
+  if (!obj.page || typeof obj.page !== 'object') {
+    return null
+  }
+  if (!obj.target || typeof obj.target !== 'object') {
+    return null
+  }
+
+  const page = obj.page as Record<string, unknown>
+  const target = obj.target as Record<string, unknown>
+
+  const clampStr = (s: unknown, max: number): string => {
+    const str = typeof s === 'string' ? s : ''
+    if (str.length <= max) {
+      return str
+    }
+    return `${str.slice(0, max)} (truncated)`
+  }
+
+  const clampArray = (arr: unknown, maxEntries: number, maxEntryLength: number): string[] => {
+    const items = Array.isArray(arr) ? arr : []
+    return items.slice(0, maxEntries).map((item) => clampStr(item, maxEntryLength))
+  }
+
+  const safeStr = (s: unknown, max = 500): string => clampStr(s, max)
+
+  const safeNum = (n: unknown, fallback = 0): number =>
+    typeof n === 'number' && Number.isFinite(n) ? n : fallback
+
+  // Why: mirror the guest-side secret detection on the main side so a
+  // compromised guest cannot smuggle secret-bearing values through attributes
+  // or URLs. This is the defense-in-depth layer.
+  const containsSecret = (val: string): boolean => {
+    const lower = val.toLowerCase()
+    return GRAB_SECRET_PATTERNS.some((p) => lower.includes(p))
+  }
+
+  // Why: mirror the guest-side URL sanitization. Strip query strings and
+  // fragments to prevent token leakage even if the guest is compromised.
+  const sanitizeUrl = (raw: unknown): string => {
+    const str = typeof raw === 'string' ? raw : ''
+    if (!str) {
+      return ''
+    }
+    try {
+      const u = new URL(str)
+      u.search = ''
+      u.hash = ''
+      return u.toString()
+    } catch {
+      // Why: returning the raw string on parse failure could preserve
+      // javascript: URIs or other non-http schemes. Return empty.
+      return ''
+    }
+  }
+
+  // Why: re-filter attributes on the main side so a compromised guest cannot
+  // smuggle unsafe attribute names (e.g., event handlers) or secret-bearing
+  // values into the payload that reaches the renderer.
+  const safeAttributes = (attrs: unknown): Record<string, string> => {
+    if (!attrs || typeof attrs !== 'object') {
+      return {}
+    }
+    const filtered: Record<string, string> = {}
+    for (const [key, value] of Object.entries(attrs as Record<string, unknown>)) {
+      const name = key.toLowerCase()
+      const isAria = name.startsWith('aria-')
+      const isSafe = GRAB_SAFE_ATTRIBUTE_NAMES.has(name)
+      if (!isAria && !isSafe) {
+        continue
+      }
+      const strValue = safeStr(value, 2000)
+      if (containsSecret(strValue)) {
+        filtered[name] = '[redacted]'
+      } else if ((name === 'href' || name === 'src' || name === 'action') && strValue) {
+        filtered[name] = sanitizeUrl(strValue)
+      } else if (name === 'class') {
+        filtered[name] = safeStr(value, 200)
+      } else {
+        filtered[name] = safeStr(value, 500)
+      }
+    }
+    return filtered
+  }
+
+  const safeRect = (r: unknown): BrowserGrabRect => {
+    if (!r || typeof r !== 'object') {
+      return { x: 0, y: 0, width: 0, height: 0 }
+    }
+    const rect = r as Record<string, unknown>
+    return {
+      x: safeNum(rect.x),
+      y: safeNum(rect.y),
+      width: safeNum(rect.width),
+      height: safeNum(rect.height)
+    }
+  }
+
+  const accessibility = target.accessibility as Record<string, unknown> | null | undefined
+  const computedStyles = target.computedStyles as Record<string, unknown> | null | undefined
+
+  return {
+    page: {
+      // Why: re-sanitize the URL main-side so a compromised guest cannot
+      // pass through query strings containing tokens or secrets.
+      sanitizedUrl: sanitizeUrl(page.sanitizedUrl),
+      title: safeStr(page.title, 500),
+      viewportWidth: safeNum(page.viewportWidth),
+      viewportHeight: safeNum(page.viewportHeight),
+      scrollX: safeNum(page.scrollX),
+      scrollY: safeNum(page.scrollY),
+      devicePixelRatio: safeNum(page.devicePixelRatio, 1),
+      capturedAt: safeStr(page.capturedAt, 100)
+    },
+    target: {
+      tagName: safeStr(target.tagName, 50),
+      selector: safeStr(target.selector, 500),
+      textSnippet: clampStr(target.textSnippet, GRAB_BUDGET.textSnippetMaxLength),
+      htmlSnippet: clampStr(target.htmlSnippet, GRAB_BUDGET.htmlSnippetMaxLength),
+      attributes: safeAttributes(target.attributes),
+      accessibility: {
+        role: safeStr(accessibility?.role) || null,
+        accessibleName: safeStr(accessibility?.accessibleName) || null,
+        ariaLabel: safeStr(accessibility?.ariaLabel) || null,
+        ariaLabelledBy: safeStr(accessibility?.ariaLabelledBy) || null
+      },
+      rectViewport: safeRect(target.rectViewport),
+      rectPage: safeRect(target.rectPage),
+      computedStyles: {
+        display: safeStr(computedStyles?.display),
+        position: safeStr(computedStyles?.position),
+        width: safeStr(computedStyles?.width),
+        height: safeStr(computedStyles?.height),
+        margin: safeStr(computedStyles?.margin),
+        padding: safeStr(computedStyles?.padding),
+        color: safeStr(computedStyles?.color),
+        backgroundColor: safeStr(computedStyles?.backgroundColor),
+        border: safeStr(computedStyles?.border),
+        borderRadius: safeStr(computedStyles?.borderRadius),
+        fontFamily: safeStr(computedStyles?.fontFamily),
+        fontSize: safeStr(computedStyles?.fontSize),
+        fontWeight: safeStr(computedStyles?.fontWeight),
+        lineHeight: safeStr(computedStyles?.lineHeight),
+        textAlign: safeStr(computedStyles?.textAlign),
+        zIndex: safeStr(computedStyles?.zIndex)
+      }
+    },
+    nearbyText: clampArray(
+      obj.nearbyText,
+      GRAB_BUDGET.nearbyTextMaxEntries,
+      GRAB_BUDGET.nearbyTextEntryMaxLength
+    ),
+    ancestorPath: clampArray(obj.ancestorPath, GRAB_BUDGET.ancestorPathMaxEntries, 200),
+    screenshot: null
+  }
 }
 
 class BrowserManager {
@@ -19,6 +227,7 @@ class BrowserManager {
     number,
     { code: number; description: string; validatedUrl: string }
   >()
+  private readonly activeGrabOps = new Map<string, ActiveGrabOp>()
 
   private openValidatedExternal(rawUrl: string): void {
     const externalUrl = normalizeExternalBrowserUrl(rawUrl)
@@ -112,6 +321,11 @@ class BrowserManager {
   }
 
   unregisterGuest(browserTabId: string): void {
+    // Why: unregistering a guest while a grab is active means the guest is
+    // being torn down. Cancel the grab so the renderer gets a clean signal
+    // instead of a dangling Promise.
+    this.cancelGrabOp(browserTabId, 'evicted')
+
     const cleanup = this.contextMenuCleanupByTabId.get(browserTabId)
     if (cleanup) {
       cleanup()
@@ -122,6 +336,10 @@ class BrowserManager {
   }
 
   unregisterAll(): void {
+    // Cancel all active grab ops before tearing down registrations
+    for (const browserTabId of this.activeGrabOps.keys()) {
+      this.cancelGrabOp(browserTabId, 'evicted')
+    }
     for (const browserTabId of this.webContentsIdByTabId.keys()) {
       this.unregisterGuest(browserTabId)
     }
@@ -148,6 +366,319 @@ class BrowserManager {
     }
     guest.openDevTools({ mode: 'detach' })
     return true
+  }
+
+  // ---------------------------------------------------------------------------
+  // Browser Context Grab — main-owned operations
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Validates that a caller (identified by sender webContentsId) owns the
+   * given browserTabId. Returns the guest WebContents or null.
+   */
+  getAuthorizedGuest(
+    browserTabId: string,
+    senderWebContentsId: number
+  ): Electron.WebContents | null {
+    const registeredRenderer = this.rendererWebContentsIdByTabId.get(browserTabId)
+    if (registeredRenderer == null || registeredRenderer !== senderWebContentsId) {
+      return null
+    }
+    const guestId = this.webContentsIdByTabId.get(browserTabId)
+    if (guestId == null) {
+      return null
+    }
+    const guest = webContents.fromId(guestId)
+    if (!guest || guest.isDestroyed()) {
+      this.webContentsIdByTabId.delete(browserTabId)
+      return null
+    }
+    return guest
+  }
+
+  /** Returns true if a grab operation is currently active for this tab. */
+  hasActiveGrabOp(browserTabId: string): boolean {
+    return this.activeGrabOps.has(browserTabId)
+  }
+
+  /**
+   * Enable or disable grab mode for a browser tab. When enabled, injects the
+   * overlay runtime into the guest. When disabled, cancels any active grab op.
+   */
+  async setGrabMode(
+    browserTabId: string,
+    enabled: boolean,
+    guest: Electron.WebContents
+  ): Promise<boolean> {
+    if (!enabled) {
+      this.cancelGrabOp(browserTabId, 'user')
+      return true
+    }
+    // Why: injecting the overlay runtime eagerly on arm lets the hover UI
+    // appear instantly when the user starts moving the pointer, rather than
+    // adding a visible delay between "click Grab" and "overlay appears".
+    // The runtime is idempotent — re-injection on the same page is safe.
+    try {
+      await guest.executeJavaScript(buildGuestOverlayScript('arm'))
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /**
+   * Await a single grab selection on the given tab. Returns a Promise that
+   * resolves exactly once when the user clicks, cancels, or an error occurs.
+   *
+   * Why the click is handled in-guest rather than via main-side interception:
+   * Electron's `before-input-event` only fires for keyboard events, not mouse
+   * events on guest webContents. The design doc anticipated a main-owned
+   * interceptor, but the spike showed this API gap. The fallback (documented
+   * in the design doc) is to let the guest overlay's full-viewport hit-catcher
+   * consume the click. The overlay calls `stopPropagation()` and
+   * `preventDefault()` so the page underneath does not receive the event.
+   * This is not a perfect guarantee (capture-phase listeners on window may
+   * still fire), but it covers the vast majority of sites.
+   */
+  awaitGrabSelection(
+    browserTabId: string,
+    opId: string,
+    guest: Electron.WebContents
+  ): Promise<BrowserGrabResult> {
+    // Why: only one active grab operation per tab prevents race conditions
+    // where a late click from a previous operation resolves the wrong Promise.
+    const existing = this.activeGrabOps.get(browserTabId)
+    if (existing) {
+      // Why: skip teardown injection when replacing an op. The new op will
+      // reuse the already-armed overlay. If we injected teardown here, it
+      // would race with the new awaitClick script in the guest's JS queue
+      // and destroy the overlay before the click handler is installed.
+      existing.skipTeardown = true
+      existing.resolve({ opId: existing.opId, kind: 'cancelled', reason: 'user' })
+    }
+
+    return new Promise<BrowserGrabResult>((resolve) => {
+      const guestWebContentsId = guest.id
+      let settled = false
+
+      const settleOnce = (result: BrowserGrabResult): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        clearTimeout(timeoutId)
+        // Why: when the user successfully selects an element, keep the guest
+        // overlay visible so the highlight box persists while the renderer
+        // shows the copy menu. Teardown happens later when the renderer calls
+        // setGrabMode(false) or re-arms with a fresh armAndAwait cycle.
+        op.cleanup(result.kind === 'selected')
+        this.activeGrabOps.delete(browserTabId)
+        resolve(result)
+      }
+
+      // Why: the guest overlay runtime handles the click in-page and calls
+      // __orcaGrabResolve() which is wired by the 'awaitClick' script to
+      // resolve the executeJavaScript Promise with the extracted payload.
+      // Main just needs to run that script and await its result.
+      const awaitGuestClick = async (): Promise<void> => {
+        try {
+          const rawPayload = await guest.executeJavaScript(buildGuestOverlayScript('awaitClick'))
+          if (!rawPayload || typeof rawPayload !== 'object') {
+            settleOnce({ opId, kind: 'cancelled', reason: 'user' })
+            return
+          }
+          const payload = clampGrabPayload(rawPayload)
+          if (!payload) {
+            settleOnce({ opId, kind: 'error', reason: 'Guest returned invalid payload structure' })
+            return
+          }
+          settleOnce({ opId, kind: 'selected', payload })
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Selection failed'
+          // Distinguish cancellation from errors
+          if (message.includes('cancelled')) {
+            settleOnce({ opId, kind: 'cancelled', reason: 'user' })
+          } else {
+            settleOnce({ opId, kind: 'error', reason: message })
+          }
+        }
+      }
+
+      // --- Auto-cancel on top-level navigation ---
+      // Why: only cancel on main-frame navigations. Subframe navigations
+      // (e.g., iframe ads loading) should not spuriously cancel the grab.
+      const handleNavigation = (
+        _event: unknown,
+        _url: unknown,
+        _isInPlace: unknown,
+        isMainFrame: boolean
+      ): void => {
+        if (isMainFrame) {
+          settleOnce({ opId, kind: 'cancelled', reason: 'navigation' })
+        }
+      }
+
+      // --- Auto-cancel on guest destruction ---
+      const handleDestroyed = (): void => {
+        settleOnce({ opId, kind: 'cancelled', reason: 'evicted' })
+      }
+
+      // --- Hard timeout ---
+      const timeoutId = setTimeout(() => {
+        settleOnce({ opId, kind: 'cancelled', reason: 'timeout' })
+      }, GRAB_OP_TIMEOUT_MS)
+
+      // Install listeners
+      guest.on('did-start-navigation', handleNavigation)
+      guest.on('destroyed', handleDestroyed)
+
+      const cleanup = (preserveOverlay?: boolean): void => {
+        try {
+          guest.off('did-start-navigation', handleNavigation)
+          guest.off('destroyed', handleDestroyed)
+        } catch {
+          // Why: the guest may already be destroyed during teardown.
+          // Cleanup is best-effort.
+        }
+        // Why: skip teardown injection when (a) the op is being replaced by a
+        // new op (skipTeardown), or (b) the selection succeeded and the overlay
+        // should stay visible while the copy menu is shown (preserveOverlay).
+        if (op.skipTeardown || preserveOverlay) {
+          return
+        }
+        // Tell the guest to remove the overlay
+        try {
+          if (!guest.isDestroyed()) {
+            void guest.executeJavaScript(buildGuestOverlayScript('teardown'))
+          }
+        } catch {
+          // Best-effort overlay removal
+        }
+      }
+
+      const op: ActiveGrabOp = {
+        opId,
+        browserTabId,
+        guestWebContentsId,
+        resolve: settleOnce,
+        cleanup
+      }
+      this.activeGrabOps.set(browserTabId, op)
+
+      // Start awaiting the click in the guest
+      void awaitGuestClick()
+    })
+  }
+
+  /**
+   * Cancel an active grab operation for the given tab.
+   */
+  cancelGrabOp(browserTabId: string, reason: BrowserGrabCancelReason): void {
+    const op = this.activeGrabOps.get(browserTabId)
+    if (!op) {
+      return
+    }
+    // Why: settleOnce (op.resolve) already calls op.cleanup() and deletes the
+    // map entry. Calling them again here would double-inject the teardown script.
+    op.resolve({ opId: op.opId, kind: 'cancelled', reason })
+  }
+
+  /**
+   * Capture a screenshot of the guest surface and optionally crop it to
+   * the given CSS-pixel rect.
+   */
+  async captureSelectionScreenshot(
+    _browserTabId: string,
+    rect: BrowserGrabRect,
+    guest: Electron.WebContents
+  ): Promise<BrowserGrabScreenshot | null> {
+    try {
+      // Why: the rect comes from the renderer via IPC. Validate that all fields
+      // are finite numbers before using them in arithmetic, so NaN cannot reach
+      // Electron's image.crop() and cause undefined behavior.
+      const safeN = (n: unknown, fallback = 0): number =>
+        typeof n === 'number' && Number.isFinite(n) ? n : fallback
+      const safeRect = {
+        x: safeN(rect.x),
+        y: safeN(rect.y),
+        width: safeN(rect.width),
+        height: safeN(rect.height)
+      }
+
+      const image = await guest.capturePage()
+      if (image.isEmpty()) {
+        return null
+      }
+
+      const bitmapSize = image.getSize()
+      // Why: capturePage returns a bitmap in physical pixels. The grab rect is
+      // in CSS pixels. To map between them we need the combined scale factor
+      // (zoomFactor * deviceScaleFactor). Rather than using the primary display
+      // (which is wrong on multi-monitor setups with mixed DPI), we derive the
+      // scale factor empirically: ask the guest for its CSS viewport width, then
+      // compute scaleFactor = bitmapWidth / viewportCSSWidth. This is correct
+      // regardless of which display the window is on.
+      const viewportCSSWidth: number = await guest.executeJavaScript('window.innerWidth')
+      if (!viewportCSSWidth || viewportCSSWidth <= 0) {
+        return null
+      }
+      const scaleFactor = bitmapSize.width / viewportCSSWidth
+
+      // Map CSS-pixel rect to bitmap coordinates
+      const cropX = Math.max(0, Math.round(safeRect.x * scaleFactor))
+      const cropY = Math.max(0, Math.round(safeRect.y * scaleFactor))
+      const cropW = Math.min(bitmapSize.width - cropX, Math.round(safeRect.width * scaleFactor))
+      const cropH = Math.min(bitmapSize.height - cropY, Math.round(safeRect.height * scaleFactor))
+
+      if (cropW <= 0 || cropH <= 0) {
+        return null
+      }
+
+      const cropped = image.crop({ x: cropX, y: cropY, width: cropW, height: cropH })
+      const pngBuffer = cropped.toPNG()
+
+      // Enforce screenshot byte budget
+      if (pngBuffer.byteLength > GRAB_BUDGET.screenshotMaxBytes) {
+        // Why: downscaling would add complexity for v1. Fail closed to
+        // "no screenshot" rather than send an oversized payload.
+        return null
+      }
+
+      const dataUrl = `data:image/png;base64,${pngBuffer.toString('base64')}`
+      // Why: cropW/cropH are in physical pixels (bitmap coordinates) but the
+      // rest of the grab payload uses CSS pixels. Divide by scaleFactor so the
+      // screenshot dimensions are consistent with rectViewport/rectPage.
+      return {
+        mimeType: 'image/png',
+        dataUrl,
+        width: Math.round(cropW / scaleFactor),
+        height: Math.round(cropH / scaleFactor)
+      }
+    } catch {
+      // Why: screenshot capture can fail if the guest is being torn down
+      // or the compositor surface is not available. Fail closed.
+      return null
+    }
+  }
+
+  /**
+   * Extract the payload for the currently hovered element without disrupting
+   * the active grab overlay or awaitClick listener. Used by keyboard shortcuts
+   * that let the user copy content while hovering, before clicking.
+   */
+  async extractHoverPayload(
+    _browserTabId: string,
+    guest: Electron.WebContents
+  ): Promise<BrowserGrabPayload | null> {
+    try {
+      const rawPayload = await guest.executeJavaScript(buildGuestOverlayScript('extractHover'))
+      if (!rawPayload || typeof rawPayload !== 'object') {
+        return null
+      }
+      return clampGrabPayload(rawPayload)
+    } catch {
+      return null
+    }
   }
 
   private setupContextMenu(browserTabId: string, guest: Electron.WebContents): void {

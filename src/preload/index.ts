@@ -330,7 +330,30 @@ const api = {
       ) => callback(data)
       ipcRenderer.on('browser:guest-load-failed', listener)
       return () => ipcRenderer.removeListener('browser:guest-load-failed', listener)
-    }
+    },
+
+    setGrabMode: (args: {
+      browserTabId: string
+      enabled: boolean
+    }): Promise<{ ok: true } | { ok: false; reason: string }> =>
+      ipcRenderer.invoke('browser:setGrabMode', args),
+
+    awaitGrabSelection: (args: { browserTabId: string; opId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('browser:awaitGrabSelection', args),
+
+    cancelGrab: (args: { browserTabId: string }): Promise<boolean> =>
+      ipcRenderer.invoke('browser:cancelGrab', args),
+
+    captureSelectionScreenshot: (args: {
+      browserTabId: string
+      rect: { x: number; y: number; width: number; height: number }
+    }): Promise<{ ok: true; screenshot: unknown } | { ok: false; reason: string }> =>
+      ipcRenderer.invoke('browser:captureSelectionScreenshot', args),
+
+    extractHoverPayload: (args: {
+      browserTabId: string
+    }): Promise<{ ok: true; payload: unknown } | { ok: false; reason: string }> =>
+      ipcRenderer.invoke('browser:extractHoverPayload', args)
   },
 
   hooks: {
@@ -546,6 +569,8 @@ const api = {
     readClipboardText: (): Promise<string> => ipcRenderer.invoke('clipboard:readText'),
     writeClipboardText: (text: string): Promise<void> =>
       ipcRenderer.invoke('clipboard:writeText', text),
+    writeClipboardImage: (dataUrl: string): Promise<void> =>
+      ipcRenderer.invoke('clipboard:writeImage', dataUrl),
     onFileDrop: (
       callback: (data: { path: string; target: 'editor' | 'terminal' }) => void
     ): (() => void) => {

@@ -1,4 +1,4 @@
-import { app, clipboard, ipcMain, session } from 'electron'
+import { app, clipboard, ipcMain, nativeImage, session } from 'electron'
 import type { BrowserWindow } from 'electron'
 import type { Store } from '../persistence'
 import type { CreateWorktreeResult } from '../../shared/types'
@@ -127,9 +127,23 @@ function registerFileDropRelay(mainWindow: BrowserWindow): void {
 export function registerClipboardHandlers(): void {
   ipcMain.removeHandler('clipboard:readText')
   ipcMain.removeHandler('clipboard:writeText')
+  ipcMain.removeHandler('clipboard:writeImage')
 
   ipcMain.handle('clipboard:readText', () => clipboard.readText())
   ipcMain.handle('clipboard:writeText', (_event, text: string) => clipboard.writeText(text))
+  ipcMain.handle('clipboard:writeImage', (_event, dataUrl: string) => {
+    // Why: only accept validated PNG data URIs to prevent writing arbitrary
+    // data to the clipboard. The renderer already validates the prefix, but
+    // defense-in-depth applies here too.
+    if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/png;base64,')) {
+      return
+    }
+    const image = nativeImage.createFromDataURL(dataUrl)
+    if (image.isEmpty()) {
+      return
+    }
+    clipboard.writeImage(image)
+  })
 }
 
 export function registerUpdaterHandlers(_store: Store): void {
