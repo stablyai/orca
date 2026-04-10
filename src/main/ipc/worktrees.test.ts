@@ -18,7 +18,8 @@ const {
   hasHooksFileMock,
   loadHooksMock,
   computeWorktreePathMock,
-  ensurePathWithinWorkspaceMock
+  ensurePathWithinWorkspaceMock,
+  gitExecFileAsyncMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   removeHandlerMock: vi.fn(),
@@ -36,7 +37,8 @@ const {
   hasHooksFileMock: vi.fn(),
   loadHooksMock: vi.fn(),
   computeWorktreePathMock: vi.fn(),
-  ensurePathWithinWorkspaceMock: vi.fn()
+  ensurePathWithinWorkspaceMock: vi.fn(),
+  gitExecFileAsyncMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -50,6 +52,11 @@ vi.mock('../git/worktree', () => ({
   listWorktrees: listWorktreesMock,
   addWorktree: addWorktreeMock,
   removeWorktree: removeWorktreeMock
+}))
+
+vi.mock('../git/runner', () => ({
+  gitExecFileAsync: gitExecFileAsyncMock,
+  gitExecFileSync: vi.fn()
 }))
 
 vi.mock('../git/repo', () => ({
@@ -120,6 +127,7 @@ describe('registerWorktreeHandlers', () => {
       loadHooksMock,
       computeWorktreePathMock,
       ensurePathWithinWorkspaceMock,
+      gitExecFileAsyncMock,
       mainWindow.webContents.send,
       store.getRepos,
       store.getRepo,
@@ -345,6 +353,28 @@ describe('registerWorktreeHandlers', () => {
         branch: 'improve-dashboard'
       })
     })
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('worktrees:changed', {
+      repoId: 'repo-1'
+    })
+  })
+
+  it('prunes git worktree tracking when removing an orphaned worktree', async () => {
+    const orphanError = Object.assign(new Error('git worktree remove failed'), {
+      stderr: "fatal: '/workspace/feature-wt' is not a working tree"
+    })
+    removeWorktreeMock.mockRejectedValue(orphanError)
+    getEffectiveHooksMock.mockReturnValue(null)
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
+
+    await handlers['worktrees:remove'](null, {
+      worktreeId: 'repo-1::/workspace/feature-wt'
+    })
+
+    // Should have called git worktree prune to clean up stale tracking
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'prune'], {
+      cwd: '/workspace/repo'
+    })
+    expect(store.removeWorktreeMeta).toHaveBeenCalledWith('repo-1::/workspace/feature-wt')
     expect(mainWindow.webContents.send).toHaveBeenCalledWith('worktrees:changed', {
       repoId: 'repo-1'
     })

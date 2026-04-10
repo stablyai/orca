@@ -12,7 +12,7 @@ import type {
 import { getPRForBranch } from '../github/client'
 import { listWorktrees, addWorktree, removeWorktree } from '../git/worktree'
 import { getGitUsername, getDefaultBaseRef, getBranchConflictKind } from '../git/repo'
-import { gitExecFileSync } from '../git/runner'
+import { gitExecFileAsync, gitExecFileSync } from '../git/runner'
 import { isWslPath, parseWslPath, getWslHome } from '../wsl'
 import { join } from 'path'
 import { listRepoWorktrees } from '../repo-worktrees'
@@ -242,6 +242,11 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
         if (isOrphanedWorktreeError(error)) {
           console.warn(`[worktrees] Orphaned worktree detected at ${worktreePath}, cleaning up`)
           await rm(worktreePath, { recursive: true, force: true }).catch(() => {})
+          // Why: `git worktree remove` failed, so git's internal worktree tracking
+          // (`.git/worktrees/<name>`) is still intact. Without pruning, `git worktree
+          // list` continues to show the stale entry and the branch it had checked out
+          // remains locked — other worktrees cannot check it out.
+          await gitExecFileAsync(['worktree', 'prune'], { cwd: repo.path }).catch(() => {})
           store.removeWorktreeMeta(args.worktreeId)
           await rebuildAuthorizedRootsCache(store)
           notifyWorktreesChanged(mainWindow, repoId)
