@@ -186,15 +186,22 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   },
 
   updateWorktreeMeta: async (worktreeId, updates) => {
+    // Why: editing a comment is meaningful interaction with the worktree.
+    // Without refreshing lastActivityAt, the time-decay score has decayed
+    // since the previous sort, so a re-sort causes the worktree to drop in
+    // ranking even though the user just touched it. Bumping the timestamp
+    // keeps the recency signal fresh so the worktree holds its position.
+    const enriched = 'comment' in updates ? { ...updates, lastActivityAt: Date.now() } : updates
+
     set((s) => {
-      const nextWorktrees = applyWorktreeUpdates(s.worktreesByRepo, worktreeId, updates)
+      const nextWorktrees = applyWorktreeUpdates(s.worktreesByRepo, worktreeId, enriched)
       return nextWorktrees === s.worktreesByRepo
         ? {}
         : { worktreesByRepo: nextWorktrees, sortEpoch: s.sortEpoch + 1 }
     })
 
     try {
-      await window.api.worktrees.updateMeta({ worktreeId, updates })
+      await window.api.worktrees.updateMeta({ worktreeId, updates: enriched })
     } catch (err) {
       console.error('Failed to update worktree meta:', err)
       void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
