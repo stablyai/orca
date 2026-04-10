@@ -1,9 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
-const SIDEBAR_TOGGLE_ANIMATION_MS = 200
-
-export type SidebarContentAnimationState = 'opening' | 'open' | 'closing' | 'closed'
-
 type UseSidebarResizeOptions = {
   isOpen: boolean
   width: number
@@ -18,8 +14,6 @@ type UseSidebarResizeResult<T extends HTMLElement> = {
   containerRef: React.RefObject<T | null>
   isResizing: boolean
   onResizeStart: (event: React.MouseEvent) => void
-  renderedOpen: boolean
-  contentAnimationState: SidebarContentAnimationState
 }
 
 export function clampSidebarResizeWidth(width: number, minWidth: number, maxWidth: number): number {
@@ -31,28 +25,7 @@ export function getRenderedSidebarWidthCssValue(
   width: number,
   renderedExtraWidth: number
 ): string {
-  return `${getRenderedSidebarWidthPx(isOpen, width, renderedExtraWidth)}px`
-}
-
-export function getRenderedSidebarWidthPx(
-  isOpen: boolean,
-  width: number,
-  renderedExtraWidth: number
-): number {
-  return isOpen ? width + renderedExtraWidth : 0
-}
-
-export function interpolateSidebarAnimationWidth(
-  startWidth: number,
-  endWidth: number,
-  progress: number
-): number {
-  const clampedProgress = Math.min(1, Math.max(0, progress))
-  const easedProgress =
-    clampedProgress < 0.5
-      ? 4 * clampedProgress * clampedProgress * clampedProgress
-      : 1 - Math.pow(-2 * clampedProgress + 2, 3) / 2
-  return startWidth + (endWidth - startWidth) * easedProgress
+  return isOpen ? `${width + renderedExtraWidth}px` : '0px'
 }
 
 export function getNextSidebarResizeWidth({
@@ -89,13 +62,7 @@ export function useSidebarResize<T extends HTMLElement>({
   const startWidthRef = useRef(width)
   const draftWidthRef = useRef(width)
   const frameRef = useRef<number | null>(null)
-  const closeTimerRef = useRef<number | null>(null)
-  const openFrameRef = useRef<number | null>(null)
   const [isResizing, setIsResizing] = useState(false)
-  const [renderedOpen, setRenderedOpen] = useState(isOpen)
-  const [contentAnimationState, setContentAnimationState] = useState<SidebarContentAnimationState>(
-    isOpen ? 'open' : 'closed'
-  )
 
   const resetDocumentStyles = useCallback(() => {
     document.body.style.cursor = ''
@@ -103,7 +70,7 @@ export function useSidebarResize<T extends HTMLElement>({
   }, [])
 
   const applyRenderedWidth = useCallback(
-    (nextWidth: number, nextIsOpen: boolean = renderedOpen) => {
+    (nextWidth: number) => {
       const container = containerRef.current
       if (!container) {
         return
@@ -113,13 +80,9 @@ export function useSidebarResize<T extends HTMLElement>({
       // React props. Any unrelated rerender during a drag would otherwise
       // snap the DOM width back to the last persisted store value and make the
       // handle feel like it is lagging behind the pointer.
-      container.style.width = getRenderedSidebarWidthCssValue(
-        nextIsOpen,
-        nextWidth,
-        renderedExtraWidth
-      )
+      container.style.width = getRenderedSidebarWidthCssValue(isOpen, nextWidth, renderedExtraWidth)
     },
-    [renderedOpen, renderedExtraWidth]
+    [isOpen, renderedExtraWidth]
   )
 
   useLayoutEffect(() => {
@@ -130,52 +93,6 @@ export function useSidebarResize<T extends HTMLElement>({
     draftWidthRef.current = width
     applyRenderedWidth(width)
   }, [applyRenderedWidth, width])
-
-  useEffect(() => {
-    if (closeTimerRef.current !== null) {
-      window.clearTimeout(closeTimerRef.current)
-      closeTimerRef.current = null
-    }
-    if (openFrameRef.current !== null) {
-      cancelAnimationFrame(openFrameRef.current)
-      openFrameRef.current = null
-    }
-
-    if (isOpen) {
-      setRenderedOpen(true)
-      setContentAnimationState((current) => (current === 'open' ? current : 'opening'))
-      // Why: opening reserves the layout width immediately so the terminal
-      // resizes once, then animates only the sidebar's inner content. This
-      // avoids the terminal blanking seen during continuous shell-width
-      // animation while still giving the sidebar a smooth visual transition.
-      openFrameRef.current = window.requestAnimationFrame(() => {
-        openFrameRef.current = null
-        setContentAnimationState('open')
-      })
-      return
-    }
-
-    setContentAnimationState((current) => (current === 'closed' ? current : 'closing'))
-    // Why: keep the sidebar's layout width alive during the exit animation so
-    // the user sees content slide/fade away first, then release the space at
-    // the end. The terminal only snaps once when the sidebar is fully gone.
-    closeTimerRef.current = window.setTimeout(() => {
-      closeTimerRef.current = null
-      setRenderedOpen(false)
-      setContentAnimationState('closed')
-    }, SIDEBAR_TOGGLE_ANIMATION_MS)
-
-    return () => {
-      if (closeTimerRef.current !== null) {
-        window.clearTimeout(closeTimerRef.current)
-        closeTimerRef.current = null
-      }
-      if (openFrameRef.current !== null) {
-        cancelAnimationFrame(openFrameRef.current)
-        openFrameRef.current = null
-      }
-    }
-  }, [isOpen])
 
   const stopResize = useCallback(() => {
     if (!isResizingRef.current) {
@@ -245,14 +162,6 @@ export function useSidebarResize<T extends HTMLElement>({
         frameRef.current = null
       }
 
-      if (closeTimerRef.current !== null) {
-        window.clearTimeout(closeTimerRef.current)
-        closeTimerRef.current = null
-      }
-      if (openFrameRef.current !== null) {
-        cancelAnimationFrame(openFrameRef.current)
-        openFrameRef.current = null
-      }
       isResizingRef.current = false
       resetDocumentStyles()
     }
@@ -272,5 +181,5 @@ export function useSidebarResize<T extends HTMLElement>({
     [width]
   )
 
-  return { containerRef, isResizing, onResizeStart, renderedOpen, contentAnimationState }
+  return { containerRef, isResizing, onResizeStart }
 }
