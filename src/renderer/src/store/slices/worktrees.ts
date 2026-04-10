@@ -309,11 +309,21 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         ? browserTabs.some((tab) => tab.id === restoredBrowserTabId)
         : false
 
-      // If restored file is gone, fall back to another open file for this worktree
+      // Why: restore the visible tab surface the user last had active in this
+      // worktree.  The 'terminal' case must be handled explicitly — without it,
+      // the fallback branches below see that a file is still open and promote
+      // the surface to 'editor', so the user always lands on a file tab instead
+      // of the terminal they were working in.
       let activeFileId: string | null
       let activeBrowserTabId: string | null
       let activeTabType: WorkspaceVisibleTabType
-      if (restoredTabType === 'browser' && browserTabStillOpen) {
+      if (restoredTabType === 'terminal') {
+        activeFileId = fileStillOpen ? restoredFileId : null
+        activeBrowserTabId = browserTabStillOpen
+          ? restoredBrowserTabId
+          : (browserTabs[0]?.id ?? null)
+        activeTabType = 'terminal'
+      } else if (restoredTabType === 'browser' && browserTabStillOpen) {
         activeFileId = fileStillOpen ? restoredFileId : null
         activeBrowserTabId = restoredBrowserTabId
         activeTabType = 'browser'

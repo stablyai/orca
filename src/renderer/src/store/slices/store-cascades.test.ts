@@ -472,4 +472,33 @@ describe('setActiveWorktree', () => {
     expect(s.activeTabTypeByWorktree[backgroundWt]).toBe('browser')
     expect(s.activeBrowserTabIdByWorktree[backgroundWt]).toBe(browserTab.id)
   })
+
+  it('restores terminal surface when switching to a worktree that was last on a terminal tab with open files', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const fileId = '/path/wt1/src/index.ts'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      activeWorktreeId: null,
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'terminal-1', worktreeId: wt })]
+      },
+      openFiles: [makeOpenFile({ id: fileId, worktreeId: wt, filePath: fileId })],
+      activeFileIdByWorktree: { [wt]: fileId },
+      // User was on the terminal, not the editor
+      activeTabTypeByWorktree: { [wt]: 'terminal' },
+      refreshGitHubForWorktree: vi.fn()
+    })
+
+    store.getState().setActiveWorktree(wt)
+
+    const s = store.getState()
+    expect(s.activeWorktreeId).toBe(wt)
+    expect(s.activeTabType).toBe('terminal')
+    // File ID should still be tracked for background state
+    expect(s.activeFileId).toBe(fileId)
+  })
 })
