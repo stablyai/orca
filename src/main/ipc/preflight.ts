@@ -13,6 +13,11 @@ export type PreflightStatus = {
 // The check only runs once per app session — relaunch to re-check.
 let cached: PreflightStatus | null = null
 
+/** @internal - tests need a clean preflight cache between cases. */
+export function _resetPreflightCache(): void {
+  cached = null
+}
+
 async function isCommandAvailable(command: string): Promise<boolean> {
   try {
     await execFileAsync(command, ['--version'])
@@ -24,20 +29,25 @@ async function isCommandAvailable(command: string): Promise<boolean> {
 
 async function isGhAuthenticated(): Promise<boolean> {
   try {
-    const { stdout } = await execFileAsync('gh', ['auth', 'status'], {
+    await execFileAsync('gh', ['auth', 'status'], {
       encoding: 'utf-8'
     })
-    return stdout.includes('Logged in')
+    // Why: for plain-text `gh auth status`, exit 0 means gh did not detect any
+    // authentication issues for the checked hosts/accounts.
+    return true
   } catch (error) {
-    // gh auth status writes to stderr and exits 1 when not authenticated,
-    // but also writes "Logged in" to stderr when authenticated on older versions.
+    // Why: some environments may surface partial command output on the thrown
+    // error object. Keep a compatibility fallback so we avoid a false auth
+    // warning if success markers are present despite a non-zero result.
+    const stdout = (error as { stdout?: string }).stdout ?? ''
     const stderr = (error as { stderr?: string }).stderr ?? ''
-    return stderr.includes('Logged in')
+    const output = `${stdout}\n${stderr}`
+    return output.includes('Logged in') || output.includes('Active account: true')
   }
 }
 
-async function runPreflightCheck(): Promise<PreflightStatus> {
-  if (cached) {
+export async function runPreflightCheck(force = false): Promise<PreflightStatus> {
+  if (cached && !force) {
     return cached
   }
 
@@ -57,7 +67,10 @@ async function runPreflightCheck(): Promise<PreflightStatus> {
 }
 
 export function registerPreflightHandlers(): void {
-  ipcMain.handle('preflight:check', async (): Promise<PreflightStatus> => {
-    return runPreflightCheck()
-  })
+  ipcMain.handle(
+    'preflight:check',
+    async (_event, args?: { force?: boolean }): Promise<PreflightStatus> => {
+      return runPreflightCheck(args?.force)
+    }
+  )
 }

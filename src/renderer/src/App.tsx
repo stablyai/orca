@@ -1,5 +1,5 @@
 /* eslint-disable max-lines */
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { DEFAULT_WORKTREE_CARD_PROPERTIES } from '../../shared/constants'
 import { isGitRepoKind } from '../../shared/repo-kind'
 
@@ -29,6 +29,7 @@ import type { BrowserTab, PersistedOpenFile, WorkspaceVisibleTabType } from '../
 import type { OpenFile } from './store/slices/editor'
 
 const isMac = navigator.userAgent.includes('Mac')
+const SIDEBAR_TRANSITION_MS = 200
 
 /** Build the editor-file portion of the workspace session for persistence.
  *  Only edit-mode files are saved — diffs and conflict views are transient. */
@@ -150,6 +151,7 @@ function App(): React.JSX.Element {
   const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
   const setQuickOpenVisible = useAppStore((s) => s.setQuickOpenVisible)
   const isFullScreen = useAppStore((s) => s.isFullScreen)
+  const hasSeenInitialSidebarStateRef = useRef(false)
 
   // Subscribe to IPC push events
   useIpcEvents()
@@ -328,6 +330,27 @@ function App(): React.JSX.Element {
     window.addEventListener('beforeunload', captureAndFlush)
     return () => window.removeEventListener('beforeunload', captureAndFlush)
   }, [])
+
+  useEffect(() => {
+    if (!persistedUIReady) {
+      return
+    }
+
+    if (!hasSeenInitialSidebarStateRef.current) {
+      hasSeenInitialSidebarStateRef.current = true
+      return
+    }
+
+    // Why: the terminal's WebGL renderer can flash blank while the app shell
+    // animates sidebar widths. Broadcasting the transition window lets active
+    // terminals temporarily fall back to the DOM renderer just for that
+    // animation, then restore GPU rendering after the layout settles.
+    window.dispatchEvent(
+      new CustomEvent('orca-layout-transition', {
+        detail: { durationMs: SIDEBAR_TRANSITION_MS }
+      })
+    )
+  }, [persistedUIReady, sidebarOpen, rightSidebarOpen])
 
   useEffect(() => {
     if (!persistedUIReady) {
@@ -605,7 +628,11 @@ function App(): React.JSX.Element {
             {activeView === 'settings' ? <Settings /> : !activeWorktreeId ? <Landing /> : null}
           </div>
         </div>
-        {showSidebar && rightSidebarOpen ? <RightSidebar /> : null}
+        {/* Why: the right sidebar stays mounted even while "closed" so its
+            width can animate from 0px to the saved width. Unmounting here made
+            the panel pop in abruptly instead of matching the left sidebar's
+            smooth expand/collapse behavior. */}
+        {showSidebar ? <RightSidebar /> : null}
       </div>
       <QuickOpen />
       <ZoomOverlay />

@@ -15,6 +15,11 @@ import { computeVisibleWorktreeIds, setVisibleWorktreeIds } from './visible-work
 import { estimateRowHeight } from './worktree-list-estimate'
 import { useModifierHint } from '@/hooks/useModifierHint'
 
+// How long to wait after a sortEpoch bump before actually re-sorting.
+// Prevents jarring position shifts when background events (AI starting work,
+// terminal title changes) trigger score recalculations.
+const SORT_SETTLE_MS = 3_000
+
 const WorktreeList = React.memo(function WorktreeList() {
   // ── Granular selectors (each is a primitive or shallow-stable ref) ──
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
@@ -50,6 +55,52 @@ const WorktreeList = React.memo(function WorktreeList() {
   const issueCache = useAppStore((s) => (searchQuery ? s.issueCache : null))
 
   const sortEpoch = useAppStore((s) => s.sortEpoch)
+
+  // Count of non-archived worktrees — used to detect structural changes
+  // (add/remove) vs. pure reorders (score shifts) so the debounce below
+  // can apply immediately when the list shape changes.
+  const worktreeCount = useMemo(() => {
+    let count = 0
+    for (const ws of Object.values(worktreesByRepo)) {
+      for (const w of ws) {
+        if (!w.isArchived) {
+          count++
+        }
+      }
+    }
+    return count
+  }, [worktreesByRepo])
+
+  // Why debounce: sort scores include a time-decaying activity component.
+  // Recomputing instantly on every sortEpoch bump (e.g. AI starting work,
+  // terminal title changes) recalculates all scores with a fresh `now`,
+  // causing worktrees to visibly jump even when the triggering event isn't
+  // about the worktree the user is looking at.  Settling for a few seconds
+  // lets rapid-fire events coalesce and prevents mid-interaction surprises.
+  //
+  // However, structural changes (worktree created or removed) must apply
+  // immediately — a new worktree should appear at its correct sorted
+  // position, not at the bottom for 3 seconds.
+  const [debouncedSortEpoch, setDebouncedSortEpoch] = useState(sortEpoch)
+  const prevWorktreeCountRef = useRef(worktreeCount)
+  useEffect(() => {
+    if (debouncedSortEpoch === sortEpoch) {
+      return
+    }
+
+    // Detect add/remove by comparing worktree count.
+    const structuralChange = worktreeCount !== prevWorktreeCountRef.current
+    prevWorktreeCountRef.current = worktreeCount
+
+    if (structuralChange) {
+      setDebouncedSortEpoch(sortEpoch)
+      return
+    }
+
+    const timer = setTimeout(() => setDebouncedSortEpoch(sortEpoch), SORT_SETTLE_MS)
+    return () => clearTimeout(timer)
+  }, [sortEpoch, debouncedSortEpoch, worktreeCount])
+
   const scrollRef = useRef<HTMLDivElement>(null)
   // Why a latching ref: we need to distinguish "app just started, no PTYs
   // have spawned yet" from "user closed all terminals mid-session." The
@@ -111,10 +162,11 @@ const WorktreeList = React.memo(function WorktreeList() {
       buildWorktreeComparator(sortBy, currentTabs, currentRepoMap, state.prCache, Date.now())
     )
     return allWorktrees.map((w) => w.id)
-    // sortEpoch is an intentional trigger: it's not read inside the memo, but
-    // its change signals that the sort order should be recomputed.
+    // debouncedSortEpoch is an intentional trigger: it's not read inside the
+    // memo, but its change signals that the sort order should be recomputed.
+    // The debounce prevents jarring mid-interaction position shifts.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [sortEpoch, sortBy, repos])
+  }, [debouncedSortEpoch, sortBy, repos])
 
   // Persist the computed sort order so the sidebar can be restored after
   // restart. Only persist during live sessions (sessionHasHadPty latched) —

@@ -1,12 +1,24 @@
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
+import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
+
+function fitAndRefreshPane(pane: ManagedPane): void {
+  try {
+    pane.fitAddon.fit()
+    // Why: width animations from the left/right sidebars can leave xterm's
+    // renderer showing only the pane background until some later paint or PTY
+    // write arrives. Forcing a viewport refresh after fit keeps the existing
+    // scrollback visible throughout the transition instead of flashing blank.
+    if (pane.terminal.rows > 0) {
+      pane.terminal.refresh(0, pane.terminal.rows - 1)
+    }
+  } catch {
+    /* ignore */
+  }
+}
 
 export function fitPanes(manager: PaneManager): void {
   for (const pane of manager.getPanes()) {
-    try {
-      pane.fitAddon.fit()
-    } catch {
-      /* ignore */
-    }
+    fitAndRefreshPane(pane)
   }
 }
 

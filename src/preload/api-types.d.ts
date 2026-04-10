@@ -53,7 +53,7 @@ export type PreflightStatus = {
 }
 
 export type PreflightApi = {
-  check: () => Promise<PreflightStatus>
+  check: (args?: { force?: boolean }) => Promise<PreflightStatus>
 }
 
 export type StatsApi = {

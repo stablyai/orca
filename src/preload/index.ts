@@ -274,10 +274,12 @@ const api = {
   },
 
   preflight: {
-    check: (): Promise<{
+    check: (args?: {
+      force?: boolean
+    }): Promise<{
       git: { installed: boolean }
       gh: { installed: boolean; authenticated: boolean }
-    }> => ipcRenderer.invoke('preflight:check')
+    }> => ipcRenderer.invoke('preflight:check', args)
   },
 
   notifications: {

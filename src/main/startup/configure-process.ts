@@ -56,6 +56,63 @@ export function configureDevUserDataPath(isDev: boolean): void {
   app.setPath('userData', join(app.getPath('appData'), 'orca-dev'))
 }
 
+export function installDevParentDisconnectQuit(isDev: boolean): void {
+  if (!isDev || typeof process.send !== 'function') {
+    return
+  }
+
+  // Why: electron-vite dev controls the Electron app over Node IPC so it can
+  // hot-restart the main process. On macOS, Ctrl+C can stop that parent process
+  // without terminating the app window, so in dev we quit explicitly when the
+  // supervising IPC channel disconnects instead of leaving a stray Electron app.
+  process.once('disconnect', () => {
+    app.quit()
+  })
+}
+
+export function installDevParentWatchdog(isDev: boolean): void {
+  if (!isDev) {
+    return
+  }
+
+  const initialParentPid = process.ppid
+  if (!Number.isInteger(initialParentPid) || initialParentPid <= 1) {
+    return
+  }
+
+  const timer = setInterval(() => {
+    const parentPidChanged = process.ppid !== initialParentPid
+    let parentMissing = false
+
+    try {
+      process.kill(initialParentPid, 0)
+    } catch (error) {
+      if (
+        error &&
+        typeof error === 'object' &&
+        'code' in error &&
+        (error as NodeJS.ErrnoException).code === 'ESRCH'
+      ) {
+        parentMissing = true
+      } else {
+        throw error
+      }
+    }
+
+    if (parentPidChanged || parentMissing) {
+      clearInterval(timer)
+      // Why: electron-vite's dev runner starts Electron with plain spawn() and
+      // inherited stdio, not an IPC channel. On macOS that means Ctrl+C can end
+      // the dev runner while leaving Orca open. Watching the original parent PID
+      // keeps dev shutdown coupled to the terminal session without affecting the
+      // packaged app, which is not supervised by electron-vite.
+      app.quit()
+    }
+  }, 1000)
+
+  timer.unref()
+}
+
 export function enableMainProcessGpuFeatures(): void {
   app.commandLine.appendSwitch('enable-features', 'Vulkan,UseSkiaGraphite')
   app.commandLine.appendSwitch('enable-unsafe-webgpu')

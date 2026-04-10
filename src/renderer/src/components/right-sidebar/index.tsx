@@ -138,15 +138,16 @@ export default function RightSidebar(): React.JSX.Element {
     : visibleItems[0].id
 
   const activityBarSideWidth = activityBarPosition === 'side' ? ACTIVITY_BAR_SIDE_WIDTH : 0
-  const { containerRef, isResizing, onResizeStart } = useSidebarResize<HTMLDivElement>({
-    isOpen: rightSidebarOpen,
-    width: rightSidebarWidth,
-    minWidth: MIN_WIDTH,
-    maxWidth: MAX_WIDTH,
-    deltaSign: -1,
-    renderedExtraWidth: activityBarSideWidth,
-    setWidth: setRightSidebarWidth
-  })
+  const { containerRef, onResizeStart, renderedOpen, contentAnimationState } =
+    useSidebarResize<HTMLDivElement>({
+      isOpen: rightSidebarOpen,
+      width: rightSidebarWidth,
+      minWidth: MIN_WIDTH,
+      maxWidth: MAX_WIDTH,
+      deltaSign: -1,
+      renderedExtraWidth: activityBarSideWidth,
+      setWidth: setRightSidebarWidth
+    })
 
   const panelContent = (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden scrollbar-sleek-parent">
@@ -171,54 +172,73 @@ export default function RightSidebar(): React.JSX.Element {
   return (
     <div
       ref={containerRef}
+      aria-hidden={!rightSidebarOpen}
       className={cn(
         'relative flex-shrink-0 flex flex-row overflow-visible',
-        isResizing ? 'transition-none' : 'transition-[width] duration-200'
+        !renderedOpen && 'pointer-events-none'
       )}
     >
       {/* Panel content area */}
       <div
         className="flex flex-col flex-1 min-w-0 bg-sidebar overflow-hidden"
         style={{
-          borderLeft: rightSidebarOpen ? '1px solid var(--sidebar-border)' : 'none'
+          borderLeft: renderedOpen ? '1px solid var(--sidebar-border)' : 'none'
         }}
       >
-        {activityBarPosition === 'top' ? (
-          /* ── Top activity bar: horizontal icon row ── */
-          <ContextMenu>
-            <ContextMenuTrigger asChild>
-              <div className="flex items-center border-b border-border h-[33px] min-h-[33px] px-1">
-                <TooltipProvider delayDuration={400}>{activityBarIcons}</TooltipProvider>
-              </div>
-            </ContextMenuTrigger>
-            <ActivityBarPositionMenu
-              currentPosition={activityBarPosition}
-              onChangePosition={setActivityBarPosition}
-            />
-          </ContextMenu>
-        ) : (
-          /* ── Side layout: static title header ── */
-          <div className="flex items-center h-[33px] min-h-[33px] px-3 border-b border-border">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground">
-              {visibleItems.find((item) => item.id === effectiveTab)?.title ?? ''}
-            </span>
-          </div>
-        )}
+        <div
+          className={cn(
+            'flex min-h-0 flex-1 flex-col transition-[transform,opacity] duration-200 ease-out',
+            contentAnimationState === 'open' || contentAnimationState === 'opening'
+              ? 'translate-x-0 opacity-100'
+              : 'translate-x-3 opacity-0'
+          )}
+        >
+          {activityBarPosition === 'top' ? (
+            /* ── Top activity bar: horizontal icon row ── */
+            <ContextMenu>
+              <ContextMenuTrigger asChild>
+                <div className="flex items-center border-b border-border h-[33px] min-h-[33px] px-1">
+                  <TooltipProvider delayDuration={400}>{activityBarIcons}</TooltipProvider>
+                </div>
+              </ContextMenuTrigger>
+              <ActivityBarPositionMenu
+                currentPosition={activityBarPosition}
+                onChangePosition={setActivityBarPosition}
+              />
+            </ContextMenu>
+          ) : (
+            /* ── Side layout: static title header ── */
+            <div className="flex items-center h-[33px] min-h-[33px] px-3 border-b border-border">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground">
+                {visibleItems.find((item) => item.id === effectiveTab)?.title ?? ''}
+              </span>
+            </div>
+          )}
 
-        {panelContent}
+          {panelContent}
+        </div>
 
         {/* Resize handle on LEFT side */}
-        <div
-          className="absolute top-0 left-0 w-1 h-full cursor-col-resize hover:bg-ring/20 active:bg-ring/30 transition-colors z-10"
-          onMouseDown={onResizeStart}
-        />
+        {renderedOpen ? (
+          <div
+            className="absolute top-0 left-0 w-1 h-full cursor-col-resize hover:bg-ring/20 active:bg-ring/30 transition-colors z-10"
+            onMouseDown={onResizeStart}
+          />
+        ) : null}
       </div>
 
       {/* Side Activity Bar (icon strip on right edge) — only for 'side' position */}
       {activityBarPosition === 'side' && (
         <ContextMenu>
           <ContextMenuTrigger asChild>
-            <div className="flex flex-col items-center w-10 min-w-[40px] bg-sidebar border-l border-border">
+            <div
+              className={cn(
+                'flex flex-col items-center w-10 min-w-[40px] bg-sidebar border-l border-border transition-[transform,opacity] duration-200 ease-out',
+                contentAnimationState === 'open' || contentAnimationState === 'opening'
+                  ? 'translate-x-0 opacity-100'
+                  : 'translate-x-3 opacity-0'
+              )}
+            >
               <TooltipProvider delayDuration={400}>{activityBarIcons}</TooltipProvider>
             </div>
           </ContextMenuTrigger>

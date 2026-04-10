@@ -14,6 +14,8 @@ import { checkForUpdatesFromMenu, isQuittingForUpdate } from './updater'
 import {
   configureDevUserDataPath,
   enableMainProcessGpuFeatures,
+  installDevParentDisconnectQuit,
+  installDevParentWatchdog,
   installUncaughtPipeErrorGuard,
   patchPackagedProcessPath
 } from './startup/configure-process'
@@ -30,6 +32,8 @@ let runtimeRpc: OrcaRuntimeRpcServer | null = null
 installUncaughtPipeErrorGuard()
 patchPackagedProcessPath()
 configureDevUserDataPath(is.dev)
+installDevParentDisconnectQuit(is.dev)
+installDevParentWatchdog(is.dev)
 // Why: must run after configureDevUserDataPath (which redirects userData to
 // orca-dev in dev mode) but before app.setName('Orca') inside whenReady
 // (which would change the resolved path on case-sensitive filesystems).

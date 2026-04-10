@@ -33,43 +33,52 @@ export default function Sidebar(): React.JSX.Element {
     }
   }, [repoCount, fetchAllWorktrees])
 
-  const { containerRef, isResizing, onResizeStart } = useSidebarResize<HTMLDivElement>({
-    isOpen: sidebarOpen,
-    width: sidebarWidth,
-    minWidth: MIN_WIDTH,
-    maxWidth: MAX_WIDTH,
-    deltaSign: 1,
-    setWidth: setSidebarWidth
-  })
+  const { containerRef, onResizeStart, renderedOpen, contentAnimationState } =
+    useSidebarResize<HTMLDivElement>({
+      isOpen: sidebarOpen,
+      width: sidebarWidth,
+      minWidth: MIN_WIDTH,
+      maxWidth: MAX_WIDTH,
+      deltaSign: 1,
+      setWidth: setSidebarWidth
+    })
 
   return (
     <TooltipProvider delayDuration={400}>
       <div
         ref={containerRef}
-        className={cn(
-          'relative flex-shrink-0 bg-sidebar flex flex-col overflow-hidden scrollbar-sleek-parent',
-          isResizing ? 'transition-none' : 'transition-[width] duration-200'
-        )}
+        className="relative flex-shrink-0 bg-sidebar flex flex-col overflow-hidden scrollbar-sleek-parent"
         style={{
-          borderRight: sidebarOpen ? '1px solid var(--sidebar-border)' : 'none'
+          borderRight: renderedOpen ? '1px solid var(--sidebar-border)' : 'none'
         }}
       >
-        {/* Fixed controls */}
-        <SidebarHeader />
-        <SearchBar />
-        <GroupControls />
+        <div
+          className={cn(
+            'flex min-h-0 flex-1 flex-col transition-[transform,opacity] duration-200 ease-out',
+            contentAnimationState === 'open' || contentAnimationState === 'opening'
+              ? 'translate-x-0 opacity-100'
+              : '-translate-x-3 opacity-0'
+          )}
+        >
+          {/* Fixed controls */}
+          <SidebarHeader />
+          <SearchBar />
+          <GroupControls />
 
-        {/* Virtualized scrollable list */}
-        <WorktreeList />
+          {/* Virtualized scrollable list */}
+          <WorktreeList />
 
-        {/* Fixed bottom toolbar */}
-        <SidebarToolbar />
+          {/* Fixed bottom toolbar */}
+          <SidebarToolbar />
+        </div>
 
         {/* Resize handle */}
-        <div
-          className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-ring/20 active:bg-ring/30 transition-colors z-10"
-          onMouseDown={onResizeStart}
-        />
+        {renderedOpen ? (
+          <div
+            className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-ring/20 active:bg-ring/30 transition-colors z-10"
+            onMouseDown={onResizeStart}
+          />
+        ) : null}
       </div>
 
       {/* Dialog (rendered outside sidebar to avoid clipping) */}

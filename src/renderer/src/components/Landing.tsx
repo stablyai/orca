@@ -19,6 +19,43 @@ type PreflightIssue = {
   fixUrl: string
 }
 
+function getPreflightIssues(status: {
+  git: { installed: boolean }
+  gh: { installed: boolean; authenticated: boolean }
+}): PreflightIssue[] {
+  const issues: PreflightIssue[] = []
+
+  if (!status.git.installed) {
+    issues.push({
+      id: 'git',
+      title: 'Git is not installed',
+      description: 'Git is required for Git repositories, source control, and worktree management.',
+      fixLabel: 'Install Git',
+      fixUrl: 'https://git-scm.com/downloads'
+    })
+  }
+
+  if (!status.gh.installed) {
+    issues.push({
+      id: 'gh',
+      title: 'GitHub CLI is not installed',
+      description: 'Orca uses the GitHub CLI (gh) to show pull requests, issues, and checks.',
+      fixLabel: 'Install GitHub CLI',
+      fixUrl: 'https://cli.github.com'
+    })
+  } else if (!status.gh.authenticated) {
+    issues.push({
+      id: 'gh-auth',
+      title: 'GitHub CLI is not authenticated',
+      description: 'Run "gh auth login" in a terminal to connect your GitHub account.',
+      fixLabel: 'Learn more',
+      fixUrl: 'https://cli.github.com/manual/gh_auth_login'
+    })
+  }
+
+  return issues
+}
+
 function KeyCap({ label }: { label: string }): React.JSX.Element {
   return (
     <span className="inline-flex min-w-6 items-center justify-center rounded border border-border/80 bg-secondary/70 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
@@ -126,50 +163,50 @@ export default function Landing(): React.JSX.Element {
 
   useEffect(() => {
     let cancelled = false
+    const refreshPreflight = (force = false): void => {
+      void window.api.preflight.check(force ? { force: true } : undefined).then((status) => {
+        if (cancelled) {
+          return
+        }
+        setPreflightIssues(getPreflightIssues(status))
+      })
+    }
 
-    void window.api.preflight.check().then((status) => {
-      if (cancelled) {
-        return
+    refreshPreflight()
+
+    // Why: users often install/authenticate gh outside Orca. Re-check when the
+    // window becomes active again so the landing warning clears without relaunch.
+    const handleWindowActive = (): void => {
+      if (document.visibilityState === 'visible') {
+        refreshPreflight(true)
       }
+    }
 
-      const issues: PreflightIssue[] = []
-
-      if (!status.git.installed) {
-        issues.push({
-          id: 'git',
-          title: 'Git is not installed',
-          description:
-            'Git is required for Git repositories, source control, and worktree management.',
-          fixLabel: 'Install Git',
-          fixUrl: 'https://git-scm.com/downloads'
-        })
-      }
-
-      if (!status.gh.installed) {
-        issues.push({
-          id: 'gh',
-          title: 'GitHub CLI is not installed',
-          description: 'Orca uses the GitHub CLI (gh) to show pull requests, issues, and checks.',
-          fixLabel: 'Install GitHub CLI',
-          fixUrl: 'https://cli.github.com'
-        })
-      } else if (!status.gh.authenticated) {
-        issues.push({
-          id: 'gh-auth',
-          title: 'GitHub CLI is not authenticated',
-          description: 'Run "gh auth login" in a terminal to connect your GitHub account.',
-          fixLabel: 'Learn more',
-          fixUrl: 'https://cli.github.com/manual/gh_auth_login'
-        })
-      }
-
-      setPreflightIssues(issues)
-    })
+    document.addEventListener('visibilitychange', handleWindowActive)
+    window.addEventListener('focus', handleWindowActive)
 
     return () => {
       cancelled = true
+      document.removeEventListener('visibilitychange', handleWindowActive)
+      window.removeEventListener('focus', handleWindowActive)
     }
   }, [])
+
+  useEffect(() => {
+    if (preflightIssues.length === 0) {
+      return
+    }
+
+    // Why: some users complete `gh auth login` without ever leaving the Orca
+    // window. Poll only while a warning is visible so the banner self-clears.
+    const intervalId = window.setInterval(() => {
+      void window.api.preflight.check({ force: true }).then((status) => {
+        setPreflightIssues(getPreflightIssues(status))
+      })
+    }, 30000)
+
+    return () => window.clearInterval(intervalId)
+  }, [preflightIssues.length])
 
   const shortcuts = useMemo<ShortcutItem[]>(
     () => [
