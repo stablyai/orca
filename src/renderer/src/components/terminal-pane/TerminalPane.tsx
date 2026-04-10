@@ -14,7 +14,7 @@ import type { PtyTransport } from './pty-transport'
 import { fitPanes, shellEscapePath } from './pane-helpers'
 import { EMPTY_LAYOUT, paneLeafId, serializeTerminalLayout } from './layout-serialization'
 import { createExpandCollapseActions } from './expand-collapse'
-import { useTerminalKeyboardShortcuts } from './keyboard-handlers'
+import { useTerminalKeyboardShortcuts, type SearchState } from './keyboard-handlers'
 import { useTerminalFontZoom } from './useTerminalFontZoom'
 import CloseTerminalDialog from './CloseTerminalDialog'
 import { TerminalErrorToast } from './TerminalErrorToast'
@@ -63,6 +63,7 @@ export default function TerminalPane({
 
   const [expandedPaneId, setExpandedPaneId] = useState<number | null>(null)
   const [searchOpen, setSearchOpen] = useState(false)
+  const searchStateRef = useRef<SearchState>({ query: '', caseSensitive: false, regex: false })
   const [closeConfirmPaneId, setCloseConfirmPaneId] = useState<number | null>(null)
   const [terminalError, setTerminalError] = useState<string | null>(null)
 
@@ -271,7 +272,9 @@ export default function TerminalPane({
     persistLayoutSnapshot,
     toggleExpandPane,
     setSearchOpen,
-    onRequestClosePane: handleRequestClosePane
+    onRequestClosePane: handleRequestClosePane,
+    searchOpen,
+    searchStateRef
   })
 
   useTerminalPaneGlobalEffects({
@@ -568,6 +571,7 @@ export default function TerminalPane({
             isOpen={searchOpen}
             onClose={() => setSearchOpen(false)}
             searchAddon={activePane.searchAddon ?? null}
+            searchStateRef={searchStateRef}
           />,
           activePane.container
         )}

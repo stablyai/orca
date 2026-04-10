@@ -2,17 +2,20 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { ChevronUp, ChevronDown, X, CaseSensitive, Regex } from 'lucide-react'
 import type { SearchAddon } from '@xterm/addon-search'
 import { Button } from '@/components/ui/button'
+import type { SearchState } from '@/components/terminal-pane/keyboard-handlers'
 
 type TerminalSearchProps = {
   isOpen: boolean
   onClose: () => void
   searchAddon: SearchAddon | null
+  searchStateRef: React.RefObject<SearchState>
 }
 
 export default function TerminalSearch({
   isOpen,
   onClose,
-  searchAddon
+  searchAddon,
+  searchStateRef
 }: TerminalSearchProps): React.JSX.Element | null {
   const inputRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
@@ -45,6 +48,10 @@ export default function TerminalSearch({
   }, [isOpen, searchAddon])
 
   useEffect(() => {
+    // Keep the ref in sync so the keyboard handler (Cmd+G / Cmd+Shift+G)
+    // can read the current search state without lifting it to parent state.
+    searchStateRef.current = { query, caseSensitive, regex }
+
     if (!query) {
       searchAddon?.clearDecorations()
       return
@@ -52,7 +59,7 @@ export default function TerminalSearch({
     if (searchAddon && isOpen) {
       searchAddon.findNext(query, { caseSensitive, regex, incremental: true })
     }
-  }, [query, searchAddon, isOpen, caseSensitive, regex])
+  }, [query, searchAddon, isOpen, caseSensitive, regex, searchStateRef])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
