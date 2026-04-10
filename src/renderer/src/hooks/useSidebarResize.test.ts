@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   clampSidebarResizeWidth,
   getNextSidebarResizeWidth,
-  getRenderedSidebarWidthCssValue
+  getRenderedSidebarWidthCssValue,
+  getRenderedSidebarWidthPx,
+  interpolateSidebarAnimationWidth
 } from './useSidebarResize'
 
 describe('useSidebarResize helpers', () => {
@@ -63,8 +65,19 @@ describe('useSidebarResize helpers', () => {
   })
 
   it('renders closed sidebars at zero width and open sidebars with extra width', () => {
+    expect(getRenderedSidebarWidthPx(false, 280, 40)).toBe(0)
+    expect(getRenderedSidebarWidthPx(true, 280, 0)).toBe(280)
+    expect(getRenderedSidebarWidthPx(true, 280, 40)).toBe(320)
     expect(getRenderedSidebarWidthCssValue(false, 280, 40)).toBe('0px')
     expect(getRenderedSidebarWidthCssValue(true, 280, 0)).toBe('280px')
     expect(getRenderedSidebarWidthCssValue(true, 280, 40)).toBe('320px')
+  })
+
+  it('interpolates sidebar toggle widths with clamped easing progress', () => {
+    expect(interpolateSidebarAnimationWidth(0, 320, -1)).toBe(0)
+    expect(interpolateSidebarAnimationWidth(0, 320, 0)).toBe(0)
+    expect(interpolateSidebarAnimationWidth(0, 320, 1)).toBe(320)
+    expect(interpolateSidebarAnimationWidth(0, 320, 2)).toBe(320)
+    expect(interpolateSidebarAnimationWidth(0, 320, 0.5)).toBe(160)
   })
 })
