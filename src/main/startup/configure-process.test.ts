@@ -54,7 +54,7 @@ describe('installDevParentDisconnectQuit', () => {
     const originalOnce = process.once.bind(process)
     const disconnectHandlers: (() => void)[] = []
 
-    process.send = (() => undefined) as NodeJS.Process['send']
+    process.send = (() => true) as unknown as NodeJS.Process['send']
     process.once = ((event: string | symbol, listener: (...args: any[]) => void) => {
       if (event === 'disconnect') {
         disconnectHandlers.push(listener as () => void)
