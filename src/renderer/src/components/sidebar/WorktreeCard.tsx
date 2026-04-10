@@ -430,8 +430,10 @@ const WorktreeCard = React.memo(function WorktreeCard({
 
           {/* Meta section: Issue / PR Links / Comment
              ⚠ Layout coupling: the padding (py-0.5, mt-0.5), gap-[3px], and
-             line heights here are used to derive the pixel constants in
-             WorktreeList's estimateSize. Update both if changing spacing. */}
+             line heights here are used to derive the size estimates in
+             WorktreeList's estimateSize. The comment row's estimate is
+             dynamic (based on content length + newlines). Update the
+             estimate function if changing spacing or line-height. */}
           {((cardProps.includes('issue') && issue) ||
             (cardProps.includes('pr') && pr) ||
             (cardProps.includes('comment') && worktree.comment)) && (
@@ -549,19 +551,12 @@ const WorktreeCard = React.memo(function WorktreeCard({
               )}
 
               {cardProps.includes('comment') && worktree.comment && (
-                <HoverCard openDelay={300}>
-                  <HoverCardTrigger asChild>
-                    <div
-                      className="text-[11px] text-muted-foreground truncate cursor-pointer -mx-1.5 px-1.5 py-0.5 hover:bg-background/40 hover:text-foreground rounded transition-colors leading-none"
-                      onClick={handleEditComment}
-                    >
-                      {worktree.comment}
-                    </div>
-                  </HoverCardTrigger>
-                  <HoverCardContent side="right" align="start" className="w-64 p-3 text-xs">
-                    <p className="whitespace-pre-wrap">{worktree.comment}</p>
-                  </HoverCardContent>
-                </HoverCard>
+                <div
+                  className="text-[11px] text-muted-foreground whitespace-pre-wrap break-words cursor-pointer -mx-1.5 px-1.5 py-0.5 hover:bg-background/40 hover:text-foreground rounded transition-colors leading-normal"
+                  onClick={handleEditComment}
+                >
+                  {worktree.comment}
+                </div>
               )}
             </div>
           )}
