@@ -72,7 +72,7 @@ type KeyboardHandlersDeps = {
   toggleExpandPane: (paneId: number) => void
   setSearchOpen: React.Dispatch<React.SetStateAction<boolean>>
   onRequestClosePane: (paneId: number) => void
-  searchOpen: boolean
+  searchOpenRef: React.RefObject<boolean>
   searchStateRef: React.RefObject<SearchState>
 }
 
@@ -88,7 +88,7 @@ export function useTerminalKeyboardShortcuts({
   toggleExpandPane,
   setSearchOpen,
   onRequestClosePane,
-  searchOpen,
+  searchOpenRef,
   searchStateRef
 }: KeyboardHandlersDeps): void {
   useEffect(() => {
@@ -112,7 +112,7 @@ export function useTerminalKeyboardShortcuts({
       // is in the search input. Uses its own mod-key check because this
       // runs before the shared `mod` variable is declared.
       // preventDefault suppresses macOS/Electron's native "find next".
-      const direction = matchSearchNavigate(e, isMac, searchOpen, searchStateRef.current)
+      const direction = matchSearchNavigate(e, isMac, searchOpenRef.current, searchStateRef.current)
       if (direction !== null) {
         e.preventDefault()
         e.stopPropagation()
@@ -358,7 +358,7 @@ export function useTerminalKeyboardShortcuts({
     toggleExpandPane,
     setSearchOpen,
     onRequestClosePane,
-    searchOpen,
+    searchOpenRef,
     searchStateRef
   ])
 }

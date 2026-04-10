@@ -63,6 +63,8 @@ export default function TerminalPane({
 
   const [expandedPaneId, setExpandedPaneId] = useState<number | null>(null)
   const [searchOpen, setSearchOpen] = useState(false)
+  const searchOpenRef = useRef(false)
+  searchOpenRef.current = searchOpen
   const searchStateRef = useRef<SearchState>({ query: '', caseSensitive: false, regex: false })
   const [closeConfirmPaneId, setCloseConfirmPaneId] = useState<number | null>(null)
   const [terminalError, setTerminalError] = useState<string | null>(null)
@@ -273,7 +275,7 @@ export default function TerminalPane({
     toggleExpandPane,
     setSearchOpen,
     onRequestClosePane: handleRequestClosePane,
-    searchOpen,
+    searchOpenRef,
     searchStateRef
   })
 
