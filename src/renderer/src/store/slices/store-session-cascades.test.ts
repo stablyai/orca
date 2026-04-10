@@ -946,6 +946,7 @@ describe('hydrateEditorSession', () => {
     expect(s.openFiles).toHaveLength(1)
     expect(s.activeFileId).toBeNull()
     expect(s.activeTabType).toBe('terminal')
+    expect(s.activeTabTypeByWorktree[wt]).toBeUndefined()
   })
 
   it('filters out files for deleted worktrees', () => {

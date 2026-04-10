@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { browserWindowMock, openExternalMock } = vi.hoisted(() => ({
+const { browserWindowMock, openExternalMock, attachGuestPoliciesMock } = vi.hoisted(() => ({
   browserWindowMock: vi.fn(),
-  openExternalMock: vi.fn()
+  openExternalMock: vi.fn(),
+  attachGuestPoliciesMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -24,12 +25,19 @@ vi.mock('../../../resources/icon-dev.png?asset', () => ({
   default: 'icon-dev'
 }))
 
+vi.mock('../browser/browser-manager', () => ({
+  browserManager: {
+    attachGuestPolicies: attachGuestPoliciesMock
+  }
+}))
+
 import { createMainWindow } from './createMainWindow'
 
 describe('createMainWindow', () => {
   beforeEach(() => {
     browserWindowMock.mockReset()
     openExternalMock.mockReset()
+    attachGuestPoliciesMock.mockReset()
   })
 
   it('enables renderer sandboxing and opens external links safely', () => {
@@ -119,6 +127,10 @@ describe('createMainWindow', () => {
       { src: 'data:text/html,<script>alert(1)</script>' } as never
     )
     expect(denyInlineHtmlEvent.preventDefault).toHaveBeenCalledTimes(1)
+
+    const guest = { marker: 'guest' }
+    windowHandlers['did-attach-webview']({} as never, guest as never)
+    expect(attachGuestPoliciesMock).toHaveBeenCalledWith(guest)
   })
 
   it('supports all minus key variants for terminal zoom out', () => {

@@ -12,6 +12,7 @@ export type BrowserGuestRegistration = {
 class BrowserManager {
   private readonly webContentsIdByTabId = new Map<string, number>()
   private readonly contextMenuCleanupByTabId = new Map<string, () => void>()
+  private readonly policyAttachedGuestIds = new Set<number>()
 
   private openValidatedExternal(rawUrl: string): void {
     const externalUrl = normalizeExternalBrowserUrl(rawUrl)
@@ -21,6 +22,10 @@ class BrowserManager {
   }
 
   attachGuestPolicies(guest: Electron.WebContents): void {
+    if (this.policyAttachedGuestIds.has(guest.id)) {
+      return
+    }
+    this.policyAttachedGuestIds.add(guest.id)
     guest.setBackgroundThrottling(true)
     guest.setWindowOpenHandler(({ url }) => {
       // Why: popup-capable guests are required for OAuth and target=_blank
@@ -62,6 +67,13 @@ class BrowserManager {
     if (guest.getType() !== 'webview') {
       return
     }
+    if (!this.policyAttachedGuestIds.has(webContentsId)) {
+      // Why: renderer registration is only the second half of the guest setup.
+      // Main must only trust guests that already passed attach-time policy
+      // installation; otherwise a trusted renderer could point us at some other
+      // arbitrary webview and bypass the intended host-window attach boundary.
+      return
+    }
 
     this.webContentsIdByTabId.set(browserTabId, webContentsId)
 
@@ -81,6 +93,7 @@ class BrowserManager {
     for (const browserTabId of this.webContentsIdByTabId.keys()) {
       this.unregisterGuest(browserTabId)
     }
+    this.policyAttachedGuestIds.clear()
   }
 
   getGuestWebContentsId(browserTabId: string): number | null {

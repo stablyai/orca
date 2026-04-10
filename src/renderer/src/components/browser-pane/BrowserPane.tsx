@@ -18,6 +18,12 @@ import {
   normalizeBrowserNavigationUrl,
   normalizeExternalBrowserUrl
 } from '../../../../shared/browser-url'
+import {
+  clearLiveBrowserUrl,
+  consumeEvictedBrowserTab,
+  markEvictedBrowserTab,
+  rememberLiveBrowserUrl
+} from './browser-runtime'
 
 type BrowserTabPageState = Partial<
   Pick<
@@ -86,6 +92,7 @@ export function destroyPersistentWebview(browserTabId: string): void {
   if (!webview) {
     registeredWebContentsIds.delete(browserTabId)
     parkedAtByTabId.delete(browserTabId)
+    clearLiveBrowserUrl(browserTabId)
     return
   }
   void window.api.browser.unregisterGuest({ browserTabId })
@@ -93,6 +100,7 @@ export function destroyPersistentWebview(browserTabId: string): void {
   webviewRegistry.delete(browserTabId)
   registeredWebContentsIds.delete(browserTabId)
   parkedAtByTabId.delete(browserTabId)
+  clearLiveBrowserUrl(browserTabId)
 }
 
 function buildLoadError(event: {
@@ -150,7 +158,9 @@ function evictParkedWebviews(excludedTabId: string | null = null): void {
       // Why: browser tabs are persistent for fast switching, but hidden guests
       // cannot grow without bound or long Orca sessions accumulate Chromium
       // processes and GPU surfaces. Evict only parked webviews, never the
-      // currently visible guest.
+      // currently visible guest. Remember the eviction so the next mount can
+      // explain why an older tab had to reload instead of silently losing state.
+      markEvictedBrowserTab(browserTabId)
       destroyPersistentWebview(browserTabId)
     }
   }
@@ -172,10 +182,19 @@ export default function BrowserPane({
   const onUpdatePageStateRef = useRef(onUpdatePageState)
   const onSetUrlRef = useRef(onSetUrl)
   const [addressBarValue, setAddressBarValue] = useState(browserTab.url)
+  const [resourceNotice, setResourceNotice] = useState<string | null>(null)
 
   useEffect(() => {
     setAddressBarValue(toDisplayUrl(browserTab.url))
   }, [browserTab.url])
+
+  useEffect(() => {
+    setResourceNotice(
+      consumeEvictedBrowserTab(browserTab.id)
+        ? 'This tab reloaded to free browser resources.'
+        : null
+    )
+  }, [browserTab.id])
 
   useEffect(() => {
     onUpdatePageStateRef.current = onUpdatePageState
@@ -258,6 +277,7 @@ export default function BrowserPane({
 
     const handleDidStopLoading = (): void => {
       const currentUrl = webview.getURL() || webview.src || 'about:blank'
+      rememberLiveBrowserUrl(browserTab.id, currentUrl)
       setAddressBarValue(toDisplayUrl(currentUrl))
       onSetUrlRef.current(browserTab.id, currentUrl)
       onUpdatePageStateRef.current(browserTab.id, {
@@ -275,6 +295,7 @@ export default function BrowserPane({
         return
       }
       const currentUrl = event.url ?? webview.getURL() ?? webview.src ?? 'about:blank'
+      rememberLiveBrowserUrl(browserTab.id, currentUrl)
       setAddressBarValue(toDisplayUrl(currentUrl))
       onSetUrlRef.current(browserTab.id, currentUrl)
       onUpdatePageStateRef.current(browserTab.id, {
@@ -381,9 +402,10 @@ export default function BrowserPane({
       return
     }
 
-    setAddressBarValue(nextUrl)
+    setAddressBarValue(toDisplayUrl(nextUrl))
     onSetUrlRef.current(browserTab.id, nextUrl)
     onUpdatePageStateRef.current(browserTab.id, { loading: true, loadError: null, title: nextUrl })
+    setResourceNotice(null)
 
     const webview = webviewRef.current
     if (!webview) {
@@ -486,6 +508,11 @@ export default function BrowserPane({
           <ExternalLink className="size-4" />
         </Button>
       </div>
+      {resourceNotice ? (
+        <div className="border-b border-border/60 bg-background px-3 py-1.5 text-xs text-muted-foreground">
+          {resourceNotice}
+        </div>
+      ) : null}
       {browserTab.loadError ? (
         <div className="border-b border-border/60 bg-background px-3 py-1.5 text-xs text-amber-500/90">
           {browserTab.loadError.description}

@@ -399,4 +399,77 @@ describe('setActiveWorktree', () => {
     expect(store.getState().activeTabTypeByWorktree[wt]).toBe('terminal')
     expect(store.getState().activeBrowserTabIdByWorktree[wt]).toBeNull()
   })
+
+  it('falls back to editor globally when closing the last active browser tab in a worktree with files', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const fileId = '/path/wt1/src/index.ts'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      activeWorktreeId: wt,
+      activeTabType: 'browser',
+      openFiles: [makeOpenFile({ id: fileId, worktreeId: wt, filePath: fileId })],
+      activeFileId: fileId,
+      activeFileIdByWorktree: { [wt]: fileId },
+      activeTabTypeByWorktree: { [wt]: 'browser' },
+      browserTabsByWorktree: {
+        [wt]: [
+          {
+            id: 'browser-1',
+            worktreeId: wt,
+            url: 'https://example.com',
+            title: 'Example',
+            loading: false,
+            faviconUrl: null,
+            canGoBack: false,
+            canGoForward: false,
+            loadError: null,
+            createdAt: 0
+          }
+        ]
+      },
+      activeBrowserTabId: 'browser-1',
+      activeBrowserTabIdByWorktree: { [wt]: 'browser-1' }
+    })
+
+    store.getState().closeBrowserTab('browser-1')
+
+    const s = store.getState()
+    expect(s.activeTabType).toBe('editor')
+    expect(s.activeTabTypeByWorktree[wt]).toBe('editor')
+    expect(s.activeFileId).toBe(fileId)
+  })
+
+  it('does not switch the global surface when creating a browser tab for a background worktree', () => {
+    const store = createTestStore()
+    const activeWt = 'repo1::/path/wt1'
+    const backgroundWt = 'repo1::/path/wt2'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: activeWt, repoId: 'repo1', path: '/path/wt1' }),
+          makeWorktree({ id: backgroundWt, repoId: 'repo1', path: '/path/wt2' })
+        ]
+      },
+      activeWorktreeId: activeWt,
+      activeTabType: 'terminal',
+      tabsByWorktree: {
+        [activeWt]: [makeTab({ id: 'terminal-1', worktreeId: activeWt })],
+        [backgroundWt]: [makeTab({ id: 'terminal-2', worktreeId: backgroundWt })]
+      }
+    })
+
+    const browserTab = store
+      .getState()
+      .createBrowserTab(backgroundWt, 'https://example.com', { activate: true })
+
+    const s = store.getState()
+    expect(s.activeTabType).toBe('terminal')
+    expect(s.activeTabTypeByWorktree[backgroundWt]).toBe('browser')
+    expect(s.activeBrowserTabIdByWorktree[backgroundWt]).toBe(browserTab.id)
+  })
 })

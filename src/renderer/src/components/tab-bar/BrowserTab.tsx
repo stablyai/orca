@@ -11,6 +11,7 @@ import {
 import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
 import type { BrowserTab as BrowserTabState } from '../../../../shared/types'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from './SortableTab'
+import { getLiveBrowserUrl } from '../browser-pane/browser-runtime'
 
 function getBrowserTabLabel(tab: BrowserTabState): string {
   if (
@@ -51,9 +52,10 @@ export default function BrowserTab({
   // Why: about:blank and other non-http URLs should not be sent to the
   // system browser. Disable the context menu item instead of silently
   // calling shell.openUrl with an unsupported URL.
+  const openInBrowserUrl = getLiveBrowserUrl(tab.id) ?? tab.url
   let isHttpUrl = false
   try {
-    const parsed = new URL(tab.url)
+    const parsed = new URL(openInBrowserUrl)
     isHttpUrl = parsed.protocol === 'http:' || parsed.protocol === 'https:'
   } catch {
     // invalid URL — leave disabled
@@ -151,7 +153,7 @@ export default function BrowserTab({
             Close Tabs To The Right
           </DropdownMenuItem>
           <DropdownMenuItem
-            onSelect={() => void window.api.shell.openUrl(tab.url)}
+            onSelect={() => void window.api.shell.openUrl(openInBrowserUrl)}
             disabled={!isHttpUrl}
           >
             <ExternalLink className="w-3.5 h-3.5 mr-1.5" />

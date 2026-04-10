@@ -97,6 +97,7 @@ describe('browserManager', () => {
 
   it('unregisterAll clears tracked guests and context-menu listeners', () => {
     const guest = {
+      id: 101,
       isDestroyed: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
@@ -107,7 +108,9 @@ describe('browserManager', () => {
     }
     webContentsFromIdMock.mockReturnValue(guest)
 
+    browserManager.attachGuestPolicies(guest as never)
     browserManager.registerGuest({ browserTabId: 'browser-1', webContentsId: 101 })
+    browserManager.attachGuestPolicies({ ...guest, id: 102 } as never)
     browserManager.registerGuest({ browserTabId: 'browser-2', webContentsId: 102 })
 
     browserManager.unregisterAll()
@@ -138,5 +141,45 @@ describe('browserManager', () => {
     expect(browserManager.getGuestWebContentsId('browser-evil')).toBeNull()
     // setWindowOpenHandler must NOT have been called on the main window's webContents
     expect(guestSetWindowOpenHandlerMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects registration for guests that never received attach-time policy wiring', () => {
+    const guest = {
+      id: 777,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    webContentsFromIdMock.mockReturnValue(guest)
+
+    browserManager.registerGuest({ browserTabId: 'browser-1', webContentsId: 777 })
+
+    expect(browserManager.getGuestWebContentsId('browser-1')).toBeNull()
+    expect(menuBuildFromTemplateMock).not.toHaveBeenCalled()
+  })
+
+  it('does not duplicate guest policy listeners when attach is reported twice', () => {
+    const guest = {
+      id: 303,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.attachGuestPolicies(guest as never)
+
+    expect(guestSetBackgroundThrottlingMock).toHaveBeenCalledTimes(1)
+    expect(guestSetWindowOpenHandlerMock).toHaveBeenCalledTimes(1)
+    expect(guestOnMock.mock.calls.filter(([event]) => event === 'will-navigate')).toHaveLength(1)
+    expect(guestOnMock.mock.calls.filter(([event]) => event === 'will-redirect')).toHaveLength(1)
   })
 })

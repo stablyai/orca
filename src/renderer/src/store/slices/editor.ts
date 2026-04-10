@@ -1339,9 +1339,19 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         )
       )
       const filteredActiveTabTypeByWorktree = Object.fromEntries(
-        Object.entries(persistedActiveTabTypeByWorktree).filter(([wId]) =>
-          validWorktreeIds.has(wId)
-        )
+        Object.entries(persistedActiveTabTypeByWorktree).filter(([wId, tabType]) => {
+          if (!validWorktreeIds.has(wId)) {
+            return false
+          }
+          if (tabType !== 'editor') {
+            return true
+          }
+          // Why: a persisted "editor" surface only makes sense if that
+          // worktree still restored a concrete active editor file. Otherwise we
+          // preserve a stale last-active marker that conflicts with browser or
+          // terminal restore logic for the same worktree.
+          return Boolean(filteredActiveFileIdByWorktree[wId])
+        })
       )
 
       return {

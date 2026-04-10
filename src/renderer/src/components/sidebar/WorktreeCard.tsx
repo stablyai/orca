@@ -58,6 +58,25 @@ const CONFLICT_OPERATION_LABELS: Record<Exclude<GitConflictOperation, 'unknown'>
 
 // ── Stable empty array for tabs fallback ─────────────────────────
 const EMPTY_TABS: TerminalTab[] = []
+const EMPTY_BROWSER_TABS: { id: string }[] = []
+
+export function getWorktreeStatus(tabs: TerminalTab[], browserTabs: { id: string }[]): Status {
+  const liveTabs = tabs.filter((tab) => tab.ptyId)
+  if (liveTabs.some((tab) => detectAgentStatusFromTitle(tab.title) === 'permission')) {
+    return 'permission'
+  }
+  if (liveTabs.some((tab) => detectAgentStatusFromTitle(tab.title) === 'working')) {
+    return 'working'
+  }
+  if (liveTabs.length > 0 || browserTabs.length > 0) {
+    // Why: browser-only worktrees are still active from the user's point of
+    // view even when they have no PTY-backed terminal. The sidebar filter
+    // already treats them as active, so the card badge must stay consistent
+    // instead of showing a misleading inactive dot.
+    return 'active'
+  }
+  return 'inactive'
+}
 
 type WorktreeCardProps = {
   worktree: Worktree
@@ -138,6 +157,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
 
   // ── GRANULAR selectors: only subscribe to THIS worktree's data ──
   const tabs = useAppStore((s) => s.tabsByWorktree[worktree.id] ?? EMPTY_TABS)
+  const browserTabs = useAppStore((s) => s.browserTabsByWorktree[worktree.id] ?? EMPTY_BROWSER_TABS)
 
   const branch = branchDisplayName(worktree.branch)
   const isFolder = repo ? isFolderRepo(repo) : false
@@ -155,23 +175,10 @@ const WorktreeCard = React.memo(function WorktreeCard({
       : undefined
     : null
 
-  const hasTerminals = tabs.length > 0
   const isDeleting = deleteState?.isDeleting ?? false
 
   // Derive status
-  const status: Status = useMemo(() => {
-    if (!hasTerminals) {
-      return 'inactive'
-    }
-    const liveTabs = tabs.filter((tab) => tab.ptyId)
-    if (liveTabs.some((tab) => detectAgentStatusFromTitle(tab.title) === 'permission')) {
-      return 'permission'
-    }
-    if (liveTabs.some((tab) => detectAgentStatusFromTitle(tab.title) === 'working')) {
-      return 'working'
-    }
-    return liveTabs.length > 0 ? 'active' : 'inactive'
-  }, [hasTerminals, tabs])
+  const status: Status = useMemo(() => getWorktreeStatus(tabs, browserTabs), [tabs, browserTabs])
 
   const showPR = cardProps.includes('pr')
   const showCI = cardProps.includes('ci')

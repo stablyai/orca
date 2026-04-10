@@ -105,6 +105,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       })()
 
       const shouldActivate = options?.activate ?? true
+      const shouldUpdateGlobalActiveSurface = shouldActivate && s.activeWorktreeId === worktreeId
       return {
         browserTabsByWorktree: {
           ...s.browserTabsByWorktree,
@@ -120,9 +121,11 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
           [worktreeId]: shouldActivate ? id : (s.activeBrowserTabIdByWorktree[worktreeId] ?? null)
         },
         // Why: browser tabs live in the same visual strip as terminals and editors.
-        // Creating one should immediately select the browser surface for that worktree
-        // instead of leaving focus on a different tab type behind the new tab label.
-        activeTabType: shouldActivate ? 'browser' : s.activeTabType,
+        // Creating one should immediately select the browser surface for that
+        // worktree, but only the active worktree is allowed to drive Orca's
+        // global visible surface. Background worktrees keep their per-worktree
+        // browser selection without stealing the foreground pane.
+        activeTabType: shouldUpdateGlobalActiveSurface ? 'browser' : s.activeTabType,
         activeTabTypeByWorktree: shouldActivate
           ? { ...s.activeTabTypeByWorktree, [worktreeId]: 'browser' }
           : s.activeTabTypeByWorktree
@@ -163,20 +166,23 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
 
       const isActiveTabInOwningWorktree =
         s.activeWorktreeId === owningWorktreeId && s.activeBrowserTabId === tabId
-      const nextActiveTabType =
-        isActiveTabInOwningWorktree &&
-        remainingBrowserTabs.length === 0 &&
-        s.openFiles.every((file) => file.worktreeId !== owningWorktreeId)
-          ? 'terminal'
-          : s.activeTabType
-
       const nextActiveTabTypeByWorktree = { ...s.activeTabTypeByWorktree }
+      let nextActiveTabType = s.activeTabType
       if (remainingBrowserTabs.length === 0) {
-        nextActiveTabTypeByWorktree[owningWorktreeId] = getFallbackTabTypeForWorktree(
+        const fallbackTabType = getFallbackTabTypeForWorktree(
           owningWorktreeId,
           s.openFiles,
           s.tabsByWorktree
         )
+        nextActiveTabTypeByWorktree[owningWorktreeId] = fallbackTabType
+        if (isActiveTabInOwningWorktree && s.activeTabType === 'browser') {
+          // Why: the per-worktree restore map and the global active surface must
+          // stay in lockstep. Leaving activeTabType at "browser" after the last
+          // browser tab closes makes the workspace point at a surface that no
+          // longer exists, which later renders as a blank body until another
+          // caller repairs state opportunistically.
+          nextActiveTabType = fallbackTabType
+        }
       }
 
       return {
