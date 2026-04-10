@@ -31,10 +31,14 @@ export function useFileExplorerTree(
       if (!options?.force && (cache[dirPath]?.children.length > 0 || cache[dirPath]?.loading)) {
         return
       }
+      // Why: when force-reloading a directory (e.g. after a file is created,
+      // duplicated, or deleted), keep the previous children visible while the
+      // fresh listing loads. Clearing to [] would momentarily shrink flatRows,
+      // causing the virtualizer to lose scroll position and jump to the top.
       setDirCache((prev) => ({
         ...prev,
         [dirPath]: {
-          children: options?.force ? [] : (prev[dirPath]?.children ?? []),
+          children: prev[dirPath]?.children ?? [],
           loading: true
         }
       }))
@@ -73,7 +77,10 @@ export function useFileExplorerTree(
     if (!worktreePath) {
       return
     }
-    setDirCache({})
+    // Why: clearing the entire dirCache here would momentarily empty flatRows,
+    // causing the virtualizer scroll position to jump to the top. Instead we
+    // rely on the force-reload inside loadDir which keeps existing children
+    // visible until the fresh listing arrives.
     await loadDir(worktreePath, -1, { force: true })
     await Promise.all(
       Array.from(expanded).map(async (dirPath) => {
