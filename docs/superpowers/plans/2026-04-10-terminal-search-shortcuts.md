@@ -200,7 +200,7 @@ Insert this block in `onKeyDown` right after the `if (e.repeat) return` check (l
       }
 ```
 
-Note: this block accesses `manager` which is declared further down. Move the `const manager = managerRef.current; if (!manager) return` check above the `isEditableTarget` guard as well, so the search handler can reference it. The full reordering inside `onKeyDown` becomes:
+Note: this block accesses `manager` which is declared further down. Move the `const manager = managerRef.current; if (!manager) return` check above the `isEditableTarget` guard as well, so the search handler can reference it. This reorder is safe — the code between the old `manager` position and `isEditableTarget` only computes `mod` and checks `altKey`, neither of which references `manager`. The minor behavioral change is that `!manager` now short-circuits before `isEditableTarget` runs, which is harmless (no manager means no terminal to handle shortcuts for). The full reordering inside `onKeyDown` becomes:
 
 ```
 if (e.repeat) return
@@ -265,70 +265,17 @@ git commit -m "feat: add Cmd+G / Cmd+Shift+G search navigation to keyboard handl
 
 ---
 
-### Task 3: Sync search state from `TerminalSearch` into the ref
+### Task 3: Wire `searchStateRef` through `TerminalPane`, `TerminalSearch`, and sync it
 
-**Files:**
-- Modify: `src/renderer/src/components/TerminalSearch.tsx`
-
-- [ ] **Step 1: Add `searchStateRef` prop to the component**
-
-Update the props type and destructuring:
-
-```ts
-type TerminalSearchProps = {
-  isOpen: boolean
-  onClose: () => void
-  searchAddon: SearchAddon | null
-  searchStateRef: React.MutableRefObject<{ query: string; caseSensitive: boolean; regex: boolean }>
-}
-
-export default function TerminalSearch({
-  isOpen,
-  onClose,
-  searchAddon,
-  searchStateRef
-}: TerminalSearchProps): React.JSX.Element | null {
-```
-
-- [ ] **Step 2: Sync the ref inside the existing incremental-search `useEffect`**
-
-The existing `useEffect` (lines 47–55) already runs whenever `query`, `caseSensitive`, or `regex` change. Add the ref sync at the top, before the early return on empty query:
-
-```ts
-  useEffect(() => {
-    // Keep the ref in sync so the keyboard handler (Cmd+G / Cmd+Shift+G)
-    // can read the current search state without lifting it to parent state.
-    searchStateRef.current = { query, caseSensitive, regex }
-
-    if (!query) {
-      searchAddon?.clearDecorations()
-      return
-    }
-    if (searchAddon && isOpen) {
-      searchAddon.findNext(query, { caseSensitive, regex, incremental: true })
-    }
-  }, [query, searchAddon, isOpen, caseSensitive, regex, searchStateRef])
-```
-
-Note: `searchStateRef` is added to the dependency array to satisfy the linter, though as a ref it never changes identity.
-
-- [ ] **Step 3: Commit**
-
-```bash
-git add src/renderer/src/components/TerminalSearch.tsx
-git commit -m "feat: sync search state into ref for keyboard handler access"
-```
-
----
-
-### Task 4: Wire `searchStateRef` through `TerminalPane`
+Tasks 3 modifies both `TerminalPane.tsx` and `TerminalSearch.tsx` together because `searchStateRef` is a required prop — modifying them separately would break TypeScript compilation between commits.
 
 **Files:**
 - Modify: `src/renderer/src/components/terminal-pane/TerminalPane.tsx`
+- Modify: `src/renderer/src/components/TerminalSearch.tsx`
 
-- [ ] **Step 1: Import `SearchState` and create the ref**
+- [ ] **Step 1: Import `SearchState` and create the ref in `TerminalPane`**
 
-Add the import at the top of the file alongside the existing `keyboard-handlers` import:
+Add the import at the top of `TerminalPane.tsx` alongside the existing `keyboard-handlers` import:
 
 ```ts
 import { useTerminalKeyboardShortcuts } from './keyboard-handlers'
@@ -381,21 +328,63 @@ Update the `TerminalSearch` JSX (around line 567) to include the new prop:
           />,
 ```
 
-- [ ] **Step 4: Run the full test suite to verify nothing is broken**
+- [ ] **Step 4: Add `searchStateRef` prop to `TerminalSearch`**
+
+In `TerminalSearch.tsx`, update the props type and destructuring:
+
+```ts
+type TerminalSearchProps = {
+  isOpen: boolean
+  onClose: () => void
+  searchAddon: SearchAddon | null
+  searchStateRef: React.MutableRefObject<{ query: string; caseSensitive: boolean; regex: boolean }>
+}
+
+export default function TerminalSearch({
+  isOpen,
+  onClose,
+  searchAddon,
+  searchStateRef
+}: TerminalSearchProps): React.JSX.Element | null {
+```
+
+- [ ] **Step 5: Sync the ref inside the existing incremental-search `useEffect`**
+
+The existing `useEffect` (lines 47–55) already runs whenever `query`, `caseSensitive`, or `regex` change. Add the ref sync at the top, before the early return on empty query. This ensures the ref stays in sync even when the query is cleared (so it reflects the true current state):
+
+```ts
+  useEffect(() => {
+    // Keep the ref in sync so the keyboard handler (Cmd+G / Cmd+Shift+G)
+    // can read the current search state without lifting it to parent state.
+    searchStateRef.current = { query, caseSensitive, regex }
+
+    if (!query) {
+      searchAddon?.clearDecorations()
+      return
+    }
+    if (searchAddon && isOpen) {
+      searchAddon.findNext(query, { caseSensitive, regex, incremental: true })
+    }
+  }, [query, searchAddon, isOpen, caseSensitive, regex, searchStateRef])
+```
+
+Note: `searchStateRef` is added to the dependency array to satisfy the linter, though as a ref it never changes identity.
+
+- [ ] **Step 6: Run the full test suite to verify nothing is broken**
 
 Run: `pnpm test`
 Expected: All tests pass (no regressions)
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add src/renderer/src/components/terminal-pane/TerminalPane.tsx
-git commit -m "feat: wire searchStateRef through TerminalPane to search and keyboard handler"
+git add src/renderer/src/components/terminal-pane/TerminalPane.tsx src/renderer/src/components/TerminalSearch.tsx
+git commit -m "feat: wire searchStateRef through TerminalPane and TerminalSearch"
 ```
 
 ---
 
-### Task 5: TypeScript build verification
+### Task 4: TypeScript build verification
 
 **Files:** None (verification only)
 
