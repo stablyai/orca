@@ -144,6 +144,7 @@ describe('useIpcEvents updater integration', () => {
           onOpenQuickOpen: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
           onActivateWorktree: () => () => {},
+          onNewBrowserTab: () => () => {},
           onFullscreenChanged: () => () => {},
           onTerminalZoom: () => () => {},
           getZoomLevel: () => 0,
