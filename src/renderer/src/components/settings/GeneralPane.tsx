@@ -57,6 +57,40 @@ function getCodexAccountLabel(
   return state.accounts.find((account) => account.id === accountId)?.email ?? 'Codex account'
 }
 
+function getCodexAccountErrorDescription(error: unknown): string {
+  const message = String((error as Error)?.message ?? error)
+    .replace(/^Error occurred in handler for 'codexAccounts:[^']+':\s*/i, '')
+    .replace(/^Error invoking remote method 'codexAccounts:[^']+':\s*/i, '')
+    .replace(/^Error:\s*/i, '')
+    .trim()
+  const normalizedMessage = message.toLowerCase()
+
+  // Why: Codex account actions cross the Electron IPC boundary, and invoke()
+  // failures often include transport-level wrapper text that is useful in
+  // devtools but noisy in product UI. Normalize the handful of expected auth
+  // failures here so users see actionable sign-in guidance instead of IPC
+  // internals or raw upstream wording.
+  if (normalizedMessage.includes('timed out waiting for codex login to finish')) {
+    return 'Codex sign-in took too long to finish. Please try again.'
+  }
+  if (normalizedMessage.includes('codex sign-in took too long to finish')) {
+    return 'Codex sign-in took too long to finish. Please try again.'
+  }
+  if (
+    normalizedMessage.includes('auth error 502') ||
+    normalizedMessage.includes('gateway') ||
+    normalizedMessage.includes('bad gateway')
+  ) {
+    return 'Codex sign-in is temporarily unavailable. Please try again in a minute.'
+  }
+  if (normalizedMessage.startsWith('codex login failed:')) {
+    const loginMessage = message.slice('Codex login failed:'.length).trim()
+    return loginMessage || 'Codex sign-in failed. Please try again.'
+  }
+
+  return message || 'Codex sign-in failed. Please try again.'
+}
+
 export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const updateStatus = useAppStore((s) => s.updateStatus)
@@ -182,7 +216,7 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
       }
     } catch (error) {
       toast.error('Codex account update failed.', {
-        description: String((error as Error)?.message ?? error)
+        description: getCodexAccountErrorDescription(error)
       })
     } finally {
       setCodexAction('idle')
@@ -258,7 +292,6 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
             />
           </button>
         </SearchableSetting>
-
       </section>
     ) : null,
     matchesSettingsSearch(searchQuery, GENERAL_BROWSER_SEARCH_ENTRIES) ? (
@@ -494,7 +527,7 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
       </section>
     ) : null,
     matchesSettingsSearch(searchQuery, GENERAL_CODEX_ACCOUNTS_SEARCH_ENTRIES) ? (
-      <section key="codex-accounts" className="space-y-4">
+      <section key="codex-accounts" id="general-codex-accounts" className="space-y-4 scroll-mt-6">
         <div className="space-y-1">
           <h3 className="text-sm font-semibold">Codex Accounts</h3>
           <p className="text-xs text-muted-foreground">
@@ -512,6 +545,10 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
           keywords={['codex', 'account', 'rate limit', 'status bar', 'quota']}
           className="space-y-3 px-1 py-2"
         >
+          {/* Why: Settings deep-links can target this subsection directly from
+          the status-bar account switcher. Keeping a stable DOM anchor here
+          avoids dumping the user at the top of General and making them hunt
+          for the actual Codex account controls. */}
           <div className="flex items-center justify-between gap-3">
             <div className="space-y-0.5">
               <Label>Accounts</Label>

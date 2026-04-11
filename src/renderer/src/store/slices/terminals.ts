@@ -578,20 +578,34 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     if (notices.length === 0) {
       return
     }
-    set((s) => ({
-      codexRestartNoticeByPtyId: {
-        ...s.codexRestartNoticeByPtyId,
-        ...Object.fromEntries(
-          notices.map((notice) => [
-            notice.ptyId,
-            {
-              previousAccountLabel: notice.previousAccountLabel,
-              nextAccountLabel: notice.nextAccountLabel
-            }
-          ])
-        )
+    set((s) => {
+      const next = { ...s.codexRestartNoticeByPtyId }
+      const nextPendingCodexPaneRestartIds = { ...s.pendingCodexPaneRestartIds }
+      for (const notice of notices) {
+        const existing = next[notice.ptyId]
+        const previousAccountLabel = existing?.previousAccountLabel ?? notice.previousAccountLabel
+
+        // Why: a live Codex pane stays on the account it originally launched
+        // with until that pane actually restarts. Repeated account switches
+        // must preserve that original pane account; otherwise A -> B -> A
+        // keeps showing a stale restart notice even though the pane never left
+        // account A and no longer needs a restart.
+        if (previousAccountLabel === notice.nextAccountLabel) {
+          delete next[notice.ptyId]
+          delete nextPendingCodexPaneRestartIds[notice.ptyId]
+          continue
+        }
+
+        next[notice.ptyId] = {
+          previousAccountLabel,
+          nextAccountLabel: notice.nextAccountLabel
+        }
       }
-    }))
+      return {
+        codexRestartNoticeByPtyId: next,
+        pendingCodexPaneRestartIds: nextPendingCodexPaneRestartIds
+      }
+    })
   },
 
   clearCodexRestartNotice: (ptyId) => {
@@ -600,8 +614,13 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         return {}
       }
       const next = { ...s.codexRestartNoticeByPtyId }
+      const nextPendingCodexPaneRestartIds = { ...s.pendingCodexPaneRestartIds }
       delete next[ptyId]
-      return { codexRestartNoticeByPtyId: next }
+      delete nextPendingCodexPaneRestartIds[ptyId]
+      return {
+        codexRestartNoticeByPtyId: next,
+        pendingCodexPaneRestartIds: nextPendingCodexPaneRestartIds
+      }
     })
   },
 

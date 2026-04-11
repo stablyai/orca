@@ -312,6 +312,11 @@ function CodexSwitcherMenu({
                   ? ` across ${staleCodexTabCount} ${staleCodexTabCount === 1 ? 'tab' : 'tabs'} in ${staleCodexWorktreeCount} worktrees.`
                   : ` in ${staleCodexTabCount} ${staleCodexTabCount === 1 ? 'tab' : 'tabs'}.`
                 : '.'}
+              {staleCodexWorktreeCount > 1 ? (
+                <span className="mt-0.5 block">
+                  Visible sessions restart now. Others restart when their worktree becomes active.
+                </span>
+              ) : null}
             </div>
             <button
               type="button"
@@ -319,8 +324,8 @@ function CodexSwitcherMenu({
               className="mt-2 inline-flex w-full items-center justify-center rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
             >
               {staleCodexSessionCount === 1
-                ? 'Restart Open Session'
-                : `Restart ${staleCodexSessionCount} Sessions`}
+                ? 'Queue Session Restart'
+                : `Queue ${staleCodexSessionCount} Session Restarts`}
             </button>
           </div>
         </>
@@ -328,7 +333,11 @@ function CodexSwitcherMenu({
       <DropdownMenuSeparator />
       <DropdownMenuItem
         onSelect={() => {
-          openSettingsTarget({ pane: 'general', repoId: null })
+          openSettingsTarget({
+            pane: 'general',
+            repoId: null,
+            sectionId: 'general-codex-accounts'
+          })
           setActiveView('settings')
         }}
       >

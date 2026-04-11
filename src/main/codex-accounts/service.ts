@@ -310,7 +310,7 @@ export class CodexAccountService {
       const timeout = setTimeout(() => {
         child.kill()
         settle(() => {
-          rejectPromise(new Error('Timed out waiting for Codex login to finish.'))
+          rejectPromise(new Error('Codex sign-in took too long to finish. Please try again.'))
         })
       }, LOGIN_TIMEOUT_MS)
 

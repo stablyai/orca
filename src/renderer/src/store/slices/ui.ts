@@ -34,6 +34,7 @@ export type UISlice = {
   settingsNavigationTarget: {
     pane: 'general' | 'appearance' | 'terminal' | 'shortcuts' | 'repo'
     repoId: string | null
+    sectionId?: string
   } | null
   openSettingsTarget: (target: NonNullable<UISlice['settingsNavigationTarget']>) => void
   clearSettingsTarget: () => void

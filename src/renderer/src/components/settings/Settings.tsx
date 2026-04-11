@@ -80,6 +80,7 @@ function Settings(): React.JSX.Element {
   const [activeSectionId, setActiveSectionId] = useState('general')
   const contentScrollRef = useRef<HTMLDivElement | null>(null)
   const terminalFontsLoadedRef = useRef(false)
+  const pendingNavSectionRef = useRef<string | null>(null)
   const pendingScrollTargetRef = useRef<string | null>(null)
 
   useEffect(() => {
@@ -100,10 +101,12 @@ function Settings(): React.JSX.Element {
       return
     }
 
-    pendingScrollTargetRef.current = getSettingsSectionId(
+    const paneSectionId = getSettingsSectionId(
       settingsNavigationTarget.pane as SettingsNavTarget,
       settingsNavigationTarget.repoId
     )
+    pendingNavSectionRef.current = paneSectionId
+    pendingScrollTargetRef.current = settingsNavigationTarget.sectionId ?? paneSectionId
     clearSettingsTarget()
   }, [clearSettingsTarget, settingsNavigationTarget])
 
@@ -277,17 +280,19 @@ function Settings(): React.JSX.Element {
 
   useEffect(() => {
     const scrollTargetId = pendingScrollTargetRef.current
+    const pendingNavSectionId = pendingNavSectionRef.current
     const visibleIds = new Set(visibleNavSections.map((section) => section.id))
 
-    if (scrollTargetId && visibleIds.has(scrollTargetId)) {
+    if (scrollTargetId && pendingNavSectionId && visibleIds.has(pendingNavSectionId)) {
       const target = document.getElementById(scrollTargetId)
       target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      setActiveSectionId(scrollTargetId)
+      setActiveSectionId(pendingNavSectionId)
+      pendingNavSectionRef.current = null
       pendingScrollTargetRef.current = null
       return
     }
 
-    if (scrollTargetId && settingsSearchQuery.trim() !== '') {
+    if (scrollTargetId && pendingNavSectionId && settingsSearchQuery.trim() !== '') {
       setSettingsSearchQuery('')
       return
     }
