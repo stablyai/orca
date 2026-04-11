@@ -101,7 +101,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     // focus-follows-mouse never happens unexpectedly.
     terminalFocusFollowsMouse: false,
     terminalScrollbackBytes: 10_000_000,
-    openLinksInApp: false,
+    openLinksInApp: true,
     rightSidebarOpenByDefault: true,
     notifications: getDefaultNotificationSettings(),
     diffDefaultView: 'inline',
