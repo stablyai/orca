@@ -11,6 +11,7 @@ import type {
   CodexManagedAccountSummary,
   CodexRateLimitAccountsState
 } from '../../shared/types'
+import { resolveCodexCommand } from '../codex-cli/command'
 import type { Store } from '../persistence'
 import type { RateLimitService } from '../rate-limits/service'
 
@@ -281,7 +282,7 @@ export class CodexAccountService {
 
   private async runCodexLogin(managedHomePath: string): Promise<void> {
     await new Promise<void>((resolvePromise, rejectPromise) => {
-      const child = spawn('codex', ['login'], {
+      const child = spawn(resolveCodexCommand(), ['login'], {
         stdio: ['ignore', 'pipe', 'pipe'],
         env: {
           ...process.env,
