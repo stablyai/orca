@@ -366,7 +366,7 @@ export type PreloadApi = {
     ) => () => void
     onTerminalZoom: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void
     readClipboardText: () => Promise<string>
-    readClipboardImage: () => Promise<string | null>
+    saveClipboardImageAsTempFile: () => Promise<string | null>
     writeClipboardText: (text: string) => Promise<void>
     writeClipboardImage: (dataUrl: string) => Promise<void>
     onFileDrop: (

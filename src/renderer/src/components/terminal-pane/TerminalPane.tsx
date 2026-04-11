@@ -437,19 +437,21 @@ export default function TerminalPane({
       const hasImage = e.clipboardData?.types.some((t) => t.startsWith('image/'))
       if (hasImage) {
         void window.api.ui
-          .readClipboardImage()
-          .then((dataUrl) => {
-            if (dataUrl) {
-              // Write to a temp file so the terminal process can access the image
-              // by path — avoids embedding raw binary in the PTY stream.
-              void window.api.ui.writeClipboardImage(dataUrl)
+          .saveClipboardImageAsTempFile()
+          .then((filePath) => {
+            if (filePath) {
+              // Paste the temp file path so the terminal process can access the image —
+              // avoids embedding raw binary in the PTY stream.
+              pane.terminal.paste(filePath)
             } else {
               // Clipboard reported an image type but read came back empty —
               // fall through to text paste so the user is not left with nothing.
               void window.api.ui
                 .readClipboardText()
                 .then((text) => {
-                  if (text) pane.terminal.paste(text)
+                  if (text) {
+                    pane.terminal.paste(text)
+                  }
                 })
                 .catch(() => {
                   /* ignore */
