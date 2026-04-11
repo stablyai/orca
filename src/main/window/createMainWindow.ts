@@ -213,6 +213,15 @@ export function createMainWindow(store: Store | null): BrowserWindow {
       // and intercepting it would break standard terminal usage (like Enter in shells or Vim).
       event.preventDefault()
       mainWindow.webContents.send('ui:toggleWorktreePalette')
+    } else if (input.code === 'KeyP' && !input.shift) {
+      // Forward Cmd/Ctrl+P to trigger Quick Open
+      event.preventDefault()
+      mainWindow.webContents.send('ui:openQuickOpen')
+    } else if (input.key >= '1' && input.key <= '9' && !input.shift) {
+      // Forward Cmd/Ctrl+1-9 for quick worktree switching
+      event.preventDefault()
+      const index = parseInt(input.key, 10) - 1
+      mainWindow.webContents.send('ui:jumpToWorktreeIndex', index)
     }
   })
 

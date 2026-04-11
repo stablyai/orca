@@ -1,7 +1,8 @@
 import { useEffect } from 'react'
 import { useAppStore } from '../store'
 import { applyUIZoom } from '@/lib/ui-zoom'
-import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-activation'
+import { activateAndRevealWorktree, ensureWorktreeHasInitialTerminal } from '@/lib/worktree-activation'
+import { getVisibleWorktreeIds } from '@/components/sidebar/visible-worktrees'
 import { nextEditorFontZoomLevel, computeEditorFontSize } from '@/lib/editor-font-zoom'
 import type { UpdateStatus } from '../../../shared/types'
 import { createUpdateToastController } from './update-toast-controller'
@@ -87,6 +88,28 @@ export function useIpcEvents(): void {
           return
         }
         store.openModal('worktree-palette')
+      })
+    )
+
+    unsubs.push(
+      window.api.ui.onOpenQuickOpen(() => {
+        const store = useAppStore.getState()
+        if (store.activeView !== 'settings' && store.activeWorktreeId !== null) {
+          store.openModal('quick-open')
+        }
+      })
+    )
+
+    unsubs.push(
+      window.api.ui.onJumpToWorktreeIndex((index) => {
+        const store = useAppStore.getState()
+        if (store.activeView === 'settings') {
+          return
+        }
+        const visibleIds = getVisibleWorktreeIds()
+        if (index < visibleIds.length) {
+          activateAndRevealWorktree(visibleIds[index])
+        }
       })
     )
 

@@ -547,6 +547,16 @@ const api = {
       ipcRenderer.on('ui:toggleWorktreePalette', listener)
       return () => ipcRenderer.removeListener('ui:toggleWorktreePalette', listener)
     },
+    onOpenQuickOpen: (callback: () => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent) => callback()
+      ipcRenderer.on('ui:openQuickOpen', listener)
+      return () => ipcRenderer.removeListener('ui:openQuickOpen', listener)
+    },
+    onJumpToWorktreeIndex: (callback: (index: number) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, index: number) => callback(index)
+      ipcRenderer.on('ui:jumpToWorktreeIndex', listener)
+      return () => ipcRenderer.removeListener('ui:jumpToWorktreeIndex', listener)
+    },
     onActivateWorktree: (
       callback: (data: {
         repoId: string

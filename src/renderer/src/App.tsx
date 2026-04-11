@@ -25,6 +25,7 @@ import {
   setRuntimeGraphSyncEnabled
 } from './runtime/sync-runtime-graph'
 import { getVisibleWorktreeIds } from './components/sidebar/visible-worktrees'
+import { activateAndRevealWorktree } from './lib/worktree-activation'
 import { useGlobalFileDrop } from './hooks/useGlobalFileDrop'
 import { registerUpdaterBeforeUnloadBypass } from './lib/updater-beforeunload'
 import type { BrowserTab, PersistedOpenFile, WorkspaceVisibleTabType } from '../../shared/types'
@@ -464,10 +465,7 @@ function App(): React.JSX.Element {
         if (index < visibleIds.length) {
           // Prevent the digit from being typed into the focused input/editor
           e.preventDefault()
-          const store = useAppStore.getState()
-          store.setActiveWorktree(visibleIds[index])
-          // Scroll sidebar to reveal the activated card
-          store.revealWorktreeInSidebar(visibleIds[index])
+          activateAndRevealWorktree(visibleIds[index])
         }
         return
       }
