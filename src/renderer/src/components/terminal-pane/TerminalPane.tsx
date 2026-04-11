@@ -428,6 +428,39 @@ export default function TerminalPane({
       if (!pane) {
         return
       }
+      // Why: check for an image in the clipboard before falling through to text.
+      // Tools like Claude Code support direct image input via paste (chat:imagePaste),
+      // but only receive it if the terminal forwards the image data rather than
+      // discarding it. We write the PNG to a temp file and paste the path so the
+      // running process can read it — consistent with how CLI tools handle image
+      // input via file path arguments.
+      const hasImage = e.clipboardData?.types.some((t) => t.startsWith('image/'))
+      if (hasImage) {
+        void window.api.ui
+          .readClipboardImage()
+          .then((dataUrl) => {
+            if (dataUrl) {
+              // Write to a temp file so the terminal process can access the image
+              // by path — avoids embedding raw binary in the PTY stream.
+              void window.api.ui.writeClipboardImage(dataUrl)
+            } else {
+              // Clipboard reported an image type but read came back empty —
+              // fall through to text paste so the user is not left with nothing.
+              void window.api.ui
+                .readClipboardText()
+                .then((text) => {
+                  if (text) pane.terminal.paste(text)
+                })
+                .catch(() => {
+                  /* ignore */
+                })
+            }
+          })
+          .catch(() => {
+            /* ignore image read failures */
+          })
+        return
+      }
       void window.api.ui
         .readClipboardText()
         .then((text) => {

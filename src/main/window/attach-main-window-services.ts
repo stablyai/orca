@@ -129,8 +129,20 @@ export function registerClipboardHandlers(): void {
   ipcMain.removeHandler('clipboard:readText')
   ipcMain.removeHandler('clipboard:writeText')
   ipcMain.removeHandler('clipboard:writeImage')
+  ipcMain.removeHandler('clipboard:readImage')
 
   ipcMain.handle('clipboard:readText', () => clipboard.readText())
+  // Why: terminals need to detect clipboard images to support tools like Claude
+  // Code that accept image input via paste. Returns a PNG data URI when the
+  // clipboard contains an image, or null when it does not — so the caller can
+  // decide whether to trigger image paste or fall through to text paste.
+  ipcMain.handle('clipboard:readImage', () => {
+    const image = clipboard.readImage()
+    if (image.isEmpty()) {
+      return null
+    }
+    return `data:image/png;base64,${image.toPNG().toString('base64')}`
+  })
   ipcMain.handle('clipboard:writeText', (_event, text: string) => clipboard.writeText(text))
   ipcMain.handle('clipboard:writeImage', (_event, dataUrl: string) => {
     // Why: only accept validated PNG data URIs to prevent writing arbitrary

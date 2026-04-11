@@ -644,6 +644,7 @@ const api = {
       return () => ipcRenderer.removeListener('terminal:zoom', listener)
     },
     readClipboardText: (): Promise<string> => ipcRenderer.invoke('clipboard:readText'),
+    readClipboardImage: (): Promise<string | null> => ipcRenderer.invoke('clipboard:readImage'),
     writeClipboardText: (text: string): Promise<void> =>
       ipcRenderer.invoke('clipboard:writeText', text),
     writeClipboardImage: (dataUrl: string): Promise<void> =>
