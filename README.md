@@ -41,7 +41,7 @@
 
 ## Features
 
-- **No login required** — Bring your own Claude Code or Codex subscription. No account walls, no extra tokens, no middleman.
+- **No login required** — Bring your own Claude Code or Codex subscription.
 - **Worktree-native** — Every feature gets its own worktree. No stashing, no branch juggling. Spin up and switch instantly.
 - **Multi-agent terminals** — Run multiple AI agents side-by-side in tabs and panes. See which ones are active at a glance.
 - **Built-in source control** — Review AI-generated diffs, make quick edits, and commit without leaving Orca.
@@ -54,6 +54,20 @@
 
 - **[Download from onOrca.dev](https://onOrca.dev)**
 - Or download the latest binaries via the **[GitHub Releases page](https://github.com/stablyai/orca/releases)**.
+
+---
+
+## [New] Hot Swap Codex Accounts
+
+**Multiple Codex accounts? Switch in one click.**
+
+If you run multiple Codex accounts to get the best token deal, Orca lets you hot-swap between them instantly — no re-login, no config files. Just pick an account and keep building.
+
+<p align="center">
+
+  <img src="docs/assets/codex-account-switcher.gif" alt="Orca Codex Account Switcher — hot swap between multiple Codex accounts" width="800" />
+
+</p>
 
 ---
 
