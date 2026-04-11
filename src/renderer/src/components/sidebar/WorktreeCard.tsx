@@ -559,11 +559,25 @@ const WorktreeCard = React.memo(function WorktreeCard({
               )}
 
               {cardProps.includes('comment') && worktree.comment && (
-                <CommentMarkdown
-                  content={worktree.comment}
-                  className="text-[11px] text-muted-foreground break-words cursor-pointer -mx-1.5 px-1.5 py-0.5 hover:bg-background/40 hover:text-foreground rounded transition-colors leading-normal [&_.comment-md-p]:block [&_.comment-md-p+.comment-md-p]:mt-1"
-                  onClick={handleEditComment}
-                />
+                <HoverCard openDelay={400}>
+                  <HoverCardTrigger asChild>
+                    <CommentMarkdown
+                      content={worktree.comment}
+                      className="text-[11px] text-muted-foreground break-words -mx-1.5 px-1.5 py-0.5 rounded transition-colors leading-normal line-clamp-2 [&_.comment-md-p]:inline [&_.comment-md-p+.comment-md-p]:before:content-['_']"
+                      onDoubleClick={handleEditComment}
+                    />
+                  </HoverCardTrigger>
+                  <HoverCardContent
+                    side="right"
+                    align="start"
+                    className="w-72 max-h-80 overflow-y-auto p-3"
+                  >
+                    <CommentMarkdown
+                      content={worktree.comment}
+                      className="text-[11.5px] text-foreground break-words leading-normal [&_.comment-md-p]:block [&_.comment-md-p+.comment-md-p]:mt-1"
+                    />
+                  </HoverCardContent>
+                </HoverCard>
               )}
             </div>
           )}
