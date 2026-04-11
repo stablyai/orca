@@ -84,6 +84,14 @@ export function useTerminalPaneContextMenu({
     const text = await window.api.ui.readClipboardText()
     if (text) {
       pane.terminal.paste(text)
+      return
+    }
+    // Why: clipboard has no text — check for an image (e.g. screenshot).
+    // Saves the image to a temp file and pastes the path so CLI tools like
+    // Claude Code can access it, consistent with the keyboard paste path.
+    const filePath = await window.api.ui.saveClipboardImageAsTempFile()
+    if (filePath) {
+      pane.terminal.paste(filePath)
     }
   }
 

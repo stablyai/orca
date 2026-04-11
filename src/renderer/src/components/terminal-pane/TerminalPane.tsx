@@ -400,11 +400,17 @@ export default function TerminalPane({
     toggleExpandPane
   })
 
-  // Intercept paste events on the terminal to bypass Chromium's native
-  // clipboard pipeline. Chromium holds NSPasteboard references during format
-  // conversion, which can cause concurrent clipboard reads by CLI tools
-  // (e.g. Codex checking for images) to fail intermittently. Reading via
-  // Electron's clipboard module in the main process avoids this contention.
+  // Intercept paste at the keydown level (Cmd+V / Ctrl+V) AND as a fallback
+  // on the paste event. We must handle keydown because Chromium does not fire
+  // a paste event when the clipboard contains only image data (no text
+  // representation) and the target is a textarea — which is exactly how
+  // xterm.js receives focus. Without the keydown handler, image-only pastes
+  // are silently discarded and tools like Claude Code never receive the image.
+  //
+  // The paste event handler is kept as a fallback for non-keyboard paste
+  // triggers (Edit > Paste menu, programmatic paste, etc.) and also bypasses
+  // Chromium's native clipboard pipeline that can cause concurrent clipboard
+  // reads by CLI tools (e.g. Codex checking for images) to fail intermittently.
   useEffect(() => {
     if (!isActive) {
       return
@@ -413,6 +419,66 @@ export default function TerminalPane({
     if (!container) {
       return
     }
+
+    // Shared helper: try text first (fast path, single IPC call for the
+    // common case), then check for a clipboard image only when text is empty
+    // — which is the image-only clipboard scenario this fix targets.
+    const pasteFromClipboard = (pane: { terminal: { paste: (data: string) => void } }): void => {
+      void window.api.ui
+        .readClipboardText()
+        .then((text) => {
+          if (text) {
+            pane.terminal.paste(text)
+            return
+          }
+          // Why: clipboard has no text — check for an image. This is the
+          // image-only clipboard case (e.g. screenshot) where Chromium's paste
+          // event would never fire on a textarea. We save the image to a temp
+          // file and paste the path so the terminal process can access it.
+          return window.api.ui.saveClipboardImageAsTempFile().then((filePath) => {
+            if (filePath) {
+              pane.terminal.paste(filePath)
+            }
+          })
+        })
+        .catch(() => {
+          /* ignore clipboard failures */
+        })
+    }
+
+    // Why: intercept Cmd+V / Ctrl+V at the keydown level so we can check
+    // for clipboard images via Electron's main-process clipboard API. The
+    // browser's paste event is unreliable for image-only clipboards when the
+    // target is a <textarea> (xterm.js's hidden input), so this handler
+    // ensures image paste works regardless.
+    const isMac = navigator.userAgent.includes('Mac')
+    const onKeyPaste = (e: KeyboardEvent): void => {
+      if (e.key.toLowerCase() !== 'v') {
+        return
+      }
+      const mod = isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey
+      if (!mod || e.altKey || e.shiftKey) {
+        return
+      }
+      const target = e.target
+      if (target instanceof Element && target.closest('[data-terminal-search-root]')) {
+        return
+      }
+      e.preventDefault()
+      e.stopPropagation()
+      const manager = managerRef.current
+      if (!manager) {
+        return
+      }
+      const pane = manager.getActivePane() ?? manager.getPanes()[0]
+      if (!pane) {
+        return
+      }
+      pasteFromClipboard(pane)
+    }
+
+    // Fallback: handle paste events triggered by non-keyboard sources
+    // (Edit > Paste menu, programmatic paste, etc.).
     const onPaste = (e: ClipboardEvent): void => {
       const target = e.target
       if (target instanceof Element && target.closest('[data-terminal-search-root]')) {
@@ -428,54 +494,15 @@ export default function TerminalPane({
       if (!pane) {
         return
       }
-      // Why: check for an image in the clipboard before falling through to text.
-      // Tools like Claude Code support direct image input via paste (chat:imagePaste),
-      // but only receive it if the terminal forwards the image data rather than
-      // discarding it. We write the PNG to a temp file and paste the path so the
-      // running process can read it — consistent with how CLI tools handle image
-      // input via file path arguments.
-      const hasImage = e.clipboardData?.types.some((t) => t.startsWith('image/'))
-      if (hasImage) {
-        void window.api.ui
-          .saveClipboardImageAsTempFile()
-          .then((filePath) => {
-            if (filePath) {
-              // Paste the temp file path so the terminal process can access the image —
-              // avoids embedding raw binary in the PTY stream.
-              pane.terminal.paste(filePath)
-            } else {
-              // Clipboard reported an image type but read came back empty —
-              // fall through to text paste so the user is not left with nothing.
-              void window.api.ui
-                .readClipboardText()
-                .then((text) => {
-                  if (text) {
-                    pane.terminal.paste(text)
-                  }
-                })
-                .catch(() => {
-                  /* ignore */
-                })
-            }
-          })
-          .catch(() => {
-            /* ignore image read failures */
-          })
-        return
-      }
-      void window.api.ui
-        .readClipboardText()
-        .then((text) => {
-          if (text) {
-            pane.terminal.paste(text)
-          }
-        })
-        .catch(() => {
-          /* ignore clipboard read failures */
-        })
+      pasteFromClipboard(pane)
     }
+
+    container.addEventListener('keydown', onKeyPaste, { capture: true })
     container.addEventListener('paste', onPaste, { capture: true })
-    return () => container.removeEventListener('paste', onPaste, { capture: true })
+    return () => {
+      container.removeEventListener('keydown', onKeyPaste, { capture: true })
+      container.removeEventListener('paste', onPaste, { capture: true })
+    }
   }, [isActive])
 
   // Sync the data-has-title attribute on pane containers when titles change,
