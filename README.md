@@ -43,11 +43,11 @@
 
 ---
 
-## [New] Built-in Browser & Design Mode
+## [New] Per Worktree Browser & Design Mode
 
 **See your app. Click any element. Drop it into the chat.**
 
-Orca ships with a built-in browser right inside your IDE. Preview your app as you build, then switch to Design Mode — click any UI element and it lands directly in your AI chat as context. No screenshots, no copy-pasting selectors. Just point at what you want to change and tell the agent what to do.
+Orca ships with a built-in browser right inside your worktree. Preview your app as you build, then switch to Design Mode — click any UI element and it lands directly in your AI chat as context. No screenshots, no copy-pasting selectors. Just point at what you want to change and tell the agent what to do.
 
 <p align="center">
   <img src="docs/assets/orca-design-mode.gif" alt="Orca Design Mode — click any UI element and drop it into the chat" width="800" />
