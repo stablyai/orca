@@ -394,6 +394,10 @@ export type GlobalSettings = {
    *  analytics and external terminal sessions. */
   codexManagedAccounts: CodexManagedAccount[]
   activeCodexManagedAccountId: string | null
+  /** Custom keybinding overrides. Keys are action IDs (e.g. 'toggleSidebar'),
+   *  values are key combo strings (e.g. 'Cmd+B' or 'Ctrl+B'). Unset actions
+   *  use their built-in defaults. */
+  keybindings: Record<string, string>
 }
 
 export type NotificationEventSource = 'agent-task-complete' | 'terminal-bell' | 'test'

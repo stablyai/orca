@@ -460,7 +460,7 @@ function Settings(): React.JSX.Element {
                   description="Keyboard shortcuts for common actions."
                   searchEntries={SHORTCUTS_PANE_SEARCH_ENTRIES}
                 >
-                  <ShortcutsPane />
+                  <ShortcutsPane settings={settings} updateSettings={updateSettings} />
                 </SettingsSection>
 
                 <SettingsSection
