@@ -14,6 +14,9 @@ export type GrabModeHook = {
   state: GrabModeState
   payload: BrowserGrabPayload | null
   error: string | null
+  /** True when the user right-clicked to select, signalling the renderer
+   *  should show the full action menu instead of auto-copying. */
+  contextMenu: boolean
   toggle: () => void
   cancel: () => void
   /** Called after Copy — re-arms grab for another pick. */
@@ -37,6 +40,7 @@ export function useGrabMode(browserTabId: string): GrabModeHook {
   const [state, setState] = useState<GrabModeState>('idle')
   const [payload, setPayload] = useState<BrowserGrabPayload | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [contextMenu, setContextMenu] = useState(false)
   const activeOpIdRef = useRef<string | null>(null)
   const browserTabIdRef = useRef(browserTabId)
 
@@ -88,7 +92,7 @@ export function useGrabMode(browserTabId: string): GrabModeHook {
 
     activeOpIdRef.current = null
 
-    if (result.kind === 'selected') {
+    if (result.kind === 'selected' || result.kind === 'context-selected') {
       // Capture screenshot for the selected element
       let screenshot: BrowserGrabScreenshot | null = null
       try {
@@ -103,6 +107,7 @@ export function useGrabMode(browserTabId: string): GrabModeHook {
         // Screenshot failure is non-fatal
       }
 
+      setContextMenu(result.kind === 'context-selected')
       setPayload({ ...result.payload, screenshot })
       setState('confirming')
     } else if (result.kind === 'cancelled') {
@@ -118,6 +123,7 @@ export function useGrabMode(browserTabId: string): GrabModeHook {
     if (state === 'idle' || state === 'error') {
       setError(null)
       setPayload(null)
+      setContextMenu(false)
       void armAndAwait()
     } else {
       // Disable grab mode
@@ -134,6 +140,7 @@ export function useGrabMode(browserTabId: string): GrabModeHook {
       setState('idle')
       setPayload(null)
       setError(null)
+      setContextMenu(false)
     }
   }, [state, armAndAwait])
 
@@ -151,6 +158,7 @@ export function useGrabMode(browserTabId: string): GrabModeHook {
     setState('idle')
     setPayload(null)
     setError(null)
+    setContextMenu(false)
   }, [])
 
   // Why: Copy re-arms so the user can quickly pick another element without
@@ -163,6 +171,7 @@ export function useGrabMode(browserTabId: string): GrabModeHook {
     setState('armed')
     setPayload(null)
     setError(null)
+    setContextMenu(false)
     void armAndAwait()
   }, [armAndAwait])
 
@@ -177,6 +186,7 @@ export function useGrabMode(browserTabId: string): GrabModeHook {
     setState('idle')
     setPayload(null)
     setError(null)
+    setContextMenu(false)
   }, [])
 
   // Keyboard shortcut: Esc cancels grab mode
@@ -192,5 +202,5 @@ export function useGrabMode(browserTabId: string): GrabModeHook {
     return () => window.removeEventListener('keydown', handleKeyDown, true)
   }, [state, cancel])
 
-  return { state, payload, error, toggle, cancel, rearm, exit }
+  return { state, payload, error, contextMenu, toggle, cancel, rearm, exit }
 }

@@ -3,16 +3,17 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ArrowLeft,
   ArrowRight,
+  CircleCheck,
   Copy,
   Crosshair,
   ExternalLink,
   Globe,
   Image,
   Loader2,
+  OctagonX,
   RefreshCw,
   SquareCode
 } from 'lucide-react'
-import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -272,6 +273,82 @@ export default function BrowserPane({
   const addressBarValueRef = useRef(browserTab.url)
   const [resourceNotice, setResourceNotice] = useState<string | null>(null)
   const grab = useGrabMode(browserTab.id)
+
+  // Inline toast that appears near the grabbed element instead of the global
+  // bottom-right toaster, so feedback feels spatially connected to the action.
+  // Why: positioned below (or above, if near viewport bottom) so it doesn't
+  // occlude the element the user just selected.
+  const [grabToast, setGrabToast] = useState<{
+    message: string
+    type: 'success' | 'error'
+    x: number
+    y: number
+    below: boolean
+    payload: BrowserGrabPayload | null
+  } | null>(null)
+  const grabToastTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+  // Why: clear the toast auto-dismiss timer on unmount so it cannot fire
+  // after the component is destroyed (prevents setState-on-unmounted warnings
+  // and stale rearm calls).
+  useEffect(() => {
+    return () => clearTimeout(grabToastTimerRef.current)
+  }, [])
+  const grabRef = useRef(grab)
+  grabRef.current = grab
+
+  const dismissGrabToast = useCallback(() => {
+    clearTimeout(grabToastTimerRef.current)
+    setGrabToast(null)
+    // Why: only rearm if the grab state is still 'confirming', meaning the
+    // auto-copy toast is dismissing naturally. If the user already triggered
+    // a shortcut (C/S) that called rearm, the state will be 'armed' and we
+    // skip to avoid a double-rearm race.
+    if (grabRef.current.state === 'confirming') {
+      grabRef.current.rearm()
+    }
+  }, [])
+
+  const showGrabToast = useCallback(
+    (message: string, type: 'success' | 'error', payload?: BrowserGrabPayload | null) => {
+      let x = 0
+      let y = 0
+      let below = true
+      const containerRect = containerRef.current?.getBoundingClientRect()
+      if (payload) {
+        const rect = payload.target.rectViewport
+        const webview = webviewRef.current
+        const webviewRect = webview?.getBoundingClientRect()
+        const offsetX = (webviewRect?.left ?? 0) - (containerRect?.left ?? 0)
+        const offsetY = (webviewRect?.top ?? 0) - (containerRect?.top ?? 0)
+        x = offsetX + rect.x + rect.width / 2
+        const elementBottom = offsetY + rect.y + rect.height
+        const elementTop = offsetY + rect.y
+        const containerHeight = containerRect?.height ?? 0
+        // Show below the element unless it's too close to the bottom edge
+        below = elementBottom + 52 < containerHeight
+        y = below ? elementBottom : elementTop
+      } else if (containerRect) {
+        x = containerRect.width / 2
+        y = containerRect.height / 2
+      }
+      clearTimeout(grabToastTimerRef.current)
+      setGrabToast({ message, type, x, y, below, payload: payload ?? null })
+      grabToastTimerRef.current = setTimeout(() => dismissGrabToast(), 2000)
+    },
+    [dismissGrabToast]
+  )
+
+  // Why: auto-copy element context when the user left-clicks to select in
+  // grab mode. One-click-to-copy is the primary action. Right-click
+  // (contextMenu=true) skips auto-copy and shows the full action dropdown
+  // so the user can choose between copy and screenshot.
+  useEffect(() => {
+    if (grab.state === 'confirming' && grab.payload && !grab.contextMenu) {
+      const text = formatGrabPayloadAsText(grab.payload)
+      void window.api.ui.writeClipboardText(text)
+      showGrabToast('Copied', 'success', grab.payload)
+    }
+  }, [grab.state, grab.payload, grab.contextMenu, showGrabToast])
 
   useEffect(() => {
     setAddressBarValue(toDisplayUrl(browserTab.url))
@@ -594,11 +671,23 @@ export default function BrowserPane({
     return () => window.clearInterval(intervalId)
   }, [browserTab.id, browserTab.loading])
 
-  // CmdOrCtrl+Shift+G toggles grab mode
+  // CmdOrCtrl+C toggles grab mode
+  // Why: Cmd+C is deliberately repurposed inside the browser pane so that the
+  // most natural "copy" gesture enters grab mode, letting the user visually
+  // pick and copy an element.  Normal text copy inside the webview guest is
+  // handled by the guest page itself (Chromium's built-in Cmd+C) and never
+  // reaches the host renderer keydown listener.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent): void => {
+      // Why: let native Cmd+C work in text inputs (address bar, search fields,
+      // contentEditable regions). Only intercept when focus is on a non-input
+      // element so grab-mode toggle doesn't swallow copy in form controls.
+      const tag = (e.target as HTMLElement)?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable) {
+        return
+      }
       const isMod = navigator.userAgent.includes('Mac') ? e.metaKey : e.ctrlKey
-      if (isMod && e.shiftKey && e.key.toLowerCase() === 'g') {
+      if (isMod && !e.shiftKey && e.key.toLowerCase() === 'c') {
         e.preventDefault()
         grab.toggle()
       }
@@ -635,25 +724,34 @@ export default function BrowserPane({
         if (key === 'c') {
           const text = formatGrabPayloadAsText(payload)
           void window.api.ui.writeClipboardText(text)
-          toast.success('Copied element context to clipboard')
+          showGrabToast('Copied', 'success', payload)
         } else {
           const dataUrl = payload.screenshot?.dataUrl
           if (dataUrl?.startsWith('data:image/png;base64,')) {
             void window.api.ui.writeClipboardImage(dataUrl)
-            toast.success('Copied screenshot to clipboard')
+            showGrabToast('Screenshotted', 'success', payload)
           } else {
-            toast.error('No screenshot available')
+            showGrabToast('No screenshot available', 'error', payload)
           }
         }
       }
 
       if (grab.state === 'confirming') {
-        // Already have the payload from the click selection
-        const currentPayload = grabPayloadRef.current
-        if (currentPayload) {
-          copyFromPayload(currentPayload)
+        // Why: left-click auto-copies, so only S (screenshot) is useful.
+        // But right-click (contextMenu) skips auto-copy, so C must still work.
+        if (grab.contextMenu && key === 'c') {
+          const currentPayload = grabPayloadRef.current
+          if (currentPayload) {
+            copyFromPayload(currentPayload)
+          }
+          grab.rearm()
+        } else if (key === 's') {
+          const currentPayload = grabPayloadRef.current
+          if (currentPayload) {
+            copyFromPayload(currentPayload)
+          }
+          grab.rearm()
         }
-        grab.rearm()
       } else {
         // armed/awaiting — extract hovered element via IPC without clicking
         void (async () => {
@@ -661,7 +759,7 @@ export default function BrowserPane({
             browserTabId: browserTabIdRef.current
           })
           if (!result.ok) {
-            toast.error('No element hovered')
+            showGrabToast('No element hovered', 'error')
             return
           }
           const payload = result.payload as BrowserGrabPayload
@@ -687,29 +785,40 @@ export default function BrowserPane({
     }
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [grab])
+  }, [grab, showGrabToast])
 
-  // Why: the copy handlers do NOT call grab.rearm() themselves. Rearm is
-  // triggered by onOpenChange(false) when the dropdown menu closes after
-  // item selection. This prevents a double-rearm race that would cause the
-  // second grab selection's dropdown to fail to appear.
+  // Why: Radix DropdownMenu fires onOpenChange(false) before onSelect, so
+  // the rearm in onOpenChange would clear the payload before the handler runs.
+  // This ref lets onOpenChange skip the rearm when a menu action was taken.
+  const grabMenuActionTakenRef = useRef(false)
+
+  // Handlers for the right-click context dropdown menu
   const handleGrabCopy = useCallback(() => {
-    if (!grab.payload) {
+    grabMenuActionTakenRef.current = true
+    const payload = grabPayloadRef.current
+    if (!payload) {
       return
     }
-    const text = formatGrabPayloadAsText(grab.payload)
+    const text = formatGrabPayloadAsText(payload)
     void window.api.ui.writeClipboardText(text)
-    toast.success('Copied element context to clipboard')
-  }, [grab])
+    showGrabToast('Copied', 'success', payload)
+    grab.rearm()
+  }, [grab, showGrabToast])
 
   const handleGrabCopyScreenshot = useCallback(() => {
-    const dataUrl = grab.payload?.screenshot?.dataUrl
+    grabMenuActionTakenRef.current = true
+    const payload = grabPayloadRef.current
+    if (!payload) {
+      return
+    }
+    const dataUrl = payload.screenshot?.dataUrl
     if (!dataUrl?.startsWith('data:image/png;base64,')) {
       return
     }
     void window.api.ui.writeClipboardImage(dataUrl)
-    toast.success('Copied screenshot to clipboard')
-  }, [grab])
+    showGrabToast('Screenshotted', 'success', payload)
+    grab.rearm()
+  }, [grab, showGrabToast])
 
   const submitAddressBar = (): void => {
     const nextUrl = normalizeBrowserNavigationUrl(addressBarValue)
@@ -826,7 +935,7 @@ export default function BrowserPane({
           variant={grab.state !== 'idle' ? 'default' : 'ghost'}
           className={`h-8 w-8 ${grab.state !== 'idle' ? 'bg-foreground/80 text-background hover:bg-foreground/90' : ''}`}
           onClick={grab.toggle}
-          title={`Grab page element (${navigator.userAgent.includes('Mac') ? '⌘⇧G' : 'Ctrl+Shift+G'})`}
+          title={`Grab page element (${navigator.userAgent.includes('Mac') ? '⌘C' : 'Ctrl+C'})`}
           disabled={isBlankTab}
         >
           <Crosshair className="size-4" />
@@ -870,8 +979,8 @@ export default function BrowserPane({
             {grab.state === 'error'
               ? `Grab failed: ${grab.error ?? 'Unknown error'}`
               : grab.state === 'confirming'
-                ? 'Element selected — C to copy, S for screenshot'
-                : 'Hover and press C to copy, S for screenshot, or click to select'}
+                ? 'Copied — press S for screenshot, or click another element'
+                : 'Click to copy, or hover and press C. S for screenshot.'}
           </span>
           <button
             className="ml-auto text-muted-foreground hover:text-foreground"
@@ -936,14 +1045,18 @@ export default function BrowserPane({
             </div>
           </div>
         ) : null}
-        {/* Why: the grab copy menu appears at the selected element's location
-            inside the webview, like a right-click context menu. A hidden trigger
-            is positioned at the element's center (translated from guest viewport
-            coordinates to renderer coordinates using the webview's offset). */}
+        {/* Right-click context dropdown: positioned at the element's center,
+            shown when grab.contextMenu is true (user right-clicked). */}
         <DropdownMenu
-          open={grab.state === 'confirming'}
+          open={grab.state === 'confirming' && grab.contextMenu}
           onOpenChange={(open) => {
             if (!open && grab.state === 'confirming') {
+              // Why: skip rearm if a menu action (Copy/Screenshot) already
+              // handled the rearm — see grabMenuActionTakenRef.
+              if (grabMenuActionTakenRef.current) {
+                grabMenuActionTakenRef.current = false
+                return
+              }
               grab.rearm()
             }
           }}
@@ -960,10 +1073,9 @@ export default function BrowserPane({
                 const rect = grab.payload.target.rectViewport
                 const webview = webviewRef.current
                 const webviewRect = webview?.getBoundingClientRect()
-                const containerRect = containerRef.current?.getBoundingClientRect()
-                // Position relative to the container (which has position:relative)
-                const offsetX = (webviewRect?.left ?? 0) - (containerRect?.left ?? 0)
-                const offsetY = (webviewRect?.top ?? 0) - (containerRect?.top ?? 0)
+                const cRect = containerRef.current?.getBoundingClientRect()
+                const offsetX = (webviewRect?.left ?? 0) - (cRect?.left ?? 0)
+                const offsetY = (webviewRect?.top ?? 0) - (cRect?.top ?? 0)
                 return {
                   left: offsetX + rect.x + rect.width / 2,
                   top: offsetY + rect.y + rect.height / 2
@@ -985,9 +1097,92 @@ export default function BrowserPane({
               </DropdownMenuItem>
             ) : null}
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => grab.cancel()}>Cancel</DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={() => {
+                grabMenuActionTakenRef.current = true
+                grab.cancel()
+              }}
+            >
+              Cancel
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {/* Inline toast bubble (left-click auto-copy feedback). Positioned
+            below (or above if near viewport bottom) so it doesn't occlude
+            the element. The "···" button opens the same action dropdown as
+            right-click for users who prefer clicking. */}
+        {grabToast ? (
+          <div
+            className="absolute z-30 flex items-center animate-in fade-in zoom-in-95 duration-150"
+            style={{
+              left: grabToast.x,
+              top: grabToast.y,
+              transform: grabToast.below
+                ? 'translate(-50%, 8px)'
+                : 'translate(-50%, -100%) translateY(-8px)',
+              flexDirection: grabToast.below ? 'column' : 'column-reverse'
+            }}
+          >
+            {/* Caret pointing toward the element */}
+            <div
+              className="h-2 w-4 shrink-0"
+              style={{
+                clipPath: grabToast.below
+                  ? 'polygon(50% 0%, 0% 100%, 100% 100%)'
+                  : 'polygon(0% 0%, 100% 0%, 50% 100%)',
+                background: 'white'
+              }}
+            />
+            <div
+              className={`flex items-center gap-1.5 rounded-full py-1.5 pl-3 pr-1.5 shadow-lg ${
+                grabToast.type === 'success' ? 'bg-white text-gray-900' : 'bg-white text-red-600'
+              }`}
+            >
+              {grabToast.type === 'success' ? (
+                <CircleCheck className="size-4 fill-blue-600 text-white" />
+              ) : (
+                <OctagonX className="size-4 text-red-500" />
+              )}
+              <span className="text-sm font-semibold">{grabToast.message}</span>
+              <DropdownMenu
+                onOpenChange={(open) => {
+                  if (open) {
+                    clearTimeout(grabToastTimerRef.current)
+                  } else {
+                    grabToastTimerRef.current = setTimeout(() => dismissGrabToast(), 1200)
+                  }
+                }}
+              >
+                <DropdownMenuTrigger asChild>
+                  <button className="flex size-6 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-black/10 hover:text-gray-700">
+                    <span className="text-sm font-bold leading-none">···</span>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" sideOffset={4}>
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      const dataUrl = grabToast.payload?.screenshot?.dataUrl
+                      if (dataUrl?.startsWith('data:image/png;base64,')) {
+                        void window.api.ui.writeClipboardImage(dataUrl)
+                        setGrabToast((prev) =>
+                          prev ? { ...prev, message: 'Screenshotted' } : null
+                        )
+                      }
+                    }}
+                    disabled={
+                      !grabToast.payload?.screenshot?.dataUrl?.startsWith('data:image/png;base64,')
+                    }
+                  >
+                    <Image className="size-3.5" />
+                    Copy Screenshot
+                    <DropdownMenuShortcut>S</DropdownMenuShortcut>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   )

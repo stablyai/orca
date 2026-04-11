@@ -441,10 +441,24 @@ const AWAIT_CLICK_SCRIPT = `new Promise(function(resolve, reject) {
   }
 
   function onContext(e) {
-    // Block right-click while armed
+    // Why: right-click resolves with the payload wrapped in a context-menu
+    // marker so the renderer can show the full action dropdown instead of
+    // auto-copying. This gives users a deliberate path to screenshot and
+    // other secondary actions while keeping left-click as the fast copy path.
     e.preventDefault();
     e.stopPropagation();
     e.stopImmediatePropagation();
+    grab.host.removeEventListener('click', onClick, true);
+    grab.host.removeEventListener('contextmenu', onContext, true);
+    var el = grab.getCurrentElement();
+    if (!el) {
+      grab.cleanup();
+      reject(new Error('cancelled'));
+      return;
+    }
+    var payload = grab.extractPayload(el);
+    grab.freezeHighlight();
+    resolve({ __orcaContextMenu: true, payload: payload });
   }
 
   grab.host.addEventListener('click', onClick, true);
