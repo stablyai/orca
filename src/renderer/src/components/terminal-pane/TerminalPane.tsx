@@ -2,6 +2,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { CSSProperties } from 'react'
+import type { IDisposable } from '@xterm/xterm'
+import { RefreshCw } from 'lucide-react'
 import { useAppStore } from '../../store'
 import {
   DEFAULT_TERMINAL_DIVIDER_DARK,
@@ -24,6 +26,7 @@ import { useTerminalPaneGlobalEffects } from './use-terminal-pane-global-effects
 import { useTerminalPaneLifecycle } from './use-terminal-pane-lifecycle'
 import { useTerminalPaneContextMenu } from './use-terminal-pane-context-menu'
 import { useNotificationDispatch } from './use-notification-dispatch'
+import { connectPanePty } from './pty-connection'
 
 /** Global set of buffer-capture callbacks, one per mounted TerminalPane.
  *  The beforeunload handler in App.tsx invokes every callback to populate
@@ -57,6 +60,7 @@ export default function TerminalPane({
     new Map()
   )
   const paneTransportsRef = useRef<Map<number, PtyTransport>>(new Map())
+  const panePtyBindingsRef = useRef<Map<number, IDisposable>>(new Map())
   const pendingWritesRef = useRef<Map<number, string>>(new Map())
   const isActiveRef = useRef(isActive)
   isActiveRef.current = isActive
@@ -85,6 +89,9 @@ export default function TerminalPane({
 
   const setTabPaneExpanded = useAppStore((store) => store.setTabPaneExpanded)
   const setTabCanExpandPane = useAppStore((store) => store.setTabCanExpandPane)
+  const suppressPtyExit = useAppStore((store) => store.suppressPtyExit)
+  const clearCodexRestartNotice = useAppStore((store) => store.clearCodexRestartNotice)
+  const codexRestartNoticeByPtyId = useAppStore((store) => store.codexRestartNoticeByPtyId)
   const savedLayout = useAppStore((store) => store.terminalLayoutsByTabId[tabId] ?? EMPTY_LAYOUT)
   const setTabLayout = useAppStore((store) => store.setTabLayout)
   const initialLayoutRef = useRef(savedLayout)
@@ -128,6 +135,7 @@ export default function TerminalPane({
 
   const systemPrefersDark = useSystemPrefersDark()
   const dispatchNotification = useNotificationDispatch(worktreeId)
+  const setCacheTimerStartedAt = useAppStore((store) => store.setCacheTimerStartedAt)
 
   // Memoized with useCallback so downstream hooks (useTerminalKeyboardShortcuts,
   // useTerminalPaneLifecycle, createExpandCollapseActions) don't tear down and
@@ -250,16 +258,18 @@ export default function TerminalPane({
     expandedStyleSnapshotRef,
     paneFontSizesRef,
     paneTransportsRef,
+    panePtyBindingsRef,
     pendingWritesRef,
     isActiveRef,
     onPtyExitRef,
     onPtyErrorRef,
     clearTabPtyId,
+    consumeSuppressedPtyExit: useAppStore((store) => store.consumeSuppressedPtyExit),
     updateTabTitle,
     updateTabPtyId,
     markWorktreeUnread,
     dispatchNotification,
-    setCacheTimerStartedAt: useAppStore((store) => store.setCacheTimerStartedAt),
+    setCacheTimerStartedAt,
     setTabPaneExpanded,
     setTabCanExpandPane,
     setExpandedPane,
@@ -269,6 +279,71 @@ export default function TerminalPane({
     paneTitlesRef,
     setRenamingPaneId
   })
+
+  const handleRestartCodexPane = useCallback(
+    (paneId: number) => {
+      const manager = managerRef.current
+      const pane = manager?.getPanes().find((candidate) => candidate.id === paneId)
+      if (!manager || !pane) {
+        return
+      }
+
+      const transport = paneTransportsRef.current.get(paneId)
+      const panePtyBinding = panePtyBindingsRef.current.get(paneId)
+      const existingPtyId = transport?.getPtyId()
+
+      if (existingPtyId) {
+        suppressPtyExit(existingPtyId)
+        clearCodexRestartNotice(existingPtyId)
+        // Why: pane-scoped Codex restarts should preserve the split layout and
+        // replace only the stale session in place. Clearing the PTY binding and
+        // consuming the upcoming suppressed exit keeps the pane mounted while a
+        // fresh PTY reconnects under the newly selected Codex account.
+        clearTabPtyId(tabId, existingPtyId)
+      }
+
+      panePtyBinding?.dispose()
+      panePtyBindingsRef.current.delete(paneId)
+      transport?.destroy?.()
+      paneTransportsRef.current.delete(paneId)
+      setCacheTimerStartedAt(`${tabId}:${paneId}`, null)
+
+      const newPaneBinding = connectPanePty(pane, manager, {
+        tabId,
+        worktreeId,
+        cwd,
+        startup: { command: 'codex' },
+        paneTransportsRef,
+        pendingWritesRef,
+        isActiveRef,
+        onPtyExitRef,
+        onPtyErrorRef,
+        clearTabPtyId,
+        consumeSuppressedPtyExit: useAppStore.getState().consumeSuppressedPtyExit,
+        updateTabTitle,
+        updateTabPtyId,
+        markWorktreeUnread,
+        dispatchNotification,
+        setCacheTimerStartedAt
+      })
+      panePtyBindingsRef.current.set(paneId, newPaneBinding)
+      manager.setActivePane(paneId, { focus: true })
+    },
+    [
+      clearCodexRestartNotice,
+      clearTabPtyId,
+      cwd,
+      dispatchNotification,
+      markWorktreeUnread,
+      onPtyExitRef,
+      setCacheTimerStartedAt,
+      suppressPtyExit,
+      tabId,
+      updateTabPtyId,
+      updateTabTitle,
+      worktreeId
+    ]
+  )
 
   useTerminalFontZoom({ isActive, managerRef, paneFontSizesRef, settingsRef })
 
@@ -534,6 +609,18 @@ export default function TerminalPane({
   }
 
   const activePane = managerRef.current?.getActivePane()
+  const staleCodexPanes =
+    managerRef.current?.getPanes().flatMap((pane) => {
+      const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId()
+      if (!ptyId) {
+        return []
+      }
+      const restartNotice = codexRestartNoticeByPtyId[ptyId]
+      if (!restartNotice) {
+        return []
+      }
+      return [{ pane, ptyId, restartNotice }]
+    }) ?? []
 
   return (
     <>
@@ -656,6 +743,34 @@ export default function TerminalPane({
           </div>,
           pane.container,
           `pane-title-${pane.id}`
+        )
+      })}
+      {staleCodexPanes.map(({ pane, ptyId }) => {
+        return createPortal(
+          <div className="absolute right-3 top-3 z-20 pointer-events-none">
+            <div className="pointer-events-auto flex items-center gap-2 rounded-lg border border-border/80 bg-popover/95 px-2 py-1.5 shadow-lg backdrop-blur-sm">
+              <span className="text-[11px] text-muted-foreground">Using previous account</span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => handleRestartCodexPane(pane.id)}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-2 py-1 text-[11px] font-medium text-background transition-colors hover:opacity-90"
+                >
+                  <RefreshCw className="size-3" />
+                  Restart
+                </button>
+                <button
+                  type="button"
+                  onClick={() => clearCodexRestartNotice(ptyId)}
+                  className="rounded-md px-1.5 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
+                >
+                  Later
+                </button>
+              </div>
+            </div>
+          </div>,
+          pane.container,
+          `pane-codex-restart-${pane.id}`
         )
       })}
       <CloseTerminalDialog

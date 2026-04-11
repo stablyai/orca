@@ -47,6 +47,24 @@ export function ProviderIcon({ provider }: { provider: string }): React.JSX.Elem
   return <ClaudeIcon size={13} />
 }
 
+function ErrorMessage({
+  message,
+  inverted = false
+}: {
+  message: string
+  inverted?: boolean
+}): React.JSX.Element {
+  const labelClass = inverted ? 'text-background/80' : 'text-foreground/85'
+  const detailClass = inverted ? 'text-background/55' : 'text-muted-foreground'
+
+  return (
+    <div className="space-y-0.5">
+      <div className={`text-[11px] font-medium ${labelClass}`}>Usage unavailable</div>
+      <div className={detailClass}>{message}</div>
+    </div>
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Tooltip — progress bar section for a single window
 // ---------------------------------------------------------------------------
@@ -156,7 +174,106 @@ export function ProviderTooltip({ p }: { p: ProviderRateLimits | null }): React.
       <TooltipWindowSection w={p.weekly} label="Weekly" />
 
       {/* Stale data warning */}
-      {p.error && <div className="text-background/40 italic">Stale — {p.error}</div>}
+      {p.error ? <ErrorMessage message={p.error} inverted /> : null}
+    </div>
+  )
+}
+
+export function ProviderPanel({
+  p,
+  inverted = false,
+  className
+}: {
+  p: ProviderRateLimits | null
+  inverted?: boolean
+  className?: string
+}): React.JSX.Element {
+  const textClass = inverted ? 'text-background' : 'text-foreground'
+  const mutedClass = inverted ? 'text-background/60' : 'text-muted-foreground'
+  const faintClass = inverted ? 'text-background/50' : 'text-muted-foreground/80'
+  const dividerClass = inverted ? 'border-background/15' : 'border-border/70'
+  const emptyBarClass = inverted ? 'bg-background/20' : 'bg-muted'
+
+  if (!p) {
+    return <span className={`text-xs ${mutedClass}`}>No data available</span>
+  }
+
+  const name = p.provider === 'claude' ? 'Claude' : 'Codex'
+
+  if (p.status === 'unavailable') {
+    return (
+      <div className={`text-xs ${className ?? 'w-full'}`}>
+        <div className={`flex items-center gap-1.5 font-medium ${textClass}`}>
+          <ProviderIcon provider={p.provider} />
+          {name}
+        </div>
+        <div className={mutedClass}>{p.error ?? 'CLI not found'}</div>
+      </div>
+    )
+  }
+
+  if (p.status === 'error' && !p.session && !p.weekly) {
+    return (
+      <div className={`text-xs ${className ?? 'w-full'}`}>
+        <div className={`flex items-center gap-1.5 font-medium ${textClass}`}>
+          <ProviderIcon provider={p.provider} />
+          {name}
+        </div>
+        <div className="mt-2">
+          <ErrorMessage message={p.error ?? 'Unable to fetch usage'} inverted={inverted} />
+        </div>
+      </div>
+    )
+  }
+
+  const updatedAgo = p.updatedAt ? `Updated ${formatTimeAgo(p.updatedAt)}` : 'Not yet updated'
+
+  const PanelWindowSection = ({
+    w,
+    label
+  }: {
+    w: RateLimitWindow | null
+    label: string
+  }): React.JSX.Element | null => {
+    if (!w) {
+      return null
+    }
+    const leftPct = Math.max(0, Math.round(100 - w.usedPercent))
+    const resetIn = w.resetsAt ? formatDuration(w.resetsAt - Date.now()) : null
+
+    return (
+      <div className="space-y-1">
+        <div className={`font-medium ${textClass}`}>{label}</div>
+        <div className={`h-[6px] w-full overflow-hidden rounded-full ${emptyBarClass}`}>
+          <div
+            className={`h-full rounded-full ${barColor(leftPct)} transition-all duration-300`}
+            style={{ width: `${Math.min(100, Math.max(0, leftPct))}%` }}
+          />
+        </div>
+        <div className={`flex justify-between ${mutedClass}`}>
+          <span>{leftPct}% left</span>
+          {resetIn && <span>Resets in {resetIn}</span>}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className={`${className ?? 'w-full'} space-y-3 text-xs`}>
+      <div>
+        <div className={`flex items-center gap-1.5 text-[13px] font-medium ${textClass}`}>
+          <ProviderIcon provider={p.provider} />
+          {name}
+        </div>
+        <div className={faintClass}>{updatedAgo}</div>
+      </div>
+
+      <div className={`border-t ${dividerClass}`} />
+
+      <PanelWindowSection w={p.session} label="Session" />
+      <PanelWindowSection w={p.weekly} label="Weekly" />
+
+      {p.error ? <ErrorMessage message={p.error} inverted={inverted} /> : null}
     </div>
   )
 }

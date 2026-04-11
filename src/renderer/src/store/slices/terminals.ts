@@ -22,6 +22,10 @@ export type TerminalSlice = {
   activeTabIdByWorktree: Record<string, string | null>
   ptyIdsByTabId: Record<string, string[]>
   suppressedPtyExitIds: Record<string, true>
+  codexRestartNoticeByPtyId: Record<
+    string,
+    { previousAccountLabel: string; nextAccountLabel: string }
+  >
   expandedPaneByTabId: Record<string, boolean>
   canExpandPaneByTabId: Record<string, boolean>
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>
@@ -49,7 +53,12 @@ export type TerminalSlice = {
   updateTabPtyId: (tabId: string, ptyId: string) => void
   clearTabPtyId: (tabId: string, ptyId?: string) => void
   shutdownWorktreeTerminals: (worktreeId: string) => Promise<void>
+  suppressPtyExit: (ptyId: string) => void
   consumeSuppressedPtyExit: (ptyId: string) => boolean
+  markCodexRestartNotices: (
+    notices: { ptyId: string; previousAccountLabel: string; nextAccountLabel: string }[]
+  ) => void
+  clearCodexRestartNotice: (ptyId: string) => void
   setTabPaneExpanded: (tabId: string, expanded: boolean) => void
   setTabCanExpandPane: (tabId: string, canExpand: boolean) => void
   setTabLayout: (tabId: string, layout: TerminalLayoutSnapshot | null) => void
@@ -57,6 +66,7 @@ export type TerminalSlice = {
     tabId: string,
     startup: { command: string; env?: Record<string, string> }
   ) => void
+  restartCodexTabs: (tabIds: string[]) => void
   consumeTabStartupCommand: (
     tabId: string
   ) => { command: string; env?: Record<string, string> } | null
@@ -90,6 +100,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   activeTabIdByWorktree: {},
   ptyIdsByTabId: {},
   suppressedPtyExitIds: {},
+  codexRestartNoticeByPtyId: {},
   expandedPaneByTabId: {},
   canExpandPaneByTabId: {},
   terminalLayoutsByTabId: {},
@@ -412,7 +423,19 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       nextPtyIdsByTabId[tabId] = ptyId
         ? (nextPtyIdsByTabId[tabId] ?? []).filter((id) => id !== ptyId)
         : []
-      return { tabsByWorktree: next, ptyIdsByTabId: nextPtyIdsByTabId }
+      const nextCodexRestartNoticeByPtyId = { ...s.codexRestartNoticeByPtyId }
+      if (ptyId) {
+        delete nextCodexRestartNoticeByPtyId[ptyId]
+      } else {
+        for (const currentPtyId of s.ptyIdsByTabId[tabId] ?? []) {
+          delete nextCodexRestartNoticeByPtyId[currentPtyId]
+        }
+      }
+      return {
+        tabsByWorktree: next,
+        ptyIdsByTabId: nextPtyIdsByTabId,
+        codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId
+      }
     })
 
     // Bump meaningful activity when a PTY exits, but skip if this exit
@@ -440,6 +463,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const nextSuppressedPtyExitIds = {
         ...s.suppressedPtyExitIds,
         ...Object.fromEntries(ptyIds.map((ptyId) => [ptyId, true] as const))
+      }
+      const nextCodexRestartNoticeByPtyId = { ...s.codexRestartNoticeByPtyId }
+      for (const ptyId of ptyIds) {
+        delete nextCodexRestartNoticeByPtyId[ptyId]
       }
       // Why: clear any queued setup and issue-command splits for the affected
       // tabs so stale commands do not fire unintended splits when the worktree
@@ -473,6 +500,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         tabsByWorktree: nextTabsByWorktree,
         ptyIdsByTabId: nextPtyIdsByTabId,
         suppressedPtyExitIds: nextSuppressedPtyExitIds,
+        codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId,
         pendingSetupSplitByTabId: nextPendingSetupSplitByTabId,
         pendingIssueCommandSplitByTabId: nextPendingIssueCommandSplitByTabId,
         browserTabsByWorktree: nextBrowserTabsByWorktree,
@@ -502,6 +530,43 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       return { suppressedPtyExitIds: next }
     })
     return wasSuppressed
+  },
+
+  suppressPtyExit: (ptyId) => {
+    set((s) => ({
+      suppressedPtyExitIds: { ...s.suppressedPtyExitIds, [ptyId]: true }
+    }))
+  },
+
+  markCodexRestartNotices: (notices) => {
+    if (notices.length === 0) {
+      return
+    }
+    set((s) => ({
+      codexRestartNoticeByPtyId: {
+        ...s.codexRestartNoticeByPtyId,
+        ...Object.fromEntries(
+          notices.map((notice) => [
+            notice.ptyId,
+            {
+              previousAccountLabel: notice.previousAccountLabel,
+              nextAccountLabel: notice.nextAccountLabel
+            }
+          ])
+        )
+      }
+    }))
+  },
+
+  clearCodexRestartNotice: (ptyId) => {
+    set((s) => {
+      if (!s.codexRestartNoticeByPtyId[ptyId]) {
+        return {}
+      }
+      const next = { ...s.codexRestartNoticeByPtyId }
+      delete next[ptyId]
+      return { codexRestartNoticeByPtyId: next }
+    })
   },
 
   setTabPaneExpanded: (tabId, expanded) => {
@@ -535,6 +600,52 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         [tabId]: startup
       }
     }))
+  },
+
+  restartCodexTabs: (tabIds) => {
+    const targetTabIds = new Set(tabIds)
+    if (targetTabIds.size === 0) {
+      return
+    }
+
+    set((s) => {
+      const nextTabsByWorktree = { ...s.tabsByWorktree }
+      const nextPendingStartupByTabId = { ...s.pendingStartupByTabId }
+      const nextSuppressedPtyExitIds = { ...s.suppressedPtyExitIds }
+
+      for (const [worktreeId, tabs] of Object.entries(s.tabsByWorktree)) {
+        let changed = false
+        const nextTabs = tabs.map((tab, index) => {
+          if (!targetTabIds.has(tab.id)) {
+            return tab
+          }
+          changed = true
+          for (const ptyId of s.ptyIdsByTabId[tab.id] ?? []) {
+            nextSuppressedPtyExitIds[ptyId] = true
+          }
+          nextPendingStartupByTabId[tab.id] = { command: 'codex' }
+          return {
+            ...clearTransientTerminalState(tab, index),
+            generation: (tab.generation ?? 0) + 1
+          }
+        })
+
+        if (changed) {
+          nextTabsByWorktree[worktreeId] = nextTabs
+        }
+      }
+
+      // Why: restarting a live Codex terminal should reuse the existing tab
+      // surface, not close/reopen tabs or mutate arbitrary shell state. We
+      // queue `codex` as the next startup command and bump tab generation so
+      // TerminalPane remounts, tears down the old PTY, and reconnects under
+      // the newly selected CODEX_HOME in the same tab.
+      return {
+        tabsByWorktree: nextTabsByWorktree,
+        pendingStartupByTabId: nextPendingStartupByTabId,
+        suppressedPtyExitIds: nextSuppressedPtyExitIds
+      }
+    })
   },
 
   consumeTabStartupCommand: (tabId) => {

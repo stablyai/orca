@@ -1,4 +1,5 @@
 import type { PaneManager, ManagedPane } from '@/lib/pane-manager/pane-manager'
+import type { IDisposable } from '@xterm/xterm'
 import { isGeminiTerminalTitle, isClaudeAgent } from '@/lib/agent-status'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
@@ -17,6 +18,7 @@ type PtyConnectionDeps = {
   onPtyExitRef: React.RefObject<(ptyId: string) => void>
   onPtyErrorRef?: React.RefObject<(paneId: number, message: string) => void>
   clearTabPtyId: (tabId: string, ptyId: string) => void
+  consumeSuppressedPtyExit: (ptyId: string) => boolean
   updateTabTitle: (tabId: string, title: string) => void
   updateTabPtyId: (tabId: string, ptyId: string) => void
   markWorktreeUnread: (worktreeId: string) => void
@@ -31,7 +33,7 @@ export function connectPanePty(
   pane: ManagedPane,
   manager: PaneManager,
   deps: PtyConnectionDeps
-): void {
+): IDisposable {
   // Why: setup commands must only run once — in the initial pane of the tab.
   // Capture and clear the startup reference synchronously so that panes
   // created later by splits or layout restoration cannot re-execute the
@@ -56,6 +58,14 @@ export function connectPanePty(
     // we must republish when a pane loses its PTY instead of waiting for a
     // broader layout change that may never happen.
     scheduleRuntimeGraphSync()
+    // Why: intentional restarts suppress the PTY exit ahead of time so the
+    // pane stays mounted and can reconnect in place. Without consuming the
+    // suppression here, split-pane Codex restarts would still close the pane
+    // because this handler runs before the tab-level close logic sees the exit.
+    if (deps.consumeSuppressedPtyExit(ptyId)) {
+      manager.setPaneGpuRendering(pane.id, true)
+      return
+    }
     manager.setPaneGpuRendering(pane.id, true)
     const panes = manager.getPanes()
     if (panes.length <= 1) {
@@ -145,11 +155,11 @@ export function connectPanePty(
   })
   deps.paneTransportsRef.current.set(pane.id, transport)
 
-  pane.terminal.onData((data) => {
+  const onDataDisposable = pane.terminal.onData((data) => {
     transport.sendInput(data)
   })
 
-  pane.terminal.onResize(({ cols, rows }) => {
+  const onResizeDisposable = pane.terminal.onResize(({ cols, rows }) => {
     transport.resize(cols, rows)
   })
 
@@ -238,4 +248,11 @@ export function connectPanePty(
     }
     scheduleRuntimeGraphSync()
   })
+
+  return {
+    dispose() {
+      onDataDisposable.dispose()
+      onResizeDisposable.dispose()
+    }
+  }
 }

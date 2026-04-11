@@ -68,11 +68,25 @@ export const GENERAL_BROWSER_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   }
 ]
 
+export const GENERAL_CODEX_ACCOUNTS_SEARCH_ENTRIES: SettingsSearchEntry[] = [
+  {
+    title: 'Codex Accounts',
+    description: 'Manage which Codex account Orca uses for live rate limit fetching.',
+    keywords: ['codex', 'account', 'rate limit', 'status bar', 'quota']
+  },
+  {
+    title: 'Active Codex Account',
+    description: 'Choose which saved Codex account powers live quota reads.',
+    keywords: ['codex', 'account', 'switch', 'active', 'status bar']
+  }
+]
+
 export const GENERAL_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   ...GENERAL_WORKSPACE_SEARCH_ENTRIES,
   ...GENERAL_BROWSER_SEARCH_ENTRIES,
   ...GENERAL_EDITOR_SEARCH_ENTRIES,
   ...GENERAL_CLI_SEARCH_ENTRIES,
   ...GENERAL_CACHE_TIMER_SEARCH_ENTRIES,
+  ...GENERAL_CODEX_ACCOUNTS_SEARCH_ENTRIES,
   ...GENERAL_UPDATE_SEARCH_ENTRIES
 ]

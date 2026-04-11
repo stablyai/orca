@@ -2,12 +2,12 @@
    splitting individual settings into separate files would scatter related controls without a
    meaningful abstraction boundary. */
 import { useEffect, useState } from 'react'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { CodexRateLimitAccountsState, GlobalSettings } from '../../../../shared/types'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Separator } from '../ui/separator'
-import { Download, FolderOpen, Loader2, RefreshCw, Timer } from 'lucide-react'
+import { Download, FolderOpen, Loader2, Plus, RefreshCw, Timer, Trash2 } from 'lucide-react'
 import { useAppStore } from '../../store'
 import { CliSection } from './CliSection'
 import { toast } from 'sonner'
@@ -19,6 +19,7 @@ import {
 import { clampNumber } from '@/lib/terminal-theme'
 import {
   GENERAL_BROWSER_SEARCH_ENTRIES,
+  GENERAL_CODEX_ACCOUNTS_SEARCH_ENTRIES,
   GENERAL_CACHE_TIMER_SEARCH_ENTRIES,
   GENERAL_CLI_SEARCH_ENTRIES,
   GENERAL_EDITOR_SEARCH_ENTRIES,
@@ -29,6 +30,15 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
+import { markLiveCodexSessionsForRestart } from '@/lib/codex-session-restart'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from '../ui/dialog'
 
 export { GENERAL_PANE_SEARCH_ENTRIES }
 
@@ -37,13 +47,32 @@ type GeneralPaneProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => void
 }
 
+function getCodexAccountLabel(
+  state: CodexRateLimitAccountsState,
+  accountId: string | null | undefined
+): string {
+  if (accountId == null) {
+    return 'System default'
+  }
+  return state.accounts.find((account) => account.id === accountId)?.email ?? 'Codex account'
+}
+
 export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const updateStatus = useAppStore((s) => s.updateStatus)
+  const fetchSettings = useAppStore((s) => s.fetchSettings)
   const [appVersion, setAppVersion] = useState<string | null>(null)
   const [autoSaveDelayDraft, setAutoSaveDelayDraft] = useState(
     String(settings.editorAutoSaveDelayMs)
   )
+  const [codexAccounts, setCodexAccounts] = useState<CodexRateLimitAccountsState>({
+    accounts: [],
+    activeAccountId: null
+  })
+  const [codexAction, setCodexAction] = useState<
+    'idle' | 'adding' | `reauth:${string}` | `remove:${string}` | `select:${string | 'system'}`
+  >('idle')
+  const [removeAccountId, setRemoveAccountId] = useState<string | null>(null)
 
   useEffect(() => {
     window.api.updater.getVersion().then(setAppVersion)
@@ -52,6 +81,31 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
   useEffect(() => {
     setAutoSaveDelayDraft(String(settings.editorAutoSaveDelayMs))
   }, [settings.editorAutoSaveDelayMs])
+
+  useEffect(() => {
+    let stale = false
+
+    const loadCodexAccounts = async (): Promise<void> => {
+      try {
+        const next = await window.api.codexAccounts.list()
+        if (!stale) {
+          setCodexAccounts(next)
+        }
+      } catch (error) {
+        if (!stale) {
+          toast.error('Could not load Codex accounts.', {
+            description: String((error as Error)?.message ?? error)
+          })
+        }
+      }
+    }
+
+    void loadCodexAccounts()
+
+    return () => {
+      stale = true
+    }
+  }, [])
 
   const handleBrowseWorkspace = async () => {
     const path = await window.api.repos.pickFolder()
@@ -88,6 +142,51 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
         description: String((error as Error)?.message ?? error)
       })
     })
+  }
+
+  const syncCodexAccounts = async (next: CodexRateLimitAccountsState): Promise<void> => {
+    setCodexAccounts(next)
+    await fetchSettings()
+  }
+
+  const formatAccountTimestamp = (timestamp: number): string => {
+    return new Date(timestamp).toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
+    })
+  }
+
+  const runCodexAccountAction = async (
+    action: typeof codexAction,
+    operation: () => Promise<CodexRateLimitAccountsState>
+  ): Promise<void> => {
+    const previousActiveAccountId = codexAccounts.activeAccountId
+    setCodexAction(action)
+    try {
+      const next = await operation()
+      await syncCodexAccounts(next)
+      const shouldPromptRestart =
+        action === 'adding' ||
+        (action.startsWith('select:') && previousActiveAccountId !== next.activeAccountId) ||
+        (action.startsWith('reauth:') &&
+          next.activeAccountId !== null &&
+          action === `reauth:${next.activeAccountId}`) ||
+        (action.startsWith('remove:') && previousActiveAccountId !== next.activeAccountId)
+      if (shouldPromptRestart) {
+        void markLiveCodexSessionsForRestart({
+          previousAccountLabel: getCodexAccountLabel(codexAccounts, previousActiveAccountId),
+          nextAccountLabel: getCodexAccountLabel(next, next.activeAccountId)
+        })
+      }
+    } catch (error) {
+      toast.error('Codex account update failed.', {
+        description: String((error as Error)?.message ?? error)
+      })
+    } finally {
+      setCodexAction('idle')
+    }
   }
 
   const visibleSections = [
@@ -394,6 +493,172 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
         )}
       </section>
     ) : null,
+    matchesSettingsSearch(searchQuery, GENERAL_CODEX_ACCOUNTS_SEARCH_ENTRIES) ? (
+      <section key="codex-accounts" className="space-y-4">
+        <div className="space-y-1">
+          <h3 className="text-sm font-semibold">Codex Accounts</h3>
+          <p className="text-xs text-muted-foreground">
+            Add and switch between Codex accounts in Orca.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Each account keeps its own local sign-in context in Orca. Account auth stays on this
+            device.
+          </p>
+        </div>
+
+        <SearchableSetting
+          title="Codex Accounts"
+          description="Manage which Codex account Orca uses for live rate limit fetching."
+          keywords={['codex', 'account', 'rate limit', 'status bar', 'quota']}
+          className="space-y-3 px-1 py-2"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="space-y-0.5">
+              <Label>Accounts</Label>
+              <p className="text-xs text-muted-foreground">
+                Add a Codex account to use it in Orca.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                void runCodexAccountAction('adding', () => window.api.codexAccounts.add())
+              }
+              disabled={codexAction !== 'idle'}
+              className="gap-2"
+            >
+              {codexAction === 'adding' ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Plus className="size-3.5" />
+              )}
+              Add Account
+            </Button>
+          </div>
+
+          {codexAccounts.accounts.length === 0 ? (
+            <div className="rounded-md border border-dashed border-border/70 px-3 py-4 text-xs text-muted-foreground">
+              No managed Codex accounts yet. Orca will use your system default Codex login until you
+              add one here.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() =>
+                  void runCodexAccountAction('select:system', () =>
+                    window.api.codexAccounts.select({ accountId: null })
+                  )
+                }
+                disabled={codexAction !== 'idle'}
+                className={`flex min-h-[58px] w-full items-center justify-between gap-3 rounded-md border px-3 py-3 text-left transition-colors ${
+                  codexAccounts.activeAccountId === null
+                    ? 'border-foreground/25 bg-accent/20'
+                    : 'border-border/70 hover:bg-accent/10'
+                } disabled:cursor-default disabled:opacity-100`}
+              >
+                <div className="flex min-w-0 flex-1 items-center gap-2 text-sm">
+                  <span className="font-medium">System default</span>
+                  <span className="truncate text-xs text-muted-foreground">
+                    Use your current system Codex login.
+                  </span>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  {codexAccounts.activeAccountId === null ? (
+                    <span className="rounded-full bg-foreground px-2 py-0.5 text-[10px] font-medium text-background">
+                      Active
+                    </span>
+                  ) : null}
+                </div>
+              </button>
+              {codexAccounts.accounts.map((account) => {
+                const isActive = codexAccounts.activeAccountId === account.id
+                const isReauthing = codexAction === `reauth:${account.id}`
+                const isRemoving = codexAction === `remove:${account.id}`
+                const isBusy = codexAction !== 'idle'
+
+                return (
+                  <button
+                    key={account.id}
+                    type="button"
+                    onClick={() =>
+                      void runCodexAccountAction(`select:${account.id}`, () =>
+                        window.api.codexAccounts.select({ accountId: account.id })
+                      )
+                    }
+                    disabled={isBusy}
+                    className={`flex min-h-[58px] w-full items-center justify-between gap-3 rounded-md border px-3 py-3 text-left transition-colors ${
+                      isActive
+                        ? 'border-foreground/25 bg-accent/20'
+                        : 'border-border/70 hover:bg-accent/10'
+                    }`}
+                  >
+                    <div className="flex w-full items-center justify-between gap-3 max-md:flex-col max-md:items-start">
+                      <div className="flex min-w-0 flex-1 items-center gap-2 text-sm">
+                        <span className="truncate font-medium">{account.email}</span>
+                        {account.workspaceLabel ? (
+                          <span className="truncate text-xs text-muted-foreground">
+                            {account.workspaceLabel}
+                          </span>
+                        ) : null}
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          {formatAccountTimestamp(account.lastAuthenticatedAt)}
+                        </span>
+                        {isActive ? (
+                          <span className="shrink-0 rounded-full bg-foreground px-2 py-0.5 text-[10px] font-medium text-background">
+                            Active
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <div className="flex shrink-0 items-center justify-end gap-2 max-md:w-full max-md:flex-wrap">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            void runCodexAccountAction(`reauth:${account.id}`, () =>
+                              window.api.codexAccounts.reauthenticate({ accountId: account.id })
+                            )
+                          }}
+                          disabled={isBusy}
+                          className="h-8 gap-2 px-3"
+                        >
+                          {isReauthing ? (
+                            <Loader2 className="size-3.5 animate-spin" />
+                          ) : (
+                            <RefreshCw className="size-3.5" />
+                          )}
+                          Re-authenticate
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            setRemoveAccountId(account.id)
+                          }}
+                          disabled={isBusy}
+                          className="h-8 gap-2 px-3"
+                        >
+                          {isRemoving ? (
+                            <Loader2 className="size-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="size-3.5" />
+                          )}
+                          Remove
+                        </Button>
+                      </div>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </SearchableSetting>
+      </section>
+    ) : null,
     matchesSettingsSearch(searchQuery, GENERAL_UPDATE_SEARCH_ENTRIES) ? (
       <section key="updates" className="space-y-4">
         <div className="space-y-1">
@@ -489,6 +754,40 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
 
   return (
     <div className="space-y-8">
+      <Dialog
+        open={removeAccountId !== null}
+        onOpenChange={(open) => !open && setRemoveAccountId(null)}
+      >
+        <DialogContent showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Remove Codex Account?</DialogTitle>
+            <DialogDescription>
+              Orca will delete the managed Codex home for this saved account. If it is currently
+              active, Orca falls back to the system default Codex login.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRemoveAccountId(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                const accountId = removeAccountId
+                if (!accountId) {
+                  return
+                }
+                setRemoveAccountId(null)
+                void runCodexAccountAction(`remove:${accountId}`, () =>
+                  window.api.codexAccounts.remove({ accountId })
+                )
+              }}
+            >
+              Remove Account
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {visibleSections.map((section, index) => (
         <div key={index} className="space-y-8">
           {index > 0 ? <Separator /> : null}

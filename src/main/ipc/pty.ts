@@ -74,13 +74,18 @@ function ensureNodePtySpawnHelperExecutable(): void {
   }
 }
 
-export function registerPtyHandlers(mainWindow: BrowserWindow, runtime?: OrcaRuntimeService): void {
+export function registerPtyHandlers(
+  mainWindow: BrowserWindow,
+  runtime?: OrcaRuntimeService,
+  getSelectedCodexHomePath?: () => string | null
+): void {
   // Remove any previously registered handlers so we can re-register them
   // (e.g. when macOS re-activates the app and creates a new window).
   ipcMain.removeHandler('pty:spawn')
   ipcMain.removeHandler('pty:resize')
   ipcMain.removeHandler('pty:kill')
   ipcMain.removeHandler('pty:hasChildProcesses')
+  ipcMain.removeHandler('pty:getForegroundProcess')
   ipcMain.removeAllListeners('pty:write')
 
   // Kill orphaned PTY processes from previous page loads when the renderer reloads.
@@ -200,6 +205,7 @@ export function registerPtyHandlers(mainWindow: BrowserWindow, runtime?: OrcaRun
         throw new Error(`Working directory "${validationCwd}" is not a directory.`)
       }
 
+      const selectedCodexHomePath = getSelectedCodexHomePath?.() ?? null
       const spawnEnv = {
         ...process.env,
         ...args.env,
@@ -208,6 +214,15 @@ export function registerPtyHandlers(mainWindow: BrowserWindow, runtime?: OrcaRun
         TERM_PROGRAM: 'Orca',
         FORCE_HYPERLINK: '1'
       } as Record<string, string>
+
+      // Why: the selected Codex account should affect Codex launched inside
+      // Orca terminals too, not just Orca's background quota fetches. Inject
+      // the managed CODEX_HOME only into this PTY environment so the override
+      // stays scoped to Orca terminals instead of mutating the app process or
+      // the user's external shells.
+      if (selectedCodexHomePath) {
+        spawnEnv.CODEX_HOME = selectedCodexHomePath
+      }
 
       // Why: When Electron is launched from Finder (not a terminal), the process
       // does not inherit the user's shell locale settings. Without an explicit
@@ -371,6 +386,23 @@ export function registerPtyHandlers(mainWindow: BrowserWindow, runtime?: OrcaRun
     } catch {
       // .process can throw if the PTY fd is already closed.
       return false
+    }
+  })
+
+  ipcMain.handle('pty:getForegroundProcess', (_event, args: { id: string }): string | null => {
+    const proc = ptyProcesses.get(args.id)
+    if (!proc) {
+      return null
+    }
+    try {
+      // Why: live Codex-session actions must key off the PTY foreground process,
+      // not the tab title. Agent CLIs do not reliably emit stable OSC titles,
+      // so title-based detection misses real Codex sessions that still need a
+      // restart after account switching.
+      return proc.process || null
+    } catch {
+      // .process can throw if the PTY fd is already closed.
+      return null
     }
   })
 }

@@ -24,12 +24,14 @@ import {
 import { RateLimitService } from './rate-limits/service'
 import { attachMainWindowServices } from './window/attach-main-window-services'
 import { createMainWindow } from './window/createMainWindow'
+import { CodexAccountService } from './codex-accounts/service'
 
 let mainWindow: BrowserWindow | null = null
 let store: Store | null = null
 let stats: StatsCollector | null = null
 let claudeUsage: ClaudeUsageStore | null = null
 let codexUsage: CodexUsageStore | null = null
+let codexAccounts: CodexAccountService | null = null
 let runtime: OrcaRuntimeService | null = null
 let rateLimits: RateLimitService | null = null
 let runtimeRpc: OrcaRuntimeRpcServer | null = null
@@ -69,6 +71,9 @@ function openMainWindow(): BrowserWindow {
   if (!rateLimits) {
     throw new Error('Rate limit service must be initialized before opening the main window')
   }
+  if (!codexAccounts) {
+    throw new Error('Codex account service must be initialized before opening the main window')
+  }
 
   const window = createMainWindow(store)
   registerCoreHandlers(
@@ -77,10 +82,13 @@ function openMainWindow(): BrowserWindow {
     stats,
     claudeUsage,
     codexUsage,
+    codexAccounts,
     rateLimits,
     window.webContents.id
   )
-  attachMainWindowServices(window, store, runtime)
+  attachMainWindowServices(window, store, runtime, () =>
+    codexAccounts!.getSelectedManagedHomePath()
+  )
   rateLimits.attach(window)
   rateLimits.start()
   window.on('closed', () => {
@@ -106,6 +114,8 @@ app.whenReady().then(async () => {
   claudeUsage = new ClaudeUsageStore(store)
   codexUsage = new CodexUsageStore(store)
   rateLimits = new RateLimitService()
+  codexAccounts = new CodexAccountService(store, rateLimits)
+  rateLimits.setCodexHomePathResolver(() => codexAccounts!.getSelectedManagedHomePath())
   runtime = new OrcaRuntimeService(store, stats)
   nativeTheme.themeSource = store.getSettings().theme ?? 'system'
 

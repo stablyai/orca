@@ -18,6 +18,7 @@ import { registerSettingsHandlers } from './settings'
 import { registerBrowserHandlers } from './browser'
 import { registerShellHandlers } from './shell'
 import { registerUIHandlers } from './ui'
+import { registerCodexAccountHandlers } from './codex-accounts'
 import { warmSystemFontFamilies } from '../system-fonts'
 import {
   registerClipboardHandlers,
@@ -26,6 +27,7 @@ import {
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
 import type { RateLimitService } from '../rate-limits/service'
+import type { CodexAccountService } from '../codex-accounts/service'
 
 export function registerCoreHandlers(
   store: Store,
@@ -33,6 +35,7 @@ export function registerCoreHandlers(
   stats: StatsCollector,
   claudeUsage: ClaudeUsageStore,
   codexUsage: CodexUsageStore,
+  codexAccounts: CodexAccountService,
   rateLimits: RateLimitService,
   mainWindowWebContentsId: number | null = null
 ): void {
@@ -41,6 +44,7 @@ export function registerCoreHandlers(
   registerPreflightHandlers()
   registerClaudeUsageHandlers(claudeUsage)
   registerCodexUsageHandlers(codexUsage)
+  registerCodexAccountHandlers(codexAccounts)
   registerRateLimitHandlers(rateLimits)
   registerGitHubHandlers(store, stats)
   registerStatsHandlers(stats)

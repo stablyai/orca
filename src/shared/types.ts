@@ -320,6 +320,34 @@ export type NotificationSettings = {
   suppressWhenFocused: boolean
 }
 
+export type CodexManagedAccount = {
+  id: string
+  email: string
+  managedHomePath: string
+  providerAccountId?: string | null
+  workspaceLabel?: string | null
+  workspaceAccountId?: string | null
+  createdAt: number
+  updatedAt: number
+  lastAuthenticatedAt: number
+}
+
+export type CodexManagedAccountSummary = {
+  id: string
+  email: string
+  providerAccountId?: string | null
+  workspaceLabel?: string | null
+  workspaceAccountId?: string | null
+  createdAt: number
+  updatedAt: number
+  lastAuthenticatedAt: number
+}
+
+export type CodexRateLimitAccountsState = {
+  accounts: CodexManagedAccountSummary[]
+  activeAccountId: string | null
+}
+
 export type GlobalSettings = {
   workspaceDir: string
   nestWorkspaces: boolean
@@ -359,6 +387,13 @@ export type GlobalSettings = {
    *  300 000 (5 min, the standard Anthropic API / Bedrock TTL) and
    *  3 600 000 (1 hr, for extended-TTL plans). */
   promptCacheTtlMs: number
+  /** Why: Codex rate-limit account routing is a durable app preference owned by
+   *  the main process, not transient UI state. Persisting the selected managed
+   *  homes here lets Orca resolve the correct `CODEX_HOME` before the renderer
+   *  hydrates, while keeping this scope explicitly separate from Codex usage
+   *  analytics and external terminal sessions. */
+  codexManagedAccounts: CodexManagedAccount[]
+  activeCodexManagedAccountId: string | null
 }
 
 export type NotificationEventSource = 'agent-task-complete' | 'terminal-bell' | 'test'

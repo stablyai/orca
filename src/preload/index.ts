@@ -198,6 +198,10 @@ const api = {
     hasChildProcesses: (id: string): Promise<boolean> =>
       ipcRenderer.invoke('pty:hasChildProcesses', { id }),
 
+    /** Return the PTY foreground process basename when available (e.g. "codex"). */
+    getForegroundProcess: (id: string): Promise<string | null> =>
+      ipcRenderer.invoke('pty:getForegroundProcess', { id }),
+
     onData: (callback: (data: { id: string; data: string }) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, data: { id: string; data: string }) =>
         callback(data)
@@ -268,6 +272,17 @@ const api = {
       ipcRenderer.invoke('settings:set', args),
 
     listFonts: (): Promise<string[]> => ipcRenderer.invoke('settings:listFonts')
+  },
+
+  codexAccounts: {
+    list: (): Promise<unknown> => ipcRenderer.invoke('codexAccounts:list'),
+    add: (): Promise<unknown> => ipcRenderer.invoke('codexAccounts:add'),
+    reauthenticate: (args: { accountId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('codexAccounts:reauthenticate', args),
+    remove: (args: { accountId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('codexAccounts:remove', args),
+    select: (args: { accountId: string | null }): Promise<unknown> =>
+      ipcRenderer.invoke('codexAccounts:select', args)
   },
 
   cli: {

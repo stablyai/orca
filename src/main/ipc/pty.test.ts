@@ -84,7 +84,8 @@ describe('registerPtyHandlers', () => {
   /** Helper: trigger pty:spawn and return the env passed to node-pty. */
   function spawnAndGetEnv(
     argsEnv?: Record<string, string>,
-    processEnvOverrides?: Record<string, string | undefined>
+    processEnvOverrides?: Record<string, string | undefined>,
+    getSelectedCodexHomePath?: () => string | null
   ): Record<string, string> {
     const savedEnv: Record<string, string | undefined> = {}
     if (processEnvOverrides) {
@@ -102,7 +103,7 @@ describe('registerPtyHandlers', () => {
       // Clear previously registered handlers so re-registration doesn't
       // accumulate stale state across calls within one test.
       handlers.clear()
-      registerPtyHandlers(mainWindow as never)
+      registerPtyHandlers(mainWindow as never, undefined, getSelectedCodexHomePath)
       handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
@@ -142,6 +143,16 @@ describe('registerPtyHandlers', () => {
       expect(env.TERM).toBe('xterm-256color')
       expect(env.COLORTERM).toBe('truecolor')
       expect(env.TERM_PROGRAM).toBe('Orca')
+    })
+
+    it('injects the selected Codex home into Orca terminal PTYs', () => {
+      const env = spawnAndGetEnv(undefined, undefined, () => '/tmp/orca-codex-home')
+      expect(env.CODEX_HOME).toBe('/tmp/orca-codex-home')
+    })
+
+    it('leaves ambient CODEX_HOME untouched when system default is selected', () => {
+      const env = spawnAndGetEnv(undefined, { CODEX_HOME: '/tmp/system-codex-home' }, () => null)
+      expect(env.CODEX_HOME).toBe('/tmp/system-codex-home')
     })
   })
 

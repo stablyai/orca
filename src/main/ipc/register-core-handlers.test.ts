@@ -14,6 +14,7 @@ const {
   registerUIHandlersMock,
   registerFilesystemHandlersMock,
   registerRuntimeHandlersMock,
+  registerCodexAccountHandlersMock,
   registerClipboardHandlersMock,
   registerUpdaterHandlersMock,
   registerRateLimitHandlersMock,
@@ -34,6 +35,7 @@ const {
   registerUIHandlersMock: vi.fn(),
   registerFilesystemHandlersMock: vi.fn(),
   registerRuntimeHandlersMock: vi.fn(),
+  registerCodexAccountHandlersMock: vi.fn(),
   registerClipboardHandlersMock: vi.fn(),
   registerUpdaterHandlersMock: vi.fn(),
   registerRateLimitHandlersMock: vi.fn(),
@@ -102,6 +104,10 @@ vi.mock('./runtime', () => ({
   registerRuntimeHandlers: registerRuntimeHandlersMock
 }))
 
+vi.mock('./codex-accounts', () => ({
+  registerCodexAccountHandlers: registerCodexAccountHandlersMock
+}))
+
 vi.mock('../window/attach-main-window-services', () => ({
   registerClipboardHandlers: registerClipboardHandlersMock,
   registerUpdaterHandlers: registerUpdaterHandlersMock
@@ -129,6 +135,7 @@ describe('registerCoreHandlers', () => {
     registerUIHandlersMock.mockReset()
     registerFilesystemHandlersMock.mockReset()
     registerRuntimeHandlersMock.mockReset()
+    registerCodexAccountHandlersMock.mockReset()
     registerClipboardHandlersMock.mockReset()
     registerUpdaterHandlersMock.mockReset()
     registerRateLimitHandlersMock.mockReset()
@@ -143,6 +150,7 @@ describe('registerCoreHandlers', () => {
     const stats = { marker: 'stats' }
     const claudeUsage = { marker: 'claudeUsage' }
     const codexUsage = { marker: 'codexUsage' }
+    const codexAccounts = { marker: 'codexAccounts' }
     const rateLimits = { marker: 'rateLimits' }
 
     registerCoreHandlers(
@@ -151,11 +159,13 @@ describe('registerCoreHandlers', () => {
       stats as never,
       claudeUsage as never,
       codexUsage as never,
+      codexAccounts as never,
       rateLimits as never
     )
 
     expect(registerClaudeUsageHandlersMock).toHaveBeenCalledWith(claudeUsage)
     expect(registerCodexUsageHandlersMock).toHaveBeenCalledWith(codexUsage)
+    expect(registerCodexAccountHandlersMock).toHaveBeenCalledWith(codexAccounts)
     expect(registerRateLimitHandlersMock).toHaveBeenCalledWith(rateLimits)
     expect(registerGitHubHandlersMock).toHaveBeenCalledWith(store, stats)
     expect(registerStatsHandlersMock).toHaveBeenCalledWith(stats)

@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: the preload contract is intentionally centralized in one declaration file so renderer and preload stay in lockstep when IPC surfaces change. */
 import type {
   BrowserLoadError,
+  CodexRateLimitAccountsState,
   CreateWorktreeResult,
   DirEntry,
   FsChangedPayload,
@@ -187,6 +188,7 @@ export type PreloadApi = {
     resize: (id: string, cols: number, rows: number) => void
     kill: (id: string) => Promise<void>
     hasChildProcesses: (id: string) => Promise<boolean>
+    getForegroundProcess: (id: string) => Promise<string | null>
     onData: (callback: (data: { id: string; data: string }) => void) => () => void
     onExit: (callback: (data: { id: string; code: number }) => void) => () => void
   }
@@ -224,6 +226,13 @@ export type PreloadApi = {
     get: () => Promise<GlobalSettings>
     set: (args: Partial<GlobalSettings>) => Promise<GlobalSettings>
     listFonts: () => Promise<string[]>
+  }
+  codexAccounts: {
+    list: () => Promise<CodexRateLimitAccountsState>
+    add: () => Promise<CodexRateLimitAccountsState>
+    reauthenticate: (args: { accountId: string }) => Promise<CodexRateLimitAccountsState>
+    remove: (args: { accountId: string }) => Promise<CodexRateLimitAccountsState>
+    select: (args: { accountId: string | null }) => Promise<CodexRateLimitAccountsState>
   }
   cli: {
     getInstallStatus: () => Promise<CliInstallStatus>

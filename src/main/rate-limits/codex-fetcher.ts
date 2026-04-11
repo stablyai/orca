@@ -1,8 +1,15 @@
+/* eslint-disable max-lines -- Why: keeping both Codex RPC and PTY fallback
+paths together in one file makes it easier to audit the protocol/parsing
+differences and ensure account-scoped env handling stays identical. */
 import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
 import { spawn } from 'node:child_process'
 
 const RPC_TIMEOUT_MS = 10_000
 const PTY_TIMEOUT_MS = 15_000
+
+export type FetchCodexRateLimitsOptions = {
+  codexHomePath?: string | null
+}
 
 // ---------------------------------------------------------------------------
 // JSON-RPC helpers
@@ -71,7 +78,7 @@ function mapRpcWindow(raw: RpcRateWindow | undefined): RateLimitWindow | null {
 // RPC fetch — spawn `codex -s read-only -a untrusted app-server`
 // ---------------------------------------------------------------------------
 
-async function fetchViaRpc(): Promise<ProviderRateLimits> {
+async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<ProviderRateLimits> {
   return new Promise<ProviderRateLimits>((resolve) => {
     let buffer = ''
     let resolved = false
@@ -79,7 +86,13 @@ async function fetchViaRpc(): Promise<ProviderRateLimits> {
 
     const child = spawn('codex', ['-s', 'read-only', '-a', 'untrusted', 'app-server'], {
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env }
+      // Why: the selected Codex rate-limit account must only affect this fetch
+      // subprocess. Never mutate process.env globally or other Codex features
+      // would inherit the managed account unintentionally.
+      env: {
+        ...process.env,
+        ...(options?.codexHomePath ? { CODEX_HOME: options.codexHomePath } : {})
+      }
     })
 
     const timeout = setTimeout(() => {
@@ -263,7 +276,7 @@ function parsePtyStatus(output: string): {
   return { session, weekly }
 }
 
-async function fetchViaPty(): Promise<ProviderRateLimits> {
+async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<ProviderRateLimits> {
   const pty = await import('node-pty')
 
   return new Promise<ProviderRateLimits>((resolve) => {
@@ -275,7 +288,11 @@ async function fetchViaPty(): Promise<ProviderRateLimits> {
       name: 'xterm-256color',
       cols: 120,
       rows: 40,
-      env: { ...process.env, TERM: 'xterm-256color' }
+      env: {
+        ...process.env,
+        TERM: 'xterm-256color',
+        ...(options?.codexHomePath ? { CODEX_HOME: options.codexHomePath } : {})
+      }
     })
 
     const timeout = setTimeout(() => {
@@ -353,17 +370,19 @@ async function fetchViaPty(): Promise<ProviderRateLimits> {
 // Public API
 // ---------------------------------------------------------------------------
 
-export async function fetchCodexRateLimits(): Promise<ProviderRateLimits> {
+export async function fetchCodexRateLimits(
+  options?: FetchCodexRateLimitsOptions
+): Promise<ProviderRateLimits> {
   // Path A: try RPC first
   try {
-    return await fetchViaRpc()
+    return await fetchViaRpc(options)
   } catch {
     // RPC failed — fall through to PTY
   }
 
   // Path B: PTY fallback
   try {
-    return await fetchViaPty()
+    return await fetchViaPty(options)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'
     const isNotInstalled = message.includes('ENOENT')

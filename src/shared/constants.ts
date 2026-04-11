@@ -109,7 +109,9 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     notifications: getDefaultNotificationSettings(),
     diffDefaultView: 'inline',
     promptCacheTimerEnabled: false,
-    promptCacheTtlMs: 300_000
+    promptCacheTtlMs: 300_000,
+    codexManagedAccounts: [],
+    activeCodexManagedAccountId: null
   }
 }
 

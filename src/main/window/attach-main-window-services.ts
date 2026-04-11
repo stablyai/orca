@@ -19,11 +19,12 @@ import {
 export function attachMainWindowServices(
   mainWindow: BrowserWindow,
   store: Store,
-  runtime: OrcaRuntimeService
+  runtime: OrcaRuntimeService,
+  getSelectedCodexHomePath?: () => string | null
 ): void {
   registerRepoHandlers(mainWindow, store)
   registerWorktreeHandlers(mainWindow, store)
-  registerPtyHandlers(mainWindow, runtime)
+  registerPtyHandlers(mainWindow, runtime, getSelectedCodexHomePath)
   registerFileDropRelay(mainWindow)
   setupAutoUpdater(mainWindow, {
     getLastUpdateCheckAt: () => store.getUI().lastUpdateCheckAt,

@@ -1,17 +1,38 @@
-import { RefreshCw } from 'lucide-react'
-import { useCallback, useRef, useState } from 'react'
+/* eslint-disable max-lines -- Why: the status bar keeps provider rendering,
+interaction menus, and compact-layout behavior together so the hover/click
+states stay consistent across Claude and Codex. */
+import { AlertTriangle, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   ContextMenu,
   ContextMenuCheckboxItem,
   ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import { useAppStore } from '../../store'
+import type { CodexRateLimitAccountsState } from '../../../../shared/types'
 import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
-import { ProviderIcon, ProviderTooltip } from './tooltip'
+import { ProviderIcon, ProviderPanel } from './tooltip'
+import { markLiveCodexSessionsForRestart } from '@/lib/codex-session-restart'
+
+function getCodexAccountLabel(
+  state: CodexRateLimitAccountsState,
+  accountId: string | null | undefined
+): string {
+  if (accountId == null) {
+    return 'System default'
+  }
+  return state.accounts.find((account) => account.id === accountId)?.email ?? 'Codex account'
+}
 
 // ---------------------------------------------------------------------------
 // Mini progress bar (shows remaining capacity, grey)
@@ -53,6 +74,7 @@ function ProviderSegment({
   compact: boolean
 }): React.JSX.Element {
   const provider = p?.provider ?? 'claude'
+  const statusLabel = p?.error && /rate limit/i.test(p.error) ? 'Limited' : 'Unavailable'
 
   // Idle / initial load
   if (!p || p.status === 'idle') {
@@ -86,9 +108,10 @@ function ProviderSegment({
   // Error with no data
   if (p.status === 'error' && !p.session && !p.weekly) {
     return (
-      <span className="inline-flex items-center gap-1 text-muted-foreground/70">
+      <span className="inline-flex items-center gap-1 text-muted-foreground">
         <ProviderIcon provider={provider} />
-        <span className="text-yellow-500">&loz;</span>
+        <AlertTriangle size={11} className="text-muted-foreground/80" />
+        {!compact && <span className="text-[11px] font-medium">{statusLabel}</span>}
       </span>
     )
   }
@@ -98,14 +121,273 @@ function ProviderSegment({
   const isFetching = p.status === 'fetching'
 
   return (
-    <span className={`inline-flex items-center gap-1.5 ${isStale ? 'opacity-60' : ''}`}>
+    <span className="inline-flex items-center gap-1.5">
       <ProviderIcon provider={provider} />
       {p.session && !compact && <MiniBar leftPct={Math.max(0, 100 - p.session.usedPercent)} />}
       {p.session && <WindowLabel w={p.session} label="5h" />}
       {p.session && p.weekly && <span className="text-muted-foreground">&middot;</span>}
       {p.weekly && <WindowLabel w={p.weekly} label="wk" />}
+      {isStale && <AlertTriangle size={11} className="text-muted-foreground/80" />}
       {isFetching && <RefreshCw size={10} className="animate-spin text-muted-foreground" />}
     </span>
+  )
+}
+
+function CodexSwitcherMenu({
+  codex,
+  compact,
+  iconOnly
+}: {
+  codex: ProviderRateLimits
+  compact: boolean
+  iconOnly: boolean
+}): React.JSX.Element {
+  const [open, setOpen] = useState(false)
+  const [accountsExpanded, setAccountsExpanded] = useState(false)
+  const [accounts, setAccounts] = useState<CodexRateLimitAccountsState>({
+    accounts: [],
+    activeAccountId: null
+  })
+  const [isSwitching, setIsSwitching] = useState(false)
+  const setActiveView = useAppStore((s) => s.setActiveView)
+  const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
+  const fetchSettings = useAppStore((s) => s.fetchSettings)
+  const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
+  const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
+  const codexRestartNoticeByPtyId = useAppStore((s) => s.codexRestartNoticeByPtyId)
+  const restartCodexTabs = useAppStore((s) => s.restartCodexTabs)
+  const codexAccountSyncKey = useAppStore((s) => {
+    const settings = s.settings
+    if (!settings) {
+      return 'no-settings'
+    }
+    return `${settings.activeCodexManagedAccountId ?? 'system'}:${settings.codexManagedAccounts.map((account) => `${account.id}:${account.updatedAt}`).join('|')}`
+  })
+
+  const loadAccounts = useCallback(async () => {
+    const next = await window.api.codexAccounts.list()
+    setAccounts(next)
+  }, [])
+
+  useEffect(() => {
+    // Why: the status bar keeps its own lightweight account snapshot for the
+    // dropdown. Settings account actions mutate the main-process store outside
+    // this component, so we refresh when the persisted account roster changes
+    // or when the menu opens instead of leaving a stale account list mounted.
+    void loadAccounts().catch((error) => {
+      console.error('Failed to load Codex accounts for status bar:', error)
+    })
+  }, [loadAccounts, open, codexAccountSyncKey])
+
+  const handleSelectAccount = async (accountId: string | null): Promise<void> => {
+    if (isSwitching) {
+      return
+    }
+    const previousActiveAccountId = accounts.activeAccountId
+    setIsSwitching(true)
+    try {
+      const next = await window.api.codexAccounts.select({ accountId })
+      setAccounts(next)
+      await fetchSettings()
+      if (previousActiveAccountId !== next.activeAccountId) {
+        await markLiveCodexSessionsForRestart({
+          previousAccountLabel: getCodexAccountLabel(accounts, previousActiveAccountId),
+          nextAccountLabel: getCodexAccountLabel(next, next.activeAccountId)
+        })
+        // Why: account switching can require a second explicit recovery step
+        // for live Codex terminals. Keeping the switcher open and collapsing
+        // back to the summary row lets the follow-up "restart open tabs"
+        // prompt appear in the same flow instead of feeling detached.
+        setAccountsExpanded(false)
+      }
+    } catch (error) {
+      console.error('Failed to switch Codex account from status bar:', error)
+    } finally {
+      setIsSwitching(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!open) {
+      setAccountsExpanded(false)
+    }
+  }, [open])
+
+  const activeAccountLabel =
+    accounts.activeAccountId === null
+      ? 'System default'
+      : (accounts.accounts.find((account) => account.id === accounts.activeAccountId)?.email ??
+        'Managed')
+  const availableSwitchTargets = [
+    ...(accounts.activeAccountId === null
+      ? []
+      : [{ id: null as string | null, label: 'System default' }]),
+    ...accounts.accounts
+      .filter((account) => account.id !== accounts.activeAccountId)
+      .map((account) => ({
+        id: account.id,
+        label: account.workspaceLabel
+          ? `${account.email} (${account.workspaceLabel})`
+          : account.email
+      }))
+  ]
+  const staleCodexPtyIds = Object.keys(codexRestartNoticeByPtyId)
+  const staleCodexTabIds = Object.keys(ptyIdsByTabId).filter((tabId) =>
+    (ptyIdsByTabId[tabId] ?? []).some((ptyId) => Boolean(codexRestartNoticeByPtyId[ptyId]))
+  )
+  const staleCodexWorktreeCount = new Set(
+    Object.entries(tabsByWorktree).flatMap(([worktreeId, tabs]) =>
+      tabs.some((tab) => staleCodexTabIds.includes(tab.id)) ? [worktreeId] : []
+    )
+  ).size
+  const staleCodexSessionCount = staleCodexPtyIds.length
+  const staleCodexTabCount = staleCodexTabIds.length
+
+  return (
+    <ProviderDetailsMenu
+      provider={codex}
+      compact={compact}
+      iconOnly={iconOnly}
+      ariaLabel="Open Codex details and account switcher"
+      open={open}
+      onOpenChange={setOpen}
+    >
+      <DropdownMenuLabel>Codex Account</DropdownMenuLabel>
+      <DropdownMenuItem
+        onSelect={(event) => {
+          event.preventDefault()
+          setAccountsExpanded((prev) => !prev)
+        }}
+      >
+        <span className="max-w-[180px] truncate text-[12px] text-foreground">
+          {activeAccountLabel}
+        </span>
+        {accountsExpanded ? (
+          <ChevronDown className="ml-auto size-3.5 text-muted-foreground/85" />
+        ) : (
+          <ChevronRight className="ml-auto size-3.5 text-muted-foreground/85" />
+        )}
+      </DropdownMenuItem>
+      {accountsExpanded ? (
+        <div className="px-1 pb-1">
+          <div className="px-2 py-1 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+            Switch to
+          </div>
+          <div className="max-h-[220px] overflow-y-auto rounded-md border border-border/60 bg-accent/5 p-1">
+            {availableSwitchTargets.length === 0 ? (
+              <div className="px-2 py-1.5 text-[11px] text-muted-foreground">No other accounts</div>
+            ) : null}
+            {availableSwitchTargets.map((target) => (
+              <DropdownMenuItem
+                key={target.id ?? 'system'}
+                onSelect={(event) => {
+                  // Why: account switching may need an immediate follow-up
+                  // restart action for live Codex tabs. Prevent the menu from
+                  // auto-closing so that prompt can stay within the same
+                  // account-switcher interaction instead of jumping elsewhere.
+                  event.preventDefault()
+                  void handleSelectAccount(target.id)
+                }}
+                disabled={isSwitching}
+              >
+                <span className="truncate">{target.label}</span>
+              </DropdownMenuItem>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      {staleCodexTabCount > 0 ? (
+        <>
+          <DropdownMenuSeparator />
+          <div className="px-2 py-2">
+            <div className="text-[11px] text-muted-foreground">
+              {/* Why: stale restart notices are tracked per PTY session, but the
+              bulk restart action operates per tab remount. Show both counts so
+              split panes do not make the number look wrong. */}
+              {staleCodexSessionCount === 1
+                ? '1 open Codex session still uses the previous account.'
+                : `${staleCodexSessionCount} open Codex sessions still use the previous account.`}
+              {staleCodexTabCount > 0 ? (
+                <span className="block mt-0.5">
+                  {staleCodexTabCount === 1 ? 'Across 1 tab' : `Across ${staleCodexTabCount} tabs`}
+                  {staleCodexWorktreeCount > 1 ? ` in ${staleCodexWorktreeCount} worktrees` : ''}.
+                </span>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              onClick={() => restartCodexTabs(staleCodexTabIds)}
+              className="mt-2 inline-flex w-full items-center justify-center rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
+            >
+              {staleCodexTabCount === 1 ? 'Restart Open Tab' : `Restart ${staleCodexTabCount} Tabs`}
+            </button>
+          </div>
+        </>
+      ) : null}
+      <DropdownMenuSeparator />
+      <DropdownMenuItem
+        onSelect={() => {
+          openSettingsTarget({ pane: 'general', repoId: null })
+          setActiveView('settings')
+        }}
+      >
+        Manage Accounts…
+      </DropdownMenuItem>
+    </ProviderDetailsMenu>
+  )
+}
+
+function ProviderDetailsMenu({
+  provider,
+  compact,
+  iconOnly,
+  ariaLabel,
+  open,
+  onOpenChange,
+  children
+}: {
+  provider: ProviderRateLimits
+  compact: boolean
+  iconOnly: boolean
+  ariaLabel: string
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  children?: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <DropdownMenu open={open} onOpenChange={onOpenChange}>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex items-center cursor-pointer rounded px-1 py-0.5 hover:bg-accent/70"
+          aria-label={ariaLabel}
+        >
+          {iconOnly ? (
+            <span className="inline-flex items-center gap-1">
+              <span
+                className={`inline-block h-2 w-2 rounded-full ${provider.session || provider.weekly ? 'bg-muted-foreground/60' : 'bg-muted-foreground/30'}`}
+              />
+              <span className="text-muted-foreground">
+                {provider.provider === 'claude' ? 'C' : 'X'}
+              </span>
+            </span>
+          ) : (
+            <ProviderSegment p={provider} compact={compact} />
+          )}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="top" align="start" sideOffset={8} className="w-[260px]">
+        <div className="p-2">
+          <ProviderPanel p={provider} />
+        </div>
+        {children ? (
+          <>
+            <DropdownMenuSeparator />
+            {children}
+          </>
+        ) : null}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
@@ -117,7 +399,6 @@ export function StatusBar(): React.JSX.Element | null {
   const rateLimits = useAppStore((s) => s.rateLimits)
   const refreshRateLimits = useAppStore((s) => s.refreshRateLimits)
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
-  const setStatusBarVisible = useAppStore((s) => s.setStatusBarVisible)
   const statusBarItems = useAppStore((s) => s.statusBarItems)
   const toggleStatusBarItem = useAppStore((s) => s.toggleStatusBarItem)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -162,11 +443,12 @@ export function StatusBar(): React.JSX.Element | null {
 
   const { claude, codex } = rateLimits
 
-  // Why: a provider is "showable" when it has data AND the user hasn't hidden
-  // it via the context menu. Unavailable providers (e.g. Claude for API key
-  // users) are always hidden regardless of the toggle.
-  const showClaude = claude && claude.status !== 'unavailable' && statusBarItems.includes('claude')
-  const showCodex = codex && codex.status !== 'unavailable' && statusBarItems.includes('codex')
+  // Why: hiding `unavailable` providers makes the status bar appear to lose a
+  // provider at random after refreshes or wake/resume. Keeping the slot visible
+  // preserves layout stability and makes it obvious that the provider is still
+  // configured but currently unavailable.
+  const showClaude = claude && statusBarItems.includes('claude')
+  const showCodex = codex && statusBarItems.includes('codex')
   const anyVisible = showClaude || showCodex
 
   const compact = containerWidth < 900
@@ -182,63 +464,27 @@ export function StatusBar(): React.JSX.Element | null {
           {iconOnly ? (
             <>
               {showClaude && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="inline-flex items-center gap-1 cursor-default">
-                      <span
-                        className={`inline-block w-2 h-2 rounded-full ${claude.session || claude.weekly ? 'bg-muted-foreground/60' : 'bg-muted-foreground/30'}`}
-                      />
-                      <span className="text-muted-foreground">C</span>
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" sideOffset={6} collisionPadding={12}>
-                    <ProviderTooltip p={claude} />
-                  </TooltipContent>
-                </Tooltip>
+                <ProviderDetailsMenu
+                  provider={claude}
+                  compact={compact}
+                  iconOnly
+                  ariaLabel="Open Claude usage details"
+                />
               )}
-              {showCodex && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="inline-flex items-center gap-1 cursor-default">
-                      <span
-                        className={`inline-block w-2 h-2 rounded-full ${codex.session || codex.weekly ? 'bg-muted-foreground/60' : 'bg-muted-foreground/30'}`}
-                      />
-                      <span className="text-muted-foreground">X</span>
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" sideOffset={6} collisionPadding={12}>
-                    <ProviderTooltip p={codex} />
-                  </TooltipContent>
-                </Tooltip>
-              )}
+              {showCodex && <CodexSwitcherMenu codex={codex} compact={compact} iconOnly />}
             </>
           ) : (
             <>
               {showClaude && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="inline-flex items-center cursor-default">
-                      <ProviderSegment p={claude} compact={compact} />
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" sideOffset={6} collisionPadding={12}>
-                    <ProviderTooltip p={claude} />
-                  </TooltipContent>
-                </Tooltip>
+                <ProviderDetailsMenu
+                  provider={claude}
+                  compact={compact}
+                  iconOnly={false}
+                  ariaLabel="Open Claude usage details"
+                />
               )}
 
-              {showCodex && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="inline-flex items-center cursor-default">
-                      <ProviderSegment p={codex} compact={compact} />
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" sideOffset={6} collisionPadding={12}>
-                    <ProviderTooltip p={codex} />
-                  </TooltipContent>
-                </Tooltip>
-              )}
+              {showCodex && <CodexSwitcherMenu codex={codex} compact={compact} iconOnly={false} />}
             </>
           )}
 
@@ -264,11 +510,7 @@ export function StatusBar(): React.JSX.Element | null {
         </div>
       </ContextMenuTrigger>
 
-      <ContextMenuContent>
-        <ContextMenuItem onClick={() => setStatusBarVisible(false)}>
-          Hide Status Bar
-        </ContextMenuItem>
-        <ContextMenuSeparator />
+      <ContextMenuContent className="min-w-0 w-fit">
         <ContextMenuCheckboxItem
           checked={statusBarItems.includes('claude')}
           onCheckedChange={() => toggleStatusBarItem('claude')}

@@ -27,7 +27,8 @@ function buildMenuOptions() {
     onOpenSettings: vi.fn(),
     onZoomIn: vi.fn(),
     onZoomOut: vi.fn(),
-    onZoomReset: vi.fn()
+    onZoomReset: vi.fn(),
+    onToggleStatusBar: vi.fn()
   }
 }
 

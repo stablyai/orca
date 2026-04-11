@@ -104,8 +104,25 @@ const STOP_SUBSTRINGS = [
 // palette prompts ("Show plan usage limits") are auto-confirmed with Enter.
 const COMMAND_PALETTE_RE = /show plan|usage limits/i
 const TRUST_PROMPT_RE = /do you trust|trust the files|safety check/i
+const RATE_LIMITED_RE = /rate limited\.?\s+please try again later/i
+const LOAD_FAILED_RE = /failed to load usage data/i
 const STARTUP_DELAY_MS = 2_000
 const SETTLE_AFTER_STOP_MS = 2_000
+
+function describeClaudeUsageFailure(output: string): string {
+  if (RATE_LIMITED_RE.test(output)) {
+    return 'Claude usage is rate limited right now.'
+  }
+
+  if (LOAD_FAILED_RE.test(output)) {
+    return 'Claude usage is unavailable right now.'
+  }
+
+  // Why: parser failures are an implementation detail of Orca's PTY fallback.
+  // The UI should explain the user-visible outcome, not leak internal parsing
+  // mechanics that the user cannot act on.
+  return 'Claude usage is unavailable right now.'
+}
 
 export async function fetchViaPty(): Promise<ProviderRateLimits> {
   const pty = await import('node-pty')
@@ -189,7 +206,7 @@ export async function fetchViaPty(): Promise<ProviderRateLimits> {
           session: null,
           weekly: null,
           updatedAt: Date.now(),
-          error: 'Failed to parse Claude CLI /usage output',
+          error: describeClaudeUsageFailure(clean),
           status: 'error'
         })
       } else {

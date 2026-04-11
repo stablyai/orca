@@ -236,6 +236,42 @@ describe('removeRepo cascade', () => {
   })
 })
 
+describe('restartCodexTabs', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('queues codex restart in-place and suppresses old PTY exits', () => {
+    const store = createTestStore()
+    const wt1 = 'repo1::/path/wt1'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt1, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt1]: [makeTab({ id: 'tab1', worktreeId: wt1, title: 'codex', generation: 2 })]
+      },
+      ptyIdsByTabId: {
+        tab1: ['pty-a', 'pty-b']
+      },
+      pendingStartupByTabId: {}
+    })
+
+    store.getState().restartCodexTabs(['tab1'])
+    const state = store.getState()
+    const restartedTab = state.tabsByWorktree[wt1][0]
+
+    expect(state.pendingStartupByTabId.tab1).toEqual({ command: 'codex' })
+    expect(state.suppressedPtyExitIds['pty-a']).toBe(true)
+    expect(state.suppressedPtyExitIds['pty-b']).toBe(true)
+    expect(restartedTab.generation).toBe(3)
+  })
+})
+
 describe('hydrateWorkspaceSession', () => {
   beforeEach(() => {
     vi.clearAllMocks()
