@@ -18,6 +18,8 @@ type PtyConnectionDeps = {
   onPtyErrorRef?: React.RefObject<(paneId: number, message: string) => void>
   clearTabPtyId: (tabId: string, ptyId: string) => void
   updateTabTitle: (tabId: string, title: string) => void
+  setRuntimePaneTitle: (tabId: string, paneId: number, title: string) => void
+  clearRuntimePaneTitle: (tabId: string, paneId: number) => void
   updateTabPtyId: (tabId: string, ptyId: string) => void
   markWorktreeUnread: (worktreeId: string) => void
   dispatchNotification: (event: {
@@ -47,6 +49,7 @@ export function connectPanePty(
   const cacheKey = `${deps.tabId}:${pane.id}`
 
   const onExit = (ptyId: string): void => {
+    deps.clearRuntimePaneTitle(deps.tabId, pane.id)
     deps.clearTabPtyId(deps.tabId, ptyId)
     // Why: if the PTY exits abruptly (Ctrl-D, crash, shell termination) without
     // first emitting a non-agent title, the cache timer would persist as stale
@@ -75,6 +78,7 @@ export function connectPanePty(
 
   const onTitleChange = (title: string, rawTitle: string): void => {
     manager.setPaneGpuRendering(pane.id, !isGeminiTerminalTitle(rawTitle))
+    deps.setRuntimePaneTitle(deps.tabId, pane.id, title)
     deps.updateTabTitle(deps.tabId, title)
 
     if (!hasConsideredInitialCacheTimerSeed) {

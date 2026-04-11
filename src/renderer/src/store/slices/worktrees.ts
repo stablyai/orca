@@ -116,9 +116,11 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         delete nextTabs[worktreeId]
         const nextLayouts = { ...s.terminalLayoutsByTabId }
         const nextPtyIdsByTabId = { ...s.ptyIdsByTabId }
+        const nextRuntimePaneTitlesByTabId = { ...s.runtimePaneTitlesByTabId }
         for (const tabId of tabIds) {
           delete nextLayouts[tabId]
           delete nextPtyIdsByTabId[tabId]
+          delete nextRuntimePaneTitlesByTabId[tabId]
         }
         const nextDeleteState = { ...s.deleteStateByWorktreeId }
         delete nextDeleteState[worktreeId]
@@ -141,6 +143,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           worktreesByRepo: next,
           tabsByWorktree: nextTabs,
           ptyIdsByTabId: nextPtyIdsByTabId,
+          runtimePaneTitlesByTabId: nextRuntimePaneTitlesByTabId,
           terminalLayoutsByTabId: nextLayouts,
           deleteStateByWorktreeId: nextDeleteState,
           fileSearchStateByWorktree: (() => {

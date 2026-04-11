@@ -48,6 +48,8 @@ type UseTerminalPaneLifecycleDeps = {
   onPtyErrorRef?: React.RefObject<(paneId: number, message: string) => void>
   clearTabPtyId: (tabId: string, ptyId: string) => void
   updateTabTitle: (tabId: string, title: string) => void
+  setRuntimePaneTitle: (tabId: string, paneId: number, title: string) => void
+  clearRuntimePaneTitle: (tabId: string, paneId: number) => void
   updateTabPtyId: (tabId: string, ptyId: string) => void
   markWorktreeUnread: (worktreeId: string) => void
   dispatchNotification: (event: {
@@ -88,6 +90,8 @@ export function useTerminalPaneLifecycle({
   onPtyErrorRef,
   clearTabPtyId,
   updateTabTitle,
+  setRuntimePaneTitle,
+  clearRuntimePaneTitle,
   updateTabPtyId,
   markWorktreeUnread,
   dispatchNotification,
@@ -183,6 +187,8 @@ export function useTerminalPaneLifecycle({
       onPtyErrorRef,
       clearTabPtyId,
       updateTabTitle,
+      setRuntimePaneTitle,
+      clearRuntimePaneTitle,
       updateTabPtyId,
       markWorktreeUnread,
       dispatchNotification,
@@ -240,6 +246,7 @@ export function useTerminalPaneLifecycle({
           transport.destroy?.()
           paneTransportsRef.current.delete(paneId)
         }
+        clearRuntimePaneTitle(tabId, paneId)
         paneFontSizesRef.current.delete(paneId)
         pendingWritesRef.current.delete(paneId)
         // Clean up pane title state so closed panes don't leave stale entries.

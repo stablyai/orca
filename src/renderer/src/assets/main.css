@@ -337,6 +337,41 @@
   flex-shrink: 0;
 }
 
+.titlebar-agent-badge {
+  -webkit-app-region: no-drag;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 10px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  background: color-mix(in srgb, var(--accent) 80%, transparent);
+  color: var(--foreground);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.titlebar-agent-badge-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  background: #16a34a;
+  box-shadow: 0 0 0 3px color-mix(in srgb, #16a34a 18%, transparent);
+}
+
+.titlebar-agent-badge-count {
+  min-width: 1ch;
+}
+
+.titlebar-agent-badge-label {
+  color: var(--muted-foreground);
+  font-weight: 500;
+}
+
 .titlebar-icon-button {
   -webkit-app-region: no-drag;
   background: none;

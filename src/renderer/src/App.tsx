@@ -27,6 +27,7 @@ import {
 import { useGlobalFileDrop } from './hooks/useGlobalFileDrop'
 import { registerUpdaterBeforeUnloadBypass } from './lib/updater-beforeunload'
 import { buildWorkspaceSessionPayload } from './lib/workspace-session'
+import { countWorkingAgents } from './lib/agent-status'
 
 const isMac = navigator.userAgent.includes('Mac')
 
@@ -59,6 +60,12 @@ function App(): React.JSX.Element {
   const activeRepoId = useAppStore((s) => s.activeRepoId)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const activeTabId = useAppStore((s) => s.activeTabId)
+  const activeAgentCount = useAppStore((s) =>
+    countWorkingAgents({
+      tabsByWorktree: s.tabsByWorktree,
+      runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId
+    })
+  )
   const expandedPaneByTabId = useAppStore((s) => s.expandedPaneByTabId)
   const canExpandPaneByTabId = useAppStore((s) => s.canExpandPaneByTabId)
   const terminalLayoutsByTabId = useAppStore((s) => s.terminalLayoutsByTabId)
@@ -488,6 +495,23 @@ function App(): React.JSX.Element {
               </TooltipContent>
             </Tooltip>
             <div className="titlebar-title">Orca</div>
+            {activeAgentCount > 0 ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    className="titlebar-agent-badge"
+                    aria-label={`${activeAgentCount} ${activeAgentCount === 1 ? 'agent' : 'agents'} active`}
+                  >
+                    <span className="titlebar-agent-badge-dot" aria-hidden />
+                    <span className="titlebar-agent-badge-count">{activeAgentCount}</span>
+                    <span className="titlebar-agent-badge-label">active</span>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>
+                  {`${activeAgentCount} ${activeAgentCount === 1 ? 'agent' : 'agents'} active across all worktrees`}
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
           </div>
           {/* Why: keep the center titlebar slot mounted even when tabs are hidden.
               Using `hidden` here collapsed the spacer entirely, which let the
