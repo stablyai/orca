@@ -10,7 +10,7 @@ import CacheTimer from './CacheTimer'
 import CommentMarkdown from './CommentMarkdown'
 import WorktreeContextMenu from './WorktreeContextMenu'
 import { cn } from '@/lib/utils'
-import { detectAgentStatusFromTitle } from '@/lib/agent-status'
+import { getWorktreeStatus, type WorktreeStatus } from '@/lib/worktree-status'
 import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
 import type {
   Worktree,
@@ -22,7 +22,6 @@ import type {
   GitConflictOperation,
   TerminalTab
 } from '../../../../shared/types'
-import type { Status } from './StatusIndicator'
 
 function branchDisplayName(branch: string): string {
   return branch.replace(/^refs\/heads\//, '')
@@ -54,24 +53,6 @@ const CONFLICT_OPERATION_LABELS: Record<Exclude<GitConflictOperation, 'unknown'>
 // ── Stable empty array for tabs fallback ─────────────────────────
 const EMPTY_TABS: TerminalTab[] = []
 const EMPTY_BROWSER_TABS: { id: string }[] = []
-
-export function getWorktreeStatus(tabs: TerminalTab[], browserTabs: { id: string }[]): Status {
-  const liveTabs = tabs.filter((tab) => tab.ptyId)
-  if (liveTabs.some((tab) => detectAgentStatusFromTitle(tab.title) === 'permission')) {
-    return 'permission'
-  }
-  if (liveTabs.some((tab) => detectAgentStatusFromTitle(tab.title) === 'working')) {
-    return 'working'
-  }
-  if (liveTabs.length > 0 || browserTabs.length > 0) {
-    // Why: browser-only worktrees are still active from the user's point of
-    // view even when they have no PTY-backed terminal. The sidebar filter
-    // already treats them as active, so the card badge must stay consistent
-    // instead of showing a misleading inactive dot.
-    return 'active'
-  }
-  return 'inactive'
-}
 
 type WorktreeCardProps = {
   worktree: Worktree
@@ -173,7 +154,10 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const isDeleting = deleteState?.isDeleting ?? false
 
   // Derive status
-  const status: Status = useMemo(() => getWorktreeStatus(tabs, browserTabs), [tabs, browserTabs])
+  const status: WorktreeStatus = useMemo(
+    () => getWorktreeStatus(tabs, browserTabs),
+    [tabs, browserTabs]
+  )
 
   const showPR = cardProps.includes('pr')
   const showCI = cardProps.includes('ci')

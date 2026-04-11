@@ -17,7 +17,7 @@ const MOD_KEY = isMac ? 'Meta' : 'Control'
  * - Window blur resets state to handle Cmd+Tab away without a keyup event.
  * - `e.repeat` events are ignored so the timer only starts once.
  */
-export function useModifierHint(): { showHints: boolean } {
+export function useModifierHint(enabled: boolean = true): { showHints: boolean } {
   const [showHints, setShowHints] = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -28,6 +28,11 @@ export function useModifierHint(): { showHints: boolean } {
         timerRef.current = null
       }
       setShowHints(false)
+    }
+
+    if (!enabled) {
+      clear()
+      return undefined
     }
 
     const onKeyDown = (e: KeyboardEvent): void => {
@@ -71,7 +76,7 @@ export function useModifierHint(): { showHints: boolean } {
       window.removeEventListener('keyup', onKeyUp)
       window.removeEventListener('blur', clear)
     }
-  }, [])
+  }, [enabled])
 
   return { showHints }
 }

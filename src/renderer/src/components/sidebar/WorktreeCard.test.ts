@@ -13,7 +13,7 @@ vi.mock('@/lib/agent-status', () => ({
   })
 }))
 
-import { getWorktreeStatus } from './WorktreeCard'
+import { getWorktreeStatus } from '@/lib/worktree-status'
 
 function makeTerminalTab(title: string): TerminalTab {
   return {
@@ -34,11 +34,11 @@ describe('getWorktreeStatus', () => {
   })
 
   it('keeps terminal agent states higher priority than browser presence', () => {
-    expect(
-      getWorktreeStatus([makeTerminalTab('permission needed')], [{ id: 'browser-1' }])
-    ).toBe('permission')
-    expect(
-      getWorktreeStatus([makeTerminalTab('working hard')], [{ id: 'browser-1' }])
-    ).toBe('working')
+    expect(getWorktreeStatus([makeTerminalTab('permission needed')], [{ id: 'browser-1' }])).toBe(
+      'permission'
+    )
+    expect(getWorktreeStatus([makeTerminalTab('working hard')], [{ id: 'browser-1' }])).toBe(
+      'working'
+    )
   })
 })

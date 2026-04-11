@@ -1,5 +1,5 @@
 /* oxlint-disable max-lines */
-import React, { useCallback, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import {
@@ -11,216 +11,13 @@ import {
 } from '@/components/ui/command'
 import { branchName } from '@/lib/git-utils'
 import { sortWorktreesRecent } from '@/components/sidebar/smart-sort'
+import StatusIndicator from '@/components/sidebar/StatusIndicator'
+import { cn } from '@/lib/utils'
+import { getWorktreeStatus, getWorktreeStatusLabel } from '@/lib/worktree-status'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
-import type { Worktree, Repo } from '../../../shared/types'
-
-// ─── Search result types ────────────────────────────────────────────
-
-type MatchRange = { start: number; end: number }
-
-type PaletteMatchBase = { worktreeId: string }
-
-/** Empty query — all non-archived worktrees shown, no match metadata. */
-type PaletteMatchAll = PaletteMatchBase & {
-  matchedField: null
-  matchRange: null
-}
-
-/** Comment match — includes a truncated snippet centered on the matched range. */
-type PaletteMatchComment = PaletteMatchBase & {
-  matchedField: 'comment'
-  matchRange: MatchRange
-  snippet: string
-  /** Offset of the snippet start within the original comment, for highlight calculation. */
-  snippetOffset: number
-}
-
-/** Non-comment field match — range within the matched field's display value. */
-type PaletteMatchField = PaletteMatchBase & {
-  matchedField: 'displayName' | 'branch' | 'repo' | 'pr' | 'issue'
-  matchRange: MatchRange
-}
-
-type PaletteMatch = PaletteMatchAll | PaletteMatchComment | PaletteMatchField
-
-// ─── Search logic ───────────────────────────────────────────────────
-
-function extractCommentSnippet(
-  comment: string,
-  matchStart: number,
-  matchEnd: number
-): { snippet: string; snippetOffset: number } {
-  let snippetStart = Math.max(0, matchStart - 40)
-  let snippetEnd = Math.min(comment.length, matchEnd + 40)
-
-  // Snap to word boundaries (scan up to 10 chars)
-  for (let i = 0; i < 10 && snippetStart > 0; i++) {
-    if (/\s/.test(comment[snippetStart - 1])) {
-      break
-    }
-    snippetStart--
-  }
-  for (let i = 0; i < 10 && snippetEnd < comment.length; i++) {
-    if (/\s/.test(comment[snippetEnd])) {
-      break
-    }
-    snippetEnd++
-  }
-
-  const prefix = snippetStart > 0 ? '\u2026' : ''
-  const suffix = snippetEnd < comment.length ? '\u2026' : ''
-  const snippet = prefix + comment.slice(snippetStart, snippetEnd) + suffix
-
-  return { snippet, snippetOffset: snippetStart - prefix.length }
-}
-
-function searchWorktrees(
-  worktrees: Worktree[],
-  query: string,
-  repoMap: Map<string, Repo>,
-  prCache: Record<string, { data?: { number: number; title: string } | null }> | null,
-  issueCache: Record<string, { data?: { number: number; title: string } | null }> | null
-): PaletteMatch[] {
-  if (!query) {
-    return worktrees.map((w) => ({
-      worktreeId: w.id,
-      matchedField: null,
-      matchRange: null
-    }))
-  }
-
-  const q = query.toLowerCase()
-  const results: PaletteMatch[] = []
-
-  for (const w of worktrees) {
-    // Field priority: displayName > branch > repo > comment > pr > issue
-    const nameIdx = w.displayName.toLowerCase().indexOf(q)
-    if (nameIdx !== -1) {
-      results.push({
-        worktreeId: w.id,
-        matchedField: 'displayName',
-        matchRange: { start: nameIdx, end: nameIdx + q.length }
-      })
-      continue
-    }
-
-    const branch = branchName(w.branch)
-    const branchIdx = branch.toLowerCase().indexOf(q)
-    if (branchIdx !== -1) {
-      results.push({
-        worktreeId: w.id,
-        matchedField: 'branch',
-        matchRange: { start: branchIdx, end: branchIdx + q.length }
-      })
-      continue
-    }
-
-    const repoName = repoMap.get(w.repoId)?.displayName ?? ''
-    const repoIdx = repoName.toLowerCase().indexOf(q)
-    if (repoIdx !== -1) {
-      results.push({
-        worktreeId: w.id,
-        matchedField: 'repo',
-        matchRange: { start: repoIdx, end: repoIdx + q.length }
-      })
-      continue
-    }
-
-    if (w.comment) {
-      const commentIdx = w.comment.toLowerCase().indexOf(q)
-      if (commentIdx !== -1) {
-        const { snippet, snippetOffset } = extractCommentSnippet(
-          w.comment,
-          commentIdx,
-          commentIdx + q.length
-        )
-        results.push({
-          worktreeId: w.id,
-          matchedField: 'comment',
-          matchRange: { start: commentIdx, end: commentIdx + q.length },
-          snippet,
-          snippetOffset
-        })
-        continue
-      }
-    }
-
-    // Strip leading '#' for number matching, guard against bare '#'
-    const numQuery = q.startsWith('#') ? q.slice(1) : q
-    if (!numQuery) {
-      continue
-    }
-
-    // PR matching
-    const repo = repoMap.get(w.repoId)
-    const branchForPR = branchName(w.branch)
-    const prKey = repo && branchForPR ? `${repo.path}::${branchForPR}` : ''
-    const pr = prKey && prCache ? prCache[prKey]?.data : undefined
-
-    if (pr) {
-      const prNumStr = String(pr.number)
-      const prNumIdx = prNumStr.indexOf(numQuery)
-      if (prNumIdx !== -1) {
-        results.push({
-          worktreeId: w.id,
-          matchedField: 'pr',
-          matchRange: { start: prNumIdx, end: prNumIdx + numQuery.length }
-        })
-        continue
-      }
-      const prTitleIdx = pr.title.toLowerCase().indexOf(q)
-      if (prTitleIdx !== -1) {
-        results.push({
-          worktreeId: w.id,
-          matchedField: 'pr',
-          matchRange: { start: prTitleIdx, end: prTitleIdx + q.length }
-        })
-        continue
-      }
-    } else if (w.linkedPR != null) {
-      const prNumStr = String(w.linkedPR)
-      const prNumIdx = prNumStr.indexOf(numQuery)
-      if (prNumIdx !== -1) {
-        results.push({
-          worktreeId: w.id,
-          matchedField: 'pr',
-          matchRange: { start: prNumIdx, end: prNumIdx + numQuery.length }
-        })
-        continue
-      }
-    }
-
-    // Issue matching
-    if (w.linkedIssue != null) {
-      const issueNumStr = String(w.linkedIssue)
-      const issueNumIdx = issueNumStr.indexOf(numQuery)
-      if (issueNumIdx !== -1) {
-        results.push({
-          worktreeId: w.id,
-          matchedField: 'issue',
-          matchRange: { start: issueNumIdx, end: issueNumIdx + numQuery.length }
-        })
-        continue
-      }
-      const issueKey = repo ? `${repo.path}::${w.linkedIssue}` : ''
-      const issue = issueKey && issueCache ? issueCache[issueKey]?.data : undefined
-      if (issue?.title) {
-        const issueTitleIdx = issue.title.toLowerCase().indexOf(q)
-        if (issueTitleIdx !== -1) {
-          results.push({
-            worktreeId: w.id,
-            matchedField: 'issue',
-            matchRange: { start: issueTitleIdx, end: issueTitleIdx + q.length }
-          })
-          continue
-        }
-      }
-    }
-  }
-
-  return results
-}
+import { searchWorktrees, type MatchRange } from '@/lib/worktree-palette-search'
+import type { Worktree } from '../../../shared/types'
 
 // ─── Highlight helper ───────────────────────────────────────────────
 
@@ -246,14 +43,21 @@ function HighlightedText({
   )
 }
 
-// ─── Field badge labels ─────────────────────────────────────────────
+function PaletteState({ title, subtitle }: { title: string; subtitle: string }): React.JSX.Element {
+  return (
+    <div className="px-5 py-8 text-center">
+      <p className="text-sm font-medium text-foreground">{title}</p>
+      <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>
+    </div>
+  )
+}
 
-const FIELD_BADGES: Record<string, string> = {
-  branch: 'Branch',
-  repo: 'Repo',
-  comment: 'Comment',
-  pr: 'PR',
-  issue: 'Issue'
+function FooterKey({ children }: { children: React.ReactNode }): React.JSX.Element {
+  return (
+    <span className="rounded-full border border-border/60 bg-muted/35 px-2 py-0.5 text-[10px] font-medium text-foreground/85">
+      {children}
+    </span>
+  )
 }
 
 // ─── Component ──────────────────────────────────────────────────────
@@ -267,15 +71,20 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const prCache = useAppStore((s) => s.prCache)
   const issueCache = useAppStore((s) => s.issueCache)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const browserTabsByWorktree = useAppStore((s) => s.browserTabsByWorktree)
 
   const [query, setQuery] = useState('')
+  const [selectedWorktreeId, setSelectedWorktreeId] = useState('')
   const previousWorktreeIdRef = useRef<string | null>(null)
+  const wasVisibleRef = useRef(false)
 
   const repoMap = useMemo(() => new Map(repos.map((r) => [r.id, r])), [repos])
 
   // All non-archived worktrees sorted by recent signals
   const sortedWorktrees = useMemo(() => {
-    const all: Worktree[] = Object.values(worktreesByRepo).flat().filter((w) => !w.isArchived)
+    const all: Worktree[] = Object.values(worktreesByRepo)
+      .flat()
+      .filter((w) => !w.isArchived)
     return sortWorktreesRecent(all, tabsByWorktree, repoMap, prCache)
   }, [worktreesByRepo, tabsByWorktree, repoMap, prCache])
 
@@ -295,20 +104,35 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   }, [sortedWorktrees])
 
   // Loading state: repos exist but worktreesByRepo is still empty
-  const isLoading =
-    repos.length > 0 && Object.keys(worktreesByRepo).length === 0
+  const isLoading = repos.length > 0 && Object.keys(worktreesByRepo).length === 0
 
-  const handleOpenChange = useCallback(
-    (open: boolean) => {
-      if (open) {
-        previousWorktreeIdRef.current = activeWorktreeId
-        setQuery('')
-      } else {
-        closeModal()
-      }
-    },
-    [closeModal, activeWorktreeId]
-  )
+  useEffect(() => {
+    if (visible && !wasVisibleRef.current) {
+      // Why: this dialog opens from external store state, so session reset must
+      // follow the controlled `visible` flag instead of relying on Radix open callbacks.
+      previousWorktreeIdRef.current = activeWorktreeId
+      setQuery('')
+      setSelectedWorktreeId('')
+    }
+
+    wasVisibleRef.current = visible
+  }, [visible, activeWorktreeId])
+
+  useEffect(() => {
+    if (!visible) {
+      return
+    }
+    if (matches.length === 0) {
+      setSelectedWorktreeId('')
+      return
+    }
+    if (!matches.some((match) => match.worktreeId === selectedWorktreeId)) {
+      // Why: the palette keeps live recent ordering while open. Control cmdk's
+      // selected value by worktree ID so background re-sorts keep the same
+      // logical worktree selected instead of drifting to a new visual index.
+      setSelectedWorktreeId(matches[0].worktreeId)
+    }
+  }, [visible, matches, selectedWorktreeId])
 
   const focusActiveSurface = useCallback(() => {
     // Why: double rAF — first waits for React to commit state (palette closes),
@@ -330,6 +154,20 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     })
   }, [])
 
+  const handleOpenChange = useCallback(
+    (open: boolean) => {
+      if (open) {
+        return
+      }
+
+      closeModal()
+      if (previousWorktreeIdRef.current) {
+        focusActiveSurface()
+      }
+    },
+    [closeModal, focusActiveSurface]
+  )
+
   const handleSelect = useCallback(
     (worktreeId: string) => {
       const state = useAppStore.getState()
@@ -340,6 +178,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       }
       activateAndRevealWorktree(worktreeId)
       closeModal()
+      setSelectedWorktreeId('')
       focusActiveSurface()
     },
     [closeModal, focusActiveSurface]
@@ -363,21 +202,43 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       onCloseAutoFocus={handleCloseAutoFocus}
       title="Open Worktree"
       description="Search across all worktrees by name, branch, comment, PR, or issue"
+      overlayClassName="bg-black/55 backdrop-blur-[2px]"
+      contentClassName="top-[13%] w-[736px] max-w-[94vw] overflow-hidden rounded-[22px] border border-border/70 bg-background/96 shadow-[0_26px_84px_rgba(0,0,0,0.32)] backdrop-blur-xl"
+      commandProps={{
+        loop: true,
+        value: selectedWorktreeId,
+        onValueChange: setSelectedWorktreeId,
+        className: 'bg-transparent'
+      }}
     >
       <CommandInput
         placeholder="Jump to worktree..."
         value={query}
         onValueChange={setQuery}
+        wrapperClassName="mx-3 mt-3 rounded-[16px] border border-border/55 bg-muted/28 px-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+        iconClassName="mr-2.5 h-4 w-4 text-muted-foreground/60"
+        className="h-12 text-[14px] placeholder:text-muted-foreground/75"
       />
-      <CommandList>
+      <CommandList className="max-h-[min(460px,62vh)] px-2.5 pb-2.5 pt-1.5">
         {isLoading ? (
-          <div className="py-6 text-center text-sm text-muted-foreground">
-            Loading worktrees...
-          </div>
+          <PaletteState
+            title="Loading worktrees"
+            subtitle="Gathering your recent worktrees and activity state."
+          />
         ) : !hasWorktrees ? (
-          <CommandEmpty>No active worktrees. Create one to get started.</CommandEmpty>
+          <CommandEmpty className="py-0">
+            <PaletteState
+              title="No active worktrees"
+              subtitle="Create one to get started, then jump back here any time."
+            />
+          </CommandEmpty>
         ) : matches.length === 0 ? (
-          <CommandEmpty>No worktrees match your search.</CommandEmpty>
+          <CommandEmpty className="py-0">
+            <PaletteState
+              title="No worktrees match your search"
+              subtitle="Try a name, branch, repo, comment, PR, or issue."
+            />
+          </CommandEmpty>
         ) : (
           matches.map((match) => {
             const w = worktreeMap.get(match.worktreeId)
@@ -387,94 +248,102 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
             const repo = repoMap.get(w.repoId)
             const repoName = repo?.displayName ?? ''
             const branch = branchName(w.branch)
+            const status = getWorktreeStatus(
+              tabsByWorktree[w.id] ?? [],
+              browserTabsByWorktree[w.id] ?? []
+            )
+            const statusLabel = getWorktreeStatusLabel(status)
+            const isCurrentWorktree = activeWorktreeId === w.id
 
             return (
               <CommandItem
                 key={w.id}
                 value={w.id}
                 onSelect={() => handleSelect(w.id)}
-                className="flex items-center gap-2 px-3 py-2"
+                data-current={isCurrentWorktree ? 'true' : undefined}
+                className={cn(
+                  'mx-0.5 flex items-start gap-3 rounded-[14px] border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
+                  'data-[selected=true]:border-border/70 data-[selected=true]:bg-accent/55 data-[selected=true]:text-foreground data-[selected=true]:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.03)]',
+                  'data-[current=true]:border-emerald-500/25 data-[current=true]:bg-emerald-500/[0.05]'
+                )}
               >
-                <div className="flex flex-col min-w-0 flex-1 gap-0.5">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="truncate text-sm font-medium text-foreground">
-                      {match.matchedField === 'displayName' ? (
-                        <HighlightedText
-                          text={w.displayName}
-                          matchRange={match.matchRange}
-                        />
-                      ) : (
-                        w.displayName
-                      )}
-                    </span>
-                    {/* Repo badge for multi-repo disambiguation */}
-                    {repoName && (
-                      <span
-                        className="shrink-0 rounded px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground bg-muted"
-                        style={
-                          repo?.badgeColor
-                            ? {
-                                backgroundColor: `${repo.badgeColor}15`,
-                                color: repo.badgeColor
-                              }
-                            : undefined
-                        }
-                      >
-                        {match.matchedField === 'repo' ? (
-                          <HighlightedText
-                            text={repoName}
-                            matchRange={match.matchRange}
-                          />
-                        ) : (
-                          repoName
-                        )}
-                      </span>
-                    )}
-                    {/* Match-field badge */}
-                    {match.matchedField && FIELD_BADGES[match.matchedField] && (
-                      <span
-                        className="shrink-0 rounded px-1 py-0.5 text-[10px] leading-none text-muted-foreground/70 border border-border/50"
-                        aria-label={`Matched in ${FIELD_BADGES[match.matchedField]}`}
-                      >
-                        {FIELD_BADGES[match.matchedField]}
-                      </span>
-                    )}
+                <div className="mt-0.5 flex w-7 shrink-0 items-start justify-center">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full border border-border/45 bg-muted/35">
+                    <StatusIndicator status={status} aria-hidden="true" />
+                    <span className="sr-only">{statusLabel}</span>
                   </div>
-                  {/* Secondary info: branch + optional match snippet */}
-                  <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground truncate">
-                    <span className="truncate">
-                      {match.matchedField === 'branch' ? (
-                        <HighlightedText text={branch} matchRange={match.matchRange} />
-                      ) : (
-                        branch
-                      )}
-                    </span>
-                    {match.matchedField === 'comment' && 'snippet' in match && (
-                      <>
-                        <span className="text-border">|</span>
-                        <span className="truncate italic">
-                          <HighlightedText
-                            text={match.snippet}
-                            matchRange={{
-                              start: match.matchRange.start - match.snippetOffset,
-                              end: match.matchRange.end - match.snippetOffset
-                            }}
-                          />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-2.5">
+                    <div className="min-w-0">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="truncate text-[14px] font-semibold tracking-[-0.01em] text-foreground">
+                          {match.displayNameRange ? (
+                            <HighlightedText
+                              text={w.displayName}
+                              matchRange={match.displayNameRange}
+                            />
+                          ) : (
+                            w.displayName
+                          )}
                         </span>
-                      </>
-                    )}
-                    {match.matchedField === 'pr' && (
-                      <>
-                        <span className="text-border">|</span>
-                        <span className="truncate">PR #{w.linkedPR}</span>
-                      </>
-                    )}
-                    {match.matchedField === 'issue' && (
-                      <>
-                        <span className="text-border">|</span>
-                        <span className="truncate">Issue #{w.linkedIssue}</span>
-                      </>
-                    )}
+                        {isCurrentWorktree && (
+                          <span className="shrink-0 rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-0.5 text-[9px] font-medium leading-none text-muted-foreground/88 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]">
+                            Current
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[12px] text-muted-foreground">
+                        <span className="truncate font-medium text-muted-foreground/92">
+                          {match.branchRange ? (
+                            <HighlightedText text={branch} matchRange={match.branchRange} />
+                          ) : (
+                            branch
+                          )}
+                        </span>
+                      </div>
+                      {match.supportingText && (
+                        <div className="mt-1.5 flex min-w-0 items-start gap-2 text-[12px] leading-5 text-muted-foreground/88">
+                          <span className="shrink-0 rounded-full border border-border/45 bg-background/45 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.12em] text-muted-foreground/75">
+                            {match.supportingText.label}
+                          </span>
+                          <span className="truncate">
+                            <HighlightedText
+                              text={match.supportingText.text}
+                              matchRange={match.supportingText.matchRange}
+                            />
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 flex-col items-end gap-1.5 pt-0.5">
+                      {repoName && (
+                        <span className="inline-flex max-w-[180px] items-center gap-1.5 rounded-[7px] border border-border/55 bg-muted/38 px-2 py-1 text-[10px] font-semibold leading-none text-foreground/92 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]">
+                          <span
+                            aria-hidden="true"
+                            className="size-1.5 shrink-0 rounded-full"
+                            style={
+                              repo?.badgeColor ? { backgroundColor: repo.badgeColor } : undefined
+                            }
+                          />
+                          <span className="truncate">
+                            {match.repoRange ? (
+                              <HighlightedText text={repoName} matchRange={match.repoRange} />
+                            ) : (
+                              repoName
+                            )}
+                          </span>
+                        </span>
+                      )}
+                      {match.badgeLabel && (
+                        <span
+                          className="rounded-full border border-border/40 bg-background/45 px-2 py-0.5 text-[9px] font-medium uppercase tracking-[0.12em] text-muted-foreground/82"
+                          aria-label={`Matched in ${match.badgeLabel}`}
+                        >
+                          {match.badgeLabel}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               </CommandItem>
@@ -482,9 +351,19 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
           })
         )}
       </CommandList>
+      <div className="flex items-center justify-end border-t border-border/60 px-3.5 py-2.5 text-[11px] text-muted-foreground/82">
+        <div className="flex items-center gap-2">
+          <FooterKey>Enter</FooterKey>
+          <span>Jump</span>
+          <FooterKey>Esc</FooterKey>
+          <span>Close</span>
+          <FooterKey>↑↓</FooterKey>
+          <span>Move</span>
+        </div>
+      </div>
       {/* Accessibility: announce result count changes */}
       <div aria-live="polite" className="sr-only">
-        {query.trim() ? `${resultCount} worktrees found` : ''}
+        {query.trim() ? `${resultCount} worktrees found` : `${resultCount} worktrees available`}
       </div>
     </CommandDialog>
   )

@@ -26,21 +26,35 @@ function CommandDialog({
   description = 'Search for a command to run...',
   shouldFilter,
   onCloseAutoFocus,
+  contentClassName,
+  overlayClassName,
+  commandProps,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Root> & {
   title?: string
   description?: string
   shouldFilter?: boolean
   onCloseAutoFocus?: (e: Event) => void
+  contentClassName?: string
+  overlayClassName?: string
+  commandProps?: React.ComponentProps<typeof CommandPrimitive>
 }) {
+  const { className: commandClassName, ...commandRootProps } = commandProps ?? {}
+
   return (
     <DialogPrimitive.Root {...props}>
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay
-          className="fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0"
+          className={cn(
+            'fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0',
+            overlayClassName
+          )}
         />
         <DialogPrimitive.Content
-          className="fixed top-[20%] left-[50%] z-50 w-[660px] max-w-[90vw] translate-x-[-50%] rounded-lg border border-border bg-popover shadow-lg outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95"
+          className={cn(
+            'fixed top-[20%] left-[50%] z-50 w-[660px] max-w-[90vw] translate-x-[-50%] rounded-lg border border-border bg-popover shadow-lg outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
+            contentClassName
+          )}
           onCloseAutoFocus={onCloseAutoFocus}
         >
           <DialogPrimitive.Title className="sr-only">{title}</DialogPrimitive.Title>
@@ -49,7 +63,11 @@ function CommandDialog({
           </DialogPrimitive.Description>
           <Command
             shouldFilter={shouldFilter}
-            className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3"
+            className={cn(
+              '[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3',
+              commandClassName
+            )}
+            {...commandRootProps}
           >
             {children}
           </Command>
@@ -61,11 +79,19 @@ function CommandDialog({
 
 function CommandInput({
   className,
+  wrapperClassName,
+  iconClassName,
   ...props
-}: React.ComponentProps<typeof CommandPrimitive.Input>) {
+}: React.ComponentProps<typeof CommandPrimitive.Input> & {
+  wrapperClassName?: string
+  iconClassName?: string
+}) {
   return (
-    <div className="flex items-center border-b border-border px-3" data-cmdk-input-wrapper="">
-      <SearchIcon className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+    <div
+      className={cn('flex items-center border-b border-border px-3', wrapperClassName)}
+      data-cmdk-input-wrapper=""
+    >
+      <SearchIcon className={cn('mr-2 h-4 w-4 shrink-0 opacity-50', iconClassName)} />
       <CommandPrimitive.Input
         data-slot="command-input"
         className={cn(
@@ -82,13 +108,19 @@ function CommandList({ className, ...props }: React.ComponentProps<typeof Comman
   return (
     <CommandPrimitive.List
       data-slot="command-list"
-      className={cn('max-h-[min(400px,60vh)] overflow-y-auto overflow-x-hidden scrollbar-sleek', className)}
+      className={cn(
+        'max-h-[min(400px,60vh)] overflow-y-auto overflow-x-hidden scrollbar-sleek scroll-pb-4 scroll-pt-4',
+        className
+      )}
       {...props}
     />
   )
 }
 
-function CommandEmpty({ className, ...props }: React.ComponentProps<typeof CommandPrimitive.Empty>) {
+function CommandEmpty({
+  className,
+  ...props
+}: React.ComponentProps<typeof CommandPrimitive.Empty>) {
   return (
     <CommandPrimitive.Empty
       data-slot="command-empty"
@@ -114,10 +146,7 @@ function CommandGroup({
   )
 }
 
-function CommandItem({
-  className,
-  ...props
-}: React.ComponentProps<typeof CommandPrimitive.Item>) {
+function CommandItem({ className, ...props }: React.ComponentProps<typeof CommandPrimitive.Item>) {
   return (
     <CommandPrimitive.Item
       data-slot="command-item"
