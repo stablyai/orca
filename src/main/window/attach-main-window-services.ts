@@ -135,10 +135,16 @@ export function registerClipboardHandlers(): void {
     // Why: only accept validated PNG data URIs to prevent writing arbitrary
     // data to the clipboard. The renderer already validates the prefix, but
     // defense-in-depth applies here too.
-    if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/png;base64,')) {
+    const prefix = 'data:image/png;base64,'
+    if (typeof dataUrl !== 'string' || !dataUrl.startsWith(prefix)) {
       return
     }
-    const image = nativeImage.createFromDataURL(dataUrl)
+    // Why: use createFromBuffer instead of createFromDataURL — the latter
+    // silently returns an empty image on some macOS + Electron combinations
+    // when the data URL is large (>500KB). Decoding the base64 manually and
+    // using createFromBuffer is more reliable.
+    const buffer = Buffer.from(dataUrl.slice(prefix.length), 'base64')
+    const image = nativeImage.createFromBuffer(buffer)
     if (image.isEmpty()) {
       return
     }

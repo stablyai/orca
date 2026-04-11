@@ -471,7 +471,7 @@ class BrowserManager {
         // overlay visible so the highlight box persists while the renderer
         // shows the copy menu. Teardown happens later when the renderer calls
         // setGrabMode(false) or re-arms with a fresh armAndAwait cycle.
-        op.cleanup(result.kind === 'selected')
+        op.cleanup(result.kind === 'selected' || result.kind === 'context-selected')
         this.activeGrabOps.delete(browserTabId)
         resolve(result)
       }
@@ -487,12 +487,24 @@ class BrowserManager {
             settleOnce({ opId, kind: 'cancelled', reason: 'user' })
             return
           }
-          const payload = clampGrabPayload(rawPayload)
+          // Why: the guest wraps right-click results in { __orcaContextMenu, payload }
+          // so the renderer can show the full action dropdown instead of auto-copying.
+          const isContextMenu =
+            '__orcaContextMenu' in (rawPayload as Record<string, unknown>) &&
+            (rawPayload as Record<string, unknown>).__orcaContextMenu === true
+          const payloadSource = isContextMenu
+            ? (rawPayload as Record<string, unknown>).payload
+            : rawPayload
+          const payload = clampGrabPayload(payloadSource)
           if (!payload) {
             settleOnce({ opId, kind: 'error', reason: 'Guest returned invalid payload structure' })
             return
           }
-          settleOnce({ opId, kind: 'selected', payload })
+          settleOnce({
+            opId,
+            kind: isContextMenu ? 'context-selected' : 'selected',
+            payload
+          })
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Selection failed'
           // Distinguish cancellation from errors
@@ -605,7 +617,25 @@ class BrowserManager {
         height: safeN(rect.height)
       }
 
-      const image = await guest.capturePage()
+      // Why: hide the grab overlay before capturing so the highlight box and
+      // label don't appear in the screenshot. The overlay is restored after.
+      // Wrapped in try/finally so the overlay is always restored even if
+      // capturePage() throws (e.g., guest destroyed mid-capture).
+      await guest
+        .executeJavaScript(
+          `(function(){ var g = window.__orcaGrab; if (g && g.host) g.host.style.display = 'none'; })()`
+        )
+        .catch(() => {})
+      let image: Electron.NativeImage
+      try {
+        image = await guest.capturePage()
+      } finally {
+        await guest
+          .executeJavaScript(
+            `(function(){ var g = window.__orcaGrab; if (g && g.host) g.host.style.display = ''; })()`
+          )
+          .catch(() => {})
+      }
       if (image.isEmpty()) {
         return null
       }

@@ -94,6 +94,7 @@ export type BrowserGrabCancelReason = 'user' | 'tab-inactive' | 'navigation' | '
 /** Discriminated union for the result of a single grab operation. */
 export type BrowserGrabResult =
   | { opId: string; kind: 'selected'; payload: BrowserGrabPayload }
+  | { opId: string; kind: 'context-selected'; payload: BrowserGrabPayload }
   | { opId: string; kind: 'cancelled'; reason: BrowserGrabCancelReason }
   | { opId: string; kind: 'error'; reason: string }
 
