@@ -45,6 +45,7 @@
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
     "@monaco-editor/react": "^4.7.0",
+    "@parcel/watcher": "^2.5.6",
     "@tanstack/react-virtual": "^3.13.23",
     "@tiptap/extension-code-block-lowlight": "^3.22.2",
     "@tiptap/extension-image": "^3.22.1",
@@ -125,6 +126,7 @@
   "packageManager": "pnpm@10.24.0+sha512.01ff8ae71b4419903b65c60fb2dc9d34cf8bb6e06d03bde112ef38f7a34d6904c424ba66bea5cdcf12890230bf39f9580473140ed9c946fef328b6e5238a345a",
   "pnpm": {
     "onlyBuiltDependencies": [
+      "@parcel/watcher",
       "electron",
       "esbuild",
       "node-pty"

@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
+import { dirname } from '@/lib/path'
 import { isPathEqualOrDescendant } from './file-explorer-paths'
 import type { PendingDelete, TreeNode } from './file-explorer-types'
 import { requestEditorSaveQuiesce } from '@/components/editor/editor-autosave'
@@ -13,7 +14,7 @@ type UseFileDeletionParams = {
     filePath: string
   }[]
   closeFile: (fileId: string) => void
-  refreshTree: () => Promise<void>
+  refreshDir: (dirPath: string) => Promise<void>
   selectedPath: string | null
   setSelectedPath: Dispatch<SetStateAction<string | null>>
   isMac: boolean
@@ -50,7 +51,7 @@ export function useFileDeletion({
   activeWorktreeId,
   openFiles,
   closeFile,
-  refreshTree,
+  refreshDir,
   selectedPath,
   setSelectedPath,
   isMac,
@@ -120,7 +121,10 @@ export function useFileDeletion({
       if (selectedPath && isPathEqualOrDescendant(selectedPath, node.path)) {
         setSelectedPath(null)
       }
-      await refreshTree()
+      // Why: use targeted refreshDir instead of refreshTree so only the parent
+      // directory is reloaded, preserving scroll position and avoiding redundant
+      // full-tree reloads (the watcher will also trigger a targeted refresh).
+      await refreshDir(dirname(node.path))
     } catch (error) {
       const action = isWindows ? 'move to Recycle Bin' : 'move to Trash'
       toast.error(error instanceof Error ? error.message : `Failed to ${action} '${node.name}'.`)
@@ -133,7 +137,7 @@ export function useFileDeletion({
     isWindows,
     openFiles,
     pendingDelete,
-    refreshTree,
+    refreshDir,
     selectedPath,
     setSelectedPath
   ])

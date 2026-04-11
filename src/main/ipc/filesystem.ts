@@ -157,7 +157,17 @@ export function registerFilesystemHandlers(store: Store): void {
   ipcMain.handle('fs:deletePath', async (_event, args: { targetPath: string }): Promise<void> => {
     const targetPath = await resolveAuthorizedPath(args.targetPath, store)
 
-    await shell.trashItem(targetPath)
+    // Why: once auto-refresh exists, an external delete can race with a
+    // UI-initiated delete. Swallowing ENOENT keeps the action idempotent
+    // from the user's perspective (design §7.1).
+    try {
+      await shell.trashItem(targetPath)
+    } catch (error) {
+      if (isENOENT(error)) {
+        return
+      }
+      throw error
+    }
   })
 
   registerFilesystemMutationHandlers(store)
