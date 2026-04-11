@@ -19,7 +19,7 @@ export type LinkHandlerDeps = {
 }
 
 type TerminalLinkEvent = Pick<MouseEvent, 'metaKey' | 'ctrlKey'> &
-  Partial<Pick<MouseEvent, 'shiftKey'>>
+  Partial<Pick<MouseEvent, 'shiftKey' | 'preventDefault' | 'stopPropagation'>>
 
 function isMacPlatform(): boolean {
   return navigator.userAgent.includes('Mac')
@@ -181,6 +181,12 @@ export function handleOscLink(
   if (!isTerminalLinkActivation(event)) {
     return
   }
+
+  // Why: xterm renders URL links as clickable anchors. Once Orca decides to
+  // handle a modified click itself, we must suppress the browser's default
+  // anchor navigation or Electron will still launch the system browser.
+  event?.preventDefault?.()
+  event?.stopPropagation?.()
 
   let parsed: URL
   try {
