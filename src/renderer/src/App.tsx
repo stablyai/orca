@@ -150,9 +150,6 @@ function App(): React.JSX.Element {
   const rightSidebarWidth = useAppStore((s) => s.rightSidebarWidth)
   const setRightSidebarOpen = useAppStore((s) => s.setRightSidebarOpen)
   const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
-  const setQuickOpenVisible = useAppStore((s) => s.setQuickOpenVisible)
-  const worktreePaletteVisible = useAppStore((s) => s.worktreePaletteVisible)
-  const setWorktreePaletteVisible = useAppStore((s) => s.setWorktreePaletteVisible)
   const closeModal = useAppStore((s) => s.closeModal)
   const isFullScreen = useAppStore((s) => s.isFullScreen)
 
@@ -446,9 +443,7 @@ function App(): React.JSX.Element {
         activeWorktreeId !== null
       ) {
         e.preventDefault()
-        // Why: overlay mutual exclusion — dismiss palette before opening QuickOpen
-        setWorktreePaletteVisible(false)
-        setQuickOpenVisible(true)
+        openModal('quick-open')
         return
       }
 
@@ -543,10 +538,7 @@ function App(): React.JSX.Element {
     toggleSidebar,
     toggleRightSidebar,
     setRightSidebarTab,
-    setRightSidebarOpen,
-    setQuickOpenVisible,
-    worktreePaletteVisible,
-    setWorktreePaletteVisible
+    setRightSidebarOpen
   ])
 
   return (

@@ -259,8 +259,8 @@ const FIELD_BADGES: Record<string, string> = {
 // ─── Component ──────────────────────────────────────────────────────
 
 export default function WorktreeJumpPalette(): React.JSX.Element | null {
-  const visible = useAppStore((s) => s.worktreePaletteVisible)
-  const setVisible = useAppStore((s) => s.setWorktreePaletteVisible)
+  const visible = useAppStore((s) => s.activeModal === 'worktree-palette')
+  const closeModal = useAppStore((s) => s.closeModal)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const repos = useAppStore((s) => s.repos)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
@@ -303,10 +303,11 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       if (open) {
         previousWorktreeIdRef.current = activeWorktreeId
         setQuery('')
+      } else {
+        closeModal()
       }
-      setVisible(open)
     },
-    [setVisible, activeWorktreeId]
+    [closeModal, activeWorktreeId]
   )
 
   const focusActiveSurface = useCallback(() => {
@@ -338,10 +339,10 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         return
       }
       activateAndRevealWorktree(worktreeId)
-      setVisible(false)
+      closeModal()
       focusActiveSurface()
     },
-    [setVisible, focusActiveSurface]
+    [closeModal, focusActiveSurface]
   )
 
   const handleCloseAutoFocus = useCallback((e: Event) => {

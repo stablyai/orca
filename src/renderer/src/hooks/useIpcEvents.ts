@@ -82,16 +82,11 @@ export function useIpcEvents(): void {
     unsubs.push(
       window.api.ui.onToggleWorktreePalette(() => {
         const store = useAppStore.getState()
-        if (store.worktreePaletteVisible) {
-          store.setWorktreePaletteVisible(false)
+        if (store.activeModal === 'worktree-palette') {
+          store.closeModal()
           return
         }
-        // Why: keep the main-process shortcut path behavior identical to the
-        // renderer keydown path so browser-tab focus cannot produce a different
-        // overlay stack than terminal/editor focus.
-        store.closeModal()
-        store.setQuickOpenVisible(false)
-        store.setWorktreePaletteVisible(true)
+        store.openModal('worktree-palette')
       })
     )
 

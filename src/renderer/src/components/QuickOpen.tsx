@@ -1,8 +1,16 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Search, File } from 'lucide-react'
+/* oxlint-disable max-lines */
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { File } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { detectLanguage } from '@/lib/language-detect'
 import { joinPath } from '@/lib/path'
+import {
+  CommandDialog,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandItem
+} from '@/components/ui/command'
 
 /**
  * Simple fuzzy match: checks if all characters in the query appear in order
@@ -45,19 +53,16 @@ function fuzzyMatch(query: string, target: string): number {
 }
 
 export default function QuickOpen(): React.JSX.Element | null {
-  const visible = useAppStore((s) => s.quickOpenVisible)
-  const setVisible = useAppStore((s) => s.setQuickOpenVisible)
+  const visible = useAppStore((s) => s.activeModal === 'quick-open')
+  const closeModal = useAppStore((s) => s.closeModal)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const openFile = useAppStore((s) => s.openFile)
 
   const [query, setQuery] = useState('')
   const [files, setFiles] = useState<string[]>([])
-  const [selectedIndex, setSelectedIndex] = useState(0)
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
-  const listRef = useRef<HTMLDivElement>(null)
 
   // Find active worktree path
   const worktreePath = useMemo(() => {
@@ -81,13 +86,11 @@ export default function QuickOpen(): React.JSX.Element | null {
 
     if (!worktreePath) {
       setFiles([])
-      setSelectedIndex(0)
       return
     }
 
     let cancelled = false
     setQuery('')
-    setSelectedIndex(0)
     setFiles([])
     setLoadError(null)
     setLoading(true)
@@ -113,9 +116,6 @@ export default function QuickOpen(): React.JSX.Element | null {
         }
       })
 
-    // Focus input after mount
-    requestAnimationFrame(() => inputRef.current?.focus())
-
     return () => {
       cancelled = true
     }
@@ -138,21 +138,12 @@ export default function QuickOpen(): React.JSX.Element | null {
     return results.slice(0, 50)
   }, [files, query])
 
-  // Scroll selected item into view
-  useEffect(() => {
-    if (!listRef.current) {
-      return
-    }
-    const item = listRef.current.children[selectedIndex] as HTMLElement | undefined
-    item?.scrollIntoView({ block: 'nearest' })
-  }, [selectedIndex])
-
   const handleSelect = useCallback(
     (relativePath: string) => {
       if (!activeWorktreeId || !worktreePath) {
         return
       }
-      setVisible(false)
+      closeModal()
       openFile({
         filePath: joinPath(worktreePath, relativePath),
         relativePath,
@@ -161,114 +152,71 @@ export default function QuickOpen(): React.JSX.Element | null {
         mode: 'edit'
       })
     },
-    [activeWorktreeId, worktreePath, openFile, setVisible]
+    [activeWorktreeId, worktreePath, openFile, closeModal]
   )
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        setVisible(false)
-        return
-      }
-      if (e.key === 'ArrowDown') {
-        e.preventDefault()
-        if (filtered.length > 0) {
-          setSelectedIndex((i) => Math.min(i + 1, filtered.length - 1))
-        }
-        return
-      }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault()
-        if (filtered.length > 0) {
-          setSelectedIndex((i) => Math.max(i - 1, 0))
-        }
-        return
-      }
-      if (e.key === 'Enter') {
-        e.preventDefault()
-        const item = filtered[selectedIndex]
-        if (item) {
-          handleSelect(item.path)
-        }
+  const handleOpenChange = useCallback(
+    (open: boolean) => {
+      if (!open) {
+        closeModal()
       }
     },
-    [setVisible, filtered, selectedIndex, handleSelect]
+    [closeModal]
   )
 
-  if (!visible) {
-    return null
-  }
+  const handleCloseAutoFocus = useCallback((e: Event) => {
+    // Why: prevent Radix from stealing focus to the trigger element.
+    e.preventDefault()
+  }, [])
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-8"
-      onClick={() => setVisible(false)}
+    <CommandDialog
+      open={visible}
+      onOpenChange={handleOpenChange}
+      shouldFilter={false}
+      onCloseAutoFocus={handleCloseAutoFocus}
+      title="Go to file"
+      description="Search for a file to open"
     >
-      <div
-        className="w-[660px] max-w-[90vw] bg-background border border-border rounded-lg shadow-2xl overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Search input */}
-        <div className="flex items-center gap-2 px-3 border-b border-border">
-          <Search size={14} className="text-muted-foreground flex-shrink-0" />
-          <input
-            ref={inputRef}
-            type="text"
-            className="flex-1 bg-transparent text-sm py-2.5 outline-none text-foreground placeholder:text-muted-foreground"
-            placeholder="Go to file..."
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value)
-              setSelectedIndex(0)
-            }}
-            onKeyDown={handleKeyDown}
-            spellCheck={false}
-          />
-        </div>
-
-        {/* Results list — only rendered when there is content to avoid empty padding */}
-        {(loading || query.trim() || filtered.length > 0) && (
-          <div ref={listRef} className="max-h-[300px] overflow-y-auto scrollbar-sleek pb-1">
-            {loading && (
-              <div className="px-3 py-6 text-center text-xs text-muted-foreground">
-                Loading files...
-              </div>
-            )}
-            {!loading && loadError && (
-              <div className="px-3 py-6 text-center text-xs text-muted-foreground">
-                Could not load files: {loadError}
-              </div>
-            )}
-            {filtered.length === 0 && query.trim() && (
-              <div className="px-3 py-6 text-center text-xs text-muted-foreground">
-                No matching files
-              </div>
-            )}
-            {filtered.map((item, idx) => {
-              const lastSlash = item.path.lastIndexOf('/')
-              const dir = lastSlash >= 0 ? item.path.slice(0, lastSlash) : ''
-              const filename = item.path.slice(lastSlash + 1)
-
-              return (
-                <button
-                  key={item.path}
-                  type="button"
-                  className={`w-full flex items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-accent/50 ${
-                    idx === selectedIndex ? 'bg-accent' : ''
-                  }`}
-                  onClick={() => handleSelect(item.path)}
-                  onMouseEnter={() => setSelectedIndex(idx)}
-                >
-                  <File size={14} className="text-muted-foreground flex-shrink-0" />
-                  <span className="truncate text-foreground">{filename}</span>
-                  {dir && <span className="truncate text-muted-foreground ml-1">{dir}</span>}
-                </button>
-              )
-            })}
+      <CommandInput
+        placeholder="Go to file..."
+        value={query}
+        onValueChange={setQuery}
+      />
+      <CommandList>
+        {loading ? (
+          <div className="py-6 text-center text-sm text-muted-foreground">
+            Loading files...
           </div>
+        ) : loadError ? (
+          <div className="py-6 text-center text-sm text-red-500">{loadError}</div>
+        ) : filtered.length === 0 ? (
+          <CommandEmpty>No matching files.</CommandEmpty>
+        ) : (
+          filtered.map((item) => {
+            const lastSlash = item.path.lastIndexOf('/')
+            const dir = lastSlash >= 0 ? item.path.slice(0, lastSlash) : ''
+            const filename = item.path.slice(lastSlash + 1)
+
+            return (
+              <CommandItem
+                key={item.path}
+                value={item.path}
+                onSelect={() => handleSelect(item.path)}
+                className="flex items-center gap-2 px-3 py-1.5"
+              >
+                <File size={14} className="text-muted-foreground flex-shrink-0" />
+                <span className="truncate text-foreground">{filename}</span>
+                {dir && <span className="truncate text-muted-foreground ml-1">{dir}</span>}
+              </CommandItem>
+            )
+          })
         )}
+      </CommandList>
+      {/* Accessibility: announce result count changes */}
+      <div aria-live="polite" className="sr-only">
+        {query.trim() ? `${filtered.length} files found` : ''}
       </div>
-    </div>
+    </CommandDialog>
   )
 }

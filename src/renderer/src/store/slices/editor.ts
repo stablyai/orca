@@ -247,10 +247,6 @@ export type EditorSlice = {
     reveal: { filePath: string; line: number; column: number; matchLength: number } | null
   ) => void
 
-  // Quick open (Cmd+P)
-  quickOpenVisible: boolean
-  setQuickOpenVisible: (visible: boolean) => void
-
   // Session hydration — restore editor files from persisted workspace session
   hydrateEditorSession: (session: WorkspaceSessionState) => void
 }
@@ -1269,10 +1265,6 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   // Editor navigation
   pendingEditorReveal: null,
   setPendingEditorReveal: (reveal) => set({ pendingEditorReveal: reveal }),
-
-  // Quick open
-  quickOpenVisible: false,
-  setQuickOpenVisible: (visible) => set({ quickOpenVisible: visible }),
 
   // Why: only edit-mode files are restored — diffs and conflict views depend on
   // transient git state that may have changed between sessions. Restoring them
