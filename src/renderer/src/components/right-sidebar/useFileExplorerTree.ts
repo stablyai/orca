@@ -1,3 +1,4 @@
+import type React from 'react'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { joinPath, normalizeRelativePath } from '@/lib/path'
 import type { DirCache, TreeNode } from './file-explorer-types'
@@ -6,6 +7,7 @@ import { shouldIncludeFileExplorerEntry } from './file-explorer-entries'
 
 type UseFileExplorerTreeResult = {
   dirCache: Record<string, DirCache>
+  setDirCache: React.Dispatch<React.SetStateAction<Record<string, DirCache>>>
   flatRows: TreeNode[]
   rowsByPath: Map<string, TreeNode>
   rootCache: DirCache | undefined
@@ -138,6 +140,7 @@ export function useFileExplorerTree(
 
   return {
     dirCache,
+    setDirCache,
     flatRows,
     rowsByPath,
     rootCache,

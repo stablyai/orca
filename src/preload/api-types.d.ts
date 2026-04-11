@@ -3,6 +3,7 @@ import type {
   BrowserLoadError,
   CreateWorktreeResult,
   DirEntry,
+  FsChangedPayload,
   GlobalSettings,
   GitBranchCompareResult,
   GitConflictOperation,
@@ -241,7 +242,9 @@ export type PreloadApi = {
   }
   browser: BrowserApi
   hooks: {
-    check: (args: { repoId: string }) => Promise<{ hasHooks: boolean; hooks: OrcaHooks | null }>
+    check: (args: {
+      repoId: string
+    }) => Promise<{ hasHooks: boolean; hooks: OrcaHooks | null; mayNeedUpdate: boolean }>
     readIssueCommand: (args: { repoId: string }) => Promise<{
       localContent: string | null
       sharedContent: string | null
@@ -295,6 +298,9 @@ export type PreloadApi = {
     }) => Promise<{ size: number; isDirectory: boolean; mtime: number }>
     listFiles: (args: { rootPath: string }) => Promise<string[]>
     search: (args: SearchOptions) => Promise<SearchResult>
+    watchWorktree: (args: { worktreePath: string }) => Promise<void>
+    unwatchWorktree: (args: { worktreePath: string }) => Promise<void>
+    onFsChanged: (callback: (payload: FsChangedPayload) => void) => () => void
   }
   git: {
     status: (args: { worktreePath: string }) => Promise<{ entries: GitStatusEntry[] }>

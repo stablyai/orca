@@ -23,6 +23,7 @@ import {
   readIssueCommand,
   runHook,
   hasHooksFile,
+  hasUnrecognizedOrcaYamlKeys,
   shouldRunSetupForCreate,
   writeIssueCommand
 } from '../hooks'
@@ -301,14 +302,20 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
   ipcMain.handle('hooks:check', (_event, args: { repoId: string }) => {
     const repo = store.getRepo(args.repoId)
     if (!repo || isFolderRepo(repo)) {
-      return { hasHooks: false, hooks: null }
+      return { hasHooks: false, hooks: null, mayNeedUpdate: false }
     }
 
     const has = hasHooksFile(repo.path)
     const hooks = has ? loadHooks(repo.path) : null
+    // Why: when a newer Orca version adds a top-level key to `orca.yaml`, older
+    // versions that don't recognise it return null and show "could not be parsed".
+    // Detecting well-formed but unrecognised keys lets the UI suggest updating
+    // instead of implying the file is broken.
+    const mayNeedUpdate = has && !hooks && hasUnrecognizedOrcaYamlKeys(repo.path)
     return {
       hasHooks: has,
-      hooks
+      hooks,
+      mayNeedUpdate
     }
   })
 

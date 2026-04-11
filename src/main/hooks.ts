@@ -131,6 +131,32 @@ export function hasHooksFile(repoPath: string): boolean {
   return existsSync(join(repoPath, 'orca.yaml'))
 }
 
+// Why: when a newer Orca release adds a top-level key to `orca.yaml` (like
+// `issueCommand` was added here), older versions that don't recognise it will
+// return `null` from `parseOrcaYaml` and show a confusing "could not be parsed"
+// error.  Detecting well-formed but unrecognised keys lets the UI suggest an
+// update instead of implying the file is broken.
+const RECOGNIZED_ORCA_YAML_KEYS = new Set(['scripts', 'issueCommand'])
+
+/**
+ * Return true when `orca.yaml` contains at least one top-level key that this
+ * version of Orca does not handle.
+ */
+export function hasUnrecognizedOrcaYamlKeys(repoPath: string): boolean {
+  try {
+    const content = readFileSync(join(repoPath, 'orca.yaml'), 'utf-8')
+    return content.split(/\r?\n/).some((line) => {
+      // Why: bare `key:` at end-of-line (no trailing space) is valid YAML for
+      // a mapping with a block value on the next line. Match both forms so
+      // newer keys like `futureFeature:\n  nested` are still detected.
+      const m = line.match(/^([A-Za-z][A-Za-z0-9_-]*):(\s|$)/)
+      return m != null && !RECOGNIZED_ORCA_YAML_KEYS.has(m[1])
+    })
+  } catch {
+    return false
+  }
+}
+
 // ─── Issue command files ────────────────────────────────────────────────
 // Why: `orca.yaml` is the tracked, project-wide defaults surface, while
 // `.orca/issue-command` remains the per-user override. Keeping the local file in

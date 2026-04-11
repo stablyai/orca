@@ -4,7 +4,7 @@ review and type drift checks easier than scattering these bindings across module
 import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { CliInstallStatus } from '../shared/cli-install-types'
-import type { NotificationDispatchResult } from '../shared/types'
+import type { FsChangedPayload, NotificationDispatchResult } from '../shared/types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../shared/runtime-types'
 import {
   ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT,
@@ -357,7 +357,9 @@ const api = {
   },
 
   hooks: {
-    check: (args: { repoId: string }): Promise<{ hasHooks: boolean; hooks: unknown }> =>
+    check: (args: {
+      repoId: string
+    }): Promise<{ hasHooks: boolean; hooks: unknown; mayNeedUpdate: boolean }> =>
       ipcRenderer.invoke('hooks:check', args),
 
     readIssueCommand: (args: {
@@ -499,7 +501,17 @@ const api = {
       }[]
       totalMatches: number
       truncated: boolean
-    }> => ipcRenderer.invoke('fs:search', args)
+    }> => ipcRenderer.invoke('fs:search', args),
+    watchWorktree: (args: { worktreePath: string }): Promise<void> =>
+      ipcRenderer.invoke('fs:watchWorktree', args),
+    unwatchWorktree: (args: { worktreePath: string }): Promise<void> =>
+      ipcRenderer.invoke('fs:unwatchWorktree', args),
+    onFsChanged: (callback: (payload: FsChangedPayload) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload: FsChangedPayload) =>
+        callback(payload)
+      ipcRenderer.on('fs:changed', listener)
+      return () => ipcRenderer.removeListener('fs:changed', listener)
+    }
   },
 
   git: {

@@ -24,9 +24,9 @@ import {
 } from '@/components/ui/select'
 import RepoDotLabel from '@/components/repo/RepoDotLabel'
 import { parseGitHubIssueOrPRNumber } from '@/lib/github-links'
-import { SPACE_NAMES } from '@/constants/space-names'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
+import { getSuggestedFishName, shouldApplySuggestedName } from './worktree-name-suggestions'
 
 const DIALOG_CLOSE_RESET_DELAY_MS = 200
 
@@ -107,7 +107,7 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
         ? 'run'
         : 'skip')
   const suggestedName = useMemo(
-    () => getSuggestedSpaceName(repoId, worktreesByRepo, settings?.nestWorkspaces ?? false),
+    () => getSuggestedFishName(repoId, worktreesByRepo, settings?.nestWorkspaces ?? false),
     [repoId, worktreesByRepo, settings?.nestWorkspaces]
   )
   // Why: setup visibility is part of the create decision no matter which default
@@ -138,7 +138,7 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
 
   // Auto-fill name from suggestion (adjusting state during render)
   if (isOpen && repoId && suggestedName && suggestedName !== prevSuggestedNameRef.current) {
-    const shouldApplySuggestion = !name.trim() || name === lastSuggestedNameRef.current
+    const shouldApplySuggestion = shouldApplySuggestedName(name, lastSuggestedNameRef.current)
     prevSuggestedNameRef.current = suggestedName
     if (shouldApplySuggestion) {
       setName(suggestedName)
@@ -705,64 +705,6 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
 })
 
 export default AddWorktreeDialog
-
-function getSuggestedSpaceName(
-  repoId: string,
-  worktreesByRepo: Record<string, { path: string }[]>,
-  nestWorkspaces: boolean
-): string {
-  if (!repoId) {
-    return SPACE_NAMES[0]
-  }
-
-  const usedNames = new Set<string>()
-  const repoWorktrees = worktreesByRepo[repoId] ?? []
-
-  for (const worktree of repoWorktrees) {
-    usedNames.add(normalizeSpaceName(lastPathSegment(worktree.path)))
-  }
-
-  if (!nestWorkspaces) {
-    for (const worktrees of Object.values(worktreesByRepo)) {
-      for (const worktree of worktrees) {
-        usedNames.add(normalizeSpaceName(lastPathSegment(worktree.path)))
-      }
-    }
-  }
-
-  for (const candidate of SPACE_NAMES) {
-    if (!usedNames.has(normalizeSpaceName(candidate))) {
-      return candidate
-    }
-  }
-
-  let suffix = 2
-  while (true) {
-    for (const candidate of SPACE_NAMES) {
-      const numberedCandidate = `${candidate}-${suffix}`
-      if (!usedNames.has(normalizeSpaceName(numberedCandidate))) {
-        return numberedCandidate
-      }
-    }
-    suffix += 1
-  }
-}
-
-function lastPathSegment(path: string): string {
-  // Why: worktree paths come from the OS, so Windows worktrees use backslashes.
-  // Split on both separators or the suggestion logic treats the whole absolute
-  // path as the "name" and starts re-suggesting already-used worktree names.
-  return (
-    path
-      .replace(/[\\/]+$/, '')
-      .split(/[\\/]/)
-      .pop() ?? path
-  )
-}
-
-function normalizeSpaceName(name: string): string {
-  return name.trim().toLowerCase()
-}
 
 function findRepoIdForWorktree(
   worktreeId: string | null,

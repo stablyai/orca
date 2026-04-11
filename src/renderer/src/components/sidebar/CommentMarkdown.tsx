@@ -100,33 +100,36 @@ const components: Components = {
 // with existing plain-text comments that rely on newline formatting.
 const remarkPlugins = [remarkGfm, remarkBreaks]
 
-type CommentMarkdownProps = {
+type CommentMarkdownProps = React.ComponentPropsWithoutRef<'div'> & {
   content: string
-  className?: string
-  onClick?: (e: React.MouseEvent) => void
 }
 
-const CommentMarkdown = React.memo(function CommentMarkdown({
-  content,
-  className,
-  onClick
-}: CommentMarkdownProps) {
-  return (
-    <div
-      className={cn(
-        // Reset inline-code pill styles when <code> is inside a <pre> block.
-        // The descendant selector (pre code) has higher specificity than the
-        // direct utility classes on <code>, so these overrides win reliably.
-        '[&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:rounded-none',
-        className
-      )}
-      onClick={onClick}
-    >
-      <Markdown remarkPlugins={remarkPlugins} components={components}>
-        {content}
-      </Markdown>
-    </div>
-  )
-})
+// Why forwardRef + rest props: Radix's HoverCardTrigger asChild merges a ref
+// and event handlers (onPointerEnter, onPointerLeave, data-state, etc.) onto
+// the child. Without forwarding both, the hover card cannot open or position.
+const CommentMarkdown = React.memo(
+  React.forwardRef<HTMLDivElement, CommentMarkdownProps>(function CommentMarkdown(
+    { content, className, ...rest },
+    ref
+  ) {
+    return (
+      <div
+        ref={ref}
+        className={cn(
+          // Reset inline-code pill styles when <code> is inside a <pre> block.
+          // The descendant selector (pre code) has higher specificity than the
+          // direct utility classes on <code>, so these overrides win reliably.
+          '[&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:rounded-none',
+          className
+        )}
+        {...rest}
+      >
+        <Markdown remarkPlugins={remarkPlugins} components={components}>
+          {content}
+        </Markdown>
+      </div>
+    )
+  })
+)
 
 export default CommentMarkdown

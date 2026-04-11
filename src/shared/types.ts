@@ -416,6 +416,19 @@ export type DirEntry = {
   isSymlink: boolean
 }
 
+// ─── Filesystem watcher ─────────────────────────────────────
+export type FsChangeEvent = {
+  kind: 'create' | 'update' | 'delete' | 'rename' | 'overflow'
+  absolutePath: string
+  oldAbsolutePath?: string
+  isDirectory?: boolean
+}
+
+export type FsChangedPayload = {
+  worktreePath: string
+  events: FsChangeEvent[]
+}
+
 // ─── Git Status ─────────────────────────────────────────────
 export type GitFileStatus = 'modified' | 'added' | 'deleted' | 'renamed' | 'untracked' | 'copied'
 export type GitStagingArea = 'staged' | 'unstaged' | 'untracked'

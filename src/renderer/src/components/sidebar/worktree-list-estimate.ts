@@ -48,48 +48,9 @@ export function estimateRowHeight(
     }
   }
   if (cardProps.includes('comment') && wt.comment) {
-    // Comment renders as markdown via react-markdown. Markdown block elements
-    // (lists, code blocks, blockquotes) add some vertical overhead compared to
-    // raw text, but the dominant factor is still line count. We estimate visual
-    // lines from explicit newlines and character wrapping (~35 chars per line at
-    // typical sidebar width), then add a small buffer for markdown block spacing.
-    // Line-height is leading-normal (1.5 × 11px = 16.5px) + py-0.5(4px).
-    const lines = wt.comment.split('\n')
-    let totalLines = 0
-    let hasBlocks = false
-    let inCodeFence = false
-    let codeFenceLines = 0
-    for (const line of lines) {
-      if (line.startsWith('```')) {
-        hasBlocks = true
-        if (inCodeFence) {
-          // Closing fence: cap at max-h-32 (128px) ÷ 16.5 ≈ 8 visible lines
-          totalLines += Math.min(codeFenceLines, 8)
-          codeFenceLines = 0
-        }
-        inCodeFence = !inCodeFence
-        continue
-      }
-      if (inCodeFence) {
-        codeFenceLines++
-      } else {
-        totalLines += Math.max(1, Math.ceil(line.length / 35))
-        // Detect markdown block elements that add extra vertical spacing.
-        // Only check outside code fences — fenced content renders as plain code.
-        if (/^(\s*[-*+]\s|#{1,6}\s|>\s|---|\d+\.\s)/.test(line)) {
-          hasBlocks = true
-        }
-      }
-    }
-    // Handle unclosed code fence (treat remaining lines normally)
-    if (inCodeFence) {
-      totalLines += Math.min(codeFenceLines, 8)
-    }
-    h += Math.ceil(totalLines * 16.5) + 4
-    // Markdown blocks (lists, headings, code fences) add ~4-8px of extra margin
-    if (hasBlocks) {
-      h += 8
-    }
+    // Comment is clamped to 2 lines (line-clamp-2) in the card. Full content
+    // is shown in a hover card. Height: 2 lines × 16.5px + py-0.5(4px).
+    h += Math.ceil(2 * 16.5) + 4
     metaCount++
   }
 

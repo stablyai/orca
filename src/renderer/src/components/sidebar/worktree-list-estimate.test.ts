@@ -84,27 +84,21 @@ describe('estimateRowHeight', () => {
     expect(estimateRowHeight(itemRow(worktree), ['pr'], repoMap, prCache)).toBe(55)
   })
 
-  it('estimates comment height based on content length', () => {
+  it('estimates comment height as fixed 2-line clamp', () => {
     const wt = { ...worktree, comment: 'todo: fix bug' }
     const base = estimateRowHeight(itemRow(worktree), ['comment'], repoMap, null)
     const withComment = estimateRowHeight(itemRow(wt), ['comment'], repoMap, null)
-    // 1 line × ceil(16.5)=17 + 4px py-0.5 + 8px meta spacing = 29
-    expect(withComment - base).toBe(29)
+    // 2 lines × ceil(16.5)=33 + 4px py-0.5 + 8px meta spacing = 45
+    expect(withComment - base).toBe(45)
   })
 
-  it('estimates multi-line comment height from newlines', () => {
-    const wt = { ...worktree, comment: 'first line\nsecond line\nthird line' }
-    const h = estimateRowHeight(itemRow(wt), ['comment'], repoMap, null)
-    // base 55 + ceil(3 × 16.5)=50 + 4px py-0.5 + 8px meta spacing = 117
-    expect(h).toBe(117)
-  })
-
-  it('estimates wrapped long lines in comment', () => {
-    // 70 chars wraps to 2 lines at ~35 chars/line
-    const wt = { ...worktree, comment: 'a'.repeat(70) }
-    const h = estimateRowHeight(itemRow(wt), ['comment'], repoMap, null)
-    // base 55 + ceil(2 × 16.5)=33 + 4px py-0.5 + 8px meta spacing = 100
-    expect(h).toBe(100)
+  it('uses same fixed height for long comments (clamped to 2 lines)', () => {
+    const short = { ...worktree, comment: 'short' }
+    const long = { ...worktree, comment: 'first line\nsecond line\nthird line\nfourth line' }
+    const hShort = estimateRowHeight(itemRow(short), ['comment'], repoMap, null)
+    const hLong = estimateRowHeight(itemRow(long), ['comment'], repoMap, null)
+    // Both clamped to 2 lines, so same height
+    expect(hShort).toBe(hLong)
   })
 
   it('stacks all metadata lines correctly', () => {
@@ -113,9 +107,8 @@ describe('estimateRowHeight', () => {
       '/tmp/orca::feature/cool': { data: { number: 1 } }
     }
     const h = estimateRowHeight(itemRow(wt), ['issue', 'pr', 'comment'], repoMap, prCache)
-    // 55 base + 16 issue + 16 pr + (17+4) comment + 8 meta spacing + 2×3 gaps = 122
-    // (inter-card gap is handled by the virtualizer's `gap` option, not here)
-    expect(h).toBe(122)
+    // 55 base + 16 issue + 16 pr + (33+4) comment + 8 meta spacing + 2×3 gaps = 138
+    expect(h).toBe(138)
   })
 
   it('strips refs/heads/ prefix when building PR cache key', () => {

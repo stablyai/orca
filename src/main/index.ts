@@ -6,6 +6,7 @@ import { StatsCollector, initStatsPath } from './stats/collector'
 import { ClaudeUsageStore, initClaudeUsagePath } from './claude-usage/store'
 import { CodexUsageStore, initCodexUsagePath } from './codex-usage/store'
 import { killAllPty } from './ipc/pty'
+import { closeAllWatchers } from './ipc/filesystem-watcher'
 import { registerCoreHandlers } from './ipc/register-core-handlers'
 import { triggerStartupNotificationRegistration } from './ipc/notifications'
 import { OrcaRuntimeService } from './runtime/orca-runtime'
@@ -146,6 +147,7 @@ app.on('before-quit', () => {
   // agent_start events with no matching stops.
   stats?.flush()
   killAllPty()
+  void closeAllWatchers()
   if (runtimeRpc) {
     void runtimeRpc.stop().catch((error) => {
       console.error('[runtime] Failed to stop local RPC transport:', error)

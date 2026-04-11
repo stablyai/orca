@@ -4,6 +4,7 @@ import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { StatsCollector } from '../stats/collector'
 import { registerFilesystemHandlers } from './filesystem'
+import { registerFilesystemWatcherHandlers } from './filesystem-watcher'
 import { registerClaudeUsageHandlers } from './claude-usage'
 import { registerCodexUsageHandlers } from './codex-usage'
 import { registerGitHubHandlers } from './github'
@@ -46,6 +47,7 @@ export function registerCoreHandlers(
   registerSessionHandlers(store)
   registerUIHandlers(store)
   registerFilesystemHandlers(store)
+  registerFilesystemWatcherHandlers()
   registerRuntimeHandlers(runtime)
   registerClipboardHandlers()
   registerUpdaterHandlers(store)

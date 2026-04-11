@@ -20,6 +20,7 @@ import { useActiveWorktreePath } from './useActiveWorktreePath'
 import { useFileDuplicate } from './useFileDuplicate'
 import { useFileExplorerDragDrop } from './useFileExplorerDragDrop'
 import { useFileExplorerTree } from './useFileExplorerTree'
+import { useFileExplorerWatch } from './useFileExplorerWatch'
 
 export default function FileExplorer(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
@@ -45,6 +46,7 @@ export default function FileExplorer(): React.JSX.Element {
 
   const {
     dirCache,
+    setDirCache,
     flatRows,
     rowsByPath,
     rootCache,
@@ -91,7 +93,7 @@ export default function FileExplorer(): React.JSX.Element {
     activeWorktreeId,
     openFiles,
     closeFile,
-    refreshTree,
+    refreshDir,
     selectedPath,
     setSelectedPath,
     isMac,
@@ -152,6 +154,19 @@ export default function FileExplorer(): React.JSX.Element {
     flatRows,
     scrollRef,
     refreshDir
+  })
+
+  useFileExplorerWatch({
+    worktreePath,
+    activeWorktreeId,
+    dirCache,
+    setDirCache,
+    expanded,
+    setSelectedPath,
+    refreshDir,
+    refreshTree,
+    inlineInput,
+    dragSourcePath
   })
 
   const totalCount = flatRows.length + (inlineInputIndex >= 0 ? 1 : 0)

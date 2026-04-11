@@ -26,61 +26,9 @@ import {
 } from './runtime/sync-runtime-graph'
 import { useGlobalFileDrop } from './hooks/useGlobalFileDrop'
 import { registerUpdaterBeforeUnloadBypass } from './lib/updater-beforeunload'
-import type { BrowserTab, PersistedOpenFile, WorkspaceVisibleTabType } from '../../shared/types'
-import type { OpenFile } from './store/slices/editor'
+import { buildWorkspaceSessionPayload } from './lib/workspace-session'
 
 const isMac = navigator.userAgent.includes('Mac')
-
-/** Build the editor-file portion of the workspace session for persistence.
- *  Only edit-mode files are saved — diffs and conflict views are transient. */
-function buildEditorSessionData(
-  openFiles: OpenFile[],
-  activeFileIdByWorktree: Record<string, string | null>,
-  activeTabTypeByWorktree: Record<string, WorkspaceVisibleTabType>
-): {
-  openFilesByWorktree: Record<string, PersistedOpenFile[]>
-  activeFileIdByWorktree: Record<string, string | null>
-  activeTabTypeByWorktree: Record<string, WorkspaceVisibleTabType>
-} {
-  const editFiles = openFiles.filter((f) => f.mode === 'edit')
-  const byWorktree: Record<string, PersistedOpenFile[]> = {}
-  for (const f of editFiles) {
-    const arr = byWorktree[f.worktreeId] ?? (byWorktree[f.worktreeId] = [])
-    arr.push({
-      filePath: f.filePath,
-      relativePath: f.relativePath,
-      worktreeId: f.worktreeId,
-      language: f.language,
-      isPreview: f.isPreview || undefined
-    })
-  }
-  return {
-    openFilesByWorktree: byWorktree,
-    activeFileIdByWorktree,
-    activeTabTypeByWorktree
-  }
-}
-
-function buildBrowserSessionData(
-  browserTabsByWorktree: Record<string, BrowserTab[]>,
-  activeBrowserTabIdByWorktree: Record<string, string | null>
-): {
-  browserTabsByWorktree: Record<string, BrowserTab[]>
-  activeBrowserTabIdByWorktree: Record<string, string | null>
-} {
-  return {
-    // Why: browser tabs persist only lightweight chrome state. Live guest
-    // webContents are recreated on restore, so loading is reset to false and
-    // transient errors are preserved only as last-known tab metadata.
-    browserTabsByWorktree: Object.fromEntries(
-      Object.entries(browserTabsByWorktree).map(([worktreeId, tabs]) => [
-        worktreeId,
-        tabs.map((tab) => ({ ...tab, loading: false }))
-      ])
-    ),
-    activeBrowserTabIdByWorktree
-  }
-}
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
@@ -257,23 +205,21 @@ function App(): React.JSX.Element {
       return
     }
     const timer = window.setTimeout(() => {
-      // Why: setWorkspaceSession is a full replacement, not a merge.
-      // Every call MUST include activeWorktreeIdsOnShutdown or it is
-      // silently erased from disk.
-      const activeWorktreeIdsOnShutdown = Object.entries(tabsByWorktree)
-        .filter(([, tabs]) => tabs.some((t) => t.ptyId))
-        .map(([worktreeId]) => worktreeId)
-      void window.api.session.set({
-        activeRepoId,
-        activeWorktreeId,
-        activeTabId,
-        tabsByWorktree,
-        terminalLayoutsByTabId,
-        activeWorktreeIdsOnShutdown,
-        activeTabIdByWorktree,
-        ...buildEditorSessionData(openFiles, activeFileIdByWorktree, activeTabTypeByWorktree),
-        ...buildBrowserSessionData(browserTabsByWorktree, activeBrowserTabIdByWorktree)
-      })
+      void window.api.session.set(
+        buildWorkspaceSessionPayload({
+          activeRepoId,
+          activeWorktreeId,
+          activeTabId,
+          tabsByWorktree,
+          terminalLayoutsByTabId,
+          activeTabIdByWorktree,
+          openFiles,
+          activeFileIdByWorktree,
+          activeTabTypeByWorktree,
+          browserTabsByWorktree,
+          activeBrowserTabIdByWorktree
+        })
+      )
     }, 150)
 
     return () => window.clearTimeout(timer)
@@ -307,27 +253,35 @@ function App(): React.JSX.Element {
         }
       }
       const state = useAppStore.getState()
-      const activeWorktreeIdsOnShutdown = Object.entries(state.tabsByWorktree)
-        .filter(([, tabs]) => tabs.some((t) => t.ptyId))
-        .map(([worktreeId]) => worktreeId)
-      window.api.session.setSync({
-        activeRepoId: state.activeRepoId,
-        activeWorktreeId: state.activeWorktreeId,
-        activeTabId: state.activeTabId,
-        tabsByWorktree: state.tabsByWorktree,
-        terminalLayoutsByTabId: state.terminalLayoutsByTabId,
-        activeWorktreeIdsOnShutdown,
-        activeTabIdByWorktree: state.activeTabIdByWorktree,
-        ...buildEditorSessionData(
-          state.openFiles,
-          state.activeFileIdByWorktree,
-          state.activeTabTypeByWorktree
-        ),
-        ...buildBrowserSessionData(state.browserTabsByWorktree, state.activeBrowserTabIdByWorktree)
-      })
+      window.api.session.setSync(buildWorkspaceSessionPayload(state))
     }
     window.addEventListener('beforeunload', captureAndFlush)
     return () => window.removeEventListener('beforeunload', captureAndFlush)
+  }, [])
+
+  // Periodically capture terminal scrollback buffers and persist to disk.
+  // Why: the normal shutdown path races with PTY exit events — before-quit
+  // kills all PTYs, whose async exit handlers close tabs and unmount
+  // TerminalPane components (removing their capture callbacks) before the
+  // renderer's beforeunload can run. Periodic saves ensure scrollback is
+  // available on restart even when the shutdown capture is lost.
+  useEffect(() => {
+    const PERIODIC_SAVE_INTERVAL_MS = 3 * 60_000
+    const timer = window.setInterval(() => {
+      if (!useAppStore.getState().workspaceSessionReady || shutdownBufferCaptures.size === 0) {
+        return
+      }
+      for (const capture of shutdownBufferCaptures) {
+        try {
+          capture()
+        } catch {
+          // Don't let one pane's failure block the rest.
+        }
+      }
+      const state = useAppStore.getState()
+      void window.api.session.set(buildWorkspaceSessionPayload(state))
+    }, PERIODIC_SAVE_INTERVAL_MS)
+    return () => window.clearInterval(timer)
   }, [])
 
   useEffect(() => {

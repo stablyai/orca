@@ -69,7 +69,7 @@ function Settings(): React.JSX.Element {
   const setSettingsSearchQuery = useAppStore((s) => s.setSettingsSearchQuery)
 
   const [repoHooksMap, setRepoHooksMap] = useState<
-    Record<string, { hasHooks: boolean; hooks: OrcaHooks | null }>
+    Record<string, { hasHooks: boolean; hooks: OrcaHooks | null; mayNeedUpdate: boolean }>
   >({})
   const systemPrefersDark = useSystemPrefersDark()
   const [scrollbackMode, setScrollbackMode] = useState<'preset' | 'custom'>('preset')
@@ -155,19 +155,24 @@ function Settings(): React.JSX.Element {
       const results = await Promise.all(
         repos.map(async (repo) => {
           if (isFolderRepo(repo)) {
-            return [repo.id, { hasHooks: false, hooks: null }] as const
+            return [repo.id, { hasHooks: false, hooks: null, mayNeedUpdate: false }] as const
           }
           try {
             const result = await window.api.hooks.check({ repoId: repo.id })
             return [repo.id, result] as const
           } catch {
-            return [repo.id, { hasHooks: false, hooks: null }] as const
+            return [repo.id, { hasHooks: false, hooks: null, mayNeedUpdate: false }] as const
           }
         })
       )
 
       if (!stale) {
-        setRepoHooksMap(Object.fromEntries(results))
+        setRepoHooksMap(
+          Object.fromEntries(results) as Record<
+            string,
+            { hasHooks: boolean; hooks: OrcaHooks | null; mayNeedUpdate: boolean }
+          >
+        )
       }
     }
 
@@ -478,6 +483,7 @@ function Settings(): React.JSX.Element {
                         repo={repo}
                         yamlHooks={repoHooksState?.hooks ?? null}
                         hasHooksFile={repoHooksState?.hasHooks ?? false}
+                        mayNeedUpdate={repoHooksState?.mayNeedUpdate ?? false}
                         updateRepo={updateRepo}
                         removeRepo={removeRepo}
                       />

@@ -592,6 +592,13 @@ export default function Terminal(): React.JSX.Element | null {
         window.api.ui.confirmWindowClose()
         return
       }
+      // Why: before-quit (main process) kills all PTYs before this handler
+      // runs. The async PTY exit events close tabs and unmount TerminalPane
+      // components, removing their buffer capture callbacks. Dispatching
+      // beforeunload here — while components are still mounted — captures
+      // scrollback buffers before the race can discard them. This mirrors
+      // the auto-updater path (preload/index.ts) which does the same thing.
+      window.dispatchEvent(new Event('beforeunload'))
       const state = useAppStore.getState()
       const allPtyIds = Object.values(state.ptyIdsByTabId).flat()
       if (allPtyIds.length === 0) {
