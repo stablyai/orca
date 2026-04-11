@@ -21,20 +21,18 @@ vi.mock('util', async () => {
   const actual = await vi.importActual('util')
   return {
     ...actual,
-    promisify: vi.fn(() =>
-      (...args: unknown[]) =>
-        new Promise((resolve, reject) => {
-          execFileMock(
-            ...args,
-            (error: Error | null, stdout: string, stderr: string) => {
+    promisify: vi.fn(
+      () =>
+        (...args: unknown[]) =>
+          new Promise((resolve, reject) => {
+            execFileMock(...args, (error: Error | null, stdout: string, stderr: string) => {
               if (error) {
                 reject(Object.assign(error, { stdout, stderr }))
                 return
               }
               resolve({ stdout, stderr })
-            }
-          )
-        })
+            })
+          })
     )
   }
 })
@@ -91,7 +89,7 @@ describe('removeWorktree', () => {
     execFileSyncMock.mockReset()
   })
 
-  it('removes the worktree, prunes stale refs, and deletes its local branch', async () => {
+  it('removes the worktree and deletes its local branch without running blanket prune', async () => {
     mockGitCommands({
       'git worktree list --porcelain': {
         stdout: `worktree /repo
@@ -115,14 +113,12 @@ branch refs/heads/main
 
     const calls = getGitCalls()
     expect(calls).toEqual(
-      expect.arrayContaining([
-        'git worktree remove /repo-feature',
-        'git worktree prune',
-        'git branch -D feature/test'
-      ])
+      expect.arrayContaining(['git worktree remove /repo-feature', 'git branch -D feature/test'])
     )
-    expectGitCallOrder(calls, 'git worktree remove /repo-feature', 'git worktree prune')
-    expectGitCallOrder(calls, 'git worktree prune', 'git branch -D feature/test')
+    // Why: blanket `git worktree prune` destroys admin entries for ALL worktrees
+    // whose .git files are missing, cascading damage to nested siblings.
+    expect(calls).not.toContain('git worktree prune')
+    expectGitCallOrder(calls, 'git worktree remove /repo-feature', 'git branch -D feature/test')
   })
 
   it('skips branch deletion when another worktree still points at the branch', async () => {
@@ -157,17 +153,17 @@ branch refs/heads/feature/test
 
     const calls = getGitCalls()
     expect(calls).toEqual(
-      expect.arrayContaining([
-        'git worktree remove /repo-feature',
-        'git worktree prune',
-        'git worktree list --porcelain'
-      ])
+      expect.arrayContaining(['git worktree remove /repo-feature', 'git worktree list --porcelain'])
     )
     expect(calls).not.toContain('git branch -D feature/test')
-    expectGitCallOrder(calls, 'git worktree remove /repo-feature', 'git worktree prune')
+    expect(calls).not.toContain('git worktree prune')
   })
 
-  it('deletes the branch after prune removes stale sibling worktree entries', async () => {
+  it('deletes the branch when stale sibling marked prunable is filtered out', async () => {
+    // Why: after removal, a sibling worktree on the same branch that is marked
+    // `prunable` should be ignored when deciding whether the branch is still in
+    // use. This replaces the old `git worktree prune` approach — prunable
+    // entries are filtered out rather than destroyed.
     mockGitCommands({
       'git worktree list --porcelain': {
         stdout: `worktree /repo
@@ -188,6 +184,11 @@ prunable gitdir file points to non-existent location
         stdout: `worktree /repo
 HEAD abc123
 branch refs/heads/main
+
+worktree /repo-stale
+HEAD 0000000
+branch refs/heads/feature/test
+prunable gitdir file points to non-existent location
 `
       }
     })
@@ -196,13 +197,10 @@ branch refs/heads/main
 
     const calls = getGitCalls()
     expect(calls).toEqual(
-      expect.arrayContaining([
-        'git worktree remove /repo-feature',
-        'git worktree prune',
-        'git branch -D feature/test'
-      ])
+      expect.arrayContaining(['git worktree remove /repo-feature', 'git branch -D feature/test'])
     )
-    expectGitCallOrder(calls, 'git worktree prune', 'git branch -D feature/test')
+    // Prunable sibling should NOT prevent branch deletion
+    expect(calls).not.toContain('git worktree prune')
   })
 
   it('passes --force before the worktree path when forced removal is requested', async () => {
@@ -256,10 +254,10 @@ branch refs/heads/main
     expect(calls).toEqual(
       expect.arrayContaining([
         'git worktree remove c:\\workspaces\\delete-branch-ui-test',
-        'git worktree prune',
         'git branch -D feature/test'
       ])
     )
+    expect(calls).not.toContain('git worktree prune')
   })
 
   it('keeps removal successful when branch cleanup fails', async () => {

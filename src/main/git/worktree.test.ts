@@ -42,21 +42,24 @@ bare
         head: 'abc123',
         branch: 'refs/heads/main',
         isBare: false,
-        isMainWorktree: true
+        isMainWorktree: true,
+        isPrunable: false
       },
       {
         path: '/repo-feature',
         head: 'def456',
         branch: 'refs/heads/feature/test',
         isBare: false,
-        isMainWorktree: false
+        isMainWorktree: false,
+        isPrunable: false
       },
       {
         path: '/repo-bare',
         head: '0000000',
         branch: '',
         isBare: true,
-        isMainWorktree: false
+        isMainWorktree: false,
+        isPrunable: false
       }
     ])
   })
@@ -80,7 +83,8 @@ branch refs/heads/main
         head: 'aaa111',
         branch: 'refs/heads/main',
         isBare: false,
-        isMainWorktree: true
+        isMainWorktree: true,
+        isPrunable: false
       }
     ])
   })
@@ -96,7 +100,8 @@ detached
         head: 'abc123',
         branch: '',
         isBare: false,
-        isMainWorktree: true
+        isMainWorktree: true,
+        isPrunable: false
       }
     ])
   })
@@ -117,14 +122,16 @@ branch refs/heads/dev
         head: 'aaa111',
         branch: 'refs/heads/main',
         isBare: false,
-        isMainWorktree: true
+        isMainWorktree: true,
+        isPrunable: false
       },
       {
         path: '/repo-b',
         head: 'bbb222',
         branch: 'refs/heads/dev',
         isBare: false,
-        isMainWorktree: false
+        isMainWorktree: false,
+        isPrunable: false
       }
     ])
   })
@@ -139,7 +146,8 @@ branch refs/heads/main
         head: '',
         branch: 'refs/heads/main',
         isBare: false,
-        isMainWorktree: true
+        isMainWorktree: true,
+        isPrunable: false
       }
     ])
   })
@@ -155,7 +163,8 @@ branch refs/heads/main
         head: 'ccc333',
         branch: 'refs/heads/main',
         isBare: false,
-        isMainWorktree: true
+        isMainWorktree: true,
+        isPrunable: false
       }
     ])
   })
@@ -179,21 +188,53 @@ bare
         head: '0000000',
         branch: '',
         isBare: true,
-        isMainWorktree: true
+        isMainWorktree: true,
+        isPrunable: false
       },
       {
         path: '/regular',
         head: 'abc123',
         branch: 'refs/heads/main',
         isBare: false,
-        isMainWorktree: false
+        isMainWorktree: false,
+        isPrunable: false
       },
       {
         path: '/bare-two',
         head: '1111111',
         branch: '',
         isBare: true,
-        isMainWorktree: false
+        isMainWorktree: false,
+        isPrunable: false
+      }
+    ])
+  })
+  it('parses prunable worktree entries', () => {
+    const output = `worktree /repo
+HEAD abc123
+branch refs/heads/main
+
+worktree /repo-stale
+HEAD 0000000
+branch refs/heads/feature/old
+prunable gitdir file points to non-existent location
+`
+    expect(parseWorktreeList(output)).toEqual([
+      {
+        path: '/repo',
+        head: 'abc123',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true,
+        isPrunable: false
+      },
+      {
+        path: '/repo-stale',
+        head: '0000000',
+        branch: 'refs/heads/feature/old',
+        isBare: false,
+        isMainWorktree: false,
+        isPrunable: true
       }
     ])
   })

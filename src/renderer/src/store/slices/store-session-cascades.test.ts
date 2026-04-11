@@ -125,6 +125,7 @@ function makeWorktree(overrides: Partial<Worktree> & { id: string; repoId: strin
     branch: 'refs/heads/feature',
     isBare: false,
     isMainWorktree: false,
+    isPrunable: false,
     displayName: 'feature',
     comment: '',
     linkedIssue: null,

@@ -157,7 +157,8 @@ describe('mergeWorktree', () => {
     head: 'abc123',
     branch: 'refs/heads/feature-x',
     isBare: false,
-    isMainWorktree: false
+    isMainWorktree: false,
+    isPrunable: false
   }
 
   it('merges with full metadata', () => {
@@ -180,6 +181,7 @@ describe('mergeWorktree', () => {
       branch: 'refs/heads/feature-x',
       isBare: false,
       isMainWorktree: false,
+      isPrunable: false,
       displayName: 'My Feature',
       comment: 'WIP',
       linkedIssue: 42,
@@ -214,7 +216,8 @@ describe('mergeWorktree', () => {
       head: '000000',
       branch: '',
       isBare: true,
-      isMainWorktree: false
+      isMainWorktree: false,
+      isPrunable: false
     }
     const result = mergeWorktree('repo1', bareGit, undefined)
     expect(result.displayName).toBe('bare-repo')

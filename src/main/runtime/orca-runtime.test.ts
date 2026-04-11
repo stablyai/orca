@@ -18,7 +18,8 @@ const {
       head: 'abc',
       branch: 'feature/foo',
       isBare: false,
-      isMainWorktree: false
+      isMainWorktree: false,
+      isPrunable: false
     }
   ],
   addWorktreeMock: vi.fn(),
@@ -256,7 +257,8 @@ describe('OrcaRuntimeService', () => {
         head: 'abc',
         branch: 'refs/heads/Jinwoo-H/test-3a',
         isBare: false,
-        isMainWorktree: false
+        isMainWorktree: false,
+        isPrunable: false
       }
     ])
 
@@ -615,7 +617,8 @@ describe('OrcaRuntimeService', () => {
         head: 'def',
         branch: 'runtime-hook-test',
         isBare: false,
-        isMainWorktree: false
+        isMainWorktree: false,
+        isPrunable: false
       }
     ])
 
@@ -735,7 +738,8 @@ describe('OrcaRuntimeService', () => {
           head: 'abc',
           branch: 'refs/heads/improve-dashboard',
           isBare: false,
-          isMainWorktree: false
+          isMainWorktree: false,
+          isPrunable: false
         }
       ])
       .mockResolvedValueOnce([
@@ -744,7 +748,8 @@ describe('OrcaRuntimeService', () => {
           head: 'abc',
           branch: 'refs/heads/improve-dashboard',
           isBare: false,
-          isMainWorktree: false
+          isMainWorktree: false,
+          isPrunable: false
         }
       ])
 

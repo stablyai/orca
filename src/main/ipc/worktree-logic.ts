@@ -155,6 +155,7 @@ export function mergeWorktree(
     branch: git.branch,
     isBare: git.isBare,
     isMainWorktree: git.isMainWorktree,
+    isPrunable: git.isPrunable,
     displayName: meta?.displayName || branchShort || defaultDisplayName || basename(git.path),
     comment: meta?.comment || '',
     linkedIssue: meta?.linkedIssue ?? null,
