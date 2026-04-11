@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: the YAML status card, issue-command editor, policy grid, and legacy-hook section form one cohesive settings surface; splitting them across files would scatter tightly coupled state and prop drilling. */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { OrcaHooks, Repo, SetupRunPolicy } from '../../../../shared/types'
-import { AlertTriangle, ArrowUpCircle } from 'lucide-react'
+import { AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '../ui/button'
 import { SearchableSetting } from './SearchableSetting'
@@ -49,11 +49,11 @@ const YAML_STATE_STYLES: Record<
       'Shared hook and issue-automation defaults are defined in the repo and available to everyone who uses it.'
   },
   'update-available': {
-    card: 'border-sky-500/20 bg-sky-500/5',
-    title: 'text-sky-700 dark:text-sky-300',
-    heading: 'Update available',
+    card: 'border-amber-500/20 bg-amber-500/5',
+    title: 'text-amber-700 dark:text-amber-300',
+    heading: '`orca.yaml` could not be parsed',
     description:
-      'Your `orca.yaml` contains configuration keys that this version of Orca does not recognize. Update Orca to use the latest features.'
+      'The file contains configuration keys that this version of Orca does not recognize. You may need to update Orca, or check the file for typos.'
   },
   invalid: {
     card: 'border-amber-500/20 bg-amber-500/5',
@@ -274,16 +274,16 @@ export function RepositoryHooksSection({
               </p>
             </div>
           ) : yamlState === 'update-available' ? (
-            <div className="flex items-start gap-3 rounded-xl border border-sky-500/20 bg-background/60 p-4">
-              <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-sky-500/12 text-sky-600 dark:text-sky-300">
-                <ArrowUpCircle className="size-5" />
+            <div className="flex items-start gap-3 rounded-xl border border-amber-500/20 bg-background/60 p-4">
+              <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-amber-500/12 text-amber-600 dark:text-amber-300">
+                <AlertTriangle className="size-5" />
               </div>
               <p className="text-sm leading-6 text-muted-foreground">
-                {/* Why: a file with well-formed YAML keys that this version doesn't handle is
-                almost certainly authored for a newer Orca release. Suggesting an update is
-                far less confusing than "could not be parsed", which implies the file is broken. */}
-                Your `orca.yaml` uses configuration keys that were introduced in a newer version of
-                Orca. Update to the latest release so all settings take effect.
+                {/* Why: a file with well-formed YAML keys that this version doesn't handle
+                could be from a newer Orca release or could be a typo. Keep the same warning
+                tone as the parse-error state but add the update hint. */}
+                The file contains keys this version of Orca does not recognize. Check the file for
+                typos, or update Orca if a newer version is available.
               </p>
             </div>
           ) : yamlState === 'invalid' ? (
