@@ -8,6 +8,7 @@ import SearchBar from './SearchBar'
 import GroupControls from './GroupControls'
 import WorktreeList from './WorktreeList'
 import SidebarToolbar from './SidebarToolbar'
+import ScriptRunner from './ScriptRunner'
 import AddWorktreeDialog from './AddWorktreeDialog'
 import WorktreeMetaDialog from './WorktreeMetaDialog'
 import DeleteWorktreeDialog from './DeleteWorktreeDialog'
@@ -61,6 +62,9 @@ export default function Sidebar(): React.JSX.Element {
 
         {/* Virtualized scrollable list */}
         <WorktreeList />
+
+        {/* Script runner panel */}
+        <ScriptRunner />
 
         {/* Fixed bottom toolbar */}
         <SidebarToolbar />
