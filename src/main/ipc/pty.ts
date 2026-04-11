@@ -1,3 +1,8 @@
+/* eslint-disable max-lines -- Why: PTY IPC is intentionally centralized in one
+main-process module so spawn-time environment scoping, lifecycle cleanup,
+foreground-process inspection, and renderer IPC stay behind a single audited
+boundary. Splitting it by line count would scatter tightly coupled terminal
+process behavior across files without a cleaner ownership seam. */
 import { basename } from 'path'
 import { existsSync, accessSync, statSync, chmodSync, constants as fsConstants } from 'fs'
 import { type BrowserWindow, ipcMain } from 'electron'
@@ -22,7 +27,8 @@ let didEnsureSpawnHelperExecutable = false
 function getShellValidationError(shellPath: string): string | null {
   if (!existsSync(shellPath)) {
     return (
-      `Shell "${shellPath}" does not exist. ` + `Set a valid SHELL environment variable or install zsh/bash.`
+      `Shell "${shellPath}" does not exist. ` +
+      `Set a valid SHELL environment variable or install zsh/bash.`
     )
   }
   try {
@@ -41,15 +47,18 @@ function ensureNodePtySpawnHelperExecutable(): void {
 
   try {
     const unixTerminalPath = require.resolve('node-pty/lib/unixTerminal.js')
-    const packageRoot = basename(unixTerminalPath) === 'unixTerminal.js'
-      ? unixTerminalPath.replace(/[/\\]lib[/\\]unixTerminal\.js$/, '')
-      : unixTerminalPath
+    const packageRoot =
+      basename(unixTerminalPath) === 'unixTerminal.js'
+        ? unixTerminalPath.replace(/[/\\]lib[/\\]unixTerminal\.js$/, '')
+        : unixTerminalPath
     const candidates = [
       `${packageRoot}/build/Release/spawn-helper`,
       `${packageRoot}/build/Debug/spawn-helper`,
       `${packageRoot}/prebuilds/${process.platform}-${process.arch}/spawn-helper`
     ].map((candidate) =>
-      candidate.replace('app.asar/', 'app.asar.unpacked/').replace('node_modules.asar/', 'node_modules.asar.unpacked/')
+      candidate
+        .replace('app.asar/', 'app.asar.unpacked/')
+        .replace('node_modules.asar/', 'node_modules.asar.unpacked/')
     )
 
     for (const candidate of candidates) {
@@ -260,7 +269,9 @@ export function registerPtyHandlers(
         // should not brick Orca terminals. Fall back to system shells so the
         // user still gets a working terminal while the bad SHELL config remains.
         const configuredShellPath = shellPath
-        const fallbackShells = ['/bin/zsh', '/bin/bash', '/bin/sh'].filter((s) => s !== configuredShellPath)
+        const fallbackShells = ['/bin/zsh', '/bin/bash', '/bin/sh'].filter(
+          (s) => s !== configuredShellPath
+        )
         for (const fallback of fallbackShells) {
           if (getShellValidationError(fallback)) {
             continue
