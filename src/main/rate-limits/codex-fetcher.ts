@@ -3,6 +3,7 @@ paths together in one file makes it easier to audit the protocol/parsing
 differences and ensure account-scoped env handling stays identical. */
 import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
 import { spawn } from 'node:child_process'
+import { resolveCodexCommand } from '../codex-cli/command'
 
 const RPC_TIMEOUT_MS = 10_000
 const PTY_TIMEOUT_MS = 15_000
@@ -84,16 +85,20 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
     let resolved = false
     let rpcId = 0
 
-    const child = spawn('codex', ['-s', 'read-only', '-a', 'untrusted', 'app-server'], {
-      stdio: ['pipe', 'pipe', 'pipe'],
-      // Why: the selected Codex rate-limit account must only affect this fetch
-      // subprocess. Never mutate process.env globally or other Codex features
-      // would inherit the managed account unintentionally.
-      env: {
-        ...process.env,
-        ...(options?.codexHomePath ? { CODEX_HOME: options.codexHomePath } : {})
+    const child = spawn(
+      resolveCodexCommand(),
+      ['-s', 'read-only', '-a', 'untrusted', 'app-server'],
+      {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        // Why: the selected Codex rate-limit account must only affect this fetch
+        // subprocess. Never mutate process.env globally or other Codex features
+        // would inherit the managed account unintentionally.
+        env: {
+          ...process.env,
+          ...(options?.codexHomePath ? { CODEX_HOME: options.codexHomePath } : {})
+        }
       }
-    })
+    )
 
     const timeout = setTimeout(() => {
       if (!resolved) {
@@ -278,13 +283,14 @@ function parsePtyStatus(output: string): {
 
 async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<ProviderRateLimits> {
   const pty = await import('node-pty')
+  const codexCommand = resolveCodexCommand()
 
   return new Promise<ProviderRateLimits>((resolve) => {
     let output = ''
     let resolved = false
     let sentStatus = false
 
-    const term = pty.spawn('codex', [], {
+    const term = pty.spawn(codexCommand, [], {
       name: 'xterm-256color',
       cols: 120,
       rows: 40,
