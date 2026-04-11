@@ -28,12 +28,6 @@ function branchDisplayName(branch: string): string {
   return branch.replace(/^refs\/heads\//, '')
 }
 
-const PRIMARY_BRANCHES = new Set(['main', 'master', 'develop', 'dev'])
-
-function isPrimaryBranch(branch: string): boolean {
-  return PRIMARY_BRANCHES.has(branchDisplayName(branch))
-}
-
 function prStateLabel(state: PRState): string {
   return state.charAt(0).toUpperCase() + state.slice(1)
 }
@@ -316,8 +310,30 @@ const WorktreeCard = React.memo(function WorktreeCard({
         <div className="flex-1 min-w-0 flex flex-col gap-1.5">
           {/* Header row: Title and Checks */}
           <div className="flex items-center justify-between min-w-0 gap-2">
-            <div className="text-[12px] font-semibold text-foreground truncate leading-tight">
-              {worktree.displayName}
+            <div className="flex items-center gap-1.5 min-w-0">
+              <div className="text-[12px] font-semibold text-foreground truncate leading-tight">
+                {worktree.displayName}
+              </div>
+
+              {/* Why: the primary worktree (the original clone directory) cannot be
+                 deleted via `git worktree remove`. Placing this badge next to the
+                 name makes it immediately visible and avoids confusion with the
+                 branch name "main" shown below. */}
+              {worktree.isMainWorktree && !isFolder && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge
+                      variant="outline"
+                      className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 leading-none text-blue-600 border-blue-500/30 bg-blue-500/5 dark:text-blue-400 dark:border-blue-400/30 dark:bg-blue-400/5"
+                    >
+                      primary
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent side="right" sideOffset={8}>
+                    Primary worktree (original clone directory)
+                  </TooltipContent>
+                </Tooltip>
+              )}
             </div>
 
             {/* CI Checks & PR state on the right */}
@@ -359,9 +375,6 @@ const WorktreeCard = React.memo(function WorktreeCard({
               </div>
             )}
 
-            {/* Branch / folder badge — unchanged from the original logic so we
-               never lose the branch name, even when the main worktree is checked
-               out on a non-primary branch like "feature-x". */}
             {isFolder ? (
               <Badge
                 variant="secondary"
@@ -369,54 +382,10 @@ const WorktreeCard = React.memo(function WorktreeCard({
               >
                 {repo ? getRepoKindLabel(repo) : 'Folder'}
               </Badge>
-            ) : isPrimaryBranch(worktree.branch) ? (
-              worktree.isMainWorktree ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Badge
-                      variant="outline"
-                      className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 leading-none text-blue-600 border-blue-500/30 bg-blue-500/5 dark:text-blue-400 dark:border-blue-400/30 dark:bg-blue-400/5"
-                    >
-                      main
-                    </Badge>
-                  </TooltipTrigger>
-                  <TooltipContent side="right" sideOffset={8}>
-                    Main worktree
-                  </TooltipContent>
-                </Tooltip>
-              ) : (
-                <Badge
-                  variant="secondary"
-                  className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 leading-none text-muted-foreground bg-accent border border-border dark:bg-accent/80 dark:border-border/50"
-                >
-                  main
-                </Badge>
-              )
             ) : (
               <span className="text-[11px] text-muted-foreground truncate leading-none">
                 {branch}
               </span>
-            )}
-
-            {/* Why: the main worktree (the original clone directory) cannot be
-               deleted via `git worktree remove`. Surfacing this in the card lets
-               users identify it at a glance. When the branch is already primary,
-               the blue "main" badge above does double duty; otherwise we add a
-               separate blue badge so both the branch and worktree type are visible. */}
-            {worktree.isMainWorktree && !isFolder && !isPrimaryBranch(worktree.branch) && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Badge
-                    variant="outline"
-                    className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 text-blue-600 border-blue-500/30 bg-blue-500/5 dark:text-blue-400 dark:border-blue-400/30 dark:bg-blue-400/5 leading-none"
-                  >
-                    main
-                  </Badge>
-                </TooltipTrigger>
-                <TooltipContent side="right" sideOffset={8}>
-                  Main worktree
-                </TooltipContent>
-              </Tooltip>
             )}
 
             {/* Why: the conflict operation (merge/rebase/cherry-pick) is the
