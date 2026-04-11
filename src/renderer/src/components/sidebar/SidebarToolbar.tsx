@@ -18,6 +18,7 @@ import type { GitHubViewer } from '../../../../shared/types'
 const GITHUB_ISSUES_URL = 'https://github.com/stablyai/orca/issues/'
 const DISCORD_URL = 'https://discord.gg/fzjDKHxv8Q'
 const X_URL = 'https://x.com/orca_build'
+const FEEDBACK_API_URL = 'https://api.onorca.dev/v1/feedback'
 
 type SubmitIdentity = {
   githubLogin: string | null
@@ -96,7 +97,7 @@ function FeedbackDialog({
     setIsSubmitting(true)
     try {
       const identity = getSubmitIdentity(viewer, submitAnonymously)
-      const response = await fetch('https://api.onOrca.dev/v1/feedback', {
+      const response = await fetch(FEEDBACK_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         // Why: showing the exact GitHub identity in the dialog makes the
