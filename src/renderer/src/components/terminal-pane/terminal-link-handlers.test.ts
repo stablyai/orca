@@ -84,12 +84,20 @@ describe('handleOscLink', () => {
   it('keeps cmd/ctrl+click in Orca when the in-app browser setting is enabled', () => {
     setPlatform('Macintosh')
     storeState.settings = { openLinksInApp: true }
+    const preventDefault = vi.fn()
+    const stopPropagation = vi.fn()
 
-    handleOscLink('https://example.com', { metaKey: true, ctrlKey: false, shiftKey: false }, deps)
+    handleOscLink(
+      'https://example.com',
+      { metaKey: true, ctrlKey: false, shiftKey: false, preventDefault, stopPropagation },
+      deps
+    )
 
     expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/')
     expect(setActiveWorktreeMock).toHaveBeenCalledWith('wt-1')
     expect(openUrlMock).not.toHaveBeenCalled()
+    expect(preventDefault).toHaveBeenCalled()
+    expect(stopPropagation).toHaveBeenCalled()
   })
 
   it('uses the system browser for shift+cmd/ctrl+click even when Orca browser tabs are enabled', () => {
