@@ -22,6 +22,7 @@ import {
 import { isUpdaterQuitAndInstallInProgress } from '@/lib/updater-beforeunload'
 import EditorAutosaveController from './editor/EditorAutosaveController'
 import BrowserPane, { destroyPersistentWebview } from './browser-pane/BrowserPane'
+import { reconcileTabOrder } from './tab-bar/reconcile-order'
 
 const EditorPanel = lazy(() => import('./editor/EditorPanel'))
 
@@ -506,29 +507,44 @@ export default function Terminal(): React.JSX.Element | null {
       }
 
       // Cmd/Ctrl+Shift+] and Cmd/Ctrl+Shift+[ - switch tabs
-      if (mod && e.shiftKey && (e.key === ']' || e.key === '[') && !e.repeat) {
+      // Why: use e.code instead of e.key because on macOS, Shift+[ reports '{'
+      // as the key value (the shifted character), not '['.
+      if (
+        mod &&
+        e.shiftKey &&
+        (e.code === 'BracketRight' || e.code === 'BracketLeft') &&
+        !e.repeat
+      ) {
         const state = useAppStore.getState()
         const currentTerminalTabs = state.tabsByWorktree[activeWorktreeId] ?? []
         const currentEditorFiles = state.openFiles.filter((f) => f.worktreeId === activeWorktreeId)
         const currentBrowserTabs = state.browserTabsByWorktree[activeWorktreeId] ?? []
-        const currentOrder = state.tabBarOrderByWorktree[activeWorktreeId] ?? []
-        const allTabIds = currentOrder
-          .map((id) => {
-            if (currentTerminalTabs.some((tab) => tab.id === id)) {
-              return { type: 'terminal' as const, id }
-            }
-            if (currentEditorFiles.some((file) => file.id === id)) {
-              return { type: 'editor' as const, id }
-            }
-            if (currentBrowserTabs.some((tab) => tab.id === id)) {
-              return { type: 'browser' as const, id }
-            }
-            return null
-          })
-          .filter(
-            (value): value is { type: 'terminal' | 'editor' | 'browser'; id: string } =>
-              value !== null
-          )
+        const terminalIds = currentTerminalTabs.map((t) => t.id)
+        const editorIds = currentEditorFiles.map((f) => f.id)
+        const browserIds = currentBrowserTabs.map((t) => t.id)
+        // Why: use reconcileTabOrder instead of raw tabBarOrderByWorktree so
+        // tab switching works even when the stored order is unset (e.g. for
+        // worktrees restored from session whose initial tabs were created
+        // without populating tabBarOrderByWorktree).
+        const reconciledOrder = reconcileTabOrder(
+          state.tabBarOrderByWorktree[activeWorktreeId],
+          terminalIds,
+          editorIds,
+          browserIds
+        )
+        const terminalIdSet = new Set(terminalIds)
+        const editorIdSet = new Set(editorIds)
+        const browserIdSet = new Set(browserIds)
+        const allTabIds = reconciledOrder.map((id) => ({
+          type: terminalIdSet.has(id)
+            ? ('terminal' as const)
+            : editorIdSet.has(id)
+              ? ('editor' as const)
+              : browserIdSet.has(id)
+                ? ('browser' as const)
+                : (null as never),
+          id
+        }))
 
         if (allTabIds.length > 1) {
           e.preventDefault()
@@ -539,7 +555,7 @@ export default function Terminal(): React.JSX.Element | null {
                 ? state.activeBrowserTabId
                 : state.activeTabId
           const idx = allTabIds.findIndex((t) => t.id === currentId)
-          const dir = e.key === ']' ? 1 : -1
+          const dir = e.code === 'BracketRight' ? 1 : -1
           const next = allTabIds[(idx + dir + allTabIds.length) % allTabIds.length]
           if (next.type === 'terminal') {
             setActiveTab(next.id)

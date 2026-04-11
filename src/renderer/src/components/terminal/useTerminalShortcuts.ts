@@ -53,7 +53,12 @@ export function useTerminalShortcuts({
       return
     }
 
-    if (!event.shiftKey || (event.key !== ']' && event.key !== '[')) {
+    // Why: use event.code instead of event.key because on macOS, Shift+[
+    // reports '{' as the key value (the shifted character), not '['.
+    if (
+      !event.shiftKey ||
+      (event.code !== 'BracketRight' && event.code !== 'BracketLeft')
+    ) {
       return
     }
 
@@ -64,7 +69,7 @@ export function useTerminalShortcuts({
     event.preventDefault()
     const currentId = activeTabType === 'editor' ? activeFileId : activeTabId
     const currentIndex = unifiedTabs.findIndex((tab) => tab.id === currentId)
-    const direction = event.key === ']' ? 1 : -1
+    const direction = event.code === 'BracketRight' ? 1 : -1
     const nextTab =
       unifiedTabs[(currentIndex + direction + unifiedTabs.length) % unifiedTabs.length]
 
