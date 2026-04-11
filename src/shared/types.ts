@@ -394,6 +394,7 @@ export type GlobalSettings = {
    *  analytics and external terminal sessions. */
   codexManagedAccounts: CodexManagedAccount[]
   activeCodexManagedAccountId: string | null
+  sidebarScriptRunnerEnabled: boolean
 }
 
 export type NotificationEventSource = 'agent-task-complete' | 'terminal-bell' | 'test'

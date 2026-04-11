@@ -25,6 +25,7 @@ export default function Sidebar(): React.JSX.Element {
   const setSidebarWidth = useAppStore((s) => s.setSidebarWidth)
   const repos = useAppStore((s) => s.repos)
   const fetchAllWorktrees = useAppStore((s) => s.fetchAllWorktrees)
+  const scriptRunnerEnabled = useAppStore((s) => s.settings?.sidebarScriptRunnerEnabled ?? true)
 
   // Fetch worktrees when repos are added/removed
   const repoCount = repos.length
@@ -64,7 +65,7 @@ export default function Sidebar(): React.JSX.Element {
         <WorktreeList />
 
         {/* Script runner panel */}
-        <ScriptRunner />
+        {scriptRunnerEnabled && <ScriptRunner />}
 
         {/* Fixed bottom toolbar */}
         <SidebarToolbar />

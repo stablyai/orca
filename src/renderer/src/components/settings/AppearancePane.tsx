@@ -27,6 +27,11 @@ export const APPEARANCE_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     title: 'Open Right Sidebar by Default',
     description: 'Automatically expand the file explorer panel when creating a new worktree.',
     keywords: ['layout', 'file explorer', 'sidebar']
+  },
+  {
+    title: 'Sidebar Script Runner',
+    description: 'Show a script runner panel in the sidebar to run package.json scripts.',
+    keywords: ['sidebar', 'scripts', 'runner', 'terminal', 'package.json']
   }
 ]
 
@@ -134,6 +139,38 @@ export function AppearancePane({
             <span
               className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
                 settings.rightSidebarOpenByDefault ? 'translate-x-4' : 'translate-x-0.5'
+              }`}
+            />
+          </button>
+        </SearchableSetting>
+
+        <SearchableSetting
+          title="Sidebar Script Runner"
+          description="Show a script runner panel in the sidebar to run package.json scripts."
+          keywords={['sidebar', 'scripts', 'runner', 'terminal', 'package.json']}
+          className="flex items-center justify-between gap-4 px-1 py-2"
+        >
+          <div className="space-y-0.5">
+            <Label>Sidebar Script Runner</Label>
+            <p className="text-xs text-muted-foreground">
+              Show a script runner panel in the sidebar to run package.json scripts.
+            </p>
+          </div>
+          <button
+            role="switch"
+            aria-checked={settings.sidebarScriptRunnerEnabled}
+            onClick={() =>
+              updateSettings({
+                sidebarScriptRunnerEnabled: !settings.sidebarScriptRunnerEnabled
+              })
+            }
+            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
+              settings.sidebarScriptRunnerEnabled ? 'bg-foreground' : 'bg-muted-foreground/30'
+            }`}
+          >
+            <span
+              className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
+                settings.sidebarScriptRunnerEnabled ? 'translate-x-4' : 'translate-x-0.5'
               }`}
             />
           </button>
