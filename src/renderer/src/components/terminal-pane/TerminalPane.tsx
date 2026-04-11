@@ -90,6 +90,10 @@ export default function TerminalPane({
   const setTabPaneExpanded = useAppStore((store) => store.setTabPaneExpanded)
   const setTabCanExpandPane = useAppStore((store) => store.setTabCanExpandPane)
   const suppressPtyExit = useAppStore((store) => store.suppressPtyExit)
+  const pendingCodexPaneRestartIds = useAppStore((store) => store.pendingCodexPaneRestartIds)
+  const consumePendingCodexPaneRestart = useAppStore(
+    (store) => store.consumePendingCodexPaneRestart
+  )
   const clearCodexRestartNotice = useAppStore((store) => store.clearCodexRestartNotice)
   const codexRestartNoticeByPtyId = useAppStore((store) => store.codexRestartNoticeByPtyId)
   const savedLayout = useAppStore((store) => store.terminalLayoutsByTabId[tabId] ?? EMPTY_LAYOUT)
@@ -344,6 +348,26 @@ export default function TerminalPane({
       worktreeId
     ]
   )
+
+  useEffect(() => {
+    const manager = managerRef.current
+    if (!manager) {
+      return
+    }
+
+    for (const pane of manager.getPanes()) {
+      const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId()
+      if (!ptyId || !pendingCodexPaneRestartIds[ptyId]) {
+        continue
+      }
+      // Why: the status-bar switcher can request a global restart for stale
+      // Codex sessions, but the actual execution must stay pane scoped so a
+      // split tab does not lose unrelated non-Codex panes.
+      if (consumePendingCodexPaneRestart(ptyId)) {
+        handleRestartCodexPane(pane.id)
+      }
+    }
+  }, [consumePendingCodexPaneRestart, handleRestartCodexPane, pendingCodexPaneRestartIds])
 
   useTerminalFontZoom({ isActive, managerRef, paneFontSizesRef, settingsRef })
 

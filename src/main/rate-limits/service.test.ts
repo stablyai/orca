@@ -137,4 +137,43 @@ describe('RateLimitService', () => {
     expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
     expect(fetchCodexRateLimits).toHaveBeenCalledTimes(2)
   })
+
+  it('waits for a queued explicit refresh when another fetch is already in flight', async () => {
+    const service = new RateLimitService()
+    const firstClaude = deferred<ProviderRateLimits>()
+    const firstCodex = deferred<ProviderRateLimits>()
+    const secondClaude = deferred<ProviderRateLimits>()
+    const secondCodex = deferred<ProviderRateLimits>()
+
+    vi.mocked(fetchClaudeRateLimits)
+      .mockImplementationOnce(() => firstClaude.promise)
+      .mockImplementationOnce(() => secondClaude.promise)
+    vi.mocked(fetchCodexRateLimits)
+      .mockImplementationOnce(() => firstCodex.promise)
+      .mockImplementationOnce(() => secondCodex.promise)
+
+    const backgroundFetch = serviceInternals(service).fetchAll()
+    await Promise.resolve()
+
+    let refreshResolved = false
+    const manualRefresh = service.refresh().then(() => {
+      refreshResolved = true
+    })
+    await Promise.resolve()
+
+    firstClaude.resolve(okProvider('claude', 10, Date.now()))
+    firstCodex.resolve(okProvider('codex', 20, Date.now()))
+    await Promise.resolve()
+
+    expect(refreshResolved).toBe(false)
+
+    secondClaude.resolve(okProvider('claude', 11, Date.now()))
+    secondCodex.resolve(okProvider('codex', 21, Date.now()))
+    await backgroundFetch
+    await manualRefresh
+
+    expect(refreshResolved).toBe(true)
+    expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
+    expect(fetchCodexRateLimits).toHaveBeenCalledTimes(2)
+  })
 })

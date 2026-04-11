@@ -241,7 +241,7 @@ describe('restartCodexTabs', () => {
     vi.clearAllMocks()
   })
 
-  it('queues codex restart in-place and suppresses old PTY exits', () => {
+  it('queues pane-scoped codex restarts without remounting the whole tab', () => {
     const store = createTestStore()
     const wt1 = 'repo1::/path/wt1'
 
@@ -261,14 +261,13 @@ describe('restartCodexTabs', () => {
       pendingStartupByTabId: {}
     })
 
-    store.getState().restartCodexTabs(['tab1'])
+    store.getState().queueCodexPaneRestarts(['pty-b'])
     const state = store.getState()
-    const restartedTab = state.tabsByWorktree[wt1][0]
 
-    expect(state.pendingStartupByTabId.tab1).toEqual({ command: 'codex' })
-    expect(state.suppressedPtyExitIds['pty-a']).toBe(true)
-    expect(state.suppressedPtyExitIds['pty-b']).toBe(true)
-    expect(restartedTab.generation).toBe(3)
+    expect(state.pendingCodexPaneRestartIds).toEqual({ 'pty-b': true })
+    expect(state.pendingStartupByTabId).toEqual({})
+    expect(state.suppressedPtyExitIds).toEqual({})
+    expect(state.tabsByWorktree[wt1][0].generation).toBe(2)
   })
 })
 

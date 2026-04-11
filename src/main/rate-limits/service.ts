@@ -1,3 +1,6 @@
+/* eslint-disable max-lines -- Why: this service centralizes polling, stale-data
+handling, account-switch fetch semantics, and renderer push coordination so the
+fetch ordering rules stay in one place. */
 import type { BrowserWindow } from 'electron'
 import type { RateLimitState, ProviderRateLimits } from '../../shared/rate-limit-types'
 import { fetchClaudeRateLimits } from './claude-fetcher'
@@ -20,6 +23,7 @@ export class RateLimitService {
   private isFetching = false
   private fullFetchQueued = false
   private codexOnlyFetchQueued = false
+  private fetchIdleResolvers: (() => void)[] = []
   private codexFetchGeneration = 0
   private codexHomePathResolver: (() => string | null) | null = null
 
@@ -147,6 +151,7 @@ export class RateLimitService {
     if (this.isFetching) {
       if (options?.force) {
         this.fullFetchQueued = true
+        return this.waitForFetchIdle()
       }
       return
     }
@@ -169,6 +174,7 @@ export class RateLimitService {
       }
     } finally {
       this.isFetching = false
+      this.resolveFetchIdleWaiters()
     }
   }
 
@@ -176,6 +182,7 @@ export class RateLimitService {
     if (this.isFetching) {
       if (options?.force) {
         this.codexOnlyFetchQueued = true
+        return this.waitForFetchIdle()
       }
       return
     }
@@ -198,6 +205,30 @@ export class RateLimitService {
       }
     } finally {
       this.isFetching = false
+      this.resolveFetchIdleWaiters()
+    }
+  }
+
+  private waitForFetchIdle(): Promise<void> {
+    if (!this.isFetching && !this.fullFetchQueued && !this.codexOnlyFetchQueued) {
+      return Promise.resolve()
+    }
+    // Why: explicit refresh callers need to await the queued follow-up cycle
+    // when a poll is already in flight, otherwise the UI stops spinning before
+    // the user-requested refresh actually runs.
+    return new Promise((resolve) => {
+      this.fetchIdleResolvers.push(resolve)
+    })
+  }
+
+  private resolveFetchIdleWaiters(): void {
+    if (this.isFetching || this.fullFetchQueued || this.codexOnlyFetchQueued) {
+      return
+    }
+    const resolvers = this.fetchIdleResolvers
+    this.fetchIdleResolvers = []
+    for (const resolve of resolvers) {
+      resolve()
     }
   }
 

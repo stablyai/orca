@@ -22,6 +22,7 @@ export type TerminalSlice = {
   activeTabIdByWorktree: Record<string, string | null>
   ptyIdsByTabId: Record<string, string[]>
   suppressedPtyExitIds: Record<string, true>
+  pendingCodexPaneRestartIds: Record<string, true>
   codexRestartNoticeByPtyId: Record<
     string,
     { previousAccountLabel: string; nextAccountLabel: string }
@@ -55,6 +56,8 @@ export type TerminalSlice = {
   shutdownWorktreeTerminals: (worktreeId: string) => Promise<void>
   suppressPtyExit: (ptyId: string) => void
   consumeSuppressedPtyExit: (ptyId: string) => boolean
+  queueCodexPaneRestarts: (ptyIds: string[]) => void
+  consumePendingCodexPaneRestart: (ptyId: string) => boolean
   markCodexRestartNotices: (
     notices: { ptyId: string; previousAccountLabel: string; nextAccountLabel: string }[]
   ) => void
@@ -66,7 +69,6 @@ export type TerminalSlice = {
     tabId: string,
     startup: { command: string; env?: Record<string, string> }
   ) => void
-  restartCodexTabs: (tabIds: string[]) => void
   consumeTabStartupCommand: (
     tabId: string
   ) => { command: string; env?: Record<string, string> } | null
@@ -100,6 +102,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   activeTabIdByWorktree: {},
   ptyIdsByTabId: {},
   suppressedPtyExitIds: {},
+  pendingCodexPaneRestartIds: {},
   codexRestartNoticeByPtyId: {},
   expandedPaneByTabId: {},
   canExpandPaneByTabId: {},
@@ -423,17 +426,21 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       nextPtyIdsByTabId[tabId] = ptyId
         ? (nextPtyIdsByTabId[tabId] ?? []).filter((id) => id !== ptyId)
         : []
+      const nextPendingCodexPaneRestartIds = { ...s.pendingCodexPaneRestartIds }
       const nextCodexRestartNoticeByPtyId = { ...s.codexRestartNoticeByPtyId }
       if (ptyId) {
+        delete nextPendingCodexPaneRestartIds[ptyId]
         delete nextCodexRestartNoticeByPtyId[ptyId]
       } else {
         for (const currentPtyId of s.ptyIdsByTabId[tabId] ?? []) {
+          delete nextPendingCodexPaneRestartIds[currentPtyId]
           delete nextCodexRestartNoticeByPtyId[currentPtyId]
         }
       }
       return {
         tabsByWorktree: next,
         ptyIdsByTabId: nextPtyIdsByTabId,
+        pendingCodexPaneRestartIds: nextPendingCodexPaneRestartIds,
         codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId
       }
     })
@@ -464,8 +471,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         ...s.suppressedPtyExitIds,
         ...Object.fromEntries(ptyIds.map((ptyId) => [ptyId, true] as const))
       }
+      const nextPendingCodexPaneRestartIds = { ...s.pendingCodexPaneRestartIds }
       const nextCodexRestartNoticeByPtyId = { ...s.codexRestartNoticeByPtyId }
       for (const ptyId of ptyIds) {
+        delete nextPendingCodexPaneRestartIds[ptyId]
         delete nextCodexRestartNoticeByPtyId[ptyId]
       }
       // Why: clear any queued setup and issue-command splits for the affected
@@ -500,6 +509,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         tabsByWorktree: nextTabsByWorktree,
         ptyIdsByTabId: nextPtyIdsByTabId,
         suppressedPtyExitIds: nextSuppressedPtyExitIds,
+        pendingCodexPaneRestartIds: nextPendingCodexPaneRestartIds,
         codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId,
         pendingSetupSplitByTabId: nextPendingSetupSplitByTabId,
         pendingIssueCommandSplitByTabId: nextPendingIssueCommandSplitByTabId,
@@ -536,6 +546,32 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     set((s) => ({
       suppressedPtyExitIds: { ...s.suppressedPtyExitIds, [ptyId]: true }
     }))
+  },
+
+  queueCodexPaneRestarts: (ptyIds) => {
+    if (ptyIds.length === 0) {
+      return
+    }
+    set((s) => ({
+      pendingCodexPaneRestartIds: {
+        ...s.pendingCodexPaneRestartIds,
+        ...Object.fromEntries(ptyIds.map((ptyId) => [ptyId, true] as const))
+      }
+    }))
+  },
+
+  consumePendingCodexPaneRestart: (ptyId) => {
+    let wasQueued = false
+    set((s) => {
+      if (!s.pendingCodexPaneRestartIds[ptyId]) {
+        return {}
+      }
+      wasQueued = true
+      const next = { ...s.pendingCodexPaneRestartIds }
+      delete next[ptyId]
+      return { pendingCodexPaneRestartIds: next }
+    })
+    return wasQueued
   },
 
   markCodexRestartNotices: (notices) => {
@@ -600,52 +636,6 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         [tabId]: startup
       }
     }))
-  },
-
-  restartCodexTabs: (tabIds) => {
-    const targetTabIds = new Set(tabIds)
-    if (targetTabIds.size === 0) {
-      return
-    }
-
-    set((s) => {
-      const nextTabsByWorktree = { ...s.tabsByWorktree }
-      const nextPendingStartupByTabId = { ...s.pendingStartupByTabId }
-      const nextSuppressedPtyExitIds = { ...s.suppressedPtyExitIds }
-
-      for (const [worktreeId, tabs] of Object.entries(s.tabsByWorktree)) {
-        let changed = false
-        const nextTabs = tabs.map((tab, index) => {
-          if (!targetTabIds.has(tab.id)) {
-            return tab
-          }
-          changed = true
-          for (const ptyId of s.ptyIdsByTabId[tab.id] ?? []) {
-            nextSuppressedPtyExitIds[ptyId] = true
-          }
-          nextPendingStartupByTabId[tab.id] = { command: 'codex' }
-          return {
-            ...clearTransientTerminalState(tab, index),
-            generation: (tab.generation ?? 0) + 1
-          }
-        })
-
-        if (changed) {
-          nextTabsByWorktree[worktreeId] = nextTabs
-        }
-      }
-
-      // Why: restarting a live Codex terminal should reuse the existing tab
-      // surface, not close/reopen tabs or mutate arbitrary shell state. We
-      // queue `codex` as the next startup command and bump tab generation so
-      // TerminalPane remounts, tears down the old PTY, and reconnects under
-      // the newly selected CODEX_HOME in the same tab.
-      return {
-        tabsByWorktree: nextTabsByWorktree,
-        pendingStartupByTabId: nextPendingStartupByTabId,
-        suppressedPtyExitIds: nextSuppressedPtyExitIds
-      }
-    })
   },
 
   consumeTabStartupCommand: (tabId) => {

@@ -155,7 +155,7 @@ function CodexSwitcherMenu({
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
   const codexRestartNoticeByPtyId = useAppStore((s) => s.codexRestartNoticeByPtyId)
-  const restartCodexTabs = useAppStore((s) => s.restartCodexTabs)
+  const queueCodexPaneRestarts = useAppStore((s) => s.queueCodexPaneRestarts)
   const codexAccountSyncKey = useAppStore((s) => {
     const settings = s.settings
     if (!settings) {
@@ -302,24 +302,25 @@ function CodexSwitcherMenu({
           <div className="px-2 py-2">
             <div className="text-[11px] text-muted-foreground">
               {/* Why: stale restart notices are tracked per PTY session, but the
-              bulk restart action operates per tab remount. Show both counts so
-              split panes do not make the number look wrong. */}
+              bulk restart action operates per PTY-backed pane restart. Show
+              both counts so split panes do not make the number look wrong. */}
               {staleCodexSessionCount === 1
-                ? '1 open Codex session still uses the previous account.'
-                : `${staleCodexSessionCount} open Codex sessions still use the previous account.`}
-              {staleCodexTabCount > 0 ? (
-                <span className="block mt-0.5">
-                  {staleCodexTabCount === 1 ? 'Across 1 tab' : `Across ${staleCodexTabCount} tabs`}
-                  {staleCodexWorktreeCount > 1 ? ` in ${staleCodexWorktreeCount} worktrees` : ''}.
-                </span>
-              ) : null}
+                ? '1 Codex session is still on the old account'
+                : `${staleCodexSessionCount} Codex sessions are still on the old account`}
+              {staleCodexTabCount > 0
+                ? staleCodexWorktreeCount > 1
+                  ? ` across ${staleCodexTabCount} ${staleCodexTabCount === 1 ? 'tab' : 'tabs'} in ${staleCodexWorktreeCount} worktrees.`
+                  : ` in ${staleCodexTabCount} ${staleCodexTabCount === 1 ? 'tab' : 'tabs'}.`
+                : '.'}
             </div>
             <button
               type="button"
-              onClick={() => restartCodexTabs(staleCodexTabIds)}
+              onClick={() => queueCodexPaneRestarts(staleCodexPtyIds)}
               className="mt-2 inline-flex w-full items-center justify-center rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
             >
-              {staleCodexTabCount === 1 ? 'Restart Open Tab' : `Restart ${staleCodexTabCount} Tabs`}
+              {staleCodexSessionCount === 1
+                ? 'Restart Open Session'
+                : `Restart ${staleCodexSessionCount} Sessions`}
             </button>
           </div>
         </>
