@@ -66,7 +66,9 @@ describe('useIpcEvents updater integration', () => {
   it('routes updater status events into store state and update toasts', async () => {
     const setUpdateStatus = vi.fn()
     const handleStatus = vi.fn()
-    let statusListener: ((status: unknown) => void) | null = null
+    const updaterStatusListenerRef: { current: ((status: unknown) => void) | null } = {
+      current: null
+    }
 
     vi.doMock('react', async () => {
       const actual = await vi.importActual<typeof ReactModule>('react')
@@ -150,7 +152,7 @@ describe('useIpcEvents updater integration', () => {
         updater: {
           getStatus: () => Promise.resolve({ state: 'idle' }),
           onStatus: (listener: (status: unknown) => void) => {
-            statusListener = listener
+            updaterStatusListenerRef.current = listener
             return () => {}
           }
         },
@@ -168,7 +170,10 @@ describe('useIpcEvents updater integration', () => {
     expect(setUpdateStatus).toHaveBeenCalledWith({ state: 'idle' })
 
     const availableStatus = { state: 'available', version: '1.2.3' }
-    statusListener?.(availableStatus)
+    if (typeof updaterStatusListenerRef.current !== 'function') {
+      throw new Error('Expected updater status listener to be registered')
+    }
+    updaterStatusListenerRef.current(availableStatus)
 
     expect(setUpdateStatus).toHaveBeenCalledWith(availableStatus)
     expect(handleStatus).toHaveBeenCalledWith(availableStatus)
