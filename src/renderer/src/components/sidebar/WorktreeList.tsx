@@ -20,6 +20,31 @@ import { useModifierHint } from '@/hooks/useModifierHint'
 // terminal title changes) trigger score recalculations.
 const SORT_SETTLE_MS = 3_000
 
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false
+  }
+
+  // xterm uses a hidden textarea for terminal input. Treating it like a normal
+  // text field would make the sidebar's app-level worktree shortcuts unreachable.
+  if (target.classList.contains('xterm-helper-textarea')) {
+    return false
+  }
+
+  if (target.isContentEditable) {
+    return true
+  }
+
+  return (
+    target.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"]') !==
+    null
+  )
+}
+
+function getWorktreeOptionId(worktreeId: string): string {
+  return `worktree-list-option-${encodeURIComponent(worktreeId)}`
+}
+
 const WorktreeList = React.memo(function WorktreeList() {
   // ── Granular selectors (each is a primitive or shallow-stable ref) ──
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
@@ -32,6 +57,7 @@ const WorktreeList = React.memo(function WorktreeList() {
   const showActiveOnly = useAppStore((s) => s.showActiveOnly)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const openModal = useAppStore((s) => s.openModal)
+  const activeModal = useAppStore((s) => s.activeModal)
   const pendingRevealWorktreeId = useAppStore((s) => s.pendingRevealWorktreeId)
   const clearPendingRevealWorktreeId = useAppStore((s) => s.clearPendingRevealWorktreeId)
 
@@ -218,7 +244,11 @@ const WorktreeList = React.memo(function WorktreeList() {
 
   // Cmd+1–9 hint overlay: map worktree ID → hint number (1–9) for the first
   // 9 visible worktrees. Only populated while the user holds the modifier key.
-  const { showHints } = useModifierHint()
+  // Why suppress during modals: shortcuts like Cmd+J can open overlays via IPC
+  // before the renderer observes the second key in the combo, which leaves the
+  // bare-modifier timer armed. Hint badges are only useful while the sidebar is
+  // the active navigation surface, so any modal should clear and disable them.
+  const { showHints } = useModifierHint(activeModal === 'none')
 
   // Collapsed group state
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
@@ -252,6 +282,10 @@ const WorktreeList = React.memo(function WorktreeList() {
         .filter((r): r is Extract<Row, { type: 'item' }> => r.type === 'item')
         .map((r) => r.worktree),
     [rows]
+  )
+  const activeWorktreeRowIndex = useMemo(
+    () => rows.findIndex((row) => row.type === 'item' && row.worktree.id === activeWorktreeId),
+    [rows, activeWorktreeId]
   )
 
   // Why layout effect instead of effect: the global Cmd/Ctrl+1–9 key handler
@@ -385,7 +419,16 @@ const WorktreeList = React.memo(function WorktreeList() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      const mod = navigator.userAgent.includes('Mac') ? e.metaKey : e.ctrlKey
+      // Why: these shortcuts are for the sidebar navigation surface. Once a
+      // modal opens or focus is inside an editor/input, the host should leave
+      // the keystroke alone so overlays and text editing keep native behavior.
+      if (activeModal !== 'none' || isEditableTarget(e.target)) {
+        return
+      }
+
+      const mod = navigator.userAgent.includes('Mac')
+        ? e.metaKey && !e.ctrlKey
+        : e.ctrlKey && !e.metaKey
       if (mod && !e.shiftKey && e.key === '0') {
         scrollRef.current?.focus()
         e.preventDefault()
@@ -400,7 +443,7 @@ const WorktreeList = React.memo(function WorktreeList() {
 
     window.addEventListener('keydown', handleKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true })
-  }, [navigateWorktree])
+  }, [activeModal, navigateWorktree])
 
   const handleContainerKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -461,21 +504,38 @@ const WorktreeList = React.memo(function WorktreeList() {
     )
   }
 
+  const virtualItems = virtualizer.getVirtualItems()
+  const activeDescendantId =
+    activeWorktreeId != null &&
+    activeWorktreeRowIndex !== -1 &&
+    virtualItems.some((item) => item.index === activeWorktreeRowIndex)
+      ? getWorktreeOptionId(activeWorktreeId)
+      : undefined
+
   return (
     <div
       ref={scrollRef}
       tabIndex={0}
+      role="listbox"
+      aria-label="Worktrees"
+      aria-orientation="vertical"
+      aria-activedescendant={activeDescendantId}
       onKeyDown={handleContainerKeyDown}
       className="flex-1 overflow-auto px-1 scrollbar-sleek scroll-smooth outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset pt-px"
     >
-      <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
-        {virtualizer.getVirtualItems().map((vItem) => {
+      <div
+        role="presentation"
+        className="relative w-full"
+        style={{ height: `${virtualizer.getTotalSize()}px` }}
+      >
+        {virtualItems.map((vItem) => {
           const row = rows[vItem.index]
 
           if (row.type === 'header') {
             return (
               <div
                 key={vItem.key}
+                role="presentation"
                 data-index={vItem.index}
                 ref={virtualizer.measureElement}
                 className="absolute left-0 right-0"
@@ -554,6 +614,9 @@ const WorktreeList = React.memo(function WorktreeList() {
           return (
             <div
               key={vItem.key}
+              id={getWorktreeOptionId(row.worktree.id)}
+              role="option"
+              aria-selected={activeWorktreeId === row.worktree.id}
               data-index={vItem.index}
               ref={virtualizer.measureElement}
               className="absolute left-0 right-0"
