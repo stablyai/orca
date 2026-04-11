@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
+import { matchesKeyCombo, resolveKeybinding } from '../../../../shared/keybindings'
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
@@ -36,6 +37,7 @@ type KeyboardHandlersDeps = {
   toggleExpandPane: (paneId: number) => void
   setSearchOpen: React.Dispatch<React.SetStateAction<boolean>>
   onRequestClosePane: (paneId: number) => void
+  keybindings?: Record<string, string>
 }
 
 export function useTerminalKeyboardShortcuts({
@@ -49,7 +51,8 @@ export function useTerminalKeyboardShortcuts({
   persistLayoutSnapshot,
   toggleExpandPane,
   setSearchOpen,
-  onRequestClosePane
+  onRequestClosePane,
+  keybindings = {}
 }: KeyboardHandlersDeps): void {
   useEffect(() => {
     if (!isActive) {
@@ -57,6 +60,9 @@ export function useTerminalKeyboardShortcuts({
     }
 
     const isMac = navigator.userAgent.includes('Mac')
+    const resolve = (id: Parameters<typeof resolveKeybinding>[0]): string =>
+      resolveKeybinding(id, keybindings, isMac)
+
     const onKeyDown = (e: KeyboardEvent): void => {
       if (e.repeat) {
         return
@@ -76,7 +82,7 @@ export function useTerminalKeyboardShortcuts({
 
       // Cmd/Ctrl+Shift+C copies terminal selection via Electron clipboard.
       // This ensures Linux terminal copy works consistently.
-      if (e.shiftKey && e.key.toLowerCase() === 'c') {
+      if (matchesKeyCombo(e, resolve('copySelection'), isMac)) {
         const pane = manager.getActivePane() ?? manager.getPanes()[0]
         if (!pane) {
           return
@@ -95,7 +101,7 @@ export function useTerminalKeyboardShortcuts({
 
       // Keep Cmd+F bound to the terminal search until the app has a real
       // top-level find-in-page flow to fall back to.
-      if (!e.shiftKey && e.key.toLowerCase() === 'f') {
+      if (matchesKeyCombo(e, resolve('toggleSearch_terminal'), isMac)) {
         e.preventDefault()
         e.stopPropagation()
         setSearchOpen((prev) => !prev)
@@ -103,7 +109,7 @@ export function useTerminalKeyboardShortcuts({
       }
 
       // Cmd+K clears active pane screen + scrollback.
-      if (!e.shiftKey && e.key.toLowerCase() === 'k') {
+      if (matchesKeyCombo(e, resolve('clearPane'), isMac)) {
         e.preventDefault()
         e.stopPropagation()
         const pane = manager.getActivePane() ?? manager.getPanes()[0]
@@ -114,7 +120,10 @@ export function useTerminalKeyboardShortcuts({
       }
 
       // Cmd+[ / Cmd+] cycles active split pane focus.
-      if (!e.shiftKey && (e.code === 'BracketLeft' || e.code === 'BracketRight')) {
+      if (
+        matchesKeyCombo(e, resolve('focusPrevPane'), isMac) ||
+        matchesKeyCombo(e, resolve('focusNextPane'), isMac)
+      ) {
         const panes = manager.getPanes()
         if (panes.length < 2) {
           return
@@ -136,14 +145,14 @@ export function useTerminalKeyboardShortcuts({
           return
         }
 
-        const dir = e.code === 'BracketRight' ? 1 : -1
+        const dir = matchesKeyCombo(e, resolve('focusNextPane'), isMac) ? 1 : -1
         const nextPane = panes[(currentIdx + dir + panes.length) % panes.length]
         manager.setActivePane(nextPane.id, { focus: true })
         return
       }
 
       // Cmd+Shift+Enter expands/collapses the active pane to full terminal area.
-      if (e.shiftKey && e.key === 'Enter' && (e.code === 'Enter' || e.code === 'NumpadEnter')) {
+      if (matchesKeyCombo(e, resolve('expandPane'), isMac)) {
         const panes = manager.getPanes()
         if (panes.length < 2) {
           return
@@ -162,7 +171,7 @@ export function useTerminalKeyboardShortcuts({
       // pane remains). Always intercepted here so the tab-level handler in
       // Terminal.tsx never closes the entire tab directly — that would kill
       // every pane instead of just the focused one.
-      if (!e.shiftKey && e.key.toLowerCase() === 'w') {
+      if (matchesKeyCombo(e, resolve('closeTab'), isMac)) {
         e.preventDefault()
         e.stopPropagation()
         const pane = manager.getActivePane() ?? manager.getPanes()[0]
@@ -176,7 +185,10 @@ export function useTerminalKeyboardShortcuts({
       // Cmd+D / Cmd+Shift+D split the active pane in the focused tab only.
       // Exit expanded mode first so the new split gets proper dimensions
       // (matches Ghostty behavior).
-      if (e.key.toLowerCase() === 'd') {
+      if (
+        matchesKeyCombo(e, resolve('splitRight'), isMac) ||
+        matchesKeyCombo(e, resolve('splitDown'), isMac)
+      ) {
         e.preventDefault()
         e.stopPropagation()
         if (expandedPaneIdRef.current !== null) {
@@ -189,7 +201,10 @@ export function useTerminalKeyboardShortcuts({
         if (!pane) {
           return
         }
-        manager.splitPane(pane.id, e.shiftKey ? 'horizontal' : 'vertical')
+        const direction = matchesKeyCombo(e, resolve('splitDown'), isMac)
+          ? 'horizontal'
+          : 'vertical'
+        manager.splitPane(pane.id, direction)
       }
     }
 
@@ -348,6 +363,7 @@ export function useTerminalKeyboardShortcuts({
     persistLayoutSnapshot,
     toggleExpandPane,
     setSearchOpen,
-    onRequestClosePane
+    onRequestClosePane,
+    keybindings
   ])
 }

@@ -229,6 +229,10 @@ export class Store {
       notifications: {
         ...this.state.settings.notifications,
         ...updates.notifications
+      },
+      keybindings: {
+        ...this.state.settings.keybindings,
+        ...updates.keybindings
       }
     }
     this.scheduleSave()

@@ -35,6 +35,10 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
               notifications: {
                 ...s.settings.notifications,
                 ...updates.notifications
+              },
+              keybindings: {
+                ...s.settings.keybindings,
+                ...updates.keybindings
               }
             }
           : null
