@@ -5,12 +5,19 @@ import { FitAddon } from '@xterm/addon-fit'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import { createIpcPtyTransport, type PtyTransport } from '@/components/terminal-pane/pty-transport'
 import type { FsChangedPayload } from '../../../../shared/types'
 
 type PackageScripts = Record<string, string>
 
 type RunningScript = {
+  id: number
   name: string
   command: string
   terminal: Terminal
@@ -19,6 +26,8 @@ type RunningScript = {
   exited: boolean
   exitCode: number | null
 }
+
+let nextScriptId = 0
 
 async function detectPackageManager(worktreePath: string): Promise<'pnpm' | 'yarn' | 'npm'> {
   const pnpmExists = await window.api.shell.pathExists(`${worktreePath}/pnpm-lock.yaml`)
@@ -63,7 +72,9 @@ function usePackageScripts(worktreePath: string | null): {
 
     const unsubscribe = window.api.fs.onFsChanged((payload: FsChangedPayload) => {
       if (payload.worktreePath !== worktreePath) return
-      const touchesPackageJson = payload.events.some((e) => e.absolutePath.endsWith('package.json'))
+      const touchesPackageJson = payload.events.some((e) =>
+        e.absolutePath.endsWith('package.json')
+      )
       if (touchesPackageJson) {
         void fetchScripts()
       }
@@ -82,10 +93,10 @@ export default function ScriptRunner(): React.JSX.Element | null {
   const [editingCommand, setEditingCommand] = useState<string | null>(null)
   const [commandOverrides, setCommandOverrides] = useState<Record<string, string>>({})
   const [runningScripts, setRunningScripts] = useState<RunningScript[]>([])
-  const [activeTabIndex, setActiveTabIndex] = useState(0)
-  const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [activeTabId, setActiveTabId] = useState<number | null>(null)
   const terminalContainerRef = useRef<HTMLDivElement>(null)
-  const resizeObserverRef = useRef<ResizeObserver | null>(null)
+  const runningScriptsRef = useRef(runningScripts)
+  runningScriptsRef.current = runningScripts
 
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
@@ -106,7 +117,6 @@ export default function ScriptRunner(): React.JSX.Element | null {
     void detectPackageManager(worktreePath).then(setPackageManager)
   }, [worktreePath])
 
-  // Auto-select first script
   useEffect(() => {
     if (scripts && !selectedScript) {
       const first = Object.keys(scripts)[0]
@@ -114,58 +124,47 @@ export default function ScriptRunner(): React.JSX.Element | null {
     }
   }, [scripts, selectedScript])
 
+  const activeScript = runningScripts.find((s) => s.id === activeTabId)
+
   // Mount active tab's terminal to the container
   useEffect(() => {
     const container = terminalContainerRef.current
-    if (!container) return
-    const activeScript = runningScripts[activeTabIndex]
-    if (!activeScript) return
+    if (!container || !activeScript) return
 
-    // Clear container and attach this terminal
     container.innerHTML = ''
     activeScript.terminal.open(container)
-    requestAnimationFrame(() => {
-      activeScript.fitAddon.fit()
-    })
-  }, [activeTabIndex, runningScripts])
+    requestAnimationFrame(() => activeScript.fitAddon.fit())
+  }, [activeScript])
 
   // Resize terminal when container resizes
   useEffect(() => {
     const container = terminalContainerRef.current
-    if (!container) return
+    if (!container || !activeScript) return
 
-    resizeObserverRef.current = new ResizeObserver(() => {
-      const activeScript = runningScripts[activeTabIndex]
-      if (activeScript) {
-        activeScript.fitAddon.fit()
-        activeScript.transport.resize(
-          activeScript.terminal.cols,
-          activeScript.terminal.rows
-        )
-      }
+    const observer = new ResizeObserver(() => {
+      activeScript.fitAddon.fit()
+      activeScript.transport.resize(activeScript.terminal.cols, activeScript.terminal.rows)
     })
-    resizeObserverRef.current.observe(container)
+    observer.observe(container)
 
-    return () => {
-      resizeObserverRef.current?.disconnect()
-    }
-  }, [activeTabIndex, runningScripts])
+    return () => observer.disconnect()
+  }, [activeScript])
 
   // Cleanup all PTYs on unmount
   useEffect(() => {
     return () => {
-      for (const script of runningScripts) {
+      for (const script of runningScriptsRef.current) {
         script.transport.disconnect()
         script.terminal.dispose()
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional cleanup-only
   }, [])
 
   const handleRun = useCallback(() => {
     if (!selectedScript || !worktreePath || !scripts) return
 
-    const command = commandOverrides[selectedScript] ?? `${packageManager} run ${selectedScript}`
+    const command =
+      commandOverrides[selectedScript] ?? `${packageManager} run ${selectedScript}`
 
     const terminal = new Terminal({
       allowProposedApi: true,
@@ -183,8 +182,10 @@ export default function ScriptRunner(): React.JSX.Element | null {
     terminal.loadAddon(fitAddon)
 
     const transport = createIpcPtyTransport({ cwd: worktreePath })
+    const scriptId = nextScriptId++
 
     const newScript: RunningScript = {
+      id: scriptId,
       name: selectedScript,
       command,
       terminal,
@@ -195,9 +196,8 @@ export default function ScriptRunner(): React.JSX.Element | null {
     }
 
     setRunningScripts((prev) => [...prev, newScript])
-    setActiveTabIndex((prev) => prev === 0 && runningScripts.length === 0 ? 0 : runningScripts.length)
+    setActiveTabId(scriptId)
 
-    // Wait a tick for the terminal container to render, then connect
     requestAnimationFrame(() => {
       const container = terminalContainerRef.current
       if (container) {
@@ -212,14 +212,11 @@ export default function ScriptRunner(): React.JSX.Element | null {
         rows: terminal.rows,
         callbacks: {
           onData: (data) => terminal.write(data),
-          onConnect: () => {
-            // Send the command once PTY is ready
-            transport.sendInput(`${command}\r`)
-          },
+          onConnect: () => transport.sendInput(`${command}\r`),
           onExit: (code) => {
             setRunningScripts((prev) =>
               prev.map((s) =>
-                s === newScript ? { ...s, exited: true, exitCode: code } : s
+                s.id === scriptId ? { ...s, exited: true, exitCode: code } : s
               )
             )
           }
@@ -229,35 +226,37 @@ export default function ScriptRunner(): React.JSX.Element | null {
       terminal.onData((data) => transport.sendInput(data))
       terminal.onResize(({ cols, rows }) => transport.resize(cols, rows))
     })
-  }, [selectedScript, worktreePath, scripts, packageManager, commandOverrides, runningScripts.length])
+  }, [selectedScript, worktreePath, scripts, packageManager, commandOverrides])
 
-  const handleStop = useCallback(
-    (index: number) => {
-      const script = runningScripts[index]
-      if (!script) return
+  const handleStop = useCallback((scriptId: number) => {
+    setRunningScripts((prev) => {
+      const script = prev.find((s) => s.id === scriptId)
+      if (!script || script.exited) return prev
       script.transport.disconnect()
-      setRunningScripts((prev) =>
-        prev.map((s, i) => (i === index ? { ...s, exited: true, exitCode: -1 } : s))
+      return prev.map((s) =>
+        s.id === scriptId ? { ...s, exited: true, exitCode: -1 } : s
       )
-    },
-    [runningScripts]
-  )
+    })
+  }, [])
 
   const handleCloseTab = useCallback(
-    (index: number) => {
-      const script = runningScripts[index]
+    (scriptId: number) => {
+      const script = runningScripts.find((s) => s.id === scriptId)
       if (!script) return
-      if (!script.exited) {
-        script.transport.disconnect()
-      }
+      if (!script.exited) script.transport.disconnect()
       script.terminal.dispose()
-      setRunningScripts((prev) => prev.filter((_, i) => i !== index))
-      setActiveTabIndex((prev) => {
-        if (prev >= index && prev > 0) return prev - 1
-        return prev
+
+      setRunningScripts((prev) => {
+        const next = prev.filter((s) => s.id !== scriptId)
+        if (activeTabId === scriptId) {
+          const closedIdx = prev.findIndex((s) => s.id === scriptId)
+          const fallback = next[Math.min(closedIdx, next.length - 1)]
+          setActiveTabId(fallback?.id ?? null)
+        }
+        return next
       })
     },
-    [runningScripts]
+    [runningScripts, activeTabId]
   )
 
   if (!worktreePath || (!scripts && !loading)) return null
@@ -275,78 +274,96 @@ export default function ScriptRunner(): React.JSX.Element | null {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col border-t border-sidebar-border">
-      {/* Header */}
       <button
         onClick={() => setCollapsed(!collapsed)}
         className="flex w-full shrink-0 items-center gap-1 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
       >
-        {collapsed ? <ChevronRight className="size-3" /> : <ChevronDown className="size-3" />}
+        {collapsed ? (
+          <ChevronRight className="size-3" />
+        ) : (
+          <ChevronDown className="size-3" />
+        )}
         <span>Scripts</span>
+        {runningScripts.filter((s) => !s.exited).length > 0 && (
+          <span className="ml-auto flex items-center gap-1 text-[10px] font-normal normal-case tracking-normal text-emerald-500">
+            <span className="size-1.5 rounded-full bg-emerald-500" />
+            {runningScripts.filter((s) => !s.exited).length}
+          </span>
+        )}
       </button>
 
       {!collapsed && (
         <div className="flex min-h-0 flex-1 flex-col">
-          {/* Single-row script picker */}
-          <div className="flex shrink-0 items-center gap-1 px-2 pb-1.5">
-            {/* Script dropdown */}
-            <div className="relative">
-              <button
-                onClick={() => setDropdownOpen(!dropdownOpen)}
-                className="flex items-center gap-1 rounded px-2 py-1 text-[12px] font-medium text-foreground bg-secondary/70 hover:bg-secondary transition-colors"
-              >
-                {isRunning && (
-                  <span className="size-2 rounded-full bg-green-500 shrink-0" />
-                )}
-                <span className="truncate max-w-[60px]">{selectedScript ?? '...'}</span>
-                <ChevronDown className="size-3 text-muted-foreground shrink-0" />
-              </button>
+          {/* Script picker row */}
+          <div className="flex shrink-0 items-center gap-1.5 px-2 pb-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center gap-1.5 rounded-md border border-border/50 bg-secondary/50 px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:bg-secondary">
+                  {isRunning && (
+                    <span className="size-1.5 rounded-full bg-emerald-500 shrink-0" />
+                  )}
+                  <span className="max-w-[60px] truncate">
+                    {selectedScript ?? 'Select'}
+                  </span>
+                  <ChevronDown className="size-3 text-muted-foreground shrink-0" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="bottom" align="start" className="w-44">
+                {scriptNames.map((name) => {
+                  const running = runningScripts.some(
+                    (s) => s.name === name && !s.exited
+                  )
+                  return (
+                    <DropdownMenuItem
+                      key={name}
+                      onClick={() => setSelectedScript(name)}
+                      className="gap-2 text-[11px]"
+                    >
+                      {running ? (
+                        <span className="size-1.5 rounded-full bg-emerald-500 shrink-0" />
+                      ) : (
+                        <span className="size-1.5 shrink-0" />
+                      )}
+                      <span className="truncate">{name}</span>
+                    </DropdownMenuItem>
+                  )
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
 
-              {dropdownOpen && (
-                <div className="absolute left-0 top-full z-50 mt-1 w-40 rounded-md border border-border bg-popover py-1 shadow-lg">
-                  {scriptNames.map((name) => {
-                    const running = runningScripts.some((s) => s.name === name && !s.exited)
-                    return (
-                      <button
-                        key={name}
-                        onClick={() => {
-                          setSelectedScript(name)
-                          setDropdownOpen(false)
-                        }}
-                        className="flex w-full items-center gap-2 px-3 py-1.5 text-[12px] text-foreground/80 hover:bg-accent transition-colors"
-                      >
-                        {running && <span className="size-2 rounded-full bg-green-500 shrink-0" />}
-                        <span className="truncate">{name}</span>
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Editable command field */}
             <input
               type="text"
               value={editingCommand ?? currentCommand}
               onChange={(e) => setEditingCommand(e.target.value)}
+              onFocus={(e) => setEditingCommand(e.target.value)}
               onBlur={() => {
                 if (editingCommand !== null && selectedScript) {
-                  setCommandOverrides((prev) => ({ ...prev, [selectedScript]: editingCommand }))
+                  setCommandOverrides((prev) => ({
+                    ...prev,
+                    [selectedScript]: editingCommand
+                  }))
                 }
                 setEditingCommand(null)
               }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   if (editingCommand !== null && selectedScript) {
-                    setCommandOverrides((prev) => ({ ...prev, [selectedScript]: editingCommand }))
+                    setCommandOverrides((prev) => ({
+                      ...prev,
+                      [selectedScript]: editingCommand
+                    }))
                   }
+                  setEditingCommand(null)
+                  ;(e.target as HTMLInputElement).blur()
+                } else if (e.key === 'Escape') {
                   setEditingCommand(null)
                   ;(e.target as HTMLInputElement).blur()
                 }
               }}
-              className="h-6 min-w-0 flex-1 rounded border border-border/50 bg-background/50 px-2 text-[10px] font-mono text-muted-foreground outline-none focus:border-ring focus:text-foreground"
+              className="h-6 min-w-0 flex-1 rounded-md border border-border/50 bg-background/50 px-2 font-mono text-[10px] text-muted-foreground outline-none transition-colors focus:border-ring focus:text-foreground"
+              spellCheck={false}
             />
 
-            {/* Play / Stop button */}
             {isRunning ? (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -355,13 +372,13 @@ export default function ScriptRunner(): React.JSX.Element | null {
                     size="icon-xs"
                     className="size-6 shrink-0 text-red-500 hover:text-red-400"
                     onClick={() => {
-                      const idx = runningScripts.findIndex(
+                      const script = runningScripts.find(
                         (s) => s.name === selectedScript && !s.exited
                       )
-                      if (idx !== -1) handleStop(idx)
+                      if (script) handleStop(script.id)
                     }}
                   >
-                    <Square className="size-3" />
+                    <Square className="size-3 fill-current" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="top" sideOffset={4}>
@@ -374,11 +391,11 @@ export default function ScriptRunner(): React.JSX.Element | null {
                   <Button
                     variant="ghost"
                     size="icon-xs"
-                    className="size-6 shrink-0 text-green-500 hover:text-green-400"
+                    className="size-6 shrink-0 text-emerald-500 hover:text-emerald-400 disabled:opacity-30"
                     onClick={handleRun}
                     disabled={!selectedScript}
                   >
-                    <Play className="size-3" />
+                    <Play className="size-3 fill-current" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="top" sideOffset={4}>
@@ -391,53 +408,63 @@ export default function ScriptRunner(): React.JSX.Element | null {
           {/* Tabs for running scripts */}
           {runningScripts.length > 0 && (
             <>
-              <div className="flex shrink-0 items-center border-t border-sidebar-border bg-background/30">
-                {runningScripts.map((script, index) => (
+              <div className="flex shrink-0 overflow-x-auto border-t border-sidebar-border bg-background/30 scrollbar-none">
+                {runningScripts.map((script) => (
                   <button
-                    key={`${script.name}-${index}`}
-                    onClick={() => setActiveTabIndex(index)}
-                    className={`group flex items-center gap-1.5 border-r border-sidebar-border px-2.5 py-1 text-[11px] transition-colors ${
-                      index === activeTabIndex
+                    key={script.id}
+                    onClick={() => setActiveTabId(script.id)}
+                    className={`group flex shrink-0 items-center gap-1.5 border-r border-sidebar-border px-2.5 py-1 text-[11px] transition-colors ${
+                      script.id === activeTabId
                         ? 'bg-background text-foreground'
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
                     <span
-                      className={`size-2 rounded-full shrink-0 ${
+                      className={`size-1.5 rounded-full shrink-0 ${
                         script.exited
                           ? script.exitCode === 0
-                            ? 'bg-muted-foreground'
+                            ? 'bg-muted-foreground/40'
                             : 'bg-red-500'
-                          : 'bg-green-500'
+                          : 'bg-emerald-500'
                       }`}
                     />
-                    <span className="truncate max-w-[50px]">{script.name}</span>
-                    <button
+                    <span className="max-w-[50px] truncate">{script.name}</span>
+                    <span
+                      role="button"
+                      tabIndex={0}
                       onClick={(e) => {
                         e.stopPropagation()
-                        handleCloseTab(index)
+                        handleCloseTab(script.id)
                       }}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.stopPropagation()
+                          handleCloseTab(script.id)
+                        }
+                      }}
+                      className="rounded-sm p-0.5 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-accent"
                     >
-                      <X className="size-3" />
-                    </button>
+                      <X className="size-2.5" />
+                    </span>
                   </button>
                 ))}
               </div>
 
-              {/* Mini terminal */}
               <div
                 ref={terminalContainerRef}
-                className="min-h-[120px] flex-1 overflow-hidden bg-[#111114]"
+                className="min-h-[120px] flex-1 overflow-hidden"
               />
             </>
           )}
 
-          {/* Empty state */}
           {runningScripts.length === 0 && (
-            <div className="flex flex-1 items-center justify-center px-4 py-8">
-              <p className="text-center text-[11px] text-muted-foreground">
-                Select a script and click play to run it here.
+            <div className="flex flex-1 items-center justify-center px-4 py-6">
+              <p className="text-center text-[11px] leading-relaxed text-muted-foreground">
+                Select a script and press{' '}
+                <kbd className="rounded border border-border/60 bg-secondary/50 px-1 py-0.5 text-[10px]">
+                  Play
+                </kbd>{' '}
+                to run it here
               </p>
             </div>
           )}
