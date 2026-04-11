@@ -34,6 +34,11 @@ const SHORTCUT_GROUP_DEFINITIONS: ShortcutGroupDefinition[] = [
         keys: ({ mod }) => [mod, 'P']
       },
       {
+        action: 'Switch worktree',
+        searchKeywords: ['shortcut', 'global', 'worktree', 'switch', 'jump'],
+        keys: ({ mod, shift }) => mod === '⌘' ? [mod, 'J'] : [mod, shift, 'J']
+      },
+      {
         action: 'Create worktree',
         searchKeywords: ['shortcut', 'global', 'worktree'],
         keys: ({ mod }) => [mod, 'N']

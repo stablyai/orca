@@ -25,7 +25,7 @@ import {
 import RepoDotLabel from '@/components/repo/RepoDotLabel'
 import { parseGitHubIssueOrPRNumber } from '@/lib/github-links'
 import { SPACE_NAMES } from '@/constants/space-names'
-import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-activation'
+import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 
 const DIALOG_CLOSE_RESET_DELAY_MS = 200
@@ -39,16 +39,9 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
-  const setActiveRepo = useAppStore((s) => s.setActiveRepo)
-  const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
   const setActiveView = useAppStore((s) => s.setActiveView)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const setSidebarOpen = useAppStore((s) => s.setSidebarOpen)
-  const searchQuery = useAppStore((s) => s.searchQuery)
-  const setSearchQuery = useAppStore((s) => s.setSearchQuery)
-  const filterRepoIds = useAppStore((s) => s.filterRepoIds)
-  const setFilterRepoIds = useAppStore((s) => s.setFilterRepoIds)
-  const revealWorktreeInSidebar = useAppStore((s) => s.revealWorktreeInSidebar)
   const setRightSidebarOpen = useAppStore((s) => s.setRightSidebarOpen)
   const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
@@ -216,18 +209,14 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
           }
         : undefined
 
-      setActiveRepo(repoId)
-      setActiveView('terminal')
+      activateAndRevealWorktree(wt.id, {
+        setup: result.setup,
+        issueCommand
+      })
+      // Why: dialog-specific extras that remain after calling the shared
+      // helper — opening the sidebar and right sidebar are create-flow
+      // concerns, not general activation behavior.
       setSidebarOpen(true)
-      if (searchQuery) {
-        setSearchQuery('')
-      }
-      if (filterRepoIds.length > 0 && !filterRepoIds.includes(repoId)) {
-        setFilterRepoIds([])
-      }
-      setActiveWorktree(wt.id)
-      ensureWorktreeHasInitialTerminal(useAppStore.getState(), wt.id, result.setup, issueCommand)
-      revealWorktreeInSidebar(wt.id)
       if (settings?.rightSidebarOpenByDefault) {
         setRightSidebarTab('explorer')
         setRightSidebarOpen(true)
@@ -246,15 +235,7 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
     comment,
     createWorktree,
     updateWorktreeMeta,
-    setActiveRepo,
-    setActiveView,
     setSidebarOpen,
-    searchQuery,
-    setSearchQuery,
-    filterRepoIds,
-    setFilterRepoIds,
-    setActiveWorktree,
-    revealWorktreeInSidebar,
     setRightSidebarOpen,
     setRightSidebarTab,
     settings?.rightSidebarOpenByDefault,

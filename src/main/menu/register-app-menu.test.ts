@@ -108,4 +108,17 @@ describe('registerAppMenu', () => {
     expect(reloadIgnoringCacheMock).toHaveBeenCalledTimes(1)
     expect(reloadMock).not.toHaveBeenCalled()
   })
+
+  it('shows the worktree palette shortcut as a display-only menu hint', () => {
+    registerAppMenu(buildMenuOptions())
+
+    const template = buildFromTemplateMock.mock.calls[0][0] as Electron.MenuItemConstructorOptions[]
+    const viewMenu = template.find((item) => item.label === 'View')
+    const submenu = viewMenu?.submenu as Electron.MenuItemConstructorOptions[]
+    const expectedLabel = `Open Worktree Palette\t${process.platform === 'darwin' ? 'Cmd+J' : 'Ctrl+Shift+J'}`
+    const paletteItem = submenu.find((item) => item.label === expectedLabel)
+
+    expect(paletteItem).toBeDefined()
+    expect(paletteItem?.accelerator).toBeUndefined()
+  })
 })

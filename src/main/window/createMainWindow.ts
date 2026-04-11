@@ -200,6 +200,19 @@ export function createMainWindow(store: Store | null): BrowserWindow {
     } else if (input.key === '0' && !input.shift) {
       event.preventDefault()
       mainWindow.webContents.send('terminal:zoom', 'reset')
+    } else if (
+      input.code === 'KeyJ' &&
+      ((process.platform === 'darwin' && !input.shift) ||
+        (process.platform !== 'darwin' && input.shift))
+    ) {
+      // Why: embedded browser guests can keep keyboard focus inside Chromium's
+      // guest webContents, which bypasses the renderer's window-level keydown
+      // listener. Forward the worktree-switch shortcut through the main window
+      // so Cmd+J (macOS) or Ctrl+Shift+J (Win/Linux) works consistently from browser tabs too.
+      // We use Ctrl+Shift+J on Win/Linux because Ctrl+J is the ASCII Line Feed control code
+      // and intercepting it would break standard terminal usage (like Enter in shells or Vim).
+      event.preventDefault()
+      mainWindow.webContents.send('ui:toggleWorktreePalette')
     }
   })
 

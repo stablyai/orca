@@ -1,4 +1,5 @@
 import { detectAgentStatusFromTitle } from '@/lib/agent-status'
+import { branchName } from '@/lib/git-utils'
 import type { Worktree, Repo, TerminalTab } from '../../../../shared/types'
 
 type SortBy = 'name' | 'recent' | 'repo'
@@ -10,17 +11,13 @@ export type RecentSortOverride = {
   hasRecentPRSignal: boolean
 }
 
-function branchDisplayName(branch: string): string {
-  return branch.replace(/^refs\/heads\//, '')
-}
-
 export function hasRecentPRSignal(
   worktree: Worktree,
   repoMap: Map<string, Repo>,
   prCache: Record<string, PRCacheEntry> | null
 ): boolean {
   const repo = repoMap.get(worktree.repoId)
-  const branch = branchDisplayName(worktree.branch)
+  const branch = branchName(worktree.branch)
   if (!repo || !branch) {
     return worktree.linkedPR !== null
   }
@@ -158,6 +155,37 @@ export function buildWorktreeComparator(
         return 0
     }
   }
+}
+
+/**
+ * Sort worktrees by recent-work signals, handling the cold-start / warm
+ * distinction in one place. On cold start (no live PTYs yet), falls back to
+ * persisted `sortOrder` descending with alphabetical `displayName` fallback.
+ * Once any PTY is alive, uses the full smart-score comparator.
+ *
+ * Both the palette and `getVisibleWorktreeIds()` import this to avoid
+ * duplicating the cold/warm branching logic.
+ */
+export function sortWorktreesRecent(
+  worktrees: Worktree[],
+  tabsByWorktree: Record<string, TerminalTab[]>,
+  repoMap: Map<string, Repo>,
+  prCache: Record<string, PRCacheEntry> | null
+): Worktree[] {
+  const hasAnyLivePty = Object.values(tabsByWorktree)
+    .flat()
+    .some((t) => t.ptyId)
+
+  if (!hasAnyLivePty) {
+    // Cold start: use persisted sortOrder snapshot
+    return [...worktrees].sort(
+      (a, b) => b.sortOrder - a.sortOrder || a.displayName.localeCompare(b.displayName)
+    )
+  }
+
+  return [...worktrees].sort(
+    buildWorktreeComparator('recent', tabsByWorktree, repoMap, prCache, Date.now())
+  )
 }
 
 /**

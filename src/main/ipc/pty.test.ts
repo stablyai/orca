@@ -185,4 +185,118 @@ describe('registerPtyHandlers', () => {
       }
     }
   })
+
+  it('falls back to a system shell when SHELL points to a missing binary', () => {
+    const originalShell = process.env.SHELL
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    existsSyncMock.mockImplementation((targetPath: string) => targetPath !== '/opt/homebrew/bin/bash')
+
+    try {
+      process.env.SHELL = '/opt/homebrew/bin/bash'
+
+      registerPtyHandlers(mainWindow as never)
+      const result = handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })
+
+      expect(result).toEqual({ id: expect.any(String) })
+      expect(spawnMock).toHaveBeenCalledTimes(1)
+      expect(spawnMock).toHaveBeenCalledWith(
+        '/bin/zsh',
+        ['-l'],
+        expect.objectContaining({ cwd: '/tmp' })
+      )
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Primary shell "/opt/homebrew/bin/bash" failed')
+      )
+    } finally {
+      warnSpy.mockRestore()
+      if (originalShell === undefined) {
+        delete process.env.SHELL
+      } else {
+        process.env.SHELL = originalShell
+      }
+    }
+  })
+
+  it('falls back when SHELL points to a non-executable binary', () => {
+    const originalShell = process.env.SHELL
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    accessSyncMock.mockImplementation((targetPath: string) => {
+      if (targetPath === '/opt/homebrew/bin/bash') {
+        throw new Error('permission denied')
+      }
+    })
+
+    try {
+      process.env.SHELL = '/opt/homebrew/bin/bash'
+
+      registerPtyHandlers(mainWindow as never)
+      handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })
+
+      expect(spawnMock).toHaveBeenCalledTimes(1)
+      expect(spawnMock).toHaveBeenCalledWith(
+        '/bin/zsh',
+        ['-l'],
+        expect.objectContaining({ cwd: '/tmp' })
+      )
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Shell "/opt/homebrew/bin/bash" is not executable')
+      )
+    } finally {
+      warnSpy.mockRestore()
+      if (originalShell === undefined) {
+        delete process.env.SHELL
+      } else {
+        process.env.SHELL = originalShell
+      }
+    }
+  })
+
+  it('prefers args.env.SHELL and normalizes the child env after fallback', () => {
+    const originalShell = process.env.SHELL
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    existsSyncMock.mockImplementation((targetPath: string) => targetPath !== '/opt/homebrew/bin/bash')
+
+    try {
+      process.env.SHELL = '/bin/bash'
+
+      registerPtyHandlers(mainWindow as never)
+      handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp',
+        env: { SHELL: '/opt/homebrew/bin/bash' }
+      })
+
+      expect(spawnMock).toHaveBeenCalledTimes(1)
+      expect(spawnMock).toHaveBeenCalledWith(
+        '/bin/zsh',
+        ['-l'],
+        expect.objectContaining({
+          cwd: '/tmp',
+          env: expect.objectContaining({ SHELL: '/bin/zsh' })
+        })
+      )
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Primary shell "/opt/homebrew/bin/bash" failed')
+      )
+    } finally {
+      warnSpy.mockRestore()
+      if (originalShell === undefined) {
+        delete process.env.SHELL
+      } else {
+        process.env.SHELL = originalShell
+      }
+    }
+  })
 })

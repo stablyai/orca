@@ -334,6 +334,7 @@ export type PreloadApi = {
     get: () => Promise<PersistedUIState>
     set: (args: Partial<PersistedUIState>) => Promise<void>
     onOpenSettings: (callback: () => void) => () => void
+    onToggleWorktreePalette: (callback: () => void) => () => void
     onActivateWorktree: (
       callback: (data: { repoId: string; worktreeId: string; setup?: WorktreeSetupLaunch }) => void
     ) => () => void

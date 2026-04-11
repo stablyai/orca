@@ -80,6 +80,22 @@ export function useIpcEvents(): void {
     )
 
     unsubs.push(
+      window.api.ui.onToggleWorktreePalette(() => {
+        const store = useAppStore.getState()
+        if (store.worktreePaletteVisible) {
+          store.setWorktreePaletteVisible(false)
+          return
+        }
+        // Why: keep the main-process shortcut path behavior identical to the
+        // renderer keydown path so browser-tab focus cannot produce a different
+        // overlay stack than terminal/editor focus.
+        store.closeModal()
+        store.setQuickOpenVisible(false)
+        store.setWorktreePaletteVisible(true)
+      })
+    )
+
+    unsubs.push(
       window.api.ui.onActivateWorktree(({ repoId, worktreeId, setup }) => {
         void (async () => {
           const store = useAppStore.getState()

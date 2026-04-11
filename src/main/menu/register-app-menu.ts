@@ -107,6 +107,15 @@ export function registerAppMenu({
           click: () => onZoomOut()
         },
         { type: 'separator' },
+        {
+          // Why: display-only shortcut hint — do NOT set `accelerator` here.
+          // Menu accelerators intercept key events at the main-process level
+          // before the renderer's keydown handler fires. The overlay
+          // mutual-exclusion logic (which runs in the renderer) would be
+          // bypassed if this were a real accelerator binding.
+          label: `Open Worktree Palette\t${process.platform === 'darwin' ? 'Cmd+J' : 'Ctrl+Shift+J'}`
+        },
+        { type: 'separator' },
         { role: 'togglefullscreen' }
       ]
     },

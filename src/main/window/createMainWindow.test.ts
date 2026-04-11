@@ -1,3 +1,4 @@
+/* oxlint-disable max-lines */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { browserWindowMock, openExternalMock, attachGuestPoliciesMock, isMock } = vi.hoisted(() => ({
@@ -279,6 +280,55 @@ describe('createMainWindow', () => {
     }
 
     expect(webContents.send).not.toHaveBeenCalled()
+  })
+
+  it('forwards ctrl/cmd+j to the worktree palette toggle event', () => {
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isDevToolsOpened: vi.fn(),
+      openDevTools: vi.fn(),
+      closeDevTools: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    createMainWindow(null)
+
+    const isDarwin = process.platform === 'darwin'
+    for (const input of [
+      { type: 'keyDown', code: 'KeyJ', key: 'j', meta: isDarwin, control: !isDarwin, alt: false, shift: !isDarwin },
+      { type: 'keyDown', code: 'KeyJ', key: '', meta: isDarwin, control: !isDarwin, alt: false, shift: !isDarwin }
+    ]) {
+      const preventDefault = vi.fn()
+      windowHandlers['before-input-event']({ preventDefault } as never, input as never)
+      expect(preventDefault).toHaveBeenCalledTimes(1)
+    }
+
+    expect(webContents.send).toHaveBeenCalledTimes(2)
+    expect(webContents.send).toHaveBeenNthCalledWith(1, 'ui:toggleWorktreePalette')
+    expect(webContents.send).toHaveBeenNthCalledWith(2, 'ui:toggleWorktreePalette')
   })
 
   it('toggles devtools on F12 in development', () => {

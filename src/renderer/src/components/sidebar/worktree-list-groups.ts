@@ -1,10 +1,9 @@
 import { CircleCheckBig, CircleDot, CircleX, FolderGit2, GitPullRequest } from 'lucide-react'
 import type React from 'react'
 import type { Repo, Worktree } from '../../../../shared/types'
+import { branchName } from '@/lib/git-utils'
 
-export function branchName(branch: string): string {
-  return branch.replace(/^refs\/heads\//, '')
-}
+export { branchName }
 
 export type GroupHeaderRow = {
   type: 'header'

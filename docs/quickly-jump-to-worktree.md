@@ -8,14 +8,14 @@ This document outlines the design for a "Quick Jump to Worktree" feature: a glob
 
 ## 2. User Experience (UX)
 
-### 2.1 The Shortcut: `Cmd+O` / `Ctrl+O`
+### 2.1 The Shortcut: `Cmd+J` (macOS) / `Ctrl+Shift+J` (Windows/Linux)
 
-To establish this palette as the central "Open Workspace" action in Orca, `**Cmd+O**` (macOS) and `**Ctrl+O**` (Windows/Linux) is the chosen shortcut.
+To establish this palette as the central "Switch Worktree" action in Orca, `**Cmd+J**` (macOS) and `**Ctrl+Shift+J**` (Windows/Linux) are the chosen shortcuts.
 
-**Why `Cmd+O` / `Ctrl+O`?**
+**Why `Cmd+J` / `Ctrl+Shift+J`?**
 
-- **"First-Class Citizen" semantics:** By claiming the OS-standard "Open" chord, we tell the user: "Worktrees are the fundamental projects here. This is how you open things." Orca has no traditional "Open File" dialog, so there is no in-app conflict.
-- **Symmetric across platforms:** Using the same letter on all platforms keeps documentation and muscle memory simple. The earlier concern about `AltGr` collisions applies to `Ctrl+Alt+O`, not `Ctrl+O` — there is no conflict.
+- **Matches the action honestly:** This palette switches between existing worktrees. "Jump" is a better semantic fit than "Open" because the user is navigating, not creating a new file-open flow.
+- **Avoids `Ctrl+J` (Line Feed) conflict:** On Windows and Linux, `Ctrl+J` translates to a Line Feed (`\n`) in bash, zsh, and almost all readline-based CLI applications. For many terminal power users, `Ctrl+J` and `Ctrl+M` (Carriage Return) are used interchangeably with the physical `Enter` key to execute commands. In Vim, it is used for navigation or inserting newlines, and in Emacs it maps to `newline-and-indent`. Intercepting `Ctrl+J` globally would severely disrupt core terminal workflows. Thus, `Ctrl+Shift+J` is used on these platforms. (On macOS, `Cmd` is an OS-level modifier, so `Cmd+J` safely avoids this issue).
 - **Avoids `Cmd+K` conflict:** In terminal-heavy apps, `Cmd+K` is universally expected to "Clear Terminal". Overriding it breaks developer muscle memory.
 - **Avoids `Cmd+P` conflict:** `Cmd+P` is already in use for Quick Open File (`QuickOpen.tsx`).
 - **Avoids `Ctrl+E` (readline):** `Ctrl+E` is "end of line" in bash/zsh readline. Stealing it in a terminal-heavy app would break shell navigation muscle memory — the same class of conflict that rules out `Cmd+K`.
@@ -66,13 +66,13 @@ Note: `dialog.tsx` already exists in `src/renderer/src/components/ui/`. The shad
 
 The shortcut follows the **same renderer-side `keydown` pattern** already used by `Cmd+P` (QuickOpen) and `Cmd+1–9` (worktree jump) in `App.tsx`.
 
-The existing `onKeyDown` handler in `App.tsx` (inside a `useEffect`) has two zones: shortcuts registered **before** the `isEditableTarget` guard fire from any focus context including xterm.js and contentEditable elements; shortcuts **after** the guard only fire from non-editable targets. `Cmd+P` and `Cmd+1–9` are in the pre-guard zone. `Cmd+O` must also be placed there so it works when a terminal has focus — no main-process `before-input-event` interception is needed.
+The existing `onKeyDown` handler in `App.tsx` (inside a `useEffect`) has two zones: shortcuts registered **before** the `isEditableTarget` guard fire from any focus context including xterm.js and contentEditable elements; shortcuts **after** the guard only fire from non-editable targets. `Cmd+P` and `Cmd+1–9` are in the pre-guard zone. `Cmd+J` must also be placed there so it works when a terminal has focus — no main-process `before-input-event` interception is needed.
 
 **Implementation:** Add a new branch to the existing `onKeyDown` handler in `App.tsx`, before the `isEditableTarget` guard:
 
 ```tsx
-// Cmd/Ctrl+O — toggle worktree jump palette
-if (mod && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'o') {
+// Cmd/Ctrl+J — toggle worktree jump palette
+if (mod && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'j') {
   e.preventDefault()
   if (worktreePaletteVisible) {
     setWorktreePaletteVisible(false)
@@ -85,13 +85,13 @@ if (mod && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'o') {
 }
 ```
 
-**Toggle semantics:** If the palette is already open, `Cmd+O` closes it (matching the toggle behavior users expect from palette shortcuts). The overlay mutual-exclusion clearing (`closeModal`, `setQuickOpenVisible(false)`) only runs on open, not on close.
+**Toggle semantics:** If the palette is already open, `Cmd+J` closes it (matching the toggle behavior users expect from palette shortcuts). The overlay mutual-exclusion clearing (`closeModal`, `setQuickOpenVisible(false)`) only runs on open, not on close.
 
 **No `activeWorktreeId` or `activeView` guard:** Unlike `Cmd+P` (which requires both `activeView !== 'settings'` and `activeWorktreeId !== null`), the palette has neither guard. Users should be able to open the palette even when no worktree is active (e.g., fresh session with repos but no worktree selected yet) or from the settings view. The escape/cancel path must handle `previousWorktreeId === null` gracefully — focus falls to the document body.
 
 **Overlay mutual exclusion:** The codebase has three independent overlay state systems: `activeModal` (union type in `ui.ts`), `quickOpenVisible` (boolean in `editor.ts`), and the new `worktreePaletteVisible` (boolean in `ui.ts`). All three must be mutually exclusive — only one overlay can be open at a time. The mechanism:
 
-1. `**Cmd+O` handler** (palette open): Before setting `worktreePaletteVisible(true)`, call `closeModal()` (dismisses any active modal) and `setQuickOpenVisible(false)` (dismisses QuickOpen).
+1. `**Cmd+J` handler** (palette open): Before setting `worktreePaletteVisible(true)`, call `closeModal()` (dismisses any active modal) and `setQuickOpenVisible(false)` (dismisses QuickOpen).
 2. `**Cmd+P` handler** (QuickOpen open): Before setting `quickOpenVisible(true)`, call `setWorktreePaletteVisible(false)`. (It already calls `closeModal()` implicitly by not conflicting with the modal system.)
 3. `**openModal()` wrapper**: Extend `openModal` in `ui.ts` to also call `setWorktreePaletteVisible(false)` when opening a modal. This covers all modal-open paths (Cmd+N, delete confirmation, etc.) without requiring each callsite to know about the palette. `quickOpenVisible` lives in the editor slice, so `openModal` cannot directly clear it from within the UI slice. This is safe because of how QuickOpen's focus model works: QuickOpen auto-focuses its `<input>` on mount (via `requestAnimationFrame` in a `useEffect`), and `isEditableTarget` returns `true` for `<input>` elements. Therefore, all keyboard-triggered `openModal` paths (`Cmd+N`, etc.) that are gated behind `isEditableTarget` will not fire while QuickOpen has focus. Mouse-triggered `openModal` paths (e.g., `WorktreeCard` double-click calling `openModal('edit-meta')`) fire on the sidebar, which is visually behind the QuickOpen overlay — the click would first dismiss QuickOpen via its backdrop `onClick` handler, closing it before the modal opens.
 
@@ -99,7 +99,7 @@ This prevents z-index stacking and confusing multi-overlay states.
 
 **Tech debt note:** Three independent overlay state systems (`activeModal`, `quickOpenVisible`, `worktreePaletteVisible`) is O(n²) in the number of overlay types — every new overlay must know about all others. A follow-up issue should be filed to unify them into a single `activeOverlay` union type, but this is out of scope for the current feature.
 
-**Menu registration:** Register a `View -> Open Worktree Palette` entry in `register-app-menu.ts` for discoverability, consistent with Section 2.1. The entry must use a **display-only shortcut hint** — do **not** set `accelerator: 'CmdOrCtrl+O'`. In Electron, menu accelerators intercept key events at the main-process level *before* the renderer's `keydown` handler fires (this is how `CmdOrCtrl+,` for Settings works — its `click` handler runs in the main process via `onOpenSettings`). If `CmdOrCtrl+O` were registered as a real accelerator, the renderer `keydown` handler would never see the event, and the overlay mutual-exclusion logic (which runs in the renderer) would be bypassed. Instead, show the shortcut text in the menu label (e.g., `label: 'Open Worktree Palette\tCmdOrCtrl+O'`) without binding `accelerator`, matching the pattern used by `Cmd+P` (QuickOpen), which has no menu entry at all and relies solely on the renderer handler.
+**Menu registration:** Register a `View -> Open Worktree Palette` entry in `register-app-menu.ts` for discoverability, consistent with Section 2.1. The entry must use a **display-only shortcut hint** — do **not** set `accelerator: 'CmdOrCtrl+J'`. In Electron, menu accelerators intercept key events at the main-process level *before* the renderer's `keydown` handler fires (this is how `CmdOrCtrl+,` for Settings works — its `click` handler runs in the main process via `onOpenSettings`). If `CmdOrCtrl+J` were registered as a real accelerator, the renderer `keydown` handler would never see the event, and the overlay mutual-exclusion logic (which runs in the renderer) would be bypassed. Instead, show the shortcut text in the menu label (e.g., `label: 'Open Worktree Palette\tCmdOrCtrl+J'`) without binding `accelerator`, matching the pattern used by `Cmd+P` (QuickOpen), which has no menu entry at all and relies solely on the renderer handler.
 
 ### 3.3 State Management
 
@@ -197,7 +197,10 @@ The palette should match what `Cmd+1–9` does today (the closest analog: jumpin
 
 The five activation steps above overlap heavily with `AddRepoDialog.handleOpenWorktree` and `AddWorktreeDialog`'s post-create flow. With three callsites now sharing the same core sequence, extract a shared `activateAndRevealWorktree(worktreeId: string, opts?: { setup?: WorktreeSetupLaunch })` helper in `worktree-activation.ts` that covers the common steps: set `activeRepoId` (cross-repo), switch `activeView` (from settings), `setActiveWorktree`, `ensureWorktreeHasInitialTerminal`, clear sidebar filters that would hide the target, and `revealWorktreeInSidebar`.
 
-**Sidebar filter clearing:** The helper must clear `filterRepoIds` (and `searchQuery` if non-empty) when the target worktree's repo is not in the current filter set, because `revealWorktreeInSidebar` relies on the worktree card being *rendered* in the sidebar (the `pendingRevealWorktreeId` effect in `WorktreeList` finds the target in the rendered `rows` array via `findIndex`). If sidebar filters exclude the target repo, the card is never rendered and the reveal silently no-ops — the user selects a worktree and nothing visually happens. `AddWorktreeDialog` already handles this inline (clears both `searchQuery` and `filterRepoIds` before activation); the shared helper absorbs that responsibility. The clearing is conditional: if `filterRepoIds` is empty (no filter active) or already includes the target repo, no clearing is needed.
+**Sidebar filter clearing:** The helper must clear any sidebar filter state that would prevent the target card from being rendered, because `revealWorktreeInSidebar` relies on the worktree card being *rendered* in the sidebar (the `pendingRevealWorktreeId` effect in `WorktreeList` finds the target in the rendered `rows` array via `findIndex`). If sidebar filters exclude the target, the card is never rendered and the reveal silently no-ops — the user selects a worktree and nothing visually happens. `AddWorktreeDialog` already handles this inline (clears both `searchQuery` and `filterRepoIds` before activation); the shared helper absorbs that responsibility. Specifically:
+
+- Clear `filterRepoIds` if it is non-empty and does not include the target worktree's repo.
+- Clear `searchQuery` unconditionally if it is non-empty. Even if the target repo is visible, an active text search might exclude the specific worktree being jumped to.
 
 Callsite-specific extras that remain inline after calling the shared helper:
 
@@ -237,7 +240,7 @@ The `cmdk` library provides built-in ARIA support:
 - Extract `sortWorktreesRecent()` helper in `smart-sort.ts` (encapsulates cold/warm branching from `getVisibleWorktreeIds()`); update `getVisibleWorktreeIds()` to use it.
 - Create `WorktreeJumpPalette.tsx`, mount in `App.tsx`.
 - Add `worktreePaletteVisible` to the UI slice.
-- Add `Cmd/Ctrl+O` toggle handler to the existing `onKeyDown` in `App.tsx`.
+- Add `Cmd/Ctrl+J` toggle handler to the existing `onKeyDown` in `App.tsx`.
 - Wire real worktree data from `worktreesByRepo` (filtered by `!isArchived`) with sidebar-consistent recent ordering and both empty states (no worktrees / no search results).
 - Handle startup race: if `worktreesByRepo` is empty but repos exist (data still loading), show a "Loading worktrees..." state instead of the misleading "No active worktrees" empty state. Guard: `Object.keys(worktreesByRepo).length === 0 && repos.length > 0`. Note: `worktreesByRepo` is populated per-repo as individual `fetchWorktrees` calls complete, so once any repo's worktrees arrive, the guard flips to showing partial results — this is intentional (partial results are more useful than a spinner) but means the list may grow incrementally during the first few seconds after launch.
 - Define and implement the search result model: `PaletteMatch` with matched field, character ranges, and comment snippet extraction.
@@ -265,7 +268,7 @@ The `cmdk` library provides built-in ARIA support:
 
 ## 5. Alternatives Considered
 
-- `**Cmd+J` (Jump):** Highly semantic for "Quick Switch" and avoids overriding the OS "Open" dialog. Rejected because we want worktrees to feel like primary projects (hence `Cmd+O`), but remains a strong fallback. Note: `Cmd+O` will feel natural to Orca users quickly, but may surprise users who expect it to mean "Open File from disk" — this is an intentional tradeoff since Orca has no file-open dialog.
+- `**Cmd+O` (Open):** Standard app semantic, but less honest for this feature because the palette switches between existing worktrees rather than opening a new file or workspace. Rejected in favor of `Cmd+J`, which better matches the action users are taking.
 - `**Ctrl+E` (Explore):** Initially considered for Windows/Linux. Rejected because `Ctrl+E` is "end of line" in bash/zsh readline — stealing it in a terminal-heavy app breaks shell navigation muscle memory.
 - `**Ctrl+Alt+O`:** Initially considered for Windows/Linux but rejected to avoid `AltGr` collisions on international keyboards (e.g., Polish, German layouts).
 - `**Cmd+1...9` (Direct jumping):** Doesn't scale past 9 worktrees and requires the user to memorize sidebar positions. Already implemented as a complementary feature.

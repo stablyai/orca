@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-activation'
+import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { LinkedWorktreeItem } from './LinkedWorktreeItem'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { Repo, Worktree } from '../../../../shared/types'
@@ -27,9 +27,6 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   const repos = useAppStore((s) => s.repos)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
-  const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
-  const setActiveRepo = useAppStore((s) => s.setActiveRepo)
-  const revealWorktreeInSidebar = useAppStore((s) => s.revealWorktreeInSidebar)
   const openModal = useAppStore((s) => s.openModal)
   const setActiveView = useAppStore((s) => s.setActiveView)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
@@ -184,17 +181,10 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
 
   const handleOpenWorktree = useCallback(
     (worktree: Worktree) => {
-      setActiveRepo(repoId)
-      // Why: if the dialog was opened from the settings view, we must switch
-      // back to terminal — otherwise App.tsx keeps rendering Settings and the
-      // worktree appears stuck. AddWorktreeDialog does the same thing.
-      setActiveView('terminal')
-      setActiveWorktree(worktree.id)
-      ensureWorktreeHasInitialTerminal(useAppStore.getState(), worktree.id)
-      revealWorktreeInSidebar(worktree.id)
+      activateAndRevealWorktree(worktree.id)
       closeModal()
     },
-    [repoId, setActiveRepo, setActiveView, setActiveWorktree, revealWorktreeInSidebar, closeModal]
+    [closeModal]
   )
 
   const handleCreateWorktree = useCallback(() => {

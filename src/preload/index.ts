@@ -542,6 +542,11 @@ const api = {
       ipcRenderer.on('ui:openSettings', listener)
       return () => ipcRenderer.removeListener('ui:openSettings', listener)
     },
+    onToggleWorktreePalette: (callback: () => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent) => callback()
+      ipcRenderer.on('ui:toggleWorktreePalette', listener)
+      return () => ipcRenderer.removeListener('ui:toggleWorktreePalette', listener)
+    },
     onActivateWorktree: (
       callback: (data: {
         repoId: string

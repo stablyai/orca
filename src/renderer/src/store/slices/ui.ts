@@ -65,6 +65,8 @@ export type UISlice = {
   setUpdateStatus: (status: UpdateStatus) => void
   dismissedUpdateVersion: string | null
   dismissUpdate: () => void
+  worktreePaletteVisible: boolean
+  setWorktreePaletteVisible: (v: boolean) => void
   isFullScreen: boolean
   setIsFullScreen: (v: boolean) => void
 }
@@ -84,7 +86,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set) => (
 
   activeModal: 'none',
   modalData: {},
-  openModal: (modal, data = {}) => set({ activeModal: modal, modalData: data }),
+  // Why: opening any modal must dismiss the worktree palette to maintain
+  // overlay mutual exclusion — only one overlay can be visible at a time.
+  openModal: (modal, data = {}) => set({ activeModal: modal, modalData: data, worktreePaletteVisible: false }),
   closeModal: () => set({ activeModal: 'none', modalData: {} }),
 
   searchQuery: '',
@@ -161,6 +165,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set) => (
       void window.api.ui.set({ dismissedUpdateVersion }).catch(console.error)
       return { dismissedUpdateVersion }
     }),
+  worktreePaletteVisible: false,
+  setWorktreePaletteVisible: (v) => set({ worktreePaletteVisible: v }),
   isFullScreen: false,
   setIsFullScreen: (v) => set({ isFullScreen: v })
 })

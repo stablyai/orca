@@ -17,6 +17,7 @@ import Landing from './components/Landing'
 import Settings from './components/settings/Settings'
 import RightSidebar from './components/right-sidebar'
 import QuickOpen from './components/QuickOpen'
+import WorktreeJumpPalette from './components/WorktreeJumpPalette'
 import { ZoomOverlay } from './components/ZoomOverlay'
 import { useGitStatusPolling } from './components/right-sidebar/useGitStatusPolling'
 import {
@@ -150,6 +151,9 @@ function App(): React.JSX.Element {
   const setRightSidebarOpen = useAppStore((s) => s.setRightSidebarOpen)
   const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
   const setQuickOpenVisible = useAppStore((s) => s.setQuickOpenVisible)
+  const worktreePaletteVisible = useAppStore((s) => s.worktreePaletteVisible)
+  const setWorktreePaletteVisible = useAppStore((s) => s.setWorktreePaletteVisible)
+  const closeModal = useAppStore((s) => s.closeModal)
   const isFullScreen = useAppStore((s) => s.isFullScreen)
 
   // Subscribe to IPC push events
@@ -442,6 +446,8 @@ function App(): React.JSX.Element {
         activeWorktreeId !== null
       ) {
         e.preventDefault()
+        // Why: overlay mutual exclusion — dismiss palette before opening QuickOpen
+        setWorktreePaletteVisible(false)
         setQuickOpenVisible(true)
         return
       }
@@ -532,12 +538,15 @@ function App(): React.JSX.Element {
     activeView,
     activeWorktreeId,
     openModal,
+    closeModal,
     repos,
     toggleSidebar,
     toggleRightSidebar,
     setRightSidebarTab,
     setRightSidebarOpen,
-    setQuickOpenVisible
+    setQuickOpenVisible,
+    worktreePaletteVisible,
+    setWorktreePaletteVisible
   ])
 
   return (
@@ -634,6 +643,7 @@ function App(): React.JSX.Element {
         {showSidebar && rightSidebarOpen ? <RightSidebar /> : null}
       </div>
       <QuickOpen />
+      <WorktreeJumpPalette />
       <ZoomOverlay />
       <Toaster closeButton toastOptions={{ className: 'font-sans text-sm' }} />
     </div>

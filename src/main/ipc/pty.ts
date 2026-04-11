@@ -1,5 +1,5 @@
 import { basename } from 'path'
-import { existsSync, accessSync, statSync, constants as fsConstants } from 'fs'
+import { existsSync, accessSync, statSync, chmodSync, constants as fsConstants } from 'fs'
 import { type BrowserWindow, ipcMain } from 'electron'
 import * as pty from 'node-pty'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
@@ -17,6 +17,62 @@ const ptyShellName = new Map<string, string>()
 // created by the new page, killing them and leaving blank terminals.
 let loadGeneration = 0
 const ptyLoadGeneration = new Map<string, number>()
+let didEnsureSpawnHelperExecutable = false
+
+function getShellValidationError(shellPath: string): string | null {
+  if (!existsSync(shellPath)) {
+    return (
+      `Shell "${shellPath}" does not exist. ` + `Set a valid SHELL environment variable or install zsh/bash.`
+    )
+  }
+  try {
+    accessSync(shellPath, fsConstants.X_OK)
+  } catch {
+    return `Shell "${shellPath}" is not executable. Check file permissions.`
+  }
+  return null
+}
+
+function ensureNodePtySpawnHelperExecutable(): void {
+  if (didEnsureSpawnHelperExecutable || process.platform === 'win32') {
+    return
+  }
+  didEnsureSpawnHelperExecutable = true
+
+  try {
+    const unixTerminalPath = require.resolve('node-pty/lib/unixTerminal.js')
+    const packageRoot = basename(unixTerminalPath) === 'unixTerminal.js'
+      ? unixTerminalPath.replace(/[/\\]lib[/\\]unixTerminal\.js$/, '')
+      : unixTerminalPath
+    const candidates = [
+      `${packageRoot}/build/Release/spawn-helper`,
+      `${packageRoot}/build/Debug/spawn-helper`,
+      `${packageRoot}/prebuilds/${process.platform}-${process.arch}/spawn-helper`
+    ].map((candidate) =>
+      candidate.replace('app.asar/', 'app.asar.unpacked/').replace('node_modules.asar/', 'node_modules.asar.unpacked/')
+    )
+
+    for (const candidate of candidates) {
+      if (!existsSync(candidate)) {
+        continue
+      }
+      const mode = statSync(candidate).mode
+      if ((mode & 0o111) !== 0) {
+        return
+      }
+      // Why: node-pty's Unix backend launches this helper before the requested
+      // shell binary. Some package-manager/install paths strip the execute bit
+      // from the prebuilt helper, which makes every PTY spawn fail with the
+      // misleading "posix_spawnp failed" shell error even when /bin/zsh exists.
+      chmodSync(candidate, mode | 0o755)
+      return
+    }
+  } catch (error) {
+    console.warn(
+      `[pty] Failed to ensure node-pty spawn-helper is executable: ${error instanceof Error ? error.message : String(error)}`
+    )
+  }
+}
 
 export function registerPtyHandlers(mainWindow: BrowserWindow, runtime?: OrcaRuntimeService): void {
   // Remove any previously registered handlers so we can re-register them
@@ -122,28 +178,17 @@ export function registerPtyHandlers(mainWindow: BrowserWindow, runtime?: OrcaRun
         effectiveCwd = cwd
         validationCwd = cwd
       } else {
-        shellPath = process.env.SHELL || '/bin/zsh'
+        // Why: startup commands can pass env overrides for the PTY. Prefer an
+        // explicit SHELL override when present, but still validate/fallback it
+        // exactly like the inherited process shell so stale config can't brick
+        // terminal creation.
+        shellPath = args.env?.SHELL || process.env.SHELL || '/bin/zsh'
         shellArgs = ['-l']
         effectiveCwd = cwd
         validationCwd = cwd
       }
 
-      // Why: node-pty's posix_spawnp error is opaque (no errno). Pre-validate
-      // the shell binary and cwd so we can surface actionable diagnostics
-      // instead of a bare "posix_spawnp failed" message.
-      if (process.platform !== 'win32') {
-        if (!existsSync(shellPath)) {
-          throw new Error(
-            `Shell "${shellPath}" does not exist. ` +
-              `Set a valid SHELL environment variable or install zsh/bash.`
-          )
-        }
-        try {
-          accessSync(shellPath, fsConstants.X_OK)
-        } catch {
-          throw new Error(`Shell "${shellPath}" is not executable. Check file permissions.`)
-        }
-      }
+      ensureNodePtySpawnHelperExecutable()
 
       if (!existsSync(validationCwd)) {
         throw new Error(
@@ -173,67 +218,80 @@ export function registerPtyHandlers(mainWindow: BrowserWindow, runtime?: OrcaRun
       spawnEnv.LANG ??= 'en_US.UTF-8'
 
       let ptyProcess: pty.IPty | undefined
-      try {
-        ptyProcess = pty.spawn(shellPath, shellArgs, {
-          name: 'xterm-256color',
-          cols: args.cols,
-          rows: args.rows,
-          cwd: effectiveCwd,
-          env: spawnEnv
-        })
-      } catch (err) {
-        // Why: node-pty.spawn can throw if posix_spawnp fails for reasons
-        // not caught by the pre-validation above (e.g. architecture mismatch
-        // of the native addon, PTY allocation failure, or resource limits).
-        // Try common fallback shells before giving up — the user's SHELL
-        // env may point to a broken or incompatible binary.
-        const primaryError = err instanceof Error ? err.message : String(err)
+      let primaryError: string | null = null
+      if (process.platform !== 'win32') {
+        primaryError = getShellValidationError(shellPath)
+      }
 
-        if (process.platform !== 'win32') {
-          const fallbackShells = ['/bin/zsh', '/bin/bash', '/bin/sh'].filter((s) => s !== shellPath)
-          for (const fallback of fallbackShells) {
-            try {
-              accessSync(fallback, fsConstants.X_OK)
-            } catch {
-              continue
-            }
-            try {
-              ptyProcess = pty.spawn(fallback, ['-l'], {
-                name: 'xterm-256color',
-                cols: args.cols,
-                rows: args.rows,
-                cwd: effectiveCwd,
-                env: spawnEnv
-              })
-              // Fallback succeeded — update shellPath for the basename tracking below.
-              console.warn(
-                `[pty] Primary shell "${shellPath}" failed (${primaryError}), fell back to "${fallback}"`
-              )
-              shellPath = fallback
-              break
-            } catch {
-              // Fallback also failed — try next.
-            }
+      if (!primaryError) {
+        try {
+          ptyProcess = pty.spawn(shellPath, shellArgs, {
+            name: 'xterm-256color',
+            cols: args.cols,
+            rows: args.rows,
+            cwd: effectiveCwd,
+            env: spawnEnv
+          })
+        } catch (err) {
+          // Why: node-pty.spawn can throw if posix_spawnp fails for reasons
+          // not caught by the validation above (e.g. architecture mismatch
+          // of the native addon, PTY allocation failure, or resource limits).
+          primaryError = err instanceof Error ? err.message : String(err)
+        }
+      }
+
+      if (!ptyProcess && process.platform !== 'win32') {
+        // Why: a stale login shell path (common after Homebrew/bash changes)
+        // should not brick Orca terminals. Fall back to system shells so the
+        // user still gets a working terminal while the bad SHELL config remains.
+        const configuredShellPath = shellPath
+        const fallbackShells = ['/bin/zsh', '/bin/bash', '/bin/sh'].filter((s) => s !== configuredShellPath)
+        for (const fallback of fallbackShells) {
+          if (getShellValidationError(fallback)) {
+            continue
+          }
+          try {
+            ptyProcess = pty.spawn(fallback, ['-l'], {
+              name: 'xterm-256color',
+              cols: args.cols,
+              rows: args.rows,
+              cwd: effectiveCwd,
+              env: spawnEnv
+            })
+            console.warn(
+              `[pty] Primary shell "${configuredShellPath}" failed (${primaryError ?? 'unknown error'}), fell back to "${fallback}"`
+            )
+            shellPath = fallback
+            break
+          } catch {
+            // Fallback also failed — try next.
           }
         }
+      }
 
-        if (!ptyProcess) {
-          const diag = [
-            `shell: ${shellPath}`,
-            `cwd: ${effectiveCwd}`,
-            `arch: ${process.arch}`,
-            `platform: ${process.platform} ${process.getSystemVersion?.() ?? ''}`
-          ].join(', ')
-          throw new Error(
-            `Failed to spawn shell "${shellPath}": ${primaryError} (${diag}). ` +
-              `If this persists, please file an issue.`
-          )
-        }
+      if (!ptyProcess) {
+        const diag = [
+          `shell: ${shellPath}`,
+          `cwd: ${effectiveCwd}`,
+          `arch: ${process.arch}`,
+          `platform: ${process.platform} ${process.getSystemVersion?.() ?? ''}`
+        ].join(', ')
+        throw new Error(
+          `Failed to spawn shell "${shellPath}": ${primaryError ?? 'unknown error'} (${diag}). ` +
+            `If this persists, please file an issue.`
+        )
       }
 
       // Should be unreachable — the catch block throws when no fallback succeeds.
       if (!ptyProcess) {
         throw new Error('PTY process was not created')
+      }
+      if (process.platform !== 'win32') {
+        // Why: once we fall back to a known-good shell, keep the child env in
+        // sync with the shell we actually launched. Leaving a stale SHELL value
+        // behind can confuse shell startup logic and any later subprocesses
+        // that inspect $SHELL to choose their own execution path.
+        spawnEnv.SHELL = shellPath
       }
       const proc = ptyProcess
       ptyProcesses.set(id, proc)
