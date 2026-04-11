@@ -122,7 +122,7 @@ function ExampleTemplateCard({
   return (
     <div className="space-y-2">
       <p className="text-[10px] tracking-[0.18em] text-muted-foreground">
-        Example `orca.yaml` template
+        Example <code className="rounded bg-muted px-1 py-0.5">orca.yaml</code> template
       </p>
       <div className="relative rounded-lg border border-border/50 bg-background/70">
         <Button
