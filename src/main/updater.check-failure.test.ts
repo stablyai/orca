@@ -100,7 +100,7 @@ describe('updater check failure handling', () => {
     vi.unstubAllGlobals()
   })
 
-  it('treats GitHub release transition errors as not-available for user-initiated checks', async () => {
+  it('treats GitHub release transition errors as idle for user-initiated checks', async () => {
     autoUpdaterMock.checkForUpdates.mockResolvedValueOnce(undefined).mockImplementationOnce(() => {
       autoUpdaterMock.emit('checking-for-update')
       queueMicrotask(() => {
@@ -120,11 +120,18 @@ describe('updater check failure handling', () => {
       const statuses = sendMock.mock.calls
         .filter(([channel]) => channel === 'updater:status')
         .map(([, status]) => status)
-      expect(statuses).toContainEqual({ state: 'not-available', userInitiated: true })
+      // Why: release transition failures should NOT pretend the user is up to
+      // date.  Sending 'idle' lets the toast controller show an honest
+      // "currently rolling out" message instead of the misleading "you're on the
+      // latest version" that auto-dismisses.
+      expect(statuses).toContainEqual({ state: 'idle' })
+      expect(statuses).not.toContainEqual(
+        expect.objectContaining({ state: 'not-available', userInitiated: true })
+      )
     })
   })
 
-  it('treats missing latest-mac.yml during user-initiated checks as not-available', async () => {
+  it('treats missing latest-mac.yml during user-initiated checks as idle', async () => {
     autoUpdaterMock.checkForUpdates.mockResolvedValueOnce(undefined).mockImplementationOnce(() => {
       autoUpdaterMock.emit('checking-for-update')
       queueMicrotask(() => {
@@ -149,7 +156,10 @@ describe('updater check failure handling', () => {
       const statuses = sendMock.mock.calls
         .filter(([channel]) => channel === 'updater:status')
         .map(([, status]) => status)
-      expect(statuses).toContainEqual({ state: 'not-available', userInitiated: true })
+      expect(statuses).toContainEqual({ state: 'idle' })
+      expect(statuses).not.toContainEqual(
+        expect.objectContaining({ state: 'not-available', userInitiated: true })
+      )
     })
   })
 })

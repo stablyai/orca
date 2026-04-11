@@ -159,6 +159,34 @@ describe('createUpdateToastController', () => {
     expect(toastApi.info).toHaveBeenCalledTimes(1)
   })
 
+  it('replaces checking toast with an unable-to-check message when a user-initiated check goes idle', () => {
+    const toastApi = createToastApi()
+    toastApi.loading.mockReturnValue('checking-toast')
+    const updaterApi = createUpdaterApi()
+    const storeApi = createStoreApi()
+    const controller = createUpdateToastController({ toastApi, updaterApi, storeApi })
+
+    controller.handleStatus({ state: 'checking', userInitiated: true })
+    controller.handleStatus({ state: 'idle' })
+
+    expect(toastApi.info).toHaveBeenCalledWith(
+      "Unable to check for updates right now. We'll try again shortly.",
+      { id: 'checking-toast' }
+    )
+  })
+
+  it('does not show a rolling-out message for background checks that go idle', () => {
+    const toastApi = createToastApi()
+    const updaterApi = createUpdaterApi()
+    const storeApi = createStoreApi()
+    const controller = createUpdateToastController({ toastApi, updaterApi, storeApi })
+
+    controller.handleStatus({ state: 'checking' })
+    controller.handleStatus({ state: 'idle' })
+
+    expect(toastApi.info).not.toHaveBeenCalled()
+  })
+
   it('calls dismissUpdate when the user closes the available toast without updating', () => {
     const toastApi = createToastApi()
     toastApi.info.mockReturnValue('available-toast')

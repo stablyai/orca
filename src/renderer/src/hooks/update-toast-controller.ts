@@ -69,7 +69,16 @@ export function createUpdateToastController(deps?: {
         checkingToastId = toastApi.loading('Checking for updates...')
       } else if (status.state === 'idle') {
         if (checkingToastId) {
-          toastApi.dismiss(checkingToastId)
+          // Why: a user-initiated check that resolves to idle (rather than
+          // 'not-available') means the check couldn't complete — this can
+          // happen because a new release is being published and the update
+          // manifest is temporarily unavailable, or because of a transient
+          // network failure.  We use a neutral message that is honest for
+          // both scenarios instead of claiming a rollout is in progress
+          // (misleading when the real cause is a network blip).
+          toastApi.info('Unable to check for updates right now. We\'ll try again shortly.', {
+            id: checkingToastId
+          })
           checkingToastId = undefined
         }
       } else if (status.state === 'not-available') {

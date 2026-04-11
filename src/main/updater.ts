@@ -9,12 +9,7 @@ import {
   markMacQuitAndInstallInFlight
 } from './updater-mac-install'
 import { registerAutoUpdaterHandlers } from './updater-events'
-import {
-  compareVersions,
-  isBenignCheckFailure,
-  isGitHubReleaseTransitionFailure,
-  statusesEqual
-} from './updater-fallback'
+import { compareVersions, isBenignCheckFailure, statusesEqual } from './updater-fallback'
 
 const AUTO_UPDATE_CHECK_INTERVAL_MS = 36 * 60 * 60 * 1000
 const AUTO_UPDATE_RETRY_INTERVAL_MS = 60 * 60 * 1000
@@ -112,22 +107,25 @@ async function sendCheckFailureStatus(message: string, userInitiated?: boolean):
 
   const handleFailure = async (): Promise<void> => {
     if (isBenignCheckFailure(message)) {
-      // Release transition failures (missing latest.yml during publishing) and
-      // network blips are transient. For user-initiated checks during a release
-      // transition, show "up to date" so the action doesn't appear to silently
-      // do nothing; for background checks, silently retry later.
-      if (userInitiated && isGitHubReleaseTransitionFailure(message.toLowerCase())) {
-        clearAvailableUpdateContext()
-        persistLastUpdateCheckAt?.(Date.now())
-        sendStatus({ state: 'not-available', userInitiated: true })
-        return
-      }
-
+      // Why: release transition failures (missing latest.yml while a new
+      // release is being published) and network blips are transient.  The
+      // previous approach sent 'not-available' for user-initiated checks
+      // during a release transition, which falsely told the user "you're
+      // on the latest version" — the toast would flash and auto-dismiss,
+      // hiding the fact that a newer release is mid-publish.  Now all
+      // benign failures go to 'idle' uniformly: the toast controller
+      // converts a user-initiated checking→idle transition into an honest
+      // "currently rolling out" message, and a background retry is
+      // always scheduled so the update notification arrives once the
+      // release finishes.
       console.warn('[updater] benign check failure:', message)
       clearAvailableUpdateContext()
-      if (!userInitiated) {
-        scheduleAutomaticUpdateCheck(AUTO_UPDATE_RETRY_INTERVAL_MS)
-      }
+      scheduleAutomaticUpdateCheck(AUTO_UPDATE_RETRY_INTERVAL_MS)
+      // Why: we intentionally do NOT call persistLastUpdateCheckAt here.
+      // The check didn't truly complete (the manifest was unreachable due
+      // to a release transition or network blip), so recording a timestamp
+      // would suppress the next startup check and delay discovery of the
+      // new version.
       sendStatus({ state: 'idle' })
       return
     }
