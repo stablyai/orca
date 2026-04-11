@@ -153,6 +153,14 @@ describe('hasUnrecognizedOrcaYamlKeys', () => {
     expect(hasUnrecognizedOrcaYamlKeys('/test/repo')).toBe(true)
   })
 
+  it('returns true when an unknown key has no trailing space (block-value form)', async () => {
+    const fs = await import('fs')
+    vi.mocked(fs.readFileSync).mockReturnValue('futureFeature:\n  nested: value\n')
+
+    const { hasUnrecognizedOrcaYamlKeys } = await import('./hooks')
+    expect(hasUnrecognizedOrcaYamlKeys('/test/repo')).toBe(true)
+  })
+
   it('returns true when the file mixes recognised and unrecognised keys', async () => {
     const fs = await import('fs')
     vi.mocked(fs.readFileSync).mockReturnValue(

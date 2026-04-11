@@ -241,7 +241,9 @@ export type PreloadApi = {
   }
   browser: BrowserApi
   hooks: {
-    check: (args: { repoId: string }) => Promise<{ hasHooks: boolean; hooks: OrcaHooks | null }>
+    check: (args: {
+      repoId: string
+    }) => Promise<{ hasHooks: boolean; hooks: OrcaHooks | null; mayNeedUpdate: boolean }>
     readIssueCommand: (args: { repoId: string }) => Promise<{
       localContent: string | null
       sharedContent: string | null

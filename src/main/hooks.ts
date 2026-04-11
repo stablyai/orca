@@ -146,7 +146,10 @@ export function hasUnrecognizedOrcaYamlKeys(repoPath: string): boolean {
   try {
     const content = readFileSync(join(repoPath, 'orca.yaml'), 'utf-8')
     return content.split(/\r?\n/).some((line) => {
-      const m = line.match(/^([A-Za-z][A-Za-z0-9_-]*):\s/)
+      // Why: bare `key:` at end-of-line (no trailing space) is valid YAML for
+      // a mapping with a block value on the next line. Match both forms so
+      // newer keys like `futureFeature:\n  nested` are still detected.
+      const m = line.match(/^([A-Za-z][A-Za-z0-9_-]*):(\s|$)/)
       return m != null && !RECOGNIZED_ORCA_YAML_KEYS.has(m[1])
     })
   } catch {
