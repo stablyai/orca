@@ -20,7 +20,6 @@ const DISCORD_URL = 'https://discord.gg/fzjDKHxv8Q'
 const X_URL = 'https://x.com/orca_build'
 
 type SubmitIdentity = {
-  anonymous: boolean
   githubLogin: string | null
   githubEmail: string | null
 }
@@ -32,14 +31,12 @@ function openExternalUrl(url: string): void {
 function getSubmitIdentity(viewer: GitHubViewer | null, anonymous: boolean): SubmitIdentity {
   if (anonymous || !viewer) {
     return {
-      anonymous: true,
       githubLogin: null,
       githubEmail: null
     }
   }
 
   return {
-    anonymous: false,
     githubLogin: viewer.login,
     githubEmail: viewer.email
   }
@@ -107,7 +104,6 @@ function FeedbackDialog({
         // without having to disconnect gh for the rest of Orca.
         body: JSON.stringify({
           feedback: trimmed,
-          anonymous: identity.anonymous,
           githubLogin: identity.githubLogin,
           githubEmail: identity.githubEmail
         })
