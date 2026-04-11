@@ -251,6 +251,11 @@ export function registerPtyHandlers(mainWindow: BrowserWindow, runtime?: OrcaRun
             continue
           }
           try {
+            // Why: set SHELL to the fallback *before* spawning so the child
+            // process inherits the correct value. Leaving the stale original
+            // SHELL in the env would confuse shell startup logic and any
+            // subprocesses that inspect $SHELL.
+            spawnEnv.SHELL = fallback
             ptyProcess = pty.spawn(fallback, ['-l'], {
               name: 'xterm-256color',
               cols: args.cols,
@@ -282,15 +287,12 @@ export function registerPtyHandlers(mainWindow: BrowserWindow, runtime?: OrcaRun
         )
       }
 
-      // Should be unreachable — the catch block throws when no fallback succeeds.
-      if (!ptyProcess) {
-        throw new Error('PTY process was not created')
-      }
       if (process.platform !== 'win32') {
-        // Why: once we fall back to a known-good shell, keep the child env in
-        // sync with the shell we actually launched. Leaving a stale SHELL value
-        // behind can confuse shell startup logic and any later subprocesses
-        // that inspect $SHELL to choose their own execution path.
+        // Why: after a successful fallback, update spawnEnv.SHELL to match what
+        // was actually launched. The value was already set inside the fallback loop
+        // before spawn, but we also need shellPath to reflect the fallback for the
+        // ptyShellName map below. (Primary-path spawns already have the correct
+        // SHELL from process.env / args.env.)
         spawnEnv.SHELL = shellPath
       }
       const proc = ptyProcess
