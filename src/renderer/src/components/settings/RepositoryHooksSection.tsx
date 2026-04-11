@@ -274,18 +274,7 @@ export function RepositoryHooksSection({
               </p>
             </div>
           ) : yamlState === 'update-available' ? (
-            <div className="flex items-start gap-3 rounded-xl border border-amber-500/20 bg-background/60 p-4">
-              <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-amber-500/12 text-amber-600 dark:text-amber-300">
-                <AlertTriangle className="size-5" />
-              </div>
-              <p className="text-sm leading-6 text-muted-foreground">
-                {/* Why: a file with well-formed YAML keys that this version doesn't handle
-                could be from a newer Orca release or could be a typo. Keep the same warning
-                tone as the parse-error state but add the update hint. */}
-                The file contains keys this version of Orca does not recognize. Check the file for
-                typos, or update Orca if a newer version is available.
-              </p>
-            </div>
+            <ExampleTemplateCard copiedTemplate={copiedTemplate} onCopyTemplate={onCopyTemplate} />
           ) : yamlState === 'invalid' ? (
             <div className="space-y-5">
               <div className="flex items-start gap-3 rounded-xl border border-amber-500/20 bg-background/60 p-4">
