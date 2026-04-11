@@ -27,6 +27,7 @@ function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
     head: overrides.head ?? 'abc123',
     isBare: overrides.isBare ?? false,
     isMainWorktree: overrides.isMainWorktree ?? false,
+    isPrunable: overrides.isPrunable ?? false,
     linkedIssue: overrides.linkedIssue ?? null,
     linkedPR: overrides.linkedPR ?? null,
     isArchived: overrides.isArchived ?? false,

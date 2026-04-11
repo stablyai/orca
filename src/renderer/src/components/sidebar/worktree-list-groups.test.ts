@@ -18,6 +18,7 @@ const worktree: Worktree = {
   head: 'abc123',
   isBare: false,
   isMainWorktree: false,
+  isPrunable: false,
   linkedIssue: null,
   linkedPR: null,
   isArchived: false,

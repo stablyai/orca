@@ -30,7 +30,8 @@ describe('repo-worktrees', () => {
       head: '',
       branch: '',
       isBare: false,
-      isMainWorktree: true
+      isMainWorktree: true,
+      isPrunable: false
     })
   })
 
@@ -50,7 +51,8 @@ describe('repo-worktrees', () => {
         head: '',
         branch: '',
         isBare: false,
-        isMainWorktree: true
+        isMainWorktree: true,
+        isPrunable: false
       }
     ])
     expect(listWorktreesMock).not.toHaveBeenCalled()
@@ -58,7 +60,14 @@ describe('repo-worktrees', () => {
 
   it('delegates to git worktree listing for git repos', async () => {
     listWorktreesMock.mockResolvedValue([
-      { path: '/workspace/repo', head: 'abc', branch: '', isBare: false, isMainWorktree: true }
+      {
+        path: '/workspace/repo',
+        head: 'abc',
+        branch: '',
+        isBare: false,
+        isMainWorktree: true,
+        isPrunable: false
+      }
     ])
 
     const result = await listRepoWorktrees({

@@ -27,6 +27,9 @@ export type GitWorktreeInfo = {
   /** True for the repo's main working tree (the first entry from `git worktree list`).
    *  Linked worktrees created via `git worktree add` have this set to false. */
   isMainWorktree: boolean
+  /** True when `git worktree list --porcelain` marks this entry as prunable,
+   *  meaning its .git file or admin directory is stale or inconsistent. */
+  isPrunable: boolean
 }
 
 // ─── Worktree (app-level, enriched) ──────────────────────────────────

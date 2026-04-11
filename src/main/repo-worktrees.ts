@@ -11,7 +11,10 @@ export function createFolderWorktree(repo: Repo): GitWorktreeInfo {
     // Why: folder mode has no linked worktree graph. Treat the folder itself
     // as the single primary worktree so the rest of Orca's worktree-first UI
     // can keep using one stable workspace identity.
-    isMainWorktree: true
+    isMainWorktree: true,
+    // Why: folder mode is synthetic, not a git-managed worktree entry, so it
+    // can never be prunable in the git worktree sense.
+    isPrunable: false
   }
 }
 
