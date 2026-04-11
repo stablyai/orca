@@ -3,7 +3,6 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { createPortal } from 'react-dom'
 import type { CSSProperties } from 'react'
 import type { IDisposable } from '@xterm/xterm'
-import { RefreshCw } from 'lucide-react'
 import { useAppStore } from '../../store'
 import {
   DEFAULT_TERMINAL_DIVIDER_DARK,
@@ -95,7 +94,6 @@ export default function TerminalPane({
     (store) => store.consumePendingCodexPaneRestart
   )
   const clearCodexRestartNotice = useAppStore((store) => store.clearCodexRestartNotice)
-  const codexRestartNoticeByPtyId = useAppStore((store) => store.codexRestartNoticeByPtyId)
   const savedLayout = useAppStore((store) => store.terminalLayoutsByTabId[tabId] ?? EMPTY_LAYOUT)
   const setTabLayout = useAppStore((store) => store.setTabLayout)
   const initialLayoutRef = useRef(savedLayout)
@@ -633,19 +631,6 @@ export default function TerminalPane({
   }
 
   const activePane = managerRef.current?.getActivePane()
-  const staleCodexPanes =
-    managerRef.current?.getPanes().flatMap((pane) => {
-      const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId()
-      if (!ptyId) {
-        return []
-      }
-      const restartNotice = codexRestartNoticeByPtyId[ptyId]
-      if (!restartNotice) {
-        return []
-      }
-      return [{ pane, ptyId, restartNotice }]
-    }) ?? []
-
   return (
     <>
       <div
@@ -767,34 +752,6 @@ export default function TerminalPane({
           </div>,
           pane.container,
           `pane-title-${pane.id}`
-        )
-      })}
-      {staleCodexPanes.map(({ pane, ptyId }) => {
-        return createPortal(
-          <div className="absolute right-3 top-3 z-20 pointer-events-none">
-            <div className="pointer-events-auto flex items-center gap-2 rounded-lg border border-border/80 bg-popover/95 px-2 py-1.5 shadow-lg backdrop-blur-sm">
-              <span className="text-[11px] text-muted-foreground">Using previous account</span>
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => handleRestartCodexPane(pane.id)}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-2 py-1 text-[11px] font-medium text-background transition-colors hover:opacity-90"
-                >
-                  <RefreshCw className="size-3" />
-                  Restart
-                </button>
-                <button
-                  type="button"
-                  onClick={() => clearCodexRestartNotice(ptyId)}
-                  className="rounded-md px-1.5 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
-                >
-                  Later
-                </button>
-              </div>
-            </div>
-          </div>,
-          pane.container,
-          `pane-codex-restart-${pane.id}`
         )
       })}
       <CloseTerminalDialog

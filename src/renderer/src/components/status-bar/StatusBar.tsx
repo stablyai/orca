@@ -119,6 +119,11 @@ function ProviderSegment({
   // Has data (ok, fetching with stale data, or error with stale data)
   const isStale = p.status === 'error'
   const isFetching = p.status === 'fetching'
+  const trailingStatusIcon = isFetching ? (
+    <RefreshCw size={10} className="animate-spin text-muted-foreground" />
+  ) : isStale ? (
+    <AlertTriangle size={11} className="text-muted-foreground/80" />
+  ) : null
 
   return (
     <span className="inline-flex items-center gap-1.5">
@@ -127,8 +132,12 @@ function ProviderSegment({
       {p.session && <WindowLabel w={p.session} label="5h" />}
       {p.session && p.weekly && <span className="text-muted-foreground">&middot;</span>}
       {p.weekly && <WindowLabel w={p.weekly} label="wk" />}
-      {isStale && <AlertTriangle size={11} className="text-muted-foreground/80" />}
-      {isFetching && <RefreshCw size={10} className="animate-spin text-muted-foreground" />}
+      <span className="inline-flex w-3 justify-center">
+        {/* Why: reserve the trailing provider-status slot even when no icon is
+        visible so Claude/Codex do not shift horizontally as fetching/error
+        adornments appear and disappear. */}
+        {trailingStatusIcon}
+      </span>
     </span>
   )
 }
@@ -306,12 +315,7 @@ function CodexSwitcherMenu({
               both counts so split panes do not make the number look wrong. */}
               {staleCodexSessionCount === 1
                 ? '1 Codex session is still on the old account'
-                : `${staleCodexSessionCount} Codex sessions are still on the old account`}
-              {staleCodexTabCount > 0
-                ? staleCodexWorktreeCount > 1
-                  ? ` across ${staleCodexTabCount} ${staleCodexTabCount === 1 ? 'tab' : 'tabs'} in ${staleCodexWorktreeCount} worktrees.`
-                  : ` in ${staleCodexTabCount} ${staleCodexTabCount === 1 ? 'tab' : 'tabs'}.`
-                : '.'}
+                : `${staleCodexSessionCount} Codex sessions are still on the old account.`}
               {staleCodexWorktreeCount > 1 ? (
                 <span className="mt-0.5 block">
                   Visible sessions restart now. Others restart when their worktree becomes active.
@@ -324,8 +328,8 @@ function CodexSwitcherMenu({
               className="mt-2 inline-flex w-full items-center justify-center rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
             >
               {staleCodexSessionCount === 1
-                ? 'Queue Session Restart'
-                : `Queue ${staleCodexSessionCount} Session Restarts`}
+                ? 'Restart Session'
+                : `Restart ${staleCodexSessionCount} Sessions`}
             </button>
           </div>
         </>

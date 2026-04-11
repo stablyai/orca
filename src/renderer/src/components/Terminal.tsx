@@ -13,6 +13,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { RefreshCw } from 'lucide-react'
 import TabBar from './tab-bar/TabBar'
 import TerminalPane from './terminal-pane/TerminalPane'
 import {
@@ -39,6 +40,10 @@ export default function Terminal(): React.JSX.Element | null {
   const setTabCustomTitle = useAppStore((s) => s.setTabCustomTitle)
   const setTabColor = useAppStore((s) => s.setTabColor)
   const consumeSuppressedPtyExit = useAppStore((s) => s.consumeSuppressedPtyExit)
+  const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
+  const codexRestartNoticeByPtyId = useAppStore((s) => s.codexRestartNoticeByPtyId)
+  const queueCodexPaneRestarts = useAppStore((s) => s.queueCodexPaneRestarts)
+  const clearCodexRestartNotice = useAppStore((s) => s.clearCodexRestartNotice)
   const expandedPaneByTabId = useAppStore((s) => s.expandedPaneByTabId)
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
   const openFiles = useAppStore((s) => s.openFiles)
@@ -758,6 +763,51 @@ export default function Terminal(): React.JSX.Element | null {
                 className={isVisible ? 'absolute inset-0' : 'absolute inset-0 hidden'}
                 aria-hidden={!isVisible}
               >
+                {(() => {
+                  const staleWorktreePtyIds = worktreeTabs.flatMap((tab) =>
+                    (ptyIdsByTabId[tab.id] ?? []).filter((ptyId) =>
+                      Boolean(codexRestartNoticeByPtyId[ptyId])
+                    )
+                  )
+                  if (staleWorktreePtyIds.length === 0) {
+                    return null
+                  }
+                  // Why: account switching is global, but repeating the same
+                  // stale-session prompt in every affected Codex pane quickly
+                  // turns into noise. Keep one worktree-scoped chip in the
+                  // same visual corner so users get the same prompt style
+                  // without having to dismiss it in every pane.
+                  return (
+                    <div className="pointer-events-none absolute right-3 top-3 z-20">
+                      <div className="pointer-events-auto flex items-center gap-2 rounded-lg border border-border/80 bg-popover/95 px-2 py-1.5 shadow-lg backdrop-blur-sm">
+                        <span className="text-[11px] text-muted-foreground">
+                          Codex is using the previous account
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => queueCodexPaneRestarts(staleWorktreePtyIds)}
+                            className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-2 py-1 text-[11px] font-medium text-background transition-colors hover:opacity-90"
+                          >
+                            <RefreshCw className="size-3" />
+                            Restart
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              for (const ptyId of staleWorktreePtyIds) {
+                                clearCodexRestartNotice(ptyId)
+                              }
+                            }}
+                            className="rounded-md px-1.5 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
+                          >
+                            Dismiss
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })()}
                 {worktreeTabs.map((tab) => (
                   <TerminalPane
                     key={`${tab.id}-${tab.generation ?? 0}`}
