@@ -247,6 +247,57 @@ export function useTerminalKeyboardShortcuts({
       paneTransportsRef.current.get(pane.id)?.sendInput('\x17')
     }
 
+    // Cmd+Backspace → send \x15 (Ctrl+U, kill to beginning of line) to PTY.
+    // Mirrors Warp's behavior where Cmd+Backspace deletes the whole line to
+    // the left of the cursor. Skip editable targets so browser inputs are unaffected.
+    const onCmdBackspace = (e: KeyboardEvent): void => {
+      if (!e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) {
+        return
+      }
+      if (e.key !== 'Backspace') {
+        return
+      }
+      if (isEditableTarget(e.target)) {
+        return
+      }
+      const manager = managerRef.current
+      if (!manager) {
+        return
+      }
+      e.preventDefault()
+      e.stopPropagation()
+      const pane = manager.getActivePane() ?? manager.getPanes()[0]
+      if (!pane) {
+        return
+      }
+      paneTransportsRef.current.get(pane.id)?.sendInput('\x15')
+    }
+
+    // Cmd+Delete → send \x0b (Ctrl+K, kill to end of line) to PTY.
+    // Mirrors Warp's "Delete All Right" behavior. Skip editable targets.
+    const onCmdDelete = (e: KeyboardEvent): void => {
+      if (!e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) {
+        return
+      }
+      if (e.key !== 'Delete') {
+        return
+      }
+      if (isEditableTarget(e.target)) {
+        return
+      }
+      const manager = managerRef.current
+      if (!manager) {
+        return
+      }
+      e.preventDefault()
+      e.stopPropagation()
+      const pane = manager.getActivePane() ?? manager.getPanes()[0]
+      if (!pane) {
+        return
+      }
+      paneTransportsRef.current.get(pane.id)?.sendInput('\x0b')
+    }
+
     // Alt+Backspace → send ESC + DEL (\x1b\x7f, backward-kill-word) to PTY.
     // Skip when focus is in an input/textarea so native word-delete still works.
     const onAltBackspace = (e: KeyboardEvent): void => {
@@ -276,11 +327,15 @@ export function useTerminalKeyboardShortcuts({
     window.addEventListener('keydown', onShiftEnter, { capture: true })
     window.addEventListener('keydown', onCtrlBackspace, { capture: true })
     window.addEventListener('keydown', onAltBackspace, { capture: true })
+    window.addEventListener('keydown', onCmdBackspace, { capture: true })
+    window.addEventListener('keydown', onCmdDelete, { capture: true })
     return () => {
       window.removeEventListener('keydown', onKeyDown, { capture: true })
       window.removeEventListener('keydown', onShiftEnter, { capture: true })
       window.removeEventListener('keydown', onCtrlBackspace, { capture: true })
       window.removeEventListener('keydown', onAltBackspace, { capture: true })
+      window.removeEventListener('keydown', onCmdBackspace, { capture: true })
+      window.removeEventListener('keydown', onCmdDelete, { capture: true })
     }
   }, [
     isActive,
