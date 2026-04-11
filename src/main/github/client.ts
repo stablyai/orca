@@ -1,6 +1,12 @@
 /* eslint-disable max-lines -- Why: co-locating all GitHub client functions keeps the
 concurrency acquire/release pattern and error handling consistent across operations. */
-import type { PRInfo, PRMergeableState, PRCheckDetail, PRComment } from '../../shared/types'
+import type {
+  PRInfo,
+  PRMergeableState,
+  PRCheckDetail,
+  PRComment,
+  GitHubViewer
+} from '../../shared/types'
 import { getPRConflictSummary } from './conflict-summary'
 import { execFileAsync, ghExecFileAsync, acquire, release, getOwnerRepo } from './gh-utils'
 export { _resetOwnerRepoCache } from './gh-utils'
@@ -50,6 +56,33 @@ export async function starOrca(): Promise<boolean> {
     return true
   } catch {
     return false
+  } finally {
+    release()
+  }
+}
+
+/**
+ * Get the authenticated GitHub viewer when gh is available and logged in.
+ * Returns null when gh is unavailable, unauthenticated, or the lookup fails.
+ */
+export async function getAuthenticatedViewer(): Promise<GitHubViewer | null> {
+  await acquire()
+  try {
+    const { stdout } = await execFileAsync(
+      'gh',
+      ['api', 'user', '--jq', '{login: .login, email: .email}'],
+      { encoding: 'utf-8' }
+    )
+    const viewer = JSON.parse(stdout) as { login?: string; email?: string | null }
+    if (!viewer.login?.trim()) {
+      return null
+    }
+    return {
+      login: viewer.login.trim(),
+      email: viewer.email?.trim() || null
+    }
+  } catch {
+    return null
   } finally {
     release()
   }

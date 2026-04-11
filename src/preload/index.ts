@@ -213,6 +213,8 @@ const api = {
   },
 
   gh: {
+    viewer: (): Promise<unknown> => ipcRenderer.invoke('gh:viewer'),
+
     prForBranch: (args: { repoPath: string; branch: string }): Promise<unknown> =>
       ipcRenderer.invoke('gh:prForBranch', args),
 

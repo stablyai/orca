@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { handleMock, getPRForBranchMock, getIssueMock, listIssuesMock } = vi.hoisted(() => ({
-  handleMock: vi.fn(),
-  getPRForBranchMock: vi.fn(),
-  getIssueMock: vi.fn(),
-  listIssuesMock: vi.fn()
-}))
+const { handleMock, getPRForBranchMock, getIssueMock, listIssuesMock, getAuthenticatedViewerMock } =
+  vi.hoisted(() => ({
+    handleMock: vi.fn(),
+    getPRForBranchMock: vi.fn(),
+    getIssueMock: vi.fn(),
+    listIssuesMock: vi.fn(),
+    getAuthenticatedViewerMock: vi.fn()
+  }))
 
 vi.mock('electron', () => ({
   ipcMain: {
@@ -16,7 +18,8 @@ vi.mock('electron', () => ({
 vi.mock('../github/client', () => ({
   getPRForBranch: getPRForBranchMock,
   getIssue: getIssueMock,
-  listIssues: listIssuesMock
+  listIssues: listIssuesMock,
+  getAuthenticatedViewer: getAuthenticatedViewerMock
 }))
 
 import { registerGitHubHandlers } from './github'
@@ -46,6 +49,7 @@ describe('registerGitHubHandlers', () => {
     getPRForBranchMock.mockReset()
     getIssueMock.mockReset()
     listIssuesMock.mockReset()
+    getAuthenticatedViewerMock.mockReset()
     for (const key of Object.keys(handlers)) {
       delete handlers[key]
     }
@@ -92,5 +96,17 @@ describe('registerGitHubHandlers', () => {
     })
 
     expect(listIssuesMock).toHaveBeenCalledWith('/workspace/repo', 5)
+  })
+
+  it('forwards the authenticated viewer lookup', async () => {
+    getAuthenticatedViewerMock.mockResolvedValue({ login: 'octocat', email: 'octocat@example.com' })
+
+    registerGitHubHandlers(store as never, stats as never)
+
+    await expect(handlers['gh:viewer'](null, undefined)).resolves.toEqual({
+      login: 'octocat',
+      email: 'octocat@example.com'
+    })
+    expect(getAuthenticatedViewerMock).toHaveBeenCalled()
   })
 })

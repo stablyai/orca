@@ -9,6 +9,7 @@ import type {
   GitConflictOperation,
   GitDiffResult,
   GitStatusEntry,
+  GitHubViewer,
   IssueInfo,
   NotificationDispatchRequest,
   NotificationDispatchResult,
@@ -188,6 +189,7 @@ export type PreloadApi = {
     onExit: (callback: (data: { id: string; code: number }) => void) => () => void
   }
   gh: {
+    viewer: () => Promise<GitHubViewer | null>
     prForBranch: (args: { repoPath: string; branch: string }) => Promise<PRInfo | null>
     issue: (args: { repoPath: string; number: number }) => Promise<IssueInfo | null>
     listIssues: (args: { repoPath: string; limit?: number }) => Promise<IssueInfo[]>

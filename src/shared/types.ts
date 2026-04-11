@@ -255,6 +255,11 @@ export type IssueInfo = {
   labels: string[]
 }
 
+export type GitHubViewer = {
+  login: string
+  email: string | null
+}
+
 // ─── Hooks (orca.yaml) ──────────────────────────────────────────────
 export type OrcaHooks = {
   scripts: {

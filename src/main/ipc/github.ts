@@ -7,6 +7,7 @@ import {
   getPRForBranch,
   getIssue,
   listIssues,
+  getAuthenticatedViewer,
   getPRChecks,
   getPRComments,
   resolveReviewThread,
@@ -109,6 +110,7 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
   )
 
   // Star operations target the Orca repo itself — no repoPath validation needed
+  ipcMain.handle('gh:viewer', () => getAuthenticatedViewer())
   ipcMain.handle('gh:checkOrcaStarred', () => checkOrcaStarred())
   ipcMain.handle('gh:starOrca', () => starOrca())
 }

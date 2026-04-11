@@ -1,6 +1,7 @@
 import type { ElectronAPI } from '@electron-toolkit/preload'
 import type {
   CreateWorktreeResult,
+  GitHubViewer,
   CreateWorktreeArgs
 } from '../../shared/types'
 import type { PreloadApi } from './api-types'
@@ -52,6 +53,7 @@ type PtyApi = {
 }
 
 type GhApi = {
+  viewer: () => Promise<GitHubViewer | null>
   prForBranch: (args: { repoPath: string; branch: string }) => Promise<PRInfo | null>
   issue: (args: { repoPath: string; number: number }) => Promise<IssueInfo | null>
   listIssues: (args: { repoPath: string; limit?: number }) => Promise<IssueInfo[]>
