@@ -1,8 +1,5 @@
 /* eslint-disable max-lines */
-
 import { useEffect, useCallback, useRef, useState, lazy, Suspense } from 'react'
-import { createPortal } from 'react-dom'
-import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
 import { useAppStore } from '../store'
 import {
   Dialog,
@@ -13,8 +10,6 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { RefreshCw } from 'lucide-react'
-import TabBar from './tab-bar/TabBar'
 import TerminalPane from './terminal-pane/TerminalPane'
 import {
   ORCA_EDITOR_SAVE_AND_CLOSE_EVENT,
@@ -22,8 +17,9 @@ import {
 } from './editor/editor-autosave'
 import { isUpdaterQuitAndInstallInProgress } from '@/lib/updater-beforeunload'
 import EditorAutosaveController from './editor/EditorAutosaveController'
-import BrowserPane, { destroyPersistentWebview } from './browser-pane/BrowserPane'
+import { destroyPersistentWebview } from './browser-pane/BrowserPane'
 import { reconcileTabOrder } from './tab-bar/reconcile-order'
+import TabGroupSplitLayout from './tab-group/TabGroupSplitLayout'
 
 const EditorPanel = lazy(() => import('./editor/EditorPanel'))
 
@@ -37,46 +33,35 @@ export default function Terminal(): React.JSX.Element | null {
   const closeTab = useAppStore((s) => s.closeTab)
   const setActiveTab = useAppStore((s) => s.setActiveTab)
   const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
-  const setTabCustomTitle = useAppStore((s) => s.setTabCustomTitle)
-  const setTabColor = useAppStore((s) => s.setTabColor)
   const consumeSuppressedPtyExit = useAppStore((s) => s.consumeSuppressedPtyExit)
-  const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
-  const codexRestartNoticeByPtyId = useAppStore((s) => s.codexRestartNoticeByPtyId)
-  const queueCodexPaneRestarts = useAppStore((s) => s.queueCodexPaneRestarts)
-  const clearCodexRestartNotice = useAppStore((s) => s.clearCodexRestartNotice)
-  const expandedPaneByTabId = useAppStore((s) => s.expandedPaneByTabId)
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
   const openFiles = useAppStore((s) => s.openFiles)
-  const activeFileId = useAppStore((s) => s.activeFileId)
   const activeBrowserTabId = useAppStore((s) => s.activeBrowserTabId)
   const activeTabType = useAppStore((s) => s.activeTabType)
   const setActiveTabType = useAppStore((s) => s.setActiveTabType)
   const setActiveFile = useAppStore((s) => s.setActiveFile)
   const closeFile = useAppStore((s) => s.closeFile)
-  const closeAllFiles = useAppStore((s) => s.closeAllFiles)
-  const pinFile = useAppStore((s) => s.pinFile)
   const browserTabsByWorktree = useAppStore((s) => s.browserTabsByWorktree)
+  const groupsByWorktree = useAppStore((s) => s.groupsByWorktree)
+  const layoutByWorktree = useAppStore((s) => s.layoutByWorktree)
+  const activeGroupIdByWorktree = useAppStore((s) => s.activeGroupIdByWorktree)
+  const ensureWorktreeRootGroup = useAppStore((s) => s.ensureWorktreeRootGroup)
   const createBrowserTab = useAppStore((s) => s.createBrowserTab)
   const closeBrowserTab = useAppStore((s) => s.closeBrowserTab)
   const setActiveBrowserTab = useAppStore((s) => s.setActiveBrowserTab)
-  const updateBrowserTabPageState = useAppStore((s) => s.updateBrowserTabPageState)
-  const setBrowserTabUrl = useAppStore((s) => s.setBrowserTabUrl)
 
   const markFileDirty = useAppStore((s) => s.markFileDirty)
   const setTabBarOrder = useAppStore((s) => s.setTabBarOrder)
-  const tabBarOrderByWorktree = useAppStore((s) => s.tabBarOrderByWorktree)
-  const tabBarOrder = activeWorktreeId ? tabBarOrderByWorktree[activeWorktreeId] : undefined
 
   const tabs = activeWorktreeId ? (tabsByWorktree[activeWorktreeId] ?? []) : []
   const allWorktrees = Object.values(worktreesByRepo).flat()
 
-  // Why: the TabBar is rendered into the titlebar via a portal so tabs share
-  // the same row as the "Orca" title. The target element is created by App.tsx.
-  // Uses useEffect because the DOM element doesn't exist during the render phase.
-  const [titlebarTabsTarget, setTitlebarTabsTarget] = useState<HTMLElement | null>(null)
   useEffect(() => {
-    setTitlebarTabsTarget(document.getElementById('titlebar-tabs'))
-  }, [])
+    if (!activeWorktreeId) {
+      return
+    }
+    ensureWorktreeRootGroup(activeWorktreeId)
+  }, [activeWorktreeId, ensureWorktreeRootGroup])
 
   // Filter editor files to only show those belonging to the active worktree
   const worktreeFiles = activeWorktreeId
@@ -85,6 +70,20 @@ export default function Terminal(): React.JSX.Element | null {
   const worktreeBrowserTabs = activeWorktreeId
     ? (browserTabsByWorktree[activeWorktreeId] ?? [])
     : []
+  const activeGroups = activeWorktreeId ? (groupsByWorktree[activeWorktreeId] ?? []) : []
+  const activeLayout = activeWorktreeId ? layoutByWorktree[activeWorktreeId] : undefined
+  const effectiveActiveLayout =
+    activeLayout ??
+    (activeWorktreeId
+      ? (() => {
+          const fallbackGroupId =
+            activeGroupIdByWorktree[activeWorktreeId] ?? activeGroups[0]?.id ?? null
+          if (!fallbackGroupId) {
+            return undefined
+          }
+          return { type: 'leaf', groupId: fallbackGroupId } as const
+        })()
+      : undefined)
   const activeWorktreeBrowserTabIdsKey = activeWorktreeId
     ? (browserTabsByWorktree[activeWorktreeId] ?? []).map((tab) => tab.id).join(',')
     : ''
@@ -364,114 +363,6 @@ export default function Terminal(): React.JSX.Element | null {
     [consumeSuppressedPtyExit, handleCloseTab]
   )
 
-  const handleCloseOthers = useCallback(
-    (tabId: string) => {
-      if (!activeWorktreeId) {
-        return
-      }
-      const state = useAppStore.getState()
-      const order = state.tabBarOrderByWorktree[activeWorktreeId] ?? []
-      for (const id of order) {
-        if (id === tabId) {
-          continue
-        }
-        if ((state.tabsByWorktree[activeWorktreeId] ?? []).some((tab) => tab.id === id)) {
-          closeTab(id)
-        } else if (
-          state.openFiles.some((file) => file.worktreeId === activeWorktreeId && file.id === id)
-        ) {
-          if (
-            state.activeFileId === id &&
-            state.openFiles.find((file) => file.id === id)?.isDirty
-          ) {
-            continue
-          }
-          closeFile(id)
-        } else if (
-          (state.browserTabsByWorktree[activeWorktreeId] ?? []).some((tab) => tab.id === id)
-        ) {
-          destroyPersistentWebview(id)
-          closeBrowserTab(id)
-        }
-      }
-    },
-    [activeWorktreeId, closeBrowserTab, closeFile, closeTab]
-  )
-
-  const handleCloseTabsToRight = useCallback(
-    (tabId: string) => {
-      if (!activeWorktreeId) {
-        return
-      }
-      const state = useAppStore.getState()
-      const currentOrder = state.tabBarOrderByWorktree[activeWorktreeId] ?? []
-      const index = currentOrder.findIndex((id) => id === tabId)
-      if (index === -1) {
-        return
-      }
-      const rightIds = currentOrder.slice(index + 1)
-      for (const id of rightIds) {
-        if ((state.tabsByWorktree[activeWorktreeId] ?? []).some((tab) => tab.id === id)) {
-          closeTab(id)
-        } else if (
-          state.openFiles.some((file) => file.worktreeId === activeWorktreeId && file.id === id)
-        ) {
-          closeFile(id)
-        } else if (
-          (state.browserTabsByWorktree[activeWorktreeId] ?? []).some((tab) => tab.id === id)
-        ) {
-          destroyPersistentWebview(id)
-          closeBrowserTab(id)
-        }
-      }
-    },
-    [activeWorktreeId, closeBrowserTab, closeFile, closeTab]
-  )
-
-  const handleActivateTab = useCallback(
-    (tabId: string) => {
-      setActiveTab(tabId)
-      setActiveTabType('terminal')
-    },
-    [setActiveTab, setActiveTabType]
-  )
-
-  const handleTogglePaneExpand = useCallback(
-    (tabId: string) => {
-      setActiveTab(tabId)
-      requestAnimationFrame(() => {
-        window.dispatchEvent(
-          new CustomEvent(TOGGLE_TERMINAL_PANE_EXPAND_EVENT, {
-            detail: { tabId }
-          })
-        )
-      })
-    },
-    [setActiveTab]
-  )
-
-  const handleActivateBrowserTab = useCallback(
-    (tabId: string) => {
-      setActiveBrowserTab(tabId)
-      setActiveTabType('browser')
-    },
-    [setActiveBrowserTab, setActiveTabType]
-  )
-
-  const handleBrowserTabPageStateUpdate = useCallback(
-    (tabId: string, updates: Parameters<typeof updateBrowserTabPageState>[1]) => {
-      updateBrowserTabPageState(tabId, updates)
-    },
-    [updateBrowserTabPageState]
-  )
-
-  const handleBrowserTabSetUrl = useCallback(
-    (tabId: string, url: string) => {
-      setBrowserTabUrl(tabId, url)
-    },
-    [setBrowserTabUrl]
-  )
-
   // Keyboard shortcuts
   useEffect(() => {
     if (!activeWorktreeId) {
@@ -703,181 +594,73 @@ export default function Terminal(): React.JSX.Element | null {
     >
       <EditorAutosaveController />
 
-      {/* Why: the tab bar is rendered into the titlebar via a portal so it
-          shares the same visual row as the "Orca" title. The portal target
-          (#titlebar-tabs) lives in App.tsx's titlebar. */}
-      {activeWorktreeId &&
-        titlebarTabsTarget &&
-        createPortal(
-          <TabBar
-            tabs={tabs}
-            activeTabId={activeTabId}
+      {/* Why: every worktree now renders through the canonical group layout,
+          including the original single group. Keeping the first group inline
+          avoids a "tabs in the titlebar first, tabs in the pane after split"
+          mismatch, so split creation no longer changes the vertical position
+          of the tab strip. */}
+      {activeWorktreeId && effectiveActiveLayout ? (
+        <div className="flex flex-1 min-w-0 min-h-0 overflow-hidden">
+          <TabGroupSplitLayout
+            layout={effectiveActiveLayout}
             worktreeId={activeWorktreeId}
-            onActivate={handleActivateTab}
-            onClose={handleCloseTab}
-            onCloseOthers={handleCloseOthers}
-            onCloseToRight={handleCloseTabsToRight}
-            onReorder={setTabBarOrder}
-            onNewTerminalTab={handleNewTab}
-            onNewBrowserTab={handleNewBrowserTab}
-            onSetCustomTitle={setTabCustomTitle}
-            onSetTabColor={setTabColor}
-            expandedPaneByTabId={expandedPaneByTabId}
-            onTogglePaneExpand={handleTogglePaneExpand}
-            editorFiles={worktreeFiles}
-            browserTabs={worktreeBrowserTabs}
-            activeFileId={activeFileId}
-            activeBrowserTabId={activeBrowserTabId}
-            activeTabType={activeTabType}
-            onActivateFile={(fileId) => {
-              setActiveFile(fileId)
-              setActiveTabType('editor')
-            }}
-            onCloseFile={handleCloseFile}
-            onActivateBrowserTab={handleActivateBrowserTab}
-            onCloseBrowserTab={handleCloseBrowserTab}
-            onCloseAllFiles={closeAllFiles}
-            onPinFile={pinFile}
-            tabBarOrder={tabBarOrder}
-          />,
-          titlebarTabsTarget
-        )}
+            focusedGroupId={activeGroupIdByWorktree[activeWorktreeId]}
+          />
+        </div>
+      ) : (
+        <>
+          {/* Terminal panes container - hidden when editor or browser tab active */}
+          <div
+            className={`relative flex-1 min-h-0 overflow-hidden ${
+              (activeTabType === 'editor' && worktreeFiles.length > 0) ||
+              (activeTabType === 'browser' && worktreeBrowserTabs.length > 0)
+                ? 'hidden'
+                : ''
+            }`}
+          >
+            {allWorktrees
+              .filter((wt) => mountedWorktreeIdsRef.current.has(wt.id))
+              .map((worktree) => {
+                const worktreeTabs = tabsByWorktree[worktree.id] ?? []
+                const isVisible = activeView !== 'settings' && worktree.id === activeWorktreeId
 
-      {/* Terminal panes container - hidden when editor tab active */}
-      <div
-        className={`relative flex-1 min-h-0 overflow-hidden ${
-          // Why: only hide the terminal container when another tab type has
-          // content to display. Hiding unconditionally for non-terminal types
-          // causes a blank screen when activeTabType is stale (e.g. 'editor'
-          // with no files after session restore). The terminal stays visible
-          // as a fallback until another surface is ready.
-          (activeTabType === 'editor' && worktreeFiles.length > 0) ||
-          (activeTabType === 'browser' && worktreeBrowserTabs.length > 0)
-            ? 'hidden'
-            : ''
-        }`}
-      >
-        {allWorktrees
-          .filter((wt) => mountedWorktreeIdsRef.current.has(wt.id))
-          .map((worktree) => {
-            const worktreeTabs = tabsByWorktree[worktree.id] ?? []
-            const isVisible = activeView !== 'settings' && worktree.id === activeWorktreeId
-
-            return (
-              <div
-                key={worktree.id}
-                className={isVisible ? 'absolute inset-0' : 'absolute inset-0 hidden'}
-                aria-hidden={!isVisible}
-              >
-                {(() => {
-                  const staleWorktreePtyIds = worktreeTabs.flatMap((tab) =>
-                    (ptyIdsByTabId[tab.id] ?? []).filter((ptyId) =>
-                      Boolean(codexRestartNoticeByPtyId[ptyId])
-                    )
-                  )
-                  if (staleWorktreePtyIds.length === 0) {
-                    return null
-                  }
-                  // Why: account switching is global, but repeating the same
-                  // stale-session prompt in every affected Codex pane quickly
-                  // turns into noise. Keep one worktree-scoped chip in the
-                  // same visual corner so users get the same prompt style
-                  // without having to dismiss it in every pane.
-                  return (
-                    <div className="pointer-events-none absolute right-3 top-3 z-20">
-                      <div className="pointer-events-auto flex items-center gap-2 rounded-lg border border-border/80 bg-popover/95 px-2 py-1.5 shadow-lg backdrop-blur-sm">
-                        <span className="text-[11px] text-muted-foreground">
-                          Codex is using the previous account
-                        </span>
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => queueCodexPaneRestarts(staleWorktreePtyIds)}
-                            className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-2 py-1 text-[11px] font-medium text-background transition-colors hover:opacity-90"
-                          >
-                            <RefreshCw className="size-3" />
-                            Restart
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              for (const ptyId of staleWorktreePtyIds) {
-                                clearCodexRestartNotice(ptyId)
-                              }
-                            }}
-                            className="rounded-md px-1.5 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
-                          >
-                            Dismiss
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })()}
-                {worktreeTabs.map((tab) => (
-                  <TerminalPane
-                    key={`${tab.id}-${tab.generation ?? 0}`}
-                    tabId={tab.id}
-                    worktreeId={worktree.id}
-                    cwd={worktree.path}
-                    isActive={isVisible && tab.id === activeTabId && activeTabType === 'terminal'}
-                    onPtyExit={(ptyId) => handlePtyExit(tab.id, ptyId)}
-                    onCloseTab={() => handleCloseTab(tab.id)}
-                  />
-                ))}
-              </div>
-            )
-          })}
-      </div>
-
-      {/* Browser panes container — hidden when active tab is not a browser tab.
-          Only the active browser tab for the active worktree is mounted; others
-          are parked in a hidden off-screen container by BrowserPane to preserve
-          their webview guest process across tab switches. */}
-      <div
-        className={`relative flex-1 min-h-0 overflow-hidden ${activeTabType !== 'browser' ? 'hidden' : ''}`}
-      >
-        {allWorktrees.map((worktree) => {
-          const browserTabs = browserTabsByWorktree[worktree.id] ?? []
-          const isVisibleWorktree = activeView !== 'settings' && worktree.id === activeWorktreeId
-          if (browserTabs.length === 0) {
-            return null
-          }
-          return (
-            <div
-              key={`browser-${worktree.id}`}
-              className={isVisibleWorktree ? 'absolute inset-0' : 'absolute inset-0 hidden'}
-              aria-hidden={!isVisibleWorktree}
-            >
-              {isVisibleWorktree && activeTabType === 'browser'
-                ? browserTabs
-                    .filter((browserTab) => browserTab.id === activeBrowserTabId)
-                    .map((browserTab) => (
-                      <BrowserPane
-                        key={browserTab.id}
-                        browserTab={browserTab}
-                        onUpdatePageState={handleBrowserTabPageStateUpdate}
-                        onSetUrl={handleBrowserTabSetUrl}
+                return (
+                  <div
+                    key={worktree.id}
+                    className={isVisible ? 'absolute inset-0' : 'absolute inset-0 hidden'}
+                    aria-hidden={!isVisible}
+                  >
+                    {worktreeTabs.map((tab) => (
+                      <TerminalPane
+                        key={`${tab.id}-${tab.generation ?? 0}`}
+                        tabId={tab.id}
+                        worktreeId={worktree.id}
+                        cwd={worktree.path}
+                        isActive={
+                          isVisible && tab.id === activeTabId && activeTabType === 'terminal'
+                        }
+                        onPtyExit={(ptyId) => handlePtyExit(tab.id, ptyId)}
+                        onCloseTab={() => handleCloseTab(tab.id)}
                       />
-                    ))
-                : null}
-            </div>
-          )
-        })}
-      </div>
+                    ))}
+                  </div>
+                )
+              })}
+          </div>
 
-      {activeWorktreeId && activeTabType === 'editor' && worktreeFiles.length > 0 && (
-        <Suspense
-          fallback={
-            <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
-              Loading editor...
-            </div>
-          }
-        >
-          <EditorPanel />
-        </Suspense>
+          {activeWorktreeId && activeTabType === 'editor' && worktreeFiles.length > 0 && (
+            <Suspense
+              fallback={
+                <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
+                  Loading editor...
+                </div>
+              }
+            >
+              <EditorPanel />
+            </Suspense>
+          )}
+        </>
       )}
-
       {/* Save confirmation dialog */}
       <Dialog
         open={saveDialogFileId !== null}

@@ -46,6 +46,7 @@ export type PtyTransport = {
   ) => boolean
   isConnected: () => boolean
   getPtyId: () => string | null
+  preserve?: () => void
   destroy?: () => void | Promise<void>
 }
 
@@ -447,6 +448,25 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         unregisterPtyHandlers(id)
         storedCallbacks.onDisconnect?.()
       }
+    },
+
+    preserve() {
+      if (staleTitleTimer) {
+        clearTimeout(staleTitleTimer)
+        staleTitleTimer = null
+      }
+      if (!ptyId) {
+        destroyed = true
+        connected = false
+        return
+      }
+      const id = ptyId
+      // Why: split-group creation currently remounts TerminalPane while the
+      // underlying terminal tab still exists. We must detach this renderer's
+      // listeners without killing the PTY so the next mount can re-attach to
+      // the same live shell instead of spawning a fresh one and losing work.
+      unregisterPtyHandlers(id)
+      connected = false
     },
 
     sendInput(data: string): boolean {

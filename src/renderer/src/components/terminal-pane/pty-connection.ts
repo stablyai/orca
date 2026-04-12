@@ -4,7 +4,7 @@ import { isGeminiTerminalTitle, isClaudeAgent } from '@/lib/agent-status'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
 import type { PtyTransport } from './pty-transport'
-import { createIpcPtyTransport, getEagerPtyBufferHandle } from './pty-transport'
+import { createIpcPtyTransport } from './pty-transport'
 import { shouldSeedCacheTimerOnInitialTitle } from './cache-timer-seeding'
 
 type PtyConnectionDeps = {
@@ -15,6 +15,7 @@ type PtyConnectionDeps = {
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
   pendingWritesRef: React.RefObject<Map<number, string>>
   isActiveRef: React.RefObject<boolean>
+  effectiveVisibleRef: React.RefObject<boolean>
   onPtyExitRef: React.RefObject<(ptyId: string) => void>
   onPtyErrorRef?: React.RefObject<(paneId: number, message: string) => void>
   clearTabPtyId: (tabId: string, ptyId: string) => void
@@ -194,7 +195,11 @@ export function connectPanePty(
     }
 
     const dataCallback = (data: string): void => {
-      if (deps.isActiveRef.current) {
+      // Why: in split-group mode, a non-focused group's terminal is visible
+      // (display:flex) but not active (no keyboard focus). PTY output must
+      // still be written to xterm so the user sees content. Only buffer
+      // output when the terminal is truly hidden (e.g., a background tab).
+      if (deps.effectiveVisibleRef.current) {
         pane.terminal.write(data)
       } else {
         const pending = deps.pendingWritesRef.current
@@ -210,17 +215,17 @@ export function connectPanePty(
       .getState()
       .tabsByWorktree[deps.worktreeId]?.find((t) => t.id === deps.tabId)?.ptyId
 
-    // Why: only attach if the eager buffer handle still exists. For split-pane
-    // tabs, replayTerminalLayout calls connectPanePty once per pane. The first
-    // pane consumes the handle via attach(); subsequent panes find no handle
-    // and fall through to connect(), which spawns their own fresh PTYs. Without
-    // this guard, every split pane would try to share the same PTY ID, and the
-    // last one's handler would overwrite the earlier ones' in the dispatcher.
-    if (existingPtyId && getEagerPtyBufferHandle(existingPtyId)) {
+    // Why: layout-only remounts (for example creating a new tab group around an
+    // existing terminal) preserve the tab's live PTY in Zustand. Re-attach to
+    // any existing PTY ID here so remounting the UI does not spawn a fresh
+    // shell and wipe the user's in-progress session. The eager-buffer handle is
+    // only needed to replay startup output after full app restore.
+    if (existingPtyId) {
       allowInitialIdleCacheSeed = true
-      // Why: this tab had a PTY eagerly spawned by reconnectPersistedTerminals().
-      // Attach to it instead of spawning a duplicate. Startup commands are
-      // intentionally skipped — the PTY was already spawned with a fresh shell.
+      // Why: this tab already has a live PTY, either from startup reconnect or
+      // from a layout-only remount that preserved the shell. Attach to it
+      // instead of spawning a duplicate. Startup commands are intentionally
+      // skipped — the PTY was already spawned with a fresh shell.
       transport.attach({
         existingPtyId,
         cols,

@@ -46,7 +46,7 @@ export type TerminalSlice = {
   workspaceSessionReady: boolean
   pendingReconnectWorktreeIds: string[]
   pendingReconnectTabByWorktree: Record<string, string[]>
-  createTab: (worktreeId: string) => TerminalTab
+  createTab: (worktreeId: string, tabId?: string) => TerminalTab
   closeTab: (tabId: string) => void
   reorderTabs: (worktreeId: string, tabIds: string[]) => void
   setTabBarOrder: (worktreeId: string, order: string[]) => void
@@ -175,8 +175,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     }
   },
 
-  createTab: (worktreeId) => {
-    const id = globalThis.crypto.randomUUID()
+  createTab: (worktreeId, tabId) => {
+    const id = tabId ?? globalThis.crypto.randomUUID()
     let tab!: TerminalTab
     set((s) => {
       const existing = s.tabsByWorktree[worktreeId] ?? []
@@ -201,6 +201,23 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         terminalLayoutsByTabId: { ...s.terminalLayoutsByTabId, [tab.id]: emptyLayoutSnapshot() }
       }
     })
+    const state = get()
+    const targetGroupId =
+      state.activeGroupIdByWorktree[worktreeId] ?? state.groupsByWorktree[worktreeId]?.[0]?.id
+    if (
+      targetGroupId &&
+      !state.findTabForEntityInGroup(worktreeId, targetGroupId, id, 'terminal')
+    ) {
+      state.createUnifiedTab(worktreeId, 'terminal', {
+        id,
+        entityId: id,
+        label: tab.title,
+        customLabel: tab.customTitle,
+        color: tab.color
+      })
+    } else if (targetGroupId) {
+      state.activateTab(id)
+    }
     return tab
   },
 
@@ -263,6 +280,15 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         cacheTimerByKey: nextCacheTimer
       }
     })
+    const item = get().unifiedTabsByWorktree
+    for (const tabs of Object.values(item)) {
+      const workspaceItem = tabs.find(
+        (entry) => entry.contentType === 'terminal' && entry.entityId === tabId
+      )
+      if (workspaceItem) {
+        get().closeUnifiedTab(workspaceItem.id)
+      }
+    }
   },
 
   reorderTabs: (worktreeId, tabIds) => {
@@ -311,7 +337,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     })
   },
 
-  setActiveTab: (tabId) =>
+  setActiveTab: (tabId) => {
     set((s) => {
       const worktreeId = s.activeWorktreeId
       return {
@@ -320,7 +346,16 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           ? { ...s.activeTabIdByWorktree, [worktreeId]: tabId }
           : s.activeTabIdByWorktree
       }
-    }),
+    })
+    const item = Object.values(get().unifiedTabsByWorktree)
+      .flat()
+      .find((entry) => entry.contentType === 'terminal' && entry.entityId === tabId)
+    if (item) {
+      get().activateTab(item.id)
+    }
+  },
+
+  // Keep the canonical workspace item label in sync with terminal runtime title.
 
   updateTabTitle: (tabId, title) => {
     set((s) => {
@@ -353,6 +388,12 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         ? { tabsByWorktree: next }
         : { tabsByWorktree: next, sortEpoch: s.sortEpoch + 1 }
     })
+    const item = Object.values(get().unifiedTabsByWorktree)
+      .flat()
+      .find((entry) => entry.contentType === 'terminal' && entry.entityId === tabId)
+    if (item) {
+      get().setTabLabel(item.id, title)
+    }
   },
 
   setRuntimePaneTitle: (tabId, paneId, title) => {
@@ -399,6 +440,12 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       scheduleRuntimeGraphSync()
       return { tabsByWorktree: next }
     })
+    const item = Object.values(get().unifiedTabsByWorktree)
+      .flat()
+      .find((entry) => entry.contentType === 'terminal' && entry.entityId === tabId)
+    if (item) {
+      get().setTabCustomLabel(item.id, title)
+    }
   },
 
   setTabColor: (tabId, color) => {
@@ -409,6 +456,12 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       }
       return { tabsByWorktree: next }
     })
+    const item = Object.values(get().unifiedTabsByWorktree)
+      .flat()
+      .find((entry) => entry.contentType === 'terminal' && entry.entityId === tabId)
+    if (item) {
+      get().setUnifiedTabColor(item.id, color)
+    }
   },
 
   updateTabPtyId: (tabId, ptyId) => {

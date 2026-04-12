@@ -20,6 +20,10 @@ type WorkspaceSessionSnapshot = Pick<
   | 'activeTabTypeByWorktree'
   | 'browserTabsByWorktree'
   | 'activeBrowserTabIdByWorktree'
+  | 'unifiedTabsByWorktree'
+  | 'groupsByWorktree'
+  | 'layoutByWorktree'
+  | 'activeGroupIdByWorktree'
 >
 
 /** Build the editor-file portion of the workspace session for persistence.
@@ -87,6 +91,12 @@ export function buildWorkspaceSessionPayload(
     // field silently disables eager terminal reconnect on the next restart.
     activeWorktreeIdsOnShutdown,
     activeTabIdByWorktree: snapshot.activeTabIdByWorktree,
+    // Why: the unified tab/group model is persisted alongside legacy fields so
+    // builds with TabGroupSplitLayout can restore group layouts on restart.
+    unifiedTabs: snapshot.unifiedTabsByWorktree,
+    tabGroups: snapshot.groupsByWorktree,
+    tabGroupLayouts: snapshot.layoutByWorktree,
+    activeGroupIdByWorktree: snapshot.activeGroupIdByWorktree,
     ...buildEditorSessionData(
       snapshot.openFiles,
       snapshot.activeFileIdByWorktree,

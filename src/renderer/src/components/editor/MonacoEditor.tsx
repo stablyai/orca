@@ -316,6 +316,11 @@ export default function MonacoEditor({
           }
         }}
         path={filePath}
+        // Why: when editor tabs are split across groups, multiple Editor instances
+        // share the same Monaco model (keyed by path). The default behavior disposes
+        // the model on unmount, which blanks every other editor showing that file.
+        // keepCurrentModel prevents model disposal so sibling editors survive.
+        keepCurrentModel
       />
 
       {toastNode}

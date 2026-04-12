@@ -146,7 +146,7 @@ export type EditorSlice = {
   activeTabType: WorkspaceVisibleTabType
   setActiveTabType: (type: WorkspaceVisibleTabType) => void
   openFile: (file: Omit<OpenFile, 'id' | 'isDirty'>, options?: { preview?: boolean }) => void
-  pinFile: (fileId: string) => void
+  pinFile: (fileId: string, tabId?: string) => void
   closeFile: (fileId: string) => void
   closeAllFiles: () => void
   setActiveFile: (fileId: string) => void
@@ -251,7 +251,39 @@ export type EditorSlice = {
   hydrateEditorSession: (session: WorkspaceSessionState) => void
 }
 
-export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (set) => ({
+function openWorkspaceEditorItem(
+  state: AppState,
+  fileId: string,
+  worktreeId: string,
+  label: string,
+  contentType: 'editor' | 'diff' | 'conflict-review',
+  isPreview?: boolean
+): string {
+  const activeGroupIdByWorktree = state.activeGroupIdByWorktree ?? {}
+  const groupsByWorktree = state.groupsByWorktree ?? {}
+  const targetGroupId =
+    activeGroupIdByWorktree[worktreeId] ?? groupsByWorktree[worktreeId]?.[0]?.id ?? ''
+  if (!state.findTabForEntityInGroup || !state.createUnifiedTab || !state.activateTab) {
+    return fileId
+  }
+  const existing = state.findTabForEntityInGroup(worktreeId, targetGroupId, fileId, contentType)
+  if (existing) {
+    state.activateTab(existing.id)
+    return existing.id
+  }
+  return state.createUnifiedTab(worktreeId, contentType, {
+    entityId: fileId,
+    label,
+    isPreview,
+    targetGroupId
+  }).id
+}
+
+function isEditorWorkspaceItemContentType(contentType: string): boolean {
+  return contentType === 'editor' || contentType === 'diff' || contentType === 'conflict-review'
+}
+
+export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (set, get) => ({
   editorDrafts: {},
   setEditorDraft: (fileId, content) =>
     set((s) => ({
@@ -339,7 +371,21 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       }
     }),
 
-  openFile: (file, options) =>
+  openFile: (file, options) => {
+    const stateBeforeOpen = get()
+    const activeGroupIdByWorktree = stateBeforeOpen.activeGroupIdByWorktree ?? {}
+    const groupsByWorktree = stateBeforeOpen.groupsByWorktree ?? {}
+    const unifiedTabsByWorktree = stateBeforeOpen.unifiedTabsByWorktree ?? {}
+    const targetGroupId =
+      activeGroupIdByWorktree[file.worktreeId] ?? groupsByWorktree[file.worktreeId]?.[0]?.id ?? null
+    const replacedPreviewEntityId =
+      options?.preview && targetGroupId
+        ? ((unifiedTabsByWorktree[file.worktreeId] ?? []).find(
+            (item) =>
+              item.groupId === targetGroupId && item.contentType === 'editor' && item.isPreview
+          )?.entityId ?? null)
+        : null
+
     set((s) => {
       const id = file.filePath
       const existing = s.openFiles.find((f) => f.id === id)
@@ -390,52 +436,6 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         }
       }
 
-      // If opening as preview, replace the existing preview tab for this worktree
-      let newFiles = s.openFiles
-      if (isPreview) {
-        const existingPreviewIdx = s.openFiles.findIndex(
-          (f) => f.worktreeId === worktreeId && f.isPreview
-        )
-        if (existingPreviewIdx !== -1) {
-          const replacedPreview = s.openFiles[existingPreviewIdx]
-          const nextEditorDrafts =
-            replacedPreview.id === id
-              ? s.editorDrafts
-              : Object.fromEntries(
-                  Object.entries(s.editorDrafts).filter(([fileId]) => fileId !== replacedPreview.id)
-                )
-          const nextMarkdownViewMode =
-            replacedPreview.id === id
-              ? s.markdownViewMode
-              : Object.fromEntries(
-                  Object.entries(s.markdownViewMode).filter(
-                    ([fileId]) => fileId !== replacedPreview.id
-                  )
-                )
-          // Replace in-place to preserve tab position
-          newFiles = s.openFiles.map((f, i) =>
-            i === existingPreviewIdx ? { ...file, id, isDirty: false, isPreview: true } : f
-          )
-          // Swap the old preview ID for the new one in the stored tab bar order
-          const prevOrder = s.tabBarOrderByWorktree?.[worktreeId]
-          const previewTabBarUpdate = prevOrder
-            ? {
-                tabBarOrderByWorktree: {
-                  ...s.tabBarOrderByWorktree,
-                  [worktreeId]: prevOrder.map((eid) => (eid === replacedPreview.id ? id : eid))
-                }
-              }
-            : {}
-          return {
-            openFiles: newFiles,
-            editorDrafts: nextEditorDrafts,
-            markdownViewMode: nextMarkdownViewMode,
-            ...previewTabBarUpdate,
-            ...activeResult
-          }
-        }
-      }
-
       // Why: append the new file to the persisted tab bar order so it appears
       // at the end of the tab bar. Without this, reconcileOrder in TabBar
       // falls back to type-grouped ordering (terminals first) when the stored
@@ -456,21 +456,70 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             inBase.add(eid)
           }
         }
-        base.push(id)
+        // Why: preview replacement is scoped to the active split group, not the
+        // whole worktree. When a group's preview swaps from file A to file B,
+        // update the legacy tab-bar order in place so single-group mode keeps
+        // the tab position stable without deleting unrelated editor state.
+        if (isPreview && replacedPreviewEntityId && replacedPreviewEntityId !== id) {
+          const replacedIndex = base.indexOf(replacedPreviewEntityId)
+          if (replacedIndex !== -1) {
+            base[replacedIndex] = id
+          } else {
+            base.push(id)
+          }
+        } else {
+          base.push(id)
+        }
         tabBarUpdate.tabBarOrderByWorktree = { ...s.tabBarOrderByWorktree, [worktreeId]: base }
       }
 
       return {
         openFiles: [
-          ...newFiles,
+          ...s.openFiles,
           { ...file, id, isDirty: false, isPreview: isPreview || undefined }
         ],
         ...tabBarUpdate,
         ...activeResult
       }
-    }),
+    })
+    const stateAfterSet = get()
+    const hasTabsSlice =
+      Boolean(stateAfterSet.findTabForEntityInGroup) &&
+      Boolean(stateAfterSet.createUnifiedTab) &&
+      Boolean(stateAfterSet.activateTab)
+    if (hasTabsSlice) {
+      void openWorkspaceEditorItem(
+        stateAfterSet,
+        file.filePath,
+        file.worktreeId,
+        file.relativePath,
+        file.mode === 'conflict-review'
+          ? 'conflict-review'
+          : file.mode === 'diff'
+            ? 'diff'
+            : 'editor',
+        options?.preview ?? false
+      )
+    }
+    if (hasTabsSlice && replacedPreviewEntityId && replacedPreviewEntityId !== file.filePath) {
+      const stateAfterOpen = get()
+      const stillReferenced = Object.values(stateAfterOpen.unifiedTabsByWorktree ?? {})
+        .flat()
+        .some(
+          (item) =>
+            item.entityId === replacedPreviewEntityId &&
+            isEditorWorkspaceItemContentType(item.contentType)
+        )
+      // Why: preview replacement now happens per split group in unifiedTabs.
+      // Only drop the backing OpenFile when no editor workspace item still
+      // references that document, otherwise another group would lose its tab.
+      if (!stillReferenced) {
+        stateAfterOpen.closeFile(replacedPreviewEntityId)
+      }
+    }
+  },
 
-  pinFile: (fileId) =>
+  pinFile: (fileId, tabId) => {
     set((s) => {
       const file = s.openFiles.find((f) => f.id === fileId)
       if (!file?.isPreview) {
@@ -479,7 +528,19 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       return {
         openFiles: s.openFiles.map((f) => (f.id === fileId ? { ...f, isPreview: undefined } : f))
       }
-    }),
+    })
+    const state = get()
+    for (const tabs of Object.values(state.unifiedTabsByWorktree ?? {})) {
+      for (const item of tabs) {
+        // Why: split groups can show the same document in multiple tab instances.
+        // Pinning should only affect the tab instance the user acted on, not
+        // every other group that happens to reference the same file.
+        if (item.entityId === fileId && (!tabId || item.id === tabId)) {
+          state.pinTab(item.id)
+        }
+      }
+    }
+  },
 
   // Why: closing a tab does NOT clear Resolved locally state. If the file is
   // still present in Changes or Staged Changes, the continuity badge should
@@ -567,7 +628,19 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       }
     }),
 
-  closeAllFiles: () =>
+  closeAllFiles: () => {
+    const state = get()
+    const activeWorktreeId = state.activeWorktreeId
+    const closingItemIds = Object.values(state.unifiedTabsByWorktree ?? {})
+      .flat()
+      .filter(
+        (item) =>
+          (item.contentType === 'editor' ||
+            item.contentType === 'diff' ||
+            item.contentType === 'conflict-review') &&
+          (!activeWorktreeId || item.worktreeId === activeWorktreeId)
+      )
+      .map((item) => item.id)
     set((s) => {
       const activeWorktreeId = s.activeWorktreeId
       if (!activeWorktreeId) {
@@ -615,9 +688,13 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         // to an old match unexpectedly.
         pendingEditorReveal: null
       }
-    }),
+    })
+    for (const itemId of closingItemIds) {
+      get().closeUnifiedTab?.(itemId)
+    }
+  },
 
-  setActiveFile: (fileId) =>
+  setActiveFile: (fileId) => {
     set((s) => {
       const file = s.openFiles.find((f) => f.id === fileId)
       const worktreeId = file?.worktreeId
@@ -627,7 +704,26 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           ? { ...s.activeFileIdByWorktree, [worktreeId]: fileId }
           : s.activeFileIdByWorktree
       }
-    }),
+    })
+    const state = get()
+    const worktreeId = state.activeWorktreeId
+    if (!worktreeId) {
+      return
+    }
+    const groupId =
+      (state.activeGroupIdByWorktree ?? {})[worktreeId] ??
+      (state.groupsByWorktree ?? {})[worktreeId]?.[0]?.id
+    if (!groupId) {
+      return
+    }
+    const item =
+      state.findTabForEntityInGroup(worktreeId, groupId, fileId, 'editor') ??
+      state.findTabForEntityInGroup(worktreeId, groupId, fileId, 'diff') ??
+      state.findTabForEntityInGroup(worktreeId, groupId, fileId, 'conflict-review')
+    if (item && state.activateTab) {
+      state.activateTab(item.id)
+    }
+  },
 
   reorderFiles: (fileIds) =>
     set((s) => {
@@ -656,7 +752,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       )
     })),
 
-  openDiff: (worktreeId, filePath, relativePath, language, staged) =>
+  openDiff: (worktreeId, filePath, relativePath, language, staged) => {
     set((s) => {
       const diffSource: DiffSource = staged ? 'staged' : 'unstaged'
       const id = `${worktreeId}::diff::${diffSource}::${relativePath}`
@@ -704,12 +800,21 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
         activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
       }
-    }),
+    })
+    openWorkspaceEditorItem(
+      get(),
+      `${worktreeId}::diff::${staged ? 'staged' : 'unstaged'}::${relativePath}`,
+      worktreeId,
+      relativePath,
+      'diff'
+    )
+  },
 
-  openBranchDiff: (worktreeId, worktreePath, entry, compare, language) =>
+  openBranchDiff: (worktreeId, worktreePath, entry, compare, language) => {
+    const branchCompare = toBranchCompareSnapshot(compare)
+    const itemEntityId = `${worktreeId}::diff::branch::${compare.baseRef}::${branchCompare.compareVersion}::${entry.path}`
     set((s) => {
-      const branchCompare = toBranchCompareSnapshot(compare)
-      const id = `${worktreeId}::diff::branch::${compare.baseRef}::${branchCompare.compareVersion}::${entry.path}`
+      const id = itemEntityId
       const existing = s.openFiles.find((f) => f.id === id)
       if (existing) {
         return {
@@ -755,9 +860,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
         activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
       }
-    }),
+    })
+    openWorkspaceEditorItem(get(), itemEntityId, worktreeId, entry.path, 'diff')
+  },
 
-  openAllDiffs: (worktreeId, worktreePath, alternate, areaFilter) =>
+  openAllDiffs: (worktreeId, worktreePath, alternate, areaFilter) => {
     set((s) => {
       const relevantEntries = (s.gitStatusByWorktree[worktreeId] ?? []).filter((entry) => {
         if (areaFilter) {
@@ -819,9 +926,23 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
         activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
       }
-    }),
+    })
+    openWorkspaceEditorItem(
+      get(),
+      areaFilter
+        ? `${worktreeId}::all-diffs::uncommitted::${areaFilter}`
+        : `${worktreeId}::all-diffs::uncommitted`,
+      worktreeId,
+      areaFilter
+        ? ({ staged: 'Staged Changes', unstaged: 'Changes', untracked: 'Untracked Files' }[
+            areaFilter
+          ] ?? 'All Changes')
+        : 'All Changes',
+      'diff'
+    )
+  },
 
-  openConflictFile: (worktreeId, worktreePath, entry, language) =>
+  openConflictFile: (worktreeId, worktreePath, entry, language) => {
     set((s) => {
       const absolutePath = joinPath(worktreePath, entry.path)
       const id = absolutePath
@@ -889,14 +1010,22 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             ? s.trackedConflictPathsByWorktree
             : { ...s.trackedConflictPathsByWorktree, [worktreeId]: nextTracked }
       }
-    }),
+    })
+    openWorkspaceEditorItem(
+      get(),
+      joinPath(worktreePath, entry.path),
+      worktreeId,
+      entry.path,
+      'editor'
+    )
+  },
 
   // Why: Review conflicts is launched from Source Control into the editor area,
   // not from Checks. Merge-conflict review is source-control work, not CI/PR
   // status. The tab renders from a stored snapshot (entries + timestamp), not
   // from live status on every paint, so the list is stable even if the live
   // unresolved set changes between polls.
-  openConflictReview: (worktreeId, worktreePath, entries, source) =>
+  openConflictReview: (worktreeId, worktreePath, entries, source) => {
     set((s) => {
       const id = `${worktreeId}::conflict-review`
       const conflictReview: ConflictReviewState = {
@@ -947,11 +1076,19 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
         activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
       }
-    }),
+    })
+    openWorkspaceEditorItem(
+      get(),
+      `${worktreeId}::conflict-review`,
+      worktreeId,
+      'Conflict Review',
+      'conflict-review'
+    )
+  },
 
-  openBranchAllDiffs: (worktreeId, worktreePath, compare, alternate) =>
+  openBranchAllDiffs: (worktreeId, worktreePath, compare, alternate) => {
+    const branchCompare = toBranchCompareSnapshot(compare)
     set((s) => {
-      const branchCompare = toBranchCompareSnapshot(compare)
       const branchEntriesSnapshot = s.gitBranchChangesByWorktree[worktreeId] ?? []
       const id = `${worktreeId}::all-diffs::branch::${compare.baseRef}::${branchCompare.compareVersion}`
       const existing = s.openFiles.find((f) => f.id === id)
@@ -999,7 +1136,15 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
         activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
       }
-    }),
+    })
+    openWorkspaceEditorItem(
+      get(),
+      `${worktreeId}::all-diffs::branch::${compare.baseRef}::${branchCompare.compareVersion}`,
+      worktreeId,
+      'All Changes',
+      'diff'
+    )
+  },
 
   // Cursor line tracking
   editorCursorLine: {},

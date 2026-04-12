@@ -13,6 +13,24 @@ export function findTabAndWorktree(
   return null
 }
 
+export function findTabByEntityInGroup(
+  tabsByWorktree: Record<string, Tab[]>,
+  worktreeId: string,
+  groupId: string,
+  entityId: string,
+  contentType?: Tab['contentType']
+): Tab | null {
+  const tabs = tabsByWorktree[worktreeId] ?? []
+  return (
+    tabs.find(
+      (tab) =>
+        tab.groupId === groupId &&
+        tab.entityId === entityId &&
+        (contentType ? tab.contentType === contentType : true)
+    ) ?? null
+  )
+}
+
 export function findGroupForTab(
   groupsByWorktree: Record<string, TabGroup[]>,
   worktreeId: string,
@@ -25,13 +43,16 @@ export function findGroupForTab(
 export function ensureGroup(
   groupsByWorktree: Record<string, TabGroup[]>,
   activeGroupIdByWorktree: Record<string, string>,
-  worktreeId: string
+  worktreeId: string,
+  preferredGroupId?: string
 ): {
   group: TabGroup
   groupsByWorktree: Record<string, TabGroup[]>
   activeGroupIdByWorktree: Record<string, string>
 } {
-  const existing = groupsByWorktree[worktreeId]?.[0]
+  const existing =
+    groupsByWorktree[worktreeId]?.find((group) => group.id === preferredGroupId) ??
+    groupsByWorktree[worktreeId]?.[0]
   if (existing) {
     return { group: existing, groupsByWorktree, activeGroupIdByWorktree }
   }

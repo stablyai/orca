@@ -6,6 +6,10 @@ type HydratedTabState = {
   activeGroupIdByWorktree: Record<string, string>
 }
 
+function isTransientEditorContentType(contentType: Tab['contentType']): boolean {
+  return contentType === 'diff' || contentType === 'conflict-review'
+}
+
 function hydrateUnifiedFormat(
   session: WorkspaceSessionState,
   validWorktreeIds: Set<string>
@@ -13,6 +17,12 @@ function hydrateUnifiedFormat(
   const tabsByWorktree: Record<string, Tab[]> = {}
   const groupsByWorktree: Record<string, TabGroup[]> = {}
   const activeGroupIdByWorktree: Record<string, string> = {}
+  const persistedEditFileIdsByWorktree = Object.fromEntries(
+    Object.entries(session.openFilesByWorktree ?? {}).map(([worktreeId, files]) => [
+      worktreeId,
+      new Set(files.map((file) => file.filePath))
+    ])
+  )
 
   for (const [worktreeId, tabs] of Object.entries(session.unifiedTabs!)) {
     if (!validWorktreeIds.has(worktreeId)) {
@@ -21,9 +31,20 @@ function hydrateUnifiedFormat(
     if (tabs.length === 0) {
       continue
     }
-    tabsByWorktree[worktreeId] = [...tabs].sort(
-      (a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt
-    )
+    const persistedEditFileIds = persistedEditFileIdsByWorktree[worktreeId] ?? new Set<string>()
+    tabsByWorktree[worktreeId] = [...tabs]
+      .filter((tab) => {
+        if (!isTransientEditorContentType(tab.contentType)) {
+          return true
+        }
+        // Why: persisted unified tabs can still contain transient diff or
+        // conflict-review entries from pre-fix sessions, but editor hydration
+        // intentionally restores only edit-mode files. Drop those orphaned
+        // editor-like tabs here so restored split groups never point at a pane
+        // with no backing OpenFile state.
+        return persistedEditFileIds.has(tab.entityId ?? tab.id)
+      })
+      .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt)
   }
 
   for (const [worktreeId, groups] of Object.entries(session.tabGroups!)) {
@@ -71,6 +92,7 @@ function hydrateLegacyFormat(
     for (const tt of terminalTabs) {
       tabs.push({
         id: tt.id,
+        entityId: tt.id,
         groupId,
         worktreeId,
         contentType: 'terminal',
@@ -88,6 +110,7 @@ function hydrateLegacyFormat(
     for (const ef of editorFiles) {
       tabs.push({
         id: ef.filePath,
+        entityId: ef.filePath,
         groupId,
         worktreeId,
         contentType: 'editor',

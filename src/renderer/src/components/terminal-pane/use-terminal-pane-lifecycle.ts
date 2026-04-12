@@ -50,6 +50,7 @@ type UseTerminalPaneLifecycleDeps = {
   panePtyBindingsRef: React.RefObject<Map<number, IDisposable>>
   pendingWritesRef: React.RefObject<Map<number, string>>
   isActiveRef: React.RefObject<boolean>
+  effectiveVisibleRef: React.RefObject<boolean>
   onPtyExitRef: React.RefObject<(ptyId: string) => void>
   onPtyErrorRef?: React.RefObject<(paneId: number, message: string) => void>
   clearTabPtyId: (tabId: string, ptyId: string) => void
@@ -94,6 +95,7 @@ export function useTerminalPaneLifecycle({
   panePtyBindingsRef,
   pendingWritesRef,
   isActiveRef,
+  effectiveVisibleRef,
   onPtyExitRef,
   onPtyErrorRef,
   clearTabPtyId,
@@ -193,6 +195,7 @@ export function useTerminalPaneLifecycle({
       paneTransportsRef,
       pendingWritesRef,
       isActiveRef,
+      effectiveVisibleRef,
       onPtyExitRef,
       onPtyErrorRef,
       clearTabPtyId,
@@ -446,7 +449,15 @@ export function useTerminalPaneLifecycle({
       }
       linkDisposables.clear()
       for (const transport of paneTransports.values()) {
-        transport.destroy?.()
+        if (transport.getPtyId()) {
+          // Why: split-group layout changes can temporarily unmount the whole
+          // TerminalPane tree even though the tab is still open. Preserve live
+          // PTYs across that renderer remount so opening a neighboring group
+          // does not restart the user's shell or running command.
+          transport.preserve?.()
+        } else {
+          transport.destroy?.()
+        }
       }
       for (const panePtyBinding of panePtyBindings.values()) {
         panePtyBinding.dispose()
