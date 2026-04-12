@@ -17,8 +17,13 @@ import { cn } from '@/lib/utils'
 import { getWorktreeStatus, getWorktreeStatusLabel } from '@/lib/worktree-status'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
-import { searchWorktrees, type MatchRange } from '@/lib/worktree-palette-search'
+import {
+  searchCreateWorktreeAction,
+  searchWorktrees,
+  type MatchRange
+} from '@/lib/worktree-palette-search'
 import type { Worktree } from '../../../shared/types'
+import { isGitRepoKind } from '../../../shared/repo-kind'
 
 // ─── Highlight helper ───────────────────────────────────────────────
 
@@ -79,8 +84,10 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const [selectedWorktreeId, setSelectedWorktreeId] = useState('')
   const previousWorktreeIdRef = useRef<string | null>(null)
   const wasVisibleRef = useRef(false)
+  const skipRestoreFocusRef = useRef(false)
 
   const repoMap = useMemo(() => new Map(repos.map((r) => [r.id, r])), [repos])
+  const canCreateWorktree = useMemo(() => repos.some((repo) => isGitRepoKind(repo)), [repos])
 
   // All non-archived worktrees sorted by recent signals
   const sortedWorktrees = useMemo(() => {
@@ -94,6 +101,10 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const matches = useMemo(
     () => searchWorktrees(sortedWorktrees, query.trim(), repoMap, prCache, issueCache),
     [sortedWorktrees, query, repoMap, prCache, issueCache]
+  )
+  const createAction = useMemo(
+    () => (canCreateWorktree ? searchCreateWorktreeAction(query.trim()) : null),
+    [canCreateWorktree, query]
   )
 
   // Build a map of worktreeId -> Worktree for quick lookup
@@ -114,6 +125,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       // Why: this dialog opens from external store state, so session reset must
       // follow the controlled `visible` flag instead of relying on Radix open callbacks.
       previousWorktreeIdRef.current = activeWorktreeId
+      skipRestoreFocusRef.current = false
       setQuery('')
       setSelectedWorktreeId('')
     }
@@ -125,19 +137,28 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     if (!visible) {
       return
     }
+    const firstSelectableId =
+      createAction?.action === 'create-worktree' ? '__create_worktree__' : null
     if (matches.length === 0) {
-      // Why: when no worktrees match but the "Create new worktree" item is shown,
-      // pre-select it so the user can press Enter to immediately create one.
-      setSelectedWorktreeId(hasWorktrees && query.trim() ? '__create_worktree__' : '')
+      setSelectedWorktreeId(firstSelectableId ?? '')
       return
     }
-    if (!matches.some((match) => match.worktreeId === selectedWorktreeId)) {
+    if (
+      selectedWorktreeId === '__create_worktree__' &&
+      createAction?.action === 'create-worktree'
+    ) {
+      return
+    }
+    if (
+      !matches.some((match) => match.worktreeId === selectedWorktreeId) &&
+      selectedWorktreeId !== firstSelectableId
+    ) {
       // Why: the palette keeps live recent ordering while open. Control cmdk's
       // selected value by worktree ID so background re-sorts keep the same
       // logical worktree selected instead of drifting to a new visual index.
-      setSelectedWorktreeId(matches[0].worktreeId)
+      setSelectedWorktreeId(firstSelectableId ?? matches[0].worktreeId)
     }
-  }, [visible, matches, selectedWorktreeId, hasWorktrees, query])
+  }, [visible, matches, selectedWorktreeId, createAction])
 
   const focusActiveSurface = useCallback(() => {
     // Why: double rAF — first waits for React to commit state (palette closes),
@@ -166,7 +187,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       }
 
       closeModal()
-      if (previousWorktreeIdRef.current) {
+      if (previousWorktreeIdRef.current && !skipRestoreFocusRef.current) {
         focusActiveSurface()
       }
     },
@@ -190,6 +211,10 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   )
 
   const handleCreateWorktree = useCallback(() => {
+    // Why: when Cmd+J hands off to the create dialog, that new modal owns focus.
+    // Re-running the palette's terminal/editor focus restore races the dialog's
+    // autofocus and can pull keyboard input away from the name field.
+    skipRestoreFocusRef.current = true
     closeModal()
     // Why: we open create-worktree in a microtask so Radix Dialog fully unmounts
     // before the next modal mounts, avoiding stacked-dialog focus conflicts.
@@ -203,7 +228,8 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   }, [])
 
   // Result count for screen readers
-  const resultCount = matches.length
+  const worktreeResultCount = matches.length
+  const actionCount = createAction ? 1 : 0
 
   return (
     <CommandDialog
@@ -236,139 +262,53 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
             title="Loading worktrees"
             subtitle="Gathering your recent worktrees and activity state."
           />
-        ) : !hasWorktrees ? (
+        ) : !hasWorktrees && !createAction ? (
           <CommandEmpty className="py-0">
             <PaletteState
               title="No active worktrees"
               subtitle="Create one to get started, then jump back here any time."
             />
           </CommandEmpty>
-        ) : matches.length === 0 ? (
-          <>
-            <CommandEmpty className="py-0">
-              <PaletteState
-                title="No worktrees match your search"
-                subtitle="Try a name, branch, repo, comment, PR, or issue."
-              />
-            </CommandEmpty>
-            <CommandItem
-              value="__create_worktree__"
-              onSelect={handleCreateWorktree}
-              className="group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow] data-[selected=true]:border-border data-[selected=true]:bg-neutral-100 data-[selected=true]:text-foreground dark:data-[selected=true]:bg-neutral-800"
-            >
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-dashed border-border/60 bg-muted/25 text-muted-foreground/70">
-                <Plus size={14} aria-hidden="true" />
-              </div>
-              <span className="flex-1 text-[14px] font-medium text-foreground/90">
-                Create new worktree…
-              </span>
-              <CornerDownLeft
-                size={14}
-                aria-hidden="true"
-                className="shrink-0 self-center text-muted-foreground opacity-0 transition-opacity group-data-[selected=true]:opacity-100"
-              />
-            </CommandItem>
-          </>
+        ) : matches.length === 0 && !createAction ? (
+          <CommandEmpty className="py-0">
+            <PaletteState
+              title="No worktrees match your search"
+              subtitle="Try a name, branch, repo, comment, PR, or issue."
+            />
+          </CommandEmpty>
         ) : (
-          matches.map((match) => {
-            const w = worktreeMap.get(match.worktreeId)
-            if (!w) {
-              return null
-            }
-            const repo = repoMap.get(w.repoId)
-            const repoName = repo?.displayName ?? ''
-            const branch = branchName(w.branch)
-            const status = getWorktreeStatus(
-              tabsByWorktree[w.id] ?? [],
-              browserTabsByWorktree[w.id] ?? []
-            )
-            const statusLabel = getWorktreeStatusLabel(status)
-            const isCurrentWorktree = activeWorktreeId === w.id
-
-            return (
+          <>
+            {!hasWorktrees && !query.trim() && createAction && (
+              <div className="px-2 pb-2 pt-1">
+                <PaletteState
+                  title="No active worktrees"
+                  subtitle="Create one to get started, then jump back here any time."
+                />
+              </div>
+            )}
+            {matches.length === 0 && query.trim() && (
+              <div className="px-2 pb-2 pt-1">
+                <PaletteState
+                  title="No worktrees match your search"
+                  subtitle="Try a name, branch, repo, comment, PR, or issue."
+                />
+              </div>
+            )}
+            {createAction && (
               <CommandItem
-                key={w.id}
-                value={w.id}
-                onSelect={() => handleSelect(w.id)}
-                data-current={isCurrentWorktree ? 'true' : undefined}
-                className={cn(
-                  'group mx-0.5 flex cursor-pointer items-start gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
-                  'data-[selected=true]:border-border data-[selected=true]:bg-neutral-100 data-[selected=true]:text-foreground dark:data-[selected=true]:bg-neutral-800',
-                  'data-[current=true]:border-emerald-500/25 data-[current=true]:bg-emerald-500/[0.08]'
-                )}
+                value="__create_worktree__"
+                onSelect={handleCreateWorktree}
+                className="group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow] data-[selected=true]:border-border data-[selected=true]:bg-neutral-100 data-[selected=true]:text-foreground dark:data-[selected=true]:bg-neutral-800"
               >
-                <div className="mt-1.5 flex w-4 shrink-0 items-start justify-center">
-                  <StatusIndicator status={status} aria-hidden="true" />
-                  <span className="sr-only">{statusLabel}</span>
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-dashed border-border/60 bg-muted/25 text-muted-foreground/70">
+                  <Plus size={14} aria-hidden="true" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-2.5">
-                    <div className="min-w-0">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span className="truncate text-[14px] font-semibold tracking-[-0.01em] text-foreground">
-                          {match.displayNameRange ? (
-                            <HighlightedText
-                              text={w.displayName}
-                              matchRange={match.displayNameRange}
-                            />
-                          ) : (
-                            w.displayName
-                          )}
-                        </span>
-                        {isCurrentWorktree && (
-                          <span className="shrink-0 self-center rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
-                            Current
-                          </span>
-                        )}
-                        {w.isMainWorktree && (
-                          <span className="shrink-0 self-center rounded border border-muted-foreground/30 bg-muted-foreground/5 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground">
-                            primary
-                          </span>
-                        )}
-                      </div>
-                      <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[12px] text-muted-foreground">
-                        <span className="truncate font-medium text-muted-foreground/92">
-                          {match.branchRange ? (
-                            <HighlightedText text={branch} matchRange={match.branchRange} />
-                          ) : (
-                            branch
-                          )}
-                        </span>
-                      </div>
-                      {match.supportingText && (
-                        <div className="mt-1.5 flex min-w-0 items-start gap-2 text-[12px] leading-5 text-muted-foreground/88">
-                          <span className="shrink-0 rounded-full border border-border/45 bg-background/45 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.12em] text-muted-foreground/75">
-                            {match.supportingText.label}
-                          </span>
-                          <span className="truncate">
-                            <HighlightedText
-                              text={match.supportingText.text}
-                              matchRange={match.supportingText.matchRange}
-                            />
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex shrink-0 flex-col items-end gap-1.5">
-                      {repoName && (
-                        <span className="inline-flex max-w-[180px] items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-[11px] font-semibold leading-none text-foreground">
-                          <span
-                            aria-hidden="true"
-                            className="size-1.5 shrink-0 rounded-full"
-                            style={
-                              repo?.badgeColor ? { backgroundColor: repo.badgeColor } : undefined
-                            }
-                          />
-                          <span className="truncate">
-                            {match.repoRange ? (
-                              <HighlightedText text={repoName} matchRange={match.repoRange} />
-                            ) : (
-                              repoName
-                            )}
-                          </span>
-                        </span>
-                      )}
-                    </div>
+                  <div className="text-[14px] font-semibold tracking-[-0.01em] text-foreground">
+                    <HighlightedText
+                      text={createAction.label}
+                      matchRange={createAction.matchRange}
+                    />
                   </div>
                 </div>
                 {/* Why: always rendered to reserve space and prevent layout shift
@@ -380,8 +320,117 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                   className="shrink-0 self-center text-muted-foreground opacity-0 transition-opacity group-data-[selected=true]:opacity-100"
                 />
               </CommandItem>
-            )
-          })
+            )}
+            {matches.map((match) => {
+              const w = worktreeMap.get(match.worktreeId)
+              if (!w) {
+                return null
+              }
+              const repo = repoMap.get(w.repoId)
+              const repoName = repo?.displayName ?? ''
+              const branch = branchName(w.branch)
+              const status = getWorktreeStatus(
+                tabsByWorktree[w.id] ?? [],
+                browserTabsByWorktree[w.id] ?? []
+              )
+              const statusLabel = getWorktreeStatusLabel(status)
+              const isCurrentWorktree = activeWorktreeId === w.id
+
+              return (
+                <CommandItem
+                  key={w.id}
+                  value={w.id}
+                  onSelect={() => handleSelect(w.id)}
+                  data-current={isCurrentWorktree ? 'true' : undefined}
+                  className={cn(
+                    'group mx-0.5 flex cursor-pointer items-start gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
+                    'data-[selected=true]:border-border data-[selected=true]:bg-neutral-100 data-[selected=true]:text-foreground dark:data-[selected=true]:bg-neutral-800',
+                    'data-[current=true]:border-emerald-500/25 data-[current=true]:bg-emerald-500/[0.08]'
+                  )}
+                >
+                  <div className="mt-1.5 flex w-4 shrink-0 items-start justify-center">
+                    <StatusIndicator status={status} aria-hidden="true" />
+                    <span className="sr-only">{statusLabel}</span>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2.5">
+                      <div className="min-w-0">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="truncate text-[14px] font-semibold tracking-[-0.01em] text-foreground">
+                            {match.displayNameRange ? (
+                              <HighlightedText
+                                text={w.displayName}
+                                matchRange={match.displayNameRange}
+                              />
+                            ) : (
+                              w.displayName
+                            )}
+                          </span>
+                          {isCurrentWorktree && (
+                            <span className="shrink-0 self-center rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
+                              Current
+                            </span>
+                          )}
+                          {w.isMainWorktree && (
+                            <span className="shrink-0 self-center rounded border border-muted-foreground/30 bg-muted-foreground/5 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground">
+                              primary
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[12px] text-muted-foreground">
+                          <span className="truncate font-medium text-muted-foreground/92">
+                            {match.branchRange ? (
+                              <HighlightedText text={branch} matchRange={match.branchRange} />
+                            ) : (
+                              branch
+                            )}
+                          </span>
+                        </div>
+                        {match.supportingText && (
+                          <div className="mt-1.5 flex min-w-0 items-start gap-2 text-[12px] leading-5 text-muted-foreground/88">
+                            <span className="shrink-0 rounded-full border border-border/45 bg-background/45 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.12em] text-muted-foreground/75">
+                              {match.supportingText.label}
+                            </span>
+                            <span className="truncate">
+                              <HighlightedText
+                                text={match.supportingText.text}
+                                matchRange={match.supportingText.matchRange}
+                              />
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex shrink-0 flex-col items-end gap-1.5">
+                        {repoName && (
+                          <span className="inline-flex max-w-[180px] items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-[11px] font-semibold leading-none text-foreground">
+                            <span
+                              aria-hidden="true"
+                              className="size-1.5 shrink-0 rounded-full"
+                              style={
+                                repo?.badgeColor ? { backgroundColor: repo.badgeColor } : undefined
+                              }
+                            />
+                            <span className="truncate">
+                              {match.repoRange ? (
+                                <HighlightedText text={repoName} matchRange={match.repoRange} />
+                              ) : (
+                                repoName
+                              )}
+                            </span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <CornerDownLeft
+                    size={14}
+                    aria-hidden="true"
+                    className="shrink-0 self-center text-muted-foreground opacity-0 transition-opacity group-data-[selected=true]:opacity-100"
+                  />
+                </CommandItem>
+              )
+            })}
+          </>
         )}
       </CommandList>
       <div className="flex items-center justify-end border-t border-border/60 px-3.5 py-2.5 text-[11px] text-muted-foreground/82">
@@ -396,7 +445,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       </div>
       {/* Accessibility: announce result count changes */}
       <div aria-live="polite" className="sr-only">
-        {query.trim() ? `${resultCount} worktrees found` : `${resultCount} worktrees available`}
+        {query.trim()
+          ? `${worktreeResultCount} worktrees found${actionCount ? ', create new worktree action available' : ''}`
+          : `${worktreeResultCount} worktrees available${actionCount ? ', create new worktree action available' : ''}`}
       </div>
     </CommandDialog>
   )

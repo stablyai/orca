@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { searchWorktrees } from './worktree-palette-search'
+import { searchCreateWorktreeAction, searchWorktrees } from './worktree-palette-search'
 import type { Repo, Worktree } from '../../../shared/types'
 
 function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
@@ -116,5 +116,31 @@ describe('worktree-palette-search', () => {
       text: 'Issue #304',
       matchRange: { start: 7, end: 10 }
     })
+  })
+
+  it('includes the create-worktree action for direct label matches', () => {
+    expect(searchCreateWorktreeAction('create new')).toEqual({
+      action: 'create-worktree',
+      label: 'Create new worktree',
+      matchRange: { start: 0, end: 10 }
+    })
+  })
+
+  it('includes the create-worktree action for alias matches without fake highlights', () => {
+    expect(searchCreateWorktreeAction('add worktree')).toEqual({
+      action: 'create-worktree',
+      label: 'Create new worktree',
+      matchRange: null
+    })
+  })
+
+  it('does not include the create-worktree action for partial alias fragments', () => {
+    expect(searchCreateWorktreeAction('new')).toBeNull()
+    expect(searchCreateWorktreeAction('work')).toBeNull()
+    expect(searchCreateWorktreeAction('add work')).toBeNull()
+  })
+
+  it('omits the create-worktree action for unrelated queries', () => {
+    expect(searchCreateWorktreeAction('rebasing')).toBeNull()
   })
 })
