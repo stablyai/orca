@@ -10,6 +10,7 @@ import {
   List,
   ListOrdered,
   ListTodo,
+  Pilcrow,
   Quote
 } from 'lucide-react'
 import { RichMarkdownToolbarButton } from './RichMarkdownToolbarButton'
@@ -41,6 +42,7 @@ export function RichMarkdownToolbar({
         return null
       }
       return {
+        paragraph: ed.isActive('paragraph'),
         h1: ed.isActive('heading', { level: 1 }),
         h2: ed.isActive('heading', { level: 2 }),
         h3: ed.isActive('heading', { level: 3 }),
@@ -58,6 +60,13 @@ export function RichMarkdownToolbar({
 
   return (
     <div className="rich-markdown-editor-toolbar">
+      <RichMarkdownToolbarButton
+        active={active?.paragraph ?? false}
+        label="Body text"
+        onClick={() => editor?.chain().focus().setParagraph().run()}
+      >
+        <Pilcrow className="size-3.5" />
+      </RichMarkdownToolbarButton>
       <RichMarkdownToolbarButton
         active={active?.h1 ?? false}
         label="Heading 1"
