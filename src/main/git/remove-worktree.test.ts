@@ -1,43 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { execFileMock, execFileSyncMock } = vi.hoisted(() => ({
-  execFileMock: vi.fn(),
-  execFileSyncMock: vi.fn()
+const { gitExecFileAsyncMock, gitExecFileSyncMock } = vi.hoisted(() => ({
+  gitExecFileAsyncMock: vi.fn(),
+  gitExecFileSyncMock: vi.fn()
 }))
 
-vi.mock('child_process', () => ({
-  execFile: execFileMock,
-  execFileSync: execFileSyncMock,
-  // runner.ts imports spawn from child_process; stub prevents
-  // "missing export" errors when the mock is resolved transitively.
-  spawn: vi.fn()
+vi.mock('./runner', () => ({
+  gitExecFileAsync: gitExecFileAsyncMock,
+  gitExecFileSync: gitExecFileSyncMock,
+  translateWslOutputPaths: (output: string) => output
 }))
-
-// Why: runner.ts uses promisify(execFile). The default promisify of a test
-// mock doesn't return { stdout, stderr } because the mock lacks Node's
-// util.promisify.custom symbol. Return a wrapper that invokes the callback-
-// style execFileMock and shapes the result correctly.
-vi.mock('util', async () => {
-  const actual = await vi.importActual('util')
-  return {
-    ...actual,
-    promisify: vi.fn(() =>
-      (...args: unknown[]) =>
-        new Promise((resolve, reject) => {
-          execFileMock(
-            ...args,
-            (error: Error | null, stdout: string, stderr: string) => {
-              if (error) {
-                reject(Object.assign(error, { stdout, stderr }))
-                return
-              }
-              resolve({ stdout, stderr })
-            }
-          )
-        })
-    )
-  }
-})
 
 import { removeWorktree } from './worktree'
 
@@ -49,35 +21,28 @@ type MockResult = {
 
 function mockGitCommands(results: Record<string, MockResult>): void {
   const callCounts = new Map<string, number>()
-  execFileMock.mockImplementation(
-    (
-      file: string,
-      args: string[],
-      options: { cwd: string; encoding: string } | ((...params: unknown[]) => void),
-      callback?: (...params: unknown[]) => void
-    ) => {
-      const resolvedCallback = typeof options === 'function' ? options : callback
-      const key = `${file} ${args.join(' ')}`
-      const callCount = (callCounts.get(key) ?? 0) + 1
-      callCounts.set(key, callCount)
-      const result = results[`${key}#${callCount}`] ?? results[key] ?? {}
+  gitExecFileAsyncMock.mockImplementation((args: string[]) => {
+    const key = `git ${args.join(' ')}`
+    const callCount = (callCounts.get(key) ?? 0) + 1
+    callCounts.set(key, callCount)
+    const result = results[`${key}#${callCount}`] ?? results[key] ?? {}
 
-      if (result.error) {
-        const error = Object.assign(result.error, {
-          stdout: result.stdout ?? '',
-          stderr: result.stderr ?? ''
-        })
-        resolvedCallback?.(error, result.stdout ?? '', result.stderr ?? '')
-        return
-      }
-
-      resolvedCallback?.(null, result.stdout ?? '', result.stderr ?? '')
+    if (result.error) {
+      throw Object.assign(result.error, {
+        stdout: result.stdout ?? '',
+        stderr: result.stderr ?? ''
+      })
     }
-  )
+
+    return {
+      stdout: result.stdout ?? '',
+      stderr: result.stderr ?? ''
+    }
+  })
 }
 
 function getGitCalls(): string[] {
-  return execFileMock.mock.calls.map((call) => `${call[0]} ${call[1].join(' ')}`)
+  return gitExecFileAsyncMock.mock.calls.map((call) => `git ${call[0].join(' ')}`)
 }
 
 function expectGitCallOrder(calls: string[], beforeCall: string, afterCall: string): void {
@@ -87,8 +52,8 @@ function expectGitCallOrder(calls: string[], beforeCall: string, afterCall: stri
 
 describe('removeWorktree', () => {
   beforeEach(() => {
-    execFileMock.mockReset()
-    execFileSyncMock.mockReset()
+    gitExecFileAsyncMock.mockReset()
+    gitExecFileSyncMock.mockReset()
   })
 
   it('removes the worktree, prunes stale refs, and deletes its local branch', async () => {

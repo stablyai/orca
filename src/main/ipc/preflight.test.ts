@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { handleMock, execFileAsyncMock } = vi.hoisted(() => ({
+const { handleMock, execFileMock, execFileAsyncMock } = vi.hoisted(() => ({
   handleMock: vi.fn(),
+  execFileMock: vi.fn(),
   execFileAsyncMock: vi.fn()
 }))
 
@@ -11,11 +12,12 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('util', async () => {
-  const actual = await vi.importActual('util')
+vi.mock('child_process', () => {
+  const execFileWithPromisify = Object.assign(execFileMock, {
+    [Symbol.for('nodejs.util.promisify.custom')]: execFileAsyncMock
+  })
   return {
-    ...actual,
-    promisify: vi.fn(() => execFileAsyncMock)
+    execFile: execFileWithPromisify
   }
 })
 
