@@ -129,6 +129,10 @@ export default function SortableTab({
               ? 'bg-accent/40 text-foreground border-b-transparent'
               : 'bg-card text-muted-foreground hover:text-foreground hover:bg-accent/50'
           }`}
+          onDoubleClick={(e) => {
+            e.stopPropagation()
+            handleRenameOpen()
+          }}
           onPointerDown={(e) => {
             if (e.button !== 0) {
               return
