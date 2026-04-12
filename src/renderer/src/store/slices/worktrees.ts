@@ -134,6 +134,24 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         delete nextActiveBrowserTabIdByWorktree[worktreeId]
         const nextActiveTabTypeByWorktree = { ...s.activeTabTypeByWorktree }
         delete nextActiveTabTypeByWorktree[worktreeId]
+        const nextActiveTabIdByWorktree = { ...s.activeTabIdByWorktree }
+        delete nextActiveTabIdByWorktree[worktreeId]
+        // Why: clean up per-file editor state for files belonging to the removed
+        // worktree so stale drafts and view modes never accumulate in memory.
+        const removedFileIds = new Set(
+          s.openFiles.filter((f) => f.worktreeId === worktreeId).map((f) => f.id)
+        )
+        const nextEditorDrafts = removedFileIds.size > 0 ? { ...s.editorDrafts } : s.editorDrafts
+        const nextMarkdownViewMode =
+          removedFileIds.size > 0 ? { ...s.markdownViewMode } : s.markdownViewMode
+        if (removedFileIds.size > 0) {
+          for (const fileId of removedFileIds) {
+            delete nextEditorDrafts[fileId]
+            delete nextMarkdownViewMode[fileId]
+          }
+        }
+        const nextExpandedDirs = { ...s.expandedDirs }
+        delete nextExpandedDirs[worktreeId]
         // If the active file belonged to the removed worktree, clear it
         const activeFileCleared = s.activeFileId
           ? s.openFiles.some((f) => f.id === s.activeFileId && f.worktreeId === worktreeId)
@@ -161,6 +179,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           activeFileIdByWorktree: nextActiveFileIdByWorktree,
           activeBrowserTabIdByWorktree: nextActiveBrowserTabIdByWorktree,
           activeTabTypeByWorktree: nextActiveTabTypeByWorktree,
+          activeTabIdByWorktree: nextActiveTabIdByWorktree,
+          editorDrafts: nextEditorDrafts,
+          markdownViewMode: nextMarkdownViewMode,
+          expandedDirs: nextExpandedDirs,
           activeFileId: activeFileCleared ? null : s.activeFileId,
           activeBrowserTabId: removedActiveWorktree ? null : s.activeBrowserTabId,
           activeTabType: removedActiveWorktree || activeFileCleared ? 'terminal' : s.activeTabType,
