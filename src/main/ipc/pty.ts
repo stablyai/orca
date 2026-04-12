@@ -16,6 +16,13 @@ let ptyCounter = 0
 const ptyProcesses = new Map<string, pty.IPty>()
 /** Basename of the shell binary each PTY was spawned with (e.g. "zsh"). */
 const ptyShellName = new Map<string, string>()
+// Why: node-pty's onData/onExit register native NAPI ThreadSafeFunction
+// callbacks. If the PTY is killed without disposing these listeners, the
+// stale callbacks survive into node::FreeEnvironment() where NAPI attempts
+// to invoke/clean them up on a destroyed environment, triggering a SIGABRT
+// via Napi::Error::ThrowAsJavaScriptException. Storing and calling the
+// disposables before proc.kill() prevents the use-after-free crash.
+const ptyDisposables = new Map<string, { dispose: () => void }[]>()
 
 // Track which "page load generation" each PTY belongs to.
 // When the renderer reloads, we only kill PTYs from previous generations,
@@ -26,7 +33,18 @@ let loadGeneration = 0
 const ptyLoadGeneration = new Map<string, number>()
 let didEnsureSpawnHelperExecutable = false
 
+function disposePtyListeners(id: string): void {
+  const disposables = ptyDisposables.get(id)
+  if (disposables) {
+    for (const d of disposables) {
+      d.dispose()
+    }
+    ptyDisposables.delete(id)
+  }
+}
+
 function clearPtyState(id: string): void {
+  disposePtyListeners(id)
   ptyProcesses.delete(id)
   ptyShellName.delete(id)
   ptyLoadGeneration.delete(id)
@@ -357,14 +375,14 @@ export function registerPtyHandlers(
       ptyLoadGeneration.set(id, loadGeneration)
       runtime?.onPtySpawned(id)
 
-      proc.onData((data) => {
+      const onDataDisposable = proc.onData((data) => {
         runtime?.onPtyData(id, data, Date.now())
         if (!mainWindow.isDestroyed()) {
           mainWindow.webContents.send('pty:data', { id, data })
         }
       })
 
-      proc.onExit(({ exitCode }) => {
+      const onExitDisposable = proc.onExit(({ exitCode }) => {
         clearPtyState(id)
         clearProviderPtyState(id)
         runtime?.onPtyExit(id, exitCode)
@@ -372,6 +390,8 @@ export function registerPtyHandlers(
           mainWindow.webContents.send('pty:exit', { id, code: exitCode })
         }
       })
+
+      ptyDisposables.set(id, [onDataDisposable, onExitDisposable])
 
       return { id }
     }
@@ -451,6 +471,7 @@ export function registerPtyHandlers(
  */
 export function killAllPty(): void {
   for (const [id, proc] of ptyProcesses) {
+    disposePtyListeners(id)
     try {
       proc.kill()
     } catch {
