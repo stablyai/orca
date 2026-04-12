@@ -287,6 +287,8 @@ export function EditorContent({
       originalContent={dc.originalContent}
       modifiedContent={editBuffers[activeFile.id] ?? dc.modifiedContent}
       language={resolvedLanguage}
+      filePath={activeFile.filePath}
+      relativePath={activeFile.relativePath}
       sideBySide={sideBySide}
       editable={isEditable}
       onContentChange={isEditable ? handleContentChange : undefined}

@@ -3,11 +3,14 @@ import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
 import { useAppStore } from '@/store'
 import '@/lib/monaco-setup'
 import { computeEditorFontSize } from '@/lib/editor-font-zoom'
+import { useContextualCopySetup } from './useContextualCopySetup'
 
 type DiffViewerProps = {
   originalContent: string
   modifiedContent: string
   language: string
+  filePath: string
+  relativePath: string
   sideBySide: boolean
   editable?: boolean
   onContentChange?: (content: string) => void
@@ -18,6 +21,8 @@ export default function DiffViewer({
   originalContent,
   modifiedContent,
   language,
+  filePath,
+  relativePath,
   sideBySide,
   editable,
   onContentChange,
@@ -39,11 +44,20 @@ export default function DiffViewer({
   const onContentChangeRef = useRef(onContentChange)
   onContentChangeRef.current = onContentChange
 
+  const { setupCopy, toastNode } = useContextualCopySetup()
+
+  const propsRef = useRef({ relativePath, language, onSave })
+  propsRef.current = { relativePath, language, onSave }
+
   const handleMount: DiffOnMount = useCallback(
     (editor, monaco) => {
-      if (editable) {
-        const modifiedEditor = editor.getModifiedEditor()
+      const originalEditor = editor.getOriginalEditor()
+      const modifiedEditor = editor.getModifiedEditor()
 
+      setupCopy(originalEditor, monaco, filePath, propsRef)
+      setupCopy(modifiedEditor, monaco, filePath, propsRef)
+
+      if (editable) {
         // Cmd/Ctrl+S to save
         modifiedEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
           onSaveRef.current?.(modifiedEditor.getValue())
@@ -59,7 +73,7 @@ export default function DiffViewer({
         editor.focus()
       }
     },
-    [editable]
+    [editable, setupCopy, filePath]
   )
 
   return (
@@ -92,6 +106,7 @@ export default function DiffViewer({
           }}
         />
       </div>
+      {toastNode}
     </div>
   )
 }
