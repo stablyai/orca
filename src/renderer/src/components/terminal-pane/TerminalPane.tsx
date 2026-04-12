@@ -331,8 +331,12 @@ export default function TerminalPane({
         paneTransportsRef,
         pendingWritesRef,
         isActiveRef,
+        effectiveVisibleRef,
         onPtyExitRef,
         onPtyErrorRef,
+        // Why: Codex restarts create a fresh PTY — there is no prior layout
+        // snapshot to reattach from, so an empty map is correct.
+        restoredPtyIdByPaneId: new Map(),
         clearTabPtyId,
         consumeSuppressedPtyExit: useAppStore.getState().consumeSuppressedPtyExit,
         updateTabTitle,
