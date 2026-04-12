@@ -15,11 +15,12 @@ import {
   MessageSquare,
   Pencil,
   XCircle,
-  Trash2
+  Trash
 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import type { Worktree } from '../../../../shared/types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
+import { getWorktreeRemovalAction, openWorktreeRemovalModal } from './worktree-removal'
 
 type Props = {
   worktree: Worktree
@@ -42,6 +43,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({ worktree, 
   const isDeleting = deleteState?.isDeleting ?? false
   const repo = repos.find((entry) => entry.id === worktree.repoId)
   const isFolder = repo ? isFolderRepo(repo) : false
+  const removalAction = getWorktreeRemovalAction(worktree, isFolder)
 
   useEffect(() => {
     const closeMenu = (): void => setMenuOpen(false)
@@ -100,26 +102,8 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({ worktree, 
 
   const handleDelete = useCallback(() => {
     setMenuOpen(false)
-    if (isFolder) {
-      // Why: folder mode reuses the worktree row UI for a synthetic root entry,
-      // but users still expect "remove" to disconnect the folder from Orca,
-      // not to run git-style delete semantics against the real folder on disk.
-      openModal('confirm-remove-folder', {
-        repoId: worktree.repoId,
-        displayName: worktree.displayName
-      })
-      return
-    }
-    clearWorktreeDeleteState(worktree.id)
-    openModal('delete-worktree', { worktreeId: worktree.id })
-  }, [
-    worktree.id,
-    worktree.repoId,
-    worktree.displayName,
-    clearWorktreeDeleteState,
-    isFolder,
-    openModal
-  ])
+    openWorktreeRemovalModal(worktree, isFolder, openModal, clearWorktreeDeleteState)
+  }, [clearWorktreeDeleteState, isFolder, openModal, worktree])
 
   return (
     <>
@@ -183,15 +167,11 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({ worktree, 
           <DropdownMenuItem
             variant="destructive"
             onSelect={handleDelete}
-            disabled={isDeleting || (!isFolder && worktree.isMainWorktree)}
-            title={
-              !isFolder && worktree.isMainWorktree
-                ? 'The main worktree cannot be deleted'
-                : undefined
-            }
+            disabled={isDeleting || removalAction.disabled}
+            title={removalAction.disabledReason}
           >
-            <Trash2 className="size-3.5" />
-            {isDeleting ? 'Deleting…' : isFolder ? 'Remove Folder from Orca' : 'Delete'}
+            <Trash className="size-3.5" />
+            {isDeleting ? 'Deleting…' : removalAction.label}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

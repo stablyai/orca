@@ -4,11 +4,12 @@ import { useAppStore } from '@/store'
 import { Badge } from '@/components/ui/badge'
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { Bell, GitMerge, LoaderCircle, CircleDot, CircleCheck, CircleX } from 'lucide-react'
+import { Bell, GitMerge, LoaderCircle, CircleDot, CircleCheck, CircleX, Trash } from 'lucide-react'
 import StatusIndicator from './StatusIndicator'
 import CacheTimer from './CacheTimer'
 import CommentMarkdown from './CommentMarkdown'
 import WorktreeContextMenu from './WorktreeContextMenu'
+import { getWorktreeRemovalAction, openWorktreeRemovalModal } from './worktree-removal'
 import { cn } from '@/lib/utils'
 import { getWorktreeStatus, type WorktreeStatus } from '@/lib/worktree-status'
 import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
@@ -96,6 +97,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
 }: WorktreeCardProps) {
   const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
   const openModal = useAppStore((s) => s.openModal)
+  const clearWorktreeDeleteState = useAppStore((s) => s.clearWorktreeDeleteState)
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const fetchPRForBranch = useAppStore((s) => s.fetchPRForBranch)
   const fetchIssue = useAppStore((s) => s.fetchIssue)
@@ -152,6 +154,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
     : null
 
   const isDeleting = deleteState?.isDeleting ?? false
+  const removalAction = getWorktreeRemovalAction(worktree, isFolder)
 
   // Derive status
   const status: WorktreeStatus = useMemo(
@@ -217,6 +220,17 @@ const WorktreeCard = React.memo(function WorktreeCard({
   )
 
   const unreadTooltip = worktree.isUnread ? 'Mark read' : 'Mark unread'
+  const handleQuickDelete = useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      event.preventDefault()
+      event.stopPropagation()
+      if (isDeleting || removalAction.disabled) {
+        return
+      }
+      openWorktreeRemovalModal(worktree, isFolder, openModal, clearWorktreeDeleteState)
+    },
+    [clearWorktreeDeleteState, isDeleting, isFolder, openModal, removalAction.disabled, worktree]
+  )
 
   return (
     <WorktreeContextMenu worktree={worktree}>
@@ -293,7 +307,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
         {/* Content area */}
         <div className="flex-1 min-w-0 flex flex-col gap-1.5">
           {/* Header row: Title and Checks */}
-          <div className="flex items-center justify-between min-w-0 gap-2">
+          <div className="flex items-start justify-between min-w-0 gap-2">
             <div className="flex items-center gap-1.5 min-w-0">
               <div className="text-[12px] font-semibold text-foreground truncate leading-tight">
                 {worktree.displayName}
@@ -320,9 +334,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
               )}
             </div>
 
-            {/* CI Checks & PR state on the right */}
-            {cardProps.includes('ci') && pr && pr.checksStatus !== 'neutral' && (
-              <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-1 shrink-0">
+              {/* CI Checks & PR state on the right */}
+              {cardProps.includes('ci') && pr && pr.checksStatus !== 'neutral' && (
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <span className="inline-flex items-center opacity-80 hover:opacity-100 transition-opacity">
@@ -341,8 +355,41 @@ const WorktreeCard = React.memo(function WorktreeCard({
                     <span>CI checks {checksLabel(pr.checksStatus).toLowerCase()}</span>
                   </TooltipContent>
                 </Tooltip>
-              </div>
-            )}
+              )}
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={handleQuickDelete}
+                    aria-disabled={isDeleting || removalAction.disabled}
+                    aria-label={
+                      removalAction.disabledReason
+                        ? `${removalAction.label}. ${removalAction.disabledReason}`
+                        : removalAction.label
+                    }
+                    // Why: issue #502 asks for a fast inline delete affordance,
+                    // but this row is still primarily a navigation target. We
+                    // reveal the destructive button only on hover/focus so it
+                    // is discoverable without turning every row into permanent
+                    // red chrome or creating a hidden one-click delete path.
+                    className={cn(
+                      'flex size-6 items-center justify-center rounded-md border border-transparent text-muted-foreground/70 transition-all',
+                      'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto',
+                      'focus-visible:opacity-100 focus-visible:pointer-events-auto focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+                      isDeleting || removalAction.disabled
+                        ? 'cursor-not-allowed'
+                        : 'hover:border-destructive/20 hover:bg-destructive/10 hover:text-destructive active:scale-95'
+                    )}
+                  >
+                    <Trash className="size-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right" sideOffset={4}>
+                  <span>{removalAction.disabledReason ?? removalAction.label}</span>
+                </TooltipContent>
+              </Tooltip>
+            </div>
           </div>
 
           {/* Subtitle row: Repo badge + Branch */}
