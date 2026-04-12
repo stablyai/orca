@@ -6,6 +6,7 @@ import {
   normalizeTerminalTitle,
   extractLastOscTitle
 } from '../../../../shared/agent-detection'
+import type { OpenCodeStatusEvent } from '../../../../shared/types'
 
 export type PtyTransport = {
   connect: (options: {
@@ -53,6 +54,7 @@ export type PtyTransport = {
 // that triggers MaxListenersExceededWarning with many panes/tabs.
 const ptyDataHandlers = new Map<string, (data: string) => void>()
 const ptyExitHandlers = new Map<string, (code: number) => void>()
+const openCodeStatusHandlers = new Map<string, (event: OpenCodeStatusEvent) => void>()
 let ptyDispatcherAttached = false
 
 export function ensurePtyDispatcher(): void {
@@ -65,6 +67,9 @@ export function ensurePtyDispatcher(): void {
   })
   window.api.pty.onExit((payload) => {
     ptyExitHandlers.get(payload.id)?.(payload.code)
+  })
+  window.api.pty.onOpenCodeStatus((payload) => {
+    openCodeStatusHandlers.get(payload.ptyId)?.(payload)
   })
 }
 
@@ -173,6 +178,8 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   let inOsc = false
   let pendingOscEscape = false
   let lastEmittedTitle: string | null = null
+  let lastObservedTerminalTitle: string | null = null
+  let openCodeStatus: OpenCodeStatusEvent['status'] | null = null
   let staleTitleTimer: ReturnType<typeof setTimeout> | null = null
   const agentTracker =
     onAgentBecameIdle || onAgentBecameWorking || onAgentExited
@@ -198,6 +205,54 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   function unregisterPtyHandlers(id: string): void {
     ptyDataHandlers.delete(id)
     ptyExitHandlers.delete(id)
+    openCodeStatusHandlers.delete(id)
+  }
+
+  function getSyntheticOpenCodeTitle(status: OpenCodeStatusEvent['status']): string {
+    const baseTitle =
+      lastObservedTerminalTitle && lastObservedTerminalTitle !== 'OpenCode'
+        ? `OpenCode · ${lastObservedTerminalTitle}`
+        : 'OpenCode'
+
+    if (status === 'working') {
+      return `⠋ ${baseTitle}`
+    }
+    if (status === 'permission') {
+      return `${baseTitle} permission needed`
+    }
+    return baseTitle
+  }
+
+  function applyOpenCodeStatus(event: OpenCodeStatusEvent): void {
+    openCodeStatus = event.status
+    if (staleTitleTimer) {
+      clearTimeout(staleTitleTimer)
+      staleTitleTimer = null
+    }
+
+    const rawTitle = getSyntheticOpenCodeTitle(event.status)
+    const title = normalizeTerminalTitle(rawTitle)
+    lastEmittedTitle = title
+    onTitleChange?.(title, rawTitle)
+    agentTracker?.handleTitle(rawTitle)
+  }
+
+  function applyObservedTerminalTitle(title: string): void {
+    lastObservedTerminalTitle = title
+
+    // Why: OpenCode can keep emitting plain titles like "OpenCode" while the
+    // session is still busy. If we let those raw titles overwrite the
+    // hook-derived state, the working spinner flashes briefly and disappears.
+    // While OpenCode has an explicit non-idle status, that status is the
+    // source of truth and the observed title is only used as context text.
+    if (openCodeStatus && openCodeStatus !== 'idle') {
+      applyOpenCodeStatus({ ptyId: ptyId ?? '', status: openCodeStatus })
+      return
+    }
+
+    lastEmittedTitle = normalizeTerminalTitle(title)
+    onTitleChange?.(lastEmittedTitle, title)
+    agentTracker?.handleTitle(title)
   }
 
   return {
@@ -237,9 +292,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
                 clearTimeout(staleTitleTimer)
                 staleTitleTimer = null
               }
-              lastEmittedTitle = normalizeTerminalTitle(title)
-              onTitleChange(lastEmittedTitle, title)
-              agentTracker?.handleTitle(title)
+              applyObservedTerminalTitle(title)
             } else if (
               lastEmittedTitle &&
               detectAgentStatusFromTitle(lastEmittedTitle) === 'working'
@@ -274,6 +327,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
             clearTimeout(staleTitleTimer)
             staleTitleTimer = null
           }
+          openCodeStatus = null
           connected = false
           ptyId = null
           unregisterPtyHandlers(spawnedId)
@@ -281,6 +335,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           storedCallbacks.onDisconnect?.()
           onPtyExit?.(spawnedId)
         })
+        openCodeStatusHandlers.set(spawnedId, applyOpenCodeStatus)
 
         storedCallbacks.onConnect?.()
         storedCallbacks.onStatus?.('shell')
@@ -316,9 +371,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
               clearTimeout(staleTitleTimer)
               staleTitleTimer = null
             }
-            lastEmittedTitle = normalizeTerminalTitle(title)
-            onTitleChange(lastEmittedTitle, title)
-            agentTracker?.handleTitle(title)
+            applyObservedTerminalTitle(title)
           } else if (
             lastEmittedTitle &&
             detectAgentStatusFromTitle(lastEmittedTitle) === 'working'
@@ -347,6 +400,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           clearTimeout(staleTitleTimer)
           staleTitleTimer = null
         }
+        openCodeStatus = null
         connected = false
         ptyId = null
         unregisterPtyHandlers(id)
@@ -354,6 +408,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         storedCallbacks.onDisconnect?.()
         onPtyExit?.(id)
       })
+      openCodeStatusHandlers.set(id, applyOpenCodeStatus)
 
       // Replay any data buffered between eager spawn and now. Route through
       // the real data handler (not storedCallbacks.onData directly) so that
@@ -383,6 +438,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         clearTimeout(staleTitleTimer)
         staleTitleTimer = null
       }
+      openCodeStatus = null
       if (ptyId) {
         const id = ptyId
         window.api.pty.kill(id)

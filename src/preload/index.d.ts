@@ -2,7 +2,8 @@ import type { ElectronAPI } from '@electron-toolkit/preload'
 import type {
   CreateWorktreeResult,
   GitHubViewer,
-  CreateWorktreeArgs
+  CreateWorktreeArgs,
+  OpenCodeStatusEvent
 } from '../../shared/types'
 import type { PreloadApi } from './api-types'
 
@@ -50,6 +51,7 @@ type PtyApi = {
   hasChildProcesses: (id: string) => Promise<boolean>
   onData: (callback: (data: { id: string; data: string }) => void) => () => void
   onExit: (callback: (data: { id: string; code: number }) => void) => () => void
+  onOpenCodeStatus: (callback: (event: OpenCodeStatusEvent) => void) => () => void
 }
 
 type GhApi = {

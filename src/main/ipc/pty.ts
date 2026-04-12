@@ -9,6 +9,7 @@ import { type BrowserWindow, ipcMain } from 'electron'
 import * as pty from 'node-pty'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { parseWslPath } from '../wsl'
+import { openCodeHookService } from '../opencode/hook-service'
 
 let ptyCounter = 0
 const ptyProcesses = new Map<string, pty.IPty>()
@@ -112,6 +113,7 @@ export function registerPtyHandlers(
         ptyProcesses.delete(id)
         ptyShellName.delete(id)
         ptyLoadGeneration.delete(id)
+        openCodeHookService.clearPty(id)
         // Why: notify runtime so the agent detector can close out any live
         // agent sessions. Without this, killed PTYs would remain in the
         // detector's liveAgents map and accumulate inflated durations.
@@ -144,6 +146,7 @@ export function registerPtyHandlers(
       ptyProcesses.delete(ptyId)
       ptyShellName.delete(ptyId)
       ptyLoadGeneration.delete(ptyId)
+      openCodeHookService.clearPty(ptyId)
       runtime?.onPtyExit(ptyId, -1)
       return true
     }
@@ -223,6 +226,15 @@ export function registerPtyHandlers(
         TERM_PROGRAM: 'Orca',
         FORCE_HYPERLINK: '1'
       } as Record<string, string>
+
+      const openCodeHookEnv = openCodeHookService.buildPtyEnv(id)
+      if (spawnEnv.OPENCODE_CONFIG_DIR) {
+        // Why: OPENCODE_CONFIG_DIR is a singular extra config root. Replacing a
+        // user-provided directory would silently hide their custom OpenCode
+        // config, so preserve it and fall back to title-only detection there.
+        delete openCodeHookEnv.OPENCODE_CONFIG_DIR
+      }
+      Object.assign(spawnEnv, openCodeHookEnv)
 
       // Why: the selected Codex account should affect Codex launched inside
       // Orca terminals too, not just Orca's background quota fetches. Inject
@@ -338,6 +350,7 @@ export function registerPtyHandlers(
         ptyProcesses.delete(id)
         ptyShellName.delete(id)
         ptyLoadGeneration.delete(id)
+        openCodeHookService.clearPty(id)
         runtime?.onPtyExit(id, exitCode)
         if (!mainWindow.isDestroyed()) {
           mainWindow.webContents.send('pty:exit', { id, code: exitCode })
@@ -373,6 +386,7 @@ export function registerPtyHandlers(
       ptyProcesses.delete(args.id)
       ptyShellName.delete(args.id)
       ptyLoadGeneration.delete(args.id)
+      openCodeHookService.clearPty(args.id)
       runtime?.onPtyExit(args.id, -1)
     }
   })
@@ -431,5 +445,6 @@ export function killAllPty(): void {
     ptyProcesses.delete(id)
     ptyShellName.delete(id)
     ptyLoadGeneration.delete(id)
+    openCodeHookService.clearPty(id)
   }
 }

@@ -25,6 +25,7 @@ import { RateLimitService } from './rate-limits/service'
 import { attachMainWindowServices } from './window/attach-main-window-services'
 import { createMainWindow } from './window/createMainWindow'
 import { CodexAccountService } from './codex-accounts/service'
+import { openCodeHookService } from './opencode/hook-service'
 
 let mainWindow: BrowserWindow | null = null
 /** Whether a manual app.quit() (Cmd+Q, etc.) is in progress. Shared with the
@@ -127,6 +128,13 @@ app.whenReady().then(async () => {
   rateLimits.setCodexHomePathResolver(() => codexAccounts!.getSelectedManagedHomePath())
   runtime = new OrcaRuntimeService(store, stats)
   nativeTheme.themeSource = store.getSettings().theme ?? 'system'
+  try {
+    await openCodeHookService.start()
+  } catch (error) {
+    // Why: OpenCode hooks only enrich status detection. Orca should still boot
+    // even if the local loopback server cannot bind on this launch.
+    console.error('[opencode] Failed to start local hook server:', error)
+  }
 
   registerAppMenu({
     onCheckForUpdates: () => checkForUpdatesFromMenu(),
@@ -193,6 +201,7 @@ app.on('will-quit', () => {
   // are still running. killAllPty() does not call runtime.onPtyExit(),
   // so without this ordering, running agents would produce orphaned
   // agent_start events with no matching stops.
+  openCodeHookService.stop()
   stats?.flush()
   killAllPty()
   void closeAllWatchers()

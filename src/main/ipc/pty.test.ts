@@ -1,3 +1,6 @@
+/* eslint-disable max-lines -- Why: PTY spawn env behavior is easiest to verify in
+one focused file because the registration helper is stateful and each spawn-path
+assertion reuses the same mocked IPC and node-pty harness. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -8,7 +11,9 @@ const {
   existsSyncMock,
   statSyncMock,
   accessSyncMock,
-  spawnMock
+  spawnMock,
+  openCodeBuildPtyEnvMock,
+  openCodeClearPtyMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   onMock: vi.fn(),
@@ -17,7 +22,9 @@ const {
   existsSyncMock: vi.fn(),
   statSyncMock: vi.fn(),
   accessSyncMock: vi.fn(),
-  spawnMock: vi.fn()
+  spawnMock: vi.fn(),
+  openCodeBuildPtyEnvMock: vi.fn(),
+  openCodeClearPtyMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -42,6 +49,13 @@ vi.mock('node-pty', () => ({
   spawn: spawnMock
 }))
 
+vi.mock('../opencode/hook-service', () => ({
+  openCodeHookService: {
+    buildPtyEnv: openCodeBuildPtyEnvMock,
+    clearPty: openCodeClearPtyMock
+  }
+}))
+
 import { registerPtyHandlers } from './pty'
 
 describe('registerPtyHandlers', () => {
@@ -64,6 +78,8 @@ describe('registerPtyHandlers', () => {
     statSyncMock.mockReset()
     accessSyncMock.mockReset()
     spawnMock.mockReset()
+    openCodeBuildPtyEnvMock.mockReset()
+    openCodeClearPtyMock.mockReset()
     mainWindow.webContents.on.mockReset()
     mainWindow.webContents.send.mockReset()
 
@@ -72,6 +88,12 @@ describe('registerPtyHandlers', () => {
     })
     existsSyncMock.mockReturnValue(true)
     statSyncMock.mockReturnValue({ isDirectory: () => true })
+    openCodeBuildPtyEnvMock.mockReturnValue({
+      ORCA_OPENCODE_HOOK_PORT: '4567',
+      ORCA_OPENCODE_HOOK_TOKEN: 'opencode-token',
+      ORCA_OPENCODE_PTY_ID: 'test-pty',
+      OPENCODE_CONFIG_DIR: '/tmp/orca-opencode-config'
+    })
     spawnMock.mockReturnValue({
       onData: vi.fn(),
       onExit: vi.fn(),
@@ -150,6 +172,16 @@ describe('registerPtyHandlers', () => {
       expect(env.CODEX_HOME).toBe('/tmp/orca-codex-home')
     })
 
+    it('injects the OpenCode hook env into Orca terminal PTYs', () => {
+      const env = spawnAndGetEnv()
+      expect(openCodeBuildPtyEnvMock).toHaveBeenCalledTimes(1)
+      expect(openCodeBuildPtyEnvMock.mock.calls[0]?.[0]).toEqual(expect.any(String))
+      expect(env.ORCA_OPENCODE_HOOK_PORT).toBe('4567')
+      expect(env.ORCA_OPENCODE_HOOK_TOKEN).toBe('opencode-token')
+      expect(env.ORCA_OPENCODE_PTY_ID).toBe('test-pty')
+      expect(env.OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-config')
+    })
+
     it('leaves ambient CODEX_HOME untouched when system default is selected', () => {
       const env = spawnAndGetEnv(undefined, { CODEX_HOME: '/tmp/system-codex-home' }, () => null)
       expect(env.CODEX_HOME).toBe('/tmp/system-codex-home')
@@ -201,7 +233,9 @@ describe('registerPtyHandlers', () => {
     const originalShell = process.env.SHELL
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
-    existsSyncMock.mockImplementation((targetPath: string) => targetPath !== '/opt/homebrew/bin/bash')
+    existsSyncMock.mockImplementation(
+      (targetPath: string) => targetPath !== '/opt/homebrew/bin/bash'
+    )
 
     try {
       process.env.SHELL = '/opt/homebrew/bin/bash'
@@ -276,7 +310,9 @@ describe('registerPtyHandlers', () => {
     const originalShell = process.env.SHELL
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
-    existsSyncMock.mockImplementation((targetPath: string) => targetPath !== '/opt/homebrew/bin/bash')
+    existsSyncMock.mockImplementation(
+      (targetPath: string) => targetPath !== '/opt/homebrew/bin/bash'
+    )
 
     try {
       process.env.SHELL = '/bin/bash'

@@ -4,7 +4,11 @@ review and type drift checks easier than scattering these bindings across module
 import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { CliInstallStatus } from '../shared/cli-install-types'
-import type { FsChangedPayload, NotificationDispatchResult } from '../shared/types'
+import type {
+  FsChangedPayload,
+  NotificationDispatchResult,
+  OpenCodeStatusEvent
+} from '../shared/types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../shared/runtime-types'
 import type { RateLimitState } from '../shared/rate-limit-types'
 import {
@@ -214,6 +218,13 @@ const api = {
         callback(data)
       ipcRenderer.on('pty:exit', listener)
       return () => ipcRenderer.removeListener('pty:exit', listener)
+    },
+
+    onOpenCodeStatus: (callback: (event: OpenCodeStatusEvent) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: OpenCodeStatusEvent) =>
+        callback(data)
+      ipcRenderer.on('pty:opencode-status', listener)
+      return () => ipcRenderer.removeListener('pty:opencode-status', listener)
     }
   },
 

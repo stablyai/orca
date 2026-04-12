@@ -440,6 +440,14 @@ export type NotificationDispatchResult = {
   reason?: 'disabled' | 'source-disabled' | 'suppressed-focus' | 'cooldown' | 'not-supported'
 }
 
+export type OpenCodeStatusEvent = {
+  ptyId: string
+  /** Compatibility shim for OpenCode: Orca's activity surfaces already depend
+   *  on this normalized state machine, so hook payloads collapse into the same
+   *  working/idle/permission categories instead of inventing a parallel model. */
+  status: 'working' | 'idle' | 'permission'
+}
+
 export type WorktreeCardProperty = 'status' | 'unread' | 'ci' | 'issue' | 'pr' | 'comment'
 
 export type StatusBarItem = 'claude' | 'codex'

@@ -14,6 +14,7 @@ import type {
   IssueInfo,
   NotificationDispatchRequest,
   NotificationDispatchResult,
+  OpenCodeStatusEvent,
   OrcaHooks,
   PersistedUIState,
   PRCheckDetail,
@@ -194,6 +195,7 @@ export type PreloadApi = {
     getForegroundProcess: (id: string) => Promise<string | null>
     onData: (callback: (data: { id: string; data: string }) => void) => () => void
     onExit: (callback: (data: { id: string; code: number }) => void) => () => void
+    onOpenCodeStatus: (callback: (event: OpenCodeStatusEvent) => void) => () => void
   }
   gh: {
     viewer: () => Promise<GitHubViewer | null>
