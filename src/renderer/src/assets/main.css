@@ -294,6 +294,13 @@
   user-select: none;
 }
 
+/* When tabs are portaled into the titlebar, the slot inherits the
+   titlebar's drag region — opt the tab strip out so tabs stay
+   clickable and scrollable. */
+#titlebar-tabs > .terminal-tab-strip {
+  -webkit-app-region: no-drag;
+}
+
 .titlebar-traffic-light-pad {
   width: calc(80px / var(--ui-zoom-factor, 1));
   flex-shrink: 0;
@@ -352,6 +359,7 @@
   font-weight: 600;
   line-height: 1;
   white-space: nowrap;
+  flex-shrink: 0;
   cursor: pointer;
 }
 
