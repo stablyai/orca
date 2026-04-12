@@ -6,6 +6,7 @@ import { isGitRepoKind } from '../../shared/repo-kind'
 import { Minimize2, PanelLeft, PanelRight } from 'lucide-react'
 import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
 import { syncZoomCSSVar } from '@/lib/ui-zoom'
+import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from './store'
@@ -132,6 +133,7 @@ function App(): React.JSX.Element {
   useGlobalFileDrop()
 
   const settings = useAppStore((s) => s.settings)
+  const updateSettings = useAppStore((s) => s.updateSettings)
 
   // Fetch initial data + hydrate GitHub cache from disk
   useEffect(() => {
@@ -553,7 +555,9 @@ function App(): React.JSX.Element {
                   </span>
                 </HoverCardTrigger>
                 <HoverCardContent side="bottom" sideOffset={6} className="titlebar-agent-hovercard">
-                  <div className="titlebar-agent-hovercard-header">
+                  <div
+                    className={`titlebar-agent-hovercard-header${activeAgentCount > 0 ? ' titlebar-agent-hovercard-header-with-list' : ''}`}
+                  >
                     {activeAgentCount === 0
                       ? 'No agents active'
                       : `${activeAgentCount} ${activeAgentCount === 1 ? 'agent' : 'agents'} active`}
@@ -579,6 +583,19 @@ function App(): React.JSX.Element {
                       })}
                     </div>
                   )}
+                  <button
+                    className="titlebar-agent-hovercard-hide"
+                    onClick={() => {
+                      void updateSettings({ showTitlebarAgentActivity: false })
+                      toast('Agent activity badge hidden', {
+                        description: 'You can turn it back on in Settings → Appearance.',
+                        duration: Infinity,
+                        dismissible: true
+                      })
+                    }}
+                  >
+                    Hide from titlebar
+                  </button>
                 </HoverCardContent>
               </HoverCard>
             ) : null}

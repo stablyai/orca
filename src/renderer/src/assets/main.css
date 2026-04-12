@@ -396,8 +396,33 @@
   font-size: 11px;
   font-weight: 500;
   color: var(--muted-foreground);
+}
+
+.titlebar-agent-hovercard-header-with-list {
   border-bottom: 1px solid var(--border);
   margin-bottom: 4px;
+}
+
+.titlebar-agent-hovercard-hide {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 5px 12px;
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+  background: none;
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  cursor: pointer;
+  border-radius: 0;
+}
+
+.titlebar-agent-hovercard-hide:hover {
+  color: var(--foreground);
+  background: var(--accent);
 }
 
 .titlebar-agent-hovercard-list {
