@@ -49,6 +49,22 @@ function forceRepaint(window: BrowserWindow): void {
   }, 32)
 }
 
+// Why: the titlebar is 42px (border-box, 1px border-bottom).  The visual
+// center of the CSS-centered content sits at ~20 CSS px from the top.
+// At zoom factor z that becomes 20·z window px.  Traffic lights are
+// ~12px tall, so we position their top edge at (center − 6).
+const TITLEBAR_CSS_CENTER = 20
+const TRAFFIC_LIGHT_RADIUS = 6
+const TRAFFIC_LIGHT_X = 16
+
+function syncTrafficLightPosition(win: BrowserWindow, zoomFactor: number): void {
+  if (win.isDestroyed()) {
+    return
+  }
+  const y = Math.round(TITLEBAR_CSS_CENTER * zoomFactor - TRAFFIC_LIGHT_RADIUS)
+  win.setWindowButtonPosition({ x: TRAFFIC_LIGHT_X, y })
+}
+
 export function createMainWindow(store: Store | null): BrowserWindow {
   const mainWindow = new BrowserWindow({
     width: 1200,
@@ -59,7 +75,16 @@ export function createMainWindow(store: Store | null): BrowserWindow {
     autoHideMenuBar: true,
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : undefined,
-    ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 16, y: 12 } } : {}),
+    // Why: initial position for 1x zoom; syncTrafficLightPosition() adjusts
+    // dynamically when the user changes UI zoom.
+    ...(process.platform === 'darwin'
+      ? {
+          trafficLightPosition: {
+            x: TRAFFIC_LIGHT_X,
+            y: TITLEBAR_CSS_CENTER - TRAFFIC_LIGHT_RADIUS
+          }
+        }
+      : {}),
     icon: is.dev ? devIcon : icon,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -84,7 +109,14 @@ export function createMainWindow(store: Store | null): BrowserWindow {
   }
 
   mainWindow.webContents.on('dom-ready', () => {
-    mainWindow.webContents.setZoomLevel(store?.getUI().uiZoomLevel ?? 0)
+    const level = store?.getUI().uiZoomLevel ?? 0
+    mainWindow.webContents.setZoomLevel(level)
+    // Why: the native traffic lights sit at a fixed position in the window
+    // while CSS content scales with zoom.  We must reposition the buttons
+    // on startup so they stay vertically aligned with the zoomed titlebar.
+    if (process.platform === 'darwin') {
+      syncTrafficLightPosition(mainWindow, Math.pow(1.2, level))
+    }
   })
 
   mainWindow.on('ready-to-show', () => {
@@ -258,8 +290,15 @@ export function createMainWindow(store: Store | null): BrowserWindow {
       mainWindow.close()
     }
   }
+  const trafficLightChannel = 'ui:sync-traffic-lights'
+  const onSyncTrafficLights = (_event: Electron.IpcMainEvent, zoomFactor: number): void => {
+    syncTrafficLightPosition(mainWindow, zoomFactor)
+  }
+  ipcMain.on(trafficLightChannel, onSyncTrafficLights)
+
   ipcMain.on(confirmCloseChannel, onConfirmClose)
   mainWindow.on('closed', () => {
+    ipcMain.removeListener(trafficLightChannel, onSyncTrafficLights)
     ipcMain.removeListener(confirmCloseChannel, onConfirmClose)
   })
 

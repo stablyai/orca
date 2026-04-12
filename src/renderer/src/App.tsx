@@ -480,23 +480,24 @@ function App(): React.JSX.Element {
             style={{ width: showSidebar && sidebarOpen ? sidebarWidth : undefined }}
           >
             <div className={isMac && !isFullScreen ? 'titlebar-traffic-light-pad' : 'pl-2'} />
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  className="sidebar-toggle"
-                  onClick={toggleSidebar}
-                  aria-label={showSidebar ? 'Toggle sidebar' : 'Sidebar unavailable in settings'}
-                  disabled={!showSidebar}
-                >
-                  <PanelLeft size={16} />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={6}>
-                {showSidebar
-                  ? `Toggle sidebar (${isMac ? '⌘B' : 'Ctrl+B'})`
-                  : 'Sidebar unavailable in settings'}
-              </TooltipContent>
-            </Tooltip>
+            {/* Why: hide the toggle entirely in settings so no disabled button
+                or stray Radix PopperAnchor portal appears in the titlebar. */}
+            {showSidebar && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    className="sidebar-toggle"
+                    onClick={toggleSidebar}
+                    aria-label="Toggle sidebar"
+                  >
+                    <PanelLeft size={16} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>
+                  {`Toggle sidebar (${isMac ? '⌘B' : 'Ctrl+B'})`}
+                </TooltipContent>
+              </Tooltip>
+            )}
             <div className="titlebar-title">Orca</div>
             {activeAgentCount > 0 ? (
               <Tooltip>

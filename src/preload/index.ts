@@ -662,6 +662,8 @@ const api = {
     },
     getZoomLevel: (): number => webFrame.getZoomLevel(),
     setZoomLevel: (level: number): void => webFrame.setZoomLevel(level),
+    syncTrafficLights: (zoomFactor: number): void =>
+      ipcRenderer.send('ui:sync-traffic-lights', zoomFactor),
     onFullscreenChanged: (callback: (isFullScreen: boolean) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, isFullScreen: boolean) =>
         callback(isFullScreen)
