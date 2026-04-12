@@ -134,6 +134,61 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         delete nextActiveBrowserTabIdByWorktree[worktreeId]
         const nextActiveTabTypeByWorktree = { ...s.activeTabTypeByWorktree }
         delete nextActiveTabTypeByWorktree[worktreeId]
+        const nextActiveTabIdByWorktree = { ...s.activeTabIdByWorktree }
+        delete nextActiveTabIdByWorktree[worktreeId]
+        const nextTabBarOrderByWorktree = { ...s.tabBarOrderByWorktree }
+        // Why: the mixed terminal/editor/browser tab strip persists visual order
+        // per worktree. If a deleted worktree keeps its entry, stale tab IDs stay
+        // retained indefinitely even though reconcileTabOrder filters them later.
+        delete nextTabBarOrderByWorktree[worktreeId]
+        const nextPendingReconnectTabByWorktree = { ...s.pendingReconnectTabByWorktree }
+        delete nextPendingReconnectTabByWorktree[worktreeId]
+        // Why: split-tab layout/group state is owned by the worktree. Leaving it
+        // behind retains full tab chrome for terminals/editors/browser tabs that
+        // no longer exist and makes a deleted worktree look restorable in session
+        // state even though its backing entities were already removed.
+        const nextUnifiedTabsByWorktree = { ...s.unifiedTabsByWorktree }
+        delete nextUnifiedTabsByWorktree[worktreeId]
+        const nextGroupsByWorktree = { ...s.groupsByWorktree }
+        delete nextGroupsByWorktree[worktreeId]
+        const nextActiveGroupIdByWorktree = { ...s.activeGroupIdByWorktree }
+        delete nextActiveGroupIdByWorktree[worktreeId]
+        const nextLayoutByWorktree = { ...s.layoutByWorktree }
+        delete nextLayoutByWorktree[worktreeId]
+        // Why: git status / compare caches are keyed by worktree and stop being
+        // refreshed once the worktree is deleted. Remove them here so deleted
+        // worktrees cannot retain stale conflict badges, branch diffs, or compare
+        // request keys indefinitely in a long-lived renderer session.
+        const nextGitStatusByWorktree = { ...s.gitStatusByWorktree }
+        delete nextGitStatusByWorktree[worktreeId]
+        const nextGitConflictOperationByWorktree = { ...s.gitConflictOperationByWorktree }
+        delete nextGitConflictOperationByWorktree[worktreeId]
+        const nextTrackedConflictPathsByWorktree = { ...s.trackedConflictPathsByWorktree }
+        delete nextTrackedConflictPathsByWorktree[worktreeId]
+        const nextGitBranchChangesByWorktree = { ...s.gitBranchChangesByWorktree }
+        delete nextGitBranchChangesByWorktree[worktreeId]
+        const nextGitBranchCompareSummaryByWorktree = { ...s.gitBranchCompareSummaryByWorktree }
+        delete nextGitBranchCompareSummaryByWorktree[worktreeId]
+        const nextGitBranchCompareRequestKeyByWorktree = {
+          ...s.gitBranchCompareRequestKeyByWorktree
+        }
+        delete nextGitBranchCompareRequestKeyByWorktree[worktreeId]
+        // Why: clean up per-file editor state for files belonging to the removed
+        // worktree so stale drafts and view modes never accumulate in memory.
+        const removedFileIds = new Set(
+          s.openFiles.filter((f) => f.worktreeId === worktreeId).map((f) => f.id)
+        )
+        const nextEditorDrafts = removedFileIds.size > 0 ? { ...s.editorDrafts } : s.editorDrafts
+        const nextMarkdownViewMode =
+          removedFileIds.size > 0 ? { ...s.markdownViewMode } : s.markdownViewMode
+        if (removedFileIds.size > 0) {
+          for (const fileId of removedFileIds) {
+            delete nextEditorDrafts[fileId]
+            delete nextMarkdownViewMode[fileId]
+          }
+        }
+        const nextExpandedDirs = { ...s.expandedDirs }
+        delete nextExpandedDirs[worktreeId]
         // If the active file belonged to the removed worktree, clear it
         const activeFileCleared = s.activeFileId
           ? s.openFiles.some((f) => f.id === s.activeFileId && f.worktreeId === worktreeId)
@@ -161,6 +216,22 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           activeFileIdByWorktree: nextActiveFileIdByWorktree,
           activeBrowserTabIdByWorktree: nextActiveBrowserTabIdByWorktree,
           activeTabTypeByWorktree: nextActiveTabTypeByWorktree,
+          activeTabIdByWorktree: nextActiveTabIdByWorktree,
+          tabBarOrderByWorktree: nextTabBarOrderByWorktree,
+          pendingReconnectTabByWorktree: nextPendingReconnectTabByWorktree,
+          unifiedTabsByWorktree: nextUnifiedTabsByWorktree,
+          groupsByWorktree: nextGroupsByWorktree,
+          activeGroupIdByWorktree: nextActiveGroupIdByWorktree,
+          layoutByWorktree: nextLayoutByWorktree,
+          editorDrafts: nextEditorDrafts,
+          markdownViewMode: nextMarkdownViewMode,
+          expandedDirs: nextExpandedDirs,
+          gitStatusByWorktree: nextGitStatusByWorktree,
+          gitConflictOperationByWorktree: nextGitConflictOperationByWorktree,
+          trackedConflictPathsByWorktree: nextTrackedConflictPathsByWorktree,
+          gitBranchChangesByWorktree: nextGitBranchChangesByWorktree,
+          gitBranchCompareSummaryByWorktree: nextGitBranchCompareSummaryByWorktree,
+          gitBranchCompareRequestKeyByWorktree: nextGitBranchCompareRequestKeyByWorktree,
           activeFileId: activeFileCleared ? null : s.activeFileId,
           activeBrowserTabId: removedActiveWorktree ? null : s.activeBrowserTabId,
           activeTabType: removedActiveWorktree || activeFileCleared ? 'terminal' : s.activeTabType,
