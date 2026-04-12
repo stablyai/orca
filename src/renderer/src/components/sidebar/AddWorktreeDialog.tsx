@@ -76,6 +76,7 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
   const isOpen = activeModal === 'create-worktree'
   const preselectedRepoId =
     typeof modalData.preselectedRepoId === 'string' ? modalData.preselectedRepoId : ''
+  const prefilledName = typeof modalData.prefilledName === 'string' ? modalData.prefilledName : ''
   const activeWorktreeRepoId = useMemo(
     () => findRepoIdForWorktree(activeWorktreeId, worktreesByRepo),
     [activeWorktreeId, worktreesByRepo]
@@ -132,6 +133,14 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
       setRepoId(activeRepoId)
     } else {
       setRepoId(eligibleRepos[0].id)
+    }
+
+    if (prefilledName.trim()) {
+      // Why: when the Cmd+J palette offers "create worktree <query>" after a
+      // search miss, the follow-up dialog should preserve that exact name
+      // instead of replacing it with the default creature suggestion.
+      setName(prefilledName)
+      lastSuggestedNameRef.current = ''
     }
   }
   prevIsOpenRef.current = isOpen

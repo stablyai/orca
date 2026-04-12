@@ -20,12 +20,6 @@ export type PaletteSearchResult = {
   supportingText: PaletteSupportingText | null
 }
 
-export type PaletteCreateWorktreeResult = {
-  action: 'create-worktree'
-  label: string
-  matchRange: MatchRange | null
-}
-
 type PRCacheEntry = { data?: { number: number; title: string } | null } | undefined
 type IssueCacheEntry = { data?: { number: number; title: string } | null } | undefined
 
@@ -249,38 +243,4 @@ export function searchWorktrees(
   }
 
   return results
-}
-
-export function searchCreateWorktreeAction(query: string): PaletteCreateWorktreeResult | null {
-  const label = 'Create new worktree'
-  if (!query) {
-    return {
-      action: 'create-worktree',
-      label,
-      matchRange: null
-    }
-  }
-
-  const normalizedQuery = query.toLowerCase()
-  if (label.toLowerCase().startsWith(normalizedQuery)) {
-    return {
-      action: 'create-worktree',
-      label,
-      matchRange: { start: 0, end: normalizedQuery.length }
-    }
-  }
-
-  const aliases = ['new worktree', 'add worktree', 'create worktree']
-  if (!aliases.includes(normalizedQuery)) {
-    return null
-  }
-
-  // Why: aliases like "add worktree" should still surface the create action
-  // even though the visible row copy says "Create new worktree". Keep the
-  // highlight tied to the rendered label only when the label itself matches.
-  return {
-    action: 'create-worktree',
-    label,
-    matchRange: null
-  }
 }

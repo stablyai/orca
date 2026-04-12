@@ -17,11 +17,7 @@ import { cn } from '@/lib/utils'
 import { getWorktreeStatus, getWorktreeStatusLabel } from '@/lib/worktree-status'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
-import {
-  searchCreateWorktreeAction,
-  searchWorktrees,
-  type MatchRange
-} from '@/lib/worktree-palette-search'
+import { searchWorktrees, type MatchRange } from '@/lib/worktree-palette-search'
 import type { Worktree } from '../../../shared/types'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 
@@ -102,10 +98,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     () => searchWorktrees(sortedWorktrees, query.trim(), repoMap, prCache, issueCache),
     [sortedWorktrees, query, repoMap, prCache, issueCache]
   )
-  const createAction = useMemo(
-    () => (canCreateWorktree ? searchCreateWorktreeAction(query.trim()) : null),
-    [canCreateWorktree, query]
-  )
+  const createWorktreeName = query.trim()
+  const showCreateAction =
+    canCreateWorktree && createWorktreeName.length > 0 && matches.length === 0
 
   // Build a map of worktreeId -> Worktree for quick lookup
   const worktreeMap = useMemo(() => {
@@ -137,16 +132,12 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     if (!visible) {
       return
     }
-    const firstSelectableId =
-      createAction?.action === 'create-worktree' ? '__create_worktree__' : null
+    const firstSelectableId = showCreateAction ? '__create_worktree__' : null
     if (matches.length === 0) {
       setSelectedWorktreeId(firstSelectableId ?? '')
       return
     }
-    if (
-      selectedWorktreeId === '__create_worktree__' &&
-      createAction?.action === 'create-worktree'
-    ) {
+    if (selectedWorktreeId === '__create_worktree__' && showCreateAction) {
       return
     }
     if (
@@ -158,7 +149,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       // logical worktree selected instead of drifting to a new visual index.
       setSelectedWorktreeId(firstSelectableId ?? matches[0].worktreeId)
     }
-  }, [visible, matches, selectedWorktreeId, createAction])
+  }, [visible, matches, selectedWorktreeId, showCreateAction])
 
   const focusActiveSurface = useCallback(() => {
     // Why: double rAF — first waits for React to commit state (palette closes),
@@ -211,6 +202,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   )
 
   const handleCreateWorktree = useCallback(() => {
+    if (!createWorktreeName) {
+      return
+    }
     // Why: when Cmd+J hands off to the create dialog, that new modal owns focus.
     // Re-running the palette's terminal/editor focus restore races the dialog's
     // autofocus and can pull keyboard input away from the name field.
@@ -218,8 +212,8 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     closeModal()
     // Why: we open create-worktree in a microtask so Radix Dialog fully unmounts
     // before the next modal mounts, avoiding stacked-dialog focus conflicts.
-    queueMicrotask(() => openModal('create-worktree'))
-  }, [closeModal, openModal])
+    queueMicrotask(() => openModal('create-worktree', { prefilledName: createWorktreeName }))
+  }, [closeModal, createWorktreeName, openModal])
 
   const handleCloseAutoFocus = useCallback((e: Event) => {
     // Why: prevent Radix from stealing focus to the trigger element. We manage
@@ -229,7 +223,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
 
   // Result count for screen readers
   const worktreeResultCount = matches.length
-  const actionCount = createAction ? 1 : 0
+  const actionCount = showCreateAction ? 1 : 0
 
   return (
     <CommandDialog
@@ -262,14 +256,14 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
             title="Loading worktrees"
             subtitle="Gathering your recent worktrees and activity state."
           />
-        ) : !hasWorktrees && !createAction ? (
+        ) : !hasWorktrees && !showCreateAction ? (
           <CommandEmpty className="py-0">
             <PaletteState
               title="No active worktrees"
               subtitle="Create one to get started, then jump back here any time."
             />
           </CommandEmpty>
-        ) : matches.length === 0 && !createAction ? (
+        ) : matches.length === 0 && !showCreateAction ? (
           <CommandEmpty className="py-0">
             <PaletteState
               title="No worktrees match your search"
@@ -278,7 +272,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
           </CommandEmpty>
         ) : (
           <>
-            {!hasWorktrees && !query.trim() && createAction && (
+            {!hasWorktrees && !query.trim() && showCreateAction && (
               <div className="px-2 pb-2 pt-1">
                 <PaletteState
                   title="No active worktrees"
@@ -294,7 +288,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                 />
               </div>
             )}
-            {createAction && (
+            {showCreateAction && (
               <CommandItem
                 value="__create_worktree__"
                 onSelect={handleCreateWorktree}
@@ -305,10 +299,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-[14px] font-semibold tracking-[-0.01em] text-foreground">
-                    <HighlightedText
-                      text={createAction.label}
-                      matchRange={createAction.matchRange}
-                    />
+                    Create worktree &quot;{createWorktreeName}&quot;
                   </div>
                 </div>
                 {/* Why: always rendered to reserve space and prevent layout shift
