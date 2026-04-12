@@ -22,7 +22,7 @@ const ptyShellName = new Map<string, string>()
 // to invoke/clean them up on a destroyed environment, triggering a SIGABRT
 // via Napi::Error::ThrowAsJavaScriptException. Storing and calling the
 // disposables before proc.kill() prevents the use-after-free crash.
-const ptyDisposables = new Map<string, Array<{ dispose: () => void }>>()
+const ptyDisposables = new Map<string, { dispose: () => void }[]>()
 
 // Track which "page load generation" each PTY belongs to.
 // When the renderer reloads, we only kill PTYs from previous generations,
