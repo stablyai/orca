@@ -14,6 +14,7 @@ import '@/lib/monaco-setup'
 import { computeEditorFontSize } from '@/lib/editor-font-zoom'
 
 import { useContextualCopySetup } from './useContextualCopySetup'
+import { computeMonacoRevealRange } from './monaco-reveal-range'
 
 type MonacoEditorProps = {
   filePath: string
@@ -39,6 +40,10 @@ export default function MonacoEditor({
   revealMatchLength
 }: MonacoEditorProps): React.JSX.Element {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
+  const revealDecorationRef = useRef<editor.IEditorDecorationsCollection | null>(null)
+  const revealHighlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const revealRafRef = useRef<number | null>(null)
+  const revealInnerRafRef = useRef<number | null>(null)
   const { setupCopy, toastNode } = useContextualCopySetup()
   // Why: The scroll throttle timer must be accessible from useLayoutEffect cleanup
   // so we can cancel any pending write before synchronously snapshotting the final
@@ -67,6 +72,60 @@ export default function MonacoEditor({
   const isDark =
     settings?.theme === 'dark' ||
     (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+
+  const clearTransientRevealHighlight = useCallback(() => {
+    if (revealHighlightTimerRef.current !== null) {
+      clearTimeout(revealHighlightTimerRef.current)
+      revealHighlightTimerRef.current = null
+    }
+    revealDecorationRef.current?.clear()
+    revealDecorationRef.current = null
+  }, [])
+
+  const cancelScheduledReveal = useCallback(() => {
+    if (revealRafRef.current !== null) {
+      cancelAnimationFrame(revealRafRef.current)
+      revealRafRef.current = null
+    }
+    if (revealInnerRafRef.current !== null) {
+      cancelAnimationFrame(revealInnerRafRef.current)
+      revealInnerRafRef.current = null
+    }
+  }, [])
+
+  const queueReveal = useCallback(
+    (
+      editorInstance: editor.IStandaloneCodeEditor,
+      line: number,
+      column: number,
+      matchLength: number,
+      onApplied?: () => void
+    ) => {
+      cancelScheduledReveal()
+
+      // Why: the search click path already waits two frames before publishing
+      // the reveal intent, but Monaco can still mount before its viewport math
+      // settles. Deferring the actual reveal by two editor-owned frames keeps
+      // scroll-to-match and inline highlight deterministic on fresh opens.
+      revealRafRef.current = requestAnimationFrame(() => {
+        revealInnerRafRef.current = requestAnimationFrame(() => {
+          performReveal(
+            editorInstance,
+            line,
+            column,
+            matchLength,
+            clearTransientRevealHighlight,
+            revealDecorationRef,
+            revealHighlightTimerRef
+          )
+          onApplied?.()
+          revealRafRef.current = null
+          revealInnerRafRef.current = null
+        })
+      })
+    },
+    [cancelScheduledReveal, clearTransientRevealHighlight]
+  )
 
   const handleMount: OnMount = useCallback(
     (editorInstance, monaco) => {
@@ -126,8 +185,9 @@ export default function MonacoEditor({
       // the active tab. Without scoping consumption to the destination file,
       // the previously mounted editor can clear the reveal on the first click.
       if (reveal?.filePath === filePath) {
-        performReveal(editorInstance, reveal.line, reveal.column, reveal.matchLength)
-        useAppStore.getState().setPendingEditorReveal(null)
+        queueReveal(editorInstance, reveal.line, reveal.column, reveal.matchLength, () => {
+          useAppStore.getState().setPendingEditorReveal(null)
+        })
       } else {
         const savedScrollTop = scrollTopCache.get(filePath)
         if (savedScrollTop !== undefined) {
@@ -145,7 +205,7 @@ export default function MonacoEditor({
         }
       }
     },
-    [setupCopy, filePath, setEditorCursorLine]
+    [queueReveal, setupCopy, filePath, setEditorCursorLine]
   )
 
   const handleChange = useCallback(
@@ -174,8 +234,10 @@ export default function MonacoEditor({
       if (ed) {
         setWithLRU(scrollTopCache, filePath, ed.getScrollTop())
       }
+      cancelScheduledReveal()
+      clearTransientRevealHighlight()
     }
-  }, [filePath])
+  }, [cancelScheduledReveal, clearTransientRevealHighlight, filePath])
 
   // Update editor options when settings change
   useEffect(() => {
@@ -216,10 +278,14 @@ export default function MonacoEditor({
     if (!revealLine || !editorRef.current) {
       return
     }
-    performReveal(editorRef.current, revealLine, revealColumn ?? 1, revealMatchLength ?? 0)
-    // Clear after consuming so it doesn't re-fire
-    setPendingEditorReveal(null)
-  }, [revealLine, revealColumn, revealMatchLength, setPendingEditorReveal])
+    queueReveal(editorRef.current, revealLine, revealColumn ?? 1, revealMatchLength ?? 0, () => {
+      // Why: the reveal is intentionally delayed until Monaco finishes its
+      // own post-mount layout frames. Clearing the pending payload only after
+      // the queued reveal runs prevents lost navigation if the editor
+      // unmounts before those frames execute.
+      setPendingEditorReveal(null)
+    })
+  }, [queueReveal, revealLine, revealColumn, revealMatchLength, setPendingEditorReveal])
 
   return (
     <div className="relative h-full">
@@ -308,28 +374,56 @@ function performReveal(
   ed: editor.IStandaloneCodeEditor,
   line: number,
   column: number,
-  matchLength: number
+  matchLength: number,
+  clearTransientRevealHighlight: () => void,
+  revealDecorationRef: React.RefObject<editor.IEditorDecorationsCollection | null>,
+  revealHighlightTimerRef: React.RefObject<ReturnType<typeof setTimeout> | null>
 ): void {
   const model = ed.getModel()
-  const maxLine = model?.getLineCount() ?? Infinity
+  if (!model) {
+    ed.focus()
+    return
+  }
 
-  // Clamp line to valid range
-  const safeLine = Math.min(Math.max(1, line), maxLine)
-  const lineLength = model?.getLineMaxColumn(safeLine) ?? Infinity
-  const safeCol = Math.min(Math.max(1, column), lineLength)
+  const range = computeMonacoRevealRange({
+    line,
+    column,
+    matchLength,
+    maxLine: model.getLineCount(),
+    lineMaxColumn: model.getLineMaxColumn(Math.min(Math.max(1, line), model.getLineCount()))
+  })
+  const shouldHighlight = matchLength > 0
 
-  ed.setPosition({ lineNumber: safeLine, column: safeCol })
-  ed.revealLineInCenter(safeLine)
-
-  // Highlight the match if we have length info
-  if (matchLength > 0) {
-    const endCol = Math.min(safeCol + matchLength, lineLength)
+  ed.setPosition({ lineNumber: range.startLineNumber, column: range.startColumn })
+  if (shouldHighlight) {
+    ed.setSelection(range)
+    ed.revealRangeInCenter(range)
+  } else {
     ed.setSelection({
-      startLineNumber: safeLine,
-      startColumn: safeCol,
-      endLineNumber: safeLine,
-      endColumn: endCol
+      startLineNumber: range.startLineNumber,
+      startColumn: range.startColumn,
+      endLineNumber: range.startLineNumber,
+      endColumn: range.startColumn
     })
+    ed.revealPositionInCenter({ lineNumber: range.startLineNumber, column: range.startColumn })
+  }
+
+  clearTransientRevealHighlight()
+  if (shouldHighlight) {
+    revealDecorationRef.current = ed.createDecorationsCollection([
+      {
+        range,
+        options: {
+          inlineClassName: 'monaco-search-result-highlight',
+          stickiness: 1
+        }
+      }
+    ])
+    revealHighlightTimerRef.current = setTimeout(() => {
+      revealDecorationRef.current?.clear()
+      revealDecorationRef.current = null
+      revealHighlightTimerRef.current = null
+    }, 1200)
   }
 
   ed.focus()
