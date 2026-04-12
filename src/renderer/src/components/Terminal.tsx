@@ -148,11 +148,7 @@ export default function Terminal(): React.JSX.Element | null {
       mountedWorktreeIdsRef.current.delete(id)
     }
   }
-  // Why: tracks worktrees that have already been initialized (either by
-  // auto-creating a first tab or by having tabs on first activation). Once a
-  // worktree is in this set, closing all its tabs will NOT auto-spawn a
-  // replacement — the user explicitly chose to close them.
-  const initializedWorktreesRef = useRef(new Set<string>())
+  const initialTabCreationGuardRef = useRef<string | null>(null)
 
   // Auto-create first tab when worktree activates
   useEffect(() => {
@@ -160,22 +156,27 @@ export default function Terminal(): React.JSX.Element | null {
       return
     }
     if (!activeWorktreeId) {
+      initialTabCreationGuardRef.current = null
       return
     }
 
+    // Why: skip auto-creation if terminal tabs already exist, or if editor files
+    // are open for this worktree. The user may have intentionally closed all
+    // terminal tabs while keeping editors open — auto-spawning a terminal would
+    // be disruptive.
     if (tabs.length > 0 || worktreeFiles.length > 0 || worktreeBrowserTabs.length > 0) {
-      initializedWorktreesRef.current.add(activeWorktreeId)
+      if (initialTabCreationGuardRef.current === activeWorktreeId) {
+        initialTabCreationGuardRef.current = null
+      }
       return
     }
 
-    // Why: once a worktree has been initialized (had tabs or auto-created one),
-    // don't auto-create again. This prevents a new terminal from spawning
-    // immediately after the user closes the last tab. Also guards against
-    // React StrictMode double-invocation.
-    if (initializedWorktreesRef.current.has(activeWorktreeId)) {
+    // In React StrictMode (dev), mount effects are intentionally invoked twice.
+    // Track the worktree we already initialized so we only create one first tab.
+    if (initialTabCreationGuardRef.current === activeWorktreeId) {
       return
     }
-    initializedWorktreesRef.current.add(activeWorktreeId)
+    initialTabCreationGuardRef.current = activeWorktreeId
     createTab(activeWorktreeId)
   }, [
     workspaceSessionReady,
@@ -543,11 +544,7 @@ export default function Terminal(): React.JSX.Element | null {
               <TabGroupSplitLayout
                 layout={effectiveLayout}
                 worktreeId={worktree.id}
-                // Why: hidden worktrees must not have a focused group, otherwise
-                // their TerminalPanes register window-level keydown handlers
-                // that fire alongside the visible worktree's handlers — causing
-                // shortcuts like Cmd+D to split panes in the wrong worktree.
-                focusedGroupId={isVisible ? activeGroupIdByWorktree[worktree.id] : undefined}
+                focusedGroupId={activeGroupIdByWorktree[worktree.id]}
               />
             </div>
           )

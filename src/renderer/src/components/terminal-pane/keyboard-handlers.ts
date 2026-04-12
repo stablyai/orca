@@ -140,7 +140,7 @@ export function useTerminalKeyboardShortcuts({
 
       if (action.type === 'sendInput') {
         e.preventDefault()
-        e.stopImmediatePropagation()
+        e.stopPropagation()
         const pane = manager.getActivePane() ?? manager.getPanes()[0]
         if (!pane) {
           return
@@ -165,7 +165,7 @@ export function useTerminalKeyboardShortcuts({
           return
         }
         e.preventDefault()
-        e.stopImmediatePropagation()
+        e.stopPropagation()
         void window.api.ui.writeClipboardText(selection).catch(() => {
           /* ignore clipboard write failures */
         })
@@ -176,7 +176,7 @@ export function useTerminalKeyboardShortcuts({
       // top-level find-in-page flow to fall back to.
       if (action.type === 'toggleSearch') {
         e.preventDefault()
-        e.stopImmediatePropagation()
+        e.stopPropagation()
         setSearchOpen((prev) => !prev)
         return
       }
@@ -184,7 +184,7 @@ export function useTerminalKeyboardShortcuts({
       // Cmd+K clears active pane screen + scrollback.
       if (action.type === 'clearActivePane') {
         e.preventDefault()
-        e.stopImmediatePropagation()
+        e.stopPropagation()
         const pane = manager.getActivePane() ?? manager.getPanes()[0]
         if (pane) {
           pane.terminal.clear()
@@ -199,7 +199,7 @@ export function useTerminalKeyboardShortcuts({
           return
         }
         e.preventDefault()
-        e.stopImmediatePropagation()
+        e.stopPropagation()
 
         // Collapse expanded pane before switching
         if (expandedPaneIdRef.current !== null) {
@@ -228,7 +228,7 @@ export function useTerminalKeyboardShortcuts({
           return
         }
         e.preventDefault()
-        e.stopImmediatePropagation()
+        e.stopPropagation()
         const pane = manager.getActivePane() ?? panes[0]
         if (!pane) {
           return
@@ -243,7 +243,7 @@ export function useTerminalKeyboardShortcuts({
       // every pane instead of just the focused one.
       if (action.type === 'closeActivePane') {
         e.preventDefault()
-        e.stopImmediatePropagation()
+        e.stopPropagation()
         const pane = manager.getActivePane() ?? manager.getPanes()[0]
         if (!pane) {
           return
@@ -257,7 +257,7 @@ export function useTerminalKeyboardShortcuts({
       // (matches Ghostty behavior).
       if (action.type === 'splitActivePane') {
         e.preventDefault()
-        e.stopImmediatePropagation()
+        e.stopPropagation()
         if (expandedPaneIdRef.current !== null) {
           setExpandedPane(null)
           restoreExpandedLayout()
