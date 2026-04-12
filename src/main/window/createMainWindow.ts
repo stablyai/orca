@@ -10,27 +10,7 @@ import {
   normalizeBrowserNavigationUrl,
   normalizeExternalBrowserUrl
 } from '../../shared/browser-url'
-
-function isZoomInShortcut(input: Electron.Input): boolean {
-  return input.key === '=' || input.key === '+' || input.code === 'NumpadAdd'
-}
-
-function isZoomOutShortcut(input: Electron.Input): boolean {
-  // Why: Electron reports Cmd/Ctrl+Minus differently across layouts and devices:
-  // some emit '-' while shifted layouts emit '_', and other layouts/devices
-  // report symbolic names like "Minus"/"Subtract" in either key or code.
-  // We accept all known variants so zoom out remains reachable everywhere.
-  const key = (input.key ?? '').toLowerCase()
-  const code = (input.code ?? '').toLowerCase()
-  return (
-    key === '-' ||
-    key === '_' ||
-    key.includes('minus') ||
-    key.includes('subtract') ||
-    code.includes('minus') ||
-    code.includes('subtract')
-  )
-}
+import { resolveWindowShortcutAction } from '../../shared/window-shortcut-policy'
 
 function forceRepaint(window: BrowserWindow): void {
   if (window.isDestroyed()) {
@@ -218,42 +198,39 @@ export function createMainWindow(store: Store | null): BrowserWindow {
       return
     }
 
-    const modifierPressed = process.platform === 'darwin' ? input.meta : input.control
-    if (!modifierPressed || input.alt) {
+    // Why: keep the main-process interception surface as an explicit allowlist.
+    // Anything outside this helper must continue to the renderer/PTTY so
+    // readline control chords are not silently stolen above the terminal.
+    const action = resolveWindowShortcutAction(input, process.platform)
+    if (!action) {
       return
     }
 
-    if (isZoomInShortcut(input)) {
-      event.preventDefault()
-      mainWindow.webContents.send('terminal:zoom', 'in')
-    } else if (isZoomOutShortcut(input)) {
-      event.preventDefault()
-      mainWindow.webContents.send('terminal:zoom', 'out')
-    } else if (input.key === '0' && !input.shift) {
-      event.preventDefault()
-      mainWindow.webContents.send('terminal:zoom', 'reset')
-    } else if (
-      input.code === 'KeyJ' &&
-      ((process.platform === 'darwin' && !input.shift) ||
-        (process.platform !== 'darwin' && input.shift))
-    ) {
+    event.preventDefault()
+
+    if (action.type === 'zoom') {
+      mainWindow.webContents.send('terminal:zoom', action.direction)
+      return
+    }
+
+    if (action.type === 'toggleWorktreePalette') {
       // Why: embedded browser guests can keep keyboard focus inside Chromium's
       // guest webContents, which bypasses the renderer's window-level keydown
       // listener. Forward the worktree-switch shortcut through the main window
       // so Cmd+J (macOS) or Ctrl+Shift+J (Win/Linux) works consistently from browser tabs too.
-      // We use Ctrl+Shift+J on Win/Linux because Ctrl+J is the ASCII Line Feed control code
-      // and intercepting it would break standard terminal usage (like Enter in shells or Vim).
-      event.preventDefault()
       mainWindow.webContents.send('ui:toggleWorktreePalette')
-    } else if (input.code === 'KeyP' && !input.shift) {
+      return
+    }
+
+    if (action.type === 'openQuickOpen') {
       // Forward Cmd/Ctrl+P to trigger Quick Open
-      event.preventDefault()
       mainWindow.webContents.send('ui:openQuickOpen')
-    } else if (input.key >= '1' && input.key <= '9' && !input.shift) {
+      return
+    }
+
+    if (action.type === 'jumpToWorktreeIndex') {
       // Forward Cmd/Ctrl+1-9 for quick worktree switching
-      event.preventDefault()
-      const index = parseInt(input.key, 10) - 1
-      mainWindow.webContents.send('ui:jumpToWorktreeIndex', index)
+      mainWindow.webContents.send('ui:jumpToWorktreeIndex', action.index)
     }
   })
 

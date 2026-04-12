@@ -7,6 +7,10 @@ import {
   normalizeBrowserNavigationUrl,
   normalizeExternalBrowserUrl
 } from '../../shared/browser-url'
+import {
+  isWindowShortcutModifierChord,
+  resolveWindowShortcutAction
+} from '../../shared/window-shortcut-policy'
 import type {
   BrowserGrabCancelReason,
   BrowserGrabPayload,
@@ -897,10 +901,18 @@ class BrowserManager {
       if (input.type !== 'keyDown') {
         return
       }
-      const isMod = process.platform === 'darwin' ? input.meta : input.control
-      if (!isMod || input.alt) {
+      // Why: browser guests need a broader modifier-chord gate than the main
+      // window because they also forward guest-specific tab shortcuts
+      // (Cmd/Ctrl+T/W/Shift+B/Shift+[ / ]) in addition to the shared allowlist
+      // handled by resolveWindowShortcutAction().
+      if (!isWindowShortcutModifierChord(input, process.platform)) {
         return
       }
+
+      // Why: centralizing the shared subset still keeps guest forwarding in
+      // lockstep with the main window for the chords that must never steal
+      // readline control input above the terminal.
+      const action = resolveWindowShortcutAction(input, process.platform)
 
       const rendererWcId = this.rendererWebContentsIdByTabId.get(browserTabId)
       if (!rendererWcId) {
@@ -919,16 +931,12 @@ class BrowserManager {
         rendererWc.send('ui:closeActiveTab')
       } else if (input.shift && (input.code === 'BracketRight' || input.code === 'BracketLeft')) {
         rendererWc.send('ui:switchTab', input.code === 'BracketRight' ? 1 : -1)
-      } else if (
-        input.code === 'KeyJ' &&
-        ((process.platform === 'darwin' && !input.shift) ||
-          (process.platform !== 'darwin' && input.shift))
-      ) {
+      } else if (action?.type === 'toggleWorktreePalette') {
         rendererWc.send('ui:toggleWorktreePalette')
-      } else if (input.code === 'KeyP' && !input.shift) {
+      } else if (action?.type === 'openQuickOpen') {
         rendererWc.send('ui:openQuickOpen')
-      } else if (input.key >= '1' && input.key <= '9' && !input.shift) {
-        rendererWc.send('ui:jumpToWorktreeIndex', parseInt(input.key, 10) - 1)
+      } else if (action?.type === 'jumpToWorktreeIndex') {
+        rendererWc.send('ui:jumpToWorktreeIndex', action.index)
       } else {
         return
       }
