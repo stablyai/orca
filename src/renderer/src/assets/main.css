@@ -352,6 +352,11 @@
   font-weight: 600;
   line-height: 1;
   white-space: nowrap;
+  cursor: pointer;
+}
+
+.titlebar-agent-badge-idle {
+  opacity: 0.55;
 }
 
 .titlebar-agent-badge-dot {
@@ -363,6 +368,11 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, #16a34a 18%, transparent);
 }
 
+.titlebar-agent-badge-dot-idle {
+  background: var(--muted-foreground);
+  box-shadow: none;
+}
+
 .titlebar-agent-badge-count {
   min-width: 1ch;
 }
@@ -370,6 +380,74 @@
 .titlebar-agent-badge-label {
   color: var(--muted-foreground);
   font-weight: 500;
+}
+
+/* ─── Agent hover card (titlebar badge popover) ───────────────────── */
+
+.titlebar-agent-hovercard {
+  width: auto;
+  min-width: 180px;
+  max-width: 280px;
+  padding: 8px 0;
+}
+
+.titlebar-agent-hovercard-header {
+  padding: 0 12px 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+
+.titlebar-agent-hovercard-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.titlebar-agent-hovercard-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 12px;
+  background: none;
+  border: none;
+  color: var(--foreground);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 0;
+  width: 100%;
+}
+
+.titlebar-agent-hovercard-row:hover {
+  background: var(--accent);
+}
+
+.titlebar-agent-hovercard-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.titlebar-agent-hovercard-count {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.titlebar-agent-hovercard-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #16a34a;
 }
 
 .titlebar-icon-button {

@@ -9,6 +9,7 @@ import { syncZoomCSSVar } from '@/lib/ui-zoom'
 import { Toaster } from '@/components/ui/sonner'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from './store'
+import { useShallow } from 'zustand/react/shallow'
 import { useIpcEvents } from './hooks/useIpcEvents'
 import Sidebar from './components/Sidebar'
 import Terminal from './components/Terminal'
@@ -29,7 +30,10 @@ import {
 import { useGlobalFileDrop } from './hooks/useGlobalFileDrop'
 import { registerUpdaterBeforeUnloadBypass } from './lib/updater-beforeunload'
 import { buildWorkspaceSessionPayload } from './lib/workspace-session'
-import { countWorkingAgents } from './lib/agent-status'
+import { countWorkingAgents, countWorkingAgentsPerWorktree } from './lib/agent-status'
+import { activateAndRevealWorktree } from './lib/worktree-activation'
+import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card'
+import { findWorktreeById } from '@/store/slices/worktree-helpers'
 
 const isMac = navigator.userAgent.includes('Mac')
 
@@ -68,6 +72,15 @@ function App(): React.JSX.Element {
       runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId
     })
   )
+  const agentCountByWorktree = useAppStore(
+    useShallow((s) =>
+      countWorkingAgentsPerWorktree({
+        tabsByWorktree: s.tabsByWorktree,
+        runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId
+      })
+    )
+  )
+  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const expandedPaneByTabId = useAppStore((s) => s.expandedPaneByTabId)
   const canExpandPaneByTabId = useAppStore((s) => s.canExpandPaneByTabId)
   const terminalLayoutsByTabId = useAppStore((s) => s.terminalLayoutsByTabId)
@@ -477,7 +490,7 @@ function App(): React.JSX.Element {
               tabs start exactly where the sidebar ends, creating a clean vertical
               alignment between the sidebar edge and the first tab. */}
           <div
-            className="flex items-center shrink-0 overflow-hidden"
+            className={`flex items-center overflow-hidden${showSidebar && sidebarOpen ? ' shrink-0' : ' min-w-0'}`}
             style={{ width: showSidebar && sidebarOpen ? sidebarWidth : undefined }}
           >
             <div className={isMac && !isFullScreen ? 'titlebar-traffic-light-pad' : 'pl-2'} />
@@ -500,22 +513,50 @@ function App(): React.JSX.Element {
               </Tooltip>
             )}
             <div className="titlebar-title">Orca</div>
-            {activeAgentCount > 0 ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
+            {settings?.showTitlebarAgentActivity !== false ? (
+              <HoverCard openDelay={200} closeDelay={100}>
+                <HoverCardTrigger asChild>
                   <span
-                    className="titlebar-agent-badge"
+                    className={`titlebar-agent-badge${activeAgentCount === 0 ? ' titlebar-agent-badge-idle' : ''}`}
                     aria-label={`${activeAgentCount} ${activeAgentCount === 1 ? 'agent' : 'agents'} active`}
                   >
-                    <span className="titlebar-agent-badge-dot" aria-hidden />
+                    <span
+                      className={`titlebar-agent-badge-dot${activeAgentCount === 0 ? ' titlebar-agent-badge-dot-idle' : ''}`}
+                      aria-hidden
+                    />
                     <span className="titlebar-agent-badge-count">{activeAgentCount}</span>
                     <span className="titlebar-agent-badge-label">active</span>
                   </span>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6}>
-                  {`${activeAgentCount} ${activeAgentCount === 1 ? 'agent' : 'agents'} active across all worktrees`}
-                </TooltipContent>
-              </Tooltip>
+                </HoverCardTrigger>
+                <HoverCardContent side="bottom" sideOffset={6} className="titlebar-agent-hovercard">
+                  <div className="titlebar-agent-hovercard-header">
+                    {activeAgentCount === 0
+                      ? 'No agents active'
+                      : `${activeAgentCount} ${activeAgentCount === 1 ? 'agent' : 'agents'} active`}
+                  </div>
+                  {activeAgentCount > 0 && (
+                    <div className="titlebar-agent-hovercard-list">
+                      {Object.entries(agentCountByWorktree).map(([worktreeId, count]) => {
+                        const wt = findWorktreeById(worktreesByRepo, worktreeId)
+                        return (
+                          <button
+                            key={worktreeId}
+                            className="titlebar-agent-hovercard-row"
+                            onClick={() => activateAndRevealWorktree(worktreeId)}
+                          >
+                            <span className="titlebar-agent-hovercard-name">
+                              {wt?.displayName ?? worktreeId}
+                            </span>
+                            <span className="titlebar-agent-hovercard-count">
+                              {count} <span className="titlebar-agent-hovercard-dot" />
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </HoverCardContent>
+              </HoverCard>
             ) : null}
           </div>
           {/* Why: keep the center titlebar slot mounted even when tabs are hidden.
