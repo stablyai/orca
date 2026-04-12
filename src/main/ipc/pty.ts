@@ -115,6 +115,7 @@ export function registerPtyHandlers(
         ptyShellName.delete(id)
         ptyLoadGeneration.delete(id)
         openCodeHookService.clearPty(id)
+        piTitlebarExtensionService.clearPty(id)
         // Why: notify runtime so the agent detector can close out any live
         // agent sessions. Without this, killed PTYs would remain in the
         // detector's liveAgents map and accumulate inflated durations.
@@ -148,6 +149,7 @@ export function registerPtyHandlers(
       ptyShellName.delete(ptyId)
       ptyLoadGeneration.delete(ptyId)
       openCodeHookService.clearPty(ptyId)
+      piTitlebarExtensionService.clearPty(ptyId)
       runtime?.onPtyExit(ptyId, -1)
       return true
     }
@@ -236,7 +238,13 @@ export function registerPtyHandlers(
         delete openCodeHookEnv.OPENCODE_CONFIG_DIR
       }
       Object.assign(spawnEnv, openCodeHookEnv)
-      Object.assign(spawnEnv, piTitlebarExtensionService.buildPtyEnv(spawnEnv.PATH))
+      // Why: PI_CODING_AGENT_DIR owns Pi's full config/session root. Build a
+      // PTY-scoped overlay from the caller's chosen root so Pi sessions keep
+      // their user state without sharing a mutable overlay across terminals.
+      Object.assign(
+        spawnEnv,
+        piTitlebarExtensionService.buildPtyEnv(id, spawnEnv.PI_CODING_AGENT_DIR)
+      )
 
       // Why: the selected Codex account should affect Codex launched inside
       // Orca terminals too, not just Orca's background quota fetches. Inject
@@ -353,6 +361,7 @@ export function registerPtyHandlers(
         ptyShellName.delete(id)
         ptyLoadGeneration.delete(id)
         openCodeHookService.clearPty(id)
+        piTitlebarExtensionService.clearPty(id)
         runtime?.onPtyExit(id, exitCode)
         if (!mainWindow.isDestroyed()) {
           mainWindow.webContents.send('pty:exit', { id, code: exitCode })
@@ -389,6 +398,7 @@ export function registerPtyHandlers(
       ptyShellName.delete(args.id)
       ptyLoadGeneration.delete(args.id)
       openCodeHookService.clearPty(args.id)
+      piTitlebarExtensionService.clearPty(args.id)
       runtime?.onPtyExit(args.id, -1)
     }
   })
@@ -448,5 +458,6 @@ export function killAllPty(): void {
     ptyShellName.delete(id)
     ptyLoadGeneration.delete(id)
     openCodeHookService.clearPty(id)
+    piTitlebarExtensionService.clearPty(id)
   }
 }

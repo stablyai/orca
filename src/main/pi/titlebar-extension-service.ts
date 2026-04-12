@@ -1,10 +1,22 @@
-import { execFileSync } from 'child_process'
-import { mkdirSync, writeFileSync, chmodSync } from 'fs'
-import { delimiter, join } from 'path'
+import {
+  cpSync,
+  existsSync,
+  linkSync,
+  mkdirSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync
+} from 'fs'
+import { homedir } from 'os'
+import { basename, join } from 'path'
 import { app } from 'electron'
 
 const ORCA_PI_EXTENSION_FILE = 'orca-titlebar-spinner.ts'
-const ORCA_PI_WRAPPER_FILE = process.platform === 'win32' ? 'pi.cmd' : 'pi'
+const PI_AGENT_DIR_NAME = '.pi'
+const PI_AGENT_SUBDIR = 'agent'
+const PI_OVERLAY_DIR_NAME = 'pi-agent-overlays'
 
 function getPiTitlebarExtensionSource(): string {
   return [
@@ -68,85 +80,87 @@ function getPiTitlebarExtensionSource(): string {
   ].join('\n')
 }
 
-function getUnixWrapperSource(): string {
-  return [
-    '#!/bin/sh',
-    '# Why: Pi only loads extra titlebar behavior via extension files. Orca',
-    '# prepends this PTY-local wrapper to PATH so every `pi` launch gets the',
-    "# spinner extension without overwriting the user's PI_CODING_AGENT_DIR.",
-    'exec "$ORCA_PI_REAL_BIN" --extension "$ORCA_PI_EXTENSION_PATH" "$@"',
-    ''
-  ].join('\n')
+function getDefaultPiAgentDir(): string {
+  return join(homedir(), PI_AGENT_DIR_NAME, PI_AGENT_SUBDIR)
 }
 
-function getWindowsWrapperSource(): string {
-  return [
-    '@echo off',
-    'REM Why: Pi only exposes spinner title updates through an extension. Orca',
-    'REM prepends this PTY-local wrapper to PATH so every `pi` launch gets the',
-    "REM spinner extension without replacing the user's Pi config directory.",
-    '"%ORCA_PI_REAL_BIN%" --extension "%ORCA_PI_EXTENSION_PATH%" %*',
-    ''
-  ].join('\r\n')
-}
+function mirrorEntry(sourcePath: string, targetPath: string): void {
+  const sourceStats = statSync(sourcePath)
 
-function resolvePiBinary(): string | null {
-  try {
-    if (process.platform === 'win32') {
-      const stdout = execFileSync('where.exe', ['pi'], {
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore']
-      })
-      return (
-        stdout
-          .split(/\r?\n/)
-          .map((line) => line.trim())
-          .find(Boolean) || null
-      )
+  if (process.platform === 'win32') {
+    if (sourceStats.isDirectory()) {
+      symlinkSync(sourcePath, targetPath, 'junction')
+      return
     }
 
-    const stdout = execFileSync('which', ['pi'], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore']
-    })
-    return stdout.trim() || null
-  } catch {
-    return null
+    try {
+      linkSync(sourcePath, targetPath)
+      return
+    } catch {
+      cpSync(sourcePath, targetPath)
+      return
+    }
   }
+
+  symlinkSync(sourcePath, targetPath, sourceStats.isDirectory() ? 'dir' : 'file')
 }
 
 export class PiTitlebarExtensionService {
-  buildPtyEnv(existingPath: string | undefined): Record<string, string> {
-    const realPiPath = resolvePiBinary()
-    if (!realPiPath) {
-      return {}
+  private getOverlayDir(ptyId: string): string {
+    return join(app.getPath('userData'), PI_OVERLAY_DIR_NAME, ptyId)
+  }
+
+  private mirrorAgentDir(sourceAgentDir: string, overlayDir: string): void {
+    if (!existsSync(sourceAgentDir)) {
+      return
     }
 
-    const runtimeDir = join(app.getPath('userData'), 'pi-runtime')
-    const binDir = join(runtimeDir, 'bin')
-    mkdirSync(binDir, { recursive: true })
+    for (const entry of readdirSync(sourceAgentDir, { withFileTypes: true })) {
+      const sourcePath = join(sourceAgentDir, entry.name)
 
-    const extensionPath = join(runtimeDir, ORCA_PI_EXTENSION_FILE)
-    writeFileSync(extensionPath, getPiTitlebarExtensionSource())
+      if (entry.name === 'extensions' && entry.isDirectory()) {
+        const overlayExtensionsDir = join(overlayDir, 'extensions')
+        mkdirSync(overlayExtensionsDir, { recursive: true })
+        for (const extensionEntry of readdirSync(sourcePath, { withFileTypes: true })) {
+          mirrorEntry(
+            join(sourcePath, extensionEntry.name),
+            join(overlayExtensionsDir, extensionEntry.name)
+          )
+        }
+        continue
+      }
 
-    const wrapperPath = join(binDir, ORCA_PI_WRAPPER_FILE)
-    writeFileSync(
-      wrapperPath,
-      process.platform === 'win32' ? getWindowsWrapperSource() : getUnixWrapperSource()
-    )
-    if (process.platform !== 'win32') {
-      chmodSync(wrapperPath, 0o755)
+      // Why: PI_CODING_AGENT_DIR controls Pi's entire state tree, not just
+      // extension discovery. Mirror the user's top-level Pi resources into the
+      // overlay so enabling Orca's titlebar extension preserves auth, sessions,
+      // skills, prompts, themes, and any future files Pi stores there.
+      mirrorEntry(sourcePath, join(overlayDir, basename(sourcePath)))
     }
+  }
+
+  buildPtyEnv(ptyId: string, existingAgentDir: string | undefined): Record<string, string> {
+    const sourceAgentDir = existingAgentDir || getDefaultPiAgentDir()
+    const overlayDir = this.getOverlayDir(ptyId)
+
+    rmSync(overlayDir, { recursive: true, force: true })
+    mkdirSync(overlayDir, { recursive: true })
+    this.mirrorAgentDir(sourceAgentDir, overlayDir)
+
+    const extensionsDir = join(overlayDir, 'extensions')
+    mkdirSync(extensionsDir, { recursive: true })
+    // Why: Pi auto-loads global extensions from PI_CODING_AGENT_DIR/extensions.
+    // Add Orca's titlebar extension alongside the user's existing extensions
+    // instead of replacing that directory, otherwise Orca terminals would
+    // silently disable the user's Pi customization inside Orca only.
+    writeFileSync(join(extensionsDir, ORCA_PI_EXTENSION_FILE), getPiTitlebarExtensionSource())
 
     return {
-      // Why: `pi` is launched manually inside an interactive shell, not through
-      // Orca's direct provider spawner. Prepending a wrapper directory is the
-      // only way to add the titlebar extension for arbitrary future `pi`
-      // commands without mutating the user's global Pi config directory.
-      PATH: existingPath ? `${binDir}${delimiter}${existingPath}` : binDir,
-      ORCA_PI_REAL_BIN: realPiPath,
-      ORCA_PI_EXTENSION_PATH: extensionPath
+      PI_CODING_AGENT_DIR: overlayDir
     }
+  }
+
+  clearPty(ptyId: string): void {
+    rmSync(this.getOverlayDir(ptyId), { recursive: true, force: true })
   }
 }
 
