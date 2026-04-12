@@ -13,7 +13,6 @@ function makeTab(overrides: Partial<Tab> & { id: string; worktreeId: string }): 
   return {
     groupId: 'g1',
     contentType: 'terminal',
-    entityId: overrides.id,
     label: overrides.id,
     customLabel: null,
     color: null,

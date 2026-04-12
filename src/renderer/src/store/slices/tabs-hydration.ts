@@ -1,9 +1,4 @@
 import type { Tab, TabGroup, WorkspaceSessionState } from '../../../../shared/types'
-import {
-  getPersistedEditFileIdsByWorktree,
-  isTransientEditorContentType,
-  selectHydratedActiveGroupId
-} from './tabs-helpers'
 
 type HydratedTabState = {
   unifiedTabsByWorktree: Record<string, Tab[]>
@@ -18,7 +13,6 @@ function hydrateUnifiedFormat(
   const tabsByWorktree: Record<string, Tab[]> = {}
   const groupsByWorktree: Record<string, TabGroup[]> = {}
   const activeGroupIdByWorktree: Record<string, string> = {}
-  const persistedEditFileIdsByWorktree = getPersistedEditFileIdsByWorktree(session)
 
   for (const [worktreeId, tabs] of Object.entries(session.unifiedTabs!)) {
     if (!validWorktreeIds.has(worktreeId)) {
@@ -27,20 +21,9 @@ function hydrateUnifiedFormat(
     if (tabs.length === 0) {
       continue
     }
-    const persistedEditFileIds = persistedEditFileIdsByWorktree[worktreeId] ?? new Set<string>()
-    tabsByWorktree[worktreeId] = [...tabs]
-      .filter((tab) => {
-        if (!isTransientEditorContentType(tab.contentType)) {
-          return true
-        }
-        // Why: persisted unified tabs can still contain transient diff or
-        // conflict-review entries from pre-fix sessions, but editor hydration
-        // intentionally restores only edit-mode files. Drop those orphaned
-        // editor-like tabs here so restored split groups never point at a pane
-        // with no backing OpenFile state.
-        return persistedEditFileIds.has(tab.entityId ?? tab.id)
-      })
-      .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt)
+    tabsByWorktree[worktreeId] = [...tabs].sort(
+      (a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt
+    )
   }
 
   for (const [worktreeId, groups] of Object.entries(session.tabGroups!)) {
@@ -52,27 +35,14 @@ function hydrateUnifiedFormat(
     }
 
     const validTabIds = new Set((tabsByWorktree[worktreeId] ?? []).map((t) => t.id))
-    const validatedGroups = groups.map((g) => {
-      const tabOrder = g.tabOrder.filter((tid) => validTabIds.has(tid))
-      return {
-        ...g,
-        tabOrder,
-        // Why: restore can drop transient tabs with no backing file state. If
-        // the saved active tab disappears, promote the first surviving tab so
-        // the restored group still shows content immediately.
-        activeTabId:
-          g.activeTabId && validTabIds.has(g.activeTabId) ? g.activeTabId : (tabOrder[0] ?? null)
-      }
-    })
+    const validatedGroups = groups.map((g) => ({
+      ...g,
+      tabOrder: g.tabOrder.filter((tid) => validTabIds.has(tid)),
+      activeTabId: g.activeTabId && validTabIds.has(g.activeTabId) ? g.activeTabId : null
+    }))
 
     groupsByWorktree[worktreeId] = validatedGroups
-    const activeGroupId = selectHydratedActiveGroupId(
-      validatedGroups,
-      session.activeGroupIdByWorktree?.[worktreeId]
-    )
-    if (activeGroupId) {
-      activeGroupIdByWorktree[worktreeId] = activeGroupId
-    }
+    activeGroupIdByWorktree[worktreeId] = validatedGroups[0].id
   }
 
   return { unifiedTabsByWorktree: tabsByWorktree, groupsByWorktree, activeGroupIdByWorktree }
@@ -101,7 +71,6 @@ function hydrateLegacyFormat(
     for (const tt of terminalTabs) {
       tabs.push({
         id: tt.id,
-        entityId: tt.id,
         groupId,
         worktreeId,
         contentType: 'terminal',
@@ -119,7 +88,6 @@ function hydrateLegacyFormat(
     for (const ef of editorFiles) {
       tabs.push({
         id: ef.filePath,
-        entityId: ef.filePath,
         groupId,
         worktreeId,
         contentType: 'editor',

@@ -31,16 +31,9 @@ type FileContent = {
 
 type DiffContent = GitDiffResult
 
-export default function EditorPanel({
-  activeFileId: activeFileIdProp
-}: {
-  activeFileId?: string | null
-} = {}): React.JSX.Element | null {
+export default function EditorPanel(): React.JSX.Element | null {
   const openFiles = useAppStore((s) => s.openFiles)
-  // Why: hooks must be called unconditionally — React requires the same hooks
-  // in the same order on every render regardless of props.
-  const globalActiveFileId = useAppStore((s) => s.activeFileId)
-  const activeFileId = activeFileIdProp ?? globalActiveFileId
+  const activeFileId = useAppStore((s) => s.activeFileId)
   const markFileDirty = useAppStore((s) => s.markFileDirty)
   const pendingEditorReveal = useAppStore((s) => s.pendingEditorReveal)
   const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)

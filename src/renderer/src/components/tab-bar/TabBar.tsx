@@ -8,7 +8,7 @@ import {
   type DragEndEvent
 } from '@dnd-kit/core'
 import { SortableContext, horizontalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
-import { Columns2, Globe, Plus, Rows2, TerminalSquare } from 'lucide-react'
+import { Globe, Plus, TerminalSquare } from 'lucide-react'
 import type {
   BrowserTab as BrowserTabState,
   TerminalTab,
@@ -48,7 +48,7 @@ type TabBarProps = {
   onSetCustomTitle: (tabId: string, title: string | null) => void
   onSetTabColor: (tabId: string, color: string | null) => void
   onTogglePaneExpand: (tabId: string) => void
-  editorFiles?: (OpenFile & { tabId?: string })[]
+  editorFiles?: OpenFile[]
   browserTabs?: BrowserTabState[]
   activeFileId?: string | null
   activeBrowserTabId?: string | null
@@ -58,14 +58,13 @@ type TabBarProps = {
   onActivateBrowserTab?: (tabId: string) => void
   onCloseBrowserTab?: (tabId: string) => void
   onCloseAllFiles?: () => void
-  onPinFile?: (fileId: string, tabId?: string) => void
+  onPinFile?: (fileId: string) => void
   tabBarOrder?: string[]
-  onCreateSplitGroup?: (direction: 'right' | 'down') => void
 }
 
 type TabItem =
   | { type: 'terminal'; id: string; data: TerminalTab }
-  | { type: 'editor'; id: string; data: OpenFile & { tabId?: string } }
+  | { type: 'editor'; id: string; data: OpenFile }
   | { type: 'browser'; id: string; data: BrowserTabState }
 
 export default function TabBar({
@@ -94,8 +93,7 @@ export default function TabBar({
   onCloseBrowserTab,
   onCloseAllFiles,
   onPinFile,
-  tabBarOrder,
-  onCreateSplitGroup
+  tabBarOrder
 }: TabBarProps): React.JSX.Element {
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -110,17 +108,14 @@ export default function TabBar({
   )
 
   const terminalMap = useMemo(() => new Map(tabs.map((t) => [t.id, t])), [tabs])
-  const editorMap = useMemo(
-    () => new Map((editorFiles ?? []).map((f) => [f.tabId ?? f.id, f])),
-    [editorFiles]
-  )
+  const editorMap = useMemo(() => new Map((editorFiles ?? []).map((f) => [f.id, f])), [editorFiles])
   const browserMap = useMemo(
     () => new Map((browserTabs ?? []).map((t) => [t.id, t])),
     [browserTabs]
   )
 
   const terminalIds = useMemo(() => tabs.map((t) => t.id), [tabs])
-  const editorFileIds = useMemo(() => editorFiles?.map((f) => f.tabId ?? f.id) ?? [], [editorFiles])
+  const editorFileIds = useMemo(() => editorFiles?.map((f) => f.id) ?? [], [editorFiles])
   const browserTabIds = useMemo(() => browserTabs?.map((tab) => tab.id) ?? [], [browserTabs])
 
   // Build the unified ordered list, reconciling stored order with current items
@@ -269,7 +264,7 @@ export default function TabBar({
                   onClose={() => onCloseFile?.(item.id)}
                   onCloseToRight={() => onCloseToRight(item.id)}
                   onCloseAll={() => onCloseAllFiles?.()}
-                  onPin={() => onPinFile?.(item.data.id, item.data.tabId)}
+                  onPin={() => onPinFile?.(item.id)}
                 />
               )
             })}
@@ -320,28 +315,6 @@ export default function TabBar({
             New Browser Tab
             <DropdownMenuShortcut>{NEW_BROWSER_SHORTCUT}</DropdownMenuShortcut>
           </DropdownMenuItem>
-          {onCreateSplitGroup && (
-            <>
-              {/* Why: v1 split groups only create empty neighboring groups from
-                  the plus menu. Reusing per-tab context actions here would
-                  duplicate tab content and reintroduce the runtime identity
-                  bugs this layout-only flow is meant to avoid. */}
-              <DropdownMenuItem
-                onSelect={() => onCreateSplitGroup('right')}
-                className="gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium"
-              >
-                <Columns2 className="size-4 text-muted-foreground" />
-                New Group Right
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={() => onCreateSplitGroup('down')}
-                className="gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium"
-              >
-                <Rows2 className="size-4 text-muted-foreground" />
-                New Group Down
-              </DropdownMenuItem>
-            </>
-          )}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

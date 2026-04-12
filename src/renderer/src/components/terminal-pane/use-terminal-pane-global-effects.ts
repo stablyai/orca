@@ -8,9 +8,6 @@ import type { PtyTransport } from './pty-transport'
 type UseTerminalPaneGlobalEffectsArgs = {
   tabId: string
   isActive: boolean
-  // Why: in multi-group splits, isVisible controls rendering/display while
-  // isActive controls keyboard focus. When not provided, isActive is used.
-  isVisible?: boolean
   managerRef: React.RefObject<PaneManager | null>
   containerRef: React.RefObject<HTMLDivElement | null>
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
@@ -22,7 +19,6 @@ type UseTerminalPaneGlobalEffectsArgs = {
 export function useTerminalPaneGlobalEffects({
   tabId,
   isActive,
-  isVisible,
   managerRef,
   containerRef,
   paneTransportsRef,
@@ -30,15 +26,14 @@ export function useTerminalPaneGlobalEffects({
   isActiveRef,
   toggleExpandPane
 }: UseTerminalPaneGlobalEffectsArgs): void {
-  const wasVisibleRef = useRef(false)
+  const wasActiveRef = useRef(false)
 
   useEffect(() => {
-    const effectiveVisible = isVisible ?? isActive
     const manager = managerRef.current
     if (!manager) {
       return
     }
-    if (effectiveVisible) {
+    if (isActive) {
       manager.resumeRendering()
       for (const [paneId, pendingBuffer] of pendingWritesRef.current.entries()) {
         if (pendingBuffer.length > 0) {
@@ -49,23 +44,14 @@ export function useTerminalPaneGlobalEffects({
           pendingWritesRef.current.set(paneId, '')
         }
       }
-      // Why: fit all visible panes so they fill their container, but only
-      // focus the terminal when the pane is the keyboard-active one. This
-      // prevents non-focused split groups from stealing xterm focus.
-      requestAnimationFrame(() => {
-        if (isActive) {
-          fitAndFocusPanes(manager)
-        } else {
-          fitPanes(manager)
-        }
-      })
-    } else if (wasVisibleRef.current) {
+      requestAnimationFrame(() => fitAndFocusPanes(manager))
+    } else if (wasActiveRef.current) {
       manager.suspendRendering()
     }
-    wasVisibleRef.current = effectiveVisible
+    wasActiveRef.current = isActive
     isActiveRef.current = isActive
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isActive, isVisible])
+  }, [isActive])
 
   useEffect(() => {
     const onToggleExpand = (event: Event): void => {

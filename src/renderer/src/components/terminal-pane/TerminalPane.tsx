@@ -26,7 +26,11 @@ import { useTerminalPaneLifecycle } from './use-terminal-pane-lifecycle'
 import { useTerminalPaneContextMenu } from './use-terminal-pane-context-menu'
 import { useNotificationDispatch } from './use-notification-dispatch'
 import { connectPanePty } from './pty-connection'
-import { registerTerminalBufferCapture } from './buffer-capture-registry'
+
+/** Global set of buffer-capture callbacks, one per mounted TerminalPane.
+ *  The beforeunload handler in App.tsx invokes every callback to populate
+ *  Zustand with serialized buffers before flushing the session to disk. */
+export const shutdownBufferCaptures = new Set<() => void>()
 
 const MAX_BUFFER_BYTES = 512 * 1024
 
@@ -35,11 +39,6 @@ type TerminalPaneProps = {
   worktreeId: string
   cwd?: string
   isActive: boolean
-  // Why: in multi-group splits, the active tab in each group must be visible
-  // (display: flex) but only the focused group's terminal should receive
-  // keyboard input. When provided, isVisible controls display independently
-  // of isActive. When omitted, isActive controls both (single-group behavior).
-  isVisible?: boolean
   onPtyExit: (ptyId: string) => void
   onCloseTab: () => void
 }
@@ -49,7 +48,6 @@ export default function TerminalPane({
   worktreeId,
   cwd,
   isActive,
-  isVisible,
   onPtyExit,
   onCloseTab
 }: TerminalPaneProps): React.JSX.Element {
@@ -63,11 +61,8 @@ export default function TerminalPane({
   const paneTransportsRef = useRef<Map<number, PtyTransport>>(new Map())
   const panePtyBindingsRef = useRef<Map<number, IDisposable>>(new Map())
   const pendingWritesRef = useRef<Map<number, string>>(new Map())
-  const effectiveVisible = isVisible ?? isActive
   const isActiveRef = useRef(isActive)
   isActiveRef.current = isActive
-  const effectiveVisibleRef = useRef(effectiveVisible)
-  effectiveVisibleRef.current = effectiveVisible
 
   const [expandedPaneId, setExpandedPaneId] = useState<number | null>(null)
   const [searchOpen, setSearchOpen] = useState(false)
@@ -273,7 +268,6 @@ export default function TerminalPane({
     panePtyBindingsRef,
     pendingWritesRef,
     isActiveRef,
-    effectiveVisibleRef,
     onPtyExitRef,
     onPtyErrorRef,
     clearTabPtyId,
@@ -331,12 +325,8 @@ export default function TerminalPane({
         paneTransportsRef,
         pendingWritesRef,
         isActiveRef,
-        effectiveVisibleRef,
         onPtyExitRef,
         onPtyErrorRef,
-        // Why: Codex restarts create a fresh PTY — there is no prior layout
-        // snapshot to reattach from, so an empty map is correct.
-        restoredPtyIdByPaneId: new Map(),
         clearTabPtyId,
         consumeSuppressedPtyExit: useAppStore.getState().consumeSuppressedPtyExit,
         updateTabTitle,
@@ -407,7 +397,6 @@ export default function TerminalPane({
   useTerminalPaneGlobalEffects({
     tabId,
     isActive,
-    isVisible,
     managerRef,
     containerRef,
     paneTransportsRef,
@@ -551,98 +540,80 @@ export default function TerminalPane({
     }
   }, [paneTitles, renamingPaneId])
 
-  const captureTerminalSnapshot = useCallback((): void => {
-    const manager = managerRef.current
-    const container = containerRef.current
-    if (!manager || !container) {
-      return
-    }
-    const panes = manager.getPanes()
-    if (panes.length === 0) {
-      return
-    }
-    // Flush pending background PTY output into terminals before serializing.
-    // terminal.write() is async so some trailing bytes may be lost — best effort.
-    for (const pane of panes) {
-      const pending = pendingWritesRef.current.get(pane.id)
-      if (pending) {
-        pane.terminal.write(pending)
-        pendingWritesRef.current.set(pane.id, '')
-      }
-    }
-    const buffers: Record<string, string> = {}
-    for (const pane of panes) {
-      try {
-        const leafId = paneLeafId(pane.id)
-        let scrollback = pane.terminal.options.scrollback ?? 10_000
-        let serialized = pane.serializeAddon.serialize({ scrollback })
-        // Cap at 512KB — binary search for largest scrollback that fits.
-        if (serialized.length > MAX_BUFFER_BYTES && scrollback > 1) {
-          let lo = 1
-          let hi = scrollback
-          let best = ''
-          while (lo <= hi) {
-            const mid = Math.floor((lo + hi) / 2)
-            const attempt = pane.serializeAddon.serialize({ scrollback: mid })
-            if (attempt.length <= MAX_BUFFER_BYTES) {
-              best = attempt
-              lo = mid + 1
-            } else {
-              hi = mid - 1
-            }
-          }
-          serialized = best
-        }
-        if (serialized.length > 0) {
-          buffers[leafId] = serialized
-        }
-      } catch {
-        // Serialization failure for one pane should not block others.
-      }
-    }
-    const activePaneId = manager.getActivePane()?.id ?? panes[0]?.id ?? null
-    const layout = serializeTerminalLayout(container, activePaneId, expandedPaneIdRef.current)
-    if (Object.keys(buffers).length > 0) {
-      layout.buffersByLeafId = buffers
-    }
-    // Merge pane titles so the snapshot doesn't silently drop them.
-    const titleEntries = panes
-      .filter((p) => paneTitlesRef.current[p.id])
-      .map((p) => [paneLeafId(p.id), paneTitlesRef.current[p.id]] as const)
-    if (titleEntries.length > 0) {
-      layout.titlesByLeafId = Object.fromEntries(titleEntries)
-    }
-    // Why: multi-pane terminals each have their own PTY, but the tab only
-    // stores the last pane's ptyId. Capture per-leaf PTY IDs so each pane
-    // can re-attach to its own shell after a layout-only remount instead
-    // of all panes racing onto the single tab-level ptyId.
-    const ptyIdEntries = panes
-      .map((p) => {
-        const ptyId = paneTransportsRef.current.get(p.id)?.getPtyId()
-        return ptyId ? ([paneLeafId(p.id), ptyId] as const) : null
-      })
-      .filter((entry): entry is readonly [string, string] => entry !== null)
-    if (ptyIdEntries.length > 0) {
-      layout.ptyIdsByLeafId = Object.fromEntries(ptyIdEntries)
-    }
-    setTabLayout(tabId, layout)
-  }, [setTabLayout, tabId])
-
   // Register a capture callback for shutdown. The beforeunload handler in
   // App.tsx calls all registered callbacks to serialize terminal buffers.
   useEffect(() => {
-    return registerTerminalBufferCapture(captureTerminalSnapshot)
-  }, [captureTerminalSnapshot])
-
-  useEffect(() => {
-    return () => {
-      // Why: split-group layout changes remount TerminalPane even when the PTY
-      // keeps running. Capture live xterm scrollback here so the next mount can
-      // restore the visible terminal state instead of attaching to the right
-      // shell with an empty viewport.
-      captureTerminalSnapshot()
+    const captureBuffers = (): void => {
+      const manager = managerRef.current
+      const container = containerRef.current
+      if (!manager || !container) {
+        return
+      }
+      const panes = manager.getPanes()
+      if (panes.length === 0) {
+        return
+      }
+      // Flush pending background PTY output into terminals before serializing.
+      // terminal.write() is async so some trailing bytes may be lost — best effort.
+      for (const pane of panes) {
+        const pending = pendingWritesRef.current.get(pane.id)
+        if (pending) {
+          pane.terminal.write(pending)
+          pendingWritesRef.current.set(pane.id, '')
+        }
+      }
+      const buffers: Record<string, string> = {}
+      for (const pane of panes) {
+        try {
+          const leafId = paneLeafId(pane.id)
+          let scrollback = pane.terminal.options.scrollback ?? 10_000
+          let serialized = pane.serializeAddon.serialize({ scrollback })
+          // Cap at 512KB — binary search for largest scrollback that fits.
+          if (serialized.length > MAX_BUFFER_BYTES && scrollback > 1) {
+            let lo = 1
+            let hi = scrollback
+            let best = ''
+            while (lo <= hi) {
+              const mid = Math.floor((lo + hi) / 2)
+              const attempt = pane.serializeAddon.serialize({ scrollback: mid })
+              if (attempt.length <= MAX_BUFFER_BYTES) {
+                best = attempt
+                lo = mid + 1
+              } else {
+                hi = mid - 1
+              }
+            }
+            serialized = best
+          }
+          if (serialized.length > 0) {
+            buffers[leafId] = serialized
+          }
+        } catch {
+          // Serialization failure for one pane should not block others.
+        }
+      }
+      const activePaneId = manager.getActivePane()?.id ?? panes[0]?.id ?? null
+      const layout = serializeTerminalLayout(container, activePaneId, expandedPaneIdRef.current)
+      if (Object.keys(buffers).length > 0) {
+        layout.buffersByLeafId = buffers
+      }
+      // Merge pane titles so the shutdown snapshot doesn't silently drop them.
+      // Why: the old early-return on empty buffers skipped this entirely, which
+      // meant titles were lost on restart when the terminal had no scrollback
+      // content (e.g. fresh pane, cleared screen).
+      const titleEntries = panes
+        .filter((p) => paneTitlesRef.current[p.id])
+        .map((p) => [paneLeafId(p.id), paneTitlesRef.current[p.id]] as const)
+      if (titleEntries.length > 0) {
+        layout.titlesByLeafId = Object.fromEntries(titleEntries)
+      }
+      setTabLayout(tabId, layout)
     }
-  }, [captureTerminalSnapshot])
+    shutdownBufferCaptures.add(captureBuffers)
+    return () => {
+      shutdownBufferCaptures.delete(captureBuffers)
+    }
+  }, [tabId, setTabLayout])
 
   const handleStartRename = useCallback((paneId: number) => {
     setRenameValue(paneTitlesRef.current[paneId] ?? '')
@@ -723,7 +694,7 @@ export default function TerminalPane({
     : null
 
   const terminalContainerStyle: CSSProperties = {
-    display: effectiveVisible ? 'flex' : 'none',
+    display: isActive ? 'flex' : 'none',
     ['--orca-terminal-divider-color' as string]:
       effectiveAppearance?.dividerColor ?? DEFAULT_TERMINAL_DIVIDER_DARK,
     ['--orca-terminal-divider-color-strong' as string]: normalizeColor(
@@ -770,7 +741,7 @@ export default function TerminalPane({
           transport.sendInput(shellEscapePath(filePath))
         }}
       />
-      {terminalError && effectiveVisible && (
+      {terminalError && isActive && (
         <TerminalErrorToast error={terminalError} onDismiss={() => setTerminalError(null)} />
       )}
       {activePane?.container &&

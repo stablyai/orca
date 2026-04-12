@@ -152,22 +152,10 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
           : s.pendingAddressBarFocusByTabId
       }
     })
-    // Why: wire browser tabs into the unified tab group system so they appear
-    // in each group's tab bar and can live alongside terminals and editors,
-    // matching the pattern terminals use (see createTab in terminals.ts).
-    const state = get()
-    const targetGroupId =
-      state.activeGroupIdByWorktree[worktreeId] ?? state.groupsByWorktree[worktreeId]?.[0]?.id
-    if (targetGroupId && !state.findTabForEntityInGroup(worktreeId, targetGroupId, id, 'browser')) {
-      state.createUnifiedTab(worktreeId, 'browser', {
-        entityId: id,
-        label: options?.title ?? normalizedUrl
-      })
-    }
     return browserTab
   },
 
-  closeBrowserTab: (tabId) => {
+  closeBrowserTab: (tabId) =>
     set((s) => {
       let owningWorktreeId: string | null = null
       const nextBrowserTabsByWorktree: Record<string, BrowserTab[]> = {}
@@ -217,6 +205,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
           nextActiveTabType = fallbackTabType
         }
       }
+
       return {
         browserTabsByWorktree: nextBrowserTabsByWorktree,
         activeBrowserTabId:
@@ -233,20 +222,9 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         ),
         activeTabTypeByWorktree: nextActiveTabTypeByWorktree
       }
-    })
-    // Why: sync browser tab closure with the unified tab group system so the
-    // group removes the tab from its tab bar and collapses if empty.
-    for (const tabs of Object.values(get().unifiedTabsByWorktree)) {
-      const workspaceItem = tabs.find(
-        (entry) => entry.contentType === 'browser' && entry.entityId === tabId
-      )
-      if (workspaceItem) {
-        get().closeUnifiedTab(workspaceItem.id)
-      }
-    }
-  },
+    }),
 
-  setActiveBrowserTab: (tabId) => {
+  setActiveBrowserTab: (tabId) =>
     set((s) => {
       const browserTab = Object.values(s.browserTabsByWorktree)
         .flat()
@@ -266,15 +244,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
           [browserTab.worktreeId]: 'browser'
         }
       }
-    })
-    // Sync with unified tab system — same pattern as setActiveTab in terminals.ts
-    const item = Object.values(get().unifiedTabsByWorktree)
-      .flat()
-      .find((entry) => entry.contentType === 'browser' && entry.entityId === tabId)
-    if (item) {
-      get().activateTab(item.id)
-    }
-  },
+    }),
 
   consumeAddressBarFocusRequest: (tabId) => {
     if (!get().pendingAddressBarFocusByTabId[tabId]) {
@@ -290,7 +260,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     return true
   },
 
-  updateBrowserTabPageState: (tabId, updates) => {
+  updateBrowserTabPageState: (tabId, updates) =>
     set((s) => ({
       browserTabsByWorktree: Object.fromEntries(
         Object.entries(s.browserTabsByWorktree).map(([worktreeId, tabs]) => [
@@ -311,17 +281,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
           )
         ])
       )
-    }))
-    // Keep unified tab label in sync with browser page title
-    if (updates.title) {
-      const item = Object.values(get().unifiedTabsByWorktree)
-        .flat()
-        .find((entry) => entry.contentType === 'browser' && entry.entityId === tabId)
-      if (item) {
-        get().setTabLabel(item.id, updates.title)
-      }
-    }
-  },
+    })),
 
   setBrowserTabUrl: (tabId, url) =>
     set((s) => ({
@@ -342,7 +302,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       )
     })),
 
-  hydrateBrowserSession: (session) => {
+  hydrateBrowserSession: (session) =>
     set((s) => {
       const persistedTabsByWorktree = session.browserTabsByWorktree ?? {}
       const persistedActiveBrowserTabIdByWorktree = session.activeBrowserTabIdByWorktree ?? {}
@@ -452,22 +412,4 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         activeTabType
       }
     })
-    // Why: sessions saved before browser tabs were integrated into the unified
-    // tab group system won't have browser entries in unifiedTabs. Create them
-    // now so existing browser tabs appear in group tab bars after upgrade.
-    const state = get()
-    for (const [worktreeId, browserTabs] of Object.entries(state.browserTabsByWorktree)) {
-      for (const bt of browserTabs) {
-        const exists = (state.unifiedTabsByWorktree[worktreeId] ?? []).some(
-          (t) => t.contentType === 'browser' && t.entityId === bt.id
-        )
-        if (!exists) {
-          state.createUnifiedTab(worktreeId, 'browser', {
-            entityId: bt.id,
-            label: bt.title
-          })
-        }
-      }
-    }
-  }
 })

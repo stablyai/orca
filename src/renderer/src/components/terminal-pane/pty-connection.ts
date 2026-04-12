@@ -15,14 +15,8 @@ type PtyConnectionDeps = {
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
   pendingWritesRef: React.RefObject<Map<number, string>>
   isActiveRef: React.RefObject<boolean>
-  effectiveVisibleRef: React.RefObject<boolean>
   onPtyExitRef: React.RefObject<(ptyId: string) => void>
   onPtyErrorRef?: React.RefObject<(paneId: number, message: string) => void>
-  /** Per-pane PTY IDs restored from a layout snapshot. Populated by the
-   *  lifecycle hook after `replayTerminalLayout` maps old leaf IDs to new
-   *  pane IDs — consumed inside the deferred rAF to re-attach each pane
-   *  to its own shell instead of all panes racing onto the single tab-level ptyId. */
-  restoredPtyIdByPaneId: Map<number, string>
   clearTabPtyId: (tabId: string, ptyId: string) => void
   consumeSuppressedPtyExit: (ptyId: string) => boolean
   updateTabTitle: (tabId: string, title: string) => void
@@ -200,11 +194,7 @@ export function connectPanePty(
     }
 
     const dataCallback = (data: string): void => {
-      // Why: in split-group mode, a non-focused group's terminal is visible
-      // (display:flex) but not active (no keyboard focus). PTY output must
-      // still be written to xterm so the user sees content. Only buffer
-      // output when the terminal is truly hidden (e.g., a background tab).
-      if (deps.effectiveVisibleRef.current) {
+      if (deps.isActiveRef.current) {
         pane.terminal.write(data)
       } else {
         const pending = deps.pendingWritesRef.current
@@ -220,39 +210,19 @@ export function connectPanePty(
       .getState()
       .tabsByWorktree[deps.worktreeId]?.find((t) => t.id === deps.tabId)?.ptyId
 
-    // Resolve which PTY to re-attach to, if any. Three cases, in priority order:
-    //
-    // 1. Layout remount — per-pane PTY from snapshot, verified live. The snapshot
-    //    captures per-leaf PTY IDs so each pane re-attaches to its own shell. We
-    //    validate the snapshot ID is still live (present in ptyIdsByTabId) to avoid
-    //    attaching to a stale ID from a previous app session on disk.
-    // 2. Startup reconnect — first pane consumes the eager buffer handle from the
-    //    backend. Only fires on app restore, never on layout remount (live PTYs
-    //    don't have eager handles).
-    // 3. Fallback for single-pane tabs or pre-snapshot-era layouts where no
-    //    per-leaf PTY IDs were captured. The tab-level ptyId is correct when
-    //    there is only one pane.
-    const leafPtyId = deps.restoredPtyIdByPaneId.get(pane.id) ?? null
-    const livePtyIds = new Set(useAppStore.getState().ptyIdsByTabId[deps.tabId] ?? [])
-
-    // Why: the tab-level ptyId fallback (case 3) must only fire when this is
-    // the sole pane in the tab. When a user splits a pane (Cmd+D), the new
-    // pane has no leafPtyId but the tab already has a live PTY from the
-    // original pane. Without this guard, attach() replaces the original
-    // pane's data handler in the singleton dispatcher (keyed by ptyId),
-    // causing the original pane to lose output while both panes share one
-    // shell's input — the exact "type in left, appears in right" bug.
-    const isSinglePaneFallback = !leafPtyId && manager.getPanes().length <= 1
-    const reattachPtyId =
-      (leafPtyId && livePtyIds.has(leafPtyId) && leafPtyId) ||
-      (existingPtyId && getEagerPtyBufferHandle(existingPtyId) && existingPtyId) ||
-      (isSinglePaneFallback && existingPtyId) ||
-      null
-
-    if (reattachPtyId) {
+    // Why: only attach if the eager buffer handle still exists. For split-pane
+    // tabs, replayTerminalLayout calls connectPanePty once per pane. The first
+    // pane consumes the handle via attach(); subsequent panes find no handle
+    // and fall through to connect(), which spawns their own fresh PTYs. Without
+    // this guard, every split pane would try to share the same PTY ID, and the
+    // last one's handler would overwrite the earlier ones' in the dispatcher.
+    if (existingPtyId && getEagerPtyBufferHandle(existingPtyId)) {
       allowInitialIdleCacheSeed = true
+      // Why: this tab had a PTY eagerly spawned by reconnectPersistedTerminals().
+      // Attach to it instead of spawning a duplicate. Startup commands are
+      // intentionally skipped — the PTY was already spawned with a fresh shell.
       transport.attach({
-        existingPtyId: reattachPtyId,
+        existingPtyId,
         cols,
         rows,
         callbacks: {
@@ -261,7 +231,6 @@ export function connectPanePty(
         }
       })
     } else {
-      // Fresh shell — no existing PTY to reattach.
       allowInitialIdleCacheSeed = false
       transport.connect({
         url: '',

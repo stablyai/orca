@@ -117,7 +117,6 @@ export function makeUnifiedTab(
   overrides: Partial<Tab> & { id: string; worktreeId: string; groupId: string }
 ): Tab {
   return {
-    entityId: overrides.id,
     contentType: 'terminal',
     label: 'Terminal 1',
     customLabel: null,

@@ -3,7 +3,6 @@
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { describe, expect, it } from 'vitest'
 import { createEditorSlice } from './editor'
-import { createTabsSlice } from './tabs'
 import type { AppState } from '../types'
 
 function createEditorStore(): StoreApi<AppState> {
@@ -14,7 +13,6 @@ function createEditorStore(): StoreApi<AppState> {
     browserTabsByWorktree: {},
     activeBrowserTabId: null,
     activeBrowserTabIdByWorktree: {},
-    ...createTabsSlice(...(args as Parameters<typeof createTabsSlice>)),
     ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
   })) as unknown as StoreApi<AppState>
 }
@@ -129,129 +127,6 @@ describe('createEditorSlice markdown view state', () => {
         isPreview: true
       })
     ])
-  })
-
-  it('replaces preview tabs only inside the active split group', () => {
-    const store = createEditorStore()
-
-    store.getState().openFile(
-      {
-        filePath: '/repo/docs/README.md',
-        relativePath: 'docs/README.md',
-        worktreeId: 'wt-1',
-        language: 'markdown',
-        mode: 'edit'
-      },
-      { preview: true }
-    )
-
-    const originalPreview = store
-      .getState()
-      .unifiedTabsByWorktree['wt-1'].find((tab) => tab.entityId === '/repo/docs/README.md')
-    expect(originalPreview).toBeTruthy()
-
-    const splitGroupId = store
-      .getState()
-      .createEmptySplitGroup('wt-1', originalPreview!.groupId, 'right')
-    expect(splitGroupId).toBeTruthy()
-
-    store.getState().openFile(
-      {
-        filePath: '/repo/docs/guide.md',
-        relativePath: 'docs/guide.md',
-        worktreeId: 'wt-1',
-        language: 'markdown',
-        mode: 'edit'
-      },
-      { preview: true }
-    )
-
-    let tabs = store.getState().unifiedTabsByWorktree['wt-1']
-    expect(
-      tabs.find(
-        (tab) => tab.groupId === originalPreview!.groupId && tab.entityId === '/repo/docs/README.md'
-      )
-    ).toBeTruthy()
-    expect(
-      tabs.find((tab) => tab.groupId === splitGroupId && tab.entityId === '/repo/docs/guide.md')
-    ).toBeTruthy()
-    expect(
-      store
-        .getState()
-        .openFiles.map((file) => file.id)
-        .sort()
-    ).toEqual(['/repo/docs/README.md', '/repo/docs/guide.md'])
-
-    store.getState().openFile(
-      {
-        filePath: '/repo/docs/tutorial.md',
-        relativePath: 'docs/tutorial.md',
-        worktreeId: 'wt-1',
-        language: 'markdown',
-        mode: 'edit'
-      },
-      { preview: true }
-    )
-
-    tabs = store.getState().unifiedTabsByWorktree['wt-1']
-    expect(
-      tabs.find(
-        (tab) => tab.groupId === originalPreview!.groupId && tab.entityId === '/repo/docs/README.md'
-      )
-    ).toBeTruthy()
-    expect(
-      tabs.find((tab) => tab.groupId === splitGroupId && tab.entityId === '/repo/docs/guide.md')
-    ).toBeFalsy()
-    expect(
-      tabs.find((tab) => tab.groupId === splitGroupId && tab.entityId === '/repo/docs/tutorial.md')
-    ).toBeTruthy()
-    expect(
-      store
-        .getState()
-        .openFiles.map((file) => file.id)
-        .sort()
-    ).toEqual(['/repo/docs/README.md', '/repo/docs/tutorial.md'])
-  })
-})
-
-describe('createEditorSlice pinFile', () => {
-  it('pins only the targeted split-tab instance for a shared file', () => {
-    const store = createEditorStore()
-
-    const original = store.getState().createUnifiedTab('wt-1', 'editor', {
-      entityId: '/repo/docs/README.md',
-      label: 'docs/README.md',
-      isPreview: true
-    })
-    const splitGroupId = store.getState().createEmptySplitGroup('wt-1', original.groupId, 'right')
-    expect(splitGroupId).toBeTruthy()
-    const duplicate = store.getState().createUnifiedTab('wt-1', 'editor', {
-      entityId: '/repo/docs/README.md',
-      label: 'docs/README.md',
-      isPreview: true,
-      targetGroupId: splitGroupId ?? undefined
-    })
-
-    store.setState({
-      openFiles: [
-        {
-          id: '/repo/docs/README.md',
-          filePath: '/repo/docs/README.md',
-          relativePath: 'docs/README.md',
-          worktreeId: 'wt-1',
-          language: 'markdown',
-          isDirty: false,
-          mode: 'edit',
-          isPreview: true
-        }
-      ]
-    })
-
-    store.getState().pinFile('/repo/docs/README.md', duplicate.id)
-
-    const tabs = store.getState().unifiedTabsByWorktree['wt-1']
-    expect(tabs.find((tab) => tab.id === original.id)?.isPinned).not.toBe(true)
-    expect(tabs.find((tab) => tab.id === duplicate.id)?.isPinned).toBe(true)
   })
 })
 

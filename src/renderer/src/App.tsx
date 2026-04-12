@@ -13,7 +13,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useIpcEvents } from './hooks/useIpcEvents'
 import Sidebar from './components/Sidebar'
 import Terminal from './components/Terminal'
-import { captureAllTerminalBuffers } from './components/terminal-pane/buffer-capture-registry'
+import { shutdownBufferCaptures } from './components/terminal-pane/TerminalPane'
 import Landing from './components/Landing'
 import Settings from './components/settings/Settings'
 import RightSidebar from './components/right-sidebar'
@@ -112,11 +112,6 @@ function App(): React.JSX.Element {
   const activeTabIdByWorktree = useAppStore((s) => s.activeTabIdByWorktree)
   const browserTabsByWorktree = useAppStore((s) => s.browserTabsByWorktree)
   const activeBrowserTabIdByWorktree = useAppStore((s) => s.activeBrowserTabIdByWorktree)
-  const unifiedTabsByWorktree = useAppStore((s) => s.unifiedTabsByWorktree)
-  const groupsByWorktree = useAppStore((s) => s.groupsByWorktree)
-  const layoutByWorktree = useAppStore((s) => s.layoutByWorktree)
-  const activeGroupIdByWorktree = useAppStore((s) => s.activeGroupIdByWorktree)
-  const hydrateTabsSession = useAppStore((s) => s.hydrateTabsSession)
 
   // Right sidebar + editor state
   const toggleRightSidebar = useAppStore((s) => s.toggleRightSidebar)
@@ -155,7 +150,6 @@ function App(): React.JSX.Element {
         if (!cancelled) {
           hydratePersistedUI(persistedUI)
           hydrateWorkspaceSession(session)
-          hydrateTabsSession(session)
           hydrateEditorSession(session)
           hydrateBrowserSession(session)
           await reconnectPersistedTerminals(abortController.signal)
@@ -209,7 +203,6 @@ function App(): React.JSX.Element {
     initGitHubCache,
     hydratePersistedUI,
     hydrateWorkspaceSession,
-    hydrateTabsSession,
     hydrateEditorSession,
     hydrateBrowserSession,
     reconnectPersistedTerminals
@@ -248,11 +241,7 @@ function App(): React.JSX.Element {
           activeFileIdByWorktree,
           activeTabTypeByWorktree,
           browserTabsByWorktree,
-          activeBrowserTabIdByWorktree,
-          unifiedTabsByWorktree,
-          groupsByWorktree,
-          layoutByWorktree,
-          activeGroupIdByWorktree
+          activeBrowserTabIdByWorktree
         })
       )
     }, 150)
@@ -269,10 +258,6 @@ function App(): React.JSX.Element {
     activeFileIdByWorktree,
     activeTabTypeByWorktree,
     activeTabIdByWorktree,
-    unifiedTabsByWorktree,
-    groupsByWorktree,
-    layoutByWorktree,
-    activeGroupIdByWorktree,
     browserTabsByWorktree,
     activeBrowserTabIdByWorktree
   ])
@@ -295,7 +280,13 @@ function App(): React.JSX.Element {
       if (!useAppStore.getState().workspaceSessionReady) {
         return
       }
-      captureAllTerminalBuffers()
+      for (const capture of shutdownBufferCaptures) {
+        try {
+          capture()
+        } catch {
+          // Don't let one pane's failure block the rest.
+        }
+      }
       const state = useAppStore.getState()
       window.api.session.setSync(buildWorkspaceSessionPayload(state))
       shutdownBuffersCaptured = true
@@ -311,10 +302,16 @@ function App(): React.JSX.Element {
   useEffect(() => {
     const PERIODIC_SAVE_INTERVAL_MS = 3 * 60_000
     const timer = window.setInterval(() => {
-      if (!useAppStore.getState().workspaceSessionReady) {
+      if (!useAppStore.getState().workspaceSessionReady || shutdownBufferCaptures.size === 0) {
         return
       }
-      captureAllTerminalBuffers()
+      for (const capture of shutdownBufferCaptures) {
+        try {
+          capture()
+        } catch {
+          // Don't let one pane's failure block the rest.
+        }
+      }
       const state = useAppStore.getState()
       void window.api.session.set(buildWorkspaceSessionPayload(state))
     }, PERIODIC_SAVE_INTERVAL_MS)
@@ -586,10 +583,11 @@ function App(): React.JSX.Element {
               </HoverCard>
             ) : null}
           </div>
-          {/* Why: keep the center titlebar slot mounted even when no content is
-              using it. Collapsing this spacer lets the right-side controls jump
-              left in empty states; `invisible` preserves titlebar alignment
-              without reserving a second tab-rendering path. */}
+          {/* Why: keep the center titlebar slot mounted even when tabs are hidden.
+              Using `hidden` here collapsed the spacer entirely, which let the
+              right-sidebar toggle slide left in the no-tabs empty state. `invisible`
+              still suppresses any stale portal content without breaking the far-right
+              titlebar alignment. */}
           <div
             id="titlebar-tabs"
             className={`flex flex-1 min-w-0 self-stretch${activeView === 'settings' || !activeWorktreeId ? ' invisible pointer-events-none' : ''}`}
