@@ -540,59 +540,61 @@ function App(): React.JSX.Element {
               </Tooltip>
             )}
             <div className="titlebar-title">Orca</div>
-            {settings?.showTitlebarAgentActivity !== false ? (
-              <HoverCard openDelay={200} closeDelay={100}>
-                <HoverCardTrigger asChild>
-                  <span
-                    className={`titlebar-agent-badge${activeAgentCount === 0 ? ' titlebar-agent-badge-idle' : ''}`}
-                    aria-label={`${activeAgentCount} ${activeAgentCount === 1 ? 'agent' : 'agents'} active`}
-                  >
-                    <span
-                      className={`titlebar-agent-badge-dot${activeAgentCount === 0 ? ' titlebar-agent-badge-dot-idle' : ''}`}
-                      aria-hidden
-                    />
-                    <span className="titlebar-agent-badge-count">{activeAgentCount}</span>
-                    <span className="titlebar-agent-badge-label">active</span>
-                  </span>
-                </HoverCardTrigger>
-                <HoverCardContent side="bottom" sideOffset={6} className="titlebar-agent-hovercard">
-                  <div className="titlebar-agent-hovercard-header">
-                    {activeAgentCount === 0
-                      ? 'No agents active'
-                      : `${activeAgentCount} ${activeAgentCount === 1 ? 'agent' : 'agents'} active`}
-                  </div>
-                  {activeAgentCount > 0 && (
-                    <div className="titlebar-agent-hovercard-list">
-                      {Object.entries(agentCountByWorktree).map(([worktreeId, count]) => {
-                        const wt = findWorktreeById(worktreesByRepo, worktreeId)
-                        return (
-                          <button
-                            key={worktreeId}
-                            className="titlebar-agent-hovercard-row"
-                            onClick={() => activateAndRevealWorktree(worktreeId)}
-                          >
-                            <span className="titlebar-agent-hovercard-name">
-                              {wt?.displayName ?? worktreeId}
-                            </span>
-                            <span className="titlebar-agent-hovercard-count">
-                              {count} <span className="titlebar-agent-hovercard-dot" />
-                            </span>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  )}
-                </HoverCardContent>
-              </HoverCard>
-            ) : null}
           </div>
-          {/* Why: keep the center titlebar slot mounted even when no content is
-              using it. Collapsing this spacer lets the right-side controls jump
-              left in empty states; `invisible` preserves titlebar alignment
-              without reserving a second tab-rendering path. */}
+          {/* Why: agent badge is outside the sidebar-width container so it is
+              never clipped when the sidebar is narrow. */}
+          {settings?.showTitlebarAgentActivity !== false ? (
+            <HoverCard openDelay={200} closeDelay={100}>
+              <HoverCardTrigger asChild>
+                <span
+                  className={`titlebar-agent-badge${activeAgentCount === 0 ? ' titlebar-agent-badge-idle' : ''}`}
+                  aria-label={`${activeAgentCount} ${activeAgentCount === 1 ? 'agent' : 'agents'} active`}
+                >
+                  <span
+                    className={`titlebar-agent-badge-dot${activeAgentCount === 0 ? ' titlebar-agent-badge-dot-idle' : ''}`}
+                    aria-hidden
+                  />
+                  <span className="titlebar-agent-badge-count">{activeAgentCount}</span>
+                  <span className="titlebar-agent-badge-label">active</span>
+                </span>
+              </HoverCardTrigger>
+              <HoverCardContent side="bottom" sideOffset={6} className="titlebar-agent-hovercard">
+                <div className="titlebar-agent-hovercard-header">
+                  {activeAgentCount === 0
+                    ? 'No agents active'
+                    : `${activeAgentCount} ${activeAgentCount === 1 ? 'agent' : 'agents'} active`}
+                </div>
+                {activeAgentCount > 0 && (
+                  <div className="titlebar-agent-hovercard-list">
+                    {Object.entries(agentCountByWorktree).map(([worktreeId, count]) => {
+                      const wt = findWorktreeById(worktreesByRepo, worktreeId)
+                      return (
+                        <button
+                          key={worktreeId}
+                          className="titlebar-agent-hovercard-row"
+                          onClick={() => activateAndRevealWorktree(worktreeId)}
+                        >
+                          <span className="titlebar-agent-hovercard-name">
+                            {wt?.displayName ?? worktreeId}
+                          </span>
+                          <span className="titlebar-agent-hovercard-count">
+                            {count} <span className="titlebar-agent-hovercard-dot" />
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </HoverCardContent>
+            </HoverCard>
+          ) : null}
+          {/* Why: the center titlebar slot hosts portaled tabs from the active
+              group when no splits are active, saving a full row of vertical
+              space. The slot stays mounted even when empty so the right-side
+              controls don't jump left. */}
           <div
             id="titlebar-tabs"
-            className={`flex flex-1 min-w-0 self-stretch${activeView === 'settings' || !activeWorktreeId ? ' invisible pointer-events-none' : ''}`}
+            className={`flex flex-1 min-w-0 self-stretch items-stretch${activeView === 'settings' || !activeWorktreeId ? ' invisible pointer-events-none' : ''}`}
           />
           {showTitlebarExpandButton && (
             <Tooltip>

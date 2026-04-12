@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Why: group panels intentionally co-locate group-scoped tab chrome, activation/close handlers, and surface rendering so split groups cannot drift into a separate behavior path from the original root group. */
-import { lazy, Suspense, useCallback, useMemo } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import type { OpenFile } from '@/store/slices/editor'
@@ -420,6 +421,22 @@ export default function TabGroupPanel({
     />
   )
 
+  /* Why: when there are no splits the tab bar is portaled into the
+     titlebar's #titlebar-tabs slot so the titlebar row doubles as the
+     tab strip, saving ~36 px of vertical space. When the user creates a
+     split, every group renders its own inline tab bar so each pane keeps
+     its own chrome — no visual "jump". */
+  const [titlebarSlot, setTitlebarSlot] = useState<HTMLElement | null>(null)
+  useEffect(() => {
+    if (!hasSplitGroups) {
+      setTitlebarSlot(document.getElementById('titlebar-tabs'))
+    } else {
+      setTitlebarSlot(null)
+    }
+  }, [hasSplitGroups])
+
+  const portalToTitlebar = !hasSplitGroups && titlebarSlot !== null
+
   return (
     <div
       className={`flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden${
@@ -429,28 +446,27 @@ export default function TabGroupPanel({
       }`}
       onPointerDown={() => focusGroup(worktreeId, groupId)}
     >
-      {/* Why: every group, including the initial unsplit root, must render its
-          chrome inside the same panel stack. Portaling the first group's tabs
-          into the window titlebar created a second vertical frame of reference,
-          so the first split appeared to "jump down" when later groups rendered
-          inline below it. */}
-      <div className="flex items-stretch h-9 shrink-0 border-b border-border bg-card">
-        {tabBar}
-        {hasSplitGroups && (
-          <button
-            type="button"
-            aria-label="Close tab group"
-            title="Close tab group"
-            onClick={(event) => {
-              event.stopPropagation()
-              handleCloseGroup()
-            }}
-            className="mr-1 my-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent/50 hover:text-foreground group-hover/tab-group:opacity-100 focus:opacity-100"
-          >
-            <X className="size-4" />
-          </button>
-        )}
-      </div>
+      {portalToTitlebar ? (
+        createPortal(tabBar, titlebarSlot)
+      ) : (
+        <div className="flex items-stretch h-9 shrink-0 border-b border-border bg-card">
+          {tabBar}
+          {hasSplitGroups && (
+            <button
+              type="button"
+              aria-label="Close tab group"
+              title="Close tab group"
+              onClick={(event) => {
+                event.stopPropagation()
+                handleCloseGroup()
+              }}
+              className="mr-1 my-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent/50 hover:text-foreground group-hover/tab-group:opacity-100 focus:opacity-100"
+            >
+              <X className="size-4" />
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="relative flex-1 min-h-0 overflow-hidden">
         {groupTabs
