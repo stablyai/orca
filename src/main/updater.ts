@@ -11,7 +11,7 @@ import {
 import { registerAutoUpdaterHandlers } from './updater-events'
 import { compareVersions, isBenignCheckFailure, statusesEqual } from './updater-fallback'
 
-const AUTO_UPDATE_CHECK_INTERVAL_MS = 36 * 60 * 60 * 1000
+const AUTO_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 const AUTO_UPDATE_RETRY_INTERVAL_MS = 60 * 60 * 1000
 const QUIT_AND_INSTALL_DELAY_MS = 100
 

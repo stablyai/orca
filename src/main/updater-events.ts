@@ -130,7 +130,7 @@ export function registerAutoUpdaterHandlers({
       setAvailableReleaseUrl(null)
       recordCompletedUpdateCheck()
       if (!wasUserInitiated) {
-        scheduleAutomaticUpdateCheck(36 * 60 * 60 * 1000)
+        scheduleAutomaticUpdateCheck(24 * 60 * 60 * 1000)
       }
 
       sendStatus({ state: 'available', version: info.version, changelog })
@@ -144,7 +144,7 @@ export function registerAutoUpdaterHandlers({
     clearAvailableUpdateContext()
     recordCompletedUpdateCheck()
     if (!wasUserInitiated) {
-      scheduleAutomaticUpdateCheck(36 * 60 * 60 * 1000)
+      scheduleAutomaticUpdateCheck(24 * 60 * 60 * 1000)
     }
     sendStatus({ state: 'not-available', userInitiated: wasUserInitiated || undefined })
   })

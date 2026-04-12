@@ -219,7 +219,7 @@ describe('updater', () => {
     const { setupAutoUpdater } = await import('./updater')
 
     setupAutoUpdater(mainWindow as never, {
-      getLastUpdateCheckAt: () => Date.now() - 37 * 60 * 60 * 1000,
+      getLastUpdateCheckAt: () => Date.now() - 25 * 60 * 60 * 1000,
       setLastUpdateCheckAt
     })
 
@@ -237,7 +237,7 @@ describe('updater', () => {
     const { setupAutoUpdater } = await import('./updater')
 
     setupAutoUpdater(mainWindow as never, {
-      getLastUpdateCheckAt: () => Date.now() - 35 * 60 * 60 * 1000,
+      getLastUpdateCheckAt: () => Date.now() - 23 * 60 * 60 * 1000,
       setLastUpdateCheckAt
     })
 
@@ -283,7 +283,7 @@ describe('updater', () => {
     expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
   })
 
-  it('reschedules the next automatic check 36 hours after finding an available update', async () => {
+  it('reschedules the next automatic check 24 hours after finding an available update', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-04-03T12:00:00Z'))
 
@@ -317,7 +317,7 @@ describe('updater', () => {
       changelog: null
     })
 
-    vi.advanceTimersByTime(35 * 60 * 60 * 1000 + 59 * 60 * 1000)
+    vi.advanceTimersByTime(23 * 60 * 60 * 1000 + 59 * 60 * 1000)
     expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
 
     vi.advanceTimersByTime(60 * 1000)
