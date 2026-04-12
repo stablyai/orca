@@ -3,6 +3,7 @@
    meaningful abstraction boundary. */
 import { useEffect, useState } from 'react'
 import type { CodexRateLimitAccountsState, GlobalSettings } from '../../../../shared/types'
+import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
@@ -540,17 +541,17 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
             </div>
             <Button
               variant="outline"
-              size="sm"
+              size="xs"
               onClick={() =>
                 void runCodexAccountAction('adding', () => window.api.codexAccounts.add())
               }
               disabled={codexAction !== 'idle'}
-              className="gap-2"
+              className="gap-1.5"
             >
               {codexAction === 'adding' ? (
-                <Loader2 className="size-3.5 animate-spin" />
+                <Loader2 className="size-3 animate-spin" />
               ) : (
-                <Plus className="size-3.5" />
+                <Plus className="size-3" />
               )}
               Add Account
             </Button>
@@ -571,24 +572,27 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
                   )
                 }
                 disabled={codexAction !== 'idle'}
-                className={`flex min-h-[58px] w-full items-center justify-between gap-3 rounded-md border px-3 py-3 text-left transition-colors ${
+                className={`flex w-full items-center justify-between gap-3 rounded-md border px-3 py-2.5 text-left transition-colors ${
                   codexAccounts.activeAccountId === null
-                    ? 'border-foreground/25 bg-accent/20'
-                    : 'border-border/70 hover:bg-accent/10'
+                    ? 'border-foreground/20 bg-accent/15'
+                    : 'border-border/70 hover:border-border hover:bg-accent/8'
                 } disabled:cursor-default disabled:opacity-100`}
               >
-                <div className="flex min-w-0 flex-1 items-center gap-2 text-sm">
-                  <span className="font-medium">System default</span>
-                  <span className="truncate text-xs text-muted-foreground">
+                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="truncate text-sm font-medium">System default</span>
+                    {codexAccounts.activeAccountId === null ? (
+                      <Badge
+                        variant="outline"
+                        className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none text-foreground/80"
+                      >
+                        Active
+                      </Badge>
+                    ) : null}
+                  </div>
+                  <span className="truncate text-[11px] text-muted-foreground">
                     Use your current system Codex login.
                   </span>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  {codexAccounts.activeAccountId === null ? (
-                    <span className="rounded-full bg-foreground px-2 py-0.5 text-[10px] font-medium text-background">
-                      Active
-                    </span>
-                  ) : null}
                 </div>
               </button>
               {codexAccounts.accounts.map((account) => {
@@ -607,34 +611,45 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
                       )
                     }
                     disabled={isBusy}
-                    className={`flex min-h-[58px] w-full items-center justify-between gap-3 rounded-md border px-3 py-3 text-left transition-colors ${
+                    className={`flex w-full items-center justify-between gap-3 rounded-md border px-3 py-2.5 text-left transition-colors ${
                       isActive
-                        ? 'border-foreground/25 bg-accent/20'
-                        : 'border-border/70 hover:bg-accent/10'
+                        ? 'border-foreground/20 bg-accent/15'
+                        : 'border-border/70 hover:border-border hover:bg-accent/8'
                     }`}
                   >
                     <div className="flex w-full items-center justify-between gap-3 max-md:flex-col max-md:items-start">
-                      <div className="flex min-w-0 flex-1 items-center gap-2 text-sm">
-                        <span className="truncate font-medium">{account.email}</span>
-                        {account.workspaceLabel ? (
-                          <span className="truncate text-xs text-muted-foreground">
-                            {account.workspaceLabel}
+                      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="truncate text-sm font-medium">{account.email}</span>
+                          {isActive ? (
+                            <Badge
+                              variant="outline"
+                              className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none text-foreground/80"
+                            >
+                              Active
+                            </Badge>
+                          ) : null}
+                        </div>
+                        <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground max-sm:flex-wrap">
+                          {account.workspaceLabel ? (
+                            <span className="truncate">{account.workspaceLabel}</span>
+                          ) : null}
+                          {account.workspaceLabel ? (
+                            <span className="shrink-0 opacity-50">•</span>
+                          ) : null}
+                          <span className="shrink-0">
+                            {formatAccountTimestamp(account.lastAuthenticatedAt)}
                           </span>
-                        ) : null}
-                        <span className="shrink-0 text-xs text-muted-foreground">
-                          {formatAccountTimestamp(account.lastAuthenticatedAt)}
-                        </span>
-                        {isActive ? (
-                          <span className="shrink-0 rounded-full bg-foreground px-2 py-0.5 text-[10px] font-medium text-background">
-                            Active
-                          </span>
-                        ) : null}
+                        </div>
                       </div>
 
-                      <div className="flex shrink-0 items-center justify-end gap-2 max-md:w-full max-md:flex-wrap">
+                      <div className="flex shrink-0 items-center justify-end gap-1 max-md:w-full max-md:flex-wrap">
+                        {/* Why: selecting an account is the primary action in this row.
+                        Keeping maintenance actions visually lighter prevents re-auth/remove
+                        controls from overpowering the selection affordance in a dense list. */}
                         <Button
-                          variant="outline"
-                          size="sm"
+                          variant="ghost"
+                          size="xs"
                           onClick={(event) => {
                             event.stopPropagation()
                             void runCodexAccountAction(`reauth:${account.id}`, () =>
@@ -642,29 +657,29 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
                             )
                           }}
                           disabled={isBusy}
-                          className="h-8 gap-2 px-3"
+                          className="h-6 px-2 text-muted-foreground hover:text-foreground"
                         >
                           {isReauthing ? (
-                            <Loader2 className="size-3.5 animate-spin" />
+                            <Loader2 className="size-3 animate-spin" />
                           ) : (
-                            <RefreshCw className="size-3.5" />
+                            <RefreshCw className="size-3" />
                           )}
                           Re-authenticate
                         </Button>
                         <Button
-                          variant="outline"
-                          size="sm"
+                          variant="ghost"
+                          size="xs"
                           onClick={(event) => {
                             event.stopPropagation()
                             setRemoveAccountId(account.id)
                           }}
                           disabled={isBusy}
-                          className="h-8 gap-2 px-3"
+                          className="h-6 px-2 text-muted-foreground hover:text-destructive"
                         >
                           {isRemoving ? (
-                            <Loader2 className="size-3.5 animate-spin" />
+                            <Loader2 className="size-3 animate-spin" />
                           ) : (
-                            <Trash2 className="size-3.5" />
+                            <Trash2 className="size-3" />
                           )}
                           Remove
                         </Button>
