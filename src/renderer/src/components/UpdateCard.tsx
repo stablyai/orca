@@ -98,6 +98,12 @@ export function UpdateCard() {
   // Why: tracks whether the card is exiting so we can play the fade-out
   // animation before unmounting.
   const [exiting, setExiting] = useState(false)
+  // Why: when the user explicitly clicks "Check for Updates", the dismiss gate
+  // must be bypassed for the resulting 'available' card — otherwise the card
+  // flashes "Checking..." then vanishes because the same version was previously
+  // dismissed.  This ref tracks whether the current check cycle was user-initiated
+  // so the dismiss gate can let the result through.
+  const userInitiatedCycleRef = useRef(false)
 
   const changelog: ChangelogData | null = storeChangelog
 
@@ -188,6 +194,18 @@ export function UpdateCard() {
   const shouldShowDetailedErrorCard =
     status.state === 'error' && (hasStartedDownload.current || cachedVersion !== null)
 
+  // Why: track whether the current check cycle was user-initiated so the
+  // dismiss gate doesn't hide the result of an explicit "Check for Updates"
+  // click.  Without this, clicking "Check for Updates" when a version was
+  // previously dismissed causes the "Checking..." toast to flash briefly
+  // then vanish — the 'available' card is suppressed by the dismiss gate
+  // even though the user explicitly asked to see the result.
+  if (status.state === 'checking' && isUserInitiated) {
+    userInitiatedCycleRef.current = true
+  } else if (status.state === 'idle' || (status.state === 'checking' && !isUserInitiated)) {
+    userInitiatedCycleRef.current = false
+  }
+
   // Compact transient states: only show for user-initiated checks.
   if (status.state === 'checking' && !isUserInitiated) {
     return null
@@ -214,7 +232,10 @@ export function UpdateCard() {
   // Dismiss gate: if the user previously dismissed this version, hide the card
   // for passive reminder states. Keep active in-progress/error states visible so
   // explicit install actions can still surface progress and failures.
-  if (versionRef.current && dismissedVersion === versionRef.current) {
+  // Why: bypass the gate when the current cycle was user-initiated — the user
+  // explicitly asked to check, so they expect to see the result even if they
+  // dismissed the same version earlier.
+  if (versionRef.current && dismissedVersion === versionRef.current && !userInitiatedCycleRef.current) {
     if (status.state !== 'downloading' && status.state !== 'error') {
       return null
     }
@@ -237,6 +258,10 @@ export function UpdateCard() {
   // Why: the 'error' variant has no version field, so dismiss needs an
   // optional explicit version override for error/install-failure states.
   const handleClose = () => {
+    // Why: clear the user-initiated bypass so the dismiss gate re-engages
+    // immediately — otherwise the card would reappear on the next render
+    // because the bypass ref still overrides the persisted dismissal.
+    userInitiatedCycleRef.current = false
     if (status.state === 'error' && cachedVersion) {
       dismissUpdate(cachedVersion)
       return
