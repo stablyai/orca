@@ -16,7 +16,11 @@ import { Fragment, type Node as PmNode } from '@tiptap/pm/model'
  * so the cut handler (and all other block-level operations) work on a per-line basis.
  */
 export function normalizeSoftBreaks(editor: Editor): void {
-  const { doc, schema } = editor.state
+  // Why: we read from editor.view.state (not editor.state) so that the doc
+  // we traverse and the transaction we later create share the same base state.
+  // After setContent(), editor.state can be stale (last React render), while
+  // editor.view.state always reflects the latest document.
+  const { doc, schema } = editor.view.state
   const paragraphType = schema.nodes.paragraph
   if (!paragraphType) {
     return
@@ -83,10 +87,7 @@ export function normalizeSoftBreaks(editor: Editor): void {
     return
   }
 
-  // Why: we capture the transaction lazily from editor.view.state.tr (not editor.state.tr)
-  // to ensure we get the latest state. When called after setContent(), editor.state may be
-  // stale (it reflects state at the time of the last React render), while editor.view.state
-  // always reflects the most recent document.
+  // Capture the transaction lazily — only after all replacements are collected.
   const tr = editor.view.state.tr
 
   // Apply replacements in reverse order to preserve positions.
