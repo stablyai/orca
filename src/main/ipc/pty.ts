@@ -26,6 +26,20 @@ let loadGeneration = 0
 const ptyLoadGeneration = new Map<string, number>()
 let didEnsureSpawnHelperExecutable = false
 
+function clearPtyState(id: string): void {
+  ptyProcesses.delete(id)
+  ptyShellName.delete(id)
+  ptyLoadGeneration.delete(id)
+}
+
+function clearProviderPtyState(id: string): void {
+  // Why: OpenCode and Pi both allocate PTY-scoped runtime state outside the
+  // node-pty process table. Centralizing provider cleanup avoids drift where a
+  // new teardown path forgets to remove one provider's overlay/hook state.
+  openCodeHookService.clearPty(id)
+  piTitlebarExtensionService.clearPty(id)
+}
+
 function getShellValidationError(shellPath: string): string | null {
   if (!existsSync(shellPath)) {
     return (
@@ -111,11 +125,8 @@ export function registerPtyHandlers(
         } catch {
           // Process may already be dead
         }
-        ptyProcesses.delete(id)
-        ptyShellName.delete(id)
-        ptyLoadGeneration.delete(id)
-        openCodeHookService.clearPty(id)
-        piTitlebarExtensionService.clearPty(id)
+        clearPtyState(id)
+        clearProviderPtyState(id)
         // Why: notify runtime so the agent detector can close out any live
         // agent sessions. Without this, killed PTYs would remain in the
         // detector's liveAgents map and accumulate inflated durations.
@@ -145,11 +156,8 @@ export function registerPtyHandlers(
       } catch {
         return false
       }
-      ptyProcesses.delete(ptyId)
-      ptyShellName.delete(ptyId)
-      ptyLoadGeneration.delete(ptyId)
-      openCodeHookService.clearPty(ptyId)
-      piTitlebarExtensionService.clearPty(ptyId)
+      clearPtyState(ptyId)
+      clearProviderPtyState(ptyId)
       runtime?.onPtyExit(ptyId, -1)
       return true
     }
@@ -357,11 +365,8 @@ export function registerPtyHandlers(
       })
 
       proc.onExit(({ exitCode }) => {
-        ptyProcesses.delete(id)
-        ptyShellName.delete(id)
-        ptyLoadGeneration.delete(id)
-        openCodeHookService.clearPty(id)
-        piTitlebarExtensionService.clearPty(id)
+        clearPtyState(id)
+        clearProviderPtyState(id)
         runtime?.onPtyExit(id, exitCode)
         if (!mainWindow.isDestroyed()) {
           mainWindow.webContents.send('pty:exit', { id, code: exitCode })
@@ -394,11 +399,8 @@ export function registerPtyHandlers(
       } catch {
         // Process may already be dead
       }
-      ptyProcesses.delete(args.id)
-      ptyShellName.delete(args.id)
-      ptyLoadGeneration.delete(args.id)
-      openCodeHookService.clearPty(args.id)
-      piTitlebarExtensionService.clearPty(args.id)
+      clearPtyState(args.id)
+      clearProviderPtyState(args.id)
       runtime?.onPtyExit(args.id, -1)
     }
   })
@@ -454,10 +456,7 @@ export function killAllPty(): void {
     } catch {
       // Process may already be dead
     }
-    ptyProcesses.delete(id)
-    ptyShellName.delete(id)
-    ptyLoadGeneration.delete(id)
-    openCodeHookService.clearPty(id)
-    piTitlebarExtensionService.clearPty(id)
+    clearPtyState(id)
+    clearProviderPtyState(id)
   }
 }
