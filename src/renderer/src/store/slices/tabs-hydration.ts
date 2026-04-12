@@ -1,13 +1,14 @@
 import type { Tab, TabGroup, WorkspaceSessionState } from '../../../../shared/types'
+import {
+  getPersistedEditFileIdsByWorktree,
+  isTransientEditorContentType,
+  selectHydratedActiveGroupId
+} from './tabs-helpers'
 
 type HydratedTabState = {
   unifiedTabsByWorktree: Record<string, Tab[]>
   groupsByWorktree: Record<string, TabGroup[]>
   activeGroupIdByWorktree: Record<string, string>
-}
-
-function isTransientEditorContentType(contentType: Tab['contentType']): boolean {
-  return contentType === 'diff' || contentType === 'conflict-review'
 }
 
 function hydrateUnifiedFormat(
@@ -17,12 +18,7 @@ function hydrateUnifiedFormat(
   const tabsByWorktree: Record<string, Tab[]> = {}
   const groupsByWorktree: Record<string, TabGroup[]> = {}
   const activeGroupIdByWorktree: Record<string, string> = {}
-  const persistedEditFileIdsByWorktree = Object.fromEntries(
-    Object.entries(session.openFilesByWorktree ?? {}).map(([worktreeId, files]) => [
-      worktreeId,
-      new Set(files.map((file) => file.filePath))
-    ])
-  )
+  const persistedEditFileIdsByWorktree = getPersistedEditFileIdsByWorktree(session)
 
   for (const [worktreeId, tabs] of Object.entries(session.unifiedTabs!)) {
     if (!validWorktreeIds.has(worktreeId)) {
@@ -56,14 +52,27 @@ function hydrateUnifiedFormat(
     }
 
     const validTabIds = new Set((tabsByWorktree[worktreeId] ?? []).map((t) => t.id))
-    const validatedGroups = groups.map((g) => ({
-      ...g,
-      tabOrder: g.tabOrder.filter((tid) => validTabIds.has(tid)),
-      activeTabId: g.activeTabId && validTabIds.has(g.activeTabId) ? g.activeTabId : null
-    }))
+    const validatedGroups = groups.map((g) => {
+      const tabOrder = g.tabOrder.filter((tid) => validTabIds.has(tid))
+      return {
+        ...g,
+        tabOrder,
+        // Why: restore can drop transient tabs with no backing file state. If
+        // the saved active tab disappears, promote the first surviving tab so
+        // the restored group still shows content immediately.
+        activeTabId:
+          g.activeTabId && validTabIds.has(g.activeTabId) ? g.activeTabId : (tabOrder[0] ?? null)
+      }
+    })
 
     groupsByWorktree[worktreeId] = validatedGroups
-    activeGroupIdByWorktree[worktreeId] = validatedGroups[0].id
+    const activeGroupId = selectHydratedActiveGroupId(
+      validatedGroups,
+      session.activeGroupIdByWorktree?.[worktreeId]
+    )
+    if (activeGroupId) {
+      activeGroupIdByWorktree[worktreeId] = activeGroupId
+    }
   }
 
   return { unifiedTabsByWorktree: tabsByWorktree, groupsByWorktree, activeGroupIdByWorktree }

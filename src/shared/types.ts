@@ -154,6 +154,9 @@ export type TerminalLayoutSnapshot = {
   /** User-assigned pane titles, keyed by leafId (e.g. "pane:3").
    *  Persisted alongside buffers via the existing session:set flow. */
   titlesByLeafId?: Record<string, string>
+  /** Live PTY IDs per leaf, captured during layout snapshots so multi-pane
+   *  terminals can re-attach each pane to its own shell after a remount. */
+  ptyIdsByLeafId?: Record<string, string>
 }
 
 /** Minimal subset of OpenFile persisted across restarts.

@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: hydration test suite covers both unified and legacy formats with verbose session fixtures that inflate line count. */
 import { describe, it, expect, vi } from 'vitest'
 import type { WorkspaceSessionState } from '../../../../shared/types'
 import { buildHydratedTabState } from './tabs-hydration'
@@ -134,7 +135,7 @@ describe('buildHydratedTabState – unified format', () => {
 
     const result = buildHydratedTabState(session, new Set(['w1']))
     const group = result.groupsByWorktree.w1[0]
-    expect(group.activeTabId).toBeNull()
+    expect(group.activeTabId).toBe('t1')
     expect(group.tabOrder).toEqual(['t1'])
   })
 
@@ -208,9 +209,63 @@ describe('buildHydratedTabState – unified format', () => {
     expect(result.groupsByWorktree.w1[0]).toEqual({
       id: 'g1',
       worktreeId: 'w1',
-      activeTabId: null,
+      activeTabId: 'editor-1',
       tabOrder: ['editor-1']
     })
+  })
+
+  it('prefers a non-empty restored group when the persisted active group loses all tabs', () => {
+    const session: WorkspaceSessionState = {
+      ...makeBaseSession(),
+      unifiedTabs: {
+        w1: [
+          {
+            id: 'editor-1',
+            entityId: '/repo/src/index.ts',
+            groupId: 'g1',
+            worktreeId: 'w1',
+            contentType: 'editor',
+            label: 'src/index.ts',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          },
+          {
+            id: 'diff-1',
+            entityId: 'w1::diff::unstaged::src/index.ts',
+            groupId: 'g2',
+            worktreeId: 'w1',
+            contentType: 'diff',
+            label: 'src/index.ts',
+            customLabel: null,
+            color: null,
+            sortOrder: 1,
+            createdAt: 2
+          }
+        ]
+      },
+      tabGroups: {
+        w1: [
+          { id: 'g1', worktreeId: 'w1', activeTabId: 'editor-1', tabOrder: ['editor-1'] },
+          { id: 'g2', worktreeId: 'w1', activeTabId: 'diff-1', tabOrder: ['diff-1'] }
+        ]
+      },
+      activeGroupIdByWorktree: { w1: 'g2' },
+      openFilesByWorktree: {
+        w1: [
+          {
+            filePath: '/repo/src/index.ts',
+            relativePath: 'src/index.ts',
+            worktreeId: 'w1',
+            language: 'typescript'
+          }
+        ]
+      }
+    }
+
+    const result = buildHydratedTabState(session, new Set(['w1']))
+    expect(result.activeGroupIdByWorktree.w1).toBe('g1')
   })
 })
 

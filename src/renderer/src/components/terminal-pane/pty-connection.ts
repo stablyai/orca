@@ -4,7 +4,7 @@ import { isGeminiTerminalTitle, isClaudeAgent } from '@/lib/agent-status'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
 import type { PtyTransport } from './pty-transport'
-import { createIpcPtyTransport } from './pty-transport'
+import { createIpcPtyTransport, getEagerPtyBufferHandle } from './pty-transport'
 import { shouldSeedCacheTimerOnInitialTitle } from './cache-timer-seeding'
 
 type PtyConnectionDeps = {
@@ -18,6 +18,11 @@ type PtyConnectionDeps = {
   effectiveVisibleRef: React.RefObject<boolean>
   onPtyExitRef: React.RefObject<(ptyId: string) => void>
   onPtyErrorRef?: React.RefObject<(paneId: number, message: string) => void>
+  /** Per-pane PTY IDs restored from a layout snapshot. Populated by the
+   *  lifecycle hook after `replayTerminalLayout` maps old leaf IDs to new
+   *  pane IDs — consumed inside the deferred rAF to re-attach each pane
+   *  to its own shell instead of all panes racing onto the single tab-level ptyId. */
+  restoredPtyIdByPaneId: Map<number, string>
   clearTabPtyId: (tabId: string, ptyId: string) => void
   consumeSuppressedPtyExit: (ptyId: string) => boolean
   updateTabTitle: (tabId: string, title: string) => void
@@ -215,19 +220,31 @@ export function connectPanePty(
       .getState()
       .tabsByWorktree[deps.worktreeId]?.find((t) => t.id === deps.tabId)?.ptyId
 
-    // Why: layout-only remounts (for example creating a new tab group around an
-    // existing terminal) preserve the tab's live PTY in Zustand. Re-attach to
-    // any existing PTY ID here so remounting the UI does not spawn a fresh
-    // shell and wipe the user's in-progress session. The eager-buffer handle is
-    // only needed to replay startup output after full app restore.
-    if (existingPtyId) {
+    // Resolve which PTY to re-attach to, if any. Three cases, in priority order:
+    //
+    // 1. Layout remount — per-pane PTY from snapshot, verified live. The snapshot
+    //    captures per-leaf PTY IDs so each pane re-attaches to its own shell. We
+    //    validate the snapshot ID is still live (present in ptyIdsByTabId) to avoid
+    //    attaching to a stale ID from a previous app session on disk.
+    // 2. Startup reconnect — first pane consumes the eager buffer handle from the
+    //    backend. Only fires on app restore, never on layout remount (live PTYs
+    //    don't have eager handles).
+    // 3. Fallback for single-pane tabs or pre-snapshot-era layouts where no
+    //    per-leaf PTY IDs were captured. The tab-level ptyId is correct when
+    //    there is only one pane.
+    const leafPtyId = deps.restoredPtyIdByPaneId.get(pane.id) ?? null
+    const livePtyIds = new Set(useAppStore.getState().ptyIdsByTabId[deps.tabId] ?? [])
+
+    const reattachPtyId =
+      (leafPtyId && livePtyIds.has(leafPtyId) && leafPtyId) ||
+      (existingPtyId && getEagerPtyBufferHandle(existingPtyId) && existingPtyId) ||
+      (existingPtyId && !leafPtyId && existingPtyId) ||
+      null
+
+    if (reattachPtyId) {
       allowInitialIdleCacheSeed = true
-      // Why: this tab already has a live PTY, either from startup reconnect or
-      // from a layout-only remount that preserved the shell. Attach to it
-      // instead of spawning a duplicate. Startup commands are intentionally
-      // skipped — the PTY was already spawned with a fresh shell.
       transport.attach({
-        existingPtyId,
+        existingPtyId: reattachPtyId,
         cols,
         rows,
         callbacks: {
@@ -236,6 +253,7 @@ export function connectPanePty(
         }
       })
     } else {
+      // Fresh shell — no existing PTY to reattach.
       allowInitialIdleCacheSeed = false
       transport.connect({
         url: '',

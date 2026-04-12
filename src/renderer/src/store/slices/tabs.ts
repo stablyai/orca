@@ -13,8 +13,11 @@ import {
   findGroupForTab,
   findTabAndWorktree,
   findTabByEntityInGroup,
+  getPersistedEditFileIdsByWorktree,
+  isTransientEditorContentType,
   patchTab,
   pickNeighbor,
+  selectHydratedActiveGroupId,
   updateGroup
 } from './tabs-helpers'
 import { captureAllTerminalBuffers } from '../../components/terminal-pane/buffer-capture-registry'
@@ -69,21 +72,6 @@ export type TabsSlice = {
     direction: TabSplitDirection
   ) => string | null
   hydrateTabsSession: (session: WorkspaceSessionState) => void
-}
-
-function isTransientEditorContentType(contentType: TabContentType): boolean {
-  return contentType === 'diff' || contentType === 'conflict-review'
-}
-
-function getPersistedEditFileIdsByWorktree(
-  session: WorkspaceSessionState
-): Record<string, Set<string>> {
-  return Object.fromEntries(
-    Object.entries(session.openFilesByWorktree ?? {}).map(([worktreeId, files]) => [
-      worktreeId,
-      new Set(files.map((file) => file.filePath))
-    ])
-  )
 }
 
 function buildSplitNode(
@@ -222,19 +210,27 @@ function hydrateTabsState(session: WorkspaceSessionState, validWorktreeIds: Set<
         continue
       }
       const validTabIds = new Set((unifiedTabsByWorktree[worktreeId] ?? []).map((tab) => tab.id))
-      groupsByWorktree[worktreeId] = groups.map((group) => ({
-        ...group,
-        tabOrder: group.tabOrder.filter((tabId) => validTabIds.has(tabId)),
-        activeTabId:
-          group.activeTabId && validTabIds.has(group.activeTabId) ? group.activeTabId : null
-      }))
-      activeGroupIdByWorktree[worktreeId] =
-        session.activeGroupIdByWorktree?.[worktreeId] &&
-        groupsByWorktree[worktreeId].some(
-          (group) => group.id === session.activeGroupIdByWorktree?.[worktreeId]
-        )
-          ? session.activeGroupIdByWorktree[worktreeId]!
-          : groupsByWorktree[worktreeId][0].id
+      groupsByWorktree[worktreeId] = groups.map((group) => {
+        const tabOrder = group.tabOrder.filter((tabId) => validTabIds.has(tabId))
+        return {
+          ...group,
+          tabOrder,
+          // Why: restore can drop transient tabs that no longer have backing
+          // editor state. Promote the first surviving tab so the hydrated group
+          // still renders content immediately instead of coming back blank.
+          activeTabId:
+            group.activeTabId && validTabIds.has(group.activeTabId)
+              ? group.activeTabId
+              : (tabOrder[0] ?? null)
+        }
+      })
+      const activeGroupId = selectHydratedActiveGroupId(
+        groupsByWorktree[worktreeId],
+        session.activeGroupIdByWorktree?.[worktreeId]
+      )
+      if (activeGroupId) {
+        activeGroupIdByWorktree[worktreeId] = activeGroupId
+      }
       layoutByWorktree[worktreeId] = session.tabGroupLayouts?.[worktreeId] ?? {
         type: 'leaf',
         groupId: groupsByWorktree[worktreeId][0].id

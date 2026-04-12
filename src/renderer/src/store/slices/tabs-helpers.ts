@@ -1,4 +1,4 @@
-import type { Tab, TabGroup } from '../../../../shared/types'
+import type { Tab, TabContentType, TabGroup, WorkspaceSessionState } from '../../../../shared/types'
 
 export function findTabAndWorktree(
   tabsByWorktree: Record<string, Tab[]>,
@@ -82,6 +82,33 @@ export function pickNeighbor(tabOrder: string[], closingTabId: string): string |
 
 export function updateGroup(groups: TabGroup[], updated: TabGroup): TabGroup[] {
   return groups.map((g) => (g.id === updated.id ? updated : g))
+}
+
+export function isTransientEditorContentType(contentType: TabContentType): boolean {
+  return contentType === 'diff' || contentType === 'conflict-review'
+}
+
+export function getPersistedEditFileIdsByWorktree(
+  session: WorkspaceSessionState
+): Record<string, Set<string>> {
+  return Object.fromEntries(
+    Object.entries(session.openFilesByWorktree ?? {}).map(([worktreeId, files]) => [
+      worktreeId,
+      new Set(files.map((file) => file.filePath))
+    ])
+  )
+}
+
+export function selectHydratedActiveGroupId(
+  groups: TabGroup[],
+  persistedActiveGroupId?: string
+): string | undefined {
+  const preferredGroups = groups.filter((group) => group.tabOrder.length > 0)
+  const candidates = preferredGroups.length > 0 ? preferredGroups : groups
+  if (persistedActiveGroupId && candidates.some((group) => group.id === persistedActiveGroupId)) {
+    return persistedActiveGroupId
+  }
+  return candidates[0]?.id
 }
 
 /**

@@ -399,7 +399,10 @@ export default function TabGroupPanel({
         }
       }}
       onCloseAllFiles={closeAllFiles}
-      onPinFile={(tabId) => {
+      onPinFile={(_fileId, tabId) => {
+        if (!tabId) {
+          return
+        }
         const item = groupTabs.find((candidate) => candidate.id === tabId)
         if (!item) {
           return

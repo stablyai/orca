@@ -608,6 +608,19 @@ export default function TerminalPane({
     if (titleEntries.length > 0) {
       layout.titlesByLeafId = Object.fromEntries(titleEntries)
     }
+    // Why: multi-pane terminals each have their own PTY, but the tab only
+    // stores the last pane's ptyId. Capture per-leaf PTY IDs so each pane
+    // can re-attach to its own shell after a layout-only remount instead
+    // of all panes racing onto the single tab-level ptyId.
+    const ptyIdEntries = panes
+      .map((p) => {
+        const ptyId = paneTransportsRef.current.get(p.id)?.getPtyId()
+        return ptyId ? ([paneLeafId(p.id), ptyId] as const) : null
+      })
+      .filter((entry): entry is readonly [string, string] => entry !== null)
+    if (ptyIdEntries.length > 0) {
+      layout.ptyIdsByLeafId = Object.fromEntries(ptyIdEntries)
+    }
     setTabLayout(tabId, layout)
   }, [setTabLayout, tabId])
 

@@ -644,6 +644,91 @@ describe('TabsSlice', () => {
       expect(state.groupsByWorktree[WT][0].activeTabId).toBe('/file.ts')
     })
 
+    it('prefers a non-empty restored group when the persisted active group loses its tab', () => {
+      store.setState({
+        worktreesByRepo: {
+          repo1: [
+            {
+              id: WT,
+              repoId: 'repo1',
+              path: '/tmp/feature',
+              head: 'abc',
+              branch: 'feature',
+              isBare: false,
+              isMainWorktree: false,
+              displayName: 'feature',
+              comment: '',
+              linkedIssue: null,
+              linkedPR: null,
+              isArchived: false,
+              isUnread: false,
+              sortOrder: 0,
+              lastActivityAt: 0
+            }
+          ]
+        }
+      })
+
+      store.getState().hydrateTabsSession({
+        activeRepoId: 'repo1',
+        activeWorktreeId: WT,
+        activeTabId: null,
+        tabsByWorktree: {},
+        terminalLayoutsByTabId: {},
+        unifiedTabs: {
+          [WT]: [
+            {
+              id: 'editor-1',
+              entityId: '/file.ts',
+              groupId: 'g-1',
+              worktreeId: WT,
+              contentType: 'editor',
+              label: 'file.ts',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            },
+            {
+              id: 'diff-1',
+              entityId: `${WT}::diff::unstaged::file.ts`,
+              groupId: 'g-2',
+              worktreeId: WT,
+              contentType: 'diff',
+              label: 'file.ts',
+              customLabel: null,
+              color: null,
+              sortOrder: 1,
+              createdAt: 2
+            }
+          ]
+        },
+        tabGroups: {
+          [WT]: [
+            { id: 'g-1', worktreeId: WT, activeTabId: 'editor-1', tabOrder: ['editor-1'] },
+            { id: 'g-2', worktreeId: WT, activeTabId: 'diff-1', tabOrder: ['diff-1'] }
+          ]
+        },
+        activeGroupIdByWorktree: { [WT]: 'g-2' },
+        openFilesByWorktree: {
+          [WT]: [
+            {
+              filePath: '/file.ts',
+              relativePath: 'file.ts',
+              worktreeId: WT,
+              language: 'typescript'
+            }
+          ]
+        }
+      })
+
+      const state = store.getState()
+      expect(state.activeGroupIdByWorktree[WT]).toBe('g-1')
+      expect(state.groupsByWorktree[WT].find((group) => group.id === 'g-1')?.activeTabId).toBe(
+        'editor-1'
+      )
+    })
+
     it('filters out invalid worktree IDs during hydration', () => {
       store.setState({ worktreesByRepo: {} })
 
