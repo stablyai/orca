@@ -97,7 +97,21 @@ export class PaneManager {
     const isVertical = direction === 'vertical'
     const divider = this.createDividerWrapped(isVertical)
 
+    // Why: wrapInSplit reparents the existing container via replaceChild +
+    // appendChild, which can cause the browser to reset scrollTop on xterm's
+    // viewport element to 0 during the next layout. Capture the scroll-at-
+    // bottom state now, before the DOM reparenting corrupts it.
+    const buf = existing.terminal.buffer.active
+    const wasAtBottom = buf.viewportY >= buf.baseY
+
     wrapInSplit(existing.container, newPane.container, isVertical, divider, opts)
+
+    // Why: immediately restore the scroll position after DOM reparenting so
+    // that xterm's internal viewportY stays correct when the browser fires
+    // asynchronous scroll events during its layout phase.
+    if (wasAtBottom) {
+      existing.terminal.scrollToBottom()
+    }
 
     // Open terminal for new pane
     openTerminal(newPane)
@@ -111,13 +125,24 @@ export class PaneManager {
       newPane.terminal.focus()
     }
 
-    // Refit existing pane since it now shares space
-    safeFit(existing)
-
     updateMultiPaneState(this.getDragCallbacks())
 
     void this.options.onPaneCreated?.(this.toPublic(newPane))
     this.options.onLayoutChanged?.()
+
+    // Why: belt-and-suspenders for the scroll position — the deferred
+    // fitPanes (from onLayoutChanged → queueResizeAll) reflows the buffer
+    // for the new column count, which changes baseY. If the browser's
+    // rendering pipeline fired a scroll event that reset viewportY between
+    // our synchronous scrollToBottom above and the rAF, safeFit's
+    // wasAtBottom check would read false and skip scrollToBottom. This
+    // final rAF runs after fitPanes (FIFO ordering) and unconditionally
+    // restores the scroll-to-bottom state.
+    if (wasAtBottom) {
+      requestAnimationFrame(() => {
+        existing.terminal.scrollToBottom()
+      })
+    }
 
     return this.toPublic(newPane)
   }
