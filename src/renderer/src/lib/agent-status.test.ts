@@ -153,6 +153,11 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('opencode')).toBe('idle')
   })
 
+  it('detects Pi idle titles', () => {
+    expect(detectAgentStatusFromTitle('π - my-project')).toBe('idle')
+    expect(detectAgentStatusFromTitle('π - session-name - my-project')).toBe('idle')
+  })
+
   // --- Case insensitivity ---
   it('is case-insensitive for agent names', () => {
     expect(detectAgentStatusFromTitle('CLAUDE')).toBe('idle')
@@ -204,6 +209,11 @@ describe('normalizeTerminalTitle', () => {
   it('leaves non-Gemini titles unchanged', () => {
     expect(normalizeTerminalTitle('⠂ Claude Code')).toBe('⠂ Claude Code')
     expect(normalizeTerminalTitle('bash')).toBe('bash')
+  })
+
+  it('collapses Pi spinner and idle titles to stable labels', () => {
+    expect(normalizeTerminalTitle('⠋ π - my-project')).toBe('⠋ Pi')
+    expect(normalizeTerminalTitle('π - my-project')).toBe('Pi')
   })
 })
 
@@ -289,6 +299,15 @@ describe('createAgentStatusTracker', () => {
 
     tracker.handleTitle('⠋ Codex is thinking') // working
     tracker.handleTitle('codex') // idle (bare name)
+    expect(onBecameIdle).toHaveBeenCalledTimes(1)
+  })
+
+  it('fires on Pi working → idle', () => {
+    const onBecameIdle = vi.fn()
+    const tracker = createAgentStatusTracker(onBecameIdle)
+
+    tracker.handleTitle('⠋ π - my-project')
+    tracker.handleTitle('π - my-project')
     expect(onBecameIdle).toHaveBeenCalledTimes(1)
   })
 

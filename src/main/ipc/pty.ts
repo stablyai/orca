@@ -10,6 +10,7 @@ import * as pty from 'node-pty'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { parseWslPath } from '../wsl'
 import { openCodeHookService } from '../opencode/hook-service'
+import { piTitlebarExtensionService } from '../pi/titlebar-extension-service'
 
 let ptyCounter = 0
 const ptyProcesses = new Map<string, pty.IPty>()
@@ -235,6 +236,7 @@ export function registerPtyHandlers(
         delete openCodeHookEnv.OPENCODE_CONFIG_DIR
       }
       Object.assign(spawnEnv, openCodeHookEnv)
+      Object.assign(spawnEnv, piTitlebarExtensionService.buildPtyEnv(spawnEnv.PATH))
 
       // Why: the selected Codex account should affect Codex launched inside
       // Orca terminals too, not just Orca's background quota fetches. Inject

@@ -17,6 +17,7 @@ const GEMINI_IDLE = '\u25C7' // ◇
 const GEMINI_PERMISSION = '\u270B' // ✋
 
 export const AGENT_NAMES = ['claude', 'codex', 'gemini', 'opencode', 'aider']
+const PI_IDLE_PREFIX = '\u03c0 - ' // π - (Pi titlebar extension idle format)
 
 // eslint-disable-next-line no-control-regex -- intentional terminal escape sequence matching
 const OSC_TITLE_RE = /\x1b\]([012]);([^\x07\x1b]*?)(?:\x07|\x1b\\)/g
@@ -45,6 +46,10 @@ export function isGeminiTerminalTitle(title: string): boolean {
     title.includes(GEMINI_IDLE) ||
     title.toLowerCase().includes('gemini')
   )
+}
+
+export function isPiTerminalTitle(title: string): boolean {
+  return title.startsWith(PI_IDLE_PREFIX)
 }
 
 function containsBrailleSpinner(title: string): boolean {
@@ -167,6 +172,22 @@ export function normalizeTerminalTitle(title: string): string {
     }
   }
 
+  // Why: Pi's titlebar extension animates every 80ms with different braille
+  // frames. Collapsing those frames into one stable label avoids renderer
+  // churn while preserving the working/idle transition Orca keys off.
+  if (
+    isPiTerminalTitle(title) ||
+    (containsBrailleSpinner(title) && title.includes(PI_IDLE_PREFIX))
+  ) {
+    const status = detectAgentStatusFromTitle(title)
+    if (status === 'working') {
+      return '\u280b Pi'
+    }
+    if (status === 'idle') {
+      return 'Pi'
+    }
+  }
+
   return title
 }
 
@@ -224,6 +245,10 @@ export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
   // Claude Code uses ✳ prefix for idle — must check before braille/agent-name
   // because the title text is the task description, not "Claude Code".
   if (title.startsWith(`${CLAUDE_IDLE} `) || title === CLAUDE_IDLE) {
+    return 'idle'
+  }
+
+  if (isPiTerminalTitle(title)) {
     return 'idle'
   }
 

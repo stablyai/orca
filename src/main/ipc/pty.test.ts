@@ -13,7 +13,8 @@ const {
   accessSyncMock,
   spawnMock,
   openCodeBuildPtyEnvMock,
-  openCodeClearPtyMock
+  openCodeClearPtyMock,
+  piBuildPtyEnvMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   onMock: vi.fn(),
@@ -24,7 +25,8 @@ const {
   accessSyncMock: vi.fn(),
   spawnMock: vi.fn(),
   openCodeBuildPtyEnvMock: vi.fn(),
-  openCodeClearPtyMock: vi.fn()
+  openCodeClearPtyMock: vi.fn(),
+  piBuildPtyEnvMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -56,6 +58,11 @@ vi.mock('../opencode/hook-service', () => ({
   }
 }))
 
+vi.mock('../pi/titlebar-extension-service', () => ({
+  piTitlebarExtensionService: {
+    buildPtyEnv: piBuildPtyEnvMock
+  }
+}))
 import { registerPtyHandlers } from './pty'
 
 describe('registerPtyHandlers', () => {
@@ -80,6 +87,7 @@ describe('registerPtyHandlers', () => {
     spawnMock.mockReset()
     openCodeBuildPtyEnvMock.mockReset()
     openCodeClearPtyMock.mockReset()
+    piBuildPtyEnvMock.mockReset()
     mainWindow.webContents.on.mockReset()
     mainWindow.webContents.send.mockReset()
 
@@ -94,6 +102,11 @@ describe('registerPtyHandlers', () => {
       ORCA_OPENCODE_PTY_ID: 'test-pty',
       OPENCODE_CONFIG_DIR: '/tmp/orca-opencode-config'
     })
+    piBuildPtyEnvMock.mockImplementation((existingPath?: string) => ({
+      PATH: existingPath ? `/tmp/orca-pi-bin:${existingPath}` : '/tmp/orca-pi-bin',
+      ORCA_PI_REAL_BIN: '/usr/local/bin/pi',
+      ORCA_PI_EXTENSION_PATH: '/tmp/orca-pi-ext.ts'
+    }))
     spawnMock.mockReturnValue({
       onData: vi.fn(),
       onExit: vi.fn(),
@@ -182,6 +195,13 @@ describe('registerPtyHandlers', () => {
       expect(env.OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-config')
     })
 
+    it('prepends the Pi wrapper env into Orca terminal PTYs', () => {
+      const env = spawnAndGetEnv(undefined, { PATH: '/usr/bin:/bin' })
+      expect(piBuildPtyEnvMock).toHaveBeenCalledWith('/usr/bin:/bin')
+      expect(env.PATH).toBe('/tmp/orca-pi-bin:/usr/bin:/bin')
+      expect(env.ORCA_PI_REAL_BIN).toBe('/usr/local/bin/pi')
+      expect(env.ORCA_PI_EXTENSION_PATH).toBe('/tmp/orca-pi-ext.ts')
+    })
     it('leaves ambient CODEX_HOME untouched when system default is selected', () => {
       const env = spawnAndGetEnv(undefined, { CODEX_HOME: '/tmp/system-codex-home' }, () => null)
       expect(env.CODEX_HOME).toBe('/tmp/system-codex-home')
