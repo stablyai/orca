@@ -1,5 +1,5 @@
 /* eslint-disable max-lines */
-import { useEffect, useCallback, useRef, useState, lazy, Suspense } from 'react'
+import { useEffect, useCallback, useRef, useState } from 'react'
 import { useAppStore } from '../store'
 import {
   Dialog,
@@ -10,7 +10,6 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import TerminalPane from './terminal-pane/TerminalPane'
 import {
   ORCA_EDITOR_SAVE_AND_CLOSE_EVENT,
   requestEditorSaveQuiesce
@@ -20,8 +19,6 @@ import EditorAutosaveController from './editor/EditorAutosaveController'
 import { destroyPersistentWebview } from './browser-pane/BrowserPane'
 import { reconcileTabOrder } from './tab-bar/reconcile-order'
 import TabGroupSplitLayout from './tab-group/TabGroupSplitLayout'
-
-const EditorPanel = lazy(() => import('./editor/EditorPanel'))
 
 export default function Terminal(): React.JSX.Element | null {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
@@ -33,7 +30,6 @@ export default function Terminal(): React.JSX.Element | null {
   const closeTab = useAppStore((s) => s.closeTab)
   const setActiveTab = useAppStore((s) => s.setActiveTab)
   const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
-  const consumeSuppressedPtyExit = useAppStore((s) => s.consumeSuppressedPtyExit)
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
   const openFiles = useAppStore((s) => s.openFiles)
   const activeBrowserTabId = useAppStore((s) => s.activeBrowserTabId)
@@ -337,16 +333,6 @@ export default function Terminal(): React.JSX.Element | null {
       setActiveTabType,
       setActiveWorktree
     ]
-  )
-
-  const handlePtyExit = useCallback(
-    (tabId: string, ptyId: string) => {
-      if (consumeSuppressedPtyExit(ptyId)) {
-        return
-      }
-      handleCloseTab(tabId)
-    },
-    [consumeSuppressedPtyExit, handleCloseTab]
   )
 
   // Keyboard shortcuts
