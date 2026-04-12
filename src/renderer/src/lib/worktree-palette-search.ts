@@ -242,5 +242,28 @@ export function searchWorktrees(
     }
   }
 
+  // Promote primary worktrees when the query matches their repo name.
+  // When a user types a repo name, the primary branch is the most likely jump
+  // target — floating it to the top reduces selection friction. We only promote
+  // when matchedField is 'repo' so that stronger signals (displayName, branch)
+  // are not overridden by the promotion.
+  const worktreeById = new Map(worktrees.map((w) => [w.id, w]))
+  const promote = new Set<string>()
+  for (const r of results) {
+    if (r.matchedField === 'repo') {
+      const w = worktreeById.get(r.worktreeId)
+      if (w?.isMainWorktree) {
+        promote.add(r.worktreeId)
+      }
+    }
+  }
+  if (promote.size > 0) {
+    results.sort((a, b) => {
+      const ap = promote.has(a.worktreeId) ? 1 : 0
+      const bp = promote.has(b.worktreeId) ? 1 : 0
+      return bp - ap
+    })
+  }
+
   return results
 }

@@ -101,6 +101,37 @@ describe('worktree-palette-search', () => {
     })
   })
 
+  it('promotes the primary worktree to the top when query matches a repo name', () => {
+    const worktrees = [
+      makeWorktree({
+        id: 'wt-feature',
+        branch: 'refs/heads/feature/foo',
+        displayName: 'foo feature',
+        isMainWorktree: false
+      }),
+      makeWorktree({
+        id: 'wt-bugfix',
+        branch: 'refs/heads/bugfix/bar',
+        displayName: 'bar bugfix',
+        isMainWorktree: false
+      }),
+      makeWorktree({
+        id: 'wt-main',
+        branch: 'refs/heads/main',
+        displayName: 'main',
+        isMainWorktree: true
+      })
+    ]
+
+    const results = searchWorktrees(worktrees, 'orca', repoMap, null, null)
+
+    // All three match on the repo name
+    expect(results).toHaveLength(3)
+    // The primary worktree should be first despite being last in input order
+    expect(results[0].worktreeId).toBe('wt-main')
+    expect(results[0].matchedField).toBe('repo')
+  })
+
   it('matches issue numbers with a leading hash and returns issue render context', () => {
     const results = searchWorktrees(
       [makeWorktree({ linkedIssue: 304 })],
