@@ -184,24 +184,6 @@ describe('TabsSlice', () => {
 
       expect(store.getState().groupsByWorktree[WT]).toHaveLength(1)
     })
-
-    it('createTab seeds the first terminal into unified tabs before a root group exists', () => {
-      const terminal = store.getState().createTab(WT)
-      const state = store.getState()
-
-      expect(state.tabsByWorktree[WT]).toHaveLength(1)
-      expect(state.unifiedTabsByWorktree[WT]).toEqual([
-        expect.objectContaining({
-          id: terminal.id,
-          entityId: terminal.id,
-          worktreeId: WT,
-          contentType: 'terminal'
-        })
-      ])
-      expect(state.groupsByWorktree[WT]).toHaveLength(1)
-      expect(state.groupsByWorktree[WT][0].activeTabId).toBe(terminal.id)
-      expect(state.groupsByWorktree[WT][0].tabOrder).toEqual([terminal.id])
-    })
   })
 
   // ─── closeUnifiedTab ────────────────────────────────────────────────

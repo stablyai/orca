@@ -202,15 +202,12 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       }
     })
     const state = get()
-    const unifiedTabExists = (state.unifiedTabsByWorktree[worktreeId] ?? []).some(
-      (entry) => entry.contentType === 'terminal' && entry.entityId === id
-    )
-    if (!unifiedTabExists) {
-      // Why: worktree creation can seed the first terminal before Terminal.tsx
-      // mounts and creates that worktree's root group. createUnifiedTab knows
-      // how to create the missing group; gating on an existing group leaves the
-      // terminal in legacy tabsByWorktree only, so the brand-new worktree opens
-      // with an apparently empty tab strip until the user adds another tab.
+    const targetGroupId =
+      state.activeGroupIdByWorktree[worktreeId] ?? state.groupsByWorktree[worktreeId]?.[0]?.id
+    if (
+      targetGroupId &&
+      !state.findTabForEntityInGroup(worktreeId, targetGroupId, id, 'terminal')
+    ) {
       state.createUnifiedTab(worktreeId, 'terminal', {
         id,
         entityId: id,
@@ -218,7 +215,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         customLabel: tab.customTitle,
         color: tab.color
       })
-    } else {
+    } else if (targetGroupId) {
       state.activateTab(id)
     }
     return tab
