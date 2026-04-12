@@ -2,28 +2,7 @@ import { useEffect } from 'react'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
 import { matchesKeyCombo, resolveKeybinding } from '../../../../shared/keybindings'
-
-function isEditableTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) {
-    return false
-  }
-
-  // xterm.js focuses a hidden <textarea class="xterm-helper-textarea"> for
-  // keyboard input.  That element IS an editable target, but we must NOT
-  // suppress terminal shortcuts when the terminal itself is focused.
-  if (target.classList.contains('xterm-helper-textarea')) {
-    return false
-  }
-
-  if (target.isContentEditable) {
-    return true
-  }
-
-  const editableAncestor = target.closest(
-    'input, textarea, select, [contenteditable=""], [contenteditable="true"]'
-  )
-  return editableAncestor !== null
-}
+import { isEditableTarget } from './is-editable-target'
 
 type KeyboardHandlersDeps = {
   isActive: boolean

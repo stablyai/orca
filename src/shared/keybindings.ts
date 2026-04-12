@@ -197,14 +197,30 @@ export function getDefaultKeybindings(isMac: boolean): Record<KeybindingActionId
 export function parseKeyCombo(combo: string, isMac: boolean): string[] {
   return combo.split('+').map((part) => {
     if (isMac) {
-      if (part === 'Cmd') return '\u2318'
-      if (part === 'Ctrl') return '\u2303'
-      if (part === 'Shift') return '\u21E7'
-      if (part === 'Alt') return '\u2325'
-      if (part === 'Enter') return '\u21B5'
-      if (part === 'Up') return '\u2191'
-      if (part === 'Down') return '\u2193'
-      if (part === 'Backspace') return '\u232B'
+      if (part === 'Cmd') {
+        return '\u2318'
+      }
+      if (part === 'Ctrl') {
+        return '\u2303'
+      }
+      if (part === 'Shift') {
+        return '\u21E7'
+      }
+      if (part === 'Alt') {
+        return '\u2325'
+      }
+      if (part === 'Enter') {
+        return '\u21B5'
+      }
+      if (part === 'Up') {
+        return '\u2191'
+      }
+      if (part === 'Down') {
+        return '\u2193'
+      }
+      if (part === 'Backspace') {
+        return '\u232B'
+      }
     }
     return part
   })
@@ -221,24 +237,44 @@ export function resolveKeybinding(
 export function keyEventToCombo(e: KeyboardEvent, isMac: boolean): string {
   const parts: string[] = []
   if (isMac) {
-    if (e.metaKey) parts.push('Cmd')
-    if (e.ctrlKey) parts.push('Ctrl')
+    if (e.metaKey) {
+      parts.push('Cmd')
+    }
+    if (e.ctrlKey) {
+      parts.push('Ctrl')
+    }
   } else {
-    if (e.ctrlKey) parts.push('Ctrl')
-    if (e.metaKey) parts.push('Meta')
+    if (e.ctrlKey) {
+      parts.push('Ctrl')
+    }
+    if (e.metaKey) {
+      parts.push('Meta')
+    }
   }
-  if (e.altKey) parts.push('Alt')
-  if (e.shiftKey) parts.push('Shift')
+  if (e.altKey) {
+    parts.push('Alt')
+  }
+  if (e.shiftKey) {
+    parts.push('Shift')
+  }
 
   const key = e.key
   if (!['Meta', 'Control', 'Alt', 'Shift'].includes(key)) {
-    if (key === 'ArrowUp') parts.push('Up')
-    else if (key === 'ArrowDown') parts.push('Down')
-    else if (key === 'ArrowLeft') parts.push('Left')
-    else if (key === 'ArrowRight') parts.push('Right')
-    else if (key === ' ') parts.push('Space')
-    else if (key.length === 1) parts.push(key.toUpperCase())
-    else parts.push(key)
+    if (key === 'ArrowUp') {
+      parts.push('Up')
+    } else if (key === 'ArrowDown') {
+      parts.push('Down')
+    } else if (key === 'ArrowLeft') {
+      parts.push('Left')
+    } else if (key === 'ArrowRight') {
+      parts.push('Right')
+    } else if (key === ' ') {
+      parts.push('Space')
+    } else if (key.length === 1) {
+      parts.push(key.toUpperCase())
+    } else {
+      parts.push(key)
+    }
   }
 
   return parts.join('+')

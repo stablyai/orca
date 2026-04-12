@@ -12,14 +12,14 @@ import { useAppStore } from '../../store'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
 
-export const SHORTCUTS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] =
-  KEYBINDING_GROUPS.flatMap((group) =>
+export const SHORTCUTS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = KEYBINDING_GROUPS.flatMap(
+  (group) =>
     group.items.map((item) => ({
       title: item.label,
       description: `${group.title} shortcut`,
       keywords: item.searchKeywords
     }))
-  )
+)
 
 type ShortcutsPaneProps = {
   settings: GlobalSettings
@@ -41,13 +41,17 @@ function KeyRecorder({
   const isMac = navigator.userAgent.includes('Mac')
 
   useEffect(() => {
-    if (!recording) return
+    if (!recording) {
+      return
+    }
 
     const handler = (e: KeyboardEvent): void => {
       e.preventDefault()
       e.stopPropagation()
 
-      if (['Meta', 'Control', 'Alt', 'Shift'].includes(e.key)) return
+      if (['Meta', 'Control', 'Alt', 'Shift'].includes(e.key)) {
+        return
+      }
 
       if (e.key === 'Escape') {
         setRecording(false)
@@ -112,13 +116,10 @@ function KeyRecorder({
   )
 }
 
-export function ShortcutsPane({
-  settings,
-  updateSettings
-}: ShortcutsPaneProps): React.JSX.Element {
+export function ShortcutsPane({ settings, updateSettings }: ShortcutsPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const isMac = navigator.userAgent.includes('Mac')
-  const customBindings = settings.keybindings ?? {}
+  const customBindings = useMemo(() => settings.keybindings ?? {}, [settings.keybindings])
   const hasAnyCustom = Object.keys(customBindings).length > 0
 
   const handleRecord = useCallback(
