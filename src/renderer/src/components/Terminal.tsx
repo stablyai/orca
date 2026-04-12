@@ -27,7 +27,6 @@ export default function Terminal(): React.JSX.Element | null {
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const activeTabId = useAppStore((s) => s.activeTabId)
   const createTab = useAppStore((s) => s.createTab)
-  const closeTab = useAppStore((s) => s.closeTab)
   const setActiveTab = useAppStore((s) => s.setActiveTab)
   const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
@@ -228,62 +227,6 @@ export default function Terminal(): React.JSX.Element | null {
     createBrowserTab(activeWorktreeId, 'about:blank', { title: 'New Browser Tab' })
   }, [activeWorktreeId, createBrowserTab])
 
-  const handleCloseTab = useCallback(
-    (tabId: string) => {
-      const state = useAppStore.getState()
-      const owningWorktreeEntry = Object.entries(state.tabsByWorktree).find(([, worktreeTabs]) =>
-        worktreeTabs.some((tab) => tab.id === tabId)
-      )
-      const owningWorktreeId = owningWorktreeEntry?.[0] ?? null
-
-      if (!owningWorktreeId) {
-        return
-      }
-
-      const currentTabs = state.tabsByWorktree[owningWorktreeId] ?? []
-      if (currentTabs.length <= 1) {
-        closeTab(tabId)
-        if (state.activeWorktreeId === owningWorktreeId) {
-          // Why: only deactivate the worktree when no tabs of any kind remain.
-          // Editor files are a separate tab type; closing the last terminal tab
-          // should switch to the editor view instead of tearing down the workspace.
-          const worktreeFile = state.openFiles.find((f) => f.worktreeId === owningWorktreeId)
-          if (worktreeFile) {
-            setActiveFile(worktreeFile.id)
-            setActiveTabType('editor')
-          } else {
-            const browserTab = (state.browserTabsByWorktree[owningWorktreeId] ?? [])[0]
-            if (browserTab) {
-              setActiveBrowserTab(browserTab.id)
-              setActiveTabType('browser')
-            } else {
-              setActiveWorktree(null)
-            }
-          }
-        }
-        return
-      }
-
-      // If closing the active tab in the active worktree, switch to a neighbor.
-      if (state.activeWorktreeId === owningWorktreeId && tabId === state.activeTabId) {
-        const idx = currentTabs.findIndex((t) => t.id === tabId)
-        const nextTab = currentTabs[idx + 1] ?? currentTabs[idx - 1]
-        if (nextTab) {
-          setActiveTab(nextTab.id)
-        }
-      }
-      closeTab(tabId)
-    },
-    [
-      closeTab,
-      setActiveBrowserTab,
-      setActiveTab,
-      setActiveFile,
-      setActiveTabType,
-      setActiveWorktree
-    ]
-  )
-
   const handleCloseBrowserTab = useCallback(
     (tabId: string) => {
       const state = useAppStore.getState()
@@ -444,7 +387,6 @@ export default function Terminal(): React.JSX.Element | null {
     activeWorktreeId,
     handleNewBrowserTab,
     handleNewTab,
-    handleCloseTab,
     handleCloseBrowserTab,
     handleCloseFile,
     setActiveTab
