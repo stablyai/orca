@@ -3,7 +3,8 @@ save/load/render lifecycle for many modes (edit, diff, conflict review), and
 keeping that UI state together is easier to reason about than scattering it
 across multiple components. Autosave now lives in a smaller headless controller
 so hidden editor UI no longer participates in shutdown. */
-import React, { useCallback, useEffect, useState, Suspense } from 'react'
+import React, { useCallback, useEffect, useRef, useState, Suspense } from 'react'
+import * as monaco from 'monaco-editor'
 import { Columns2, FileText, Rows2 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { detectLanguage } from '@/lib/language-detect'
@@ -12,6 +13,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor'
 import MarkdownViewToggle from './MarkdownViewToggle'
 import { EditorContent } from './EditorContent'
+import { scrollTopCache, cursorPositionCache } from '@/lib/scroll-cache'
 import type { GitDiffResult } from '../../../../shared/types'
 import {
   getOpenFilesForExternalFileChange,
@@ -64,8 +66,35 @@ export default function EditorPanel(): React.JSX.Element | null {
     }
   }
 
-  const openFilesRef = React.useRef(openFiles)
+  const openFilesRef = useRef(openFiles)
   openFilesRef.current = openFiles
+
+  // Why: keepCurrentModel / keepCurrent*Model retain Monaco models after unmount
+  // so undo history survives tab switches. When a tab is *closed*, the user has
+  // signalled they're done with the file — dispose the models to reclaim memory
+  // and delete cache entries so a reopened file starts fresh.
+  const prevOpenFilePathsRef = useRef<Set<string>>(new Set())
+
+  useEffect(() => {
+    const currentPaths = new Set(openFiles.map((f) => f.filePath))
+    for (const prevPath of prevOpenFilePathsRef.current) {
+      if (!currentPaths.has(prevPath)) {
+        // Dispose kept-alive Monaco models
+        // Why: the edit model URI is constructed via monaco.Uri.parse(prevPath)
+        // to match what @monaco-editor/react creates internally when the `path`
+        // prop is provided. This convention is version-dependent.
+        const editUri = monaco.Uri.parse(prevPath)
+        monaco.editor.getModel(editUri)?.dispose()
+        monaco.editor.getModel(monaco.Uri.parse(`diff:original:${prevPath}`))?.dispose()
+        monaco.editor.getModel(monaco.Uri.parse(`diff:modified:${prevPath}`))?.dispose()
+        // Clean caches
+        scrollTopCache.delete(prevPath)
+        scrollTopCache.delete(`${prevPath}:diff`)
+        cursorPositionCache.delete(prevPath)
+      }
+    }
+    prevOpenFilePathsRef.current = currentPaths
+  }, [openFiles])
 
   // Load file content when active file changes
   useEffect(() => {

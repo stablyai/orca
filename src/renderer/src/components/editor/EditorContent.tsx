@@ -284,6 +284,8 @@ export function EditorContent({
   }
   return (
     <DiffViewer
+      key={activeFile.id}
+      filePath={activeFile.filePath}
       originalContent={dc.originalContent}
       modifiedContent={editBuffers[activeFile.id] ?? dc.modifiedContent}
       language={resolvedLanguage}

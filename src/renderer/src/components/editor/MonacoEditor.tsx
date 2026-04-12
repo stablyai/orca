@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '@/store'
-import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
+import { scrollTopCache, cursorPositionCache, setWithLRU } from '@/lib/scroll-cache'
 import '@/lib/monaco-setup'
 import { setupContextualCopy } from './setup-contextual-copy'
 import { computeEditorFontSize } from '@/lib/editor-font-zoom'
@@ -100,6 +100,10 @@ export default function MonacoEditor({
       }
       editorInstance.onDidChangeCursorPosition((e) => {
         setEditorCursorLine(filePath, e.position.lineNumber)
+        setWithLRU(cursorPositionCache, filePath, {
+          lineNumber: e.position.lineNumber,
+          column: e.position.column
+        })
       })
 
       // Why: Writing to the Map at 60fps (every scroll frame) is unnecessary since
@@ -142,15 +146,21 @@ export default function MonacoEditor({
         performReveal(editorInstance, reveal.line, reveal.column, reveal.matchLength)
         useAppStore.getState().setPendingEditorReveal(null)
       } else {
+        const savedCursor = cursorPositionCache.get(filePath)
         const savedScrollTop = scrollTopCache.get(filePath)
-        if (savedScrollTop !== undefined) {
+        if (savedScrollTop !== undefined || savedCursor) {
           // Why: Monaco renders synchronously, so a single RAF is sufficient to
           // wait for the layout pass. Unlike react-markdown or Tiptap, there is
           // no async content loading that would require a retry loop.
           // Focus is deferred into the same RAF to avoid a one-frame flash where
           // the editor is focused at scroll position 0 before restoration.
           requestAnimationFrame(() => {
-            editorInstance.setScrollTop(savedScrollTop)
+            if (savedCursor) {
+              editorInstance.setPosition(savedCursor)
+            }
+            if (savedScrollTop !== undefined) {
+              editorInstance.setScrollTop(savedScrollTop)
+            }
             editorInstance.focus()
           })
         } else {
@@ -186,6 +196,13 @@ export default function MonacoEditor({
       const ed = editorRef.current
       if (ed) {
         setWithLRU(scrollTopCache, filePath, ed.getScrollTop())
+        const pos = ed.getPosition()
+        if (pos) {
+          setWithLRU(cursorPositionCache, filePath, {
+            lineNumber: pos.lineNumber,
+            column: pos.column
+          })
+        }
       }
     }
   }, [filePath])
@@ -276,6 +293,7 @@ export default function MonacoEditor({
           }
         }}
         path={filePath}
+        keepCurrentModel
       />
 
       {copyToast ? (
