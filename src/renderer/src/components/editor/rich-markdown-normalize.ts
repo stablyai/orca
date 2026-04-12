@@ -16,21 +16,24 @@ import { Fragment, type Node as PmNode } from '@tiptap/pm/model'
  * so the cut handler (and all other block-level operations) work on a per-line basis.
  */
 export function normalizeSoftBreaks(editor: Editor): void {
-  const { doc, schema, tr } = editor.state
+  const { doc, schema } = editor.state
   const paragraphType = schema.nodes.paragraph
   if (!paragraphType) {
     return
   }
 
-  // Collect replacements in reverse document order so earlier offsets stay valid.
+  // Collect replacements across the entire document tree, not just top-level nodes.
+  // Why: doc.forEach only iterates top-level children, so paragraphs nested inside
+  // blockquotes, table cells, or other container nodes would be missed.
+  // doc.descendants walks every node at every depth and provides absolute positions.
   const replacements: { from: number; to: number; paragraphs: Fragment[] }[] = []
 
-  doc.forEach((node, offset) => {
+  doc.descendants((node, pos) => {
     if (node.type !== paragraphType) {
-      return
+      return true // continue descending into container nodes
     }
     if (!node.textContent.includes('\n')) {
-      return
+      return false // no need to descend into inline content
     }
 
     // Build an array of Fragment contents — one per output paragraph.
@@ -64,19 +67,27 @@ export function normalizeSoftBreaks(editor: Editor): void {
 
     // Only replace if we actually split into multiple paragraphs.
     if (lines.length <= 1) {
-      return
+      return false
     }
 
     replacements.push({
-      from: offset,
-      to: offset + node.nodeSize,
+      from: pos,
+      to: pos + node.nodeSize,
       paragraphs: lines
     })
+
+    return false // paragraph's inline children don't need further traversal
   })
 
   if (replacements.length === 0) {
     return
   }
+
+  // Why: we capture the transaction lazily from editor.view.state.tr (not editor.state.tr)
+  // to ensure we get the latest state. When called after setContent(), editor.state may be
+  // stale (it reflects state at the time of the last React render), while editor.view.state
+  // always reflects the most recent document.
+  const tr = editor.view.state.tr
 
   // Apply replacements in reverse order to preserve positions.
   for (let i = replacements.length - 1; i >= 0; i--) {
