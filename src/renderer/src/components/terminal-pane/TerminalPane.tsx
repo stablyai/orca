@@ -710,6 +710,7 @@ export default function TerminalPane({
         ref={containerRef}
         className="absolute inset-0 min-h-0 min-w-0"
         data-native-file-drop-target="terminal"
+        data-terminal-tab-id={tabId}
         style={terminalContainerStyle}
         onContextMenuCapture={contextMenu.onContextMenuCapture}
         onDragOver={(e) => {

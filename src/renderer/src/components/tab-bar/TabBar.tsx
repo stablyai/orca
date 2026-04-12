@@ -162,6 +162,27 @@ export default function TabBar({
     [sortableIds, worktreeId, onReorder]
   )
 
+  const focusTerminalTabSurface = useCallback((tabId: string) => {
+    // Why: creating a terminal from the "+" menu is a two-step focus race:
+    // React must first mount the new TerminalPane/xterm, then Radix closes the
+    // menu. Even after suppressing trigger focus restore, the terminal's hidden
+    // textarea may not exist until the next paint. Double-rAF waits for that
+    // commit so the new tab, not the "+" button, ends up owning keyboard focus.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const scoped = document.querySelector(
+          `[data-terminal-tab-id="${tabId}"] .xterm-helper-textarea`
+        ) as HTMLElement | null
+        if (scoped) {
+          scoped.focus()
+          return
+        }
+        const fallback = document.querySelector('.xterm-helper-textarea') as HTMLElement | null
+        fallback?.focus()
+      })
+    })
+  }, [])
+
   // Horizontal wheel scrolling for the tab strip
   const tabStripRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -250,7 +271,7 @@ export default function TabBar({
           </div>
         </SortableContext>
       </DndContext>
-      <DropdownMenu>
+      <DropdownMenu modal={false}>
         <DropdownMenuTrigger asChild>
           <button
             className="mx-1 my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground"
@@ -264,9 +285,22 @@ export default function TabBar({
           align="end"
           sideOffset={6}
           className="min-w-[11rem] rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]"
+          onCloseAutoFocus={(e) => {
+            // Why: selecting "New Terminal" activates a freshly-mounted xterm on
+            // the next frame. Radix's default focus restore sends focus back to
+            // the "+" trigger after close, which steals it from the new tab and
+            // makes the terminal look unfocused until the user clicks again.
+            e.preventDefault()
+          }}
         >
           <DropdownMenuItem
-            onSelect={onNewTerminalTab}
+            onSelect={() => {
+              onNewTerminalTab()
+              const newActiveTabId = useAppStore.getState().activeTabId
+              if (newActiveTabId) {
+                focusTerminalTabSurface(newActiveTabId)
+              }
+            }}
             className="gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium"
           >
             <TerminalSquare className="size-4 text-muted-foreground" />
