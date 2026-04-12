@@ -99,8 +99,10 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     [sortedWorktrees, query, repoMap, prCache, issueCache]
   )
   const createWorktreeName = query.trim()
-  const showCreateAction =
+  const showDefaultCreateAction = canCreateWorktree && createWorktreeName.length === 0
+  const showCreateFromQueryAction =
     canCreateWorktree && createWorktreeName.length > 0 && matches.length === 0
+  const showCreateAction = showDefaultCreateAction || showCreateFromQueryAction
 
   // Build a map of worktreeId -> Worktree for quick lookup
   const worktreeMap = useMemo(() => {
@@ -202,9 +204,6 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   )
 
   const handleCreateWorktree = useCallback(() => {
-    if (!createWorktreeName) {
-      return
-    }
     // Why: when Cmd+J hands off to the create dialog, that new modal owns focus.
     // Re-running the palette's terminal/editor focus restore races the dialog's
     // autofocus and can pull keyboard input away from the name field.
@@ -212,7 +211,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     closeModal()
     // Why: we open create-worktree in a microtask so Radix Dialog fully unmounts
     // before the next modal mounts, avoiding stacked-dialog focus conflicts.
-    queueMicrotask(() => openModal('create-worktree', { prefilledName: createWorktreeName }))
+    queueMicrotask(() =>
+      openModal('create-worktree', createWorktreeName ? { prefilledName: createWorktreeName } : {})
+    )
   }, [closeModal, createWorktreeName, openModal])
 
   const handleCloseAutoFocus = useCallback((e: Event) => {
@@ -280,14 +281,6 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                 />
               </div>
             )}
-            {matches.length === 0 && query.trim() && (
-              <div className="px-2 pb-2 pt-1">
-                <PaletteState
-                  title="No worktrees match your search"
-                  subtitle="Try a name, branch, repo, comment, PR, or issue."
-                />
-              </div>
-            )}
             {showCreateAction && (
               <CommandItem
                 value="__create_worktree__"
@@ -299,7 +292,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-[14px] font-semibold tracking-[-0.01em] text-foreground">
-                    Create worktree &quot;{createWorktreeName}&quot;
+                    {showCreateFromQueryAction
+                      ? `Create worktree "${createWorktreeName}"`
+                      : 'Create new worktree'}
                   </div>
                 </div>
                 {/* Why: always rendered to reserve space and prevent layout shift
@@ -311,6 +306,14 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                   className="shrink-0 self-center text-muted-foreground opacity-0 transition-opacity group-data-[selected=true]:opacity-100"
                 />
               </CommandItem>
+            )}
+            {matches.length === 0 && query.trim() && (
+              <div className="px-2 pb-2 pt-1">
+                <PaletteState
+                  title="No worktrees match your search"
+                  subtitle="Try a name, branch, repo, comment, PR, or issue."
+                />
+              </div>
             )}
             {matches.map((match) => {
               const w = worktreeMap.get(match.worktreeId)
