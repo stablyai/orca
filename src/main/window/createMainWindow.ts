@@ -38,7 +38,7 @@ const TRAFFIC_LIGHT_RADIUS = 6
 const TRAFFIC_LIGHT_X = 16
 
 function syncTrafficLightPosition(win: BrowserWindow, zoomFactor: number): void {
-  if (win.isDestroyed()) {
+  if (process.platform !== 'darwin' || win.isDestroyed()) {
     return
   }
   const y = Math.round(TITLEBAR_CSS_CENTER * zoomFactor - TRAFFIC_LIGHT_RADIUS)

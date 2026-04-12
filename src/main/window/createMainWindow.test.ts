@@ -34,6 +34,7 @@ vi.mock('../browser/browser-manager', () => ({
 }))
 
 import { createMainWindow } from './createMainWindow'
+import { ipcMain } from 'electron'
 
 describe('createMainWindow', () => {
   beforeEach(() => {
@@ -41,6 +42,8 @@ describe('createMainWindow', () => {
     openExternalMock.mockReset()
     attachGuestPoliciesMock.mockReset()
     isMock.dev = false
+    vi.mocked(ipcMain.on).mockReset()
+    vi.mocked(ipcMain.removeListener).mockReset()
   })
 
   it('enables renderer sandboxing and opens external links safely', () => {
@@ -435,5 +438,53 @@ describe('createMainWindow', () => {
 
     windowHandlers['will-prevent-unload']()
     expect(onQuitAborted).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores traffic light sync IPC on non-macOS', () => {
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      setWindowButtonPosition: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    createMainWindow(null)
+
+    const syncListener = vi
+      .mocked(ipcMain.on)
+      .mock.calls.find(([channel]) => channel === 'ui:sync-traffic-lights')?.[1]
+
+    expect(syncListener).toBeTypeOf('function')
+
+    syncListener?.({} as never, 1.2)
+
+    if (process.platform === 'darwin') {
+      expect(browserWindowInstance.setWindowButtonPosition).toHaveBeenCalledWith({ x: 16, y: 18 })
+      return
+    }
+
+    expect(browserWindowInstance.setWindowButtonPosition).not.toHaveBeenCalled()
   })
 })
