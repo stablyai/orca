@@ -3,6 +3,7 @@ lifecycle (arm/await/cancel/teardown), navigation/destruction auto-cancel, and
 main-side payload validation. Splitting across files would scatter the shared
 mock setup and make it harder to verify the grab contract holistically. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { GRAB_BUDGET } from '../../shared/browser-grab-types'
 
 const {
   webContentsFromIdMock,
@@ -181,6 +182,62 @@ describe('browserManager grab operations', () => {
 
       expect(preventDefault).not.toHaveBeenCalled()
       expect(rendererSendMock).not.toHaveBeenCalled()
+    })
+
+    it('forwards bare s from the guest while a grab op is active', async () => {
+      guestExecuteJavaScriptMock.mockImplementation(() => new Promise(() => {}))
+      void browserManager.awaitGrabSelection('tab-1', 'op-1', guest)
+
+      const handler = guestOnMock.mock.calls.find(
+        ([eventName]) => eventName === 'before-input-event'
+      )?.[1]
+      expect(handler).toBeTypeOf('function')
+
+      const preventDefault = vi.fn()
+      handler?.(
+        { preventDefault } as never,
+        {
+          type: 'keyDown',
+          meta: false,
+          control: false,
+          shift: false,
+          alt: false,
+          key: 's'
+        } as never
+      )
+
+      expect(preventDefault).toHaveBeenCalledTimes(1)
+      expect(rendererSendMock).toHaveBeenCalledWith('browser:grabActionShortcut', {
+        browserTabId: 'tab-1',
+        key: 's'
+      })
+    })
+  })
+
+  describe('guest app shortcut forwarding', () => {
+    it('forwards Cmd/Ctrl+Shift+B to the renderer and prevents the guest default', () => {
+      const handlers = guestOnMock.mock.calls
+        .filter(([eventName]) => eventName === 'before-input-event')
+        .map(([, handler]) => handler)
+      const forwardingHandler = handlers[1]
+      expect(forwardingHandler).toBeTypeOf('function')
+
+      const preventDefault = vi.fn()
+      forwardingHandler?.(
+        { preventDefault } as never,
+        {
+          type: 'keyDown',
+          meta: true,
+          control: true,
+          shift: true,
+          alt: false,
+          code: 'KeyB',
+          key: 'B'
+        } as never
+      )
+
+      expect(preventDefault).toHaveBeenCalledTimes(1)
+      expect(rendererSendMock).toHaveBeenCalledWith('ui:newBrowserTab')
     })
   })
 
@@ -458,6 +515,85 @@ describe('browserManager grab operations', () => {
       )
       expect(teardownCalls).toHaveLength(0)
     })
+
+    it('times out if the guest never settles the armed selection', async () => {
+      vi.useFakeTimers()
+      guestExecuteJavaScriptMock.mockImplementation(() => new Promise(() => {}))
+
+      const resultPromise = browserManager.awaitGrabSelection('tab-1', 'op-1', guest)
+      await vi.advanceTimersByTimeAsync(120_000)
+
+      const result = await resultPromise
+      expect(result).toEqual({ opId: 'op-1', kind: 'cancelled', reason: 'timeout' })
+
+      vi.useRealTimers()
+    })
+
+    it('ignores a late guest selection after the op was already cancelled', async () => {
+      let resolveGuestSelection!: (value: unknown) => void
+      guestExecuteJavaScriptMock.mockImplementation(
+        () =>
+          new Promise<unknown>((resolve) => {
+            resolveGuestSelection = resolve
+          })
+      )
+
+      const resultPromise = browserManager.awaitGrabSelection('tab-1', 'op-1', guest)
+      browserManager.cancelGrabOp('tab-1', 'user')
+
+      expect(resolveGuestSelection).toBeTypeOf('function')
+      resolveGuestSelection({
+        page: {
+          sanitizedUrl: 'https://example.com/',
+          title: 'Late result',
+          viewportWidth: 1280,
+          viewportHeight: 720,
+          scrollX: 0,
+          scrollY: 0,
+          devicePixelRatio: 2,
+          capturedAt: '2026-04-10T00:00:00.000Z'
+        },
+        target: {
+          tagName: 'button',
+          selector: 'button',
+          textSnippet: 'Late click',
+          htmlSnippet: '<button>Late click</button>',
+          attributes: {},
+          accessibility: {
+            role: 'button',
+            accessibleName: 'Late click',
+            ariaLabel: null,
+            ariaLabelledBy: null
+          },
+          rectViewport: { x: 0, y: 0, width: 100, height: 40 },
+          rectPage: { x: 0, y: 0, width: 100, height: 40 },
+          computedStyles: {
+            display: 'block',
+            position: 'static',
+            width: '100px',
+            height: '40px',
+            margin: '0',
+            padding: '0',
+            color: '#000',
+            backgroundColor: '#fff',
+            border: 'none',
+            borderRadius: '0',
+            fontFamily: 'sans-serif',
+            fontSize: '14px',
+            fontWeight: '400',
+            lineHeight: '20px',
+            textAlign: 'left',
+            zIndex: 'auto'
+          }
+        },
+        nearbyText: [],
+        ancestorPath: [],
+        screenshot: null
+      })
+
+      const result = await resultPromise
+      expect(result).toEqual({ opId: 'op-1', kind: 'cancelled', reason: 'user' })
+    })
   })
 
   describe('cancelGrabOp', () => {
@@ -496,6 +632,37 @@ describe('browserManager grab operations', () => {
 
       const promise = browserManager.awaitGrabSelection('tab-1', 'op-1', guest)
       browserManager.unregisterGuest('tab-1')
+
+      const result = await promise
+      expect(result).toEqual({ opId: 'op-1', kind: 'cancelled', reason: 'evicted' })
+    })
+
+    it('cancels active grab when the same tab is re-registered to a new guest', async () => {
+      const replacementGuest = makeGuest(202)
+      guestExecuteJavaScriptMock.mockImplementation(() => new Promise(() => {}))
+
+      const promise = browserManager.awaitGrabSelection('tab-1', 'op-1', guest)
+      webContentsFromIdMock.mockImplementation((id: number) => {
+        if (id === 101) {
+          return guest
+        }
+        if (id === 202) {
+          return replacementGuest
+        }
+        if (id === rendererWebContentsId) {
+          return {
+            isDestroyed: rendererIsDestroyedMock,
+            send: rendererSendMock
+          }
+        }
+        return null
+      })
+      browserManager.attachGuestPolicies(replacementGuest)
+      browserManager.registerGuest({
+        browserTabId: 'tab-1',
+        webContentsId: 202,
+        rendererWebContentsId
+      })
 
       const result = await promise
       expect(result).toEqual({ opId: 'op-1', kind: 'cancelled', reason: 'evicted' })
@@ -554,6 +721,139 @@ describe('browserManager grab operations', () => {
 
       const result = await promise
       expect(result).toEqual({ opId: 'op-1', kind: 'cancelled', reason: 'evicted' })
+    })
+  })
+
+  describe('captureSelectionScreenshot', () => {
+    it('captures, crops, and converts screenshot dimensions back to CSS pixels', async () => {
+      const cropMock = vi.fn(() => ({
+        toPNG: vi.fn(() => Buffer.from('png-data'))
+      }))
+      guestCapturePageMock.mockResolvedValue({
+        isEmpty: vi.fn(() => false),
+        getSize: vi.fn(() => ({ width: 2000, height: 1000 })),
+        crop: cropMock
+      })
+      guestExecuteJavaScriptMock.mockImplementation(async (script: string) =>
+        script === 'window.innerWidth' ? 1000 : undefined
+      )
+
+      const screenshot = await browserManager.captureSelectionScreenshot(
+        'tab-1',
+        { x: 10, y: 20, width: 100, height: 50 },
+        guest
+      )
+
+      expect(cropMock).toHaveBeenCalledWith({ x: 20, y: 40, width: 200, height: 100 })
+      expect(screenshot).toEqual({
+        mimeType: 'image/png',
+        dataUrl: `data:image/png;base64,${Buffer.from('png-data').toString('base64')}`,
+        width: 100,
+        height: 50
+      })
+      expect(guestExecuteJavaScriptMock).toHaveBeenNthCalledWith(
+        1,
+        `(function(){ var g = window.__orcaGrab; if (g && g.host) g.host.style.display = 'none'; })()`
+      )
+      expect(guestExecuteJavaScriptMock).toHaveBeenNthCalledWith(
+        2,
+        `(function(){ var g = window.__orcaGrab; if (g && g.host) g.host.style.display = ''; })()`
+      )
+      expect(guestExecuteJavaScriptMock).toHaveBeenNthCalledWith(3, 'window.innerWidth')
+    })
+
+    it('omits screenshots that exceed the byte budget', async () => {
+      const oversizedBuffer = Buffer.alloc(GRAB_BUDGET.screenshotMaxBytes + 1)
+      guestCapturePageMock.mockResolvedValue({
+        isEmpty: vi.fn(() => false),
+        getSize: vi.fn(() => ({ width: 1000, height: 500 })),
+        crop: vi.fn(() => ({
+          toPNG: vi.fn(() => oversizedBuffer)
+        }))
+      })
+      guestExecuteJavaScriptMock.mockImplementation(async (script: string) =>
+        script === 'window.innerWidth' ? 1000 : undefined
+      )
+
+      const screenshot = await browserManager.captureSelectionScreenshot(
+        'tab-1',
+        { x: 0, y: 0, width: 100, height: 50 },
+        guest
+      )
+
+      expect(screenshot).toBeNull()
+    })
+  })
+
+  describe('extractHoverPayload', () => {
+    it('returns a clamped payload when the guest reports a hovered element', async () => {
+      guestExecuteJavaScriptMock.mockResolvedValueOnce({
+        page: {
+          sanitizedUrl: 'https://example.com/path?token=secret#hash',
+          title: 'Hover target',
+          viewportWidth: 1200,
+          viewportHeight: 800,
+          scrollX: 0,
+          scrollY: 0,
+          devicePixelRatio: 2,
+          capturedAt: '2026-04-10T00:00:00.000Z'
+        },
+        target: {
+          tagName: 'div',
+          selector: 'div.card',
+          textSnippet: 'x'.repeat(500),
+          htmlSnippet: '<div>Hover</div>',
+          attributes: {
+            href: 'https://example.com/path?api_key=secret',
+            onclick: 'alert(1)'
+          },
+          accessibility: {
+            role: 'generic',
+            accessibleName: 'Card',
+            ariaLabel: null,
+            ariaLabelledBy: null
+          },
+          rectViewport: { x: 5, y: 10, width: 50, height: 25 },
+          rectPage: { x: 5, y: 10, width: 50, height: 25 },
+          computedStyles: {
+            display: 'block',
+            position: 'relative',
+            width: '50px',
+            height: '25px',
+            margin: '0',
+            padding: '0',
+            color: '#000',
+            backgroundColor: '#fff',
+            border: 'none',
+            borderRadius: '0',
+            fontFamily: 'sans-serif',
+            fontSize: '14px',
+            fontWeight: '400',
+            lineHeight: '20px',
+            textAlign: 'left',
+            zIndex: '1'
+          }
+        },
+        nearbyText: [],
+        ancestorPath: [],
+        screenshot: null
+      })
+
+      const payload = await browserManager.extractHoverPayload('tab-1', guest)
+
+      expect(payload).not.toBeNull()
+      expect(payload?.page.sanitizedUrl).toBe('https://example.com/path')
+      expect(payload?.target.textSnippet).toContain('(truncated)')
+      expect(payload?.target.attributes.href).toBe('[redacted]')
+      expect(payload?.target.attributes.onclick).toBeUndefined()
+    })
+
+    it('returns null for structurally invalid guest payloads', async () => {
+      guestExecuteJavaScriptMock.mockResolvedValueOnce({ page: { title: 'missing-target' } })
+
+      const payload = await browserManager.extractHoverPayload('tab-1', guest)
+
+      expect(payload).toBeNull()
     })
   })
 })

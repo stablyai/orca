@@ -205,10 +205,73 @@ describe('browserManager', () => {
     expect(guestOnMock.mock.calls.filter(([event]) => event === 'will-redirect')).toHaveLength(1)
   })
 
-  it('does not forward ctrl/cmd+r or readline chords from browser guests', () => {
+  it('replays a queued main-frame load failure after the guest registers', () => {
     const rendererSendMock = vi.fn()
     const guest = {
       id: 404,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock,
+      getURL: vi.fn(() => 'http://localhost:3000/')
+    }
+
+    webContentsFromIdMock.mockImplementation((id: number) => {
+      if (id === 404) {
+        return guest
+      }
+      if (id === rendererWebContentsId) {
+        return {
+          isDestroyed: vi.fn(() => false),
+          send: rendererSendMock
+        }
+      }
+      return null
+    })
+
+    browserManager.attachGuestPolicies(guest as never)
+
+    const didFailLoadHandler = guestOnMock.mock.calls.find(
+      ([event]) => event === 'did-fail-load'
+    )?.[1] as
+      | ((
+          event: unknown,
+          errorCode: number,
+          errorDescription: string,
+          validatedUrl: string,
+          isMainFrame: boolean
+        ) => void)
+      | undefined
+
+    expect(didFailLoadHandler).toBeTypeOf('function')
+    didFailLoadHandler?.(null, -105, 'Name not resolved', 'http://localhost:3000/', true)
+
+    expect(rendererSendMock).not.toHaveBeenCalled()
+
+    browserManager.registerGuest({
+      browserTabId: 'browser-1',
+      webContentsId: 404,
+      rendererWebContentsId
+    })
+
+    expect(rendererSendMock).toHaveBeenCalledTimes(1)
+    expect(rendererSendMock).toHaveBeenCalledWith('browser:guest-load-failed', {
+      browserTabId: 'browser-1',
+      loadError: {
+        code: -105,
+        description: 'Name not resolved',
+        validatedUrl: 'http://localhost:3000/'
+      }
+    })
+  })
+
+  it('does not forward ctrl/cmd+r or readline chords from browser guests', () => {
+    const rendererSendMock = vi.fn()
+    const guest = {
+      id: 405,
       isDestroyed: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
@@ -293,7 +356,7 @@ describe('browserManager', () => {
     const isDarwin = process.platform === 'darwin'
     const rendererSendMock = vi.fn()
     const guest = {
-      id: 405,
+      id: 406,
       isDestroyed: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
@@ -387,5 +450,46 @@ describe('browserManager', () => {
     expect(rendererSendMock).toHaveBeenNthCalledWith(3, 'ui:closeActiveTab')
     expect(rendererSendMock).toHaveBeenNthCalledWith(4, 'ui:switchTab', 1)
     expect(rendererSendMock).toHaveBeenNthCalledWith(5, 'ui:openQuickOpen')
+  })
+
+  it('cleans up prior guest listeners before re-registering the same tab', () => {
+    const guest = {
+      id: 808,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock,
+      getURL: vi.fn(() => 'https://example.com/'),
+      canGoBack: vi.fn(() => false),
+      canGoForward: vi.fn(() => false),
+      goBack: vi.fn(),
+      goForward: vi.fn(),
+      reload: vi.fn(),
+      executeJavaScript: vi.fn()
+    }
+    webContentsFromIdMock.mockReturnValue(guest)
+
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.registerGuest({
+      browserTabId: 'browser-1',
+      webContentsId: 808,
+      rendererWebContentsId
+    })
+
+    guestOffMock.mockClear()
+
+    browserManager.registerGuest({
+      browserTabId: 'browser-1',
+      webContentsId: 808,
+      rendererWebContentsId
+    })
+
+    expect(guestOffMock).toHaveBeenCalledWith('context-menu', expect.any(Function))
+    expect(
+      guestOffMock.mock.calls.filter(([eventName]) => eventName === 'before-input-event')
+    ).toHaveLength(2)
   })
 })

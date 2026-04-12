@@ -378,6 +378,17 @@ const api = {
         callback(browserTabId)
       ipcRenderer.on('browser:grabModeToggle', listener)
       return () => ipcRenderer.removeListener('browser:grabModeToggle', listener)
+    },
+
+    onGrabActionShortcut: (
+      callback: (args: { browserTabId: string; key: 'c' | 's' }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { browserTabId: string; key: 'c' | 's' }
+      ) => callback(data)
+      ipcRenderer.on('browser:grabActionShortcut', listener)
+      return () => ipcRenderer.removeListener('browser:grabActionShortcut', listener)
     }
   },
 

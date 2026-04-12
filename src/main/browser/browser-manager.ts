@@ -1,16 +1,12 @@
-/* eslint-disable max-lines -- Why: BrowserManager is the single owner of guest
-lifecycle, context menus, and grab operations. Splitting these into separate
-modules would scatter the guest authorization and tab-lookup logic that must
-stay consistent when new privileged operations are added. */
-import { clipboard, Menu, shell, webContents } from 'electron'
+/* eslint-disable max-lines -- Why: BrowserManager intentionally remains the
+single privileged facade for guest registration, authorization, and lifecycle
+cleanup even after extracting the grab/session helpers. Keeping that ownership
+in one file avoids scattering the browser security boundary across modules. */
+import { shell, webContents } from 'electron'
 import {
   normalizeBrowserNavigationUrl,
   normalizeExternalBrowserUrl
 } from '../../shared/browser-url'
-import {
-  isWindowShortcutModifierChord,
-  resolveWindowShortcutAction
-} from '../../shared/window-shortcut-policy'
 import type {
   BrowserGrabCancelReason,
   BrowserGrabPayload,
@@ -18,208 +14,21 @@ import type {
   BrowserGrabResult,
   BrowserGrabScreenshot
 } from '../../shared/browser-grab-types'
-import {
-  GRAB_BUDGET,
-  GRAB_SAFE_ATTRIBUTE_NAMES,
-  GRAB_SECRET_PATTERNS
-} from '../../shared/browser-grab-types'
 import { buildGuestOverlayScript } from './grab-guest-script'
+import { clampGrabPayload } from './browser-grab-payload'
+import { captureSelectionScreenshot as captureGrabSelectionScreenshot } from './browser-grab-screenshot'
+import { BrowserGrabSessionController } from './browser-grab-session-controller'
+import {
+  resolveRendererWebContents,
+  setupGrabShortcutForwarding,
+  setupGuestContextMenu,
+  setupGuestShortcutForwarding
+} from './browser-guest-ui'
 
 export type BrowserGuestRegistration = {
   browserTabId: string
   webContentsId: number
   rendererWebContentsId: number
-}
-
-/** Tracks the lifecycle of a single grab operation on one browser tab. */
-type ActiveGrabOp = {
-  opId: string
-  browserTabId: string
-  guestWebContentsId: number
-  resolve: (result: BrowserGrabResult) => void
-  /** Cleanup listeners and optionally inject teardown.
-   *  @param preserveOverlay When true, skip teardown injection so the guest
-   *  overlay stays visible (used when a selection succeeds and the copy menu
-   *  is shown). */
-  cleanup: (preserveOverlay?: boolean) => void
-  /** When true, cleanup skips the teardown injection. Set by awaitGrabSelection
-   *  when replacing an existing op so the freshly-armed overlay is preserved. */
-  skipTeardown?: boolean
-}
-
-/** Hard timeout for an armed grab operation to prevent indefinite hangs. */
-const GRAB_OP_TIMEOUT_MS = 120_000
-
-/**
- * Re-validate and clamp all string, array, and budget fields in a grab payload
- * before forwarding to the renderer. This is the main-side safety net: even if
- * the guest runtime is compromised, the payload that reaches renderer chrome
- * respects the documented budgets.
- *
- * Returns null if the payload is structurally invalid (missing required fields).
- */
-function clampGrabPayload(raw: unknown): BrowserGrabPayload | null {
-  // Why: the guest payload is completely untrusted. A compromised or
-  // malfunctioning guest could return anything. Validate structural shape
-  // before accessing nested properties to avoid unhandled TypeErrors.
-  if (!raw || typeof raw !== 'object') {
-    return null
-  }
-  const obj = raw as Record<string, unknown>
-  if (!obj.page || typeof obj.page !== 'object') {
-    return null
-  }
-  if (!obj.target || typeof obj.target !== 'object') {
-    return null
-  }
-
-  const page = obj.page as Record<string, unknown>
-  const target = obj.target as Record<string, unknown>
-
-  const clampStr = (s: unknown, max: number): string => {
-    const str = typeof s === 'string' ? s : ''
-    if (str.length <= max) {
-      return str
-    }
-    return `${str.slice(0, max)} (truncated)`
-  }
-
-  const clampArray = (arr: unknown, maxEntries: number, maxEntryLength: number): string[] => {
-    const items = Array.isArray(arr) ? arr : []
-    return items.slice(0, maxEntries).map((item) => clampStr(item, maxEntryLength))
-  }
-
-  const safeStr = (s: unknown, max = 500): string => clampStr(s, max)
-
-  const safeNum = (n: unknown, fallback = 0): number =>
-    typeof n === 'number' && Number.isFinite(n) ? n : fallback
-
-  // Why: mirror the guest-side secret detection on the main side so a
-  // compromised guest cannot smuggle secret-bearing values through attributes
-  // or URLs. This is the defense-in-depth layer.
-  const containsSecret = (val: string): boolean => {
-    const lower = val.toLowerCase()
-    return GRAB_SECRET_PATTERNS.some((p) => lower.includes(p))
-  }
-
-  // Why: mirror the guest-side URL sanitization. Strip query strings and
-  // fragments to prevent token leakage even if the guest is compromised.
-  const sanitizeUrl = (raw: unknown): string => {
-    const str = typeof raw === 'string' ? raw : ''
-    if (!str) {
-      return ''
-    }
-    try {
-      const u = new URL(str)
-      u.search = ''
-      u.hash = ''
-      return u.toString()
-    } catch {
-      // Why: returning the raw string on parse failure could preserve
-      // javascript: URIs or other non-http schemes. Return empty.
-      return ''
-    }
-  }
-
-  // Why: re-filter attributes on the main side so a compromised guest cannot
-  // smuggle unsafe attribute names (e.g., event handlers) or secret-bearing
-  // values into the payload that reaches the renderer.
-  const safeAttributes = (attrs: unknown): Record<string, string> => {
-    if (!attrs || typeof attrs !== 'object') {
-      return {}
-    }
-    const filtered: Record<string, string> = {}
-    for (const [key, value] of Object.entries(attrs as Record<string, unknown>)) {
-      const name = key.toLowerCase()
-      const isAria = name.startsWith('aria-')
-      const isSafe = GRAB_SAFE_ATTRIBUTE_NAMES.has(name)
-      if (!isAria && !isSafe) {
-        continue
-      }
-      const strValue = safeStr(value, 2000)
-      if (containsSecret(strValue)) {
-        filtered[name] = '[redacted]'
-      } else if ((name === 'href' || name === 'src' || name === 'action') && strValue) {
-        filtered[name] = sanitizeUrl(strValue)
-      } else if (name === 'class') {
-        filtered[name] = safeStr(value, 200)
-      } else {
-        filtered[name] = safeStr(value, 500)
-      }
-    }
-    return filtered
-  }
-
-  const safeRect = (r: unknown): BrowserGrabRect => {
-    if (!r || typeof r !== 'object') {
-      return { x: 0, y: 0, width: 0, height: 0 }
-    }
-    const rect = r as Record<string, unknown>
-    return {
-      x: safeNum(rect.x),
-      y: safeNum(rect.y),
-      width: safeNum(rect.width),
-      height: safeNum(rect.height)
-    }
-  }
-
-  const accessibility = target.accessibility as Record<string, unknown> | null | undefined
-  const computedStyles = target.computedStyles as Record<string, unknown> | null | undefined
-
-  return {
-    page: {
-      // Why: re-sanitize the URL main-side so a compromised guest cannot
-      // pass through query strings containing tokens or secrets.
-      sanitizedUrl: sanitizeUrl(page.sanitizedUrl),
-      title: safeStr(page.title, 500),
-      viewportWidth: safeNum(page.viewportWidth),
-      viewportHeight: safeNum(page.viewportHeight),
-      scrollX: safeNum(page.scrollX),
-      scrollY: safeNum(page.scrollY),
-      devicePixelRatio: safeNum(page.devicePixelRatio, 1),
-      capturedAt: safeStr(page.capturedAt, 100)
-    },
-    target: {
-      tagName: safeStr(target.tagName, 50),
-      selector: safeStr(target.selector, 500),
-      textSnippet: clampStr(target.textSnippet, GRAB_BUDGET.textSnippetMaxLength),
-      htmlSnippet: clampStr(target.htmlSnippet, GRAB_BUDGET.htmlSnippetMaxLength),
-      attributes: safeAttributes(target.attributes),
-      accessibility: {
-        role: safeStr(accessibility?.role) || null,
-        accessibleName: safeStr(accessibility?.accessibleName) || null,
-        ariaLabel: safeStr(accessibility?.ariaLabel) || null,
-        ariaLabelledBy: safeStr(accessibility?.ariaLabelledBy) || null
-      },
-      rectViewport: safeRect(target.rectViewport),
-      rectPage: safeRect(target.rectPage),
-      computedStyles: {
-        display: safeStr(computedStyles?.display),
-        position: safeStr(computedStyles?.position),
-        width: safeStr(computedStyles?.width),
-        height: safeStr(computedStyles?.height),
-        margin: safeStr(computedStyles?.margin),
-        padding: safeStr(computedStyles?.padding),
-        color: safeStr(computedStyles?.color),
-        backgroundColor: safeStr(computedStyles?.backgroundColor),
-        border: safeStr(computedStyles?.border),
-        borderRadius: safeStr(computedStyles?.borderRadius),
-        fontFamily: safeStr(computedStyles?.fontFamily),
-        fontSize: safeStr(computedStyles?.fontSize),
-        fontWeight: safeStr(computedStyles?.fontWeight),
-        lineHeight: safeStr(computedStyles?.lineHeight),
-        textAlign: safeStr(computedStyles?.textAlign),
-        zIndex: safeStr(computedStyles?.zIndex)
-      }
-    },
-    nearbyText: clampArray(
-      obj.nearbyText,
-      GRAB_BUDGET.nearbyTextMaxEntries,
-      GRAB_BUDGET.nearbyTextEntryMaxLength
-    ),
-    ancestorPath: clampArray(obj.ancestorPath, GRAB_BUDGET.ancestorPathMaxEntries, 200),
-    screenshot: null
-  }
 }
 
 class BrowserManager {
@@ -233,7 +42,7 @@ class BrowserManager {
     number,
     { code: number; description: string; validatedUrl: string }
   >()
-  private readonly activeGrabOps = new Map<string, ActiveGrabOp>()
+  private readonly grabSessionController = new BrowserGrabSessionController()
 
   private openValidatedExternal(rawUrl: string): void {
     const externalUrl = normalizeExternalBrowserUrl(rawUrl)
@@ -293,6 +102,12 @@ class BrowserManager {
     webContentsId,
     rendererWebContentsId
   }: BrowserGuestRegistration): void {
+    // Why: re-registering the same browser tab can happen when Chromium swaps
+    // or recreates the underlying guest surface. Any active grab is bound to
+    // the old guest's listeners and teardown path, so keeping it alive would
+    // leave the session attached to a stale webContents until timeout.
+    this.cancelGrabOp(browserTabId, 'evicted')
+
     const previousCleanup = this.contextMenuCleanupByTabId.get(browserTabId)
     if (previousCleanup) {
       previousCleanup()
@@ -355,9 +170,7 @@ class BrowserManager {
 
   unregisterAll(): void {
     // Cancel all active grab ops before tearing down registrations
-    for (const browserTabId of this.activeGrabOps.keys()) {
-      this.cancelGrabOp(browserTabId, 'evicted')
-    }
+    this.grabSessionController.cancelAll('evicted')
     for (const browserTabId of this.webContentsIdByTabId.keys()) {
       this.unregisterGuest(browserTabId)
     }
@@ -416,7 +229,7 @@ class BrowserManager {
 
   /** Returns true if a grab operation is currently active for this tab. */
   hasActiveGrabOp(browserTabId: string): boolean {
-    return this.activeGrabOps.has(browserTabId)
+    return this.grabSessionController.hasActiveGrabOp(browserTabId)
   }
 
   /**
@@ -463,154 +276,14 @@ class BrowserManager {
     opId: string,
     guest: Electron.WebContents
   ): Promise<BrowserGrabResult> {
-    // Why: only one active grab operation per tab prevents race conditions
-    // where a late click from a previous operation resolves the wrong Promise.
-    const existing = this.activeGrabOps.get(browserTabId)
-    if (existing) {
-      // Why: skip teardown injection when replacing an op. The new op will
-      // reuse the already-armed overlay. If we injected teardown here, it
-      // would race with the new awaitClick script in the guest's JS queue
-      // and destroy the overlay before the click handler is installed.
-      existing.skipTeardown = true
-      existing.resolve({ opId: existing.opId, kind: 'cancelled', reason: 'user' })
-    }
-
-    return new Promise<BrowserGrabResult>((resolve) => {
-      const guestWebContentsId = guest.id
-      let settled = false
-
-      const settleOnce = (result: BrowserGrabResult): void => {
-        if (settled) {
-          return
-        }
-        settled = true
-        clearTimeout(timeoutId)
-        // Why: when the user successfully selects an element, keep the guest
-        // overlay visible so the highlight box persists while the renderer
-        // shows the copy menu. Teardown happens later when the renderer calls
-        // setGrabMode(false) or re-arms with a fresh armAndAwait cycle.
-        op.cleanup(result.kind === 'selected' || result.kind === 'context-selected')
-        this.activeGrabOps.delete(browserTabId)
-        resolve(result)
-      }
-
-      // Why: the guest overlay runtime handles the click in-page and calls
-      // __orcaGrabResolve() which is wired by the 'awaitClick' script to
-      // resolve the executeJavaScript Promise with the extracted payload.
-      // Main just needs to run that script and await its result.
-      const awaitGuestClick = async (): Promise<void> => {
-        try {
-          const rawPayload = await guest.executeJavaScript(buildGuestOverlayScript('awaitClick'))
-          if (!rawPayload || typeof rawPayload !== 'object') {
-            settleOnce({ opId, kind: 'cancelled', reason: 'user' })
-            return
-          }
-          // Why: the guest wraps right-click results in { __orcaContextMenu, payload }
-          // so the renderer can show the full action dropdown instead of auto-copying.
-          const isContextMenu =
-            '__orcaContextMenu' in (rawPayload as Record<string, unknown>) &&
-            (rawPayload as Record<string, unknown>).__orcaContextMenu === true
-          const payloadSource = isContextMenu
-            ? (rawPayload as Record<string, unknown>).payload
-            : rawPayload
-          const payload = clampGrabPayload(payloadSource)
-          if (!payload) {
-            settleOnce({ opId, kind: 'error', reason: 'Guest returned invalid payload structure' })
-            return
-          }
-          settleOnce({
-            opId,
-            kind: isContextMenu ? 'context-selected' : 'selected',
-            payload
-          })
-        } catch (err) {
-          const message = err instanceof Error ? err.message : 'Selection failed'
-          // Distinguish cancellation from errors
-          if (message.includes('cancelled')) {
-            settleOnce({ opId, kind: 'cancelled', reason: 'user' })
-          } else {
-            settleOnce({ opId, kind: 'error', reason: message })
-          }
-        }
-      }
-
-      // --- Auto-cancel on top-level navigation ---
-      // Why: only cancel on main-frame navigations. Subframe navigations
-      // (e.g., iframe ads loading) should not spuriously cancel the grab.
-      const handleNavigation = (
-        _event: unknown,
-        _url: unknown,
-        _isInPlace: unknown,
-        isMainFrame: boolean
-      ): void => {
-        if (isMainFrame) {
-          settleOnce({ opId, kind: 'cancelled', reason: 'navigation' })
-        }
-      }
-
-      // --- Auto-cancel on guest destruction ---
-      const handleDestroyed = (): void => {
-        settleOnce({ opId, kind: 'cancelled', reason: 'evicted' })
-      }
-
-      // --- Hard timeout ---
-      const timeoutId = setTimeout(() => {
-        settleOnce({ opId, kind: 'cancelled', reason: 'timeout' })
-      }, GRAB_OP_TIMEOUT_MS)
-
-      // Install listeners
-      guest.on('did-start-navigation', handleNavigation)
-      guest.on('destroyed', handleDestroyed)
-
-      const cleanup = (preserveOverlay?: boolean): void => {
-        try {
-          guest.off('did-start-navigation', handleNavigation)
-          guest.off('destroyed', handleDestroyed)
-        } catch {
-          // Why: the guest may already be destroyed during teardown.
-          // Cleanup is best-effort.
-        }
-        // Why: skip teardown injection when (a) the op is being replaced by a
-        // new op (skipTeardown), or (b) the selection succeeded and the overlay
-        // should stay visible while the copy menu is shown (preserveOverlay).
-        if (op.skipTeardown || preserveOverlay) {
-          return
-        }
-        // Tell the guest to remove the overlay
-        try {
-          if (!guest.isDestroyed()) {
-            void guest.executeJavaScript(buildGuestOverlayScript('teardown'))
-          }
-        } catch {
-          // Best-effort overlay removal
-        }
-      }
-
-      const op: ActiveGrabOp = {
-        opId,
-        browserTabId,
-        guestWebContentsId,
-        resolve: settleOnce,
-        cleanup
-      }
-      this.activeGrabOps.set(browserTabId, op)
-
-      // Start awaiting the click in the guest
-      void awaitGuestClick()
-    })
+    return this.grabSessionController.awaitGrabSelection(browserTabId, opId, guest)
   }
 
   /**
    * Cancel an active grab operation for the given tab.
    */
   cancelGrabOp(browserTabId: string, reason: BrowserGrabCancelReason): void {
-    const op = this.activeGrabOps.get(browserTabId)
-    if (!op) {
-      return
-    }
-    // Why: settleOnce (op.resolve) already calls op.cleanup() and deletes the
-    // map entry. Calling them again here would double-inject the teardown script.
-    op.resolve({ opId: op.opId, kind: 'cancelled', reason })
+    this.grabSessionController.cancelGrabOp(browserTabId, reason)
   }
 
   /**
@@ -622,91 +295,7 @@ class BrowserManager {
     rect: BrowserGrabRect,
     guest: Electron.WebContents
   ): Promise<BrowserGrabScreenshot | null> {
-    try {
-      // Why: the rect comes from the renderer via IPC. Validate that all fields
-      // are finite numbers before using them in arithmetic, so NaN cannot reach
-      // Electron's image.crop() and cause undefined behavior.
-      const safeN = (n: unknown, fallback = 0): number =>
-        typeof n === 'number' && Number.isFinite(n) ? n : fallback
-      const safeRect = {
-        x: safeN(rect.x),
-        y: safeN(rect.y),
-        width: safeN(rect.width),
-        height: safeN(rect.height)
-      }
-
-      // Why: hide the grab overlay before capturing so the highlight box and
-      // label don't appear in the screenshot. The overlay is restored after.
-      // Wrapped in try/finally so the overlay is always restored even if
-      // capturePage() throws (e.g., guest destroyed mid-capture).
-      await guest
-        .executeJavaScript(
-          `(function(){ var g = window.__orcaGrab; if (g && g.host) g.host.style.display = 'none'; })()`
-        )
-        .catch(() => {})
-      let image: Electron.NativeImage
-      try {
-        image = await guest.capturePage()
-      } finally {
-        await guest
-          .executeJavaScript(
-            `(function(){ var g = window.__orcaGrab; if (g && g.host) g.host.style.display = ''; })()`
-          )
-          .catch(() => {})
-      }
-      if (image.isEmpty()) {
-        return null
-      }
-
-      const bitmapSize = image.getSize()
-      // Why: capturePage returns a bitmap in physical pixels. The grab rect is
-      // in CSS pixels. To map between them we need the combined scale factor
-      // (zoomFactor * deviceScaleFactor). Rather than using the primary display
-      // (which is wrong on multi-monitor setups with mixed DPI), we derive the
-      // scale factor empirically: ask the guest for its CSS viewport width, then
-      // compute scaleFactor = bitmapWidth / viewportCSSWidth. This is correct
-      // regardless of which display the window is on.
-      const viewportCSSWidth: number = await guest.executeJavaScript('window.innerWidth')
-      if (!viewportCSSWidth || viewportCSSWidth <= 0) {
-        return null
-      }
-      const scaleFactor = bitmapSize.width / viewportCSSWidth
-
-      // Map CSS-pixel rect to bitmap coordinates
-      const cropX = Math.max(0, Math.round(safeRect.x * scaleFactor))
-      const cropY = Math.max(0, Math.round(safeRect.y * scaleFactor))
-      const cropW = Math.min(bitmapSize.width - cropX, Math.round(safeRect.width * scaleFactor))
-      const cropH = Math.min(bitmapSize.height - cropY, Math.round(safeRect.height * scaleFactor))
-
-      if (cropW <= 0 || cropH <= 0) {
-        return null
-      }
-
-      const cropped = image.crop({ x: cropX, y: cropY, width: cropW, height: cropH })
-      const pngBuffer = cropped.toPNG()
-
-      // Enforce screenshot byte budget
-      if (pngBuffer.byteLength > GRAB_BUDGET.screenshotMaxBytes) {
-        // Why: downscaling would add complexity for v1. Fail closed to
-        // "no screenshot" rather than send an oversized payload.
-        return null
-      }
-
-      const dataUrl = `data:image/png;base64,${pngBuffer.toString('base64')}`
-      // Why: cropW/cropH are in physical pixels (bitmap coordinates) but the
-      // rest of the grab payload uses CSS pixels. Divide by scaleFactor so the
-      // screenshot dimensions are consistent with rectViewport/rectPage.
-      return {
-        mimeType: 'image/png',
-        dataUrl,
-        width: Math.round(cropW / scaleFactor),
-        height: Math.round(cropH / scaleFactor)
-      }
-    } catch {
-      // Why: screenshot capture can fail if the guest is being torn down
-      // or the compositor surface is not available. Fail closed.
-      return null
-    }
+    return captureGrabSelectionScreenshot(rect, guest)
   }
 
   /**
@@ -730,86 +319,17 @@ class BrowserManager {
   }
 
   private setupContextMenu(browserTabId: string, guest: Electron.WebContents): void {
-    const handler = (_event: Electron.Event, params: Electron.ContextMenuParams): void => {
-      const pageUrl = guest.getURL()
-      const linkUrl = params.linkURL || ''
-
-      const template: Electron.MenuItemConstructorOptions[] = []
-
-      if (linkUrl) {
-        const externalLinkUrl = normalizeExternalBrowserUrl(linkUrl)
-        template.push(
-          {
-            label: 'Open Link In Default Browser',
-            enabled: Boolean(externalLinkUrl && externalLinkUrl !== 'about:blank'),
-            click: () => {
-              this.openValidatedExternal(linkUrl)
-            }
-          },
-          {
-            label: 'Copy Link Address',
-            click: () => {
-              clipboard.writeText(linkUrl)
-            }
-          },
-          { type: 'separator' }
-        )
-      }
-
-      const externalPageUrl = normalizeExternalBrowserUrl(pageUrl)
-
-      template.push(
-        {
-          label: 'Back',
-          enabled: guest.canGoBack(),
-          click: () => guest.goBack()
+    this.contextMenuCleanupByTabId.set(
+      browserTabId,
+      setupGuestContextMenu({
+        browserTabId,
+        guest,
+        openValidatedExternal: (rawUrl) => {
+          this.openValidatedExternal(rawUrl)
         },
-        {
-          label: 'Forward',
-          enabled: guest.canGoForward(),
-          click: () => guest.goForward()
-        },
-        {
-          label: 'Reload',
-          click: () => guest.reload()
-        },
-        { type: 'separator' },
-        {
-          label: 'Open Page In Default Browser',
-          enabled: Boolean(externalPageUrl && externalPageUrl !== 'about:blank'),
-          click: () => {
-            this.openValidatedExternal(pageUrl)
-          }
-        },
-        {
-          label: 'Copy Page URL',
-          enabled: Boolean(pageUrl),
-          click: () => {
-            clipboard.writeText(pageUrl)
-          }
-        },
-        { type: 'separator' },
-        {
-          label: 'Inspect Page',
-          click: () => {
-            void this.openDevTools(browserTabId)
-          }
-        }
-      )
-
-      Menu.buildFromTemplate(template).popup()
-    }
-
-    guest.on('context-menu', handler)
-    this.contextMenuCleanupByTabId.set(browserTabId, () => {
-      try {
-        guest.off('context-menu', handler)
-      } catch {
-        // Why: browser tabs can outlive the guest webContents briefly during
-        // teardown. Cleanup should be best-effort instead of throwing while the
-        // IDE is closing a tab.
-      }
-    })
+        openDevTools: async (tabId) => this.openDevTools(tabId)
+      })
+    )
   }
 
   // Why: browser grab mode intentionally uses Cmd/Ctrl+C as its entry
@@ -826,63 +346,16 @@ class BrowserManager {
       this.grabShortcutCleanupByTabId.delete(browserTabId)
     }
 
-    const handler = (event: Electron.Event, input: Electron.Input): void => {
-      if (input.type !== 'keyDown') {
-        return
-      }
-      const isMod = process.platform === 'darwin' ? input.meta : input.control
-      if (!isMod || input.shift || input.alt || input.key.toLowerCase() !== 'c') {
-        return
-      }
-
-      void guest
-        .executeJavaScript(`(() => {
-          const active = document.activeElement
-          const tag = active?.tagName
-          const isEditable =
-            active instanceof HTMLInputElement ||
-            active instanceof HTMLTextAreaElement ||
-            active?.isContentEditable === true ||
-            tag === 'SELECT' ||
-            tag === 'IFRAME'
-          if (isEditable) {
-            return false
-          }
-          const selection = window.getSelection()
-          return Boolean(selection && selection.type === 'Range' && selection.toString().trim().length > 0)
-            ? false
-            : true
-        })()`)
-        .then((shouldToggle) => {
-          if (!shouldToggle) {
-            return
-          }
-          event.preventDefault()
-          const rendererWcId = this.rendererWebContentsIdByTabId.get(browserTabId)
-          if (!rendererWcId) {
-            return
-          }
-          const rendererWc = webContents.fromId(rendererWcId)
-          if (!rendererWc || rendererWc.isDestroyed()) {
-            return
-          }
-          rendererWc.send('browser:grabModeToggle', browserTabId)
-        })
-        .catch(() => {
-          // Why: shortcut forwarding is best-effort. Guest teardown or a
-          // transient executeJavaScript failure should not break normal copy.
-        })
-    }
-
-    guest.on('before-input-event', handler)
-    this.grabShortcutCleanupByTabId.set(browserTabId, () => {
-      try {
-        guest.off('before-input-event', handler)
-      } catch {
-        // Why: browser tabs can outlive the guest webContents briefly during
-        // teardown. Cleanup should be best-effort.
-      }
-    })
+    this.grabShortcutCleanupByTabId.set(
+      browserTabId,
+      setupGrabShortcutForwarding({
+        browserTabId,
+        guest,
+        resolveRenderer: (tabId) =>
+          resolveRendererWebContents(this.rendererWebContentsIdByTabId, tabId),
+        hasActiveGrabOp: (tabId) => this.hasActiveGrabOp(tabId)
+      })
+    )
   }
 
   // Why: a focused webview guest is a separate Chromium process — keyboard
@@ -897,62 +370,15 @@ class BrowserManager {
       this.shortcutForwardingCleanupByTabId.delete(browserTabId)
     }
 
-    const handler = (_event: Electron.Event, input: Electron.Input): void => {
-      if (input.type !== 'keyDown') {
-        return
-      }
-      // Why: browser guests need a broader modifier-chord gate than the main
-      // window because they also forward guest-specific tab shortcuts
-      // (Cmd/Ctrl+T/W/Shift+B/Shift+[ / ]) in addition to the shared allowlist
-      // handled by resolveWindowShortcutAction().
-      if (!isWindowShortcutModifierChord(input, process.platform)) {
-        return
-      }
-
-      // Why: centralizing the shared subset still keeps guest forwarding in
-      // lockstep with the main window for the chords that must never steal
-      // readline control input above the terminal.
-      const action = resolveWindowShortcutAction(input, process.platform)
-
-      const rendererWcId = this.rendererWebContentsIdByTabId.get(browserTabId)
-      if (!rendererWcId) {
-        return
-      }
-      const rendererWc = webContents.fromId(rendererWcId)
-      if (!rendererWc || rendererWc.isDestroyed()) {
-        return
-      }
-
-      if (input.code === 'KeyB' && input.shift) {
-        rendererWc.send('ui:newBrowserTab')
-      } else if (input.code === 'KeyT' && !input.shift) {
-        rendererWc.send('ui:newTerminalTab')
-      } else if (input.code === 'KeyW' && !input.shift) {
-        rendererWc.send('ui:closeActiveTab')
-      } else if (input.shift && (input.code === 'BracketRight' || input.code === 'BracketLeft')) {
-        rendererWc.send('ui:switchTab', input.code === 'BracketRight' ? 1 : -1)
-      } else if (action?.type === 'toggleWorktreePalette') {
-        rendererWc.send('ui:toggleWorktreePalette')
-      } else if (action?.type === 'openQuickOpen') {
-        rendererWc.send('ui:openQuickOpen')
-      } else if (action?.type === 'jumpToWorktreeIndex') {
-        rendererWc.send('ui:jumpToWorktreeIndex', action.index)
-      } else {
-        return
-      }
-      // Why: preventDefault stops the guest page from also processing the chord
-      // (e.g. Cmd+T opening a browser-internal new-tab page).
-      _event.preventDefault()
-    }
-
-    guest.on('before-input-event', handler)
-    this.shortcutForwardingCleanupByTabId.set(browserTabId, () => {
-      try {
-        guest.off('before-input-event', handler)
-      } catch {
-        // Why: best-effort — guest may already be destroyed during teardown.
-      }
-    })
+    this.shortcutForwardingCleanupByTabId.set(
+      browserTabId,
+      setupGuestShortcutForwarding({
+        browserTabId,
+        guest,
+        resolveRenderer: (tabId) =>
+          resolveRendererWebContents(this.rendererWebContentsIdByTabId, tabId)
+      })
+    )
   }
 
   private forwardOrQueueGuestLoadFailure(

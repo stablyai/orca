@@ -44,6 +44,7 @@ import type {
 } from '../../../../shared/browser-grab-types'
 import { useGrabMode } from './useGrabMode'
 import { formatGrabPayloadAsText } from './GrabConfirmationSheet'
+import { isEditableKeyboardTarget } from './browser-keyboard'
 
 type BrowserTabPageState = Partial<
   Pick<
@@ -755,8 +756,7 @@ export default function BrowserPane({
       // Why: let native Cmd+C work in text inputs (address bar, search fields,
       // contentEditable regions). Only intercept when focus is on a non-input
       // element so grab-mode toggle doesn't swallow copy in form controls.
-      const tag = (e.target as HTMLElement)?.tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable) {
+      if (isEditableKeyboardTarget(e.target)) {
         return
       }
       const isMod = navigator.userAgent.includes('Mac') ? e.metaKey : e.ctrlKey
@@ -789,22 +789,8 @@ export default function BrowserPane({
   // with normal typing elsewhere.
   const grabPayloadRef = useRef(grab.payload)
   grabPayloadRef.current = grab.payload
-  useEffect(() => {
-    if (grab.state === 'idle' || grab.state === 'error') {
-      return
-    }
-    const handleKeyDown = (e: KeyboardEvent): void => {
-      // Ignore if modifier keys are held — user may be doing Cmd+C etc.
-      if (e.metaKey || e.ctrlKey || e.altKey) {
-        return
-      }
-      const key = e.key.toLowerCase()
-      if (key !== 'c' && key !== 's') {
-        return
-      }
-      e.preventDefault()
-      e.stopPropagation()
-
+  const handleGrabActionShortcut = useCallback(
+    (key: 'c' | 's'): void => {
       const copyFromPayload = (payload: BrowserGrabPayload): void => {
         if (key === 'c') {
           const text = formatGrabPayloadAsText(payload)
@@ -849,7 +835,6 @@ export default function BrowserPane({
           }
           const payload = result.payload as BrowserGrabPayload
 
-          // For screenshot shortcut, also capture the screenshot
           if (key === 's') {
             try {
               const ssResult = await window.api.browser.captureSelectionScreenshot({
@@ -867,10 +852,45 @@ export default function BrowserPane({
           copyFromPayload(payload)
         })()
       }
+    },
+    [grab, showGrabToast]
+  )
+
+  useEffect(() => {
+    if (grab.state === 'idle' || grab.state === 'error') {
+      return
+    }
+    const handleKeyDown = (e: KeyboardEvent): void => {
+      if (isEditableKeyboardTarget(e.target)) {
+        return
+      }
+      // Ignore if modifier keys are held — user may be doing Cmd+C etc.
+      if (e.metaKey || e.ctrlKey || e.altKey) {
+        return
+      }
+      const key = e.key.toLowerCase()
+      if (key !== 'c' && key !== 's') {
+        return
+      }
+      e.preventDefault()
+      e.stopPropagation()
+      handleGrabActionShortcut(key as 'c' | 's')
     }
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [grab, showGrabToast])
+  }, [grab.state, handleGrabActionShortcut])
+
+  useEffect(() => {
+    if (grab.state === 'idle' || grab.state === 'error') {
+      return
+    }
+    return window.api.browser.onGrabActionShortcut(({ browserTabId, key }) => {
+      if (browserTabId !== browserTab.id) {
+        return
+      }
+      handleGrabActionShortcut(key)
+    })
+  }, [browserTab.id, grab.state, handleGrabActionShortcut])
 
   // Why: Radix DropdownMenu fires onOpenChange(false) before onSelect, so
   // the rearm in onOpenChange would clear the payload before the handler runs.
