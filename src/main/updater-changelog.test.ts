@@ -13,13 +13,13 @@ function jsonResponse(body: unknown): Response {
 }
 
 function makeEntries(
-  items: Array<{
+  items: {
     version: string
     title?: string
     description?: string
     mediaUrl?: string
     releaseNotesUrl?: string
-  }>
+  }[]
 ) {
   return items.map((item) => ({
     version: item.version,
