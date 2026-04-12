@@ -318,8 +318,24 @@ describe('createMainWindow', () => {
 
     const isDarwin = process.platform === 'darwin'
     for (const input of [
-      { type: 'keyDown', code: 'KeyJ', key: 'j', meta: isDarwin, control: !isDarwin, alt: false, shift: !isDarwin },
-      { type: 'keyDown', code: 'KeyJ', key: '', meta: isDarwin, control: !isDarwin, alt: false, shift: !isDarwin }
+      {
+        type: 'keyDown',
+        code: 'KeyJ',
+        key: 'j',
+        meta: isDarwin,
+        control: !isDarwin,
+        alt: false,
+        shift: !isDarwin
+      },
+      {
+        type: 'keyDown',
+        code: 'KeyJ',
+        key: '',
+        meta: isDarwin,
+        control: !isDarwin,
+        alt: false,
+        shift: !isDarwin
+      }
     ]) {
       const preventDefault = vi.fn()
       windowHandlers['before-input-event']({ preventDefault } as never, input as never)
@@ -376,5 +392,48 @@ describe('createMainWindow', () => {
     expect(preventDefault).toHaveBeenCalledTimes(1)
     expect(webContents.openDevTools).toHaveBeenCalledWith({ mode: 'undocked' })
     expect(webContents.closeDevTools).not.toHaveBeenCalled()
+  })
+
+  it('clears the quit latch when the renderer prevents unload', () => {
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    const onQuitAborted = vi.fn()
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    createMainWindow(null, { getIsQuitting: () => true, onQuitAborted })
+
+    const preventDefault = vi.fn()
+    windowHandlers.close({ preventDefault } as never)
+    expect(preventDefault).toHaveBeenCalledTimes(1)
+    expect(webContents.send).toHaveBeenCalledWith('window:close-requested', { isQuitting: true })
+
+    windowHandlers['will-prevent-unload']()
+    expect(onQuitAborted).toHaveBeenCalledTimes(1)
   })
 })

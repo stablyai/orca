@@ -672,9 +672,12 @@ const api = {
     },
     /** Fired by the main process when the user tries to close the window
      *  (X button, Cmd+Q, etc.). Renderer should show a confirmation dialog
-     *  if terminals are still running, then call confirmWindowClose(). */
-    onWindowCloseRequested: (callback: () => void): (() => void) => {
-      const listener = () => callback()
+     *  if terminals are still running, then call confirmWindowClose().
+     *  When isQuitting is true, the close was initiated by app.quit() (Cmd+Q)
+     *  and the renderer should skip the running-process dialog. */
+    onWindowCloseRequested: (callback: (data: { isQuitting: boolean }) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: { isQuitting: boolean }) =>
+        callback(data ?? { isQuitting: false })
       ipcRenderer.on('window:close-requested', listener)
       return () => ipcRenderer.removeListener('window:close-requested', listener)
     },

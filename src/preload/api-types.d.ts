@@ -376,7 +376,7 @@ export type PreloadApi = {
     setZoomLevel: (level: number) => void
     syncTrafficLights: (zoomFactor: number) => void
     onFullscreenChanged: (callback: (isFullScreen: boolean) => void) => () => void
-    onWindowCloseRequested: (callback: () => void) => () => void
+    onWindowCloseRequested: (callback: (data: { isQuitting: boolean }) => void) => () => void
     confirmWindowClose: () => void
   }
   runtime: {

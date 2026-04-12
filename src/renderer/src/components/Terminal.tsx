@@ -608,18 +608,24 @@ export default function Terminal(): React.JSX.Element | null {
   // Listen for main-process window close requests. When any terminal has a
   // child process running (not just an idle shell), show a confirmation dialog.
   useEffect(() => {
-    return window.api.ui.onWindowCloseRequested(() => {
+    return window.api.ui.onWindowCloseRequested(({ isQuitting }) => {
       if (isUpdaterQuitAndInstallInProgress()) {
         window.api.ui.confirmWindowClose()
         return
       }
-      // Why: before-quit (main process) kills all PTYs before this handler
-      // runs. The async PTY exit events close tabs and unmount TerminalPane
-      // components, removing their buffer capture callbacks. Dispatching
-      // beforeunload here — while components are still mounted — captures
-      // scrollback buffers before the race can discard them. This mirrors
-      // the auto-updater path (preload/index.ts) which does the same thing.
+      // Why: capture terminal scrollback buffers while TerminalPane components
+      // are still mounted. Dispatching beforeunload triggers the App.tsx
+      // captureAndFlush handler which serializes each pane's xterm buffer
+      // and writes the session to disk via synchronous IPC.
       window.dispatchEvent(new Event('beforeunload'))
+      // Why: during a quit (Cmd+Q), PTYs are still alive (cleanup is deferred
+      // to will-quit so buffers can be captured first). Skip the child-process
+      // confirmation dialog and proceed directly — the user's intent to quit
+      // is unambiguous.
+      if (isQuitting) {
+        window.api.ui.confirmWindowClose()
+        return
+      }
       const state = useAppStore.getState()
       const allPtyIds = Object.values(state.ptyIdsByTabId).flat()
       if (allPtyIds.length === 0) {

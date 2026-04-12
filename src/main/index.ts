@@ -27,6 +27,10 @@ import { createMainWindow } from './window/createMainWindow'
 import { CodexAccountService } from './codex-accounts/service'
 
 let mainWindow: BrowserWindow | null = null
+/** Whether a manual app.quit() (Cmd+Q, etc.) is in progress. Shared with the
+ *  window close handler so it can tell the renderer to skip the running-process
+ *  confirmation dialog and proceed directly to buffer capture + close. */
+let isQuitting = false
 let store: Store | null = null
 let stats: StatsCollector | null = null
 let claudeUsage: ClaudeUsageStore | null = null
@@ -75,7 +79,12 @@ function openMainWindow(): BrowserWindow {
     throw new Error('Codex account service must be initialized before opening the main window')
   }
 
-  const window = createMainWindow(store)
+  const window = createMainWindow(store, {
+    getIsQuitting: () => isQuitting,
+    onQuitAborted: () => {
+      isQuitting = false
+    }
+  })
   registerCoreHandlers(
     store,
     runtime,
@@ -169,12 +178,21 @@ app.whenReady().then(async () => {
 })
 
 app.on('before-quit', () => {
+  isQuitting = true
+  // Why: PTY cleanup is deferred to will-quit so the renderer has a chance to
+  // capture terminal scrollback buffers before PTY exit events race in and
+  // unmount TerminalPane components (removing their capture callbacks).
+  // The window close handler passes isQuitting to the renderer so it skips the
+  // child-process confirmation dialog and proceeds directly to buffer capture.
+  rateLimits?.stop()
+})
+
+app.on('will-quit', () => {
   // Why: stats.flush() must run before killAllPty() so it can read the
   // live agent state and emit synthetic agent_stop events for agents that
   // are still running. killAllPty() does not call runtime.onPtyExit(),
   // so without this ordering, running agents would produce orphaned
   // agent_start events with no matching stops.
-  rateLimits?.stop()
   stats?.flush()
   killAllPty()
   void closeAllWatchers()
@@ -187,7 +205,12 @@ app.on('before-quit', () => {
 })
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
+  // Why: on macOS, closing all windows normally keeps the app alive (dock
+  // stays active). But when a quit is in progress (Cmd+Q), the window close
+  // handler defers to the renderer for buffer capture, which cancels the
+  // original quit sequence. Re-trigger quit here so the app actually exits
+  // instead of requiring a second Cmd+Q.
+  if (process.platform !== 'darwin' || isQuitting) {
     app.quit()
   }
 })

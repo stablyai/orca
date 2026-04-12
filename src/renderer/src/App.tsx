@@ -252,7 +252,18 @@ function App(): React.JSX.Element {
   // On shutdown, capture terminal scrollback buffers and flush to disk.
   // Runs synchronously in beforeunload: capture → Zustand set → sendSync → flush.
   useEffect(() => {
+    // Why: beforeunload fires twice during a manual quit — once from the
+    // synthetic dispatch in the onWindowCloseRequested handler (captures
+    // good data while TerminalPanes are still mounted), and again from the
+    // native window close triggered by confirmWindowClose(). Between these
+    // two firings, PTY exit events can arrive and unmount TerminalPanes,
+    // emptying shutdownBufferCaptures. The guard prevents the second call
+    // from overwriting the good session data with an empty snapshot.
+    let shutdownBuffersCaptured = false
     const captureAndFlush = (): void => {
+      if (shutdownBuffersCaptured) {
+        return
+      }
       if (!useAppStore.getState().workspaceSessionReady) {
         return
       }
@@ -265,17 +276,16 @@ function App(): React.JSX.Element {
       }
       const state = useAppStore.getState()
       window.api.session.setSync(buildWorkspaceSessionPayload(state))
+      shutdownBuffersCaptured = true
     }
     window.addEventListener('beforeunload', captureAndFlush)
     return () => window.removeEventListener('beforeunload', captureAndFlush)
   }, [])
 
   // Periodically capture terminal scrollback buffers and persist to disk.
-  // Why: the normal shutdown path races with PTY exit events — before-quit
-  // kills all PTYs, whose async exit handlers close tabs and unmount
-  // TerminalPane components (removing their capture callbacks) before the
-  // renderer's beforeunload can run. Periodic saves ensure scrollback is
-  // available on restart even when the shutdown capture is lost.
+  // Why: the shutdown path captures buffers in beforeunload, but periodic
+  // saves provide a safety net so scrollback is available on restart even
+  // if an unexpected exit (crash, force-kill) bypasses normal shutdown.
   useEffect(() => {
     const PERIODIC_SAVE_INTERVAL_MS = 3 * 60_000
     const timer = window.setInterval(() => {

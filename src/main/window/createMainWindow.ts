@@ -65,7 +65,22 @@ function syncTrafficLightPosition(win: BrowserWindow, zoomFactor: number): void 
   win.setWindowButtonPosition({ x: TRAFFIC_LIGHT_X, y })
 }
 
-export function createMainWindow(store: Store | null): BrowserWindow {
+type CreateMainWindowOptions = {
+  /** Returns true when a manual app.quit() (Cmd+Q) is in progress. The close
+   *  handler sends this to the renderer so it can skip the running-process
+   *  confirmation dialog and proceed directly to buffer capture + close. */
+  getIsQuitting?: () => boolean
+  /** Notifies the caller when the renderer vetoes unload. Why: a prevented
+   *  beforeunload cancels the in-flight app.quit(), so the app-level quit
+   *  latch must be cleared or later window closes will be misclassified as
+   *  quit attempts. */
+  onQuitAborted?: () => void
+}
+
+export function createMainWindow(
+  store: Store | null,
+  opts?: CreateMainWindowOptions
+): BrowserWindow {
   const mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -281,7 +296,12 @@ export function createMainWindow(store: Store | null): BrowserWindow {
       return
     }
     e.preventDefault()
-    mainWindow.webContents.send('window:close-requested')
+    mainWindow.webContents.send('window:close-requested', {
+      isQuitting: opts?.getIsQuitting?.() ?? false
+    })
+  })
+  mainWindow.webContents.on('will-prevent-unload', () => {
+    opts?.onQuitAborted?.()
   })
 
   const onConfirmClose = (): void => {
