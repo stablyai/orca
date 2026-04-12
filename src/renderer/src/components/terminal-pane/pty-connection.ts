@@ -235,10 +235,18 @@ export function connectPanePty(
     const leafPtyId = deps.restoredPtyIdByPaneId.get(pane.id) ?? null
     const livePtyIds = new Set(useAppStore.getState().ptyIdsByTabId[deps.tabId] ?? [])
 
+    // Why: the tab-level ptyId fallback (case 3) must only fire when this is
+    // the sole pane in the tab. When a user splits a pane (Cmd+D), the new
+    // pane has no leafPtyId but the tab already has a live PTY from the
+    // original pane. Without this guard, attach() replaces the original
+    // pane's data handler in the singleton dispatcher (keyed by ptyId),
+    // causing the original pane to lose output while both panes share one
+    // shell's input — the exact "type in left, appears in right" bug.
+    const isSinglePaneFallback = !leafPtyId && manager.getPanes().length <= 1
     const reattachPtyId =
       (leafPtyId && livePtyIds.has(leafPtyId) && leafPtyId) ||
       (existingPtyId && getEagerPtyBufferHandle(existingPtyId) && existingPtyId) ||
-      (existingPtyId && !leafPtyId && existingPtyId) ||
+      (isSinglePaneFallback && existingPtyId) ||
       null
 
     if (reattachPtyId) {
