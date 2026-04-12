@@ -285,10 +285,10 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
               <CommandItem
                 value="__create_worktree__"
                 onSelect={handleCreateWorktree}
-                className="group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow] data-[selected=true]:border-border data-[selected=true]:bg-neutral-100 data-[selected=true]:text-foreground dark:data-[selected=true]:bg-neutral-800"
+                className="group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-1.5 text-left outline-none transition-[background-color,border-color,box-shadow] data-[selected=true]:border-border data-[selected=true]:bg-neutral-100 data-[selected=true]:text-foreground dark:data-[selected=true]:bg-neutral-800"
               >
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-dashed border-border/60 bg-muted/25 text-muted-foreground/70">
-                  <Plus size={14} aria-hidden="true" />
+                <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-dashed border-border/60 bg-muted/25 text-muted-foreground/70">
+                  <Plus size={13} aria-hidden="true" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-[14px] font-semibold tracking-[-0.01em] text-foreground">
@@ -337,18 +337,18 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                   onSelect={() => handleSelect(w.id)}
                   data-current={isCurrentWorktree ? 'true' : undefined}
                   className={cn(
-                    'group mx-0.5 flex cursor-pointer items-start gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
+                    'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
                     'data-[selected=true]:border-border data-[selected=true]:bg-neutral-100 data-[selected=true]:text-foreground dark:data-[selected=true]:bg-neutral-800',
                     'data-[current=true]:border-emerald-500/25 data-[current=true]:bg-emerald-500/[0.08]'
                   )}
                 >
-                  <div className="mt-1.5 flex w-4 shrink-0 items-start justify-center">
+                  <div className="flex w-4 shrink-0 items-center justify-center self-start pt-0.5">
                     <StatusIndicator status={status} aria-hidden="true" />
                     <span className="sr-only">{statusLabel}</span>
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2.5">
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <div className="flex min-w-0 items-center gap-2">
                           <span className="truncate text-[14px] font-semibold tracking-[-0.01em] text-foreground">
                             {match.displayNameRange ? (
@@ -370,9 +370,8 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                               primary
                             </span>
                           )}
-                        </div>
-                        <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[12px] text-muted-foreground">
-                          <span className="truncate font-medium text-muted-foreground/92">
+                          <span className="shrink-0 text-muted-foreground/45">·</span>
+                          <span className="truncate text-[12px] font-medium text-muted-foreground/92">
                             {match.branchRange ? (
                               <HighlightedText text={branch} matchRange={match.branchRange} />
                             ) : (
