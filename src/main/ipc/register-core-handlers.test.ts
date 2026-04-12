@@ -184,4 +184,34 @@ describe('registerCoreHandlers', () => {
     expect(registerBrowserHandlersMock).toHaveBeenCalled()
     expect(registerFilesystemWatcherHandlersMock).toHaveBeenCalled()
   })
+
+  it('only registers IPC handlers once but always updates web contents id', () => {
+    // The first test already called registerCoreHandlers, so the module-level
+    // guard is now set. beforeEach reset all mocks, so call counts are 0.
+    const store2 = { marker: 'store2' }
+    const runtime2 = { marker: 'runtime2' }
+    const stats2 = { marker: 'stats2' }
+    const claudeUsage2 = { marker: 'claudeUsage2' }
+    const codexUsage2 = { marker: 'codexUsage2' }
+    const codexAccounts2 = { marker: 'codexAccounts2' }
+    const rateLimits2 = { marker: 'rateLimits2' }
+
+    registerCoreHandlers(
+      store2 as never,
+      runtime2 as never,
+      stats2 as never,
+      claudeUsage2 as never,
+      codexUsage2 as never,
+      codexAccounts2 as never,
+      rateLimits2 as never,
+      42
+    )
+
+    // Web contents ID should always be updated
+    expect(setTrustedBrowserRendererWebContentsIdMock).toHaveBeenCalledWith(42)
+    // IPC handlers should NOT be registered again
+    expect(registerCliHandlersMock).not.toHaveBeenCalled()
+    expect(registerPreflightHandlersMock).not.toHaveBeenCalled()
+    expect(registerBrowserHandlersMock).not.toHaveBeenCalled()
+  })
 })

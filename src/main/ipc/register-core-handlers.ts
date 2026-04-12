@@ -29,6 +29,8 @@ import type { CodexUsageStore } from '../codex-usage/store'
 import type { RateLimitService } from '../rate-limits/service'
 import type { CodexAccountService } from '../codex-accounts/service'
 
+let registered = false
+
 export function registerCoreHandlers(
   store: Store,
   runtime: OrcaRuntimeService,
@@ -39,7 +41,16 @@ export function registerCoreHandlers(
   rateLimits: RateLimitService,
   mainWindowWebContentsId: number | null = null
 ): void {
+  // Why: on macOS the app can stay alive after all windows close, then
+  // openMainWindow() is called again on 'activate'. ipcMain.handle() throws
+  // if a channel is registered twice, so we guard to register only once and
+  // just update the per-window web-contents ID on subsequent calls.
   setTrustedBrowserRendererWebContentsId(mainWindowWebContentsId)
+  if (registered) {
+    return
+  }
+  registered = true
+
   registerCliHandlers()
   registerPreflightHandlers()
   registerClaudeUsageHandlers(claudeUsage)
