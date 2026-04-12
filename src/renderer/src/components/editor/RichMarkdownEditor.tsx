@@ -23,6 +23,8 @@ import { registerPendingEditorFlush } from './editor-pending-flush'
 import { createRichMarkdownKeyHandler } from './rich-markdown-key-handler'
 import { DOMSerializer } from '@tiptap/pm/model'
 import { TextSelection } from '@tiptap/pm/state'
+import { normalizeSoftBreaks } from './rich-markdown-normalize'
+import { cutVisualLine, getVisualLineRange } from './rich-markdown-visual-line'
 
 type RichMarkdownEditorProps = {
   fileId: string
@@ -130,6 +132,15 @@ export default function RichMarkdownEditor({
 
           const { $from } = selection
 
+          // Why: a GapCursor before a top-level leaf node (e.g. horizontal rule
+          // as the first child of the doc) resolves to depth 0. Attempting to cut
+          // at depth 0 would call $from.before(0) on the doc node, which throws
+          // RangeError("There is no position before the top-level node").  Bail
+          // out and let ProseMirror's default handler deal with it.
+          if ($from.depth < 1) {
+            return false
+          }
+
           // Walk up from the textblock to find the best node to cut. For list
           // items and task items, cut the whole item rather than just its inner
           // paragraph. Stop at table cells to avoid breaking table structure.
@@ -147,6 +158,21 @@ export default function RichMarkdownEditor({
 
           const cutNode = $from.node(cutDepth)
           const text = cutNode.textContent
+
+          // Why: for paragraphs that word-wrap across multiple visual lines, cut
+          // only the visual line the cursor is on rather than the entire paragraph.
+          // This matches the user expectation of per-line cutting (like VS Code)
+          // without destroying the rest of the paragraph's content.
+          if (cutNode.type.name === 'paragraph' && text) {
+            const paraStart = $from.start(cutDepth)
+            const paraEnd = $from.end(cutDepth)
+            const lineRange = getVisualLineRange(view, selection.from, paraStart, paraEnd)
+            if (lineRange) {
+              return cutVisualLine(view, event, lineRange)
+            }
+            // Falls through to block-level cut for single-line paragraphs.
+          }
+
           if (!text) {
             // Still delete the empty block, matching VS Code behavior
             event.preventDefault()
@@ -235,6 +261,10 @@ export default function RichMarkdownEditor({
       }
     },
     onCreate: ({ editor: nextEditor }) => {
+      // Why: markdown soft line breaks produce paragraphs with embedded `\n` chars.
+      // Normalizing them into separate paragraph nodes on load ensures Cmd+X (and
+      // other block-level operations) treat each line as its own block.
+      normalizeSoftBreaks(nextEditor)
       lastCommittedMarkdownRef.current = nextEditor.getMarkdown()
     },
     onUpdate: ({ editor: nextEditor }) => {
@@ -424,6 +454,9 @@ export default function RichMarkdownEditor({
     editor.commands.setContent(encodeRawMarkdownHtmlForRichEditor(content), {
       contentType: 'markdown'
     })
+    // Why: same soft-break normalization as onCreate — external content updates
+    // may re-introduce paragraphs with embedded `\n` characters.
+    normalizeSoftBreaks(editor)
     lastCommittedMarkdownRef.current = content
     syncSlashMenu(editor, rootRef.current, setSlashMenu)
   }, [content, editor])
