@@ -24,6 +24,42 @@ function isEditableTarget(target: EventTarget | null): boolean {
   return editableAncestor !== null
 }
 
+export type SearchState = {
+  query: string
+  caseSensitive: boolean
+  regex: boolean
+}
+
+/**
+ * Pure decision function for Cmd+G / Cmd+Shift+G search navigation.
+ * Returns 'next', 'previous', or null (no match).
+ * Extracted so the key-matching logic is testable without DOM dependencies.
+ */
+export function matchSearchNavigate(
+  e: Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'shiftKey' | 'altKey'>,
+  isMac: boolean,
+  searchOpen: boolean,
+  searchState: SearchState
+): 'next' | 'previous' | null {
+  if (e.altKey) {
+    return null
+  }
+  const mod = isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey
+  if (!mod) {
+    return null
+  }
+  if (e.key.toLowerCase() !== 'g') {
+    return null
+  }
+  if (!searchOpen) {
+    return null
+  }
+  if (!searchState.query) {
+    return null
+  }
+  return e.shiftKey ? 'previous' : 'next'
+}
+
 type KeyboardHandlersDeps = {
   isActive: boolean
   managerRef: React.RefObject<PaneManager | null>
@@ -36,6 +72,8 @@ type KeyboardHandlersDeps = {
   toggleExpandPane: (paneId: number) => void
   setSearchOpen: React.Dispatch<React.SetStateAction<boolean>>
   onRequestClosePane: (paneId: number) => void
+  searchOpenRef: React.RefObject<boolean>
+  searchStateRef: React.RefObject<SearchState>
 }
 
 export function useTerminalKeyboardShortcuts({
@@ -49,7 +87,9 @@ export function useTerminalKeyboardShortcuts({
   persistLayoutSnapshot,
   toggleExpandPane,
   setSearchOpen,
-  onRequestClosePane
+  onRequestClosePane,
+  searchOpenRef,
+  searchStateRef
 }: KeyboardHandlersDeps): void {
   useEffect(() => {
     if (!isActive) {
@@ -61,16 +101,40 @@ export function useTerminalKeyboardShortcuts({
       if (e.repeat) {
         return
       }
+      // Moved above isEditableTarget so the Cmd+G handler can reference it.
+      const manager = managerRef.current
+      if (!manager) {
+        return
+      }
+
+      // Cmd+G / Cmd+Shift+G navigates terminal search matches.
+      // Placed before the isEditableTarget guard so it works when focus
+      // is in the search input. Uses its own mod-key check because this
+      // runs before the shared `mod` variable is declared.
+      // preventDefault suppresses macOS/Electron's native "find next".
+      const direction = matchSearchNavigate(e, isMac, searchOpenRef.current, searchStateRef.current)
+      if (direction !== null) {
+        e.preventDefault()
+        e.stopPropagation()
+        const pane = manager.getActivePane() ?? manager.getPanes()[0]
+        if (!pane) {
+          return
+        }
+        const { query, caseSensitive, regex } = searchStateRef.current
+        if (direction === 'next') {
+          pane.searchAddon.findNext(query, { caseSensitive, regex })
+        } else {
+          pane.searchAddon.findPrevious(query, { caseSensitive, regex })
+        }
+        pane.terminal.focus()
+        return
+      }
+
       if (isEditableTarget(e.target)) {
         return
       }
       const mod = isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey
       if (!mod || e.altKey) {
-        return
-      }
-
-      const manager = managerRef.current
-      if (!manager) {
         return
       }
 
@@ -348,6 +412,8 @@ export function useTerminalKeyboardShortcuts({
     persistLayoutSnapshot,
     toggleExpandPane,
     setSearchOpen,
-    onRequestClosePane
+    onRequestClosePane,
+    searchOpenRef,
+    searchStateRef
   ])
 }
