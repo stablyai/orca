@@ -70,20 +70,6 @@ export default function Terminal(): React.JSX.Element | null {
   const worktreeBrowserTabs = activeWorktreeId
     ? (browserTabsByWorktree[activeWorktreeId] ?? [])
     : []
-  const activeGroups = activeWorktreeId ? (groupsByWorktree[activeWorktreeId] ?? []) : []
-  const activeLayout = activeWorktreeId ? layoutByWorktree[activeWorktreeId] : undefined
-  const effectiveActiveLayout =
-    activeLayout ??
-    (activeWorktreeId
-      ? (() => {
-          const fallbackGroupId =
-            activeGroupIdByWorktree[activeWorktreeId] ?? activeGroups[0]?.id ?? null
-          if (!fallbackGroupId) {
-            return undefined
-          }
-          return { type: 'leaf', groupId: fallbackGroupId } as const
-        })()
-      : undefined)
   const activeWorktreeBrowserTabIdsKey = activeWorktreeId
     ? (browserTabsByWorktree[activeWorktreeId] ?? []).map((tab) => tab.id).join(',')
     : ''
@@ -594,73 +580,47 @@ export default function Terminal(): React.JSX.Element | null {
     >
       <EditorAutosaveController />
 
-      {/* Why: every worktree now renders through the canonical group layout,
-          including the original single group. Keeping the first group inline
-          avoids a "tabs in the titlebar first, tabs in the pane after split"
-          mismatch, so split creation no longer changes the vertical position
-          of the tab strip. */}
-      {activeWorktreeId && effectiveActiveLayout ? (
-        <div className="flex flex-1 min-w-0 min-h-0 overflow-hidden">
-          <TabGroupSplitLayout
-            layout={effectiveActiveLayout}
-            worktreeId={activeWorktreeId}
-            focusedGroupId={activeGroupIdByWorktree[activeWorktreeId]}
-          />
-        </div>
-      ) : (
-        <>
-          {/* Terminal panes container - hidden when editor or browser tab active */}
-          <div
-            className={`relative flex-1 min-h-0 overflow-hidden ${
-              (activeTabType === 'editor' && worktreeFiles.length > 0) ||
-              (activeTabType === 'browser' && worktreeBrowserTabs.length > 0)
-                ? 'hidden'
-                : ''
-            }`}
-          >
-            {allWorktrees
-              .filter((wt) => mountedWorktreeIdsRef.current.has(wt.id))
-              .map((worktree) => {
-                const worktreeTabs = tabsByWorktree[worktree.id] ?? []
-                const isVisible = activeView !== 'settings' && worktree.id === activeWorktreeId
-
-                return (
-                  <div
-                    key={worktree.id}
-                    className={isVisible ? 'absolute inset-0' : 'absolute inset-0 hidden'}
-                    aria-hidden={!isVisible}
-                  >
-                    {worktreeTabs.map((tab) => (
-                      <TerminalPane
-                        key={`${tab.id}-${tab.generation ?? 0}`}
-                        tabId={tab.id}
-                        worktreeId={worktree.id}
-                        cwd={worktree.path}
-                        isActive={
-                          isVisible && tab.id === activeTabId && activeTabType === 'terminal'
-                        }
-                        onPtyExit={(ptyId) => handlePtyExit(tab.id, ptyId)}
-                        onCloseTab={() => handleCloseTab(tab.id)}
-                      />
-                    ))}
-                  </div>
-                )
-              })}
-          </div>
-
-          {activeWorktreeId && activeTabType === 'editor' && worktreeFiles.length > 0 && (
-            <Suspense
-              fallback={
-                <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
-                  Loading editor...
-                </div>
+      {/* Why: render TabGroupSplitLayout for ALL mounted worktrees and toggle
+          visibility with CSS instead of conditional rendering. Rendering only the
+          active worktree causes React to unmount TabGroupPanel (and its TerminalPane
+          children) on every worktree switch, which triggers the cleanup effect that
+          destroys PTY transports and kills terminal processes. Keeping all visited
+          worktrees mounted preserves terminal sessions across switches. */}
+      {allWorktrees
+        .filter((wt) => mountedWorktreeIdsRef.current.has(wt.id))
+        .map((worktree) => {
+          const isVisible = activeView !== 'settings' && worktree.id === activeWorktreeId
+          const wtGroups = groupsByWorktree[worktree.id] ?? []
+          const wtLayout = layoutByWorktree[worktree.id]
+          const effectiveLayout =
+            wtLayout ??
+            (() => {
+              const fallbackGroupId =
+                activeGroupIdByWorktree[worktree.id] ?? wtGroups[0]?.id ?? null
+              if (!fallbackGroupId) {
+                return undefined
               }
+              return { type: 'leaf', groupId: fallbackGroupId } as const
+            })()
+
+          if (!effectiveLayout) {
+            return null
+          }
+
+          return (
+            <div
+              key={worktree.id}
+              className={`flex flex-1 min-w-0 min-h-0 overflow-hidden${isVisible ? '' : ' hidden'}`}
+              aria-hidden={!isVisible}
             >
-              <EditorPanel />
-            </Suspense>
-          )}
-        </>
-      )}
+              <TabGroupSplitLayout
+                layout={effectiveLayout}
+                worktreeId={worktree.id}
+                focusedGroupId={activeGroupIdByWorktree[worktree.id]}
+              />
+            </div>
+          )
+        })}
       {/* Save confirmation dialog */}
       <Dialog
         open={saveDialogFileId !== null}
