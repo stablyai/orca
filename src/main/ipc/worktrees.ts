@@ -11,7 +11,7 @@ import type {
 } from '../../shared/types'
 import { removeWorktree } from '../git/worktree'
 import { gitExecFileAsync } from '../git/runner'
-import { listRepoWorktrees } from '../repo-worktrees'
+import { listRepoWorktrees, createFolderWorktree } from '../repo-worktrees'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 import { getEffectiveHooks, runHook } from '../hooks'
 import {
@@ -69,7 +69,9 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
 
     for (const repo of repos) {
       let gitWorktrees
-      if (repo.connectionId) {
+      if (isFolderRepo(repo)) {
+        gitWorktrees = [createFolderWorktree(repo)]
+      } else if (repo.connectionId) {
         const provider = getSshGitProvider(repo.connectionId)
         // Why: when SSH is disconnected the provider is null. Skip this repo
         // so the renderer keeps its cached worktree list instead of clearing it.
@@ -101,7 +103,9 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
     }
 
     let gitWorktrees
-    if (repo.connectionId) {
+    if (isFolderRepo(repo)) {
+      gitWorktrees = [createFolderWorktree(repo)]
+    } else if (repo.connectionId) {
       const provider = getSshGitProvider(repo.connectionId)
       // Why: when SSH is disconnected the provider is null. Throwing here
       // makes the renderer's fetchWorktrees catch block preserve its cached
