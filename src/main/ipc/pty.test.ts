@@ -350,6 +350,36 @@ describe('registerPtyHandlers', () => {
     }
   })
 
+  it('does not force ~/.bashrc after sourcing bash login files in the shell-ready rcfile', async () => {
+    const originalPlatform = process.platform
+    const originalShell = process.env.SHELL
+
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'darwin'
+    })
+    process.env.SHELL = '/bin/bash'
+
+    try {
+      spawnAndGetCall({ cwd: '/tmp', command: 'echo hello' })
+
+      const { getBashShellReadyRcfileContent } = await import('./pty')
+      const bashRcContent = getBashShellReadyRcfileContent()
+      expect(bashRcContent).toContain('source "$HOME/.bash_profile"')
+      expect(bashRcContent).not.toContain('source "$HOME/.bashrc"')
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+      if (originalShell === undefined) {
+        delete process.env.SHELL
+      } else {
+        process.env.SHELL = originalShell
+      }
+    }
+  })
+
   it('does not write the startup command before the shell-ready marker arrives', async () => {
     vi.useFakeTimers()
     const mockProc = createMockProc()

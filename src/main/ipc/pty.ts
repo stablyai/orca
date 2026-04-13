@@ -98,6 +98,38 @@ function getShellReadyWrapperRoot(): string {
   return `${app.getPath('userData')}/shell-ready`
 }
 
+export function getBashShellReadyRcfileContent(): string {
+  return `# Orca bash shell-ready wrapper
+[[ -f /etc/profile ]] && source /etc/profile
+if [[ -f "$HOME/.bash_profile" ]]; then
+  source "$HOME/.bash_profile"
+elif [[ -f "$HOME/.bash_login" ]]; then
+  source "$HOME/.bash_login"
+elif [[ -f "$HOME/.profile" ]]; then
+  source "$HOME/.profile"
+fi
+# Why: preserve bash's normal login-shell contract. Many users already source
+# ~/.bashrc from ~/.bash_profile; forcing ~/.bashrc again here would duplicate
+# PATH edits, hooks, and prompt init in Orca startup-command shells.
+# Why: append the marker through PROMPT_COMMAND so it fires after the login
+# startup files have rebuilt the prompt, matching Superset's "shell ready"
+# contract without re-running user rc files.
+__orca_prompt_mark() {
+  printf "\\033]133;A\\007"
+}
+if [[ "$(declare -p PROMPT_COMMAND 2>/dev/null)" == "declare -a"* ]]; then
+  PROMPT_COMMAND=("\${PROMPT_COMMAND[@]}" "__orca_prompt_mark")
+else
+  _orca_prev_prompt_command="\${PROMPT_COMMAND}"
+  if [[ -n "\${_orca_prev_prompt_command}" ]]; then
+    PROMPT_COMMAND="\${_orca_prev_prompt_command};__orca_prompt_mark"
+  else
+    PROMPT_COMMAND="__orca_prompt_mark"
+  fi
+fi
+`
+}
+
 function ensureShellReadyWrappers(): void {
   if (didEnsureShellReadyWrappers || process.platform === 'win32') {
     return
@@ -135,32 +167,7 @@ __orca_prompt_mark() {
 }
 precmd_functions=(\${precmd_functions[@]} __orca_prompt_mark)
 `
-  const bashRc = `# Orca bash shell-ready wrapper
-[[ -f /etc/profile ]] && source /etc/profile
-if [[ -f "$HOME/.bash_profile" ]]; then
-  source "$HOME/.bash_profile"
-elif [[ -f "$HOME/.bash_login" ]]; then
-  source "$HOME/.bash_login"
-elif [[ -f "$HOME/.profile" ]]; then
-  source "$HOME/.profile"
-fi
-[[ -f "$HOME/.bashrc" ]] && source "$HOME/.bashrc"
-# Why: append the marker through PROMPT_COMMAND so it fires after the prompt has
-# been rebuilt by user config, matching Superset's "shell ready" contract.
-__orca_prompt_mark() {
-  printf "\\033]133;A\\007"
-}
-if [[ "$(declare -p PROMPT_COMMAND 2>/dev/null)" == "declare -a"* ]]; then
-  PROMPT_COMMAND=("\${PROMPT_COMMAND[@]}" "__orca_prompt_mark")
-else
-  _orca_prev_prompt_command="\${PROMPT_COMMAND}"
-  if [[ -n "\${_orca_prev_prompt_command}" ]]; then
-    PROMPT_COMMAND="\${_orca_prev_prompt_command};__orca_prompt_mark"
-  else
-    PROMPT_COMMAND="__orca_prompt_mark"
-  fi
-fi
-`
+  const bashRc = getBashShellReadyRcfileContent()
 
   const files = [
     [`${zshDir}/.zshenv`, zshEnv],
@@ -230,7 +237,6 @@ function writeStartupCommandWhenShellReady(
       return
     }
     sent = true
-    cleanup()
     // Why: run startup commands inside the same interactive shell Orca keeps
     // open for the pane. Spawning `shell -c <command>; exec shell -l` would
     // avoid the race, but it would also replace the session after the agent
