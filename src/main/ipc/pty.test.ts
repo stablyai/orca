@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: PTY spawn env behavior is easiest to verify in
 one focused file because the registration helper is stateful and each spawn-path
 assertion reuses the same mocked IPC and node-pty harness. */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   handleMock,
@@ -212,6 +212,105 @@ describe('registerPtyHandlers', () => {
     it('leaves ambient CODEX_HOME untouched when system default is selected', () => {
       const env = spawnAndGetEnv(undefined, { CODEX_HOME: '/tmp/system-codex-home' }, () => null)
       expect(env.CODEX_HOME).toBe('/tmp/system-codex-home')
+    })
+  })
+
+  describe('Windows UTF-8 code page', () => {
+    let originalPlatform: string
+    let originalComspec: string | undefined
+
+    beforeEach(() => {
+      originalPlatform = process.platform
+      originalComspec = process.env.COMSPEC
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: 'win32'
+      })
+      process.env.USERPROFILE = 'C:\\Users\\test'
+    })
+
+    afterEach(() => {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+      if (originalComspec === undefined) {
+        delete process.env.COMSPEC
+      } else {
+        process.env.COMSPEC = originalComspec
+      }
+    })
+
+    it('passes chcp 65001 to cmd.exe for UTF-8 console output', () => {
+      process.env.COMSPEC = 'C:\\Windows\\system32\\cmd.exe'
+
+      registerPtyHandlers(mainWindow as never)
+      handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+
+      expect(spawnMock).toHaveBeenCalledWith(
+        'C:\\Windows\\system32\\cmd.exe',
+        ['/K', 'chcp 65001 > nul'],
+        expect.any(Object)
+      )
+    })
+
+    it('sets Console encoding for powershell.exe', () => {
+      process.env.COMSPEC = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+
+      registerPtyHandlers(mainWindow as never)
+      handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+
+      expect(spawnMock).toHaveBeenCalledWith(
+        'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+        [
+          '-NoExit',
+          '-Command',
+          '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
+        ],
+        expect.any(Object)
+      )
+    })
+
+    it('sets Console encoding for pwsh.exe', () => {
+      process.env.COMSPEC = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
+
+      registerPtyHandlers(mainWindow as never)
+      handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+
+      expect(spawnMock).toHaveBeenCalledWith(
+        'C:\\Program Files\\PowerShell\\7\\pwsh.exe',
+        [
+          '-NoExit',
+          '-Command',
+          '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
+        ],
+        expect.any(Object)
+      )
+    })
+
+    it('sets PYTHONUTF8=1 in the spawn environment on Windows', () => {
+      process.env.COMSPEC = 'C:\\Windows\\system32\\cmd.exe'
+
+      registerPtyHandlers(mainWindow as never)
+      handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      const env = spawnCall[2].env as Record<string, string>
+      expect(env.PYTHONUTF8).toBe('1')
+    })
+
+    it('does not override an existing PYTHONUTF8 value', () => {
+      process.env.COMSPEC = 'C:\\Windows\\system32\\cmd.exe'
+      process.env.PYTHONUTF8 = '0'
+
+      registerPtyHandlers(mainWindow as never)
+      handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      const env = spawnCall[2].env as Record<string, string>
+      expect(env.PYTHONUTF8).toBe('0')
+
+      delete process.env.PYTHONUTF8
     })
   })
 
