@@ -514,9 +514,11 @@ function App(): React.JSX.Element {
         <div className="titlebar">
           {/* Why: the left section of the titlebar matches the sidebar width so
               tabs start exactly where the sidebar ends, creating a clean vertical
-              alignment between the sidebar edge and the first tab. */}
+              alignment between the sidebar edge and the first tab. When the
+              sidebar is collapsed, shrink-0 prevents the flex-1 tab section from
+              squeezing this area, and mr-2 adds a gap before the first tab. */}
           <div
-            className={`flex items-center overflow-hidden mr-2${showSidebar && sidebarOpen ? ' shrink-0' : ' min-w-0'}`}
+            className={`flex items-center${showSidebar && sidebarOpen ? ' overflow-hidden shrink-0' : ' shrink-0 mr-2'}`}
             style={{ width: showSidebar && sidebarOpen ? sidebarWidth : undefined }}
           >
             <div className={isMac && !isFullScreen ? 'titlebar-traffic-light-pad' : 'pl-2'} />
@@ -551,7 +553,6 @@ function App(): React.JSX.Element {
                       aria-hidden
                     />
                     <span className="titlebar-agent-badge-count">{activeAgentCount}</span>
-                    <span className="titlebar-agent-badge-label">active</span>
                   </span>
                 </HoverCardTrigger>
                 <HoverCardContent side="bottom" sideOffset={6} className="titlebar-agent-hovercard">
