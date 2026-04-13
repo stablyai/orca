@@ -90,31 +90,34 @@ export function useTerminalPaneGlobalEffects({
     // continuous window resizes or layout animations.  Each fitPanes() call
     // triggers fitAddon.fit() → terminal.resize() which, when the column
     // count changes, reflows the entire scrollback buffer and recalculates
-    // the viewport scroll position.  Rapid-fire reflows can leave the
-    // viewport at a stale scroll offset, causing the terminal to appear
-    // scrolled to the top or to show blank space where scrollback should be.
-    // Batching through requestAnimationFrame coalesces bursts into a single
-    // reflow per paint frame — the same pattern used by queueResizeAll in
-    // use-terminal-pane-lifecycle.ts.
-    let rafId: number | null = null
+    // the viewport scroll position.  On Windows, a single reflow of 10 000
+    // scrollback lines can block the renderer for 500 ms–2 s, freezing the
+    // UI while a sidebar opens or a window resizes.
+    //
+    // A trailing-edge debounce (150 ms) coalesces bursts into one reflow
+    // after the layout settles.  This is longer than the previous RAF-only
+    // batch (≈16 ms) but still short enough that the user never notices the
+    // terminal running at a stale column count.
+    const RESIZE_DEBOUNCE_MS = 150
+    let timerId: ReturnType<typeof setTimeout> | null = null
     const resizeObserver = new ResizeObserver(() => {
-      if (rafId !== null) {
-        return
+      if (timerId !== null) {
+        clearTimeout(timerId)
       }
-      rafId = requestAnimationFrame(() => {
-        rafId = null
+      timerId = setTimeout(() => {
+        timerId = null
         const manager = managerRef.current
         if (!manager) {
           return
         }
         fitPanes(manager)
-      })
+      }, RESIZE_DEBOUNCE_MS)
     })
     resizeObserver.observe(container)
     return () => {
       resizeObserver.disconnect()
-      if (rafId !== null) {
-        cancelAnimationFrame(rafId)
+      if (timerId !== null) {
+        clearTimeout(timerId)
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
