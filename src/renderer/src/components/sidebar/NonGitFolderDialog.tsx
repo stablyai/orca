@@ -18,13 +18,31 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
 
   const isOpen = activeModal === 'confirm-non-git-folder'
   const folderPath = typeof modalData.folderPath === 'string' ? modalData.folderPath : ''
+  const connectionId = typeof modalData.connectionId === 'string' ? modalData.connectionId : ''
 
   const handleConfirm = useCallback(() => {
-    if (folderPath) {
+    if (connectionId && folderPath) {
+      void (async () => {
+        try {
+          const repo = await window.api.repos.addRemote({
+            connectionId,
+            remotePath: folderPath,
+            kind: 'folder'
+          })
+          const state = useAppStore.getState()
+          if (!state.repos.some((r) => r.id === repo.id)) {
+            useAppStore.setState({ repos: [...state.repos, repo] })
+          }
+          await state.fetchWorktrees(repo.id)
+        } catch {
+          // Best-effort — the toast from the store handles errors
+        }
+      })()
+    } else if (folderPath) {
       void addNonGitFolder(folderPath)
     }
     closeModal()
-  }, [addNonGitFolder, closeModal, folderPath])
+  }, [addNonGitFolder, closeModal, folderPath, connectionId])
 
   const handleOpenChange = useCallback(
     (open: boolean) => {

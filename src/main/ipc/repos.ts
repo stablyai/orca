@@ -80,7 +80,12 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     'repos:addRemote',
     async (
       _event,
-      args: { connectionId: string; remotePath: string; displayName?: string }
+      args: {
+        connectionId: string
+        remotePath: string
+        displayName?: string
+        kind?: 'git' | 'folder'
+      }
     ): Promise<Repo> => {
       const gitProvider = getSshGitProvider(args.connectionId)
       if (!gitProvider) {
@@ -97,21 +102,30 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       const pathSegments = args.remotePath.replace(/\/+$/, '').split('/')
       const folderName = pathSegments.at(-1) || args.remotePath
 
-      // Why: detect whether the remote path is a git repo so we can set kind
-      // correctly. Non-git directories are added as 'folder' with git features
-      // disabled, matching the local add-repo behavior.
-      let repoKind: 'git' | 'folder' = 'folder'
+      let repoKind: 'git' | 'folder' = args.kind ?? 'git'
       let resolvedPath = args.remotePath
-      try {
-        const check = await gitProvider.isGitRepoAsync(args.remotePath)
-        if (check.isRepo) {
-          repoKind = 'git'
-          if (check.rootPath) {
-            resolvedPath = check.rootPath
+
+      if (args.kind !== 'folder') {
+        // Why: when kind is not explicitly 'folder', verify the remote path is
+        // a git repo. Throw on failure so the renderer can show the "Open as
+        // Folder" confirmation dialog — matching the local add-repo behavior
+        // where non-git directories require explicit user consent.
+        try {
+          const check = await gitProvider.isGitRepoAsync(args.remotePath)
+          if (check.isRepo) {
+            repoKind = 'git'
+            if (check.rootPath) {
+              resolvedPath = check.rootPath
+            }
+          } else {
+            throw new Error(`Not a valid git repository: ${args.remotePath}`)
           }
+        } catch (err) {
+          if (err instanceof Error && err.message.includes('Not a valid git repository')) {
+            throw err
+          }
+          throw new Error(`Not a valid git repository: ${args.remotePath}`)
         }
-      } catch {
-        // If detection fails, fall back to folder
       }
 
       const repo: Repo = {

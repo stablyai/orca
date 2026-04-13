@@ -15,6 +15,7 @@ type ReposApi = {
     connectionId: string
     remotePath: string
     displayName?: string
+    kind?: 'git' | 'folder'
   }) => Promise<Repo>
   remove: (args: { repoId: string }) => Promise<void>
   update: (args: {

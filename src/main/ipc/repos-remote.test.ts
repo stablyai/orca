@@ -133,12 +133,23 @@ describe('repos:addRemote', () => {
     ).rejects.toThrow('SSH connection "unknown-conn" not found')
   })
 
-  it('sets kind to folder when remote path is not a git repo', async () => {
+  it('throws when remote path is not a git repo', async () => {
     mockGitProvider.isGitRepoAsync.mockResolvedValueOnce({ isRepo: false, rootPath: null })
 
+    await expect(
+      handlers.get('repos:addRemote')!(null, {
+        connectionId: 'conn-1',
+        remotePath: '/home/user/documents'
+      })
+    ).rejects.toThrow('Not a valid git repository')
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
+  })
+
+  it('adds as folder when kind is explicitly set', async () => {
     const result = await handlers.get('repos:addRemote')!(null, {
       connectionId: 'conn-1',
-      remotePath: '/home/user/documents'
+      remotePath: '/home/user/documents',
+      kind: 'folder'
     })
 
     expect(mockStore.addRepo).toHaveBeenCalledWith(

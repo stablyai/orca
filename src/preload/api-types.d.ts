@@ -220,6 +220,7 @@ export type PreloadApi = {
       connectionId: string
       remotePath: string
       displayName?: string
+      kind?: 'git' | 'folder'
     }) => Promise<Repo>
     onCloneProgress: (callback: (data: { phase: string; percent: number }) => void) => () => void
     getGitUsername: (args: { repoId: string }) => Promise<string>

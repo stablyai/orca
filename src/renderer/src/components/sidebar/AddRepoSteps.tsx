@@ -96,17 +96,23 @@ export function useRemoteRepo(
       }
 
       toast.success('Remote repository added', { description: repo.displayName })
-
-      if (repo.kind === 'folder') {
-        closeModal()
-        return
-      }
-
       setAddedRepo(repo)
       await fetchWorktrees(repo.id)
       setStep('setup')
     } catch (err) {
-      setRemoteError(err instanceof Error ? err.message : String(err))
+      const message = err instanceof Error ? err.message : String(err)
+      if (message.includes('Not a valid git repository')) {
+        // Why: match the local add-repo flow — show confirmation dialog so
+        // users understand git features will be unavailable, rather than
+        // silently adding as a folder.
+        closeModal()
+        useAppStore.getState().openModal('confirm-non-git-folder', {
+          folderPath: remotePath.trim(),
+          connectionId: selectedTargetId
+        })
+        return
+      }
+      setRemoteError(message)
     } finally {
       setIsAddingRemote(false)
     }
