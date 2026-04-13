@@ -4,6 +4,14 @@ import { Plus, Upload } from 'lucide-react'
 import type { SshTarget } from '../../../../shared/ssh-types'
 import { useAppStore } from '@/store'
 import { Button } from '../ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from '../ui/dialog'
 import type { SettingsSearchEntry } from './settings-search'
 import { SshTargetCard } from './SshTargetCard'
 import { SshTargetForm, EMPTY_FORM, type EditingTarget } from './SshTargetForm'
@@ -43,6 +51,7 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<EditingTarget>(EMPTY_FORM)
   const [testing, setTesting] = useState<string | null>(null)
+  const [pendingRemove, setPendingRemove] = useState<{ id: string; label: string } | null>(null)
 
   const loadTargets = useCallback(async () => {
     try {
@@ -96,14 +105,7 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
     }
   }
 
-  const handleRemove = async (id: string, label: string): Promise<void> => {
-    // Why: destructive action — confirm before removing to prevent accidental
-    // loss of a configured target and disconnecting active sessions.
-    if (
-      !window.confirm(`Remove SSH target "${label}"? This will disconnect any active sessions.`)
-    ) {
-      return
-    }
+  const handleRemove = async (id: string): Promise<void> => {
     try {
       // Why: disconnect any non-disconnected connection, including transitional
       // states (connecting, reconnecting, deploying-relay). Leaving these alive
@@ -241,7 +243,7 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
               onDisconnect={(id) => void handleDisconnect(id)}
               onTest={(id) => void handleTest(id)}
               onEdit={handleEdit}
-              onRemove={(id) => void handleRemove(id, target.label)}
+              onRemove={(id) => setPendingRemove({ id, label: target.label })}
             />
           ))}
         </div>
@@ -257,6 +259,48 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
           onCancel={cancelForm}
         />
       ) : null}
+
+      {/* Remove confirmation dialog */}
+      <Dialog
+        open={!!pendingRemove}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingRemove(null)
+          }
+        }}
+      >
+        <DialogContent className="max-w-sm sm:max-w-sm" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle className="text-sm">Remove SSH Target</DialogTitle>
+            <DialogDescription className="text-xs">
+              This will remove the target and disconnect any active sessions.
+            </DialogDescription>
+          </DialogHeader>
+
+          {pendingRemove ? (
+            <div className="rounded-md border border-border/70 bg-muted/35 px-3 py-2 text-xs">
+              <div className="break-all text-muted-foreground">{pendingRemove.label}</div>
+            </div>
+          ) : null}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingRemove(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (pendingRemove) {
+                  void handleRemove(pendingRemove.id)
+                  setPendingRemove(null)
+                }
+              }}
+            >
+              Remove
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
