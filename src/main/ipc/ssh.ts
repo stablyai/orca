@@ -1,4 +1,3 @@
-import { randomUUID } from 'crypto'
 import { ipcMain, type BrowserWindow } from 'electron'
 import type { Store } from '../persistence'
 import { SshConnectionStore } from '../ssh/ssh-connection-store'
@@ -14,6 +13,7 @@ import { registerSshGitProvider } from '../providers/ssh-git-dispatch'
 import { SshPortForwardManager } from '../ssh/ssh-port-forward'
 import type { SshTarget, SshConnectionState } from '../../shared/ssh-types'
 import { cleanupConnection, wireUpSshPtyEvents, reestablishRelayStack } from './ssh-relay-helpers'
+import { buildSshAuthCallbacks } from './ssh-auth-helpers'
 
 let sshStore: SshConnectionStore | null = null
 let connectionManager: SshConnectionManager | null = null
@@ -87,98 +87,7 @@ export function registerSshHandlers(
       }
     },
 
-    onHostKeyVerify: async (req) => {
-      const win = getMainWindow()
-      if (!win || win.isDestroyed()) {
-        return false
-      }
-
-      return new Promise<boolean>((resolve) => {
-        const channel = `ssh:host-key-verify-response-${randomUUID()}`
-        // Why: if the renderer crashes or the window closes before responding,
-        // the ipcMain.once listener would leak forever. The timeout,
-        // destroy listener, and removeListener in cleanup ensure no leak.
-        const onClosed = () => {
-          cleanup()
-          resolve(false)
-        }
-        const cleanup = () => {
-          ipcMain.removeAllListeners(channel)
-          clearTimeout(timer)
-          win.removeListener('closed', onClosed)
-        }
-        const timer = setTimeout(() => {
-          cleanup()
-          resolve(false)
-        }, 120_000)
-        win.webContents.send('ssh:host-key-verify', { ...req, responseChannel: channel })
-        ipcMain.once(channel, (_event, accepted: boolean) => {
-          cleanup()
-          resolve(accepted)
-        })
-        win.once('closed', onClosed)
-      })
-    },
-
-    onAuthChallenge: async (req) => {
-      const win = getMainWindow()
-      if (!win || win.isDestroyed()) {
-        return []
-      }
-
-      return new Promise<string[]>((resolve) => {
-        const channel = `ssh:auth-challenge-response-${randomUUID()}`
-        const onClosed = () => {
-          cleanup()
-          resolve([])
-        }
-        const cleanup = () => {
-          ipcMain.removeAllListeners(channel)
-          clearTimeout(timer)
-          win.removeListener('closed', onClosed)
-        }
-        const timer = setTimeout(() => {
-          cleanup()
-          resolve([])
-        }, 120_000)
-        win.webContents.send('ssh:auth-challenge', { ...req, responseChannel: channel })
-        ipcMain.once(channel, (_event, responses: string[]) => {
-          cleanup()
-          resolve(responses)
-        })
-        win.once('closed', onClosed)
-      })
-    },
-
-    onPasswordPrompt: async (targetId: string) => {
-      const win = getMainWindow()
-      if (!win || win.isDestroyed()) {
-        return null
-      }
-
-      return new Promise<string | null>((resolve) => {
-        const channel = `ssh:password-response-${randomUUID()}`
-        const onClosed = () => {
-          cleanup()
-          resolve(null)
-        }
-        const cleanup = () => {
-          ipcMain.removeAllListeners(channel)
-          clearTimeout(timer)
-          win.removeListener('closed', onClosed)
-        }
-        const timer = setTimeout(() => {
-          cleanup()
-          resolve(null)
-        }, 120_000)
-        win.webContents.send('ssh:password-prompt', { targetId, responseChannel: channel })
-        ipcMain.once(channel, (_event, password: string | null) => {
-          cleanup()
-          resolve(password)
-        })
-        win.once('closed', onClosed)
-      })
-    }
+    ...buildSshAuthCallbacks(getMainWindow)
   }
 
   connectionManager = new SshConnectionManager(callbacks)

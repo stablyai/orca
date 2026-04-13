@@ -132,6 +132,7 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "@parcel/watcher",
+      "cpu-features",
       "electron",
       "esbuild",
       "node-pty"
