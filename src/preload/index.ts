@@ -185,6 +185,7 @@ const api = {
       rows: number
       cwd?: string
       env?: Record<string, string>
+      command?: string
     }): Promise<{ id: string }> => ipcRenderer.invoke('pty:spawn', opts),
 
     write: (id: string, data: string): void => {

@@ -11,6 +11,10 @@ const {
   existsSyncMock,
   statSyncMock,
   accessSyncMock,
+  mkdirSyncMock,
+  writeFileSyncMock,
+  chmodSyncMock,
+  getPathMock,
   spawnMock,
   openCodeBuildPtyEnvMock,
   openCodeClearPtyMock,
@@ -24,6 +28,10 @@ const {
   existsSyncMock: vi.fn(),
   statSyncMock: vi.fn(),
   accessSyncMock: vi.fn(),
+  mkdirSyncMock: vi.fn(),
+  writeFileSyncMock: vi.fn(),
+  chmodSyncMock: vi.fn(),
+  getPathMock: vi.fn(),
   spawnMock: vi.fn(),
   openCodeBuildPtyEnvMock: vi.fn(),
   openCodeClearPtyMock: vi.fn(),
@@ -32,6 +40,9 @@ const {
 }))
 
 vi.mock('electron', () => ({
+  app: {
+    getPath: getPathMock
+  },
   ipcMain: {
     handle: handleMock,
     on: onMock,
@@ -44,6 +55,9 @@ vi.mock('fs', () => ({
   existsSync: existsSyncMock,
   statSync: statSyncMock,
   accessSync: accessSyncMock,
+  mkdirSync: mkdirSyncMock,
+  writeFileSync: writeFileSyncMock,
+  chmodSync: chmodSyncMock,
   constants: {
     X_OK: 1
   }
@@ -92,6 +106,10 @@ describe('registerPtyHandlers', () => {
     existsSyncMock.mockReset()
     statSyncMock.mockReset()
     accessSyncMock.mockReset()
+    mkdirSyncMock.mockReset()
+    writeFileSyncMock.mockReset()
+    chmodSyncMock.mockReset()
+    getPathMock.mockReset()
     spawnMock.mockReset()
     openCodeBuildPtyEnvMock.mockReset()
     openCodeClearPtyMock.mockReset()
@@ -103,6 +121,7 @@ describe('registerPtyHandlers', () => {
     handleMock.mockImplementation((channel, handler) => {
       handlers.set(channel, handler)
     })
+    getPathMock.mockReturnValue('/tmp/orca-user-data')
     existsSyncMock.mockReturnValue(true)
     statSyncMock.mockReturnValue({ isDirectory: () => true })
     openCodeBuildPtyEnvMock.mockReturnValue({
@@ -124,6 +143,33 @@ describe('registerPtyHandlers', () => {
       kill: vi.fn()
     })
   })
+
+  function createMockProc() {
+    let dataHandler: ((data: string) => void) | null = null
+    let exitHandler: ((event: { exitCode: number }) => void) | null = null
+
+    return {
+      proc: {
+        onData: vi.fn((handler: (data: string) => void) => {
+          dataHandler = handler
+          return makeDisposable()
+        }),
+        onExit: vi.fn((handler: (event: { exitCode: number }) => void) => {
+          exitHandler = handler
+          return makeDisposable()
+        }),
+        write: vi.fn(),
+        resize: vi.fn(),
+        kill: vi.fn()
+      },
+      emitData(data: string) {
+        dataHandler?.(data)
+      },
+      emitExit(exitCode = 0) {
+        exitHandler?.({ exitCode })
+      }
+    }
+  }
 
   /** Helper: trigger pty:spawn and return the env passed to node-pty. */
   function spawnAndGetEnv(
@@ -164,6 +210,25 @@ describe('registerPtyHandlers', () => {
         }
       }
     }
+  }
+
+  function spawnAndGetCall(args?: {
+    cwd?: string
+    env?: Record<string, string>
+    command?: string
+  }): [string, string[], { cwd: string; env: Record<string, string> }] {
+    handlers.clear()
+    registerPtyHandlers(mainWindow as never)
+    handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      ...args
+    })
+    return spawnMock.mock.calls.at(-1) as [
+      string,
+      string[],
+      { cwd: string; env: Record<string, string> }
+    ]
   }
 
   describe('spawn environment', () => {
@@ -253,6 +318,87 @@ describe('registerPtyHandlers', () => {
       } else {
         process.env.USERPROFILE = originalUserProfile
       }
+    }
+  })
+
+  it('spawns a plain POSIX login shell and queues startup commands for the live session', () => {
+    const originalPlatform = process.platform
+    const originalShell = process.env.SHELL
+
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'darwin'
+    })
+    process.env.SHELL = '/bin/zsh'
+
+    try {
+      const [shell, args, options] = spawnAndGetCall({ cwd: '/tmp', command: 'printf "hello"' })
+      expect(shell).toBe('/bin/zsh')
+      expect(args).toEqual(['-l'])
+      expect(options.env.ZDOTDIR).toBe('/tmp/orca-user-data/shell-ready/zsh')
+      expect(options.env.ORCA_ORIG_ZDOTDIR).toBe(process.env.HOME)
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+      if (originalShell === undefined) {
+        delete process.env.SHELL
+      } else {
+        process.env.SHELL = originalShell
+      }
+    }
+  })
+
+  it('does not write the startup command before the shell-ready marker arrives', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp',
+        command: 'claude'
+      })
+
+      expect(mockProc.proc.write).not.toHaveBeenCalled()
+
+      mockProc.emitData('last login: today\r\n')
+      vi.runOnlyPendingTimers()
+      expect(mockProc.proc.write).not.toHaveBeenCalled()
+
+      mockProc.emitData('\x1b]133;A\x07% ')
+      await Promise.resolve()
+      vi.runAllTimers()
+      expect(mockProc.proc.write).toHaveBeenCalledWith('claude\n')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('falls back to a max wait when the shell emits no readiness output', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp',
+        command: 'codex'
+      })
+
+      vi.advanceTimersByTime(1500)
+      await Promise.resolve()
+      vi.runAllTimers()
+      expect(mockProc.proc.write).toHaveBeenCalledWith('codex\n')
+    } finally {
+      vi.useRealTimers()
     }
   })
 

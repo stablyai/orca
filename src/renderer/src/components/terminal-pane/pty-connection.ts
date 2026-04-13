@@ -149,6 +149,7 @@ export function connectPanePty(
   const transport = createIpcPtyTransport({
     cwd: deps.cwd,
     env: paneStartup?.env,
+    command: paneStartup?.command,
     onPtyExit: onExit,
     onTitleChange,
     onPtySpawn,
@@ -237,14 +238,6 @@ export function connectPanePty(
         cols,
         rows,
         callbacks: {
-          onConnect: () => {
-            if (paneStartup?.command) {
-              // Why: setup commands are injected only after the PTY reports a live
-              // shell connection. Writing earlier is racy with shell startup files
-              // and can drop characters on slower shells.
-              transport.sendInput(`${paneStartup.command}\r`)
-            }
-          },
           onData: dataCallback,
           onError: reportError
         }
