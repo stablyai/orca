@@ -65,14 +65,22 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     const store = createMockStore()
 
     ensureWorktreeHasInitialTerminal(store, 'wt-1', undefined, {
-      command: 'claude "Fix issue #42"'
+      runnerScriptPath: '/tmp/repo/.git/orca/issue-command-runner.sh',
+      envVars: {
+        ORCA_ROOT_PATH: '/tmp/repo',
+        ORCA_WORKTREE_PATH: '/tmp/worktrees/wt-1'
+      }
     })
 
     expect(store.createTab).toHaveBeenCalledWith('wt-1')
     expect(store.setActiveTab).toHaveBeenCalledWith('tab-1')
     expect(store.queueTabSetupSplit).not.toHaveBeenCalled()
     expect(store.queueTabIssueCommandSplit).toHaveBeenCalledWith('tab-1', {
-      command: 'claude "Fix issue #42"'
+      command: 'bash /tmp/repo/.git/orca/issue-command-runner.sh',
+      env: {
+        ORCA_ROOT_PATH: '/tmp/repo',
+        ORCA_WORKTREE_PATH: '/tmp/worktrees/wt-1'
+      }
     })
   })
 
@@ -87,7 +95,8 @@ describe('ensureWorktreeHasInitialTerminal', () => {
         envVars: { ORCA_ROOT_PATH: '/tmp/repo' }
       },
       {
-        command: 'claude "Fix issue #42"'
+        runnerScriptPath: '/tmp/repo/.git/orca/issue-command-runner.sh',
+        envVars: { ORCA_ROOT_PATH: '/tmp/repo' }
       }
     )
 
@@ -96,7 +105,8 @@ describe('ensureWorktreeHasInitialTerminal', () => {
       env: { ORCA_ROOT_PATH: '/tmp/repo' }
     })
     expect(store.queueTabIssueCommandSplit).toHaveBeenCalledWith('tab-1', {
-      command: 'claude "Fix issue #42"'
+      command: 'bash /tmp/repo/.git/orca/issue-command-runner.sh',
+      env: { ORCA_ROOT_PATH: '/tmp/repo' }
     })
   })
 
