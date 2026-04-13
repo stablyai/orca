@@ -1,8 +1,9 @@
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkFrontmatter from 'remark-frontmatter'
 import rehypeHighlight from 'rehype-highlight'
+import { extractFrontMatter } from './markdown-frontmatter'
 import { ChevronDown, ChevronUp, X } from 'lucide-react'
 import type { Components } from 'react-markdown'
 import { Button } from '@/components/ui/button'
@@ -44,6 +45,17 @@ export default function MarkdownPreview({
   const isDark =
     settings?.theme === 'dark' ||
     (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+
+  const frontMatter = useMemo(() => extractFrontMatter(content), [content])
+  const frontMatterInner = useMemo(() => {
+    if (!frontMatter) {
+      return ''
+    }
+    return frontMatter.raw
+      .replace(/^(?:---|\+\+\+)\r?\n/, '')
+      .replace(/\r?\n(?:---|\+\+\+)\r?\n?$/, '')
+      .trim()
+  }, [frontMatter])
 
   // Why: Each markdown viewing mode (source/rich/preview) produces different
   // DOM structures and content heights. A scroll position saved in source mode
@@ -369,6 +381,19 @@ export default function MarkdownPreview({
         </div>
       ) : null}
       <div ref={bodyRef} className="markdown-body">
+        {/* Why: remarkFrontmatter silently strips front-matter from rendered
+        output. We extract it ourselves and render it as a styled code block so
+        the user can see the metadata in preview mode. */}
+        {frontMatter && (
+          <div className="mb-4 rounded border border-border/60 bg-muted/40 px-3 py-2">
+            <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+              Front Matter
+            </div>
+            <pre className="max-h-48 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground font-mono scrollbar-editor">
+              {frontMatterInner}
+            </pre>
+          </div>
+        )}
         <Markdown
           components={components}
           remarkPlugins={[remarkGfm, remarkFrontmatter]}
