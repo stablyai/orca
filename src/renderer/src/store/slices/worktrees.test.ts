@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
@@ -265,8 +266,12 @@ describe('removeWorktree state cleanup', () => {
         'repo1::/path/wt2': [{ id: 'tab-2', worktreeId: 'repo1::/path/wt2' }]
       },
       groupsByWorktree: {
-        'repo1::/path/wt1': [{ id: 'group-1', worktreeId: 'repo1::/path/wt1', activeTabId: 'tab-1' }],
-        'repo1::/path/wt2': [{ id: 'group-2', worktreeId: 'repo1::/path/wt2', activeTabId: 'tab-2' }]
+        'repo1::/path/wt1': [
+          { id: 'group-1', worktreeId: 'repo1::/path/wt1', activeTabId: 'tab-1' }
+        ],
+        'repo1::/path/wt2': [
+          { id: 'group-2', worktreeId: 'repo1::/path/wt2', activeTabId: 'tab-2' }
+        ]
       },
       activeGroupIdByWorktree: {
         'repo1::/path/wt1': 'group-1',
