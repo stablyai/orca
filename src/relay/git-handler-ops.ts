@@ -262,3 +262,48 @@ export async function branchDiffEntries(
   }
   return results
 }
+
+// Why: only read-only git subcommands are allowed via exec. config is restricted
+// to read-only flags; branch rejects destructive flags; fetch/worktree removed.
+const ALLOWED_GIT_SUBCOMMANDS = new Set([
+  'rev-parse',
+  'branch',
+  'log',
+  'show-ref',
+  'ls-remote',
+  'remote',
+  'symbolic-ref',
+  'merge-base',
+  'ls-files',
+  'config'
+])
+const CONFIG_READ_ONLY_FLAGS = new Set(['--get', '--get-all', '--list', '--get-regexp', '-l'])
+const BRANCH_DESTRUCTIVE_FLAGS = new Set([
+  '-d',
+  '-D',
+  '--delete',
+  '-m',
+  '-M',
+  '--move',
+  '-c',
+  '-C',
+  '--copy'
+])
+
+export function validateGitExecArgs(args: string[]): void {
+  const subcommand = args[0]
+  if (!subcommand || !ALLOWED_GIT_SUBCOMMANDS.has(subcommand)) {
+    throw new Error(`git subcommand not allowed: ${subcommand ?? '(empty)'}`)
+  }
+  const restArgs = args.slice(1)
+  if (subcommand === 'config') {
+    if (!restArgs.some((a) => CONFIG_READ_ONLY_FLAGS.has(a))) {
+      throw new Error('git config is restricted to read-only operations (--get, --list, etc.)')
+    }
+  }
+  if (subcommand === 'branch') {
+    if (restArgs.some((a) => BRANCH_DESTRUCTIVE_FLAGS.has(a))) {
+      throw new Error('Destructive git branch flags are not allowed via exec')
+    }
+  }
+}

@@ -96,6 +96,9 @@ export class PtyHandler {
   }
 
   private async spawn(params: Record<string, unknown>): Promise<{ id: string }> {
+    if (this.ptys.size >= 50) {
+      throw new Error('Maximum number of PTY sessions reached (50)')
+    }
     const pty = await loadPty()
     if (!pty) {
       throw new Error('node-pty is not available on this remote host')
@@ -184,6 +187,19 @@ export class PtyHandler {
   private async sendSignal(params: Record<string, unknown>): Promise<void> {
     const id = params.id as string
     const signal = params.signal as string
+    const ALLOWED_SIGNALS = new Set([
+      'SIGINT',
+      'SIGTERM',
+      'SIGHUP',
+      'SIGKILL',
+      'SIGTSTP',
+      'SIGCONT',
+      'SIGUSR1',
+      'SIGUSR2'
+    ])
+    if (!ALLOWED_SIGNALS.has(signal)) {
+      throw new Error(`Signal not allowed: ${signal}`)
+    }
     const managed = this.ptys.get(id)
     if (!managed) {
       throw new Error(`PTY "${id}" not found`)
@@ -331,6 +347,9 @@ export class PtyHandler {
   dispose(): void {
     this.cancelGraceTimer()
     for (const [, managed] of this.ptys) {
+      if (managed.killTimer) {
+        clearTimeout(managed.killTimer)
+      }
       managed.pty.kill('SIGTERM')
     }
     this.ptys.clear()

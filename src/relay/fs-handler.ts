@@ -75,7 +75,7 @@ export class FsHandler {
 
   private async readFile(params: Record<string, unknown>) {
     const filePath = params.filePath as string
-    this.context.validatePath(filePath)
+    await this.context.validatePathResolved(filePath)
     const stats = await stat(filePath)
     if (stats.size > MAX_FILE_SIZE) {
       throw new Error(
@@ -96,7 +96,7 @@ export class FsHandler {
 
   private async writeFile(params: Record<string, unknown>) {
     const filePath = params.filePath as string
-    this.context.validatePath(filePath)
+    await this.context.validatePathResolved(filePath)
     const content = params.content as string
     try {
       const fileStats = await lstat(filePath)
@@ -129,7 +129,7 @@ export class FsHandler {
 
   private async deletePath(params: Record<string, unknown>) {
     const targetPath = params.targetPath as string
-    this.context.validatePath(targetPath)
+    await this.context.validatePathResolved(targetPath)
     const recursive = params.recursive as boolean | undefined
     const stats = await stat(targetPath)
     if (stats.isDirectory() && !recursive) {
@@ -206,6 +206,11 @@ export class FsHandler {
 
   private async watch(params: Record<string, unknown>) {
     const rootPath = params.rootPath as string
+    this.context.validatePath(rootPath)
+
+    if (this.watches.size >= 20) {
+      throw new Error('Maximum number of file watchers reached')
+    }
 
     if (this.watches.has(rootPath)) {
       return

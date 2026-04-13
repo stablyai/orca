@@ -11,31 +11,16 @@ import {
   parseBranchDiff,
   parseWorktreeList
 } from './git-handler-utils'
-import { computeDiff, branchCompare as branchCompareOp, branchDiffEntries } from './git-handler-ops'
+import {
+  computeDiff,
+  branchCompare as branchCompareOp,
+  branchDiffEntries,
+  validateGitExecArgs
+} from './git-handler-ops'
 
 const execFileAsync = promisify(execFile)
 const MAX_GIT_BUFFER = 10 * 1024 * 1024
 const BULK_CHUNK_SIZE = 100
-
-// Why: git.exec allows the client to run arbitrary git subcommands. Without an
-// allowlist a compromised client could run destructive commands like
-// `git push --force`, `git filter-branch`, or use `git config` alias tricks to
-// execute arbitrary shell commands. Only read-only / safe subcommands are
-// permitted.
-const ALLOWED_GIT_SUBCOMMANDS = new Set([
-  'config',
-  'rev-parse',
-  'branch',
-  'fetch',
-  'log',
-  'show-ref',
-  'ls-remote',
-  'worktree',
-  'remote',
-  'symbolic-ref',
-  'merge-base',
-  'ls-files'
-])
 
 export class GitHandler {
   private dispatcher: RelayDispatcher
@@ -65,8 +50,6 @@ export class GitHandler {
     this.dispatcher.onRequest('git.isGitRepo', (p) => this.isGitRepo(p))
   }
 
-  // ─── Helpers ────────────────────────────────────────────────────
-
   private async git(
     args: string[],
     cwd: string,
@@ -87,8 +70,6 @@ export class GitHandler {
     })) as { stdout: Buffer }
     return stdout
   }
-
-  // ─── Status ─────────────────────────────────────────────────────
 
   private async getStatus(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
@@ -153,8 +134,6 @@ export class GitHandler {
     return dotGitPath
   }
 
-  // ─── Diff ───────────────────────────────────────────────────────
-
   private async getDiff(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
     this.context.validatePath(worktreePath)
@@ -162,8 +141,6 @@ export class GitHandler {
     const staged = params.staged as boolean
     return computeDiff(this.gitBuffer.bind(this), worktreePath, filePath, staged)
   }
-
-  // ─── Stage / Unstage / Discard ──────────────────────────────────
 
   private async stage(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
@@ -206,7 +183,9 @@ export class GitHandler {
 
     const resolved = path.resolve(worktreePath, filePath)
     const rel = path.relative(path.resolve(worktreePath), resolved)
-    if (!rel || rel === '..' || rel.startsWith('../') || path.isAbsolute(rel)) {
+    // Why: empty rel or '.' means the path IS the worktree root — rm -rf would
+    // delete the entire worktree. Reject along with parent-escaping paths.
+    if (!rel || rel === '.' || rel === '..' || rel.startsWith('../') || path.isAbsolute(rel)) {
       throw new Error(`Path "${filePath}" resolves outside the worktree`)
     }
 
@@ -223,15 +202,11 @@ export class GitHandler {
       : rm(resolved, { force: true, recursive: true }))
   }
 
-  // ─── Conflict Operation ─────────────────────────────────────────
-
   private async conflictOperation(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
     this.context.validatePath(worktreePath)
     return this.detectConflictOperation(worktreePath)
   }
-
-  // ─── Branch Compare ─────────────────────────────────────────────
 
   private async branchCompare(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
@@ -246,8 +221,6 @@ export class GitHandler {
       return parseBranchDiff(stdout)
     })
   }
-
-  // ─── Branch Diff ────────────────────────────────────────────────
 
   private async branchDiff(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
@@ -265,21 +238,12 @@ export class GitHandler {
     )
   }
 
-  // ─── Exec (arbitrary git commands) ──────────────────────────────
-
   private async exec(params: Record<string, unknown>) {
     const args = params.args as string[]
     const cwd = params.cwd as string
     this.context.validatePath(cwd)
 
-    // Why: without an allowlist a compromised client could run destructive git
-    // commands (push --force, filter-branch) or abuse config aliases to execute
-    // arbitrary shell commands on the remote host.
-    const subcommand = args[0]
-    if (!subcommand || !ALLOWED_GIT_SUBCOMMANDS.has(subcommand)) {
-      throw new Error(`git subcommand not allowed: ${subcommand ?? '(empty)'}`)
-    }
-
+    validateGitExecArgs(args)
     const { stdout, stderr } = await this.git(args, cwd)
     return { stdout, stderr }
   }
@@ -294,8 +258,6 @@ export class GitHandler {
       return { isRepo: false, rootPath: null }
     }
   }
-
-  // ─── Worktrees ──────────────────────────────────────────────────
 
   private async listWorktrees(params: Record<string, unknown>) {
     const repoPath = params.repoPath as string
