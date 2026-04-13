@@ -94,40 +94,40 @@ export function SshTargetCard({
         {status === 'connected' ? (
           <Button
             variant="ghost"
-            size="sm"
+            size="xs"
             onClick={() => onDisconnect(target.id)}
-            className="gap-1.5 text-xs"
+            className="gap-1.5"
           >
-            <WifiOff className="size-3.5" />
+            <WifiOff className="size-3" />
             Disconnect
           </Button>
         ) : isConnecting(status) ? (
-          <Button variant="ghost" size="sm" disabled className="gap-1.5 text-xs">
-            <Loader2 className="size-3.5 animate-spin" />
+          <Button variant="ghost" size="xs" disabled className="gap-1.5">
+            <Loader2 className="size-3 animate-spin" />
             Connecting
           </Button>
         ) : (
           <>
             <Button
               variant="ghost"
-              size="sm"
+              size="xs"
               onClick={() => onConnect(target.id)}
-              className="gap-1.5 text-xs"
+              className="gap-1.5"
             >
-              <Wifi className="size-3.5" />
+              <Wifi className="size-3" />
               Connect
             </Button>
             <Button
               variant="ghost"
-              size="sm"
+              size="xs"
               onClick={() => onTest(target.id)}
               disabled={testing}
-              className="gap-1.5 text-xs"
+              className="gap-1.5"
             >
               {testing ? (
-                <Loader2 className="size-3.5 animate-spin" />
+                <Loader2 className="size-3 animate-spin" />
               ) : (
-                <MonitorSmartphone className="size-3.5" />
+                <MonitorSmartphone className="size-3" />
               )}
               Test
             </Button>
@@ -138,19 +138,19 @@ export function SshTargetCard({
           variant="ghost"
           size="icon"
           onClick={() => onEdit(target)}
-          className="size-8"
+          className="size-7"
           aria-label="Edit target"
         >
-          <Pencil className="size-3.5" />
+          <Pencil className="size-3" />
         </Button>
         <Button
           variant="ghost"
           size="icon"
           onClick={() => onRemove(target.id)}
-          className="size-8 text-muted-foreground hover:text-red-400"
+          className="size-7 text-muted-foreground hover:text-red-400"
           aria-label="Remove target"
         >
-          <Trash2 className="size-3.5" />
+          <Trash2 className="size-3" />
         </Button>
       </div>
     </div>

@@ -110,6 +110,7 @@ const api = {
       connectionId: string
       remotePath: string
       displayName?: string
+      kind?: 'git' | 'folder'
     }): Promise<unknown> => ipcRenderer.invoke('repos:addRemote', args),
 
     remove: (args: { repoId: string }): Promise<void> => ipcRenderer.invoke('repos:remove', args),
