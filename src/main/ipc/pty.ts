@@ -248,10 +248,15 @@ export function registerPtyHandlers(
         if (shellBasename === 'cmd.exe') {
           shellArgs = ['/K', 'chcp 65001 > nul']
         } else if (shellBasename === 'powershell.exe' || shellBasename === 'pwsh.exe') {
+          // Why: `-NoExit -Command` alone skips the user's $PROFILE, breaking
+          // custom prompts (oh-my-posh, starship), aliases, and PSReadLine
+          // configuration. Dot-sourcing $PROFILE first restores the normal
+          // startup experience. PowerShell silently ignores a missing $PROFILE,
+          // so this is safe even when no profile file exists.
           shellArgs = [
             '-NoExit',
             '-Command',
-            '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
+            '. $PROFILE 2>$null; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
           ]
         } else {
           shellArgs = []

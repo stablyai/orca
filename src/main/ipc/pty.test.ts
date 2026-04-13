@@ -239,6 +239,7 @@ describe('registerPtyHandlers', () => {
       } else {
         process.env.COMSPEC = originalComspec
       }
+      delete process.env.PYTHONUTF8
     })
 
     it('passes chcp 65001 to cmd.exe for UTF-8 console output', () => {
@@ -265,7 +266,7 @@ describe('registerPtyHandlers', () => {
         [
           '-NoExit',
           '-Command',
-          '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
+          '. $PROFILE 2>$null; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
         ],
         expect.any(Object)
       )
@@ -282,7 +283,7 @@ describe('registerPtyHandlers', () => {
         [
           '-NoExit',
           '-Command',
-          '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
+          '. $PROFILE 2>$null; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
         ],
         expect.any(Object)
       )
@@ -309,8 +310,6 @@ describe('registerPtyHandlers', () => {
       const spawnCall = spawnMock.mock.calls.at(-1)!
       const env = spawnCall[2].env as Record<string, string>
       expect(env.PYTHONUTF8).toBe('0')
-
-      delete process.env.PYTHONUTF8
     })
   })
 
