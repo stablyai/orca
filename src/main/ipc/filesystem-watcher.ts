@@ -238,9 +238,15 @@ async function createWatcher(rootKey: string, rootPath: string): Promise<Watched
           if (root.batch.timer) {
             clearTimeout(root.batch.timer)
           }
-          void root.subscription.unsubscribe().catch(() => {
-            // Already errored — ignore cleanup failures
-          })
+          // Why: the error callback can fire before `watcher.subscribe()`
+          // resolves and assigns root.subscription (e.g. the watched root
+          // is deleted or inaccessible at startup).  Guard against null so
+          // the cleanup path doesn't crash the main process.
+          if (root.subscription) {
+            void root.subscription.unsubscribe().catch(() => {
+              // Already errored — ignore cleanup failures
+            })
+          }
           watchedRoots.delete(rootKey)
           return
         }
