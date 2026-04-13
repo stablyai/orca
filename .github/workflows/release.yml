@@ -75,6 +75,12 @@ jobs:
       - name: Verify macOS signing environment
         if: matrix.platform == 'mac'
         run: node config/scripts/verify-macos-release-env.mjs
+        env:
+          CSC_LINK: ${{ secrets.MAC_CERTS }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
       - name: Build app
         run: ${{ matrix.build_command }}
@@ -97,21 +103,22 @@ jobs:
 
           shopt -s nullglob
           for pattern in \
-            "release/*.dmg" \
-            "release/*.zip" \
-            "release/*.AppImage" \
-            "release/*.deb" \
-            "release/*.exe" \
-            "release/*.blockmap" \
-            "release/latest*.yml"; do
+            "dist/*.dmg" \
+            "dist/*.zip" \
+            "dist/*.AppImage" \
+            "dist/*.deb" \
+            "dist/*.exe" \
+            "dist/*.blockmap" \
+            "dist/latest*.yml"; do
             for file in $pattern; do
               cp "$file" release-publish/
             done
           done
 
-          # Why: each split macOS build emits a same-named latest-mac.yml. We
-          # keep the arm64 manifest as canonical and rename the Intel one so the
-          # publish job can merge both manifests before GitHub sees the assets.
+          # Why: each split macOS build emits a same-named latest-mac.yml into
+          # dist/. We keep the arm64 manifest as canonical and rename the Intel
+          # one so the publish job can merge both manifests before GitHub sees
+          # the assets.
           if [[ "${{ matrix.platform }}" == "mac" && "${{ matrix.arch }}" == "x64" ]]; then
             mv release-publish/latest-mac.yml release-publish/latest-mac-x64.yml
           fi
