@@ -26,6 +26,7 @@
     "build:cli": "tsc -p config/tsconfig.cli.json --outDir out --composite false --incremental false",
     "build:electron-vite": "node config/scripts/run-electron-vite-build.mjs",
     "build": "pnpm run typecheck && pnpm run build:electron-vite && pnpm run build:cli",
+    "build:release": "pnpm run build:electron-vite && pnpm run build:cli",
     "postinstall": "pnpm rebuild electron && electron-builder install-app-deps",
     "build:unpack": "pnpm run build && electron-builder --config config/electron-builder.config.cjs --dir",
     "build:win": "pnpm run build && electron-builder --config config/electron-builder.config.cjs --win",

@@ -6,7 +6,30 @@ on:
       - 'v*'
 
 jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
   create-release:
+    needs: preflight
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -25,12 +48,30 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-latest
+          - os: macos-15
             platform: mac
+            arch: arm64
+            artifact_name: release-mac-arm64
+            build_command: pnpm build:release
+            package_command: ORCA_MAC_RELEASE=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --arm64 --publish never
+          - os: macos-15-intel
+            platform: mac
+            arch: x64
+            artifact_name: release-mac-x64
+            build_command: pnpm build:release
+            package_command: ORCA_MAC_RELEASE=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --x64 --publish never
           - os: windows-latest
             platform: win
+            arch: x64
+            artifact_name: release-win-x64
+            build_command: pnpm build:release
+            package_command: pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never
           - os: ubuntu-latest
             platform: linux
+            arch: x64
+            artifact_name: release-linux-x64
+            build_command: pnpm build:release
+            package_command: pnpm exec electron-builder --config config/electron-builder.config.cjs --linux --publish never
 
     runs-on: ${{ matrix.os }}
 
@@ -54,9 +95,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build and release (macOS)
+      - name: Verify macOS signing environment
         if: matrix.platform == 'mac'
-        run: pnpm build:mac:release --publish always
+        run: node config/scripts/verify-macos-release-env.mjs
+
+      - name: Build app
+        run: ${{ matrix.build_command }}
+
+      - name: Package release artifacts
+        run: ${{ matrix.package_command }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_LINK: ${{ secrets.MAC_CERTS }}
@@ -65,17 +112,39 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
-      - name: Build and release (Windows)
-        if: matrix.platform == 'win'
-        run: pnpm build:win --publish always
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Collect release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-publish
 
-      - name: Build and release (Linux)
-        if: matrix.platform == 'linux'
-        run: pnpm build:linux --publish always
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          shopt -s nullglob
+          for pattern in \
+            "release/*.dmg" \
+            "release/*.zip" \
+            "release/*.AppImage" \
+            "release/*.deb" \
+            "release/*.exe" \
+            "release/*.blockmap" \
+            "release/latest*.yml"; do
+            for file in $pattern; do
+              cp "$file" release-publish/
+            done
+          done
+
+          # Why: each split macOS build emits a same-named latest-mac.yml. We
+          # keep the arm64 manifest as canonical and rename the Intel one so the
+          # publish job can merge both manifests before GitHub sees the assets.
+          if [[ "${{ matrix.platform }}" == "mac" && "${{ matrix.arch }}" == "x64" ]]; then
+            mv release-publish/latest-mac.yml release-publish/latest-mac-x64.yml
+          fi
+
+      - name: Upload release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: release-publish/*
+          if-no-files-found: error
 
   publish-release:
     needs: release
@@ -83,6 +152,40 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Download release assets
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: release-assets
+
+      - name: Merge macOS updater manifests
+        run: |
+          node config/scripts/merge-mac-update-manifests.mjs \
+            release-assets/release-mac-arm64/latest-mac.yml \
+            release-assets/release-mac-x64/latest-mac-x64.yml
+          rm release-assets/release-mac-x64/latest-mac-x64.yml
+
+      - name: Upload release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=()
+          while IFS= read -r -d '' file; do
+            files+=("$file")
+          done < <(find release-assets -type f -print0)
+
+          gh release upload "${{ github.ref_name }}" "${files[@]}" --clobber --repo "${{ github.repository }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Publish release
         run: gh release edit ${{ github.ref_name }} --draft=false --repo ${{ github.repository }}
         env:
