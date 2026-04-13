@@ -96,7 +96,7 @@ export default function ImageViewer({
   }
 
   const previewPane = isPdf ? (
-    <div className="relative flex flex-1 items-center justify-center overflow-auto bg-muted/20 p-4">
+    <div className="relative flex flex-1 flex-col overflow-auto bg-muted/20 p-4">
       {/* Why: Electron's Chromium PDF viewer can fail to initialize inside a
           sandboxed iframe even when the Blob URL is valid. Using <embed> keeps
           the preview isolated to the browser's native PDF surface without
@@ -104,7 +104,7 @@ export default function ImageViewer({
       <embed
         src={previewUrl}
         type={mimeType}
-        className="h-full min-h-[24rem] w-full rounded-md border border-border/60 bg-background"
+        className="flex-1 min-h-[24rem] w-full rounded-md border border-border/60 bg-background"
       />
     </div>
   ) : (

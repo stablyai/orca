@@ -48,8 +48,22 @@ export default function ImageDiffViewer({
   mimeType,
   sideBySide
 }: ImageDiffViewerProps): JSX.Element {
+  // Why: in inline (single-column) mode the grid defaults to equal row
+  // heights. When one side is empty (e.g. a new untracked PDF), the "No
+  // preview" pane would waste half the vertical space. Using `auto` for
+  // empty panes lets them collapse to their content height so the pane
+  // with the actual preview fills the remaining space.
+  const gridRowStyle = !sideBySide
+    ? {
+        gridTemplateRows: `${originalContent ? '1fr' : 'auto'} ${modifiedContent ? '1fr' : 'auto'}`
+      }
+    : undefined
+
   return (
-    <div className={`grid h-full min-h-0 gap-3 p-3 ${sideBySide ? 'grid-cols-2' : 'grid-cols-1'}`}>
+    <div
+      className={`grid h-full min-h-0 gap-3 p-3 ${sideBySide ? 'grid-cols-2' : 'grid-cols-1'}`}
+      style={gridRowStyle}
+    >
       <ImageDiffPane
         label="Original"
         content={originalContent}
