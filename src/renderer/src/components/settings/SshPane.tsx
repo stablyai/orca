@@ -74,7 +74,9 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
       host: form.host.trim(),
       port,
       username: form.username.trim(),
-      ...(form.identityFile.trim() ? { identityFile: form.identityFile.trim() } : {})
+      ...(form.identityFile.trim() ? { identityFile: form.identityFile.trim() } : {}),
+      ...(form.proxyCommand.trim() ? { proxyCommand: form.proxyCommand.trim() } : {}),
+      ...(form.jumpHost.trim() ? { jumpHost: form.jumpHost.trim() } : {})
     }
 
     try {
@@ -125,7 +127,9 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
       host: target.host,
       port: String(target.port),
       username: target.username,
-      identityFile: target.identityFile ?? ''
+      identityFile: target.identityFile ?? '',
+      proxyCommand: target.proxyCommand ?? '',
+      jumpHost: target.jumpHost ?? ''
     })
     setShowForm(true)
   }

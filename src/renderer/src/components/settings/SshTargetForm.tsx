@@ -9,6 +9,8 @@ export type EditingTarget = {
   port: string
   username: string
   identityFile: string
+  proxyCommand: string
+  jumpHost: string
 }
 
 export const EMPTY_FORM: EditingTarget = {
@@ -16,7 +18,9 @@ export const EMPTY_FORM: EditingTarget = {
   host: '',
   port: '22',
   username: '',
-  identityFile: ''
+  identityFile: '',
+  proxyCommand: '',
+  jumpHost: ''
 }
 
 type SshTargetFormProps = {
@@ -86,6 +90,28 @@ export function SshTargetForm({
           />
           <p className="text-[11px] text-muted-foreground">
             Optional. SSH agent is used by default.
+          </p>
+        </div>
+        <div className="col-span-2 space-y-1.5">
+          <Label>Proxy Command</Label>
+          <Input
+            value={form.proxyCommand}
+            onChange={(e) => onFormChange((f) => ({ ...f, proxyCommand: e.target.value }))}
+            placeholder="e.g. cloudflared access ssh --hostname %h"
+          />
+          <p className="text-[11px] text-muted-foreground">
+            Optional. Used for tunneling (e.g. Cloudflare Access, ProxyCommand).
+          </p>
+        </div>
+        <div className="col-span-2 space-y-1.5">
+          <Label>Jump Host</Label>
+          <Input
+            value={form.jumpHost}
+            onChange={(e) => onFormChange((f) => ({ ...f, jumpHost: e.target.value }))}
+            placeholder="bastion.example.com"
+          />
+          <p className="text-[11px] text-muted-foreground">
+            Optional. Equivalent to ProxyJump / ssh -J.
           </p>
         </div>
       </div>
