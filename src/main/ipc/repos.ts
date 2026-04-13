@@ -97,13 +97,30 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       const pathSegments = args.remotePath.replace(/\/+$/, '').split('/')
       const folderName = pathSegments.at(-1) || args.remotePath
 
+      // Why: detect whether the remote path is a git repo so we can set kind
+      // correctly. Non-git directories are added as 'folder' with git features
+      // disabled, matching the local add-repo behavior.
+      let repoKind: 'git' | 'folder' = 'folder'
+      let resolvedPath = args.remotePath
+      try {
+        const check = await gitProvider.isGitRepoAsync(args.remotePath)
+        if (check.isRepo) {
+          repoKind = 'git'
+          if (check.rootPath) {
+            resolvedPath = check.rootPath
+          }
+        }
+      } catch {
+        // If detection fails, fall back to folder
+      }
+
       const repo: Repo = {
         id: randomUUID(),
-        path: args.remotePath,
+        path: resolvedPath,
         displayName: args.displayName || folderName,
         badgeColor: REPO_COLORS[store.getRepos().length % REPO_COLORS.length],
         addedAt: Date.now(),
-        kind: 'git',
+        kind: repoKind,
         connectionId: args.connectionId
       }
 
@@ -115,7 +132,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       // reject writes to the workspace after the first root is registered.
       const mux = getActiveMultiplexer(args.connectionId)
       if (mux) {
-        mux.notify('session.registerRoot', { rootPath: args.remotePath })
+        mux.notify('session.registerRoot', { rootPath: resolvedPath })
       }
 
       return repo

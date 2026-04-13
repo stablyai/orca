@@ -10,7 +10,8 @@ const { handleMock, mockStore, mockGitProvider } = vi.hoisted(() => ({
     updateRepo: vi.fn()
   },
   mockGitProvider: {
-    isGitRepo: vi.fn().mockReturnValue(true)
+    isGitRepo: vi.fn().mockReturnValue(true),
+    isGitRepoAsync: vi.fn().mockResolvedValue({ isRepo: true, rootPath: null })
   }
 }))
 
@@ -130,6 +131,43 @@ describe('repos:addRemote', () => {
         remotePath: '/home/user/project'
       })
     ).rejects.toThrow('SSH connection "unknown-conn" not found')
+  })
+
+  it('sets kind to folder when remote path is not a git repo', async () => {
+    mockGitProvider.isGitRepoAsync.mockResolvedValueOnce({ isRepo: false, rootPath: null })
+
+    const result = await handlers.get('repos:addRemote')!(null, {
+      connectionId: 'conn-1',
+      remotePath: '/home/user/documents'
+    })
+
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'folder',
+        path: '/home/user/documents'
+      })
+    )
+    expect(result).toHaveProperty('kind', 'folder')
+  })
+
+  it('uses rootPath from git detection when available', async () => {
+    mockGitProvider.isGitRepoAsync.mockResolvedValueOnce({
+      isRepo: true,
+      rootPath: '/home/user/project'
+    })
+
+    const result = await handlers.get('repos:addRemote')!(null, {
+      connectionId: 'conn-1',
+      remotePath: '/home/user/project/src'
+    })
+
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'git',
+        path: '/home/user/project'
+      })
+    )
+    expect(result).toHaveProperty('path', '/home/user/project')
   })
 
   it('notifies renderer when remote repo is added', async () => {
