@@ -79,6 +79,7 @@ describe('registerPtyHandlers', () => {
   }
 
   beforeEach(() => {
+    delete process.env.OPENCODE_CONFIG_DIR
     handlers.clear()
     handleMock.mockReset()
     onMock.mockReset()

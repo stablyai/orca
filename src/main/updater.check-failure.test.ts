@@ -70,6 +70,7 @@ vi.mock('electron', () => ({
   app: appMock,
   BrowserWindow: browserWindowMock,
   autoUpdater: nativeUpdaterMock,
+  powerMonitor: { on: vi.fn() },
   net: { fetch: vi.fn() }
 }))
 
@@ -83,6 +84,11 @@ vi.mock('@electron-toolkit/utils', () => ({
 
 vi.mock('./ipc/pty', () => ({
   killAllPty: killAllPtyMock
+}))
+
+vi.mock('./updater-nudge', () => ({
+  fetchNudge: vi.fn().mockResolvedValue(null),
+  shouldApplyNudge: vi.fn().mockReturnValue(false)
 }))
 
 describe('updater check failure handling', () => {

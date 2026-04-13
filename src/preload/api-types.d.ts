@@ -295,7 +295,9 @@ export type PreloadApi = {
     check: () => Promise<void>
     download: () => Promise<void>
     quitAndInstall: () => Promise<void>
+    dismissNudge: () => Promise<void>
     onStatus: (callback: (status: UpdateStatus) => void) => () => void
+    onClearDismissal: (callback: () => void) => () => void
   }
   stats: StatsApi
   claudeUsage: ClaudeUsageApi

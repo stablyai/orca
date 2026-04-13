@@ -87,6 +87,7 @@ vi.mock('electron', () => ({
   app: appMock,
   BrowserWindow: browserWindowMock,
   autoUpdater: nativeUpdaterMock,
+  powerMonitor: { on: vi.fn() },
   shell: shellMock,
   net: { fetch: vi.fn() }
 }))
@@ -105,6 +106,11 @@ vi.mock('./ipc/pty', () => ({
 
 vi.mock('./updater-changelog', () => ({
   fetchChangelog: vi.fn().mockResolvedValue(null)
+}))
+
+vi.mock('./updater-nudge', () => ({
+  fetchNudge: vi.fn().mockResolvedValue(null),
+  shouldApplyNudge: vi.fn().mockReturnValue(false)
 }))
 
 describe('updater mac install handoff', () => {

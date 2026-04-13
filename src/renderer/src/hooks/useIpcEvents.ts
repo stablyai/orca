@@ -157,6 +157,12 @@ export function useIpcEvents(): void {
     )
 
     unsubs.push(
+      window.api.updater.onClearDismissal(() => {
+        useAppStore.getState().clearDismissedUpdateVersion()
+      })
+    )
+
+    unsubs.push(
       window.api.ui.onFullscreenChanged((isFullScreen) => {
         useAppStore.getState().setIsFullScreen(isFullScreen)
       })

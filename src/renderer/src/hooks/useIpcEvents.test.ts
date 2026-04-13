@@ -153,7 +153,8 @@ describe('useIpcEvents updater integration', () => {
           onStatus: (listener: (status: unknown) => void) => {
             updaterStatusListenerRef.current = listener
             return () => {}
-          }
+          },
+          onClearDismissal: () => () => {}
         },
         browser: {
           onGuestLoadFailed: () => () => {}

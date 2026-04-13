@@ -12,6 +12,7 @@ export function statusesEqual(left: UpdateStatus, right: UpdateStatus): boolean 
       return (
         right.state === 'available' &&
         left.version === right.version &&
+        left.activeNudgeId === right.activeNudgeId &&
         left.releaseUrl === right.releaseUrl &&
         // Why: fetchChangelog creates a fresh object each time, so reference
         // equality is always false. Compare by presence — since update-available
@@ -22,19 +23,22 @@ export function statusesEqual(left: UpdateStatus, right: UpdateStatus): boolean 
       return (
         right.state === 'downloading' &&
         left.version === right.version &&
+        left.activeNudgeId === right.activeNudgeId &&
         left.percent === right.percent
       )
     case 'downloaded':
       return (
         right.state === 'downloaded' &&
         left.version === right.version &&
+        left.activeNudgeId === right.activeNudgeId &&
         left.releaseUrl === right.releaseUrl
       )
     case 'error':
       return (
         right.state === 'error' &&
         left.message === right.message &&
-        left.userInitiated === right.userInitiated
+        left.userInitiated === right.userInitiated &&
+        left.activeNudgeId === right.activeNudgeId
       )
   }
 }
@@ -87,6 +91,10 @@ function parseVersion(value: string): ParsedVersion | null {
     core: [Number(match[1]), Number(match[2]), Number(match[3])],
     prerelease: match[4]?.split('.') ?? []
   }
+}
+
+export function isValidVersion(value: string): boolean {
+  return parseVersion(value) !== null
 }
 
 function compareIdentifiers(left: string, right: string): number {

@@ -442,6 +442,7 @@ const api = {
     getVersion: (): Promise<string> => ipcRenderer.invoke('updater:getVersion'),
     check: (): Promise<void> => ipcRenderer.invoke('updater:check'),
     download: (): Promise<void> => ipcRenderer.invoke('updater:download'),
+    dismissNudge: (): Promise<void> => ipcRenderer.invoke('updater:dismissNudge'),
     quitAndInstall: async (): Promise<void> => {
       // Why: quitAndInstall closes the BrowserWindow directly from the main
       // process. Renderer beforeunload guards treat that like a normal window
@@ -501,6 +502,11 @@ const api = {
       const listener = (_event: Electron.IpcRendererEvent, status: unknown) => callback(status)
       ipcRenderer.on('updater:status', listener)
       return () => ipcRenderer.removeListener('updater:status', listener)
+    },
+    onClearDismissal: (callback: () => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent) => callback()
+      ipcRenderer.on('updater:clearDismissal', listener)
+      return () => ipcRenderer.removeListener('updater:clearDismissal', listener)
     }
   },
 

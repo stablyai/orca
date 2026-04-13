@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, powerMonitor } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import { is } from '@electron-toolkit/utils'
 import type { UpdateStatus } from '../shared/types'
@@ -10,9 +10,12 @@ import {
 } from './updater-mac-install'
 import { registerAutoUpdaterHandlers } from './updater-events'
 import { compareVersions, isBenignCheckFailure, statusesEqual } from './updater-fallback'
+import { fetchNudge, shouldApplyNudge } from './updater-nudge'
 
 const AUTO_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 const AUTO_UPDATE_RETRY_INTERVAL_MS = 60 * 60 * 1000
+const NUDGE_POLL_INTERVAL_MS = 30 * 60 * 1000
+const NUDGE_ACTIVATION_COOLDOWN_MS = 5 * 60 * 1000
 const QUIT_AND_INSTALL_DELAY_MS = 100
 
 let mainWindowRef: BrowserWindow | null = null
@@ -25,8 +28,18 @@ let availableReleaseUrl: string | null = null
 let pendingCheckFailureKey: string | null = null
 let pendingCheckFailurePromise: Promise<void> | null = null
 let autoUpdateCheckTimer: ReturnType<typeof setTimeout> | null = null
+let nudgeCheckTimer: ReturnType<typeof setTimeout> | null = null
 let pendingQuitAndInstallTimer: ReturnType<typeof setTimeout> | null = null
 let persistLastUpdateCheckAt: ((timestamp: number) => void) | null = null
+let activeUpdateNudgeId: string | null = null
+let awaitingNudgeCheckOutcome = false
+let nudgeCheckInFlight = false
+let lastNudgeCheckAt = 0
+
+let _getPendingUpdateNudgeId: (() => string | null) | null = null
+let _getDismissedUpdateNudgeId: (() => string | null) | null = null
+let _setPendingUpdateNudgeId: ((id: string | null) => void) | null = null
+let _setDismissedUpdateNudgeId: ((id: string | null) => void) | null = null
 // Why: guards against duplicate download() calls when both the card and
 // Settings trigger a download before the first download-progress event
 // flips the status to 'downloading'.
@@ -40,17 +53,71 @@ function clearAvailableUpdateContext(): void {
   availableReleaseUrl = null
 }
 
+function clearPendingUpdateNudge(): void {
+  activeUpdateNudgeId = null
+  awaitingNudgeCheckOutcome = false
+  _setPendingUpdateNudgeId?.(null)
+}
+
+function getPersistedPendingUpdateNudgeId(): string | null {
+  return _getPendingUpdateNudgeId?.() ?? null
+}
+
+function decorateStatusWithActiveNudge(status: UpdateStatus): UpdateStatus {
+  // Why: only actionable/error states carry the nudge marker so the renderer
+  // can tell whether a dismiss should also acknowledge the campaign. Cycle-
+  // boundary states (idle, checking, not-available) never need it.
+  if (!activeUpdateNudgeId) {
+    return status
+  }
+  if (
+    status.state === 'idle' ||
+    status.state === 'checking' ||
+    status.state === 'not-available'
+  ) {
+    return status
+  }
+  return { ...status, activeNudgeId: activeUpdateNudgeId }
+}
+
 function sendStatus(status: UpdateStatus): void {
+  if (awaitingNudgeCheckOutcome) {
+    if (status.state === 'available') {
+      awaitingNudgeCheckOutcome = false
+    } else if (
+      status.state === 'idle' ||
+      status.state === 'not-available' ||
+      status.state === 'error'
+    ) {
+      // Why: when a nudge-triggered check finds no update (or errors out),
+      // move the campaign to dismissed so it doesn't re-fire on the next
+      // poll cycle. Without this, a nudge whose version range includes
+      // already-up-to-date users would loop every 30 minutes, each time
+      // triggering a redundant checkForUpdates() and clearing the persisted
+      // dismissedUpdateVersion.
+      if (activeUpdateNudgeId) {
+        _setDismissedUpdateNudgeId?.(activeUpdateNudgeId)
+      }
+      clearPendingUpdateNudge()
+    }
+  }
+
+  const decoratedStatus = decorateStatusWithActiveNudge(status)
+
   // Why: reset the in-flight guard when the status moves past the
   // window where duplicate download() calls are possible.
-  if (status.state === 'downloading' || status.state === 'error' || status.state === 'idle') {
+  if (
+    decoratedStatus.state === 'downloading' ||
+    decoratedStatus.state === 'error' ||
+    decoratedStatus.state === 'idle'
+  ) {
     downloadInFlight = false
   }
-  if (statusesEqual(currentStatus, status)) {
+  if (statusesEqual(currentStatus, decoratedStatus)) {
     return
   }
-  currentStatus = status
-  mainWindowRef?.webContents.send('updater:status', status)
+  currentStatus = decoratedStatus
+  mainWindowRef?.webContents.send('updater:status', decoratedStatus)
 }
 
 function sendErrorStatus(message: string, userInitiated?: boolean): void {
@@ -178,11 +245,19 @@ function recordCompletedUpdateCheck(): void {
   persistLastUpdateCheckAt?.(Date.now())
 }
 
-function runBackgroundUpdateCheck(): void {
+function runBackgroundUpdateCheck(
+  nudgeId: string | null = getPersistedPendingUpdateNudgeId()
+): void {
   if (!app.isPackaged || is.dev) {
     sendStatus({ state: 'not-available' })
     return
   }
+  // Why: scope the nudge marker to the updater cycle being launched right now.
+  // Setting it here, before any updater events or rejected promises can arrive,
+  // prevents later ordinary checks from inheriting an older campaign id. Use
+  // the persisted pending id for ordinary background checks so a nudge-driven
+  // card can still be dismissed correctly after relaunch or a later 24h check.
+  activeUpdateNudgeId = nudgeId
   // Don't send 'checking' here — the 'checking-for-update' event handler does it,
   // and sending it from both places causes duplicate notifications (issue #35).
   autoUpdater.checkForUpdates().catch((err) => {
@@ -202,6 +277,10 @@ export function checkForUpdatesFromMenu(): void {
   }
 
   userInitiatedCheck = true
+  // Why: a manual check is independent of any active nudge campaign. Reset the
+  // nudge marker so the resulting status is not decorated with activeNudgeId,
+  // which would cause a later dismiss to consume the campaign by accident.
+  activeUpdateNudgeId = null
   // Don't send 'checking' here — the 'checking-for-update' event handler does it,
   // and sending it from both places causes duplicate notifications (issue #35).
 
@@ -240,17 +319,90 @@ export function quitAndInstall(): void {
   }, QUIT_AND_INSTALL_DELAY_MS)
 }
 
+async function checkForUpdateNudge(): Promise<void> {
+  if (!app.isPackaged || is.dev) {
+    return
+  }
+  if (nudgeCheckInFlight) {
+    return
+  }
+
+  const now = Date.now()
+  if (now - lastNudgeCheckAt < NUDGE_ACTIVATION_COOLDOWN_MS) {
+    return
+  }
+  lastNudgeCheckAt = now
+
+  nudgeCheckInFlight = true
+  try {
+    const nudge = await fetchNudge()
+    if (!nudge) {
+      return
+    }
+
+    if (currentStatus.state === 'checking' || currentStatus.state === 'downloading') {
+      return
+    }
+
+    const appVersion = app.getVersion()
+    const pendingUpdateNudgeId = _getPendingUpdateNudgeId?.() ?? null
+    const dismissedUpdateNudgeId = _getDismissedUpdateNudgeId?.() ?? null
+
+    if (
+      shouldApplyNudge({
+        nudge,
+        appVersion,
+        pendingUpdateNudgeId,
+        dismissedUpdateNudgeId
+      })
+    ) {
+      awaitingNudgeCheckOutcome = true
+      _setPendingUpdateNudgeId?.(nudge.id)
+      mainWindowRef?.webContents.send('updater:clearDismissal')
+      runBackgroundUpdateCheck(nudge.id)
+    }
+  } finally {
+    nudgeCheckInFlight = false
+  }
+}
+
+function scheduleUpdateNudgeCheck(): void {
+  if (nudgeCheckTimer) {
+    clearTimeout(nudgeCheckTimer)
+  }
+  nudgeCheckTimer = setTimeout(() => {
+    void checkForUpdateNudge()
+    scheduleUpdateNudgeCheck()
+  }, NUDGE_POLL_INTERVAL_MS)
+}
+
+export function dismissNudge(): void {
+  const pendingId = activeUpdateNudgeId ?? _getPendingUpdateNudgeId?.() ?? null
+  if (pendingId) {
+    _setDismissedUpdateNudgeId?.(pendingId)
+    clearPendingUpdateNudge()
+  }
+}
+
 export function setupAutoUpdater(
   mainWindow: BrowserWindow,
   opts?: {
     getLastUpdateCheckAt?: () => number | null
     onBeforeQuit?: () => void
     setLastUpdateCheckAt?: (timestamp: number) => void
+    getPendingUpdateNudgeId?: () => string | null
+    getDismissedUpdateNudgeId?: () => string | null
+    setPendingUpdateNudgeId?: (id: string | null) => void
+    setDismissedUpdateNudgeId?: (id: string | null) => void
   }
 ): void {
   mainWindowRef = mainWindow
   onBeforeQuitCleanup = opts?.onBeforeQuit ?? null
   persistLastUpdateCheckAt = opts?.setLastUpdateCheckAt ?? null
+  _getPendingUpdateNudgeId = opts?.getPendingUpdateNudgeId ?? null
+  _getDismissedUpdateNudgeId = opts?.getDismissedUpdateNudgeId ?? null
+  _setPendingUpdateNudgeId = opts?.setPendingUpdateNudgeId ?? null
+  _setDismissedUpdateNudgeId = opts?.setDismissedUpdateNudgeId ?? null
 
   if (!app.isPackaged && !is.dev) {
     return
@@ -299,6 +451,16 @@ export function setupAutoUpdater(
     setUserInitiatedCheck: (value) => {
       userInitiatedCheck = value
     }
+  })
+
+  void checkForUpdateNudge()
+  scheduleUpdateNudgeCheck()
+
+  powerMonitor.on('resume', () => {
+    void checkForUpdateNudge()
+  })
+  app.on('browser-window-focus', () => {
+    void checkForUpdateNudge()
   })
 
   const lastUpdateCheckAt = opts?.getLastUpdateCheckAt?.() ?? null

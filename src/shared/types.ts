@@ -320,6 +320,7 @@ export type UpdateStatus =
   | {
       state: 'available'
       version: string
+      activeNudgeId?: string
       // Why: releaseUrl is not currently populated by the update-available handler
       // (it always sends undefined). Kept on the type for the Settings page's
       // release-notes link fallback and for potential future use if the main
@@ -333,9 +334,9 @@ export type UpdateStatus =
       changelog: ChangelogData | null
     }
   | { state: 'not-available'; userInitiated?: boolean }
-  | { state: 'downloading'; percent: number; version: string }
-  | { state: 'downloaded'; version: string; releaseUrl?: string }
-  | { state: 'error'; message: string; userInitiated?: boolean }
+  | { state: 'downloading'; percent: number; version: string; activeNudgeId?: string }
+  | { state: 'downloaded'; version: string; releaseUrl?: string; activeNudgeId?: string }
+  | { state: 'error'; message: string; userInitiated?: boolean; activeNudgeId?: string }
 
 // ─── Settings ────────────────────────────────────────────────────────
 export type NotificationSettings = {
@@ -468,6 +469,8 @@ export type PersistedUIState = {
   statusBarVisible: boolean
   dismissedUpdateVersion: string | null
   lastUpdateCheckAt: number | null
+  pendingUpdateNudgeId?: string | null
+  dismissedUpdateNudgeId?: string | null
   /** Whether Orca has already attempted to trigger the macOS notification
    *  permission dialog via a startup notification. Prevents re-firing on
    *  every launch. */

@@ -85,6 +85,7 @@ export type UISlice = {
   updateChangelog: ChangelogData | null
   dismissedUpdateVersion: string | null
   dismissUpdate: (versionOverride?: string) => void
+  clearDismissedUpdateVersion: () => void
   updateReassuranceSeen: boolean
   markUpdateReassuranceSeen: () => void
   isFullScreen: boolean
@@ -216,16 +217,27 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set) => (
   },
   updateChangelog: null,
   dismissedUpdateVersion: null,
+  clearDismissedUpdateVersion: () => {
+    set({ dismissedUpdateVersion: null })
+  },
   dismissUpdate: (versionOverride?: string) =>
     set((s) => {
       // Why: the 'error' variant has no version field, so the card passes
       // the cached version explicitly via versionOverride.
       const dismissedUpdateVersion =
         versionOverride ?? ('version' in s.updateStatus ? (s.updateStatus.version ?? null) : null)
+      const activeNudgeId =
+        'activeNudgeId' in s.updateStatus ? (s.updateStatus.activeNudgeId ?? null) : null
       // Why: dismissing an update is user intent, not transient view state. Persist
       // the dismissed version so relaunching the app does not immediately re-show
       // the same reminder card until a newer release appears.
       void window.api.ui.set({ dismissedUpdateVersion }).catch(console.error)
+      // Why: only dismiss the main-process nudge campaign when the visible card
+      // actually came from a nudge-driven update cycle. Ordinary update dismissals
+      // must not consume the active campaign state.
+      if (activeNudgeId) {
+        void window.api.updater.dismissNudge().catch(console.error)
+      }
       return { dismissedUpdateVersion }
     }),
   updateReassuranceSeen: false,

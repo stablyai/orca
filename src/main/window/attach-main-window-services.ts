@@ -16,7 +16,8 @@ import {
   downloadUpdate,
   getUpdateStatus,
   quitAndInstall,
-  setupAutoUpdater
+  setupAutoUpdater,
+  dismissNudge
 } from '../updater'
 
 export function attachMainWindowServices(
@@ -34,6 +35,24 @@ export function attachMainWindowServices(
     onBeforeQuit: () => store.flush(),
     setLastUpdateCheckAt: (timestamp) => {
       store.updateUI({ lastUpdateCheckAt: timestamp })
+    },
+    getPendingUpdateNudgeId: () => store.getUI().pendingUpdateNudgeId ?? null,
+    getDismissedUpdateNudgeId: () => store.getUI().dismissedUpdateNudgeId ?? null,
+    setPendingUpdateNudgeId: (id) => {
+      // Why: the nudge lifecycle is owned by the main process. When applying a
+      // new campaign, persist the pending id AND clear the version dismissal
+      // together so relaunches cannot resurrect the old hidden-card state
+      // between nudge apply and renderer sync. When clearing (id is null),
+      // only touch pendingUpdateNudgeId — clearing dismissedUpdateVersion here
+      // would silently un-dismiss an update if the flow ever changes.
+      if (id) {
+        store.updateUI({ pendingUpdateNudgeId: id, dismissedUpdateVersion: null })
+      } else {
+        store.updateUI({ pendingUpdateNudgeId: null })
+      }
+    },
+    setDismissedUpdateNudgeId: (id) => {
+      store.updateUI({ dismissedUpdateNudgeId: id })
     }
   })
   registerRuntimeWindowLifecycle(mainWindow, runtime)
@@ -175,10 +194,12 @@ export function registerUpdaterHandlers(_store: Store): void {
   ipcMain.removeHandler('updater:check')
   ipcMain.removeHandler('updater:download')
   ipcMain.removeHandler('updater:quitAndInstall')
+  ipcMain.removeHandler('updater:dismissNudge')
 
   ipcMain.handle('updater:getStatus', () => getUpdateStatus())
   ipcMain.handle('updater:getVersion', () => app.getVersion())
   ipcMain.handle('updater:check', () => checkForUpdatesFromMenu())
   ipcMain.handle('updater:download', () => downloadUpdate())
   ipcMain.handle('updater:quitAndInstall', () => quitAndInstall())
+  ipcMain.handle('updater:dismissNudge', () => dismissNudge())
 }
