@@ -7,6 +7,7 @@ import type { GitStatusEntry, GitDiffResult } from '../../../../shared/types'
 import { RICH_MARKDOWN_MAX_SIZE_BYTES } from '../../../../shared/constants'
 import { getMarkdownRenderMode } from './markdown-render-mode'
 import { getMarkdownRichModeUnsupportedMessage } from './markdown-rich-mode'
+import { extractFrontMatter, prependFrontMatter } from './markdown-frontmatter'
 
 const MonacoEditor = lazy(() => import('./MonacoEditor'))
 const DiffViewer = lazy(() => import('./DiffViewer'))
@@ -135,17 +136,38 @@ export function EditorContent({
     }
 
     if (renderMode === 'rich-editor') {
+      // Why: front-matter is stripped before the rich editor sees the content
+      // because Tiptap has no front-matter node and would silently drop it.
+      // The raw block is displayed as a read-only banner and recombined with
+      // the body on every content change and save so the edit buffer always
+      // holds the complete document.
+      const fm = extractFrontMatter(currentContent)
+      const editorContent = fm ? fm.body : currentContent
+
+      const onContentChangeWithFm = fm
+        ? (body: string): void => handleContentChange(prependFrontMatter(fm.raw, body))
+        : handleContentChange
+
+      const onSaveWithFm = fm
+        ? (body: string): Promise<void> => handleSave(prependFrontMatter(fm.raw, body))
+        : handleSave
+
       return (
-        // Why: same remount reasoning as MonacoEditor — see renderMonacoEditor.
-        <RichMarkdownEditor
-          key={activeFile.id}
-          fileId={activeFile.id}
-          content={currentContent}
-          filePath={activeFile.filePath}
-          onContentChange={handleContentChange}
-          onDirtyStateHint={handleDirtyStateHint}
-          onSave={handleSave}
-        />
+        <div className="flex h-full min-h-0 flex-col">
+          {fm && <FrontMatterBanner raw={fm.raw} />}
+          <div className="min-h-0 flex-1">
+            {/* Why: same remount reasoning as MonacoEditor — see renderMonacoEditor. */}
+            <RichMarkdownEditor
+              key={activeFile.id}
+              fileId={activeFile.id}
+              content={editorContent}
+              filePath={activeFile.filePath}
+              onContentChange={onContentChangeWithFm}
+              onDirtyStateHint={handleDirtyStateHint}
+              onSave={onSaveWithFm}
+            />
+          </div>
+        </div>
       )
     }
 
@@ -294,5 +316,31 @@ export function EditorContent({
       onContentChange={isEditable ? handleContentChange : undefined}
       onSave={isEditable ? handleSave : undefined}
     />
+  )
+}
+
+// Why: a minimal read-only banner that shows the raw front-matter content
+// above the rich editor so the user knows it exists and can switch to source
+// mode to edit it. Kept deliberately simple — no collapsible state — to avoid
+// layout shifts that would interfere with ProseMirror's scroll management.
+function FrontMatterBanner({ raw }: { raw: string }): React.JSX.Element {
+  // Strip the opening/closing delimiters to show only the YAML/TOML content.
+  const inner = raw
+    .replace(/^(?:---|\+\+\+)\r?\n/, '')
+    .replace(/\r?\n(?:---|\+\+\+)\r?\n?$/, '')
+    .trim()
+
+  return (
+    <div className="border-b border-border/60 bg-muted/40 px-3 py-2">
+      <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+        Front Matter
+        <span className="ml-2 font-normal normal-case tracking-normal opacity-70">
+          (edit in source mode)
+        </span>
+      </div>
+      <pre className="max-h-32 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground font-mono scrollbar-editor">
+        {inner}
+      </pre>
+    </div>
   )
 }

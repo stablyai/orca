@@ -521,7 +521,12 @@ const WorktreeList = React.memo(function WorktreeList() {
       aria-orientation="vertical"
       aria-activedescendant={activeDescendantId}
       onKeyDown={handleContainerKeyDown}
-      className="flex-1 overflow-auto px-1 scrollbar-sleek scroll-smooth outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset pt-px"
+      // Why: `scrollbar-gutter: stable` keeps the overflow lane reserved so
+      // cards do not reflow when the list becomes scrollable. With that lane
+      // reserved, the right-side list padding is redundant, so keep only the
+      // left inset and let the scrollbar occupy the reclaimed edge space.
+      className="flex-1 overflow-auto pl-1 scrollbar-sleek scroll-smooth outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset pt-px"
+      style={{ scrollbarGutter: 'stable' }}
     >
       <div
         role="presentation"

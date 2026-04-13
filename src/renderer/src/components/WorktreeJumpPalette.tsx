@@ -9,7 +9,7 @@ import {
   CommandEmpty,
   CommandItem
 } from '@/components/ui/command'
-import { CornerDownLeft, Plus } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { branchName } from '@/lib/git-utils'
 import { sortWorktreesRecent } from '@/components/sidebar/smart-sort'
 import StatusIndicator from '@/components/sidebar/StatusIndicator'
@@ -99,10 +99,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     [sortedWorktrees, query, repoMap, prCache, issueCache]
   )
   const createWorktreeName = query.trim()
-  const showDefaultCreateAction = canCreateWorktree && createWorktreeName.length === 0
-  const showCreateFromQueryAction =
-    canCreateWorktree && createWorktreeName.length > 0 && matches.length === 0
-  const showCreateAction = showDefaultCreateAction || showCreateFromQueryAction
+  // Why: only surface the create-worktree action after the user has typed a query,
+  // so it doesn't clutter the default (empty-query) list of recent worktrees.
+  const showCreateAction = canCreateWorktree && createWorktreeName.length > 0
 
   // Build a map of worktreeId -> Worktree for quick lookup
   const worktreeMap = useMemo(() => {
@@ -273,14 +272,6 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
           </CommandEmpty>
         ) : (
           <>
-            {!hasWorktrees && !query.trim() && showCreateAction && (
-              <div className="px-2 pb-2 pt-1">
-                <PaletteState
-                  title="No active worktrees"
-                  subtitle="Create one to get started, then jump back here any time."
-                />
-              </div>
-            )}
             {showCreateAction && (
               <CommandItem
                 value="__create_worktree__"
@@ -292,19 +283,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-[14px] font-semibold tracking-[-0.01em] text-foreground">
-                    {showCreateFromQueryAction
-                      ? `Create worktree "${createWorktreeName}"`
-                      : 'Create new worktree'}
+                    {`Create worktree "${createWorktreeName}"`}
                   </div>
                 </div>
-                {/* Why: always rendered to reserve space and prevent layout shift
-                   when selection moves between items. Opacity toggled by the
-                   parent CommandItem's data-selected attribute. */}
-                <CornerDownLeft
-                  size={14}
-                  aria-hidden="true"
-                  className="shrink-0 self-center text-muted-foreground opacity-0 transition-opacity group-data-[selected=true]:opacity-100"
-                />
               </CommandItem>
             )}
             {matches.length === 0 && query.trim() && (
@@ -415,11 +396,6 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                       </div>
                     </div>
                   </div>
-                  <CornerDownLeft
-                    size={14}
-                    aria-hidden="true"
-                    className="shrink-0 self-center text-muted-foreground opacity-0 transition-opacity group-data-[selected=true]:opacity-100"
-                  />
                 </CommandItem>
               )
             })}
@@ -429,7 +405,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       <div className="flex items-center justify-end border-t border-border/60 px-3.5 py-2.5 text-[11px] text-muted-foreground/82">
         <div className="flex items-center gap-2">
           <FooterKey>Enter</FooterKey>
-          <span>Jump</span>
+          <span>Open</span>
           <FooterKey>Esc</FooterKey>
           <span>Close</span>
           <FooterKey>↑↓</FooterKey>

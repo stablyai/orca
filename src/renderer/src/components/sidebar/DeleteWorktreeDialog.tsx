@@ -8,7 +8,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { AlertTriangle, LoaderCircle, Trash2 } from 'lucide-react'
+import { AlertTriangle, LoaderCircle, Trash } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { toast } from 'sonner'
 import { getDeleteWorktreeToastCopy } from './delete-worktree-toast'
@@ -179,7 +179,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
                 onClick={() => handleDelete(true)}
                 disabled={isDeleting}
               >
-                {isDeleting ? <LoaderCircle className="size-4 animate-spin" /> : <Trash2 />}
+                {isDeleting ? <LoaderCircle className="size-4 animate-spin" /> : <Trash />}
                 {isDeleting ? 'Force Deleting…' : 'Force Delete'}
               </Button>
             ) : (
@@ -189,7 +189,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
                 onClick={() => handleDelete(false)}
                 disabled={isDeleting}
               >
-                {isDeleting ? <LoaderCircle className="size-4 animate-spin" /> : <Trash2 />}
+                {isDeleting ? <LoaderCircle className="size-4 animate-spin" /> : <Trash />}
                 {isDeleting ? 'Deleting…' : 'Delete'}
               </Button>
             ))}

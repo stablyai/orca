@@ -15,14 +15,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem
-} from '@/components/ui/select'
-import RepoDotLabel from '@/components/repo/RepoDotLabel'
+import RepoCombobox from '@/components/repo/RepoCombobox'
 import { parseGitHubIssueOrPRNumber } from '@/lib/github-links'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
@@ -351,12 +344,14 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
     })
   }, [isOpen, repoId, suggestedName])
 
-  // Safety guard: creating a worktree requires at least one repo.
+  // Safety guard: creating a worktree requires at least one git repo. Non-git
+  // folders can exist in the sidebar, but this dialog only works for repos
+  // that can actually host a worktree, so close before rendering an empty picker.
   useEffect(() => {
-    if (isOpen && repos.length === 0) {
+    if (isOpen && eligibleRepos.length === 0) {
       handleOpenChange(false)
     }
-  }, [eligibleRepos.length, handleOpenChange, isOpen, repos.length])
+  }, [eligibleRepos.length, handleOpenChange, isOpen])
 
   // Load hook state and the effective issue-command template for the selected repo.
   useEffect(() => {
@@ -458,6 +453,13 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === 'Enter' && !e.shiftKey && repoId && name.trim() && !creating) {
+        // Why: Enter inside the repository search surface should select/filter
+        // repos, not bubble up and submit the entire create-worktree dialog.
+        // The guard is scoped to Enter only so future keyboard shortcuts added
+        // to this handler are not silently swallowed.
+        if ((e.target as HTMLElement | null)?.closest('[data-repo-combobox-root="true"]')) {
+          return
+        }
         if (
           shouldWaitForSetupCheck ||
           shouldWaitForIssueAutomationCheck ||
@@ -495,26 +497,7 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
           {/* Repo selector */}
           <div className="space-y-1">
             <label className="text-[11px] font-medium text-muted-foreground">Repository</label>
-            <Select value={repoId} onValueChange={handleRepoChange}>
-              <SelectTrigger className="h-8 text-xs w-full">
-                <SelectValue placeholder="Select repo...">
-                  {selectedRepo ? (
-                    <RepoDotLabel
-                      name={selectedRepo.displayName}
-                      color={selectedRepo.badgeColor}
-                      dotClassName="size-1.5"
-                    />
-                  ) : null}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {eligibleRepos.map((r) => (
-                  <SelectItem key={r.id} value={r.id}>
-                    <RepoDotLabel name={r.displayName} color={r.badgeColor} />
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <RepoCombobox repos={eligibleRepos} value={repoId} onValueChange={handleRepoChange} />
           </div>
 
           {/* Name */}

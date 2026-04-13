@@ -4,7 +4,9 @@ import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
+import { isFolderRepo } from '../../../../shared/repo-kind'
 import type { PRInfo, Repo, Worktree } from '../../../../shared/types'
+import { getWorktreeRemovalAction, openWorktreeRemovalModal } from '../sidebar/worktree-removal'
 
 const MERGE_METHODS = ['squash', 'merge', 'rebase'] as const
 
@@ -26,10 +28,15 @@ export default function PRActions({
   onRefreshPR: () => Promise<void>
 }): React.JSX.Element | null {
   const openModal = useAppStore((s) => s.openModal)
+  const clearWorktreeDeleteState = useAppStore((s) => s.clearWorktreeDeleteState)
+  const deleteState = useAppStore((s) => s.deleteStateByWorktreeId[worktree.id])
+  const isDeleting = deleteState?.isDeleting ?? false
   const [merging, setMerging] = useState(false)
   const [mergeError, setMergeError] = useState<string | null>(null)
   const [mergeMenuOpen, setMergeMenuOpen] = useState(false)
   const mergeMenuRef = useRef<HTMLDivElement>(null)
+  const isFolder = isFolderRepo(repo)
+  const removalAction = getWorktreeRemovalAction(worktree, isFolder)
 
   const handleMerge = useCallback(
     async (method: 'merge' | 'squash' | 'rebase' = 'squash') => {
@@ -70,8 +77,13 @@ export default function PRActions({
   }, [mergeMenuOpen])
 
   const handleDeleteWorktree = useCallback(() => {
-    openModal('delete-worktree', { worktreeId: worktree.id })
-  }, [worktree.id, openModal])
+    // Why: guard against double-clicks while a delete is already in progress,
+    // matching the pattern in WorktreeCard and WorktreeContextMenu.
+    if (isDeleting) {
+      return
+    }
+    openWorktreeRemovalModal(worktree, isFolder, openModal, clearWorktreeDeleteState)
+  }, [clearWorktreeDeleteState, isDeleting, isFolder, openModal, worktree])
 
   // Why: merging a PR with unresolved conflicts would fail on GitHub anyway;
   // disabling the button prevents a confusing error and signals the user must
@@ -164,9 +176,11 @@ export default function PRActions({
         size="xs"
         className="w-full text-[11px]"
         onClick={handleDeleteWorktree}
+        disabled={isDeleting || removalAction.disabled}
+        title={removalAction.disabledReason}
       >
         <Trash2 className="size-3.5" />
-        Delete Worktree
+        {isDeleting ? 'Deleting\u2026' : removalAction.label}
       </Button>
     )
   }

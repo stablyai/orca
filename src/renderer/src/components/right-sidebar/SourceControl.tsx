@@ -1226,6 +1226,12 @@ function BranchEntryRow({
     >
       <div
         className="group flex cursor-pointer items-center gap-1 pl-5 pr-3 py-1 transition-colors hover:bg-accent/40"
+        draggable
+        onDragStart={(e) => {
+          const absolutePath = joinPath(worktreePath, entry.path)
+          e.dataTransfer.setData('text/x-orca-file-path', absolutePath)
+          e.dataTransfer.effectAllowed = 'copy'
+        }}
         onClick={onOpen}
       >
         <StatusIcon className="size-3.5 shrink-0" style={{ color: STATUS_COLORS[entry.status] }} />
