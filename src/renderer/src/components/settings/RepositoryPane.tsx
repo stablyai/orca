@@ -175,7 +175,7 @@ export function RepositoryPane({
 
   const visibleSections = [
     matchesSettingsSearch(searchQuery, identityEntries) ? (
-      <section key="identity" className="space-y-6">
+      <section key="identity" className="space-y-8">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-1">
             <h3 className="text-sm font-semibold">Identity</h3>

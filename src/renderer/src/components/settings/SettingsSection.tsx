@@ -25,7 +25,14 @@ export function SettingsSection({
   }
 
   return (
-    <section id={id} data-settings-section={id} className={className ?? 'space-y-6 scroll-mt-6'}>
+    <section
+      id={id}
+      data-settings-section={id}
+      className={
+        className ??
+        'space-y-8 scroll-mt-6 border-b border-border/40 pb-10 last:border-b-0 last:pb-0'
+      }
+    >
       <div className="space-y-1">
         <h2 className="text-xl font-semibold">{title}</h2>
         <p className="text-sm text-muted-foreground">{description}</p>
