@@ -53,7 +53,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     resetRemoteState,
     handleOpenRemoteStep,
     handleAddRemoteRepo
-  } = useRemoteRepo(fetchWorktrees, setStep, setAddedRepo)
+  } = useRemoteRepo(fetchWorktrees, setStep, setAddedRepo, closeModal)
   useEffect(() => {
     if (!isCloning) {
       return

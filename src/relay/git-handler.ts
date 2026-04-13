@@ -270,9 +270,11 @@ export class GitHandler {
     return { stdout, stderr }
   }
 
+  // Why: isGitRepo is called during the add-repo flow before any workspace
+  // roots are registered with the relay. Skipping validatePath is safe because
+  // this is a read-only git rev-parse check — no files are mutated.
   private async isGitRepo(params: Record<string, unknown>) {
     const dirPath = params.dirPath as string
-    this.context.validatePath(dirPath)
     try {
       const { stdout } = await this.git(['rev-parse', '--show-toplevel'], dirPath)
       return { isRepo: true, rootPath: stdout.trim() }

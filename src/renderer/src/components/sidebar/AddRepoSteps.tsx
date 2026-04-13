@@ -21,7 +21,8 @@ import type { SshTarget, SshConnectionState } from '../../../../shared/ssh-types
 export function useRemoteRepo(
   fetchWorktrees: (repoId: string) => Promise<void>,
   setStep: (step: 'add' | 'clone' | 'remote' | 'setup') => void,
-  setAddedRepo: (repo: Repo | null) => void
+  setAddedRepo: (repo: Repo | null) => void,
+  closeModal: () => void
 ) {
   const [sshTargets, setSshTargets] = useState<(SshTarget & { state?: SshConnectionState })[]>([])
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null)
@@ -95,6 +96,12 @@ export function useRemoteRepo(
       }
 
       toast.success('Remote repository added', { description: repo.displayName })
+
+      if (repo.kind === 'folder') {
+        closeModal()
+        return
+      }
+
       setAddedRepo(repo)
       await fetchWorktrees(repo.id)
       setStep('setup')
@@ -103,7 +110,7 @@ export function useRemoteRepo(
     } finally {
       setIsAddingRemote(false)
     }
-  }, [selectedTargetId, remotePath, fetchWorktrees, setStep, setAddedRepo])
+  }, [selectedTargetId, remotePath, fetchWorktrees, setStep, setAddedRepo, closeModal])
 
   return {
     sshTargets,
