@@ -135,6 +135,10 @@ type SshApi = {
   onStateChanged: (
     callback: (data: { targetId: string; state: SshConnectionState }) => void
   ) => () => void
+  browseDir: (args: { targetId: string; dirPath: string }) => Promise<{
+    entries: { name: string; isDirectory: boolean }[]
+    resolvedPath: string
+  }>
 }
 
 type Api = PreloadApi & {

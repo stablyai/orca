@@ -1136,7 +1136,15 @@ const api = {
       ipcRenderer.invoke('ssh:removePortForward', args),
 
     listPortForwards: (args?: { targetId?: string }): Promise<unknown[]> =>
-      ipcRenderer.invoke('ssh:listPortForwards', args)
+      ipcRenderer.invoke('ssh:listPortForwards', args),
+
+    browseDir: (args: {
+      targetId: string
+      dirPath: string
+    }): Promise<{
+      entries: { name: string; isDirectory: boolean }[]
+      resolvedPath: string
+    }> => ipcRenderer.invoke('ssh:browseDir', args)
   }
 }
 

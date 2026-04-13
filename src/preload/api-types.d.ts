@@ -543,5 +543,9 @@ export type PreloadApi = {
     }) => Promise<unknown>
     removePortForward: (args: { id: string }) => Promise<boolean>
     listPortForwards: (args?: { targetId?: string }) => Promise<unknown[]>
+    browseDir: (args: { targetId: string; dirPath: string }) => Promise<{
+      entries: { name: string; isDirectory: boolean }[]
+      resolvedPath: string
+    }>
   }
 }

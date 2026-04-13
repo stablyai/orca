@@ -7,11 +7,12 @@
  */
 import React, { useCallback, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { Folder } from 'lucide-react'
+import { Folder, FolderOpen } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { RemoteFileBrowser } from './RemoteFileBrowser'
 import type { Repo } from '../../../../shared/types'
 import type { SshTarget, SshConnectionState } from '../../../../shared/ssh-types'
 
@@ -142,6 +143,30 @@ export function RemoteStep({
   onRemotePathChange,
   onAdd
 }: RemoteStepProps): React.JSX.Element {
+  const [browsing, setBrowsing] = useState(false)
+
+  if (browsing && selectedTargetId) {
+    return (
+      <>
+        <DialogHeader>
+          <DialogTitle>Browse remote filesystem</DialogTitle>
+          <DialogDescription>
+            Navigate to a directory and click Select to choose it.
+          </DialogDescription>
+        </DialogHeader>
+        <RemoteFileBrowser
+          targetId={selectedTargetId}
+          initialPath={remotePath || '~'}
+          onSelect={(path) => {
+            onRemotePathChange(path)
+            setBrowsing(false)
+          }}
+          onCancel={() => setBrowsing(false)}
+        />
+      </>
+    )
+  }
+
   return (
     <>
       <DialogHeader>
@@ -196,13 +221,24 @@ export function RemoteStep({
 
         <div className="space-y-1">
           <label className="text-[11px] font-medium text-muted-foreground">Remote path</label>
-          <Input
-            value={remotePath}
-            onChange={(e) => onRemotePathChange(e.target.value)}
-            placeholder="/home/user/project"
-            className="h-8 text-xs"
-            disabled={isAddingRemote}
-          />
+          <div className="flex gap-2">
+            <Input
+              value={remotePath}
+              onChange={(e) => onRemotePathChange(e.target.value)}
+              placeholder="/home/user/project"
+              className="h-8 text-xs flex-1"
+              disabled={isAddingRemote}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 px-2 shrink-0"
+              onClick={() => setBrowsing(true)}
+              disabled={!selectedTargetId || isAddingRemote}
+            >
+              <FolderOpen className="size-3.5" />
+            </Button>
+          </div>
         </div>
 
         {remoteError && <p className="text-[11px] text-destructive">{remoteError}</p>}

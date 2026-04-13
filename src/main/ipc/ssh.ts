@@ -14,6 +14,7 @@ import { SshPortForwardManager } from '../ssh/ssh-port-forward'
 import type { SshTarget, SshConnectionState } from '../../shared/ssh-types'
 import { cleanupConnection, wireUpSshPtyEvents, reestablishRelayStack } from './ssh-relay-helpers'
 import { buildSshAuthCallbacks } from './ssh-auth-helpers'
+import { registerSshBrowseHandler } from './ssh-browse'
 
 let sshStore: SshConnectionStore | null = null
 let connectionManager: SshConnectionManager | null = null
@@ -92,6 +93,7 @@ export function registerSshHandlers(
 
   connectionManager = new SshConnectionManager(callbacks)
   portForwardManager = new SshPortForwardManager()
+  registerSshBrowseHandler(() => connectionManager)
 
   // ── Target CRUD ────────────────────────────────────────────────────
 
