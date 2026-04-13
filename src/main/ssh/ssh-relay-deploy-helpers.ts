@@ -78,8 +78,12 @@ export function waitForSentinel(channel: ClientChannel): Promise<MultiplexerTran
       }
     }, RELAY_SENTINEL_TIMEOUT_MS)
 
+    const MAX_BUFFER_CAP = 64 * 1024
     channel.stderr.on('data', (data: Buffer) => {
       stderrOutput += data.toString('utf-8')
+      if (stderrOutput.length > MAX_BUFFER_CAP) {
+        stderrOutput = stderrOutput.slice(-MAX_BUFFER_CAP)
+      }
     })
 
     channel.on('close', () => {

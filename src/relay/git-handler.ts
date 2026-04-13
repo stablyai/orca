@@ -275,6 +275,7 @@ export class GitHandler {
     this.context.validatePath(repoPath)
     const branchName = params.branchName as string
     const targetDir = params.targetDir as string
+    this.context.validatePath(targetDir)
     const base = params.base as string | undefined
     const track = params.track as boolean | undefined
 

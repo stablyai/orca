@@ -49,18 +49,17 @@ export class SshChannelMultiplexer {
   constructor(transport: MultiplexerTransport) {
     this.transport = transport
 
-    this.decoder = new FrameDecoder((frame) => this.handleFrame(frame))
+    this.decoder = new FrameDecoder(
+      (frame) => this.handleFrame(frame),
+      (err) => this.handleProtocolError(err)
+    )
 
     transport.onData((data) => {
       if (this.disposed) {
         return
       }
       this.lastReceivedAt = Date.now()
-      try {
-        this.decoder.feed(data)
-      } catch (err) {
-        this.handleProtocolError(err)
-      }
+      this.decoder.feed(data)
     })
 
     transport.onClose(() => {

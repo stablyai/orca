@@ -1,5 +1,6 @@
 import { Client as SshClient } from 'ssh2'
 import type { ConnectConfig, ClientChannel } from 'ssh2'
+import type { ChildProcess } from 'child_process'
 import { readFileSync } from 'fs'
 import { createHash } from 'crypto'
 import type { Socket as NetSocket } from 'net'
@@ -89,13 +90,16 @@ export type AuthHandlerState = {
   setState: (status: string, error?: string) => void
 }
 
-/** Result of buildConnectConfig: the ssh2 config plus an optional jump host
- *  client that must be destroyed when the connection is torn down. */
+/** Result of buildConnectConfig: the ssh2 config plus optional resources
+ *  that must be cleaned up when the connection is torn down. */
 export type ConnectConfigResult = {
   config: ConnectConfig
   /** The intermediate SshClient used for jump-host forwarding, if any.
    *  The caller is responsible for calling `.end()` on disconnect. */
   jumpClient: SshClient | null
+  /** The ProxyCommand child process, if any. Must be killed on disconnect
+   *  to prevent leaked proxy processes (e.g. nc, socat). */
+  proxyProcess: ChildProcess | null
 }
 
 /**
@@ -255,17 +259,18 @@ export async function buildConnectConfig(
   // We spawn the ProxyCommand as a child process and pipe its stdio.
   // Why: tokens are shell-escaped to prevent injection — a hostile hostname
   // like "foo; rm -rf /" must not be interpreted as shell code.
+  let proxyProcess: ChildProcess | null = null
   if (target.proxyCommand) {
     const { spawn } = await import('child_process')
     const expanded = target.proxyCommand
       .replace(/%h/g, shellEscape(target.host))
       .replace(/%p/g, shellEscape(String(target.port)))
       .replace(/%r/g, shellEscape(target.username))
-    const proc = spawn('/bin/sh', ['-c', expanded], { stdio: ['pipe', 'pipe', 'pipe'] })
+    proxyProcess = spawn('/bin/sh', ['-c', expanded], { stdio: ['pipe', 'pipe', 'pipe'] })
     const { PassThrough } = await import('stream')
     const stream = new PassThrough()
-    proc.stdout!.pipe(stream)
-    stream.pipe(proc.stdin!)
+    proxyProcess.stdout!.pipe(stream)
+    stream.pipe(proxyProcess.stdin!)
     config.sock = stream as unknown as NetSocket
   }
 
@@ -299,5 +304,5 @@ export async function buildConnectConfig(
     config.sock = forwardedChannel as unknown as NetSocket
   }
 
-  return { config, jumpClient }
+  return { config, jumpClient, proxyProcess }
 }

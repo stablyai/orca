@@ -1,4 +1,5 @@
 import { Client as SshClient } from 'ssh2'
+import type { ChildProcess } from 'child_process'
 import type { ClientChannel, SFTPWrapper } from 'ssh2'
 import type { SshTarget, SshConnectionState, SshConnectionStatus } from '../../shared/ssh-types'
 import { spawnSystemSsh, type SystemSshProcess } from './ssh-system-fallback'
@@ -25,6 +26,7 @@ export class SshConnection {
   /** Why: the jump host client must be tracked so it can be torn down on
    *  disconnect — otherwise the intermediate TCP connection leaks. */
   private jumpClient: SshClient | null = null
+  private proxyProcess: ChildProcess | null = null
   private systemSsh: SystemSshProcess | null = null
   private state: SshConnectionState
   private callbacks: SshConnectionCallbacks
@@ -123,10 +125,11 @@ export class SshConnection {
     this.agentAttempted = false
     this.keyAttempted = false
 
-    const { config, jumpClient } = await this.buildConfig()
-    // Why: store the jump client so disconnect() can tear it down and
-    // prevent the intermediate TCP connection from leaking.
+    const { config, jumpClient, proxyProcess } = await this.buildConfig()
+    // Why: store the jump client and proxy process so disconnect() can tear
+    // them down — otherwise the intermediate TCP connection or proxy leaks.
     this.jumpClient = jumpClient
+    this.proxyProcess = proxyProcess
 
     return new Promise<void>((resolve, reject) => {
       const client = new SshClient()
@@ -308,6 +311,10 @@ export class SshConnection {
     if (this.jumpClient) {
       this.jumpClient.end()
       this.jumpClient = null
+    }
+    if (this.proxyProcess) {
+      this.proxyProcess.kill()
+      this.proxyProcess = null
     }
     if (this.systemSsh) {
       this.systemSsh.kill()

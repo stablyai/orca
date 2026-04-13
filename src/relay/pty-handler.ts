@@ -36,6 +36,16 @@ type ManagedPty = {
 }
 const DEFAULT_GRACE_TIME_MS = 5 * 60 * 1000
 export const REPLAY_BUFFER_MAX = 100 * 1024
+const ALLOWED_SIGNALS = new Set([
+  'SIGINT',
+  'SIGTERM',
+  'SIGHUP',
+  'SIGKILL',
+  'SIGTSTP',
+  'SIGCONT',
+  'SIGUSR1',
+  'SIGUSR2'
+])
 
 export class PtyHandler {
   private ptys = new Map<string, ManagedPty>()
@@ -187,16 +197,6 @@ export class PtyHandler {
   private async sendSignal(params: Record<string, unknown>): Promise<void> {
     const id = params.id as string
     const signal = params.signal as string
-    const ALLOWED_SIGNALS = new Set([
-      'SIGINT',
-      'SIGTERM',
-      'SIGHUP',
-      'SIGKILL',
-      'SIGTSTP',
-      'SIGCONT',
-      'SIGUSR1',
-      'SIGUSR2'
-    ])
     if (!ALLOWED_SIGNALS.has(signal)) {
       throw new Error(`Signal not allowed: ${signal}`)
     }

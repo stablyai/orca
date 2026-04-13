@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto'
 import { ipcMain, type BrowserWindow } from 'electron'
 import type { Store } from '../persistence'
 import { SshConnectionStore } from '../ssh/ssh-connection-store'
@@ -67,7 +68,7 @@ export function registerSshHandlers(
       }
 
       return new Promise<boolean>((resolve) => {
-        const channel = `ssh:host-key-verify-response-${Date.now()}`
+        const channel = `ssh:host-key-verify-response-${randomUUID()}`
         win.webContents.send('ssh:host-key-verify', { ...req, responseChannel: channel })
         ipcMain.once(channel, (_event, accepted: boolean) => {
           resolve(accepted)
@@ -82,7 +83,7 @@ export function registerSshHandlers(
       }
 
       return new Promise<string[]>((resolve) => {
-        const channel = `ssh:auth-challenge-response-${Date.now()}`
+        const channel = `ssh:auth-challenge-response-${randomUUID()}`
         win.webContents.send('ssh:auth-challenge', { ...req, responseChannel: channel })
         ipcMain.once(channel, (_event, responses: string[]) => {
           resolve(responses)
@@ -97,7 +98,7 @@ export function registerSshHandlers(
       }
 
       return new Promise<string | null>((resolve) => {
-        const channel = `ssh:password-response-${Date.now()}`
+        const channel = `ssh:password-response-${randomUUID()}`
         win.webContents.send('ssh:password-prompt', { targetId, responseChannel: channel })
         ipcMain.once(channel, (_event, password: string | null) => {
           resolve(password)

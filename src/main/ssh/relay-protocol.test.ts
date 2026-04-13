@@ -122,16 +122,28 @@ describe('FrameDecoder', () => {
     expect(frames[0].payload.length).toBe(0)
   })
 
-  it('throws on oversized frame payloads', () => {
-    const decoder = new FrameDecoder(() => {})
+  it('skips oversized frames and calls onError instead of throwing', () => {
+    const errors: Error[] = []
+    const frames: DecodedFrame[] = []
+    const decoder = new FrameDecoder(
+      (f) => frames.push(f),
+      (err) => errors.push(err)
+    )
 
+    const oversizedLength = 17 * 1024 * 1024
     const header = Buffer.alloc(HEADER_LENGTH)
     header[0] = MessageType.Regular
     header.writeUInt32BE(1, 1)
     header.writeUInt32BE(0, 5)
-    header.writeUInt32BE(17 * 1024 * 1024, 9) // Over 16MB
+    header.writeUInt32BE(oversizedLength, 9)
 
-    expect(() => decoder.feed(header)).toThrow('Frame payload too large')
+    const fakePayload = Buffer.alloc(oversizedLength)
+    const fullFrame = Buffer.concat([header, fakePayload])
+
+    decoder.feed(fullFrame)
+    expect(frames).toHaveLength(0)
+    expect(errors).toHaveLength(1)
+    expect(errors[0].message).toContain('discarded')
   })
 
   it('reset clears internal buffer', () => {

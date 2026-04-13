@@ -79,6 +79,12 @@ export function wireUpSshPtyEvents(
   }
 }
 
+// Why: overlapping reconnection attempts (e.g. SSH connection flaps twice
+// quickly) would cause two concurrent reestablishRelayStack calls, leaking
+// relay processes and multiplexers from the first call. This map lets us
+// cancel the stale attempt before starting a new one.
+const reestablishAbortControllers = new Map<string, AbortController>()
+
 export async function reestablishRelayStack(
   targetId: string,
   getMainWindow: () => BrowserWindow | null,
@@ -90,18 +96,42 @@ export async function reestablishRelayStack(
     return
   }
 
+  const prevAbort = reestablishAbortControllers.get(targetId)
+  if (prevAbort) {
+    prevAbort.abort()
+  }
+  const abortController = new AbortController()
+  reestablishAbortControllers.set(targetId, abortController)
+
   // Dispose old multiplexer with connection_lost reason
   const oldMux = activeMultiplexers.get(targetId)
   if (oldMux && !oldMux.isDisposed()) {
     oldMux.dispose('connection_lost')
   }
   activeMultiplexers.delete(targetId)
+
+  // Why: dispose notification subscriptions before unregistering so stale
+  // callbacks from the old multiplexer don't fire into a torn-down provider.
+  const oldPtyProvider = getSshPtyProvider(targetId)
+  if (oldPtyProvider && 'dispose' in oldPtyProvider) {
+    ;(oldPtyProvider as { dispose: () => void }).dispose()
+  }
+  const oldFsProvider = getSshFilesystemProvider(targetId)
+  if (oldFsProvider && 'dispose' in oldFsProvider) {
+    ;(oldFsProvider as { dispose: () => void }).dispose()
+  }
+
   unregisterSshPtyProvider(targetId)
   unregisterSshFilesystemProvider(targetId)
   unregisterSshGitProvider(targetId)
 
   try {
     const { transport } = await deployAndLaunchRelay(conn)
+
+    if (abortController.signal.aborted) {
+      return
+    }
+
     const mux = new SshChannelMultiplexer(transport)
     activeMultiplexers.set(targetId, mux)
 
@@ -130,5 +160,9 @@ export async function reestablishRelayStack(
     console.warn(
       `[ssh] Failed to re-establish relay for ${targetId}: ${err instanceof Error ? err.message : String(err)}`
     )
+  } finally {
+    if (reestablishAbortControllers.get(targetId) === abortController) {
+      reestablishAbortControllers.delete(targetId)
+    }
   }
 }
