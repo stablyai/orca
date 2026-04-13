@@ -2,7 +2,7 @@ import { app, BrowserWindow } from 'electron'
 import { randomUUID } from 'crypto'
 import { createServer, type IncomingMessage, type ServerResponse } from 'http'
 import { join } from 'path'
-import { mkdirSync, writeFileSync } from 'fs'
+import { mkdirSync, writeFileSync, rmSync } from 'fs'
 import type { OpenCodeStatusEvent } from '../../shared/types'
 
 const ORCA_OPENCODE_PLUGIN_FILE = 'orca-opencode-status.js'
@@ -174,11 +174,32 @@ export class OpenCodeHookService {
     this.server?.close()
     this.server = null
     this.port = 0
+    // Why: clean up all remaining PTY config directories before clearing the
+    // in-memory tracking. Without this, directories from the current session's
+    // PTYs survive on disk after shutdown.
+    for (const ptyId of this.lastStatusByPtyId.keys()) {
+      const configDir = join(app.getPath('userData'), 'opencode-hooks', ptyId)
+      try {
+        rmSync(configDir, { recursive: true, force: true })
+      } catch {
+        // best-effort
+      }
+    }
     this.lastStatusByPtyId.clear()
   }
 
   clearPty(ptyId: string): void {
     this.lastStatusByPtyId.delete(ptyId)
+    // Why: writePluginConfig creates a directory per PTY under userData. Without
+    // cleanup these accumulate across sessions since ptyId is a monotonically
+    // increasing counter. Remove the directory when the PTY is torn down.
+    const configDir = join(app.getPath('userData'), 'opencode-hooks', ptyId)
+    try {
+      rmSync(configDir, { recursive: true, force: true })
+    } catch {
+      // Why: best-effort cleanup. The directory may already be gone if the user
+      // manually purged userData, or the OS may hold a lock briefly.
+    }
   }
 
   buildPtyEnv(ptyId: string): Record<string, string> {

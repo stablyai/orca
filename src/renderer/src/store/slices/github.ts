@@ -32,8 +32,36 @@ const inflightChecksRequests = new Map<string, Promise<PRCheckDetail[]>>()
 const inflightCommentsRequests = new Map<string, Promise<PRComment[]>>()
 const prRequestGenerations = new Map<string, number>()
 
+// Why: 500 entries is generous enough that active developers will never hit it
+// during normal use, but prevents the cache from growing without bound across
+// many repos and branches over a long-running session.
+const MAX_CACHE_ENTRIES = 500
+
 function isFresh<T>(entry: CacheEntry<T> | undefined, ttl = CACHE_TTL): entry is CacheEntry<T> {
   return entry !== undefined && Date.now() - entry.fetchedAt < ttl
+}
+
+/**
+ * Evict the oldest entries from a cache record when it exceeds the max size.
+ * Returns a pruned copy, or the original reference if no eviction was needed.
+ */
+function evictStaleEntries<T>(
+  cache: Record<string, CacheEntry<T>>,
+  maxEntries = MAX_CACHE_ENTRIES
+): Record<string, CacheEntry<T>> {
+  const keys = Object.keys(cache)
+  if (keys.length <= maxEntries) {
+    return cache
+  }
+  const sorted = keys
+    .map((k) => ({ key: k, fetchedAt: cache[k].fetchedAt }))
+    .sort((a, b) => b.fetchedAt - a.fetchedAt)
+  const keep = new Set(sorted.slice(0, maxEntries).map((e) => e.key))
+  const pruned: Record<string, CacheEntry<T>> = {}
+  for (const k of keep) {
+    pruned[k] = cache[k]
+  }
+  return pruned
 }
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null
@@ -316,8 +344,25 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   },
 
   refreshAllGitHub: () => {
-    // Invalidate checks and comments caches so they refresh on next access
-    set({ checksCache: {}, commentsCache: {} })
+    // Invalidate checks and comments caches so they refresh on next access.
+    // Also evict old entries from prCache and issueCache to prevent unbounded
+    // growth across many repos and branches over a long-running session.
+    set((s) => ({
+      checksCache: {},
+      commentsCache: {},
+      prCache: evictStaleEntries(s.prCache),
+      issueCache: evictStaleEntries(s.issueCache)
+    }))
+
+    // Why: prRequestGenerations is a module-scope Map that accumulates one
+    // entry per unique repo+branch key. Prune entries for keys no longer in
+    // the prCache so it does not grow without bound.
+    const currentPrKeys = new Set(Object.keys(get().prCache))
+    for (const key of prRequestGenerations.keys()) {
+      if (!currentPrKeys.has(key)) {
+        prRequestGenerations.delete(key)
+      }
+    }
 
     // Only re-fetch PR/issue entries that are already stale — skip fresh ones
     const state = get()

@@ -39,15 +39,26 @@ function base64ToBlobUrl(base64: string, mimeType: string): string {
 }
 
 // Why: when the user switches back to the app after deleting or replacing
-// image files externally, clearing the cache ensures the preview picks up
+// image files externally, clearing the cache forces the preview to pick up
 // the current filesystem state instead of showing stale in-memory blob URLs.
-// Old blob URLs are intentionally NOT revoked so that <img> elements keep
-// displaying until the fresh IPC load completes, avoiding a visible flash.
+// Old blob URLs are revoked after a short delay so that <img> elements still
+// display the old data while the fresh IPC load completes, avoiding a visible
+// flash. The 5-second window is generous enough for even slow IPC reads.
 function invalidateImageCache(): void {
+  const staleUrls = Array.from(blobUrlCache.values())
   blobUrlCache.clear()
   cacheGeneration += 1
   for (const listener of cacheListeners) {
     listener()
+  }
+  // Why: defer revocation so the browser keeps the old blob data readable
+  // until replacement loads complete, then free the underlying memory.
+  if (staleUrls.length > 0) {
+    setTimeout(() => {
+      for (const url of staleUrls) {
+        URL.revokeObjectURL(url)
+      }
+    }, 5000)
   }
 }
 

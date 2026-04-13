@@ -84,7 +84,15 @@ export function useGitStatusPolling(): void {
 
   useEffect(() => {
     void fetchStatus()
-    const intervalId = setInterval(() => void fetchStatus(), POLL_INTERVAL_MS)
+    // Why: skip IPC-heavy git status calls when the window is not focused.
+    // These intervals run at the App root level regardless of which sidebar tab
+    // is open, so gating on document.hasFocus() prevents wasted CPU and IPC
+    // traffic while the user is working in another application.
+    const intervalId = setInterval(() => {
+      if (document.hasFocus()) {
+        void fetchStatus()
+      }
+    }, POLL_INTERVAL_MS)
     return () => clearInterval(intervalId)
   }, [fetchStatus])
 
@@ -98,7 +106,11 @@ export function useGitStatusPolling(): void {
     // list so a branch change updates the sidebar's PR key instead of leaving
     // the previous merged PR attached to this worktree indefinitely.
     void fetchWorktrees(activeRepoId)
-    const intervalId = setInterval(() => void fetchWorktrees(activeRepoId), POLL_INTERVAL_MS)
+    const intervalId = setInterval(() => {
+      if (document.hasFocus()) {
+        void fetchWorktrees(activeRepoId)
+      }
+    }, POLL_INTERVAL_MS)
     return () => clearInterval(intervalId)
   }, [activeRepoId, activeRepoSupportsGit, fetchWorktrees])
 
@@ -125,7 +137,11 @@ export function useGitStatusPolling(): void {
     }
 
     void pollStale()
-    const intervalId = setInterval(() => void pollStale(), POLL_INTERVAL_MS)
+    const intervalId = setInterval(() => {
+      if (document.hasFocus()) {
+        void pollStale()
+      }
+    }, POLL_INTERVAL_MS)
     return () => clearInterval(intervalId)
   }, [staleConflictWorktrees, setConflictOperation])
 }

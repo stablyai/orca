@@ -81,6 +81,7 @@ class BrowserManager {
   private readonly grabShortcutCleanupByTabId = new Map<string, () => void>()
   private readonly shortcutForwardingCleanupByTabId = new Map<string, () => void>()
   private readonly policyAttachedGuestIds = new Set<number>()
+  private readonly policyCleanupByGuestId = new Map<number, () => void>()
   private readonly pendingLoadFailuresByGuestId = new Map<
     number,
     { code: number; description: string; validatedUrl: string }
@@ -155,27 +156,37 @@ class BrowserManager {
       }
     }
 
+    const didFailLoadHandler = (
+      _event: Electron.Event,
+      errorCode: number,
+      errorDescription: string,
+      validatedURL: string,
+      isMainFrame: boolean
+    ): void => {
+      if (!isMainFrame || errorCode === -3) {
+        return
+      }
+      this.forwardOrQueueGuestLoadFailure(guest.id, {
+        code: errorCode,
+        description: errorDescription || 'This site could not be reached.',
+        validatedUrl: validatedURL || guest.getURL() || 'about:blank'
+      })
+    }
+
     guest.on('will-navigate', navigationGuard)
     guest.on('will-redirect', navigationGuard)
-    guest.on(
-      'did-fail-load',
-      (
-        _event: Electron.Event,
-        errorCode: number,
-        errorDescription: string,
-        validatedURL: string,
-        isMainFrame: boolean
-      ) => {
-        if (!isMainFrame || errorCode === -3) {
-          return
-        }
-        this.forwardOrQueueGuestLoadFailure(guest.id, {
-          code: errorCode,
-          description: errorDescription || 'This site could not be reached.',
-          validatedUrl: validatedURL || guest.getURL() || 'about:blank'
-        })
+    guest.on('did-fail-load', didFailLoadHandler)
+
+    // Why: store cleanup so unregisterGuest can remove these listeners when the
+    // guest surface is torn down, preventing the callbacks from preventing GC of
+    // the underlying WebContents wrapper.
+    this.policyCleanupByGuestId.set(guest.id, () => {
+      if (!guest.isDestroyed()) {
+        guest.off('will-navigate', navigationGuard)
+        guest.off('will-redirect', navigationGuard)
+        guest.off('did-fail-load', didFailLoadHandler)
       }
-    )
+    })
   }
 
   registerGuest({
@@ -239,6 +250,19 @@ class BrowserManager {
     // instead of a dangling Promise.
     this.cancelGrabOp(browserTabId, 'evicted')
 
+    // Why: remove the policy listeners attached in attachGuestPolicies so the
+    // callbacks (which close over the guest WebContents) do not prevent GC of
+    // the underlying Chromium surface after the guest is destroyed.
+    const guestWebContentsId = this.webContentsIdByTabId.get(browserTabId)
+    if (guestWebContentsId !== undefined) {
+      const policyCleanup = this.policyCleanupByGuestId.get(guestWebContentsId)
+      if (policyCleanup) {
+        policyCleanup()
+        this.policyCleanupByGuestId.delete(guestWebContentsId)
+      }
+      this.policyAttachedGuestIds.delete(guestWebContentsId)
+    }
+
     const cleanup = this.contextMenuCleanupByTabId.get(browserTabId)
     if (cleanup) {
       cleanup()
@@ -280,6 +304,7 @@ class BrowserManager {
       this.unregisterGuest(browserTabId)
     }
     this.policyAttachedGuestIds.clear()
+    this.policyCleanupByGuestId.clear()
     this.tabIdByWebContentsId.clear()
     this.pendingLoadFailuresByGuestId.clear()
     this.pendingPermissionEventsByGuestId.clear()

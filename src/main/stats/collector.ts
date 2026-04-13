@@ -6,6 +6,11 @@ import type { StatsEvent, StatsAggregates, StatsFile } from './types'
 
 const STATS_SCHEMA_VERSION = 1
 const MAX_EVENTS = 10_000
+// Why: countedPRs is a deduplication registry that grows with every PR created
+// through Orca. Without a cap, a heavily-used instance accumulates thousands of
+// URL strings across months. 2000 entries is about 6-12 months of active use
+// for a power user, and at ~50 chars per URL the overhead is ~100KB max.
+const MAX_COUNTED_PRS = 2_000
 // Why 5s instead of the main store's 300ms: stat events are infrequent
 // (a few per session) and not latency-sensitive for the UI.
 const DEBOUNCE_MS = 5_000
@@ -173,6 +178,13 @@ export class StatsCollector {
         this.aggregates.totalPRsCreated++
         if (event.meta?.prUrl) {
           this.aggregates.countedPRs.push(String(event.meta.prUrl))
+          // Why: trim oldest entries so the dedup array does not grow without
+          // bound. The aggregate totalPRsCreated counter remains accurate; only
+          // the dedup lookup for very old PRs is lost, which is acceptable
+          // since PRs that old would never be re-counted in practice.
+          if (this.aggregates.countedPRs.length > MAX_COUNTED_PRS) {
+            this.aggregates.countedPRs = this.aggregates.countedPRs.slice(-MAX_COUNTED_PRS)
+          }
         }
         break
       // agent_stop duration is handled directly in onAgentStop() to avoid
