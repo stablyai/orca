@@ -73,9 +73,11 @@ export function encodeKeepAliveFrame(id: number, ack: number): Buffer {
 export class FrameDecoder {
   private buffer = Buffer.alloc(0)
   private onFrame: (frame: DecodedFrame) => void
+  private onError: ((err: Error) => void) | null
 
-  constructor(onFrame: (frame: DecodedFrame) => void) {
+  constructor(onFrame: (frame: DecodedFrame) => void, onError?: (err: Error) => void) {
     this.onFrame = onFrame
+    this.onError = onError ?? null
   }
 
   feed(chunk: Buffer | Uint8Array): void {
@@ -83,10 +85,28 @@ export class FrameDecoder {
 
     while (this.buffer.length >= HEADER_LENGTH) {
       const length = this.buffer.readUInt32BE(9)
-      if (length > MAX_MESSAGE_SIZE) {
-        throw new Error(`Frame payload too large: ${length} bytes`)
-      }
       const totalLength = HEADER_LENGTH + length
+
+      if (length > MAX_MESSAGE_SIZE) {
+        // Why: Throwing here would leave the buffer in a partially consumed
+        // state — subsequent feed() calls would try to parse the leftover
+        // payload bytes as a new header, corrupting every future frame.
+        // Instead we skip the entire oversized frame so the decoder stays
+        // synchronized with the stream.
+        if (this.buffer.length < totalLength) {
+          // Haven't received the full oversized payload yet; wait for more data.
+          break
+        }
+        this.buffer = this.buffer.subarray(totalLength)
+        const err = new Error(`Frame payload too large: ${length} bytes — discarded`)
+        if (this.onError) {
+          this.onError(err)
+        } else {
+          process.stderr.write(`[relay] ${err.message}\n`)
+        }
+        continue
+      }
+
       if (this.buffer.length < totalLength) {
         break
       }

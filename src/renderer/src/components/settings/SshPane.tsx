@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Plus, Upload } from 'lucide-react'
-import type { SshTarget, SshConnectionState } from '../../../../shared/ssh-types'
+import type { SshTarget } from '../../../../shared/ssh-types'
+import { useAppStore } from '@/store'
 import { Button } from '../ui/button'
 import type { SettingsSearchEntry } from './settings-search'
 import { SshTargetCard } from './SshTargetCard'
@@ -34,7 +35,10 @@ type SshPaneProps = Record<string, never>
 
 export function SshPane(_props: SshPaneProps): React.JSX.Element {
   const [targets, setTargets] = useState<SshTarget[]>([])
-  const [states, setStates] = useState<Map<string, SshConnectionState>>(new Map())
+  // Why: connection states are already hydrated and kept up-to-date by the
+  // global store (via useIpcEvents.ts). Reading from the store avoids
+  // duplicating the onStateChanged listener and per-target getState IPC calls.
+  const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<EditingTarget>(EMPTY_FORM)
@@ -44,21 +48,6 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
     try {
       const result = (await window.api.ssh.listTargets()) as SshTarget[]
       setTargets(result)
-
-      const stateMap = new Map<string, SshConnectionState>()
-      for (const target of result) {
-        try {
-          const state = (await window.api.ssh.getState({
-            targetId: target.id
-          })) as SshConnectionState | null
-          if (state) {
-            stateMap.set(target.id, state)
-          }
-        } catch {
-          // No state yet
-        }
-      }
-      setStates(stateMap)
     } catch {
       toast.error('Failed to load SSH targets')
     }
@@ -67,17 +56,6 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
   useEffect(() => {
     void loadTargets()
   }, [loadTargets])
-
-  useEffect(() => {
-    const unsub = window.api.ssh.onStateChanged((data: { targetId: string; state: unknown }) => {
-      setStates((prev) => {
-        const next = new Map(prev)
-        next.set(data.targetId, data.state as SshConnectionState)
-        return next
-      })
-    })
-    return unsub
-  }, [])
 
   const handleSave = async (): Promise<void> => {
     if (!form.host.trim() || !form.username.trim()) {
@@ -116,9 +94,16 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
     }
   }
 
-  const handleRemove = async (id: string): Promise<void> => {
+  const handleRemove = async (id: string, label: string): Promise<void> => {
+    // Why: destructive action — confirm before removing to prevent accidental
+    // loss of a configured target and disconnecting active sessions.
+    if (
+      !window.confirm(`Remove SSH target "${label}"? This will disconnect any active sessions.`)
+    ) {
+      return
+    }
     try {
-      const state = states.get(id)
+      const state = sshConnectionStates.get(id)
       if (state && state.status === 'connected') {
         await window.api.ssh.disconnect({ targetId: id })
       }
@@ -243,13 +228,13 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
             <SshTargetCard
               key={target.id}
               target={target}
-              state={states.get(target.id)}
+              state={sshConnectionStates.get(target.id)}
               testing={testing === target.id}
               onConnect={(id) => void handleConnect(id)}
               onDisconnect={(id) => void handleDisconnect(id)}
               onTest={(id) => void handleTest(id)}
               onEdit={handleEdit}
-              onRemove={(id) => void handleRemove(id)}
+              onRemove={(id) => void handleRemove(id, target.label)}
             />
           ))}
         </div>

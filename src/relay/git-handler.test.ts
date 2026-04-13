@@ -51,7 +51,9 @@ describe('GitHandler', () => {
   beforeEach(() => {
     tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-git-'))
     dispatcher = createMockDispatcher()
-    new GitHandler(dispatcher as unknown as RelayDispatcher, new RelayContext())
+    const ctx = new RelayContext()
+    ctx.registerRoot(tmpDir)
+    new GitHandler(dispatcher as unknown as RelayDispatcher, ctx)
   })
 
   afterEach(async () => {

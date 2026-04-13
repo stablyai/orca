@@ -32,9 +32,13 @@ function parseArgs(argv: string[]): { graceTimeMs: number } {
 function main(): void {
   const { graceTimeMs } = parseArgs(process.argv)
 
-  // Prevent Node from exiting on uncaught errors in production relay
+  // Why: After an uncaught exception Node's internal state may be corrupted
+  // (e.g. half-written buffers, broken invariants). Logging and continuing
+  // would risk silent data corruption or zombie PTYs. We log for diagnostics
+  // and then exit so the client can detect the disconnect and reconnect cleanly.
   process.on('uncaughtException', (err) => {
     process.stderr.write(`[relay] Uncaught exception: ${err.message}\n`)
+    process.exit(1)
   })
 
   const dispatcher = new RelayDispatcher((data) => {

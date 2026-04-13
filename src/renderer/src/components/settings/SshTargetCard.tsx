@@ -134,7 +134,13 @@ export function SshTargetCard({
           </>
         )}
 
-        <Button variant="ghost" size="icon" onClick={() => onEdit(target)} className="size-8">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => onEdit(target)}
+          className="size-8"
+          aria-label="Edit target"
+        >
           <Pencil className="size-3.5" />
         </Button>
         <Button
@@ -142,6 +148,7 @@ export function SshTargetCard({
           size="icon"
           onClick={() => onRemove(target.id)}
           className="size-8 text-muted-foreground hover:text-red-400"
+          aria-label="Remove target"
         >
           <Trash2 className="size-3.5" />
         </Button>

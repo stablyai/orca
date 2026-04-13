@@ -231,13 +231,21 @@ export function useIpcEvents(): void {
     // reflect the correct connected/disconnected state on app launch.
     void (async () => {
       try {
-        const targets = (await window.api.ssh.listTargets()) as { id: string }[]
+        const targets = (await window.api.ssh.listTargets()) as {
+          id: string
+          label: string
+        }[]
+        // Why: populate target labels map so WorktreeCard (and other components)
+        // can look up display labels without issuing per-card IPC calls.
+        const labels = new Map<string, string>()
         for (const target of targets) {
+          labels.set(target.id, target.label)
           const state = await window.api.ssh.getState({ targetId: target.id })
           if (state) {
             useAppStore.getState().setSshConnectionState(target.id, state as SshConnectionState)
           }
         }
+        useAppStore.getState().setSshTargetLabels(labels)
       } catch {
         // SSH may not be configured
       }

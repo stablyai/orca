@@ -8,10 +8,17 @@ import { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import { SshPtyProvider } from '../providers/ssh-pty-provider'
 import { SshFilesystemProvider } from '../providers/ssh-filesystem-provider'
 import { SshGitProvider } from '../providers/ssh-git-provider'
-import { registerSshPtyProvider, unregisterSshPtyProvider, getPtyIdsForConnection } from './pty'
+import {
+  registerSshPtyProvider,
+  unregisterSshPtyProvider,
+  getSshPtyProvider,
+  getPtyIdsForConnection,
+  clearPtyOwnershipForConnection
+} from './pty'
 import {
   registerSshFilesystemProvider,
-  unregisterSshFilesystemProvider
+  unregisterSshFilesystemProvider,
+  getSshFilesystemProvider
 } from '../providers/ssh-filesystem-dispatch'
 import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
 import type { SshPortForwardManager } from '../ssh/ssh-port-forward'
@@ -29,6 +36,22 @@ export function cleanupConnection(
     mux.dispose()
     activeMultiplexers.delete(targetId)
   }
+  // Why: clear PTY ownership entries before unregistering the provider so
+  // stale ownership entries don't route future lookups to a dead provider.
+  clearPtyOwnershipForConnection(targetId)
+
+  // Why: dispose notification subscriptions before unregistering so the
+  // multiplexer's handler list doesn't retain stale callbacks that fire
+  // into a torn-down provider after disconnect.
+  const ptyProvider = getSshPtyProvider(targetId)
+  if (ptyProvider && 'dispose' in ptyProvider) {
+    ;(ptyProvider as { dispose: () => void }).dispose()
+  }
+  const fsProvider = getSshFilesystemProvider(targetId)
+  if (fsProvider && 'dispose' in fsProvider) {
+    ;(fsProvider as { dispose: () => void }).dispose()
+  }
+
   unregisterSshPtyProvider(targetId)
   unregisterSshFilesystemProvider(targetId)
   unregisterSshGitProvider(targetId)

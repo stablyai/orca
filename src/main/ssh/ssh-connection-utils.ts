@@ -1,6 +1,7 @@
 import { Client as SshClient } from 'ssh2'
 import type { ConnectConfig, ClientChannel } from 'ssh2'
 import { readFileSync } from 'fs'
+import { createHash } from 'crypto'
 import type { Socket as NetSocket } from 'net'
 import type { SshTarget, SshConnectionState } from '../../shared/ssh-types'
 
@@ -70,12 +71,31 @@ export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+/**
+ * Why: ProxyCommand values are interpolated into a `/bin/sh -c` invocation.
+ * Without escaping, a malicious hostname (e.g. `foo; rm -rf /`) would be
+ * executed as shell code.  Wrapping in single quotes and escaping embedded
+ * single quotes is the standard POSIX shell-safe quoting strategy.
+ */
+function shellEscape(s: string): string {
+  return `'${s.replace(/'/g, "'\\''")}'`
+}
+
 // ── Auth handler state (passed in by the connection) ────────────────
 
 export type AuthHandlerState = {
   agentAttempted: boolean
   keyAttempted: boolean
   setState: (status: string, error?: string) => void
+}
+
+/** Result of buildConnectConfig: the ssh2 config plus an optional jump host
+ *  client that must be destroyed when the connection is torn down. */
+export type ConnectConfigResult = {
+  config: ConnectConfig
+  /** The intermediate SshClient used for jump-host forwarding, if any.
+   *  The caller is responsible for calling `.end()` on disconnect. */
+  jumpClient: SshClient | null
 }
 
 /**
@@ -86,7 +106,7 @@ export async function buildConnectConfig(
   target: SshTarget,
   callbacks: SshConnectionCallbacks,
   authState: AuthHandlerState
-): Promise<ConnectConfig> {
+): Promise<ConnectConfigResult> {
   const config: ConnectConfig = {
     host: target.host,
     port: target.port,
@@ -95,12 +115,35 @@ export async function buildConnectConfig(
     keepaliveInterval: 5000,
     keepaliveCountMax: 4,
 
-    hostVerifier: (key) => {
-      // ssh2 calls this synchronously, but we need async UI.
-      // We handle host key verification via the 'hostkeys' event instead.
-      // Return true here and let the event handler deal with unknown keys.
-      void key
-      return true
+    // Why: ssh2's hostVerifier callback form `(key, verify) => void` blocks
+    // the handshake until `verify(true/false)` is called.  This lets us
+    // prompt the user asynchronously without racing the 'ready' event.
+    // We hash the raw host public key ourselves (no `hostHash` config) so
+    // that the fingerprint reflects the actual key, not just its algorithm.
+    hostVerifier: (key: Buffer, verify: (accept: boolean) => void) => {
+      const fingerprint = createHash('sha256').update(key).digest('base64')
+      // Why: ssh2 exposes the key type via the negotiated algorithms on the
+      // handshake event, but we don't have that here.  Parsing the key
+      // type from the raw public key buffer is fragile; 'unknown' is safe
+      // because the fingerprint is the security-critical value.
+      const keyType = 'unknown'
+
+      authState.setState('host-key-verification')
+      callbacks
+        .onHostKeyVerify({
+          host: target.host,
+          ip: target.host,
+          fingerprint,
+          keyType
+        })
+        .then((accepted) => {
+          verify(accepted)
+        })
+        .catch(() => {
+          // Why: if the UI callback rejects (e.g. renderer crashed), we must
+          // deny the host key to avoid silently trusting an unverified server.
+          verify(false)
+        })
     },
 
     authHandler: (methodsLeft, _partialSuccess, callback) => {
@@ -210,12 +253,14 @@ export async function buildConnectConfig(
 
   // Wire ProxyCommand: ssh2 accepts a custom socket/stream via the `sock` option.
   // We spawn the ProxyCommand as a child process and pipe its stdio.
+  // Why: tokens are shell-escaped to prevent injection — a hostile hostname
+  // like "foo; rm -rf /" must not be interpreted as shell code.
   if (target.proxyCommand) {
     const { spawn } = await import('child_process')
     const expanded = target.proxyCommand
-      .replace(/%h/g, target.host)
-      .replace(/%p/g, String(target.port))
-      .replace(/%r/g, target.username)
+      .replace(/%h/g, shellEscape(target.host))
+      .replace(/%p/g, shellEscape(String(target.port)))
+      .replace(/%r/g, shellEscape(target.username))
     const proc = spawn('/bin/sh', ['-c', expanded], { stdio: ['pipe', 'pipe', 'pipe'] })
     const { PassThrough } = await import('stream')
     const stream = new PassThrough()
@@ -225,8 +270,12 @@ export async function buildConnectConfig(
   }
 
   // Wire JumpHost: establish an intermediate SSH connection and forward a channel.
+  // Why: the jump client is returned to the caller so it can be destroyed on
+  // disconnect — otherwise the intermediate TCP connection leaks.
+  let jumpClient: SshClient | null = null
   if (target.jumpHost && !target.proxyCommand) {
-    const jumpConn = new SshClient()
+    jumpClient = new SshClient()
+    const jumpConn = jumpClient
     await new Promise<void>((resolve, reject) => {
       jumpConn.on('ready', () => resolve())
       jumpConn.on('error', (err) => reject(err))
@@ -250,5 +299,5 @@ export async function buildConnectConfig(
     config.sock = forwardedChannel as unknown as NetSocket
   }
 
-  return config
+  return { config, jumpClient }
 }

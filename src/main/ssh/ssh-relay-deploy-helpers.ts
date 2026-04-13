@@ -198,8 +198,10 @@ export async function resolveRemoteNodePath(conn: SshConnection): Promise<string
     'command -v node 2>/dev/null',
     'command -v /usr/local/bin/node 2>/dev/null',
     'command -v /opt/homebrew/bin/node 2>/dev/null',
-    // Why: nvm installs into a versioned directory — use ls to find it
-    'ls -1 $HOME/.nvm/versions/node/*/bin/node 2>/dev/null | tail -1',
+    // Why: nvm installs into a versioned directory. `ls -1` sorts
+    // alphabetically, which misorders versions (e.g. v9 > v18). Pipe
+    // through `sort -V` (version sort) so we pick the highest version.
+    'ls -1 $HOME/.nvm/versions/node/*/bin/node 2>/dev/null | sort -V | tail -1',
     'command -v $HOME/.local/bin/node 2>/dev/null',
     'command -v $HOME/.fnm/aliases/default/bin/node 2>/dev/null'
   ].join(' || ')

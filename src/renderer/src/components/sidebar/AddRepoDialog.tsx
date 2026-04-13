@@ -12,10 +12,9 @@ import {
 import { Button } from '@/components/ui/button'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { LinkedWorktreeItem } from './LinkedWorktreeItem'
-import { RemoteStep, CloneStep } from './AddRepoSteps'
+import { RemoteStep, CloneStep, useRemoteRepo } from './AddRepoSteps'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { Repo, Worktree } from '../../../../shared/types'
-import type { SshTarget, SshConnectionState } from '../../../../shared/ssh-types'
 
 const AddRepoDialog = React.memo(function AddRepoDialog() {
   const activeModal = useAppStore((s) => s.activeModal)
@@ -39,14 +38,22 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     null
   )
 
-  // Remote repo state
-  const [sshTargets, setSshTargets] = useState<(SshTarget & { state?: SshConnectionState })[]>([])
-  const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null)
-  const [remotePath, setRemotePath] = useState('~/')
-  const [remoteError, setRemoteError] = useState<string | null>(null)
-  const [isAddingRemote, setIsAddingRemote] = useState(false)
   // Why: monotonic ID so stale clone callbacks can detect they were superseded.
   const cloneGenRef = useRef(0)
+
+  const {
+    sshTargets,
+    selectedTargetId,
+    remotePath,
+    remoteError,
+    isAddingRemote,
+    setSelectedTargetId,
+    setRemotePath,
+    setRemoteError,
+    resetRemoteState,
+    handleOpenRemoteStep,
+    handleAddRemoteRepo
+  } = useRemoteRepo(fetchWorktrees, setStep, setAddedRepo)
   useEffect(() => {
     if (!isCloning) {
       return
@@ -86,11 +93,8 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     setIsCloning(false)
     setCloneError(null)
     setCloneProgress(null)
-    setSelectedTargetId(null)
-    setRemotePath('~/')
-    setRemoteError(null)
-    setIsAddingRemote(false)
-  }, [])
+    resetRemoteState()
+  }, [resetRemoteState])
 
   // Why: reset state on close so reopening doesn't show stale step/repo.
   useEffect(() => {
@@ -196,62 +200,6 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
 
   // Why: handleBack reuses resetState which already aborts clones and resets all fields.
   const handleBack = resetState
-
-  const handleOpenRemoteStep = useCallback(async () => {
-    setStep('remote')
-    try {
-      const targets = (await window.api.ssh.listTargets()) as SshTarget[]
-      const withState = await Promise.all(
-        targets.map(async (t) => {
-          const state = (await window.api.ssh.getState({
-            targetId: t.id
-          })) as SshConnectionState | null
-          return { ...t, state: state ?? undefined }
-        })
-      )
-      setSshTargets(withState)
-      const connected = withState.find((t) => t.state?.status === 'connected')
-      if (connected) {
-        setSelectedTargetId(connected.id)
-      }
-    } catch {
-      setSshTargets([])
-    }
-  }, [])
-
-  const handleAddRemoteRepo = useCallback(async () => {
-    if (!selectedTargetId || !remotePath.trim()) {
-      return
-    }
-
-    setIsAddingRemote(true)
-    setRemoteError(null)
-    try {
-      const repo = (await window.api.repos.addRemote({
-        connectionId: selectedTargetId,
-        remotePath: remotePath.trim()
-      })) as Repo
-
-      const state = useAppStore.getState()
-      const existingIdx = state.repos.findIndex((r) => r.id === repo.id)
-      if (existingIdx === -1) {
-        useAppStore.setState({ repos: [...state.repos, repo] })
-      } else {
-        const updated = [...state.repos]
-        updated[existingIdx] = repo
-        useAppStore.setState({ repos: updated })
-      }
-
-      toast.success('Remote repository added', { description: repo.displayName })
-      setAddedRepo(repo)
-      await fetchWorktrees(repo.id)
-      setStep('setup')
-    } catch (err) {
-      setRemoteError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setIsAddingRemote(false)
-    }
-  }, [selectedTargetId, remotePath, fetchWorktrees])
 
   return (
     <Dialog

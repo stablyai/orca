@@ -94,7 +94,7 @@ async function checkRelayExists(
   try {
     const output = await execCommand(
       conn,
-      `test -f ${remoteDir}/relay.js && echo OK || echo MISSING`
+      `test -f "${remoteDir}/relay.js" && echo OK || echo MISSING`
     )
     if (output.trim() !== 'OK') {
       return false
@@ -115,7 +115,7 @@ async function checkRelayExists(
 
     const versionOutput = await execCommand(
       conn,
-      `cat ${remoteDir}/.version 2>/dev/null || echo MISSING`
+      `cat "${remoteDir}/.version" 2>/dev/null || echo MISSING`
     )
     return versionOutput.trim() === expectedVersion
   } catch {
@@ -137,7 +137,7 @@ async function uploadRelay(
   }
 
   // Create remote directory
-  await execCommand(conn, `mkdir -p ${remoteDir}`)
+  await execCommand(conn, `mkdir -p "${remoteDir}"`)
 
   // Upload via SFTP
   const sftp = await conn.sftp()
@@ -149,18 +149,31 @@ async function uploadRelay(
   }
 
   // Make the node binary executable
-  await execCommand(conn, `chmod +x ${remoteDir}/node 2>/dev/null; true`)
+  await execCommand(conn, `chmod +x "${remoteDir}/node" 2>/dev/null; true`)
 
   // Why: version marker includes a content hash so code changes trigger
   // re-deploy even without bumping RELAY_VERSION. Read from the local build
   // output so the remote marker matches exactly what checkRelayExists expects.
+  // Why: we write the version file via SFTP instead of a shell command to
+  // avoid shell injection — the version string could contain characters
+  // that break or escape single-quoted shell interpolation.
   let versionString = RELAY_VERSION
   const localVersionFile = join(localRelayDir, '.version')
   if (existsSync(localVersionFile)) {
     const { readFileSync } = await import('fs')
     versionString = readFileSync(localVersionFile, 'utf-8').trim()
   }
-  await execCommand(conn, `printf '%s' '${versionString}' > ${remoteDir}/.version`)
+  const versionSftp = await conn.sftp()
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const ws = versionSftp.createWriteStream(`${remoteDir}/.version`)
+      ws.on('close', resolve)
+      ws.on('error', reject)
+      ws.end(versionString)
+    })
+  } finally {
+    versionSftp.end()
+  }
 }
 
 // Why: node-pty is a native addon that can't be bundled by esbuild. It must
@@ -178,14 +191,14 @@ async function installNativeDeps(conn: SshConnection, remoteDir: string): Promis
   try {
     await execCommand(
       conn,
-      `export PATH="${nodeBinDir}:$PATH" && cd ${remoteDir} && npm init -y --silent 2>/dev/null && npm install node-pty 2>&1`
+      `export PATH="${nodeBinDir}:$PATH" && cd "${remoteDir}" && npm init -y --silent 2>/dev/null && npm install node-pty 2>&1`
     )
     // Why: SFTP uploads preserve file content but not Unix execute bits.
     // node-pty ships a prebuilt `spawn-helper` binary that must be executable
     // for posix_spawnp to fork the PTY process.
     await execCommand(
       conn,
-      `find ${remoteDir}/node_modules/node-pty/prebuilds -name spawn-helper -exec chmod +x {} + 2>/dev/null; true`
+      `find "${remoteDir}/node_modules/node-pty/prebuilds" -name spawn-helper -exec chmod +x {} + 2>/dev/null; true`
     )
   } catch (err) {
     // Why: node-pty install can fail if build tools (python, make, g++) are
@@ -225,6 +238,6 @@ async function launchRelay(conn: SshConnection, remoteDir: string): Promise<Mult
   // Non-login SSH shells may not have node in PATH, so we source the
   // user's profile to pick up nvm/fnm/brew PATH entries.
   const nodePath = await resolveRemoteNodePath(conn)
-  const channel = await conn.exec(`cd ${remoteDir} && ${nodePath} relay.js --grace-time 60`)
+  const channel = await conn.exec(`cd "${remoteDir}" && ${nodePath} relay.js --grace-time 60`)
   return waitForSentinel(channel)
 }

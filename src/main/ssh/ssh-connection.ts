@@ -1,6 +1,5 @@
 import { Client as SshClient } from 'ssh2'
 import type { ClientChannel, SFTPWrapper } from 'ssh2'
-import { createHash } from 'crypto'
 import type { SshTarget, SshConnectionState, SshConnectionStatus } from '../../shared/ssh-types'
 import { spawnSystemSsh, type SystemSshProcess } from './ssh-system-fallback'
 import {
@@ -23,6 +22,9 @@ export type {
 
 export class SshConnection {
   private client: SshClient | null = null
+  /** Why: the jump host client must be tracked so it can be torn down on
+   *  disconnect — otherwise the intermediate TCP connection leaks. */
+  private jumpClient: SshClient | null = null
   private systemSsh: SystemSshProcess | null = null
   private state: SshConnectionState
   private callbacks: SshConnectionCallbacks
@@ -31,7 +33,6 @@ export class SshConnection {
   private disposed = false
   private agentAttempted = false
   private keyAttempted = false
-  private hostKeyVerified = false
 
   constructor(target: SshTarget, callbacks: SshConnectionCallbacks) {
     this.target = target
@@ -121,9 +122,11 @@ export class SshConnection {
     this.setState('connecting')
     this.agentAttempted = false
     this.keyAttempted = false
-    this.hostKeyVerified = false
 
-    const config = await this.buildConfig()
+    const { config, jumpClient } = await this.buildConfig()
+    // Why: store the jump client so disconnect() can tear it down and
+    // prevent the intermediate TCP connection from leaking.
+    this.jumpClient = jumpClient
 
     return new Promise<void>((resolve, reject) => {
       const client = new SshClient()
@@ -137,45 +140,11 @@ export class SshConnection {
         }
       }, CONNECT_TIMEOUT_MS)
 
-      // Why: ssh2's hostVerifier is synchronous, but we need async UI confirmation.
-      // We intercept 'handshake' to prompt the user and only proceed if accepted.
-      client.on('handshake', (negotiated) => {
-        if (this.hostKeyVerified || settled) {
-          return
-        }
-
-        const serverHostKey = (negotiated as unknown as Record<string, unknown>).serverHostKey
-        if (!serverHostKey) {
-          return
-        }
-
-        this.hostKeyVerified = true
-
-        const keyType = typeof serverHostKey === 'string' ? serverHostKey : 'unknown'
-        const fingerprint = createHash('sha256')
-          .update(Buffer.from(keyType, 'utf-8'))
-          .digest('base64')
-
-        this.setState('host-key-verification')
-        this.callbacks
-          .onHostKeyVerify({
-            host: this.target.host,
-            ip: this.target.host,
-            fingerprint,
-            keyType
-          })
-          .then((accepted) => {
-            if (!accepted && !settled) {
-              settled = true
-              clearTimeout(timeout)
-              client.destroy()
-              reject(new Error('Host key verification rejected by user'))
-            }
-          })
-          .catch(() => {
-            // If callback fails, allow connection to proceed
-          })
-      })
+      // Why: host key verification is now handled inside the hostVerifier
+      // callback in buildConnectConfig (ssh-connection-utils.ts).  The
+      // callback form `(key, verify) => void` blocks the handshake until
+      // the user accepts/rejects, so no separate 'handshake' listener is
+      // needed here.
 
       client.on('ready', () => {
         if (settled) {
@@ -214,25 +183,21 @@ export class SshConnection {
     })
   }
 
+  // Why: both `end` and `close` fire on disconnect. If reconnect succeeds
+  // between the two events, the second handler would null out the *new*
+  // connection. Guarding on `this.client === client` prevents that.
   private setupDisconnectHandler(client: SshClient): void {
-    client.on('end', () => {
-      if (this.disposed) {
+    const handleDisconnect = () => {
+      if (this.disposed || this.client !== client) {
         return
       }
       this.client = null
       this.scheduleReconnect()
-    })
-
-    client.on('close', () => {
-      if (this.disposed) {
-        return
-      }
-      this.client = null
-      this.scheduleReconnect()
-    })
-
+    }
+    client.on('end', handleDisconnect)
+    client.on('close', handleDisconnect)
     client.on('error', (err) => {
-      if (this.disposed) {
+      if (this.disposed || this.client !== client) {
         return
       }
       console.warn(`[ssh] Connection error for ${this.target.label}: ${err.message}`)
@@ -263,8 +228,14 @@ export class SshConnection {
 
       try {
         await this.attemptConnect()
+        // Why: reset the counter and re-broadcast so the UI shows attempt 0.
+        // attemptConnect already calls setState('connected'), but the attempt
+        // counter must be zeroed *before* so the broadcast carries the right value.
         this.state.reconnectAttempt = 0
+        this.setState('connected')
       } catch {
+        // Why: increment before scheduleReconnect so the setState('reconnecting')
+        // call inside it broadcasts the updated attempt number to the UI.
         this.state.reconnectAttempt++
         this.scheduleReconnect()
       }
@@ -302,6 +273,18 @@ export class SshConnection {
       })
 
       this.setState('connected')
+
+      // Why: unlike ssh2 Client which emits end/close, the system SSH process
+      // only signals disconnection through its exit event. Without this handler
+      // an unexpected exit would leave the connection in 'connected' state with
+      // no underlying transport.
+      proc.onExit((_code) => {
+        if (!this.disposed && this.systemSsh === proc) {
+          this.systemSsh = null
+          this.scheduleReconnect()
+        }
+      })
+
       return proc
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -319,6 +302,12 @@ export class SshConnection {
     if (this.client) {
       this.client.end()
       this.client = null
+    }
+    // Why: the jump host client holds an open TCP connection to the
+    // intermediate host.  Failing to close it would leak the socket.
+    if (this.jumpClient) {
+      this.jumpClient.end()
+      this.jumpClient = null
     }
     if (this.systemSsh) {
       this.systemSsh.kill()

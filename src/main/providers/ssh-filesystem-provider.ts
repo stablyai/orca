@@ -9,12 +9,16 @@ export class SshFilesystemProvider implements IFilesystemProvider {
   // sends all fs.changed events on one notification channel. Keying by rootPath
   // prevents cross-pollination between different worktree watchers.
   private watchListeners = new Map<string, (events: FsChangeEvent[]) => void>()
+  // Why: store the unsubscribe handle so dispose() can detach from the
+  // multiplexer. Without this, notification callbacks keep firing after
+  // the provider is torn down on disconnect, routing events to stale state.
+  private unsubscribeNotifications: (() => void) | null = null
 
   constructor(connectionId: string, mux: SshChannelMultiplexer) {
     this.connectionId = connectionId
     this.mux = mux
 
-    mux.onNotification((method, params) => {
+    this.unsubscribeNotifications = mux.onNotification((method, params) => {
       if (method === 'fs.changed') {
         const events = params.events as FsChangeEvent[]
         for (const [rootPath, cb] of this.watchListeners) {
@@ -25,6 +29,14 @@ export class SshFilesystemProvider implements IFilesystemProvider {
         }
       }
     })
+  }
+
+  dispose(): void {
+    if (this.unsubscribeNotifications) {
+      this.unsubscribeNotifications()
+      this.unsubscribeNotifications = null
+    }
+    this.watchListeners.clear()
   }
 
   getConnectionId(): string {

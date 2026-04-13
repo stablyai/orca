@@ -1,3 +1,6 @@
+/* eslint-disable max-lines -- Why: repo IPC is intentionally centralized so SSH
+routing, clone lifecycle, and store persistence stay behind a single audited
+boundary. Splitting by line count would scatter tightly coupled repo behavior. */
 import type { BrowserWindow } from 'electron'
 import { dialog, ipcMain } from 'electron'
 import { randomUUID } from 'crypto'
@@ -288,10 +291,24 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     }
   )
 
-  ipcMain.handle('repos:getGitUsername', (_event, args: { repoId: string }) => {
+  ipcMain.handle('repos:getGitUsername', async (_event, args: { repoId: string }) => {
     const repo = store.getRepo(args.repoId)
     if (!repo || isFolderRepo(repo)) {
       return ''
+    }
+    // Why: remote repos have their git config on the remote host, so we
+    // must route through the relay's git.exec to read user.name.
+    if (repo.connectionId) {
+      const provider = getSshGitProvider(repo.connectionId)
+      if (!provider) {
+        return ''
+      }
+      try {
+        const result = await provider.exec(['config', 'user.name'], repo.path)
+        return result.stdout.trim()
+      } catch {
+        return ''
+      }
     }
     return getGitUsername(repo.path)
   })
@@ -299,6 +316,27 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.handle('repos:getBaseRefDefault', async (_event, args: { repoId: string }) => {
     const repo = store.getRepo(args.repoId)
     if (!repo || isFolderRepo(repo)) {
+      return 'origin/main'
+    }
+    // Why: remote repos need the relay to resolve symbolic-ref on the
+    // remote host where the git data lives.
+    if (repo.connectionId) {
+      const provider = getSshGitProvider(repo.connectionId)
+      if (!provider) {
+        return 'origin/main'
+      }
+      try {
+        const result = await provider.exec(
+          ['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'],
+          repo.path
+        )
+        const ref = result.stdout.trim()
+        if (ref) {
+          return ref.replace(/^refs\/remotes\//, '')
+        }
+      } catch {
+        // Fall through to default
+      }
       return 'origin/main'
     }
     return getBaseRefDefault(repo.path)
@@ -311,7 +349,34 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       if (!repo || isFolderRepo(repo)) {
         return []
       }
-      return searchBaseRefs(repo.path, args.query, args.limit ?? 25)
+      const limit = args.limit ?? 25
+      // Why: remote repos need the relay to list branches on the remote host.
+      if (repo.connectionId) {
+        const provider = getSshGitProvider(repo.connectionId)
+        if (!provider) {
+          return []
+        }
+        try {
+          const result = await provider.exec(
+            [
+              'for-each-ref',
+              '--format=%(refname:short)',
+              '--sort=-committerdate',
+              `refs/remotes/origin/*${args.query}*`,
+              `refs/heads/*${args.query}*`
+            ],
+            repo.path
+          )
+          return result.stdout
+            .split('\n')
+            .map((s) => s.trim())
+            .filter(Boolean)
+            .slice(0, limit)
+        } catch {
+          return []
+        }
+      }
+      return searchBaseRefs(repo.path, args.query, limit)
     }
   )
 }

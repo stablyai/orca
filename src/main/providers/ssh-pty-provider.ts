@@ -16,13 +16,17 @@ export class SshPtyProvider implements IPtyProvider {
   private dataListeners = new Set<DataCallback>()
   private replayListeners = new Set<ReplayCallback>()
   private exitListeners = new Set<ExitCallback>()
+  // Why: store the unsubscribe handle so dispose() can detach from the
+  // multiplexer. Without this, notification callbacks keep firing after
+  // the provider is torn down on disconnect, routing events to stale state.
+  private unsubscribeNotifications: (() => void) | null = null
 
   constructor(connectionId: string, mux: SshChannelMultiplexer) {
     this.connectionId = connectionId
     this.mux = mux
 
     // Subscribe to relay notifications for PTY events
-    mux.onNotification((method, params) => {
+    this.unsubscribeNotifications = mux.onNotification((method, params) => {
       switch (method) {
         case 'pty.data':
           for (const cb of this.dataListeners) {
@@ -43,6 +47,16 @@ export class SshPtyProvider implements IPtyProvider {
           break
       }
     })
+  }
+
+  dispose(): void {
+    if (this.unsubscribeNotifications) {
+      this.unsubscribeNotifications()
+      this.unsubscribeNotifications = null
+    }
+    this.dataListeners.clear()
+    this.replayListeners.clear()
+    this.exitListeners.clear()
   }
 
   getConnectionId(): string {

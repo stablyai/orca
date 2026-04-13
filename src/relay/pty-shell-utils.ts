@@ -1,5 +1,8 @@
-import { execFileSync } from 'child_process'
+import { execFile as execFileCb } from 'child_process'
 import { existsSync, readFileSync } from 'fs'
+import { promisify } from 'util'
+
+const execFile = promisify(execFileCb)
 
 /**
  * Resolve the default shell for PTY spawning.
@@ -37,7 +40,7 @@ export async function resolveProcessCwd(pid: number, fallbackCwd: string): Promi
 
   // Fallback: use lsof on macOS
   try {
-    const output = execFileSync('lsof', ['-p', String(pid), '-Fn'], {
+    const { stdout: output } = await execFile('lsof', ['-p', String(pid), '-Fn'], {
       encoding: 'utf-8',
       timeout: 3000
     })
@@ -60,13 +63,13 @@ export async function resolveProcessCwd(pid: number, fallbackCwd: string): Promi
 /**
  * Check whether a process has child processes (via pgrep).
  */
-export function processHasChildren(pid: number): boolean {
+export async function processHasChildren(pid: number): Promise<boolean> {
   try {
-    const output = execFileSync('pgrep', ['-P', String(pid)], {
+    const { stdout } = await execFile('pgrep', ['-P', String(pid)], {
       encoding: 'utf-8',
       timeout: 3000
     })
-    return output.trim().length > 0
+    return stdout.trim().length > 0
   } catch {
     return false
   }
@@ -75,13 +78,13 @@ export function processHasChildren(pid: number): boolean {
 /**
  * Get the foreground process name of a given pid (via ps).
  */
-export function getForegroundProcessName(pid: number): string | null {
+export async function getForegroundProcessName(pid: number): Promise<string | null> {
   try {
-    const output = execFileSync('ps', ['-o', 'comm=', '-p', String(pid)], {
+    const { stdout } = await execFile('ps', ['-o', 'comm=', '-p', String(pid)], {
       encoding: 'utf-8',
       timeout: 3000
     })
-    return output.trim() || null
+    return stdout.trim() || null
   } catch {
     return null
   }

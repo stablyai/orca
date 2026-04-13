@@ -26,7 +26,14 @@ async function loadPty(): Promise<typeof NodePty | null> {
   }
 }
 
-type ManagedPty = { id: string; pty: IPty; initialCwd: string; buffered: string }
+type ManagedPty = {
+  id: string
+  pty: IPty
+  initialCwd: string
+  buffered: string
+  /** Timer for SIGKILL fallback after a graceful SIGTERM shutdown. */
+  killTimer?: ReturnType<typeof setTimeout>
+}
 const DEFAULT_GRACE_TIME_MS = 5 * 60 * 1000
 export const REPLAY_BUFFER_MAX = 100 * 1024
 
@@ -54,6 +61,12 @@ export class PtyHandler {
       this.dispatcher.notify('pty.data', { id: managed.id, data })
     })
     managed.pty.onExit(({ exitCode }: { exitCode: number }) => {
+      // Why: If the PTY exits normally (or via SIGTERM), we must clear the
+      // SIGKILL fallback timer to avoid sending SIGKILL to a recycled PID.
+      if (managed.killTimer) {
+        clearTimeout(managed.killTimer)
+        managed.killTimer = undefined
+      }
       this.dispatcher.notify('pty.exit', { id: managed.id, code: exitCode })
       this.ptys.delete(managed.id)
     })
@@ -154,6 +167,17 @@ export class PtyHandler {
       managed.pty.kill('SIGKILL')
     } else {
       managed.pty.kill('SIGTERM')
+
+      // Why: Some processes ignore SIGTERM (e.g. a hung child, a custom signal
+      // handler). Without a SIGKILL fallback the PTY process would leak and the
+      // managed entry would never be cleaned up. The 5-second window gives
+      // well-behaved processes time to flush and exit gracefully. The timer is
+      // cleared in the onExit handler if the process terminates on its own.
+      managed.killTimer = setTimeout(() => {
+        if (this.ptys.has(id)) {
+          managed.pty.kill('SIGKILL')
+        }
+      }, 5000)
     }
   }
 
@@ -199,7 +223,7 @@ export class PtyHandler {
     if (!managed) {
       return false
     }
-    return processHasChildren(managed.pty.pid)
+    return await processHasChildren(managed.pty.pid)
   }
 
   private async getForegroundProcess(params: Record<string, unknown>): Promise<string | null> {
@@ -208,13 +232,13 @@ export class PtyHandler {
     if (!managed) {
       return null
     }
-    return getForegroundProcessName(managed.pty.pid)
+    return await getForegroundProcessName(managed.pty.pid)
   }
 
   private async listProcesses(): Promise<{ id: string; cwd: string; title: string }[]> {
     const results: { id: string; cwd: string; title: string }[] = []
     for (const [id, managed] of this.ptys) {
-      const title = getForegroundProcessName(managed.pty.pid) || 'shell'
+      const title = (await getForegroundProcessName(managed.pty.pid)) || 'shell'
       results.push({ id, cwd: managed.initialCwd, title })
     }
     return results
@@ -271,6 +295,18 @@ export class PtyHandler {
         env: process.env as Record<string, string>
       })
       this.wireAndStore({ id: entry.id, pty: term, initialCwd: entry.cwd, buffered: '' })
+
+      // Why: nextId starts at 1 and is only incremented by spawn(). Revived
+      // PTYs carry their original IDs (e.g. "pty-3"), so without this bump the
+      // next spawn() would generate an ID that collides with an already-active
+      // revived PTY.
+      const match = entry.id.match(/^pty-(\d+)$/)
+      if (match) {
+        const revivedNum = parseInt(match[1], 10)
+        if (revivedNum >= this.nextId) {
+          this.nextId = revivedNum + 1
+        }
+      }
     }
   }
 

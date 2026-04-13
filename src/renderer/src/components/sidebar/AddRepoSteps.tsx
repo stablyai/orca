@@ -5,12 +5,119 @@
  * by moving the presentational JSX for each wizard step into separate components
  * while the parent retains all state and handlers.
  */
-import React from 'react'
+import React, { useCallback, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { Folder } from 'lucide-react'
+import { useAppStore } from '@/store'
 import { DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import type { Repo } from '../../../../shared/types'
 import type { SshTarget, SshConnectionState } from '../../../../shared/ssh-types'
+
+// ── Remote repo hook ────────────────────────────────────────────────
+
+export function useRemoteRepo(
+  fetchWorktrees: (repoId: string) => Promise<void>,
+  setStep: (step: 'add' | 'clone' | 'remote' | 'setup') => void,
+  setAddedRepo: (repo: Repo | null) => void
+) {
+  const [sshTargets, setSshTargets] = useState<(SshTarget & { state?: SshConnectionState })[]>([])
+  const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null)
+  const [remotePath, setRemotePath] = useState('~/')
+  const [remoteError, setRemoteError] = useState<string | null>(null)
+  const [isAddingRemote, setIsAddingRemote] = useState(false)
+  const remoteGenRef = useRef(0)
+
+  const resetRemoteState = useCallback(() => {
+    remoteGenRef.current++
+    setSshTargets([])
+    setSelectedTargetId(null)
+    setRemotePath('~/')
+    setRemoteError(null)
+    setIsAddingRemote(false)
+  }, [])
+
+  const handleOpenRemoteStep = useCallback(async () => {
+    const gen = ++remoteGenRef.current
+    setStep('remote')
+    try {
+      const targets = (await window.api.ssh.listTargets()) as SshTarget[]
+      if (gen !== remoteGenRef.current) {
+        return
+      }
+      const withState = await Promise.all(
+        targets.map(async (t) => {
+          const state = (await window.api.ssh.getState({
+            targetId: t.id
+          })) as SshConnectionState | null
+          return { ...t, state: state ?? undefined }
+        })
+      )
+      if (gen !== remoteGenRef.current) {
+        return
+      }
+      setSshTargets(withState)
+      const connected = withState.find((t) => t.state?.status === 'connected')
+      if (connected) {
+        setSelectedTargetId(connected.id)
+      }
+    } catch {
+      if (gen !== remoteGenRef.current) {
+        return
+      }
+      setSshTargets([])
+    }
+  }, [setStep])
+
+  const handleAddRemoteRepo = useCallback(async () => {
+    if (!selectedTargetId || !remotePath.trim()) {
+      return
+    }
+
+    setIsAddingRemote(true)
+    setRemoteError(null)
+    try {
+      const repo = (await window.api.repos.addRemote({
+        connectionId: selectedTargetId,
+        remotePath: remotePath.trim()
+      })) as Repo
+
+      const state = useAppStore.getState()
+      const existingIdx = state.repos.findIndex((r) => r.id === repo.id)
+      if (existingIdx === -1) {
+        useAppStore.setState({ repos: [...state.repos, repo] })
+      } else {
+        const updated = [...state.repos]
+        updated[existingIdx] = repo
+        useAppStore.setState({ repos: updated })
+      }
+
+      toast.success('Remote repository added', { description: repo.displayName })
+      setAddedRepo(repo)
+      await fetchWorktrees(repo.id)
+      setStep('setup')
+    } catch (err) {
+      setRemoteError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setIsAddingRemote(false)
+    }
+  }, [selectedTargetId, remotePath, fetchWorktrees, setStep, setAddedRepo])
+
+  return {
+    sshTargets,
+    selectedTargetId,
+    remotePath,
+    remoteError,
+    isAddingRemote,
+    setSelectedTargetId,
+    setRemotePath,
+    setRemoteError,
+    resetRemoteState,
+    handleOpenRemoteStep,
+    handleAddRemoteRepo
+  }
+}
 
 // ── Remote step ──────────────────────────────────────────────────────
 

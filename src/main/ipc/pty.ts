@@ -87,6 +87,7 @@ export function clearPtyOwnershipForConnection(connectionId: string): void {
   }
 }
 
+
 // ─── Provider-scoped PTY state cleanup ──────────────────────────────
 
 export function clearProviderPtyState(id: string): void {

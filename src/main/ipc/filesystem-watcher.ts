@@ -460,4 +460,17 @@ export async function closeAllWatchers(): Promise<void> {
     }
   }
   watchedRoots.clear()
+
+  // Why: remote watchers are tracked separately from local @parcel/watcher
+  // subscriptions. Without cleaning them up here, their unwatch callbacks
+  // would never fire, leaving the relay polling for FS changes after the
+  // app has shut down.
+  for (const [key, unwatchFn] of remoteWatchers) {
+    try {
+      unwatchFn()
+    } catch (err) {
+      console.error(`[filesystem-watcher] remote unwatch error for ${key}:`, err)
+    }
+  }
+  remoteWatchers.clear()
 }

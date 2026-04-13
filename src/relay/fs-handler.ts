@@ -57,6 +57,7 @@ export class FsHandler {
 
   private async readDir(params: Record<string, unknown>) {
     const dirPath = params.dirPath as string
+    this.context.validatePath(dirPath)
     const entries = await readdir(dirPath, { withFileTypes: true })
     return entries
       .map((entry) => ({
@@ -74,6 +75,7 @@ export class FsHandler {
 
   private async readFile(params: Record<string, unknown>) {
     const filePath = params.filePath as string
+    this.context.validatePath(filePath)
     const stats = await stat(filePath)
     if (stats.size > MAX_FILE_SIZE) {
       throw new Error(
@@ -111,7 +113,11 @@ export class FsHandler {
 
   private async stat(params: Record<string, unknown>) {
     const filePath = params.filePath as string
-    const stats = await stat(filePath)
+    this.context.validatePath(filePath)
+    // Why: lstat is used instead of stat so that symlinks are reported as
+    // symlinks rather than being silently followed. stat() follows symlinks,
+    // meaning isSymbolicLink() would always return false.
+    const stats = await lstat(filePath)
     let type: 'file' | 'directory' | 'symlink' = 'file'
     if (stats.isDirectory()) {
       type = 'directory'
@@ -157,17 +163,21 @@ export class FsHandler {
   private async copy(params: Record<string, unknown>) {
     const source = params.source as string
     const destination = params.destination as string
+    this.context.validatePath(source)
+    this.context.validatePath(destination)
     await cp(source, destination, { recursive: true })
   }
 
   private async realpath(params: Record<string, unknown>) {
     const filePath = params.filePath as string
+    this.context.validatePath(filePath)
     return realpath(filePath)
   }
 
   private async search(params: Record<string, unknown>) {
     const query = params.query as string
     const rootPath = params.rootPath as string
+    this.context.validatePath(rootPath)
     const caseSensitive = params.caseSensitive as boolean | undefined
     const wholeWord = params.wholeWord as boolean | undefined
     const useRegex = params.useRegex as boolean | undefined
@@ -190,6 +200,7 @@ export class FsHandler {
 
   private async listFiles(params: Record<string, unknown>): Promise<string[]> {
     const rootPath = params.rootPath as string
+    this.context.validatePath(rootPath)
     return listFilesWithRg(rootPath)
   }
 

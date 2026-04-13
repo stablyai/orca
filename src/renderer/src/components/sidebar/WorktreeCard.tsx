@@ -84,21 +84,11 @@ const WorktreeCard = React.memo(function WorktreeCard({
   })
   const isSshDisconnected = sshStatus != null && sshStatus !== 'connected'
   const [showDisconnectedDialog, setShowDisconnectedDialog] = useState(false)
-  const [sshTargetLabel, setSshTargetLabel] = useState('')
-
-  useEffect(() => {
-    if (!repo?.connectionId) {
-      return
-    }
-    window.api.ssh.listTargets().then((targets) => {
-      const target = (targets as { id: string; label: string }[]).find(
-        (t) => t.id === repo.connectionId
-      )
-      if (target) {
-        setSshTargetLabel(target.label)
-      }
-    })
-  }, [repo?.connectionId])
+  // Why: read the target label from the store (populated during hydration in
+  // useIpcEvents.ts) instead of calling listTargets IPC per card instance.
+  const sshTargetLabel = useAppStore((s) =>
+    repo?.connectionId ? (s.sshTargetLabels.get(repo.connectionId) ?? '') : ''
+  )
 
   // ── GRANULAR selectors: only subscribe to THIS worktree's data ──
   const tabs = useAppStore((s) => s.tabsByWorktree[worktree.id] ?? EMPTY_TABS)

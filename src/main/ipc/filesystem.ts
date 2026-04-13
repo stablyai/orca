@@ -664,8 +664,18 @@ export function registerFilesystemHandlers(store: Store): void {
     'git:remoteFileUrl',
     async (
       _event,
-      args: { worktreePath: string; relativePath: string; line: number }
+      args: { worktreePath: string; relativePath: string; line: number; connectionId?: string }
     ): Promise<string | null> => {
+      // Why: remote repos can't use the local hosted-git-info approach because
+      // the .git/config lives on the remote. Route through the relay's git.exec
+      // to fetch the remote URL and build the file link server-side.
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(`No git provider for connection "${args.connectionId}"`)
+        }
+        return provider.getRemoteFileUrl(args.worktreePath, args.relativePath, args.line)
+      }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       return getRemoteFileUrl(worktreePath, args.relativePath, args.line)
     }

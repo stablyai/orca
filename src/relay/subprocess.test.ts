@@ -33,6 +33,7 @@ type RelayProcess = {
   responses: (JsonRpcResponse | JsonRpcNotification)[]
   sentinelReceived: Promise<void>
   send: (method: string, params?: Record<string, unknown>) => number
+  sendNotification: (method: string, params?: Record<string, unknown>) => void
   waitForResponse: (id: number, timeoutMs?: number) => Promise<JsonRpcResponse>
   waitForNotification: (method: string, timeoutMs?: number) => Promise<JsonRpcNotification>
   kill: (signal?: NodeJS.Signals) => void
@@ -106,6 +107,17 @@ function spawnRelay(args: string[] = []): RelayProcess {
     return id
   }
 
+  const sendNotification = (method: string, params?: Record<string, unknown>): void => {
+    const seq = nextSeq++
+    const notif: JsonRpcNotification = {
+      jsonrpc: '2.0',
+      method,
+      ...(params !== undefined ? { params } : {})
+    }
+    const frame = encodeJsonRpcFrame(notif, seq, 0)
+    proc.stdin!.write(frame)
+  }
+
   const waitForResponse = (id: number, timeoutMs = 5000): Promise<JsonRpcResponse> => {
     return new Promise((resolve, reject) => {
       const deadline = Date.now() + timeoutMs
@@ -172,6 +184,7 @@ function spawnRelay(args: string[] = []): RelayProcess {
     responses,
     sentinelReceived,
     send,
+    sendNotification,
     waitForResponse,
     waitForNotification,
     kill,
@@ -206,6 +219,7 @@ describe('Subprocess: Relay entry point', () => {
 
     relay = spawnRelay()
     await relay.sentinelReceived
+    relay.sendNotification('session.registerRoot', { rootPath: tmpDir })
 
     const id = relay.send('fs.stat', { filePath: path.join(tmpDir, 'test.txt') })
     const resp = await relay.waitForResponse(id)
@@ -223,6 +237,7 @@ describe('Subprocess: Relay entry point', () => {
 
     relay = spawnRelay()
     await relay.sentinelReceived
+    relay.sendNotification('session.registerRoot', { rootPath: tmpDir })
 
     const id = relay.send('fs.readDir', { dirPath: tmpDir })
     const resp = await relay.waitForResponse(id)
@@ -237,6 +252,7 @@ describe('Subprocess: Relay entry point', () => {
 
     relay = spawnRelay()
     await relay.sentinelReceived
+    relay.sendNotification('session.registerRoot', { rootPath: tmpDir })
 
     // Write
     const filePath = path.join(tmpDir, 'output.txt')
@@ -266,6 +282,7 @@ describe('Subprocess: Relay entry point', () => {
 
     relay = spawnRelay()
     await relay.sentinelReceived
+    relay.sendNotification('session.registerRoot', { rootPath: tmpDir })
 
     const id = relay.send('git.status', { worktreePath: tmpDir })
     const resp = await relay.waitForResponse(id)
@@ -289,10 +306,12 @@ describe('Subprocess: Relay entry point', () => {
   }, 10_000)
 
   it('returns error for failing handler', async () => {
+    tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-sub-'))
     relay = spawnRelay()
     await relay.sentinelReceived
+    relay.sendNotification('session.registerRoot', { rootPath: tmpDir })
 
-    const id = relay.send('fs.readFile', { filePath: '/nonexistent/path/xyz' })
+    const id = relay.send('fs.readFile', { filePath: path.join(tmpDir, 'nonexistent.txt') })
     const resp = await relay.waitForResponse(id)
 
     expect(resp.error).toBeDefined()
@@ -306,6 +325,7 @@ describe('Subprocess: Relay entry point', () => {
 
     relay = spawnRelay()
     await relay.sentinelReceived
+    relay.sendNotification('session.registerRoot', { rootPath: tmpDir })
 
     const id1 = relay.send('fs.stat', { filePath: path.join(tmpDir, 'one.txt') })
     const id2 = relay.send('fs.stat', { filePath: path.join(tmpDir, 'two.txt') })

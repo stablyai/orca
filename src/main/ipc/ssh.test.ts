@@ -104,12 +104,16 @@ vi.mock('../providers/ssh-filesystem-provider', () => ({
 
 vi.mock('./pty', () => ({
   registerSshPtyProvider: vi.fn(),
-  unregisterSshPtyProvider: vi.fn()
+  unregisterSshPtyProvider: vi.fn(),
+  clearPtyOwnershipForConnection: vi.fn(),
+  getSshPtyProvider: vi.fn(),
+  getPtyIdsForConnection: vi.fn().mockReturnValue([])
 }))
 
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   registerSshFilesystemProvider: vi.fn(),
-  unregisterSshFilesystemProvider: vi.fn()
+  unregisterSshFilesystemProvider: vi.fn(),
+  getSshFilesystemProvider: vi.fn()
 }))
 
 vi.mock('../providers/ssh-git-provider', () => ({

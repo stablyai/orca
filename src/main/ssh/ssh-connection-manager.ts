@@ -9,6 +9,10 @@ import { SshConnection, type SshConnectionCallbacks } from './ssh-connection'
 export class SshConnectionManager {
   private connections = new Map<string, SshConnection>()
   private callbacks: SshConnectionCallbacks
+  // Why: two concurrent connect() calls for the same target would both pass
+  // the "existing" check, create two SshConnections, and orphan the first.
+  // This set prevents a second call from racing with an in-progress one.
+  private connectingTargets = new Set<string>()
 
   constructor(callbacks: SshConnectionCallbacks) {
     this.callbacks = callbacks
@@ -20,21 +24,31 @@ export class SshConnectionManager {
       return existing
     }
 
-    if (existing) {
-      await existing.disconnect()
+    if (this.connectingTargets.has(target.id)) {
+      throw new Error(`Connection to ${target.label} is already in progress`)
     }
 
-    const conn = new SshConnection(target, this.callbacks)
-    this.connections.set(target.id, conn)
+    this.connectingTargets.add(target.id)
 
     try {
-      await conn.connect()
-    } catch (err) {
-      this.connections.delete(target.id)
-      throw err
-    }
+      if (existing) {
+        await existing.disconnect()
+      }
 
-    return conn
+      const conn = new SshConnection(target, this.callbacks)
+      this.connections.set(target.id, conn)
+
+      try {
+        await conn.connect()
+      } catch (err) {
+        this.connections.delete(target.id)
+        throw err
+      }
+
+      return conn
+    } finally {
+      this.connectingTargets.delete(target.id)
+    }
   }
 
   async disconnect(targetId: string): Promise<void> {

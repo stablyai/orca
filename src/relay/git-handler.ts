@@ -17,6 +17,26 @@ const execFileAsync = promisify(execFile)
 const MAX_GIT_BUFFER = 10 * 1024 * 1024
 const BULK_CHUNK_SIZE = 100
 
+// Why: git.exec allows the client to run arbitrary git subcommands. Without an
+// allowlist a compromised client could run destructive commands like
+// `git push --force`, `git filter-branch`, or use `git config` alias tricks to
+// execute arbitrary shell commands. Only read-only / safe subcommands are
+// permitted.
+const ALLOWED_GIT_SUBCOMMANDS = new Set([
+  'config',
+  'rev-parse',
+  'branch',
+  'fetch',
+  'log',
+  'show-ref',
+  'ls-remote',
+  'worktree',
+  'remote',
+  'symbolic-ref',
+  'merge-base',
+  'ls-files'
+])
+
 export class GitHandler {
   private dispatcher: RelayDispatcher
   private context: RelayContext
@@ -72,6 +92,7 @@ export class GitHandler {
 
   private async getStatus(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
+    this.context.validatePath(worktreePath)
     const conflictOperation = await this.detectConflictOperation(worktreePath)
     const entries: Record<string, unknown>[] = []
 
@@ -136,6 +157,7 @@ export class GitHandler {
 
   private async getDiff(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
+    this.context.validatePath(worktreePath)
     const filePath = params.filePath as string
     const staged = params.staged as boolean
     return computeDiff(this.gitBuffer.bind(this), worktreePath, filePath, staged)
@@ -145,18 +167,21 @@ export class GitHandler {
 
   private async stage(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
+    this.context.validatePath(worktreePath)
     const filePath = params.filePath as string
     await this.git(['add', '--', filePath], worktreePath)
   }
 
   private async unstage(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
+    this.context.validatePath(worktreePath)
     const filePath = params.filePath as string
     await this.git(['restore', '--staged', '--', filePath], worktreePath)
   }
 
   private async bulkStage(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
+    this.context.validatePath(worktreePath)
     const filePaths = params.filePaths as string[]
     for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
       const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
@@ -166,6 +191,7 @@ export class GitHandler {
 
   private async bulkUnstage(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
+    this.context.validatePath(worktreePath)
     const filePaths = params.filePaths as string[]
     for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
       const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
@@ -175,6 +201,7 @@ export class GitHandler {
 
   private async discard(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
+    this.context.validatePath(worktreePath)
     const filePath = params.filePath as string
 
     const resolved = path.resolve(worktreePath, filePath)
@@ -200,6 +227,7 @@ export class GitHandler {
 
   private async conflictOperation(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
+    this.context.validatePath(worktreePath)
     return this.detectConflictOperation(worktreePath)
   }
 
@@ -207,6 +235,7 @@ export class GitHandler {
 
   private async branchCompare(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
+    this.context.validatePath(worktreePath)
     const baseRef = params.baseRef as string
     const gitBound = this.git.bind(this)
     return branchCompareOp(gitBound, worktreePath, baseRef, async (mergeBase, headOid) => {
@@ -221,10 +250,12 @@ export class GitHandler {
   // ─── Branch Diff ────────────────────────────────────────────────
 
   private async branchDiff(params: Record<string, unknown>) {
+    const worktreePath = params.worktreePath as string
+    this.context.validatePath(worktreePath)
     return branchDiffEntries(
       this.git.bind(this),
       this.gitBuffer.bind(this),
-      params.worktreePath as string,
+      worktreePath,
       params.baseRef as string,
       {
         includePatch: params.includePatch as boolean | undefined,
@@ -239,12 +270,23 @@ export class GitHandler {
   private async exec(params: Record<string, unknown>) {
     const args = params.args as string[]
     const cwd = params.cwd as string
+    this.context.validatePath(cwd)
+
+    // Why: without an allowlist a compromised client could run destructive git
+    // commands (push --force, filter-branch) or abuse config aliases to execute
+    // arbitrary shell commands on the remote host.
+    const subcommand = args[0]
+    if (!subcommand || !ALLOWED_GIT_SUBCOMMANDS.has(subcommand)) {
+      throw new Error(`git subcommand not allowed: ${subcommand ?? '(empty)'}`)
+    }
+
     const { stdout, stderr } = await this.git(args, cwd)
     return { stdout, stderr }
   }
 
   private async isGitRepo(params: Record<string, unknown>) {
     const dirPath = params.dirPath as string
+    this.context.validatePath(dirPath)
     try {
       const { stdout } = await this.git(['rev-parse', '--show-toplevel'], dirPath)
       return { isRepo: true, rootPath: stdout.trim() }
@@ -257,6 +299,7 @@ export class GitHandler {
 
   private async listWorktrees(params: Record<string, unknown>) {
     const repoPath = params.repoPath as string
+    this.context.validatePath(repoPath)
     try {
       const { stdout } = await this.git(['worktree', 'list', '--porcelain'], repoPath)
       return parseWorktreeList(stdout)
@@ -267,6 +310,7 @@ export class GitHandler {
 
   private async addWorktree(params: Record<string, unknown>) {
     const repoPath = params.repoPath as string
+    this.context.validatePath(repoPath)
     const branchName = params.branchName as string
     const targetDir = params.targetDir as string
     const base = params.base as string | undefined
@@ -286,6 +330,7 @@ export class GitHandler {
 
   private async removeWorktree(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
+    this.context.validatePath(worktreePath)
     const force = params.force as boolean | undefined
 
     let repoPath = worktreePath

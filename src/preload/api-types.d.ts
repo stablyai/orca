@@ -216,6 +216,11 @@ export type PreloadApi = {
     pickDirectory: () => Promise<string | null>
     clone: (args: { url: string; destination: string }) => Promise<Repo>
     cloneAbort: () => Promise<void>
+    addRemote: (args: {
+      connectionId: string
+      remotePath: string
+      displayName?: string
+    }) => Promise<Repo>
     onCloneProgress: (callback: (data: { phase: string; percent: number }) => void) => () => void
     getGitUsername: (args: { repoId: string }) => Promise<string>
     getBaseRefDefault: (args: { repoId: string }) => Promise<string>

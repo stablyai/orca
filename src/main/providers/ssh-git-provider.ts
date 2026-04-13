@@ -1,5 +1,6 @@
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import type { IGitProvider } from './types'
+import hostedGitInfo from 'hosted-git-info'
 import type {
   GitStatusResult,
   GitDiffResult,
@@ -122,5 +123,53 @@ export class SshGitProvider implements IGitProvider {
   // operations behind worktree registration which validates the path.
   isGitRepo(_path: string): boolean {
     return true
+  }
+
+  // Why: the local getRemoteFileUrl uses hosted-git-info which requires the
+  // remote URL from .git/config. For SSH connections we must fetch the remote
+  // URL from the relay, then apply the same hosted-git-info logic locally.
+  async getRemoteFileUrl(
+    worktreePath: string,
+    relativePath: string,
+    line: number
+  ): Promise<string | null> {
+    let remoteUrl: string
+    try {
+      const result = await this.exec(['remote', 'get-url', 'origin'], worktreePath)
+      remoteUrl = result.stdout.trim()
+    } catch {
+      return null
+    }
+    if (!remoteUrl) {
+      return null
+    }
+
+    const info = hostedGitInfo.fromUrl(remoteUrl)
+    if (!info) {
+      return null
+    }
+
+    let defaultBranch = 'main'
+    try {
+      const refResult = await this.exec(
+        ['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'],
+        worktreePath
+      )
+      const ref = refResult.stdout.trim()
+      if (ref) {
+        defaultBranch = ref.replace(/^refs\/remotes\/origin\//, '')
+      }
+    } catch {
+      // Fall back to 'main'
+    }
+
+    const browseUrl = info.browseFile(relativePath, { committish: defaultBranch })
+    if (!browseUrl) {
+      return null
+    }
+
+    // Why: hosted-git-info lowercases the fragment, but GitHub convention
+    // uses uppercase L for line links (e.g. #L42). Append manually.
+    return `${browseUrl}#L${line}`
   }
 }

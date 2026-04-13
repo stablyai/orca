@@ -10,6 +10,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { statusColor } from '@/components/settings/SshTargetCard'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 
 type SshDisconnectedDialogProps = {
@@ -73,7 +74,7 @@ export function SshDisconnectedDialog({
           <div className="min-w-0 flex-1">
             <span className="text-sm font-medium">{targetLabel}</span>
           </div>
-          <span className="size-2 shrink-0 rounded-full bg-red-500" />
+          <span className={`size-2 shrink-0 rounded-full ${statusColor(status)}`} />
         </div>
 
         <DialogFooter>
