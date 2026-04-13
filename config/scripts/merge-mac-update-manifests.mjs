@@ -14,10 +14,18 @@ function parseScalarValue(rawValue) {
   const isQuoted = trimmed.startsWith("'") && trimmed.endsWith("'") && trimmed.length >= 2
   const value = isQuoted ? trimmed.slice(1, -1).replace(/''/g, "'") : trimmed
 
-  if (isQuoted) return value
-  if (value === 'true') return true
-  if (value === 'false') return false
-  if (/^-?\d+(?:\.\d+)?$/.test(value)) return Number(value)
+  if (isQuoted) {
+    return value
+  }
+  if (value === 'true') {
+    return true
+  }
+  if (value === 'false') {
+    return false
+  }
+  if (/^-?\d+(?:\.\d+)?$/.test(value)) {
+    return Number(value)
+  }
   return value
 }
 
@@ -55,12 +63,16 @@ function parseMacUpdateManifest(raw, sourcePath) {
   for (const [index, rawLine] of lines.entries()) {
     const lineNumber = index + 1
     const line = rawLine.trimEnd()
-    if (line.length === 0) continue
+    if (line.length === 0) {
+      continue
+    }
 
     const fileUrlMatch = line.match(/^  - url:\s*(.+)$/)
     if (fileUrlMatch?.[1]) {
       const finalized = finalizeFileRecord(currentFile, sourcePath, lineNumber)
-      if (finalized) files.push(finalized)
+      if (finalized) {
+        files.push(finalized)
+      }
       currentFile = { url: stripSingleQuotes(fileUrlMatch[1].trim()) }
       inFiles = true
       continue
@@ -95,7 +107,9 @@ function parseMacUpdateManifest(raw, sourcePath) {
 
     if (inFiles && currentFile != null) {
       const finalized = finalizeFileRecord(currentFile, sourcePath, lineNumber)
-      if (finalized) files.push(finalized)
+      if (finalized) {
+        files.push(finalized)
+      }
       currentFile = null
     }
     inFiles = false
@@ -142,7 +156,9 @@ function parseMacUpdateManifest(raw, sourcePath) {
   }
 
   const finalized = finalizeFileRecord(currentFile, sourcePath, lines.length)
-  if (finalized) files.push(finalized)
+  if (finalized) {
+    files.push(finalized)
+  }
 
   if (!version) {
     throw new Error(`Invalid macOS update manifest at ${sourcePath}: missing version.`)
