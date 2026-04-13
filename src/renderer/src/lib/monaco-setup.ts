@@ -1,5 +1,6 @@
 import { loader } from '@monaco-editor/react'
 import * as monaco from 'monaco-editor'
+import { typescript as monacoTS } from 'monaco-editor'
 import 'monaco-editor/min/vs/editor/editor.main.css'
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 import jsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker'
@@ -37,10 +38,10 @@ globalThis.MonacoEnvironment = {
 // import statement. Ignoring specific TS diagnostic codes (e.g., 2307, 2792)
 // removes this noise while keeping type checking, auto-complete, and basic
 // validation fully functional for local symbols.
-monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
+monacoTS.typescriptDefaults.setDiagnosticsOptions({
   diagnosticCodesToIgnore: [2307, 2792]
 })
-monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
+monacoTS.javascriptDefaults.setDiagnosticsOptions({
   diagnosticCodesToIgnore: [2307, 2792]
 })
 
