@@ -36,6 +36,26 @@ export function registerSshHandlers(
   store: Store,
   getMainWindow: () => BrowserWindow | null
 ): { connectionManager: SshConnectionManager; sshStore: SshConnectionStore } {
+  // Why: on macOS, app re-activation creates a new BrowserWindow and re-calls
+  // this function. ipcMain.handle() throws if a handler is already registered,
+  // so we must remove any prior handlers before re-registering.
+  for (const ch of [
+    'ssh:listTargets',
+    'ssh:addTarget',
+    'ssh:updateTarget',
+    'ssh:removeTarget',
+    'ssh:importConfig',
+    'ssh:connect',
+    'ssh:disconnect',
+    'ssh:getState',
+    'ssh:testConnection',
+    'ssh:addPortForward',
+    'ssh:removePortForward',
+    'ssh:listPortForwards'
+  ]) {
+    ipcMain.removeHandler(ch)
+  }
+
   sshStore = new SshConnectionStore(store)
 
   const callbacks: SshConnectionCallbacks = {
@@ -57,7 +77,13 @@ export function registerSshHandlers(
         state.reconnectAttempt === 0 &&
         initializedConnections.has(targetId)
       ) {
-        void reestablishRelayStack(targetId, getMainWindow, connectionManager, activeMultiplexers)
+        void reestablishRelayStack(
+          targetId,
+          getMainWindow,
+          connectionManager,
+          activeMultiplexers,
+          portForwardManager
+        )
       }
     },
 
@@ -70,11 +96,16 @@ export function registerSshHandlers(
       return new Promise<boolean>((resolve) => {
         const channel = `ssh:host-key-verify-response-${randomUUID()}`
         // Why: if the renderer crashes or the window closes before responding,
-        // the ipcMain.once listener would leak forever. The timeout and
-        // destroy listener ensure cleanup.
+        // the ipcMain.once listener would leak forever. The timeout,
+        // destroy listener, and removeListener in cleanup ensure no leak.
+        const onClosed = () => {
+          cleanup()
+          resolve(false)
+        }
         const cleanup = () => {
           ipcMain.removeAllListeners(channel)
           clearTimeout(timer)
+          win.removeListener('closed', onClosed)
         }
         const timer = setTimeout(() => {
           cleanup()
@@ -85,10 +116,7 @@ export function registerSshHandlers(
           cleanup()
           resolve(accepted)
         })
-        win.once('closed', () => {
-          cleanup()
-          resolve(false)
-        })
+        win.once('closed', onClosed)
       })
     },
 
@@ -100,9 +128,14 @@ export function registerSshHandlers(
 
       return new Promise<string[]>((resolve) => {
         const channel = `ssh:auth-challenge-response-${randomUUID()}`
+        const onClosed = () => {
+          cleanup()
+          resolve([])
+        }
         const cleanup = () => {
           ipcMain.removeAllListeners(channel)
           clearTimeout(timer)
+          win.removeListener('closed', onClosed)
         }
         const timer = setTimeout(() => {
           cleanup()
@@ -113,10 +146,7 @@ export function registerSshHandlers(
           cleanup()
           resolve(responses)
         })
-        win.once('closed', () => {
-          cleanup()
-          resolve([])
-        })
+        win.once('closed', onClosed)
       })
     },
 
@@ -128,9 +158,14 @@ export function registerSshHandlers(
 
       return new Promise<string | null>((resolve) => {
         const channel = `ssh:password-response-${randomUUID()}`
+        const onClosed = () => {
+          cleanup()
+          resolve(null)
+        }
         const cleanup = () => {
           ipcMain.removeAllListeners(channel)
           clearTimeout(timer)
+          win.removeListener('closed', onClosed)
         }
         const timer = setTimeout(() => {
           cleanup()
@@ -141,10 +176,7 @@ export function registerSshHandlers(
           cleanup()
           resolve(password)
         })
-        win.once('closed', () => {
-          cleanup()
-          resolve(null)
-        })
+        win.once('closed', onClosed)
       })
     }
   }
@@ -185,7 +217,28 @@ export function registerSshHandlers(
       throw new Error(`SSH target "${args.targetId}" not found`)
     }
 
-    const conn = await connectionManager!.connect(target)
+    let conn
+    try {
+      conn = await connectionManager!.connect(target)
+    } catch (err) {
+      // Why: SshConnection.connect() sets its internal state to 'error', but
+      // the onStateChange callback may have been suppressed or the state may
+      // not have propagated to the renderer. Explicitly broadcast the error
+      // so the UI leaves 'connecting'/'host-key-verification'.
+      const win = getMainWindow()
+      if (win && !win.isDestroyed()) {
+        win.webContents.send('ssh:state-changed', {
+          targetId: args.targetId,
+          state: {
+            targetId: args.targetId,
+            status: 'error',
+            error: err instanceof Error ? err.message : String(err),
+            reconnectAttempt: 0
+          }
+        })
+      }
+      throw err
+    }
 
     // Deploy relay and establish multiplexer
     callbacks.onStateChange(args.targetId, {
@@ -256,6 +309,14 @@ export function registerSshHandlers(
     const target = sshStore!.getTarget(args.targetId)
     if (!target) {
       throw new Error(`SSH target "${args.targetId}" not found`)
+    }
+
+    // Why: testConnection calls connect() then disconnect(). If the target
+    // already has an active relay session, connect() would reuse the connection
+    // but disconnect() would tear down the entire relay stack — killing all
+    // active PTYs and file watchers for a "test" that was supposed to be safe.
+    if (initializedConnections.has(args.targetId)) {
+      return { success: true, state: connectionManager!.getState(args.targetId) }
     }
 
     testingTargets.add(args.targetId)

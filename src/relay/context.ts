@@ -1,4 +1,5 @@
 import { resolve, relative, isAbsolute } from 'path'
+import { realpathSync } from 'fs'
 import { realpath } from 'fs/promises'
 
 // Why: mutating FS operations on the remote must be scoped to workspace roots
@@ -15,7 +16,20 @@ export class RelayContext {
   private rootsRegistered = false
 
   registerRoot(rootPath: string): void {
-    this.authorizedRoots.add(resolve(rootPath))
+    const resolved = resolve(rootPath)
+    this.authorizedRoots.add(resolved)
+    // Why: on macOS, /tmp is a symlink to /private/tmp. If a root is registered
+    // as /tmp/workspace, validatePathResolved would resolve it to /private/tmp/
+    // workspace, which fails the textual root check. Register both forms so the
+    // resolved path also passes validation.
+    try {
+      const real = realpathSync(resolved)
+      if (real !== resolved) {
+        this.authorizedRoots.add(real)
+      }
+    } catch {
+      // Root doesn't exist yet — textual form is sufficient
+    }
     this.rootsRegistered = true
   }
 
@@ -43,8 +57,14 @@ export class RelayContext {
     try {
       const real = await realpath(targetPath)
       this.validatePath(real)
-    } catch {
-      // Path doesn't exist yet (e.g., createFile) — textual check is sufficient
+    } catch (err) {
+      // Why: ENOENT/ENOTDIR means the path doesn't exist yet (e.g., createFile)
+      // so the textual check above is sufficient. Other errors (EACCES, EIO)
+      // indicate real problems that should propagate.
+      const code = (err as NodeJS.ErrnoException).code
+      if (code !== 'ENOENT' && code !== 'ENOTDIR') {
+        throw err
+      }
     }
   }
 }

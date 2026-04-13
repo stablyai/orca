@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react'
-import { Check, ChevronsUpDown } from 'lucide-react'
+import { Check, ChevronsUpDown, Globe } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Command,
@@ -67,11 +67,19 @@ export default function RepoCombobox({
           data-repo-combobox-root="true"
         >
           {selectedRepo ? (
-            <RepoDotLabel
-              name={selectedRepo.displayName}
-              color={selectedRepo.badgeColor}
-              dotClassName="size-1.5"
-            />
+            <span className="inline-flex min-w-0 items-center gap-1.5">
+              <RepoDotLabel
+                name={selectedRepo.displayName}
+                color={selectedRepo.badgeColor}
+                dotClassName="size-1.5"
+              />
+              {selectedRepo.connectionId && (
+                <span className="shrink-0 inline-flex items-center gap-0.5 rounded bg-muted px-1 py-0.5 text-[9px] font-medium leading-none text-muted-foreground">
+                  <Globe className="size-2.5" />
+                  SSH
+                </span>
+              )}
+            </span>
           ) : (
             <span className="text-muted-foreground">{placeholder}</span>
           )}
@@ -106,11 +114,19 @@ export default function RepoCombobox({
                   )}
                 />
                 <div className="min-w-0 flex-1">
-                  <RepoDotLabel
-                    name={repo.displayName}
-                    color={repo.badgeColor}
-                    className="max-w-full"
-                  />
+                  <span className="inline-flex items-center gap-1.5">
+                    <RepoDotLabel
+                      name={repo.displayName}
+                      color={repo.badgeColor}
+                      className="max-w-full"
+                    />
+                    {repo.connectionId && (
+                      <span className="shrink-0 inline-flex items-center gap-0.5 rounded bg-muted px-1 py-0.5 text-[9px] font-medium leading-none text-muted-foreground">
+                        <Globe className="size-2.5" />
+                        SSH
+                      </span>
+                    )}
+                  </span>
                   <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{repo.path}</p>
                 </div>
               </CommandItem>

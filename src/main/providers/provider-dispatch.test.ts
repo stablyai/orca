@@ -50,7 +50,7 @@ describe('PTY provider dispatch', () => {
   const handlers = new Map<string, (...args: unknown[]) => unknown>()
   const mainWindow = {
     isDestroyed: () => false,
-    webContents: { on: vi.fn(), send: vi.fn() }
+    webContents: { on: vi.fn(), send: vi.fn(), removeListener: vi.fn() }
   }
 
   function setup(): void {

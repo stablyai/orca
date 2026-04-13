@@ -92,7 +92,8 @@ describe('registerPtyHandlers', () => {
     isDestroyed: () => false,
     webContents: {
       on: vi.fn(),
-      send: vi.fn()
+      send: vi.fn(),
+      removeListener: vi.fn()
     }
   }
 

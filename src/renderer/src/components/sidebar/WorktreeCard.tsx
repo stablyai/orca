@@ -156,11 +156,13 @@ const WorktreeCard = React.memo(function WorktreeCard({
     if (selection && selection.toString().length > 0) {
       return
     }
+    // Why: always activate the worktree so the user can see terminal history,
+    // editor state, etc. even when SSH is disconnected. Show the reconnect
+    // dialog as a non-blocking overlay rather than a gate.
+    setActiveWorktree(worktree.id)
     if (isSshDisconnected) {
       setShowDisconnectedDialog(true)
-      return
     }
-    setActiveWorktree(worktree.id)
   }, [worktree.id, setActiveWorktree, isSshDisconnected])
 
   const handleDoubleClick = useCallback(() => {

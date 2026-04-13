@@ -145,6 +145,9 @@ export class RelayDispatcher {
   }
 
   private sendFrame(msg: JsonRpcRequest | JsonRpcResponse | JsonRpcNotification): void {
+    if (this.disposed) {
+      return
+    }
     const seq = this.nextOutgoingSeq++
     const frame = encodeJsonRpcFrame(msg, seq, this.highestReceivedSeq)
     this.write(frame)

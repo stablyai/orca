@@ -97,15 +97,20 @@ export class SshPortForwardManager {
   }
 
   removeAllForwards(connectionId: string): void {
-    for (const [id, { entry }] of this.forwards) {
-      if (entry.connectionId === connectionId) {
-        this.removeForward(id)
-      }
+    // Why: removeForward deletes from this.forwards. Collecting IDs first
+    // avoids mutating the map during iteration, which is fragile if
+    // removeForward ever gains cascading cleanup.
+    const toRemove = [...this.forwards.entries()]
+      .filter(([, { entry }]) => entry.connectionId === connectionId)
+      .map(([id]) => id)
+    for (const id of toRemove) {
+      this.removeForward(id)
     }
   }
 
   dispose(): void {
-    for (const [id] of this.forwards) {
+    const ids = [...this.forwards.keys()]
+    for (const id of ids) {
       this.removeForward(id)
     }
   }

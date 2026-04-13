@@ -176,13 +176,19 @@ export class FsHandler {
   private async realpath(params: Record<string, unknown>) {
     const filePath = params.filePath as string
     this.context.validatePath(filePath)
-    return realpath(filePath)
+    const resolved = await realpath(filePath)
+    // Why: a symlink inside the workspace may resolve to a path outside it.
+    // Returning the resolved path without validation leaks the external target.
+    this.context.validatePath(resolved)
+    return resolved
   }
 
   private async search(params: Record<string, unknown>) {
     const query = params.query as string
     const rootPath = params.rootPath as string
-    this.context.validatePath(rootPath)
+    // Why: a symlink inside the workspace pointing to a directory outside it
+    // would let rg search (and return content from) files beyond the workspace.
+    await this.context.validatePathResolved(rootPath)
     const caseSensitive = params.caseSensitive as boolean | undefined
     const wholeWord = params.wholeWord as boolean | undefined
     const useRegex = params.useRegex as boolean | undefined
@@ -205,7 +211,7 @@ export class FsHandler {
 
   private async listFiles(params: Record<string, unknown>): Promise<string[]> {
     const rootPath = params.rootPath as string
-    this.context.validatePath(rootPath)
+    await this.context.validatePathResolved(rootPath)
     return listFilesWithRg(rootPath)
   }
 

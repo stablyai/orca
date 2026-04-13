@@ -138,6 +138,13 @@ export class GitHandler {
     const worktreePath = params.worktreePath as string
     this.context.validatePath(worktreePath)
     const filePath = params.filePath as string
+    // Why: filePath is relative to worktreePath and used in readWorkingFile via
+    // path.join. Without validation, ../../etc/passwd traverses outside the worktree.
+    const resolved = path.resolve(worktreePath, filePath)
+    const rel = path.relative(path.resolve(worktreePath), resolved)
+    if (rel.startsWith('..') || path.isAbsolute(rel)) {
+      throw new Error(`Path "${filePath}" resolves outside the worktree`)
+    }
     const staged = params.staged as boolean
     return computeDiff(this.gitBuffer.bind(this), worktreePath, filePath, staged)
   }
@@ -218,6 +225,11 @@ export class GitHandler {
     const worktreePath = params.worktreePath as string
     this.context.validatePath(worktreePath)
     const baseRef = params.baseRef as string
+    // Why: a baseRef starting with '-' would be interpreted as a flag to
+    // git rev-parse, potentially leaking environment variables or config.
+    if (baseRef.startsWith('-')) {
+      throw new Error('Base ref must not start with "-"')
+    }
     const gitBound = this.git.bind(this)
     return branchCompareOp(gitBound, worktreePath, baseRef, async (mergeBase, headOid) => {
       const { stdout } = await gitBound(
@@ -231,11 +243,15 @@ export class GitHandler {
   private async branchDiff(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
     this.context.validatePath(worktreePath)
+    const baseRef = params.baseRef as string
+    if (baseRef.startsWith('-')) {
+      throw new Error('Base ref must not start with "-"')
+    }
     return branchDiffEntries(
       this.git.bind(this),
       this.gitBuffer.bind(this),
       worktreePath,
-      params.baseRef as string,
+      baseRef,
       {
         includePatch: params.includePatch as boolean | undefined,
         filePath: params.filePath as string | undefined,

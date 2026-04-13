@@ -13,7 +13,9 @@ import {
   unregisterSshPtyProvider,
   getSshPtyProvider,
   getPtyIdsForConnection,
-  clearPtyOwnershipForConnection
+  clearPtyOwnershipForConnection,
+  clearProviderPtyState,
+  deletePtyOwnership
 } from './pty'
 import {
   registerSshFilesystemProvider,
@@ -74,6 +76,10 @@ export function wireUpSshPtyEvents(
     }
   })
   ptyProvider.onExit((payload) => {
+    clearProviderPtyState(payload.id)
+    // Why: without this, the ownership entry for the exited remote PTY lingers,
+    // routing future lookups to the SSH provider for a PTY that no longer exists.
+    deletePtyOwnership(payload.id)
     const win = getMainWindow()
     if (win && !win.isDestroyed()) {
       win.webContents.send('pty:exit', payload)
@@ -91,12 +97,17 @@ export async function reestablishRelayStack(
   targetId: string,
   getMainWindow: () => BrowserWindow | null,
   connectionManager: SshConnectionManager | null,
-  activeMultiplexers: Map<string, SshChannelMultiplexer>
+  activeMultiplexers: Map<string, SshChannelMultiplexer>,
+  portForwardManager?: SshPortForwardManager | null
 ): Promise<void> {
   const conn = connectionManager?.getConnection(targetId)
   if (!conn) {
     return
   }
+
+  // Why: port forwards hold open local TCP servers backed by SSH channels that
+  // are now dead. Without cleanup, clients connecting to forwarded ports hang.
+  portForwardManager?.removeAllForwards(targetId)
 
   const prevAbort = reestablishAbortControllers.get(targetId)
   if (prevAbort) {

@@ -215,16 +215,19 @@ export class LocalPtyProvider implements IPtyProvider {
     if (!proc) {
       return
     }
+    // Why: disposePtyListeners removes the onExit callback, so the natural
+    // exit cleanup path from node-pty won't fire. Cleanup and notification
+    // must happen unconditionally after the try/catch.
     disposePtyListeners(id)
     try {
       proc.kill()
     } catch {
-      // Process may already be dead — ensure cleanup still happens.
-      clearPtyState(id)
-      this.opts.onExit?.(id, -1)
-      for (const cb of exitListeners) {
-        cb({ id, code: -1 })
-      }
+      /* Process may already be dead */
+    }
+    clearPtyState(id)
+    this.opts.onExit?.(id, -1)
+    for (const cb of exitListeners) {
+      cb({ id, code: -1 })
     }
   }
 

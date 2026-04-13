@@ -1,15 +1,12 @@
 import { Client as SshClient } from 'ssh2'
 import type { ConnectConfig, ClientChannel } from 'ssh2'
-import type { ChildProcess } from 'child_process'
+import { type ChildProcess, execFileSync } from 'child_process'
 import { readFileSync } from 'fs'
 import { createHash } from 'crypto'
 import type { Socket as NetSocket } from 'net'
 import type { SshTarget, SshConnectionState } from '../../shared/ssh-types'
 
-// ── Callback types for UI integration ───────────────────────────────
-// Why: these types live here (rather than in ssh-connection.ts) to avoid
-// a circular import: ssh-connection.ts imports helpers from this file, and
-// this file needs the callback types for buildConnectConfig.
+// Why: types live here (not ssh-connection.ts) to break a circular import.
 
 export type HostKeyVerifyRequest = {
   host: string
@@ -31,10 +28,6 @@ export type SshConnectionCallbacks = {
   onAuthChallenge: (req: AuthChallengeRequest) => Promise<string[]>
   onPasswordPrompt: (targetId: string) => Promise<string | null>
 }
-
-// ── Constants (matching VS Code's remoteAgentConnection.ts) ─────────
-// Why: extracted from ssh-connection.ts to keep each file under the
-// 300-line oxlint max-lines threshold.
 
 export const INITIAL_RETRY_ATTEMPTS = 5
 export const INITIAL_RETRY_DELAY_MS = 2000
@@ -72,14 +65,21 @@ export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-/**
- * Why: ProxyCommand values are interpolated into a `/bin/sh -c` invocation.
- * Without escaping, a malicious hostname (e.g. `foo; rm -rf /`) would be
- * executed as shell code.  Wrapping in single quotes and escaping embedded
- * single quotes is the standard POSIX shell-safe quoting strategy.
- */
+// Why: prevents shell injection when interpolating into ProxyCommand.
 export function shellEscape(s: string): string {
   return `'${s.replace(/'/g, "'\\''")}'`
+}
+
+// Why: ssh2 doesn't check known_hosts. Without this, every connection blocks
+// on a UI prompt that isn't wired up yet, causing a silent timeout.
+function isHostKnown(host: string, port: number): boolean {
+  try {
+    const lookup = port === 22 ? host : `[${host}]:${port}`
+    execFileSync('ssh-keygen', ['-F', lookup], { stdio: 'pipe', timeout: 3000 })
+    return true
+  } catch {
+    return false
+  }
 }
 
 // ── Auth handler state (passed in by the connection) ────────────────
@@ -90,22 +90,11 @@ export type AuthHandlerState = {
   setState: (status: string, error?: string) => void
 }
 
-/** Result of buildConnectConfig: the ssh2 config plus optional resources
- *  that must be cleaned up when the connection is torn down. */
 export type ConnectConfigResult = {
   config: ConnectConfig
-  /** The intermediate SshClient used for jump-host forwarding, if any.
-   *  The caller is responsible for calling `.end()` on disconnect. */
   jumpClient: SshClient | null
-  /** The ProxyCommand child process, if any. Must be killed on disconnect
-   *  to prevent leaked proxy processes (e.g. nc, socat). */
   proxyProcess: ChildProcess | null
 }
-
-/**
- * Build the ssh2 ConnectConfig for a target. Handles auth methods,
- * ProxyCommand, and JumpHost wiring.
- */
 export async function buildConnectConfig(
   target: SshTarget,
   callbacks: SshConnectionCallbacks,
@@ -120,16 +109,15 @@ export async function buildConnectConfig(
     keepaliveCountMax: 4,
 
     // Why: ssh2's hostVerifier callback form `(key, verify) => void` blocks
-    // the handshake until `verify(true/false)` is called.  This lets us
-    // prompt the user asynchronously without racing the 'ready' event.
-    // We hash the raw host public key ourselves (no `hostHash` config) so
-    // that the fingerprint reflects the actual key, not just its algorithm.
+    // the handshake until `verify(true/false)` is called. We check
+    // known_hosts first so trusted hosts connect without a UI prompt.
     hostVerifier: (key: Buffer, verify: (accept: boolean) => void) => {
+      if (isHostKnown(target.host, target.port)) {
+        verify(true)
+        return
+      }
+
       const fingerprint = createHash('sha256').update(key).digest('base64')
-      // Why: ssh2 exposes the key type via the negotiated algorithms on the
-      // handshake event, but we don't have that here.  Parsing the key
-      // type from the raw public key buffer is fragile; 'unknown' is safe
-      // because the fingerprint is the security-critical value.
       const keyType = 'unknown'
 
       authState.setState('host-key-verification')
@@ -144,8 +132,6 @@ export async function buildConnectConfig(
           verify(accepted)
         })
         .catch(() => {
-          // Why: if the UI callback rejects (e.g. renderer crashed), we must
-          // deny the host key to avoid silently trusting an unverified server.
           verify(false)
         })
     },
@@ -255,10 +241,6 @@ export async function buildConnectConfig(
     config.agent = process.env.SSH_AUTH_SOCK
   }
 
-  // Wire ProxyCommand: ssh2 accepts a custom socket/stream via the `sock` option.
-  // We spawn the ProxyCommand as a child process and pipe its stdio.
-  // Why: tokens are shell-escaped to prevent injection — a hostile hostname
-  // like "foo; rm -rf /" must not be interpreted as shell code.
   let proxyProcess: ChildProcess | null = null
   if (target.proxyCommand) {
     const { spawn } = await import('child_process')

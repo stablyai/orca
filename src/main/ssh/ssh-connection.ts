@@ -117,7 +117,9 @@ export class SshConnection {
       }
     }
 
-    throw lastError ?? new Error('Connection failed')
+    const finalError = lastError ?? new Error('Connection failed')
+    this.setState('error', finalError.message)
+    throw finalError
   }
 
   private async attemptConnect(): Promise<void> {
@@ -149,7 +151,9 @@ export class SshConnection {
         if (!settled) {
           settled = true
           client.destroy()
-          reject(new Error(`Connection timed out after ${CONNECT_TIMEOUT_MS}ms`))
+          const msg = `Connection timed out after ${CONNECT_TIMEOUT_MS}ms`
+          this.setState('error', msg)
+          reject(new Error(msg))
         }
       }, CONNECT_TIMEOUT_MS)
 
@@ -260,24 +264,44 @@ export class SshConnection {
     if (this.disposed) {
       throw new Error('Connection disposed')
     }
+    // Why: if connectViaSystemSsh is called again after a prior failed attempt,
+    // the old process may still be running. Without cleanup, overwriting
+    // this.systemSsh at line 267 would orphan the old process.
+    if (this.systemSsh) {
+      this.systemSsh.kill()
+      this.systemSsh = null
+    }
     this.setState('connecting')
 
     try {
       const proc = spawnSystemSsh(this.target)
       this.systemSsh = proc
 
+      // Why: two onExit handlers are registered — one for the initial handshake
+      // (reject the promise on early exit) and one for post-connect reconnection.
+      // Without a settled flag, an early exit during handshake would fire both,
+      // causing the reconnection handler to schedule a reconnect for a connection
+      // that was never established.
+      let settled = false
+
       // Why: verify the SSH connection succeeded before reporting connected.
       // Wait for relay sentinel output or a non-zero exit.
       await new Promise<void>((resolve, reject) => {
         const timeout = setTimeout(() => {
+          settled = true
           reject(new Error('System SSH connection timed out'))
         }, CONNECT_TIMEOUT_MS)
 
         proc.stdout.once('data', () => {
+          settled = true
           clearTimeout(timeout)
           resolve()
         })
         proc.onExit((code) => {
+          if (settled) {
+            return
+          }
+          settled = true
           clearTimeout(timeout)
           if (code !== 0) {
             reject(new Error(`System SSH exited with code ${code}`))
