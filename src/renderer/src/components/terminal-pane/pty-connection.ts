@@ -193,12 +193,23 @@ export function connectPanePty(
       deps.onPtyErrorRef?.current?.(pane.id, message)
     }
 
+    // Why: 512 KB cap keeps the pending buffer from growing without bound
+    // when an agent runs for minutes in a background worktree.  When the
+    // cap is reached, the oldest output is trimmed so the most recent
+    // terminal state is preserved.  This matches the MAX_BUFFER_BYTES
+    // constant used for serialized scrollback capture.
+    const MAX_PENDING_BYTES = 512 * 1024
+
     const dataCallback = (data: string): void => {
       if (deps.isActiveRef.current) {
         pane.terminal.write(data)
       } else {
         const pending = deps.pendingWritesRef.current
-        pending.set(pane.id, (pending.get(pane.id) ?? '') + data)
+        let buf = (pending.get(pane.id) ?? '') + data
+        if (buf.length > MAX_PENDING_BYTES) {
+          buf = buf.slice(buf.length - MAX_PENDING_BYTES)
+        }
+        pending.set(pane.id, buf)
       }
     }
 
