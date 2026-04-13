@@ -3,6 +3,7 @@ import * as path from 'path'
 import { stat } from 'fs/promises'
 import type { AsyncSubscription, Event as WatcherEvent } from '@parcel/watcher'
 import type { FsChangeEvent, FsChangedPayload } from '../../shared/types'
+import { isWslPath } from '../wsl'
 
 // ── Ignore patterns ──────────────────────────────────────────────────
 // Why: high-churn directories are suppressed at the native watcher level
@@ -44,6 +45,18 @@ type WatchedRoot = {
 // ── Module state ─────────────────────────────────────────────────────
 
 const watchedRoots = new Map<string, WatchedRoot>()
+
+// Why: roots that failed watcher creation (e.g. WSL UNC paths where
+// @parcel/watcher's ReadDirectoryChangesW doesn't work) are cached so
+// we don't retry on every worktree switch and spam the console with
+// repeated "Failed to read changes" / "watchman not found" errors.
+const unwatchableRoots = new Set<string>()
+
+// Why: the `destroyed` listener was previously registered per-root on the
+// same WebContents.  With 11+ worktrees, this exceeded Node's default
+// MaxListeners of 10.  Track which senders already have a single cleanup
+// listener so we register exactly once per sender.
+const senderCleanupRegistered = new Set<number>()
 
 // ── Path normalization ───────────────────────────────────────────────
 
@@ -289,6 +302,21 @@ async function createWatcher(rootKey: string, rootPath: string): Promise<Watched
 async function subscribe(worktreePath: string, sender: WebContents): Promise<void> {
   const rootKey = normalizeRootPath(worktreePath)
 
+  // Why: @parcel/watcher uses ReadDirectoryChangesW on Windows which does
+  // not work across the WSL network filesystem boundary (\\wsl.localhost\…).
+  // Every attempt fails with "Failed to read changes" and falls back to
+  // watchman (which is typically not installed), spamming the console on
+  // every worktree switch.  Skip these paths entirely — the file explorer
+  // still works, it just won't auto-refresh on external changes.
+  if (isWslPath(worktreePath)) {
+    return
+  }
+
+  // Don't retry roots that already failed — avoids repeated error spam.
+  if (unwatchableRoots.has(rootKey)) {
+    return
+  }
+
   let root = watchedRoots.get(rootKey)
   if (!root) {
     // Verify root exists and is a directory
@@ -296,10 +324,12 @@ async function subscribe(worktreePath: string, sender: WebContents): Promise<voi
       const s = await stat(rootKey)
       if (!s.isDirectory()) {
         console.warn(`[filesystem-watcher] not a directory: ${rootKey}`)
+        unwatchableRoots.add(rootKey)
         return
       }
     } catch {
       console.warn(`[filesystem-watcher] cannot stat root: ${rootKey}`)
+      unwatchableRoots.add(rootKey)
       return
     }
 
@@ -309,22 +339,39 @@ async function subscribe(worktreePath: string, sender: WebContents): Promise<voi
       // Why: createWatcher already logged the error. Swallow it here so the
       // renderer's watchWorktree call resolves without crashing the main
       // process. The watcher simply won't be active for this root (§7.3).
+      unwatchableRoots.add(rootKey)
       return
     }
     watchedRoots.set(rootKey, root)
   }
 
-  // Why: only register the `destroyed` listener once per sender. If the same
-  // renderer calls watchWorktree for the same root multiple times (e.g. after
-  // a React re-mount), re-registering would accumulate duplicate listeners
-  // that each call unsubscribe on destroy, causing redundant cleanup work.
-  if (!root.listeners.has(sender.id)) {
+  root.listeners.set(sender.id, sender)
+
+  // Why: register a single `destroyed` listener per sender (not per-root).
+  // The old code registered one listener per root, so 11+ worktrees would
+  // exceed Node's default MaxListeners of 10 on the same WebContents.  A
+  // single listener that iterates all roots avoids the warning and is
+  // equivalent — `destroyed` fires once when the renderer process exits.
+  if (!senderCleanupRegistered.has(sender.id)) {
+    senderCleanupRegistered.add(sender.id)
     sender.once('destroyed', () => {
-      unsubscribe(rootKey, sender.id)
+      senderCleanupRegistered.delete(sender.id)
+      for (const [key, watchedRoot] of watchedRoots) {
+        if (watchedRoot.listeners.has(sender.id)) {
+          watchedRoot.listeners.delete(sender.id)
+          if (watchedRoot.listeners.size === 0) {
+            if (watchedRoot.batch.timer) {
+              clearTimeout(watchedRoot.batch.timer)
+            }
+            void watchedRoot.subscription.unsubscribe().catch((err: unknown) => {
+              console.error(`[filesystem-watcher] unsubscribe error for ${key}:`, err)
+            })
+            watchedRoots.delete(key)
+          }
+        }
+      }
     })
   }
-
-  root.listeners.set(sender.id, sender)
 }
 
 function unsubscribe(worktreePath: string, senderId: number): void {
