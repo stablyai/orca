@@ -177,6 +177,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   let pendingEscape = false
   let inOsc = false
   let pendingOscEscape = false
+  let suppressAttentionEvents = false
   let lastEmittedTitle: string | null = null
   let lastObservedTerminalTitle: string | null = null
   let openCodeStatus: OpenCodeStatusEvent['status'] | null = null
@@ -184,7 +185,11 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   const agentTracker =
     onAgentBecameIdle || onAgentBecameWorking || onAgentExited
       ? createAgentStatusTracker(
-          onAgentBecameIdle ?? (() => {}),
+          (title) => {
+            if (!suppressAttentionEvents) {
+              onAgentBecameIdle?.(title)
+            }
+          },
           onAgentBecameWorking,
           onAgentExited
         )
@@ -316,7 +321,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
               }, STALE_TITLE_TIMEOUT)
             }
           }
-          if (onBell && chunkContainsBell(data)) {
+          if (onBell && chunkContainsBell(data) && !suppressAttentionEvents) {
             onBell()
           }
         })
@@ -390,7 +395,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
             }, STALE_TITLE_TIMEOUT)
           }
         }
-        if (onBell && chunkContainsBell(data)) {
+        if (onBell && chunkContainsBell(data) && !suppressAttentionEvents) {
           onBell()
         }
       })
@@ -419,7 +424,17 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       if (bufferHandle) {
         const buffered = bufferHandle.flush()
         if (buffered) {
-          ptyDataHandlers.get(id)?.(buffered)
+          // Why: eager PTY buffers contain output produced before the pane
+          // attached, often from a previous app session. We still replay that
+          // data so titles and scrollback restore correctly, but it must not
+          // generate fresh unread badges or notifications for unrelated
+          // worktrees just because Orca is reconnecting background terminals.
+          suppressAttentionEvents = true
+          try {
+            ptyDataHandlers.get(id)?.(buffered)
+          } finally {
+            suppressAttentionEvents = false
+          }
         }
         bufferHandle.dispose()
       }

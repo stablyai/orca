@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createIpcPtyTransport } from './pty-transport'
 
 describe('createIpcPtyTransport', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window
@@ -10,6 +9,7 @@ describe('createIpcPtyTransport', () => {
     | null = null
 
   beforeEach(() => {
+    vi.resetModules()
     onData = null
     onExit = null
     onOpenCodeStatus = null
@@ -57,6 +57,7 @@ describe('createIpcPtyTransport', () => {
   })
 
   it('maps OpenCode status events into the existing working to idle agent lifecycle', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
     const onTitleChange = vi.fn()
     const onAgentBecameWorking = vi.fn()
     const onAgentBecameIdle = vi.fn()
@@ -85,5 +86,34 @@ describe('createIpcPtyTransport', () => {
     expect(onTitleChange).toHaveBeenNthCalledWith(3, 'OpenCode', 'OpenCode')
     expect(onData).not.toBeNull()
     expect(onExit).not.toBeNull()
+  })
+
+  it('does not fire unread-side effects when replaying buffered data during attach', async () => {
+    const { createIpcPtyTransport, registerEagerPtyBuffer } = await import('./pty-transport')
+    const onTitleChange = vi.fn()
+    const onAgentBecameIdle = vi.fn()
+    const onBell = vi.fn()
+
+    const handle = registerEagerPtyBuffer('pty-restored', vi.fn())
+    onData?.({
+      id: 'pty-restored',
+      data: '\u001b]0;. Claude working\u0007\u001b]0;* Claude done\u0007\u0007'
+    })
+
+    const transport = createIpcPtyTransport({
+      onTitleChange,
+      onAgentBecameIdle,
+      onBell
+    })
+
+    transport.attach({
+      existingPtyId: 'pty-restored',
+      callbacks: {}
+    })
+
+    expect(handle.flush()).toBe('')
+    expect(onTitleChange).toHaveBeenCalledWith('* Claude done', '* Claude done')
+    expect(onAgentBecameIdle).not.toHaveBeenCalled()
+    expect(onBell).not.toHaveBeenCalled()
   })
 })
