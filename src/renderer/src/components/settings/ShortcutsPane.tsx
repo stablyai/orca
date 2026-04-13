@@ -36,7 +36,7 @@ const SHORTCUT_GROUP_DEFINITIONS: ShortcutGroupDefinition[] = [
       {
         action: 'Switch worktree',
         searchKeywords: ['shortcut', 'global', 'worktree', 'switch', 'jump'],
-        keys: ({ mod, shift }) => mod === '⌘' ? [mod, 'J'] : [mod, shift, 'J']
+        keys: ({ mod, shift }) => (mod === '⌘' ? [mod, 'J'] : [mod, shift, 'J'])
       },
       {
         action: 'Create worktree',
@@ -131,13 +131,23 @@ const SHORTCUT_GROUP_DEFINITIONS: ShortcutGroupDefinition[] = [
       {
         action: 'Split pane right',
         searchKeywords: ['shortcut', 'pane', 'split'],
-        keys: ({ mod }) => [mod, 'D']
+        // Why: on Windows/Linux, Ctrl+D must pass through as EOF (#586),
+        // so split-right requires Shift on non-Mac platforms.
+        keys: ({ mod, shift }) => (mod === '⌘' ? [mod, 'D'] : [mod, shift, 'D'])
       },
-      {
-        action: 'Split pane down',
-        searchKeywords: ['shortcut', 'pane', 'split'],
-        keys: ({ mod, shift }) => [mod, shift, 'D']
-      },
+      ...(navigator.userAgent.includes('Mac')
+        ? [
+            {
+              action: 'Split pane down',
+              searchKeywords: ['shortcut', 'pane', 'split'],
+              keys: ({ mod, shift }: { mod: string; shift: string; enter: string }) => [
+                mod,
+                shift,
+                'D'
+              ]
+            } satisfies ShortcutDefinition
+          ]
+        : []),
       {
         action: 'Close pane (EOF)',
         searchKeywords: ['shortcut', 'pane', 'close', 'eof'],

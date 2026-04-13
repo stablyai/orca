@@ -106,4 +106,32 @@ describe('resolveTerminalShortcutAction', () => {
       resolveTerminalShortcutAction(event({ key: 'r', code: 'KeyR', ctrlKey: true }), false)
     ).toBeNull()
   })
+
+  it('lets Ctrl+D pass through as EOF on non-Mac, requires Shift for split (#586)', () => {
+    // Ctrl+D without Shift on Windows/Linux must NOT trigger split — it's EOF
+    expect(
+      resolveTerminalShortcutAction(event({ key: 'd', code: 'KeyD', ctrlKey: true }), false)
+    ).toBeNull()
+
+    // Ctrl+Shift+D on Windows/Linux splits the pane (vertical)
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'd', code: 'KeyD', ctrlKey: true, shiftKey: true }),
+        false
+      )
+    ).toEqual({ type: 'splitActivePane', direction: 'vertical' })
+  })
+
+  it('keeps Cmd+D and Cmd+Shift+D for split on macOS', () => {
+    expect(
+      resolveTerminalShortcutAction(event({ key: 'd', code: 'KeyD', metaKey: true }), true)
+    ).toEqual({ type: 'splitActivePane', direction: 'vertical' })
+
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'd', code: 'KeyD', metaKey: true, shiftKey: true }),
+        true
+      )
+    ).toEqual({ type: 'splitActivePane', direction: 'horizontal' })
+  })
 })
