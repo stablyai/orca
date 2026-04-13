@@ -516,7 +516,7 @@ function App(): React.JSX.Element {
               tabs start exactly where the sidebar ends, creating a clean vertical
               alignment between the sidebar edge and the first tab. */}
           <div
-            className={`flex items-center overflow-hidden${showSidebar && sidebarOpen ? ' shrink-0' : ' min-w-0'}`}
+            className={`flex items-center overflow-hidden mr-2${showSidebar && sidebarOpen ? ' shrink-0' : ' min-w-0'}`}
             style={{ width: showSidebar && sidebarOpen ? sidebarWidth : undefined }}
           >
             <div className={isMac && !isFullScreen ? 'titlebar-traffic-light-pad' : 'pl-2'} />
