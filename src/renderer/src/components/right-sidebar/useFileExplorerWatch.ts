@@ -5,6 +5,7 @@ import type { DirCache } from './file-explorer-types'
 import type { InlineInput } from './FileExplorerRow'
 import { normalizeAbsolutePath } from './file-explorer-paths'
 import { dirname } from '@/lib/path'
+import { getConnectionId } from '@/lib/connection-context'
 import {
   purgeDirCacheSubtree,
   purgeExpandedDirsSubtree,
@@ -88,7 +89,8 @@ export function useFileExplorerWatch({
 
     const currentWorktreePath = worktreePath
 
-    void window.api.fs.watchWorktree({ worktreePath })
+    const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
+    void window.api.fs.watchWorktree({ worktreePath, connectionId })
 
     function processPayload(payload: FsChangedPayload): void {
       // Why: during rapid worktree switches, in-flight batched events from
@@ -209,10 +211,10 @@ export function useFileExplorerWatch({
 
     return () => {
       unsubscribeListener()
-      void window.api.fs.unwatchWorktree({ worktreePath })
+      void window.api.fs.unwatchWorktree({ worktreePath, connectionId })
       deferredRef.current = []
     }
-  }, [worktreePath, setDirCache, setSelectedPath])
+  }, [worktreePath, activeWorktreeId, setDirCache, setSelectedPath])
 
   // ── Flush deferred events when interaction ends ────────────────────
   useEffect(() => {

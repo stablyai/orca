@@ -55,7 +55,7 @@ export default function FileExplorer(): React.JSX.Element {
     refreshTree,
     refreshDir,
     resetAndLoad
-  } = useFileExplorerTree(worktreePath, expanded)
+  } = useFileExplorerTree(worktreePath, expanded, activeWorktreeId)
 
   const [selectedPath, setSelectedPath] = useState<string | null>(null)
   const [flashingPath, setFlashingPath] = useState<string | null>(null)

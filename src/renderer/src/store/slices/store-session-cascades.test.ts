@@ -97,6 +97,7 @@ import { createClaudeUsageSlice } from './claude-usage'
 import { createCodexUsageSlice } from './codex-usage'
 import { createBrowserSlice } from './browser'
 import { createRateLimitSlice } from './rate-limits'
+import { createSshSlice } from './ssh'
 
 function createTestStore() {
   return create<AppState>()((...a) => ({
@@ -112,7 +113,8 @@ function createTestStore() {
     ...createClaudeUsageSlice(...a),
     ...createCodexUsageSlice(...a),
     ...createBrowserSlice(...a),
-    ...createRateLimitSlice(...a)
+    ...createRateLimitSlice(...a),
+    ...createSshSlice(...a)
   }))
 }
 

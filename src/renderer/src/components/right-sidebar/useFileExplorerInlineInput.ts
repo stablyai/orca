@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { detectLanguage } from '@/lib/language-detect'
 import { dirname, joinPath } from '@/lib/path'
+import { getConnectionId } from '@/lib/connection-context'
 import type { InlineInput } from './FileExplorerRow'
 import type { TreeNode } from './file-explorer-types'
 
@@ -119,12 +120,14 @@ export function useFileExplorerInlineInput({
         return
       }
       const run = async (): Promise<void> => {
+        const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
         if (inlineInput.type === 'rename' && inlineInput.existingPath) {
           const parentDir = dirname(inlineInput.existingPath)
           try {
             await window.api.fs.rename({
               oldPath: inlineInput.existingPath,
-              newPath: joinPath(parentDir, name)
+              newPath: joinPath(parentDir, name),
+              connectionId
             })
           } catch (err) {
             toast.error(
@@ -136,8 +139,8 @@ export function useFileExplorerInlineInput({
           const fullPath = joinPath(inlineInput.parentPath, name)
           try {
             await (inlineInput.type === 'folder'
-              ? window.api.fs.createDir({ dirPath: fullPath })
-              : window.api.fs.createFile({ filePath: fullPath }))
+              ? window.api.fs.createDir({ dirPath: fullPath, connectionId })
+              : window.api.fs.createFile({ filePath: fullPath, connectionId }))
             await refreshDir(inlineInput.parentPath)
             if (inlineInput.type === 'file') {
               openFile({

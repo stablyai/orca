@@ -11,6 +11,7 @@ import type { ClaudeUsageSlice } from './slices/claude-usage'
 import type { CodexUsageSlice } from './slices/codex-usage'
 import type { BrowserSlice } from './slices/browser'
 import type { RateLimitSlice } from './slices/rate-limits'
+import type { SshSlice } from './slices/ssh'
 
 export type AppState = RepoSlice &
   WorktreeSlice &
@@ -24,4 +25,5 @@ export type AppState = RepoSlice &
   ClaudeUsageSlice &
   CodexUsageSlice &
   BrowserSlice &
-  RateLimitSlice
+  RateLimitSlice &
+  SshSlice

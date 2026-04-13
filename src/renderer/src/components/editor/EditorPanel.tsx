@@ -7,6 +7,7 @@ import React, { useCallback, useEffect, useRef, useState, Suspense } from 'react
 import * as monaco from 'monaco-editor'
 import { Columns2, FileText, Rows2 } from 'lucide-react'
 import { useAppStore } from '@/store'
+import { getConnectionId } from '@/lib/connection-context'
 import { detectLanguage } from '@/lib/language-detect'
 import { getEditorHeaderCopyState, getEditorHeaderOpenFileState } from './editor-header'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -134,7 +135,7 @@ export default function EditorPanel({
       if (fileContents[activeFile.id]) {
         return
       }
-      void loadFileContent(activeFile.filePath, activeFile.id)
+      void loadFileContent(activeFile.filePath, activeFile.id, activeFile.worktreeId)
     } else if (
       activeFile.mode === 'diff' &&
       activeFile.diffSource !== undefined &&
@@ -156,17 +157,21 @@ export default function EditorPanel({
     return () => window.clearTimeout(timeout)
   }, [copiedPathToast])
 
-  const loadFileContent = useCallback(async (filePath: string, id: string): Promise<void> => {
-    try {
-      const result = (await window.api.fs.readFile({ filePath })) as FileContent
-      setFileContents((prev) => ({ ...prev, [id]: result }))
-    } catch (err) {
-      setFileContents((prev) => ({
-        ...prev,
-        [id]: { content: `Error loading file: ${err}`, isBinary: false }
-      }))
-    }
-  }, [])
+  const loadFileContent = useCallback(
+    async (filePath: string, id: string, worktreeId?: string): Promise<void> => {
+      try {
+        const connectionId = getConnectionId(worktreeId ?? null) ?? undefined
+        const result = (await window.api.fs.readFile({ filePath, connectionId })) as FileContent
+        setFileContents((prev) => ({ ...prev, [id]: result }))
+      } catch (err) {
+        setFileContents((prev) => ({
+          ...prev,
+          [id]: { content: `Error loading file: ${err}`, isBinary: false }
+        }))
+      }
+    },
+    []
+  )
 
   const loadDiffContent = useCallback(async (file: OpenFile | null): Promise<void> => {
     if (!file) {
@@ -182,6 +187,7 @@ export default function EditorPanel({
         file.branchCompare?.baseOid && file.branchCompare.headOid && file.branchCompare.mergeBase
           ? file.branchCompare
           : null
+      const connectionId = getConnectionId(file.worktreeId) ?? undefined
       const result =
         file.diffSource === 'branch' && branchCompare
           ? ((await window.api.git.branchDiff({
@@ -193,12 +199,14 @@ export default function EditorPanel({
                 mergeBase: branchCompare.mergeBase!
               },
               filePath: file.relativePath,
-              oldPath: file.branchOldPath
+              oldPath: file.branchOldPath,
+              connectionId
             })) as DiffContent)
           : ((await window.api.git.diff({
               worktreePath,
               filePath: file.relativePath,
-              staged: file.diffSource === 'staged'
+              staged: file.diffSource === 'staged',
+              connectionId
             })) as DiffContent)
       setDiffContents((prev) => ({ ...prev, [file.id]: result }))
     } catch (err) {
@@ -294,7 +302,7 @@ export default function EditorPanel({
 
       for (const file of matchingFiles) {
         if (file.mode === 'edit') {
-          void loadFileContent(file.filePath, file.id)
+          void loadFileContent(file.filePath, file.id, file.worktreeId)
         } else if (
           file.mode === 'diff' &&
           file.diffSource !== 'combined-uncommitted' &&

@@ -7,6 +7,7 @@ import {
   toWorktreeRelativePath
 } from '@/lib/terminal-links'
 import { useAppStore } from '@/store'
+import { getConnectionId } from '@/lib/connection-context'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 
 export type LinkHandlerDeps = {
@@ -46,8 +47,12 @@ export function openDetectedFilePath(
   void (async () => {
     let statResult
     try {
-      await window.api.fs.authorizeExternalPath({ targetPath: filePath })
-      statResult = await window.api.fs.stat({ filePath })
+      const connectionId = getConnectionId(deps.worktreeId ?? null) ?? undefined
+      // Why: remote paths don't need local auth — the relay is the security boundary.
+      if (!connectionId) {
+        await window.api.fs.authorizeExternalPath({ targetPath: filePath })
+      }
+      statResult = await window.api.fs.stat({ filePath, connectionId })
     } catch {
       return
     }

@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { detectLanguage } from '@/lib/language-detect'
 import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
 import { useAppStore } from '@/store'
+import { getConnectionId } from '@/lib/connection-context'
 
 export function useGlobalFileDrop(): void {
   useEffect(() => {
@@ -21,8 +22,12 @@ export function useGlobalFileDrop(): void {
 
       void (async () => {
         try {
-          await window.api.fs.authorizeExternalPath({ targetPath: filePath })
-          const stat = await window.api.fs.stat({ filePath })
+          const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+          // Why: remote paths don't need local auth — the relay is the security boundary.
+          if (!connectionId) {
+            await window.api.fs.authorizeExternalPath({ targetPath: filePath })
+          }
+          const stat = await window.api.fs.stat({ filePath, connectionId })
           if (stat.isDirectory) {
             return
           }

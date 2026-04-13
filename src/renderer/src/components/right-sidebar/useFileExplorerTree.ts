@@ -1,6 +1,7 @@
 import type React from 'react'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { joinPath, normalizeRelativePath } from '@/lib/path'
+import { getConnectionId } from '@/lib/connection-context'
 import type { DirCache, TreeNode } from './file-explorer-types'
 import { splitPathSegments } from './path-tree'
 import { shouldIncludeFileExplorerEntry } from './file-explorer-entries'
@@ -20,7 +21,8 @@ type UseFileExplorerTreeResult = {
 
 export function useFileExplorerTree(
   worktreePath: string | null,
-  expanded: Set<string>
+  expanded: Set<string>,
+  activeWorktreeId?: string | null
 ): UseFileExplorerTreeResult {
   const [dirCache, setDirCache] = useState<Record<string, DirCache>>({})
   const [rootError, setRootError] = useState<string | null>(null)
@@ -45,7 +47,8 @@ export function useFileExplorerTree(
         }
       }))
       try {
-        const entries = await window.api.fs.readDir({ dirPath })
+        const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
+        const entries = await window.api.fs.readDir({ dirPath, connectionId })
         if (depth === -1) {
           setRootError(null)
         }
@@ -72,7 +75,7 @@ export function useFileExplorerTree(
         setDirCache((prev) => ({ ...prev, [dirPath]: { children: [], loading: false } }))
       }
     },
-    [worktreePath]
+    [activeWorktreeId, worktreePath]
   )
 
   const refreshTree = useCallback(async () => {

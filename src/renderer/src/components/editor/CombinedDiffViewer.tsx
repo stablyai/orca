@@ -8,6 +8,7 @@ import type { editor as monacoEditor } from 'monaco-editor'
 import { useAppStore } from '@/store'
 import { joinPath } from '@/lib/path'
 import { setWithLRU } from '@/lib/scroll-cache'
+import { getConnectionId } from '@/lib/connection-context'
 import '@/lib/monaco-setup'
 import { Button } from '@/components/ui/button'
 import type { OpenFile } from '@/store/slices/editor'
@@ -191,6 +192,7 @@ export default function CombinedDiffViewer({ file }: { file: OpenFile }): React.
 
       let result: GitDiffResult
       try {
+        const connectionId = getConnectionId(file.worktreeId) ?? undefined
         result =
           isBranchMode && branchCompare
             ? ((await window.api.git.branchDiff({
@@ -202,12 +204,14 @@ export default function CombinedDiffViewer({ file }: { file: OpenFile }): React.
                   mergeBase: branchCompare.mergeBase!
                 },
                 filePath: entry.path,
-                oldPath: entry.oldPath
+                oldPath: entry.oldPath,
+                connectionId
               })) as GitDiffResult)
             : ((await window.api.git.diff({
                 worktreePath: file.filePath,
                 filePath: entry.path,
-                staged: 'area' in entry && entry.area === 'staged'
+                staged: 'area' in entry && entry.area === 'staged',
+                connectionId
               })) as GitDiffResult)
       } catch {
         result = {
@@ -268,7 +272,8 @@ export default function CombinedDiffViewer({ file }: { file: OpenFile }): React.
       const content = modifiedEditor.getValue()
       const absolutePath = joinPath(file.filePath, section.path)
       try {
-        await window.api.fs.writeFile({ filePath: absolutePath, content })
+        const connectionId = getConnectionId(file.worktreeId) ?? undefined
+        await window.api.fs.writeFile({ filePath: absolutePath, content, connectionId })
         setSections((prev) =>
           prev.map((s, i) => (i === index ? { ...s, modifiedContent: content, dirty: false } : s))
         )
@@ -276,7 +281,7 @@ export default function CombinedDiffViewer({ file }: { file: OpenFile }): React.
         console.error('Save failed:', err)
       }
     },
-    [file.filePath, sections]
+    [file.filePath, file.worktreeId, sections]
   )
 
   const handleSectionSaveRef = useRef(handleSectionSave)

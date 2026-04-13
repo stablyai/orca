@@ -118,12 +118,12 @@ describe('registerPtyHandlers', () => {
     mainWindow.webContents.on.mockReset()
     mainWindow.webContents.send.mockReset()
 
-    handleMock.mockImplementation((channel, handler) => {
+    handleMock.mockImplementation((channel: string, handler: (...a: unknown[]) => unknown) => {
       handlers.set(channel, handler)
     })
     getPathMock.mockReturnValue('/tmp/orca-user-data')
     existsSyncMock.mockReturnValue(true)
-    statSyncMock.mockReturnValue({ isDirectory: () => true })
+    statSyncMock.mockReturnValue({ isDirectory: () => true, mode: 0o755 })
     openCodeBuildPtyEnvMock.mockReturnValue({
       ORCA_OPENCODE_HOOK_PORT: '4567',
       ORCA_OPENCODE_HOOK_TOKEN: 'opencode-token',
@@ -140,7 +140,9 @@ describe('registerPtyHandlers', () => {
       onExit: vi.fn(() => makeDisposable()),
       write: vi.fn(),
       resize: vi.fn(),
-      kill: vi.fn()
+      kill: vi.fn(),
+      process: 'zsh',
+      pid: 12345
     })
   })
 
@@ -172,11 +174,11 @@ describe('registerPtyHandlers', () => {
   }
 
   /** Helper: trigger pty:spawn and return the env passed to node-pty. */
-  function spawnAndGetEnv(
+  async function spawnAndGetEnv(
     argsEnv?: Record<string, string>,
     processEnvOverrides?: Record<string, string | undefined>,
     getSelectedCodexHomePath?: () => string | null
-  ): Record<string, string> {
+  ): Promise<Record<string, string>> {
     const savedEnv: Record<string, string | undefined> = {}
     if (processEnvOverrides) {
       for (const [k, v] of Object.entries(processEnvOverrides)) {
@@ -194,7 +196,7 @@ describe('registerPtyHandlers', () => {
       // accumulate stale state across calls within one test.
       handlers.clear()
       registerPtyHandlers(mainWindow as never, undefined, getSelectedCodexHomePath)
-      handlers.get('pty:spawn')!(null, {
+      await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
         ...(argsEnv ? { env: argsEnv } : {})
@@ -232,35 +234,36 @@ describe('registerPtyHandlers', () => {
   }
 
   describe('spawn environment', () => {
-    it('defaults LANG to en_US.UTF-8 when not inherited from process.env', () => {
-      const env = spawnAndGetEnv(undefined, { LANG: undefined })
+    it('defaults LANG to en_US.UTF-8 when not inherited from process.env', async () => {
+      const env = await spawnAndGetEnv(undefined, { LANG: undefined })
       expect(env.LANG).toBe('en_US.UTF-8')
     })
 
-    it('inherits LANG from process.env when already set', () => {
-      const env = spawnAndGetEnv(undefined, { LANG: 'ja_JP.UTF-8' })
+    it('inherits LANG from process.env when already set', async () => {
+      const env = await spawnAndGetEnv(undefined, { LANG: 'ja_JP.UTF-8' })
       expect(env.LANG).toBe('ja_JP.UTF-8')
     })
 
-    it('lets caller-provided env override LANG', () => {
-      const env = spawnAndGetEnv({ LANG: 'fr_FR.UTF-8' })
+    it('lets caller-provided env override LANG', async () => {
+      const env = await spawnAndGetEnv({ LANG: 'fr_FR.UTF-8' })
       expect(env.LANG).toBe('fr_FR.UTF-8')
     })
 
-    it('always sets TERM and COLORTERM regardless of env', () => {
-      const env = spawnAndGetEnv()
+    it('always sets TERM and COLORTERM regardless of env', async () => {
+      const env = await spawnAndGetEnv()
       expect(env.TERM).toBe('xterm-256color')
       expect(env.COLORTERM).toBe('truecolor')
       expect(env.TERM_PROGRAM).toBe('Orca')
     })
 
-    it('injects the selected Codex home into Orca terminal PTYs', () => {
-      const env = spawnAndGetEnv(undefined, undefined, () => '/tmp/orca-codex-home')
+    it('injects the selected Codex home into Orca terminal PTYs', async () => {
+      const env = await spawnAndGetEnv(undefined, undefined, () => '/tmp/orca-codex-home')
       expect(env.CODEX_HOME).toBe('/tmp/orca-codex-home')
     })
 
-    it('injects the OpenCode hook env into Orca terminal PTYs', () => {
-      const env = spawnAndGetEnv()
+    it('injects the OpenCode hook env into Orca terminal PTYs', async () => {
+      // Why: clear any ambient OPENCODE_CONFIG_DIR so the mock's value is used
+      const env = await spawnAndGetEnv(undefined, { OPENCODE_CONFIG_DIR: undefined })
       expect(openCodeBuildPtyEnvMock).toHaveBeenCalledTimes(1)
       expect(openCodeBuildPtyEnvMock.mock.calls[0]?.[0]).toEqual(expect.any(String))
       expect(env.ORCA_OPENCODE_HOOK_PORT).toBe('4567')
@@ -269,13 +272,17 @@ describe('registerPtyHandlers', () => {
       expect(env.OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-config')
     })
 
-    it('injects the Pi agent overlay env into Orca terminal PTYs', () => {
-      const env = spawnAndGetEnv(undefined, { PI_CODING_AGENT_DIR: '/tmp/user-pi-agent' })
+    it('injects the Pi agent overlay env into Orca terminal PTYs', async () => {
+      const env = await spawnAndGetEnv(undefined, { PI_CODING_AGENT_DIR: '/tmp/user-pi-agent' })
       expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), '/tmp/user-pi-agent')
       expect(env.PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
     })
-    it('leaves ambient CODEX_HOME untouched when system default is selected', () => {
-      const env = spawnAndGetEnv(undefined, { CODEX_HOME: '/tmp/system-codex-home' }, () => null)
+    it('leaves ambient CODEX_HOME untouched when system default is selected', async () => {
+      const env = await spawnAndGetEnv(
+        undefined,
+        { CODEX_HOME: '/tmp/system-codex-home' },
+        () => null
+      )
       expect(env.CODEX_HOME).toBe('/tmp/system-codex-home')
     })
   })
@@ -391,7 +398,7 @@ describe('registerPtyHandlers', () => {
     })
   })
 
-  it('rejects missing WSL worktree cwd instead of validating only the fallback Windows cwd', () => {
+  it('rejects missing WSL worktree cwd instead of validating only the fallback Windows cwd', async () => {
     const originalPlatform = process.platform
     const originalUserProfile = process.env.USERPROFILE
 
@@ -411,13 +418,15 @@ describe('registerPtyHandlers', () => {
     try {
       registerPtyHandlers(mainWindow as never)
 
-      expect(() =>
+      await expect(
         handlers.get('pty:spawn')!(null, {
           cols: 80,
           rows: 24,
           cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\missing'
         })
-      ).toThrow('Working directory "\\\\wsl.localhost\\Ubuntu\\home\\jin\\missing" does not exist.')
+      ).rejects.toThrow(
+        'Working directory "\\\\wsl.localhost\\Ubuntu\\home\\jin\\missing" does not exist.'
+      )
       expect(spawnMock).not.toHaveBeenCalled()
     } finally {
       Object.defineProperty(process, 'platform', {
@@ -555,7 +564,7 @@ describe('registerPtyHandlers', () => {
       process.env.SHELL = '/opt/homebrew/bin/bash'
 
       registerPtyHandlers(mainWindow as never)
-      const result = handlers.get('pty:spawn')!(null, {
+      const result = await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
         cwd: '/tmp'
@@ -581,7 +590,7 @@ describe('registerPtyHandlers', () => {
     }
   })
 
-  it('falls back when SHELL points to a non-executable binary', () => {
+  it('falls back when SHELL points to a non-executable binary', async () => {
     const originalShell = process.env.SHELL
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
@@ -595,7 +604,7 @@ describe('registerPtyHandlers', () => {
       process.env.SHELL = '/opt/homebrew/bin/bash'
 
       registerPtyHandlers(mainWindow as never)
-      handlers.get('pty:spawn')!(null, {
+      await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
         cwd: '/tmp'
@@ -620,7 +629,7 @@ describe('registerPtyHandlers', () => {
     }
   })
 
-  it('prefers args.env.SHELL and normalizes the child env after fallback', () => {
+  it('prefers args.env.SHELL and normalizes the child env after fallback', async () => {
     const originalShell = process.env.SHELL
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
@@ -632,7 +641,7 @@ describe('registerPtyHandlers', () => {
       process.env.SHELL = '/bin/bash'
 
       registerPtyHandlers(mainWindow as never)
-      handlers.get('pty:spawn')!(null, {
+      await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
         cwd: '/tmp',
@@ -661,23 +670,32 @@ describe('registerPtyHandlers', () => {
     }
   })
 
-  it('cleans up provider-specific PTY overlays when a PTY is killed', () => {
+  it('cleans up provider-specific PTY overlays when a PTY is killed', async () => {
+    let exitCb: ((info: { exitCode: number }) => void) | undefined
     const proc = {
       onData: vi.fn(() => makeDisposable()),
-      onExit: vi.fn(() => makeDisposable()),
+      onExit: vi.fn((cb: (info: { exitCode: number }) => void) => {
+        exitCb = cb
+        return makeDisposable()
+      }),
       write: vi.fn(),
       resize: vi.fn(),
-      kill: vi.fn()
+      kill: vi.fn(() => {
+        // Simulate node-pty behavior: kill triggers onExit callback
+        exitCb?.({ exitCode: -1 })
+      }),
+      process: 'zsh',
+      pid: 12345
     }
     spawnMock.mockReturnValue(proc)
 
     registerPtyHandlers(mainWindow as never)
-    const spawnResult = handlers.get('pty:spawn')!(null, {
+    const spawnResult = (await handlers.get('pty:spawn')!(null, {
       cols: 80,
       rows: 24
-    }) as { id: string }
+    })) as { id: string }
 
-    handlers.get('pty:kill')!(null, { id: spawnResult.id })
+    await handlers.get('pty:kill')!(null, { id: spawnResult.id })
 
     expect(openCodeClearPtyMock).toHaveBeenCalledWith(spawnResult.id)
     expect(piClearPtyMock).toHaveBeenCalledWith(spawnResult.id)

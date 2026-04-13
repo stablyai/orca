@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo } from 'react'
 import { useAppStore } from '@/store'
 import type { GitConflictOperation, GitStatusResult } from '../../../../shared/types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
+import { getConnectionId } from '@/lib/connection-context'
 
 const POLL_INTERVAL_MS = 3000
 
@@ -70,7 +71,11 @@ export function useGitStatusPolling(): void {
       return
     }
     try {
-      const status = (await window.api.git.status({ worktreePath })) as GitStatusResult
+      const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+      const status = (await window.api.git.status({
+        worktreePath,
+        connectionId
+      })) as GitStatusResult
       setGitStatus(activeWorktreeId, status)
     } catch {
       // ignore
@@ -109,7 +114,8 @@ export function useGitStatusPolling(): void {
       for (const { id, path } of staleConflictWorktrees) {
         try {
           const op = (await window.api.git.conflictOperation({
-            worktreePath: path
+            worktreePath: path,
+            connectionId: getConnectionId(id) ?? undefined
           })) as GitConflictOperation
           setConflictOperation(id, op)
         } catch {

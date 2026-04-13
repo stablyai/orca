@@ -6,6 +6,7 @@ import {
   GitBranch,
   Keyboard,
   Palette,
+  Server,
   SlidersHorizontal,
   SquareTerminal
 } from 'lucide-react'
@@ -21,6 +22,7 @@ import { TerminalPane, TERMINAL_PANE_SEARCH_ENTRIES } from './TerminalPane'
 import { RepositoryPane, getRepositoryPaneSearchEntries } from './RepositoryPane'
 import { GitPane, GIT_PANE_SEARCH_ENTRIES } from './GitPane'
 import { NotificationsPane, NOTIFICATIONS_PANE_SEARCH_ENTRIES } from './NotificationsPane'
+import { SshPane, SSH_PANE_SEARCH_ENTRIES } from './SshPane'
 import { StatsPane, STATS_PANE_SEARCH_ENTRIES } from '../stats/StatsPane'
 import { SettingsSidebar } from './SettingsSidebar'
 import { SettingsSection } from './SettingsSection'
@@ -34,6 +36,7 @@ type SettingsNavTarget =
   | 'notifications'
   | 'shortcuts'
   | 'stats'
+  | 'ssh'
   | 'repo'
 
 type SettingsNavSection = {
@@ -42,6 +45,7 @@ type SettingsNavSection = {
   description: string
   icon: typeof SlidersHorizontal
   searchEntries: SettingsSearchEntry[]
+  badge?: string
 }
 
 function getSettingsSectionId(pane: SettingsNavTarget, repoId: string | null): string {
@@ -259,6 +263,14 @@ function Settings(): React.JSX.Element {
         icon: BarChart3,
         searchEntries: STATS_PANE_SEARCH_ENTRIES
       },
+      {
+        id: 'ssh',
+        title: 'SSH',
+        description: 'Remote SSH connections.',
+        icon: Server,
+        searchEntries: SSH_PANE_SEARCH_ENTRIES,
+        badge: 'Beta'
+      },
       ...repos.map((repo) => ({
         id: `repo-${repo.id}`,
         title: repo.displayName,
@@ -470,6 +482,16 @@ function Settings(): React.JSX.Element {
                   searchEntries={STATS_PANE_SEARCH_ENTRIES}
                 >
                   <StatsPane />
+                </SettingsSection>
+
+                <SettingsSection
+                  id="ssh"
+                  title="SSH"
+                  badge="Beta"
+                  description="Manage remote SSH connections. Connect to remote servers to browse files, run terminals, and use git."
+                  searchEntries={SSH_PANE_SEARCH_ENTRIES}
+                >
+                  <SshPane />
                 </SettingsSection>
 
                 {repos.map((repo) => {

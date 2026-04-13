@@ -9,6 +9,7 @@ import { ORCA_BROWSER_PARTITION } from '../../shared/constants'
 import { registerRepoHandlers } from '../ipc/repos'
 import { registerWorktreeHandlers } from '../ipc/worktrees'
 import { registerPtyHandlers } from '../ipc/pty'
+import { registerSshHandlers } from '../ipc/ssh'
 import { browserManager } from '../browser/browser-manager'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import {
@@ -29,6 +30,7 @@ export function attachMainWindowServices(
   registerRepoHandlers(mainWindow, store)
   registerWorktreeHandlers(mainWindow, store)
   registerPtyHandlers(mainWindow, runtime, getSelectedCodexHomePath)
+  registerSshHandlers(store, () => mainWindow)
   registerFileDropRelay(mainWindow)
   setupAutoUpdater(mainWindow, {
     getLastUpdateCheckAt: () => store.getUI().lastUpdateCheckAt,

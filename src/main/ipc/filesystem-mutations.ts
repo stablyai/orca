@@ -3,6 +3,7 @@ import { lstat, mkdir, rename, writeFile } from 'fs/promises'
 import { basename, dirname } from 'path'
 import type { Store } from '../persistence'
 import { resolveAuthorizedPath, isENOENT } from './filesystem-auth'
+import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 
 /**
  * Re-throw filesystem errors with user-friendly messages.
@@ -49,29 +50,59 @@ async function assertNotExists(targetPath: string): Promise<void> {
  * Deletion is handled separately via `fs:deletePath` (shell.trashItem).
  */
 export function registerFilesystemMutationHandlers(store: Store): void {
-  ipcMain.handle('fs:createFile', async (_event, args: { filePath: string }): Promise<void> => {
-    const filePath = await resolveAuthorizedPath(args.filePath, store)
-    await mkdir(dirname(filePath), { recursive: true })
-    try {
-      // Use the 'wx' flag for atomic create-if-not-exists, avoiding TOCTOU races
-      await writeFile(filePath, '', { encoding: 'utf-8', flag: 'wx' })
-    } catch (error) {
-      rethrowWithUserMessage(error, filePath)
+  ipcMain.handle(
+    'fs:createFile',
+    async (_event, args: { filePath: string; connectionId?: string }): Promise<void> => {
+      if (args.connectionId) {
+        const provider = getSshFilesystemProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(`No filesystem provider for connection "${args.connectionId}"`)
+        }
+        return provider.createFile(args.filePath)
+      }
+      const filePath = await resolveAuthorizedPath(args.filePath, store)
+      await mkdir(dirname(filePath), { recursive: true })
+      try {
+        // Use the 'wx' flag for atomic create-if-not-exists, avoiding TOCTOU races
+        await writeFile(filePath, '', { encoding: 'utf-8', flag: 'wx' })
+      } catch (error) {
+        rethrowWithUserMessage(error, filePath)
+      }
     }
-  })
+  )
 
-  ipcMain.handle('fs:createDir', async (_event, args: { dirPath: string }): Promise<void> => {
-    const dirPath = await resolveAuthorizedPath(args.dirPath, store)
-    await assertNotExists(dirPath)
-    await mkdir(dirPath, { recursive: true })
-  })
+  ipcMain.handle(
+    'fs:createDir',
+    async (_event, args: { dirPath: string; connectionId?: string }): Promise<void> => {
+      if (args.connectionId) {
+        const provider = getSshFilesystemProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(`No filesystem provider for connection "${args.connectionId}"`)
+        }
+        return provider.createDir(args.dirPath)
+      }
+      const dirPath = await resolveAuthorizedPath(args.dirPath, store)
+      await assertNotExists(dirPath)
+      await mkdir(dirPath, { recursive: true })
+    }
+  )
 
   // Note: fs.rename throws EXDEV if old and new paths are on different
   // filesystems/volumes. This is unlikely since both paths are under the same
   // workspace root, but a cross-drive rename would surface as an IPC error.
   ipcMain.handle(
     'fs:rename',
-    async (_event, args: { oldPath: string; newPath: string }): Promise<void> => {
+    async (
+      _event,
+      args: { oldPath: string; newPath: string; connectionId?: string }
+    ): Promise<void> => {
+      if (args.connectionId) {
+        const provider = getSshFilesystemProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(`No filesystem provider for connection "${args.connectionId}"`)
+        }
+        return provider.rename(args.oldPath, args.newPath)
+      }
       const oldPath = await resolveAuthorizedPath(args.oldPath, store)
       const newPath = await resolveAuthorizedPath(args.newPath, store)
       await assertNotExists(newPath)

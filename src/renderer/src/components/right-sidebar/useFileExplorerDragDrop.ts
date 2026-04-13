@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { basename, dirname, joinPath } from '@/lib/path'
 import { detectLanguage } from '@/lib/language-detect'
+import { getConnectionId } from '@/lib/connection-context'
 import { requestEditorSaveQuiesce } from '@/components/editor/editor-autosave'
 
 function extractIpcErrorMessage(err: unknown, fallback: string): string {
@@ -150,7 +151,8 @@ export function useFileExplorerDragDrop({
         await Promise.all(filesToMove.map((file) => requestEditorSaveQuiesce({ fileId: file.id })))
 
         try {
-          await window.api.fs.rename({ oldPath: sourcePath, newPath })
+          const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
+          await window.api.fs.rename({ oldPath: sourcePath, newPath, connectionId })
         } catch (err) {
           toast.error(extractIpcErrorMessage(err, `Failed to move '${fileName}'.`))
           return

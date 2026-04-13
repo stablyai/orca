@@ -1,10 +1,6 @@
-/* eslint-disable max-lines -- Why: AddRepoDialog owns a multi-step flow (add/clone/setup) with
-   clone progress, abort handling, and worktree setup — splitting further would scatter
-   tightly coupled step transitions across files. */
-
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { FolderOpen, GitBranchPlus, Settings, ArrowLeft, Globe, Folder } from 'lucide-react'
+import { FolderOpen, GitBranchPlus, Settings, ArrowLeft, Globe, Monitor } from 'lucide-react'
 import { useAppStore } from '@/store'
 import {
   Dialog,
@@ -14,11 +10,12 @@ import {
   DialogDescription
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { LinkedWorktreeItem } from './LinkedWorktreeItem'
+import { RemoteStep, CloneStep } from './AddRepoSteps'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { Repo, Worktree } from '../../../../shared/types'
+import type { SshTarget, SshConnectionState } from '../../../../shared/ssh-types'
 
 const AddRepoDialog = React.memo(function AddRepoDialog() {
   const activeModal = useAppStore((s) => s.activeModal)
@@ -31,7 +28,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   const setActiveView = useAppStore((s) => s.setActiveView)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
 
-  const [step, setStep] = useState<'add' | 'clone' | 'setup'>('add')
+  const [step, setStep] = useState<'add' | 'clone' | 'remote' | 'setup'>('add')
   const [addedRepo, setAddedRepo] = useState<Repo | null>(null)
   const [isAdding, setIsAdding] = useState(false)
   const [cloneUrl, setCloneUrl] = useState('')
@@ -41,12 +38,15 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   const [cloneProgress, setCloneProgress] = useState<{ phase: string; percent: number } | null>(
     null
   )
-  // Why: track a monotonically increasing ID so that when the user closes the
-  // dialog or navigates away during a clone, the stale completion callback can
-  // detect it was superseded and bail out instead of corrupting dialog state.
-  const cloneGenRef = useRef(0)
 
-  // Subscribe to clone progress events while cloning is active
+  // Remote repo state
+  const [sshTargets, setSshTargets] = useState<(SshTarget & { state?: SshConnectionState })[]>([])
+  const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null)
+  const [remotePath, setRemotePath] = useState('~/')
+  const [remoteError, setRemoteError] = useState<string | null>(null)
+  const [isAddingRemote, setIsAddingRemote] = useState(false)
+  // Why: monotonic ID so stale clone callbacks can detect they were superseded.
+  const cloneGenRef = useRef(0)
   useEffect(() => {
     if (!isCloning) {
       return
@@ -61,8 +61,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     return worktreesByRepo[repoId] ?? []
   }, [worktreesByRepo, repoId])
 
-  // Why: sort by recent activity (lastActivityAt) with alphabetical fallback for
-  // worktrees not yet opened in Orca. Matches buildWorktreeComparator behavior.
+  // Why: sort by recent activity with alphabetical fallback.
   const sortedWorktrees = useMemo(() => {
     return [...worktrees].sort((a, b) => {
       if (a.lastActivityAt !== b.lastActivityAt) {
@@ -87,19 +86,20 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     setIsCloning(false)
     setCloneError(null)
     setCloneProgress(null)
+    setSelectedTargetId(null)
+    setRemotePath('~/')
+    setRemoteError(null)
+    setIsAddingRemote(false)
   }, [])
 
-  // Why: reset all local state when the dialog closes for any reason —
-  // whether via onOpenChange, closeModal() from code, or activeModal
-  // being replaced by another modal. Without this, reopening the dialog
-  // can show a stale step/repo from the previous session.
+  // Why: reset state on close so reopening doesn't show stale step/repo.
   useEffect(() => {
     if (!isOpen) {
       resetState()
     }
   }, [isOpen, resetState])
 
-  const isInputStep = step === 'add' || step === 'clone'
+  const isInputStep = step === 'add' || step === 'clone' || step === 'remote'
 
   const handleBrowse = useCallback(async () => {
     setIsAdding(true)
@@ -110,12 +110,9 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
         await fetchWorktrees(repo.id)
         setStep('setup')
       } else if (repo) {
-        // Why: non-git folders have no worktrees, so step 2 is irrelevant. Close
-        // the modal after the folder is added.
+        // Why: non-git folders have no worktrees — close immediately.
         closeModal()
       }
-      // null = user cancelled the picker, or the non-git-folder confirmation
-      // dialog took over (which replaces activeModal, closing this dialog).
     } finally {
       setIsAdding(false)
     }
@@ -149,11 +146,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
         return
       }
       toast.success('Repository cloned', { description: repo.displayName })
-      // Why: eagerly upsert the cloned repo in the store so that step 2's
-      // "Create worktree" button finds it in eligibleRepos immediately,
-      // without waiting for the async repos:changed IPC event. This also
-      // handles the case where a folder repo was upgraded to git by the
-      // clone handler — the existing entry needs its kind updated.
+      // Why: eagerly upsert so step 2 finds the repo before the IPC event.
       const state = useAppStore.getState()
       const existingIdx = state.repos.findIndex((r) => r.id === repo.id)
       if (existingIdx === -1) {
@@ -201,34 +194,79 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     setActiveView('settings')
   }, [closeModal, openSettingsTarget, setActiveView, repoId])
 
-  const handleBack = useCallback(() => {
-    cloneGenRef.current++
-    void window.api.repos.cloneAbort()
-    setStep('add')
-    setAddedRepo(null)
-    setCloneUrl('')
-    setCloneDestination('')
-    setIsCloning(false)
-    setCloneError(null)
-    setCloneProgress(null)
+  // Why: handleBack reuses resetState which already aborts clones and resets all fields.
+  const handleBack = resetState
+
+  const handleOpenRemoteStep = useCallback(async () => {
+    setStep('remote')
+    try {
+      const targets = (await window.api.ssh.listTargets()) as SshTarget[]
+      const withState = await Promise.all(
+        targets.map(async (t) => {
+          const state = (await window.api.ssh.getState({
+            targetId: t.id
+          })) as SshConnectionState | null
+          return { ...t, state: state ?? undefined }
+        })
+      )
+      setSshTargets(withState)
+      const connected = withState.find((t) => t.state?.status === 'connected')
+      if (connected) {
+        setSelectedTargetId(connected.id)
+      }
+    } catch {
+      setSshTargets([])
+    }
   }, [])
 
-  const handleOpenChange = useCallback(
-    (open: boolean) => {
-      if (!open) {
-        closeModal()
-        resetState()
+  const handleAddRemoteRepo = useCallback(async () => {
+    if (!selectedTargetId || !remotePath.trim()) {
+      return
+    }
+
+    setIsAddingRemote(true)
+    setRemoteError(null)
+    try {
+      const repo = (await window.api.repos.addRemote({
+        connectionId: selectedTargetId,
+        remotePath: remotePath.trim()
+      })) as Repo
+
+      const state = useAppStore.getState()
+      const existingIdx = state.repos.findIndex((r) => r.id === repo.id)
+      if (existingIdx === -1) {
+        useAppStore.setState({ repos: [...state.repos, repo] })
+      } else {
+        const updated = [...state.repos]
+        updated[existingIdx] = repo
+        useAppStore.setState({ repos: updated })
       }
-    },
-    [closeModal, resetState]
-  )
+
+      toast.success('Remote repository added', { description: repo.displayName })
+      setAddedRepo(repo)
+      await fetchWorktrees(repo.id)
+      setStep('setup')
+    } catch (err) {
+      setRemoteError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setIsAddingRemote(false)
+    }
+  }, [selectedTargetId, remotePath, fetchWorktrees])
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) {
+          closeModal()
+          resetState()
+        }
+      }}
+    >
       <DialogContent className="sm:max-w-lg">
         {/* Step indicator row — back button (step 2 only), dots, X is rendered by DialogContent */}
         <div className="flex items-center justify-center -mt-1">
-          {step === 'clone' && (
+          {(step === 'clone' || step === 'remote') && (
             <button
               className="absolute left-6 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
               onClick={handleBack}
@@ -297,85 +335,56 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
                 </div>
               </Button>
             </div>
+
+            <Button
+              onClick={handleOpenRemoteStep}
+              variant="outline"
+              className="w-full h-auto py-3 px-4 flex items-center gap-3 text-left"
+            >
+              <Monitor className="size-5 text-muted-foreground shrink-0" />
+              <div>
+                <p className="text-sm font-medium">Open remote repo (SSH)</p>
+                <p className="text-xs text-muted-foreground font-normal mt-0.5">
+                  Browse a connected SSH target
+                </p>
+              </div>
+            </Button>
           </>
+        ) : step === 'remote' ? (
+          <RemoteStep
+            sshTargets={sshTargets}
+            selectedTargetId={selectedTargetId}
+            remotePath={remotePath}
+            remoteError={remoteError}
+            isAddingRemote={isAddingRemote}
+            onSelectTarget={(id) => {
+              setSelectedTargetId(id)
+              setRemoteError(null)
+            }}
+            onRemotePathChange={(value) => {
+              setRemotePath(value)
+              setRemoteError(null)
+            }}
+            onAdd={handleAddRemoteRepo}
+          />
         ) : step === 'clone' ? (
-          <>
-            <DialogHeader>
-              <DialogTitle>Clone from URL</DialogTitle>
-              <DialogDescription>Enter the Git URL and choose where to clone it.</DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-3 pt-1">
-              <div className="space-y-1">
-                <label className="text-[11px] font-medium text-muted-foreground">Git URL</label>
-                <Input
-                  value={cloneUrl}
-                  onChange={(e) => {
-                    setCloneUrl(e.target.value)
-                    setCloneError(null)
-                  }}
-                  placeholder="https://github.com/user/repo.git"
-                  className="h-8 text-xs"
-                  disabled={isCloning}
-                  autoFocus
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[11px] font-medium text-muted-foreground">
-                  Clone location
-                </label>
-                <div className="flex gap-2">
-                  <Input
-                    value={cloneDestination}
-                    onChange={(e) => {
-                      setCloneDestination(e.target.value)
-                      setCloneError(null)
-                    }}
-                    placeholder="/path/to/destination"
-                    className="h-8 text-xs flex-1"
-                    disabled={isCloning}
-                  />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-8 px-2 shrink-0"
-                    onClick={handlePickDestination}
-                    disabled={isCloning}
-                  >
-                    <Folder className="size-3.5" />
-                  </Button>
-                </div>
-              </div>
-
-              {cloneError && <p className="text-[11px] text-destructive">{cloneError}</p>}
-
-              <Button
-                onClick={handleClone}
-                disabled={!cloneUrl.trim() || !cloneDestination.trim() || isCloning}
-                className="w-full"
-              >
-                {isCloning ? 'Cloning...' : 'Clone'}
-              </Button>
-
-              {/* Why: progress bar lives below the button so it doesn't push the
-                 button down when it appears mid-clone. */}
-              {isCloning && cloneProgress && (
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                    <span>{cloneProgress.phase}</span>
-                    <span>{cloneProgress.percent}%</span>
-                  </div>
-                  <div className="h-1.5 w-full rounded-full bg-secondary overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-foreground transition-[width] duration-300 ease-out"
-                      style={{ width: `${cloneProgress.percent}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-          </>
+          <CloneStep
+            cloneUrl={cloneUrl}
+            cloneDestination={cloneDestination}
+            cloneError={cloneError}
+            cloneProgress={cloneProgress}
+            isCloning={isCloning}
+            onUrlChange={(value) => {
+              setCloneUrl(value)
+              setCloneError(null)
+            }}
+            onDestChange={(value) => {
+              setCloneDestination(value)
+              setCloneError(null)
+            }}
+            onPickDestination={handlePickDestination}
+            onClone={handleClone}
+          />
         ) : (
           <>
             <DialogHeader>
@@ -424,7 +433,10 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
                   variant="ghost"
                   size="sm"
                   className="text-xs"
-                  onClick={() => handleOpenChange(false)}
+                  onClick={() => {
+                    closeModal()
+                    resetState()
+                  }}
                 >
                   Skip
                 </Button>

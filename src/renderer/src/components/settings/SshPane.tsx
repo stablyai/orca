@@ -1,0 +1,270 @@
+import { useCallback, useEffect, useState } from 'react'
+import { toast } from 'sonner'
+import { Plus, Upload } from 'lucide-react'
+import type { SshTarget, SshConnectionState } from '../../../../shared/ssh-types'
+import { Button } from '../ui/button'
+import type { SettingsSearchEntry } from './settings-search'
+import { SshTargetCard } from './SshTargetCard'
+import { SshTargetForm, EMPTY_FORM, type EditingTarget } from './SshTargetForm'
+
+export const SSH_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
+  {
+    title: 'SSH Connections',
+    description: 'Manage remote SSH targets.',
+    keywords: ['ssh', 'remote', 'server', 'connection', 'host']
+  },
+  {
+    title: 'Add SSH Target',
+    description: 'Add a new remote SSH target.',
+    keywords: ['ssh', 'add', 'new', 'target', 'host', 'server']
+  },
+  {
+    title: 'Import from SSH Config',
+    description: 'Import hosts from ~/.ssh/config.',
+    keywords: ['ssh', 'import', 'config', 'hosts']
+  },
+  {
+    title: 'Test Connection',
+    description: 'Test connectivity to an SSH target.',
+    keywords: ['ssh', 'test', 'connection', 'ping']
+  }
+]
+
+type SshPaneProps = Record<string, never>
+
+export function SshPane(_props: SshPaneProps): React.JSX.Element {
+  const [targets, setTargets] = useState<SshTarget[]>([])
+  const [states, setStates] = useState<Map<string, SshConnectionState>>(new Map())
+  const [showForm, setShowForm] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [form, setForm] = useState<EditingTarget>(EMPTY_FORM)
+  const [testing, setTesting] = useState<string | null>(null)
+
+  const loadTargets = useCallback(async () => {
+    try {
+      const result = (await window.api.ssh.listTargets()) as SshTarget[]
+      setTargets(result)
+
+      const stateMap = new Map<string, SshConnectionState>()
+      for (const target of result) {
+        try {
+          const state = (await window.api.ssh.getState({
+            targetId: target.id
+          })) as SshConnectionState | null
+          if (state) {
+            stateMap.set(target.id, state)
+          }
+        } catch {
+          // No state yet
+        }
+      }
+      setStates(stateMap)
+    } catch {
+      toast.error('Failed to load SSH targets')
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadTargets()
+  }, [loadTargets])
+
+  useEffect(() => {
+    const unsub = window.api.ssh.onStateChanged((data: { targetId: string; state: unknown }) => {
+      setStates((prev) => {
+        const next = new Map(prev)
+        next.set(data.targetId, data.state as SshConnectionState)
+        return next
+      })
+    })
+    return unsub
+  }, [])
+
+  const handleSave = async (): Promise<void> => {
+    if (!form.host.trim() || !form.username.trim()) {
+      toast.error('Host and username are required')
+      return
+    }
+
+    const port = parseInt(form.port, 10)
+    if (isNaN(port) || port < 1 || port > 65535) {
+      toast.error('Port must be between 1 and 65535')
+      return
+    }
+
+    const target = {
+      label: form.label.trim() || `${form.username}@${form.host}`,
+      host: form.host.trim(),
+      port,
+      username: form.username.trim(),
+      ...(form.identityFile.trim() ? { identityFile: form.identityFile.trim() } : {})
+    }
+
+    try {
+      if (editingId) {
+        await window.api.ssh.updateTarget({ id: editingId, updates: target })
+        toast.success('Target updated')
+      } else {
+        await window.api.ssh.addTarget({ target })
+        toast.success('Target added')
+      }
+      setShowForm(false)
+      setEditingId(null)
+      setForm(EMPTY_FORM)
+      await loadTargets()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save target')
+    }
+  }
+
+  const handleRemove = async (id: string): Promise<void> => {
+    try {
+      const state = states.get(id)
+      if (state && state.status === 'connected') {
+        await window.api.ssh.disconnect({ targetId: id })
+      }
+      await window.api.ssh.removeTarget({ id })
+      toast.success('Target removed')
+      await loadTargets()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to remove target')
+    }
+  }
+
+  const handleEdit = (target: SshTarget): void => {
+    setEditingId(target.id)
+    setForm({
+      label: target.label,
+      host: target.host,
+      port: String(target.port),
+      username: target.username,
+      identityFile: target.identityFile ?? ''
+    })
+    setShowForm(true)
+  }
+
+  const handleConnect = async (targetId: string): Promise<void> => {
+    try {
+      await window.api.ssh.connect({ targetId })
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Connection failed')
+    }
+  }
+
+  const handleDisconnect = async (targetId: string): Promise<void> => {
+    try {
+      await window.api.ssh.disconnect({ targetId })
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Disconnect failed')
+    }
+  }
+
+  const handleTest = async (targetId: string): Promise<void> => {
+    setTesting(targetId)
+    try {
+      const result = await window.api.ssh.testConnection({ targetId })
+      if (result.success) {
+        toast.success('Connection successful')
+      } else {
+        toast.error(result.error ?? 'Connection test failed')
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Test failed')
+    } finally {
+      setTesting(null)
+    }
+  }
+
+  const handleImport = async (): Promise<void> => {
+    try {
+      const imported = (await window.api.ssh.importConfig()) as SshTarget[]
+      if (imported.length === 0) {
+        toast('No new hosts found in ~/.ssh/config')
+      } else {
+        toast.success(`Imported ${imported.length} host${imported.length > 1 ? 's' : ''}`)
+      }
+      await loadTargets()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Import failed')
+    }
+  }
+
+  const cancelForm = (): void => {
+    setShowForm(false)
+    setEditingId(null)
+    setForm(EMPTY_FORM)
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Header row */}
+      <div className="flex items-start justify-between">
+        <div className="space-y-0.5">
+          <p className="text-sm font-medium">Targets</p>
+          <p className="text-xs text-muted-foreground">
+            Add a remote host to connect to it in Orca. Supports Linux and macOS remotes.
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void handleImport()}
+            className="gap-1.5"
+          >
+            <Upload className="size-3.5" />
+            Import from Config
+          </Button>
+          {!showForm ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setEditingId(null)
+                setForm(EMPTY_FORM)
+                setShowForm(true)
+              }}
+              className="gap-1.5"
+            >
+              <Plus className="size-3.5" />
+              Add Target
+            </Button>
+          ) : null}
+        </div>
+      </div>
+
+      {/* Target list */}
+      {targets.length === 0 && !showForm ? (
+        <div className="flex items-center justify-center rounded-lg border border-dashed border-border/60 bg-card/30 px-4 py-5 text-sm text-muted-foreground">
+          No SSH targets configured.
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {targets.map((target) => (
+            <SshTargetCard
+              key={target.id}
+              target={target}
+              state={states.get(target.id)}
+              testing={testing === target.id}
+              onConnect={(id) => void handleConnect(id)}
+              onDisconnect={(id) => void handleDisconnect(id)}
+              onTest={(id) => void handleTest(id)}
+              onEdit={handleEdit}
+              onRemove={(id) => void handleRemove(id)}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Add/Edit form */}
+      {showForm ? (
+        <SshTargetForm
+          editingId={editingId}
+          form={form}
+          onFormChange={setForm}
+          onSave={() => void handleSave()}
+          onCancel={cancelForm}
+        />
+      ) : null}
+    </div>
+  )
+}

@@ -9,6 +9,7 @@ type SettingsSectionProps = {
   searchEntries: SettingsSearchEntry[]
   children: React.ReactNode
   className?: string
+  badge?: string
 }
 
 export function SettingsSection({
@@ -17,7 +18,8 @@ export function SettingsSection({
   description,
   searchEntries,
   children,
-  className
+  className,
+  badge
 }: SettingsSectionProps): React.JSX.Element | null {
   const query = useAppStore((state) => state.settingsSearchQuery)
   if (!matchesSettingsSearch(query, searchEntries)) {
@@ -37,7 +39,14 @@ export function SettingsSection({
       }
     >
       <div className="space-y-1">
-        <h2 className="text-xl font-semibold">{title}</h2>
+        <h2 className="flex items-center gap-2 text-xl font-semibold">
+          {title}
+          {badge ? (
+            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+              {badge}
+            </span>
+          ) : null}
+        </h2>
         <p className="text-sm text-muted-foreground">{description}</p>
       </div>
       {children}

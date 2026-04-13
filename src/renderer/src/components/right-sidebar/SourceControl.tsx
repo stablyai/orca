@@ -45,6 +45,7 @@ import {
   notifyEditorExternalFileChange,
   requestEditorSaveQuiesce
 } from '@/components/editor/editor-autosave'
+import { getConnectionId } from '@/lib/connection-context'
 import { PullRequestIcon } from './checks-helpers'
 import type {
   GitBranchChangeEntry,
@@ -309,12 +310,13 @@ export default function SourceControl(): React.JSX.Element {
     }
     setIsExecutingBulk(true)
     try {
-      await window.api.git.bulkStage({ worktreePath, filePaths: bulkStagePaths })
+      const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
+      await window.api.git.bulkStage({ worktreePath, filePaths: bulkStagePaths, connectionId })
       clearSelection()
     } finally {
       setIsExecutingBulk(false)
     }
-  }, [worktreePath, bulkStagePaths, clearSelection])
+  }, [worktreePath, bulkStagePaths, clearSelection, activeWorktreeId])
 
   const handleBulkUnstage = useCallback(async () => {
     if (!worktreePath || bulkUnstagePaths.length === 0) {
@@ -322,12 +324,13 @@ export default function SourceControl(): React.JSX.Element {
     }
     setIsExecutingBulk(true)
     try {
-      await window.api.git.bulkUnstage({ worktreePath, filePaths: bulkUnstagePaths })
+      const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
+      await window.api.git.bulkUnstage({ worktreePath, filePaths: bulkUnstagePaths, connectionId })
       clearSelection()
     } finally {
       setIsExecutingBulk(false)
     }
-  }, [worktreePath, bulkUnstagePaths, clearSelection])
+  }, [worktreePath, bulkUnstagePaths, clearSelection, activeWorktreeId])
 
   const unresolvedConflicts = useMemo(
     () => entries.filter((entry) => entry.conflictStatus === 'unresolved' && entry.conflictKind),
@@ -364,9 +367,11 @@ export default function SourceControl(): React.JSX.Element {
     }
 
     try {
+      const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
       const result = await window.api.git.branchCompare({
         worktreePath,
-        baseRef: effectiveBaseRef
+        baseRef: effectiveBaseRef,
+        connectionId
       })
       setGitBranchCompareResult(activeWorktreeId, requestKey, result)
     } catch (error) {
@@ -449,12 +454,13 @@ export default function SourceControl(): React.JSX.Element {
         return
       }
       try {
-        await window.api.git.stage({ worktreePath, filePath })
+        const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
+        await window.api.git.stage({ worktreePath, filePath, connectionId })
       } catch {
         // git operation failed silently
       }
     },
-    [worktreePath]
+    [worktreePath, activeWorktreeId]
   )
 
   const handleUnstage = useCallback(
@@ -463,12 +469,13 @@ export default function SourceControl(): React.JSX.Element {
         return
       }
       try {
-        await window.api.git.unstage({ worktreePath, filePath })
+        const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
+        await window.api.git.unstage({ worktreePath, filePath, connectionId })
       } catch {
         // git operation failed silently
       }
     },
-    [worktreePath]
+    [worktreePath, activeWorktreeId]
   )
 
   const handleDiscard = useCallback(
@@ -485,7 +492,8 @@ export default function SourceControl(): React.JSX.Element {
           worktreePath,
           relativePath: filePath
         })
-        await window.api.git.discard({ worktreePath, filePath })
+        const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
+        await window.api.git.discard({ worktreePath, filePath, connectionId })
         notifyEditorExternalFileChange({
           worktreeId: activeWorktreeId,
           worktreePath,

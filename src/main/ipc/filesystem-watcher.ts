@@ -6,6 +6,7 @@ import type { FsChangeEvent, FsChangedPayload } from '../../shared/types'
 import { isWslPath } from '../wsl'
 import { createWslWatcher } from './filesystem-watcher-wsl'
 import type { WatchedRoot } from './filesystem-watcher-wsl'
+import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 
 // ── Ignore patterns ──────────────────────────────────────────────────
 // Why: high-churn directories are suppressed at the native watcher level
@@ -385,20 +386,65 @@ function unsubscribe(worktreePath: string, senderId: number): void {
   }
 }
 
+// ── Remote watcher state ─────────────────────────────────────────────
+// Key: `${connectionId}:${worktreePath}`, Value: unwatch function
+const remoteWatchers = new Map<string, () => void>()
+
 // ── Public API ───────────────────────────────────────────────────────
 
 export function registerFilesystemWatcherHandlers(): void {
   ipcMain.handle(
     'fs:watchWorktree',
-    async (event, args: { worktreePath: string }): Promise<void> => {
+    async (event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
+      if (args.connectionId) {
+        const provider = getSshFilesystemProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(`No filesystem provider for connection "${args.connectionId}"`)
+        }
+        const key = `${args.connectionId}:${args.worktreePath}`
+        if (remoteWatchers.has(key)) {
+          return
+        }
+
+        const unwatch = await provider.watch(args.worktreePath, (events) => {
+          if (!event.sender.isDestroyed()) {
+            event.sender.send('fs:changed', {
+              worktreePath: args.worktreePath,
+              events
+            } satisfies FsChangedPayload)
+          }
+        })
+        remoteWatchers.set(key, unwatch)
+
+        event.sender.once('destroyed', () => {
+          const unwatchFn = remoteWatchers.get(key)
+          if (unwatchFn) {
+            unwatchFn()
+            remoteWatchers.delete(key)
+          }
+        })
+        return
+      }
       await subscribe(args.worktreePath, event.sender)
     }
   )
 
-  ipcMain.handle('fs:unwatchWorktree', (_event, args: { worktreePath: string }): void => {
-    const senderId = _event.sender.id
-    unsubscribe(args.worktreePath, senderId)
-  })
+  ipcMain.handle(
+    'fs:unwatchWorktree',
+    (_event, args: { worktreePath: string; connectionId?: string }): void => {
+      if (args.connectionId) {
+        const key = `${args.connectionId}:${args.worktreePath}`
+        const unwatchFn = remoteWatchers.get(key)
+        if (unwatchFn) {
+          unwatchFn()
+          remoteWatchers.delete(key)
+        }
+        return
+      }
+      const senderId = _event.sender.id
+      unsubscribe(args.worktreePath, senderId)
+    }
+  )
 }
 
 /** Tear down all watchers on app shutdown. */

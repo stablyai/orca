@@ -21,6 +21,7 @@ import { createClaudeUsageSlice } from './claude-usage'
 import { createCodexUsageSlice } from './codex-usage'
 import { createBrowserSlice } from './browser'
 import { createRateLimitSlice } from './rate-limits'
+import { createSshSlice } from './ssh'
 
 export const TEST_REPO = {
   id: 'repo1',
@@ -44,7 +45,8 @@ export function createTestStore() {
     ...createClaudeUsageSlice(...a),
     ...createCodexUsageSlice(...a),
     ...createBrowserSlice(...a),
-    ...createRateLimitSlice(...a)
+    ...createRateLimitSlice(...a),
+    ...createSshSlice(...a)
   }))
 }
 

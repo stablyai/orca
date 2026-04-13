@@ -81,7 +81,11 @@ function isExternalUrl(src: string): boolean {
  * returns the URL directly. Re-validates on window re-focus so deleted or
  * replaced images are picked up.
  */
-export function useLocalImageSrc(rawSrc: string | undefined, filePath: string): string | undefined {
+export function useLocalImageSrc(
+  rawSrc: string | undefined,
+  filePath: string,
+  connectionId?: string | null
+): string | undefined {
   const [generation, setGeneration] = useState(cacheGeneration)
 
   useEffect(() => {
@@ -126,7 +130,7 @@ export function useLocalImageSrc(rawSrc: string | undefined, filePath: string): 
 
     let cancelled = false
     window.api.fs
-      .readFile({ filePath: absolutePath })
+      .readFile({ filePath: absolutePath, connectionId: connectionId ?? undefined })
       .then((result) => {
         if (cancelled) {
           return
@@ -151,7 +155,7 @@ export function useLocalImageSrc(rawSrc: string | undefined, filePath: string): 
     return () => {
       cancelled = true
     }
-  }, [rawSrc, filePath, generation])
+  }, [rawSrc, filePath, generation, connectionId])
 
   return displaySrc
 }
@@ -161,7 +165,11 @@ export function useLocalImageSrc(rawSrc: string | undefined, filePath: string): 
  * outside React (e.g. ProseMirror nodeViews). Resolves from cache when
  * available.
  */
-export async function loadLocalImageSrc(rawSrc: string, filePath: string): Promise<string | null> {
+export async function loadLocalImageSrc(
+  rawSrc: string,
+  filePath: string,
+  connectionId?: string | null
+): Promise<string | null> {
   if (
     rawSrc.startsWith('http://') ||
     rawSrc.startsWith('https://') ||
@@ -182,7 +190,10 @@ export async function loadLocalImageSrc(rawSrc: string, filePath: string): Promi
   }
 
   try {
-    const result = await window.api.fs.readFile({ filePath: absolutePath })
+    const result = await window.api.fs.readFile({
+      filePath: absolutePath,
+      connectionId: connectionId ?? undefined
+    })
     if (result.isBinary && result.content) {
       const url = base64ToBlobUrl(result.content, result.mimeType ?? 'image/png')
       cacheBlobUrl(absolutePath, url)

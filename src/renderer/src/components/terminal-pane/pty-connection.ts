@@ -146,6 +146,14 @@ export function connectPanePty(
     deps.setCacheTimerStartedAt(cacheKey, null)
   }
 
+  // Why: remote repos route PTY spawn through the SSH provider. Resolve the
+  // repo's connectionId from the store so the transport passes it to pty:spawn.
+  const state = useAppStore.getState()
+  const allWorktrees = Object.values(state.worktreesByRepo ?? {}).flat()
+  const worktree = allWorktrees.find((w) => w.id === deps.worktreeId)
+  const repo = worktree ? state.repos?.find((r) => r.id === worktree.repoId) : null
+  const connectionId = repo?.connectionId ?? null
+
   const transport = createIpcPtyTransport({
     cwd: deps.cwd,
     env: paneStartup?.env,

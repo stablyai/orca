@@ -1,0 +1,93 @@
+import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
+import type { IFilesystemProvider, FileStat, FileReadResult } from './types'
+import type { DirEntry, FsChangeEvent, SearchOptions, SearchResult } from '../../shared/types'
+
+export class SshFilesystemProvider implements IFilesystemProvider {
+  private connectionId: string
+  private mux: SshChannelMultiplexer
+  // Why: each watch() call registers for a specific rootPath, but the relay
+  // sends all fs.changed events on one notification channel. Keying by rootPath
+  // prevents cross-pollination between different worktree watchers.
+  private watchListeners = new Map<string, (events: FsChangeEvent[]) => void>()
+
+  constructor(connectionId: string, mux: SshChannelMultiplexer) {
+    this.connectionId = connectionId
+    this.mux = mux
+
+    mux.onNotification((method, params) => {
+      if (method === 'fs.changed') {
+        const events = params.events as FsChangeEvent[]
+        for (const [rootPath, cb] of this.watchListeners) {
+          const matching = events.filter((e) => e.absolutePath.startsWith(rootPath))
+          if (matching.length > 0) {
+            cb(matching)
+          }
+        }
+      }
+    })
+  }
+
+  getConnectionId(): string {
+    return this.connectionId
+  }
+
+  async readDir(dirPath: string): Promise<DirEntry[]> {
+    return (await this.mux.request('fs.readDir', { dirPath })) as DirEntry[]
+  }
+
+  async readFile(filePath: string): Promise<FileReadResult> {
+    return (await this.mux.request('fs.readFile', { filePath })) as FileReadResult
+  }
+
+  async writeFile(filePath: string, content: string): Promise<void> {
+    await this.mux.request('fs.writeFile', { filePath, content })
+  }
+
+  async stat(filePath: string): Promise<FileStat> {
+    return (await this.mux.request('fs.stat', { filePath })) as FileStat
+  }
+
+  async deletePath(targetPath: string, recursive?: boolean): Promise<void> {
+    await this.mux.request('fs.deletePath', { targetPath, recursive })
+  }
+
+  async createFile(filePath: string): Promise<void> {
+    await this.mux.request('fs.createFile', { filePath })
+  }
+
+  async createDir(dirPath: string): Promise<void> {
+    await this.mux.request('fs.createDir', { dirPath })
+  }
+
+  async rename(oldPath: string, newPath: string): Promise<void> {
+    await this.mux.request('fs.rename', { oldPath, newPath })
+  }
+
+  async copy(source: string, destination: string): Promise<void> {
+    await this.mux.request('fs.copy', { source, destination })
+  }
+
+  async realpath(filePath: string): Promise<string> {
+    return (await this.mux.request('fs.realpath', { filePath })) as string
+  }
+
+  async search(opts: SearchOptions): Promise<SearchResult> {
+    return (await this.mux.request('fs.search', opts)) as SearchResult
+  }
+
+  async listFiles(rootPath: string): Promise<string[]> {
+    return (await this.mux.request('fs.listFiles', { rootPath })) as string[]
+  }
+
+  async watch(rootPath: string, callback: (events: FsChangeEvent[]) => void): Promise<() => void> {
+    this.watchListeners.set(rootPath, callback)
+    await this.mux.request('fs.watch', { rootPath })
+
+    return () => {
+      this.watchListeners.delete(rootPath)
+      if (this.watchListeners.size === 0) {
+        this.mux.notify('fs.unwatch', { rootPath })
+      }
+    }
+  }
+}

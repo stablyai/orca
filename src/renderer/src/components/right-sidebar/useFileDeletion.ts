@@ -3,6 +3,7 @@ import type { Dispatch, SetStateAction } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { dirname } from '@/lib/path'
+import { getConnectionId } from '@/lib/connection-context'
 import { isPathEqualOrDescendant } from './file-explorer-paths'
 import type { PendingDelete, TreeNode } from './file-explorer-types'
 import { requestEditorSaveQuiesce } from '@/components/editor/editor-autosave'
@@ -89,7 +90,8 @@ export function useFileDeletion({
       // action cannot be undone by a trailing write that recreates the file.
       await Promise.all(filesToClose.map((file) => requestEditorSaveQuiesce({ fileId: file.id })))
 
-      await window.api.fs.deletePath({ targetPath: node.path })
+      const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
+      await window.api.fs.deletePath({ targetPath: node.path, connectionId })
 
       for (const file of filesToClose) {
         closeFile(file.id)

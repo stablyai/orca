@@ -3,6 +3,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync } from '
 import { join, dirname } from 'path'
 import { homedir } from 'os'
 import type { PersistedState, Repo, WorktreeMeta, GlobalSettings } from '../shared/types'
+import type { SshTarget } from '../shared/ssh-types'
 import { isFolderRepo } from '../shared/repo-kind'
 import { getGitUsername } from './git/repo'
 import {
@@ -83,7 +84,8 @@ export class Store {
             ...parsed.ui,
             sortBy: normalizeSortBy(parsed.ui?.sortBy)
           },
-          workspaceSession: { ...defaults.workspaceSession, ...parsed.workspaceSession }
+          workspaceSession: { ...defaults.workspaceSession, ...parsed.workspaceSession },
+          sshTargets: parsed.sshTargets ?? []
         }
       }
     } catch (err) {
@@ -275,6 +277,42 @@ export class Store {
 
   setWorkspaceSession(session: PersistedState['workspaceSession']): void {
     this.state.workspaceSession = session
+    this.scheduleSave()
+  }
+
+  // ── SSH Targets ────────────────────────────────────────────────────
+
+  getSshTargets(): SshTarget[] {
+    return this.state.sshTargets ?? []
+  }
+
+  getSshTarget(id: string): SshTarget | undefined {
+    return this.state.sshTargets?.find((t) => t.id === id)
+  }
+
+  addSshTarget(target: SshTarget): void {
+    if (!this.state.sshTargets) {
+      this.state.sshTargets = []
+    }
+    this.state.sshTargets.push(target)
+    this.scheduleSave()
+  }
+
+  updateSshTarget(id: string, updates: Partial<Omit<SshTarget, 'id'>>): SshTarget | null {
+    const target = this.state.sshTargets?.find((t) => t.id === id)
+    if (!target) {
+      return null
+    }
+    Object.assign(target, updates)
+    this.scheduleSave()
+    return { ...target }
+  }
+
+  removeSshTarget(id: string): void {
+    if (!this.state.sshTargets) {
+      return
+    }
+    this.state.sshTargets = this.state.sshTargets.filter((t) => t.id !== id)
     this.scheduleSave()
   }
 

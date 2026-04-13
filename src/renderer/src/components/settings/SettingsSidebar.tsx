@@ -6,6 +6,7 @@ type NavSection = {
   id: string
   title: string
   icon: LucideIcon | ((props: LucideProps) => React.JSX.Element)
+  badge?: string
 }
 
 type RepoNavSection = NavSection & {
@@ -78,6 +79,11 @@ export function SettingsSidebar({
                 >
                   <Icon className="mr-2 size-4" />
                   {section.title}
+                  {section.badge ? (
+                    <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
+                      {section.badge}
+                    </span>
+                  ) : null}
                 </button>
               )
             })}

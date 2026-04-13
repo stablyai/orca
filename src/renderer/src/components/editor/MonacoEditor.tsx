@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '@/store'
+import { getConnectionId } from '@/lib/connection-context'
 import { scrollTopCache, cursorPositionCache, setWithLRU } from '@/lib/scroll-cache'
 import '@/lib/monaco-setup'
 import { computeEditorFontSize } from '@/lib/editor-font-zoom'
@@ -373,10 +374,15 @@ export default function MonacoEditor({
             onSelect={async () => {
               // Derive worktree root from the absolute and relative paths
               const worktreePath = filePath.slice(0, -(relativePath.length + 1))
+              const activeFile = useAppStore
+                .getState()
+                .openFiles.find((f) => f.filePath === filePath)
+              const connectionId = getConnectionId(activeFile?.worktreeId ?? null) ?? undefined
               const url = await window.api.git.remoteFileUrl({
                 worktreePath,
                 relativePath,
-                line: gutterMenuLine
+                line: gutterMenuLine,
+                connectionId
               })
               if (url) {
                 window.api.ui.writeClipboardText(url)

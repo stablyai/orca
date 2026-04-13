@@ -2,6 +2,7 @@ import type { StoreApi } from 'zustand'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
+import { getConnectionId } from '@/lib/connection-context'
 import {
   canAutoSaveOpenFile,
   getOpenFilesForExternalFileChange,
@@ -72,7 +73,12 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
         }
 
         const contentToSave = state.editorDrafts[file.id] ?? fallbackContent
-        await window.api.fs.writeFile({ filePath: liveFile.filePath, content: contentToSave })
+        const connectionId = getConnectionId(liveFile.worktreeId) ?? undefined
+        await window.api.fs.writeFile({
+          filePath: liveFile.filePath,
+          content: contentToSave,
+          connectionId
+        })
 
         if ((saveGeneration.get(file.id) ?? 0) !== queuedGeneration) {
           return

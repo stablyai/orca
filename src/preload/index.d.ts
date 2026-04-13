@@ -5,11 +5,17 @@ import type {
   CreateWorktreeArgs,
   OpenCodeStatusEvent
 } from '../../shared/types'
+import type { SshTarget, SshConnectionState } from '../../shared/ssh-types'
 import type { PreloadApi } from './api-types'
 
 type ReposApi = {
   list: () => Promise<Repo[]>
   add: (args: { path: string; kind?: 'git' | 'folder' }) => Promise<Repo>
+  addRemote: (args: {
+    connectionId: string
+    remotePath: string
+    displayName?: string
+  }) => Promise<Repo>
   remove: (args: { repoId: string }) => Promise<void>
   update: (args: {
     repoId: string
@@ -44,6 +50,7 @@ type PtyApi = {
     rows: number
     cwd?: string
     env?: Record<string, string>
+    connectionId?: string | null
   }) => Promise<{ id: string }>
   write: (id: string, data: string) => void
   resize: (id: string, cols: number, rows: number) => void
@@ -112,10 +119,29 @@ type ShellApi = {
   copyFile: (args: { srcPath: string; destPath: string }) => Promise<void>
 }
 
+type SshApi = {
+  listTargets: () => Promise<SshTarget[]>
+  addTarget: (args: { target: Omit<SshTarget, 'id'> }) => Promise<SshTarget>
+  updateTarget: (args: {
+    id: string
+    updates: Partial<Omit<SshTarget, 'id'>>
+  }) => Promise<SshTarget>
+  removeTarget: (args: { id: string }) => Promise<void>
+  importConfig: () => Promise<SshTarget[]>
+  connect: (args: { targetId: string }) => Promise<SshConnectionState>
+  disconnect: (args: { targetId: string }) => Promise<void>
+  getState: (args: { targetId: string }) => Promise<SshConnectionState | null>
+  testConnection: (args: { targetId: string }) => Promise<{ success: boolean; error?: string }>
+  onStateChanged: (
+    callback: (data: { targetId: string; state: SshConnectionState }) => void
+  ) => () => void
+}
+
 type Api = PreloadApi & {
   repos: ReposApi
   worktrees: WorktreesApi
   pty: PtyApi
+  ssh: SshApi
 }
 
 declare global {

@@ -1,4 +1,5 @@
 /* eslint-disable max-lines */
+import type { SshTarget } from './ssh-types'
 
 // ─── Repo ────────────────────────────────────────────────────────────
 export type RepoKind = 'git' | 'folder'
@@ -13,6 +14,8 @@ export type Repo = {
   gitUsername?: string
   worktreeBaseRef?: string
   hookSettings?: RepoHookSettings
+  /** SSH target ID for remote repos. null/undefined = local. */
+  connectionId?: string | null
 }
 
 export type SetupRunPolicy = 'ask' | 'run-by-default' | 'skip-by-default'
@@ -557,6 +560,7 @@ export type PersistedState = {
     issue: Record<string, { data: IssueInfo | null; fetchedAt: number }>
   }
   workspaceSession: WorkspaceSessionState
+  sshTargets: SshTarget[]
 }
 
 // ─── Filesystem ─────────────────────────────────────────────

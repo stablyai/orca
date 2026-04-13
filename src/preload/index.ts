@@ -106,6 +106,12 @@ const api = {
     add: (args: { path: string; kind?: 'git' | 'folder' }): Promise<unknown> =>
       ipcRenderer.invoke('repos:add', args),
 
+    addRemote: (args: {
+      connectionId: string
+      remotePath: string
+      displayName?: string
+    }): Promise<unknown> => ipcRenderer.invoke('repos:addRemote', args),
+
     remove: (args: { repoId: string }): Promise<void> => ipcRenderer.invoke('repos:remove', args),
 
     update: (args: { repoId: string; updates: Record<string, unknown> }): Promise<unknown> =>
@@ -703,29 +709,35 @@ const api = {
   fs: {
     readDir: (args: {
       dirPath: string
+      connectionId?: string
     }): Promise<{ name: string; isDirectory: boolean; isSymlink: boolean }[]> =>
       ipcRenderer.invoke('fs:readDir', args),
     readFile: (args: {
       filePath: string
+      connectionId?: string
     }): Promise<{ content: string; isBinary: boolean; isImage?: boolean; mimeType?: string }> =>
       ipcRenderer.invoke('fs:readFile', args),
-    writeFile: (args: { filePath: string; content: string }): Promise<void> =>
-      ipcRenderer.invoke('fs:writeFile', args),
-    createFile: (args: { filePath: string }): Promise<void> =>
+    writeFile: (args: {
+      filePath: string
+      content: string
+      connectionId?: string
+    }): Promise<void> => ipcRenderer.invoke('fs:writeFile', args),
+    createFile: (args: { filePath: string; connectionId?: string }): Promise<void> =>
       ipcRenderer.invoke('fs:createFile', args),
-    createDir: (args: { dirPath: string }): Promise<void> =>
+    createDir: (args: { dirPath: string; connectionId?: string }): Promise<void> =>
       ipcRenderer.invoke('fs:createDir', args),
-    rename: (args: { oldPath: string; newPath: string }): Promise<void> =>
+    rename: (args: { oldPath: string; newPath: string; connectionId?: string }): Promise<void> =>
       ipcRenderer.invoke('fs:rename', args),
-    deletePath: (args: { targetPath: string }): Promise<void> =>
+    deletePath: (args: { targetPath: string; connectionId?: string }): Promise<void> =>
       ipcRenderer.invoke('fs:deletePath', args),
     authorizeExternalPath: (args: { targetPath: string }): Promise<void> =>
       ipcRenderer.invoke('fs:authorizeExternalPath', args),
     stat: (args: {
       filePath: string
+      connectionId?: string
     }): Promise<{ size: number; isDirectory: boolean; mtime: number }> =>
       ipcRenderer.invoke('fs:stat', args),
-    listFiles: (args: { rootPath: string }): Promise<string[]> =>
+    listFiles: (args: { rootPath: string; connectionId?: string }): Promise<string[]> =>
       ipcRenderer.invoke('fs:listFiles', args),
     search: (args: {
       query: string
@@ -736,6 +748,7 @@ const api = {
       includePattern?: string
       excludePattern?: string
       maxResults?: number
+      connectionId?: string
     }): Promise<{
       files: {
         filePath: string
@@ -745,9 +758,9 @@ const api = {
       totalMatches: number
       truncated: boolean
     }> => ipcRenderer.invoke('fs:search', args),
-    watchWorktree: (args: { worktreePath: string }): Promise<void> =>
+    watchWorktree: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
       ipcRenderer.invoke('fs:watchWorktree', args),
-    unwatchWorktree: (args: { worktreePath: string }): Promise<void> =>
+    unwatchWorktree: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
       ipcRenderer.invoke('fs:unwatchWorktree', args),
     onFsChanged: (callback: (payload: FsChangedPayload) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, payload: FsChangedPayload) =>
@@ -758,34 +771,58 @@ const api = {
   },
 
   git: {
-    status: (args: { worktreePath: string }): Promise<unknown> =>
+    status: (args: { worktreePath: string; connectionId?: string }): Promise<unknown> =>
       ipcRenderer.invoke('git:status', args),
-    conflictOperation: (args: { worktreePath: string }): Promise<unknown> =>
+    conflictOperation: (args: { worktreePath: string; connectionId?: string }): Promise<unknown> =>
       ipcRenderer.invoke('git:conflictOperation', args),
-    diff: (args: { worktreePath: string; filePath: string; staged: boolean }): Promise<unknown> =>
-      ipcRenderer.invoke('git:diff', args),
-    branchCompare: (args: { worktreePath: string; baseRef: string }): Promise<unknown> =>
-      ipcRenderer.invoke('git:branchCompare', args),
+    diff: (args: {
+      worktreePath: string
+      filePath: string
+      staged: boolean
+      connectionId?: string
+    }): Promise<unknown> => ipcRenderer.invoke('git:diff', args),
+    branchCompare: (args: {
+      worktreePath: string
+      baseRef: string
+      connectionId?: string
+    }): Promise<unknown> => ipcRenderer.invoke('git:branchCompare', args),
     branchDiff: (args: {
       worktreePath: string
       compare: { baseRef: string; baseOid: string; headOid: string; mergeBase: string }
       filePath: string
       oldPath?: string
+      connectionId?: string
     }): Promise<unknown> => ipcRenderer.invoke('git:branchDiff', args),
-    stage: (args: { worktreePath: string; filePath: string }): Promise<void> =>
-      ipcRenderer.invoke('git:stage', args),
-    bulkStage: (args: { worktreePath: string; filePaths: string[] }): Promise<void> =>
-      ipcRenderer.invoke('git:bulkStage', args),
-    unstage: (args: { worktreePath: string; filePath: string }): Promise<void> =>
-      ipcRenderer.invoke('git:unstage', args),
-    bulkUnstage: (args: { worktreePath: string; filePaths: string[] }): Promise<void> =>
-      ipcRenderer.invoke('git:bulkUnstage', args),
-    discard: (args: { worktreePath: string; filePath: string }): Promise<void> =>
-      ipcRenderer.invoke('git:discard', args),
+    stage: (args: {
+      worktreePath: string
+      filePath: string
+      connectionId?: string
+    }): Promise<void> => ipcRenderer.invoke('git:stage', args),
+    bulkStage: (args: {
+      worktreePath: string
+      filePaths: string[]
+      connectionId?: string
+    }): Promise<void> => ipcRenderer.invoke('git:bulkStage', args),
+    unstage: (args: {
+      worktreePath: string
+      filePath: string
+      connectionId?: string
+    }): Promise<void> => ipcRenderer.invoke('git:unstage', args),
+    bulkUnstage: (args: {
+      worktreePath: string
+      filePaths: string[]
+      connectionId?: string
+    }): Promise<void> => ipcRenderer.invoke('git:bulkUnstage', args),
+    discard: (args: {
+      worktreePath: string
+      filePath: string
+      connectionId?: string
+    }): Promise<void> => ipcRenderer.invoke('git:discard', args),
     remoteFileUrl: (args: {
       worktreePath: string
       relativePath: string
       line: number
+      connectionId?: string
     }): Promise<string | null> => ipcRenderer.invoke('git:remoteFileUrl', args)
   },
 
@@ -977,6 +1014,129 @@ const api = {
       ipcRenderer.on('rateLimits:update', listener)
       return () => ipcRenderer.removeListener('rateLimits:update', listener)
     }
+  },
+
+  ssh: {
+    listTargets: (): Promise<unknown[]> => ipcRenderer.invoke('ssh:listTargets'),
+
+    addTarget: (args: { target: Record<string, unknown> }): Promise<unknown> =>
+      ipcRenderer.invoke('ssh:addTarget', args),
+
+    updateTarget: (args: { id: string; updates: Record<string, unknown> }): Promise<unknown> =>
+      ipcRenderer.invoke('ssh:updateTarget', args),
+
+    removeTarget: (args: { id: string }): Promise<void> =>
+      ipcRenderer.invoke('ssh:removeTarget', args),
+
+    importConfig: (): Promise<unknown[]> => ipcRenderer.invoke('ssh:importConfig'),
+
+    connect: (args: { targetId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('ssh:connect', args),
+
+    disconnect: (args: { targetId: string }): Promise<void> =>
+      ipcRenderer.invoke('ssh:disconnect', args),
+
+    getState: (args: { targetId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('ssh:getState', args),
+
+    testConnection: (args: {
+      targetId: string
+    }): Promise<{ success: boolean; error?: string; state?: unknown }> =>
+      ipcRenderer.invoke('ssh:testConnection', args),
+
+    onStateChanged: (
+      callback: (data: { targetId: string; state: unknown }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { targetId: string; state: unknown }
+      ) => callback(data)
+      ipcRenderer.on('ssh:state-changed', listener)
+      return () => ipcRenderer.removeListener('ssh:state-changed', listener)
+    },
+
+    onHostKeyVerify: (
+      callback: (data: {
+        host: string
+        ip: string
+        fingerprint: string
+        keyType: string
+        responseChannel: string
+      }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: {
+          host: string
+          ip: string
+          fingerprint: string
+          keyType: string
+          responseChannel: string
+        }
+      ) => callback(data)
+      ipcRenderer.on('ssh:host-key-verify', listener)
+      return () => ipcRenderer.removeListener('ssh:host-key-verify', listener)
+    },
+
+    respondHostKeyVerify: (args: { channel: string; accepted: boolean }): void => {
+      ipcRenderer.send(args.channel, args.accepted)
+    },
+
+    onAuthChallenge: (
+      callback: (data: {
+        targetId: string
+        name: string
+        instructions: string
+        prompts: { prompt: string; echo: boolean }[]
+        responseChannel: string
+      }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: {
+          targetId: string
+          name: string
+          instructions: string
+          prompts: { prompt: string; echo: boolean }[]
+          responseChannel: string
+        }
+      ) => callback(data)
+      ipcRenderer.on('ssh:auth-challenge', listener)
+      return () => ipcRenderer.removeListener('ssh:auth-challenge', listener)
+    },
+
+    respondAuthChallenge: (args: { channel: string; responses: string[] }): void => {
+      ipcRenderer.send(args.channel, args.responses)
+    },
+
+    onPasswordPrompt: (
+      callback: (data: { targetId: string; responseChannel: string }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { targetId: string; responseChannel: string }
+      ) => callback(data)
+      ipcRenderer.on('ssh:password-prompt', listener)
+      return () => ipcRenderer.removeListener('ssh:password-prompt', listener)
+    },
+
+    respondPassword: (args: { channel: string; password: string | null }): void => {
+      ipcRenderer.send(args.channel, args.password)
+    },
+
+    addPortForward: (args: {
+      targetId: string
+      localPort: number
+      remoteHost: string
+      remotePort: number
+      label?: string
+    }): Promise<unknown> => ipcRenderer.invoke('ssh:addPortForward', args),
+
+    removePortForward: (args: { id: string }): Promise<boolean> =>
+      ipcRenderer.invoke('ssh:removePortForward', args),
+
+    listPortForwards: (args?: { targetId?: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('ssh:listPortForwards', args)
   }
 }
 
