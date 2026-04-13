@@ -138,7 +138,7 @@ const SHORTCUT_GROUP_DEFINITIONS: ShortcutGroupDefinition[] = [
       {
         action: 'Split pane down',
         searchKeywords: ['shortcut', 'pane', 'split'],
-        // Why: on Windows/Linux, Cmd+Shift+D is taken by split-right (#586),
+        // Why: on Windows/Linux, Ctrl+Shift+D is taken by split-right (#586),
         // so split-down uses Alt+Shift+D following Windows Terminal convention.
         keys: ({ mod, shift }) => (mod === '⌘' ? [mod, shift, 'D'] : ['Alt', shift, 'D'])
       },

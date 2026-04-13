@@ -136,6 +136,11 @@ describe('resolveTerminalShortcutAction', () => {
         true
       )
     ).toBeNull()
+
+    // Alt+D (no Shift) on Windows/Linux must pass through for readline forward-word-delete
+    expect(
+      resolveTerminalShortcutAction(event({ key: 'd', code: 'KeyD', altKey: true }), false)
+    ).toBeNull()
   })
 
   it('keeps Cmd+D and Cmd+Shift+D for split on macOS', () => {
