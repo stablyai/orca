@@ -17,6 +17,7 @@ export type PtySpawnOptions = {
   rows: number
   cwd?: string
   env?: Record<string, string>
+  command?: string
 }
 
 export type PtySpawnResult = {

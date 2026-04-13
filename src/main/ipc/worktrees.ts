@@ -13,25 +13,17 @@ import { removeWorktree } from '../git/worktree'
 import { gitExecFileAsync } from '../git/runner'
 import { listRepoWorktrees, createFolderWorktree } from '../repo-worktrees'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
-import { getEffectiveHooks, runHook } from '../hooks'
 import {
   createIssueCommandRunnerScript,
-  createSetupRunnerScript,
   getEffectiveHooks,
   loadHooks,
   readIssueCommand,
   runHook,
   hasHooksFile,
   hasUnrecognizedOrcaYamlKeys,
-  shouldRunSetupForCreate,
   writeIssueCommand
 } from '../hooks'
 import {
-  sanitizeWorktreeName,
-  computeBranchName,
-  computeWorktreePath,
-  ensurePathWithinWorkspace,
-  shouldSetDisplayName,
   mergeWorktree,
   parseWorktreeId,
   formatWorktreeRemovalError,
@@ -42,7 +34,6 @@ import {
   createRemoteWorktree,
   notifyWorktreesChanged
 } from './worktree-remote'
-import { registerHooksHandlers } from './worktree-hooks'
 import { rebuildAuthorizedRootsCache, ensureAuthorizedRootsCache } from './filesystem-auth'
 
 export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store): void {

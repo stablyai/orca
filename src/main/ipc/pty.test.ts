@@ -553,7 +553,7 @@ describe('registerPtyHandlers', () => {
     }
   })
 
-  it('falls back to a system shell when SHELL points to a missing binary', () => {
+  it('falls back to a system shell when SHELL points to a missing binary', async () => {
     const originalShell = process.env.SHELL
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 

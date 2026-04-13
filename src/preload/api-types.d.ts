@@ -249,6 +249,7 @@ export type PreloadApi = {
       cwd?: string
       env?: Record<string, string>
       command?: string
+      connectionId?: string | null
     }) => Promise<{ id: string }>
     write: (id: string, data: string) => void
     resize: (id: string, cols: number, rows: number) => void

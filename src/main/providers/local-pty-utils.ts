@@ -94,6 +94,9 @@ export type ShellSpawnParams = {
   cwd: string
   env: Record<string, string>
   ptySpawn: typeof pty.spawn
+  getShellReadyConfig?: (
+    shell: string
+  ) => { args: string[] | null; env: Record<string, string> } | null
 }
 
 export type ShellSpawnResult = {
@@ -106,7 +109,7 @@ export type ShellSpawnResult = {
  * try common fallback shells before giving up.
  */
 export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResult {
-  const { shellPath, shellArgs, cols, rows, cwd, env, ptySpawn } = params
+  const { shellPath, shellArgs, cols, rows, cwd, env, ptySpawn, getShellReadyConfig } = params
   let primaryError: string | null = null
 
   if (process.platform !== 'win32') {
@@ -132,8 +135,16 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
         continue
       }
       try {
+        const fallbackReady = getShellReadyConfig?.(fallback)
         env.SHELL = fallback
-        const proc = ptySpawn(fallback, ['-l'], { name: 'xterm-256color', cols, rows, cwd, env })
+        Object.assign(env, fallbackReady?.env ?? {})
+        const proc = ptySpawn(fallback, fallbackReady?.args ?? ['-l'], {
+          name: 'xterm-256color',
+          cols,
+          rows,
+          cwd,
+          env
+        })
         console.warn(
           `[pty] Primary shell "${shellPath}" failed (${primaryError ?? 'unknown error'}), fell back to "${fallback}"`
         )

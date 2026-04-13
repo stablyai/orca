@@ -25,24 +25,12 @@ export {
 export type { EagerPtyHandle, PtyTransport, IpcPtyTransportOptions } from './pty-dispatcher'
 export { extractLastOscTitle } from '../../../../shared/agent-detection'
 
-export type IpcPtyTransportOptions = {
-  cwd?: string
-  env?: Record<string, string>
-  command?: string
-  onPtyExit?: (ptyId: string) => void
-  onTitleChange?: (title: string, rawTitle: string) => void
-  onPtySpawn?: (ptyId: string) => void
-  onBell?: () => void
-  onAgentBecameIdle?: (title: string) => void
-  onAgentBecameWorking?: () => void
-  onAgentExited?: () => void
-}
-
 export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTransport {
   const {
     cwd,
     env,
     command,
+    connectionId,
     onPtyExit,
     onTitleChange,
     onPtySpawn,
@@ -190,7 +178,8 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           rows: options.rows ?? 24,
           cwd,
           env,
-          command
+          command,
+          ...(connectionId ? { connectionId } : {})
         })
 
         // If destroyed while spawn was in flight, kill the new pty and bail

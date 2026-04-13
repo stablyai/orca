@@ -1,3 +1,7 @@
+/* eslint-disable max-lines -- Why: shell-ready startup command integration adds
+~70 lines of scanner/promise wiring to spawn(). Splitting the method would scatter
+tightly coupled PTY lifecycle logic (scan → ready → write → exit cleanup) across
+files without a cleaner ownership seam. */
 import { basename, win32 as pathWin32 } from 'path'
 import { existsSync } from 'fs'
 import * as pty from 'node-pty'
@@ -8,6 +12,13 @@ import {
   validateWorkingDirectory,
   spawnShellWithFallback
 } from './local-pty-utils'
+import {
+  getShellReadyLaunchConfig,
+  createShellReadyScanState,
+  scanForShellReady,
+  writeStartupCommandWhenShellReady,
+  STARTUP_COMMAND_READY_MAX_WAIT_MS
+} from './local-pty-shell-ready'
 
 let ptyCounter = 0
 const ptyProcesses = new Map<string, pty.IPty>()
@@ -88,6 +99,7 @@ export class LocalPtyProvider implements IPtyProvider {
     let shellArgs: string[]
     let effectiveCwd: string
     let validationCwd: string
+    let shellReadyLaunch: ReturnType<typeof getShellReadyLaunchConfig> | null = null
     if (wslInfo) {
       const escapedCwd = wslInfo.linuxPath.replace(/'/g, "'\\''")
       shellPath = 'wsl.exe'
@@ -124,7 +136,8 @@ export class LocalPtyProvider implements IPtyProvider {
       validationCwd = cwd
     } else {
       shellPath = args.env?.SHELL || process.env.SHELL || '/bin/zsh'
-      shellArgs = ['-l']
+      shellReadyLaunch = args.command ? getShellReadyLaunchConfig(shellPath) : null
+      shellArgs = shellReadyLaunch?.args ?? ['-l']
       effectiveCwd = cwd
       validationCwd = cwd
     }
@@ -135,6 +148,7 @@ export class LocalPtyProvider implements IPtyProvider {
     const spawnEnv: Record<string, string> = {
       ...process.env,
       ...args.env,
+      ...shellReadyLaunch?.env,
       TERM: 'xterm-256color',
       COLORTERM: 'truecolor',
       TERM_PROGRAM: 'Orca',
@@ -161,7 +175,8 @@ export class LocalPtyProvider implements IPtyProvider {
       rows: args.rows,
       cwd: effectiveCwd,
       env: finalEnv,
-      ptySpawn: pty.spawn
+      ptySpawn: pty.spawn,
+      getShellReadyConfig: args.command ? (shell) => getShellReadyLaunchConfig(shell) : undefined
     })
     shellPath = spawnResult.shellPath
 
@@ -175,8 +190,53 @@ export class LocalPtyProvider implements IPtyProvider {
     ptyLoadGeneration.set(id, loadGeneration)
     this.opts.onSpawned?.(id)
 
+    // Shell-ready startup command support
+    let resolveShellReady: (() => void) | null = null
+    let shellReadyTimeout: ReturnType<typeof setTimeout> | null = null
+    const shellReadyScanState = shellReadyLaunch?.supportsReadyMarker
+      ? createShellReadyScanState()
+      : null
+    const shellReadyPromise = args.command
+      ? new Promise<void>((resolve) => {
+          resolveShellReady = resolve
+        })
+      : Promise.resolve()
+    const finishShellReady = (): void => {
+      if (!resolveShellReady) {
+        return
+      }
+      if (shellReadyTimeout) {
+        clearTimeout(shellReadyTimeout)
+        shellReadyTimeout = null
+      }
+      const resolve = resolveShellReady
+      resolveShellReady = null
+      resolve()
+    }
+    if (args.command) {
+      if (shellReadyLaunch?.supportsReadyMarker) {
+        shellReadyTimeout = setTimeout(() => {
+          finishShellReady()
+        }, STARTUP_COMMAND_READY_MAX_WAIT_MS)
+      } else {
+        finishShellReady()
+      }
+    }
+    let startupCommandCleanup: (() => void) | null = null
+
     const disposables: { dispose: () => void }[] = []
-    const onDataDisposable = proc.onData((data) => {
+    const onDataDisposable = proc.onData((rawData) => {
+      let data = rawData
+      if (shellReadyScanState && resolveShellReady) {
+        const scanned = scanForShellReady(shellReadyScanState, rawData)
+        data = scanned.output
+        if (scanned.matched) {
+          finishShellReady()
+        }
+      }
+      if (data.length === 0) {
+        return
+      }
       this.opts.onData?.(id, data, Date.now())
       for (const cb of dataListeners) {
         cb({ id, data })
@@ -187,6 +247,11 @@ export class LocalPtyProvider implements IPtyProvider {
     }
 
     const onExitDisposable = proc.onExit(({ exitCode }) => {
+      if (shellReadyTimeout) {
+        clearTimeout(shellReadyTimeout)
+        shellReadyTimeout = null
+      }
+      startupCommandCleanup?.()
       clearPtyState(id)
       this.opts.onExit?.(id, exitCode)
       for (const cb of exitListeners) {
@@ -197,6 +262,12 @@ export class LocalPtyProvider implements IPtyProvider {
       disposables.push(onExitDisposable)
     }
     ptyDisposables.set(id, disposables)
+
+    if (args.command) {
+      writeStartupCommandWhenShellReady(shellReadyPromise, proc, args.command, (cleanup) => {
+        startupCommandCleanup = cleanup
+      })
+    }
 
     return { id }
   }

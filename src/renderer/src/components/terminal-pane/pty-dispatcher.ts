@@ -151,6 +151,7 @@ export type PtyTransport = {
 export type IpcPtyTransportOptions = {
   cwd?: string
   env?: Record<string, string>
+  command?: string
   connectionId?: string | null
   onPtyExit?: (ptyId: string) => void
   onTitleChange?: (title: string, rawTitle: string) => void

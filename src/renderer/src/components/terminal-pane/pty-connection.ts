@@ -158,6 +158,7 @@ export function connectPanePty(
     cwd: deps.cwd,
     env: paneStartup?.env,
     command: paneStartup?.command,
+    connectionId,
     onPtyExit: onExit,
     onTitleChange,
     onPtySpawn,
