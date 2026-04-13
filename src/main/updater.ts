@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { app, BrowserWindow, powerMonitor } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import { is } from '@electron-toolkit/utils'
