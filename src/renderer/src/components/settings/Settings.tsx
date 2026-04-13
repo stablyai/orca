@@ -381,7 +381,7 @@ function Settings(): React.JSX.Element {
     .filter((section) => section.id.startsWith('repo-'))
     .map((section) => {
       const repo = repos.find((entry) => entry.id === section.id.replace('repo-', ''))
-      return { ...section, badgeColor: repo?.badgeColor }
+      return { ...section, badgeColor: repo?.badgeColor, isRemote: !!repo?.connectionId }
     })
 
   return (

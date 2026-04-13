@@ -1,4 +1,4 @@
-import { ArrowLeft, Search, type LucideIcon, type LucideProps } from 'lucide-react'
+import { ArrowLeft, Globe, Search, type LucideIcon, type LucideProps } from 'lucide-react'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 
@@ -11,6 +11,7 @@ type NavSection = {
 
 type RepoNavSection = NavSection & {
   badgeColor?: string
+  isRemote?: boolean
 }
 
 type SettingsSidebarProps = {
@@ -114,6 +115,9 @@ export function SettingsSidebar({
                         style={{ backgroundColor: section.badgeColor ?? '#6b7280' }}
                       />
                       <span className="truncate">{section.title}</span>
+                      {section.isRemote && (
+                        <Globe className="size-3 shrink-0 text-muted-foreground" />
+                      )}
                     </button>
                   )
                 })}
