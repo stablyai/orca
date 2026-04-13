@@ -266,7 +266,7 @@ describe('registerPtyHandlers', () => {
         [
           '-NoExit',
           '-Command',
-          '. $PROFILE 2>$null; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
+          'try { . $PROFILE } catch {}; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
         ],
         expect.any(Object)
       )
@@ -283,7 +283,7 @@ describe('registerPtyHandlers', () => {
         [
           '-NoExit',
           '-Command',
-          '. $PROFILE 2>$null; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
+          'try { . $PROFILE } catch {}; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
         ],
         expect.any(Object)
       )
@@ -310,6 +310,19 @@ describe('registerPtyHandlers', () => {
       const spawnCall = spawnMock.mock.calls.at(-1)!
       const env = spawnCall[2].env as Record<string, string>
       expect(env.PYTHONUTF8).toBe('0')
+    })
+
+    it('passes no encoding args for unrecognized shells', () => {
+      process.env.COMSPEC = 'C:\\Program Files\\Git\\bin\\bash.exe'
+
+      registerPtyHandlers(mainWindow as never)
+      handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+
+      expect(spawnMock).toHaveBeenCalledWith(
+        'C:\\Program Files\\Git\\bin\\bash.exe',
+        [],
+        expect.any(Object)
+      )
     })
   })
 

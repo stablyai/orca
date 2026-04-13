@@ -251,12 +251,14 @@ export function registerPtyHandlers(
           // Why: `-NoExit -Command` alone skips the user's $PROFILE, breaking
           // custom prompts (oh-my-posh, starship), aliases, and PSReadLine
           // configuration. Dot-sourcing $PROFILE first restores the normal
-          // startup experience. PowerShell silently ignores a missing $PROFILE,
-          // so this is safe even when no profile file exists.
+          // startup experience. The try/catch ensures a broken profile (e.g.
+          // terminating errors from strict-mode violations or failing module
+          // imports) cannot prevent the encoding commands from executing —
+          // otherwise the CJK fix would silently fail for those users.
           shellArgs = [
             '-NoExit',
             '-Command',
-            '. $PROFILE 2>$null; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
+            'try { . $PROFILE } catch {}; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
           ]
         } else {
           shellArgs = []
