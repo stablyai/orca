@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { existsSyncMock, statSyncMock, accessSyncMock, spawnMock } = vi.hoisted(() => ({
   existsSyncMock: vi.fn(),
@@ -37,8 +37,12 @@ describe('LocalPtyProvider', () => {
     pid: number
   }
   let exitCb: ((info: { exitCode: number }) => void) | undefined
+  let origShell: string | undefined
 
   beforeEach(() => {
+    origShell = process.env.SHELL
+    process.env.SHELL = '/bin/zsh'
+
     existsSyncMock.mockReturnValue(true)
     statSyncMock.mockReturnValue({ isDirectory: () => true, mode: 0o755 })
     accessSyncMock.mockReturnValue(undefined)
@@ -60,6 +64,14 @@ describe('LocalPtyProvider', () => {
     spawnMock.mockReturnValue(mockProc)
 
     provider = new LocalPtyProvider()
+  })
+
+  afterEach(() => {
+    if (origShell === undefined) {
+      delete process.env.SHELL
+    } else {
+      process.env.SHELL = origShell
+    }
   })
 
   describe('spawn', () => {
