@@ -34,13 +34,14 @@ globalThis.MonacoEnvironment = {
 // Why: Monaco's built-in TypeScript worker runs in isolation without filesystem
 // access, so it cannot resolve imports to project files that aren't open as
 // editor models. This produces false "Cannot find module" diagnostics for every
-// import statement. Disabling semantic validation removes this noise while
-// keeping syntax highlighting and basic validation intact.
+// import statement. Ignoring specific TS diagnostic codes (e.g., 2307, 2792)
+// removes this noise while keeping type checking, auto-complete, and basic
+// validation fully functional for local symbols.
 monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
-  noSemanticValidation: true
+  diagnosticCodesToIgnore: [2307, 2792]
 })
 monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
-  noSemanticValidation: true
+  diagnosticCodesToIgnore: [2307, 2792]
 })
 
 // Configure Monaco to use the locally bundled editor instead of CDN
