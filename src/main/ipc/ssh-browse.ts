@@ -91,6 +91,18 @@ export function registerSshBrowseHandler(
 
 // Why: prevent shell injection in the directory path. Single-quote wrapping
 // with escaped internal single quotes is the safest approach for sh/bash.
+// Tilde must be expanded by the shell, so paths starting with ~ use $HOME
+// substitution instead of literal quoting (single quotes suppress expansion).
 function shellEscape(s: string): string {
+  if (s === '~') {
+    return '"$HOME"'
+  }
+  if (s.startsWith('~/')) {
+    return `"$HOME"/${shellEscapeRaw(s.slice(2))}`
+  }
+  return shellEscapeRaw(s)
+}
+
+function shellEscapeRaw(s: string): string {
   return `'${s.replace(/'/g, "'\\''")}'`
 }
