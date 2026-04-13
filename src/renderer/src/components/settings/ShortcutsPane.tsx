@@ -135,19 +135,13 @@ const SHORTCUT_GROUP_DEFINITIONS: ShortcutGroupDefinition[] = [
         // so split-right requires Shift on non-Mac platforms.
         keys: ({ mod, shift }) => (mod === '⌘' ? [mod, 'D'] : [mod, shift, 'D'])
       },
-      ...(navigator.userAgent.includes('Mac')
-        ? [
-            {
-              action: 'Split pane down',
-              searchKeywords: ['shortcut', 'pane', 'split'],
-              keys: ({ mod, shift }: { mod: string; shift: string; enter: string }) => [
-                mod,
-                shift,
-                'D'
-              ]
-            } satisfies ShortcutDefinition
-          ]
-        : []),
+      {
+        action: 'Split pane down',
+        searchKeywords: ['shortcut', 'pane', 'split'],
+        // Why: on Windows/Linux, Cmd+Shift+D is taken by split-right (#586),
+        // so split-down uses Alt+Shift+D following Windows Terminal convention.
+        keys: ({ mod, shift }) => (mod === '⌘' ? [mod, shift, 'D'] : ['Alt', shift, 'D'])
+      },
       {
         action: 'Close pane (EOF)',
         searchKeywords: ['shortcut', 'pane', 'close', 'eof'],

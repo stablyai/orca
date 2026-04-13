@@ -113,13 +113,29 @@ describe('resolveTerminalShortcutAction', () => {
       resolveTerminalShortcutAction(event({ key: 'd', code: 'KeyD', ctrlKey: true }), false)
     ).toBeNull()
 
-    // Ctrl+Shift+D on Windows/Linux splits the pane (vertical)
+    // Ctrl+Shift+D on Windows/Linux splits the pane right (vertical)
     expect(
       resolveTerminalShortcutAction(
         event({ key: 'd', code: 'KeyD', ctrlKey: true, shiftKey: true }),
         false
       )
     ).toEqual({ type: 'splitActivePane', direction: 'vertical' })
+
+    // Alt+Shift+D on Windows/Linux splits the pane down (horizontal)
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'd', code: 'KeyD', altKey: true, shiftKey: true }),
+        false
+      )
+    ).toEqual({ type: 'splitActivePane', direction: 'horizontal' })
+
+    // Alt+Shift+D should NOT trigger split-down on Mac (Mac uses Cmd+Shift+D)
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'd', code: 'KeyD', altKey: true, shiftKey: true }),
+        true
+      )
+    ).toBeNull()
   })
 
   it('keeps Cmd+D and Cmd+Shift+D for split on macOS', () => {

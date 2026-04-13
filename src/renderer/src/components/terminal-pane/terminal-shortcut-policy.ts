@@ -75,6 +75,22 @@ export function resolveTerminalShortcutAction(
     }
   }
 
+  // Why: on Windows/Linux, Alt+Shift+D splits the pane down (horizontal).
+  // This lives outside the mod+!alt block above because it uses Alt instead
+  // of Ctrl, following the Windows Terminal convention for split shortcuts
+  // and avoiding the Ctrl+D / EOF conflict (see #586).
+  if (
+    !isMac &&
+    !event.repeat &&
+    !event.metaKey &&
+    !event.ctrlKey &&
+    event.altKey &&
+    event.shiftKey &&
+    event.key.toLowerCase() === 'd'
+  ) {
+    return { type: 'splitActivePane', direction: 'horizontal' }
+  }
+
   if (
     !event.metaKey &&
     !event.ctrlKey &&
