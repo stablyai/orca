@@ -97,11 +97,11 @@ export default function RepoCombobox({
                 key={repo.id}
                 value={repo.id}
                 onSelect={() => handleSelect(repo.id)}
-                className="items-start gap-2 px-3 py-2"
+                className="items-center gap-2 px-3 py-2"
               >
                 <Check
                   className={cn(
-                    'mt-0.5 size-4 text-foreground',
+                    'size-4 text-foreground',
                     value === repo.id ? 'opacity-100' : 'opacity-0'
                   )}
                 />
