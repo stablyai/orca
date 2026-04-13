@@ -263,6 +263,13 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
 
   const handleRepoChange = useCallback(
     (value: string) => {
+      // Why: re-selecting the already-active repo resets checkedHooksRepoId and
+      // hasLoadedIssueCommand to null/false, but the useEffect that reloads them
+      // depends on [isOpen, repoId] — since repoId didn't change the effect never
+      // re-fires, leaving the Create button permanently disabled.
+      if (value === repoId) {
+        return
+      }
       setRepoId(value)
       setYamlHooks(null)
       setCheckedHooksRepoId(null)
@@ -276,7 +283,7 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
         setCreateError(null)
       }
     },
-    [createError]
+    [createError, repoId]
   )
 
   const handleOpenSetupSettings = useCallback(() => {
