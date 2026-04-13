@@ -116,7 +116,10 @@ export function SettingsSidebar({
                       />
                       <span className="truncate">{section.title}</span>
                       {section.isRemote && (
-                        <Globe className="size-3 shrink-0 text-muted-foreground" />
+                        <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-[10px] text-muted-foreground">
+                          <Globe className="size-3" />
+                          SSH
+                        </span>
                       )}
                     </button>
                   )
