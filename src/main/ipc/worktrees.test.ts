@@ -12,6 +12,7 @@ const {
   getBranchConflictKindMock,
   getPRForBranchMock,
   getEffectiveHooksMock,
+  createIssueCommandRunnerScriptMock,
   createSetupRunnerScriptMock,
   shouldRunSetupForCreateMock,
   runHookMock,
@@ -31,6 +32,7 @@ const {
   getBranchConflictKindMock: vi.fn(),
   getPRForBranchMock: vi.fn(),
   getEffectiveHooksMock: vi.fn(),
+  createIssueCommandRunnerScriptMock: vi.fn(),
   createSetupRunnerScriptMock: vi.fn(),
   shouldRunSetupForCreateMock: vi.fn(),
   runHookMock: vi.fn(),
@@ -70,6 +72,7 @@ vi.mock('../github/client', () => ({
 }))
 
 vi.mock('../hooks', () => ({
+  createIssueCommandRunnerScript: createIssueCommandRunnerScriptMock,
   createSetupRunnerScript: createSetupRunnerScriptMock,
   getEffectiveHooks: getEffectiveHooksMock,
   loadHooks: loadHooksMock,
@@ -120,6 +123,7 @@ describe('registerWorktreeHandlers', () => {
       getBranchConflictKindMock,
       getPRForBranchMock,
       getEffectiveHooksMock,
+      createIssueCommandRunnerScriptMock,
       createSetupRunnerScriptMock,
       shouldRunSetupForCreateMock,
       runHookMock,
@@ -177,6 +181,13 @@ describe('registerWorktreeHandlers', () => {
         ORCA_WORKTREE_PATH: '/workspace/improve-dashboard'
       }
     })
+    createIssueCommandRunnerScriptMock.mockReturnValue({
+      runnerScriptPath: '/workspace/repo/.git/orca/issue-command-runner.sh',
+      envVars: {
+        ORCA_ROOT_PATH: '/workspace/repo',
+        ORCA_WORKTREE_PATH: '/workspace/improve-dashboard'
+      }
+    })
     computeWorktreePathMock.mockImplementation(
       (
         sanitizedName: string,
@@ -214,6 +225,27 @@ describe('registerWorktreeHandlers', () => {
 
     expect(getPRForBranchMock).not.toHaveBeenCalled()
     expect(addWorktreeMock).not.toHaveBeenCalled()
+  })
+
+  it('creates an issue-command runner for an existing repo/worktree pair', async () => {
+    const result = await handlers['hooks:createIssueCommandRunner'](null, {
+      repoId: 'repo-1',
+      worktreePath: '/workspace/improve-dashboard',
+      command: 'codex exec "long command"'
+    })
+
+    expect(createIssueCommandRunnerScriptMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'repo-1' }),
+      '/workspace/improve-dashboard',
+      'codex exec "long command"'
+    )
+    expect(result).toEqual({
+      runnerScriptPath: '/workspace/repo/.git/orca/issue-command-runner.sh',
+      envVars: {
+        ORCA_ROOT_PATH: '/workspace/repo',
+        ORCA_WORKTREE_PATH: '/workspace/improve-dashboard'
+      }
+    })
   })
 
   it('lists a synthetic worktree for folder-mode repos', async () => {

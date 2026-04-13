@@ -318,6 +318,11 @@ export type PreloadApi = {
     check: (args: {
       repoId: string
     }) => Promise<{ hasHooks: boolean; hooks: OrcaHooks | null; mayNeedUpdate: boolean }>
+    createIssueCommandRunner: (args: {
+      repoId: string
+      worktreePath: string
+      command: string
+    }) => Promise<WorktreeSetupLaunch>
     readIssueCommand: (args: { repoId: string }) => Promise<{
       localContent: string | null
       sharedContent: string | null

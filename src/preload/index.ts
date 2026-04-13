@@ -591,6 +591,13 @@ const api = {
     }): Promise<{ hasHooks: boolean; hooks: unknown; mayNeedUpdate: boolean }> =>
       ipcRenderer.invoke('hooks:check', args),
 
+    createIssueCommandRunner: (args: {
+      repoId: string
+      worktreePath: string
+      command: string
+    }): Promise<{ runnerScriptPath: string; envVars: Record<string, string> }> =>
+      ipcRenderer.invoke('hooks:createIssueCommandRunner', args),
+
     readIssueCommand: (args: {
       repoId: string
     }): Promise<{
