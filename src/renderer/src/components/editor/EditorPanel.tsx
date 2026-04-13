@@ -96,6 +96,12 @@ export default function EditorPanel({
             // prop is provided. This convention is version-dependent.
             monaco.editor.getModel(monaco.Uri.parse(prevFile.filePath))?.dispose()
             scrollTopCache.delete(prevFile.filePath)
+            // Why: markdown edit tabs cycle through three view modes (source, rich,
+            // preview), each caching scroll under a mode-scoped key. All must be
+            // evicted so a reopened file starts fresh regardless of which mode was
+            // last active.
+            scrollTopCache.delete(`${prevFile.filePath}:rich`)
+            scrollTopCache.delete(`${prevFile.filePath}:preview`)
             cursorPositionCache.delete(prevFile.filePath)
             break
           case 'diff':

@@ -84,8 +84,12 @@ export default function MarkdownPreview({
 
     container.addEventListener('scroll', onScroll, { passive: true })
     return () => {
-      // Snapshot final position synchronously before detach.
-      setWithLRU(scrollTopCache, scrollCacheKey, container.scrollTop)
+      // Why: During React StrictMode double-mount (or rapid mount/unmount before
+      // react-markdown renders content), scrollHeight equals clientHeight and
+      // scrollTop is 0. Saving that would clobber a valid cached position.
+      if (container.scrollHeight > container.clientHeight || container.scrollTop > 0) {
+        setWithLRU(scrollTopCache, scrollCacheKey, container.scrollTop)
+      }
       if (throttleTimer !== null) {
         clearTimeout(throttleTimer)
       }
