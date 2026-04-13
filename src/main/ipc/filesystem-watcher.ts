@@ -214,6 +214,12 @@ async function createWatcher(rootKey: string, rootPath: string): Promise<Watched
   }
 
   try {
+    // Why: track whether the error callback already ran cleanup before
+    // subscribe() resolved.  If it did, the subscription object returned
+    // by subscribe() would be orphaned (never stored in watchedRoots and
+    // therefore never unsubscribed), leaking a native file-watcher handle.
+    let errorCleanedUp = false
+
     root.subscription = await watcher.subscribe(
       rootPath,
       (err, events) => {
@@ -247,6 +253,7 @@ async function createWatcher(rootKey: string, rootPath: string): Promise<Watched
               // Already errored — ignore cleanup failures
             })
           }
+          errorCleanedUp = true
           watchedRoots.delete(rootKey)
           return
         }
@@ -258,6 +265,15 @@ async function createWatcher(rootKey: string, rootPath: string): Promise<Watched
         ignore: WATCHER_IGNORE_DIRS
       }
     )
+
+    // Why: if the error callback already fired and cleaned up watchedRoots
+    // before subscribe() resolved, the subscription we just received is
+    // orphaned.  Unsubscribe it immediately to avoid leaking a native
+    // file-watcher handle that no code path would ever clean up.
+    if (errorCleanedUp) {
+      void root.subscription.unsubscribe().catch(() => {})
+      throw new Error(`Watcher for ${rootKey} errored during subscribe`)
+    }
   } catch (err) {
     // Why: if the watcher backend throws synchronously on a deleted root
     // or permission error, log rather than crashing the main process (§7.3).

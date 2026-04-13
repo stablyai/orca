@@ -207,7 +207,18 @@ export function connectPanePty(
         const pending = deps.pendingWritesRef.current
         let buf = (pending.get(pane.id) ?? '') + data
         if (buf.length > MAX_PENDING_BYTES) {
-          buf = buf.slice(buf.length - MAX_PENDING_BYTES)
+          // Why: slicing at an arbitrary offset can bisect a multi-byte
+          // character or an ANSI escape sequence (e.g. \x1b[38;2;255;0m),
+          // producing garbled output when the buffer is later flushed.
+          // Snapping forward to the next newline ensures the cut lands on
+          // a line boundary where escape state is far less likely to be
+          // mid-sequence.
+          let cutAt = buf.length - MAX_PENDING_BYTES
+          const nl = buf.indexOf('\n', cutAt)
+          if (nl !== -1 && nl < cutAt + 256) {
+            cutAt = nl + 1
+          }
+          buf = buf.slice(cutAt)
         }
         pending.set(pane.id, buf)
       }
