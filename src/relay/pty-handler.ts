@@ -47,6 +47,8 @@ const ALLOWED_SIGNALS = new Set([
   'SIGUSR2'
 ])
 
+type SerializedPtyEntry = { id: string; pid: number; cols: number; rows: number; cwd: string }
+
 export class PtyHandler {
   private ptys = new Map<string, ManagedPty>()
   private nextId = 1
@@ -93,10 +95,10 @@ export class PtyHandler {
     this.dispatcher.onRequest('pty.hasChildProcesses', (p) => this.hasChildProcesses(p))
     this.dispatcher.onRequest('pty.getForegroundProcess', (p) => this.getForegroundProcess(p))
     this.dispatcher.onRequest('pty.listProcesses', () => this.listProcesses())
-    this.dispatcher.onRequest('pty.getDefaultShell', () => resolveDefaultShell())
+    this.dispatcher.onRequest('pty.getDefaultShell', async () => resolveDefaultShell())
     this.dispatcher.onRequest('pty.serialize', (p) => this.serialize(p))
     this.dispatcher.onRequest('pty.revive', (p) => this.revive(p))
-    this.dispatcher.onRequest('pty.getProfiles', () => listShellProfiles())
+    this.dispatcher.onRequest('pty.getProfiles', async () => listShellProfiles())
 
     this.dispatcher.onNotification('pty.data', (p) => this.writeData(p))
     this.dispatcher.onNotification('pty.resize', (p) => this.resize(p))
@@ -152,6 +154,9 @@ export class PtyHandler {
   private writeData(params: Record<string, unknown>): void {
     const id = params.id as string
     const data = params.data as string
+    if (typeof data !== 'string') {
+      return
+    }
     const managed = this.ptys.get(id)
     if (managed) {
       managed.pty.write(data)
@@ -160,8 +165,8 @@ export class PtyHandler {
 
   private resize(params: Record<string, unknown>): void {
     const id = params.id as string
-    const cols = params.cols as number
-    const rows = params.rows as number
+    const cols = Math.max(1, Math.min(500, Math.floor(Number(params.cols) || 80)))
+    const rows = Math.max(1, Math.min(500, Math.floor(Number(params.rows) || 24)))
     const managed = this.ptys.get(id)
     if (managed) {
       managed.pty.resize(cols, rows)
@@ -262,32 +267,21 @@ export class PtyHandler {
 
   private async serialize(params: Record<string, unknown>): Promise<string> {
     const ids = params.ids as string[]
-    const entries: { id: string; pid: number; cols: number; rows: number; cwd: string }[] = []
+    const entries: SerializedPtyEntry[] = []
     for (const id of ids) {
       const managed = this.ptys.get(id)
       if (!managed) {
         continue
       }
-      entries.push({
-        id,
-        pid: managed.pty.pid,
-        cols: managed.pty.cols,
-        rows: managed.pty.rows,
-        cwd: managed.initialCwd
-      })
+      const { pid, cols, rows } = managed.pty
+      entries.push({ id, pid, cols, rows, cwd: managed.initialCwd })
     }
     return JSON.stringify(entries)
   }
 
   private async revive(params: Record<string, unknown>): Promise<void> {
     const state = params.state as string
-    const entries = JSON.parse(state) as {
-      id: string
-      pid: number
-      cols: number
-      rows: number
-      cwd: string
-    }[]
+    const entries = JSON.parse(state) as SerializedPtyEntry[]
 
     for (const entry of entries) {
       if (this.ptys.has(entry.id)) {

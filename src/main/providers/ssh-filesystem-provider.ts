@@ -97,9 +97,10 @@ export class SshFilesystemProvider implements IFilesystemProvider {
 
     return () => {
       this.watchListeners.delete(rootPath)
-      if (this.watchListeners.size === 0) {
-        this.mux.notify('fs.unwatch', { rootPath })
-      }
+      // Why: each watch() starts a @parcel/watcher on the relay for this specific
+      // rootPath. We must always notify the relay to stop it, not only when all
+      // watchers are gone — otherwise the remote watcher leaks inotify descriptors.
+      this.mux.notify('fs.unwatch', { rootPath })
     }
   }
 }

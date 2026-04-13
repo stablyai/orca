@@ -57,7 +57,7 @@ export class FsHandler {
 
   private async readDir(params: Record<string, unknown>) {
     const dirPath = params.dirPath as string
-    this.context.validatePath(dirPath)
+    await this.context.validatePathResolved(dirPath)
     const entries = await readdir(dirPath, { withFileTypes: true })
     return entries
       .map((entry) => ({
@@ -113,7 +113,7 @@ export class FsHandler {
 
   private async stat(params: Record<string, unknown>) {
     const filePath = params.filePath as string
-    this.context.validatePath(filePath)
+    await this.context.validatePathResolved(filePath)
     // Why: lstat is used instead of stat so that symlinks are reported as
     // symlinks rather than being silently followed. stat() follows symlinks,
     // meaning isSymbolicLink() would always return false.
@@ -140,7 +140,9 @@ export class FsHandler {
 
   private async createFile(params: Record<string, unknown>) {
     const filePath = params.filePath as string
-    this.context.validatePath(filePath)
+    // Why: symlinks in parent directories can redirect creation outside the
+    // workspace. validatePathResolved follows symlinks before checking roots.
+    await this.context.validatePathResolved(filePath)
     const { dirname } = await import('path')
     await mkdir(dirname(filePath), { recursive: true })
     await writeFile(filePath, '', { encoding: 'utf-8', flag: 'wx' })
@@ -148,23 +150,26 @@ export class FsHandler {
 
   private async createDir(params: Record<string, unknown>) {
     const dirPath = params.dirPath as string
-    this.context.validatePath(dirPath)
+    await this.context.validatePathResolved(dirPath)
     await mkdir(dirPath, { recursive: true })
   }
 
   private async rename(params: Record<string, unknown>) {
     const oldPath = params.oldPath as string
     const newPath = params.newPath as string
-    this.context.validatePath(oldPath)
-    this.context.validatePath(newPath)
+    await this.context.validatePathResolved(oldPath)
+    await this.context.validatePathResolved(newPath)
     await rename(oldPath, newPath)
   }
 
   private async copy(params: Record<string, unknown>) {
     const source = params.source as string
     const destination = params.destination as string
-    this.context.validatePath(source)
-    this.context.validatePath(destination)
+    // Why: cp follows symlinks — a symlink inside the workspace pointing to
+    // /etc would copy sensitive files into the workspace where readFile can
+    // exfiltrate them.
+    await this.context.validatePathResolved(source)
+    await this.context.validatePathResolved(destination)
     await cp(source, destination, { recursive: true })
   }
 

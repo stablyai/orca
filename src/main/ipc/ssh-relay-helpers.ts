@@ -64,19 +64,21 @@ export function wireUpSshPtyEvents(
   ptyProvider: SshPtyProvider,
   getMainWindow: () => BrowserWindow | null
 ): void {
-  const win = getMainWindow()
-  if (win && !win.isDestroyed()) {
-    ptyProvider.onData((payload) => {
-      if (!win.isDestroyed()) {
-        win.webContents.send('pty:data', payload)
-      }
-    })
-    ptyProvider.onExit((payload) => {
-      if (!win.isDestroyed()) {
-        win.webContents.send('pty:exit', payload)
-      }
-    })
-  }
+  // Why: resolving the window lazily on each event (instead of capturing once)
+  // ensures events reach the current window even if macOS app re-activation
+  // creates a new BrowserWindow after the initial wiring.
+  ptyProvider.onData((payload) => {
+    const win = getMainWindow()
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('pty:data', payload)
+    }
+  })
+  ptyProvider.onExit((payload) => {
+    const win = getMainWindow()
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('pty:exit', payload)
+    }
+  })
 }
 
 // Why: overlapping reconnection attempts (e.g. SSH connection flaps twice
@@ -129,6 +131,12 @@ export async function reestablishRelayStack(
     const { transport } = await deployAndLaunchRelay(conn)
 
     if (abortController.signal.aborted) {
+      // Why: the relay is already running on the remote. Creating a temporary
+      // multiplexer and immediately disposing it sends a clean shutdown to the
+      // relay process. Without this, the orphaned relay runs until its grace
+      // timer expires.
+      const orphanMux = new SshChannelMultiplexer(transport)
+      orphanMux.dispose()
       return
     }
 

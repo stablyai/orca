@@ -69,9 +69,25 @@ export function registerSshHandlers(
 
       return new Promise<boolean>((resolve) => {
         const channel = `ssh:host-key-verify-response-${randomUUID()}`
+        // Why: if the renderer crashes or the window closes before responding,
+        // the ipcMain.once listener would leak forever. The timeout and
+        // destroy listener ensure cleanup.
+        const cleanup = () => {
+          ipcMain.removeAllListeners(channel)
+          clearTimeout(timer)
+        }
+        const timer = setTimeout(() => {
+          cleanup()
+          resolve(false)
+        }, 120_000)
         win.webContents.send('ssh:host-key-verify', { ...req, responseChannel: channel })
         ipcMain.once(channel, (_event, accepted: boolean) => {
+          cleanup()
           resolve(accepted)
+        })
+        win.once('closed', () => {
+          cleanup()
+          resolve(false)
         })
       })
     },
@@ -84,9 +100,22 @@ export function registerSshHandlers(
 
       return new Promise<string[]>((resolve) => {
         const channel = `ssh:auth-challenge-response-${randomUUID()}`
+        const cleanup = () => {
+          ipcMain.removeAllListeners(channel)
+          clearTimeout(timer)
+        }
+        const timer = setTimeout(() => {
+          cleanup()
+          resolve([])
+        }, 120_000)
         win.webContents.send('ssh:auth-challenge', { ...req, responseChannel: channel })
         ipcMain.once(channel, (_event, responses: string[]) => {
+          cleanup()
           resolve(responses)
+        })
+        win.once('closed', () => {
+          cleanup()
+          resolve([])
         })
       })
     },
@@ -99,9 +128,22 @@ export function registerSshHandlers(
 
       return new Promise<string | null>((resolve) => {
         const channel = `ssh:password-response-${randomUUID()}`
+        const cleanup = () => {
+          ipcMain.removeAllListeners(channel)
+          clearTimeout(timer)
+        }
+        const timer = setTimeout(() => {
+          cleanup()
+          resolve(null)
+        }, 120_000)
         win.webContents.send('ssh:password-prompt', { targetId, responseChannel: channel })
         ipcMain.once(channel, (_event, password: string | null) => {
+          cleanup()
           resolve(password)
+        })
+        win.once('closed', () => {
+          cleanup()
+          resolve(null)
         })
       })
     }

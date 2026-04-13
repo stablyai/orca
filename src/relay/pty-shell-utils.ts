@@ -39,8 +39,11 @@ export async function resolveProcessCwd(pid: number, fallbackCwd: string): Promi
   }
 
   // Fallback: use lsof on macOS
+  // Why: `-d cwd` restricts output to the cwd file descriptor only. Without it,
+  // lsof returns ALL open files (sockets, log files, TTYs) and the first `n`-line
+  // could be any of them — not the actual working directory.
   try {
-    const { stdout: output } = await execFile('lsof', ['-p', String(pid), '-Fn'], {
+    const { stdout: output } = await execFile('lsof', ['-p', String(pid), '-d', 'cwd', '-Fn'], {
       encoding: 'utf-8',
       timeout: 3000
     })

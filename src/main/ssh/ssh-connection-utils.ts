@@ -78,7 +78,7 @@ export function sleep(ms: number): Promise<void> {
  * executed as shell code.  Wrapping in single quotes and escaping embedded
  * single quotes is the standard POSIX shell-safe quoting strategy.
  */
-function shellEscape(s: string): string {
+export function shellEscape(s: string): string {
   return `'${s.replace(/'/g, "'\\''")}'`
 }
 
@@ -267,10 +267,19 @@ export async function buildConnectConfig(
       .replace(/%p/g, shellEscape(String(target.port)))
       .replace(/%r/g, shellEscape(target.username))
     proxyProcess = spawn('/bin/sh', ['-c', expanded], { stdio: ['pipe', 'pipe', 'pipe'] })
-    const { PassThrough } = await import('stream')
-    const stream = new PassThrough()
-    proxyProcess.stdout!.pipe(stream)
-    stream.pipe(proxyProcess.stdin!)
+    // Why: a single PassThrough used for both directions creates a feedback loop —
+    // proxy stdout data flows through the PassThrough and gets piped right back to
+    // proxy stdin. Use a Duplex wrapper where reads come from stdout and writes
+    // go to stdin independently.
+    const { Duplex } = await import('stream')
+    const stream = new Duplex({
+      read() {},
+      write(chunk, _encoding, cb) {
+        proxyProcess!.stdin!.write(chunk, cb)
+      }
+    })
+    proxyProcess.stdout!.on('data', (data) => stream.push(data))
+    proxyProcess.stdout!.on('end', () => stream.push(null))
     config.sock = stream as unknown as NetSocket
   }
 

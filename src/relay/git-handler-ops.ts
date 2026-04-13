@@ -278,6 +278,25 @@ const ALLOWED_GIT_SUBCOMMANDS = new Set([
   'config'
 ])
 const CONFIG_READ_ONLY_FLAGS = new Set(['--get', '--get-all', '--list', '--get-regexp', '-l'])
+// Why: checking presence of a read-only flag is insufficient — a request could
+// include both --list (passes the check) and --add (performs a write). Reject
+// known write operations explicitly.
+const CONFIG_WRITE_FLAGS = new Set([
+  '--add',
+  '--unset',
+  '--unset-all',
+  '--replace-all',
+  '--rename-section',
+  '--remove-section',
+  '--edit',
+  '-e',
+  // Why: --file redirects config reads to an arbitrary file, enabling path
+  // traversal (e.g. `--file /etc/passwd --list` leaks file contents).
+  '--file',
+  '-f',
+  '--global',
+  '--system'
+])
 const BRANCH_DESTRUCTIVE_FLAGS = new Set([
   '-d',
   '-D',
@@ -290,15 +309,39 @@ const BRANCH_DESTRUCTIVE_FLAGS = new Set([
   '--copy'
 ])
 
+// Why: these flags are dangerous across ALL subcommands — --output writes to
+// arbitrary paths, --exec-path changes where git loads helpers from, --work-tree
+// and --git-dir escape the validated worktree.
+const GLOBAL_DENIED_FLAGS = new Set(['--output', '-o', '--exec-path', '--work-tree', '--git-dir'])
+
 export function validateGitExecArgs(args: string[]): void {
+  // Why: git accepts `-c key=value` before the subcommand, which can override
+  // config and execute arbitrary commands (e.g. core.sshCommand). Reject any
+  // arguments before the subcommand that look like global git flags.
+  let subcommandIdx = 0
+  while (subcommandIdx < args.length && args[subcommandIdx].startsWith('-')) {
+    subcommandIdx++
+  }
+  if (subcommandIdx > 0) {
+    throw new Error('Global git flags before the subcommand are not allowed')
+  }
+
   const subcommand = args[0]
   if (!subcommand || !ALLOWED_GIT_SUBCOMMANDS.has(subcommand)) {
     throw new Error(`git subcommand not allowed: ${subcommand ?? '(empty)'}`)
   }
   const restArgs = args.slice(1)
+
+  if (restArgs.some((a) => GLOBAL_DENIED_FLAGS.has(a))) {
+    throw new Error('Dangerous git flags are not allowed via exec')
+  }
+
   if (subcommand === 'config') {
     if (!restArgs.some((a) => CONFIG_READ_ONLY_FLAGS.has(a))) {
       throw new Error('git config is restricted to read-only operations (--get, --list, etc.)')
+    }
+    if (restArgs.some((a) => CONFIG_WRITE_FLAGS.has(a))) {
+      throw new Error('git config write operations are not allowed via exec')
     }
   }
   if (subcommand === 'branch') {

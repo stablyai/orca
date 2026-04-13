@@ -125,9 +125,19 @@ export class SshConnection {
     this.agentAttempted = false
     this.keyAttempted = false
 
+    // Why: clean up resources from a prior failed attempt before overwriting.
+    // Without this, a retry after timeout/auth-failure orphans the old jump
+    // host TCP connection and proxy child process.
+    if (this.jumpClient) {
+      this.jumpClient.end()
+      this.jumpClient = null
+    }
+    if (this.proxyProcess) {
+      this.proxyProcess.kill()
+      this.proxyProcess = null
+    }
+
     const { config, jumpClient, proxyProcess } = await this.buildConfig()
-    // Why: store the jump client and proxy process so disconnect() can tear
-    // them down — otherwise the intermediate TCP connection or proxy leaks.
     this.jumpClient = jumpClient
     this.proxyProcess = proxyProcess
 

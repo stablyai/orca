@@ -12,6 +12,11 @@ import {
 let ptyCounter = 0
 const ptyProcesses = new Map<string, pty.IPty>()
 const ptyShellName = new Map<string, string>()
+// Why: node-pty's onData/onExit register native NAPI ThreadSafeFunction
+// callbacks. If the PTY is killed without disposing these listeners, the
+// stale callbacks survive into node::FreeEnvironment() where NAPI attempts
+// to invoke/clean them up on a destroyed environment, triggering a SIGABRT.
+const ptyDisposables = new Map<string, { dispose: () => void }[]>()
 
 let loadGeneration = 0
 const ptyLoadGeneration = new Map<string, number>()
@@ -22,13 +27,25 @@ type ExitCallback = (payload: { id: string; code: number }) => void
 const dataListeners = new Set<DataCallback>()
 const exitListeners = new Set<ExitCallback>()
 
+function disposePtyListeners(id: string): void {
+  const disposables = ptyDisposables.get(id)
+  if (disposables) {
+    for (const d of disposables) {
+      d.dispose()
+    }
+    ptyDisposables.delete(id)
+  }
+}
+
 function clearPtyState(id: string): void {
+  disposePtyListeners(id)
   ptyProcesses.delete(id)
   ptyShellName.delete(id)
   ptyLoadGeneration.delete(id)
 }
 
 function safeKillAndClean(id: string, proc: pty.IPty): void {
+  disposePtyListeners(id)
   try {
     proc.kill()
   } catch {
@@ -158,20 +175,28 @@ export class LocalPtyProvider implements IPtyProvider {
     ptyLoadGeneration.set(id, loadGeneration)
     this.opts.onSpawned?.(id)
 
-    proc.onData((data) => {
+    const disposables: { dispose: () => void }[] = []
+    const onDataDisposable = proc.onData((data) => {
       this.opts.onData?.(id, data, Date.now())
       for (const cb of dataListeners) {
         cb({ id, data })
       }
     })
+    if (onDataDisposable) {
+      disposables.push(onDataDisposable)
+    }
 
-    proc.onExit(({ exitCode }) => {
+    const onExitDisposable = proc.onExit(({ exitCode }) => {
       clearPtyState(id)
       this.opts.onExit?.(id, exitCode)
       for (const cb of exitListeners) {
         cb({ id, code: exitCode })
       }
     })
+    if (onExitDisposable) {
+      disposables.push(onExitDisposable)
+    }
+    ptyDisposables.set(id, disposables)
 
     return { id }
   }
@@ -190,9 +215,8 @@ export class LocalPtyProvider implements IPtyProvider {
     if (!proc) {
       return
     }
+    disposePtyListeners(id)
     try {
-      // node-pty's kill() sends SIGHUP on Unix. The onExit handler
-      // registered in spawn() handles cleanup and listener notification.
       proc.kill()
     } catch {
       // Process may already be dead — ensure cleanup still happens.

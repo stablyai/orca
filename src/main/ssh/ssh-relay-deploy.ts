@@ -15,6 +15,7 @@ import {
   execCommand,
   resolveRemoteNodePath
 } from './ssh-relay-deploy-helpers'
+import { shellEscape } from './ssh-connection-utils'
 
 export type RelayDeployResult = {
   transport: MultiplexerTransport
@@ -49,6 +50,11 @@ export async function deployAndLaunchRelay(
   // Why: SFTP does not expand `~`, so we must resolve the remote home directory
   // explicitly. `echo $HOME` over exec gives us the absolute path.
   const remoteHome = (await execCommand(conn, 'echo $HOME')).trim()
+  // Why: a malicious or misconfigured remote could return a $HOME containing
+  // shell metacharacters. Validate it looks like a reasonable path.
+  if (!remoteHome || !/^\/[a-zA-Z0-9/_.-]+$/.test(remoteHome)) {
+    throw new Error(`Remote $HOME is not a valid path: ${remoteHome.slice(0, 100)}`)
+  }
   const remoteRelayDir = `${remoteHome}/${RELAY_REMOTE_DIR}/relay-v${RELAY_VERSION}`
   console.log(`[ssh-relay] Remote dir: ${remoteRelayDir}`)
 
@@ -94,7 +100,7 @@ async function checkRelayExists(
   try {
     const output = await execCommand(
       conn,
-      `test -f "${remoteDir}/relay.js" && echo OK || echo MISSING`
+      `test -f ${shellEscape(`${remoteDir}/relay.js`)} && echo OK || echo MISSING`
     )
     if (output.trim() !== 'OK') {
       return false
@@ -115,7 +121,7 @@ async function checkRelayExists(
 
     const versionOutput = await execCommand(
       conn,
-      `cat "${remoteDir}/.version" 2>/dev/null || echo MISSING`
+      `cat ${shellEscape(`${remoteDir}/.version`)} 2>/dev/null || echo MISSING`
     )
     return versionOutput.trim() === expectedVersion
   } catch {
@@ -137,7 +143,7 @@ async function uploadRelay(
   }
 
   // Create remote directory
-  await execCommand(conn, `mkdir -p "${remoteDir}"`)
+  await execCommand(conn, `mkdir -p ${shellEscape(remoteDir)}`)
 
   // Upload via SFTP
   const sftp = await conn.sftp()
@@ -149,7 +155,7 @@ async function uploadRelay(
   }
 
   // Make the node binary executable
-  await execCommand(conn, `chmod +x "${remoteDir}/node" 2>/dev/null; true`)
+  await execCommand(conn, `chmod +x ${shellEscape(`${remoteDir}/node`)} 2>/dev/null; true`)
 
   // Why: version marker includes a content hash so code changes trigger
   // re-deploy even without bumping RELAY_VERSION. Read from the local build
@@ -187,18 +193,20 @@ async function installNativeDeps(conn: SshConnection, remoteDir: string): Promis
   // which spawns `node` as a child — if node isn't in PATH, that child
   // fails with exit 127 even though we invoked npm via its full path.
   const nodeBinDir = nodePath.replace(/\/node$/, '')
+  const escapedDir = shellEscape(remoteDir)
+  const escapedBinDir = shellEscape(nodeBinDir)
 
   try {
     await execCommand(
       conn,
-      `export PATH="${nodeBinDir}:$PATH" && cd "${remoteDir}" && npm init -y --silent 2>/dev/null && npm install node-pty 2>&1`
+      `export PATH=${escapedBinDir}:$PATH && cd ${escapedDir} && npm init -y --silent 2>/dev/null && npm install node-pty 2>&1`
     )
     // Why: SFTP uploads preserve file content but not Unix execute bits.
     // node-pty ships a prebuilt `spawn-helper` binary that must be executable
     // for posix_spawnp to fork the PTY process.
     await execCommand(
       conn,
-      `find "${remoteDir}/node_modules/node-pty/prebuilds" -name spawn-helper -exec chmod +x {} + 2>/dev/null; true`
+      `find ${shellEscape(`${remoteDir}/node_modules/node-pty/prebuilds`)} -name spawn-helper -exec chmod +x {} + 2>/dev/null; true`
     )
   } catch (err) {
     // Why: node-pty install can fail if build tools (python, make, g++) are
@@ -238,6 +246,10 @@ async function launchRelay(conn: SshConnection, remoteDir: string): Promise<Mult
   // Non-login SSH shells may not have node in PATH, so we source the
   // user's profile to pick up nvm/fnm/brew PATH entries.
   const nodePath = await resolveRemoteNodePath(conn)
-  const channel = await conn.exec(`cd "${remoteDir}" && ${nodePath} relay.js --grace-time 60`)
+  // Why: both remoteDir and nodePath come from the remote host and could
+  // contain shell metacharacters. Single-quote escaping prevents injection.
+  const channel = await conn.exec(
+    `cd ${shellEscape(remoteDir)} && ${shellEscape(nodePath)} relay.js --grace-time 60`
+  )
   return waitForSentinel(channel)
 }

@@ -92,7 +92,7 @@ export type IGitProvider = {
   getBranchDiff(
     worktreePath: string,
     baseRef: string,
-    options?: { includePatch?: boolean }
+    options?: { includePatch?: boolean; filePath?: string; oldPath?: string }
   ): Promise<GitDiffResult[]>
   listWorktrees(repoPath: string): Promise<GitWorktreeInfo[]>
   addWorktree(

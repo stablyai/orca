@@ -103,8 +103,11 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
       return
     }
     try {
+      // Why: disconnect any non-disconnected connection, including transitional
+      // states (connecting, reconnecting, deploying-relay). Leaving these alive
+      // would orphan SSH connections with providers registered for a removed target.
       const state = sshConnectionStates.get(id)
-      if (state && state.status === 'connected') {
+      if (state && state.status !== 'disconnected') {
         await window.api.ssh.disconnect({ targetId: id })
       }
       await window.api.ssh.removeTarget({ id })

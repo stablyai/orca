@@ -701,7 +701,7 @@ describe('registerPtyHandlers', () => {
     expect(piClearPtyMock).toHaveBeenCalledWith(spawnResult.id)
   })
 
-  it('disposes PTY listeners before manual kill IPC', () => {
+  it('disposes PTY listeners before manual kill IPC', async () => {
     const onDataDisposable = makeDisposable()
     const onExitDisposable = makeDisposable()
     const proc = {
@@ -709,14 +709,19 @@ describe('registerPtyHandlers', () => {
       onExit: vi.fn(() => onExitDisposable),
       write: vi.fn(),
       resize: vi.fn(),
-      kill: vi.fn()
+      kill: vi.fn(),
+      process: 'zsh',
+      pid: 12345
     }
     spawnMock.mockReturnValue(proc)
 
     registerPtyHandlers(mainWindow as never)
-    const spawnResult = handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 }) as { id: string }
+    const spawnResult = (await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24
+    })) as { id: string }
 
-    handlers.get('pty:kill')!(null, { id: spawnResult.id })
+    await handlers.get('pty:kill')!(null, { id: spawnResult.id })
 
     expect(onDataDisposable.dispose.mock.invocationCallOrder[0]).toBeLessThan(
       proc.kill.mock.invocationCallOrder[0]
@@ -726,7 +731,7 @@ describe('registerPtyHandlers', () => {
     )
   })
 
-  it('disposes PTY listeners before runtime controller kill', () => {
+  it('disposes PTY listeners before runtime controller kill', async () => {
     const onDataDisposable = makeDisposable()
     const onExitDisposable = makeDisposable()
     const proc = {
@@ -734,7 +739,9 @@ describe('registerPtyHandlers', () => {
       onExit: vi.fn(() => onExitDisposable),
       write: vi.fn(),
       resize: vi.fn(),
-      kill: vi.fn()
+      kill: vi.fn(),
+      process: 'zsh',
+      pid: 12345
     }
     const runtime = {
       setPtyController: vi.fn(),
@@ -745,7 +752,10 @@ describe('registerPtyHandlers', () => {
     spawnMock.mockReturnValue(proc)
 
     registerPtyHandlers(mainWindow as never, runtime as never)
-    const spawnResult = handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 }) as { id: string }
+    const spawnResult = (await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24
+    })) as { id: string }
     const runtimeController = runtime.setPtyController.mock.calls[0]?.[0] as {
       kill: (ptyId: string) => boolean
     }
@@ -759,7 +769,7 @@ describe('registerPtyHandlers', () => {
     )
   })
 
-  it('disposes PTY listeners before did-finish-load orphan cleanup', () => {
+  it('disposes PTY listeners before did-finish-load orphan cleanup', async () => {
     const onDataDisposable = makeDisposable()
     const onExitDisposable = makeDisposable()
     const proc = {
@@ -767,7 +777,9 @@ describe('registerPtyHandlers', () => {
       onExit: vi.fn(() => onExitDisposable),
       write: vi.fn(),
       resize: vi.fn(),
-      kill: vi.fn()
+      kill: vi.fn(),
+      process: 'zsh',
+      pid: 12345
     }
     const runtime = {
       setPtyController: vi.fn(),
@@ -782,7 +794,7 @@ describe('registerPtyHandlers', () => {
       ([eventName]) => eventName === 'did-finish-load'
     )?.[1] as (() => void) | undefined
     expect(didFinishLoad).toBeTypeOf('function')
-    handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+    await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
     // The first load after spawn only advances generation. The second one sees
     // this PTY as belonging to a prior page load and kills it as orphaned.
@@ -797,7 +809,7 @@ describe('registerPtyHandlers', () => {
     )
   })
 
-  it('clears PTY state even when kill reports the process is already gone', () => {
+  it('clears PTY state even when kill reports the process is already gone', async () => {
     const proc = {
       onData: vi.fn(() => makeDisposable()),
       onExit: vi.fn(() => makeDisposable()),
@@ -805,16 +817,21 @@ describe('registerPtyHandlers', () => {
       resize: vi.fn(),
       kill: vi.fn(() => {
         throw new Error('already dead')
-      })
+      }),
+      process: 'zsh',
+      pid: 12345
     }
     spawnMock.mockReturnValue(proc)
 
     registerPtyHandlers(mainWindow as never)
-    const spawnResult = handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 }) as { id: string }
+    const spawnResult = (await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24
+    })) as { id: string }
 
-    handlers.get('pty:kill')!(null, { id: spawnResult.id })
+    await handlers.get('pty:kill')!(null, { id: spawnResult.id })
 
-    expect(handlers.get('pty:hasChildProcesses')!(null, { id: spawnResult.id })).toBe(false)
+    expect(await handlers.get('pty:hasChildProcesses')!(null, { id: spawnResult.id })).toBe(false)
     expect(openCodeClearPtyMock).toHaveBeenCalledWith(spawnResult.id)
     expect(piClearPtyMock).toHaveBeenCalledWith(spawnResult.id)
   })

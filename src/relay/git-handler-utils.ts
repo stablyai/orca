@@ -88,9 +88,12 @@ export function parseStatusOutput(stdout: string): {
       const worktreeStatus = xy[1]
 
       if (line.startsWith('2 ')) {
+        // Why: porcelain v2 type-2 format is `2 XY sub mH mI mW hH hI Xscore path\torigPath`.
+        // The new path is the last space-delimited token before the tab; origPath follows the tab.
         const tabParts = line.split('\t')
-        const filePath = tabParts[1]
-        const oldPath = tabParts[2]
+        const spaceParts = tabParts[0].split(' ')
+        const filePath = spaceParts.at(-1)!
+        const oldPath = tabParts[1]
         if (indexStatus !== '.') {
           entries.push({
             path: filePath,

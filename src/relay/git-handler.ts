@@ -197,9 +197,15 @@ export class GitHandler {
       // untracked
     }
 
-    await (tracked
-      ? this.git(['restore', '--worktree', '--source=HEAD', '--', filePath], worktreePath)
-      : rm(resolved, { force: true, recursive: true }))
+    if (tracked) {
+      await this.git(['restore', '--worktree', '--source=HEAD', '--', filePath], worktreePath)
+    } else {
+      // Why: textual path checks pass for symlinks inside the worktree, but
+      // rm follows symlinks — so a symlink pointing outside the workspace
+      // would delete the target. validatePathResolved catches this.
+      await this.context.validatePathResolved(resolved)
+      await rm(resolved, { force: true, recursive: true })
+    }
   }
 
   private async conflictOperation(params: Record<string, unknown>) {
@@ -278,6 +284,12 @@ export class GitHandler {
     this.context.validatePath(targetDir)
     const base = params.base as string | undefined
     const track = params.track as boolean | undefined
+
+    // Why: a branchName starting with '-' would be interpreted as a git flag,
+    // potentially changing the command's semantics (e.g. "--detach").
+    if (branchName.startsWith('-') || (base && base.startsWith('-'))) {
+      throw new Error('Branch name and base ref must not start with "-"')
+    }
 
     const args = ['worktree', 'add']
     if (track) {

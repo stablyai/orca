@@ -237,7 +237,11 @@ export class SshChannelMultiplexer {
 
   private handleNotification(msg: JsonRpcNotification): void {
     const params = msg.params ?? {}
-    for (const handler of this.notificationHandlers) {
+    // Why: handlers may unsubscribe during iteration (via the returned disposer
+    // from onNotification), which splices the live array and skips the next handler.
+    // Iterating a snapshot prevents that.
+    const snapshot = Array.from(this.notificationHandlers)
+    for (const handler of snapshot) {
       handler(msg.method, params)
     }
   }

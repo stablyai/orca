@@ -159,5 +159,9 @@ export class RelayDispatcher {
       const frame = encodeKeepAliveFrame(seq, this.highestReceivedSeq)
       this.write(frame)
     }, KEEPALIVE_SEND_MS)
+    // Why: without unref, the keepalive interval keeps the event loop alive
+    // even when the relay should be winding down (e.g. after stdin ends and
+    // all PTYs have exited). unref lets the process exit naturally.
+    this.keepaliveTimer.unref()
   }
 }
