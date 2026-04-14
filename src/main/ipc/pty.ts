@@ -3,7 +3,7 @@ main-process module so spawn-time environment scoping, lifecycle cleanup,
 foreground-process inspection, and renderer IPC stay behind a single audited
 boundary. Splitting it by line count would scatter tightly coupled terminal
 process behavior across files without a cleaner ownership seam. */
-import { basename } from 'path'
+import { basename, win32 as pathWin32 } from 'path'
 import { existsSync, accessSync, statSync, chmodSync, constants as fsConstants } from 'fs'
 import { type BrowserWindow, ipcMain } from 'electron'
 import * as pty from 'node-pty'
@@ -235,7 +235,9 @@ export function registerPtyHandlers(
         validationCwd = cwd
       } else if (process.platform === 'win32') {
         shellPath = process.env.COMSPEC || 'powershell.exe'
-        const shellBasename = basename(shellPath).toLowerCase()
+        // Why: use path.win32.basename so backslash-separated Windows paths
+        // are parsed correctly even when tests mock process.platform on Linux CI.
+        const shellBasename = pathWin32.basename(shellPath).toLowerCase()
         // Why: On CJK Windows (Chinese, Japanese, Korean), the console code page
         // defaults to the system ANSI code page (e.g. 936/GBK for Chinese).
         // ConPTY encodes its output pipe using this code page, but node-pty
