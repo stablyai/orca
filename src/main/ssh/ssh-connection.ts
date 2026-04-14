@@ -1,4 +1,5 @@
 import { Client as SshClient } from 'ssh2'
+import type { ChildProcess } from 'child_process'
 import type { ClientChannel, SFTPWrapper } from 'ssh2'
 import type { SshTarget, SshConnectionState, SshConnectionStatus } from '../../shared/ssh-types'
 import { spawnSystemSsh, type SystemSshProcess } from './ssh-system-fallback'
@@ -11,12 +12,14 @@ import {
   isTransientError,
   sleep,
   buildConnectConfig,
+  spawnProxyCommand,
   type SshConnectionCallbacks
 } from './ssh-connection-utils'
 export type { SshConnectionCallbacks } from './ssh-connection-utils'
 
 export class SshConnection {
   private client: SshClient | null = null
+  private proxyProcess: ChildProcess | null = null
   private systemSsh: SystemSshProcess | null = null
   private state: SshConnectionState
   private callbacks: SshConnectionCallbacks
@@ -108,14 +111,25 @@ export class SshConnection {
     throw finalError
   }
 
-  // Why: matches VS Code's _connectSSH (lines 720-774). Config is built before
-  // connecting, ssh2's readyTimeout handles the timeout, and no custom
-  // authHandler or hostVerifier is set — ssh2 handles auth natively.
+  // Why: matches VS Code's _connectSSH. ssh2's readyTimeout handles the
+  // timeout; no custom authHandler or hostVerifier — ssh2 handles auth natively.
   private async attemptConnect(): Promise<void> {
     this.setState('connecting')
+    // Clean up proxy from a prior failed attempt to avoid leaking processes.
+    this.proxyProcess?.kill()
+    this.proxyProcess = null
 
     const resolved = await resolveWithSshG(this.target.label).catch(() => null)
     const config = buildConnectConfig(this.target, resolved)
+
+    // Why: ssh2 doesn't support ProxyCommand natively. Spawn the proxy
+    // (e.g. cloudflared) and pipe its stdin/stdout as config.sock.
+    const effectiveProxy = this.target.proxyCommand || resolved?.proxyCommand
+    if (effectiveProxy) {
+      const proxy = spawnProxyCommand(effectiveProxy, config.host!, config.port!, config.username!)
+      this.proxyProcess = proxy.process
+      config.sock = proxy.sock
+    }
 
     return new Promise<void>((resolve, reject) => {
       const client = new SshClient()
@@ -145,9 +159,8 @@ export class SshConnection {
     })
   }
 
-  // Why: both `end` and `close` fire on disconnect. If reconnect succeeds
-  // between the two events, the second handler would null out the *new*
-  // connection. Guarding on `this.client === client` prevents that.
+  // Why: both `end` and `close` fire on disconnect. Guard on identity so
+  // a late event from the old client doesn't null out a successful reconnect.
   private setupDisconnectHandler(client: SshClient): void {
     const handleDisconnect = () => {
       if (this.disposed || this.client !== client) {
@@ -262,6 +275,8 @@ export class SshConnection {
     this.reconnectTimer = null
     this.client?.end()
     this.client = null
+    this.proxyProcess?.kill()
+    this.proxyProcess = null
     this.systemSsh?.kill()
     this.systemSsh = null
     this.setState('disconnected')

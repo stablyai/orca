@@ -1,6 +1,9 @@
 import { readFileSync, existsSync } from 'fs'
+import { spawn, type ChildProcess } from 'child_process'
 import { homedir } from 'os'
 import { join } from 'path'
+import { Duplex } from 'stream'
+import type { Socket as NetSocket } from 'net'
 import type { ConnectConfig } from 'ssh2'
 import type { SshTarget, SshConnectionState } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './ssh-config-parser'
@@ -77,7 +80,6 @@ export function findDefaultKeyFile(): { path: string; contents: Buffer } | undef
 }
 
 // Why: matches VS Code's _connectSSH auth method selection (lines 606-611, 727-758).
-// Picks ONE auth method before connecting and sets the corresponding config fields.
 // ssh2 handles the auth negotiation natively — no custom authHandler needed.
 export function buildConnectConfig(
   target: SshTarget,
@@ -95,6 +97,14 @@ export function buildConnectConfig(
     keepaliveInterval: 15_000
   }
 
+  // Why: always provide agent when available. Unlike VS Code (which has a
+  // passphrase prompt UI), we can't decrypt passphrase-protected keys at
+  // runtime. The agent holds decrypted keys, so it must always be a
+  // fallback even when an explicit key file is also provided.
+  if (process.env.SSH_AUTH_SOCK) {
+    config.agent = process.env.SSH_AUTH_SOCK
+  }
+
   const resolvedIdentity = resolved?.identityFile?.[0]
   const explicitKey =
     target.identityFile ||
@@ -106,12 +116,9 @@ export function buildConnectConfig(
     try {
       config.privateKey = readFileSync(explicitKey.replace(/^~/, homedir()))
     } catch {
-      // Key unreadable — ssh2 will fail with auth error
+      // Key unreadable — agent will handle auth if available
     }
   } else {
-    if (process.env.SSH_AUTH_SOCK) {
-      config.agent = process.env.SSH_AUTH_SOCK
-    }
     const fallback = findDefaultKeyFile()
     if (fallback) {
       config.privateKey = fallback.contents
@@ -119,4 +126,36 @@ export function buildConnectConfig(
   }
 
   return config as ConnectConfig
+}
+
+// Why: ssh2 doesn't natively support ProxyCommand. When the SSH config
+// specifies one (e.g. `cloudflared access ssh --hostname %h`), we spawn
+// the command and bridge its stdin/stdout into a Duplex stream that ssh2
+// uses as its transport socket via `config.sock`.
+export function spawnProxyCommand(
+  proxyCommand: string,
+  host: string,
+  port: number,
+  user: string
+): { process: ChildProcess; sock: NetSocket } {
+  const expanded = proxyCommand
+    .replace(/%h/g, shellEscape(host))
+    .replace(/%p/g, shellEscape(String(port)))
+    .replace(/%r/g, shellEscape(user))
+
+  const proc = spawn('/bin/sh', ['-c', expanded], { stdio: ['pipe', 'pipe', 'pipe'] })
+
+  // Why: a single PassThrough for both directions creates a feedback loop.
+  // Reads come from the proxy's stdout; writes go to its stdin.
+  const stream = new Duplex({
+    read() {},
+    write(chunk, _encoding, cb) {
+      proc.stdin!.write(chunk, cb)
+    }
+  })
+  proc.stdout!.on('data', (data) => stream.push(data))
+  proc.stdout!.on('end', () => stream.push(null))
+  proc.on('error', (err) => stream.destroy(err))
+
+  return { process: proc, sock: stream as unknown as NetSocket }
 }

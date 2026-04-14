@@ -271,7 +271,7 @@ describe('buildConnectConfig', () => {
     mockReadFileSync.mockReturnValue(Buffer.from('key'))
     const config = buildConnectConfig(makeTarget({ identityFile: '/home/user/.ssh/custom' }), null)
     expect(config.privateKey).toEqual(Buffer.from('key'))
-    expect(config.agent).toBeUndefined()
+    expect(config.agent).toBe('/tmp/agent.sock')
   })
 
   it('uses keyFile auth when resolved identityFile is non-default', () => {
@@ -281,7 +281,7 @@ describe('buildConnectConfig', () => {
       makeResolved({ identityFile: ['/home/user/.ssh/work_key'] })
     )
     expect(config.privateKey).toEqual(Buffer.from('custom-key'))
-    expect(config.agent).toBeUndefined()
+    expect(config.agent).toBe('/tmp/agent.sock')
   })
 
   it('uses agent auth when resolved identityFile is a default path (expanded)', () => {

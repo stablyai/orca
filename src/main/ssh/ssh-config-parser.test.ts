@@ -283,14 +283,14 @@ describe('parseSshGOutput', () => {
     expect(result.port).toBe(22)
   })
 
-  it('ignores proxycommand and proxyjump (not in SshResolvedConfig)', () => {
-    const output =
-      'hostname example.com\nproxycommand ssh -W %h:%p bastion\nproxyjump bastion.example.com\nport 22'
+  it('parses proxycommand and filters "none"', () => {
+    const output = 'hostname example.com\nproxycommand ssh -W %h:%p bastion\nport 22'
     const result = parseSshGOutput(output)
-    expect(result.hostname).toBe('example.com')
-    expect(result.port).toBe(22)
-    expect(result).not.toHaveProperty('proxyCommand')
-    expect(result).not.toHaveProperty('proxyJump')
+    expect(result.proxyCommand).toBe('ssh -W %h:%p bastion')
+
+    const noneOutput = 'hostname example.com\nproxycommand none\nport 22'
+    const noneResult = parseSshGOutput(noneOutput)
+    expect(noneResult.proxyCommand).toBeUndefined()
   })
 
   it('handles ~ expansion in identity file paths', () => {
