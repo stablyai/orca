@@ -217,6 +217,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         } else {
           storedCallbacks.onError?.(msg)
         }
+        return undefined
       }
     },
 
