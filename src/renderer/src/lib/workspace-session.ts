@@ -55,27 +55,38 @@ export function buildEditorSessionData(
     ids.add(f.id)
   }
 
-  const persistedActiveFileIdByWorktree = Object.fromEntries(
-    Object.entries(activeFileIdByWorktree).flatMap(([worktreeId, fileId]) => {
-      if (!fileId) {
-        return []
-      }
-      return editFileIdsByWorktree[worktreeId]?.has(fileId) ? [[worktreeId, fileId]] : []
-    })
-  )
+  const activeFileEntries: [string, string][] = []
+  for (const [worktreeId, fileId] of Object.entries(activeFileIdByWorktree)) {
+    if (!fileId) {
+      continue
+    }
+    if (editFileIdsByWorktree[worktreeId]?.has(fileId)) {
+      activeFileEntries.push([worktreeId, fileId])
+    }
+  }
+  const persistedActiveFileIdByWorktree = Object.fromEntries(activeFileEntries) as Record<
+    string,
+    string
+  >
 
-  const persistedActiveTabTypeByWorktree = Object.fromEntries(
-    Object.entries(activeTabTypeByWorktree).flatMap(([worktreeId, tabType]) => {
-      if (tabType !== 'editor') {
-        return [[worktreeId, tabType]]
-      }
-      // Why: restart only restores edit-mode files. Persisting "editor" with a
-      // transient diff/conflict file ID creates a session payload that cannot
-      // be satisfied on startup and leaves the UI with no real editor tab to
-      // select. Only keep the editor marker when it points at a restored file.
-      return persistedActiveFileIdByWorktree[worktreeId] ? [[worktreeId, tabType]] : []
-    })
-  )
+  const activeTabTypeEntries: [string, WorkspaceVisibleTabType][] = []
+  for (const [worktreeId, tabType] of Object.entries(activeTabTypeByWorktree)) {
+    if (tabType !== 'editor') {
+      activeTabTypeEntries.push([worktreeId, tabType])
+      continue
+    }
+    // Why: restart only restores edit-mode files. Persisting "editor" with a
+    // transient diff/conflict file ID creates a session payload that cannot be
+    // satisfied on startup and leaves the UI with no real editor tab to select.
+    // Only keep the editor marker when it points at a restored file.
+    if (persistedActiveFileIdByWorktree[worktreeId]) {
+      activeTabTypeEntries.push([worktreeId, tabType])
+    }
+  }
+  const persistedActiveTabTypeByWorktree = Object.fromEntries(activeTabTypeEntries) as Record<
+    string,
+    WorkspaceVisibleTabType
+  >
 
   return {
     openFilesByWorktree: byWorktree,
