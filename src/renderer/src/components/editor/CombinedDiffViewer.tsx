@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button'
 import type { OpenFile } from '@/store/slices/editor'
 import type { GitBranchChangeEntry, GitDiffResult, GitStatusEntry } from '../../../../shared/types'
 import { DiffSectionItem } from './DiffSectionItem'
+import { getCombinedUncommittedEntries } from './combined-diff-entries'
 
 type DiffSection = {
   key: string
@@ -79,18 +80,24 @@ export default function CombinedDiffViewer({ file }: { file: OpenFile }): React.
       ? file.branchCompare
       : null
 
+  // Why: prefer the snapshot taken at tab-open time so a commit that changes
+  // gitStatusByWorktree does not rebuild all sections and lose loaded content.
+  // The snapshot is already area-filtered by openAllDiffs; conflict filtering
+  // is applied here via snapshotEntries. The live path (getCombinedUncommittedEntries)
+  // adds its own area + conflict filtering as a fallback for tabs opened before
+  // the snapshot field existed.
+  const snapshotEntries = React.useMemo(
+    () => file.uncommittedEntriesSnapshot?.filter((e) => e.conflictStatus !== 'unresolved'),
+    [file.uncommittedEntriesSnapshot]
+  )
   const uncommittedEntries = React.useMemo(
     () =>
-      (gitStatusByWorktree[file.worktreeId] ?? []).filter((entry) => {
-        if (entry.conflictStatus === 'unresolved') {
-          return false
-        }
-        if (file.combinedAreaFilter) {
-          return entry.area === file.combinedAreaFilter
-        }
-        return entry.area !== 'untracked'
-      }),
-    [file.worktreeId, file.combinedAreaFilter, gitStatusByWorktree]
+      snapshotEntries ??
+      getCombinedUncommittedEntries(
+        gitStatusByWorktree[file.worktreeId] ?? [],
+        file.combinedAreaFilter
+      ),
+    [snapshotEntries, file.worktreeId, file.combinedAreaFilter, gitStatusByWorktree]
   )
   const branchEntries = React.useMemo<GitBranchChangeEntry[]>(() => {
     const snapshotEntries = file.branchEntriesSnapshot ?? []

@@ -89,6 +89,10 @@ export type OpenFile = {
   combinedAlternate?: CombinedDiffAlternate
   combinedAreaFilter?: string // filter combined diff to a specific area (e.g. 'staged', 'unstaged', 'untracked')
   branchEntriesSnapshot?: GitBranchChangeEntry[]
+  /** Why: snapshot uncommitted entries at tab-open time so a subsequent commit
+   *  does not yank entries out from under the combined diff, which would rebuild
+   *  all sections and lose loaded content + scroll position. */
+  uncommittedEntriesSnapshot?: GitStatusEntry[]
   conflict?: OpenConflictMetadata
   skippedConflicts?: CombinedDiffSkippedConflict[]
   conflictReview?: ConflictReviewState
@@ -807,6 +811,10 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const skippedConflicts = relevantEntries
         .filter((entry) => entry.conflictStatus === 'unresolved' && entry.conflictKind)
         .map((entry) => ({ path: entry.path, conflictKind: entry.conflictKind! }))
+      // Why: snapshot the entry list at open time so a subsequent commit does
+      // not yank entries from under the combined diff view, which would rebuild
+      // all sections and lose loaded content + scroll position.
+      const uncommittedEntriesSnapshot = relevantEntries
       const id = areaFilter
         ? `${worktreeId}::all-diffs::uncommitted::${areaFilter}`
         : `${worktreeId}::all-diffs::uncommitted`
@@ -822,6 +830,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             f.id === id
               ? {
                   ...f,
+                  uncommittedEntriesSnapshot,
                   combinedAlternate: alternate,
                   combinedAreaFilter: areaFilter,
                   skippedConflicts,
@@ -845,6 +854,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         isDirty: false,
         mode: 'diff',
         diffSource: 'combined-uncommitted',
+        uncommittedEntriesSnapshot,
         combinedAlternate: alternate,
         combinedAreaFilter: areaFilter,
         skippedConflicts,
