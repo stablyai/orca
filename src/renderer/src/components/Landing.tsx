@@ -208,14 +208,18 @@ export default function Landing(): React.JSX.Element {
     return () => window.clearInterval(intervalId)
   }, [preflightIssues.length])
 
-  const shortcuts = useMemo<ShortcutItem[]>(
-    () => [
-      { id: 'create', keys: ['⌘', 'N'], action: 'Create worktree' },
-      { id: 'up', keys: ['⌘', '⇧', '↑'], action: 'Move up worktree' },
-      { id: 'down', keys: ['⌘', '⇧', '↓'], action: 'Move down worktree' }
-    ],
-    []
-  )
+  const shortcuts = useMemo<ShortcutItem[]>(() => {
+    // Use platform-appropriate modifier key labels so Windows users see Ctrl/Shift
+    // rather than the Mac-only ⌘/⇧ symbols.
+    const isMac = navigator.userAgent.includes('Mac')
+    const mod = isMac ? '⌘' : 'Ctrl'
+    const shift = isMac ? '⇧' : 'Shift'
+    return [
+      { id: 'create', keys: [mod, 'N'], action: 'Create worktree' },
+      { id: 'up', keys: [mod, shift, '↑'], action: 'Move up worktree' },
+      { id: 'down', keys: [mod, shift, '↓'], action: 'Move down worktree' }
+    ]
+  }, [])
 
   return (
     <div className="absolute inset-0 flex items-center justify-center bg-background">
