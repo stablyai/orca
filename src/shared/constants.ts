@@ -52,7 +52,7 @@ export const DEFAULT_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = [
   'comment'
 ]
 
-export const DEFAULT_STATUS_BAR_ITEMS: StatusBarItem[] = ['claude', 'codex']
+export const DEFAULT_STATUS_BAR_ITEMS: StatusBarItem[] = ['claude', 'codex', 'ssh']
 
 export const REPO_COLORS = [
   '#737373', // neutral
