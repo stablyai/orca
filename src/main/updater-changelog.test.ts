@@ -37,12 +37,15 @@ describe('fetchChangelog', () => {
 
   it('returns exact match when the incoming version has rich content', async () => {
     const entries = makeEntries([
-      { version: '1.1.21', description: 'New feature', mediaUrl: 'https://onorca.dev/media/1.1.21.gif' },
+      {
+        version: '1.1.21',
+        description: 'New feature',
+        mediaUrl: 'https://onorca.dev/media/1.1.21.gif'
+      },
       { version: '1.1.20' },
       { version: '1.1.19' }
     ])
     fetchMock.mockResolvedValue(jsonResponse(entries))
-
 
     const result = await fetchChangelog('1.1.21', '1.1.19')
 
@@ -56,12 +59,16 @@ describe('fetchChangelog', () => {
     // Incoming 1.1.21 is not in JSON; 1.1.17 has rich content.
     // User is on 1.1.15 which is behind 1.1.17.
     const entries = makeEntries([
-      { version: '1.1.17', description: 'Cool feature', mediaUrl: 'https://onorca.dev/media/1.1.17.gif', releaseNotesUrl: 'https://onorca.dev/changelog/1.1.17' },
+      {
+        version: '1.1.17',
+        description: 'Cool feature',
+        mediaUrl: 'https://onorca.dev/media/1.1.17.gif',
+        releaseNotesUrl: 'https://onorca.dev/changelog/1.1.17'
+      },
       { version: '1.1.16' },
       { version: '1.1.15' }
     ])
     fetchMock.mockResolvedValue(jsonResponse(entries))
-
 
     const result = await fetchChangelog('1.1.21', '1.1.15')
 
@@ -78,11 +85,14 @@ describe('fetchChangelog', () => {
     // 1.1.17 has rich content.
     const entries = makeEntries([
       { version: '1.1.21', description: '', mediaUrl: undefined },
-      { version: '1.1.17', description: 'Great update', mediaUrl: 'https://onorca.dev/media/1.1.17.gif' },
+      {
+        version: '1.1.17',
+        description: 'Great update',
+        mediaUrl: 'https://onorca.dev/media/1.1.17.gif'
+      },
       { version: '1.1.15' }
     ])
     fetchMock.mockResolvedValue(jsonResponse(entries))
-
 
     const result = await fetchChangelog('1.1.21', '1.1.15')
 
@@ -101,7 +111,6 @@ describe('fetchChangelog', () => {
     ])
     fetchMock.mockResolvedValue(jsonResponse(entries))
 
-
     const result = await fetchChangelog('1.1.21', '1.1.19')
 
     expect(result).toBeNull()
@@ -116,7 +125,6 @@ describe('fetchChangelog', () => {
     ])
     fetchMock.mockResolvedValue(jsonResponse(entries))
 
-
     const result = await fetchChangelog('1.1.21', '1.1.19')
 
     expect(result).toBeNull()
@@ -127,10 +135,13 @@ describe('fetchChangelog', () => {
     const entries = makeEntries([
       { version: '1.1.20', description: '' },
       { version: '1.1.18' },
-      { version: '1.1.17', description: 'Old feature', mediaUrl: 'https://onorca.dev/media/old.gif' }
+      {
+        version: '1.1.17',
+        description: 'Old feature',
+        mediaUrl: 'https://onorca.dev/media/old.gif'
+      }
     ])
     fetchMock.mockResolvedValue(jsonResponse(entries))
-
 
     const result = await fetchChangelog('1.1.20', '1.1.18')
 
@@ -138,13 +149,38 @@ describe('fetchChangelog', () => {
     expect(result).toBeNull()
   })
 
-  it('shows rich entry when local version is not in JSON (very old user)', async () => {
+  it('shows rich entry at the same version as localVersion', async () => {
+    // User is on 1.1.18 which has rich content; incoming 1.1.20 has none.
+    // The user may not have seen the rich card for 1.1.18 (e.g., they updated
+    // silently), so showing it is better than showing nothing.
     const entries = makeEntries([
       { version: '1.1.20', description: '' },
-      { version: '1.1.17', description: 'Feature demo', mediaUrl: 'https://onorca.dev/media/demo.gif' }
+      {
+        version: '1.1.18',
+        description: 'Current feature',
+        mediaUrl: 'https://onorca.dev/media/current.gif'
+      },
+      { version: '1.1.17' }
     ])
     fetchMock.mockResolvedValue(jsonResponse(entries))
 
+    const result = await fetchChangelog('1.1.20', '1.1.18')
+
+    expect(result).not.toBeNull()
+    expect(result!.release.title).toBe('Release 1.1.18')
+    expect(result!.release.releaseNotesUrl).toBe('https://onorca.dev/changelog')
+  })
+
+  it('shows rich entry when local version is not in JSON (very old user)', async () => {
+    const entries = makeEntries([
+      { version: '1.1.20', description: '' },
+      {
+        version: '1.1.17',
+        description: 'Feature demo',
+        mediaUrl: 'https://onorca.dev/media/demo.gif'
+      }
+    ])
+    fetchMock.mockResolvedValue(jsonResponse(entries))
 
     const result = await fetchChangelog('1.1.21', '1.0.0')
 
@@ -155,9 +191,27 @@ describe('fetchChangelog', () => {
     expect(result!.releasesBehind).toBeNull()
   })
 
+  it('skips rich entries when local version is newer than all changelog entries', async () => {
+    // Local version 1.1.25 is not in the JSON and is newer than the latest
+    // changelog entry (1.1.20). The rich entry at 1.1.17 is stale — the user
+    // has already passed it.
+    const entries = makeEntries([
+      { version: '1.1.20', description: '' },
+      {
+        version: '1.1.17',
+        description: 'Old feature',
+        mediaUrl: 'https://onorca.dev/media/old.gif'
+      }
+    ])
+    fetchMock.mockResolvedValue(jsonResponse(entries))
+
+    const result = await fetchChangelog('1.1.26', '1.1.25')
+
+    expect(result).toBeNull()
+  })
+
   it('returns null on non-ok HTTP response', async () => {
     fetchMock.mockResolvedValue({ ok: false })
-
 
     const result = await fetchChangelog('1.1.21', '1.1.19')
 
@@ -167,7 +221,6 @@ describe('fetchChangelog', () => {
   it('returns null on non-array JSON', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ bad: true }))
 
-
     const result = await fetchChangelog('1.1.21', '1.1.19')
 
     expect(result).toBeNull()
@@ -175,12 +228,19 @@ describe('fetchChangelog', () => {
 
   it('prefers exact match over fallback when both have rich content', async () => {
     const entries = makeEntries([
-      { version: '1.1.21', description: 'Latest feature', mediaUrl: 'https://onorca.dev/media/latest.gif' },
-      { version: '1.1.17', description: 'Older feature', mediaUrl: 'https://onorca.dev/media/old.gif' },
+      {
+        version: '1.1.21',
+        description: 'Latest feature',
+        mediaUrl: 'https://onorca.dev/media/latest.gif'
+      },
+      {
+        version: '1.1.17',
+        description: 'Older feature',
+        mediaUrl: 'https://onorca.dev/media/old.gif'
+      },
       { version: '1.1.15' }
     ])
     fetchMock.mockResolvedValue(jsonResponse(entries))
-
 
     const result = await fetchChangelog('1.1.21', '1.1.15')
 
@@ -195,7 +255,6 @@ describe('fetchChangelog', () => {
       { version: '1.1.15' }
     ])
     fetchMock.mockResolvedValue(jsonResponse(entries))
-
 
     const result = await fetchChangelog('1.1.21', '1.1.15')
 

@@ -1,5 +1,6 @@
 import { net } from 'electron'
 import type { ChangelogData } from '../shared/types'
+import { compareVersions } from './updater-fallback'
 
 type ChangelogEntry = {
   version: string
@@ -93,10 +94,20 @@ export async function fetchChangelog(
         continue
       }
 
-      // Only show this entry if the user's local version is behind it.
-      // When localIndex === -1 the local version isn't in the JSON at all,
-      // which typically means it's very old — safe to show the content.
-      if (localIndex !== -1 && localIndex <= i) {
+      // Only show this entry if the user's local version is at or behind it.
+      // Why: the user hasn't necessarily seen the rich card for their own
+      // version (e.g., they updated silently or dismissed the card), so
+      // entries at the same version as localVersion are still worth showing.
+      // When localIndex === -1 the local version isn't in the JSON at all —
+      // this could mean it's very old OR very new (e.g., a patch release not
+      // yet in the changelog). Fall back to semver comparison to avoid
+      // showing stale content to users who are already ahead.
+      if (localIndex !== -1) {
+        if (localIndex < i) {
+          continue
+        }
+      } else if (compareVersions(localVersion, candidate.version) > 0) {
+        // localVersion is newer than this candidate — user already passed it.
         continue
       }
 
