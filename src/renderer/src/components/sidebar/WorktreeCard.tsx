@@ -395,13 +395,13 @@ const WorktreeCard = React.memo(function WorktreeCard({
         </div>
       </WorktreeContextMenu>
 
-      {repo?.connectionId && isSshDisconnected && (
+      {repo?.connectionId && (
         <SshDisconnectedDialog
-          open={showDisconnectedDialog}
+          open={showDisconnectedDialog && isSshDisconnected}
           onOpenChange={setShowDisconnectedDialog}
           targetId={repo.connectionId}
           targetLabel={sshTargetLabel || repo.displayName}
-          status={sshStatus!}
+          status={sshStatus ?? 'disconnected'}
         />
       )}
     </>

@@ -55,7 +55,10 @@ export function SshDisconnectedDialog({
     }
   }, [targetId, targetLabel, onOpenChange])
 
-  const message = STATUS_MESSAGES[status] ?? 'This remote repository is not connected.'
+  const isConnecting = connecting || status === 'reconnecting' || status === 'connecting'
+  const message = isConnecting
+    ? 'Reconnecting to the remote host...'
+    : (STATUS_MESSAGES[status] ?? 'This remote repository is not connected.')
   const showReconnect = isReconnectable(status)
 
   return (
@@ -63,8 +66,12 @@ export function SshDisconnectedDialog({
       <DialogContent className="sm:max-w-md" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <WifiOff className="size-5 text-muted-foreground" />
-            SSH Disconnected
+            {isConnecting ? (
+              <Loader2 className="size-5 text-yellow-500 animate-spin" />
+            ) : (
+              <WifiOff className="size-5 text-muted-foreground" />
+            )}
+            {isConnecting ? 'Reconnecting...' : 'SSH Disconnected'}
           </DialogTitle>
           <DialogDescription className="pt-1">{message}</DialogDescription>
         </DialogHeader>
@@ -74,16 +81,20 @@ export function SshDisconnectedDialog({
           <div className="min-w-0 flex-1">
             <span className="text-sm font-medium">{targetLabel}</span>
           </div>
-          <span className={`size-2 shrink-0 rounded-full ${statusColor(status)}`} />
+          {isConnecting ? (
+            <Loader2 className="size-4 shrink-0 text-yellow-500 animate-spin" />
+          ) : (
+            <span className={`size-2 shrink-0 rounded-full ${statusColor(status)}`} />
+          )}
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isConnecting}>
             Dismiss
           </Button>
           {showReconnect && (
-            <Button onClick={() => void handleReconnect()} disabled={connecting}>
-              {connecting ? (
+            <Button onClick={() => void handleReconnect()} disabled={isConnecting}>
+              {isConnecting ? (
                 <>
                   <Loader2 className="size-4 animate-spin" />
                   Connecting...
