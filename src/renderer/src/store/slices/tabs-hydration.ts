@@ -17,6 +17,27 @@ type HydratedTabState = {
   layoutByWorktree: Record<string, TabGroupLayoutNode>
 }
 
+function pruneLayoutForGroups(
+  root: TabGroupLayoutNode,
+  validGroupIds: Set<string>
+): TabGroupLayoutNode | null {
+  if (root.type === 'leaf') {
+    return validGroupIds.has(root.groupId) ? root : null
+  }
+
+  const first = pruneLayoutForGroups(root.first, validGroupIds)
+  const second = pruneLayoutForGroups(root.second, validGroupIds)
+
+  if (first === null) {
+    return second
+  }
+  if (second === null) {
+    return first
+  }
+
+  return { ...root, first, second }
+}
+
 function hydrateUnifiedFormat(
   session: WorkspaceSessionState,
   validWorktreeIds: Set<string>
@@ -69,18 +90,35 @@ function hydrateUnifiedFormat(
         activeTabId: g.activeTabId && validTabIds.has(g.activeTabId) ? g.activeTabId : null
       }
     })
+    const hydratedGroups = validatedGroups.filter((group, index) => {
+      const hadTabsBeforeHydration = groups[index]?.tabOrder.length > 0
+      return !hadTabsBeforeHydration || group.tabOrder.length > 0
+    })
+    if (hydratedGroups.length === 0) {
+      if ((tabsByWorktree[worktreeId] ?? []).length === 0) {
+        delete tabsByWorktree[worktreeId]
+      }
+      continue
+    }
 
-    groupsByWorktree[worktreeId] = validatedGroups
+    groupsByWorktree[worktreeId] = hydratedGroups
     const activeGroupId = selectHydratedActiveGroupId(
-      validatedGroups,
+      hydratedGroups,
       session.activeGroupIdByWorktree?.[worktreeId]
     )
     if (activeGroupId) {
       activeGroupIdByWorktree[worktreeId] = activeGroupId
     }
-    layoutByWorktree[worktreeId] = session.tabGroupLayouts?.[worktreeId] ?? {
+    const hydratedGroupIds = new Set(hydratedGroups.map((group) => group.id))
+    const hydratedLayout = session.tabGroupLayouts?.[worktreeId]
+      ? pruneLayoutForGroups(session.tabGroupLayouts[worktreeId], hydratedGroupIds)
+      : null
+    layoutByWorktree[worktreeId] = hydratedLayout ?? {
       type: 'leaf',
-      groupId: validatedGroups[0].id
+      // Why: if transient-only groups were removed during hydration, the
+      // persisted split tree can collapse to a single surviving group. The
+      // fallback leaf keeps restore aligned with the remaining real tabs.
+      groupId: hydratedGroups[0].id
     }
   }
 
