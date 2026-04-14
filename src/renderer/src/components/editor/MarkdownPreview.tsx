@@ -280,10 +280,14 @@ export default function MarkdownPreview({
     },
     // Why: Intercept code elements to detect mermaid fenced blocks. rehype-highlight
     // sets className="language-mermaid" on the <code> inside <pre> for ```mermaid blocks.
-    // We render those as SVG diagrams instead of highlighted source.
+    // We render those as SVG diagrams instead of highlighted source. Markdown preview
+    // opts out of Mermaid HTML labels because this path sanitizes the SVG before
+    // injection, and sanitized foreignObject labels disappear on some platforms.
     code: ({ className, children, ...props }) => {
       if (/language-mermaid/.test(className || '')) {
-        return <MermaidBlock content={String(children).trimEnd()} isDark={isDark} />
+        return (
+          <MermaidBlock content={String(children).trimEnd()} isDark={isDark} htmlLabels={false} />
+        )
       }
       return (
         <code className={className} {...props}>

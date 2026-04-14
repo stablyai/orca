@@ -1,10 +1,12 @@
 import React, { useEffect, useId, useRef, useState } from 'react'
 import mermaid from 'mermaid'
 import DOMPurify from 'dompurify'
+import { getMermaidConfig } from './mermaid-config'
 
 type MermaidBlockProps = {
   content: string
   isDark: boolean
+  htmlLabels?: boolean
 }
 
 // Why: mermaid.render() manipulates global DOM state (element IDs, internal
@@ -17,16 +19,19 @@ let renderQueue: Promise<void> = Promise.resolve()
  * Renders a mermaid diagram string as SVG. Falls back to raw source with an
  * error banner if the syntax is invalid — never breaks the rest of the preview.
  */
-export default function MermaidBlock({ content, isDark }: MermaidBlockProps): React.JSX.Element {
+export default function MermaidBlock({
+  content,
+  isDark,
+  htmlLabels = true
+}: MermaidBlockProps): React.JSX.Element {
   const id = useId().replace(/:/g, '_')
   const containerRef = useRef<HTMLDivElement>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const theme = isDark ? 'dark' : 'default'
     // Re-initialize on every effect so the theme stays in sync with the
     // current appearance. mermaid.initialize() is cheap and idempotent.
-    mermaid.initialize({ startOnLoad: false, theme })
+    mermaid.initialize(getMermaidConfig(isDark, htmlLabels))
 
     let cancelled = false
 
@@ -58,7 +63,7 @@ export default function MermaidBlock({ content, isDark }: MermaidBlockProps): Re
     return () => {
       cancelled = true
     }
-  }, [content, isDark, id])
+  }, [content, htmlLabels, isDark, id])
 
   if (error) {
     return (
