@@ -554,9 +554,14 @@ export type PreloadApi = {
       entries: { name: string; isDirectory: boolean }[]
       resolvedPath: string
     }>
-    onPassphraseRequest: (
-      callback: (data: { requestId: string; targetId: string; keyPath: string }) => void
+    onCredentialRequest: (
+      callback: (data: {
+        requestId: string
+        targetId: string
+        kind: 'passphrase' | 'password'
+        detail: string
+      }) => void
     ) => () => void
-    submitPassphrase: (args: { requestId: string; passphrase: string | null }) => Promise<void>
+    submitCredential: (args: { requestId: string; value: string | null }) => Promise<void>
   }
 }

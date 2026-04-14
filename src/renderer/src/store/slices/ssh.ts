@@ -2,10 +2,11 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { SshConnectionState, SshConnectionStatus } from '../../../../shared/ssh-types'
 
-export type SshPassphraseRequest = {
+export type SshCredentialRequest = {
   requestId: string
   targetId: string
-  keyPath: string
+  kind: 'passphrase' | 'password'
+  detail: string
 }
 
 export type SshSlice = {
@@ -13,18 +14,18 @@ export type SshSlice = {
   /** Maps target IDs to their user-facing labels. Populated during hydration
    * so components can look up labels without per-component IPC calls. */
   sshTargetLabels: Map<string, string>
-  sshPassphraseQueue: SshPassphraseRequest[]
+  sshCredentialQueue: SshCredentialRequest[]
   setSshConnectionState: (targetId: string, state: SshConnectionState) => void
   setSshTargetLabels: (labels: Map<string, string>) => void
-  enqueueSshPassphraseRequest: (req: SshPassphraseRequest) => void
-  dequeueSshPassphraseRequest: () => void
+  enqueueSshCredentialRequest: (req: SshCredentialRequest) => void
+  dequeueSshCredentialRequest: () => void
   getSshConnectionStatus: (connectionId: string | null | undefined) => SshConnectionStatus | null
 }
 
 export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set, get) => ({
   sshConnectionStates: new Map(),
   sshTargetLabels: new Map(),
-  sshPassphraseQueue: [],
+  sshCredentialQueue: [],
 
   setSshConnectionState: (targetId, state) =>
     set(() => {
@@ -34,10 +35,10 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set, ge
     }),
 
   setSshTargetLabels: (labels) => set({ sshTargetLabels: labels }),
-  enqueueSshPassphraseRequest: (req) =>
-    set((s) => ({ sshPassphraseQueue: [...s.sshPassphraseQueue, req] })),
-  dequeueSshPassphraseRequest: () =>
-    set((s) => ({ sshPassphraseQueue: s.sshPassphraseQueue.slice(1) })),
+  enqueueSshCredentialRequest: (req) =>
+    set((s) => ({ sshCredentialQueue: [...s.sshCredentialQueue, req] })),
+  dequeueSshCredentialRequest: () =>
+    set((s) => ({ sshCredentialQueue: s.sshCredentialQueue.slice(1) })),
 
   getSshConnectionStatus: (connectionId) => {
     if (!connectionId) {

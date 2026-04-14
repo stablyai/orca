@@ -8,18 +8,20 @@ import type { ConnectConfig } from 'ssh2'
 import type { SshTarget, SshConnectionState } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './ssh-config-parser'
 
+export type SshCredentialKind = 'passphrase' | 'password'
+
 export type SshConnectionCallbacks = {
   onStateChange: (targetId: string, state: SshConnectionState) => void
-  onPassphraseRequest?: (targetId: string, keyPath: string) => Promise<string | null>
+  onCredentialRequest?: (
+    targetId: string,
+    kind: SshCredentialKind,
+    detail: string
+  ) => Promise<string | null>
 }
 
 export function isPassphraseError(err: Error): boolean {
   const msg = err.message.toLowerCase()
-  return (
-    msg.includes('passphrase') ||
-    msg.includes('encrypted key') ||
-    msg.includes('bad decrypt')
-  )
+  return msg.includes('passphrase') || msg.includes('encrypted key') || msg.includes('bad decrypt')
 }
 
 export const INITIAL_RETRY_ATTEMPTS = 5

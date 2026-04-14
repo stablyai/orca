@@ -1,17 +1,15 @@
 import { ipcMain, type BrowserWindow } from 'electron'
 import { randomUUID } from 'crypto'
+import type { SshCredentialKind } from '../ssh/ssh-connection-utils'
 
-const PASSPHRASE_TIMEOUT_MS = 120_000
-const pendingRequests = new Map<string, { resolve: (passphrase: string | null) => void }>()
+const CREDENTIAL_TIMEOUT_MS = 120_000
+const pendingRequests = new Map<string, { resolve: (value: string | null) => void }>()
 
-/**
- * Ask the renderer to show a passphrase dialog and wait for the response.
- * Returns null if the user cancels or the prompt times out.
- */
-export function requestPassphrase(
+export function requestCredential(
   getMainWindow: () => BrowserWindow | null,
   targetId: string,
-  keyPath: string
+  kind: SshCredentialKind,
+  detail: string
 ): Promise<string | null> {
   const requestId = randomUUID()
   return new Promise((resolve) => {
@@ -19,18 +17,18 @@ export function requestPassphrase(
       if (pendingRequests.delete(requestId)) {
         resolve(null)
       }
-    }, PASSPHRASE_TIMEOUT_MS)
+    }, CREDENTIAL_TIMEOUT_MS)
 
     pendingRequests.set(requestId, {
-      resolve: (passphrase) => {
+      resolve: (value) => {
         clearTimeout(timer)
-        resolve(passphrase)
+        resolve(value)
       }
     })
 
     const win = getMainWindow()
     if (win && !win.isDestroyed()) {
-      win.webContents.send('ssh:passphrase-request', { requestId, targetId, keyPath })
+      win.webContents.send('ssh:credential-request', { requestId, targetId, kind, detail })
     } else {
       pendingRequests.delete(requestId)
       clearTimeout(timer)
@@ -39,15 +37,15 @@ export function requestPassphrase(
   })
 }
 
-export function registerPassphraseHandler(): void {
-  ipcMain.removeHandler('ssh:submitPassphrase')
+export function registerCredentialHandler(): void {
+  ipcMain.removeHandler('ssh:submitCredential')
   ipcMain.handle(
-    'ssh:submitPassphrase',
-    (_event, args: { requestId: string; passphrase: string | null }) => {
+    'ssh:submitCredential',
+    (_event, args: { requestId: string; value: string | null }) => {
       const pending = pendingRequests.get(args.requestId)
       if (pending) {
         pendingRequests.delete(args.requestId)
-        pending.resolve(args.passphrase)
+        pending.resolve(args.value)
       }
     }
   )

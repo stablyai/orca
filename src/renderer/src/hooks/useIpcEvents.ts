@@ -264,8 +264,8 @@ export function useIpcEvents(): void {
     })()
 
     unsubs.push(
-      window.api.ssh.onPassphraseRequest((data) => {
-        useAppStore.getState().enqueueSshPassphraseRequest(data)
+      window.api.ssh.onCredentialRequest((data) => {
+        useAppStore.getState().enqueueSshCredentialRequest(data)
       })
     )
 

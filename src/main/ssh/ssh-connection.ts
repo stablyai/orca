@@ -30,6 +30,7 @@ export class SshConnection {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private disposed = false
   private cachedPassphrase: string | null = null
+  private cachedPassword: string | null = null
 
   constructor(target: SshTarget, callbacks: SshConnectionCallbacks) {
     this.target = target
@@ -127,23 +128,36 @@ export class SshConnection {
     if (this.cachedPassphrase) {
       config.passphrase = this.cachedPassphrase
     }
+    if (this.cachedPassword) {
+      config.password = this.cachedPassword
+    }
 
     try {
       await this.doSsh2Connect(config)
     } catch (err) {
-      // Why: ssh2 fails immediately when given an encrypted key without a
-      // passphrase. Prompt the user and retry once with the passphrase.
-      if (
-        err instanceof Error &&
-        isPassphraseError(err) &&
-        !this.cachedPassphrase &&
-        this.callbacks.onPassphraseRequest
-      ) {
-        const keyPath = this.target.identityFile || resolved?.identityFile?.[0] || '(unknown)'
-        const passphrase = await this.callbacks.onPassphraseRequest(this.target.id, keyPath)
-        if (passphrase) {
-          this.cachedPassphrase = passphrase
-          config.passphrase = passphrase
+      if (!(err instanceof Error) || !this.callbacks.onCredentialRequest) {
+        throw err
+      }
+      // Why: prompt for passphrase/password on first failure, cache on success.
+      if (isPassphraseError(err) && !this.cachedPassphrase) {
+        const detail = this.target.identityFile || resolved?.identityFile?.[0] || '(unknown)'
+        const val = await this.callbacks.onCredentialRequest(this.target.id, 'passphrase', detail)
+        if (val) {
+          this.cachedPassphrase = val
+          config.passphrase = val
+          await this.doSsh2Connect(config)
+          return
+        }
+      }
+      if (isAuthError(err) && !this.cachedPassword) {
+        const val = await this.callbacks.onCredentialRequest(
+          this.target.id,
+          'password',
+          config.host || this.target.label
+        )
+        if (val) {
+          this.cachedPassword = val
+          config.password = val
           await this.doSsh2Connect(config)
           return
         }
@@ -231,7 +245,9 @@ export class SshConnection {
   }
 
   async connectViaSystemSsh(): Promise<SystemSshProcess> {
-    if (this.disposed) { throw new Error('Connection disposed') }
+    if (this.disposed) {
+      throw new Error('Connection disposed')
+    }
     this.systemSsh?.kill()
     this.systemSsh = null
     this.setState('connecting')
@@ -241,14 +257,24 @@ export class SshConnection {
       let settled = false
       await new Promise<void>((resolve, reject) => {
         const timeout = setTimeout(() => {
-          settled = true; proc.kill()
+          settled = true
+          proc.kill()
           reject(new Error('System SSH connection timed out'))
         }, CONNECT_TIMEOUT_MS)
-        proc.stdout.once('data', () => { settled = true; clearTimeout(timeout); resolve() })
+        proc.stdout.once('data', () => {
+          settled = true
+          clearTimeout(timeout)
+          resolve()
+        })
         proc.onExit((code) => {
-          if (settled) { return }
-          settled = true; clearTimeout(timeout)
-          if (code !== 0) { reject(new Error(`System SSH exited with code ${code}`)) }
+          if (settled) {
+            return
+          }
+          settled = true
+          clearTimeout(timeout)
+          if (code !== 0) {
+            reject(new Error(`System SSH exited with code ${code}`))
+          }
         })
       })
       this.setState('connected')
@@ -267,11 +293,16 @@ export class SshConnection {
 
   async disconnect(): Promise<void> {
     this.disposed = true
-    if (this.reconnectTimer) { clearTimeout(this.reconnectTimer) }
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+    }
     this.reconnectTimer = null
-    this.client?.end(); this.client = null
-    this.proxyProcess?.kill(); this.proxyProcess = null
-    this.systemSsh?.kill(); this.systemSsh = null
+    this.client?.end()
+    this.client = null
+    this.proxyProcess?.kill()
+    this.proxyProcess = null
+    this.systemSsh?.kill()
+    this.systemSsh = null
     this.setState('disconnected')
   }
 

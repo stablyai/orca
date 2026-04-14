@@ -12,10 +12,10 @@ import {
 import { useAppStore } from '@/store'
 
 export function SshPassphraseDialog(): React.JSX.Element | null {
-  const request = useAppStore((s) => s.sshPassphraseQueue[0] ?? null)
+  const request = useAppStore((s) => s.sshCredentialQueue[0] ?? null)
   const targetLabels = useAppStore((s) => s.sshTargetLabels)
-  const dequeue = useAppStore((s) => s.dequeueSshPassphraseRequest)
-  const [passphrase, setPassphrase] = useState('')
+  const dequeue = useAppStore((s) => s.dequeueSshCredentialRequest)
+  const [value, setValue] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
   const open = request !== null
@@ -23,22 +23,22 @@ export function SshPassphraseDialog(): React.JSX.Element | null {
   const requestId = request?.requestId
   useEffect(() => {
     if (requestId) {
-      setPassphrase('')
+      setValue('')
       requestAnimationFrame(() => inputRef.current?.focus())
     }
   }, [requestId])
 
   const handleSubmit = useCallback(() => {
-    if (!request || !passphrase) {
+    if (!request || !value) {
       return
     }
-    void window.api.ssh.submitPassphrase({ requestId: request.requestId, passphrase })
+    void window.api.ssh.submitCredential({ requestId: request.requestId, value })
     dequeue()
-  }, [request, passphrase, dequeue])
+  }, [request, value, dequeue])
 
   const handleCancel = useCallback(() => {
     if (request) {
-      void window.api.ssh.submitPassphrase({ requestId: request.requestId, passphrase: null })
+      void window.api.ssh.submitCredential({ requestId: request.requestId, value: null })
     }
     dequeue()
   }, [request, dequeue])
@@ -48,32 +48,43 @@ export function SshPassphraseDialog(): React.JSX.Element | null {
   }
 
   const label = targetLabels.get(request.targetId) ?? request.targetId
+  const isPassword = request.kind === 'password'
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleCancel()}>
       <DialogContent showCloseButton={false} className="max-w-[360px]">
         <DialogHeader>
-          <DialogTitle className="text-sm">SSH Key Passphrase</DialogTitle>
+          <DialogTitle className="text-sm">
+            {isPassword ? 'SSH Password' : 'SSH Key Passphrase'}
+          </DialogTitle>
           <DialogDescription className="text-xs">
-            Enter the passphrase for <span className="font-medium">{label}</span>
+            {isPassword ? (
+              <>
+                Enter the password for <span className="font-medium">{label}</span>
+              </>
+            ) : (
+              <>
+                Enter the passphrase for <span className="font-medium">{label}</span>
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
         <div>
           <label className="text-[11px] font-medium text-muted-foreground mb-1 block">
-            Passphrase for {request.keyPath}
+            {isPassword ? `Password for ${request.detail}` : `Passphrase for ${request.detail}`}
           </label>
           <Input
             ref={inputRef}
             type="password"
-            value={passphrase}
-            onChange={(e) => setPassphrase(e.target.value)}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault()
                 handleSubmit()
               }
             }}
-            placeholder="Enter passphrase"
+            placeholder={isPassword ? 'Enter password' : 'Enter passphrase'}
             className="h-8 text-sm"
           />
         </div>
@@ -81,8 +92,8 @@ export function SshPassphraseDialog(): React.JSX.Element | null {
           <Button variant="outline" size="sm" onClick={handleCancel}>
             Cancel
           </Button>
-          <Button size="sm" onClick={handleSubmit} disabled={!passphrase}>
-            Unlock
+          <Button size="sm" onClick={handleSubmit} disabled={!value}>
+            {isPassword ? 'Connect' : 'Unlock'}
           </Button>
         </DialogFooter>
       </DialogContent>
