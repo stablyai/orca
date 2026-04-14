@@ -121,7 +121,6 @@ function App(): React.JSX.Element {
   const showActiveOnly = useAppStore((s) => s.showActiveOnly)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
-  const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarWidth = useAppStore((s) => s.rightSidebarWidth)
   const isFullScreen = useAppStore((s) => s.isFullScreen)
   const settings = useAppStore((s) => s.settings)
@@ -680,7 +679,14 @@ function App(): React.JSX.Element {
               {activeView === 'settings' ? <Settings /> : !activeWorktreeId ? <Landing /> : null}
             </div>
           </div>
-          {showSidebar && rightSidebarOpen ? <RightSidebar /> : null}
+          {/* Why: keep RightSidebar mounted even when closed so that its
+              child components (FileExplorer, SourceControl, etc.) and their
+              filesystem watchers + cached directory trees survive across
+              open/close toggles.  Without this, every Ctrl+L remounts the
+              entire subtree, triggering watchWorktree + readDir + branchCompare
+              IPC calls that freeze Windows for seconds.  The sidebar already
+              renders at width 0 when closed via useSidebarResize. */}
+          {showSidebar ? <RightSidebar /> : null}
         </div>
         <StatusBar />
       </TooltipProvider>

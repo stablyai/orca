@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useMemo, useRef } from 'react'
+import React, { useMemo } from 'react'
 import { Files, Search, GitBranch, ListChecks } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
@@ -136,21 +136,8 @@ function RightSidebarInner(): React.JSX.Element {
     ? rightSidebarTab
     : visibleItems[0].id
 
-  // Why: suppress CSS width transitions when the sidebar opens so the
-  // width snaps to 320 px instantly instead of animating from 0→320 px.
-  // Without this, Chromium fires the transition causing the terminal
-  // container to resize through intermediate widths. Each intermediate
-  // width triggers a synchronous xterm scrollback reflow that blocks the
-  // renderer for seconds on Windows.
-  //
-  // useLayoutEffect + direct DOM style manipulation runs synchronously
-  // BEFORE the browser paints, so the transition is killed before Chromium
-  // can start it.  A useState-based approach has a timing race: the state
-  // update triggers a re-render that arrives one frame too late.
-  const prevOpenRef = useRef(rightSidebarOpen)
-
   const activityBarSideWidth = activityBarPosition === 'side' ? ACTIVITY_BAR_SIDE_WIDTH : 0
-  const { containerRef, isResizing, onResizeStart } = useSidebarResize<HTMLDivElement>({
+  const { containerRef, onResizeStart } = useSidebarResize<HTMLDivElement>({
     isOpen: rightSidebarOpen,
     width: rightSidebarWidth,
     minWidth: MIN_WIDTH,
@@ -159,22 +146,6 @@ function RightSidebarInner(): React.JSX.Element {
     renderedExtraWidth: activityBarSideWidth,
     setWidth: setRightSidebarWidth
   })
-
-  useLayoutEffect(() => {
-    if (rightSidebarOpen && !prevOpenRef.current) {
-      const el = containerRef.current
-      if (el) {
-        // Kill the transition before the browser paints the width change.
-        el.style.transition = 'none'
-        // Restore CSS-class-driven transitions in the next frame so close
-        // animations and drag-resize still animate smoothly.
-        requestAnimationFrame(() => {
-          el.style.transition = ''
-        })
-      }
-    }
-    prevOpenRef.current = rightSidebarOpen
-  }, [rightSidebarOpen, containerRef])
 
   const panelContent = (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden scrollbar-sleek-parent">
@@ -206,8 +177,13 @@ function RightSidebarInner(): React.JSX.Element {
     <div
       ref={containerRef}
       className={cn(
-        'relative flex-shrink-0 flex flex-row overflow-visible',
-        isResizing ? 'transition-none' : 'transition-[width] duration-200'
+        'relative flex-shrink-0 flex flex-row',
+        // Why: overflow-visible is needed when open so the resize handle
+        // on the left edge remains interactive.  When closed (width 0),
+        // switch to overflow-hidden so the activity bar icons and panel
+        // content don't leak past the 0-width boundary (the component
+        // stays mounted for performance — see App.tsx).
+        rightSidebarOpen ? 'overflow-visible' : 'overflow-hidden'
       )}
     >
       {/* Panel content area */}

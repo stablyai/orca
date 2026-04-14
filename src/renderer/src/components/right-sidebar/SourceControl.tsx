@@ -160,7 +160,12 @@ function SourceControlInner(): React.JSX.Element {
   const conflictOperation = activeWorktreeId
     ? (gitConflictOperationByWorktree[activeWorktreeId] ?? 'unknown')
     : 'unknown'
-  const isBranchVisible = rightSidebarTab === 'source-control'
+  const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
+  // Why: gate polling on both the active tab AND the sidebar being open.
+  // The sidebar now stays mounted when closed (for performance), so without
+  // this guard the branchCompare interval and PR fetch would keep running
+  // with no visible consumer, wasting git process spawns and API calls.
+  const isBranchVisible = rightSidebarTab === 'source-control' && rightSidebarOpen
 
   useEffect(() => {
     if (!activeRepo || isFolder) {

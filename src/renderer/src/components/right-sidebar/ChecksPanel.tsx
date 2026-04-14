@@ -24,6 +24,13 @@ export default function ChecksPanel(): React.JSX.Element {
   const fetchPRForBranch = useAppStore((s) => s.fetchPRForBranch)
   const gitConflictOperationByWorktree = useAppStore((s) => s.gitConflictOperationByWorktree)
 
+  // Why: the sidebar stays mounted when closed (for performance). Gate
+  // polling on visibility so we don't fetch checks/comments in the background
+  // when the panel isn't visible to the user.
+  const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
+  const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
+  const isPanelVisible = rightSidebarOpen && rightSidebarTab === 'checks'
+
   const fetchPRChecks = useAppStore((s) => s.fetchPRChecks)
   const fetchPRComments = useAppStore((s) => s.fetchPRComments)
   const resolveReviewThread = useAppStore((s) => s.resolveReviewThread)
@@ -143,7 +150,7 @@ export default function ChecksPanel(): React.JSX.Element {
 
   // Fetch checks on mount + poll with exponential backoff
   useEffect(() => {
-    if (!prNumber) {
+    if (!prNumber || !isPanelVisible) {
       setChecks([])
       return
     }
@@ -171,7 +178,7 @@ export default function ChecksPanel(): React.JSX.Element {
         clearTimeout(pollRef.current)
       }
     }
-  }, [fetchChecks, prNumber])
+  }, [fetchChecks, isPanelVisible, prNumber])
 
   // Fetch comments once when PR changes (no polling — comments change infrequently).
   // The manual refresh path calls this directly; the auto-fetch effect below uses
@@ -200,7 +207,7 @@ export default function ChecksPanel(): React.JSX.Element {
   )
 
   useEffect(() => {
-    if (!repo || !prNumber) {
+    if (!repo || !prNumber || !isPanelVisible) {
       setComments([])
       return
     }
@@ -225,7 +232,7 @@ export default function ChecksPanel(): React.JSX.Element {
     return () => {
       cancelled = true
     }
-  }, [repo, prNumber, fetchPRComments])
+  }, [repo, prNumber, isPanelVisible, fetchPRComments])
 
   const handleRefresh = useCallback(async () => {
     if (!repo || !branch) {
