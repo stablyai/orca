@@ -280,9 +280,3 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
     writeIssueCommand(repo.path, args.content)
   })
 }
-
-function notifyWorktreesChanged(mainWindow: BrowserWindow, repoId: string): void {
-  if (!mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('worktrees:changed', { repoId })
-  }
-}

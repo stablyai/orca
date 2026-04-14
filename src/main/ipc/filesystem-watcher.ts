@@ -1,3 +1,8 @@
+/* eslint-disable max-lines -- Why: filesystem-watcher centralizes native
+(@parcel/watcher), WSL (inotifywait), and SSH remote watcher lifecycles in
+one module so subscription/cleanup invariants stay auditable from a single
+file. Splitting by transport would scatter the shared debounce/coalesce
+helpers and the common batch-flush path across three files. */
 import { ipcMain, type WebContents } from 'electron'
 import * as path from 'path'
 import { stat } from 'fs/promises'
