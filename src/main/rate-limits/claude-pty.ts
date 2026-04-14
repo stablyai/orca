@@ -1,4 +1,5 @@
 import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
+import { resolveClaudeCommand } from '../codex-cli/command'
 
 const PTY_TIMEOUT_MS = 25_000
 
@@ -133,7 +134,17 @@ export async function fetchViaPty(): Promise<ProviderRateLimits> {
     let sentUsage = false
     let stopDetected = false
 
-    const term = pty.spawn('claude', [], {
+    const claudeCommand = resolveClaudeCommand()
+
+    // Why: node-pty cannot spawn .cmd/.bat batch scripts directly on Windows —
+    // those need cmd.exe as an interpreter. resolveClaudeCommand() may also fall
+    // back to bare 'claude' when it can't locate the binary on disk, yet cmd.exe
+    // can still find claude.cmd via PATHEXT. Always route through cmd.exe on win32.
+    const isWin32 = process.platform === 'win32'
+    const spawnFile = isWin32 ? 'cmd.exe' : claudeCommand
+    const spawnArgs = isWin32 ? ['/c', claudeCommand] : []
+
+    const term = pty.spawn(spawnFile, spawnArgs, {
       name: 'xterm-256color',
       cols: 120,
       rows: 40,

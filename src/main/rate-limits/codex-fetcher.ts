@@ -291,11 +291,12 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
   const codexCommand = resolveCodexCommand()
 
   // Why: node-pty cannot spawn .cmd/.bat batch scripts directly on Windows —
-  // those need cmd.exe as an interpreter. Route through `cmd.exe /c <command>`
-  // so the PTY fallback works when Codex is installed via npm (codex.cmd).
-  const isWindowsBatchScript = process.platform === 'win32' && /\.(cmd|bat)$/i.test(codexCommand)
-  const spawnFile = isWindowsBatchScript ? 'cmd.exe' : codexCommand
-  const spawnArgs = isWindowsBatchScript ? ['/c', codexCommand] : []
+  // those need cmd.exe as an interpreter. resolveCodexCommand() may also fall
+  // back to bare 'codex' when it can't locate the binary on disk, yet cmd.exe
+  // can still find codex.cmd via PATHEXT. Always route through cmd.exe on win32.
+  const isWin32 = process.platform === 'win32'
+  const spawnFile = isWin32 ? 'cmd.exe' : codexCommand
+  const spawnArgs = isWin32 ? ['/c', codexCommand] : []
 
   return new Promise<ProviderRateLimits>((resolve) => {
     let output = ''
