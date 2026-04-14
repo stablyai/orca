@@ -1,9 +1,11 @@
 import { ipcMain, type WebContents } from 'electron'
 import * as path from 'path'
 import { stat } from 'fs/promises'
-import type { AsyncSubscription, Event as WatcherEvent } from '@parcel/watcher'
+import type { Event as WatcherEvent } from '@parcel/watcher'
 import type { FsChangeEvent, FsChangedPayload } from '../../shared/types'
 import { isWslPath } from '../wsl'
+import { createWslWatcher } from './filesystem-watcher-wsl'
+import type { WatchedRoot } from './filesystem-watcher-wsl'
 
 // ── Ignore patterns ──────────────────────────────────────────────────
 // Why: high-churn directories are suppressed at the native watcher level
@@ -28,19 +30,9 @@ const WATCHER_IGNORE_DIRS: string[] = [
 const DEBOUNCE_TRAILING_MS = 150
 const DEBOUNCE_MAX_WAIT_MS = 500
 
-type DebouncedBatch = {
-  events: WatcherEvent[]
-  timer: ReturnType<typeof setTimeout> | null
-  firstEventAt: number
-}
-
 // ── Per-root watcher state ───────────────────────────────────────────
-
-type WatchedRoot = {
-  subscription: AsyncSubscription
-  listeners: Map<number, WebContents> // webContents.id -> WebContents
-  batch: DebouncedBatch
-}
+// WatchedRoot and WatcherSubscription are defined in filesystem-watcher-wsl.ts
+// and re-used here so both native and WSL watchers share the same shape.
 
 // ── Module state ─────────────────────────────────────────────────────
 
@@ -302,16 +294,6 @@ async function createWatcher(rootKey: string, rootPath: string): Promise<Watched
 async function subscribe(worktreePath: string, sender: WebContents): Promise<void> {
   const rootKey = normalizeRootPath(worktreePath)
 
-  // Why: @parcel/watcher uses ReadDirectoryChangesW on Windows which does
-  // not work across the WSL network filesystem boundary (\\wsl.localhost\…).
-  // Every attempt fails with "Failed to read changes" and falls back to
-  // watchman (which is typically not installed), spamming the console on
-  // every worktree switch.  Skip these paths entirely — the file explorer
-  // still works, it just won't auto-refresh on external changes.
-  if (isWslPath(worktreePath)) {
-    return
-  }
-
   // Don't retry roots that already failed — avoids repeated error spam.
   if (unwatchableRoots.has(rootKey)) {
     return
@@ -334,11 +316,19 @@ async function subscribe(worktreePath: string, sender: WebContents): Promise<voi
     }
 
     try {
-      root = await createWatcher(rootKey, rootKey)
+      // Why: WSL paths use inotifywait inside the Linux distro where
+      // inotify works natively; native Windows paths use @parcel/watcher.
+      root = isWslPath(worktreePath)
+        ? await createWslWatcher(rootKey, worktreePath, {
+            ignoreDirs: WATCHER_IGNORE_DIRS,
+            scheduleBatchFlush,
+            watchedRoots
+          })
+        : await createWatcher(rootKey, rootKey)
     } catch {
-      // Why: createWatcher already logged the error. Swallow it here so the
-      // renderer's watchWorktree call resolves without crashing the main
-      // process. The watcher simply won't be active for this root (§7.3).
+      // Why: createWatcher / createWslWatcher already logged the error.
+      // Swallow it here so the renderer's watchWorktree call resolves
+      // without crashing the main process.
       unwatchableRoots.add(rootKey)
       return
     }
