@@ -284,10 +284,10 @@ describe('buildConnectConfig', () => {
     expect(config.agent).toBeUndefined()
   })
 
-  it('uses agent auth when resolved identityFile is a default path', () => {
+  it('uses agent auth when resolved identityFile is a default path (expanded)', () => {
     const config = buildConnectConfig(
       makeTarget(),
-      makeResolved({ identityFile: ['~/.ssh/id_ed25519'] })
+      makeResolved({ identityFile: ['/home/testuser/.ssh/id_ed25519'] })
     )
     expect(config.agent).toBe('/tmp/agent.sock')
   })

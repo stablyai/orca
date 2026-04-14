@@ -1,5 +1,6 @@
 import { readFileSync, existsSync } from 'fs'
 import { homedir } from 'os'
+import { join } from 'path'
 import type { ConnectConfig } from 'ssh2'
 import type { SshTarget, SshConnectionState } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './ssh-config-parser'
@@ -50,13 +51,14 @@ export function shellEscape(s: string): string {
 // Why: ssh2 only tries keys that are explicitly provided. Users with keys in
 // standard locations (e.g. ~/.ssh/id_ed25519) but no SSH agent running would
 // fail to authenticate. Probing default paths matches VS Code's _findDefaultKeyFile.
-const DEFAULT_KEY_PATHS = [
-  '~/.ssh/id_ed25519',
-  '~/.ssh/id_rsa',
-  '~/.ssh/id_ecdsa',
-  '~/.ssh/id_dsa',
-  '~/.ssh/id_xmss'
-]
+const DEFAULT_KEY_NAMES = ['id_ed25519', 'id_rsa', 'id_ecdsa', 'id_dsa', 'id_xmss']
+
+const DEFAULT_KEY_PATHS = DEFAULT_KEY_NAMES.map((name) => `~/.ssh/${name}`)
+
+// Why: parseSshGOutput expands ~ to homedir(), so resolved identityFile
+// paths won't match the ~/... form in DEFAULT_KEY_PATHS. Pre-expand for
+// the comparison in buildConnectConfig.
+const EXPANDED_DEFAULT_KEY_PATHS = DEFAULT_KEY_NAMES.map((name) => join(homedir(), '.ssh', name))
 
 export function findDefaultKeyFile(): { path: string; contents: Buffer } | undefined {
   for (const keyPath of DEFAULT_KEY_PATHS) {
@@ -96,7 +98,7 @@ export function buildConnectConfig(
   const resolvedIdentity = resolved?.identityFile?.[0]
   const explicitKey =
     target.identityFile ||
-    (resolvedIdentity && !DEFAULT_KEY_PATHS.includes(resolvedIdentity)
+    (resolvedIdentity && !EXPANDED_DEFAULT_KEY_PATHS.includes(resolvedIdentity)
       ? resolvedIdentity
       : undefined)
 
