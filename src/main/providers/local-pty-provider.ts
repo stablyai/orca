@@ -6,6 +6,11 @@ import { basename, win32 as pathWin32 } from 'path'
 import { existsSync } from 'fs'
 import * as pty from 'node-pty'
 import { parseWslPath } from '../wsl'
+import {
+  injectHistoryEnv,
+  updateHistFileForFallback,
+  logHistoryInjection
+} from '../terminal-history'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from './types'
 import {
   ensureNodePtySpawnHelperExecutable,
@@ -67,6 +72,9 @@ function safeKillAndClean(id: string, proc: pty.IPty): void {
 
 export type LocalPtyProviderOptions = {
   buildSpawnEnv?: (id: string, baseEnv: Record<string, string>) => Record<string, string>
+  /** Whether worktree-scoped shell history is enabled. When true (or absent)
+   *  and a worktreeId is provided, HISTFILE is scoped per-worktree. */
+  isHistoryEnabled?: () => boolean
   onSpawned?: (id: string) => void
   onExit?: (id: string, code: number) => void
   onData?: (id: string, data: string, timestamp: number) => void
@@ -168,6 +176,20 @@ export class LocalPtyProvider implements IPtyProvider {
 
     const finalEnv = this.opts.buildSpawnEnv ? this.opts.buildSpawnEnv(id, spawnEnv) : spawnEnv
 
+    // ── Worktree-scoped shell history (§7–§10 of terminal-history-scope-design) ──
+    // Why: without this, all worktree terminals share a single global HISTFILE
+    // so ArrowUp in worktree B surfaces commands from worktree A.
+    const worktreeId = args.worktreeId
+    const historyEnabled = worktreeId && (this.opts.isHistoryEnabled?.() ?? true)
+    // Resolve the effective shell kind for history injection. For WSL, the
+    // outer executable is wsl.exe but the inner login shell is bash.
+    const effectiveShellPath = wslInfo ? 'bash' : shellPath
+    let historyResult: ReturnType<typeof injectHistoryEnv> | null = null
+    if (historyEnabled) {
+      historyResult = injectHistoryEnv(finalEnv, worktreeId, effectiveShellPath, cwd)
+      logHistoryInjection(worktreeId, historyResult)
+    }
+
     const spawnResult = spawnShellWithFallback({
       shellPath,
       shellArgs,
@@ -176,7 +198,13 @@ export class LocalPtyProvider implements IPtyProvider {
       cwd: effectiveCwd,
       env: finalEnv,
       ptySpawn: pty.spawn,
-      getShellReadyConfig: args.command ? (shell) => getShellReadyLaunchConfig(shell) : undefined
+      getShellReadyConfig: args.command ? (shell) => getShellReadyLaunchConfig(shell) : undefined,
+      // Why: if zsh failed and bash took over, HISTFILE still points to
+      // zsh_history. Update it *before* spawn so the child inherits the
+      // correct filename (see design doc §8).
+      onBeforeFallbackSpawn: historyResult?.histFile
+        ? (env, fallbackShell) => updateHistFileForFallback(env, fallbackShell)
+        : undefined
     })
     shellPath = spawnResult.shellPath
 

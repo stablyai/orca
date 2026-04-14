@@ -116,7 +116,8 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     promptCacheTimerEnabled: false,
     promptCacheTtlMs: 300_000,
     codexManagedAccounts: [],
-    activeCodexManagedAccountId: null
+    activeCodexManagedAccountId: null,
+    terminalScopeHistoryByWorktree: true
   }
 }
 

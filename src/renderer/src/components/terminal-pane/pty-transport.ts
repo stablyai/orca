@@ -31,6 +31,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     env,
     command,
     connectionId,
+    worktreeId,
     onPtyExit,
     onTitleChange,
     onPtySpawn,
@@ -179,7 +180,8 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           cwd,
           env,
           command,
-          ...(connectionId ? { connectionId } : {})
+          ...(connectionId ? { connectionId } : {}),
+          worktreeId
         })
 
         // If destroyed while spawn was in flight, kill the new pty and bail

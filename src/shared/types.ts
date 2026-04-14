@@ -491,6 +491,10 @@ export type GlobalSettings = {
    *  analytics and external terminal sessions. */
   codexManagedAccounts: CodexManagedAccount[]
   activeCodexManagedAccountId: string | null
+  /** When true, each worktree gets its own shell history file so ArrowUp
+   *  does not surface commands from other worktrees. Defaults to true.
+   *  Disable to revert to shared global shell history. */
+  terminalScopeHistoryByWorktree: boolean
 }
 
 export type NotificationEventSource = 'agent-task-complete' | 'terminal-bell' | 'test'

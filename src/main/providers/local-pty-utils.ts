@@ -97,6 +97,9 @@ export type ShellSpawnParams = {
   getShellReadyConfig?: (
     shell: string
   ) => { args: string[] | null; env: Record<string, string> } | null
+  /** Called before each fallback shell spawn so callers can update env vars
+   *  (e.g. HISTFILE) that depend on which shell is about to run. */
+  onBeforeFallbackSpawn?: (env: Record<string, string>, fallbackShell: string) => void
 }
 
 export type ShellSpawnResult = {
@@ -109,7 +112,17 @@ export type ShellSpawnResult = {
  * try common fallback shells before giving up.
  */
 export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResult {
-  const { shellPath, shellArgs, cols, rows, cwd, env, ptySpawn, getShellReadyConfig } = params
+  const {
+    shellPath,
+    shellArgs,
+    cols,
+    rows,
+    cwd,
+    env,
+    ptySpawn,
+    getShellReadyConfig,
+    onBeforeFallbackSpawn
+  } = params
   let primaryError: string | null = null
 
   if (process.platform !== 'win32') {
@@ -137,6 +150,7 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
       try {
         const fallbackReady = getShellReadyConfig?.(fallback)
         env.SHELL = fallback
+        onBeforeFallbackSpawn?.(env, fallback)
         Object.assign(env, fallbackReady?.env ?? {})
         const proc = ptySpawn(fallback, fallbackReady?.args ?? ['-l'], {
           name: 'xterm-256color',

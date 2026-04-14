@@ -957,7 +957,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           const { id: ptyId } = await window.api.pty.spawn({
             cols: 80,
             rows: 24,
-            cwd: worktree.path
+            cwd: worktree.path,
+            worktreeId
           })
           spawnedPtyIds.push(ptyId)
 

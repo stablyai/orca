@@ -20,6 +20,8 @@ import {
   setupAutoUpdater,
   dismissNudge
 } from '../updater'
+import { scheduleHistoryGc } from '../terminal-history'
+import { listRepoWorktrees } from '../repo-worktrees'
 
 export function attachMainWindowServices(
   mainWindow: BrowserWindow,
@@ -29,7 +31,21 @@ export function attachMainWindowServices(
 ): void {
   registerRepoHandlers(mainWindow, store)
   registerWorktreeHandlers(mainWindow, store)
-  registerPtyHandlers(mainWindow, runtime, getSelectedCodexHomePath)
+  registerPtyHandlers(mainWindow, runtime, getSelectedCodexHomePath, () => store.getSettings())
+  // Why: GC runs on a 10s delay so live worktree enumeration completes first.
+  // Uses git worktree list (not store.getWorktreeMeta) because untouched
+  // worktrees have no metadata entries — see design doc §7.6.
+  scheduleHistoryGc(async () => {
+    const repos = store.getRepos()
+    const ids = new Set<string>()
+    for (const repo of repos) {
+      const worktrees = await listRepoWorktrees(repo)
+      for (const wt of worktrees) {
+        ids.add(`${repo.id}::${wt.path}`)
+      }
+    }
+    return ids
+  })
   registerSshHandlers(store, () => mainWindow)
   registerFileDropRelay(mainWindow)
   setupAutoUpdater(mainWindow, {

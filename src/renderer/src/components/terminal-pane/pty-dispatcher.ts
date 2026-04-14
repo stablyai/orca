@@ -153,6 +153,8 @@ export type IpcPtyTransportOptions = {
   env?: Record<string, string>
   command?: string
   connectionId?: string | null
+  /** Orca worktree identity for scoped shell history. */
+  worktreeId?: string
   onPtyExit?: (ptyId: string) => void
   onTitleChange?: (title: string, rawTitle: string) => void
   onPtySpawn?: (ptyId: string) => void

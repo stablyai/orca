@@ -6,6 +6,7 @@ process behavior across files without a cleaner ownership seam. */
 import { type BrowserWindow, ipcMain } from 'electron'
 export { getBashShellReadyRcfileContent } from '../providers/local-pty-shell-ready'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import type { GlobalSettings } from '../../shared/types'
 import { openCodeHookService } from '../opencode/hook-service'
 import { piTitlebarExtensionService } from '../pi/titlebar-extension-service'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
@@ -114,7 +115,8 @@ let didFinishLoadHandler: (() => void) | null = null
 export function registerPtyHandlers(
   mainWindow: BrowserWindow,
   runtime?: OrcaRuntimeService,
-  getSelectedCodexHomePath?: () => string | null
+  getSelectedCodexHomePath?: () => string | null,
+  getSettings?: () => GlobalSettings
 ): void {
   // Remove any previously registered handlers so we can re-register them
   // (e.g. when macOS re-activates the app and creates a new window).
@@ -127,6 +129,7 @@ export function registerPtyHandlers(
 
   // Configure the local provider with app-specific hooks
   localProvider.configure({
+    isHistoryEnabled: () => getSettings?.()?.terminalScopeHistoryByWorktree ?? true,
     buildSpawnEnv: (id, baseEnv) => {
       const selectedCodexHomePath = getSelectedCodexHomePath?.() ?? null
 
@@ -234,6 +237,7 @@ export function registerPtyHandlers(
         env?: Record<string, string>
         command?: string
         connectionId?: string | null
+        worktreeId?: string
       }
     ) => {
       const provider = getProvider(args.connectionId)
@@ -242,7 +246,8 @@ export function registerPtyHandlers(
         rows: args.rows,
         cwd: args.cwd,
         env: args.env,
-        command: args.command
+        command: args.command,
+        worktreeId: args.worktreeId
       })
       ptyOwnership.set(result.id, args.connectionId ?? null)
       return result

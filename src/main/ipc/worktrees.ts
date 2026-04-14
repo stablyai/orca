@@ -3,6 +3,7 @@ import { ipcMain } from 'electron'
 import { rm } from 'fs/promises'
 import type { Store } from '../persistence'
 import { isFolderRepo } from '../../shared/repo-kind'
+import { deleteWorktreeHistoryDir } from '../terminal-history'
 import type {
   CreateWorktreeArgs,
   CreateWorktreeResult,
@@ -154,6 +155,7 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
         }
         await provider.removeWorktree(worktreePath, args.force)
         store.removeWorktreeMeta(args.worktreeId)
+        deleteWorktreeHistoryDir(args.worktreeId)
         notifyWorktreesChanged(mainWindow, repoId)
         return
       }
@@ -180,6 +182,7 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
           // remains locked — other worktrees cannot check it out.
           await gitExecFileAsync(['worktree', 'prune'], { cwd: repo.path }).catch(() => {})
           store.removeWorktreeMeta(args.worktreeId)
+          deleteWorktreeHistoryDir(args.worktreeId)
           await rebuildAuthorizedRootsCache(store)
           notifyWorktreesChanged(mainWindow, repoId)
           return
@@ -187,6 +190,7 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
         throw new Error(formatWorktreeRemovalError(error, worktreePath, args.force ?? false))
       }
       store.removeWorktreeMeta(args.worktreeId)
+      deleteWorktreeHistoryDir(args.worktreeId)
       await rebuildAuthorizedRootsCache(store)
 
       notifyWorktreesChanged(mainWindow, repoId)

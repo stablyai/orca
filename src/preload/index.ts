@@ -252,6 +252,7 @@ const api = {
       env?: Record<string, string>
       command?: string
       connectionId?: string | null
+      worktreeId?: string
     }): Promise<{ id: string }> => ipcRenderer.invoke('pty:spawn', opts),
 
     write: (id: string, data: string): void => {
