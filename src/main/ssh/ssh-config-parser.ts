@@ -1,4 +1,5 @@
 import { readFileSync, existsSync } from 'fs'
+import { execFile } from 'child_process'
 import { join } from 'path'
 import { homedir } from 'os'
 import type { SshTarget } from '../../shared/ssh-types'
@@ -147,4 +148,63 @@ export function sshConfigHostsToTargets(
   }
 
   return targets
+}
+
+// ── ssh -G config resolution ──────────────────────────────────────────
+
+export type SshResolvedConfig = {
+  hostname: string
+  user?: string
+  port: number
+  identityFile: string[]
+  forwardAgent: boolean
+  proxyCommand?: string
+  proxyJump?: string
+}
+
+const SSH_G_TIMEOUT_MS = 5000
+
+// Why: `ssh -G <host>` asks OpenSSH to resolve the full effective config
+// for a host, including Include directives, Match blocks, wildcard
+// inheritance, and ProxyCommand expansion. This gives us correct config
+// resolution without reimplementing OpenSSH's complex matching logic.
+export function resolveWithSshG(host: string): Promise<SshResolvedConfig | null> {
+  return new Promise((resolve) => {
+    execFile('ssh', ['-G', host], { timeout: SSH_G_TIMEOUT_MS }, (err, stdout) => {
+      if (err) {
+        resolve(null)
+        return
+      }
+      resolve(parseSshGOutput(stdout))
+    })
+  })
+}
+
+export function parseSshGOutput(stdout: string): SshResolvedConfig {
+  const map = new Map<string, string>()
+  const identityFiles: string[] = []
+
+  for (const line of stdout.split('\n')) {
+    const spaceIdx = line.indexOf(' ')
+    if (spaceIdx === -1) {
+      continue
+    }
+    const key = line.substring(0, spaceIdx).toLowerCase()
+    const value = line.substring(spaceIdx + 1).trim()
+    if (key === 'identityfile') {
+      identityFiles.push(resolveHomePath(value))
+    } else {
+      map.set(key, value)
+    }
+  }
+
+  return {
+    hostname: map.get('hostname') ?? '',
+    user: map.get('user') || undefined,
+    port: parseInt(map.get('port') ?? '22', 10),
+    identityFile: identityFiles,
+    forwardAgent: map.get('forwardagent') === 'yes',
+    proxyCommand: map.get('proxycommand') || undefined,
+    proxyJump: map.get('proxyjump') || undefined
+  }
 }

@@ -22,6 +22,12 @@ export type RelayDeployResult = {
   platform: RelayPlatform
 }
 
+// Why: individual exec commands have 30s timeouts, but the full deploy
+// pipeline (detect platform → check existing → upload → npm install →
+// launch) has no overall bound. A hanging `npm install` or slow SFTP
+// upload could block the connection indefinitely.
+const RELAY_DEPLOY_TIMEOUT_MS = 120_000
+
 /**
  * Deploy the relay to the remote host and launch it.
  *
@@ -34,6 +40,24 @@ export type RelayDeployResult = {
  * 6. Return the transport (relay's stdin/stdout) for multiplexer use
  */
 export async function deployAndLaunchRelay(
+  conn: SshConnection,
+  onProgress?: (status: string) => void
+): Promise<RelayDeployResult> {
+  let timeoutHandle: ReturnType<typeof setTimeout>
+  const timeoutPromise = new Promise<never>((_resolve, reject) => {
+    timeoutHandle = setTimeout(() => {
+      reject(new Error(`Relay deployment timed out after ${RELAY_DEPLOY_TIMEOUT_MS / 1000}s`))
+    }, RELAY_DEPLOY_TIMEOUT_MS)
+  })
+
+  try {
+    return await Promise.race([deployAndLaunchRelayInner(conn, onProgress), timeoutPromise])
+  } finally {
+    clearTimeout(timeoutHandle!)
+  }
+}
+
+async function deployAndLaunchRelayInner(
   conn: SshConnection,
   onProgress?: (status: string) => void
 ): Promise<RelayDeployResult> {

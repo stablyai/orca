@@ -33,8 +33,6 @@ export class SshConnection {
   private target: SshTarget
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private disposed = false
-  private agentAttempted = false
-  private keyAttempted = false
 
   constructor(target: SshTarget, callbacks: SshConnectionCallbacks) {
     this.target = target
@@ -124,22 +122,40 @@ export class SshConnection {
 
   private async attemptConnect(): Promise<void> {
     this.setState('connecting')
-    this.agentAttempted = false
-    this.keyAttempted = false
 
     // Why: clean up resources from a prior failed attempt before overwriting.
     // Without this, a retry after timeout/auth-failure orphans the old jump
     // host TCP connection and proxy child process.
-    if (this.jumpClient) {
-      this.jumpClient.end()
-      this.jumpClient = null
-    }
-    if (this.proxyProcess) {
-      this.proxyProcess.kill()
-      this.proxyProcess = null
+    this.jumpClient?.end()
+    this.jumpClient = null
+    this.proxyProcess?.kill()
+    this.proxyProcess = null
+
+    // Why: host key verification and auth challenges block the handshake
+    // while waiting for user input. The connection timeout must be paused
+    // during these interactions so a slow user decision doesn't cause a
+    // spurious timeout.
+    let timeoutId: ReturnType<typeof setTimeout> | null = null
+    let timeoutRemaining = CONNECT_TIMEOUT_MS
+    let timeoutStartedAt = Date.now()
+    let onTimeoutFn: (() => void) | null = null
+
+    const pauseTimeout = () => {
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId)
+        timeoutRemaining -= Date.now() - timeoutStartedAt
+        timeoutId = null
+      }
     }
 
-    const { config, jumpClient, proxyProcess } = await this.buildConfig()
+    const resumeTimeout = () => {
+      if (timeoutId === null && timeoutRemaining > 0 && onTimeoutFn) {
+        timeoutStartedAt = Date.now()
+        timeoutId = setTimeout(onTimeoutFn, timeoutRemaining)
+      }
+    }
+
+    const { config, jumpClient, proxyProcess } = await this.buildConfig(pauseTimeout, resumeTimeout)
     this.jumpClient = jumpClient
     this.proxyProcess = proxyProcess
 
@@ -147,7 +163,7 @@ export class SshConnection {
       const client = new SshClient()
       let settled = false
 
-      const timeout = setTimeout(() => {
+      onTimeoutFn = () => {
         if (!settled) {
           settled = true
           client.destroy()
@@ -155,20 +171,19 @@ export class SshConnection {
           this.setState('error', msg)
           reject(new Error(msg))
         }
-      }, CONNECT_TIMEOUT_MS)
+      }
 
-      // Why: host key verification is now handled inside the hostVerifier
-      // callback in buildConnectConfig (ssh-connection-utils.ts).  The
-      // callback form `(key, verify) => void` blocks the handshake until
-      // the user accepts/rejects, so no separate 'handshake' listener is
-      // needed here.
+      timeoutStartedAt = Date.now()
+      timeoutId = setTimeout(onTimeoutFn, CONNECT_TIMEOUT_MS)
 
       client.on('ready', () => {
         if (settled) {
           return
         }
         settled = true
-        clearTimeout(timeout)
+        if (timeoutId !== null) {
+          clearTimeout(timeoutId)
+        }
         this.client = client
         this.setState('connected')
         this.setupDisconnectHandler(client)
@@ -180,7 +195,9 @@ export class SshConnection {
           return
         }
         settled = true
-        clearTimeout(timeout)
+        if (timeoutId !== null) {
+          clearTimeout(timeoutId)
+        }
         this.setState('error', err.message)
         reject(err)
       })
@@ -189,11 +206,14 @@ export class SshConnection {
     })
   }
 
-  private async buildConfig() {
+  private async buildConfig(pauseTimeout: () => void, resumeTimeout: () => void) {
     // Why: config-building logic extracted to ssh-connection-utils.ts (max-lines).
     return buildConnectConfig(this.target, this.callbacks, {
-      agentAttempted: this.agentAttempted,
-      keyAttempted: this.keyAttempted,
+      agentAttempted: false,
+      keyAttempted: false,
+      defaultKeyAttempted: false,
+      pauseTimeout,
+      resumeTimeout,
       setState: (status: string, error?: string) => {
         this.setState(status as SshConnectionStatus, error)
       }
@@ -265,12 +285,9 @@ export class SshConnection {
       throw new Error('Connection disposed')
     }
     // Why: if connectViaSystemSsh is called again after a prior failed attempt,
-    // the old process may still be running. Without cleanup, overwriting
-    // this.systemSsh at line 267 would orphan the old process.
-    if (this.systemSsh) {
-      this.systemSsh.kill()
-      this.systemSsh = null
-    }
+    // the old process may still be running. Overwriting would orphan it.
+    this.systemSsh?.kill()
+    this.systemSsh = null
     this.setState('connecting')
 
     try {
@@ -334,26 +351,18 @@ export class SshConnection {
     this.disposed = true
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer)
-      this.reconnectTimer = null
     }
-    if (this.client) {
-      this.client.end()
-      this.client = null
-    }
+    this.reconnectTimer = null
+    this.client?.end()
+    this.client = null
     // Why: the jump host client holds an open TCP connection to the
-    // intermediate host.  Failing to close it would leak the socket.
-    if (this.jumpClient) {
-      this.jumpClient.end()
-      this.jumpClient = null
-    }
-    if (this.proxyProcess) {
-      this.proxyProcess.kill()
-      this.proxyProcess = null
-    }
-    if (this.systemSsh) {
-      this.systemSsh.kill()
-      this.systemSsh = null
-    }
+    // intermediate host. Failing to close it would leak the socket.
+    this.jumpClient?.end()
+    this.jumpClient = null
+    this.proxyProcess?.kill()
+    this.proxyProcess = null
+    this.systemSsh?.kill()
+    this.systemSsh = null
     this.setState('disconnected')
   }
 
