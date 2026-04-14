@@ -48,8 +48,22 @@ export default function ImageDiffViewer({
   mimeType,
   sideBySide
 }: ImageDiffViewerProps): JSX.Element {
+  // Why: in inline (single-column) mode the grid defaults to equal row
+  // heights, which squishes each preview into half the panel. Using
+  // minmax(32rem, 1fr) ensures content panes are tall enough to show a
+  // full page, and overflow-y-auto lets the user scroll between them.
+  // Empty "No preview" panes collapse to auto height.
+  const gridRowStyle = !sideBySide
+    ? {
+        gridTemplateRows: `${originalContent ? 'minmax(32rem, 1fr)' : 'auto'} ${modifiedContent ? 'minmax(32rem, 1fr)' : 'auto'}`
+      }
+    : undefined
+
   return (
-    <div className={`grid h-full min-h-0 gap-3 p-3 ${sideBySide ? 'grid-cols-2' : 'grid-cols-1'}`}>
+    <div
+      className={`grid h-full min-h-0 gap-3 p-3 ${sideBySide ? 'grid-cols-2' : 'grid-cols-1 overflow-y-auto'}`}
+      style={gridRowStyle}
+    >
       <ImageDiffPane
         label="Original"
         content={originalContent}

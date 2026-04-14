@@ -242,6 +242,7 @@ export type PreloadApi = {
       rows: number
       cwd?: string
       env?: Record<string, string>
+      command?: string
     }) => Promise<{ id: string }>
     write: (id: string, data: string) => void
     resize: (id: string, cols: number, rows: number) => void
@@ -318,6 +319,11 @@ export type PreloadApi = {
     check: (args: {
       repoId: string
     }) => Promise<{ hasHooks: boolean; hooks: OrcaHooks | null; mayNeedUpdate: boolean }>
+    createIssueCommandRunner: (args: {
+      repoId: string
+      worktreePath: string
+      command: string
+    }) => Promise<WorktreeSetupLaunch>
     readIssueCommand: (args: { repoId: string }) => Promise<{
       localContent: string | null
       sharedContent: string | null

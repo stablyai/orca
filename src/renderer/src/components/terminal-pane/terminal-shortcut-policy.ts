@@ -58,11 +58,37 @@ export function resolveTerminalShortcutAction(
     }
 
     if (lowerKey === 'd') {
-      return {
-        type: 'splitActivePane',
-        direction: event.shiftKey ? 'horizontal' : 'vertical'
+      if (isMac) {
+        return {
+          type: 'splitActivePane',
+          direction: event.shiftKey ? 'horizontal' : 'vertical'
+        }
       }
+      // Why: on Windows/Linux, Ctrl+D is the standard EOF signal for terminals.
+      // Binding Ctrl+D to split-pane would swallow EOF and break shell workflows
+      // (see #586). Only Ctrl+Shift+D triggers split on non-Mac platforms;
+      // Ctrl+D (without Shift) falls through to the terminal as normal input.
+      if (event.shiftKey) {
+        return { type: 'splitActivePane', direction: 'vertical' }
+      }
+      return null
     }
+  }
+
+  // Why: on Windows/Linux, Alt+Shift+D splits the pane down (horizontal).
+  // This lives outside the mod+!alt block above because it uses Alt instead
+  // of Ctrl, following the Windows Terminal convention for split shortcuts
+  // and avoiding the Ctrl+D / EOF conflict (see #586).
+  if (
+    !isMac &&
+    !event.repeat &&
+    !event.metaKey &&
+    !event.ctrlKey &&
+    event.altKey &&
+    event.shiftKey &&
+    event.key.toLowerCase() === 'd'
+  ) {
+    return { type: 'splitActivePane', direction: 'horizontal' }
   }
 
   if (

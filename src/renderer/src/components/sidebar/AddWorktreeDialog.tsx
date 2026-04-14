@@ -4,7 +4,12 @@ import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { toast } from 'sonner'
 import { ChevronRight } from 'lucide-react'
 import { useAppStore } from '@/store'
-import type { OrcaHooks, SetupDecision, SetupRunPolicy } from '../../../../shared/types'
+import type {
+  OrcaHooks,
+  SetupDecision,
+  SetupRunPolicy,
+  WorktreeSetupLaunch
+} from '../../../../shared/types'
 import {
   Dialog,
   DialogContent,
@@ -205,11 +210,28 @@ const AddWorktreeDialog = React.memo(function AddWorktreeDialog() {
       // so it can queue the split before TerminalPane mounts. The command template
       // supports {{issue}} interpolation so the launched command gets the linked
       // issue number without requiring a second, less-visible templating surface.
-      const issueCommand = shouldRunIssueAutomation
-        ? {
-            command: issueCommandTemplate.replace(/\{\{issue\}\}/g, String(parsedLinkedIssueNumber))
-          }
-        : undefined
+      let issueCommand: WorktreeSetupLaunch | undefined
+      if (shouldRunIssueAutomation) {
+        const interpolatedIssueCommand = issueCommandTemplate.replace(
+          /\{\{issue\}\}/g,
+          String(parsedLinkedIssueNumber)
+        )
+
+        try {
+          // Why: issue automation is an optional post-create convenience. If
+          // runner preparation fails after git has already created the worktree,
+          // keep the success path intact and surface the automation failure
+          // separately instead of claiming the whole create operation failed.
+          issueCommand = await window.api.hooks.createIssueCommandRunner({
+            repoId,
+            worktreePath: wt.path,
+            command: interpolatedIssueCommand
+          })
+        } catch (error) {
+          console.error('Failed to prepare issue command runner after worktree creation', error)
+          toast.error('Worktree created, but failed to prepare the GitHub issue command.')
+        }
+      }
 
       activateAndRevealWorktree(wt.id, {
         setup: result.setup,

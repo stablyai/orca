@@ -28,6 +28,10 @@ export function useTerminalPaneGlobalEffects({
 }: UseTerminalPaneGlobalEffectsArgs): void {
   const wasActiveRef = useRef(false)
 
+  // Why: tracks any in-progress chunked pending-write flush so the cleanup
+  // function can cancel it if the pane deactivates mid-flush.
+  const pendingFlushRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   useEffect(() => {
     const manager = managerRef.current
     if (!manager) {
@@ -35,17 +39,71 @@ export function useTerminalPaneGlobalEffects({
     }
     if (isActive) {
       manager.resumeRendering()
-      for (const [paneId, pendingBuffer] of pendingWritesRef.current.entries()) {
-        if (pendingBuffer.length > 0) {
-          const pane = manager.getPanes().find((existingPane) => existingPane.id === paneId)
-          if (pane) {
-            pane.terminal.write(pendingBuffer)
-          }
-          pendingWritesRef.current.set(paneId, '')
-        }
+
+      // Why: while a worktree is in the background, PTY output accumulates
+      // in pendingWritesRef with no size cap.  A Claude agent running for
+      // minutes can produce hundreds of KB.  Writing it all in one
+      // synchronous terminal.write() blocks the renderer for 2–5 s on
+      // Windows, freezing the UI on every worktree switch.
+      //
+      // Fix: drain each pane's pending buffer in 32 KB chunks with a
+      // setTimeout(0) yield between chunks.  This lets the browser paint
+      // frames and process input events between chunks so the UI stays
+      // responsive while the scrollback catches up.  The fit is deferred
+      // until after the final chunk so xterm only reflows once.
+      const CHUNK_SIZE = 32 * 1024
+      const entries = Array.from(pendingWritesRef.current.entries()).filter(
+        ([, buf]) => buf.length > 0
+      )
+      // Clear all pending buffers immediately so new PTY output arriving
+      // during the flush goes into a fresh buffer instead of being lost.
+      for (const [paneId] of entries) {
+        pendingWritesRef.current.set(paneId, '')
       }
-      requestAnimationFrame(() => fitAndFocusPanes(manager))
+
+      if (entries.length === 0) {
+        requestAnimationFrame(() => fitAndFocusPanes(manager))
+      } else {
+        let entryIdx = 0
+        let offset = 0
+
+        const drainNextChunk = (): void => {
+          if (entryIdx >= entries.length) {
+            pendingFlushRef.current = null
+            requestAnimationFrame(() => fitAndFocusPanes(manager))
+            return
+          }
+
+          const [paneId, buffer] = entries[entryIdx]
+          const pane = manager.getPanes().find((p) => p.id === paneId)
+          if (!pane) {
+            entryIdx++
+            offset = 0
+            pendingFlushRef.current = setTimeout(drainNextChunk, 0)
+            return
+          }
+
+          const chunk = buffer.slice(offset, offset + CHUNK_SIZE)
+          pane.terminal.write(chunk)
+          offset += CHUNK_SIZE
+
+          if (offset >= buffer.length) {
+            entryIdx++
+            offset = 0
+          }
+
+          // Yield to the browser between chunks so the UI stays responsive.
+          pendingFlushRef.current = setTimeout(drainNextChunk, 0)
+        }
+
+        drainNextChunk()
+      }
     } else if (wasActiveRef.current) {
+      // Cancel any in-progress chunked flush before suspending.
+      if (pendingFlushRef.current !== null) {
+        clearTimeout(pendingFlushRef.current)
+        pendingFlushRef.current = null
+      }
       manager.suspendRendering()
     }
     wasActiveRef.current = isActive
@@ -90,31 +148,34 @@ export function useTerminalPaneGlobalEffects({
     // continuous window resizes or layout animations.  Each fitPanes() call
     // triggers fitAddon.fit() → terminal.resize() which, when the column
     // count changes, reflows the entire scrollback buffer and recalculates
-    // the viewport scroll position.  Rapid-fire reflows can leave the
-    // viewport at a stale scroll offset, causing the terminal to appear
-    // scrolled to the top or to show blank space where scrollback should be.
-    // Batching through requestAnimationFrame coalesces bursts into a single
-    // reflow per paint frame — the same pattern used by queueResizeAll in
-    // use-terminal-pane-lifecycle.ts.
-    let rafId: number | null = null
+    // the viewport scroll position.  On Windows, a single reflow of 10 000
+    // scrollback lines can block the renderer for 500 ms–2 s, freezing the
+    // UI while a sidebar opens or a window resizes.
+    //
+    // A trailing-edge debounce (150 ms) coalesces bursts into one reflow
+    // after the layout settles.  This is longer than the previous RAF-only
+    // batch (≈16 ms) but still short enough that the user never notices the
+    // terminal running at a stale column count.
+    const RESIZE_DEBOUNCE_MS = 150
+    let timerId: ReturnType<typeof setTimeout> | null = null
     const resizeObserver = new ResizeObserver(() => {
-      if (rafId !== null) {
-        return
+      if (timerId !== null) {
+        clearTimeout(timerId)
       }
-      rafId = requestAnimationFrame(() => {
-        rafId = null
+      timerId = setTimeout(() => {
+        timerId = null
         const manager = managerRef.current
         if (!manager) {
           return
         }
         fitPanes(manager)
-      })
+      }, RESIZE_DEBOUNCE_MS)
     })
     resizeObserver.observe(container)
     return () => {
       resizeObserver.disconnect()
-      if (rafId !== null) {
-        cancelAnimationFrame(rafId)
+      if (timerId !== null) {
+        clearTimeout(timerId)
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

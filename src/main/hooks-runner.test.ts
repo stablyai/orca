@@ -172,3 +172,46 @@ describe('createSetupRunnerScript', () => {
     }
   })
 })
+
+describe('createIssueCommandRunnerScript', () => {
+  const makeRepo = () =>
+    ({
+      id: 'test-id',
+      path: '/test/repo',
+      displayName: 'Test Repo',
+      badgeColor: '#000',
+      addedAt: Date.now()
+    }) as unknown as Repo
+
+  it('writes a POSIX runner under the worktree git dir for long issue commands', async () => {
+    const fs = await import('fs')
+
+    execFileSyncMock.mockReturnValue(
+      '/test/repo/.git/worktrees/feature/orca/issue-command-runner.sh'
+    )
+
+    const { createIssueCommandRunnerScript } = await import('./hooks')
+    const result = createIssueCommandRunnerScript(
+      makeRepo(),
+      '/test/repo-feature',
+      'codex exec "long command"\nclaude -p "review it"'
+    )
+
+    expect(result).toEqual({
+      runnerScriptPath: '/test/repo/.git/worktrees/feature/orca/issue-command-runner.sh',
+      envVars: expect.objectContaining({
+        ORCA_ROOT_PATH: '/test/repo',
+        ORCA_WORKTREE_PATH: '/test/repo-feature'
+      })
+    })
+    expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
+      '/test/repo/.git/worktrees/feature/orca/issue-command-runner.sh',
+      '#!/usr/bin/env bash\nset -e\ncodex exec "long command"\nclaude -p "review it"\n',
+      'utf-8'
+    )
+    expect(vi.mocked(fs.chmodSync)).toHaveBeenCalledWith(
+      '/test/repo/.git/worktrees/feature/orca/issue-command-runner.sh',
+      0o755
+    )
+  })
+})

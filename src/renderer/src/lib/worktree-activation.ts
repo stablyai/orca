@@ -31,7 +31,7 @@ export function activateAndRevealWorktree(
   worktreeId: string,
   opts?: {
     setup?: WorktreeSetupLaunch
-    issueCommand?: { command: string; env?: Record<string, string> }
+    issueCommand?: WorktreeSetupLaunch
   }
 ): boolean {
   const state = useAppStore.getState()
@@ -83,7 +83,7 @@ export function ensureWorktreeHasInitialTerminal(
   store: WorktreeActivationStore,
   worktreeId: string,
   setup?: WorktreeSetupLaunch,
-  issueCommand?: { command: string; env?: Record<string, string> }
+  issueCommand?: WorktreeSetupLaunch
 ): void {
   const existingTabs = store.tabsByWorktree[worktreeId] ?? []
   if (existingTabs.length > 0) {
@@ -110,6 +110,9 @@ export function ensureWorktreeHasInitialTerminal(
   // parallel; repo bootstrap and personal issue workflows are separate
   // concerns, so Orca should not invent a dependency between them.
   if (issueCommand) {
-    store.queueTabIssueCommandSplit(terminalTab.id, issueCommand)
+    store.queueTabIssueCommandSplit(terminalTab.id, {
+      command: buildSetupRunnerCommand(issueCommand.runnerScriptPath),
+      env: issueCommand.envVars
+    })
   }
 }

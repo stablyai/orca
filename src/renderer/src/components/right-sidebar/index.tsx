@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Files, Search, GitBranch, ListChecks } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
@@ -137,6 +137,20 @@ export default function RightSidebar(): React.JSX.Element {
     ? rightSidebarTab
     : visibleItems[0].id
 
+  // Why: suppress CSS width transitions on first mount so the sidebar
+  // appears at full width instantly instead of animating from auto→320 px.
+  // Without this, Chromium may fire the transition, causing the terminal
+  // container to resize through intermediate widths.  Each intermediate
+  // width triggers a synchronous xterm scrollback reflow that blocks the
+  // renderer, freezing the entire app for seconds on Windows.
+  const [isMounting, setIsMounting] = useState(true)
+  useEffect(() => {
+    // Clear the flag after the first paint so drag-resize transitions
+    // work normally after the sidebar is visible.
+    const id = requestAnimationFrame(() => setIsMounting(false))
+    return () => cancelAnimationFrame(id)
+  }, [])
+
   const activityBarSideWidth = activityBarPosition === 'side' ? ACTIVITY_BAR_SIDE_WIDTH : 0
   const { containerRef, isResizing, onResizeStart } = useSidebarResize<HTMLDivElement>({
     isOpen: rightSidebarOpen,
@@ -173,7 +187,7 @@ export default function RightSidebar(): React.JSX.Element {
       ref={containerRef}
       className={cn(
         'relative flex-shrink-0 flex flex-row overflow-visible',
-        isResizing ? 'transition-none' : 'transition-[width] duration-200'
+        isResizing || isMounting ? 'transition-none' : 'transition-[width] duration-200'
       )}
     >
       {/* Panel content area */}

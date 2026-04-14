@@ -17,6 +17,7 @@ import { isWslPath, parseWslPath, getWslHome } from '../wsl'
 import { join } from 'path'
 import { listRepoWorktrees } from '../repo-worktrees'
 import {
+  createIssueCommandRunnerScript,
   createSetupRunnerScript,
   getEffectiveHooks,
   loadHooks,
@@ -51,6 +52,7 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
   ipcMain.removeHandler('worktrees:updateMeta')
   ipcMain.removeHandler('worktrees:persistSortOrder')
   ipcMain.removeHandler('hooks:check')
+  ipcMain.removeHandler('hooks:createIssueCommandRunner')
   ipcMain.removeHandler('hooks:readIssueCommand')
   ipcMain.removeHandler('hooks:writeIssueCommand')
 
@@ -318,6 +320,18 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
       mayNeedUpdate
     }
   })
+
+  ipcMain.handle(
+    'hooks:createIssueCommandRunner',
+    (_event, args: { repoId: string; worktreePath: string; command: string }) => {
+      const repo = store.getRepo(args.repoId)
+      if (!repo) {
+        throw new Error(`Repo not found: ${args.repoId}`)
+      }
+
+      return createIssueCommandRunnerScript(repo, args.worktreePath, args.command)
+    }
+  )
 
   ipcMain.handle('hooks:readIssueCommand', (_event, args: { repoId: string }) => {
     const repo = store.getRepo(args.repoId)

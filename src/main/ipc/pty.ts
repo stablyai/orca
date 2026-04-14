@@ -4,8 +4,16 @@ foreground-process inspection, and renderer IPC stay behind a single audited
 boundary. Splitting it by line count would scatter tightly coupled terminal
 process behavior across files without a cleaner ownership seam. */
 import { basename, win32 as pathWin32 } from 'path'
-import { existsSync, accessSync, statSync, chmodSync, constants as fsConstants } from 'fs'
-import { type BrowserWindow, ipcMain } from 'electron'
+import {
+  existsSync,
+  accessSync,
+  statSync,
+  chmodSync,
+  mkdirSync,
+  writeFileSync,
+  constants as fsConstants
+} from 'fs'
+import { app, type BrowserWindow, ipcMain } from 'electron'
 import * as pty from 'node-pty'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { parseWslPath } from '../wsl'
@@ -32,6 +40,217 @@ const ptyDisposables = new Map<string, { dispose: () => void }[]>()
 let loadGeneration = 0
 const ptyLoadGeneration = new Map<string, number>()
 let didEnsureSpawnHelperExecutable = false
+let didEnsureShellReadyWrappers = false
+
+function quotePosixSingle(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`
+}
+
+const STARTUP_COMMAND_READY_MAX_WAIT_MS = 1500
+const OSC_133_A = '\x1b]133;A'
+
+type ShellReadyScanState = {
+  matchPos: number
+  heldBytes: string
+}
+
+function createShellReadyScanState(): ShellReadyScanState {
+  return { matchPos: 0, heldBytes: '' }
+}
+
+function scanForShellReady(
+  state: ShellReadyScanState,
+  data: string
+): { output: string; matched: boolean } {
+  let output = ''
+
+  for (let i = 0; i < data.length; i += 1) {
+    const ch = data[i] as string
+    if (state.matchPos < OSC_133_A.length) {
+      if (ch === OSC_133_A[state.matchPos]) {
+        state.heldBytes += ch
+        state.matchPos += 1
+      } else {
+        output += state.heldBytes
+        state.heldBytes = ''
+        state.matchPos = 0
+        if (ch === OSC_133_A[0]) {
+          state.heldBytes = ch
+          state.matchPos = 1
+        } else {
+          output += ch
+        }
+      }
+    } else if (ch === '\x07') {
+      const remaining = data.slice(i + 1)
+      state.heldBytes = ''
+      state.matchPos = 0
+      return { output: output + remaining, matched: true }
+    } else {
+      state.heldBytes += ch
+    }
+  }
+
+  return { output, matched: false }
+}
+
+function getShellReadyWrapperRoot(): string {
+  return `${app.getPath('userData')}/shell-ready`
+}
+
+export function getBashShellReadyRcfileContent(): string {
+  return `# Orca bash shell-ready wrapper
+[[ -f /etc/profile ]] && source /etc/profile
+if [[ -f "$HOME/.bash_profile" ]]; then
+  source "$HOME/.bash_profile"
+elif [[ -f "$HOME/.bash_login" ]]; then
+  source "$HOME/.bash_login"
+elif [[ -f "$HOME/.profile" ]]; then
+  source "$HOME/.profile"
+fi
+# Why: preserve bash's normal login-shell contract. Many users already source
+# ~/.bashrc from ~/.bash_profile; forcing ~/.bashrc again here would duplicate
+# PATH edits, hooks, and prompt init in Orca startup-command shells.
+# Why: append the marker through PROMPT_COMMAND so it fires after the login
+# startup files have rebuilt the prompt, matching Superset's "shell ready"
+# contract without re-running user rc files.
+__orca_prompt_mark() {
+  printf "\\033]133;A\\007"
+}
+if [[ "$(declare -p PROMPT_COMMAND 2>/dev/null)" == "declare -a"* ]]; then
+  PROMPT_COMMAND=("\${PROMPT_COMMAND[@]}" "__orca_prompt_mark")
+else
+  _orca_prev_prompt_command="\${PROMPT_COMMAND}"
+  if [[ -n "\${_orca_prev_prompt_command}" ]]; then
+    PROMPT_COMMAND="\${_orca_prev_prompt_command};__orca_prompt_mark"
+  else
+    PROMPT_COMMAND="__orca_prompt_mark"
+  fi
+fi
+`
+}
+
+function ensureShellReadyWrappers(): void {
+  if (didEnsureShellReadyWrappers || process.platform === 'win32') {
+    return
+  }
+  didEnsureShellReadyWrappers = true
+
+  const root = getShellReadyWrapperRoot()
+  const zshDir = `${root}/zsh`
+  const bashDir = `${root}/bash`
+
+  const zshEnv = `# Orca zsh shell-ready wrapper
+export ORCA_ORIG_ZDOTDIR="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
+[[ -f "$ORCA_ORIG_ZDOTDIR/.zshenv" ]] && source "$ORCA_ORIG_ZDOTDIR/.zshenv"
+export ZDOTDIR=${quotePosixSingle(zshDir)}
+`
+  const zshProfile = `# Orca zsh shell-ready wrapper
+_orca_home="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
+[[ -f "$_orca_home/.zprofile" ]] && source "$_orca_home/.zprofile"
+`
+  const zshRc = `# Orca zsh shell-ready wrapper
+_orca_home="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
+if [[ -o interactive && -f "$_orca_home/.zshrc" ]]; then
+  source "$_orca_home/.zshrc"
+fi
+`
+  const zshLogin = `# Orca zsh shell-ready wrapper
+_orca_home="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
+if [[ -o interactive && -f "$_orca_home/.zlogin" ]]; then
+  source "$_orca_home/.zlogin"
+fi
+# Why: emit OSC 133;A only after the user's startup hooks finish so Orca knows
+# the prompt is actually ready for a long startup command paste.
+__orca_prompt_mark() {
+  printf "\\033]133;A\\007"
+}
+precmd_functions=(\${precmd_functions[@]} __orca_prompt_mark)
+`
+  const bashRc = getBashShellReadyRcfileContent()
+
+  const files = [
+    [`${zshDir}/.zshenv`, zshEnv],
+    [`${zshDir}/.zprofile`, zshProfile],
+    [`${zshDir}/.zshrc`, zshRc],
+    [`${zshDir}/.zlogin`, zshLogin],
+    [`${bashDir}/rcfile`, bashRc]
+  ] as const
+
+  for (const [path, content] of files) {
+    const dir = path.slice(0, path.lastIndexOf('/'))
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(path, content, 'utf8')
+    chmodSync(path, 0o644)
+  }
+}
+
+function getShellReadyLaunchConfig(shellPath: string): {
+  args: string[] | null
+  env: Record<string, string>
+  supportsReadyMarker: boolean
+} {
+  const shellName = basename(shellPath).toLowerCase()
+
+  if (shellName === 'zsh') {
+    ensureShellReadyWrappers()
+    return {
+      args: ['-l'],
+      env: {
+        ORCA_ORIG_ZDOTDIR: process.env.ZDOTDIR || process.env.HOME || '',
+        ZDOTDIR: `${getShellReadyWrapperRoot()}/zsh`
+      },
+      supportsReadyMarker: true
+    }
+  }
+
+  if (shellName === 'bash') {
+    ensureShellReadyWrappers()
+    return {
+      args: ['--rcfile', `${getShellReadyWrapperRoot()}/bash/rcfile`],
+      env: {},
+      supportsReadyMarker: true
+    }
+  }
+
+  return {
+    args: null,
+    env: {},
+    supportsReadyMarker: false
+  }
+}
+
+function writeStartupCommandWhenShellReady(
+  readyPromise: Promise<void>,
+  proc: pty.IPty,
+  startupCommand: string,
+  onExit: (cleanup: () => void) => void
+): void {
+  let sent = false
+
+  const cleanup = (): void => {
+    sent = true
+  }
+
+  const flush = (): void => {
+    if (sent) {
+      return
+    }
+    sent = true
+    // Why: run startup commands inside the same interactive shell Orca keeps
+    // open for the pane. Spawning `shell -c <command>; exec shell -l` would
+    // avoid the race, but it would also replace the session after the agent
+    // exits and break "stay in this terminal" workflows.
+    const payload = startupCommand.endsWith('\n') ? startupCommand : `${startupCommand}\n`
+    // Why: startup commands are usually long, quoted agent launches. Writing
+    // them in one PTY call after the shell-ready barrier avoids the incremental
+    // paste behavior that still dropped characters in practice.
+    proc.write(payload)
+  }
+
+  readyPromise.then(flush)
+  onExit(cleanup)
+}
 
 function disposePtyListeners(id: string): void {
   const disposables = ptyDisposables.get(id)
@@ -198,7 +417,16 @@ export function registerPtyHandlers(
 
   ipcMain.handle(
     'pty:spawn',
-    (_event, args: { cols: number; rows: number; cwd?: string; env?: Record<string, string> }) => {
+    (
+      _event,
+      args: {
+        cols: number
+        rows: number
+        cwd?: string
+        env?: Record<string, string>
+        command?: string
+      }
+    ) => {
       const id = String(++ptyCounter)
 
       const defaultCwd =
@@ -218,6 +446,11 @@ export function registerPtyHandlers(
       let shellArgs: string[]
       let effectiveCwd: string
       let validationCwd: string
+      let shellReadyLaunch: {
+        args: string[] | null
+        env: Record<string, string>
+        supportsReadyMarker: boolean
+      } | null = null
       if (wslInfo) {
         // Why: use `bash -c "cd ... && exec bash -l"` instead of `--cd` because
         // wsl.exe's --cd flag fails with ERROR_PATH_NOT_FOUND in some Node
@@ -273,7 +506,8 @@ export function registerPtyHandlers(
         // exactly like the inherited process shell so stale config can't brick
         // terminal creation.
         shellPath = args.env?.SHELL || process.env.SHELL || '/bin/zsh'
-        shellArgs = ['-l']
+        shellReadyLaunch = args.command ? getShellReadyLaunchConfig(shellPath) : null
+        shellArgs = shellReadyLaunch?.args ?? ['-l']
         effectiveCwd = cwd
         validationCwd = cwd
       }
@@ -294,6 +528,7 @@ export function registerPtyHandlers(
       const spawnEnv = {
         ...process.env,
         ...args.env,
+        ...shellReadyLaunch?.env,
         TERM: 'xterm-256color',
         COLORTERM: 'truecolor',
         TERM_PROGRAM: 'Orca',
@@ -324,7 +559,6 @@ export function registerPtyHandlers(
       if (selectedCodexHomePath) {
         spawnEnv.CODEX_HOME = selectedCodexHomePath
       }
-
       // Why: When Electron is launched from Finder (not a terminal), the process
       // does not inherit the user's shell locale settings. Without an explicit
       // UTF-8 locale, multi-byte characters (e.g. em dashes U+2014) are
@@ -382,8 +616,10 @@ export function registerPtyHandlers(
             // process inherits the correct value. Leaving the stale original
             // SHELL in the env would confuse shell startup logic and any
             // subprocesses that inspect $SHELL.
+            shellReadyLaunch = args.command ? getShellReadyLaunchConfig(fallback) : null
             spawnEnv.SHELL = fallback
-            ptyProcess = pty.spawn(fallback, ['-l'], {
+            Object.assign(spawnEnv, shellReadyLaunch?.env ?? {})
+            ptyProcess = pty.spawn(fallback, shellReadyLaunch?.args ?? ['-l'], {
               name: 'xterm-256color',
               cols: args.cols,
               rows: args.rows,
@@ -428,7 +664,51 @@ export function registerPtyHandlers(
       ptyLoadGeneration.set(id, loadGeneration)
       runtime?.onPtySpawned(id)
 
-      const onDataDisposable = proc.onData((data) => {
+      let resolveShellReady: (() => void) | null = null
+      let shellReadyTimeout: ReturnType<typeof setTimeout> | null = null
+      const shellReadyScanState = shellReadyLaunch?.supportsReadyMarker
+        ? createShellReadyScanState()
+        : null
+      const shellReadyPromise = args.command
+        ? new Promise<void>((resolve) => {
+            resolveShellReady = resolve
+          })
+        : Promise.resolve()
+      const finishShellReady = (): void => {
+        if (!resolveShellReady) {
+          return
+        }
+        if (shellReadyTimeout) {
+          clearTimeout(shellReadyTimeout)
+          shellReadyTimeout = null
+        }
+        const resolve = resolveShellReady
+        resolveShellReady = null
+        resolve()
+      }
+      if (args.command) {
+        if (shellReadyLaunch?.supportsReadyMarker) {
+          shellReadyTimeout = setTimeout(() => {
+            finishShellReady()
+          }, STARTUP_COMMAND_READY_MAX_WAIT_MS)
+        } else {
+          finishShellReady()
+        }
+      }
+      let startupCommandCleanup: (() => void) | null = null
+
+      const onDataDisposable = proc.onData((rawData) => {
+        let data = rawData
+        if (shellReadyScanState && resolveShellReady) {
+          const scanned = scanForShellReady(shellReadyScanState, rawData)
+          data = scanned.output
+          if (scanned.matched) {
+            finishShellReady()
+          }
+        }
+        if (data.length === 0) {
+          return
+        }
         runtime?.onPtyData(id, data, Date.now())
         if (!mainWindow.isDestroyed()) {
           mainWindow.webContents.send('pty:data', { id, data })
@@ -436,6 +716,11 @@ export function registerPtyHandlers(
       })
 
       const onExitDisposable = proc.onExit(({ exitCode }) => {
+        if (shellReadyTimeout) {
+          clearTimeout(shellReadyTimeout)
+          shellReadyTimeout = null
+        }
+        startupCommandCleanup?.()
         clearPtyState(id)
         clearProviderPtyState(id)
         runtime?.onPtyExit(id, exitCode)
@@ -445,6 +730,12 @@ export function registerPtyHandlers(
       })
 
       ptyDisposables.set(id, [onDataDisposable, onExitDisposable])
+
+      if (args.command) {
+        writeStartupCommandWhenShellReady(shellReadyPromise, proc, args.command, (cleanup) => {
+          startupCommandCleanup = cleanup
+        })
+      }
 
       return { id }
     }

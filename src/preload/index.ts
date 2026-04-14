@@ -185,6 +185,7 @@ const api = {
       rows: number
       cwd?: string
       env?: Record<string, string>
+      command?: string
     }): Promise<{ id: string }> => ipcRenderer.invoke('pty:spawn', opts),
 
     write: (id: string, data: string): void => {
@@ -590,6 +591,13 @@ const api = {
       repoId: string
     }): Promise<{ hasHooks: boolean; hooks: unknown; mayNeedUpdate: boolean }> =>
       ipcRenderer.invoke('hooks:check', args),
+
+    createIssueCommandRunner: (args: {
+      repoId: string
+      worktreePath: string
+      command: string
+    }): Promise<{ runnerScriptPath: string; envVars: Record<string, string> }> =>
+      ipcRenderer.invoke('hooks:createIssueCommandRunner', args),
 
     readIssueCommand: (args: {
       repoId: string

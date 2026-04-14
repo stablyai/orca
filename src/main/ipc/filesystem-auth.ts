@@ -62,28 +62,39 @@ export function isPathAllowed(targetPath: string, store: Store): boolean {
 }
 
 export async function rebuildAuthorizedRootsCache(store: Store): Promise<void> {
-  const nextRoots = new Set<string>()
+  // Why: repos are processed in parallel so the cache rebuild completes in
+  // wall-clock time proportional to the slowest single repo, not the sum of
+  // all repos.  The previous sequential loop was the main bottleneck on
+  // Windows where each `git worktree list` + realpath chain takes 500 ms+
+  // due to slower process creation and antivirus I/O scanning.
+  const repos = store.getRepos()
+  const perRepoResults = await Promise.all(
+    repos.map(async (repo) => {
+      const roots: string[] = []
+      try {
+        roots.push(await normalizeExistingPath(repo.path))
 
-  for (const repo of store.getRepos()) {
-    try {
-      nextRoots.add(await normalizeExistingPath(repo.path))
-
-      const worktrees = await listRepoWorktrees(repo)
-      for (const worktree of worktrees) {
-        nextRoots.add(await normalizeExistingPath(worktree.path))
+        const worktrees = await listRepoWorktrees(repo)
+        const worktreeRoots = await Promise.all(
+          worktrees.map((wt) => normalizeExistingPath(wt.path))
+        )
+        roots.push(...worktreeRoots)
+      } catch (error) {
+        // Why: a single inaccessible repo (EACCES, EIO, etc.) must not break
+        // the entire cache rebuild — that would disable File Explorer and
+        // Quick Open for all other repos. We skip the failing repo and let
+        // the rest proceed.
+        console.warn(`[filesystem-auth] skipping repo ${repo.path} during cache rebuild:`, error)
       }
-    } catch (error) {
-      // Why: a single inaccessible repo (EACCES, EIO, etc.) must not break
-      // the entire cache rebuild — that would disable File Explorer and
-      // Quick Open for all other repos. We skip the failing repo and let
-      // the rest proceed.
-      console.warn(`[filesystem-auth] skipping repo ${repo.path} during cache rebuild:`, error)
-    }
-  }
+      return roots
+    })
+  )
 
   registeredWorktreeRoots.clear()
-  for (const root of nextRoots) {
-    registeredWorktreeRoots.add(root)
+  for (const roots of perRepoResults) {
+    for (const root of roots) {
+      registeredWorktreeRoots.add(root)
+    }
   }
   registeredWorktreeRootsDirty = false
 }

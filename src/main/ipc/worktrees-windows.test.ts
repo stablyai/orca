@@ -11,6 +11,7 @@ const {
   getBranchConflictKindMock,
   getPRForBranchMock,
   getEffectiveHooksMock,
+  createIssueCommandRunnerScriptMock,
   createSetupRunnerScriptMock,
   shouldRunSetupForCreateMock,
   runHookMock,
@@ -29,6 +30,7 @@ const {
   getBranchConflictKindMock: vi.fn(),
   getPRForBranchMock: vi.fn(),
   getEffectiveHooksMock: vi.fn(),
+  createIssueCommandRunnerScriptMock: vi.fn(),
   createSetupRunnerScriptMock: vi.fn(),
   shouldRunSetupForCreateMock: vi.fn(),
   runHookMock: vi.fn(),
@@ -62,6 +64,7 @@ vi.mock('../github/client', () => ({
 }))
 
 vi.mock('../hooks', () => ({
+  createIssueCommandRunnerScript: createIssueCommandRunnerScriptMock,
   createSetupRunnerScript: createSetupRunnerScriptMock,
   getEffectiveHooks: getEffectiveHooksMock,
   loadHooks: loadHooksMock,
@@ -111,6 +114,7 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     getBranchConflictKindMock.mockReset()
     getPRForBranchMock.mockReset()
     getEffectiveHooksMock.mockReset()
+    createIssueCommandRunnerScriptMock.mockReset()
     createSetupRunnerScriptMock.mockReset()
     shouldRunSetupForCreateMock.mockReset()
     runHookMock.mockReset()

@@ -150,6 +150,7 @@ export { extractLastOscTitle } from '../../../../shared/agent-detection'
 export type IpcPtyTransportOptions = {
   cwd?: string
   env?: Record<string, string>
+  command?: string
   onPtyExit?: (ptyId: string) => void
   onTitleChange?: (title: string, rawTitle: string) => void
   onPtySpawn?: (ptyId: string) => void
@@ -163,6 +164,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   const {
     cwd,
     env,
+    command,
     onPtyExit,
     onTitleChange,
     onPtySpawn,
@@ -274,7 +276,8 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           cols: options.cols ?? 80,
           rows: options.rows ?? 24,
           cwd,
-          env
+          env,
+          command
         })
 
         // If destroyed while spawn was in flight, kill the new pty and bail

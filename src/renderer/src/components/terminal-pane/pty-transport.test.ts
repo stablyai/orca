@@ -116,4 +116,65 @@ describe('createIpcPtyTransport', () => {
     expect(onAgentBecameIdle).not.toHaveBeenCalled()
     expect(onBell).not.toHaveBeenCalled()
   })
+
+  it('passes startup commands through PTY spawn instead of writing them after connect', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawnMock = vi.fn().mockResolvedValue({ id: 'pty-1' })
+    const writeMock = vi.fn()
+
+    ;(globalThis as { window: typeof window }).window = {
+      ...originalWindow,
+      api: {
+        ...originalWindow?.api,
+        pty: {
+          ...originalWindow?.api?.pty,
+          spawn: spawnMock,
+          write: writeMock,
+          resize: vi.fn(),
+          kill: vi.fn(),
+          onData: vi.fn((callback: (payload: { id: string; data: string }) => void) => {
+            onData = callback
+            return () => {}
+          }),
+          onExit: vi.fn((callback: (payload: { id: string; code: number }) => void) => {
+            onExit = callback
+            return () => {}
+          }),
+          onOpenCodeStatus: vi.fn(
+            (
+              callback: (payload: {
+                ptyId: string
+                status: 'working' | 'idle' | 'permission'
+              }) => void
+            ) => {
+              onOpenCodeStatus = callback
+              return () => {}
+            }
+          )
+        }
+      }
+    } as unknown as typeof window
+
+    const transport = createIpcPtyTransport({
+      cwd: '/tmp/worktree',
+      env: { FOO: 'bar' },
+      command: 'echo hello'
+    })
+
+    await transport.connect({
+      url: '',
+      cols: 120,
+      rows: 40,
+      callbacks: {}
+    })
+
+    expect(spawnMock).toHaveBeenCalledWith({
+      cols: 120,
+      rows: 40,
+      cwd: '/tmp/worktree',
+      env: { FOO: 'bar' },
+      command: 'echo hello'
+    })
+    expect(writeMock).not.toHaveBeenCalled()
+  })
 })

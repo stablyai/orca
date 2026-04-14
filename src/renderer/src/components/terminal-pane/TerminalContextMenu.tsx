@@ -105,12 +105,16 @@ export default function TerminalContextMenu({
         <DropdownMenuItem onSelect={onSplitRight}>
           <PanelRightOpen />
           Split Right
-          <DropdownMenuShortcut>{mod}D</DropdownMenuShortcut>
+          {/* Why: on Windows/Linux, Ctrl+D must pass through as EOF (#586),
+              so split-right requires Shift on non-Mac platforms. */}
+          <DropdownMenuShortcut>{isMac ? `${mod}D` : `${mod}${shift}D`}</DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onSplitDown}>
           <PanelBottomOpen />
           Split Down
-          <DropdownMenuShortcut>{`${mod}${shift}D`}</DropdownMenuShortcut>
+          {/* Why: on Windows/Linux, Alt+Shift+D is used for split-down because
+              Ctrl+Shift+D is taken by split-right (#586). */}
+          <DropdownMenuShortcut>{isMac ? `${mod}${shift}D` : `Alt+${shift}D`}</DropdownMenuShortcut>
         </DropdownMenuItem>
         {canExpandPane && (
           <DropdownMenuItem onSelect={onToggleExpand}>
