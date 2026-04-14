@@ -145,14 +145,20 @@ function registerFileDropRelay(mainWindow: BrowserWindow): void {
   ipcMain.removeAllListeners('terminal:file-dropped-from-preload')
   ipcMain.on(
     'terminal:file-dropped-from-preload',
-    (_event, args: { paths: string[]; target: 'editor' | 'terminal' }) => {
+    (
+      _event,
+      args:
+        | { paths: string[]; target: 'editor' }
+        | { paths: string[]; target: 'terminal' }
+        | { paths: string[]; target: 'file-explorer'; destinationDir: string }
+    ) => {
       if (mainWindow.isDestroyed()) {
         return
       }
 
-      for (const path of args.paths) {
-        mainWindow.webContents.send('terminal:file-drop', { path, target: args.target })
-      }
+      // Why: relay exactly one IPC event per drop gesture so the renderer
+      // receives the full batch of paths without timer-based reconstruction.
+      mainWindow.webContents.send('terminal:file-drop', args)
     }
   )
 }

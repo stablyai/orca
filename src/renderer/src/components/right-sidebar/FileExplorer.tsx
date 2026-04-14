@@ -19,6 +19,7 @@ import { useFileExplorerKeys } from './useFileExplorerKeys'
 import { useActiveWorktreePath } from './useActiveWorktreePath'
 import { useFileDuplicate } from './useFileDuplicate'
 import { useFileExplorerDragDrop } from './useFileExplorerDragDrop'
+import { useFileExplorerImport } from './useFileExplorerImport'
 import { useFileExplorerTree } from './useFileExplorerTree'
 import { useFileExplorerWatch } from './useFileExplorerWatch'
 
@@ -108,8 +109,13 @@ export default function FileExplorer(): React.JSX.Element {
     dragSourcePath,
     setDragSourcePath,
     isRootDragOver,
+    isNativeDragOver,
+    nativeDropTargetDir,
+    setNativeDropTargetDir,
+    handleNativeDragExpandDir,
     stopDragEdgeScroll,
-    rootDragHandlers
+    rootDragHandlers,
+    clearNativeDragState
   } = useFileExplorerDragDrop({
     worktreePath,
     activeWorktreeId,
@@ -167,6 +173,13 @@ export default function FileExplorer(): React.JSX.Element {
     refreshTree,
     inlineInput,
     dragSourcePath
+  })
+
+  useFileExplorerImport({
+    worktreePath,
+    activeWorktreeId,
+    refreshDir,
+    clearNativeDragState
   })
 
   const totalCount = flatRows.length + (inlineInputIndex >= 0 ? 1 : 0)
@@ -252,27 +265,15 @@ export default function FileExplorer(): React.JSX.Element {
     )
   }
 
-  if (flatRows.length === 0 && !inlineInput) {
-    if (rootCache?.loading ?? true) {
-      return (
-        <div className="flex items-center justify-center h-full text-[11px] text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" />
-        </div>
-      )
-    }
-    if (rootError) {
-      return (
-        <div className="flex h-full items-center justify-center px-4 text-center text-[11px] text-muted-foreground">
-          Could not load files for this worktree: {rootError}
-        </div>
-      )
-    }
-    return (
-      <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground px-4 text-center">
-        No files in this worktree
-      </div>
-    )
-  }
+  // Why: the root explorer container must stay mounted for loading, error,
+  // and empty states so the data-native-file-drop-target marker is always
+  // present. Without this, external file drops would have no target surface
+  // when the tree is empty, still loading, or showing a read error.
+  const isEmptyState = flatRows.length === 0 && !inlineInput
+  const isLoading = isEmptyState && (rootCache?.loading ?? true)
+  const hasError = isEmptyState && !isLoading && !!rootError
+  const isEmpty = isEmptyState && !isLoading && !hasError
+  const showTree = !isEmptyState
 
   return (
     <>
@@ -281,10 +282,13 @@ export default function FileExplorer(): React.JSX.Element {
           'h-full min-h-0',
           isRootDragOver &&
             !(dragSourcePath && dirname(dragSourcePath) === worktreePath) &&
-            'bg-border'
+            'bg-border',
+          isNativeDragOver && !nativeDropTargetDir && 'bg-border'
         )}
         viewportRef={scrollRef}
         viewportClassName="h-full min-h-0 py-2"
+        data-native-file-drop-target="file-explorer"
+        data-native-file-drop-dir={worktreePath}
         onWheelCapture={handleWheelCapture}
         onDragOver={rootDragHandlers.onDragOver}
         onDragEnter={rootDragHandlers.onDragEnter}
@@ -304,90 +308,110 @@ export default function FileExplorer(): React.JSX.Element {
           setBgMenuOpen(true)
         }}
       >
-        <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
-          {virtualizer.getVirtualItems().map((vItem) => {
-            const isInlineRow = inlineInputIndex >= 0 && vItem.index === inlineInputIndex
-            const rowIndex =
-              !isInlineRow && inlineInputIndex >= 0 && vItem.index > inlineInputIndex
-                ? vItem.index - 1
-                : vItem.index
-            const node = isInlineRow ? null : flatRows[rowIndex]
-            if (!isInlineRow && !node) {
-              return null
-            }
+        {isLoading && (
+          <div className="flex items-center justify-center h-full text-[11px] text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" />
+          </div>
+        )}
+        {hasError && (
+          <div className="flex h-full items-center justify-center px-4 text-center text-[11px] text-muted-foreground">
+            Could not load files for this worktree: {rootError}
+          </div>
+        )}
+        {isEmpty && (
+          <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground px-4 text-center">
+            No files in this worktree
+          </div>
+        )}
+        {showTree && (
+          <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
+            {virtualizer.getVirtualItems().map((vItem) => {
+              const isInlineRow = inlineInputIndex >= 0 && vItem.index === inlineInputIndex
+              const rowIndex =
+                !isInlineRow && inlineInputIndex >= 0 && vItem.index > inlineInputIndex
+                  ? vItem.index - 1
+                  : vItem.index
+              const node = isInlineRow ? null : flatRows[rowIndex]
+              if (!isInlineRow && !node) {
+                return null
+              }
 
-            const showInline =
-              isInlineRow ||
-              (inlineInput?.type === 'rename' && node && inlineInput.existingPath === node.path)
-            const inlineDepth = isInlineRow ? inlineInput!.depth : (node?.depth ?? 0)
+              const showInline =
+                isInlineRow ||
+                (inlineInput?.type === 'rename' && node && inlineInput.existingPath === node.path)
+              const inlineDepth = isInlineRow ? inlineInput!.depth : (node?.depth ?? 0)
 
-            if (showInline) {
+              if (showInline) {
+                return (
+                  <div
+                    key={vItem.key}
+                    data-index={vItem.index}
+                    ref={virtualizer.measureElement}
+                    className="absolute left-0 right-0"
+                    style={{ transform: `translateY(${vItem.start}px)` }}
+                  >
+                    <InlineInputRow
+                      depth={inlineDepth}
+                      inlineInput={inlineInput!}
+                      onSubmit={handleInlineSubmit}
+                      onCancel={dismissInlineInput}
+                    />
+                  </div>
+                )
+              }
+
+              // Safe: the isInlineRow/showInline guards above ensure node is non-null here
+              const n = node!
+              const normalizedRelativePath = normalizeRelativePath(n.relativePath)
+              const nodeStatus = n.isDirectory
+                ? (folderStatusByRelativePath.get(normalizedRelativePath) ?? null)
+                : (statusByRelativePath.get(normalizedRelativePath) ?? null)
+
+              const rowParentDir = n.isDirectory ? n.path : dirname(n.path)
+              const sourceParentDir = dragSourcePath ? dirname(dragSourcePath) : null
+              const isInDropTarget =
+                (dropTargetDir != null &&
+                  dropTargetDir === rowParentDir &&
+                  dropTargetDir !== sourceParentDir) ||
+                (nativeDropTargetDir != null && nativeDropTargetDir === rowParentDir)
               return (
                 <div
                   key={vItem.key}
                   data-index={vItem.index}
                   ref={virtualizer.measureElement}
-                  className="absolute left-0 right-0"
+                  className={cn('absolute left-0 right-0', isInDropTarget && 'bg-border')}
                   style={{ transform: `translateY(${vItem.start}px)` }}
                 >
-                  <InlineInputRow
-                    depth={inlineDepth}
-                    inlineInput={inlineInput!}
-                    onSubmit={handleInlineSubmit}
-                    onCancel={dismissInlineInput}
+                  <FileExplorerRow
+                    node={n}
+                    isExpanded={expanded.has(n.path)}
+                    isLoading={n.isDirectory && Boolean(dirCache[n.path]?.loading)}
+                    isSelected={selectedPath === n.path || activeFileId === n.path}
+                    isFlashing={flashingPath === n.path}
+                    nodeStatus={nodeStatus}
+                    statusColor={nodeStatus ? STATUS_COLORS[nodeStatus] : null}
+                    deleteShortcutLabel={deleteShortcutLabel}
+                    targetDir={n.isDirectory ? n.path : dirname(n.path)}
+                    targetDepth={n.isDirectory ? n.depth + 1 : n.depth}
+                    onClick={() => handleClick(n)}
+                    onDoubleClick={() => handleDoubleClick(n)}
+                    onSelect={() => setSelectedPath(n.path)}
+                    onStartNew={startNew}
+                    onStartRename={startRename}
+                    onDuplicate={handleDuplicate}
+                    onRequestDelete={() => requestDelete(n)}
+                    onMoveDrop={handleMoveDrop}
+                    onDragTargetChange={setDropTargetDir}
+                    onDragSourceChange={setDragSourcePath}
+                    onDragExpandDir={handleDragExpandDir}
+                    onNativeDragTargetChange={setNativeDropTargetDir}
+                    onNativeDragExpandDir={handleNativeDragExpandDir}
                   />
                 </div>
               )
-            }
-
-            // Safe: the isInlineRow/showInline guards above ensure node is non-null here
-            const n = node!
-            const normalizedRelativePath = normalizeRelativePath(n.relativePath)
-            const nodeStatus = n.isDirectory
-              ? (folderStatusByRelativePath.get(normalizedRelativePath) ?? null)
-              : (statusByRelativePath.get(normalizedRelativePath) ?? null)
-
-            const rowParentDir = n.isDirectory ? n.path : dirname(n.path)
-            const sourceParentDir = dragSourcePath ? dirname(dragSourcePath) : null
-            const isInDropTarget =
-              dropTargetDir != null &&
-              dropTargetDir === rowParentDir &&
-              dropTargetDir !== sourceParentDir
-            return (
-              <div
-                key={vItem.key}
-                data-index={vItem.index}
-                ref={virtualizer.measureElement}
-                className={cn('absolute left-0 right-0', isInDropTarget && 'bg-border')}
-                style={{ transform: `translateY(${vItem.start}px)` }}
-              >
-                <FileExplorerRow
-                  node={n}
-                  isExpanded={expanded.has(n.path)}
-                  isLoading={n.isDirectory && Boolean(dirCache[n.path]?.loading)}
-                  isSelected={selectedPath === n.path || activeFileId === n.path}
-                  isFlashing={flashingPath === n.path}
-                  nodeStatus={nodeStatus}
-                  statusColor={nodeStatus ? STATUS_COLORS[nodeStatus] : null}
-                  deleteShortcutLabel={deleteShortcutLabel}
-                  targetDir={n.isDirectory ? n.path : dirname(n.path)}
-                  targetDepth={n.isDirectory ? n.depth + 1 : n.depth}
-                  onClick={() => handleClick(n)}
-                  onDoubleClick={() => handleDoubleClick(n)}
-                  onSelect={() => setSelectedPath(n.path)}
-                  onStartNew={startNew}
-                  onStartRename={startRename}
-                  onDuplicate={handleDuplicate}
-                  onRequestDelete={() => requestDelete(n)}
-                  onMoveDrop={handleMoveDrop}
-                  onDragTargetChange={setDropTargetDir}
-                  onDragSourceChange={setDragSourcePath}
-                  onDragExpandDir={handleDragExpandDir}
-                />
-              </div>
-            )
-          })}
-        </div>
+            })}
+          </div>
+        )}
       </ScrollArea>
 
       <FileExplorerBackgroundMenu

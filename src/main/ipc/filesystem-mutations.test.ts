@@ -22,7 +22,9 @@ vi.mock('fs/promises', () => ({
   mkdir: mkdirMock,
   rename: renameMock,
   writeFile: writeFileMock,
-  realpath: realpathMock
+  realpath: realpathMock,
+  copyFile: vi.fn(),
+  readdir: vi.fn()
 }))
 
 import { registerFilesystemMutationHandlers } from './filesystem-mutations'
@@ -95,7 +97,9 @@ describe('registerFilesystemMutationHandlers', () => {
     writeFileMock.mockRejectedValue(Object.assign(new Error('EEXIST'), { code: 'EEXIST' }))
 
     await expect(
-      handlers.get('fs:createFile')!(null, { filePath: path.resolve('/workspace/repo/existing.ts') })
+      handlers.get('fs:createFile')!(null, {
+        filePath: path.resolve('/workspace/repo/existing.ts')
+      })
     ).rejects.toThrow("A file or folder named 'existing.ts' already exists in this location")
   })
 

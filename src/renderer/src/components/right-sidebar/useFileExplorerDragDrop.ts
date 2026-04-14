@@ -33,6 +33,12 @@ type UseFileExplorerDragDropResult = {
   dragSourcePath: string | null
   setDragSourcePath: (path: string | null) => void
   isRootDragOver: boolean
+  /** True when a native OS file drag (Files) is hovering over the explorer */
+  isNativeDragOver: boolean
+  /** Directory path highlighted during a native Files drag, or null */
+  nativeDropTargetDir: string | null
+  setNativeDropTargetDir: (dir: string | null) => void
+  handleNativeDragExpandDir: (dirPath: string) => void
   // Stops the drag edge auto-scroll loop (call on drag end / unmount)
   stopDragEdgeScroll: () => void
   rootDragHandlers: {
@@ -41,6 +47,8 @@ type UseFileExplorerDragDropResult = {
     onDragLeave: (e: React.DragEvent) => void
     onDrop: (e: React.DragEvent) => void
   }
+  /** Clears all native drag visual state (call after import completes) */
+  clearNativeDragState: () => void
 }
 
 const ORCA_PATH_MIME = 'text/x-orca-file-path'
@@ -68,6 +76,11 @@ export function useFileExplorerDragDrop({
   const rootDragCounterRef = useRef(0)
   const [dropTargetDir, setDropTargetDir] = useState<string | null>(null)
   const [dragSourcePath, setDragSourcePath] = useState<string | null>(null)
+
+  // Native Files drag state — tracked separately from internal move state
+  const [isNativeDragOver, setIsNativeDragOver] = useState(false)
+  const nativeRootDragCounterRef = useRef(0)
+  const [nativeDropTargetDir, setNativeDropTargetDir] = useState<string | null>(null)
 
   const lastDragClientYRef = useRef<number | null>(null)
   const edgeScrollRafRef = useRef<number | null>(null)
@@ -223,14 +236,22 @@ export function useFileExplorerDragDrop({
     ]
   )
 
+  const clearNativeDragState = useCallback(() => {
+    nativeRootDragCounterRef.current = 0
+    setIsNativeDragOver(false)
+    setNativeDropTargetDir(null)
+  }, [])
+
   const rootDragHandlers = {
     onDragOver: useCallback(
       (e: React.DragEvent) => {
-        if (!e.dataTransfer.types.includes(ORCA_PATH_MIME)) {
+        const isInternal = e.dataTransfer.types.includes(ORCA_PATH_MIME)
+        const isNative = e.dataTransfer.types.includes('Files')
+        if (!isInternal && !isNative) {
           return
         }
         e.preventDefault()
-        e.dataTransfer.dropEffect = 'move'
+        e.dataTransfer.dropEffect = isInternal ? 'move' : 'copy'
         lastDragClientYRef.current = e.clientY
         if (edgeScrollRafRef.current === null) {
           edgeScrollRafRef.current = requestAnimationFrame(tickDragEdgeScroll)
@@ -239,18 +260,31 @@ export function useFileExplorerDragDrop({
       [tickDragEdgeScroll]
     ),
     onDragEnter: useCallback((e: React.DragEvent) => {
-      if (!e.dataTransfer.types.includes(ORCA_PATH_MIME)) {
+      const isInternal = e.dataTransfer.types.includes(ORCA_PATH_MIME)
+      const isNative = !isInternal && e.dataTransfer.types.includes('Files')
+      if (!isInternal && !isNative) {
         return
       }
       e.preventDefault()
-      rootDragCounterRef.current += 1
-      setIsRootDragOver(true)
+      if (isInternal) {
+        rootDragCounterRef.current += 1
+        setIsRootDragOver(true)
+      } else {
+        nativeRootDragCounterRef.current += 1
+        setIsNativeDragOver(true)
+      }
     }, []),
     onDragLeave: useCallback((_e: React.DragEvent) => {
+      // Decrement both counters since we cannot inspect types on dragleave
       rootDragCounterRef.current -= 1
       if (rootDragCounterRef.current <= 0) {
         rootDragCounterRef.current = 0
         setIsRootDragOver(false)
+      }
+      nativeRootDragCounterRef.current -= 1
+      if (nativeRootDragCounterRef.current <= 0) {
+        nativeRootDragCounterRef.current = 0
+        setIsNativeDragOver(false)
       }
     }, []),
     onDrop: useCallback(
@@ -260,12 +294,16 @@ export function useFileExplorerDragDrop({
         rootDragCounterRef.current = 0
         setIsRootDragOver(false)
         setDropTargetDir(null)
+        // Why: native Files drops are handled by the preload-relayed IPC event,
+        // not the React drop handler. We only clear native drag visual state
+        // here; the actual import is triggered from onFileDrop.
+        clearNativeDragState()
         const sourcePath = e.dataTransfer.getData(ORCA_PATH_MIME)
         if (sourcePath && worktreePath) {
           handleMoveDrop(sourcePath, worktreePath)
         }
       },
-      [worktreePath, handleMoveDrop, stopDragEdgeScroll]
+      [worktreePath, handleMoveDrop, stopDragEdgeScroll, clearNativeDragState]
     )
   }
 
@@ -279,6 +317,30 @@ export function useFileExplorerDragDrop({
     [activeWorktreeId, expanded, toggleDir]
   )
 
+  // Why: native drag expand must be expand-only (never collapse). The preload
+  // captures native drop events in the capture phase and stops propagation,
+  // so React's handleDrop never fires and the expand timer is never cleared.
+  // If revealInExplorer already expanded the folder before the timer fires,
+  // a toggleDir call would collapse it. Reading current state at call time
+  // also avoids stale-closure issues with the 500ms timer callback.
+  const handleNativeDragExpandDir = useCallback(
+    (dirPath: string) => {
+      if (!activeWorktreeId) {
+        return
+      }
+      useAppStore.setState((state) => {
+        const current = state.expandedDirs[activeWorktreeId] ?? new Set<string>()
+        if (current.has(dirPath)) {
+          return state
+        }
+        const next = new Set(current)
+        next.add(dirPath)
+        return { expandedDirs: { ...state.expandedDirs, [activeWorktreeId]: next } }
+      })
+    },
+    [activeWorktreeId]
+  )
+
   return {
     handleMoveDrop,
     handleDragExpandDir,
@@ -287,7 +349,12 @@ export function useFileExplorerDragDrop({
     dragSourcePath,
     setDragSourcePath,
     isRootDragOver,
+    isNativeDragOver,
+    nativeDropTargetDir,
+    setNativeDropTargetDir,
+    handleNativeDragExpandDir,
     stopDragEdgeScroll,
-    rootDragHandlers
+    rootDragHandlers,
+    clearNativeDragState
   }
 }

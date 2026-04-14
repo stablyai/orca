@@ -182,8 +182,8 @@ export function useTerminalPaneGlobalEffects({
   }, [isActive])
 
   useEffect(() => {
-    return window.api.ui.onFileDrop(({ path, target }) => {
-      if (!isActiveRef.current || target !== 'terminal') {
+    return window.api.ui.onFileDrop((data) => {
+      if (!isActiveRef.current || data.target !== 'terminal') {
         return
       }
       const manager = managerRef.current
@@ -202,10 +202,11 @@ export function useTerminalPaneGlobalEffects({
       // terminal cannot rely on DOM `drop` events for external files. Reusing
       // the active PTY transport preserves the existing CLI behavior for drag-
       // and-drop path insertion instead of opening those files in the editor.
-      // Why: the main process sends one IPC event per dropped file, so
-      // appending a trailing space keeps multiple paths separated in the
+      // Why: appending a trailing space keeps multiple paths separated in the
       // terminal input, matching standard drag-and-drop UX conventions.
-      transport.sendInput(`${shellEscapePath(path)} `)
+      for (const path of data.paths) {
+        transport.sendInput(`${shellEscapePath(path)} `)
+      }
     })
   }, [isActiveRef, managerRef, paneTransportsRef])
 }

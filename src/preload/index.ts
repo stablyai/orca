@@ -20,19 +20,59 @@ import {
   ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT
 } from '../shared/updater-renderer-events'
 
-type NativeFileDropTarget = 'editor' | 'terminal'
+type NativeDropResolution =
+  | { target: 'editor' }
+  | { target: 'terminal' }
+  | { target: 'file-explorer'; destinationDir: string }
+  // Why: returned when the explorer marker was found but no destinationDir
+  // could be resolved. The caller must suppress the drop entirely instead of
+  // falling back to 'editor' — fail-closed behavior per design §7.1.
+  | { target: 'rejected' }
 
-function getNativeFileDropTarget(event: DragEvent): NativeFileDropTarget | null {
+/**
+ * Walk the composed event path to classify which UI surface the native OS drop
+ * landed on, and — for file-explorer drops — extract the nearest destination
+ * directory from `data-native-file-drop-dir`.
+ *
+ * Why: the preload layer consumes native OS `drop` events before React can read
+ * filesystem paths. If preload does not capture the destination directory at
+ * drop time, the renderer can no longer tell whether the user meant "root" or
+ * "inside this folder".
+ */
+function resolveNativeFileDrop(event: DragEvent): NativeDropResolution | null {
   const path = event.composedPath()
+  let foundExplorer = false
+  let destinationDir: string | undefined
+
   for (const entry of path) {
     if (!(entry instanceof HTMLElement)) {
       continue
     }
+
     const target = entry.dataset.nativeFileDropTarget
     if (target === 'editor' || target === 'terminal') {
-      return target
+      return { target }
+    }
+    if (target === 'file-explorer') {
+      foundExplorer = true
+    }
+
+    // Pick the nearest (innermost) destination directory marker
+    if (destinationDir === undefined && entry.dataset.nativeFileDropDir) {
+      destinationDir = entry.dataset.nativeFileDropDir
     }
   }
+
+  if (foundExplorer) {
+    // Why: routing must fail closed for explorer drops. If preload sees the
+    // explorer target marker but cannot resolve a destinationDir, it rejects
+    // the gesture and emits no fallback editor drop event.
+    if (!destinationDir) {
+      return { target: 'rejected' }
+    }
+    return { target: 'file-explorer', destinationDir }
+  }
+
   return null
 }
 
@@ -71,7 +111,7 @@ document.addEventListener(
     if (!files || files.length === 0) {
       return
     }
-    const target = getNativeFileDropTarget(e)
+    const resolution = resolveNativeFileDrop(e)
 
     const paths: string[] = []
     for (let i = 0; i < files.length; i++) {
@@ -82,16 +122,34 @@ document.addEventListener(
       }
     }
 
-    if (paths.length > 0) {
-      // Why: native OS file drops must be classified before the event crosses
-      // into the isolated renderer; otherwise every drop looks identical and we
-      // cannot distinguish "open this in Orca's editor" from "send this path to
-      // the active coding CLI". Falls back to 'editor' so drops on surfaces
-      // without an explicit marker (sidebar, editor body, etc.) preserve the
-      // prior open-in-editor behavior instead of being silently discarded.
+    if (paths.length === 0) {
+      return
+    }
+
+    // Why: when the explorer marker was present but no destination directory
+    // could be resolved, the gesture is rejected entirely — no fallback to
+    // editor, per the fail-closed requirement in design §7.1.
+    if (resolution?.target === 'rejected') {
+      return
+    }
+
+    // Why: preload must emit exactly one native-drop event per drop gesture.
+    // The preload layer already has the full FileList. Re-emitting one IPC
+    // message per path and asking the renderer to reconstruct the gesture via
+    // timing would be both fragile and slower under large drops.
+    if (resolution?.target === 'file-explorer') {
       ipcRenderer.send('terminal:file-dropped-from-preload', {
         paths,
-        target: target ?? 'editor'
+        target: 'file-explorer',
+        destinationDir: resolution.destinationDir
+      })
+    } else {
+      // Why: falls back to 'editor' so drops on surfaces without an explicit
+      // marker (sidebar, editor body, etc.) preserve the prior open-in-editor
+      // behavior instead of being silently discarded.
+      ipcRenderer.send('terminal:file-dropped-from-preload', {
+        paths,
+        target: resolution?.target ?? 'editor'
       })
     }
   },
@@ -763,6 +821,30 @@ const api = {
       totalMatches: number
       truncated: boolean
     }> => ipcRenderer.invoke('fs:search', args),
+    importExternalPaths: (args: {
+      sourcePaths: string[]
+      destDir: string
+    }): Promise<{
+      results: (
+        | {
+            sourcePath: string
+            status: 'imported'
+            destPath: string
+            kind: 'file' | 'directory'
+            renamed: boolean
+          }
+        | {
+            sourcePath: string
+            status: 'skipped'
+            reason: 'missing' | 'symlink' | 'permission-denied' | 'unsupported'
+          }
+        | {
+            sourcePath: string
+            status: 'failed'
+            reason: string
+          }
+      )[]
+    }> => ipcRenderer.invoke('fs:importExternalPaths', args),
     watchWorktree: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
       ipcRenderer.invoke('fs:watchWorktree', args),
     unwatchWorktree: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
@@ -926,11 +1008,19 @@ const api = {
     writeClipboardImage: (dataUrl: string): Promise<void> =>
       ipcRenderer.invoke('clipboard:writeImage', dataUrl),
     onFileDrop: (
-      callback: (data: { path: string; target: 'editor' | 'terminal' }) => void
+      callback: (
+        data:
+          | { paths: string[]; target: 'editor' }
+          | { paths: string[]; target: 'terminal' }
+          | { paths: string[]; target: 'file-explorer'; destinationDir: string }
+      ) => void
     ): (() => void) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
-        data: { path: string; target: 'editor' | 'terminal' }
+        data:
+          | { paths: string[]; target: 'editor' }
+          | { paths: string[]; target: 'terminal' }
+          | { paths: string[]; target: 'file-explorer'; destinationDir: string }
       ) => callback(data)
       ipcRenderer.on('terminal:file-drop', listener)
       return () => ipcRenderer.removeListener('terminal:file-drop', listener)
