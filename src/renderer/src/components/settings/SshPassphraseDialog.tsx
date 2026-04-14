@@ -12,35 +12,36 @@ import {
 import { useAppStore } from '@/store'
 
 export function SshPassphraseDialog(): React.JSX.Element | null {
-  const request = useAppStore((s) => s.sshPassphraseRequest)
+  const request = useAppStore((s) => s.sshPassphraseQueue[0] ?? null)
   const targetLabels = useAppStore((s) => s.sshTargetLabels)
-  const clearRequest = useAppStore((s) => s.setSshPassphraseRequest)
+  const dequeue = useAppStore((s) => s.dequeueSshPassphraseRequest)
   const [passphrase, setPassphrase] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
   const open = request !== null
 
+  const requestId = request?.requestId
   useEffect(() => {
-    if (open) {
+    if (requestId) {
       setPassphrase('')
       requestAnimationFrame(() => inputRef.current?.focus())
     }
-  }, [open])
+  }, [requestId])
 
   const handleSubmit = useCallback(() => {
     if (!request || !passphrase) {
       return
     }
     void window.api.ssh.submitPassphrase({ requestId: request.requestId, passphrase })
-    clearRequest(null)
-  }, [request, passphrase, clearRequest])
+    dequeue()
+  }, [request, passphrase, dequeue])
 
   const handleCancel = useCallback(() => {
     if (request) {
       void window.api.ssh.submitPassphrase({ requestId: request.requestId, passphrase: null })
     }
-    clearRequest(null)
-  }, [request, clearRequest])
+    dequeue()
+  }, [request, dequeue])
 
   if (!request) {
     return null

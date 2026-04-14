@@ -29,6 +29,7 @@ export class SshConnection {
   private target: SshTarget
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private disposed = false
+  private cachedPassphrase: string | null = null
 
   constructor(target: SshTarget, callbacks: SshConnectionCallbacks) {
     this.target = target
@@ -85,7 +86,7 @@ export class SshConnection {
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err))
 
-        if (isAuthError(lastError)) {
+        if (isAuthError(lastError) || isPassphraseError(lastError)) {
           this.setState('auth-failed', lastError.message)
           throw lastError
         }
@@ -123,15 +124,25 @@ export class SshConnection {
       config.sock = proxy.sock
     }
 
+    if (this.cachedPassphrase) {
+      config.passphrase = this.cachedPassphrase
+    }
+
     try {
       await this.doSsh2Connect(config)
     } catch (err) {
       // Why: ssh2 fails immediately when given an encrypted key without a
       // passphrase. Prompt the user and retry once with the passphrase.
-      if (err instanceof Error && isPassphraseError(err) && this.callbacks.onPassphraseRequest) {
+      if (
+        err instanceof Error &&
+        isPassphraseError(err) &&
+        !this.cachedPassphrase &&
+        this.callbacks.onPassphraseRequest
+      ) {
         const keyPath = this.target.identityFile || resolved?.identityFile?.[0] || '(unknown)'
         const passphrase = await this.callbacks.onPassphraseRequest(this.target.id, keyPath)
         if (passphrase) {
+          this.cachedPassphrase = passphrase
           config.passphrase = passphrase
           await this.doSsh2Connect(config)
           return
@@ -212,7 +223,6 @@ export class SshConnection {
       try {
         await this.attemptConnect()
         this.state.reconnectAttempt = 0
-        this.setState('connected')
       } catch {
         this.state.reconnectAttempt++
         this.scheduleReconnect()
@@ -221,72 +231,47 @@ export class SshConnection {
   }
 
   async connectViaSystemSsh(): Promise<SystemSshProcess> {
-    if (this.disposed) {
-      throw new Error('Connection disposed')
-    }
+    if (this.disposed) { throw new Error('Connection disposed') }
     this.systemSsh?.kill()
     this.systemSsh = null
     this.setState('connecting')
-
     try {
       const proc = spawnSystemSsh(this.target)
       this.systemSsh = proc
-
       let settled = false
-
       await new Promise<void>((resolve, reject) => {
         const timeout = setTimeout(() => {
-          settled = true
-          proc.kill()
+          settled = true; proc.kill()
           reject(new Error('System SSH connection timed out'))
         }, CONNECT_TIMEOUT_MS)
-
-        proc.stdout.once('data', () => {
-          settled = true
-          clearTimeout(timeout)
-          resolve()
-        })
+        proc.stdout.once('data', () => { settled = true; clearTimeout(timeout); resolve() })
         proc.onExit((code) => {
-          if (settled) {
-            return
-          }
-          settled = true
-          clearTimeout(timeout)
-          if (code !== 0) {
-            reject(new Error(`System SSH exited with code ${code}`))
-          }
+          if (settled) { return }
+          settled = true; clearTimeout(timeout)
+          if (code !== 0) { reject(new Error(`System SSH exited with code ${code}`)) }
         })
       })
-
       this.setState('connected')
-
-      proc.onExit((_code) => {
+      proc.onExit(() => {
         if (!this.disposed && this.systemSsh === proc) {
           this.systemSsh = null
           this.scheduleReconnect()
         }
       })
-
       return proc
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      this.setState('error', msg)
+      this.setState('error', err instanceof Error ? err.message : String(err))
       throw err
     }
   }
 
   async disconnect(): Promise<void> {
     this.disposed = true
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer)
-    }
+    if (this.reconnectTimer) { clearTimeout(this.reconnectTimer) }
     this.reconnectTimer = null
-    this.client?.end()
-    this.client = null
-    this.proxyProcess?.kill()
-    this.proxyProcess = null
-    this.systemSsh?.kill()
-    this.systemSsh = null
+    this.client?.end(); this.client = null
+    this.proxyProcess?.kill(); this.proxyProcess = null
+    this.systemSsh?.kill(); this.systemSsh = null
     this.setState('disconnected')
   }
 

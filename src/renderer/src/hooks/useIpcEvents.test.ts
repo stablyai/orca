@@ -102,7 +102,7 @@ describe('useIpcEvents updater integration', () => {
           setRateLimitsFromPush: vi.fn(),
           setSshConnectionState: vi.fn(),
           setSshTargetLabels: vi.fn(),
-          setSshPassphraseRequest: vi.fn(),
+          enqueueSshPassphraseRequest: vi.fn(),
           settings: { terminalFontSize: 13 }
         })
       }

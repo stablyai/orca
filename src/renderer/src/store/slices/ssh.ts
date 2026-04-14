@@ -13,17 +13,18 @@ export type SshSlice = {
   /** Maps target IDs to their user-facing labels. Populated during hydration
    * so components can look up labels without per-component IPC calls. */
   sshTargetLabels: Map<string, string>
-  sshPassphraseRequest: SshPassphraseRequest | null
+  sshPassphraseQueue: SshPassphraseRequest[]
   setSshConnectionState: (targetId: string, state: SshConnectionState) => void
   setSshTargetLabels: (labels: Map<string, string>) => void
-  setSshPassphraseRequest: (req: SshPassphraseRequest | null) => void
+  enqueueSshPassphraseRequest: (req: SshPassphraseRequest) => void
+  dequeueSshPassphraseRequest: () => void
   getSshConnectionStatus: (connectionId: string | null | undefined) => SshConnectionStatus | null
 }
 
 export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set, get) => ({
   sshConnectionStates: new Map(),
   sshTargetLabels: new Map(),
-  sshPassphraseRequest: null,
+  sshPassphraseQueue: [],
 
   setSshConnectionState: (targetId, state) =>
     set(() => {
@@ -33,7 +34,10 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set, ge
     }),
 
   setSshTargetLabels: (labels) => set({ sshTargetLabels: labels }),
-  setSshPassphraseRequest: (req) => set({ sshPassphraseRequest: req }),
+  enqueueSshPassphraseRequest: (req) =>
+    set((s) => ({ sshPassphraseQueue: [...s.sshPassphraseQueue, req] })),
+  dequeueSshPassphraseRequest: () =>
+    set((s) => ({ sshPassphraseQueue: s.sshPassphraseQueue.slice(1) })),
 
   getSshConnectionStatus: (connectionId) => {
     if (!connectionId) {

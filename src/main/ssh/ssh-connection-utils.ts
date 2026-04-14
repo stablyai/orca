@@ -15,7 +15,11 @@ export type SshConnectionCallbacks = {
 
 export function isPassphraseError(err: Error): boolean {
   const msg = err.message.toLowerCase()
-  return msg.includes('passphrase') || msg.includes('encrypted')
+  return (
+    msg.includes('passphrase') ||
+    msg.includes('encrypted key') ||
+    msg.includes('bad decrypt')
+  )
 }
 
 export const INITIAL_RETRY_ATTEMPTS = 5
