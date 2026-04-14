@@ -373,6 +373,27 @@ export type PreloadApi = {
     }) => Promise<{ size: number; isDirectory: boolean; mtime: number }>
     listFiles: (args: { rootPath: string }) => Promise<string[]>
     search: (args: SearchOptions) => Promise<SearchResult>
+    importExternalPaths: (args: { sourcePaths: string[]; destDir: string }) => Promise<{
+      results: (
+        | {
+            sourcePath: string
+            status: 'imported'
+            destPath: string
+            kind: 'file' | 'directory'
+            renamed: boolean
+          }
+        | {
+            sourcePath: string
+            status: 'skipped'
+            reason: 'missing' | 'symlink' | 'permission-denied' | 'unsupported'
+          }
+        | {
+            sourcePath: string
+            status: 'failed'
+            reason: string
+          }
+      )[]
+    }>
     watchWorktree: (args: { worktreePath: string }) => Promise<void>
     unwatchWorktree: (args: { worktreePath: string }) => Promise<void>
     onFsChanged: (callback: (payload: FsChangedPayload) => void) => () => void
@@ -435,7 +456,12 @@ export type PreloadApi = {
     writeClipboardText: (text: string) => Promise<void>
     writeClipboardImage: (dataUrl: string) => Promise<void>
     onFileDrop: (
-      callback: (data: { path: string; target: 'editor' | 'terminal' }) => void
+      callback: (
+        data:
+          | { paths: string[]; target: 'editor' }
+          | { paths: string[]; target: 'terminal' }
+          | { paths: string[]; target: 'file-explorer'; destinationDir: string }
+      ) => void
     ) => () => void
     getZoomLevel: () => number
     setZoomLevel: (level: number) => void
