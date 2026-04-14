@@ -90,6 +90,14 @@ vi.mock('./worktree-logic', async (importOriginal) => {
   }
 })
 
+const { deleteWorktreeHistoryDirMock } = vi.hoisted(() => ({
+  deleteWorktreeHistoryDirMock: vi.fn()
+}))
+
+vi.mock('../terminal-history', () => ({
+  deleteWorktreeHistoryDir: deleteWorktreeHistoryDirMock
+}))
+
 import { registerWorktreeHandlers } from './worktrees'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
@@ -407,6 +415,7 @@ describe('registerWorktreeHandlers', () => {
       cwd: '/workspace/repo'
     })
     expect(store.removeWorktreeMeta).toHaveBeenCalledWith('repo-1::/workspace/feature-wt')
+    expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith('repo-1::/workspace/feature-wt')
     expect(mainWindow.webContents.send).toHaveBeenCalledWith('worktrees:changed', {
       repoId: 'repo-1'
     })
