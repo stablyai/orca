@@ -8,9 +8,15 @@ import { existsSync, accessSync, statSync, chmodSync, constants as fsConstants }
 import { type BrowserWindow, ipcMain } from 'electron'
 import * as pty from 'node-pty'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import type { PtySpawnArgs, GlobalSettings } from '../../shared/types'
 import { parseWslPath } from '../wsl'
 import { openCodeHookService } from '../opencode/hook-service'
 import { piTitlebarExtensionService } from '../pi/titlebar-extension-service'
+import {
+  injectHistoryEnv,
+  updateHistFileForFallback,
+  logHistoryInjection
+} from '../terminal-history'
 
 let ptyCounter = 0
 const ptyProcesses = new Map<string, pty.IPty>()
@@ -145,7 +151,8 @@ function ensureNodePtySpawnHelperExecutable(): void {
 export function registerPtyHandlers(
   mainWindow: BrowserWindow,
   runtime?: OrcaRuntimeService,
-  getSelectedCodexHomePath?: () => string | null
+  getSelectedCodexHomePath?: () => string | null,
+  getSettings?: () => GlobalSettings
 ): void {
   // Remove any previously registered handlers so we can re-register them
   // (e.g. when macOS re-activates the app and creates a new window).
@@ -196,221 +203,239 @@ export function registerPtyHandlers(
     }
   })
 
-  ipcMain.handle(
-    'pty:spawn',
-    (_event, args: { cols: number; rows: number; cwd?: string; env?: Record<string, string> }) => {
-      const id = String(++ptyCounter)
+  ipcMain.handle('pty:spawn', (_event, args: PtySpawnArgs) => {
+    const id = String(++ptyCounter)
 
-      const defaultCwd =
-        process.platform === 'win32'
-          ? process.env.USERPROFILE || process.env.HOMEPATH || 'C:\\'
-          : process.env.HOME || '/'
+    const defaultCwd =
+      process.platform === 'win32'
+        ? process.env.USERPROFILE || process.env.HOMEPATH || 'C:\\'
+        : process.env.HOME || '/'
 
-      const cwd = args.cwd || defaultCwd
+    const cwd = args.cwd || defaultCwd
 
-      // Why: when the working directory is inside a WSL filesystem, spawn a
-      // WSL shell (wsl.exe) instead of a native Windows shell. This gives the
-      // user a Linux environment with access to their WSL-installed tools
-      // (git, node, etc.) rather than a PowerShell with no WSL toolchain.
-      const wslInfo = process.platform === 'win32' ? parseWslPath(cwd) : null
+    // Why: when the working directory is inside a WSL filesystem, spawn a
+    // WSL shell (wsl.exe) instead of a native Windows shell. This gives the
+    // user a Linux environment with access to their WSL-installed tools
+    // (git, node, etc.) rather than a PowerShell with no WSL toolchain.
+    const wslInfo = process.platform === 'win32' ? parseWslPath(cwd) : null
 
-      let shellPath: string
-      let shellArgs: string[]
-      let effectiveCwd: string
-      let validationCwd: string
-      if (wslInfo) {
-        // Why: use `bash -c "cd ... && exec bash -l"` instead of `--cd` because
-        // wsl.exe's --cd flag fails with ERROR_PATH_NOT_FOUND in some Node
-        // spawn configurations. The exec replaces the outer bash with a login
-        // shell so the user gets their normal shell environment.
-        const escapedCwd = wslInfo.linuxPath.replace(/'/g, "'\\''")
-        shellPath = 'wsl.exe'
-        shellArgs = ['-d', wslInfo.distro, '--', 'bash', '-c', `cd '${escapedCwd}' && exec bash -l`]
-        // Why: set cwd to a valid Windows directory so node-pty's native
-        // spawn doesn't fail on the UNC path.
-        effectiveCwd = process.env.USERPROFILE || process.env.HOMEPATH || 'C:\\'
-        // Why: still validate the requested WSL UNC path, not the fallback
-        // Windows cwd. Otherwise a deleted/mistyped WSL worktree silently
-        // spawns a shell in the home directory and hides the real error.
-        validationCwd = cwd
-      } else if (process.platform === 'win32') {
-        shellPath = process.env.COMSPEC || 'powershell.exe'
-        shellArgs = []
-        effectiveCwd = cwd
-        validationCwd = cwd
-      } else {
-        // Why: startup commands can pass env overrides for the PTY. Prefer an
-        // explicit SHELL override when present, but still validate/fallback it
-        // exactly like the inherited process shell so stale config can't brick
-        // terminal creation.
-        shellPath = args.env?.SHELL || process.env.SHELL || '/bin/zsh'
-        shellArgs = ['-l']
-        effectiveCwd = cwd
-        validationCwd = cwd
-      }
+    let shellPath: string
+    let shellArgs: string[]
+    let effectiveCwd: string
+    let validationCwd: string
+    if (wslInfo) {
+      // Why: use `bash -c "cd ... && exec bash -l"` instead of `--cd` because
+      // wsl.exe's --cd flag fails with ERROR_PATH_NOT_FOUND in some Node
+      // spawn configurations. The exec replaces the outer bash with a login
+      // shell so the user gets their normal shell environment.
+      const escapedCwd = wslInfo.linuxPath.replace(/'/g, "'\\''")
+      shellPath = 'wsl.exe'
+      shellArgs = ['-d', wslInfo.distro, '--', 'bash', '-c', `cd '${escapedCwd}' && exec bash -l`]
+      // Why: set cwd to a valid Windows directory so node-pty's native
+      // spawn doesn't fail on the UNC path.
+      effectiveCwd = process.env.USERPROFILE || process.env.HOMEPATH || 'C:\\'
+      // Why: still validate the requested WSL UNC path, not the fallback
+      // Windows cwd. Otherwise a deleted/mistyped WSL worktree silently
+      // spawns a shell in the home directory and hides the real error.
+      validationCwd = cwd
+    } else if (process.platform === 'win32') {
+      shellPath = process.env.COMSPEC || 'powershell.exe'
+      shellArgs = []
+      effectiveCwd = cwd
+      validationCwd = cwd
+    } else {
+      // Why: startup commands can pass env overrides for the PTY. Prefer an
+      // explicit SHELL override when present, but still validate/fallback it
+      // exactly like the inherited process shell so stale config can't brick
+      // terminal creation.
+      shellPath = args.env?.SHELL || process.env.SHELL || '/bin/zsh'
+      shellArgs = ['-l']
+      effectiveCwd = cwd
+      validationCwd = cwd
+    }
 
-      ensureNodePtySpawnHelperExecutable()
+    ensureNodePtySpawnHelperExecutable()
 
-      if (!existsSync(validationCwd)) {
-        throw new Error(
-          `Working directory "${validationCwd}" does not exist. ` +
-            `It may have been deleted or is on an unmounted volume.`
-        )
-      }
-      if (!statSync(validationCwd).isDirectory()) {
-        throw new Error(`Working directory "${validationCwd}" is not a directory.`)
-      }
-
-      const selectedCodexHomePath = getSelectedCodexHomePath?.() ?? null
-      const spawnEnv = {
-        ...process.env,
-        ...args.env,
-        TERM: 'xterm-256color',
-        COLORTERM: 'truecolor',
-        TERM_PROGRAM: 'Orca',
-        FORCE_HYPERLINK: '1'
-      } as Record<string, string>
-
-      const openCodeHookEnv = openCodeHookService.buildPtyEnv(id)
-      if (spawnEnv.OPENCODE_CONFIG_DIR) {
-        // Why: OPENCODE_CONFIG_DIR is a singular extra config root. Replacing a
-        // user-provided directory would silently hide their custom OpenCode
-        // config, so preserve it and fall back to title-only detection there.
-        delete openCodeHookEnv.OPENCODE_CONFIG_DIR
-      }
-      Object.assign(spawnEnv, openCodeHookEnv)
-      // Why: PI_CODING_AGENT_DIR owns Pi's full config/session root. Build a
-      // PTY-scoped overlay from the caller's chosen root so Pi sessions keep
-      // their user state without sharing a mutable overlay across terminals.
-      Object.assign(
-        spawnEnv,
-        piTitlebarExtensionService.buildPtyEnv(id, spawnEnv.PI_CODING_AGENT_DIR)
+    if (!existsSync(validationCwd)) {
+      throw new Error(
+        `Working directory "${validationCwd}" does not exist. ` +
+          `It may have been deleted or is on an unmounted volume.`
       )
+    }
+    if (!statSync(validationCwd).isDirectory()) {
+      throw new Error(`Working directory "${validationCwd}" is not a directory.`)
+    }
 
-      // Why: the selected Codex account should affect Codex launched inside
-      // Orca terminals too, not just Orca's background quota fetches. Inject
-      // the managed CODEX_HOME only into this PTY environment so the override
-      // stays scoped to Orca terminals instead of mutating the app process or
-      // the user's external shells.
-      if (selectedCodexHomePath) {
-        spawnEnv.CODEX_HOME = selectedCodexHomePath
+    const selectedCodexHomePath = getSelectedCodexHomePath?.() ?? null
+    const spawnEnv = {
+      ...process.env,
+      ...args.env,
+      TERM: 'xterm-256color',
+      COLORTERM: 'truecolor',
+      TERM_PROGRAM: 'Orca',
+      FORCE_HYPERLINK: '1'
+    } as Record<string, string>
+
+    const openCodeHookEnv = openCodeHookService.buildPtyEnv(id)
+    if (spawnEnv.OPENCODE_CONFIG_DIR) {
+      // Why: OPENCODE_CONFIG_DIR is a singular extra config root. Replacing a
+      // user-provided directory would silently hide their custom OpenCode
+      // config, so preserve it and fall back to title-only detection there.
+      delete openCodeHookEnv.OPENCODE_CONFIG_DIR
+    }
+    Object.assign(spawnEnv, openCodeHookEnv)
+    // Why: PI_CODING_AGENT_DIR owns Pi's full config/session root. Build a
+    // PTY-scoped overlay from the caller's chosen root so Pi sessions keep
+    // their user state without sharing a mutable overlay across terminals.
+    Object.assign(
+      spawnEnv,
+      piTitlebarExtensionService.buildPtyEnv(id, spawnEnv.PI_CODING_AGENT_DIR)
+    )
+
+    // Why: the selected Codex account should affect Codex launched inside
+    // Orca terminals too, not just Orca's background quota fetches. Inject
+    // the managed CODEX_HOME only into this PTY environment so the override
+    // stays scoped to Orca terminals instead of mutating the app process or
+    // the user's external shells.
+    if (selectedCodexHomePath) {
+      spawnEnv.CODEX_HOME = selectedCodexHomePath
+    }
+
+    // Why: When Electron is launched from Finder (not a terminal), the process
+    // does not inherit the user's shell locale settings. Without an explicit
+    // UTF-8 locale, multi-byte characters (e.g. em dashes U+2014) are
+    // misinterpreted by the PTY and rendered as garbled sequences like "�~@~T".
+    // We default LANG to en_US.UTF-8 but let the inherited or caller-provided
+    // env override it so user locale preferences are respected.
+    spawnEnv.LANG ??= 'en_US.UTF-8'
+
+    // ── Worktree-scoped shell history (§7–§10 of terminal-history-scope-design) ──
+    // Why: without this, all worktree terminals share a single global HISTFILE
+    // so ArrowUp in worktree B surfaces commands from worktree A.
+    const worktreeId = args.worktreeId
+    const historyEnabled = worktreeId && (getSettings?.()?.terminalScopeHistoryByWorktree ?? true)
+
+    // Resolve the effective shell kind for history injection. For WSL, the
+    // outer executable is wsl.exe but the inner login shell is bash.
+    const effectiveShellPath = wslInfo ? 'bash' : shellPath
+    let historyResult: ReturnType<typeof injectHistoryEnv> | null = null
+    if (historyEnabled) {
+      historyResult = injectHistoryEnv(spawnEnv, worktreeId, effectiveShellPath, cwd)
+      logHistoryInjection(worktreeId, historyResult)
+    }
+
+    let ptyProcess: pty.IPty | undefined
+    let primaryError: string | null = null
+    if (process.platform !== 'win32') {
+      primaryError = getShellValidationError(shellPath)
+    }
+
+    if (!primaryError) {
+      try {
+        ptyProcess = pty.spawn(shellPath, shellArgs, {
+          name: 'xterm-256color',
+          cols: args.cols,
+          rows: args.rows,
+          cwd: effectiveCwd,
+          env: spawnEnv
+        })
+      } catch (err) {
+        // Why: node-pty.spawn can throw if posix_spawnp fails for reasons
+        // not caught by the validation above (e.g. architecture mismatch
+        // of the native addon, PTY allocation failure, or resource limits).
+        primaryError = err instanceof Error ? err.message : String(err)
       }
+    }
 
-      // Why: When Electron is launched from Finder (not a terminal), the process
-      // does not inherit the user's shell locale settings. Without an explicit
-      // UTF-8 locale, multi-byte characters (e.g. em dashes U+2014) are
-      // misinterpreted by the PTY and rendered as garbled sequences like "�~@~T".
-      // We default LANG to en_US.UTF-8 but let the inherited or caller-provided
-      // env override it so user locale preferences are respected.
-      spawnEnv.LANG ??= 'en_US.UTF-8'
-
-      let ptyProcess: pty.IPty | undefined
-      let primaryError: string | null = null
-      if (process.platform !== 'win32') {
-        primaryError = getShellValidationError(shellPath)
-      }
-
-      if (!primaryError) {
+    if (!ptyProcess && process.platform !== 'win32') {
+      // Why: a stale login shell path (common after Homebrew/bash changes)
+      // should not brick Orca terminals. Fall back to system shells so the
+      // user still gets a working terminal while the bad SHELL config remains.
+      const configuredShellPath = shellPath
+      const fallbackShells = ['/bin/zsh', '/bin/bash', '/bin/sh'].filter(
+        (s) => s !== configuredShellPath
+      )
+      for (const fallback of fallbackShells) {
+        if (getShellValidationError(fallback)) {
+          continue
+        }
         try {
-          ptyProcess = pty.spawn(shellPath, shellArgs, {
+          // Why: set SHELL to the fallback *before* spawning so the child
+          // process inherits the correct value. Leaving the stale original
+          // SHELL in the env would confuse shell startup logic and any
+          // subprocesses that inspect $SHELL.
+          spawnEnv.SHELL = fallback
+          // Why: if zsh failed and bash took over, HISTFILE still points to
+          // zsh_history. Update it *before* spawn so the child inherits the
+          // correct filename (see design doc §8).
+          if (historyResult?.histFile) {
+            updateHistFileForFallback(spawnEnv, fallback)
+          }
+          ptyProcess = pty.spawn(fallback, ['-l'], {
             name: 'xterm-256color',
             cols: args.cols,
             rows: args.rows,
             cwd: effectiveCwd,
             env: spawnEnv
           })
-        } catch (err) {
-          // Why: node-pty.spawn can throw if posix_spawnp fails for reasons
-          // not caught by the validation above (e.g. architecture mismatch
-          // of the native addon, PTY allocation failure, or resource limits).
-          primaryError = err instanceof Error ? err.message : String(err)
+          console.warn(
+            `[pty] Primary shell "${configuredShellPath}" failed (${primaryError ?? 'unknown error'}), fell back to "${fallback}"`
+          )
+          shellPath = fallback
+          break
+        } catch {
+          // Fallback also failed — try next.
         }
       }
-
-      if (!ptyProcess && process.platform !== 'win32') {
-        // Why: a stale login shell path (common after Homebrew/bash changes)
-        // should not brick Orca terminals. Fall back to system shells so the
-        // user still gets a working terminal while the bad SHELL config remains.
-        const configuredShellPath = shellPath
-        const fallbackShells = ['/bin/zsh', '/bin/bash', '/bin/sh'].filter(
-          (s) => s !== configuredShellPath
-        )
-        for (const fallback of fallbackShells) {
-          if (getShellValidationError(fallback)) {
-            continue
-          }
-          try {
-            // Why: set SHELL to the fallback *before* spawning so the child
-            // process inherits the correct value. Leaving the stale original
-            // SHELL in the env would confuse shell startup logic and any
-            // subprocesses that inspect $SHELL.
-            spawnEnv.SHELL = fallback
-            ptyProcess = pty.spawn(fallback, ['-l'], {
-              name: 'xterm-256color',
-              cols: args.cols,
-              rows: args.rows,
-              cwd: effectiveCwd,
-              env: spawnEnv
-            })
-            console.warn(
-              `[pty] Primary shell "${configuredShellPath}" failed (${primaryError ?? 'unknown error'}), fell back to "${fallback}"`
-            )
-            shellPath = fallback
-            break
-          } catch {
-            // Fallback also failed — try next.
-          }
-        }
-      }
-
-      if (!ptyProcess) {
-        const diag = [
-          `shell: ${shellPath}`,
-          `cwd: ${effectiveCwd}`,
-          `arch: ${process.arch}`,
-          `platform: ${process.platform} ${process.getSystemVersion?.() ?? ''}`
-        ].join(', ')
-        throw new Error(
-          `Failed to spawn shell "${shellPath}": ${primaryError ?? 'unknown error'} (${diag}). ` +
-            `If this persists, please file an issue.`
-        )
-      }
-
-      if (process.platform !== 'win32') {
-        // Why: after a successful fallback, update spawnEnv.SHELL to match what
-        // was actually launched. The value was already set inside the fallback loop
-        // before spawn, but we also need shellPath to reflect the fallback for the
-        // ptyShellName map below. (Primary-path spawns already have the correct
-        // SHELL from process.env / args.env.)
-        spawnEnv.SHELL = shellPath
-      }
-      const proc = ptyProcess
-      ptyProcesses.set(id, proc)
-      ptyShellName.set(id, basename(shellPath))
-      ptyLoadGeneration.set(id, loadGeneration)
-      runtime?.onPtySpawned(id)
-
-      const onDataDisposable = proc.onData((data) => {
-        runtime?.onPtyData(id, data, Date.now())
-        if (!mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('pty:data', { id, data })
-        }
-      })
-
-      const onExitDisposable = proc.onExit(({ exitCode }) => {
-        clearPtyState(id)
-        clearProviderPtyState(id)
-        runtime?.onPtyExit(id, exitCode)
-        if (!mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('pty:exit', { id, code: exitCode })
-        }
-      })
-
-      ptyDisposables.set(id, [onDataDisposable, onExitDisposable])
-
-      return { id }
     }
-  )
+
+    if (!ptyProcess) {
+      const diag = [
+        `shell: ${shellPath}`,
+        `cwd: ${effectiveCwd}`,
+        `arch: ${process.arch}`,
+        `platform: ${process.platform} ${process.getSystemVersion?.() ?? ''}`
+      ].join(', ')
+      throw new Error(
+        `Failed to spawn shell "${shellPath}": ${primaryError ?? 'unknown error'} (${diag}). ` +
+          `If this persists, please file an issue.`
+      )
+    }
+
+    if (process.platform !== 'win32') {
+      // Why: after a successful fallback, update spawnEnv.SHELL to match what
+      // was actually launched. The value was already set inside the fallback loop
+      // before spawn, but we also need shellPath to reflect the fallback for the
+      // ptyShellName map below. (Primary-path spawns already have the correct
+      // SHELL from process.env / args.env.)
+      spawnEnv.SHELL = shellPath
+    }
+    const proc = ptyProcess
+    ptyProcesses.set(id, proc)
+    ptyShellName.set(id, basename(shellPath))
+    ptyLoadGeneration.set(id, loadGeneration)
+    runtime?.onPtySpawned(id)
+
+    const onDataDisposable = proc.onData((data) => {
+      runtime?.onPtyData(id, data, Date.now())
+      if (!mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('pty:data', { id, data })
+      }
+    })
+
+    const onExitDisposable = proc.onExit(({ exitCode }) => {
+      clearPtyState(id)
+      clearProviderPtyState(id)
+      runtime?.onPtyExit(id, exitCode)
+      if (!mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('pty:exit', { id, code: exitCode })
+      }
+    })
+
+    ptyDisposables.set(id, [onDataDisposable, onExitDisposable])
+
+    return { id }
+  })
 
   ipcMain.on('pty:write', (_event, args: { id: string; data: string }) => {
     const proc = ptyProcesses.get(args.id)
