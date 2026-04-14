@@ -47,13 +47,12 @@ export function SshDisconnectedDialog({
     try {
       await window.api.ssh.connect({ targetId })
       onOpenChange(false)
-      toast.success(`Reconnected to ${targetLabel}`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Reconnection failed')
     } finally {
       setConnecting(false)
     }
-  }, [targetId, targetLabel, onOpenChange])
+  }, [targetId, onOpenChange])
 
   const isConnecting =
     connecting ||

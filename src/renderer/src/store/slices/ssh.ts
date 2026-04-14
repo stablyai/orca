@@ -28,8 +28,8 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set, ge
   sshCredentialQueue: [],
 
   setSshConnectionState: (targetId, state) =>
-    set(() => {
-      const next = new Map(get().sshConnectionStates)
+    set((s) => {
+      const next = new Map(s.sshConnectionStates)
       next.set(targetId, state)
       return { sshConnectionStates: next }
     }),

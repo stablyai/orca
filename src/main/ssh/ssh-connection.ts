@@ -46,31 +46,25 @@ export class SshConnection {
   getState(): SshConnectionState {
     return { ...this.state }
   }
-
   getClient(): SshClient | null {
     return this.client
   }
-
   getTarget(): SshTarget {
     return { ...this.target }
   }
 
-  async exec(command: string): Promise<ClientChannel> {
+  async exec(cmd: string): Promise<ClientChannel> {
     if (!this.client) {
       throw new Error('Not connected')
     }
-    return new Promise((resolve, reject) =>
-      this.client!.exec(command, (err, ch) => (err ? reject(err) : resolve(ch)))
-    )
+    return new Promise((res, rej) => this.client!.exec(cmd, (e, ch) => (e ? rej(e) : res(ch))))
   }
 
   async sftp(): Promise<SFTPWrapper> {
     if (!this.client) {
       throw new Error('Not connected')
     }
-    return new Promise((resolve, reject) =>
-      this.client!.sftp((err, s) => (err ? reject(err) : resolve(s)))
-    )
+    return new Promise((res, rej) => this.client!.sftp((e, s) => (e ? rej(e) : res(s))))
   }
 
   async connect(): Promise<void> {
@@ -138,17 +132,21 @@ export class SshConnection {
       if (!(err instanceof Error) || !this.callbacks.onCredentialRequest) {
         throw err
       }
-      // Why: prompt for passphrase/password on first failure, cache on success.
+      // Why: prompt for passphrase on encrypted-key error, then retry with
+      // a fresh proxy socket (ssh2 may have destroyed the original).
       if (isPassphraseError(err) && !this.cachedPassphrase) {
         const detail = this.target.identityFile || resolved?.identityFile?.[0] || '(unknown)'
         const val = await this.callbacks.onCredentialRequest(this.target.id, 'passphrase', detail)
         if (val) {
           this.cachedPassphrase = val
           config.passphrase = val
+          this.respawnProxy(config, effectiveProxy)
           await this.doSsh2Connect(config)
           return
         }
       }
+      // Why: prompt for password on auth failure. Check the original error
+      // (not a retry error) to avoid conflating passphrase vs password failures.
       if (isAuthError(err) && !this.cachedPassword) {
         const val = await this.callbacks.onCredentialRequest(
           this.target.id,
@@ -158,12 +156,25 @@ export class SshConnection {
         if (val) {
           this.cachedPassword = val
           config.password = val
+          this.respawnProxy(config, effectiveProxy)
           await this.doSsh2Connect(config)
           return
         }
       }
       throw err
     }
+  }
+
+  // Why: ssh2 may destroy the proxy socket on auth failure, so credential
+  // retries need a fresh proxy process and Duplex stream.
+  private respawnProxy(config: ConnectConfig, proxy: string | null | undefined): void {
+    if (!proxy) {
+      return
+    }
+    this.proxyProcess?.kill()
+    const p = spawnProxyCommand(proxy, config.host!, config.port!, config.username!)
+    this.proxyProcess = p.process
+    config.sock = p.sock
   }
 
   private doSsh2Connect(config: ConnectConfig): Promise<void> {
@@ -192,18 +203,18 @@ export class SshConnection {
     })
   }
 
-  // Why: both `end` and `close` fire on disconnect. Guard on identity so
-  // a late event from the old client doesn't null out a successful reconnect.
+  // Why: guard on identity so a late event from the old client doesn't
+  // null out a successful reconnect.
   private setupDisconnectHandler(client: SshClient): void {
-    const handleDisconnect = () => {
+    const onDrop = () => {
       if (this.disposed || this.client !== client) {
         return
       }
       this.client = null
       this.scheduleReconnect()
     }
-    client.on('end', handleDisconnect)
-    client.on('close', handleDisconnect)
+    client.on('end', onDrop)
+    client.on('close', onDrop)
     client.on('error', (err) => {
       if (this.disposed || this.client !== client) {
         return
@@ -218,22 +229,17 @@ export class SshConnection {
     if (this.disposed || this.reconnectTimer) {
       return
     }
-
     const attempt = this.state.reconnectAttempt
     if (attempt >= RECONNECT_BACKOFF_MS.length) {
       this.setState('reconnection-failed', 'Max reconnection attempts reached')
       return
     }
-
     this.setState('reconnecting')
-    const delay = RECONNECT_BACKOFF_MS[attempt]
-
     this.reconnectTimer = setTimeout(async () => {
       this.reconnectTimer = null
       if (this.disposed) {
         return
       }
-
       try {
         await this.attemptConnect()
         this.state.reconnectAttempt = 0
@@ -241,7 +247,7 @@ export class SshConnection {
         this.state.reconnectAttempt++
         this.scheduleReconnect()
       }
-    }, delay)
+    }, RECONNECT_BACKOFF_MS[attempt])
   }
 
   async connectViaSystemSsh(): Promise<SystemSshProcess> {
@@ -278,6 +284,9 @@ export class SshConnection {
         })
       })
       this.setState('connected')
+      // Why: register reconnection handler only after the initial handshake
+      // succeeds. The onExit registered above guards with `settled` so it
+      // won't fire a duplicate for exits during the handshake phase.
       proc.onExit(() => {
         if (!this.disposed && this.systemSsh === proc) {
           this.systemSsh = null
@@ -307,11 +316,7 @@ export class SshConnection {
   }
 
   private setState(status: SshConnectionStatus, error?: string): void {
-    this.state = {
-      ...this.state,
-      status,
-      error: error ?? null
-    }
+    this.state = { ...this.state, status, error: error ?? null }
     this.callbacks.onStateChange(this.target.id, { ...this.state })
   }
 }

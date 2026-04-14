@@ -164,12 +164,7 @@ export function registerSshHandlers(
     })
 
     try {
-      const { transport } = await deployAndLaunchRelay(conn, (status) => {
-        const win = getMainWindow()
-        if (win && !win.isDestroyed()) {
-          win.webContents.send('ssh:deploy-progress', { targetId: args.targetId, status })
-        }
-      })
+      const { transport } = await deployAndLaunchRelay(conn)
 
       const mux = new SshChannelMultiplexer(transport)
       activeMultiplexers.set(args.targetId, mux)

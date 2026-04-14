@@ -79,13 +79,12 @@ function TargetRow({
     setBusy(true)
     try {
       await window.api.ssh.connect({ targetId })
-      toast.success(`Connected to ${label}`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Connection failed')
     } finally {
       setBusy(false)
     }
-  }, [targetId, label])
+  }, [targetId])
 
   const handleDisconnect = useCallback(async () => {
     setBusy(true)

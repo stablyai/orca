@@ -37,7 +37,7 @@ export function statusColor(status: SshConnectionStatus): string {
 }
 
 export function isConnecting(status: SshConnectionStatus): boolean {
-  return ['connecting', 'deploying-relay'].includes(status)
+  return ['connecting', 'deploying-relay', 'reconnecting'].includes(status)
 }
 
 // ── SshTargetCard ────────────────────────────────────────────────────
