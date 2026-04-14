@@ -44,6 +44,327 @@ function getWorktreeOptionId(worktreeId: string): string {
   return `worktree-list-option-${encodeURIComponent(worktreeId)}`
 }
 
+type VirtualizedWorktreeViewportProps = {
+  rows: Row[]
+  activeWorktreeId: string | null
+  setActiveWorktree: (worktreeId: string | null) => void
+  groupBy: 'none' | 'repo' | 'pr-status'
+  toggleGroup: (key: string) => void
+  collapsedGroups: Set<string>
+  handleCreateForRepo: (repoId: string) => void
+  hintByWorktreeId: Map<string, number> | null
+  activeModal: string
+  pendingRevealWorktreeId: string | null
+  clearPendingRevealWorktreeId: () => void
+  worktrees: Worktree[]
+  repoMap: Map<string, Repo>
+  prCache: Record<string, unknown> | null
+}
+
+const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewport({
+  rows,
+  activeWorktreeId,
+  setActiveWorktree,
+  groupBy,
+  toggleGroup,
+  collapsedGroups,
+  handleCreateForRepo,
+  hintByWorktreeId,
+  activeModal,
+  pendingRevealWorktreeId,
+  clearPendingRevealWorktreeId,
+  worktrees,
+  repoMap,
+  prCache
+}: VirtualizedWorktreeViewportProps) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const activeWorktreeRowIndex = useMemo(
+    () => rows.findIndex((row) => row.type === 'item' && row.worktree.id === activeWorktreeId),
+    [rows, activeWorktreeId]
+  )
+
+  const virtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 120,
+    overscan: 10,
+    gap: 6,
+    getItemKey: (index) => {
+      const row = rows[index]
+      if (!row) {
+        return `__stale_${index}`
+      }
+      return row.type === 'header' ? `hdr:${row.key}` : `wt:${row.worktree.id}`
+    }
+  })
+
+  React.useEffect(() => {
+    if (!pendingRevealWorktreeId) {
+      return
+    }
+
+    if (groupBy !== 'none') {
+      const targetWorktree = worktrees.find((w) => w.id === pendingRevealWorktreeId)
+      if (targetWorktree) {
+        const groupKey = getGroupKeyForWorktree(groupBy, targetWorktree, repoMap, prCache)
+        if (groupKey && collapsedGroups.has(groupKey)) {
+          toggleGroup(groupKey)
+        }
+      }
+    }
+
+    requestAnimationFrame(() => {
+      const targetIndex = rows.findIndex(
+        (row) => row.type === 'item' && row.worktree.id === pendingRevealWorktreeId
+      )
+      if (targetIndex !== -1) {
+        virtualizer.scrollToIndex(targetIndex, { align: 'center' })
+      }
+      clearPendingRevealWorktreeId()
+    })
+  }, [
+    pendingRevealWorktreeId,
+    groupBy,
+    worktrees,
+    repoMap,
+    prCache,
+    rows,
+    virtualizer,
+    clearPendingRevealWorktreeId,
+    toggleGroup,
+    collapsedGroups
+  ])
+
+  const prCacheLen = useAppStore((s) => Object.keys(s.prCache).length)
+  const issueCacheLen = useAppStore((s) => Object.keys(s.issueCache).length)
+
+  useLayoutEffect(() => {
+    virtualizer.elementsCache.forEach((element) => {
+      const idx = parseInt(element.getAttribute('data-index') ?? '', 10)
+      if (Number.isNaN(idx) || idx >= rows.length) {
+        return
+      }
+      virtualizer.measureElement(element)
+    })
+  }, [prCacheLen, issueCacheLen, virtualizer, rows.length])
+
+  const navigateWorktree = useCallback(
+    (direction: 'up' | 'down') => {
+      const worktreeRows = rows.filter(
+        (r): r is Extract<Row, { type: 'item' }> => r.type === 'item'
+      )
+      if (worktreeRows.length === 0) {
+        return
+      }
+
+      let nextIndex = 0
+      const currentIndex = worktreeRows.findIndex((r) => r.worktree.id === activeWorktreeId)
+
+      if (currentIndex !== -1) {
+        if (direction === 'up') {
+          nextIndex = currentIndex - 1
+          if (nextIndex < 0) {
+            nextIndex = worktreeRows.length - 1
+          }
+        } else {
+          nextIndex = currentIndex + 1
+          if (nextIndex >= worktreeRows.length) {
+            nextIndex = 0
+          }
+        }
+      }
+
+      const nextWorktreeId = worktreeRows[nextIndex].worktree.id
+      setActiveWorktree(nextWorktreeId)
+
+      const rowIndex = rows.findIndex((r) => r.type === 'item' && r.worktree.id === nextWorktreeId)
+      if (rowIndex !== -1) {
+        virtualizer.scrollToIndex(rowIndex, { align: 'auto' })
+      }
+    },
+    [rows, activeWorktreeId, setActiveWorktree, virtualizer]
+  )
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (activeModal !== 'none' || isEditableTarget(e.target)) {
+        return
+      }
+
+      const mod = navigator.userAgent.includes('Mac')
+        ? e.metaKey && !e.ctrlKey
+        : e.ctrlKey && !e.metaKey
+      if (mod && !e.shiftKey && e.key === '0') {
+        scrollRef.current?.focus()
+        e.preventDefault()
+        return
+      }
+
+      if (mod && e.shiftKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+        navigateWorktree(e.key === 'ArrowUp' ? 'up' : 'down')
+        e.preventDefault()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown, { capture: true })
+    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true })
+  }, [activeModal, navigateWorktree])
+
+  const handleContainerKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        if (e.target !== e.currentTarget) {
+          return
+        }
+        navigateWorktree(e.key === 'ArrowUp' ? 'up' : 'down')
+        e.preventDefault()
+      } else if (e.key === 'Enter') {
+        const helper = document.querySelector(
+          '.xterm-helper-textarea'
+        ) as HTMLTextAreaElement | null
+        if (helper) {
+          helper.focus()
+        }
+        e.preventDefault()
+      }
+    },
+    [navigateWorktree]
+  )
+
+  const virtualItems = virtualizer.getVirtualItems()
+  const activeDescendantId =
+    activeWorktreeId != null &&
+    activeWorktreeRowIndex !== -1 &&
+    virtualItems.some((item) => item.index === activeWorktreeRowIndex)
+      ? getWorktreeOptionId(activeWorktreeId)
+      : undefined
+
+  return (
+    <div
+      ref={scrollRef}
+      tabIndex={0}
+      role="listbox"
+      aria-label="Worktrees"
+      aria-orientation="vertical"
+      aria-activedescendant={activeDescendantId}
+      onKeyDown={handleContainerKeyDown}
+      className="flex-1 overflow-auto pl-1 scrollbar-sleek scroll-smooth outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset pt-px"
+      style={{ scrollbarGutter: 'stable' }}
+    >
+      <div
+        role="presentation"
+        className="relative w-full"
+        style={{ height: `${virtualizer.getTotalSize()}px` }}
+      >
+        {virtualItems.map((vItem) => {
+          const row = rows[vItem.index]
+
+          if (row.type === 'header') {
+            return (
+              <div
+                key={vItem.key}
+                role="presentation"
+                data-index={vItem.index}
+                ref={virtualizer.measureElement}
+                className="absolute left-0 right-0"
+                style={{ transform: `translateY(${vItem.start}px)` }}
+              >
+                <button
+                  className={cn(
+                    'group mt-2 flex h-7 w-full items-center gap-1.5 px-1.5 text-left transition-all',
+                    row.repo ? 'overflow-hidden' : row.tone
+                  )}
+                  onClick={() => toggleGroup(row.key)}
+                >
+                  <div
+                    className={cn(
+                      'flex size-4 shrink-0 items-center justify-center rounded-[4px]',
+                      row.repo ? 'text-foreground' : ''
+                    )}
+                    style={row.repo ? { color: row.repo.badgeColor } : undefined}
+                  >
+                    <row.icon className="size-3" />
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <div className="truncate text-[13px] font-semibold leading-none lowercase">
+                        {row.label}
+                      </div>
+                      <div className="rounded-full bg-black/12 px-1.5 py-0.5 text-[9px] font-medium leading-none text-muted-foreground/90">
+                        {row.count}
+                      </div>
+                    </div>
+                  </div>
+
+                  {row.repo ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-xs"
+                          className="mr-0.5 size-5 shrink-0 rounded-md text-muted-foreground hover:bg-accent/70 hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                          aria-label={`Create worktree for ${row.label}`}
+                          onClick={(event) => {
+                            event.preventDefault()
+                            event.stopPropagation()
+                            if (row.repo && isGitRepoKind(row.repo)) {
+                              handleCreateForRepo(row.repo.id)
+                            }
+                          }}
+                          disabled={row.repo ? !isGitRepoKind(row.repo) : false}
+                        >
+                          <Plus className="size-3" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" sideOffset={6}>
+                        {row.repo && !isGitRepoKind(row.repo)
+                          ? `${row.label} is opened as a folder`
+                          : `Create worktree for ${row.label}`}
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : null}
+
+                  <div className="flex size-4 shrink-0 items-center justify-center text-muted-foreground/60 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <ChevronDown
+                      className={cn(
+                        'size-3.5 transition-transform',
+                        collapsedGroups.has(row.key) && '-rotate-90'
+                      )}
+                    />
+                  </div>
+                </button>
+              </div>
+            )
+          }
+
+          return (
+            <div
+              key={vItem.key}
+              id={getWorktreeOptionId(row.worktree.id)}
+              role="option"
+              aria-selected={activeWorktreeId === row.worktree.id}
+              data-index={vItem.index}
+              ref={virtualizer.measureElement}
+              className="absolute left-0 right-0"
+              style={{ transform: `translateY(${vItem.start}px)` }}
+            >
+              <WorktreeCard
+                worktree={row.worktree}
+                repo={row.repo}
+                isActive={activeWorktreeId === row.worktree.id}
+                hideRepoBadge={groupBy === 'repo'}
+                hintNumber={hintByWorktreeId?.get(row.worktree.id)}
+              />
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+})
+
 const WorktreeList = React.memo(function WorktreeList() {
   // ── Granular selectors (each is a primitive or shallow-stable ref) ──
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
@@ -126,7 +447,6 @@ const WorktreeList = React.memo(function WorktreeList() {
     return () => clearTimeout(timer)
   }, [sortEpoch, debouncedSortEpoch, worktreeCount])
 
-  const scrollRef = useRef<HTMLDivElement>(null)
   // Why a latching ref: we need to distinguish "app just started, no PTYs
   // have spawned yet" from "user closed all terminals mid-session." The
   // former should use the persisted sortOrder; the latter should keep using
@@ -269,6 +589,7 @@ const WorktreeList = React.memo(function WorktreeList() {
     () => buildRows(groupBy, worktrees, repoMap, prCache, collapsedGroups),
     [groupBy, worktrees, repoMap, prCache, collapsedGroups]
   )
+  const viewportResetKey = `${groupBy}:${rows.length}`
 
   // Why: derive the rendered item order from the post-buildRows() row list,
   // not the flat `worktrees` array, because grouping (groupBy: 'repo' or
@@ -282,11 +603,6 @@ const WorktreeList = React.memo(function WorktreeList() {
         .map((r) => r.worktree),
     [rows]
   )
-  const activeWorktreeRowIndex = useMemo(
-    () => rows.findIndex((row) => row.type === 'item' && row.worktree.id === activeWorktreeId),
-    [rows, activeWorktreeId]
-  )
-
   // Why layout effect instead of effect: the global Cmd/Ctrl+1–9 key handler
   // can fire immediately after React commits the new grouped/collapsed order.
   // Publishing after paint leaves a brief window where the sidebar shows the
@@ -306,194 +622,6 @@ const WorktreeList = React.memo(function WorktreeList() {
     }
     return map
   }, [showHints, renderedWorktrees])
-
-  // ── TanStack Virtual ──────────────────────────────────────────
-  const virtualizer = useVirtualizer({
-    count: rows.length,
-    getScrollElement: () => scrollRef.current,
-    // Why a constant instead of per-row pixel math: the previous estimateSize
-    // tried to predict exact card heights from Tailwind class constants, but
-    // those estimates drifted from actual rendered sizes — causing overlapping
-    // cards whenever content (PR rows, comments, badges) didn't match the
-    // prediction. A generous constant that overshoots the tallest possible
-    // card means items may briefly have extra space before measureElement
-    // corrects them, which is invisible compared to overlapping.
-    estimateSize: () => 120,
-    overscan: 10,
-    gap: 6,
-    getItemKey: (index) => {
-      const row = rows[index]
-      // Why: when rows shrink (group collapse, worktree removal) the
-      // virtualizer's elementsCache can still hold stale entries whose
-      // data-index exceeds the new rows length. measureElement calls
-      // getItemKey for those stale indices, so we need a fallback to
-      // avoid "Cannot read properties of undefined (reading 'type')".
-      if (!row) {
-        return `__stale_${index}`
-      }
-      return row.type === 'header' ? `hdr:${row.key}` : `wt:${row.worktree.id}`
-    }
-  })
-
-  React.useEffect(() => {
-    if (!pendingRevealWorktreeId) {
-      return
-    }
-
-    // Uncollapse the group containing the target worktree
-    if (groupBy !== 'none') {
-      const targetWorktree = worktrees.find((w) => w.id === pendingRevealWorktreeId)
-      if (targetWorktree) {
-        const groupKey = getGroupKeyForWorktree(groupBy, targetWorktree, repoMap, prCache)
-        if (groupKey) {
-          setCollapsedGroups((prev) => {
-            if (!prev.has(groupKey)) {
-              return prev
-            }
-            const next = new Set(prev)
-            next.delete(groupKey)
-            return next
-          })
-        }
-      }
-    }
-
-    // Scroll to the target after the group uncollapse re-render settles
-    requestAnimationFrame(() => {
-      const targetIndex = rows.findIndex(
-        (row) => row.type === 'item' && row.worktree.id === pendingRevealWorktreeId
-      )
-      if (targetIndex !== -1) {
-        virtualizer.scrollToIndex(targetIndex, { align: 'center' })
-      }
-      clearPendingRevealWorktreeId()
-    })
-  }, [
-    pendingRevealWorktreeId,
-    groupBy,
-    worktrees,
-    repoMap,
-    prCache,
-    rows,
-    virtualizer,
-    clearPendingRevealWorktreeId
-  ])
-
-  // ── Async content re-measurement ──────────────────────────────
-  // PR and issue data arrive asynchronously after cards mount. When a
-  // card gains an issue/PR row its height changes, and the virtualizer's
-  // ResizeObserver should reposition subsequent items. In practice the
-  // observer can miss the resize when it coincides with React's batched
-  // rendering — leaving stale measurements and overlapping cards.
-  //
-  // Why useLayoutEffect: runs after React commits the new DOM (cards now
-  // include the issue row) but before the browser paints, so the user
-  // never sees a frame of overlap.
-  const prCacheLen = useAppStore((s) => Object.keys(s.prCache).length)
-  const issueCacheLen = useAppStore((s) => Object.keys(s.issueCache).length)
-
-  useLayoutEffect(() => {
-    virtualizer.elementsCache.forEach((element) => {
-      // Why: elementsCache can hold stale DOM nodes whose data-index
-      // exceeds the current rows length (e.g. after a group collapse).
-      // Measuring a stale element feeds a detached node's size into the
-      // virtualizer, corrupting layout and causing overlapping cards.
-      const idx = parseInt(element.getAttribute('data-index') ?? '', 10)
-      if (Number.isNaN(idx) || idx >= rows.length) {
-        return
-      }
-      virtualizer.measureElement(element)
-    })
-  }, [prCacheLen, issueCacheLen, virtualizer, rows.length])
-
-  const navigateWorktree = useCallback(
-    (direction: 'up' | 'down') => {
-      const worktreeRows = rows.filter(
-        (r): r is Extract<Row, { type: 'item' }> => r.type === 'item'
-      )
-      if (worktreeRows.length === 0) {
-        return
-      }
-
-      let nextIndex = 0
-      const currentIndex = worktreeRows.findIndex((r) => r.worktree.id === activeWorktreeId)
-
-      if (currentIndex !== -1) {
-        if (direction === 'up') {
-          nextIndex = currentIndex - 1
-          if (nextIndex < 0) {
-            nextIndex = worktreeRows.length - 1
-          }
-        } else {
-          nextIndex = currentIndex + 1
-          if (nextIndex >= worktreeRows.length) {
-            nextIndex = 0
-          }
-        }
-      }
-
-      const nextWorktreeId = worktreeRows[nextIndex].worktree.id
-      setActiveWorktree(nextWorktreeId)
-
-      const rowIndex = rows.findIndex((r) => r.type === 'item' && r.worktree.id === nextWorktreeId)
-      if (rowIndex !== -1) {
-        virtualizer.scrollToIndex(rowIndex, { align: 'auto' })
-      }
-    },
-    [rows, activeWorktreeId, setActiveWorktree, virtualizer]
-  )
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Why: these shortcuts are for the sidebar navigation surface. Once a
-      // modal opens or focus is inside an editor/input, the host should leave
-      // the keystroke alone so overlays and text editing keep native behavior.
-      if (activeModal !== 'none' || isEditableTarget(e.target)) {
-        return
-      }
-
-      const mod = navigator.userAgent.includes('Mac')
-        ? e.metaKey && !e.ctrlKey
-        : e.ctrlKey && !e.metaKey
-      if (mod && !e.shiftKey && e.key === '0') {
-        scrollRef.current?.focus()
-        e.preventDefault()
-        return
-      }
-
-      if (mod && e.shiftKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
-        navigateWorktree(e.key === 'ArrowUp' ? 'up' : 'down')
-        e.preventDefault()
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown, { capture: true })
-    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true })
-  }, [activeModal, navigateWorktree])
-
-  const handleContainerKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-        // Why: only capture bare arrow keys when the list container itself is
-        // focused. If focus is on an inner input or button, arrow keys should
-        // perform their native function (e.g. cursor movement in text fields).
-        if (e.target !== e.currentTarget) {
-          return
-        }
-        navigateWorktree(e.key === 'ArrowUp' ? 'up' : 'down')
-        e.preventDefault()
-      } else if (e.key === 'Enter') {
-        const helper = document.querySelector(
-          '.xterm-helper-textarea'
-        ) as HTMLTextAreaElement | null
-        if (helper) {
-          helper.focus()
-        }
-        e.preventDefault()
-      }
-    },
-    [navigateWorktree]
-  )
 
   const handleCreateForRepo = useCallback(
     (repoId: string) => {
@@ -530,141 +658,24 @@ const WorktreeList = React.memo(function WorktreeList() {
     )
   }
 
-  const virtualItems = virtualizer.getVirtualItems()
-  const activeDescendantId =
-    activeWorktreeId != null &&
-    activeWorktreeRowIndex !== -1 &&
-    virtualItems.some((item) => item.index === activeWorktreeRowIndex)
-      ? getWorktreeOptionId(activeWorktreeId)
-      : undefined
-
   return (
-    <div
-      ref={scrollRef}
-      tabIndex={0}
-      role="listbox"
-      aria-label="Worktrees"
-      aria-orientation="vertical"
-      aria-activedescendant={activeDescendantId}
-      onKeyDown={handleContainerKeyDown}
-      // Why: `scrollbar-gutter: stable` keeps the overflow lane reserved so
-      // cards do not reflow when the list becomes scrollable. With that lane
-      // reserved, the right-side list padding is redundant, so keep only the
-      // left inset and let the scrollbar occupy the reclaimed edge space.
-      className="flex-1 overflow-auto pl-1 scrollbar-sleek scroll-smooth outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset pt-px"
-      style={{ scrollbarGutter: 'stable' }}
-    >
-      <div
-        role="presentation"
-        className="relative w-full"
-        style={{ height: `${virtualizer.getTotalSize()}px` }}
-      >
-        {virtualItems.map((vItem) => {
-          const row = rows[vItem.index]
-
-          if (row.type === 'header') {
-            return (
-              <div
-                key={vItem.key}
-                role="presentation"
-                data-index={vItem.index}
-                ref={virtualizer.measureElement}
-                className="absolute left-0 right-0"
-                style={{ transform: `translateY(${vItem.start}px)` }}
-              >
-                <button
-                  className={cn(
-                    'group mt-2 flex h-7 w-full items-center gap-1.5 px-1.5 text-left transition-all',
-                    row.repo ? 'overflow-hidden' : row.tone
-                  )}
-                  onClick={() => toggleGroup(row.key)}
-                >
-                  <div
-                    className={cn(
-                      'flex size-4 shrink-0 items-center justify-center rounded-[4px]',
-                      row.repo ? 'text-foreground' : ''
-                    )}
-                    style={row.repo ? { color: row.repo.badgeColor } : undefined}
-                  >
-                    <row.icon className="size-3" />
-                  </div>
-
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5">
-                      <div className="truncate text-[13px] font-semibold leading-none lowercase">
-                        {row.label}
-                      </div>
-                      <div className="rounded-full bg-black/12 px-1.5 py-0.5 text-[9px] font-medium leading-none text-muted-foreground/90">
-                        {row.count}
-                      </div>
-                    </div>
-                  </div>
-
-                  {row.repo ? (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-xs"
-                          className="mr-0.5 size-5 shrink-0 rounded-md text-muted-foreground hover:bg-accent/70 hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
-                          aria-label={`Create worktree for ${row.label}`}
-                          onClick={(event) => {
-                            event.preventDefault()
-                            event.stopPropagation()
-                            if (row.repo && isGitRepoKind(row.repo)) {
-                              handleCreateForRepo(row.repo.id)
-                            }
-                          }}
-                          disabled={row.repo ? !isGitRepoKind(row.repo) : false}
-                        >
-                          <Plus className="size-3" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom" sideOffset={6}>
-                        {row.repo && !isGitRepoKind(row.repo)
-                          ? `${row.label} is opened as a folder`
-                          : `Create worktree for ${row.label}`}
-                      </TooltipContent>
-                    </Tooltip>
-                  ) : null}
-
-                  <div className="flex size-4 shrink-0 items-center justify-center text-muted-foreground/60 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <ChevronDown
-                      className={cn(
-                        'size-3.5 transition-transform',
-                        collapsedGroups.has(row.key) && '-rotate-90'
-                      )}
-                    />
-                  </div>
-                </button>
-              </div>
-            )
-          }
-
-          return (
-            <div
-              key={vItem.key}
-              id={getWorktreeOptionId(row.worktree.id)}
-              role="option"
-              aria-selected={activeWorktreeId === row.worktree.id}
-              data-index={vItem.index}
-              ref={virtualizer.measureElement}
-              className="absolute left-0 right-0"
-              style={{ transform: `translateY(${vItem.start}px)` }}
-            >
-              <WorktreeCard
-                worktree={row.worktree}
-                repo={row.repo}
-                isActive={activeWorktreeId === row.worktree.id}
-                hideRepoBadge={groupBy === 'repo'}
-                hintNumber={hintByWorktreeId?.get(row.worktree.id)}
-              />
-            </div>
-          )
-        })}
-      </div>
-    </div>
+    <VirtualizedWorktreeViewport
+      key={viewportResetKey}
+      rows={rows}
+      activeWorktreeId={activeWorktreeId}
+      setActiveWorktree={setActiveWorktree}
+      groupBy={groupBy}
+      toggleGroup={toggleGroup}
+      collapsedGroups={collapsedGroups}
+      handleCreateForRepo={handleCreateForRepo}
+      hintByWorktreeId={hintByWorktreeId}
+      activeModal={activeModal}
+      pendingRevealWorktreeId={pendingRevealWorktreeId}
+      clearPendingRevealWorktreeId={clearPendingRevealWorktreeId}
+      worktrees={worktrees}
+      repoMap={repoMap}
+      prCache={prCache}
+    />
   )
 })
 
