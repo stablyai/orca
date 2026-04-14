@@ -14,13 +14,7 @@ import { STATUS_LABELS, statusColor } from '../settings/SshTargetCard'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 
 function isConnecting(status: SshConnectionStatus): boolean {
-  return [
-    'connecting',
-    'host-key-verification',
-    'auth-challenge',
-    'deploying-relay',
-    'reconnecting'
-  ].includes(status)
+  return ['connecting', 'deploying-relay', 'reconnecting'].includes(status)
 }
 
 function isReconnectable(status: SshConnectionStatus): boolean {

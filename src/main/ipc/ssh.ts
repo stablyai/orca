@@ -13,7 +13,6 @@ import { registerSshGitProvider } from '../providers/ssh-git-dispatch'
 import { SshPortForwardManager } from '../ssh/ssh-port-forward'
 import type { SshTarget, SshConnectionState } from '../../shared/ssh-types'
 import { cleanupConnection, wireUpSshPtyEvents, reestablishRelayStack } from './ssh-relay-helpers'
-import { buildSshAuthCallbacks } from './ssh-auth-helpers'
 import { registerSshBrowseHandler } from './ssh-browse'
 
 let sshStore: SshConnectionStore | null = null
@@ -86,9 +85,7 @@ export function registerSshHandlers(
           portForwardManager
         )
       }
-    },
-
-    ...buildSshAuthCallbacks(getMainWindow)
+    }
   }
 
   connectionManager = new SshConnectionManager(callbacks)
@@ -135,7 +132,7 @@ export function registerSshHandlers(
       // Why: SshConnection.connect() sets its internal state to 'error', but
       // the onStateChange callback may have been suppressed or the state may
       // not have propagated to the renderer. Explicitly broadcast the error
-      // so the UI leaves 'connecting'/'host-key-verification'.
+      // so the UI leaves 'connecting'.
       const win = getMainWindow()
       if (win && !win.isDestroyed()) {
         win.webContents.send('ssh:state-changed', {

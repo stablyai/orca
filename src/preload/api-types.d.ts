@@ -541,30 +541,6 @@ export type PreloadApi = {
       targetId: string
     }) => Promise<{ success: boolean; error?: string; state?: unknown }>
     onStateChanged: (callback: (data: { targetId: string; state: unknown }) => void) => () => void
-    onHostKeyVerify: (
-      callback: (data: {
-        host: string
-        ip: string
-        fingerprint: string
-        keyType: string
-        responseChannel: string
-      }) => void
-    ) => () => void
-    respondHostKeyVerify: (args: { channel: string; accepted: boolean }) => void
-    onAuthChallenge: (
-      callback: (data: {
-        targetId: string
-        name: string
-        instructions: string
-        prompts: { prompt: string; echo: boolean }[]
-        responseChannel: string
-      }) => void
-    ) => () => void
-    respondAuthChallenge: (args: { channel: string; responses: string[] }) => void
-    onPasswordPrompt: (
-      callback: (data: { targetId: string; responseChannel: string }) => void
-    ) => () => void
-    respondPassword: (args: { channel: string; password: string | null }) => void
     addPortForward: (args: {
       targetId: string
       localPort: number

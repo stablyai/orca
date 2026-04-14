@@ -158,8 +158,6 @@ export type SshResolvedConfig = {
   port: number
   identityFile: string[]
   forwardAgent: boolean
-  proxyCommand?: string
-  proxyJump?: string
 }
 
 const SSH_G_TIMEOUT_MS = 5000
@@ -205,8 +203,6 @@ export function parseSshGOutput(stdout: string): SshResolvedConfig {
     user: map.get('user') || undefined,
     port: parseInt(map.get('port') ?? '22', 10),
     identityFile: identityFiles,
-    forwardAgent: map.get('forwardagent') === 'yes',
-    proxyCommand: map.get('proxycommand') || undefined,
-    proxyJump: map.get('proxyjump') || undefined
+    forwardAgent: map.get('forwardagent') === 'yes'
   }
 }

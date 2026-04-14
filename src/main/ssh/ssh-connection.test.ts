@@ -36,6 +36,10 @@ vi.mock('./ssh-system-fallback', () => ({
   })
 }))
 
+vi.mock('./ssh-config-parser', () => ({
+  resolveWithSshG: vi.fn().mockResolvedValue(null)
+}))
+
 import { SshConnection, SshConnectionManager, type SshConnectionCallbacks } from './ssh-connection'
 import type { SshTarget } from '../../shared/ssh-types'
 
@@ -53,9 +57,6 @@ function createTarget(overrides?: Partial<SshTarget>): SshTarget {
 function createCallbacks(overrides?: Partial<SshConnectionCallbacks>): SshConnectionCallbacks {
   return {
     onStateChange: vi.fn(),
-    onHostKeyVerify: vi.fn().mockResolvedValue(true),
-    onAuthChallenge: vi.fn().mockResolvedValue(['123456']),
-    onPasswordPrompt: vi.fn().mockResolvedValue('password'),
     ...overrides
   }
 }

@@ -1,34 +1,16 @@
 import { readFileSync, existsSync } from 'fs'
 import { homedir } from 'os'
-import type { SshConnectionState } from '../../shared/ssh-types'
-
-// Why: types live here (not ssh-connection.ts) to break a circular import.
-
-export type HostKeyVerifyRequest = {
-  host: string
-  ip: string
-  fingerprint: string
-  keyType: string
-}
-
-export type AuthChallengeRequest = {
-  targetId: string
-  name: string
-  instructions: string
-  prompts: { prompt: string; echo: boolean }[]
-}
+import type { ConnectConfig } from 'ssh2'
+import type { SshTarget, SshConnectionState } from '../../shared/ssh-types'
+import type { SshResolvedConfig } from './ssh-config-parser'
 
 export type SshConnectionCallbacks = {
   onStateChange: (targetId: string, state: SshConnectionState) => void
-  onHostKeyVerify: (req: HostKeyVerifyRequest) => Promise<boolean>
-  onAuthChallenge: (req: AuthChallengeRequest) => Promise<string[]>
-  onPasswordPrompt: (targetId: string) => Promise<string | null>
 }
 
 export const INITIAL_RETRY_ATTEMPTS = 5
 export const INITIAL_RETRY_DELAY_MS = 2000
 export const RECONNECT_BACKOFF_MS = [1000, 2000, 5000, 5000, 10000, 10000, 10000, 30000, 30000]
-export const AUTH_CHALLENGE_TIMEOUT_MS = 60_000
 export const CONNECT_TIMEOUT_MS = 30_000
 
 const TRANSIENT_ERROR_CODES = new Set([
@@ -61,14 +43,13 @@ export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-// Why: prevents shell injection when interpolating into ProxyCommand.
 export function shellEscape(s: string): string {
   return `'${s.replace(/'/g, "'\\''")}'`
 }
 
 // Why: ssh2 only tries keys that are explicitly provided. Users with keys in
 // standard locations (e.g. ~/.ssh/id_ed25519) but no SSH agent running would
-// fail to authenticate. Probing default paths matches VS Code's behavior.
+// fail to authenticate. Probing default paths matches VS Code's _findDefaultKeyFile.
 const DEFAULT_KEY_PATHS = [
   '~/.ssh/id_ed25519',
   '~/.ssh/id_rsa',
@@ -93,9 +74,47 @@ export function findDefaultKeyFile(): { path: string; contents: Buffer } | undef
   return undefined
 }
 
-// Why: config-building logic extracted to ssh-connect-config.ts (max-lines).
-export {
-  buildConnectConfig,
-  type AuthHandlerState,
-  type ConnectConfigResult
-} from './ssh-connect-config'
+// Why: matches VS Code's _connectSSH auth method selection (lines 606-611, 727-758).
+// Picks ONE auth method before connecting and sets the corresponding config fields.
+// ssh2 handles the auth negotiation natively — no custom authHandler needed.
+export function buildConnectConfig(
+  target: SshTarget,
+  resolved: SshResolvedConfig | null
+): ConnectConfig {
+  const effectiveHost = target.host || resolved?.hostname || target.label
+  const effectivePort = target.port || resolved?.port || 22
+  const effectiveUser = target.username || resolved?.user || ''
+
+  const config: Record<string, unknown> = {
+    host: effectiveHost,
+    port: effectivePort,
+    username: effectiveUser,
+    readyTimeout: CONNECT_TIMEOUT_MS,
+    keepaliveInterval: 15_000
+  }
+
+  const resolvedIdentity = resolved?.identityFile?.[0]
+  const explicitKey =
+    target.identityFile ||
+    (resolvedIdentity && !DEFAULT_KEY_PATHS.includes(resolvedIdentity)
+      ? resolvedIdentity
+      : undefined)
+
+  if (explicitKey) {
+    try {
+      config.privateKey = readFileSync(explicitKey.replace(/^~/, homedir()))
+    } catch {
+      // Key unreadable — ssh2 will fail with auth error
+    }
+  } else {
+    if (process.env.SSH_AUTH_SOCK) {
+      config.agent = process.env.SSH_AUTH_SOCK
+    }
+    const fallback = findDefaultKeyFile()
+    if (fallback) {
+      config.privateKey = fallback.contents
+    }
+  }
+
+  return config as ConnectConfig
+}

@@ -11,8 +11,6 @@ import { Button } from '../ui/button'
 export const STATUS_LABELS: Record<SshConnectionStatus, string> = {
   disconnected: 'Disconnected',
   connecting: 'Connecting\u2026',
-  'host-key-verification': 'Verifying host key\u2026',
-  'auth-challenge': 'Authenticating\u2026',
   'auth-failed': 'Auth failed',
   'deploying-relay': 'Deploying relay\u2026',
   connected: 'Connected',
@@ -26,8 +24,6 @@ export function statusColor(status: SshConnectionStatus): string {
     case 'connected':
       return 'bg-emerald-500'
     case 'connecting':
-    case 'host-key-verification':
-    case 'auth-challenge':
     case 'deploying-relay':
     case 'reconnecting':
       return 'bg-yellow-500'
@@ -41,9 +37,7 @@ export function statusColor(status: SshConnectionStatus): string {
 }
 
 export function isConnecting(status: SshConnectionStatus): boolean {
-  return ['connecting', 'host-key-verification', 'auth-challenge', 'deploying-relay'].includes(
-    status
-  )
+  return ['connecting', 'deploying-relay'].includes(status)
 }
 
 // ── SshTargetCard ────────────────────────────────────────────────────

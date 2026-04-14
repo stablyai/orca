@@ -283,30 +283,14 @@ describe('parseSshGOutput', () => {
     expect(result.port).toBe(22)
   })
 
-  it('parses proxycommand', () => {
-    const output = 'hostname example.com\nproxycommand ssh -W %h:%p bastion\nport 22'
+  it('ignores proxycommand and proxyjump (not in SshResolvedConfig)', () => {
+    const output =
+      'hostname example.com\nproxycommand ssh -W %h:%p bastion\nproxyjump bastion.example.com\nport 22'
     const result = parseSshGOutput(output)
-    expect(result.proxyCommand).toBe('ssh -W %h:%p bastion')
-  })
-
-  it('parses proxyjump', () => {
-    const output = 'hostname example.com\nproxyjump bastion.example.com\nport 22'
-    const result = parseSshGOutput(output)
-    expect(result.proxyJump).toBe('bastion.example.com')
-  })
-
-  it('returns undefined proxyCommand when not set', () => {
-    const output = 'hostname example.com\nport 22'
-    const result = parseSshGOutput(output)
-    expect(result.proxyCommand).toBeUndefined()
-  })
-
-  it('preserves "none" as proxycommand value (filtering done at connection level)', () => {
-    const output = 'hostname example.com\nproxycommand none\nproxyjump none\nport 22'
-    const result = parseSshGOutput(output)
-    // parseSshGOutput preserves raw values; buildConnectConfig filters "none"
-    expect(result.proxyCommand).toBe('none')
-    expect(result.proxyJump).toBe('none')
+    expect(result.hostname).toBe('example.com')
+    expect(result.port).toBe(22)
+    expect(result).not.toHaveProperty('proxyCommand')
+    expect(result).not.toHaveProperty('proxyJump')
   })
 
   it('handles ~ expansion in identity file paths', () => {

@@ -18,8 +18,6 @@ describe('SSH types', () => {
     const statuses: SshConnectionStatus[] = [
       'disconnected',
       'connecting',
-      'host-key-verification',
-      'auth-challenge',
       'auth-failed',
       'deploying-relay',
       'connected',
@@ -27,7 +25,7 @@ describe('SSH types', () => {
       'reconnection-failed',
       'error'
     ]
-    expect(statuses).toHaveLength(10)
+    expect(statuses).toHaveLength(8)
   })
 
   it('SshConnectionState composes correctly', () => {

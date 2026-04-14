@@ -1,8 +1,8 @@
 import { Client as SshClient } from 'ssh2'
-import type { ChildProcess } from 'child_process'
 import type { ClientChannel, SFTPWrapper } from 'ssh2'
 import type { SshTarget, SshConnectionState, SshConnectionStatus } from '../../shared/ssh-types'
 import { spawnSystemSsh, type SystemSshProcess } from './ssh-system-fallback'
+import { resolveWithSshG } from './ssh-config-parser'
 import {
   INITIAL_RETRY_ATTEMPTS,
   INITIAL_RETRY_DELAY_MS,
@@ -13,20 +13,10 @@ import {
   buildConnectConfig,
   type SshConnectionCallbacks
 } from './ssh-connection-utils'
-// Why: type definitions live in ssh-connection-utils.ts to break a circular
-// import. Re-exported here so existing import sites keep working.
-export type {
-  HostKeyVerifyRequest,
-  AuthChallengeRequest,
-  SshConnectionCallbacks
-} from './ssh-connection-utils'
+export type { SshConnectionCallbacks } from './ssh-connection-utils'
 
 export class SshConnection {
   private client: SshClient | null = null
-  /** Why: the jump host client must be tracked so it can be torn down on
-   *  disconnect — otherwise the intermediate TCP connection leaks. */
-  private jumpClient: SshClient | null = null
-  private proxyProcess: ChildProcess | null = null
   private systemSsh: SystemSshProcess | null = null
   private state: SshConnectionState
   private callbacks: SshConnectionCallbacks
@@ -57,7 +47,6 @@ export class SshConnection {
     return { ...this.target }
   }
 
-  /** Open an exec channel. Used by relay deployment to run commands on the remote. */
   async exec(command: string): Promise<ClientChannel> {
     const client = this.client
     if (!client) {
@@ -74,7 +63,6 @@ export class SshConnection {
     })
   }
 
-  /** Open an SFTP session for file transfers (relay deployment). */
   async sftp(): Promise<SFTPWrapper> {
     const client = this.client
     if (!client) {
@@ -120,70 +108,24 @@ export class SshConnection {
     throw finalError
   }
 
+  // Why: matches VS Code's _connectSSH (lines 720-774). Config is built before
+  // connecting, ssh2's readyTimeout handles the timeout, and no custom
+  // authHandler or hostVerifier is set — ssh2 handles auth natively.
   private async attemptConnect(): Promise<void> {
     this.setState('connecting')
 
-    // Why: clean up resources from a prior failed attempt before overwriting.
-    // Without this, a retry after timeout/auth-failure orphans the old jump
-    // host TCP connection and proxy child process.
-    this.jumpClient?.end()
-    this.jumpClient = null
-    this.proxyProcess?.kill()
-    this.proxyProcess = null
-
-    // Why: host key verification and auth challenges block the handshake
-    // while waiting for user input. The connection timeout must be paused
-    // during these interactions so a slow user decision doesn't cause a
-    // spurious timeout.
-    let timeoutId: ReturnType<typeof setTimeout> | null = null
-    let timeoutRemaining = CONNECT_TIMEOUT_MS
-    let timeoutStartedAt = Date.now()
-    let onTimeoutFn: (() => void) | null = null
-
-    const pauseTimeout = () => {
-      if (timeoutId !== null) {
-        clearTimeout(timeoutId)
-        timeoutRemaining -= Date.now() - timeoutStartedAt
-        timeoutId = null
-      }
-    }
-
-    const resumeTimeout = () => {
-      if (timeoutId === null && timeoutRemaining > 0 && onTimeoutFn) {
-        timeoutStartedAt = Date.now()
-        timeoutId = setTimeout(onTimeoutFn, timeoutRemaining)
-      }
-    }
-
-    const { config, jumpClient, proxyProcess } = await this.buildConfig(pauseTimeout, resumeTimeout)
-    this.jumpClient = jumpClient
-    this.proxyProcess = proxyProcess
+    const resolved = await resolveWithSshG(this.target.label).catch(() => null)
+    const config = buildConnectConfig(this.target, resolved)
 
     return new Promise<void>((resolve, reject) => {
       const client = new SshClient()
       let settled = false
-
-      onTimeoutFn = () => {
-        if (!settled) {
-          settled = true
-          client.destroy()
-          const msg = `Connection timed out after ${CONNECT_TIMEOUT_MS}ms`
-          this.setState('error', msg)
-          reject(new Error(msg))
-        }
-      }
-
-      timeoutStartedAt = Date.now()
-      timeoutId = setTimeout(onTimeoutFn, CONNECT_TIMEOUT_MS)
 
       client.on('ready', () => {
         if (settled) {
           return
         }
         settled = true
-        if (timeoutId !== null) {
-          clearTimeout(timeoutId)
-        }
         this.client = client
         this.setState('connected')
         this.setupDisconnectHandler(client)
@@ -195,28 +137,11 @@ export class SshConnection {
           return
         }
         settled = true
-        if (timeoutId !== null) {
-          clearTimeout(timeoutId)
-        }
         this.setState('error', err.message)
         reject(err)
       })
 
       client.connect(config)
-    })
-  }
-
-  private async buildConfig(pauseTimeout: () => void, resumeTimeout: () => void) {
-    // Why: config-building logic extracted to ssh-connection-utils.ts (max-lines).
-    return buildConnectConfig(this.target, this.callbacks, {
-      agentAttempted: false,
-      keyAttempted: false,
-      defaultKeyAttempted: false,
-      pauseTimeout,
-      resumeTimeout,
-      setState: (status: string, error?: string) => {
-        this.setState(status as SshConnectionStatus, error)
-      }
     })
   }
 
@@ -265,27 +190,19 @@ export class SshConnection {
 
       try {
         await this.attemptConnect()
-        // Why: reset the counter and re-broadcast so the UI shows attempt 0.
-        // attemptConnect already calls setState('connected'), but the attempt
-        // counter must be zeroed *before* so the broadcast carries the right value.
         this.state.reconnectAttempt = 0
         this.setState('connected')
       } catch {
-        // Why: increment before scheduleReconnect so the setState('reconnecting')
-        // call inside it broadcasts the updated attempt number to the UI.
         this.state.reconnectAttempt++
         this.scheduleReconnect()
       }
     }, delay)
   }
 
-  /** Fall back to system SSH binary when ssh2 cannot handle auth (FIDO2, ControlMaster). */
   async connectViaSystemSsh(): Promise<SystemSshProcess> {
     if (this.disposed) {
       throw new Error('Connection disposed')
     }
-    // Why: if connectViaSystemSsh is called again after a prior failed attempt,
-    // the old process may still be running. Overwriting would orphan it.
     this.systemSsh?.kill()
     this.systemSsh = null
     this.setState('connecting')
@@ -294,15 +211,8 @@ export class SshConnection {
       const proc = spawnSystemSsh(this.target)
       this.systemSsh = proc
 
-      // Why: two onExit handlers are registered — one for the initial handshake
-      // (reject the promise on early exit) and one for post-connect reconnection.
-      // Without a settled flag, an early exit during handshake would fire both,
-      // causing the reconnection handler to schedule a reconnect for a connection
-      // that was never established.
       let settled = false
 
-      // Why: verify the SSH connection succeeded before reporting connected.
-      // Wait for relay sentinel output or a non-zero exit.
       await new Promise<void>((resolve, reject) => {
         const timeout = setTimeout(() => {
           settled = true
@@ -329,10 +239,6 @@ export class SshConnection {
 
       this.setState('connected')
 
-      // Why: unlike ssh2 Client which emits end/close, the system SSH process
-      // only signals disconnection through its exit event. Without this handler
-      // an unexpected exit would leave the connection in 'connected' state with
-      // no underlying transport.
       proc.onExit((_code) => {
         if (!this.disposed && this.systemSsh === proc) {
           this.systemSsh = null
@@ -356,12 +262,6 @@ export class SshConnection {
     this.reconnectTimer = null
     this.client?.end()
     this.client = null
-    // Why: the jump host client holds an open TCP connection to the
-    // intermediate host. Failing to close it would leak the socket.
-    this.jumpClient?.end()
-    this.jumpClient = null
-    this.proxyProcess?.kill()
-    this.proxyProcess = null
     this.systemSsh?.kill()
     this.systemSsh = null
     this.setState('disconnected')
@@ -377,5 +277,4 @@ export class SshConnection {
   }
 }
 
-// Why: extracted to ssh-connection-manager.ts to stay under 300-line max-lines.
 export { SshConnectionManager } from './ssh-connection-manager'

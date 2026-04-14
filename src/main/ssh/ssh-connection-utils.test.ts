@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest'
 
 vi.mock('os', () => ({
   homedir: () => '/home/testuser'
@@ -17,22 +17,20 @@ import {
   sleep,
   shellEscape,
   findDefaultKeyFile,
+  buildConnectConfig,
   CONNECT_TIMEOUT_MS,
   INITIAL_RETRY_ATTEMPTS,
   INITIAL_RETRY_DELAY_MS,
-  RECONNECT_BACKOFF_MS,
-  AUTH_CHALLENGE_TIMEOUT_MS
+  RECONNECT_BACKOFF_MS
 } from './ssh-connection-utils'
+import type { SshTarget } from '../../shared/ssh-types'
+import type { SshResolvedConfig } from './ssh-config-parser'
 
 // ── Constants ────────────────────────────────────────────────────────
 
 describe('SSH connection constants', () => {
   it('CONNECT_TIMEOUT_MS is 30 seconds (matches VS Code)', () => {
     expect(CONNECT_TIMEOUT_MS).toBe(30_000)
-  })
-
-  it('AUTH_CHALLENGE_TIMEOUT_MS is 60 seconds', () => {
-    expect(AUTH_CHALLENGE_TIMEOUT_MS).toBe(60_000)
   })
 
   it('INITIAL_RETRY_ATTEMPTS is 5', () => {
@@ -194,5 +192,113 @@ describe('findDefaultKeyFile', () => {
     const result = findDefaultKeyFile()
     expect(result).toBeDefined()
     expect(result!.path).toBe('~/.ssh/id_rsa')
+  })
+})
+
+// ── buildConnectConfig ──────────────────────────────────────────────
+
+function makeTarget(overrides?: Partial<SshTarget>): SshTarget {
+  return {
+    id: 'test-1',
+    label: 'myhost',
+    host: 'example.com',
+    port: 22,
+    username: 'deploy',
+    ...overrides
+  }
+}
+
+function makeResolved(overrides?: Partial<SshResolvedConfig>): SshResolvedConfig {
+  return {
+    hostname: '10.0.0.1',
+    port: 22,
+    identityFile: [],
+    forwardAgent: false,
+    ...overrides
+  }
+}
+
+describe('buildConnectConfig', () => {
+  const originalEnv = process.env.SSH_AUTH_SOCK
+
+  beforeEach(() => {
+    mockExistsSync.mockReturnValue(false)
+    mockReadFileSync.mockReset()
+    process.env.SSH_AUTH_SOCK = '/tmp/agent.sock'
+  })
+
+  afterEach(() => {
+    if (originalEnv !== undefined) {
+      process.env.SSH_AUTH_SOCK = originalEnv
+    } else {
+      delete process.env.SSH_AUTH_SOCK
+    }
+  })
+
+  it('uses target host/port/username', () => {
+    const config = buildConnectConfig(makeTarget(), null)
+    expect(config.host).toBe('example.com')
+    expect(config.port).toBe(22)
+    expect(config.username).toBe('deploy')
+  })
+
+  it('falls back to resolved config when target fields are empty', () => {
+    const config = buildConnectConfig(
+      makeTarget({ host: '', port: 0, username: '' }),
+      makeResolved({ hostname: '10.0.0.1', port: 2222, user: 'admin' })
+    )
+    expect(config.host).toBe('10.0.0.1')
+    expect(config.port).toBe(2222)
+    expect(config.username).toBe('admin')
+  })
+
+  it('sets readyTimeout to CONNECT_TIMEOUT_MS', () => {
+    const config = buildConnectConfig(makeTarget(), null)
+    expect(config.readyTimeout).toBe(30_000)
+  })
+
+  it('sets keepaliveInterval to 15s', () => {
+    const config = buildConnectConfig(makeTarget(), null)
+    expect(config.keepaliveInterval).toBe(15_000)
+  })
+
+  it('uses agent auth when no explicit key and SSH_AUTH_SOCK is set', () => {
+    const config = buildConnectConfig(makeTarget(), null)
+    expect(config.agent).toBe('/tmp/agent.sock')
+  })
+
+  it('uses keyFile auth when target.identityFile is set', () => {
+    mockReadFileSync.mockReturnValue(Buffer.from('key'))
+    const config = buildConnectConfig(makeTarget({ identityFile: '/home/user/.ssh/custom' }), null)
+    expect(config.privateKey).toEqual(Buffer.from('key'))
+    expect(config.agent).toBeUndefined()
+  })
+
+  it('uses keyFile auth when resolved identityFile is non-default', () => {
+    mockReadFileSync.mockReturnValue(Buffer.from('custom-key'))
+    const config = buildConnectConfig(
+      makeTarget(),
+      makeResolved({ identityFile: ['/home/user/.ssh/work_key'] })
+    )
+    expect(config.privateKey).toEqual(Buffer.from('custom-key'))
+    expect(config.agent).toBeUndefined()
+  })
+
+  it('uses agent auth when resolved identityFile is a default path', () => {
+    const config = buildConnectConfig(
+      makeTarget(),
+      makeResolved({ identityFile: ['~/.ssh/id_ed25519'] })
+    )
+    expect(config.agent).toBe('/tmp/agent.sock')
+  })
+
+  it('provides fallback key in agent auth mode', () => {
+    mockExistsSync.mockImplementation(
+      (p: unknown) => String(p) === '/home/testuser/.ssh/id_ed25519'
+    )
+    mockReadFileSync.mockReturnValue(Buffer.from('fallback'))
+    const config = buildConnectConfig(makeTarget(), null)
+    expect(config.agent).toBe('/tmp/agent.sock')
+    expect(config.privateKey).toEqual(Buffer.from('fallback'))
   })
 })

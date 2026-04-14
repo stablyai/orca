@@ -17,8 +17,6 @@ export type SshTarget = {
 export type SshConnectionStatus =
   | 'disconnected'
   | 'connecting'
-  | 'host-key-verification'
-  | 'auth-challenge'
   | 'auth-failed'
   | 'deploying-relay'
   | 'connected'

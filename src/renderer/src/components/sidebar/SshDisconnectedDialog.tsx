@@ -58,8 +58,6 @@ export function SshDisconnectedDialog({
   const isConnecting =
     connecting ||
     status === 'connecting' ||
-    status === 'host-key-verification' ||
-    status === 'auth-challenge' ||
     status === 'deploying-relay' ||
     status === 'reconnecting'
   const message = isConnecting
