@@ -10,8 +10,10 @@ import {
   RECONNECT_BACKOFF_MS,
   CONNECT_TIMEOUT_MS,
   isTransientError,
+  isAuthError,
   sleep,
   buildConnectConfig,
+  resolveEffectiveProxy,
   spawnProxyCommand,
   type SshConnectionCallbacks
 } from './ssh-connection-utils'
@@ -96,6 +98,11 @@ export class SshConnection {
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err))
 
+        if (isAuthError(lastError)) {
+          this.setState('auth-failed', lastError.message)
+          throw lastError
+        }
+
         if (!isTransientError(lastError)) {
           throw lastError
         }
@@ -111,20 +118,17 @@ export class SshConnection {
     throw finalError
   }
 
-  // Why: matches VS Code's _connectSSH. ssh2's readyTimeout handles the
-  // timeout; no custom authHandler or hostVerifier — ssh2 handles auth natively.
   private async attemptConnect(): Promise<void> {
     this.setState('connecting')
-    // Clean up proxy from a prior failed attempt to avoid leaking processes.
     this.proxyProcess?.kill()
     this.proxyProcess = null
 
     const resolved = await resolveWithSshG(this.target.label).catch(() => null)
     const config = buildConnectConfig(this.target, resolved)
 
-    // Why: ssh2 doesn't support ProxyCommand natively. Spawn the proxy
-    // (e.g. cloudflared) and pipe its stdin/stdout as config.sock.
-    const effectiveProxy = this.target.proxyCommand || resolved?.proxyCommand
+    // Why: ssh2 doesn't support ProxyCommand/ProxyJump natively. Spawn the
+    // resolved proxy and pipe its stdin/stdout as config.sock.
+    const effectiveProxy = resolveEffectiveProxy(this.target, resolved)
     if (effectiveProxy) {
       const proxy = spawnProxyCommand(effectiveProxy, config.host!, config.port!, config.username!)
       this.proxyProcess = proxy.process
@@ -151,6 +155,7 @@ export class SshConnection {
           return
         }
         settled = true
+        client.destroy()
         this.setState('error', err.message)
         reject(err)
       })

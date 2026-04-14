@@ -14,10 +14,12 @@ vi.mock('fs', () => ({
 
 import {
   isTransientError,
+  isAuthError,
   sleep,
   shellEscape,
   findDefaultKeyFile,
   buildConnectConfig,
+  resolveEffectiveProxy,
   CONNECT_TIMEOUT_MS,
   INITIAL_RETRY_ATTEMPTS,
   INITIAL_RETRY_DELAY_MS,
@@ -103,6 +105,28 @@ describe('isTransientError', () => {
 
   it('returns false for generic errors', () => {
     expect(isTransientError(new Error('something went wrong'))).toBe(false)
+  })
+})
+
+// ── isAuthError ──────────────────────────────────────────────────────
+
+describe('isAuthError', () => {
+  it('returns true for "All configured authentication methods failed"', () => {
+    expect(isAuthError(new Error('All configured authentication methods failed'))).toBe(true)
+  })
+
+  it('returns true for "Authentication failed"', () => {
+    expect(isAuthError(new Error('Authentication failed'))).toBe(true)
+  })
+
+  it('returns true for client-authentication level', () => {
+    const err = new Error('auth') as Error & { level: string }
+    err.level = 'client-authentication'
+    expect(isAuthError(err)).toBe(true)
+  })
+
+  it('returns false for transient errors', () => {
+    expect(isAuthError(new Error('connect ETIMEDOUT'))).toBe(false)
   })
 })
 
@@ -300,5 +324,36 @@ describe('buildConnectConfig', () => {
     const config = buildConnectConfig(makeTarget(), null)
     expect(config.agent).toBe('/tmp/agent.sock')
     expect(config.privateKey).toEqual(Buffer.from('fallback'))
+  })
+})
+
+// ── resolveEffectiveProxy ───────────────────────────────────────────
+
+describe('resolveEffectiveProxy', () => {
+  it('returns target.proxyCommand first', () => {
+    const target = { ...makeTarget(), proxyCommand: 'cloudflared access ssh --hostname %h' }
+    const resolved = makeResolved({ proxyCommand: 'other' })
+    expect(resolveEffectiveProxy(target, resolved)).toBe('cloudflared access ssh --hostname %h')
+  })
+
+  it('falls back to resolved proxyCommand', () => {
+    expect(
+      resolveEffectiveProxy(makeTarget(), makeResolved({ proxyCommand: 'ssh -W %h:%p gw' }))
+    ).toBe('ssh -W %h:%p gw')
+  })
+
+  it('converts target.jumpHost to ProxyCommand', () => {
+    const target = { ...makeTarget(), jumpHost: 'bastion.example.com' }
+    expect(resolveEffectiveProxy(target, null)).toBe('ssh -W %h:%p bastion.example.com')
+  })
+
+  it('converts resolved proxyJump to ProxyCommand', () => {
+    expect(resolveEffectiveProxy(makeTarget(), makeResolved({ proxyJump: 'jump.host' }))).toBe(
+      'ssh -W %h:%p jump.host'
+    )
+  })
+
+  it('returns undefined when no proxy is configured', () => {
+    expect(resolveEffectiveProxy(makeTarget(), null)).toBeUndefined()
   })
 })

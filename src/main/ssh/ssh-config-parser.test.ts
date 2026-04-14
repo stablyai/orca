@@ -293,6 +293,16 @@ describe('parseSshGOutput', () => {
     expect(noneResult.proxyCommand).toBeUndefined()
   })
 
+  it('parses proxyjump and filters "none"', () => {
+    const output = 'hostname example.com\nproxyjump bastion.example.com\nport 22'
+    const result = parseSshGOutput(output)
+    expect(result.proxyJump).toBe('bastion.example.com')
+
+    const noneOutput = 'hostname example.com\nproxyjump none\nport 22'
+    const noneResult = parseSshGOutput(noneOutput)
+    expect(noneResult.proxyJump).toBeUndefined()
+  })
+
   it('handles ~ expansion in identity file paths', () => {
     const output = 'hostname example.com\nidentityfile ~/custom_key\nport 22'
     const result = parseSshGOutput(output)

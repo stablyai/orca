@@ -26,6 +26,15 @@ const TRANSIENT_ERROR_CODES = new Set([
   'EAI_AGAIN'
 ])
 
+export function isAuthError(err: Error): boolean {
+  const msg = err.message.toLowerCase()
+  return (
+    msg.includes('all configured authentication methods failed') ||
+    msg.includes('authentication failed') ||
+    (err as { level?: string }).level === 'client-authentication'
+  )
+}
+
 export function isTransientError(err: Error): boolean {
   const code = (err as NodeJS.ErrnoException).code
   if (code && TRANSIENT_ERROR_CODES.has(code)) {
@@ -126,6 +135,27 @@ export function buildConnectConfig(
   }
 
   return config as ConnectConfig
+}
+
+// Why: ProxyJump and jumpHost are syntactic sugar for ProxyCommand.
+// OpenSSH internally converts `ProxyJump bastion` to
+// `ProxyCommand ssh -W %h:%p bastion`. We do the same so that ssh2
+// gets a single proxy spawn path regardless of how the tunnel was configured.
+export function resolveEffectiveProxy(
+  target: SshTarget,
+  resolved: SshResolvedConfig | null
+): string | undefined {
+  if (target.proxyCommand) {
+    return target.proxyCommand
+  }
+  if (resolved?.proxyCommand) {
+    return resolved.proxyCommand
+  }
+  const jump = target.jumpHost || resolved?.proxyJump
+  if (jump) {
+    return `ssh -W %h:%p ${jump}`
+  }
+  return undefined
 }
 
 // Why: ssh2 doesn't natively support ProxyCommand. When the SSH config

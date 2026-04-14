@@ -11,7 +11,8 @@ import { registerSshPtyProvider } from './pty'
 import { registerSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { registerSshGitProvider } from '../providers/ssh-git-dispatch'
 import { SshPortForwardManager } from '../ssh/ssh-port-forward'
-import type { SshTarget, SshConnectionState } from '../../shared/ssh-types'
+import type { SshTarget, SshConnectionState, SshConnectionStatus } from '../../shared/ssh-types'
+import { isAuthError } from '../ssh/ssh-connection-utils'
 import { cleanupConnection, wireUpSshPtyEvents, reestablishRelayStack } from './ssh-relay-helpers'
 import { registerSshBrowseHandler } from './ssh-browse'
 
@@ -129,18 +130,19 @@ export function registerSshHandlers(
     try {
       conn = await connectionManager!.connect(target)
     } catch (err) {
-      // Why: SshConnection.connect() sets its internal state to 'error', but
-      // the onStateChange callback may have been suppressed or the state may
-      // not have propagated to the renderer. Explicitly broadcast the error
-      // so the UI leaves 'connecting'.
+      // Why: SshConnection.connect() sets its internal state, but the
+      // onStateChange callback may not have propagated to the renderer.
+      // Explicitly broadcast so the UI leaves 'connecting'.
+      const errObj = err instanceof Error ? err : new Error(String(err))
+      const status: SshConnectionStatus = isAuthError(errObj) ? 'auth-failed' : 'error'
       const win = getMainWindow()
       if (win && !win.isDestroyed()) {
         win.webContents.send('ssh:state-changed', {
           targetId: args.targetId,
           state: {
             targetId: args.targetId,
-            status: 'error',
-            error: err instanceof Error ? err.message : String(err),
+            status,
+            error: errObj.message,
             reconnectAttempt: 0
           }
         })

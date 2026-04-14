@@ -159,6 +159,7 @@ export type SshResolvedConfig = {
   identityFile: string[]
   forwardAgent: boolean
   proxyCommand?: string
+  proxyJump?: string
 }
 
 const SSH_G_TIMEOUT_MS = 5000
@@ -199,10 +200,12 @@ export function parseSshGOutput(stdout: string): SshResolvedConfig {
     }
   }
 
-  // Why: `ssh -G` outputs `proxycommand none` when no proxy is configured.
-  // Treating "none" as a real command would spawn `/bin/sh -c none`.
+  // Why: `ssh -G` outputs `proxycommand none` / `proxyjump none` when no
+  // proxy is configured. Treating "none" as real would spawn bad commands.
   const rawProxy = map.get('proxycommand')
   const proxyCommand = rawProxy && rawProxy !== 'none' ? rawProxy : undefined
+  const rawJump = map.get('proxyjump')
+  const proxyJump = rawJump && rawJump !== 'none' ? rawJump : undefined
 
   return {
     hostname: map.get('hostname') ?? '',
@@ -210,6 +213,7 @@ export function parseSshGOutput(stdout: string): SshResolvedConfig {
     port: parseInt(map.get('port') ?? '22', 10),
     identityFile: identityFiles,
     forwardAgent: map.get('forwardagent') === 'yes',
-    proxyCommand
+    proxyCommand,
+    proxyJump
   }
 }
