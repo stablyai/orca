@@ -277,6 +277,32 @@ export function useIpcEvents(): void {
           for (const repo of remoteRepos) {
             void store.fetchWorktrees(repo.id)
           }
+
+          // Why: terminal panes that failed to spawn (no PTY provider on cold
+          // start) sit inert with an error toast. Bumping generation forces
+          // TerminalPane to remount and retry pty:spawn now that the provider
+          // is registered. Only bump for tabs with no live ptyId to avoid
+          // killing active shells.
+          const remoteRepoIds = new Set(remoteRepos.map((r) => r.id))
+          const worktreeIds = Object.values(store.worktreesByRepo)
+            .flat()
+            .filter((w) => remoteRepoIds.has(w.repoId))
+            .map((w) => w.id)
+
+          for (const worktreeId of worktreeIds) {
+            const tabs = store.tabsByWorktree[worktreeId] ?? []
+            const hasDead = tabs.some((t) => !t.ptyId)
+            if (hasDead) {
+              useAppStore.setState((s) => ({
+                tabsByWorktree: {
+                  ...s.tabsByWorktree,
+                  [worktreeId]: (s.tabsByWorktree[worktreeId] ?? []).map((t) =>
+                    t.ptyId ? t : { ...t, generation: (t.generation ?? 0) + 1 }
+                  )
+                }
+              }))
+            }
+          }
         }
       })
     )
