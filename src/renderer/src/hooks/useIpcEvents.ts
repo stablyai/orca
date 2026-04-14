@@ -265,9 +265,19 @@ export function useIpcEvents(): void {
 
     unsubs.push(
       window.api.ssh.onStateChanged((data: { targetId: string; state: unknown }) => {
-        useAppStore
-          .getState()
-          .setSshConnectionState(data.targetId, data.state as SshConnectionState)
+        const store = useAppStore.getState()
+        const state = data.state as SshConnectionState
+        store.setSshConnectionState(data.targetId, state)
+
+        // Why: on cold start, worktrees:list fails for SSH repos because the
+        // provider isn't registered yet. Once the connection comes up we must
+        // re-fetch so the sidebar populates without a manual remove-and-re-add.
+        if (state.status === 'connected') {
+          const remoteRepos = store.repos.filter((r) => r.connectionId === data.targetId)
+          for (const repo of remoteRepos) {
+            void store.fetchWorktrees(repo.id)
+          }
+        }
       })
     )
 
