@@ -84,6 +84,15 @@ const WorktreeCard = React.memo(function WorktreeCard({
   })
   const isSshDisconnected = sshStatus != null && sshStatus !== 'connected'
   const [showDisconnectedDialog, setShowDisconnectedDialog] = useState(false)
+
+  // Why: on restart the previously-active worktree is auto-restored without a
+  // click, so the dialog never opens. Auto-show it for the active card when SSH
+  // is disconnected so the user sees the reconnect prompt immediately.
+  useEffect(() => {
+    if (isActive && isSshDisconnected) {
+      setShowDisconnectedDialog(true)
+    }
+  }, [isActive, isSshDisconnected])
   // Why: read the target label from the store (populated during hydration in
   // useIpcEvents.ts) instead of calling listTargets IPC per card instance.
   const sshTargetLabel = useAppStore((s) =>
