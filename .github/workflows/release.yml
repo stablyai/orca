@@ -70,7 +70,15 @@ jobs:
       - name: Build app
         run: pnpm build:release
 
-      - name: Publish release artifacts
+      # Why: macOS signing secrets (CSC_LINK, CSC_KEY_PASSWORD) must NOT be
+      # passed to non-macOS builds. electron-builder uses CSC_LINK as the
+      # code-signing certificate on any platform, so leaking the Apple
+      # Developer ID cert to the Windows build causes the NSIS installer to
+      # be signed with an Apple cert whose chain Windows cannot validate,
+      # breaking the auto-updater with "certificate chain could not be built
+      # to a trusted root authority" (issue #631).
+      - name: Publish release artifacts (macOS)
+        if: matrix.platform == 'mac'
         run: ${{ matrix.release_command }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -79,6 +87,12 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Publish release artifacts
+        if: matrix.platform != 'mac'
+        run: ${{ matrix.release_command }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   publish-release:
     needs: release
