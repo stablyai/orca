@@ -29,14 +29,16 @@ export default function MermaidBlock({
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    // Re-initialize on every effect so the theme stays in sync with the
-    // current appearance. mermaid.initialize() is cheap and idempotent.
-    mermaid.initialize(getMermaidConfig(isDark, htmlLabels))
-
     let cancelled = false
 
     const render = async (): Promise<void> => {
       try {
+        // Why: Mermaid stores initialize() config in global module state. Apply
+        // the config inside the same serialized render task so another
+        // MermaidBlock cannot overwrite htmlLabels/theme between initialize()
+        // and render(), which would make markdown preview fall back to the
+        // broken foreignObject label path again.
+        mermaid.initialize(getMermaidConfig(isDark, htmlLabels))
         const { svg } = await mermaid.render(`mermaid-${id}`, content)
         if (!cancelled && containerRef.current) {
           // Why: although mermaid uses DOMPurify internally, we add an explicit
