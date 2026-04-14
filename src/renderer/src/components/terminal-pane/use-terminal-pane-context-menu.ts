@@ -155,13 +155,19 @@ export function useTerminalPaneContextMenu({
     const clickedPane = manager.getPanes().find((pane) => pane.container.contains(target)) ?? null
     contextPaneIdRef.current = clickedPane?.id ?? null
 
-    // Why: Windows users expect bare right-click to paste when that setting is
-    // enabled, but Ctrl+right-click must still reach the app menu so the menu
-    // remains discoverable. We keep the terminal pane target in sync first so
-    // the paste path uses the clicked split even though no menu opens.
+    // Why: Windows terminals treat right-click as copy-or-paste depending on
+    // whether text is selected. With a selection, right-click copies it and
+    // clears the selection; without one, it pastes. Ctrl+right-click still
+    // reaches the app menu so the menu remains discoverable.
     if (rightClickToPaste && !event.ctrlKey) {
       event.stopPropagation()
-      void onPaste()
+      const selection = clickedPane?.terminal.getSelection()
+      if (selection) {
+        void window.api.ui.writeClipboardText(selection)
+        clickedPane?.terminal.clearSelection()
+      } else {
+        void onPaste()
+      }
       return
     }
 
