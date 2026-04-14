@@ -40,6 +40,7 @@ export function buildEditorSessionData(
 > {
   const editFiles = openFiles.filter((f) => f.mode === 'edit')
   const byWorktree: Record<string, PersistedOpenFile[]> = {}
+  const editFileIdsByWorktree: Record<string, Set<string>> = {}
   for (const f of editFiles) {
     const arr = byWorktree[f.worktreeId] ?? (byWorktree[f.worktreeId] = [])
     arr.push({
@@ -49,11 +50,37 @@ export function buildEditorSessionData(
       language: f.language,
       isPreview: f.isPreview || undefined
     })
+    const ids =
+      editFileIdsByWorktree[f.worktreeId] ?? (editFileIdsByWorktree[f.worktreeId] = new Set())
+    ids.add(f.id)
   }
+
+  const persistedActiveFileIdByWorktree = Object.fromEntries(
+    Object.entries(activeFileIdByWorktree).flatMap(([worktreeId, fileId]) => {
+      if (!fileId) {
+        return []
+      }
+      return editFileIdsByWorktree[worktreeId]?.has(fileId) ? [[worktreeId, fileId]] : []
+    })
+  )
+
+  const persistedActiveTabTypeByWorktree = Object.fromEntries(
+    Object.entries(activeTabTypeByWorktree).flatMap(([worktreeId, tabType]) => {
+      if (tabType !== 'editor') {
+        return [[worktreeId, tabType]]
+      }
+      // Why: restart only restores edit-mode files. Persisting "editor" with a
+      // transient diff/conflict file ID creates a session payload that cannot
+      // be satisfied on startup and leaves the UI with no real editor tab to
+      // select. Only keep the editor marker when it points at a restored file.
+      return persistedActiveFileIdByWorktree[worktreeId] ? [[worktreeId, tabType]] : []
+    })
+  )
+
   return {
     openFilesByWorktree: byWorktree,
-    activeFileIdByWorktree,
-    activeTabTypeByWorktree
+    activeFileIdByWorktree: persistedActiveFileIdByWorktree,
+    activeTabTypeByWorktree: persistedActiveTabTypeByWorktree
   }
 }
 

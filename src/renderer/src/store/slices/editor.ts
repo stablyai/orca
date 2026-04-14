@@ -1468,21 +1468,27 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         }
       }
 
-      if (openFiles.length === 0) {
-        return {}
-      }
-
       // Why: use the store's activeWorktreeId (set by hydrateWorkspaceSession)
       // rather than the raw session value. hydrateWorkspaceSession may have
       // nulled out an invalid worktree ID, and we must respect that decision.
       const activeWorktreeId = s.activeWorktreeId
-      const activeFileId = activeWorktreeId
+      const fallbackActiveFileId = activeWorktreeId
+        ? (openFiles.find((f) => f.worktreeId === activeWorktreeId)?.id ?? null)
+        : null
+      const persistedActiveFileId = activeWorktreeId
         ? (persistedActiveFileIdByWorktree[activeWorktreeId] ?? null)
         : null
       // Why: verify the persisted active file still exists in the restored set.
       // The file may have been removed due to worktree validation or the
       // persisted data may reference a stale path.
-      const activeFileExists = activeFileId ? openFiles.some((f) => f.id === activeFileId) : false
+      const activeFileExists = persistedActiveFileId
+        ? openFiles.some((f) => f.id === persistedActiveFileId)
+        : false
+      // Why: if the previously active editor surface pointed at a transient
+      // diff/conflict tab, restart still restores any normal edit tabs for the
+      // worktree. Promote the first restored edit file so the UI comes back on
+      // a concrete file tab instead of an unselected editor surface.
+      const nextActiveFileId = activeFileExists ? persistedActiveFileId : fallbackActiveFileId
       const activeTabType: WorkspaceVisibleTabType =
         activeWorktreeId && persistedActiveTabTypeByWorktree[activeWorktreeId]
           ? persistedActiveTabTypeByWorktree[activeWorktreeId]
@@ -1490,10 +1496,14 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
 
       // Filter per-worktree maps to only valid worktrees with valid file references
       const filteredActiveFileIdByWorktree = Object.fromEntries(
-        Object.entries(persistedActiveFileIdByWorktree).filter(
-          ([wId, fileId]) =>
-            validWorktreeIds.has(wId) && fileId && openFiles.some((f) => f.id === fileId)
-        )
+        [...validWorktreeIds].flatMap((wId) => {
+          const persistedFileId = persistedActiveFileIdByWorktree[wId]
+          if (persistedFileId && openFiles.some((f) => f.id === persistedFileId)) {
+            return [[wId, persistedFileId]]
+          }
+          const fallbackFileId = openFiles.find((f) => f.worktreeId === wId)?.id
+          return fallbackFileId ? [[wId, fallbackFileId]] : []
+        })
       )
       const filteredActiveTabTypeByWorktree = Object.fromEntries(
         Object.entries(persistedActiveTabTypeByWorktree).filter(([wId, tabType]) => {
@@ -1511,11 +1521,18 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         })
       )
 
+      // Why: restart only restores edit-mode files. If the previous active
+      // surface for the current worktree was a transient diff/conflict view,
+      // we must clear the stale "editor" marker here so startup falls back to
+      // browser or terminal instead of showing an empty editor surface.
+      const nextActiveTabType =
+        nextActiveFileId || activeTabType !== 'editor' ? activeTabType : 'terminal'
+
       return {
         openFiles,
-        activeFileId: activeFileExists ? activeFileId : null,
+        activeFileId: nextActiveFileId,
         activeFileIdByWorktree: filteredActiveFileIdByWorktree,
-        activeTabType: activeFileExists ? activeTabType : 'terminal',
+        activeTabType: nextActiveTabType,
         activeTabTypeByWorktree: filteredActiveTabTypeByWorktree
       }
     })

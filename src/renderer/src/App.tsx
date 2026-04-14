@@ -74,6 +74,7 @@ function App(): React.JSX.Element {
       initGitHubCache: s.initGitHubCache,
       refreshAllGitHub: s.refreshAllGitHub,
       hydrateWorkspaceSession: s.hydrateWorkspaceSession,
+      hydrateTabsSession: s.hydrateTabsSession,
       hydrateEditorSession: s.hydrateEditorSession,
       hydrateBrowserSession: s.hydrateBrowserSession,
       fetchBrowserSessionProfiles: s.fetchBrowserSessionProfiles,
@@ -151,6 +152,7 @@ function App(): React.JSX.Element {
         if (!cancelled) {
           actions.hydratePersistedUI(persistedUI)
           actions.hydrateWorkspaceSession(session)
+          actions.hydrateTabsSession(session)
           actions.hydrateEditorSession(session)
           actions.hydrateBrowserSession(session)
           await actions.fetchBrowserSessionProfiles()

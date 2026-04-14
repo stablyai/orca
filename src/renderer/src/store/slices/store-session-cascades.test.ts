@@ -964,7 +964,40 @@ describe('hydrateEditorSession', () => {
     expect(s.activeTabType).toBe('terminal')
   })
 
-  it('falls back to terminal if persisted activeFileId is missing from restored files', () => {
+  it('clears stale editor markers when no edit-mode files restore for the active worktree', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      activeWorktreeId: wt,
+      activeTabType: 'editor'
+    })
+
+    store.getState().hydrateEditorSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: wt,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      activeFileIdByWorktree: { [wt]: `${wt}::diff::unstaged::src/index.ts` },
+      activeTabTypeByWorktree: { [wt]: 'editor' }
+    })
+
+    const s = store.getState()
+    expect(s.openFiles).toHaveLength(0)
+    expect(s.activeFileId).toBeNull()
+    expect(s.activeTabType).toBe('terminal')
+    expect(s.activeFileIdByWorktree[wt]).toBeUndefined()
+    expect(s.activeTabTypeByWorktree[wt]).toBeUndefined()
+  })
+
+  it('promotes the first restored edit file if persisted activeFileId is missing', () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
 
@@ -1001,9 +1034,10 @@ describe('hydrateEditorSession', () => {
 
     const s = store.getState()
     expect(s.openFiles).toHaveLength(1)
-    expect(s.activeFileId).toBeNull()
-    expect(s.activeTabType).toBe('terminal')
-    expect(s.activeTabTypeByWorktree[wt]).toBeUndefined()
+    expect(s.activeFileId).toBe('/path/wt1/src/index.ts')
+    expect(s.activeTabType).toBe('editor')
+    expect(s.activeFileIdByWorktree[wt]).toBe('/path/wt1/src/index.ts')
+    expect(s.activeTabTypeByWorktree[wt]).toBe('editor')
   })
 
   it('filters out files for deleted worktrees', () => {

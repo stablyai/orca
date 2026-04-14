@@ -100,4 +100,16 @@ describe('buildWorkspaceSessionPayload', () => {
     })
     expect(payload.browserTabsByWorktree?.['wt-1'][0].loading).toBe(false)
   })
+
+  it('drops transient active editor markers that do not point at restored edit files', () => {
+    const payload = buildWorkspaceSessionPayload(
+      createSnapshot({
+        activeFileIdByWorktree: { 'wt-1': '/tmp/demo.diff' },
+        activeTabTypeByWorktree: { 'wt-1': 'editor', 'wt-2': 'terminal' }
+      })
+    )
+
+    expect(payload.activeFileIdByWorktree).toEqual({})
+    expect(payload.activeTabTypeByWorktree).toEqual({ 'wt-2': 'terminal' })
+  })
 })
