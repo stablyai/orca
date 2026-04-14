@@ -104,6 +104,19 @@ export const GENERAL_CODEX_ACCOUNTS_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   }
 ]
 
+export const GENERAL_OPENCODE_ACCOUNTS_SEARCH_ENTRIES: SettingsSearchEntry[] = [
+  {
+    title: 'OpenCode Accounts',
+    description: 'Manage which saved OpenCode Go credential Orca injects into new terminals.',
+    keywords: ['opencode', 'open code', 'account', 'api key', 'credential', 'switch']
+  },
+  {
+    title: 'Active OpenCode Account',
+    description: 'Choose which saved OpenCode Go account powers new Orca OpenCode sessions.',
+    keywords: ['opencode', 'open code', 'account', 'switch', 'active', 'api key']
+  }
+]
+
 export const GENERAL_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   ...GENERAL_WORKSPACE_SEARCH_ENTRIES,
   ...GENERAL_BROWSER_SEARCH_ENTRIES,
@@ -111,5 +124,6 @@ export const GENERAL_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   ...GENERAL_CLI_SEARCH_ENTRIES,
   ...GENERAL_CACHE_TIMER_SEARCH_ENTRIES,
   ...GENERAL_CODEX_ACCOUNTS_SEARCH_ENTRIES,
+  ...GENERAL_OPENCODE_ACCOUNTS_SEARCH_ENTRIES,
   ...GENERAL_UPDATE_SEARCH_ENTRIES
 ]

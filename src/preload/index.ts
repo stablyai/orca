@@ -364,6 +364,21 @@ const api = {
       ipcRenderer.invoke('codexAccounts:select', args)
   },
 
+  openCodeAccounts: {
+    list: (): Promise<unknown> => ipcRenderer.invoke('openCodeAccounts:list'),
+    add: (args: { label: string; apiKey: string }): Promise<unknown> =>
+      ipcRenderer.invoke('openCodeAccounts:add', args),
+    reauthenticate: (args: {
+      accountId: string
+      label: string
+      apiKey: string
+    }): Promise<unknown> => ipcRenderer.invoke('openCodeAccounts:reauthenticate', args),
+    remove: (args: { accountId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('openCodeAccounts:remove', args),
+    select: (args: { accountId: string | null }): Promise<unknown> =>
+      ipcRenderer.invoke('openCodeAccounts:select', args)
+  },
+
   cli: {
     getInstallStatus: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:getInstallStatus'),
     install: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:install'),

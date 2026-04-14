@@ -2,7 +2,11 @@
    splitting individual settings into separate files would scatter related controls without a
    meaningful abstraction boundary. */
 import { useEffect, useState } from 'react'
-import type { CodexRateLimitAccountsState, GlobalSettings } from '../../../../shared/types'
+import type {
+  CodexRateLimitAccountsState,
+  GlobalSettings,
+  OpenCodeAccountsState
+} from '../../../../shared/types'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
@@ -26,6 +30,7 @@ import {
   GENERAL_CACHE_TIMER_SEARCH_ENTRIES,
   GENERAL_CLI_SEARCH_ENTRIES,
   GENERAL_EDITOR_SEARCH_ENTRIES,
+  GENERAL_OPENCODE_ACCOUNTS_SEARCH_ENTRIES,
   GENERAL_PANE_SEARCH_ENTRIES,
   GENERAL_UPDATE_SEARCH_ENTRIES,
   GENERAL_WORKSPACE_SEARCH_ENTRIES
@@ -101,6 +106,16 @@ function getCodexAccountErrorDescription(error: unknown): string {
   return message || 'Codex sign-in failed. Please try again.'
 }
 
+function getOpenCodeAccountErrorDescription(error: unknown): string {
+  return (
+    String((error as Error)?.message ?? error)
+      .replace(/^Error occurred in handler for 'openCodeAccounts:[^']+':\s*/i, '')
+      .replace(/^Error invoking remote method 'openCodeAccounts:[^']+':\s*/i, '')
+      .replace(/^Error:\s*/i, '')
+      .trim() || 'OpenCode account update failed. Please try again.'
+  )
+}
+
 export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const updateStatus = useAppStore((s) => s.updateStatus)
@@ -121,10 +136,23 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
     accounts: [],
     activeAccountId: null
   })
+  const [openCodeAccounts, setOpenCodeAccounts] = useState<OpenCodeAccountsState>({
+    accounts: [],
+    activeAccountId: null
+  })
   const [codexAction, setCodexAction] = useState<
     'idle' | 'adding' | `reauth:${string}` | `remove:${string}` | `select:${string | 'system'}`
   >('idle')
+  const [openCodeAction, setOpenCodeAction] = useState<
+    'idle' | `save:${'add' | string}` | `remove:${string}` | `select:${string | 'system'}`
+  >('idle')
   const [removeAccountId, setRemoveAccountId] = useState<string | null>(null)
+  const [removeOpenCodeAccountId, setRemoveOpenCodeAccountId] = useState<string | null>(null)
+  const [openCodeDialogAccountId, setOpenCodeDialogAccountId] = useState<string | 'add' | null>(
+    null
+  )
+  const [openCodeLabelDraft, setOpenCodeLabelDraft] = useState('')
+  const [openCodeApiKeyDraft, setOpenCodeApiKeyDraft] = useState('')
 
   useEffect(() => {
     window.api.updater.getVersion().then(setAppVersion)
@@ -153,6 +181,31 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
     }
 
     void loadCodexAccounts()
+
+    return () => {
+      stale = true
+    }
+  }, [])
+
+  useEffect(() => {
+    let stale = false
+
+    const loadOpenCodeAccounts = async (): Promise<void> => {
+      try {
+        const next = await window.api.openCodeAccounts.list()
+        if (!stale) {
+          setOpenCodeAccounts(next)
+        }
+      } catch (error) {
+        if (!stale) {
+          toast.error('Could not load OpenCode accounts.', {
+            description: String((error as Error)?.message ?? error)
+          })
+        }
+      }
+    }
+
+    void loadOpenCodeAccounts()
 
     return () => {
       stale = true
@@ -201,6 +254,11 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
     await fetchSettings()
   }
 
+  const syncOpenCodeAccounts = async (next: OpenCodeAccountsState): Promise<void> => {
+    setOpenCodeAccounts(next)
+    await fetchSettings()
+  }
+
   const formatAccountTimestamp = (timestamp: number): string => {
     return new Date(timestamp).toLocaleString(undefined, {
       month: 'short',
@@ -240,6 +298,30 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
       setCodexAction('idle')
     }
   }
+
+  const runOpenCodeAccountAction = async (
+    action: typeof openCodeAction,
+    operation: () => Promise<OpenCodeAccountsState>
+  ): Promise<void> => {
+    setOpenCodeAction(action)
+    try {
+      const next = await operation()
+      await syncOpenCodeAccounts(next)
+    } catch (error) {
+      toast.error('OpenCode account update failed.', {
+        description: getOpenCodeAccountErrorDescription(error)
+      })
+    } finally {
+      setOpenCodeAction('idle')
+    }
+  }
+
+  const selectedOpenCodeDialogAccount =
+    openCodeDialogAccountId && openCodeDialogAccountId !== 'add'
+      ? (openCodeAccounts.accounts.find((account) => account.id === openCodeDialogAccountId) ??
+        null)
+      : null
+  const openCodeDialogMode = openCodeDialogAccountId === 'add' ? 'add' : 'reauth'
 
   const visibleSections = [
     matchesSettingsSearch(searchQuery, GENERAL_WORKSPACE_SEARCH_ENTRIES) ? (
@@ -918,6 +1000,183 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
         </SearchableSetting>
       </section>
     ) : null,
+    matchesSettingsSearch(searchQuery, GENERAL_OPENCODE_ACCOUNTS_SEARCH_ENTRIES) ? (
+      <section
+        key="opencode-accounts"
+        id="general-opencode-accounts"
+        className="space-y-4 scroll-mt-6"
+      >
+        <div className="space-y-1">
+          <h3 className="text-sm font-semibold">OpenCode Accounts</h3>
+          <p className="text-xs text-muted-foreground">
+            Add and switch between OpenCode Go credentials in Orca.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Orca stores managed OpenCode Go API keys in its local app data and injects the selected
+            one only into new Orca terminals.
+          </p>
+        </div>
+
+        <SearchableSetting
+          title="OpenCode Accounts"
+          description="Manage which OpenCode Go credential Orca uses for new terminal sessions."
+          keywords={['opencode', 'open code', 'account', 'api key', 'credential', 'switch']}
+          className="space-y-3 px-1 py-2"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="space-y-0.5">
+              <Label>Accounts</Label>
+              <p className="text-xs text-muted-foreground">
+                Add an OpenCode Go API key for Orca-managed switching.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="xs"
+              onClick={() => {
+                setOpenCodeDialogAccountId('add')
+                setOpenCodeLabelDraft('')
+                setOpenCodeApiKeyDraft('')
+              }}
+              disabled={openCodeAction !== 'idle'}
+              className="gap-1.5"
+            >
+              <Plus className="size-3" />
+              Add Account
+            </Button>
+          </div>
+
+          {openCodeAccounts.accounts.length === 0 ? (
+            <div className="rounded-md border border-dashed border-border/70 px-3 py-4 text-xs text-muted-foreground">
+              No managed OpenCode accounts yet. Orca will keep using your system default OpenCode
+              credential until you add one here.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() =>
+                  void runOpenCodeAccountAction('select:system', () =>
+                    window.api.openCodeAccounts.select({ accountId: null })
+                  )
+                }
+                disabled={openCodeAction !== 'idle'}
+                className={`flex w-full items-center justify-between gap-3 rounded-md border px-3 py-2.5 text-left transition-colors ${
+                  openCodeAccounts.activeAccountId === null
+                    ? 'border-foreground/20 bg-accent/15'
+                    : 'border-border/70 hover:border-border hover:bg-accent/8'
+                } disabled:cursor-default disabled:opacity-100`}
+              >
+                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="truncate text-sm font-medium">System default</span>
+                    {openCodeAccounts.activeAccountId === null ? (
+                      <Badge
+                        variant="outline"
+                        className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none text-foreground/80"
+                      >
+                        Active
+                      </Badge>
+                    ) : null}
+                  </div>
+                  <span className="truncate text-[11px] text-muted-foreground">
+                    Use your current system OpenCode credential.
+                  </span>
+                </div>
+              </button>
+              {openCodeAccounts.accounts.map((account) => {
+                const isActive = openCodeAccounts.activeAccountId === account.id
+                const isSaving = openCodeAction === `save:${account.id}`
+                const isRemoving = openCodeAction === `remove:${account.id}`
+                const isBusy = openCodeAction !== 'idle'
+
+                return (
+                  <button
+                    key={account.id}
+                    type="button"
+                    onClick={() =>
+                      void runOpenCodeAccountAction(`select:${account.id}`, () =>
+                        window.api.openCodeAccounts.select({ accountId: account.id })
+                      )
+                    }
+                    disabled={isBusy}
+                    className={`flex w-full items-center justify-between gap-3 rounded-md border px-3 py-2.5 text-left transition-colors ${
+                      isActive
+                        ? 'border-foreground/20 bg-accent/15'
+                        : 'border-border/70 hover:border-border hover:bg-accent/8'
+                    }`}
+                  >
+                    <div className="flex w-full items-center justify-between gap-3 max-md:flex-col max-md:items-start">
+                      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="truncate text-sm font-medium">{account.label}</span>
+                          {isActive ? (
+                            <Badge
+                              variant="outline"
+                              className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none text-foreground/80"
+                            >
+                              Active
+                            </Badge>
+                          ) : null}
+                        </div>
+                        <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground max-sm:flex-wrap">
+                          <span className="shrink-0">OpenCode Go</span>
+                          <span className="shrink-0 opacity-50">•</span>
+                          <span className="shrink-0">{account.keyHint}</span>
+                          <span className="shrink-0 opacity-50">•</span>
+                          <span className="shrink-0">
+                            {formatAccountTimestamp(account.lastAuthenticatedAt)}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex shrink-0 items-center justify-end gap-1 max-md:w-full max-md:flex-wrap">
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            setOpenCodeDialogAccountId(account.id)
+                            setOpenCodeLabelDraft(account.label)
+                            setOpenCodeApiKeyDraft('')
+                          }}
+                          disabled={isBusy}
+                          className="h-6 px-2 text-muted-foreground hover:text-foreground"
+                        >
+                          {isSaving ? (
+                            <Loader2 className="size-3 animate-spin" />
+                          ) : (
+                            <RefreshCw className="size-3" />
+                          )}
+                          Re-authenticate
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            setRemoveOpenCodeAccountId(account.id)
+                          }}
+                          disabled={isBusy}
+                          className="h-6 px-2 text-muted-foreground hover:text-destructive"
+                        >
+                          {isRemoving ? (
+                            <Loader2 className="size-3 animate-spin" />
+                          ) : (
+                            <Trash2 className="size-3" />
+                          )}
+                          Remove
+                        </Button>
+                      </div>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </SearchableSetting>
+      </section>
+    ) : null,
     matchesSettingsSearch(searchQuery, GENERAL_UPDATE_SEARCH_ENTRIES) ? (
       <section key="updates" className="space-y-4">
         <div className="space-y-1">
@@ -1020,6 +1279,106 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
   return (
     <div className="space-y-8">
       <Dialog
+        open={openCodeDialogAccountId !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setOpenCodeDialogAccountId(null)
+            setOpenCodeLabelDraft('')
+            setOpenCodeApiKeyDraft('')
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {openCodeDialogMode === 'add'
+                ? 'Add OpenCode Account'
+                : 'Re-authenticate OpenCode Account'}
+            </DialogTitle>
+            <DialogDescription>
+              {openCodeDialogMode === 'add'
+                ? 'Save an OpenCode Go API key in Orca so you can switch accounts without changing your system credential.'
+                : 'Update the stored OpenCode Go API key for this Orca-managed account.'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label htmlFor="opencode-account-label">Label</Label>
+              <Input
+                id="opencode-account-label"
+                value={openCodeLabelDraft}
+                onChange={(event) => setOpenCodeLabelDraft(event.target.value)}
+                placeholder="Work account"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="opencode-account-api-key">OpenCode Go API Key</Label>
+              <Input
+                id="opencode-account-api-key"
+                type="password"
+                value={openCodeApiKeyDraft}
+                onChange={(event) => setOpenCodeApiKeyDraft(event.target.value)}
+                placeholder={
+                  openCodeDialogMode === 'add'
+                    ? 'sk-...'
+                    : `Enter a new API key for ${selectedOpenCodeDialogAccount?.label ?? 'this account'}`
+                }
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setOpenCodeDialogAccountId(null)
+                setOpenCodeLabelDraft('')
+                setOpenCodeApiKeyDraft('')
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                const label = openCodeLabelDraft.trim()
+                const apiKey = openCodeApiKeyDraft.trim()
+                if (!label || !apiKey) {
+                  toast.error('OpenCode account details are incomplete.', {
+                    description: 'Both a label and an OpenCode Go API key are required.'
+                  })
+                  return
+                }
+
+                const dialogAccountId = openCodeDialogAccountId
+                setOpenCodeDialogAccountId(null)
+                setOpenCodeLabelDraft('')
+                setOpenCodeApiKeyDraft('')
+
+                if (dialogAccountId === 'add') {
+                  void runOpenCodeAccountAction('save:add', () =>
+                    window.api.openCodeAccounts.add({ label, apiKey })
+                  )
+                  return
+                }
+
+                if (!dialogAccountId) {
+                  return
+                }
+
+                void runOpenCodeAccountAction(`save:${dialogAccountId}`, () =>
+                  window.api.openCodeAccounts.reauthenticate({
+                    accountId: dialogAccountId,
+                    label,
+                    apiKey
+                  })
+                )
+              }}
+            >
+              {openCodeDialogMode === 'add' ? 'Add Account' : 'Save API Key'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
         open={removeAccountId !== null}
         onOpenChange={(open) => !open && setRemoveAccountId(null)}
       >
@@ -1045,6 +1404,40 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
                 setRemoveAccountId(null)
                 void runCodexAccountAction(`remove:${accountId}`, () =>
                   window.api.codexAccounts.remove({ accountId })
+                )
+              }}
+            >
+              Remove Account
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={removeOpenCodeAccountId !== null}
+        onOpenChange={(open) => !open && setRemoveOpenCodeAccountId(null)}
+      >
+        <DialogContent showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Remove OpenCode Account?</DialogTitle>
+            <DialogDescription>
+              Orca will delete the managed OpenCode credential for this saved account. If it is
+              currently active, Orca falls back to the system default OpenCode credential.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRemoveOpenCodeAccountId(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                const accountId = removeOpenCodeAccountId
+                if (!accountId) {
+                  return
+                }
+                setRemoveOpenCodeAccountId(null)
+                void runOpenCodeAccountAction(`remove:${accountId}`, () =>
+                  window.api.openCodeAccounts.remove({ accountId })
                 )
               }}
             >

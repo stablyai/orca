@@ -19,6 +19,7 @@ import type {
   IssueInfo,
   NotificationDispatchRequest,
   NotificationDispatchResult,
+  OpenCodeAccountsState,
   OpenCodeStatusEvent,
   OrcaHooks,
   PersistedUIState,
@@ -301,6 +302,17 @@ export type PreloadApi = {
     reauthenticate: (args: { accountId: string }) => Promise<CodexRateLimitAccountsState>
     remove: (args: { accountId: string }) => Promise<CodexRateLimitAccountsState>
     select: (args: { accountId: string | null }) => Promise<CodexRateLimitAccountsState>
+  }
+  openCodeAccounts: {
+    list: () => Promise<OpenCodeAccountsState>
+    add: (args: { label: string; apiKey: string }) => Promise<OpenCodeAccountsState>
+    reauthenticate: (args: {
+      accountId: string
+      label: string
+      apiKey: string
+    }) => Promise<OpenCodeAccountsState>
+    remove: (args: { accountId: string }) => Promise<OpenCodeAccountsState>
+    select: (args: { accountId: string | null }) => Promise<OpenCodeAccountsState>
   }
   cli: {
     getInstallStatus: () => Promise<CliInstallStatus>

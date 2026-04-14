@@ -178,7 +178,8 @@ describe('registerPtyHandlers', () => {
   async function spawnAndGetEnv(
     argsEnv?: Record<string, string>,
     processEnvOverrides?: Record<string, string | undefined>,
-    getSelectedCodexHomePath?: () => string | null
+    getSelectedCodexHomePath?: () => string | null,
+    getSelectedOpenCodeDataPath?: () => string | null
   ): Promise<Record<string, string>> {
     const savedEnv: Record<string, string | undefined> = {}
     if (processEnvOverrides) {
@@ -196,7 +197,12 @@ describe('registerPtyHandlers', () => {
       // Clear previously registered handlers so re-registration doesn't
       // accumulate stale state across calls within one test.
       handlers.clear()
-      registerPtyHandlers(mainWindow as never, undefined, getSelectedCodexHomePath)
+      registerPtyHandlers(
+        mainWindow as never,
+        undefined,
+        getSelectedCodexHomePath,
+        getSelectedOpenCodeDataPath
+      )
       await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
@@ -262,6 +268,16 @@ describe('registerPtyHandlers', () => {
       expect(env.CODEX_HOME).toBe('/tmp/orca-codex-home')
     })
 
+    it('injects the selected OpenCode data root into Orca terminal PTYs', async () => {
+      const env = await spawnAndGetEnv(
+        undefined,
+        undefined,
+        undefined,
+        () => '/tmp/orca-opencode-data'
+      )
+      expect(env.XDG_DATA_HOME).toBe('/tmp/orca-opencode-data')
+    })
+
     it('injects the OpenCode hook env into Orca terminal PTYs', async () => {
       // Why: clear any ambient OPENCODE_CONFIG_DIR so the mock's value is used
       const env = await spawnAndGetEnv(undefined, { OPENCODE_CONFIG_DIR: undefined })
@@ -285,6 +301,16 @@ describe('registerPtyHandlers', () => {
         () => null
       )
       expect(env.CODEX_HOME).toBe('/tmp/system-codex-home')
+    })
+
+    it('leaves ambient XDG_DATA_HOME untouched when the system OpenCode account is selected', async () => {
+      const env = await spawnAndGetEnv(
+        undefined,
+        { XDG_DATA_HOME: '/tmp/system-opencode-data' },
+        undefined,
+        () => null
+      )
+      expect(env.XDG_DATA_HOME).toBe('/tmp/system-opencode-data')
     })
   })
 

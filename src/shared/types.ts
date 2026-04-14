@@ -439,6 +439,32 @@ export type CodexRateLimitAccountsState = {
   activeAccountId: string | null
 }
 
+export type OpenCodeManagedAccount = {
+  id: string
+  label: string
+  managedDataPath: string
+  providerId: 'opencode-go'
+  keyHint: string
+  createdAt: number
+  updatedAt: number
+  lastAuthenticatedAt: number
+}
+
+export type OpenCodeManagedAccountSummary = {
+  id: string
+  label: string
+  providerId: 'opencode-go'
+  keyHint: string
+  createdAt: number
+  updatedAt: number
+  lastAuthenticatedAt: number
+}
+
+export type OpenCodeAccountsState = {
+  accounts: OpenCodeManagedAccountSummary[]
+  activeAccountId: string | null
+}
+
 export type GlobalSettings = {
   workspaceDir: string
   nestWorkspaces: boolean
@@ -491,6 +517,13 @@ export type GlobalSettings = {
    *  analytics and external terminal sessions. */
   codexManagedAccounts: CodexManagedAccount[]
   activeCodexManagedAccountId: string | null
+  /** Why: OpenCode account routing needs the same early main-process
+   *  availability as Codex account routing so new PTYs can launch against the
+   *  selected managed `XDG_DATA_HOME` before the renderer mounts. Persist the
+   *  account roster here, but keep it scoped to Orca-managed terminals only so
+   *  external shells continue using the user's ambient OpenCode auth. */
+  openCodeManagedAccounts: OpenCodeManagedAccount[]
+  activeOpenCodeManagedAccountId: string | null
   /** When true, each worktree gets its own shell history file so ArrowUp
    *  does not surface commands from other worktrees. Defaults to true.
    *  Disable to revert to shared global shell history. */

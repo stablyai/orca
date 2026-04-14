@@ -25,6 +25,7 @@ import { RateLimitService } from './rate-limits/service'
 import { attachMainWindowServices } from './window/attach-main-window-services'
 import { createMainWindow } from './window/createMainWindow'
 import { CodexAccountService } from './codex-accounts/service'
+import { OpenCodeAccountService } from './opencode-accounts/service'
 import { openCodeHookService } from './opencode/hook-service'
 
 let mainWindow: BrowserWindow | null = null
@@ -37,6 +38,7 @@ let stats: StatsCollector | null = null
 let claudeUsage: ClaudeUsageStore | null = null
 let codexUsage: CodexUsageStore | null = null
 let codexAccounts: CodexAccountService | null = null
+let openCodeAccounts: OpenCodeAccountService | null = null
 let runtime: OrcaRuntimeService | null = null
 let rateLimits: RateLimitService | null = null
 let runtimeRpc: OrcaRuntimeRpcServer | null = null
@@ -79,6 +81,9 @@ function openMainWindow(): BrowserWindow {
   if (!codexAccounts) {
     throw new Error('Codex account service must be initialized before opening the main window')
   }
+  if (!openCodeAccounts) {
+    throw new Error('OpenCode account service must be initialized before opening the main window')
+  }
 
   const window = createMainWindow(store, {
     getIsQuitting: () => isQuitting,
@@ -93,11 +98,16 @@ function openMainWindow(): BrowserWindow {
     claudeUsage,
     codexUsage,
     codexAccounts,
+    openCodeAccounts,
     rateLimits,
     window.webContents.id
   )
-  attachMainWindowServices(window, store, runtime, () =>
-    codexAccounts!.getSelectedManagedHomePath()
+  attachMainWindowServices(
+    window,
+    store,
+    runtime,
+    () => codexAccounts!.getSelectedManagedHomePath(),
+    () => openCodeAccounts!.getSelectedManagedDataPath()
   )
   rateLimits.attach(window)
   rateLimits.start()
@@ -125,6 +135,7 @@ app.whenReady().then(async () => {
   codexUsage = new CodexUsageStore(store)
   rateLimits = new RateLimitService()
   codexAccounts = new CodexAccountService(store, rateLimits)
+  openCodeAccounts = new OpenCodeAccountService(store)
   rateLimits.setCodexHomePathResolver(() => codexAccounts!.getSelectedManagedHomePath())
   runtime = new OrcaRuntimeService(store, stats)
   nativeTheme.themeSource = store.getSettings().theme ?? 'system'

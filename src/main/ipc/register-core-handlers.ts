@@ -20,6 +20,7 @@ import { browserSessionRegistry } from '../browser/browser-session-registry'
 import { registerShellHandlers } from './shell'
 import { registerUIHandlers } from './ui'
 import { registerCodexAccountHandlers } from './codex-accounts'
+import { registerOpenCodeAccountHandlers } from './opencode-accounts'
 import { warmSystemFontFamilies } from '../system-fonts'
 import {
   registerClipboardHandlers,
@@ -29,6 +30,7 @@ import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
 import type { RateLimitService } from '../rate-limits/service'
 import type { CodexAccountService } from '../codex-accounts/service'
+import type { OpenCodeAccountService } from '../opencode-accounts/service'
 
 let registered = false
 
@@ -39,6 +41,7 @@ export function registerCoreHandlers(
   claudeUsage: ClaudeUsageStore,
   codexUsage: CodexUsageStore,
   codexAccounts: CodexAccountService,
+  openCodeAccounts: OpenCodeAccountService,
   rateLimits: RateLimitService,
   mainWindowWebContentsId: number | null = null
 ): void {
@@ -57,6 +60,7 @@ export function registerCoreHandlers(
   registerClaudeUsageHandlers(claudeUsage)
   registerCodexUsageHandlers(codexUsage)
   registerCodexAccountHandlers(codexAccounts)
+  registerOpenCodeAccountHandlers(openCodeAccounts)
   registerRateLimitHandlers(rateLimits)
   registerGitHubHandlers(store, stats)
   registerStatsHandlers(stats)

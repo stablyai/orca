@@ -15,6 +15,7 @@ const {
   registerFilesystemHandlersMock,
   registerRuntimeHandlersMock,
   registerCodexAccountHandlersMock,
+  registerOpenCodeAccountHandlersMock,
   registerClipboardHandlersMock,
   registerUpdaterHandlersMock,
   registerRateLimitHandlersMock,
@@ -36,6 +37,7 @@ const {
   registerFilesystemHandlersMock: vi.fn(),
   registerRuntimeHandlersMock: vi.fn(),
   registerCodexAccountHandlersMock: vi.fn(),
+  registerOpenCodeAccountHandlersMock: vi.fn(),
   registerClipboardHandlersMock: vi.fn(),
   registerUpdaterHandlersMock: vi.fn(),
   registerRateLimitHandlersMock: vi.fn(),
@@ -108,6 +110,10 @@ vi.mock('./codex-accounts', () => ({
   registerCodexAccountHandlers: registerCodexAccountHandlersMock
 }))
 
+vi.mock('./opencode-accounts', () => ({
+  registerOpenCodeAccountHandlers: registerOpenCodeAccountHandlersMock
+}))
+
 vi.mock('../window/attach-main-window-services', () => ({
   registerClipboardHandlers: registerClipboardHandlersMock,
   registerUpdaterHandlers: registerUpdaterHandlersMock
@@ -136,6 +142,7 @@ describe('registerCoreHandlers', () => {
     registerFilesystemHandlersMock.mockReset()
     registerRuntimeHandlersMock.mockReset()
     registerCodexAccountHandlersMock.mockReset()
+    registerOpenCodeAccountHandlersMock.mockReset()
     registerClipboardHandlersMock.mockReset()
     registerUpdaterHandlersMock.mockReset()
     registerRateLimitHandlersMock.mockReset()
@@ -151,6 +158,7 @@ describe('registerCoreHandlers', () => {
     const claudeUsage = { marker: 'claudeUsage' }
     const codexUsage = { marker: 'codexUsage' }
     const codexAccounts = { marker: 'codexAccounts' }
+    const openCodeAccounts = { marker: 'openCodeAccounts' }
     const rateLimits = { marker: 'rateLimits' }
 
     registerCoreHandlers(
@@ -160,12 +168,14 @@ describe('registerCoreHandlers', () => {
       claudeUsage as never,
       codexUsage as never,
       codexAccounts as never,
+      openCodeAccounts as never,
       rateLimits as never
     )
 
     expect(registerClaudeUsageHandlersMock).toHaveBeenCalledWith(claudeUsage)
     expect(registerCodexUsageHandlersMock).toHaveBeenCalledWith(codexUsage)
     expect(registerCodexAccountHandlersMock).toHaveBeenCalledWith(codexAccounts)
+    expect(registerOpenCodeAccountHandlersMock).toHaveBeenCalledWith(openCodeAccounts)
     expect(registerRateLimitHandlersMock).toHaveBeenCalledWith(rateLimits)
     expect(registerGitHubHandlersMock).toHaveBeenCalledWith(store, stats)
     expect(registerStatsHandlersMock).toHaveBeenCalledWith(stats)
@@ -194,6 +204,7 @@ describe('registerCoreHandlers', () => {
     const claudeUsage2 = { marker: 'claudeUsage2' }
     const codexUsage2 = { marker: 'codexUsage2' }
     const codexAccounts2 = { marker: 'codexAccounts2' }
+    const openCodeAccounts2 = { marker: 'openCodeAccounts2' }
     const rateLimits2 = { marker: 'rateLimits2' }
 
     registerCoreHandlers(
@@ -203,6 +214,7 @@ describe('registerCoreHandlers', () => {
       claudeUsage2 as never,
       codexUsage2 as never,
       codexAccounts2 as never,
+      openCodeAccounts2 as never,
       rateLimits2 as never,
       42
     )

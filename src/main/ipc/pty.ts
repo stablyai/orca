@@ -116,6 +116,7 @@ export function registerPtyHandlers(
   mainWindow: BrowserWindow,
   runtime?: OrcaRuntimeService,
   getSelectedCodexHomePath?: () => string | null,
+  getSelectedOpenCodeDataPath?: () => string | null,
   getSettings?: () => GlobalSettings
 ): void {
   // Remove any previously registered handlers so we can re-register them
@@ -131,6 +132,7 @@ export function registerPtyHandlers(
     isHistoryEnabled: () => getSettings?.()?.terminalScopeHistoryByWorktree ?? true,
     buildSpawnEnv: (id, baseEnv) => {
       const selectedCodexHomePath = getSelectedCodexHomePath?.() ?? null
+      const selectedOpenCodeDataPath = getSelectedOpenCodeDataPath?.() ?? null
 
       const openCodeHookEnv = openCodeHookService.buildPtyEnv(id)
       if (baseEnv.OPENCODE_CONFIG_DIR) {
@@ -155,6 +157,13 @@ export function registerPtyHandlers(
       // the user's external shells.
       if (selectedCodexHomePath) {
         baseEnv.CODEX_HOME = selectedCodexHomePath
+      }
+      if (selectedOpenCodeDataPath) {
+        // Why: OpenCode stores auth and per-install runtime state under
+        // `XDG_DATA_HOME/opencode`. Point only Orca PTYs at the managed data
+        // root so account switching stays scoped to Orca terminals and does
+        // not rewrite the user's global OpenCode credential selection.
+        baseEnv.XDG_DATA_HOME = selectedOpenCodeDataPath
       }
 
       return baseEnv
