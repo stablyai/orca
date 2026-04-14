@@ -51,6 +51,7 @@ type PtyApi = {
     rows: number
     cwd?: string
     env?: Record<string, string>
+    command?: string
     connectionId?: string | null
     worktreeId?: string
   }) => Promise<{ id: string }>
