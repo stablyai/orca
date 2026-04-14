@@ -1,19 +1,18 @@
 /**
- * WSL file watcher using inotifywait.
+ * Polling-based file watcher for WSL paths.
  *
  * Why: @parcel/watcher uses ReadDirectoryChangesW which doesn't work across
- * the WSL network filesystem boundary (\\wsl.localhost\…).  Instead we spawn
- * `inotifywait` (from inotify-tools) inside the WSL distro where Linux-native
- * inotify works perfectly, and stream events back over stdout.
+ * the WSL network filesystem boundary (\\wsl.localhost\…).  Instead of
+ * requiring the user to install extra tools inside WSL, we poll the
+ * directory tree via Node's fs.readdir (which works on UNC paths) and diff
+ * against a snapshot to detect changes.  A 2 s poll interval is a good
+ * balance between responsiveness and CPU cost — nobody stares at the file
+ * explorer waiting for instant refresh.
  */
-import { spawn, type ChildProcess } from 'child_process'
+import { readdir } from 'fs/promises'
+import * as path from 'path'
 import type { WebContents } from 'electron'
 import type { Event as WatcherEvent } from '@parcel/watcher'
-import type { FsChangedPayload } from '../../shared/types'
-import { parseWslPath, toWindowsWslPath } from '../wsl'
-
-// Re-use the same types / constants from the main watcher module.
-// These are passed in via the WslWatcherDeps parameter to avoid circular imports.
 
 export type WatcherSubscription = {
   unsubscribe(): Promise<void>
@@ -37,163 +36,137 @@ export type WslWatcherDeps = {
   watchedRoots: Map<string, WatchedRoot>
 }
 
-function buildInotifyExcludeRegex(ignoreDirs: string[]): string {
-  // Why: inotifywait --exclude takes a POSIX extended regex.  Match any
-  // path component that is one of the ignored directories.
-  const escaped = ignoreDirs.map((d) => d.replace(/\./g, '\\.'))
-  return `/(${escaped.join('|')})/`
+const POLL_INTERVAL_MS = 2000
+
+type DirSnapshot = Map<string, Set<string>>
+
+async function readDirSafe(dirPath: string): Promise<string[]> {
+  try {
+    const entries = await readdir(dirPath)
+    return entries
+  } catch {
+    return []
+  }
 }
 
-export function createWslWatcher(
+function shouldIgnore(name: string, ignoreDirs: string[]): boolean {
+  return ignoreDirs.includes(name)
+}
+
+/**
+ * Take a snapshot of the root directory and one level of subdirectories.
+ * Returns a map of dirPath → set of entry names.
+ */
+async function takeSnapshot(
+  rootPath: string,
+  ignoreDirs: string[]
+): Promise<DirSnapshot> {
+  const snapshot: DirSnapshot = new Map()
+
+  const rootEntries = await readDirSafe(rootPath)
+  const filtered = rootEntries.filter((name) => !shouldIgnore(name, ignoreDirs))
+  snapshot.set(rootPath, new Set(filtered))
+
+  // Why: poll one level of subdirectories so changes inside immediate
+  // children are detected (e.g. editing src/foo.ts).  Going deeper
+  // would be too expensive for large repos.  The renderer requests
+  // deeper directories explicitly via readDir when the user expands.
+  await Promise.all(
+    filtered.map(async (name) => {
+      const childPath = path.join(rootPath, name)
+      try {
+        const childEntries = await readDirSafe(childPath)
+        const childFiltered = childEntries.filter((n) => !shouldIgnore(n, ignoreDirs))
+        snapshot.set(childPath, new Set(childFiltered))
+      } catch {
+        // Not a directory or inaccessible — skip
+      }
+    })
+  )
+
+  return snapshot
+}
+
+/**
+ * Diff two snapshots and return synthetic watcher events.
+ */
+function diffSnapshots(
+  prev: DirSnapshot,
+  next: DirSnapshot
+): WatcherEvent[] {
+  const events: WatcherEvent[] = []
+
+  for (const [dirPath, nextEntries] of next) {
+    const prevEntries = prev.get(dirPath)
+    if (!prevEntries) {
+      // New directory appeared — emit create for all entries
+      for (const name of nextEntries) {
+        events.push({ type: 'create', path: path.join(dirPath, name) } as WatcherEvent)
+      }
+      continue
+    }
+
+    // Check for new entries (create)
+    for (const name of nextEntries) {
+      if (!prevEntries.has(name)) {
+        events.push({ type: 'create', path: path.join(dirPath, name) } as WatcherEvent)
+      }
+    }
+
+    // Check for removed entries (delete)
+    for (const name of prevEntries) {
+      if (!nextEntries.has(name)) {
+        events.push({ type: 'delete', path: path.join(dirPath, name) } as WatcherEvent)
+      }
+    }
+  }
+
+  // Check for directories that disappeared entirely
+  for (const [dirPath] of prev) {
+    if (!next.has(dirPath)) {
+      events.push({ type: 'delete', path: dirPath } as WatcherEvent)
+    }
+  }
+
+  return events
+}
+
+export async function createWslWatcher(
   rootKey: string,
   worktreePath: string,
   deps: WslWatcherDeps
 ): Promise<WatchedRoot> {
-  const wslInfo = parseWslPath(worktreePath)
-  if (!wslInfo) {
-    return Promise.reject(new Error('Not a WSL path'))
-  }
-
   const root: WatchedRoot = {
     subscription: null!,
     listeners: new Map(),
     batch: { events: [], timer: null, firstEventAt: 0 }
   }
 
-  return new Promise((resolve, reject) => {
-    const excludeRegex = buildInotifyExcludeRegex(deps.ignoreDirs)
+  // Take initial snapshot
+  let prevSnapshot = await takeSnapshot(worktreePath, deps.ignoreDirs)
 
-    // Why: spawn inotifywait inside the WSL distro using wsl.exe with
-    // bash -c.  Passing args directly via `wsl.exe -- inotifywait ...`
-    // routes them through the default shell, which interprets regex
-    // metacharacters (parens, pipes) as bash syntax.  Wrapping in
-    // bash -c with single quotes prevents this.
-    const escapedPath = wslInfo.linuxPath.replace(/'/g, "'\\''")
-    const shellCmd = [
-      'inotifywait -m -r',
-      '-e create -e delete -e modify -e moved_to -e moved_from',
-      `--format '%e %w%f'`,
-      `--exclude '${excludeRegex}'`,
-      `'${escapedPath}'`
-    ].join(' ')
+  const intervalId = setInterval(async () => {
+    try {
+      const nextSnapshot = await takeSnapshot(worktreePath, deps.ignoreDirs)
+      const events = diffSnapshots(prevSnapshot, nextSnapshot)
+      prevSnapshot = nextSnapshot
 
-    const child: ChildProcess = spawn(
-      'wsl.exe',
-      ['-d', wslInfo.distro, '--', 'bash', '-c', shellCmd],
-      { stdio: ['ignore', 'pipe', 'pipe'] }
-    )
-
-    let resolved = false
-    let stdoutBuf = ''
-    let stderrBuf = ''
-
-    const processLine = (line: string): void => {
-      if (!line.trim()) {
-        return
+      if (events.length > 0) {
+        root.batch.events.push(...events)
+        deps.scheduleBatchFlush(rootKey, root)
       }
-      const spaceIdx = line.indexOf(' ')
-      if (spaceIdx === -1) {
-        return
-      }
-      const eventFlags = line.slice(0, spaceIdx)
-      const linuxPath = line.slice(spaceIdx + 1)
-
-      // Convert inotifywait event flags to our event types
-      let type: 'create' | 'update' | 'delete'
-      if (eventFlags.includes('CREATE') || eventFlags.includes('MOVED_TO')) {
-        type = 'create'
-      } else if (eventFlags.includes('DELETE') || eventFlags.includes('MOVED_FROM')) {
-        type = 'delete'
-      } else if (eventFlags.includes('MODIFY') || eventFlags.includes('CLOSE_WRITE')) {
-        type = 'update'
-      } else {
-        return
-      }
-
-      // Convert Linux path back to Windows UNC path so the renderer
-      // can match it against its dirCache keys.
-      const windowsPath = toWindowsWslPath(linuxPath, wslInfo.distro)
-
-      root.batch.events.push({ type, path: windowsPath } as WatcherEvent)
-      deps.scheduleBatchFlush(rootKey, root)
+    } catch {
+      // Why: if the WSL filesystem becomes temporarily unavailable
+      // (e.g. WSL distro shuts down), skip this poll cycle rather
+      // than crashing.  The next cycle will retry.
     }
+  }, POLL_INTERVAL_MS)
 
-    child.stdout!.setEncoding('utf-8')
-    child.stdout!.on('data', (chunk: string) => {
-      // Why: inotifywait prints "Watches established." to stderr when
-      // ready.  But stdout data arriving means it's already watching.
-      // Resolve on first stdout data if we haven't already.
-      if (!resolved) {
-        resolved = true
-        resolve(root)
-      }
-
-      stdoutBuf += chunk
-      const lines = stdoutBuf.split('\n')
-      stdoutBuf = lines.pop() ?? ''
-      for (const line of lines) {
-        processLine(line)
-      }
-    })
-
-    child.stderr!.setEncoding('utf-8')
-    child.stderr!.on('data', (chunk: string) => {
-      stderrBuf += chunk
-      // Why: inotifywait prints "Watches established." to stderr when
-      // the recursive watch setup is complete.  Use this as the ready
-      // signal if no stdout data has arrived yet.
-      if (!resolved && stderrBuf.includes('Watches established')) {
-        resolved = true
-        resolve(root)
-      }
-    })
-
-    child.once('error', (err) => {
-      console.error(`[filesystem-watcher] WSL inotifywait spawn error for ${rootKey}:`, err)
-      if (!resolved) {
-        resolved = true
-        reject(new Error(`inotifywait spawn failed: ${err.message}`))
-      }
-    })
-
-    child.once('close', (code) => {
-      if (!resolved) {
-        resolved = true
-        // Why: if inotifywait exits before producing any output, it's
-        // probably not installed.  Surface a clear message so the user
-        // knows to install inotify-tools inside their WSL distro.
-        const hint =
-          stderrBuf.includes('not found') || code === 127
-            ? 'inotifywait is not installed — run `sudo apt install inotify-tools` inside WSL'
-            : `inotifywait exited with code ${code}`
-        console.warn(`[filesystem-watcher] WSL watcher for ${rootKey}: ${hint}`)
-        reject(new Error(hint))
-        return
-      }
-
-      // Watcher died after it was already running — emit overflow so
-      // the renderer does a full refresh, then clean up.
-      const overflowPayload: FsChangedPayload = {
-        worktreePath: rootKey,
-        events: [{ kind: 'overflow', absolutePath: rootKey }]
-      }
-      for (const [, wc] of root.listeners) {
-        if (!wc.isDestroyed()) {
-          wc.send('fs:changed', overflowPayload)
-        }
-      }
-      if (root.batch.timer) {
-        clearTimeout(root.batch.timer)
-      }
-      deps.watchedRoots.delete(rootKey)
-    })
-
-    // Why: the subscription object wraps the child process kill so the
-    // existing unsubscribe flow works identically for native and WSL.
-    root.subscription = {
-      unsubscribe: async () => {
-        child.kill()
-      }
+  root.subscription = {
+    unsubscribe: async () => {
+      clearInterval(intervalId)
     }
-  })
+  }
+
+  return root
 }
