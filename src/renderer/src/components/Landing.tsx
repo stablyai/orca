@@ -3,6 +3,7 @@ import { AlertTriangle, ExternalLink, FolderPlus, GitBranchPlus, Star } from 'lu
 import { cn } from '../lib/utils'
 import { useAppStore } from '../store'
 import { isGitRepoKind } from '../../../shared/repo-kind'
+import { ShortcutKeyCombo } from './ShortcutKeyCombo'
 import logo from '../../../../resources/logo.svg'
 
 type ShortcutItem = {
@@ -54,14 +55,6 @@ function getPreflightIssues(status: {
   }
 
   return issues
-}
-
-function KeyCap({ label }: { label: string }): React.JSX.Element {
-  return (
-    <span className="inline-flex min-w-6 items-center justify-center rounded border border-border/80 bg-secondary/70 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
-      {label}
-    </span>
-  )
 }
 
 type StarState = 'loading' | 'starred' | 'not-starred' | 'hidden'
@@ -265,11 +258,10 @@ export default function Landing(): React.JSX.Element {
             {shortcuts.map((shortcut) => (
               <div key={shortcut.id} className="grid grid-cols-[1fr_auto] items-center gap-3">
                 <span className="text-sm text-muted-foreground">{shortcut.action}</span>
-                <div className="flex items-center gap-1">
-                  {shortcut.keys.map((key) => (
-                    <KeyCap key={`${shortcut.id}-${key}`} label={key} />
-                  ))}
-                </div>
+                <ShortcutKeyCombo
+                  keys={shortcut.keys}
+                  separatorClassName="mx-0.5 text-[10px] text-muted-foreground"
+                />
               </div>
             ))}
           </div>

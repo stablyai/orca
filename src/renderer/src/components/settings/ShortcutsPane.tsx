@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react'
 import { useAppStore } from '../../store'
+import { ShortcutKeyCombo } from '../ShortcutKeyCombo'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
 
@@ -256,18 +257,7 @@ export function ShortcutsPane(): React.JSX.Element {
                         className="flex items-center justify-between py-1"
                       >
                         <span className="text-sm text-foreground">{item.action}</span>
-                        <div className="flex items-center gap-1">
-                          {item.keys.map((key, kIdx) => (
-                            <React.Fragment key={kIdx}>
-                              <span className="inline-flex min-w-6 items-center justify-center rounded border border-border/80 bg-secondary/70 px-1.5 py-0.5 text-xs font-medium text-muted-foreground shadow-sm">
-                                {key}
-                              </span>
-                              {!isMac && kIdx < item.keys.length - 1 ? (
-                                <span className="mx-0.5 text-xs text-muted-foreground">+</span>
-                              ) : null}
-                            </React.Fragment>
-                          ))}
-                        </div>
+                        <ShortcutKeyCombo keys={item.keys} />
                       </SearchableSetting>
                     )
                   })}
