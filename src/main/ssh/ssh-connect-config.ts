@@ -227,6 +227,9 @@ async function setupProxyCommand(
   })
   proc.stdout!.on('data', (data) => stream.push(data))
   proc.stdout!.on('end', () => stream.push(null))
+  // Why: if the proxy process crashes or fails to spawn, the unhandled
+  // 'error' event would crash the Electron main process.
+  proc.on('error', (err) => stream.destroy(err))
   return { process: proc, sock: stream as unknown as NetSocket }
 }
 
@@ -248,7 +251,12 @@ async function setupJumpHost(
     agent: process.env.SSH_AUTH_SOCK ?? undefined,
     readyTimeout: CONNECT_TIMEOUT_MS,
     keepaliveInterval: 15_000,
-    keepaliveCountMax: 4
+    keepaliveCountMax: 4,
+    // Why: without hostVerifier, ssh2 accepts any host key, making the
+    // jump host connection vulnerable to MITM attacks.
+    hostVerifier: (_key: Buffer, verify: (accept: boolean) => void) => {
+      verify(isHostKnown(jumpParsed.host, jumpParsed.port))
+    }
   }
   const jumpKey = findDefaultKeyFile()
   if (jumpKey) {

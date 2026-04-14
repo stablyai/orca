@@ -170,7 +170,9 @@ const SSH_G_TIMEOUT_MS = 5000
 // resolution without reimplementing OpenSSH's complex matching logic.
 export function resolveWithSshG(host: string): Promise<SshResolvedConfig | null> {
   return new Promise((resolve) => {
-    execFile('ssh', ['-G', host], { timeout: SSH_G_TIMEOUT_MS }, (err, stdout) => {
+    // Why: '--' prevents a host label starting with '-' from being interpreted
+    // as an SSH flag (classic argument injection vector).
+    execFile('ssh', ['-G', '--', host], { timeout: SSH_G_TIMEOUT_MS }, (err, stdout) => {
       if (err) {
         resolve(null)
         return

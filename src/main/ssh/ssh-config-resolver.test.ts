@@ -41,7 +41,7 @@ describe('resolveWithSshG', () => {
     await resolveWithSshG('testserver')
     expect(mockExecFile).toHaveBeenCalledWith(
       'ssh',
-      ['-G', 'testserver'],
+      ['-G', '--', 'testserver'],
       expect.objectContaining({ timeout: 5000 }),
       expect.any(Function)
     )

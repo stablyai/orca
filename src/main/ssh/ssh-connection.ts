@@ -306,6 +306,7 @@ export class SshConnection {
       await new Promise<void>((resolve, reject) => {
         const timeout = setTimeout(() => {
           settled = true
+          proc.kill()
           reject(new Error('System SSH connection timed out'))
         }, CONNECT_TIMEOUT_MS)
 

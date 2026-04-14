@@ -73,6 +73,10 @@ export function createAuthHandler(
           finish: (responses: string[]) => void
         ) => {
           authState.setState('auth-challenge')
+          // Why: keyboard-interactive prompts (TOTP, 2FA) require user input.
+          // Without pausing, the connection timeout kills the session while
+          // the user is typing.
+          authState.pauseTimeout?.()
           const timeoutPromise = sleep(AUTH_CHALLENGE_TIMEOUT_MS).then(() => null)
           const responsePromise = callbacks.onAuthChallenge({
             targetId,
@@ -81,6 +85,7 @@ export function createAuthHandler(
             prompts
           })
           const responses = await Promise.race([responsePromise, timeoutPromise])
+          authState.resumeTimeout?.()
           finish(responses ?? [])
         }
       } as never)
@@ -88,9 +93,13 @@ export function createAuthHandler(
     }
 
     if (methods.includes('password')) {
+      // Why: password prompts require user input. Without pausing, the
+      // connection timeout kills the session while the user is typing.
+      authState.pauseTimeout?.()
       callbacks
         .onPasswordPrompt(targetId)
         .then((password) => {
+          authState.resumeTimeout?.()
           if (password === null) {
             authState.setState('auth-failed', 'Authentication cancelled')
             callback(false as never)
@@ -103,6 +112,7 @@ export function createAuthHandler(
           } as never)
         })
         .catch(() => {
+          authState.resumeTimeout?.()
           callback(false as never)
         })
       return
