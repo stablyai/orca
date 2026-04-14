@@ -4,6 +4,7 @@ declare module 'mermaid' {
   type MermaidInitializeOptions = {
     startOnLoad?: boolean
     theme?: MermaidTheme
+    htmlLabels?: boolean
   }
 
   type MermaidRenderResult = {
