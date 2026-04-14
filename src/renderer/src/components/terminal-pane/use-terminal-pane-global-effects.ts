@@ -1,5 +1,9 @@
 import { useEffect, useRef } from 'react'
-import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
+import {
+  FOCUS_TERMINAL_PANE_EVENT,
+  TOGGLE_TERMINAL_PANE_EXPAND_EVENT,
+  type FocusTerminalPaneDetail
+} from '@/constants/terminal'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { shellEscapePath } from './pane-helpers'
 import { fitAndFocusPanes, fitPanes } from './pane-helpers'
@@ -135,6 +139,26 @@ export function useTerminalPaneGlobalEffects({
     return () => window.removeEventListener(TOGGLE_TERMINAL_PANE_EXPAND_EVENT, onToggleExpand)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabId])
+
+  useEffect(() => {
+    const onFocusPane = (event: Event): void => {
+      const detail = (event as CustomEvent<FocusTerminalPaneDetail | undefined>).detail
+      if (!detail?.tabId || detail.tabId !== tabId) {
+        return
+      }
+      const manager = managerRef.current
+      if (!manager) {
+        return
+      }
+      const pane = manager.getPanes().find((candidate) => candidate.id === detail.paneId)
+      if (!pane) {
+        return
+      }
+      manager.setActivePane(pane.id, { focus: true })
+    }
+    window.addEventListener(FOCUS_TERMINAL_PANE_EVENT, onFocusPane)
+    return () => window.removeEventListener(FOCUS_TERMINAL_PANE_EVENT, onFocusPane)
+  }, [tabId, managerRef])
 
   useEffect(() => {
     if (!isActive) {

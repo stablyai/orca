@@ -52,6 +52,12 @@ export function isPiTerminalTitle(title: string): boolean {
   return title.startsWith(PI_IDLE_PREFIX)
 }
 
+function isPiAgentTitle(title: string): boolean {
+  return (
+    isPiTerminalTitle(title) || (containsBrailleSpinner(title) && title.includes(PI_IDLE_PREFIX))
+  )
+}
+
 function containsBrailleSpinner(title: string): boolean {
   for (const char of title) {
     const codePoint = char.codePointAt(0)
@@ -224,6 +230,36 @@ export function isClaudeAgent(title: string): boolean {
   }
 
   return false
+}
+
+export function getAgentLabel(title: string): string | null {
+  const lower = title.toLowerCase()
+
+  if (isGeminiTerminalTitle(title)) {
+    return 'Gemini CLI'
+  }
+  // Why: Pi working titles include a braille spinner prefix, which would be
+  // mistaken for Claude Code if we checked `isClaudeAgent` first.
+  if (isPiAgentTitle(title)) {
+    return 'Pi'
+  }
+  // Why: Codex/OpenCode/Aider can also use braille spinner prefixes while
+  // working. Prefer explicit name matches before Claude's generic spinner
+  // heuristic so mixed-agent hovercards stay truthful.
+  if (lower.includes('codex')) {
+    return 'Codex'
+  }
+  if (lower.includes('opencode')) {
+    return 'OpenCode'
+  }
+  if (lower.includes('aider')) {
+    return 'Aider'
+  }
+  if (isClaudeAgent(title)) {
+    return 'Claude Code'
+  }
+
+  return null
 }
 
 export function detectAgentStatusFromTitle(title: string): AgentStatus | null {

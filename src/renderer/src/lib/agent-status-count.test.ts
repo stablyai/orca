@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TerminalTab } from '../../../shared/types'
-import { countWorkingAgents } from './agent-status'
+import { countWorkingAgents, getWorkingAgentsPerWorktree } from './agent-status'
 
 function makeTab(overrides: Partial<TerminalTab> = {}): TerminalTab {
   return {
@@ -79,5 +79,31 @@ describe('countWorkingAgents', () => {
         }
       })
     ).toBe(0)
+  })
+})
+
+describe('getWorkingAgentsPerWorktree', () => {
+  it('returns per-pane labels and pane ids for split tabs', () => {
+    expect(
+      getWorkingAgentsPerWorktree({
+        tabsByWorktree: {
+          'wt-1': [makeTab({ id: 'tab-1', title: '⠂ Claude Code' })]
+        },
+        runtimePaneTitlesByTabId: {
+          'tab-1': {
+            1: '⠂ Claude Code',
+            2: '✦ Gemini CLI',
+            3: '✳ Claude Code'
+          }
+        }
+      })
+    ).toEqual({
+      'wt-1': {
+        agents: [
+          { label: 'Claude Code', status: 'working', tabId: 'tab-1', paneId: 1 },
+          { label: 'Gemini CLI', status: 'working', tabId: 'tab-1', paneId: 2 }
+        ]
+      }
+    })
   })
 })

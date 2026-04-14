@@ -1,8 +1,13 @@
+/* eslint-disable max-lines --
+ * Why: agent title detection is intentionally table-driven in one place so the
+ * supported title variants stay readable and regressions are easy to compare.
+ */
 import { describe, expect, it, vi } from 'vitest'
 import {
   detectAgentStatusFromTitle,
   clearWorkingIndicators,
   createAgentStatusTracker,
+  getAgentLabel,
   isGeminiTerminalTitle,
   normalizeTerminalTitle
 } from './agent-status'
@@ -227,6 +232,18 @@ describe('isGeminiTerminalTitle', () => {
   it('does not match other terminal titles', () => {
     expect(isGeminiTerminalTitle('⠂ Claude Code')).toBe(false)
     expect(isGeminiTerminalTitle('bash')).toBe(false)
+  })
+})
+
+describe('getAgentLabel', () => {
+  it('labels Pi working titles as Pi instead of Claude Code', () => {
+    expect(getAgentLabel('⠋ π - my-project')).toBe('Pi')
+  })
+
+  it('labels supported agent families consistently', () => {
+    expect(getAgentLabel('✦ Gemini CLI')).toBe('Gemini CLI')
+    expect(getAgentLabel('⠂ Claude Code')).toBe('Claude Code')
+    expect(getAgentLabel('⠋ Codex is thinking')).toBe('Codex')
   })
 })
 

@@ -128,6 +128,31 @@ describe('fetchWorktrees', () => {
     expect(store.getState().worktreesByRepo.repo1).toEqual([refreshed])
     expect(store.getState().sortEpoch).toBe(8)
   })
+
+  it('keeps the last known worktree list when a refresh transiently returns empty', async () => {
+    const store = createTestStore()
+    const existing = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+
+    mockApi.worktrees.list.mockResolvedValue([])
+    store.setState({ worktreesByRepo: { repo1: [existing] }, sortEpoch: 7 } as Partial<AppState>)
+
+    await store.getState().fetchWorktrees('repo1')
+
+    expect(store.getState().worktreesByRepo.repo1).toEqual([existing])
+    expect(store.getState().sortEpoch).toBe(7)
+  })
+
+  it('accepts an empty refresh when the repo had no cached worktrees', async () => {
+    const store = createTestStore()
+
+    mockApi.worktrees.list.mockResolvedValue([])
+    store.setState({ worktreesByRepo: {}, sortEpoch: 7 } as Partial<AppState>)
+
+    await store.getState().fetchWorktrees('repo1')
+
+    expect(store.getState().worktreesByRepo.repo1).toEqual([])
+    expect(store.getState().sortEpoch).toBe(8)
+  })
 })
 
 describe('removeWorktree state cleanup', () => {

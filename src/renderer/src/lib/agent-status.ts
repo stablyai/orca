@@ -10,13 +10,70 @@ export {
   createAgentStatusTracker,
   normalizeTerminalTitle,
   isGeminiTerminalTitle,
-  isClaudeAgent
+  isClaudeAgent,
+  getAgentLabel
 } from '../../../shared/agent-detection'
-import { detectAgentStatusFromTitle } from '../../../shared/agent-detection'
+import {
+  type AgentStatus,
+  detectAgentStatusFromTitle,
+  getAgentLabel
+} from '../../../shared/agent-detection'
 
 type CountWorkingAgentsArgs = {
   tabsByWorktree: Record<string, TerminalTab[]>
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
+}
+
+export type WorkingAgentEntry = {
+  label: string
+  status: AgentStatus
+  tabId: string
+  paneId: number | null
+}
+
+export type WorktreeAgents = {
+  agents: WorkingAgentEntry[]
+}
+
+export function getWorkingAgentsPerWorktree({
+  tabsByWorktree,
+  runtimePaneTitlesByTabId
+}: CountWorkingAgentsArgs): Record<string, WorktreeAgents> {
+  const result: Record<string, WorktreeAgents> = {}
+
+  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
+    const agents: WorkingAgentEntry[] = []
+
+    for (const tab of tabs) {
+      const paneTitles = runtimePaneTitlesByTabId[tab.id]
+      if (paneTitles && Object.keys(paneTitles).length > 0) {
+        for (const [paneIdStr, title] of Object.entries(paneTitles)) {
+          if (detectAgentStatusFromTitle(title) === 'working') {
+            const label = getAgentLabel(title)
+            if (label) {
+              agents.push({
+                label,
+                status: 'working',
+                tabId: tab.id,
+                paneId: Number(paneIdStr)
+              })
+            }
+          }
+        }
+      } else if (tab.ptyId && detectAgentStatusFromTitle(tab.title) === 'working') {
+        const label = getAgentLabel(tab.title)
+        if (label) {
+          agents.push({ label, status: 'working', tabId: tab.id, paneId: null })
+        }
+      }
+    }
+
+    if (agents.length > 0) {
+      result[worktreeId] = { agents }
+    }
+  }
+
+  return result
 }
 
 export function countWorkingAgents({
@@ -32,29 +89,6 @@ export function countWorkingAgents({
   }
 
   return count
-}
-
-/**
- * Returns a map of worktreeId → number of active agents for that worktree.
- * Only includes worktrees with at least one working agent.
- */
-export function countWorkingAgentsPerWorktree({
-  tabsByWorktree,
-  runtimePaneTitlesByTabId
-}: CountWorkingAgentsArgs): Record<string, number> {
-  const result: Record<string, number> = {}
-
-  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
-    let count = 0
-    for (const tab of tabs) {
-      count += countWorkingAgentsForTab(tab, runtimePaneTitlesByTabId)
-    }
-    if (count > 0) {
-      result[worktreeId] = count
-    }
-  }
-
-  return result
 }
 
 function countWorkingAgentsForTab(

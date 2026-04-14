@@ -51,6 +51,17 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         return
       }
 
+      // Why: `git worktree list` can fail transiently (e.g. concurrent git
+      // operations holding a lock, disk I/O hiccup). The backend catches these
+      // errors and returns []. Replacing a known-good worktree list with []
+      // causes tabsByWorktree entries to become orphaned — the agent activity
+      // badge then shows raw worktree IDs instead of display names, and click-
+      // to-navigate silently fails because findWorktreeById returns undefined.
+      // Keep the stale-but-correct data until the next successful refresh.
+      if (worktrees.length === 0 && current && current.length > 0) {
+        return
+      }
+
       set((s) => ({
         // Why: active worktrees can change branches entirely from a terminal.
         // We refresh that live git identity into renderer state, but only bump

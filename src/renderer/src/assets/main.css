@@ -355,6 +355,11 @@
   cursor: pointer;
 }
 
+.titlebar-agent-badge:hover {
+  background: var(--accent);
+  border-color: var(--border);
+}
+
 .titlebar-agent-badge-idle {
   opacity: 0.55;
 }
@@ -430,24 +435,57 @@
   flex-direction: column;
 }
 
-.titlebar-agent-hovercard-row {
+.titlebar-agent-hovercard-worktree {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
   padding: 5px 12px;
   background: none;
   border: none;
   color: var(--foreground);
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 500;
   text-align: left;
   cursor: pointer;
   border-radius: 0;
   width: 100%;
 }
 
-.titlebar-agent-hovercard-row:hover {
+.titlebar-agent-hovercard-worktree:hover {
   background: var(--accent);
+}
+
+.titlebar-agent-hovercard-agent {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 12px 3px 24px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  background: none;
+  border: none;
+  text-align: left;
+  width: 100%;
+  cursor: pointer;
+}
+
+.titlebar-agent-hovercard-agent:hover {
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+.titlebar-agent-hovercard-agent-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.titlebar-agent-hovercard-agent-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  background: #16a34a;
 }
 
 .titlebar-agent-hovercard-name {

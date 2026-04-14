@@ -1,10 +1,10 @@
 /* eslint-disable max-lines */
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { DEFAULT_STATUS_BAR_ITEMS, DEFAULT_WORKTREE_CARD_PROPERTIES } from '../../shared/constants'
 import { isGitRepoKind } from '../../shared/repo-kind'
 
 import { Minimize2, PanelLeft, PanelRight } from 'lucide-react'
-import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
+import { FOCUS_TERMINAL_PANE_EVENT, TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
 import { syncZoomCSSVar } from '@/lib/ui-zoom'
 import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
@@ -31,10 +31,10 @@ import {
 import { useGlobalFileDrop } from './hooks/useGlobalFileDrop'
 import { registerUpdaterBeforeUnloadBypass } from './lib/updater-beforeunload'
 import { buildWorkspaceSessionPayload } from './lib/workspace-session'
-import { countWorkingAgents, countWorkingAgentsPerWorktree } from './lib/agent-status'
+import { countWorkingAgents, getWorkingAgentsPerWorktree } from './lib/agent-status'
 import { activateAndRevealWorktree } from './lib/worktree-activation'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
-import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { findWorktreeById, getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
 
 const isMac = navigator.userAgent.includes('Mac')
 
@@ -73,13 +73,15 @@ function App(): React.JSX.Element {
       runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId
     })
   )
-  const agentCountByWorktree = useAppStore(
-    useShallow((s) =>
-      countWorkingAgentsPerWorktree({
-        tabsByWorktree: s.tabsByWorktree,
-        runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId
-      })
-    )
+  const agentInputs = useAppStore(
+    useShallow((s) => ({
+      tabsByWorktree: s.tabsByWorktree,
+      runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId
+    }))
+  )
+  const workingAgentsPerWorktree = useMemo(
+    () => getWorkingAgentsPerWorktree(agentInputs),
+    [agentInputs]
   )
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const expandedPaneByTabId = useAppStore((s) => s.expandedPaneByTabId)
@@ -583,21 +585,72 @@ function App(): React.JSX.Element {
                   </div>
                   {activeAgentCount > 0 && (
                     <div className="titlebar-agent-hovercard-list">
-                      {Object.entries(agentCountByWorktree).map(([worktreeId, count]) => {
+                      {Object.entries(workingAgentsPerWorktree).map(([worktreeId, { agents }]) => {
                         const wt = findWorktreeById(worktreesByRepo, worktreeId)
+                        // Why: when a transient git error causes worktreesByRepo to
+                        // lose a worktree, the raw worktreeId (uuid::path) is not
+                        // useful. Extract a cross-platform path basename as a
+                        // readable fallback.
+                        const sepIdx = worktreeId.indexOf('::')
+                        const pathPart = sepIdx !== -1 ? worktreeId.slice(sepIdx + 2) : worktreeId
+                        const fallbackName = pathPart.split(/[\\/]/).pop() || pathPart
                         return (
-                          <button
-                            key={worktreeId}
-                            className="titlebar-agent-hovercard-row"
-                            onClick={() => activateAndRevealWorktree(worktreeId)}
-                          >
-                            <span className="titlebar-agent-hovercard-name">
-                              {wt?.displayName ?? worktreeId}
-                            </span>
-                            <span className="titlebar-agent-hovercard-count">
-                              {count} <span className="titlebar-agent-hovercard-dot" />
-                            </span>
-                          </button>
+                          <div key={worktreeId}>
+                            <button
+                              className="titlebar-agent-hovercard-worktree"
+                              onClick={() => {
+                                // Why: if the worktree is missing from worktreesByRepo
+                                // (transient git error cleared the list), refresh the
+                                // repo's worktrees before navigating so the activation
+                                // lookup succeeds instead of silently failing.
+                                if (!wt) {
+                                  const repoId = getRepoIdFromWorktreeId(worktreeId)
+                                  void useAppStore
+                                    .getState()
+                                    .fetchWorktrees(repoId)
+                                    .then(() => {
+                                      activateAndRevealWorktree(worktreeId)
+                                    })
+                                  return
+                                }
+                                activateAndRevealWorktree(worktreeId)
+                              }}
+                            >
+                              <span className="titlebar-agent-hovercard-name">
+                                {wt?.displayName ?? fallbackName}
+                              </span>
+                            </button>
+                            {agents.map((agent, index) => (
+                              <button
+                                key={index}
+                                className="titlebar-agent-hovercard-agent"
+                                onClick={() => {
+                                  activateAndRevealWorktree(worktreeId)
+                                  useAppStore.getState().setActiveTab(agent.tabId)
+                                  if (agent.paneId !== null) {
+                                    // Why: a split-terminal tab can host multiple
+                                    // agents. After selecting the tab, wait one
+                                    // frame so the active TerminalPane can mount
+                                    // and then focus the specific pane the user
+                                    // clicked instead of leaving whichever pane
+                                    // was previously active highlighted.
+                                    requestAnimationFrame(() => {
+                                      window.dispatchEvent(
+                                        new CustomEvent(FOCUS_TERMINAL_PANE_EVENT, {
+                                          detail: { tabId: agent.tabId, paneId: agent.paneId }
+                                        })
+                                      )
+                                    })
+                                  }
+                                }}
+                              >
+                                <span className="titlebar-agent-hovercard-agent-label">
+                                  {agent.label}
+                                </span>
+                                <span className="titlebar-agent-hovercard-agent-dot" />
+                              </button>
+                            ))}
+                          </div>
                         )
                       })}
                     </div>
