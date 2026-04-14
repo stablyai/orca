@@ -55,7 +55,13 @@ export function SshDisconnectedDialog({
     }
   }, [targetId, targetLabel, onOpenChange])
 
-  const isConnecting = connecting || status === 'reconnecting' || status === 'connecting'
+  const isConnecting =
+    connecting ||
+    status === 'connecting' ||
+    status === 'host-key-verification' ||
+    status === 'auth-challenge' ||
+    status === 'deploying-relay' ||
+    status === 'reconnecting'
   const message = isConnecting
     ? 'Reconnecting to the remote host...'
     : (STATUS_MESSAGES[status] ?? 'This remote repository is not connected.')

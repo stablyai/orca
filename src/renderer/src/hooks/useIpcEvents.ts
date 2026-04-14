@@ -274,35 +274,40 @@ export function useIpcEvents(): void {
         // re-fetch so the sidebar populates without a manual remove-and-re-add.
         if (state.status === 'connected') {
           const remoteRepos = store.repos.filter((r) => r.connectionId === data.targetId)
-          for (const repo of remoteRepos) {
-            void store.fetchWorktrees(repo.id)
-          }
 
-          // Why: terminal panes that failed to spawn (no PTY provider on cold
-          // start) sit inert with an error toast. Bumping generation forces
-          // TerminalPane to remount and retry pty:spawn now that the provider
-          // is registered. Only bump for tabs with no live ptyId to avoid
-          // killing active shells.
-          const remoteRepoIds = new Set(remoteRepos.map((r) => r.id))
-          const worktreeIds = Object.values(store.worktreesByRepo)
-            .flat()
-            .filter((w) => remoteRepoIds.has(w.repoId))
-            .map((w) => w.id)
+          // Why: on cold start, worktrees:list fails for SSH repos because the
+          // provider isn't registered yet. Once the connection comes up we must
+          // re-fetch so the sidebar populates without a manual remove-and-re-add.
+          // Must await before the generation bump below, otherwise worktreesByRepo
+          // is still empty and the bump silently no-ops.
+          void Promise.all(remoteRepos.map((r) => store.fetchWorktrees(r.id))).then(() => {
+            // Why: terminal panes that failed to spawn (no PTY provider on cold
+            // start) sit inert with an error toast. Bumping generation forces
+            // TerminalPane to remount and retry pty:spawn now that the provider
+            // is registered. Only bump for tabs with no live ptyId to avoid
+            // killing active shells.
+            const freshStore = useAppStore.getState()
+            const remoteRepoIds = new Set(remoteRepos.map((r) => r.id))
+            const worktreeIds = Object.values(freshStore.worktreesByRepo)
+              .flat()
+              .filter((w) => remoteRepoIds.has(w.repoId))
+              .map((w) => w.id)
 
-          for (const worktreeId of worktreeIds) {
-            const tabs = store.tabsByWorktree[worktreeId] ?? []
-            const hasDead = tabs.some((t) => !t.ptyId)
-            if (hasDead) {
-              useAppStore.setState((s) => ({
-                tabsByWorktree: {
-                  ...s.tabsByWorktree,
-                  [worktreeId]: (s.tabsByWorktree[worktreeId] ?? []).map((t) =>
-                    t.ptyId ? t : { ...t, generation: (t.generation ?? 0) + 1 }
-                  )
-                }
-              }))
+            for (const worktreeId of worktreeIds) {
+              const tabs = freshStore.tabsByWorktree[worktreeId] ?? []
+              const hasDead = tabs.some((t) => !t.ptyId)
+              if (hasDead) {
+                useAppStore.setState((s) => ({
+                  tabsByWorktree: {
+                    ...s.tabsByWorktree,
+                    [worktreeId]: (s.tabsByWorktree[worktreeId] ?? []).map((t) =>
+                      t.ptyId ? t : { ...t, generation: (t.generation ?? 0) + 1 }
+                    )
+                  }
+                }))
+              }
             }
-          }
+          })
         }
       })
     )
