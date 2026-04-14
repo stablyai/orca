@@ -8,7 +8,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '../../store'
 import { STATUS_LABELS, statusColor } from '../settings/SshTargetCard'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
@@ -156,52 +155,42 @@ export function SshStatusSegment({
 
   return (
     <DropdownMenu>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1.5 cursor-pointer rounded px-1 py-0.5 hover:bg-accent/70"
-              aria-label="SSH connection status"
-            >
-              {iconOnly ? (
-                <span className="inline-flex items-center gap-1">
-                  <span
-                    className={`inline-block size-2 rounded-full ${overallDotColor(overall)}`}
-                  />
-                  {anyConnecting ? (
-                    <Loader2 className="size-3 animate-spin text-muted-foreground" />
-                  ) : (
-                    <MonitorSmartphone className="size-3 text-muted-foreground" />
-                  )}
-                </span>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex items-center gap-1.5 cursor-pointer rounded px-1 py-0.5 hover:bg-accent/70"
+          aria-label="SSH connection status"
+        >
+          {iconOnly ? (
+            <span className="inline-flex items-center gap-1">
+              <span className={`inline-block size-2 rounded-full ${overallDotColor(overall)}`} />
+              {anyConnecting ? (
+                <Loader2 className="size-3 animate-spin text-muted-foreground" />
               ) : (
-                <span className="inline-flex items-center gap-1.5">
-                  {anyConnecting ? (
-                    <Loader2 className="size-3 animate-spin text-yellow-500" />
-                  ) : overall === 'connected' ? (
-                    <Wifi className="size-3 text-emerald-500" />
-                  ) : (
-                    <WifiOff className="size-3 text-muted-foreground" />
-                  )}
-                  {!compact && (
-                    <span className="text-[11px]">
-                      SSH <span className="text-muted-foreground">{overallLabel(overall)}</span>
-                    </span>
-                  )}
-                  <span
-                    className={`inline-block size-1.5 rounded-full ${overallDotColor(overall)}`}
-                  />
+                <MonitorSmartphone className="size-3 text-muted-foreground" />
+              )}
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5">
+              {anyConnecting ? (
+                <Loader2 className="size-3 animate-spin text-yellow-500" />
+              ) : overall === 'connected' ? (
+                <Wifi className="size-3 text-emerald-500" />
+              ) : overall === 'partial' ? (
+                <Wifi className="size-3 text-muted-foreground" />
+              ) : (
+                <WifiOff className="size-3 text-muted-foreground" />
+              )}
+              {!compact && (
+                <span className="text-[11px]">
+                  SSH <span className="text-muted-foreground">{overallLabel(overall)}</span>
                 </span>
               )}
-            </button>
-          </DropdownMenuTrigger>
-        </TooltipTrigger>
-        <TooltipContent side="top" sideOffset={6}>
-          SSH: {overallLabel(overall)} ({targets.length}{' '}
-          {targets.length === 1 ? 'target' : 'targets'})
-        </TooltipContent>
-      </Tooltip>
+              <span className={`inline-block size-1.5 rounded-full ${overallDotColor(overall)}`} />
+            </span>
+          )}
+        </button>
+      </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" sideOffset={8} className="w-[220px]">
         <div className="px-2 pt-1.5 pb-1 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
           SSH Connections

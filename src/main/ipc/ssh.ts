@@ -15,6 +15,7 @@ import type { SshTarget, SshConnectionState, SshConnectionStatus } from '../../s
 import { isAuthError } from '../ssh/ssh-connection-utils'
 import { cleanupConnection, wireUpSshPtyEvents, reestablishRelayStack } from './ssh-relay-helpers'
 import { registerSshBrowseHandler } from './ssh-browse'
+import { requestPassphrase, registerPassphraseHandler } from './ssh-passphrase'
 
 let sshStore: SshConnectionStore | null = null
 let connectionManager: SshConnectionManager | null = null
@@ -59,7 +60,10 @@ export function registerSshHandlers(
 
   sshStore = new SshConnectionStore(store)
 
+  registerPassphraseHandler()
+
   const callbacks: SshConnectionCallbacks = {
+    onPassphraseRequest: (targetId, keyPath) => requestPassphrase(getMainWindow, targetId, keyPath),
     onStateChange: (targetId: string, state: SshConnectionState) => {
       if (testingTargets.has(targetId)) {
         return

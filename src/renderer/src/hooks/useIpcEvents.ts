@@ -264,28 +264,39 @@ export function useIpcEvents(): void {
     })()
 
     unsubs.push(
+      window.api.ssh.onPassphraseRequest((data) => {
+        useAppStore.getState().setSshPassphraseRequest(data)
+      })
+    )
+
+    unsubs.push(
       window.api.ssh.onStateChanged((data: { targetId: string; state: unknown }) => {
         const store = useAppStore.getState()
         const state = data.state as SshConnectionState
         store.setSshConnectionState(data.targetId, state)
 
-        // Why: on cold start, worktrees:list fails for SSH repos because the
-        // provider isn't registered yet. Once the connection comes up we must
-        // re-fetch so the sidebar populates without a manual remove-and-re-add.
+        // Why: targets added after boot aren't in the labels map. Re-fetch
+        // so the status bar popover shows the new target immediately.
+        if (!store.sshTargetLabels.has(data.targetId)) {
+          window.api.ssh
+            .listTargets()
+            .then((targets) => {
+              const labels = new Map<string, string>()
+              for (const t of targets as { id: string; label: string }[]) {
+                labels.set(t.id, t.label)
+              }
+              useAppStore.getState().setSshTargetLabels(labels)
+            })
+            .catch(() => {})
+        }
+
         if (state.status === 'connected') {
           const remoteRepos = store.repos.filter((r) => r.connectionId === data.targetId)
 
-          // Why: on cold start, worktrees:list fails for SSH repos because the
-          // provider isn't registered yet. Once the connection comes up we must
-          // re-fetch so the sidebar populates without a manual remove-and-re-add.
-          // Must await before the generation bump below, otherwise worktreesByRepo
-          // is still empty and the bump silently no-ops.
           void Promise.all(remoteRepos.map((r) => store.fetchWorktrees(r.id))).then(() => {
             // Why: terminal panes that failed to spawn (no PTY provider on cold
-            // start) sit inert with an error toast. Bumping generation forces
-            // TerminalPane to remount and retry pty:spawn now that the provider
-            // is registered. Only bump for tabs with no live ptyId to avoid
-            // killing active shells.
+            // start) sit inert. Bumping generation forces TerminalPane to remount
+            // and retry pty:spawn. Only bump tabs with no live ptyId.
             const freshStore = useAppStore.getState()
             const remoteRepoIds = new Set(remoteRepos.map((r) => r.id))
             const worktreeIds = Object.values(freshStore.worktreesByRepo)

@@ -102,6 +102,7 @@ describe('useIpcEvents updater integration', () => {
           setRateLimitsFromPush: vi.fn(),
           setSshConnectionState: vi.fn(),
           setSshTargetLabels: vi.fn(),
+          setSshPassphraseRequest: vi.fn(),
           settings: { terminalFontSize: 13 }
         })
       }
@@ -171,7 +172,8 @@ describe('useIpcEvents updater integration', () => {
         ssh: {
           listTargets: () => Promise.resolve([]),
           getState: () => Promise.resolve(null),
-          onStateChanged: () => () => {}
+          onStateChanged: () => () => {},
+          onPassphraseRequest: () => () => {}
         }
       }
     })

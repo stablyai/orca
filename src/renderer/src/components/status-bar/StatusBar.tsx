@@ -119,13 +119,6 @@ function ProviderSegment({
 
   // Has data (ok, fetching with stale data, or error with stale data)
   const isStale = p.status === 'error'
-  const isFetching = p.status === 'fetching'
-  const trailingStatusIcon = isFetching ? (
-    <RefreshCw size={10} className="animate-spin text-muted-foreground" />
-  ) : isStale ? (
-    <AlertTriangle size={11} className="text-muted-foreground/80" />
-  ) : null
-
   return (
     <span className="inline-flex items-center gap-1.5">
       <ProviderIcon provider={provider} />
@@ -133,12 +126,7 @@ function ProviderSegment({
       {p.session && <WindowLabel w={p.session} label="5h" />}
       {p.session && p.weekly && <span className="text-muted-foreground">&middot;</span>}
       {p.weekly && <WindowLabel w={p.weekly} label="wk" />}
-      <span className="inline-flex w-3 justify-center">
-        {/* Why: reserve the trailing provider-status slot even when no icon is
-        visible so Claude/Codex do not shift horizontally as fetching/error
-        adornments appear and disappear. */}
-        {trailingStatusIcon}
-      </span>
+      {isStale && <AlertTriangle size={11} className="text-muted-foreground/80" />}
     </span>
   )
 }
@@ -466,6 +454,7 @@ function StatusBarInner(): React.JSX.Element | null {
   const showCodex = codex && statusBarItems.includes('codex')
   const showSsh = statusBarItems.includes('ssh')
   const anyVisible = showClaude || showCodex
+  const anyFetching = claude?.status === 'fetching' || codex?.status === 'fetching'
 
   const compact = containerWidth < 900
   const iconOnly = containerWidth < 500
@@ -477,54 +466,41 @@ function StatusBarInner(): React.JSX.Element | null {
           ref={containerRefCallback}
           className="flex items-center h-6 min-h-[24px] px-3 gap-4 border-t border-border bg-[var(--bg-titlebar,var(--card))] text-xs select-none shrink-0"
         >
-          {iconOnly ? (
-            <>
-              {showClaude && (
-                <ProviderDetailsMenu
-                  provider={claude}
-                  compact={compact}
-                  iconOnly
-                  ariaLabel="Open Claude usage details"
-                />
-              )}
-              {showCodex && <CodexSwitcherMenu codex={codex} compact={compact} iconOnly />}
-            </>
-          ) : (
-            <>
-              {showClaude && (
-                <ProviderDetailsMenu
-                  provider={claude}
-                  compact={compact}
-                  iconOnly={false}
-                  ariaLabel="Open Claude usage details"
-                />
-              )}
-
-              {showCodex && <CodexSwitcherMenu codex={codex} compact={compact} iconOnly={false} />}
-            </>
-          )}
+          <div className="flex items-center gap-3">
+            {showClaude && (
+              <ProviderDetailsMenu
+                provider={claude}
+                compact={compact}
+                iconOnly={iconOnly}
+                ariaLabel="Open Claude usage details"
+              />
+            )}
+            {showCodex && <CodexSwitcherMenu codex={codex} compact={compact} iconOnly={iconOnly} />}
+            {anyVisible && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={handleRefresh}
+                    disabled={isRefreshing}
+                    className="p-0.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
+                    aria-label="Refresh rate limits"
+                  >
+                    <RefreshCw
+                      size={11}
+                      className={isRefreshing || anyFetching ? 'animate-spin' : ''}
+                    />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top" sideOffset={6}>
+                  Refresh usage data
+                </TooltipContent>
+              </Tooltip>
+            )}
+          </div>
 
           <div className="flex-1" />
 
           {showSsh && <SshStatusSegment compact={compact} iconOnly={iconOnly} />}
-
-          {anyVisible && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  onClick={handleRefresh}
-                  disabled={isRefreshing}
-                  className="p-0.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
-                  aria-label="Refresh rate limits"
-                >
-                  <RefreshCw size={11} className={isRefreshing ? 'animate-spin' : ''} />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={6}>
-                Refresh usage data
-              </TooltipContent>
-            </Tooltip>
-          )}
         </div>
       </ContextMenuTrigger>
 

@@ -1,6 +1,6 @@
 import { Client as SshClient } from 'ssh2'
 import type { ChildProcess } from 'child_process'
-import type { ClientChannel, SFTPWrapper } from 'ssh2'
+import type { ClientChannel, ConnectConfig, SFTPWrapper } from 'ssh2'
 import type { SshTarget, SshConnectionState, SshConnectionStatus } from '../../shared/ssh-types'
 import { spawnSystemSsh, type SystemSshProcess } from './ssh-system-fallback'
 import { resolveWithSshG } from './ssh-config-parser'
@@ -11,6 +11,7 @@ import {
   CONNECT_TIMEOUT_MS,
   isTransientError,
   isAuthError,
+  isPassphraseError,
   sleep,
   buildConnectConfig,
   resolveEffectiveProxy,
@@ -53,35 +54,21 @@ export class SshConnection {
   }
 
   async exec(command: string): Promise<ClientChannel> {
-    const client = this.client
-    if (!client) {
+    if (!this.client) {
       throw new Error('Not connected')
     }
-    return new Promise((resolve, reject) => {
-      client.exec(command, (err, channel) => {
-        if (err) {
-          reject(err)
-        } else {
-          resolve(channel)
-        }
-      })
-    })
+    return new Promise((resolve, reject) =>
+      this.client!.exec(command, (err, ch) => (err ? reject(err) : resolve(ch)))
+    )
   }
 
   async sftp(): Promise<SFTPWrapper> {
-    const client = this.client
-    if (!client) {
+    if (!this.client) {
       throw new Error('Not connected')
     }
-    return new Promise((resolve, reject) => {
-      client.sftp((err, sftp) => {
-        if (err) {
-          reject(err)
-        } else {
-          resolve(sftp)
-        }
-      })
-    })
+    return new Promise((resolve, reject) =>
+      this.client!.sftp((err, s) => (err ? reject(err) : resolve(s)))
+    )
   }
 
   async connect(): Promise<void> {
@@ -104,6 +91,7 @@ export class SshConnection {
         }
 
         if (!isTransientError(lastError)) {
+          this.setState('error', lastError.message)
           throw lastError
         }
 
@@ -135,10 +123,28 @@ export class SshConnection {
       config.sock = proxy.sock
     }
 
+    try {
+      await this.doSsh2Connect(config)
+    } catch (err) {
+      // Why: ssh2 fails immediately when given an encrypted key without a
+      // passphrase. Prompt the user and retry once with the passphrase.
+      if (err instanceof Error && isPassphraseError(err) && this.callbacks.onPassphraseRequest) {
+        const keyPath = this.target.identityFile || resolved?.identityFile?.[0] || '(unknown)'
+        const passphrase = await this.callbacks.onPassphraseRequest(this.target.id, keyPath)
+        if (passphrase) {
+          config.passphrase = passphrase
+          await this.doSsh2Connect(config)
+          return
+        }
+      }
+      throw err
+    }
+  }
+
+  private doSsh2Connect(config: ConnectConfig): Promise<void> {
     return new Promise<void>((resolve, reject) => {
       const client = new SshClient()
       let settled = false
-
       client.on('ready', () => {
         if (settled) {
           return
@@ -149,17 +155,14 @@ export class SshConnection {
         this.setupDisconnectHandler(client)
         resolve()
       })
-
       client.on('error', (err) => {
         if (settled) {
           return
         }
         settled = true
         client.destroy()
-        this.setState('error', err.message)
         reject(err)
       })
-
       client.connect(config)
     })
   }

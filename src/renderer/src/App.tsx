@@ -23,6 +23,7 @@ import WorktreeJumpPalette from './components/WorktreeJumpPalette'
 import { StatusBar } from './components/status-bar/StatusBar'
 import { UpdateCard } from './components/UpdateCard'
 import { ZoomOverlay } from './components/ZoomOverlay'
+import { SshPassphraseDialog } from './components/settings/SshPassphraseDialog'
 import { useGitStatusPolling } from './components/right-sidebar/useGitStatusPolling'
 import {
   setRuntimeGraphStoreStateGetter,
@@ -696,6 +697,7 @@ function App(): React.JSX.Element {
       <WorktreeJumpPalette />
       <UpdateCard />
       <ZoomOverlay />
+      <SshPassphraseDialog />
       <Toaster closeButton toastOptions={{ className: 'font-sans text-sm' }} />
     </div>
   )

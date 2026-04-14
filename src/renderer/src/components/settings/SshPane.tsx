@@ -53,14 +53,21 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
   const [testing, setTesting] = useState<string | null>(null)
   const [pendingRemove, setPendingRemove] = useState<{ id: string; label: string } | null>(null)
 
+  const setSshTargetLabels = useAppStore((s) => s.setSshTargetLabels)
+
   const loadTargets = useCallback(async () => {
     try {
       const result = (await window.api.ssh.listTargets()) as SshTarget[]
       setTargets(result)
+      const labels = new Map<string, string>()
+      for (const t of result) {
+        labels.set(t.id, t.label)
+      }
+      setSshTargetLabels(labels)
     } catch {
       toast.error('Failed to load SSH targets')
     }
-  }, [])
+  }, [setSshTargetLabels])
 
   useEffect(() => {
     void loadTargets()

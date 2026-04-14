@@ -2,19 +2,28 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { SshConnectionState, SshConnectionStatus } from '../../../../shared/ssh-types'
 
+export type SshPassphraseRequest = {
+  requestId: string
+  targetId: string
+  keyPath: string
+}
+
 export type SshSlice = {
   sshConnectionStates: Map<string, SshConnectionState>
   /** Maps target IDs to their user-facing labels. Populated during hydration
    * so components can look up labels without per-component IPC calls. */
   sshTargetLabels: Map<string, string>
+  sshPassphraseRequest: SshPassphraseRequest | null
   setSshConnectionState: (targetId: string, state: SshConnectionState) => void
   setSshTargetLabels: (labels: Map<string, string>) => void
+  setSshPassphraseRequest: (req: SshPassphraseRequest | null) => void
   getSshConnectionStatus: (connectionId: string | null | undefined) => SshConnectionStatus | null
 }
 
 export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set, get) => ({
   sshConnectionStates: new Map(),
   sshTargetLabels: new Map(),
+  sshPassphraseRequest: null,
 
   setSshConnectionState: (targetId, state) =>
     set(() => {
@@ -24,6 +33,7 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set, ge
     }),
 
   setSshTargetLabels: (labels) => set({ sshTargetLabels: labels }),
+  setSshPassphraseRequest: (req) => set({ sshPassphraseRequest: req }),
 
   getSshConnectionStatus: (connectionId) => {
     if (!connectionId) {

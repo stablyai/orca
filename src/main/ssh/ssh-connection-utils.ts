@@ -10,6 +10,12 @@ import type { SshResolvedConfig } from './ssh-config-parser'
 
 export type SshConnectionCallbacks = {
   onStateChange: (targetId: string, state: SshConnectionState) => void
+  onPassphraseRequest?: (targetId: string, keyPath: string) => Promise<string | null>
+}
+
+export function isPassphraseError(err: Error): boolean {
+  const msg = err.message.toLowerCase()
+  return msg.includes('passphrase') || msg.includes('encrypted')
 }
 
 export const INITIAL_RETRY_ATTEMPTS = 5

@@ -1181,7 +1181,21 @@ const api = {
     }): Promise<{
       entries: { name: string; isDirectory: boolean }[]
       resolvedPath: string
-    }> => ipcRenderer.invoke('ssh:browseDir', args)
+    }> => ipcRenderer.invoke('ssh:browseDir', args),
+
+    onPassphraseRequest: (
+      callback: (data: { requestId: string; targetId: string; keyPath: string }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { requestId: string; targetId: string; keyPath: string }
+      ) => callback(data)
+      ipcRenderer.on('ssh:passphrase-request', listener)
+      return () => ipcRenderer.removeListener('ssh:passphrase-request', listener)
+    },
+
+    submitPassphrase: (args: { requestId: string; passphrase: string | null }): Promise<void> =>
+      ipcRenderer.invoke('ssh:submitPassphrase', args)
   }
 }
 
