@@ -447,7 +447,6 @@ function App(): React.JSX.Element {
         e.preventDefault()
         actions.setRightSidebarTab('explorer')
         actions.setRightSidebarOpen(true)
-        return
       }
 
       // Cmd/Ctrl+Shift+F — toggle right sidebar / search tab
@@ -455,7 +454,6 @@ function App(): React.JSX.Element {
         e.preventDefault()
         actions.setRightSidebarTab('search')
         actions.setRightSidebarOpen(true)
-        return
       }
 
       // Cmd/Ctrl+Shift+G — toggle right sidebar / source control tab.
@@ -469,6 +467,13 @@ function App(): React.JSX.Element {
         }
         e.preventDefault()
         actions.setRightSidebarTab('source-control')
+        actions.setRightSidebarOpen(true)
+      }
+
+      // Cmd/Ctrl+Shift+A — toggle right sidebar / agents tab
+      if (e.shiftKey && !e.altKey && e.key.toLowerCase() === 'a') {
+        e.preventDefault()
+        actions.setRightSidebarTab('agents')
         actions.setRightSidebarOpen(true)
       }
     }

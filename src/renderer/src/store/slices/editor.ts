@@ -97,7 +97,7 @@ export type OpenFile = {
   mode: 'edit' | 'diff' | 'conflict-review'
 }
 
-export type RightSidebarTab = 'explorer' | 'search' | 'source-control' | 'checks'
+export type RightSidebarTab = 'explorer' | 'search' | 'source-control' | 'checks' | 'agents'
 export type ActivityBarPosition = 'top' | 'side'
 
 export type MarkdownViewMode = 'source' | 'rich'
