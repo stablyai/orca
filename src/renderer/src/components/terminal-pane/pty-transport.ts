@@ -207,8 +207,16 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         return result.id
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        storedCallbacks.onError?.(msg)
-        throw err
+        // Why: on cold start, SSH provider isn't registered yet so pty:spawn
+        // throws a raw IPC error. Replace with a friendly message since this
+        // is an expected state, not an application crash.
+        if (connectionId && msg.includes('No PTY provider for connection')) {
+          storedCallbacks.onError?.(
+            'SSH connection is not active. Use the reconnect dialog or Settings to connect.'
+          )
+        } else {
+          storedCallbacks.onError?.(msg)
+        }
       }
     },
 
