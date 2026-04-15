@@ -7,7 +7,7 @@ export async function openFileExplorer(page: Page): Promise<void> {
   await pressShortcut(page, 'e', { shift: true })
   await expect
     .poll(
-      async () => page.evaluate(() => (window as any).__store?.getState().rightSidebarOpen),
+      async () => page.evaluate(() => window.__store?.getState().rightSidebarOpen),
       { timeout: 3_000 }
     )
     .toBe(true)

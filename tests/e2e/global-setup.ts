@@ -59,7 +59,7 @@ export default function globalSetup(): void {
   )
   writeFileSync(
     path.join(testRepoDir, 'package.json'),
-    JSON.stringify({ name: 'orca-e2e-test', version: '0.0.0', private: true }, null, 2) + '\n'
+    `${JSON.stringify({ name: 'orca-e2e-test', version: '0.0.0', private: true }, null, 2)}\n`
   )
   writeFileSync(path.join(testRepoDir, '.gitignore'), 'node_modules/\n')
   writeFileSync(

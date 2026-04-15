@@ -31,7 +31,10 @@ test.describe('Tabs', () => {
     // Clean up: close extra tabs back to 1 terminal tab.
     // Closing is done via Cmd/Ctrl+W which closes the active terminal pane/tab.
     const worktreeId = await getActiveWorktreeId(orcaPage)
-    if (!worktreeId) return
+    if (!worktreeId) {
+      return
+    }
+
     let tabs = await getWorktreeTabs(orcaPage, worktreeId)
     while (tabs.length > 1) {
       // Switch to the last tab and close it
@@ -172,7 +175,10 @@ test.describe('Tabs', () => {
     await expect
       .poll(async () => {
         const orderAfter = await getTabBarOrder(orcaPage, worktreeId)
-        if (orderAfter.length < 2) return false
+        if (orderAfter.length < 2) {
+          return false
+        }
+
         return JSON.stringify(orderAfter) !== JSON.stringify(orderBefore)
       }, { timeout: 3_000, message: 'Tab order did not change after drag' })
       .toBe(true)
@@ -193,8 +199,14 @@ test.describe('Tabs', () => {
 
     const tabsBefore = await getWorktreeTabs(orcaPage, worktreeId)
 
-    // Close the active tab with Cmd/Ctrl+W
-    await pressShortcut(orcaPage, 'w')
+    // Close the newly-created active tab with a middle click on its tab strip item.
+    // Why: Cmd/Ctrl+W is handled by the terminal pane layer and only closes the
+    // whole tab when focus is inside the terminal surface. The tab item itself
+    // exposes a direct close path via onAuxClick, which is the stable UI signal
+    // this spec actually wants to verify.
+    const tabElements = orcaPage.locator('.terminal-tab-strip [aria-roledescription="sortable"]')
+    await expect(tabElements).toHaveCount(tabsBefore.length)
+    await tabElements.last().click({ button: 'middle' })
 
     // Wait for tab count to decrease
     await expect

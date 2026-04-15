@@ -135,7 +135,12 @@ test.describe('Terminal Panes', () => {
     await pressShortcut(orcaPage, 'd')
     await waitForPaneCount(orcaPage, panesBefore + 1)
 
-    // Close the newly created split pane (it should be active, Cmd/Ctrl+W closes it)
+    // Focus the newly created pane before closing it.
+    // Why: pane close is handled by the terminal-pane keyboard layer, which
+    // listens from the focused xterm surface rather than the outer tab shell.
+    await orcaPage.locator('.xterm textarea').last().focus()
+
+    // Close the newly created split pane with Cmd/Ctrl+W.
     await pressShortcut(orcaPage, 'w')
     await waitForPaneCount(orcaPage, panesBefore)
 
@@ -251,7 +256,10 @@ test.describe('Terminal Panes', () => {
               .filter((x) => (x as HTMLElement).offsetParent !== null)
               .map((x) => (x as HTMLElement).getBoundingClientRect().width)
           })
-          if (widthsAfter.length < 2) return false
+          if (widthsAfter.length < 2) {
+            return false
+          }
+
           return paneWidthsBefore.some((w, i) => Math.abs(w - widthsAfter[i]) > 20)
         },
         { timeout: 5_000, message: 'Pane widths did not change after dragging divider' }

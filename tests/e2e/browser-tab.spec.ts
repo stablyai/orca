@@ -29,7 +29,10 @@ test.describe('Browser Tab', () => {
   test.afterEach(async ({ orcaPage }) => {
     // Clean up: close all browser tabs created during the test
     const worktreeId = await getActiveWorktreeId(orcaPage)
-    if (!worktreeId) return
+    if (!worktreeId) {
+      return
+    }
+
     let browserTabs = await getBrowserTabs(orcaPage, worktreeId)
     while (browserTabs.length > 0) {
       // Switch to browser tab type and close
@@ -37,8 +40,11 @@ test.describe('Browser Tab', () => {
       if (activeType !== 'browser') {
         // Navigate to a browser tab
         await orcaPage.evaluate((btId) => {
-          const store = (window as any).__store
-          if (!store) return
+          const store = window.__store
+          if (!store) {
+            return
+          }
+
           store.getState().setActiveBrowserTab(btId)
           store.getState().setActiveTabType('browser')
         }, browserTabs[0].id)
@@ -54,8 +60,11 @@ test.describe('Browser Tab', () => {
     const activeType = await getActiveTabType(orcaPage)
     if (activeType !== 'terminal') {
       await orcaPage.evaluate(() => {
-        const store = (window as any).__store
-        if (!store) return
+        const store = window.__store
+        if (!store) {
+          return
+        }
+
         store.getState().setActiveTabType('terminal')
       })
     }
@@ -102,7 +111,7 @@ test.describe('Browser Tab', () => {
 
     // The active browser tab should have a URL (even if it's about:blank or the default)
     const activeBrowserTabId = await orcaPage.evaluate(() => {
-      const store = (window as any).__store
+      const store = window.__store
       return store?.getState().activeBrowserTabId ?? null
     })
     expect(activeBrowserTabId).not.toBeNull()
@@ -124,7 +133,8 @@ test.describe('Browser Tab', () => {
     // Record the browser tab info
     const browserTabsBefore = await getBrowserTabs(orcaPage, worktreeId)
     expect(browserTabsBefore.length).toBeGreaterThan(0)
-    const browserTabId = browserTabsBefore[browserTabsBefore.length - 1].id
+    const browserTabId = browserTabsBefore.at(-1)?.id
+    expect(browserTabId).toBeTruthy()
 
     // Switch to the previous tab (terminal)
     await pressShortcut(orcaPage, 'BracketLeft', { shift: true })
@@ -140,7 +150,7 @@ test.describe('Browser Tab', () => {
 
     // The browser tab should still exist with the same ID
     const browserTabsAfter = await getBrowserTabs(orcaPage, worktreeId)
-    const tabStillExists = browserTabsAfter.some((t) => t.id === browserTabId)
+    const tabStillExists = browserTabsAfter.some((tab) => tab.id === browserTabId)
     expect(tabStillExists).toBe(true)
   })
 
@@ -152,7 +162,6 @@ test.describe('Browser Tab', () => {
     const allWorktreeIds = await getAllWorktreeIds(orcaPage)
     if (allWorktreeIds.length < 2) {
       test.skip(true, 'Need at least 2 worktrees to test worktree switching')
-      return
     }
 
     const worktreeId = (await getActiveWorktreeId(orcaPage))!

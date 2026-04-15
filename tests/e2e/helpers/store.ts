@@ -8,15 +8,29 @@
 
 import type { Page } from '@stablyai/playwright-test'
 import { expect } from '@stablyai/playwright-test'
+import {
+  type BrowserTabSummary,
+  type ExplorerFileSummary,
+  type TerminalTabSummary
+} from './runtime-types'
 
 /** Read a value from the Zustand store. Returns the raw JS value. */
-export async function getStoreState<T = any>(page: Page, selector: string): Promise<T> {
+export async function getStoreState<T>(page: Page, selector: string): Promise<T> {
   return page.evaluate((selector) => {
-    const store = (window as any).__store
-    if (!store) throw new Error('window.__store is not available — is the app in dev mode?')
+    const store = window.__store
+    if (!store) {
+      throw new Error('window.__store is not available — is the app in dev mode?')
+    }
+
     const state = store.getState()
     // Support dot-notation selectors like 'activeWorktreeId' or 'tabsByWorktree'
-    return selector.split('.').reduce((obj: any, key: string) => obj?.[key], state)
+    return selector.split('.').reduce<unknown>((value, key) => {
+      if (value && typeof value === 'object') {
+        return (value as Record<string, unknown>)[key]
+      }
+
+      return undefined
+    }, state) as T
   }, selector)
 }
 
@@ -39,14 +53,17 @@ export async function getActiveTabType(page: Page): Promise<string | null> {
 export async function getWorktreeTabs(
   page: Page,
   worktreeId: string
-): Promise<Array<{ id: string; title?: string }>> {
+): Promise<{ id: string; title?: string }[]> {
   return page.evaluate((worktreeId) => {
-    const store = (window as any).__store
-    if (!store) return []
+    const store = window.__store
+    if (!store) {
+      return []
+    }
+
     const state = store.getState()
-    return (state.tabsByWorktree[worktreeId] ?? []).map((t: any) => ({
-      id: t.id,
-      title: t.customTitle || t.title,
+    return (state.tabsByWorktree[worktreeId] ?? []).map((tab): TerminalTabSummary => ({
+      id: tab.id,
+      title: tab.customTitle || tab.title,
     }))
   }, worktreeId)
 }
@@ -54,8 +71,11 @@ export async function getWorktreeTabs(
 /** Get the tab bar order for a worktree. */
 export async function getTabBarOrder(page: Page, worktreeId: string): Promise<string[]> {
   return page.evaluate((worktreeId) => {
-    const store = (window as any).__store
-    if (!store) return []
+    const store = window.__store
+    if (!store) {
+      return []
+    }
+
     const state = store.getState()
     return state.tabBarOrderByWorktree[worktreeId] ?? []
   }, worktreeId)
@@ -65,15 +85,18 @@ export async function getTabBarOrder(page: Page, worktreeId: string): Promise<st
 export async function getBrowserTabs(
   page: Page,
   worktreeId: string
-): Promise<Array<{ id: string; url?: string; title?: string }>> {
+): Promise<{ id: string; url?: string; title?: string }[]> {
   return page.evaluate((worktreeId) => {
-    const store = (window as any).__store
-    if (!store) return []
+    const store = window.__store
+    if (!store) {
+      return []
+    }
+
     const state = store.getState()
-    return (state.browserTabsByWorktree[worktreeId] ?? []).map((t: any) => ({
-      id: t.id,
-      url: t.url,
-      title: t.title,
+    return (state.browserTabsByWorktree[worktreeId] ?? []).map((tab): BrowserTabSummary => ({
+      id: tab.id,
+      url: tab.url,
+      title: tab.title,
     }))
   }, worktreeId)
 }
@@ -82,17 +105,20 @@ export async function getBrowserTabs(
 export async function getOpenFiles(
   page: Page,
   worktreeId: string
-): Promise<Array<{ id: string; filePath: string; relativePath: string }>> {
+): Promise<{ id: string; filePath: string; relativePath: string }[]> {
   return page.evaluate((worktreeId) => {
-    const store = (window as any).__store
-    if (!store) return []
+    const store = window.__store
+    if (!store) {
+      return []
+    }
+
     const state = store.getState()
     return state.openFiles
-      .filter((f: any) => f.worktreeId === worktreeId)
-      .map((f: any) => ({
-        id: f.id,
-        filePath: f.filePath,
-        relativePath: f.relativePath,
+      .filter((file) => file.worktreeId === worktreeId)
+      .map((file): ExplorerFileSummary => ({
+        id: file.id,
+        filePath: file.filePath,
+        relativePath: file.relativePath,
       }))
   }, worktreeId)
 }
@@ -138,23 +164,32 @@ export async function waitForActiveWorktree(page: Page, timeoutMs = 30_000): Pro
 /** Get all worktree IDs across all repos. */
 export async function getAllWorktreeIds(page: Page): Promise<string[]> {
   return page.evaluate(() => {
-    const store = (window as any).__store
-    if (!store) return []
+    const store = window.__store
+    if (!store) {
+      return []
+    }
+
     const state = store.getState()
-    const allWorktrees = Object.values(state.worktreesByRepo).flat() as any[]
-    return allWorktrees.map((wt: any) => wt.id)
+    const allWorktrees = Object.values(state.worktreesByRepo).flat()
+    return allWorktrees.map((worktree) => worktree.id)
   })
 }
 
 /** Switch to a different worktree via the store. Returns the new worktree ID or null. */
 export async function switchToOtherWorktree(page: Page, currentWorktreeId: string): Promise<string | null> {
   return page.evaluate((currentId) => {
-    const store = (window as any).__store
-    if (!store) return null
+    const store = window.__store
+    if (!store) {
+      return null
+    }
+
     const state = store.getState()
-    const allWorktrees = Object.values(state.worktreesByRepo).flat() as any[]
-    const other = allWorktrees.find((wt: any) => wt.id !== currentId)
-    if (!other) return null
+    const allWorktrees = Object.values(state.worktreesByRepo).flat()
+    const other = allWorktrees.find((worktree) => worktree.id !== currentId)
+    if (!other) {
+      return null
+    }
+
     state.setActiveWorktree(other.id)
     return other.id
   }, currentWorktreeId)
@@ -163,8 +198,11 @@ export async function switchToOtherWorktree(page: Page, currentWorktreeId: strin
 /** Switch to a specific worktree via the store. */
 export async function switchToWorktree(page: Page, worktreeId: string): Promise<void> {
   await page.evaluate((id) => {
-    const store = (window as any).__store
-    if (!store) return
+    const store = window.__store
+    if (!store) {
+      return
+    }
+
     store.getState().setActiveWorktree(id)
   }, worktreeId)
 }
@@ -178,8 +216,11 @@ export async function switchToWorktree(page: Page, worktreeId: string): Promise<
  */
 export async function ensureTerminalVisible(page: Page, timeoutMs = 10_000): Promise<void> {
   await page.evaluate(() => {
-    const store = (window as any).__store
-    if (!store) return
+    const store = window.__store
+    if (!store) {
+      return
+    }
+
     const state = store.getState()
     if (state.activeWorktreeId) {
       const tabs = state.tabsByWorktree[state.activeWorktreeId] ?? []
@@ -198,7 +239,7 @@ export async function ensureTerminalVisible(page: Page, timeoutMs = 10_000): Pro
     .poll(
       async () =>
         page.evaluate(() => {
-          const store = (window as any).__store
+          const store = window.__store
           if (!store) {
             return false
           }
@@ -207,7 +248,7 @@ export async function ensureTerminalVisible(page: Page, timeoutMs = 10_000): Pro
             return false
           }
           const tabs = state.tabsByWorktree[state.activeWorktreeId] ?? []
-          return tabs.length > 0 && tabs.some((tab: any) => tab.id === state.activeTabId)
+          return tabs.some((tab) => tab.id === state.activeTabId)
         }),
       { timeout: timeoutMs, message: 'No active terminal tab found for current worktree' }
     )
@@ -217,13 +258,16 @@ export async function ensureTerminalVisible(page: Page, timeoutMs = 10_000): Pro
 /** Check if a worktree exists in the store. */
 export async function worktreeExists(page: Page, name: string): Promise<boolean> {
   return page.evaluate((name) => {
-    const store = (window as any).__store
-    if (!store) return false
+    const store = window.__store
+    if (!store) {
+      return false
+    }
+
     const state = store.getState()
-    const allWorktrees = Object.values(state.worktreesByRepo).flat() as any[]
+    const allWorktrees = Object.values(state.worktreesByRepo).flat()
     return allWorktrees.some(
-      (wt) =>
-        wt.displayName === name || wt.name === name || wt.path?.endsWith(`/${name}`)
+      (worktree) =>
+        worktree.displayName === name || worktree.path.endsWith(`/${name}`)
     )
   }, name)
 }

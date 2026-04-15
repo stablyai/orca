@@ -22,21 +22,30 @@ import { expect } from '@stablyai/playwright-test'
  */
 export async function getTerminalContent(page: Page, charLimit = 4000): Promise<string> {
   return page.evaluate((charLimit) => {
-    const store = (window as any).__store
-    const paneManagers: Map<string, any> | undefined = (window as any).__paneManagers
-    if (!store || !paneManagers) return ''
+    const store = window.__store
+    const paneManagers = window.__paneManagers
+    if (!store || !paneManagers) {
+      return ''
+    }
 
     const activeTabId = store.getState().activeTabId
-    if (!activeTabId) return ''
+    if (!activeTabId) {
+      return ''
+    }
 
     const manager = paneManagers.get(activeTabId)
-    if (!manager) return ''
+    if (!manager) {
+      return ''
+    }
 
     const activePane = manager.getActivePane?.()
     if (!activePane) {
       // Fallback: try all panes
       const panes = manager.getPanes?.() ?? []
-      if (panes.length === 0) return ''
+      if (panes.length === 0) {
+        return ''
+      }
+
       const text = panes[0].serializeAddon?.serialize?.() ?? ''
       return text.slice(-charLimit)
     }
@@ -59,11 +68,17 @@ export async function discoverActivePtyId(page: Page, maxId = 10): Promise<strin
 
   // Get candidate PTY IDs from the store
   const candidateIds: string[] = await page.evaluate(() => {
-    const store = (window as any).__store
-    if (!store) return []
+    const store = window.__store
+    if (!store) {
+      return []
+    }
+
     const state = store.getState()
     const activeTabId = state.activeTabId
-    if (!activeTabId) return []
+    if (!activeTabId) {
+      return []
+    }
+
     return state.ptyIdsByTabId[activeTabId] ?? []
   })
 
@@ -76,7 +91,7 @@ export async function discoverActivePtyId(page: Page, maxId = 10): Promise<strin
   await page.evaluate(
     ({ marker, idsToProbe }) => {
       for (const id of idsToProbe) {
-        ;(window as any).api.pty.write(String(id), `\x03\x15echo ${marker}_${id}\r`)
+        window.api.pty.write(String(id), `\x03\x15echo ${marker}_${id}\r`)
       }
     },
     { marker, idsToProbe }
@@ -91,7 +106,7 @@ export async function discoverActivePtyId(page: Page, maxId = 10): Promise<strin
         const markerRe = new RegExp(`${marker}_(\\d+)`, 'g')
         const matches = [...content.matchAll(markerRe)]
         if (matches.length > 0) {
-          foundPtyId = matches[matches.length - 1][1]
+          foundPtyId = matches.at(-1)?.[1] ?? null
           return true
         }
         return false
@@ -111,7 +126,7 @@ export async function discoverActivePtyId(page: Page, maxId = 10): Promise<strin
 export async function sendToTerminal(page: Page, ptyId: string, text: string): Promise<void> {
   await page.evaluate(
     ({ ptyId, text }) => {
-      ;(window as any).api.pty.write(ptyId, text)
+      window.api.pty.write(ptyId, text)
     },
     { ptyId, text }
   )
@@ -130,8 +145,8 @@ export async function execInTerminal(page: Page, ptyId: string, command: string)
  */
 export async function countVisibleTerminalPanes(page: Page): Promise<number> {
   return page.evaluate(() => {
-    const store = (window as any).__store
-    const paneManagers: Map<string, any> | undefined = (window as any).__paneManagers
+    const store = window.__store
+    const paneManagers = window.__paneManagers
     if (!store || !paneManagers) {
       return 0
     }

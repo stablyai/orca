@@ -28,19 +28,28 @@ test.describe('File Open & Markdown Preview', () => {
   test.afterEach(async ({ orcaPage }) => {
     // Clean up: close all open editor files
     const worktreeId = await getActiveWorktreeId(orcaPage)
-    if (!worktreeId) return
-    let openFiles = await getOpenFiles(orcaPage, worktreeId)
+    if (!worktreeId) {
+      return
+    }
+
+    const openFiles = await getOpenFiles(orcaPage, worktreeId)
     for (const file of openFiles) {
       await orcaPage.evaluate((fileId) => {
-        const store = (window as any).__store
-        if (!store) return
+        const store = window.__store
+        if (!store) {
+          return
+        }
+
         store.getState().closeFile(fileId)
       }, file.id)
     }
     // Switch back to terminal view
     await orcaPage.evaluate(() => {
-      const store = (window as any).__store
-      if (!store) return
+      const store = window.__store
+      if (!store) {
+        return
+      }
+
       store.getState().setActiveTabType('terminal')
     })
   })
@@ -55,14 +64,14 @@ test.describe('File Open & Markdown Preview', () => {
     // Verify the right sidebar is open and on the explorer tab
     await expect
       .poll(
-        async () => orcaPage.evaluate(() => (window as any).__store?.getState().rightSidebarOpen),
+        async () => orcaPage.evaluate(() => window.__store?.getState().rightSidebarOpen),
         { timeout: 3_000 }
       )
       .toBe(true)
 
     await expect
       .poll(
-        async () => orcaPage.evaluate(() => (window as any).__store?.getState().rightSidebarTab),
+        async () => orcaPage.evaluate(() => window.__store?.getState().rightSidebarTab),
         { timeout: 3_000 }
       )
       .toBe('explorer')

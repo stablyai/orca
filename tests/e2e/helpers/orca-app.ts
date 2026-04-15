@@ -40,13 +40,15 @@ type OrcaWorkerFixtures = {
  */
 export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
   // Worker-scoped: read the test repo path once
-  testRepoPath: [async ({}, use) => {
+  // oxlint-disable-next-line no-empty-pattern -- Playwright fixture callbacks require object destructuring here.
+  testRepoPath: [async ({}, provideFixture) => {
     const repoPath = readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
-    await use(repoPath)
+    await provideFixture(repoPath)
   }, { scope: 'worker' }],
 
   // Test-scoped: one Electron app per test
-  electronApp: async ({}, use) => {
+  // oxlint-disable-next-line no-empty-pattern -- Playwright fixture callbacks require object destructuring here.
+  electronApp: async ({}, provideFixture) => {
     const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
     const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-userdata-'))
     const app = await electron.launch({
@@ -67,22 +69,23 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
         ...(process.env.ORCA_E2E_HEADFUL ? {} : { ORCA_E2E_HEADLESS: '1' }),
       },
     })
-    await use(app)
+    await provideFixture(app)
     await app.close()
     rmSync(userDataDir, { recursive: true, force: true })
   },
 
   // Test-scoped: grab the first BrowserWindow, add the test repo, and wait
   // until the session is fully ready with a worktree active.
-  sharedPage: async ({ electronApp, testRepoPath }, use) => {
+  sharedPage: async ({ electronApp, testRepoPath }, provideFixture) => {
     // Why: the Electron app may take a while to create the first window,
-    // especially on cold start with no prior dev userData. 60s is generous.
-    const page = await electronApp.firstWindow({ timeout: 60_000 })
+    // especially on cold start with no prior dev userData. Isolated per-test
+    // profiles make late-suite launches slower, so use the full test budget.
+    const page = await electronApp.firstWindow({ timeout: 120_000 })
     await page.waitForLoadState('domcontentloaded')
 
     // Wait for the store to be available
     await page.waitForFunction(
-      () => !!(window as any).__store,
+      () => Boolean(window.__store),
       null,
       { timeout: 30_000 }
     )
@@ -92,20 +95,26 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
     // the "Add Repo" UI flow, ensuring worktrees are fetched and the session
     // initializes properly.
     await page.evaluate(async (repoPath) => {
-      await (window as any).api.repos.add({ path: repoPath })
+      await window.api.repos.add({ path: repoPath })
     }, testRepoPath)
 
     // Fetch repos in the renderer store so it picks up the new repo
     await page.evaluate(async () => {
-      const store = (window as any).__store
-      if (!store) return
+      const store = window.__store
+      if (!store) {
+        return
+      }
+
       await store.getState().fetchRepos()
     })
 
     // Wait for the repo to appear and fetch its worktrees
     await page.evaluate(async () => {
-      const store = (window as any).__store
-      if (!store) return
+      const store = window.__store
+      if (!store) {
+        return
+      }
+
       const repos = store.getState().repos
       for (const repo of repos) {
         await store.getState().fetchWorktrees(repo.id)
@@ -115,7 +124,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
     // Wait for workspaceSessionReady to become true
     await page.waitForFunction(
       () => {
-        const store = (window as any).__store
+        const store = window.__store
         return store?.getState().workspaceSessionReady === true
       },
       null,
@@ -127,12 +136,15 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
     // after earlier setup calls. Selecting it here ensures every test starts on
     // the seeded repo instead of the "Select a worktree" empty state.
     await page.evaluate((repoPath: string) => {
-      const store = (window as any).__store
-      if (!store) return
+      const store = window.__store
+      if (!store) {
+        return
+      }
+
       const state = store.getState()
-      const allWorktrees = Object.values(state.worktreesByRepo).flat() as any[]
+      const allWorktrees = Object.values(state.worktreesByRepo).flat()
       const testWorktree = allWorktrees.find(
-        (wt: any) => wt.path === repoPath || wt.path?.startsWith(repoPath)
+        (worktree) => worktree.path === repoPath || worktree.path.startsWith(repoPath)
       )
       if (testWorktree) {
         state.setActiveWorktree(testWorktree.id)
@@ -145,7 +157,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
     // authoritative wait. The shared fixture itself should not block non-
     // terminal suites on tab creation timing.
     await page.evaluate(() => {
-      const store = (window as any).__store
+      const store = window.__store
       if (!store) {
         return
       }
@@ -159,12 +171,12 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       }
     })
 
-    await use(page)
+    await provideFixture(page)
   },
 
   // Test-scoped: each test gets the shared page
-  orcaPage: async ({ sharedPage }, use) => {
-    await use(sharedPage)
+  orcaPage: async ({ sharedPage }, provideFixture) => {
+    await provideFixture(sharedPage)
   },
 })
 

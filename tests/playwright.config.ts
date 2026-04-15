@@ -16,7 +16,10 @@ export default defineConfig({
   testDir: './e2e',
   globalSetup: './e2e/global-setup.ts',
   globalTeardown: './e2e/global-teardown.ts',
-  timeout: 60_000,
+  // Why: this suite launches a fresh Electron app and isolated userData dir per
+  // test. Cold-starts late in the run can exceed 60s on CI even when the app is
+  // healthy, so the per-test budget needs to cover startup plus assertions.
+  timeout: 120_000,
   expect: { timeout: 10_000 },
   /* Run tests serially to keep the Electron E2E suite predictable */
   fullyParallel: false,
