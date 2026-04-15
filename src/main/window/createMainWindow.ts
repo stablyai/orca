@@ -12,6 +12,7 @@ import {
   normalizeExternalBrowserUrl
 } from '../../shared/browser-url'
 import { resolveWindowShortcutAction } from '../../shared/window-shortcut-policy'
+import { getMainE2EConfig } from '../e2e-config'
 
 function forceRepaint(window: BrowserWindow): void {
   if (window.isDestroyed()) {
@@ -144,7 +145,8 @@ export function createMainWindow(
     // Why: in E2E headless mode, the window stays hidden to avoid stealing
     // focus and screen real estate during test runs. Playwright interacts
     // with the renderer via CDP, which works without a visible window.
-    if (process.env.ORCA_E2E_HEADLESS) {
+    const e2eConfig = getMainE2EConfig()
+    if (e2eConfig.headless) {
       return
     }
     if (savedMaximized) {

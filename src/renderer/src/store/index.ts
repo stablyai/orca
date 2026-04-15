@@ -14,6 +14,7 @@ import { createCodexUsageSlice } from './slices/codex-usage'
 import { createBrowserSlice } from './slices/browser'
 import { createRateLimitSlice } from './slices/rate-limits'
 import { createSshSlice } from './slices/ssh'
+import { e2eConfig } from '@/lib/e2e-config'
 
 export const useAppStore = create<AppState>()((...a) => ({
   ...createRepoSlice(...a),
@@ -38,6 +39,6 @@ export type { AppState } from './types'
 // E2E tests (VITE_EXPOSE_STORE). The E2E suite reads store state directly
 // to avoid fragile DOM scraping. Harmless — the store is already reachable
 // via React DevTools in any environment.
-if ((import.meta.env.DEV || import.meta.env.VITE_EXPOSE_STORE) && typeof window !== 'undefined') {
+if ((import.meta.env.DEV || e2eConfig.exposeStore) && typeof window !== 'undefined') {
   ;(window as unknown as Record<string, unknown>).__store = useAppStore
 }

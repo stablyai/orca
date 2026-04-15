@@ -3,6 +3,7 @@ renderer and Electron. Keeping the IPC surface co-located in one file makes secu
 review and type drift checks easier than scattering these bindings across modules. */
 import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
+import { preloadE2EConfig } from './e2e-config'
 import type { CliInstallStatus } from '../shared/cli-install-types'
 import type {
   FsChangedPayload,
@@ -1311,6 +1312,9 @@ const api = {
 
     submitCredential: (args: { requestId: string; value: string | null }): Promise<void> =>
       ipcRenderer.invoke('ssh:submitCredential', args)
+  },
+  e2e: {
+    getConfig: () => preloadE2EConfig
   }
 }
 

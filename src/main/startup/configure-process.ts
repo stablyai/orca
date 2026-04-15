@@ -1,6 +1,7 @@
 import { app } from 'electron'
 import { join } from 'path'
 import { getVersionManagerBinPaths } from '../codex-cli/command'
+import { getMainE2EConfig } from '../e2e-config'
 
 const DEV_PARENT_SHUTDOWN_GRACE_MS = 3000
 
@@ -71,13 +72,13 @@ export function patchPackagedProcessPath(): void {
 }
 
 export function configureDevUserDataPath(isDev: boolean): void {
-  const e2eUserDataPath = process.env.ORCA_E2E_USER_DATA_DIR
-  if (e2eUserDataPath) {
+  const e2eConfig = getMainE2EConfig()
+  if (e2eConfig.userDataDir) {
     // Why: the E2E suite launches a fresh Electron app for each spec. A
     // dedicated userData path per launch prevents persisted repos, worktrees,
     // and session state from leaking between tests through the shared dev
     // profile while still leaving the user's real packaged profile untouched.
-    app.setPath('userData', e2eUserDataPath)
+    app.setPath('userData', e2eConfig.userDataDir)
     return
   }
 
