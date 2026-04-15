@@ -241,8 +241,10 @@ export class SshConnection {
         return
       }
       try {
-        await this.attemptConnect()
+        // Why: reset reconnectAttempt before attemptConnect so setState('connected')
+        // broadcasts reconnectAttempt=0, which ssh.ts uses to trigger relay re-establishment.
         this.state.reconnectAttempt = 0
+        await this.attemptConnect()
       } catch {
         this.state.reconnectAttempt++
         this.scheduleReconnect()
@@ -278,9 +280,13 @@ export class SshConnection {
           }
           settled = true
           clearTimeout(timeout)
-          if (code !== 0) {
-            reject(new Error(`System SSH exited with code ${code}`))
-          }
+          reject(
+            new Error(
+              code !== 0
+                ? `System SSH exited with code ${code}`
+                : 'System SSH exited before producing output'
+            )
+          )
         })
       })
       this.setState('connected')
@@ -306,6 +312,8 @@ export class SshConnection {
       clearTimeout(this.reconnectTimer)
     }
     this.reconnectTimer = null
+    this.cachedPassphrase = null
+    this.cachedPassword = null
     this.client?.end()
     this.client = null
     this.proxyProcess?.kill()

@@ -70,10 +70,14 @@ export function SshPassphraseDialog(): React.JSX.Element | null {
           </DialogDescription>
         </DialogHeader>
         <div>
-          <label className="text-[11px] font-medium text-muted-foreground mb-1 block">
+          <label
+            htmlFor="ssh-credential-input"
+            className="text-[11px] font-medium text-muted-foreground mb-1 block"
+          >
             {isPassword ? `Password for ${request.detail}` : `Passphrase for ${request.detail}`}
           </label>
           <Input
+            id="ssh-credential-input"
             ref={inputRef}
             type="password"
             value={value}

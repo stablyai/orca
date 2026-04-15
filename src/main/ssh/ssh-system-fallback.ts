@@ -76,7 +76,7 @@ function buildSshArgs(target: SshTarget): string[] {
   }
 
   const userHost = target.username ? `${target.username}@${target.host}` : target.host
-  args.push(userHost)
+  args.push('--', userHost)
 
   return args
 }

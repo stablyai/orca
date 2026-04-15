@@ -197,6 +197,7 @@ export function spawnProxyCommand(
   })
   proc.stdout!.on('data', (data) => stream.push(data))
   proc.stdout!.on('end', () => stream.push(null))
+  proc.stdin!.on('error', (err) => stream.destroy(err))
   proc.on('error', (err) => stream.destroy(err))
 
   return { process: proc, sock: stream as unknown as NetSocket }

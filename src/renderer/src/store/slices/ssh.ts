@@ -1,6 +1,6 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { SshConnectionState, SshConnectionStatus } from '../../../../shared/ssh-types'
+import type { SshConnectionState } from '../../../../shared/ssh-types'
 
 export type SshCredentialRequest = {
   requestId: string
@@ -19,10 +19,9 @@ export type SshSlice = {
   setSshTargetLabels: (labels: Map<string, string>) => void
   enqueueSshCredentialRequest: (req: SshCredentialRequest) => void
   dequeueSshCredentialRequest: () => void
-  getSshConnectionStatus: (connectionId: string | null | undefined) => SshConnectionStatus | null
 }
 
-export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set, get) => ({
+export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) => ({
   sshConnectionStates: new Map(),
   sshTargetLabels: new Map(),
   sshCredentialQueue: [],
@@ -38,13 +37,5 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set, ge
   enqueueSshCredentialRequest: (req) =>
     set((s) => ({ sshCredentialQueue: [...s.sshCredentialQueue, req] })),
   dequeueSshCredentialRequest: () =>
-    set((s) => ({ sshCredentialQueue: s.sshCredentialQueue.slice(1) })),
-
-  getSshConnectionStatus: (connectionId) => {
-    if (!connectionId) {
-      return null
-    }
-    const state = get().sshConnectionStates.get(connectionId)
-    return state?.status ?? 'disconnected'
-  }
+    set((s) => ({ sshCredentialQueue: s.sshCredentialQueue.slice(1) }))
 })
