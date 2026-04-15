@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react'
-import { Files, Search, GitBranch, ListChecks } from 'lucide-react'
+import { Files, Search, GitBranch, ListChecks, PanelRight } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
@@ -114,6 +114,7 @@ function RightSidebarInner(): React.JSX.Element {
   const setRightSidebarWidth = useAppStore((s) => s.setRightSidebarWidth)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
+  const toggleRightSidebar = useAppStore((s) => s.toggleRightSidebar)
   const checksStatus = useAppStore(getActiveChecksStatus)
   const activityBarPosition = useAppStore((s) => s.activityBarPosition)
   const setActivityBarPosition = useAppStore((s) => s.setActivityBarPosition)
@@ -173,6 +174,24 @@ function RightSidebarInner(): React.JSX.Element {
     />
   ))
 
+  const closeButton = rightSidebarOpen ? (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          className="sidebar-toggle mr-1"
+          onClick={toggleRightSidebar}
+          aria-label="Toggle right sidebar"
+        >
+          <PanelRight size={16} />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={6}>
+        {`Toggle right sidebar (${isMac ? '⌘L' : 'Ctrl+L'})`}
+      </TooltipContent>
+    </Tooltip>
+  ) : null
+
   return (
     <div
       ref={containerRef}
@@ -197,8 +216,11 @@ function RightSidebarInner(): React.JSX.Element {
           /* ── Top activity bar: horizontal icon row ── */
           <ContextMenu>
             <ContextMenuTrigger asChild>
-              <div className="flex items-center border-b border-border h-[33px] min-h-[33px] px-1">
-                <TooltipProvider delayDuration={400}>{activityBarIcons}</TooltipProvider>
+              <div className="flex items-center justify-between border-b border-border h-[42px] min-h-[42px] pl-2 pr-1">
+                <TooltipProvider delayDuration={400}>
+                  <div className="flex items-center">{activityBarIcons}</div>
+                  {closeButton}
+                </TooltipProvider>
               </div>
             </ContextMenuTrigger>
             <ActivityBarPositionMenu
@@ -208,10 +230,11 @@ function RightSidebarInner(): React.JSX.Element {
           </ContextMenu>
         ) : (
           /* ── Side layout: static title header ── */
-          <div className="flex items-center h-[33px] min-h-[33px] px-3 border-b border-border">
+          <div className="flex items-center justify-between h-[42px] min-h-[42px] px-3 border-b border-border">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground">
               {visibleItems.find((item) => item.id === effectiveTab)?.title ?? ''}
             </span>
+            <TooltipProvider delayDuration={400}>{closeButton}</TooltipProvider>
           </div>
         )}
 
@@ -276,7 +299,7 @@ function ActivityBarButton({
         <button
           className={cn(
             'relative flex items-center justify-center transition-colors',
-            isTop ? 'h-[33px] w-9' : 'w-10 h-10',
+            isTop ? 'h-[42px] w-9' : 'w-10 h-10',
             active ? 'text-foreground' : 'text-muted-foreground/60 hover:text-muted-foreground'
           )}
           onClick={onClick}
@@ -289,7 +312,7 @@ function ActivityBarButton({
             <div
               className={cn(
                 'absolute rounded-full size-[7px] ring-1 ring-sidebar',
-                isTop ? 'top-[5px] right-[5px]' : 'top-[7px] right-[7px]',
+                isTop ? 'top-[8px] right-[5px]' : 'top-[7px] right-[7px]',
                 STATUS_DOT_COLOR[statusIndicator] ?? 'bg-muted-foreground'
               )}
             />

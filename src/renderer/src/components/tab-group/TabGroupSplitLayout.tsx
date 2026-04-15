@@ -85,7 +85,10 @@ function SplitNode({
   worktreeId,
   focusedGroupId,
   isWorktreeActive,
-  hasSplitGroups
+  hasSplitGroups,
+  touchesTopEdge,
+  touchesRightEdge,
+  touchesLeftEdge
 }: {
   node: TabGroupLayoutNode
   nodePath: string
@@ -93,6 +96,9 @@ function SplitNode({
   focusedGroupId?: string
   isWorktreeActive: boolean
   hasSplitGroups: boolean
+  touchesTopEdge: boolean
+  touchesRightEdge: boolean
+  touchesLeftEdge: boolean
 }): React.JSX.Element {
   const setTabGroupSplitRatio = useAppStore((state) => state.setTabGroupSplitRatio)
 
@@ -107,6 +113,8 @@ function SplitNode({
         // "focused", Cmd/Ctrl+W and split shortcuts can hit the wrong worktree.
         isFocused={isWorktreeActive && node.groupId === focusedGroupId}
         hasSplitGroups={hasSplitGroups}
+        reserveClosedExplorerToggleSpace={touchesTopEdge && touchesRightEdge}
+        reserveCollapsedSidebarHeaderSpace={touchesTopEdge && touchesLeftEdge}
       />
     )
   }
@@ -127,6 +135,9 @@ function SplitNode({
           focusedGroupId={focusedGroupId}
           isWorktreeActive={isWorktreeActive}
           hasSplitGroups={hasSplitGroups}
+          touchesTopEdge={touchesTopEdge}
+          touchesRightEdge={isHorizontal ? false : touchesRightEdge}
+          touchesLeftEdge={touchesLeftEdge}
         />
       </div>
       <ResizeHandle
@@ -141,6 +152,9 @@ function SplitNode({
           focusedGroupId={focusedGroupId}
           isWorktreeActive={isWorktreeActive}
           hasSplitGroups={hasSplitGroups}
+          touchesTopEdge={isHorizontal ? touchesTopEdge : false}
+          touchesRightEdge={touchesRightEdge}
+          touchesLeftEdge={isHorizontal ? false : touchesLeftEdge}
         />
       </div>
     </div>
@@ -167,6 +181,9 @@ export default function TabGroupSplitLayout({
         focusedGroupId={focusedGroupId}
         isWorktreeActive={isWorktreeActive}
         hasSplitGroups={layout.type === 'split'}
+        touchesTopEdge={true}
+        touchesRightEdge={true}
+        touchesLeftEdge={true}
       />
     </div>
   )

@@ -1,5 +1,5 @@
 /* eslint-disable max-lines */
-import { useEffect, useMemo } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { DEFAULT_STATUS_BAR_ITEMS, DEFAULT_WORKTREE_CARD_PROPERTIES } from '../../shared/constants'
 import { isGitRepoKind } from '../../shared/repo-kind'
 
@@ -124,8 +124,11 @@ function App(): React.JSX.Element {
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const rightSidebarWidth = useAppStore((s) => s.rightSidebarWidth)
+  const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const isFullScreen = useAppStore((s) => s.isFullScreen)
   const settings = useAppStore((s) => s.settings)
+  const titlebarLeftControlsRef = useRef<HTMLDivElement | null>(null)
+  const [collapsedSidebarHeaderWidth, setCollapsedSidebarHeaderWidth] = useState(0)
 
   // Subscribe to IPC push events
   useIpcEvents()
@@ -380,6 +383,10 @@ function App(): React.JSX.Element {
     !hasTabBar &&
     effectiveActiveTabExpanded
   const showSidebar = activeView !== 'settings'
+  // Why: when a worktree is active (split groups always enabled), the
+  // full-width titlebar is replaced by a sidebar-width left header so the
+  // terminal + tab groups extend to the very top of the window.
+  const workspaceActive = activeView !== 'settings' && activeWorktreeId !== null
 
   const handleToggleExpand = (): void => {
     if (!effectiveActiveTabId) {
@@ -479,196 +486,258 @@ function App(): React.JSX.Element {
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
   }, [activeView, activeWorktreeId, actions, repos])
 
+  useLayoutEffect(() => {
+    const controls = titlebarLeftControlsRef.current
+    if (!controls) {
+      return
+    }
+
+    const updateWidth = (): void => {
+      setCollapsedSidebarHeaderWidth(controls.getBoundingClientRect().width)
+    }
+
+    updateWidth()
+    const observer = new ResizeObserver(() => {
+      updateWidth()
+    })
+    observer.observe(controls)
+    return () => observer.disconnect()
+  }, [activeAgentCount, isFullScreen, settings?.showTitlebarAgentActivity, showSidebar])
+
+  // Why: extracted so both the full-width titlebar (settings/landing) and
+  // the sidebar-width left header (workspace view) can share the same
+  // controls without duplicating the agent badge popover.
+  const titlebarLeftControls = (
+    <div ref={titlebarLeftControlsRef} className="flex h-full shrink-0 items-center">
+      <div className={isMac && !isFullScreen ? 'titlebar-traffic-light-pad' : 'pl-2'} />
+      {showSidebar && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              className="sidebar-toggle"
+              onClick={actions.toggleSidebar}
+              aria-label="Toggle sidebar"
+            >
+              <PanelLeft size={16} />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={6}>
+            {`Toggle sidebar (${isMac ? '⌘B' : 'Ctrl+B'})`}
+          </TooltipContent>
+        </Tooltip>
+      )}
+      {settings?.showTitlebarAgentActivity !== false ? (
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              className={`titlebar-agent-badge${activeAgentCount === 0 ? ' titlebar-agent-badge-idle' : ''}`}
+              aria-label={`${activeAgentCount} ${activeAgentCount === 1 ? 'agent' : 'agents'} active`}
+            >
+              <span
+                className={`titlebar-agent-badge-dot${activeAgentCount === 0 ? ' titlebar-agent-badge-dot-idle' : ''}`}
+                aria-hidden
+              />
+              <span className="titlebar-agent-badge-count">{activeAgentCount}</span>
+            </button>
+          </PopoverTrigger>
+          <PopoverContent side="bottom" sideOffset={6} className="titlebar-agent-hovercard">
+            <div
+              className={`titlebar-agent-hovercard-header${activeAgentCount > 0 ? ' titlebar-agent-hovercard-header-with-list' : ''}`}
+            >
+              {activeAgentCount === 0
+                ? 'No agents active'
+                : `${activeAgentCount} ${activeAgentCount === 1 ? 'agent' : 'agents'} active`}
+            </div>
+            {activeAgentCount > 0 && (
+              <div className="titlebar-agent-hovercard-list">
+                {Object.entries(workingAgentsPerWorktree).map(([worktreeId, { agents }]) => {
+                  const wt = findWorktreeById(worktreesByRepo, worktreeId)
+                  // Why: when a transient git error causes worktreesByRepo to
+                  // lose a worktree, the raw worktreeId (uuid::path) is not
+                  // useful. Extract a cross-platform path basename as a
+                  // readable fallback.
+                  const sepIdx = worktreeId.indexOf('::')
+                  const pathPart = sepIdx !== -1 ? worktreeId.slice(sepIdx + 2) : worktreeId
+                  const fallbackName = pathPart.split(/[\\/]/).pop() || pathPart
+                  return (
+                    <div key={worktreeId}>
+                      <button
+                        className="titlebar-agent-hovercard-worktree"
+                        onClick={() => {
+                          // Why: if the worktree is missing from worktreesByRepo
+                          // (transient git error cleared the list), refresh the
+                          // repo's worktrees before navigating so the activation
+                          // lookup succeeds instead of silently failing.
+                          if (!wt) {
+                            const repoId = getRepoIdFromWorktreeId(worktreeId)
+                            void useAppStore
+                              .getState()
+                              .fetchWorktrees(repoId)
+                              .then(() => {
+                                activateAndRevealWorktree(worktreeId)
+                              })
+                            return
+                          }
+                          activateAndRevealWorktree(worktreeId)
+                        }}
+                      >
+                        <span className="titlebar-agent-hovercard-name">
+                          {wt?.displayName ?? fallbackName}
+                        </span>
+                      </button>
+                      {agents.map((agent, index) => (
+                        <button
+                          key={index}
+                          className="titlebar-agent-hovercard-agent"
+                          onClick={() => {
+                            activateAndRevealWorktree(worktreeId)
+                            useAppStore.getState().setActiveTab(agent.tabId)
+                            if (agent.paneId !== null) {
+                              // Why: a split-terminal tab can host multiple
+                              // agents. After selecting the tab, wait one
+                              // frame so the active TerminalPane can mount
+                              // and then focus the specific pane the user
+                              // clicked instead of leaving whichever pane
+                              // was previously active highlighted.
+                              requestAnimationFrame(() => {
+                                window.dispatchEvent(
+                                  new CustomEvent(FOCUS_TERMINAL_PANE_EVENT, {
+                                    detail: { tabId: agent.tabId, paneId: agent.paneId }
+                                  })
+                                )
+                              })
+                            }
+                          }}
+                        >
+                          <span className="titlebar-agent-hovercard-agent-label">
+                            {agent.label}
+                          </span>
+                          <span className="titlebar-agent-hovercard-agent-dot" />
+                        </button>
+                      ))}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+            <button
+              className="titlebar-agent-hovercard-hide"
+              onClick={() => {
+                void actions.updateSettings({ showTitlebarAgentActivity: false })
+                toast('Agent activity badge hidden', {
+                  description: 'You can turn it back on in Settings → Appearance.',
+                  duration: Infinity,
+                  dismissible: true
+                })
+              }}
+            >
+              Hide from titlebar
+            </button>
+          </PopoverContent>
+        </Popover>
+      ) : null}
+    </div>
+  )
+
+  const rightSidebarToggle = showSidebar ? (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          className="sidebar-toggle mr-2"
+          onClick={actions.toggleRightSidebar}
+          aria-label="Toggle right sidebar"
+        >
+          <PanelRight size={16} />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={6}>
+        {`Toggle right sidebar (${isMac ? '⌘L' : 'Ctrl+L'})`}
+      </TooltipContent>
+    </Tooltip>
+  ) : null
+
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden">
+    <div
+      className="flex flex-col h-screen w-screen overflow-hidden"
+      style={
+        {
+          '--collapsed-sidebar-header-width': `${collapsedSidebarHeaderWidth}px`
+        } as React.CSSProperties
+      }
+    >
       <TooltipProvider delayDuration={400}>
-        <div className="titlebar">
-          {/* Why: the left section of the titlebar matches the sidebar width so
-              tabs start exactly where the sidebar ends, creating a clean vertical
-              alignment between the sidebar edge and the first tab. When the
-              sidebar is collapsed, shrink-0 prevents the flex-1 tab section from
-              squeezing this area, and mr-2 adds a gap before the first tab. */}
-          <div
-            className={`flex items-center${showSidebar && sidebarOpen ? ' overflow-hidden shrink-0' : ' shrink-0 mr-2'}`}
-            style={{ width: showSidebar && sidebarOpen ? sidebarWidth : undefined }}
-          >
-            <div className={isMac && !isFullScreen ? 'titlebar-traffic-light-pad' : 'pl-2'} />
-            {/* Why: hide the toggle entirely in settings so no disabled button
-                or stray Radix PopperAnchor portal appears in the titlebar. */}
-            {showSidebar && (
+        {/* Why: in workspace view (split groups always enabled), the full-width
+            titlebar is removed so tab groups + terminal extend to the top of
+            the window. Left titlebar controls move to a header above the sidebar.
+            Settings and landing views keep the full-width titlebar. */}
+        {!workspaceActive ? (
+          <div className="titlebar">
+            <div
+              className={`flex items-center${showSidebar && sidebarOpen ? ' overflow-hidden shrink-0' : ' shrink-0 mr-2'}`}
+              style={{ width: showSidebar && sidebarOpen ? sidebarWidth : undefined }}
+            >
+              {titlebarLeftControls}
+            </div>
+            <div
+              id="titlebar-tabs"
+              className={`flex flex-1 min-w-0 self-stretch${activeView === 'settings' || !activeWorktreeId ? ' invisible pointer-events-none' : ''}`}
+            />
+            {showTitlebarExpandButton && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
-                    className="sidebar-toggle"
-                    onClick={actions.toggleSidebar}
-                    aria-label="Toggle sidebar"
+                    className="titlebar-icon-button"
+                    onClick={handleToggleExpand}
+                    aria-label="Collapse pane"
+                    disabled={!activeTabCanExpand}
                   >
-                    <PanelLeft size={16} />
+                    <Minimize2 size={14} />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>
-                  {`Toggle sidebar (${isMac ? '⌘B' : 'Ctrl+B'})`}
+                  Collapse pane
                 </TooltipContent>
               </Tooltip>
             )}
-            <div className="titlebar-title">Orca</div>
-            {settings?.showTitlebarAgentActivity !== false ? (
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button
-                    className={`titlebar-agent-badge${activeAgentCount === 0 ? ' titlebar-agent-badge-idle' : ''}`}
-                    aria-label={`${activeAgentCount} ${activeAgentCount === 1 ? 'agent' : 'agents'} active`}
-                  >
-                    <span
-                      className={`titlebar-agent-badge-dot${activeAgentCount === 0 ? ' titlebar-agent-badge-dot-idle' : ''}`}
-                      aria-hidden
-                    />
-                    <span className="titlebar-agent-badge-count">{activeAgentCount}</span>
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent side="bottom" sideOffset={6} className="titlebar-agent-hovercard">
-                  <div
-                    className={`titlebar-agent-hovercard-header${activeAgentCount > 0 ? ' titlebar-agent-hovercard-header-with-list' : ''}`}
-                  >
-                    {activeAgentCount === 0
-                      ? 'No agents active'
-                      : `${activeAgentCount} ${activeAgentCount === 1 ? 'agent' : 'agents'} active`}
-                  </div>
-                  {activeAgentCount > 0 && (
-                    <div className="titlebar-agent-hovercard-list">
-                      {Object.entries(workingAgentsPerWorktree).map(([worktreeId, { agents }]) => {
-                        const wt = findWorktreeById(worktreesByRepo, worktreeId)
-                        // Why: when a transient git error causes worktreesByRepo to
-                        // lose a worktree, the raw worktreeId (uuid::path) is not
-                        // useful. Extract a cross-platform path basename as a
-                        // readable fallback.
-                        const sepIdx = worktreeId.indexOf('::')
-                        const pathPart = sepIdx !== -1 ? worktreeId.slice(sepIdx + 2) : worktreeId
-                        const fallbackName = pathPart.split(/[\\/]/).pop() || pathPart
-                        return (
-                          <div key={worktreeId}>
-                            <button
-                              className="titlebar-agent-hovercard-worktree"
-                              onClick={() => {
-                                // Why: if the worktree is missing from worktreesByRepo
-                                // (transient git error cleared the list), refresh the
-                                // repo's worktrees before navigating so the activation
-                                // lookup succeeds instead of silently failing.
-                                if (!wt) {
-                                  const repoId = getRepoIdFromWorktreeId(worktreeId)
-                                  void useAppStore
-                                    .getState()
-                                    .fetchWorktrees(repoId)
-                                    .then(() => {
-                                      activateAndRevealWorktree(worktreeId)
-                                    })
-                                  return
-                                }
-                                activateAndRevealWorktree(worktreeId)
-                              }}
-                            >
-                              <span className="titlebar-agent-hovercard-name">
-                                {wt?.displayName ?? fallbackName}
-                              </span>
-                            </button>
-                            {agents.map((agent, index) => (
-                              <button
-                                key={index}
-                                className="titlebar-agent-hovercard-agent"
-                                onClick={() => {
-                                  activateAndRevealWorktree(worktreeId)
-                                  useAppStore.getState().setActiveTab(agent.tabId)
-                                  if (agent.paneId !== null) {
-                                    // Why: a split-terminal tab can host multiple
-                                    // agents. After selecting the tab, wait one
-                                    // frame so the active TerminalPane can mount
-                                    // and then focus the specific pane the user
-                                    // clicked instead of leaving whichever pane
-                                    // was previously active highlighted.
-                                    requestAnimationFrame(() => {
-                                      window.dispatchEvent(
-                                        new CustomEvent(FOCUS_TERMINAL_PANE_EVENT, {
-                                          detail: { tabId: agent.tabId, paneId: agent.paneId }
-                                        })
-                                      )
-                                    })
-                                  }
-                                }}
-                              >
-                                <span className="titlebar-agent-hovercard-agent-label">
-                                  {agent.label}
-                                </span>
-                                <span className="titlebar-agent-hovercard-agent-dot" />
-                              </button>
-                            ))}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-                  <button
-                    className="titlebar-agent-hovercard-hide"
-                    onClick={() => {
-                      void actions.updateSettings({ showTitlebarAgentActivity: false })
-                      toast('Agent activity badge hidden', {
-                        description: 'You can turn it back on in Settings → Appearance.',
-                        duration: Infinity,
-                        dismissible: true
-                      })
-                    }}
-                  >
-                    Hide from titlebar
-                  </button>
-                </PopoverContent>
-              </Popover>
-            ) : null}
+            {rightSidebarToggle}
           </div>
-          {/* Why: keep the center titlebar slot mounted even when tabs are hidden.
-              Using `hidden` here collapsed the spacer entirely, which let the
-              right-sidebar toggle slide left in the no-tabs empty state. `invisible`
-              still suppresses any stale portal content without breaking the far-right
-              titlebar alignment. */}
-          <div
-            id="titlebar-tabs"
-            className={`flex flex-1 min-w-0 self-stretch${activeView === 'settings' || !activeWorktreeId ? ' invisible pointer-events-none' : ''}`}
-          />
-          {showTitlebarExpandButton && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  className="titlebar-icon-button"
-                  onClick={handleToggleExpand}
-                  aria-label="Collapse pane"
-                  disabled={!activeTabCanExpand}
-                >
-                  <Minimize2 size={14} />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={6}>
-                Collapse pane
-              </TooltipContent>
-            </Tooltip>
-          )}
-          {showSidebar ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  className="sidebar-toggle mr-2"
-                  onClick={actions.toggleRightSidebar}
-                  aria-label="Toggle right sidebar"
-                >
-                  <PanelRight size={16} />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={6}>
-                {`Toggle right sidebar (${isMac ? '⌘L' : 'Ctrl+L'})`}
-              </TooltipContent>
-            </Tooltip>
-          ) : null}
-        </div>
+        ) : null}
         <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
-          {showSidebar ? <Sidebar /> : null}
+          {showSidebar ? (
+            workspaceActive ? (
+              /* Why: left column wraps the sidebar with a titlebar-height
+                 header above it. The header holds the same controls
+                 (traffic lights, sidebar toggle, "Orca" title, agent badge)
+                 that the full-width titlebar held while the center and right
+                 columns keep their own top strips at the same 42px height.
+                 When the sidebar is collapsed, take this header out of flex
+                 layout so the terminal/editor reclaim the left edge instead of
+                 leaving behind a content-width blank strip. */
+              <div
+                className={`flex flex-col shrink-0${sidebarOpen ? '' : ' relative w-0 overflow-visible'}`}
+              >
+                <div
+                  className={`titlebar-left${sidebarOpen ? '' : ' absolute top-0 left-0 z-10'}`}
+                  style={{ width: sidebarOpen ? sidebarWidth : undefined }}
+                >
+                  {titlebarLeftControls}
+                </div>
+                <Sidebar />
+              </div>
+            ) : (
+              <Sidebar />
+            )
+          ) : null}
           <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
+            {/* Why: right sidebar toggle floats at the top-right of the center
+                column so it's always accessible whether the right sidebar is
+                open or closed. Its height matches the 42px workspace strip
+                used by the sidebar and tab rows. */}
+            {workspaceActive && !rightSidebarOpen && (
+              <div className="absolute top-0 right-0 z-10 flex items-center h-[42px]">
+                {rightSidebarToggle}
+              </div>
+            )}
             <div className="flex flex-1 min-w-0 min-h-0 flex-col">
               <div
                 className={
@@ -685,10 +754,7 @@ function App(): React.JSX.Element {
           {/* Why: keep RightSidebar mounted even when closed so that its
               child components (FileExplorer, SourceControl, etc.) and their
               filesystem watchers + cached directory trees survive across
-              open/close toggles.  Without this, every Ctrl+L remounts the
-              entire subtree, triggering watchWorktree + readDir + branchCompare
-              IPC calls that freeze Windows for seconds.  The sidebar already
-              renders at width 0 when closed via useSidebarResize. */}
+              open/close toggles. */}
           {showSidebar ? <RightSidebar /> : null}
         </div>
         <StatusBar />

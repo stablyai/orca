@@ -294,6 +294,24 @@
   user-select: none;
 }
 
+/* Why: workspace view still needs a full titlebar-height strip above the
+   sidebar so the native macOS traffic lights and sidebar chrome sit in the
+   same vertical band they use in settings/landing. The center and right
+   workspace columns are offset separately to align with this 42px baseline. */
+.titlebar-left {
+  height: 42px;
+  min-height: 42px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--bg-titlebar, var(--card));
+  border-bottom: 1px solid var(--border);
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
 .titlebar-traffic-light-pad {
   width: calc(80px / var(--ui-zoom-factor, 1));
   flex-shrink: 0;
@@ -328,21 +346,13 @@
   color: var(--muted-foreground);
 }
 
-.titlebar-title {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--muted-foreground);
-  margin-left: 8px;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
 .titlebar-agent-badge {
   -webkit-app-region: no-drag;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  margin-left: 10px;
+  margin-left: 4px;
+  margin-right: 8px;
   padding: 3px 8px;
   border-radius: 999px;
   border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);

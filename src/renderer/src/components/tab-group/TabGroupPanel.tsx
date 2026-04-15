@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { X } from 'lucide-react'
+import { useAppStore } from '../../store'
 import TabBar from '../tab-bar/TabBar'
 import TerminalPane from '../terminal-pane/TerminalPane'
 import BrowserPane from '../browser-pane/BrowserPane'
@@ -11,13 +12,19 @@ export default function TabGroupPanel({
   groupId,
   worktreeId,
   isFocused,
-  hasSplitGroups
+  hasSplitGroups,
+  reserveClosedExplorerToggleSpace,
+  reserveCollapsedSidebarHeaderSpace
 }: {
   groupId: string
   worktreeId: string
   isFocused: boolean
   hasSplitGroups: boolean
+  reserveClosedExplorerToggleSpace: boolean
+  reserveCollapsedSidebarHeaderSpace: boolean
 }): React.JSX.Element {
+  const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
+  const sidebarOpen = useAppStore((state) => state.sidebarOpen)
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
   const {
     activeBrowserTab,
@@ -115,7 +122,7 @@ export default function TabGroupPanel({
     <div
       className={`flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden${
         hasSplitGroups
-          ? ` group/tab-group border ${isFocused ? 'border-accent' : 'border-border'}`
+          ? ` group/tab-group border-x border-b ${isFocused ? 'border-accent' : 'border-border'}`
           : ''
       }`}
       onPointerDown={commands.focusGroup}
@@ -129,9 +136,28 @@ export default function TabGroupPanel({
           can show multiple groups at once, while the window titlebar only has
           one shared center slot. Rendering true tab chrome here preserves
           per-group titles without making groups fight over one portal target. */}
-      <div className="shrink-0 border-b border-border bg-card">
-        <div className="flex items-stretch">
-          <div className="min-w-0 flex-1">{tabBar}</div>
+      <div className="h-[42px] shrink-0 border-b border-border bg-card">
+        <div
+          className={`flex h-full items-stretch${
+            reserveClosedExplorerToggleSpace && !rightSidebarOpen ? ' pr-10' : ''
+          }`}
+          style={{
+            paddingLeft:
+              reserveCollapsedSidebarHeaderSpace && !sidebarOpen
+                ? 'var(--collapsed-sidebar-header-width)'
+                : undefined
+          }}
+        >
+          {/* Why: when the right sidebar is closed, App.tsx renders a floating
+              explorer toggle in the top-right corner of the workspace. Only the
+              top-right tab group can sit underneath that button, so reserve
+              space in just that one header instead of pushing every group in. */}
+          {/* Why: collapsing the left worktree sidebar should let the terminal
+              reclaim the full left edge, but the top-left tab row should still
+              stop where the remaining titlebar controls end. Use the measured
+              width of that controls cluster instead of the old full sidebar
+              width so tabs cap at the agent badge, not at the old divider. */}
+          <div className="min-w-0 flex-1 h-full">{tabBar}</div>
           {hasSplitGroups && (
             <button
               type="button"
@@ -141,7 +167,7 @@ export default function TabGroupPanel({
                 event.stopPropagation()
                 commands.closeGroup()
               }}
-              className="mx-1 my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+              className="my-auto ml-1 mr-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground"
             >
               <X className="size-4" />
             </button>

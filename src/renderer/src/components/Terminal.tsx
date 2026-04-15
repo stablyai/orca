@@ -123,18 +123,6 @@ function Terminal(): React.JSX.Element | null {
   const effectiveActiveLayout = activeWorktreeId
     ? getEffectiveLayoutForWorktree(activeWorktreeId)
     : undefined
-  const activeWorktree = activeWorktreeId
-    ? (allWorktrees.find((worktree) => worktree.id === activeWorktreeId) ?? null)
-    : null
-  const activeTerminalTab = tabs.find((tab) => tab.id === activeTabId) ?? null
-  const activeEditorFile = worktreeFiles.find((file) => file.id === activeFileId) ?? null
-  const activeBrowserTab = worktreeBrowserTabs.find((tab) => tab.id === activeBrowserTabId) ?? null
-  const activeSurfaceLabel =
-    activeTabType === 'browser'
-      ? (activeBrowserTab?.title ?? activeBrowserTab?.url ?? 'Browser')
-      : activeTabType === 'editor'
-        ? (activeEditorFile?.relativePath ?? activeEditorFile?.filePath ?? 'Editor')
-        : (activeTerminalTab?.customTitle ?? activeTerminalTab?.title ?? 'Terminal')
   const activeWorktreeBrowserTabIdsKey = activeWorktreeId
     ? (browserTabsByWorktree[activeWorktreeId] ?? []).map((tab) => tab.id).join(',')
     : ''
@@ -834,23 +822,9 @@ function Terminal(): React.JSX.Element | null {
           titlebarTabsTarget
         )}
 
-      {activeWorktreeId &&
-        effectiveActiveLayout &&
-        titlebarTabsTarget &&
-        createPortal(
-          <div className="flex h-full min-w-0 items-center px-3 text-xs text-muted-foreground">
-            {/* Why: split layouts can show several independent tab rows, so the
-                titlebar cannot host the real tabs without collapsing multiple
-                groups into one shared surface. A lightweight summary still uses
-                that otherwise empty strip and keeps the window chrome balanced. */}
-            <span className="truncate font-medium text-foreground/80">
-              {activeWorktree?.displayName ?? 'Workspace'}
-            </span>
-            <span className="px-2 text-border">/</span>
-            <span className="truncate">{activeSurfaceLabel}</span>
-          </div>,
-          titlebarTabsTarget
-        )}
+      {/* Why: the full-width titlebar is no longer rendered in workspace view
+          — tab groups + terminal extend to the top of the window instead.
+          The old summary label (workspace / active surface) is removed. */}
 
       {effectiveActiveLayout ? (
         <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
