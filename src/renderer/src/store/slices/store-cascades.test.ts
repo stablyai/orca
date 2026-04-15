@@ -795,6 +795,62 @@ describe('setActiveWorktree', () => {
     expect(replacement.title).toBe('Terminal 1')
   })
 
+  it('returns to the landing state when closing the last terminal tab in the active worktree', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const groupId = 'group-1'
+    const tabId = 'tab-1'
+    const unifiedTabId = 'unified-tab-1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      activeWorktreeId: wt,
+      activeTabId: tabId,
+      activeTabType: 'terminal',
+      activeTabIdByWorktree: { [wt]: tabId },
+      activeTabTypeByWorktree: { [wt]: 'terminal' },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: tabId, worktreeId: wt })]
+      },
+      unifiedTabsByWorktree: {
+        [wt]: [
+          makeUnifiedTab({
+            id: unifiedTabId,
+            entityId: tabId,
+            worktreeId: wt,
+            groupId,
+            contentType: 'terminal',
+            label: 'Terminal 1'
+          })
+        ]
+      },
+      groupsByWorktree: {
+        [wt]: [
+          makeTabGroup({
+            id: groupId,
+            worktreeId: wt,
+            activeTabId: unifiedTabId,
+            tabOrder: [unifiedTabId]
+          })
+        ]
+      },
+      activeGroupIdByWorktree: { [wt]: groupId },
+      layoutByWorktree: {
+        [wt]: { type: 'leaf', groupId }
+      }
+    })
+
+    store.getState().closeTab(tabId)
+
+    const s = store.getState()
+    expect(s.activeWorktreeId).toBeNull()
+    expect(s.activeTabId).toBeNull()
+    expect(s.tabsByWorktree[wt]).toEqual([])
+    expect(s.unifiedTabsByWorktree[wt]).toEqual([])
+  })
+
   it('keeps terminal numbering stable when a live agent renames an existing tab', () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'

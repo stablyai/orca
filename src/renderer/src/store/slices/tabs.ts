@@ -538,6 +538,12 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         nextLayoutByWorktree = collapsedState.layoutByWorktree
         nextActiveGroupIdByWorktree = collapsedState.activeGroupIdByWorktree
       }
+      const shouldDeactivateWorktree =
+        current.activeWorktreeId === worktreeId &&
+        nextTabs.length === 0 &&
+        (current.tabsByWorktree[worktreeId] ?? []).length === 0 &&
+        (current.browserTabsByWorktree[worktreeId] ?? []).length === 0 &&
+        !current.openFiles.some((file) => file.worktreeId === worktreeId)
       return {
         unifiedTabsByWorktree: { ...current.unifiedTabsByWorktree, [worktreeId]: nextTabs },
         groupsByWorktree: {
@@ -546,7 +552,38 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         },
         layoutByWorktree: nextLayoutByWorktree,
         activeGroupIdByWorktree: nextActiveGroupIdByWorktree,
-        ...(current.activeWorktreeId === worktreeId
+        // Why: the split-group model can legally derive "terminal with no
+        // active tab" after the final unified tab closes. That leaves the
+        // worktree selected but render-empty, so the workspace shows a blank
+        // pane instead of Orca's landing screen. When that happens, write the
+        // landing-state fallback directly instead of recomputing active-surface
+        // fields from a worktree that is no longer active.
+        ...(shouldDeactivateWorktree
+          ? {
+              activeWorktreeId: null,
+              activeTabId: null,
+              activeBrowserTabId: null,
+              activeFileId: null,
+              activeTabType: 'terminal' as const,
+              activeTabIdByWorktree: {
+                ...current.activeTabIdByWorktree,
+                [worktreeId]: null
+              },
+              activeBrowserTabIdByWorktree: {
+                ...current.activeBrowserTabIdByWorktree,
+                [worktreeId]: null
+              },
+              activeFileIdByWorktree: {
+                ...current.activeFileIdByWorktree,
+                [worktreeId]: null
+              },
+              activeTabTypeByWorktree: {
+                ...current.activeTabTypeByWorktree,
+                [worktreeId]: 'terminal'
+              }
+            }
+          : {}),
+        ...(!shouldDeactivateWorktree && current.activeWorktreeId === worktreeId
           ? buildActiveSurfacePatch(
               {
                 ...current,
