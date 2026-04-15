@@ -84,12 +84,14 @@ function SplitNode({
   nodePath,
   worktreeId,
   focusedGroupId,
+  isWorktreeActive,
   hasSplitGroups
 }: {
   node: TabGroupLayoutNode
   nodePath: string
   worktreeId: string
   focusedGroupId?: string
+  isWorktreeActive: boolean
   hasSplitGroups: boolean
 }): React.JSX.Element {
   const setTabGroupSplitRatio = useAppStore((state) => state.setTabGroupSplitRatio)
@@ -99,7 +101,11 @@ function SplitNode({
       <TabGroupPanel
         groupId={node.groupId}
         worktreeId={worktreeId}
-        isFocused={node.groupId === focusedGroupId}
+        // Why: hidden worktrees stay mounted so their PTYs and split layouts
+        // survive worktree switches, but only the visible worktree may own the
+        // global terminal shortcuts. If an offscreen group's pane stays
+        // "focused", Cmd/Ctrl+W and split shortcuts can hit the wrong worktree.
+        isFocused={isWorktreeActive && node.groupId === focusedGroupId}
         hasSplitGroups={hasSplitGroups}
       />
     )
@@ -119,6 +125,7 @@ function SplitNode({
           nodePath={nodePath.length > 0 ? `${nodePath}.first` : 'first'}
           worktreeId={worktreeId}
           focusedGroupId={focusedGroupId}
+          isWorktreeActive={isWorktreeActive}
           hasSplitGroups={hasSplitGroups}
         />
       </div>
@@ -132,6 +139,7 @@ function SplitNode({
           nodePath={nodePath.length > 0 ? `${nodePath}.second` : 'second'}
           worktreeId={worktreeId}
           focusedGroupId={focusedGroupId}
+          isWorktreeActive={isWorktreeActive}
           hasSplitGroups={hasSplitGroups}
         />
       </div>
@@ -142,11 +150,13 @@ function SplitNode({
 export default function TabGroupSplitLayout({
   layout,
   worktreeId,
-  focusedGroupId
+  focusedGroupId,
+  isWorktreeActive
 }: {
   layout: TabGroupLayoutNode
   worktreeId: string
   focusedGroupId?: string
+  isWorktreeActive: boolean
 }): React.JSX.Element {
   return (
     <div className="flex flex-1 min-w-0 min-h-0 overflow-hidden">
@@ -155,6 +165,7 @@ export default function TabGroupSplitLayout({
         nodePath=""
         worktreeId={worktreeId}
         focusedGroupId={focusedGroupId}
+        isWorktreeActive={isWorktreeActive}
         hasSplitGroups={layout.type === 'split'}
       />
     </div>

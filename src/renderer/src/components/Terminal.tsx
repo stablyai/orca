@@ -896,6 +896,7 @@ function Terminal(): React.JSX.Element | null {
                     layout={layout}
                     worktreeId={worktree.id}
                     focusedGroupId={activeGroupIdByWorktree[worktree.id]}
+                    isWorktreeActive={isVisible}
                   />
                 </div>
               )
