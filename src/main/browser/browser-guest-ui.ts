@@ -271,6 +271,12 @@ export function setupGuestShortcutForwarding(args: {
       // relying on the guest's built-in shortcut, which may not reach the
       // parked-webview eviction logic.
       renderer.send('ui:reloadBrowserPage')
+    } else if (input.code === 'KeyF' && !input.shift) {
+      // Why: Cmd/Ctrl+F must be forwarded out of the guest so the renderer can
+      // open its own find-in-page bar and call webview.findInPage(). Letting the
+      // guest handle it natively would open Chromium's built-in find UI inside
+      // the guest frame, which is invisible behind Orca's chrome.
+      renderer.send('ui:findInBrowserPage')
     } else if (input.code === 'KeyW' && !input.shift) {
       renderer.send('ui:closeActiveTab')
     } else if (input.shift && (input.code === 'BracketRight' || input.code === 'BracketLeft')) {

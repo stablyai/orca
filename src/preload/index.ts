@@ -963,6 +963,11 @@ const api = {
       ipcRenderer.on('ui:focusBrowserAddressBar', listener)
       return () => ipcRenderer.removeListener('ui:focusBrowserAddressBar', listener)
     },
+    onFindInBrowserPage: (callback: () => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent) => callback()
+      ipcRenderer.on('ui:findInBrowserPage', listener)
+      return () => ipcRenderer.removeListener('ui:findInBrowserPage', listener)
+    },
     onReloadBrowserPage: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('ui:reloadBrowserPage', listener)
@@ -1129,10 +1134,10 @@ const api = {
     addTarget: (args: { target: Omit<SshTarget, 'id'> }): Promise<SshTarget> =>
       ipcRenderer.invoke('ssh:addTarget', args),
 
-    updateTarget: (
-      args: { id: string; updates: Partial<Omit<SshTarget, 'id'>> }
-    ): Promise<SshTarget> =>
-      ipcRenderer.invoke('ssh:updateTarget', args),
+    updateTarget: (args: {
+      id: string
+      updates: Partial<Omit<SshTarget, 'id'>>
+    }): Promise<SshTarget> => ipcRenderer.invoke('ssh:updateTarget', args),
 
     removeTarget: (args: { id: string }): Promise<void> =>
       ipcRenderer.invoke('ssh:removeTarget', args),

@@ -64,6 +64,7 @@ import type {
 import { useGrabMode } from './useGrabMode'
 import { formatGrabPayloadAsText } from './GrabConfirmationSheet'
 import { isEditableKeyboardTarget } from './browser-keyboard'
+import BrowserFind from './BrowserFind'
 import {
   formatByteCount,
   formatDownloadFinishedNotice,
@@ -380,6 +381,7 @@ function BrowserPagePane({
     linkUrl: string | null
     pageUrl: string
   } | null>(null)
+  const [findOpen, setFindOpen] = useState(false)
   const grab = useGrabMode(browserTab.id)
   const createBrowserTab = useAppStore((s) => s.createBrowserTab)
   const consumeAddressBarFocusRequest = useAppStore((s) => s.consumeAddressBarFocusRequest)
@@ -716,6 +718,47 @@ function BrowserPagePane({
     })
   }, [focusAddressBarNow, isActive])
 
+  // Cmd/Ctrl+F — find in page (renderer path: focus on browser chrome)
+  // Why: unlike grab-mode shortcuts (bare C/S) which skip editable targets,
+  // Cmd+F is a modified chord that should always open find — even from the
+  // address bar. This matches Chrome/Safari behavior.
+  useEffect(() => {
+    if (!isActive) {
+      return
+    }
+    const handleKeyDown = (e: KeyboardEvent): void => {
+      const isMod = navigator.userAgent.includes('Mac') ? e.metaKey : e.ctrlKey
+      if (!isMod || e.shiftKey || e.altKey || e.key.toLowerCase() !== 'f') {
+        return
+      }
+      e.preventDefault()
+      e.stopPropagation()
+      setFindOpen(true)
+    }
+    window.addEventListener('keydown', handleKeyDown, true)
+    return () => window.removeEventListener('keydown', handleKeyDown, true)
+  }, [isActive])
+
+  // Cmd/Ctrl+F — find in page (IPC path: focus inside webview guest)
+  // Why: a focused webview guest is a separate Chromium process so the renderer
+  // keydown handler above never fires. Main intercepts the chord and sends it
+  // back here so find works whether focus is on the toolbar or the page.
+  useEffect(() => {
+    if (!isActive) {
+      return
+    }
+    return window.api.ui.onFindInBrowserPage(() => {
+      setFindOpen(true)
+    })
+  }, [isActive])
+
+  // Close find bar when tab is deactivated
+  useEffect(() => {
+    if (!isActive) {
+      setFindOpen(false)
+    }
+  }, [isActive])
+
   // Cmd/Ctrl+R — reload (renderer path: focus on browser chrome, not in guest)
   // Why: when focus is inside the renderer chrome (address bar, toolbar buttons)
   // rather than the webview guest, the guest shortcut forwarding in main never
@@ -993,7 +1036,16 @@ function BrowserPagePane({
     webview.addEventListener('dom-ready', handleDomReady)
     webview.addEventListener('did-start-loading', handleDidStartLoading)
     webview.addEventListener('did-stop-loading', handleDidStopLoading)
+    // Why: separate handler registered only on 'did-navigate' (full page loads),
+    // NOT on 'did-navigate-in-page'. The shared handleDidNavigate is registered
+    // on both events, so adding find-close logic there would also close on SPA
+    // hash changes and pushState calls, which fire constantly on single-page apps.
+    const handleFindCloseOnNavigate = (): void => {
+      setFindOpen(false)
+    }
+
     webview.addEventListener('did-navigate', handleDidNavigate)
+    webview.addEventListener('did-navigate', handleFindCloseOnNavigate)
     webview.addEventListener('did-navigate-in-page', handleDidNavigate)
     webview.addEventListener('page-title-updated', handleTitleUpdate)
     webview.addEventListener('page-favicon-updated', handleFaviconUpdate)
@@ -1018,6 +1070,7 @@ function BrowserPagePane({
       webview.removeEventListener('did-start-loading', handleDidStartLoading)
       webview.removeEventListener('did-stop-loading', handleDidStopLoading)
       webview.removeEventListener('did-navigate', handleDidNavigate)
+      webview.removeEventListener('did-navigate', handleFindCloseOnNavigate)
       webview.removeEventListener('did-navigate-in-page', handleDidNavigate)
       webview.removeEventListener('page-title-updated', handleTitleUpdate)
       webview.removeEventListener('page-favicon-updated', handleFaviconUpdate)
@@ -1876,6 +1929,7 @@ function BrowserPagePane({
         ref={containerRef}
         className="relative flex min-h-0 flex-1 overflow-hidden bg-background"
       >
+        <BrowserFind isOpen={findOpen} onClose={() => setFindOpen(false)} webviewRef={webviewRef} />
         {showFailureOverlay ? (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.02),transparent_58%)] px-6">
             <div className="flex max-w-sm flex-col items-center px-8 py-8 text-center opacity-70">

@@ -492,6 +492,7 @@ export type PreloadApi = {
     onNewBrowserTab: (callback: () => void) => () => void
     onNewTerminalTab: (callback: () => void) => () => void
     onFocusBrowserAddressBar: (callback: () => void) => () => void
+    onFindInBrowserPage: (callback: () => void) => () => void
     onReloadBrowserPage: (callback: () => void) => () => void
     onHardReloadBrowserPage: (callback: () => void) => () => void
     onCloseActiveTab: (callback: () => void) => () => void
@@ -533,7 +534,10 @@ export type PreloadApi = {
   ssh: {
     listTargets: () => Promise<SshTarget[]>
     addTarget: (args: { target: Omit<SshTarget, 'id'> }) => Promise<SshTarget>
-    updateTarget: (args: { id: string; updates: Partial<Omit<SshTarget, 'id'>> }) => Promise<SshTarget>
+    updateTarget: (args: {
+      id: string
+      updates: Partial<Omit<SshTarget, 'id'>>
+    }) => Promise<SshTarget>
     removeTarget: (args: { id: string }) => Promise<void>
     importConfig: () => Promise<SshTarget[]>
     connect: (args: { targetId: string }) => Promise<SshConnectionState | null>
@@ -542,7 +546,9 @@ export type PreloadApi = {
     testConnection: (args: {
       targetId: string
     }) => Promise<{ success: boolean; error?: string; state?: SshConnectionState }>
-    onStateChanged: (callback: (data: { targetId: string; state: SshConnectionState }) => void) => () => void
+    onStateChanged: (
+      callback: (data: { targetId: string; state: SshConnectionState }) => void
+    ) => () => void
     addPortForward: (args: {
       targetId: string
       localPort: number
