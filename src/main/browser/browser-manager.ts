@@ -304,6 +304,13 @@ class BrowserManager {
       this.unregisterGuest(browserTabId)
     }
     this.policyAttachedGuestIds.clear()
+    // Why: unregisterGuest only cleans up guests that were registered (have an
+    // entry in webContentsIdByTabId). Guests that went through
+    // attachGuestPolicies but were never registered still have cleanup closures
+    // here — invoke them so their event listeners are removed before clearing.
+    for (const cleanup of this.policyCleanupByGuestId.values()) {
+      cleanup()
+    }
     this.policyCleanupByGuestId.clear()
     this.tabIdByWebContentsId.clear()
     this.pendingLoadFailuresByGuestId.clear()

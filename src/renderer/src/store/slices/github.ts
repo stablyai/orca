@@ -354,15 +354,13 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       issueCache: evictStaleEntries(s.issueCache)
     }))
 
-    // Why: prRequestGenerations is a module-scope Map that accumulates one
-    // entry per unique repo+branch key. Prune entries for keys no longer in
-    // the prCache so it does not grow without bound.
-    const currentPrKeys = new Set(Object.keys(get().prCache))
-    for (const key of prRequestGenerations.keys()) {
-      if (!currentPrKeys.has(key)) {
-        prRequestGenerations.delete(key)
-      }
-    }
+    // Why: prRequestGenerations tracks generation counters for inflight
+    // fetch deduplication. Pruning keys that were just evicted from prCache
+    // would race with inflight requests — their generation check would fail
+    // and silently discard valid responses. Since each entry is just a number,
+    // the memory overhead is negligible; let it shrink naturally as keys stop
+    // being fetched. The eviction on prCache/issueCache above is sufficient
+    // to bound the dominant source of growth.
 
     // Only re-fetch PR/issue entries that are already stale — skip fresh ones
     const state = get()

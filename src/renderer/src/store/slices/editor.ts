@@ -446,6 +446,16 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                     ([fileId]) => fileId !== replacedPreview.id
                   )
                 )
+          // Why: editorCursorLine entries accumulate per file; clean up the
+          // evicted preview's entry so it does not leak across tab replacements.
+          const nextEditorCursorLine =
+            replacedPreview.id === id
+              ? s.editorCursorLine
+              : Object.fromEntries(
+                  Object.entries(s.editorCursorLine).filter(
+                    ([fileId]) => fileId !== replacedPreview.id
+                  )
+                )
           // Replace in-place to preserve tab position
           newFiles = s.openFiles.map((f, i) =>
             i === existingPreviewIdx ? { ...file, id, isDirty: false, isPreview: true } : f
@@ -463,6 +473,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           return {
             openFiles: newFiles,
             editorDrafts: nextEditorDrafts,
+            editorCursorLine: nextEditorCursorLine,
             markdownViewMode: nextMarkdownViewMode,
             ...previewTabBarUpdate,
             ...activeResult

@@ -52,13 +52,15 @@ function invalidateImageCache(): void {
     listener()
   }
   // Why: defer revocation so the browser keeps the old blob data readable
-  // until replacement loads complete, then free the underlying memory.
+  // until replacement IPC loads complete, then free the underlying memory.
+  // 30 seconds is generous enough to cover slow machines or large images
+  // without risking a visible broken-image flash.
   if (staleUrls.length > 0) {
     setTimeout(() => {
       for (const url of staleUrls) {
         URL.revokeObjectURL(url)
       }
-    }, 5000)
+    }, 30_000)
   }
 }
 

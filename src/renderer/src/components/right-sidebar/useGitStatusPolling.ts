@@ -93,7 +93,14 @@ export function useGitStatusPolling(): void {
         void fetchStatus()
       }
     }, POLL_INTERVAL_MS)
-    return () => clearInterval(intervalId)
+    // Why: when the user returns to the window, poll immediately so the sidebar
+    // shows up-to-date status without waiting up to POLL_INTERVAL_MS.
+    const onFocus = (): void => void fetchStatus()
+    window.addEventListener('focus', onFocus)
+    return () => {
+      clearInterval(intervalId)
+      window.removeEventListener('focus', onFocus)
+    }
   }, [fetchStatus])
 
   useEffect(() => {
@@ -111,7 +118,12 @@ export function useGitStatusPolling(): void {
         void fetchWorktrees(activeRepoId)
       }
     }, POLL_INTERVAL_MS)
-    return () => clearInterval(intervalId)
+    const onFocus = (): void => void fetchWorktrees(activeRepoId)
+    window.addEventListener('focus', onFocus)
+    return () => {
+      clearInterval(intervalId)
+      window.removeEventListener('focus', onFocus)
+    }
   }, [activeRepoId, activeRepoSupportsGit, fetchWorktrees])
 
   // Why: poll conflict operation for non-active worktrees that have a stale
@@ -142,6 +154,11 @@ export function useGitStatusPolling(): void {
         void pollStale()
       }
     }, POLL_INTERVAL_MS)
-    return () => clearInterval(intervalId)
+    const onFocus = (): void => void pollStale()
+    window.addEventListener('focus', onFocus)
+    return () => {
+      clearInterval(intervalId)
+      window.removeEventListener('focus', onFocus)
+    }
   }, [staleConflictWorktrees, setConflictOperation])
 }
