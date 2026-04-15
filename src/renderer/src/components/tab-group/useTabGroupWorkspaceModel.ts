@@ -1,23 +1,45 @@
 import { useCallback, useMemo } from 'react'
+import { useShallow } from 'zustand/react/shallow'
+import type { OpenFile } from '@/store/slices/editor'
 import type { BrowserTab as BrowserTabState, Tab } from '../../../../shared/types'
 import { useAppStore } from '../../store'
 import { destroyPersistentWebview } from '../browser-pane/BrowserPane'
 
-export function useTabGroupController({
+export type GroupEditorItem = OpenFile & { tabId: string }
+
+type TerminalTabItem = {
+  id: string
+  ptyId: null
+  worktreeId: string
+  title: string
+  customTitle: string | null | undefined
+  color: string | null | undefined
+  sortOrder: number
+  createdAt: number
+}
+
+export function useTabGroupWorkspaceModel({
   groupId,
-  worktreeId,
-  group,
-  groupTabs,
-  activeTab,
-  worktreeBrowserTabs
+  worktreeId
 }: {
   groupId: string
   worktreeId: string
-  group: { id: string; tabOrder: string[] } | null
-  groupTabs: Tab[]
-  activeTab: Tab | null
-  worktreeBrowserTabs: BrowserTabState[]
 }) {
+  const worktreeState = useAppStore(
+    useShallow((state) => ({
+      groups: state.groupsByWorktree[worktreeId] ?? [],
+      unifiedTabs: state.unifiedTabsByWorktree[worktreeId] ?? [],
+      openFiles: state.openFiles,
+      browserTabs: state.browserTabsByWorktree[worktreeId] ?? [],
+      runtimeTerminalTabs: state.tabsByWorktree[worktreeId] ?? [],
+      expandedPaneByTabId: state.expandedPaneByTabId,
+      worktree:
+        Object.values(state.worktreesByRepo)
+          .flat()
+          .find((candidate) => candidate.id === worktreeId) ?? null
+    }))
+  )
+
   const focusGroup = useAppStore((state) => state.focusGroup)
   const activateTab = useAppStore((state) => state.activateTab)
   const closeUnifiedTab = useAppStore((state) => state.closeUnifiedTab)
@@ -37,6 +59,79 @@ export function useTabGroupController({
   const closeBrowserTab = useAppStore((state) => state.closeBrowserTab)
   const setActiveBrowserTab = useAppStore((state) => state.setActiveBrowserTab)
   const copyUnifiedTabToGroup = useAppStore((state) => state.copyUnifiedTabToGroup)
+  const setTabCustomTitle = useAppStore((state) => state.setTabCustomTitle)
+  const setTabColor = useAppStore((state) => state.setTabColor)
+  const consumeSuppressedPtyExit = useAppStore((state) => state.consumeSuppressedPtyExit)
+
+  const group = useMemo(
+    () => worktreeState.groups.find((item) => item.id === groupId) ?? null,
+    [groupId, worktreeState.groups]
+  )
+  const groupTabs = useMemo(
+    () => worktreeState.unifiedTabs.filter((item) => item.groupId === groupId),
+    [groupId, worktreeState.unifiedTabs]
+  )
+  const activeItemId = group?.activeTabId ?? null
+  const activeTab = groupTabs.find((item) => item.id === activeItemId) ?? null
+
+  const terminalTabs = useMemo<TerminalTabItem[]>(
+    () =>
+      groupTabs
+        .filter((item) => item.contentType === 'terminal')
+        .map((item) => ({
+          id: item.entityId,
+          ptyId: null,
+          worktreeId,
+          title: item.label,
+          customTitle: item.customLabel ?? null,
+          color: item.color ?? null,
+          sortOrder: item.sortOrder,
+          createdAt: item.createdAt
+        })),
+    [groupTabs, worktreeId]
+  )
+
+  const editorItems = useMemo<GroupEditorItem[]>(
+    () =>
+      groupTabs
+        .filter(
+          (item) =>
+            item.contentType === 'editor' ||
+            item.contentType === 'diff' ||
+            item.contentType === 'conflict-review'
+        )
+        .map((item) => {
+          const file = worktreeState.openFiles.find((candidate) => candidate.id === item.entityId)
+          return file ? { ...file, tabId: item.id } : null
+        })
+        .filter((item): item is GroupEditorItem => item !== null),
+    [groupTabs, worktreeState.openFiles]
+  )
+
+  const browserItems = useMemo(
+    () =>
+      groupTabs
+        .filter((item) => item.contentType === 'browser')
+        .map((item) => {
+          const bt = worktreeState.browserTabs.find((candidate) => candidate.id === item.entityId)
+          return bt ?? null
+        })
+        .filter((item): item is BrowserTabState => item !== null),
+    [groupTabs, worktreeState.browserTabs]
+  )
+
+  const activeBrowserTab = useMemo(
+    () =>
+      activeTab?.contentType === 'browser'
+        ? (worktreeState.browserTabs.find((bt) => bt.id === activeTab.entityId) ?? null)
+        : null,
+    [activeTab, worktreeState.browserTabs]
+  )
+
+  const runtimeTerminalTabById = useMemo(
+    () => new Map(worktreeState.runtimeTerminalTabs.map((tab) => [tab.id, tab])),
+    [worktreeState.runtimeTerminalTabs]
+  )
 
   const closeEditorIfUnreferenced = useCallback(
     (entityId: string, closingTabId: string) => {
@@ -155,13 +250,9 @@ export function useTabGroupController({
         return
       }
 
-      // Why: tab context-menu split actions are scoped to the tab that opened
-      // the menu, not whichever tab was already active in the group. Falling
-      // back to the active tab preserves the "+" menu behavior, which creates
-      // a split from the current surface without a tab-specific source ID.
-
-      // Why: VS Code-style split actions leave the original group untouched and
-      // seed the new group with equivalent visible content when possible.
+      // Why: tab context-menu split actions belong to the visible tab that opened
+      // the menu. Keeping that decision inside the workspace model prevents the
+      // view layer from re-implementing "which tab is the source?" rules.
       if (sourceTab.contentType === 'terminal') {
         const terminal = createTab(worktreeId, newGroupId)
         setActiveTab(terminal.id)
@@ -170,7 +261,7 @@ export function useTabGroupController({
       }
 
       if (sourceTab.contentType === 'browser') {
-        const browserTab = worktreeBrowserTabs.find(
+        const browserTab = worktreeState.browserTabs.find(
           (candidate) => candidate.id === sourceTab.entityId
         )
         if (!browserTab) {
@@ -194,74 +285,49 @@ export function useTabGroupController({
       setActiveTabType('editor')
     },
     [
+      activeTab,
+      copyUnifiedTabToGroup,
       createBrowserTab,
       createEmptySplitGroup,
       createTab,
-      copyUnifiedTabToGroup,
       focusGroup,
       groupId,
       groupTabs,
-      activeTab,
       setActiveFile,
       setActiveTab,
       setActiveTabType,
-      worktreeBrowserTabs,
-      worktreeId
+      worktreeId,
+      worktreeState.browserTabs
     ]
   )
 
-  const tabBarOrder = useMemo(
-    () =>
-      (group?.tabOrder ?? []).map((itemId) => {
-        const item = groupTabs.find((candidate) => candidate.id === itemId)
-        if (!item) {
-          return itemId
-        }
-        // Why: the tab bar renders terminals and browser workspaces by their
-        // backing runtime IDs, while editor tabs render by their unified tab
-        // IDs. Reorder callbacks must round-trip through the same visible IDs
-        // or dnd-kit cannot map the dragged tab back to the stored group order.
-        return item.contentType === 'terminal' || item.contentType === 'browser'
-          ? item.entityId
-          : item.id
-      }),
-    [group, groupTabs]
-  )
+  const closeGroup = useCallback(() => {
+    const items = [...(useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? [])].filter(
+      (item) => item.groupId === groupId
+    )
+    for (const item of items) {
+      closeItem(item.id)
+    }
+    // Why: empty split groups are layout state, not tab state. The workspace
+    // model owns collapsing those placeholder panes so views do not need to
+    // understand when closing tabs is insufficient to remove a group shell.
+    closeEmptyGroup(worktreeId, groupId)
+  }, [closeEmptyGroup, closeItem, groupId, worktreeId])
 
-  return {
-    activateTerminal,
-    activateEditor,
-    activateBrowser,
-    closeItem,
-    closeGroup: () => {
-      const items = [...(useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? [])].filter(
-        (item) => item.groupId === groupId
-      )
-      for (const item of items) {
+  const closeAllEditorTabsInGroup = useCallback(() => {
+    for (const item of groupTabs) {
+      if (
+        item.contentType === 'editor' ||
+        item.contentType === 'diff' ||
+        item.contentType === 'conflict-review'
+      ) {
         closeItem(item.id)
       }
-      // Why: split creation can intentionally leave empty placeholder groups
-      // behind. Closing the group chrome must collapse those panes even when
-      // no tabs remain to trigger `closeUnifiedTab` cleanup.
-      closeEmptyGroup(worktreeId, groupId)
-    },
-    closeOthers: (itemId: string) => closeMany(closeOtherTabs(itemId)),
-    closeToRight: (itemId: string) => closeMany(closeTabsToRight(itemId)),
-    closeAllEditorTabsInGroup: () => {
-      // Why: this action is launched from one split group's editor tab menu.
-      // In split layouts it must only close editor surfaces owned by that
-      // group, not every editor tab in the worktree.
-      for (const item of groupTabs) {
-        if (
-          item.contentType === 'editor' ||
-          item.contentType === 'diff' ||
-          item.contentType === 'conflict-review'
-        ) {
-          closeItem(item.id)
-        }
-      }
-    },
-    reorderTabBar: (order: string[]) => {
+    }
+  }, [closeItem, groupTabs])
+
+  const reorderTabBar = useCallback(
+    (order: string[]) => {
       if (!group) {
         return
       }
@@ -279,18 +345,62 @@ export function useTabGroupController({
       const remainingIds = group.tabOrder.filter((itemId) => !orderedIds.has(itemId))
       reorderUnifiedTabs(groupId, itemOrder.concat(remainingIds))
     },
-    newTerminalTab: () => {
-      const terminal = createTab(worktreeId, groupId)
-      setActiveTab(terminal.id)
-      setActiveTabType('terminal')
-    },
-    newBrowserTab: () => {
-      const defaultUrl = useAppStore.getState().browserDefaultUrl ?? 'about:blank'
-      createBrowserTab(worktreeId, defaultUrl, { title: 'New Browser Tab' })
-    },
-    pinFile,
-    copyUnifiedTabToGroup,
+    [group, groupId, groupTabs, reorderUnifiedTabs]
+  )
+
+  const tabBarOrder = useMemo(
+    () =>
+      (group?.tabOrder ?? []).map((itemId) => {
+        const item = groupTabs.find((candidate) => candidate.id === itemId)
+        if (!item) {
+          return itemId
+        }
+        return item.contentType === 'terminal' || item.contentType === 'browser'
+          ? item.entityId
+          : item.id
+      }),
+    [group, groupTabs]
+  )
+
+  return {
+    group,
+    activeTab,
+    activeBrowserTab,
+    browserItems,
+    editorItems,
+    terminalTabs,
     tabBarOrder,
-    createSplitGroup
+    groupTabs,
+    worktreePath: worktreeState.worktree?.path,
+    runtimeTerminalTabById,
+    expandedPaneByTabId: worktreeState.expandedPaneByTabId,
+    commands: {
+      focusGroup: () => {
+        focusGroup(worktreeId, groupId)
+      },
+      activateBrowser,
+      activateEditor,
+      activateTerminal,
+      closeAllEditorTabsInGroup,
+      closeGroup,
+      closeItem,
+      closeOthers: (itemId: string) => closeMany(closeOtherTabs(itemId)),
+      closeToRight: (itemId: string) => closeMany(closeTabsToRight(itemId)),
+      consumeSuppressedPtyExit,
+      createSplitGroup,
+      newBrowserTab: () => {
+        const defaultUrl = useAppStore.getState().browserDefaultUrl ?? 'about:blank'
+        createBrowserTab(worktreeId, defaultUrl, { title: 'New Browser Tab' })
+      },
+      newTerminalTab: () => {
+        const terminal = createTab(worktreeId, groupId)
+        setActiveTab(terminal.id)
+        setActiveTabType('terminal')
+      },
+      pinFile,
+      reorderTabBar,
+      setTabColor,
+      setTabCustomTitle
+    }
   }
 }

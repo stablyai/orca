@@ -1,22 +1,12 @@
 /* eslint-disable max-lines -- Why: group panels intentionally co-locate group-scoped tab chrome, activation/close handlers, and surface rendering so split groups cannot drift into a separate behavior path from the original root group. */
-import { lazy, Suspense, useCallback, useMemo } from 'react'
+import { lazy, Suspense } from 'react'
 import { X } from 'lucide-react'
-import { useShallow } from 'zustand/react/shallow'
-import type { OpenFile } from '@/store/slices/editor'
-import type { BrowserTab as BrowserTabState } from '../../../../shared/types'
-import { useAppStore } from '../../store'
 import TabBar from '../tab-bar/TabBar'
 import TerminalPane from '../terminal-pane/TerminalPane'
 import BrowserPane from '../browser-pane/BrowserPane'
-import { useTabGroupController } from './useTabGroupController'
+import { useTabGroupWorkspaceModel } from './useTabGroupWorkspaceModel'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
-
-type GroupEditorItem = OpenFile & { tabId: string }
-const EMPTY_GROUPS: readonly never[] = []
-const EMPTY_TABS: readonly never[] = []
-const EMPTY_RUNTIME_TERMINALS: readonly never[] = []
-const EMPTY_BROWSER_TABS: readonly never[] = []
 
 export default function TabGroupPanel({
   groupId,
@@ -29,169 +19,55 @@ export default function TabGroupPanel({
   isFocused: boolean
   hasSplitGroups: boolean
 }): React.JSX.Element {
-  const worktreeGroups = useAppStore(
-    useShallow((state) => state.groupsByWorktree[worktreeId] ?? EMPTY_GROUPS)
-  )
-  const worktreeUnifiedTabs = useAppStore(
-    useShallow((state) => state.unifiedTabsByWorktree[worktreeId] ?? EMPTY_TABS)
-  )
-  const openFiles = useAppStore((state) => state.openFiles)
-  const worktree = useAppStore(
-    useShallow(
-      (state) =>
-        Object.values(state.worktreesByRepo)
-          .flat()
-          .find((candidate) => candidate.id === worktreeId) ?? null
-    )
-  )
-  const focusGroup = useAppStore((state) => state.focusGroup)
-  const setTabCustomTitle = useAppStore((state) => state.setTabCustomTitle)
-  const setTabColor = useAppStore((state) => state.setTabColor)
-  const consumeSuppressedPtyExit = useAppStore((state) => state.consumeSuppressedPtyExit)
-  const expandedPaneByTabId = useAppStore((state) => state.expandedPaneByTabId)
-  const browserTabsByWorktree = useAppStore((state) => state.browserTabsByWorktree)
-  const runtimeTerminalTabs = useAppStore(
-    (state) => state.tabsByWorktree[worktreeId] ?? EMPTY_RUNTIME_TERMINALS
-  )
-
-  const group = useMemo(
-    () => worktreeGroups.find((item) => item.id === groupId) ?? null,
-    [groupId, worktreeGroups]
-  )
-  const groupTabs = useMemo(
-    () => worktreeUnifiedTabs.filter((item) => item.groupId === groupId),
-    [groupId, worktreeUnifiedTabs]
-  )
-
-  const activeItemId = group?.activeTabId ?? null
-  const activeTab = groupTabs.find((item) => item.id === activeItemId) ?? null
-
-  const terminalTabs = useMemo(
-    () =>
-      groupTabs
-        .filter((item) => item.contentType === 'terminal')
-        .map((item) => ({
-          id: item.entityId,
-          ptyId: null,
-          worktreeId,
-          title: item.label,
-          customTitle: item.customLabel,
-          color: item.color,
-          sortOrder: item.sortOrder,
-          createdAt: item.createdAt
-        })),
-    [groupTabs, worktreeId]
-  )
-
-  const editorItems = useMemo<GroupEditorItem[]>(
-    () =>
-      groupTabs
-        .filter(
-          (item) =>
-            item.contentType === 'editor' ||
-            item.contentType === 'diff' ||
-            item.contentType === 'conflict-review'
-        )
-        .map((item) => {
-          const file = openFiles.find((candidate) => candidate.id === item.entityId)
-          return file ? { ...file, tabId: item.id } : null
-        })
-        .filter((item): item is GroupEditorItem => item !== null),
-    [groupTabs, openFiles]
-  )
-
-  const worktreeBrowserTabs = useMemo(
-    () => browserTabsByWorktree[worktreeId] ?? EMPTY_BROWSER_TABS,
-    [browserTabsByWorktree, worktreeId]
-  )
-
-  const browserItems = useMemo(
-    () =>
-      groupTabs
-        .filter((item) => item.contentType === 'browser')
-        .map((item) => {
-          const bt = worktreeBrowserTabs.find((candidate) => candidate.id === item.entityId)
-          return bt ?? null
-        })
-        .filter((item): item is BrowserTabState => item !== null),
-    [groupTabs, worktreeBrowserTabs]
-  )
-
-  const activeBrowserTab = useMemo(
-    () =>
-      activeTab?.contentType === 'browser'
-        ? (worktreeBrowserTabs.find((bt) => bt.id === activeTab.entityId) ?? null)
-        : null,
-    [activeTab, worktreeBrowserTabs]
-  )
-
-  const runtimeTerminalTabById = useMemo(
-    () => new Map(runtimeTerminalTabs.map((tab) => [tab.id, tab])),
-    [runtimeTerminalTabs]
-  )
-
-  const controller = useTabGroupController({
-    groupId,
-    worktreeId,
-    group,
-    groupTabs,
+  const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
+  const {
+    activeBrowserTab,
     activeTab,
-    worktreeBrowserTabs
-  })
-
-  const handleTerminalClose = useCallback(
-    (terminalId: string) => {
-      const item = groupTabs.find(
-        (candidate) => candidate.entityId === terminalId && candidate.contentType === 'terminal'
-      )
-      if (item) {
-        controller.closeItem(item.id)
-      }
-    },
-    [controller, groupTabs]
-  )
-
-  const handleBrowserClose = useCallback(
-    (browserTabId: string) => {
-      const item = groupTabs.find(
-        (candidate) => candidate.entityId === browserTabId && candidate.contentType === 'browser'
-      )
-      if (item) {
-        controller.closeItem(item.id)
-      }
-    },
-    [controller, groupTabs]
-  )
+    browserItems,
+    commands,
+    editorItems,
+    runtimeTerminalTabById,
+    tabBarOrder,
+    terminalTabs,
+    worktreePath
+  } = model
 
   const tabBar = (
     <TabBar
       tabs={terminalTabs}
       activeTabId={activeTab?.contentType === 'terminal' ? activeTab.entityId : null}
       worktreeId={worktreeId}
-      expandedPaneByTabId={expandedPaneByTabId}
-      onActivate={controller.activateTerminal}
-      onClose={handleTerminalClose}
-      onCloseOthers={(terminalId) => {
-        const item = groupTabs.find(
+      expandedPaneByTabId={model.expandedPaneByTabId}
+      onActivate={commands.activateTerminal}
+      onClose={(terminalId) => {
+        const item = model.groupTabs.find(
           (candidate) => candidate.entityId === terminalId && candidate.contentType === 'terminal'
         )
         if (item) {
-          controller.closeOthers(item.id)
+          commands.closeItem(item.id)
+        }
+      }}
+      onCloseOthers={(terminalId) => {
+        const item = model.groupTabs.find(
+          (candidate) => candidate.entityId === terminalId && candidate.contentType === 'terminal'
+        )
+        if (item) {
+          commands.closeOthers(item.id)
         }
       }}
       onCloseToRight={(terminalId) => {
-        const item = groupTabs.find(
+        const item = model.groupTabs.find(
           (candidate) => candidate.entityId === terminalId && candidate.contentType === 'terminal'
         )
         if (item) {
-          controller.closeToRight(item.id)
+          commands.closeToRight(item.id)
         }
       }}
-      onReorder={(_, order) => controller.reorderTabBar(order)}
-      onNewTerminalTab={controller.newTerminalTab}
-      onNewBrowserTab={controller.newBrowserTab}
-      onSetCustomTitle={setTabCustomTitle}
-      onSetTabColor={setTabColor}
+      onReorder={(_, order) => commands.reorderTabBar(order)}
+      onNewTerminalTab={commands.newTerminalTab}
+      onNewBrowserTab={commands.newBrowserTab}
+      onSetCustomTitle={commands.setTabCustomTitle}
+      onSetTabColor={commands.setTabColor}
       onTogglePaneExpand={() => {}}
       editorFiles={editorItems}
       browserTabs={browserItems}
@@ -208,23 +84,30 @@ export default function TabGroupPanel({
             ? 'browser'
             : 'editor'
       }
-      onActivateFile={controller.activateEditor}
-      onCloseFile={controller.closeItem}
-      onActivateBrowserTab={controller.activateBrowser}
-      onCloseBrowserTab={handleBrowserClose}
-      onCloseAllFiles={controller.closeAllEditorTabsInGroup}
+      onActivateFile={commands.activateEditor}
+      onCloseFile={commands.closeItem}
+      onActivateBrowserTab={commands.activateBrowser}
+      onCloseBrowserTab={(browserTabId) => {
+        const item = model.groupTabs.find(
+          (candidate) => candidate.entityId === browserTabId && candidate.contentType === 'browser'
+        )
+        if (item) {
+          commands.closeItem(item.id)
+        }
+      }}
+      onCloseAllFiles={commands.closeAllEditorTabsInGroup}
       onPinFile={(_fileId, tabId) => {
         if (!tabId) {
           return
         }
-        const item = groupTabs.find((candidate) => candidate.id === tabId)
+        const item = model.groupTabs.find((candidate) => candidate.id === tabId)
         if (!item) {
           return
         }
-        controller.pinFile(item.entityId, item.id)
+        commands.pinFile(item.entityId, item.id)
       }}
-      tabBarOrder={controller.tabBarOrder}
-      onCreateSplitGroup={controller.createSplitGroup}
+      tabBarOrder={tabBarOrder}
+      onCreateSplitGroup={commands.createSplitGroup}
     />
   )
 
@@ -235,7 +118,7 @@ export default function TabGroupPanel({
           ? ` group/tab-group border ${isFocused ? 'border-accent' : 'border-border'}`
           : ''
       }`}
-      onPointerDown={() => focusGroup(worktreeId, groupId)}
+      onPointerDown={commands.focusGroup}
     >
       {/* Why: every split group must keep its own real tab row because the app
           can show multiple groups at once, while the window titlebar only has
@@ -251,7 +134,7 @@ export default function TabGroupPanel({
               title="Close Group"
               onClick={(event) => {
                 event.stopPropagation()
-                controller.closeGroup()
+                commands.closeGroup()
               }}
               className="mx-1 my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground"
             >
@@ -262,14 +145,14 @@ export default function TabGroupPanel({
       </div>
 
       <div className="relative flex-1 min-h-0 overflow-hidden">
-        {groupTabs
+        {model.groupTabs
           .filter((item) => item.contentType === 'terminal')
           .map((item) => (
             <TerminalPane
               key={`${item.entityId}-${runtimeTerminalTabById.get(item.entityId)?.generation ?? 0}`}
               tabId={item.entityId}
               worktreeId={worktreeId}
-              cwd={worktree?.path}
+              cwd={worktreePath}
               isActive={
                 isFocused && activeTab?.id === item.id && activeTab.contentType === 'terminal'
               }
@@ -279,12 +162,12 @@ export default function TabGroupPanel({
               // input. isVisible controls rendering; isActive controls focus.
               isVisible={activeTab?.id === item.id && activeTab.contentType === 'terminal'}
               onPtyExit={(ptyId) => {
-                if (consumeSuppressedPtyExit(ptyId)) {
+                if (commands.consumeSuppressedPtyExit(ptyId)) {
                   return
                 }
-                controller.closeItem(item.id)
+                commands.closeItem(item.id)
               }}
-              onCloseTab={() => controller.closeItem(item.id)}
+              onCloseTab={() => commands.closeItem(item.id)}
             />
           ))}
 
