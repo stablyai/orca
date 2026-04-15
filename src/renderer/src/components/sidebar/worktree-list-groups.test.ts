@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getPRGroupKey, matchesSearch } from './worktree-list-groups'
+import { buildRows, getPRGroupKey, matchesSearch } from './worktree-list-groups'
 import type { Repo, Worktree } from '../../../../shared/types'
 
 const repo: Repo = {
@@ -146,5 +146,54 @@ describe('matchesSearch', () => {
     }
     const w = { ...worktree, linkedIssue: 99 }
     expect(matchesSearch(w, '#', repoMap, prCache, null)).toBe(false)
+  })
+})
+
+describe('buildRows with pinned worktrees', () => {
+  const pinned = { ...worktree, id: 'wt-pinned', isPinned: true, displayName: 'pinned-feature' }
+  const unpinned1 = { ...worktree, id: 'wt-1', displayName: 'alpha' }
+  const unpinned2 = { ...worktree, id: 'wt-2', displayName: 'beta' }
+
+  it('emits a Pinned header followed by pinned items in groupBy none', () => {
+    const rows = buildRows('none', [unpinned1, pinned, unpinned2], repoMap, null, new Set())
+    expect(rows[0]).toMatchObject({ type: 'header', key: 'pinned', label: 'Pinned', count: 1 })
+    expect(rows[1]).toMatchObject({ type: 'item', worktree: { id: 'wt-pinned' } })
+  })
+
+  it('emits a separator between pinned and unpinned in groupBy none', () => {
+    const rows = buildRows('none', [unpinned1, pinned, unpinned2], repoMap, null, new Set())
+    expect(rows[2]).toMatchObject({ type: 'separator', key: 'sep:pinned' })
+    expect(rows[3]).toMatchObject({ type: 'item', worktree: { id: 'wt-1' } })
+    expect(rows[4]).toMatchObject({ type: 'item', worktree: { id: 'wt-2' } })
+  })
+
+  it('excludes pinned items from regular groups in pr-status mode', () => {
+    const rows = buildRows('pr-status', [unpinned1, pinned], repoMap, null, new Set())
+    const pinnedHeader = rows.find((r) => r.type === 'header' && r.key === 'pinned')
+    expect(pinnedHeader).toBeDefined()
+    const prGroup = rows.filter((r) => r.type === 'header' && r.key.startsWith('pr:'))
+    for (const header of prGroup) {
+      if (header.type === 'header') {
+        expect(header.count).toBe(1)
+      }
+    }
+  })
+
+  it('does not emit pinned section when no worktrees are pinned', () => {
+    const rows = buildRows('none', [unpinned1, unpinned2], repoMap, null, new Set())
+    expect(rows.every((r) => r.type === 'item')).toBe(true)
+  })
+
+  it('collapses pinned group when in collapsedGroups', () => {
+    const rows = buildRows('none', [pinned, unpinned1], repoMap, null, new Set(['pinned']))
+    expect(rows[0]).toMatchObject({ type: 'header', key: 'pinned' })
+    expect(rows[1]).toMatchObject({ type: 'separator' })
+    expect(rows[2]).toMatchObject({ type: 'item', worktree: { id: 'wt-1' } })
+  })
+
+  it('does not emit separator when all worktrees are pinned', () => {
+    const allPinned = { ...unpinned1, isPinned: true }
+    const rows = buildRows('none', [pinned, allPinned], repoMap, null, new Set())
+    expect(rows.some((r) => r.type === 'separator')).toBe(false)
   })
 })

@@ -1,6 +1,6 @@
 /* eslint-disable max-lines */
 
-import React, { useEffect, useCallback, useRef, useState, lazy, Suspense } from 'react'
+import React, { useEffect, useCallback, useMemo, useRef, useState, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
 import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
 import { useAppStore } from '../store'
@@ -76,7 +76,10 @@ function Terminal(): React.JSX.Element | null {
   const tabBarOrderByWorktree = useAppStore((s) => s.tabBarOrderByWorktree)
   const tabBarOrder = activeWorktreeId ? tabBarOrderByWorktree[activeWorktreeId] : undefined
 
-  const tabs = activeWorktreeId ? (tabsByWorktree[activeWorktreeId] ?? []) : []
+  const tabs = useMemo(
+    () => (activeWorktreeId ? (tabsByWorktree[activeWorktreeId] ?? []) : []),
+    [activeWorktreeId, tabsByWorktree]
+  )
   const allWorktrees = Object.values(worktreesByRepo).flat()
 
   // Why: the TabBar is rendered into the titlebar via a portal so tabs share
