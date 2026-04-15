@@ -15,7 +15,6 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { RefreshCw } from 'lucide-react'
 import TabBar from './tab-bar/TabBar'
 import TerminalPane from './terminal-pane/TerminalPane'
 import {
@@ -29,6 +28,7 @@ import BrowserPane, { destroyPersistentWebview } from './browser-pane/BrowserPan
 import { reconcileTabOrder } from './tab-bar/reconcile-order'
 import TabGroupWorkspaceHost from './tab-group/TabGroupWorkspaceHost'
 import { shouldAutoCreateInitialTerminal } from './terminal/initial-terminal'
+import CodexRestartChip from './CodexRestartChip'
 
 const EditorPanel = lazy(() => import('./editor/EditorPanel'))
 // Why: the split-group ownership path lands before the rollout switch so we
@@ -49,10 +49,6 @@ function Terminal(): React.JSX.Element | null {
   const setTabCustomTitle = useAppStore((s) => s.setTabCustomTitle)
   const setTabColor = useAppStore((s) => s.setTabColor)
   const consumeSuppressedPtyExit = useAppStore((s) => s.consumeSuppressedPtyExit)
-  const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
-  const codexRestartNoticeByPtyId = useAppStore((s) => s.codexRestartNoticeByPtyId)
-  const queueCodexPaneRestarts = useAppStore((s) => s.queueCodexPaneRestarts)
-  const clearCodexRestartNotice = useAppStore((s) => s.clearCodexRestartNotice)
   const expandedPaneByTabId = useAppStore((s) => s.expandedPaneByTabId)
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
   const openFiles = useAppStore((s) => s.openFiles)
@@ -842,7 +838,7 @@ function Terminal(): React.JSX.Element | null {
                     className={isVisible ? 'absolute inset-0' : 'absolute inset-0 hidden'}
                     aria-hidden={!isVisible}
                   >
-                    {renderStaleCodexRestartChip(worktree.id)}
+                    <CodexRestartChip worktreeId={worktree.id} />
                     {worktreeTabs.map((tab) => (
                       <TerminalPane
                         key={`${tab.id}-${tab.generation ?? 0}`}

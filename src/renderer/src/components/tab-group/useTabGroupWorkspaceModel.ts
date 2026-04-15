@@ -1,7 +1,10 @@
+/* eslint-disable max-lines -- Why: the split-group workspace model intentionally keeps
+   group-scoped activation, close, split, and tab-order rules together so the extracted
+   controller cannot drift from the TabGroupPanel surface it coordinates. */
 import { useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { OpenFile } from '@/store/slices/editor'
-import type { BrowserTab as BrowserTabState, Tab } from '../../../../shared/types'
+import type { BrowserTab as BrowserTabState } from '../../../../shared/types'
 import { useAppStore } from '../../store'
 import { destroyPersistentWebview } from '../browser-pane/BrowserPane'
 

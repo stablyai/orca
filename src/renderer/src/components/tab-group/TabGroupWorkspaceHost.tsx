@@ -2,6 +2,7 @@ import { createPortal } from 'react-dom'
 import { useCallback, useEffect, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
+import CodexRestartChip from '../CodexRestartChip'
 import TabGroupSplitLayout from './TabGroupSplitLayout'
 
 export default function TabGroupWorkspaceHost({
@@ -58,8 +59,7 @@ export default function TabGroupWorkspaceHost({
     (tab) => tab.id === activeTabId
   )
   const activeEditorFile = worktreeFiles.find((file) => file.id === activeFileId) ?? null
-  const activeBrowserTab =
-    worktreeBrowserTabs.find((tab) => tab.id === activeBrowserTabId) ?? null
+  const activeBrowserTab = worktreeBrowserTabs.find((tab) => tab.id === activeBrowserTabId) ?? null
   const activeSurfaceLabel =
     activeTabType === 'browser'
       ? (activeBrowserTab?.title ?? activeBrowserTab?.url ?? 'Browser')
@@ -104,7 +104,7 @@ export default function TabGroupWorkspaceHost({
         titlebarTabsTarget
       )}
 
-      <div className="flex flex-1 min-w-0 min-h-0 overflow-hidden">
+      <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
         {allWorktrees
           .filter((worktree) => mountedWorktreeIds.includes(worktree.id))
           .map((worktree) => {
@@ -119,6 +119,7 @@ export default function TabGroupWorkspaceHost({
                 className={isVisible ? 'absolute inset-0 flex' : 'absolute inset-0 hidden'}
                 aria-hidden={!isVisible}
               >
+                <CodexRestartChip worktreeId={worktree.id} />
                 <TabGroupSplitLayout
                   layout={layout}
                   worktreeId={worktree.id}

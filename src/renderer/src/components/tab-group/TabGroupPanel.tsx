@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: group panels intentionally co-locate group-scoped tab chrome, activation/close handlers, and surface rendering so split groups cannot drift into a separate behavior path from the original root group. */
 import { lazy, Suspense } from 'react'
 import { X } from 'lucide-react'
 import TabBar from '../tab-bar/TabBar'

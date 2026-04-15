@@ -218,7 +218,7 @@ export default function MonacoEditor({
         }
       }
     },
-    [queueReveal, setupCopy, filePath, setEditorCursorLine]
+    [queueReveal, setupCopy, filePath, setEditorCursorLine, viewStateKey]
   )
 
   const handleChange = useCallback(
