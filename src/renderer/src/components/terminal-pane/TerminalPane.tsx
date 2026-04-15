@@ -3,6 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { createPortal } from 'react-dom'
 import type { CSSProperties } from 'react'
 import type { IDisposable } from '@xterm/xterm'
+import { ChevronDown } from 'lucide-react'
 import { useAppStore } from '../../store'
 import {
   DEFAULT_TERMINAL_DIVIDER_DARK,
@@ -62,6 +63,7 @@ export default function TerminalPane({
   )
   const paneTransportsRef = useRef<Map<number, PtyTransport>>(new Map())
   const panePtyBindingsRef = useRef<Map<number, IDisposable>>(new Map())
+  const paneScrollListenerDisposablesRef = useRef<Map<number, IDisposable>>(new Map())
   const pendingWritesRef = useRef<Map<number, string>>(new Map())
   const isActiveRef = useRef(isActive)
   isActiveRef.current = isActive
@@ -75,6 +77,9 @@ export default function TerminalPane({
   const searchStateRef = useRef<SearchState>({ query: '', caseSensitive: false, regex: false })
   const [closeConfirmPaneId, setCloseConfirmPaneId] = useState<number | null>(null)
   const [terminalError, setTerminalError] = useState<string | null>(null)
+  const [paneJumpToPresentVisible, setPaneJumpToPresentVisible] = useState<Record<number, boolean>>(
+    {}
+  )
 
   // Pane title state — keyed by ephemeral paneId, persisted via titlesByLeafId
   // in the layout snapshot. Ref keeps persistLayoutSnapshot closures fresh.
@@ -329,6 +334,7 @@ export default function TerminalPane({
     paneFontSizesRef,
     paneTransportsRef,
     panePtyBindingsRef,
+    paneScrollListenerDisposablesRef,
     pendingWritesRef,
     isActiveRef,
     isVisibleRef,
@@ -349,6 +355,7 @@ export default function TerminalPane({
     setExpandedPane,
     syncExpandedLayout,
     persistLayoutSnapshot,
+    setPaneJumpToPresentVisible,
     setPaneTitles,
     paneTitlesRef,
     setRenamingPaneId
@@ -477,6 +484,18 @@ export default function TerminalPane({
     isVisibleRef,
     toggleExpandPane
   })
+
+  const handleJumpToPresent = useCallback((paneId: number): void => {
+    const manager = managerRef.current
+    const pane = manager?.getPanes().find((candidate) => candidate.id === paneId)
+    if (!manager || !pane) {
+      return
+    }
+
+    manager.setActivePane(paneId, { focus: false })
+    pane.terminal.scrollToBottom()
+    pane.terminal.focus()
+  }, [])
 
   // Intercept paste at the keydown level (Cmd+V / Ctrl+V) AND as a fallback
   // on the paste event. We must handle keydown because Chromium does not fire
@@ -843,6 +862,26 @@ export default function TerminalPane({
           />,
           activePane.container
         )}
+      {managerRef.current?.getPanes().map((pane) => {
+        if (!paneJumpToPresentVisible[pane.id]) {
+          return null
+        }
+        return createPortal(
+          <button
+            type="button"
+            aria-label="Jump to present"
+            title="Jump to present"
+            className="absolute bottom-3 right-3 z-20 inline-flex h-8 items-center gap-1.5 rounded-full border border-zinc-700/80 bg-zinc-900/90 px-2.5 text-xs font-medium text-zinc-100 shadow-lg backdrop-blur-sm transition hover:bg-zinc-800/95"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => handleJumpToPresent(pane.id)}
+          >
+            <ChevronDown className="size-3.5 shrink-0" />
+            <span>Present</span>
+          </button>,
+          pane.container,
+          `jump-to-present-${pane.id}`
+        )
+      })}
       <TerminalContextMenu
         open={contextMenu.open}
         onOpenChange={contextMenu.setOpen}

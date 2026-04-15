@@ -24,6 +24,7 @@ import { connectPanePty } from './pty-connection'
 import type { PtyTransport } from './pty-transport'
 import { fitAndFocusPanes, fitPanes } from './pane-helpers'
 import { registerRuntimeTerminalTab, scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
+import { getPaneJumpState } from './jump-to-present'
 
 type UseTerminalPaneLifecycleDeps = {
   tabId: string
@@ -49,6 +50,7 @@ type UseTerminalPaneLifecycleDeps = {
   paneFontSizesRef: React.RefObject<Map<number, number>>
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
   panePtyBindingsRef: React.RefObject<Map<number, IDisposable>>
+  paneScrollListenerDisposablesRef: React.RefObject<Map<number, IDisposable>>
   pendingWritesRef: React.RefObject<Map<number, string>>
   isActiveRef: React.RefObject<boolean>
   isVisibleRef: React.RefObject<boolean>
@@ -72,6 +74,7 @@ type UseTerminalPaneLifecycleDeps = {
   setExpandedPane: (paneId: number | null) => void
   syncExpandedLayout: () => void
   persistLayoutSnapshot: () => void
+  setPaneJumpToPresentVisible: React.Dispatch<React.SetStateAction<Record<number, boolean>>>
   setPaneTitles: React.Dispatch<React.SetStateAction<Record<number, string>>>
   paneTitlesRef: React.RefObject<Record<number, string>>
   setRenamingPaneId: React.Dispatch<React.SetStateAction<number | null>>
@@ -95,6 +98,7 @@ export function useTerminalPaneLifecycle({
   paneFontSizesRef,
   paneTransportsRef,
   panePtyBindingsRef,
+  paneScrollListenerDisposablesRef,
   pendingWritesRef,
   isActiveRef,
   isVisibleRef,
@@ -115,6 +119,7 @@ export function useTerminalPaneLifecycle({
   setExpandedPane,
   syncExpandedLayout,
   persistLayoutSnapshot,
+  setPaneJumpToPresentVisible,
   setPaneTitles,
   paneTitlesRef,
   setRenamingPaneId
@@ -122,6 +127,7 @@ export function useTerminalPaneLifecycle({
   const systemPrefersDarkRef = useRef(systemPrefersDark)
   systemPrefersDarkRef.current = systemPrefersDark
   const linkProviderDisposablesRef = useRef(new Map<number, IDisposable>())
+  const paneJumpToPresentVisibleRef = useRef(new Map<number, boolean>())
 
   const applyAppearance = (manager: PaneManager): void => {
     const currentSettings = settingsRef.current
@@ -146,6 +152,7 @@ export function useTerminalPaneLifecycle({
     const expandedStyleSnapshots = expandedStyleSnapshotRef.current
     const paneTransports = paneTransportsRef.current
     const panePtyBindings = panePtyBindingsRef.current
+    const paneScrollListenerDisposables = paneScrollListenerDisposablesRef.current
     const pendingWrites = pendingWritesRef.current
     const linkDisposables = linkProviderDisposablesRef.current
     const worktreePath =
@@ -257,6 +264,46 @@ export function useTerminalPaneLifecycle({
           restoredLeafId
         })
         panePtyBindings.set(pane.id, panePtyBinding)
+        const syncPaneJumpStateFor = (): void => {
+          const nextShowJumpToPresent = getPaneJumpState(
+            pane.terminal.buffer.active
+          ).showJumpToPresent
+          if (paneJumpToPresentVisibleRef.current.get(pane.id) === nextShowJumpToPresent) {
+            return
+          }
+          paneJumpToPresentVisibleRef.current.set(pane.id, nextShowJumpToPresent)
+          setPaneJumpToPresentVisible((prev) => ({
+            ...prev,
+            [pane.id]: nextShowJumpToPresent
+          }))
+        }
+        const scrollDisposable = pane.terminal.onScroll(syncPaneJumpStateFor)
+        // Why: when the user is paused above the live bottom, new PTY output
+        // advances baseY without moving viewportY. Listening only to onScroll
+        // leaves the affordance stale until the user scrolls again, so writes
+        // must also trigger a sync.
+        const writeParsedDisposable = pane.terminal.onWriteParsed(syncPaneJumpStateFor)
+        // Why: fitAddon.fit() drives terminal.resize(), which can reflow the
+        // wrapped buffer and change baseY/viewportY without any explicit user
+        // scroll. Watching xterm's resize event keeps the affordance aligned
+        // with split, zoom, and container-resize refits.
+        const resizeDisposable = pane.terminal.onResize(syncPaneJumpStateFor)
+        paneScrollListenerDisposables.set(pane.id, {
+          dispose: () => {
+            scrollDisposable.dispose()
+            writeParsedDisposable.dispose()
+            resizeDisposable.dispose()
+          }
+        })
+        // Why: openTerminal() and the layout replay both schedule work into the
+        // next frame. Deferring the first sync avoids reading a transient
+        // viewportY before xterm finishes its initial fit/reflow pass.
+        requestAnimationFrame(() => {
+          if (!paneScrollListenerDisposables.has(pane.id)) {
+            return
+          }
+          syncPaneJumpStateFor()
+        })
         scheduleRuntimeGraphSync()
         queueResizeAll(true)
       },
@@ -281,9 +328,23 @@ export function useTerminalPaneLifecycle({
           transport.destroy?.()
           paneTransportsRef.current.delete(paneId)
         }
+        const scrollDisposable = paneScrollListenerDisposables.get(paneId)
+        if (scrollDisposable) {
+          scrollDisposable.dispose()
+          paneScrollListenerDisposables.delete(paneId)
+        }
+        paneJumpToPresentVisibleRef.current.delete(paneId)
         clearRuntimePaneTitle(tabId, paneId)
         paneFontSizesRef.current.delete(paneId)
         pendingWritesRef.current.delete(paneId)
+        setPaneJumpToPresentVisible((prev) => {
+          if (!(paneId in prev)) {
+            return prev
+          }
+          const next = { ...prev }
+          delete next[paneId]
+          return next
+        })
         // Clean up pane title state so closed panes don't leave stale entries.
         setPaneTitles((prev) => {
           if (!(paneId in prev)) {
@@ -468,6 +529,10 @@ export function useTerminalPaneLifecycle({
         disposable.dispose()
       }
       linkDisposables.clear()
+      for (const disposable of paneScrollListenerDisposables.values()) {
+        disposable.dispose()
+      }
+      paneScrollListenerDisposables.clear()
       for (const transport of paneTransports.values()) {
         if (tabStillExists && transport.getPtyId()) {
           // Why: moving a terminal tab between groups currently rehomes the
