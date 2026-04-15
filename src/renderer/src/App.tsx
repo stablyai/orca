@@ -502,7 +502,14 @@ function App(): React.JSX.Element {
     })
     observer.observe(controls)
     return () => observer.disconnect()
-  }, [activeAgentCount, isFullScreen, settings?.showTitlebarAgentActivity, showSidebar])
+  }, [
+    activeAgentCount,
+    isFullScreen,
+    settings?.showTitlebarAgentActivity,
+    showSidebar,
+    workspaceActive,
+    sidebarOpen
+  ])
 
   // Why: extracted so both the full-width titlebar (settings/landing) and
   // the sidebar-width left header (workspace view) can share the same
