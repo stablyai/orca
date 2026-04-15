@@ -52,14 +52,10 @@ function normalizeSortBy(sortBy: unknown): 'name' | 'recent' | 'repo' {
   return getDefaultUIState().sortBy
 }
 
-function normalizeSshTarget(target: SshTarget): SshTarget {
-  return {
-    ...target,
-    // Why: old persisted targets predate configHost. Default to the legacy
-    // label-based lookup so imported SSH aliases keep resolving through ssh -G
-    // after upgrade instead of silently losing inherited config.
-    configHost: target.configHost ?? target.label ?? target.host
-  }
+// Why: old persisted targets predate configHost. Default to label-based lookup
+// so imported SSH aliases keep resolving through ssh -G after upgrade.
+function normalizeSshTarget(t: SshTarget): SshTarget {
+  return { ...t, configHost: t.configHost ?? t.label ?? t.host }
 }
 
 export class Store {
@@ -330,9 +326,7 @@ export class Store {
   }
 
   addSshTarget(target: SshTarget): void {
-    if (!this.state.sshTargets) {
-      this.state.sshTargets = []
-    }
+    this.state.sshTargets ??= []
     this.state.sshTargets.push(normalizeSshTarget(target))
     this.scheduleSave()
   }
@@ -342,10 +336,9 @@ export class Store {
     if (!target) {
       return null
     }
-    Object.assign(target, updates)
-    Object.assign(target, normalizeSshTarget(target))
+    Object.assign(target, updates, normalizeSshTarget({ ...target, ...updates }))
     this.scheduleSave()
-    return normalizeSshTarget(target)
+    return { ...target }
   }
 
   removeSshTarget(id: string): void {

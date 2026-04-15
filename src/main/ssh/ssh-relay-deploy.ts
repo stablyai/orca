@@ -77,6 +77,7 @@ async function deployAndLaunchRelayInner(
   // Why: we only interpolate $HOME into single-quoted shell strings later, so
   // this validation only needs to reject obviously unsafe control characters.
   // Allow spaces and non-ASCII so valid home directories are not rejected.
+  // oxlint-disable-next-line no-control-regex
   if (!remoteHome || !remoteHome.startsWith('/') || /[\u0000\r\n]/.test(remoteHome)) {
     throw new Error(`Remote $HOME is not a valid path: ${remoteHome.slice(0, 100)}`)
   }
