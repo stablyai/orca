@@ -15,8 +15,8 @@ type TerminalTabItem = {
   ptyId: null
   worktreeId: string
   title: string
-  customTitle: string | null | undefined
-  color: string | null | undefined
+  customTitle: string | null
+  color: string | null
   sortOrder: number
   createdAt: number
 }
