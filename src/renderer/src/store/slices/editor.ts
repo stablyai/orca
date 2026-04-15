@@ -150,7 +150,10 @@ export type EditorSlice = {
   activeTabTypeByWorktree: Record<string, WorkspaceVisibleTabType> // worktreeId -> last active tab type
   activeTabType: WorkspaceVisibleTabType
   setActiveTabType: (type: WorkspaceVisibleTabType) => void
-  openFile: (file: Omit<OpenFile, 'id' | 'isDirty'>, options?: { preview?: boolean }) => void
+  openFile: (
+    file: Omit<OpenFile, 'id' | 'isDirty'>,
+    options?: { preview?: boolean; targetGroupId?: string }
+  ) => void
   pinFile: (fileId: string, tabId?: string) => void
   closeFile: (fileId: string) => void
   closeAllFiles: () => void
@@ -264,14 +267,17 @@ function openWorkspaceEditorItem(
   worktreeId: string,
   label: string,
   contentType: 'editor' | 'diff' | 'conflict-review',
-  isPreview?: boolean
+  isPreview?: boolean,
+  targetGroupId?: string
 ): string {
-  const targetGroupId =
-    state.activeGroupIdByWorktree?.[worktreeId] ?? state.groupsByWorktree?.[worktreeId]?.[0]?.id
-  if (!targetGroupId) {
+  const resolvedGroupId =
+    targetGroupId ??
+    state.activeGroupIdByWorktree?.[worktreeId] ??
+    state.groupsByWorktree?.[worktreeId]?.[0]?.id
+  if (!resolvedGroupId) {
     return fileId
   }
-  const existing = state.findTabForEntityInGroup?.(worktreeId, targetGroupId, fileId, contentType)
+  const existing = state.findTabForEntityInGroup?.(worktreeId, resolvedGroupId, fileId, contentType)
   if (existing) {
     state.activateTab?.(existing.id)
     return existing.id
@@ -280,7 +286,7 @@ function openWorkspaceEditorItem(
     entityId: fileId,
     label,
     isPreview,
-    targetGroupId
+    targetGroupId: resolvedGroupId
   })
   return created?.id ?? fileId
 }
@@ -525,7 +531,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         : file.mode === 'diff'
           ? 'diff'
           : 'editor',
-      options?.preview ?? false
+      options?.preview ?? false,
+      options?.targetGroupId
     )
   },
 

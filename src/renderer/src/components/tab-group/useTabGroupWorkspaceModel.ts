@@ -2,6 +2,7 @@
    group-scoped activation, close, split, and tab-order rules together so the extracted
    controller cannot drift from the TabGroupPanel surface it coordinates. */
 import { useCallback, useMemo } from 'react'
+import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
 import type { OpenFile } from '@/store/slices/editor'
 import type {
@@ -11,6 +12,8 @@ import type {
   TerminalTab
 } from '../../../../shared/types'
 import { useAppStore } from '../../store'
+import { createUntitledMarkdownFile } from '../../lib/create-untitled-markdown'
+import { extractIpcErrorMessage } from '../../lib/ipc-error'
 import { destroyPersistentWebview } from '../browser-pane/BrowserPane'
 
 export type GroupEditorItem = OpenFile & { tabId: string }
@@ -81,6 +84,7 @@ export function useTabGroupWorkspaceModel({
   const setTabCustomTitle = useAppStore((state) => state.setTabCustomTitle)
   const setTabColor = useAppStore((state) => state.setTabColor)
   const consumeSuppressedPtyExit = useAppStore((state) => state.consumeSuppressedPtyExit)
+  const openFile = useAppStore((state) => state.openFile)
 
   const group = useMemo(
     () => worktreeState.groups.find((item) => item.id === groupId) ?? null,
@@ -437,6 +441,22 @@ export function useTabGroupWorkspaceModel({
       newBrowserTab: () => {
         const defaultUrl = useAppStore.getState().browserDefaultUrl ?? 'about:blank'
         createBrowserTab(worktreeId, defaultUrl, { title: 'New Browser Tab' })
+      },
+      // Why: split-group actions must target their owning group explicitly.
+      // Relying on the ambient activeGroupIdByWorktree breaks keyboard and
+      // assistive-tech activation because the "+" menu can be triggered from
+      // an unfocused panel without first updating global group focus.
+      newFileTab: async () => {
+        const path = worktreeState.worktree?.path
+        if (!path) {
+          return
+        }
+        try {
+          const fileInfo = await createUntitledMarkdownFile(path, worktreeId)
+          openFile(fileInfo, { preview: false, targetGroupId: groupId })
+        } catch (err) {
+          toast.error(extractIpcErrorMessage(err, 'Failed to create untitled markdown file.'))
+        }
       },
       newTerminalTab: () => {
         const terminal = createTab(worktreeId, groupId)

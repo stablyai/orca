@@ -2,10 +2,12 @@
 
 import React, { useEffect, useCallback, useMemo, useRef, useState, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
+import { toast } from 'sonner'
 import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
 import { useAppStore } from '../store'
 import { findWorktreeById } from '../store/slices/worktree-helpers'
-import { detectLanguage } from '../lib/language-detect'
+import { createUntitledMarkdownFile } from '../lib/create-untitled-markdown'
+import { extractIpcErrorMessage } from '../lib/ipc-error'
 import {
   Dialog,
   DialogContent,
@@ -294,38 +296,17 @@ function Terminal(): React.JSX.Element | null {
     if (!worktree) {
       return
     }
-    const baseName = 'untitled'
-    const ext = '.md'
-    let fileName = `${baseName}${ext}`
-    let filePath = `${worktree.path}/${fileName}`
-
-    // Why: createFile uses the 'wx' flag which fails if the file exists.
-    // Probe with pathExists to find the first unused name. Using pathExists
-    // instead of stat avoids noisy ENOENT errors in the main process log.
-    let counter = 2
-    const MAX_ATTEMPTS = 100
-    while (counter <= MAX_ATTEMPTS && (await window.api.shell.pathExists(filePath))) {
-      fileName = `${baseName}-${counter}${ext}`
-      filePath = `${worktree.path}/${fileName}`
-      counter++
-    }
-
     try {
-      await window.api.fs.createFile({ filePath })
-    } catch {
-      return
+      // Why: the global Cmd/Ctrl+Shift+N shortcut is handled here rather than
+      // inside a specific TabGroupPanel, so it must snapshot the store's
+      // current focused group explicitly. Otherwise split layouts fall back to
+      // the ambient/default group and open the file in the wrong pane.
+      const targetGroupId = useAppStore.getState().activeGroupIdByWorktree[activeWorktreeId]
+      const fileInfo = await createUntitledMarkdownFile(worktree.path, activeWorktreeId)
+      openFile(fileInfo, { preview: false, targetGroupId })
+    } catch (err) {
+      toast.error(extractIpcErrorMessage(err, 'Failed to create untitled markdown file.'))
     }
-    openFile(
-      {
-        filePath,
-        relativePath: fileName,
-        worktreeId: activeWorktreeId,
-        language: detectLanguage(fileName),
-        isUntitled: true,
-        mode: 'edit'
-      },
-      { preview: false }
-    )
   }, [activeWorktreeId, openFile])
 
   const handleCloseTab = useCallback(

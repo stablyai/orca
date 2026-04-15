@@ -4,7 +4,7 @@ import { createStore, type StoreApi } from 'zustand/vanilla'
 import { describe, expect, it } from 'vitest'
 import { createEditorSlice } from './editor'
 import type { AppState } from '../types'
-import type { BrowserTab } from '../../../../shared/types'
+import type { BrowserTab, Tab, TabContentType, TabGroup } from '../../../../shared/types'
 
 function createEditorStore(overrides?: Partial<AppState>): StoreApi<AppState> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -312,6 +312,76 @@ describe('New Markdown — tab bar ordering with openFile', () => {
     expect(order.indexOf('t2')).toBeLessThan(order.indexOf('b2'))
     // New file at the end
     expect(order.at(-1)).toBe('/repo/untitled.md')
+  })
+})
+
+describe('New Markdown — split group targeting', () => {
+  it('opens into the explicitly requested group instead of the ambient active group', () => {
+    const createdTabs: {
+      worktreeId: string
+      contentType: TabContentType
+      entityId: string
+      label: string
+      targetGroupId?: string
+    }[] = []
+    const groups: TabGroup[] = [
+      { id: 'group-a', worktreeId: 'wt-1', activeTabId: null, tabOrder: [] },
+      { id: 'group-b', worktreeId: 'wt-1', activeTabId: null, tabOrder: [] }
+    ]
+    const existingTabs: Tab[] = []
+    const store = createEditorStore({
+      groupsByWorktree: { 'wt-1': groups },
+      unifiedTabsByWorktree: { 'wt-1': existingTabs },
+      activeGroupIdByWorktree: { 'wt-1': 'group-a' },
+      findTabForEntityInGroup: () => null,
+      createUnifiedTab: (worktreeId, contentType, init) => {
+        expect(init?.entityId).toBeTruthy()
+        expect(init?.label).toBeTruthy()
+        createdTabs.push({
+          worktreeId,
+          contentType,
+          entityId: init!.entityId!,
+          label: init!.label!,
+          targetGroupId: init?.targetGroupId
+        })
+        return {
+          id: 'tab-1',
+          worktreeId,
+          groupId: init?.targetGroupId ?? 'group-b',
+          contentType,
+          entityId: init?.entityId ?? '/repo/untitled.md',
+          label: init?.label ?? 'untitled.md',
+          customLabel: null,
+          color: null,
+          isPinned: false,
+          isPreview: false,
+          createdAt: 0,
+          sortOrder: 0
+        }
+      }
+    })
+
+    store.getState().openFile(
+      {
+        filePath: '/repo/untitled.md',
+        relativePath: 'untitled.md',
+        worktreeId: 'wt-1',
+        language: 'markdown',
+        isUntitled: true,
+        mode: 'edit'
+      },
+      { preview: false, targetGroupId: 'group-b' }
+    )
+
+    expect(createdTabs).toEqual([
+      {
+        worktreeId: 'wt-1',
+        contentType: 'editor',
+        entityId: '/repo/untitled.md',
+        label: 'untitled.md',
+        targetGroupId: 'group-b'
+      }
+    ])
   })
 })
 

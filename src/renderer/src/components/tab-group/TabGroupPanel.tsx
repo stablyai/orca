@@ -65,6 +65,7 @@ export default function TabGroupPanel({
       onReorder={(_, order) => commands.reorderTabBar(order)}
       onNewTerminalTab={commands.newTerminalTab}
       onNewBrowserTab={commands.newBrowserTab}
+      onNewFileTab={commands.newFileTab}
       onSetCustomTitle={commands.setTabCustomTitle}
       onSetTabColor={commands.setTabColor}
       onTogglePaneExpand={() => {}}
@@ -118,6 +119,11 @@ export default function TabGroupPanel({
           : ''
       }`}
       onPointerDown={commands.focusGroup}
+      // Why: keyboard and assistive-tech users can move focus into an unfocused
+      // split group without generating a pointer event. Keeping the owning
+      // group in sync with DOM focus makes global shortcuts like New Markdown
+      // target the panel the user actually navigated into.
+      onFocusCapture={commands.focusGroup}
     >
       {/* Why: every split group must keep its own real tab row because the app
           can show multiple groups at once, while the window titlebar only has
