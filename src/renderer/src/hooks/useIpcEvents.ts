@@ -280,6 +280,7 @@ export function useIpcEvents(): void {
         const store = useAppStore.getState()
         const state = data.state as SshConnectionState
         store.setSshConnectionState(data.targetId, state)
+        const remoteRepos = store.repos.filter((r) => r.connectionId === data.targetId)
 
         // Why: targets added after boot aren't in the labels map. Re-fetch
         // so the status bar popover shows the new target immediately.
@@ -296,9 +297,30 @@ export function useIpcEvents(): void {
             .catch(() => {})
         }
 
-        if (state.status === 'connected') {
-          const remoteRepos = store.repos.filter((r) => r.connectionId === data.targetId)
+        if (
+          ['disconnected', 'auth-failed', 'reconnection-failed', 'error'].includes(state.status)
+        ) {
+          // Why: an explicit disconnect or terminal failure tears down the SSH
+          // PTY provider without emitting per-PTY exit events. Clear the stale
+          // PTY ids in renderer state so a later reconnect remounts TerminalPane
+          // instead of keeping a dead remote PTY attached to the tab.
+          const remoteWorktreeIds = new Set(
+            Object.values(store.worktreesByRepo)
+              .flat()
+              .filter((w) => remoteRepos.some((r) => r.id === w.repoId))
+              .map((w) => w.id)
+          )
+          for (const worktreeId of remoteWorktreeIds) {
+            const tabs = useAppStore.getState().tabsByWorktree[worktreeId] ?? []
+            for (const tab of tabs) {
+              if (tab.ptyId) {
+                useAppStore.getState().clearTabPtyId(tab.id)
+              }
+            }
+          }
+        }
 
+        if (state.status === 'connected') {
           void Promise.all(remoteRepos.map((r) => store.fetchWorktrees(r.id))).then(() => {
             // Why: terminal panes that failed to spawn (no PTY provider on cold
             // start) sit inert. Bumping generation forces TerminalPane to remount
