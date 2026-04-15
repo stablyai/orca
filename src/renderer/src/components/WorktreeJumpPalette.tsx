@@ -105,23 +105,23 @@ function nextScope(scope: PaletteScope, direction: 1 | -1): PaletteScope {
   return SCOPE_ORDER[nextIndex]
 }
 
-function findBrowserSelection(pageId: string): BrowserSelection | null {
+function findBrowserSelection(
+  pageId: string,
+  workspaceId: string,
+  worktreeId: string
+): BrowserSelection | null {
   const state = useAppStore.getState()
-  const page =
-    Object.values(state.browserPagesByWorkspace)
-      .flat()
-      .find((candidate) => candidate.id === pageId) ?? null
+  const page = (state.browserPagesByWorkspace[workspaceId] ?? []).find((p) => p.id === pageId)
   if (!page) {
     return null
   }
-  const workspace =
-    Object.values(state.browserTabsByWorktree)
-      .flat()
-      .find((candidate) => candidate.id === page.workspaceId) ?? null
+  const workspace = (state.browserTabsByWorktree[worktreeId] ?? []).find(
+    (w) => w.id === workspaceId
+  )
   if (!workspace) {
     return null
   }
-  const worktree = findWorktreeById(state.worktreesByRepo, page.worktreeId)
+  const worktree = findWorktreeById(state.worktreesByRepo, worktreeId)
   if (!worktree) {
     return null
   }
@@ -429,8 +429,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   )
 
   const handleSelectBrowserPage = useCallback(
-    (pageId: string) => {
-      const selection = findBrowserSelection(pageId)
+    (result: BrowserPaletteSearchResult) => {
+      const { pageId, workspaceId, worktreeId } = result
+      const selection = findBrowserSelection(pageId, workspaceId, worktreeId)
       if (!selection) {
         toast.error('Browser page no longer exists')
         return
@@ -464,7 +465,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       if (item.type === 'worktree') {
         handleSelectWorktree(item.worktree.id)
       } else {
-        handleSelectBrowserPage(item.result.pageId)
+        handleSelectBrowserPage(item.result)
       }
     },
     [handleSelectBrowserPage, handleSelectWorktree]
@@ -557,7 +558,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         iconClassName="mr-2.5 h-4 w-4 text-muted-foreground/60"
         className="h-12 text-[14px] placeholder:text-muted-foreground/75"
       />
-      <div className="mx-3 mt-2 flex items-center gap-1.5 px-0.5">
+      <div role="tablist" className="mx-3 mt-2 flex items-center gap-1.5 px-0.5">
         {SCOPE_ORDER.map((candidate) => {
           const active = candidate === scope
           const label = candidate === 'worktrees' ? 'Worktrees' : 'Browser Tabs'
@@ -565,6 +566,8 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
             <button
               key={candidate}
               type="button"
+              role="tab"
+              aria-selected={active}
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => setScope(candidate)}
               className={cn(
@@ -717,7 +720,6 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
               }
 
               const result = item.result
-              const isBlank = result.secondaryText === 'New Tab'
               const browserWorktree = worktreeMap.get(result.worktreeId)
               const browserRepo = browserWorktree ? repoMap.get(browserWorktree.repoId) : undefined
               const browserRepoName = browserRepo?.displayName ?? result.repoName
@@ -755,7 +757,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                           <span className="shrink-0 text-muted-foreground/45">·</span>
                           <span className="min-w-0 truncate text-[12px] font-medium text-muted-foreground/92">
                             <HighlightedText
-                              text={isBlank ? 'New Tab' : result.secondaryText}
+                              text={result.secondaryText}
                               matchRange={result.secondaryRange}
                             />
                           </span>
@@ -810,7 +812,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         </div>
       </div>
       <div aria-live="polite" className="sr-only">
-        {query.trim()
+        {debouncedQuery.trim()
           ? `${resultCount} results found in ${scope === 'worktrees' ? 'worktrees' : 'browser tabs'}${showCreateAction ? ', create new worktree action available' : ''}`
           : `${resultCount} ${scope === 'worktrees' ? 'worktrees' : 'browser tabs'} available${showCreateAction ? ', create new worktree action available' : ''}`}
       </div>

@@ -15,4 +15,8 @@ describe('browser-focus', () => {
 
     expect(consumeBrowserFocusRequest('page-2')).toBe('address-bar')
   })
+
+  it('returns null for a page id that was never queued', () => {
+    expect(consumeBrowserFocusRequest('nonexistent-page')).toBeNull()
+  })
 })
