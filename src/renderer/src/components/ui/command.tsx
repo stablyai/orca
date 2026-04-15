@@ -25,6 +25,7 @@ function CommandDialog({
   title = 'Command Palette',
   description = 'Search for a command to run...',
   shouldFilter,
+  onOpenAutoFocus,
   onCloseAutoFocus,
   contentClassName,
   overlayClassName,
@@ -34,6 +35,7 @@ function CommandDialog({
   title?: string
   description?: string
   shouldFilter?: boolean
+  onOpenAutoFocus?: (e: Event) => void
   onCloseAutoFocus?: (e: Event) => void
   contentClassName?: string
   overlayClassName?: string
@@ -55,6 +57,7 @@ function CommandDialog({
             'fixed top-[20%] left-[50%] z-50 w-[660px] max-w-[90vw] translate-x-[-50%] rounded-lg border border-border bg-popover shadow-lg outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
             contentClassName
           )}
+          onOpenAutoFocus={onOpenAutoFocus}
           onCloseAutoFocus={onCloseAutoFocus}
         >
           <DialogPrimitive.Title className="sr-only">{title}</DialogPrimitive.Title>

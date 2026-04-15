@@ -66,6 +66,11 @@ import { formatGrabPayloadAsText } from './GrabConfirmationSheet'
 import { isEditableKeyboardTarget } from './browser-keyboard'
 import BrowserFind from './BrowserFind'
 import {
+  consumeBrowserFocusRequest,
+  ORCA_BROWSER_FOCUS_REQUEST_EVENT,
+  type BrowserFocusRequestDetail
+} from './browser-focus'
+import {
   formatByteCount,
   formatDownloadFinishedNotice,
   formatLoadFailureDescription,
@@ -312,7 +317,8 @@ export default function BrowserPane({
 }): React.JSX.Element {
   const browserPagesByWorkspace = useAppStore((s) => s.browserPagesByWorkspace)
   const browserPages = browserPagesByWorkspace[browserTab.id] ?? EMPTY_BROWSER_PAGES
-  const activeBrowserPage = browserPages[0] ?? null
+  const activeBrowserPage =
+    browserPages.find((page) => page.id === browserTab.activePageId) ?? browserPages[0] ?? null
   const updateBrowserPageState = useAppStore((s) => s.updateBrowserPageState)
   const setBrowserPageUrl = useAppStore((s) => s.setBrowserPageUrl)
 
@@ -717,6 +723,70 @@ function BrowserPagePane({
       focusAddressBarNow()
     })
   }, [focusAddressBarNow, isActive])
+
+  useEffect(() => {
+    if (!isActive) {
+      return
+    }
+    const focusTarget = consumeBrowserFocusRequest(browserTab.id)
+    if (!focusTarget) {
+      return
+    }
+    keepAddressBarFocusRef.current = focusTarget === 'address-bar'
+    let cancelled = false
+    let frameId = 0
+    let attempts = 0
+    const runFocus = (): void => {
+      if (cancelled) {
+        return
+      }
+      const didFocus = focusTarget === 'address-bar' ? focusAddressBarNow() : focusWebviewNow()
+      attempts += 1
+      if (!didFocus && attempts < 6) {
+        frameId = window.requestAnimationFrame(runFocus)
+      }
+    }
+    // Why: jump-palette browser focus can be queued before the target page
+    // pane mounts. Persisting the request outside React lets the active page
+    // claim it once mounted instead of depending on a transient event race.
+    frameId = window.requestAnimationFrame(runFocus)
+    return () => {
+      cancelled = true
+      window.cancelAnimationFrame(frameId)
+    }
+  }, [browserTab.id, focusAddressBarNow, focusWebviewNow, isActive])
+
+  useEffect(() => {
+    if (!isActive) {
+      return
+    }
+    const handleBrowserFocusRequest = (event: Event): void => {
+      const detail = (event as CustomEvent<BrowserFocusRequestDetail>).detail
+      if (!detail || detail.pageId !== browserTab.id) {
+        return
+      }
+      const focusTarget = consumeBrowserFocusRequest(browserTab.id)
+      if (!focusTarget) {
+        return
+      }
+      if (focusTarget === 'address-bar') {
+        // Why: palette-triggered address-bar focus has to survive the same
+        // follow-up browser load events as the existing blank-tab path.
+        keepAddressBarFocusRef.current = true
+        focusAddressBarNow()
+        return
+      }
+      keepAddressBarFocusRef.current = false
+      focusWebviewNow()
+    }
+    // Why: queued focus lets a page claim a request after mount, but palette
+    // re-selecting an already-active page never remounts. Listening for the
+    // matching event lets the active pane consume the durable request
+    // immediately without regressing the mount/activation path above.
+    window.addEventListener(ORCA_BROWSER_FOCUS_REQUEST_EVENT, handleBrowserFocusRequest)
+    return () =>
+      window.removeEventListener(ORCA_BROWSER_FOCUS_REQUEST_EVENT, handleBrowserFocusRequest)
+  }, [browserTab.id, focusAddressBarNow, focusWebviewNow, isActive])
 
   // Cmd/Ctrl+F — find in page (renderer path: focus on browser chrome)
   // Why: unlike grab-mode shortcuts (bare C/S) which skip editable targets,
@@ -1765,6 +1835,7 @@ function BrowserPagePane({
             ref={addressBarInputRef}
             value={addressBarValue}
             onChange={(event) => setAddressBarValue(event.target.value)}
+            data-orca-browser-address-bar="true"
             className="h-auto border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
             spellCheck={false}
             autoCapitalize="none"

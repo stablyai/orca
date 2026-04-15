@@ -1,6 +1,7 @@
 /* oxlint-disable max-lines */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
+import { Globe, Plus } from 'lucide-react'
 import { useAppStore } from '@/store'
 import {
   CommandDialog,
@@ -9,7 +10,6 @@ import {
   CommandEmpty,
   CommandItem
 } from '@/components/ui/command'
-import { Plus } from 'lucide-react'
 import { branchName } from '@/lib/git-utils'
 import { sortWorktreesRecent } from '@/components/sidebar/smart-sort'
 import StatusIndicator from '@/components/sidebar/StatusIndicator'
@@ -17,11 +17,49 @@ import { cn } from '@/lib/utils'
 import { getWorktreeStatus, getWorktreeStatusLabel } from '@/lib/worktree-status'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
-import { searchWorktrees, type MatchRange } from '@/lib/worktree-palette-search'
-import type { Worktree } from '../../../shared/types'
+import {
+  searchWorktrees,
+  type MatchRange,
+  type PaletteSearchResult
+} from '@/lib/worktree-palette-search'
+import {
+  searchBrowserPages,
+  type BrowserPaletteSearchResult,
+  type SearchableBrowserPage
+} from '@/lib/browser-palette-search'
+import {
+  ORCA_BROWSER_FOCUS_REQUEST_EVENT,
+  queueBrowserFocusRequest
+} from '@/components/browser-pane/browser-focus'
+import { ORCA_BROWSER_BLANK_URL } from '../../../shared/constants'
+import type { BrowserPage, BrowserWorkspace, Worktree } from '../../../shared/types'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 
-// ─── Highlight helper ───────────────────────────────────────────────
+type PaletteScope = 'worktrees' | 'browser-tabs'
+
+type WorktreePaletteItem = {
+  id: string
+  type: 'worktree'
+  score: number
+  match: PaletteSearchResult
+  worktree: Worktree
+}
+
+type BrowserPaletteItem = {
+  id: string
+  type: 'browser-page'
+  result: BrowserPaletteSearchResult
+}
+
+type PaletteItem = WorktreePaletteItem | BrowserPaletteItem
+
+type BrowserSelection = {
+  worktree: Worktree
+  workspace: BrowserWorkspace
+  page: BrowserPage
+}
+
+const SCOPE_ORDER: PaletteScope[] = ['worktrees', 'browser-tabs']
 
 function HighlightedText({
   text,
@@ -62,7 +100,54 @@ function FooterKey({ children }: { children: React.ReactNode }): React.JSX.Eleme
   )
 }
 
-// ─── Component ──────────────────────────────────────────────────────
+function nextScope(scope: PaletteScope, direction: 1 | -1): PaletteScope {
+  const index = SCOPE_ORDER.indexOf(scope)
+  const nextIndex = (index + direction + SCOPE_ORDER.length) % SCOPE_ORDER.length
+  return SCOPE_ORDER[nextIndex]
+}
+
+function getWorktreeMatchScore(match: PaletteSearchResult, isCurrentWorktree: boolean): number {
+  const base =
+    match.matchedField === 'displayName'
+      ? 0
+      : match.matchedField === 'branch'
+        ? 12
+        : match.matchedField === 'comment'
+          ? 20
+          : match.matchedField === 'pr' || match.matchedField === 'issue'
+            ? 24
+            : match.matchedField === 'repo'
+              ? 32
+              : 40
+  return isCurrentWorktree ? base - 6 : base
+}
+
+function isBlankBrowserUrl(url: string): boolean {
+  return url === 'about:blank' || url === ORCA_BROWSER_BLANK_URL
+}
+
+function findBrowserSelection(pageId: string): BrowserSelection | null {
+  const state = useAppStore.getState()
+  const page =
+    Object.values(state.browserPagesByWorkspace)
+      .flat()
+      .find((candidate) => candidate.id === pageId) ?? null
+  if (!page) {
+    return null
+  }
+  const workspace =
+    Object.values(state.browserTabsByWorktree)
+      .flat()
+      .find((candidate) => candidate.id === page.workspaceId) ?? null
+  if (!workspace) {
+    return null
+  }
+  const worktree = findWorktreeById(state.worktreesByRepo, page.worktreeId)
+  if (!worktree) {
+    return null
+  }
+  return { page, workspace, worktree }
+}
 
 export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const visible = useAppStore((s) => s.activeModal === 'worktree-palette')
@@ -74,22 +159,25 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const prCache = useAppStore((s) => s.prCache)
   const issueCache = useAppStore((s) => s.issueCache)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const activeTabType = useAppStore((s) => s.activeTabType)
+  const activeBrowserTabId = useAppStore((s) => s.activeBrowserTabId)
   const browserTabsByWorktree = useAppStore((s) => s.browserTabsByWorktree)
+  const browserPagesByWorkspace = useAppStore((s) => s.browserPagesByWorkspace)
 
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
-  const [selectedWorktreeId, setSelectedWorktreeId] = useState('')
+  const [scope, setScope] = useState<PaletteScope>('worktrees')
+  const [selectedItemId, setSelectedItemId] = useState('')
   const previousWorktreeIdRef = useRef<string | null>(null)
+  const previousActiveTabTypeRef = useRef<'browser' | 'editor' | 'terminal'>('terminal')
+  const previousBrowserPageIdRef = useRef<string | null>(null)
+  const previousBrowserFocusTargetRef = useRef<'webview' | 'address-bar'>('webview')
   const wasVisibleRef = useRef(false)
   const skipRestoreFocusRef = useRef(false)
   const prevQueryRef = useRef('')
+  const prevScopeRef = useRef<PaletteScope>('worktrees')
   const listRef = useRef<HTMLDivElement>(null)
 
-  // Why: debounce the search query so the result list doesn't reshuffle on
-  // every keystroke while the user is still typing. The input stays responsive
-  // (controlled by `query`), but the heavier search + re-render is gated by
-  // `debouncedQuery`. 150ms is fast enough to feel instant on a pause, slow
-  // enough to skip intermediate keystrokes.
   useEffect(() => {
     const id = setTimeout(() => setDebouncedQuery(query), 150)
     return () => clearTimeout(id)
@@ -98,7 +186,6 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const repoMap = useMemo(() => new Map(repos.map((r) => [r.id, r])), [repos])
   const canCreateWorktree = useMemo(() => repos.some((repo) => isGitRepoKind(repo)), [repos])
 
-  // All non-archived worktrees sorted by recent signals
   const sortedWorktrees = useMemo(() => {
     const all: Worktree[] = Object.values(worktreesByRepo)
       .flat()
@@ -106,89 +193,183 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     return sortWorktreesRecent(all, tabsByWorktree, repoMap, prCache)
   }, [worktreesByRepo, tabsByWorktree, repoMap, prCache])
 
-  // Search results
-  const matches = useMemo(
-    () => searchWorktrees(sortedWorktrees, debouncedQuery.trim(), repoMap, prCache, issueCache),
-    [sortedWorktrees, debouncedQuery, repoMap, prCache, issueCache]
-  )
-  const createWorktreeName = debouncedQuery.trim()
-  // Why: only surface the create-worktree action when the query yields no matches,
-  // so it doesn't clutter the list when existing worktrees already satisfy the search.
-  const showCreateAction =
-    canCreateWorktree && createWorktreeName.length > 0 && matches.length === 0
+  const browserSortedWorktrees = useMemo(() => {
+    const all: Worktree[] = Object.values(worktreesByRepo).flat()
+    // Why: browser-tab search is explicitly cross-worktree, so it must keep
+    // indexing live browser pages even when their owning worktree is archived.
+    return sortWorktreesRecent(all, tabsByWorktree, repoMap, prCache)
+  }, [worktreesByRepo, tabsByWorktree, repoMap, prCache])
 
-  // Build a map of worktreeId -> Worktree for quick lookup
   const worktreeMap = useMemo(() => {
     const map = new Map<string, Worktree>()
-    for (const w of sortedWorktrees) {
-      map.set(w.id, w)
+    for (const worktree of sortedWorktrees) {
+      map.set(worktree.id, worktree)
     }
     return map
   }, [sortedWorktrees])
 
-  // Loading state: repos exist but worktreesByRepo is still empty
+  const worktreeOrder = useMemo(
+    () => new Map(browserSortedWorktrees.map((worktree, index) => [worktree.id, index])),
+    [browserSortedWorktrees]
+  )
+
+  const worktreeMatches = useMemo(
+    () => searchWorktrees(sortedWorktrees, debouncedQuery.trim(), repoMap, prCache, issueCache),
+    [sortedWorktrees, debouncedQuery, repoMap, prCache, issueCache]
+  )
+
+  const browserPageEntries = useMemo<SearchableBrowserPage[]>(() => {
+    const entries: SearchableBrowserPage[] = []
+    for (const worktree of browserSortedWorktrees) {
+      const repoName = repoMap.get(worktree.repoId)?.displayName ?? ''
+      const worktreeSortIndex = worktreeOrder.get(worktree.id) ?? Number.MAX_SAFE_INTEGER
+      const workspaces = browserTabsByWorktree[worktree.id] ?? []
+      for (const workspace of workspaces) {
+        const pages = browserPagesByWorkspace[workspace.id] ?? []
+        for (const page of pages) {
+          entries.push({
+            page,
+            workspace,
+            worktree,
+            repoName,
+            worktreeSortIndex,
+            isCurrentPage:
+              workspace.id === activeBrowserTabId && workspace.activePageId === page.id,
+            isCurrentWorktree: activeWorktreeId === worktree.id
+          })
+        }
+      }
+    }
+    return entries
+  }, [
+    activeBrowserTabId,
+    activeWorktreeId,
+    browserPagesByWorkspace,
+    browserTabsByWorktree,
+    browserSortedWorktrees,
+    repoMap,
+    worktreeOrder
+  ])
+
+  const browserMatches = useMemo(
+    () => searchBrowserPages(browserPageEntries, debouncedQuery.trim()),
+    [browserPageEntries, debouncedQuery]
+  )
+
+  const worktreeItems = useMemo<WorktreePaletteItem[]>(
+    () =>
+      worktreeMatches
+        .map((match, index) => {
+          const worktree = worktreeMap.get(match.worktreeId)
+          if (!worktree) {
+            return null
+          }
+          return {
+            id: `worktree:${worktree.id}`,
+            type: 'worktree' as const,
+            score: getWorktreeMatchScore(match, activeWorktreeId === worktree.id) + index * 0.001,
+            match,
+            worktree
+          }
+        })
+        .filter((item): item is WorktreePaletteItem => item !== null),
+    [activeWorktreeId, worktreeMap, worktreeMatches]
+  )
+
+  const browserItems = useMemo<BrowserPaletteItem[]>(
+    () =>
+      browserMatches.map((result) => ({
+        id: `browser-page:${result.pageId}`,
+        type: 'browser-page' as const,
+        result
+      })),
+    [browserMatches]
+  )
+
+  const visibleItems = useMemo<PaletteItem[]>(() => {
+    if (scope === 'browser-tabs') {
+      return browserItems
+    }
+    return worktreeItems
+  }, [browserItems, scope, worktreeItems])
+
+  const createWorktreeName = debouncedQuery.trim()
+  const showCreateAction =
+    scope === 'worktrees' &&
+    canCreateWorktree &&
+    createWorktreeName.length > 0 &&
+    worktreeItems.length === 0
+
   const isLoading = repos.length > 0 && Object.keys(worktreesByRepo).length === 0
-  const hasWorktrees = sortedWorktrees.length > 0
+  const hasAnyWorktrees = sortedWorktrees.length > 0
+  const hasAnyBrowserPages = browserPageEntries.length > 0
+  const hasQuery = debouncedQuery.trim().length > 0
 
   useEffect(() => {
     if (visible && !wasVisibleRef.current) {
-      // Why: this dialog opens from external store state, so session reset must
-      // follow the controlled `visible` flag instead of relying on Radix open callbacks.
+      // Why: the palette now supports multiple scopes, but Cmd+J still has a
+      // worktree-first contract. Reset to that scope on every open so browser
+      // exploration remains opt-in rather than sticky across sessions.
       previousWorktreeIdRef.current = activeWorktreeId
+      previousActiveTabTypeRef.current = activeTabType
+      previousBrowserPageIdRef.current =
+        activeWorktreeId && activeTabType === 'browser'
+          ? ((browserTabsByWorktree[activeWorktreeId] ?? []).find(
+              (workspace) => workspace.id === activeBrowserTabId
+            )?.activePageId ?? null)
+          : null
+      previousBrowserFocusTargetRef.current = 'webview'
       skipRestoreFocusRef.current = false
+      prevQueryRef.current = ''
+      prevScopeRef.current = 'worktrees'
+      setScope('worktrees')
       setQuery('')
       setDebouncedQuery('')
-      setSelectedWorktreeId('')
+      setSelectedItemId('')
     }
 
     wasVisibleRef.current = visible
-  }, [visible, activeWorktreeId])
+  }, [activeBrowserTabId, activeTabType, activeWorktreeId, browserTabsByWorktree, visible])
 
   useEffect(() => {
     if (!visible) {
       return
     }
     const queryChanged = debouncedQuery !== prevQueryRef.current
+    const scopeChanged = scope !== prevScopeRef.current
     prevQueryRef.current = debouncedQuery
+    prevScopeRef.current = scope
 
     const firstSelectableId = showCreateAction ? '__create_worktree__' : null
 
-    // Why: when the search query changes, the results reorder to reflect new
-    // relevance ranking. Always snap the selection to the top result so the
-    // user sees the best match highlighted, and scroll the list to the top so
-    // the selected item is visible without the user having to scroll up.
-    if (queryChanged) {
-      if (matches.length > 0) {
-        setSelectedWorktreeId(matches[0].worktreeId)
+    if (queryChanged || scopeChanged) {
+      if (visibleItems.length > 0) {
+        setSelectedItemId(visibleItems[0].id)
       } else {
-        setSelectedWorktreeId(firstSelectableId ?? '')
+        setSelectedItemId(firstSelectableId ?? '')
       }
       listRef.current?.scrollTo(0, 0)
       return
     }
 
-    if (matches.length === 0) {
-      setSelectedWorktreeId(firstSelectableId ?? '')
+    if (visibleItems.length === 0) {
+      setSelectedItemId(firstSelectableId ?? '')
       return
     }
-    if (selectedWorktreeId === '__create_worktree__' && showCreateAction) {
-      return
-    }
-    if (
-      !matches.some((match) => match.worktreeId === selectedWorktreeId) &&
-      selectedWorktreeId !== firstSelectableId
-    ) {
-      // Why: the palette keeps live recent ordering while open. Control cmdk's
-      // selected value by worktree ID so background re-sorts keep the same
-      // logical worktree selected instead of drifting to a new visual index.
-      setSelectedWorktreeId(firstSelectableId ?? matches[0].worktreeId)
-    }
-  }, [visible, matches, selectedWorktreeId, showCreateAction, debouncedQuery])
 
-  const focusActiveSurface = useCallback(() => {
-    // Why: double rAF — first waits for React to commit state (palette closes),
-    // second waits for the target worktree surface layout to settle after Radix
-    // Dialog unmounts. Pragmatic v1 choice per design doc Section 3.5.
+    if (selectedItemId === '__create_worktree__' && showCreateAction) {
+      return
+    }
+
+    if (
+      !visibleItems.some((item) => item.id === selectedItemId) &&
+      selectedItemId !== firstSelectableId
+    ) {
+      setSelectedItemId(firstSelectableId ?? visibleItems[0].id)
+    }
+  }, [debouncedQuery, scope, selectedItemId, showCreateAction, visible, visibleItems])
+
+  const focusFallbackSurface = useCallback(() => {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         const xterm = document.querySelector('.xterm-helper-textarea') as HTMLElement | null
@@ -196,7 +377,6 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
           xterm.focus()
           return
         }
-        // Fallback: try Monaco editor
         const monaco = document.querySelector('.monaco-editor textarea') as HTMLElement | null
         if (monaco) {
           monaco.focus()
@@ -205,6 +385,18 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     })
   }, [])
 
+  const requestBrowserFocus = useCallback(
+    (detail: { pageId: string; target: 'webview' | 'address-bar' }) => {
+      queueBrowserFocusRequest(detail)
+      window.dispatchEvent(
+        new CustomEvent(ORCA_BROWSER_FOCUS_REQUEST_EVENT, {
+          detail
+        })
+      )
+    },
+    []
+  )
+
   const handleOpenChange = useCallback(
     (open: boolean) => {
       if (open) {
@@ -212,96 +404,207 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       }
 
       closeModal()
-      if (previousWorktreeIdRef.current && !skipRestoreFocusRef.current) {
-        focusActiveSurface()
+      if (skipRestoreFocusRef.current) {
+        return
+      }
+      if (previousActiveTabTypeRef.current === 'browser' && previousBrowserPageIdRef.current) {
+        // Why: dismissing Cmd+J from a browser surface should return focus to
+        // that page, not fall through to the generic terminal/editor fallback.
+        requestBrowserFocus({
+          pageId: previousBrowserPageIdRef.current,
+          target: previousBrowserFocusTargetRef.current
+        })
+        return
+      }
+      if (previousWorktreeIdRef.current) {
+        focusFallbackSurface()
       }
     },
-    [closeModal, focusActiveSurface]
+    [closeModal, focusFallbackSurface, requestBrowserFocus]
   )
 
-  const handleSelect = useCallback(
+  const handleSelectWorktree = useCallback(
     (worktreeId: string) => {
-      const state = useAppStore.getState()
-      const wt = findWorktreeById(state.worktreesByRepo, worktreeId)
-      if (!wt) {
+      const worktree = findWorktreeById(useAppStore.getState().worktreesByRepo, worktreeId)
+      if (!worktree) {
         toast.error('Worktree no longer exists')
         return
       }
       activateAndRevealWorktree(worktreeId)
+      skipRestoreFocusRef.current = true
       closeModal()
-      setSelectedWorktreeId('')
-      focusActiveSurface()
+      setSelectedItemId('')
+      focusFallbackSurface()
     },
-    [closeModal, focusActiveSurface]
+    [closeModal, focusFallbackSurface]
+  )
+
+  const handleSelectBrowserPage = useCallback(
+    (pageId: string) => {
+      const selection = findBrowserSelection(pageId)
+      if (!selection) {
+        toast.error('Browser page no longer exists')
+        return
+      }
+      const activated = activateAndRevealWorktree(selection.worktree.id)
+      if (!activated) {
+        toast.error('Worktree no longer exists')
+        return
+      }
+
+      const nextSelection = findBrowserSelection(pageId)
+      if (!nextSelection) {
+        toast.error('Browser page no longer exists')
+        return
+      }
+
+      const state = useAppStore.getState()
+      state.setActiveBrowserTab(nextSelection.workspace.id)
+      state.setActiveBrowserPage(nextSelection.workspace.id, pageId)
+      skipRestoreFocusRef.current = true
+      closeModal()
+      setSelectedItemId('')
+      requestBrowserFocus({
+        pageId,
+        target: isBlankBrowserUrl(nextSelection.page.url) ? 'address-bar' : 'webview'
+      })
+    },
+    [closeModal, requestBrowserFocus]
+  )
+
+  const handleSelectItem = useCallback(
+    (item: PaletteItem) => {
+      if (item.type === 'worktree') {
+        handleSelectWorktree(item.worktree.id)
+      } else {
+        handleSelectBrowserPage(item.result.pageId)
+      }
+    },
+    [handleSelectBrowserPage, handleSelectWorktree]
   )
 
   const handleCreateWorktree = useCallback(() => {
-    // Why: when Cmd+J hands off to the create dialog, that new modal owns focus.
-    // Re-running the palette's terminal/editor focus restore races the dialog's
-    // autofocus and can pull keyboard input away from the name field.
     skipRestoreFocusRef.current = true
     closeModal()
-    // Why: we open create-worktree in a microtask so Radix Dialog fully unmounts
-    // before the next modal mounts, avoiding stacked-dialog focus conflicts.
     queueMicrotask(() =>
       openModal('create-worktree', createWorktreeName ? { prefilledName: createWorktreeName } : {})
     )
   }, [closeModal, createWorktreeName, openModal])
 
   const handleCloseAutoFocus = useCallback((e: Event) => {
-    // Why: prevent Radix from stealing focus to the trigger element. We manage
-    // focus ourselves via the double-rAF approach.
     e.preventDefault()
   }, [])
 
-  // Result count for screen readers
-  const worktreeResultCount = matches.length
-  const actionCount = showCreateAction ? 1 : 0
+  const handleOpenAutoFocus = useCallback((_event: Event) => {
+    previousBrowserFocusTargetRef.current =
+      previousActiveTabTypeRef.current === 'browser' &&
+      document.activeElement instanceof HTMLElement &&
+      document.activeElement.closest('[data-orca-browser-address-bar="true"]')
+        ? 'address-bar'
+        : 'webview'
+  }, [])
+
+  const handleInputKeyDown = useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== 'Tab') {
+      return
+    }
+    // Why: the scope chips are part of the palette's search model, not the
+    // browser's focus ring. Cycling them with Tab keeps the input focused and
+    // avoids turning scope changes into a pointer-only affordance.
+    event.preventDefault()
+    setScope((current) => nextScope(current, event.shiftKey ? -1 : 1))
+  }, [])
+
+  const title = scope === 'browser-tabs' ? 'Open Browser Tab' : 'Open Worktree'
+  const description =
+    scope === 'browser-tabs'
+      ? 'Search open browser pages across all worktrees'
+      : 'Search across all worktrees by name, branch, comment, PR, or issue'
+  const placeholder =
+    scope === 'browser-tabs' ? 'Search open browser tabs...' : 'Jump to worktree...'
+
+  const resultCount = visibleItems.length
+  const emptyState = (() => {
+    if (scope === 'browser-tabs') {
+      return hasAnyBrowserPages && hasQuery
+        ? {
+            title: 'No browser tabs match your search',
+            subtitle: 'Try a page title, URL, worktree name, or repo name.'
+          }
+        : {
+            title: 'No open browser tabs',
+            subtitle: 'Open a page in Orca and it will show up here.'
+          }
+    }
+    return hasAnyWorktrees && hasQuery
+      ? {
+          title: 'No worktrees match your search',
+          subtitle: 'Try a name, branch, repo, comment, PR, or issue.'
+        }
+      : {
+          title: 'No active worktrees',
+          subtitle: 'Create one to get started, then jump back here any time.'
+        }
+  })()
 
   return (
     <CommandDialog
       open={visible}
       onOpenChange={handleOpenChange}
       shouldFilter={false}
+      onOpenAutoFocus={handleOpenAutoFocus}
       onCloseAutoFocus={handleCloseAutoFocus}
-      title="Open Worktree"
-      description="Search across all worktrees by name, branch, comment, PR, or issue"
+      title={title}
+      description={description}
       overlayClassName="bg-black/55 backdrop-blur-[2px]"
       contentClassName="top-[13%] w-[736px] max-w-[94vw] overflow-hidden rounded-xl border border-border/70 bg-background/96 shadow-[0_26px_84px_rgba(0,0,0,0.32)] backdrop-blur-xl"
       commandProps={{
         loop: true,
-        value: selectedWorktreeId,
-        onValueChange: setSelectedWorktreeId,
+        value: selectedItemId,
+        onValueChange: setSelectedItemId,
         className: 'bg-transparent'
       }}
     >
       <CommandInput
-        placeholder="Jump to worktree..."
+        placeholder={placeholder}
         value={query}
         onValueChange={setQuery}
+        onKeyDown={handleInputKeyDown}
         wrapperClassName="mx-3 mt-3 rounded-lg border border-border/55 bg-muted/28 px-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
         iconClassName="mr-2.5 h-4 w-4 text-muted-foreground/60"
         className="h-12 text-[14px] placeholder:text-muted-foreground/75"
       />
-      <CommandList ref={listRef} className="max-h-[min(460px,62vh)] px-2.5 pb-2.5 pt-1.5">
+      <div className="mx-3 mt-2 flex items-center gap-1.5 px-0.5">
+        {SCOPE_ORDER.map((candidate) => {
+          const active = candidate === scope
+          const label = candidate === 'worktrees' ? 'Worktrees' : 'Browser Tabs'
+          return (
+            <button
+              key={candidate}
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => setScope(candidate)}
+              className={cn(
+                'inline-flex items-center rounded-md border px-2.5 py-1 text-[11px] font-medium transition-colors',
+                active
+                  ? 'border-border bg-accent/80 text-foreground'
+                  : 'border-transparent text-muted-foreground hover:bg-accent/60 hover:text-foreground'
+              )}
+            >
+              {label}
+            </button>
+          )
+        })}
+      </div>
+      <CommandList ref={listRef} className="max-h-[min(460px,62vh)] px-2.5 pb-2.5 pt-2">
         {isLoading ? (
           <PaletteState
-            title="Loading worktrees"
-            subtitle="Gathering your recent worktrees and activity state."
+            title="Loading jump targets"
+            subtitle="Gathering your recent worktrees and open browser pages."
           />
-        ) : !hasWorktrees && !showCreateAction ? (
+        ) : visibleItems.length === 0 && !showCreateAction ? (
           <CommandEmpty className="py-0">
-            <PaletteState
-              title="No active worktrees"
-              subtitle="Create one to get started, then jump back here any time."
-            />
-          </CommandEmpty>
-        ) : matches.length === 0 && !showCreateAction ? (
-          <CommandEmpty className="py-0">
-            <PaletteState
-              title="No worktrees match your search"
-              subtitle="Try a name, branch, repo, comment, PR, or issue."
-            />
+            <PaletteState title={emptyState.title} subtitle={emptyState.subtitle} />
           </CommandEmpty>
         ) : (
           <>
@@ -321,107 +624,184 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                 </div>
               </CommandItem>
             )}
-            {matches.length === 0 && query.trim() && (
-              <div className="px-2 pb-2 pt-1">
-                <PaletteState
-                  title="No worktrees match your search"
-                  subtitle="Try a name, branch, repo, comment, PR, or issue."
-                />
-              </div>
-            )}
-            {matches.map((match) => {
-              const w = worktreeMap.get(match.worktreeId)
-              if (!w) {
-                return null
+            {visibleItems.map((item) => {
+              if (item.type === 'worktree') {
+                const worktree = item.worktree
+                const repo = repoMap.get(worktree.repoId)
+                const repoName = repo?.displayName ?? ''
+                const branch = branchName(worktree.branch)
+                const status = getWorktreeStatus(
+                  tabsByWorktree[worktree.id] ?? [],
+                  browserTabsByWorktree[worktree.id] ?? []
+                )
+                const statusLabel = getWorktreeStatusLabel(status)
+                const isCurrentWorktree = activeWorktreeId === worktree.id
+
+                return (
+                  <CommandItem
+                    key={item.id}
+                    value={item.id}
+                    onSelect={() => handleSelectItem(item)}
+                    data-current={isCurrentWorktree ? 'true' : undefined}
+                    className={cn(
+                      'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
+                      'data-[selected=true]:border-border data-[selected=true]:bg-neutral-100 data-[selected=true]:text-foreground dark:data-[selected=true]:bg-neutral-800'
+                    )}
+                  >
+                    <div className="flex w-4 shrink-0 items-center justify-center self-start pt-0.5">
+                      <StatusIndicator status={status} aria-hidden="true" />
+                      <span className="sr-only">{statusLabel}</span>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2.5">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span className="truncate text-[14px] font-semibold tracking-[-0.01em] text-foreground">
+                              {item.match.displayNameRange ? (
+                                <HighlightedText
+                                  text={worktree.displayName}
+                                  matchRange={item.match.displayNameRange}
+                                />
+                              ) : (
+                                worktree.displayName
+                              )}
+                            </span>
+                            {isCurrentWorktree && (
+                              <span className="shrink-0 self-center rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
+                                Current
+                              </span>
+                            )}
+                            {worktree.isMainWorktree && (
+                              <span className="shrink-0 self-center rounded border border-muted-foreground/30 bg-muted-foreground/5 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground">
+                                primary
+                              </span>
+                            )}
+                            <span className="shrink-0 text-muted-foreground/45">·</span>
+                            <span className="truncate text-[12px] font-medium text-muted-foreground/92">
+                              {item.match.branchRange ? (
+                                <HighlightedText
+                                  text={branch}
+                                  matchRange={item.match.branchRange}
+                                />
+                              ) : (
+                                branch
+                              )}
+                            </span>
+                          </div>
+                          {item.match.supportingText && (
+                            <div className="mt-1.5 flex min-w-0 items-start gap-2 text-[12px] leading-5 text-muted-foreground/88">
+                              <span className="shrink-0 rounded-full border border-border/45 bg-background/45 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.12em] text-muted-foreground/75">
+                                {item.match.supportingText.label}
+                              </span>
+                              <span className="truncate">
+                                <HighlightedText
+                                  text={item.match.supportingText.text}
+                                  matchRange={item.match.supportingText.matchRange}
+                                />
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex shrink-0 flex-col items-end gap-1.5">
+                          {repoName && (
+                            <span className="inline-flex max-w-[180px] items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-[11px] font-semibold leading-none text-foreground">
+                              <span
+                                aria-hidden="true"
+                                className="size-1.5 shrink-0 rounded-full"
+                                style={
+                                  repo?.badgeColor
+                                    ? { backgroundColor: repo.badgeColor }
+                                    : undefined
+                                }
+                              />
+                              <span className="truncate">
+                                {item.match.repoRange ? (
+                                  <HighlightedText
+                                    text={repoName}
+                                    matchRange={item.match.repoRange}
+                                  />
+                                ) : (
+                                  repoName
+                                )}
+                              </span>
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </CommandItem>
+                )
               }
-              const repo = repoMap.get(w.repoId)
-              const repoName = repo?.displayName ?? ''
-              const branch = branchName(w.branch)
-              const status = getWorktreeStatus(
-                tabsByWorktree[w.id] ?? [],
-                browserTabsByWorktree[w.id] ?? []
-              )
-              const statusLabel = getWorktreeStatusLabel(status)
-              const isCurrentWorktree = activeWorktreeId === w.id
+
+              const result = item.result
+              const isBlank = result.secondaryText === 'New Tab'
+              const browserWorktree = worktreeMap.get(result.worktreeId)
+              const browserRepo = browserWorktree ? repoMap.get(browserWorktree.repoId) : undefined
+              const browserRepoName = browserRepo?.displayName ?? result.repoName
 
               return (
                 <CommandItem
-                  key={w.id}
-                  value={w.id}
-                  onSelect={() => handleSelect(w.id)}
-                  data-current={isCurrentWorktree ? 'true' : undefined}
+                  key={item.id}
+                  value={item.id}
+                  onSelect={() => handleSelectItem(item)}
                   className={cn(
                     'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
                     'data-[selected=true]:border-border data-[selected=true]:bg-neutral-100 data-[selected=true]:text-foreground dark:data-[selected=true]:bg-neutral-800'
                   )}
                 >
-                  <div className="flex w-4 shrink-0 items-center justify-center self-start pt-0.5">
-                    <StatusIndicator status={status} aria-hidden="true" />
-                    <span className="sr-only">{statusLabel}</span>
+                  <div className="flex w-4 shrink-0 items-center justify-center self-start pt-0.5 text-muted-foreground/85">
+                    <Globe className="size-3.5" aria-hidden="true" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2.5">
                       <div className="min-w-0 flex-1">
                         <div className="flex min-w-0 items-center gap-2">
-                          <span className="truncate text-[14px] font-semibold tracking-[-0.01em] text-foreground">
-                            {match.displayNameRange ? (
-                              <HighlightedText
-                                text={w.displayName}
-                                matchRange={match.displayNameRange}
-                              />
-                            ) : (
-                              w.displayName
-                            )}
+                          <span className="max-w-[40%] shrink-0 truncate text-[14px] font-semibold tracking-[-0.01em] text-foreground">
+                            <HighlightedText text={result.title} matchRange={result.titleRange} />
                           </span>
-                          {isCurrentWorktree && (
+                          {result.isCurrentPage && (
                             <span className="shrink-0 self-center rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
-                              Current
+                              Current Tab
                             </span>
                           )}
-                          {w.isMainWorktree && (
-                            <span className="shrink-0 self-center rounded border border-muted-foreground/30 bg-muted-foreground/5 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground">
-                              primary
+                          {!result.isCurrentPage && result.isCurrentWorktree && (
+                            <span className="shrink-0 self-center rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
+                              Current Worktree
                             </span>
                           )}
                           <span className="shrink-0 text-muted-foreground/45">·</span>
-                          <span className="truncate text-[12px] font-medium text-muted-foreground/92">
-                            {match.branchRange ? (
-                              <HighlightedText text={branch} matchRange={match.branchRange} />
-                            ) : (
-                              branch
-                            )}
+                          <span className="min-w-0 truncate text-[12px] font-medium text-muted-foreground/92">
+                            <HighlightedText
+                              text={isBlank ? 'New Tab' : result.secondaryText}
+                              matchRange={result.secondaryRange}
+                            />
+                          </span>
+                          <span className="shrink-0 text-muted-foreground/45">·</span>
+                          <span className="shrink-0 text-[12px] font-medium text-muted-foreground/92">
+                            <HighlightedText
+                              text={result.worktreeName}
+                              matchRange={result.worktreeRange}
+                            />
                           </span>
                         </div>
-                        {match.supportingText && (
-                          <div className="mt-1.5 flex min-w-0 items-start gap-2 text-[12px] leading-5 text-muted-foreground/88">
-                            <span className="shrink-0 rounded-full border border-border/45 bg-background/45 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.12em] text-muted-foreground/75">
-                              {match.supportingText.label}
-                            </span>
-                            <span className="truncate">
-                              <HighlightedText
-                                text={match.supportingText.text}
-                                matchRange={match.supportingText.matchRange}
-                              />
-                            </span>
-                          </div>
-                        )}
                       </div>
                       <div className="flex shrink-0 flex-col items-end gap-1.5">
-                        {repoName && (
+                        {browserRepoName && (
                           <span className="inline-flex max-w-[180px] items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-[11px] font-semibold leading-none text-foreground">
                             <span
                               aria-hidden="true"
                               className="size-1.5 shrink-0 rounded-full"
                               style={
-                                repo?.badgeColor ? { backgroundColor: repo.badgeColor } : undefined
+                                browserRepo?.badgeColor
+                                  ? { backgroundColor: browserRepo.badgeColor }
+                                  : undefined
                               }
                             />
                             <span className="truncate">
-                              {match.repoRange ? (
-                                <HighlightedText text={repoName} matchRange={match.repoRange} />
-                              ) : (
-                                repoName
-                              )}
+                              <HighlightedText
+                                text={browserRepoName}
+                                matchRange={result.repoRange}
+                              />
                             </span>
                           </span>
                         )}
@@ -438,17 +818,18 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         <div className="flex items-center gap-2">
           <FooterKey>Enter</FooterKey>
           <span>Open</span>
+          <FooterKey>Tab</FooterKey>
+          <span>Switch</span>
           <FooterKey>Esc</FooterKey>
           <span>Close</span>
           <FooterKey>↑↓</FooterKey>
           <span>Move</span>
         </div>
       </div>
-      {/* Accessibility: announce result count changes */}
       <div aria-live="polite" className="sr-only">
         {query.trim()
-          ? `${worktreeResultCount} worktrees found${actionCount ? ', create new worktree action available' : ''}`
-          : `${worktreeResultCount} worktrees available${actionCount ? ', create new worktree action available' : ''}`}
+          ? `${resultCount} results found in ${scope === 'worktrees' ? 'worktrees' : 'browser tabs'}${showCreateAction ? ', create new worktree action available' : ''}`
+          : `${resultCount} ${scope === 'worktrees' ? 'worktrees' : 'browser tabs'} available${showCreateAction ? ', create new worktree action available' : ''}`}
       </div>
     </CommandDialog>
   )
