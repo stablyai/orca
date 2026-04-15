@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: SSH connection lifecycle, credential retries, reconnect policy, and transport fallback are intentionally co-located so state transitions stay auditable in one file. */
 import { Client as SshClient } from 'ssh2'
 import type { ChildProcess } from 'child_process'
 import type { ClientChannel, ConnectConfig, SFTPWrapper } from 'ssh2'
@@ -31,6 +32,7 @@ export class SshConnection {
   private disposed = false
   private cachedPassphrase: string | null = null
   private cachedPassword: string | null = null
+  private connectGeneration = 0
 
   constructor(target: SshTarget, callbacks: SshConnectionCallbacks) {
     this.target = target
@@ -106,8 +108,9 @@ export class SshConnection {
     this.setState('connecting')
     this.proxyProcess?.kill()
     this.proxyProcess = null
+    const connectGeneration = ++this.connectGeneration
 
-    const resolved = await resolveWithSshG(this.target.label).catch(() => null)
+    const resolved = await resolveWithSshG(this.target.configHost || this.target.label).catch(() => null)
     const config = buildConnectConfig(this.target, resolved)
 
     // Why: ssh2 doesn't support ProxyCommand/ProxyJump natively. Spawn the
@@ -127,9 +130,11 @@ export class SshConnection {
     }
 
     try {
-      await this.doSsh2Connect(config)
+      await this.doSsh2Connect(config, connectGeneration)
     } catch (err) {
       if (!(err instanceof Error) || !this.callbacks.onCredentialRequest) {
+        this.proxyProcess?.kill()
+        this.proxyProcess = null
         throw err
       }
       // Why: prompt for passphrase on encrypted-key error, then retry with
@@ -141,7 +146,7 @@ export class SshConnection {
           this.cachedPassphrase = val
           config.passphrase = val
           this.respawnProxy(config, effectiveProxy)
-          await this.doSsh2Connect(config)
+          await this.doSsh2Connect(config, connectGeneration)
           return
         }
       }
@@ -157,17 +162,22 @@ export class SshConnection {
           this.cachedPassword = val
           config.password = val
           this.respawnProxy(config, effectiveProxy)
-          await this.doSsh2Connect(config)
+          await this.doSsh2Connect(config, connectGeneration)
           return
         }
       }
+      this.proxyProcess?.kill()
+      this.proxyProcess = null
       throw err
     }
   }
 
   // Why: ssh2 may destroy the proxy socket on auth failure, so credential
   // retries need a fresh proxy process and Duplex stream.
-  private respawnProxy(config: ConnectConfig, proxy: string | null | undefined): void {
+  private respawnProxy(
+    config: ConnectConfig,
+    proxy: ReturnType<typeof resolveEffectiveProxy> | null | undefined
+  ): void {
     if (!proxy) {
       return
     }
@@ -177,7 +187,7 @@ export class SshConnection {
     config.sock = p.sock
   }
 
-  private doSsh2Connect(config: ConnectConfig): Promise<void> {
+  private doSsh2Connect(config: ConnectConfig, connectGeneration: number): Promise<void> {
     return new Promise<void>((resolve, reject) => {
       const client = new SshClient()
       let settled = false
@@ -185,8 +195,19 @@ export class SshConnection {
         if (settled) {
           return
         }
+        // Why: connect() completion races with explicit disconnect(). Once a
+        // newer connect attempt or disconnect bumps the generation/disposed
+        // state, this late ready event must not resurrect the torn-down client.
+        if (this.disposed || connectGeneration !== this.connectGeneration) {
+          settled = true
+          client.end()
+          client.destroy()
+          reject(new Error('SSH connection attempt was cancelled'))
+          return
+        }
         settled = true
         this.client = client
+        this.proxyProcess = null
         this.setState('connected')
         this.setupDisconnectHandler(client)
         resolve()
@@ -245,8 +266,20 @@ export class SshConnection {
         // broadcasts reconnectAttempt=0, which ssh.ts uses to trigger relay re-establishment.
         this.state.reconnectAttempt = 0
         await this.attemptConnect()
-      } catch {
-        this.state.reconnectAttempt++
+      } catch (err) {
+        if (this.disposed) {
+          return
+        }
+        const error = err instanceof Error ? err : new Error(String(err))
+        if (isAuthError(error) || isPassphraseError(error)) {
+          this.setState('auth-failed', error.message)
+          return
+        }
+        if (!isTransientError(error)) {
+          this.setState('error', error.message)
+          return
+        }
+        this.state.reconnectAttempt = attempt + 1
         this.scheduleReconnect()
       }
     }, RECONNECT_BACKOFF_MS[attempt])
@@ -308,6 +341,7 @@ export class SshConnection {
 
   async disconnect(): Promise<void> {
     this.disposed = true
+    this.connectGeneration += 1
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer)
     }

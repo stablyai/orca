@@ -5,6 +5,7 @@ import { Label } from '../ui/label'
 
 export type EditingTarget = {
   label: string
+  configHost: string
   host: string
   port: string
   username: string
@@ -15,6 +16,7 @@ export type EditingTarget = {
 
 export const EMPTY_FORM: EditingTarget = {
   label: '',
+  configHost: '',
   host: '',
   port: '22',
   username: '',

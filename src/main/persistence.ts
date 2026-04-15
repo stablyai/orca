@@ -52,6 +52,16 @@ function normalizeSortBy(sortBy: unknown): 'name' | 'recent' | 'repo' {
   return getDefaultUIState().sortBy
 }
 
+function normalizeSshTarget(target: SshTarget): SshTarget {
+  return {
+    ...target,
+    // Why: old persisted targets predate configHost. Default to the legacy
+    // label-based lookup so imported SSH aliases keep resolving through ssh -G
+    // after upgrade instead of silently losing inherited config.
+    configHost: target.configHost ?? target.label ?? target.host
+  }
+}
+
 export class Store {
   private state: PersistedState
   private writeTimer: ReturnType<typeof setTimeout> | null = null
@@ -88,7 +98,7 @@ export class Store {
             sortBy: normalizeSortBy(parsed.ui?.sortBy)
           },
           workspaceSession: { ...defaults.workspaceSession, ...parsed.workspaceSession },
-          sshTargets: parsed.sshTargets ?? []
+          sshTargets: (parsed.sshTargets ?? []).map(normalizeSshTarget)
         }
       }
     } catch (err) {
@@ -311,18 +321,19 @@ export class Store {
   // ── SSH Targets ────────────────────────────────────────────────────
 
   getSshTargets(): SshTarget[] {
-    return this.state.sshTargets ?? []
+    return (this.state.sshTargets ?? []).map(normalizeSshTarget)
   }
 
   getSshTarget(id: string): SshTarget | undefined {
-    return this.state.sshTargets?.find((t) => t.id === id)
+    const target = this.state.sshTargets?.find((t) => t.id === id)
+    return target ? normalizeSshTarget(target) : undefined
   }
 
   addSshTarget(target: SshTarget): void {
     if (!this.state.sshTargets) {
       this.state.sshTargets = []
     }
-    this.state.sshTargets.push(target)
+    this.state.sshTargets.push(normalizeSshTarget(target))
     this.scheduleSave()
   }
 
@@ -332,8 +343,9 @@ export class Store {
       return null
     }
     Object.assign(target, updates)
+    Object.assign(target, normalizeSshTarget(target))
     this.scheduleSave()
-    return { ...target }
+    return normalizeSshTarget(target)
   }
 
   removeSshTarget(id: string): void {

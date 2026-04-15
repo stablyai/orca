@@ -382,6 +382,7 @@ export default function TerminalPane({
       transport?.destroy?.()
       paneTransportsRef.current.delete(paneId)
       setCacheTimerStartedAt(`${tabId}:${paneId}`, null)
+      setTerminalError(null)
 
       const newPaneBinding = connectPanePty(pane, manager, {
         tabId,

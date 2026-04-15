@@ -68,6 +68,7 @@ import type {
   ClaudeUsageSummary
 } from '../../shared/claude-usage-types'
 import type { RateLimitState } from '../../shared/rate-limit-types'
+import type { SshConnectionState, SshTarget } from '../../shared/ssh-types'
 import type {
   CodexUsageBreakdownKind,
   CodexUsageBreakdownRow,
@@ -250,6 +251,7 @@ export type PreloadApi = {
       env?: Record<string, string>
       command?: string
       connectionId?: string | null
+      worktreeId?: string
     }) => Promise<{ id: string }>
     write: (id: string, data: string) => void
     resize: (id: string, cols: number, rows: number) => void
@@ -529,18 +531,18 @@ export type PreloadApi = {
     onUpdate: (callback: (state: RateLimitState) => void) => () => void
   }
   ssh: {
-    listTargets: () => Promise<unknown[]>
-    addTarget: (args: { target: Record<string, unknown> }) => Promise<unknown>
-    updateTarget: (args: { id: string; updates: Record<string, unknown> }) => Promise<unknown>
+    listTargets: () => Promise<SshTarget[]>
+    addTarget: (args: { target: Omit<SshTarget, 'id'> }) => Promise<SshTarget>
+    updateTarget: (args: { id: string; updates: Partial<Omit<SshTarget, 'id'>> }) => Promise<SshTarget>
     removeTarget: (args: { id: string }) => Promise<void>
-    importConfig: () => Promise<unknown[]>
-    connect: (args: { targetId: string }) => Promise<unknown>
+    importConfig: () => Promise<SshTarget[]>
+    connect: (args: { targetId: string }) => Promise<SshConnectionState | null>
     disconnect: (args: { targetId: string }) => Promise<void>
-    getState: (args: { targetId: string }) => Promise<unknown>
+    getState: (args: { targetId: string }) => Promise<SshConnectionState | null>
     testConnection: (args: {
       targetId: string
-    }) => Promise<{ success: boolean; error?: string; state?: unknown }>
-    onStateChanged: (callback: (data: { targetId: string; state: unknown }) => void) => () => void
+    }) => Promise<{ success: boolean; error?: string; state?: SshConnectionState }>
+    onStateChanged: (callback: (data: { targetId: string; state: SshConnectionState }) => void) => () => void
     addPortForward: (args: {
       targetId: string
       localPort: number
@@ -562,6 +564,7 @@ export type PreloadApi = {
         detail: string
       }) => void
     ) => () => void
+    onCredentialResolved: (callback: (data: { requestId: string }) => void) => () => void
     submitCredential: (args: { requestId: string; value: string | null }) => Promise<void>
   }
 }

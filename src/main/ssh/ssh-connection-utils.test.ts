@@ -333,24 +333,34 @@ describe('resolveEffectiveProxy', () => {
   it('returns target.proxyCommand first', () => {
     const target = { ...makeTarget(), proxyCommand: 'cloudflared access ssh --hostname %h' }
     const resolved = makeResolved({ proxyCommand: 'other' })
-    expect(resolveEffectiveProxy(target, resolved)).toBe('cloudflared access ssh --hostname %h')
+    expect(resolveEffectiveProxy(target, resolved)).toEqual({
+      kind: 'proxy-command',
+      command: 'cloudflared access ssh --hostname %h'
+    })
   })
 
   it('falls back to resolved proxyCommand', () => {
     expect(
       resolveEffectiveProxy(makeTarget(), makeResolved({ proxyCommand: 'ssh -W %h:%p gw' }))
-    ).toBe('ssh -W %h:%p gw')
+    ).toEqual({
+      kind: 'proxy-command',
+      command: 'ssh -W %h:%p gw'
+    })
   })
 
-  it('converts target.jumpHost to ProxyCommand', () => {
+  it('returns structured jump-host config for target.jumpHost', () => {
     const target = { ...makeTarget(), jumpHost: 'bastion.example.com' }
-    expect(resolveEffectiveProxy(target, null)).toBe('ssh -W %h:%p bastion.example.com')
+    expect(resolveEffectiveProxy(target, null)).toEqual({
+      kind: 'jump-host',
+      jumpHost: 'bastion.example.com'
+    })
   })
 
-  it('converts resolved proxyJump to ProxyCommand', () => {
-    expect(resolveEffectiveProxy(makeTarget(), makeResolved({ proxyJump: 'jump.host' }))).toBe(
-      'ssh -W %h:%p jump.host'
-    )
+  it('returns structured jump-host config for resolved proxyJump', () => {
+    expect(resolveEffectiveProxy(makeTarget(), makeResolved({ proxyJump: 'jump.host' }))).toEqual({
+      kind: 'jump-host',
+      jumpHost: 'jump.host'
+    })
   })
 
   it('returns undefined when no proxy is configured', () => {

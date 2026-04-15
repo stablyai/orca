@@ -41,6 +41,7 @@ vi.mock('./ssh-config-parser', () => ({
 }))
 
 import { SshConnection, SshConnectionManager, type SshConnectionCallbacks } from './ssh-connection'
+import { resolveWithSshG } from './ssh-config-parser'
 import type { SshTarget } from '../../shared/ssh-types'
 
 function createTarget(overrides?: Partial<SshTarget>): SshTarget {
@@ -138,6 +139,21 @@ describe('SshConnection', () => {
     await conn.disconnect()
 
     await expect(conn.connect()).rejects.toThrow('Connection disposed')
+  })
+
+  it('resolves OpenSSH config using configHost when present', async () => {
+    const callbacks = createCallbacks()
+    const conn = new SshConnection(
+      createTarget({
+        label: 'Friendly Name',
+        configHost: 'ssh-alias'
+      }),
+      callbacks
+    )
+
+    await conn.connect()
+
+    expect(resolveWithSshG).toHaveBeenCalledWith('ssh-alias')
   })
 })
 

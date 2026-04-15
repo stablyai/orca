@@ -347,6 +347,11 @@ export function connectPanePty(
               startFreshSpawn()
               return
             }
+            // Why: this attach path reuses a PTY spawned by an earlier mount.
+            // Persist the binding here so tab-level PTY ownership stays correct
+            // even if no later spawn event or layout snapshot runs.
+            deps.syncPanePtyLayoutBinding(pane.id, spawnedPtyId)
+            deps.updateTabPtyId(deps.tabId, spawnedPtyId)
             transport.attach({
               existingPtyId: spawnedPtyId,
               cols,

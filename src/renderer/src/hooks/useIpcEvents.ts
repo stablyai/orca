@@ -270,6 +270,12 @@ export function useIpcEvents(): void {
     )
 
     unsubs.push(
+      window.api.ssh.onCredentialResolved(({ requestId }) => {
+        useAppStore.getState().removeSshCredentialRequest(requestId)
+      })
+    )
+
+    unsubs.push(
       window.api.ssh.onStateChanged((data: { targetId: string; state: unknown }) => {
         const store = useAppStore.getState()
         const state = data.state as SshConnectionState

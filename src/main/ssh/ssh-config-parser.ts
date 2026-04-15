@@ -138,6 +138,7 @@ export function sshConfigHostsToTargets(
     targets.push({
       id: `ssh-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       label,
+      configHost: entry.host,
       host: effectiveHost,
       port: entry.port ?? 22,
       username: entry.user ?? '',

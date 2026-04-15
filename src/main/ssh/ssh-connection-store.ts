@@ -16,6 +16,7 @@ export class SshConnectionStore {
   addTarget(target: Omit<SshTarget, 'id'>): SshTarget {
     const full: SshTarget = {
       ...target,
+      configHost: target.configHost ?? target.host,
       id: `ssh-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     }
     this.store.addSshTarget(full)
@@ -35,7 +36,7 @@ export class SshConnectionStore {
    * Returns the newly imported targets.
    */
   importFromSshConfig(): SshTarget[] {
-    const existingLabels = new Set(this.store.getSshTargets().map((t) => t.label))
+    const existingLabels = new Set(this.store.getSshTargets().map((t) => t.configHost ?? t.label))
     const configHosts = loadUserSshConfig()
     const newTargets = sshConfigHostsToTargets(configHosts, existingLabels)
 

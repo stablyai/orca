@@ -65,9 +65,14 @@ describe('useIpcEvents updater integration', () => {
 
   it('routes updater status events into store state', async () => {
     const setUpdateStatus = vi.fn()
+    const removeSshCredentialRequest = vi.fn()
     const updaterStatusListenerRef: { current: ((status: unknown) => void) | null } = {
       current: null
     }
+    const credentialResolvedListenerRef: { current: ((data: { requestId: string }) => void) | null } =
+      {
+        current: null
+      }
 
     vi.doMock('react', async () => {
       const actual = await vi.importActual<typeof ReactModule>('react')
@@ -103,6 +108,7 @@ describe('useIpcEvents updater integration', () => {
           setSshConnectionState: vi.fn(),
           setSshTargetLabels: vi.fn(),
           enqueueSshCredentialRequest: vi.fn(),
+          removeSshCredentialRequest,
           settings: { terminalFontSize: 13 }
         })
       }
@@ -173,7 +179,11 @@ describe('useIpcEvents updater integration', () => {
           listTargets: () => Promise.resolve([]),
           getState: () => Promise.resolve(null),
           onStateChanged: () => () => {},
-          onCredentialRequest: () => () => {}
+          onCredentialRequest: () => () => {},
+          onCredentialResolved: (listener: (data: { requestId: string }) => void) => {
+            credentialResolvedListenerRef.current = listener
+            return () => {}
+          }
         }
       }
     })
@@ -192,5 +202,12 @@ describe('useIpcEvents updater integration', () => {
     updaterStatusListenerRef.current(availableStatus)
 
     expect(setUpdateStatus).toHaveBeenCalledWith(availableStatus)
+
+    if (typeof credentialResolvedListenerRef.current !== 'function') {
+      throw new Error('Expected credential resolved listener to be registered')
+    }
+    credentialResolvedListenerRef.current({ requestId: 'req-1' })
+
+    expect(removeSshCredentialRequest).toHaveBeenCalledWith('req-1')
   })
 })

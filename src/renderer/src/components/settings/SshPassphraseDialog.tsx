@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -14,8 +15,9 @@ import { useAppStore } from '@/store'
 export function SshPassphraseDialog(): React.JSX.Element | null {
   const request = useAppStore((s) => s.sshCredentialQueue[0] ?? null)
   const targetLabels = useAppStore((s) => s.sshTargetLabels)
-  const dequeue = useAppStore((s) => s.dequeueSshCredentialRequest)
+  const removeRequest = useAppStore((s) => s.removeSshCredentialRequest)
   const [value, setValue] = useState('')
+  const [submitting, setSubmitting] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const open = request !== null
@@ -24,24 +26,37 @@ export function SshPassphraseDialog(): React.JSX.Element | null {
   useEffect(() => {
     if (requestId) {
       setValue('')
+      setSubmitting(false)
       requestAnimationFrame(() => inputRef.current?.focus())
     }
   }, [requestId])
 
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useCallback(async () => {
     if (!request || !value) {
       return
     }
-    void window.api.ssh.submitCredential({ requestId: request.requestId, value })
-    dequeue()
-  }, [request, value, dequeue])
-
-  const handleCancel = useCallback(() => {
-    if (request) {
-      void window.api.ssh.submitCredential({ requestId: request.requestId, value: null })
+    setSubmitting(true)
+    try {
+      await window.api.ssh.submitCredential({ requestId: request.requestId, value })
+      removeRequest(request.requestId)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to submit SSH credential')
+      setSubmitting(false)
     }
-    dequeue()
-  }, [request, dequeue])
+  }, [request, value, removeRequest])
+
+  const handleCancel = useCallback(async () => {
+    if (request) {
+      setSubmitting(true)
+      try {
+        await window.api.ssh.submitCredential({ requestId: request.requestId, value: null })
+        removeRequest(request.requestId)
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to cancel SSH credential request')
+        setSubmitting(false)
+      }
+    }
+  }, [request, removeRequest])
 
   if (!request) {
     return null
@@ -51,7 +66,7 @@ export function SshPassphraseDialog(): React.JSX.Element | null {
   const isPassword = request.kind === 'password'
 
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleCancel()}>
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && void handleCancel()}>
       <DialogContent showCloseButton={false} className="max-w-[360px]">
         <DialogHeader>
           <DialogTitle className="text-sm">
@@ -85,18 +100,19 @@ export function SshPassphraseDialog(): React.JSX.Element | null {
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault()
-                handleSubmit()
+                void handleSubmit()
               }
             }}
             placeholder={isPassword ? 'Enter password' : 'Enter passphrase'}
             className="h-8 text-sm"
+            disabled={submitting}
           />
         </div>
         <DialogFooter className="mt-1">
-          <Button variant="outline" size="sm" onClick={handleCancel}>
+          <Button variant="outline" size="sm" onClick={() => void handleCancel()} disabled={submitting}>
             Cancel
           </Button>
-          <Button size="sm" onClick={handleSubmit} disabled={!value}>
+          <Button size="sm" onClick={() => void handleSubmit()} disabled={!value || submitting}>
             {isPassword ? 'Connect' : 'Unlock'}
           </Button>
         </DialogFooter>

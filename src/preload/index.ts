@@ -11,6 +11,7 @@ import type {
 } from '../shared/types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../shared/runtime-types'
 import type { RateLimitState } from '../shared/rate-limit-types'
+import type { SshConnectionState, SshTarget } from '../shared/ssh-types'
 import {
   ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT,
   type EditorSaveDirtyFilesDetail
@@ -1123,39 +1124,41 @@ const api = {
   },
 
   ssh: {
-    listTargets: (): Promise<unknown[]> => ipcRenderer.invoke('ssh:listTargets'),
+    listTargets: (): Promise<SshTarget[]> => ipcRenderer.invoke('ssh:listTargets'),
 
-    addTarget: (args: { target: Record<string, unknown> }): Promise<unknown> =>
+    addTarget: (args: { target: Omit<SshTarget, 'id'> }): Promise<SshTarget> =>
       ipcRenderer.invoke('ssh:addTarget', args),
 
-    updateTarget: (args: { id: string; updates: Record<string, unknown> }): Promise<unknown> =>
+    updateTarget: (
+      args: { id: string; updates: Partial<Omit<SshTarget, 'id'>> }
+    ): Promise<SshTarget> =>
       ipcRenderer.invoke('ssh:updateTarget', args),
 
     removeTarget: (args: { id: string }): Promise<void> =>
       ipcRenderer.invoke('ssh:removeTarget', args),
 
-    importConfig: (): Promise<unknown[]> => ipcRenderer.invoke('ssh:importConfig'),
+    importConfig: (): Promise<SshTarget[]> => ipcRenderer.invoke('ssh:importConfig'),
 
-    connect: (args: { targetId: string }): Promise<unknown> =>
+    connect: (args: { targetId: string }): Promise<SshConnectionState | null> =>
       ipcRenderer.invoke('ssh:connect', args),
 
     disconnect: (args: { targetId: string }): Promise<void> =>
       ipcRenderer.invoke('ssh:disconnect', args),
 
-    getState: (args: { targetId: string }): Promise<unknown> =>
+    getState: (args: { targetId: string }): Promise<SshConnectionState | null> =>
       ipcRenderer.invoke('ssh:getState', args),
 
     testConnection: (args: {
       targetId: string
-    }): Promise<{ success: boolean; error?: string; state?: unknown }> =>
+    }): Promise<{ success: boolean; error?: string; state?: SshConnectionState }> =>
       ipcRenderer.invoke('ssh:testConnection', args),
 
     onStateChanged: (
-      callback: (data: { targetId: string; state: unknown }) => void
+      callback: (data: { targetId: string; state: SshConnectionState }) => void
     ): (() => void) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
-        data: { targetId: string; state: unknown }
+        data: { targetId: string; state: SshConnectionState }
       ) => callback(data)
       ipcRenderer.on('ssh:state-changed', listener)
       return () => ipcRenderer.removeListener('ssh:state-changed', listener)
@@ -1202,6 +1205,13 @@ const api = {
       ) => callback(data)
       ipcRenderer.on('ssh:credential-request', listener)
       return () => ipcRenderer.removeListener('ssh:credential-request', listener)
+    },
+
+    onCredentialResolved: (callback: (data: { requestId: string }) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: { requestId: string }) =>
+        callback(data)
+      ipcRenderer.on('ssh:credential-resolved', listener)
+      return () => ipcRenderer.removeListener('ssh:credential-resolved', listener)
     },
 
     submitCredential: (args: { requestId: string; value: string | null }): Promise<void> =>

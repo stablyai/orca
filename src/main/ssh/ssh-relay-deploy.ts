@@ -74,9 +74,10 @@ async function deployAndLaunchRelayInner(
   // Why: SFTP does not expand `~`, so we must resolve the remote home directory
   // explicitly. `echo $HOME` over exec gives us the absolute path.
   const remoteHome = (await execCommand(conn, 'echo $HOME')).trim()
-  // Why: a malicious or misconfigured remote could return a $HOME containing
-  // shell metacharacters. Validate it looks like a reasonable path.
-  if (!remoteHome || !/^\/[a-zA-Z0-9/_.-]+$/.test(remoteHome)) {
+  // Why: we only interpolate $HOME into single-quoted shell strings later, so
+  // this validation only needs to reject obviously unsafe control characters.
+  // Allow spaces and non-ASCII so valid home directories are not rejected.
+  if (!remoteHome || !remoteHome.startsWith('/') || /[\u0000\r\n]/.test(remoteHome)) {
     throw new Error(`Remote $HOME is not a valid path: ${remoteHome.slice(0, 100)}`)
   }
   const remoteRelayDir = `${remoteHome}/${RELAY_REMOTE_DIR}/relay-v${RELAY_VERSION}`

@@ -33,6 +33,7 @@ const initializedConnections = new Set<string>()
 // flash "connected" then "disconnected". Suppressing broadcasts during tests
 // avoids that visual glitch.
 const testingTargets = new Set<string>()
+const explicitRelaySetupTargets = new Set<string>()
 
 export function registerSshHandlers(
   store: Store,
@@ -60,7 +61,7 @@ export function registerSshHandlers(
 
   sshStore = new SshConnectionStore(store)
 
-  registerCredentialHandler()
+  registerCredentialHandler(getMainWindow)
 
   const callbacks: SshConnectionCallbacks = {
     onCredentialRequest: (targetId, kind, detail) =>
@@ -81,7 +82,8 @@ export function registerSshHandlers(
       if (
         state.status === 'connected' &&
         state.reconnectAttempt === 0 &&
-        initializedConnections.has(targetId)
+        initializedConnections.has(targetId) &&
+        !explicitRelaySetupTargets.has(targetId)
       ) {
         void reestablishRelayStack(
           targetId,
@@ -132,6 +134,7 @@ export function registerSshHandlers(
     }
 
     let conn
+    explicitRelaySetupTargets.add(args.targetId)
     try {
       conn = await connectionManager!.connect(target)
     } catch (err) {
@@ -155,15 +158,15 @@ export function registerSshHandlers(
       throw err
     }
 
-    // Deploy relay and establish multiplexer
-    callbacks.onStateChange(args.targetId, {
-      targetId: args.targetId,
-      status: 'deploying-relay',
-      error: null,
-      reconnectAttempt: 0
-    })
-
     try {
+      // Deploy relay and establish multiplexer
+      callbacks.onStateChange(args.targetId, {
+        targetId: args.targetId,
+        status: 'deploying-relay',
+        error: null,
+        reconnectAttempt: 0
+      })
+
       const { transport } = await deployAndLaunchRelay(conn)
 
       const mux = new SshChannelMultiplexer(transport)
@@ -201,6 +204,8 @@ export function registerSshHandlers(
       // Relay deployment failed — disconnect SSH
       await connectionManager!.disconnect(args.targetId)
       throw err
+    } finally {
+      explicitRelaySetupTargets.delete(args.targetId)
     }
 
     return connectionManager!.getState(args.targetId)

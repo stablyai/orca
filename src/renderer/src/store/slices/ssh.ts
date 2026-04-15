@@ -18,7 +18,7 @@ export type SshSlice = {
   setSshConnectionState: (targetId: string, state: SshConnectionState) => void
   setSshTargetLabels: (labels: Map<string, string>) => void
   enqueueSshCredentialRequest: (req: SshCredentialRequest) => void
-  dequeueSshCredentialRequest: () => void
+  removeSshCredentialRequest: (requestId: string) => void
 }
 
 export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) => ({
@@ -36,6 +36,8 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
   setSshTargetLabels: (labels) => set({ sshTargetLabels: labels }),
   enqueueSshCredentialRequest: (req) =>
     set((s) => ({ sshCredentialQueue: [...s.sshCredentialQueue, req] })),
-  dequeueSshCredentialRequest: () =>
-    set((s) => ({ sshCredentialQueue: s.sshCredentialQueue.slice(1) }))
+  removeSshCredentialRequest: (requestId) =>
+    set((s) => ({
+      sshCredentialQueue: s.sshCredentialQueue.filter((req) => req.requestId !== requestId)
+    }))
 })

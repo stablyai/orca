@@ -72,6 +72,10 @@ export function shellEscape(s: string): string {
   return `'${s.replace(/'/g, "'\\''")}'`
 }
 
+function cmdEscape(s: string): string {
+  return `"${s.replace(/"/g, '""')}"`
+}
+
 // Why: ssh2 only tries keys that are explicitly provided. Users with keys in
 // standard locations (e.g. ~/.ssh/id_ed25519) but no SSH agent running would
 // fail to authenticate. Probing default paths matches VS Code's _findDefaultKeyFile.
@@ -153,19 +157,23 @@ export function buildConnectConfig(
 // OpenSSH internally converts `ProxyJump bastion` to
 // `ProxyCommand ssh -W %h:%p bastion`. We do the same so that ssh2
 // gets a single proxy spawn path regardless of how the tunnel was configured.
+export type EffectiveProxy =
+  | { kind: 'proxy-command'; command: string }
+  | { kind: 'jump-host'; jumpHost: string }
+
 export function resolveEffectiveProxy(
   target: SshTarget,
   resolved: SshResolvedConfig | null
-): string | undefined {
+): EffectiveProxy | undefined {
   if (target.proxyCommand) {
-    return target.proxyCommand
+    return { kind: 'proxy-command', command: target.proxyCommand }
   }
   if (resolved?.proxyCommand) {
-    return resolved.proxyCommand
+    return { kind: 'proxy-command', command: resolved.proxyCommand }
   }
   const jump = target.jumpHost || resolved?.proxyJump
   if (jump) {
-    return `ssh -W %h:%p ${jump}`
+    return { kind: 'jump-host', jumpHost: jump }
   }
   return undefined
 }
@@ -174,18 +182,34 @@ export function resolveEffectiveProxy(
 // specifies one (e.g. `cloudflared access ssh --hostname %h`), we spawn
 // the command and bridge its stdin/stdout into a Duplex stream that ssh2
 // uses as its transport socket via `config.sock`.
+function getShellSpawnConfig(command: string): { file: string; args: string[] } {
+  if (process.platform === 'win32') {
+    const comspec = process.env.ComSpec || 'cmd.exe'
+    return { file: comspec, args: ['/d', '/s', '/c', command] }
+  }
+  return { file: '/bin/sh', args: ['-c', command] }
+}
+
 export function spawnProxyCommand(
-  proxyCommand: string,
+  proxy: EffectiveProxy,
   host: string,
   port: number,
   user: string
 ): { process: ChildProcess; sock: NetSocket } {
-  const expanded = proxyCommand
-    .replace(/%h/g, shellEscape(host))
-    .replace(/%p/g, shellEscape(String(port)))
-    .replace(/%r/g, shellEscape(user))
-
-  const proc = spawn('/bin/sh', ['-c', expanded], { stdio: ['pipe', 'pipe', 'pipe'] })
+  const proc =
+    proxy.kind === 'jump-host'
+      ? // Why: ProxyJump is structured input, not a shell snippet. Spawn ssh
+        // directly so jump-host values cannot escape through shell parsing.
+        spawn('ssh', ['-W', `${host}:${port}`, '--', proxy.jumpHost], { stdio: ['pipe', 'pipe', 'pipe'] })
+      : (() => {
+          const escape = process.platform === 'win32' ? cmdEscape : shellEscape
+          const expanded = proxy.command
+            .replace(/%h/g, escape(host))
+            .replace(/%p/g, escape(String(port)))
+            .replace(/%r/g, escape(user))
+          const shell = getShellSpawnConfig(expanded)
+          return spawn(shell.file, shell.args, { stdio: ['pipe', 'pipe', 'pipe'] })
+        })()
 
   // Why: a single PassThrough for both directions creates a feedback loop.
   // Reads come from the proxy's stdout; writes go to its stdin.

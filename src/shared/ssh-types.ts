@@ -3,6 +3,8 @@
 export type SshTarget = {
   id: string
   label: string
+  /** Host alias to resolve through OpenSSH config (ssh -G). */
+  configHost?: string
   host: string
   port: number
   username: string

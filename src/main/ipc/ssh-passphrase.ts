@@ -5,6 +5,16 @@ import type { SshCredentialKind } from '../ssh/ssh-connection-utils'
 const CREDENTIAL_TIMEOUT_MS = 120_000
 const pendingRequests = new Map<string, { resolve: (value: string | null) => void }>()
 
+function notifyCredentialResolved(
+  getMainWindow: () => BrowserWindow | null,
+  requestId: string
+): void {
+  const win = getMainWindow()
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('ssh:credential-resolved', { requestId })
+  }
+}
+
 export function requestCredential(
   getMainWindow: () => BrowserWindow | null,
   targetId: string,
@@ -15,6 +25,7 @@ export function requestCredential(
   return new Promise((resolve) => {
     const timer = setTimeout(() => {
       if (pendingRequests.delete(requestId)) {
+        notifyCredentialResolved(getMainWindow, requestId)
         resolve(null)
       }
     }, CREDENTIAL_TIMEOUT_MS)
@@ -32,12 +43,13 @@ export function requestCredential(
     } else {
       pendingRequests.delete(requestId)
       clearTimeout(timer)
+      notifyCredentialResolved(getMainWindow, requestId)
       resolve(null)
     }
   })
 }
 
-export function registerCredentialHandler(): void {
+export function registerCredentialHandler(getMainWindow: () => BrowserWindow | null): void {
   ipcMain.removeHandler('ssh:submitCredential')
   ipcMain.handle(
     'ssh:submitCredential',
@@ -45,6 +57,7 @@ export function registerCredentialHandler(): void {
       const pending = pendingRequests.get(args.requestId)
       if (pending) {
         pendingRequests.delete(args.requestId)
+        notifyCredentialResolved(getMainWindow, args.requestId)
         pending.resolve(args.value)
       }
     }

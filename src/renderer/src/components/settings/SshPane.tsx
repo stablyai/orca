@@ -50,14 +50,17 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<EditingTarget>(EMPTY_FORM)
-  const [testing, setTesting] = useState<string | null>(null)
+  const [testingIds, setTestingIds] = useState<Set<string>>(new Set())
   const [pendingRemove, setPendingRemove] = useState<{ id: string; label: string } | null>(null)
 
   const setSshTargetLabels = useAppStore((s) => s.setSshTargetLabels)
 
-  const loadTargets = useCallback(async () => {
+  const loadTargets = useCallback(async (opts?: { signal?: AbortSignal }) => {
     try {
       const result = (await window.api.ssh.listTargets()) as SshTarget[]
+      if (opts?.signal?.aborted) {
+        return
+      }
       setTargets(result)
       const labels = new Map<string, string>()
       for (const t of result) {
@@ -65,12 +68,16 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
       }
       setSshTargetLabels(labels)
     } catch {
-      toast.error('Failed to load SSH targets')
+      if (!opts?.signal?.aborted) {
+        toast.error('Failed to load SSH targets')
+      }
     }
   }, [setSshTargetLabels])
 
   useEffect(() => {
-    void loadTargets()
+    const abortController = new AbortController()
+    void loadTargets({ signal: abortController.signal })
+    return () => abortController.abort()
   }, [loadTargets])
 
   const handleSave = async (): Promise<void> => {
@@ -87,6 +94,7 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
 
     const target = {
       label: form.label.trim() || `${form.username}@${form.host}`,
+      configHost: form.configHost.trim() || form.host.trim(),
       host: form.host.trim(),
       port,
       username: form.username.trim(),
@@ -133,6 +141,7 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
     setEditingId(target.id)
     setForm({
       label: target.label,
+      configHost: target.configHost ?? target.host,
       host: target.host,
       port: String(target.port),
       username: target.username,
@@ -160,7 +169,7 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
   }
 
   const handleTest = async (targetId: string): Promise<void> => {
-    setTesting(targetId)
+    setTestingIds((prev) => new Set(prev).add(targetId))
     try {
       const result = await window.api.ssh.testConnection({ targetId })
       if (result.success) {
@@ -171,7 +180,11 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Test failed')
     } finally {
-      setTesting(null)
+      setTestingIds((prev) => {
+        const next = new Set(prev)
+        next.delete(targetId)
+        return next
+      })
     }
   }
 
@@ -245,7 +258,7 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
               key={target.id}
               target={target}
               state={sshConnectionStates.get(target.id)}
-              testing={testing === target.id}
+              testing={testingIds.has(target.id)}
               onConnect={(id) => void handleConnect(id)}
               onDisconnect={(id) => void handleDisconnect(id)}
               onTest={(id) => void handleTest(id)}
