@@ -141,6 +141,12 @@ export function createMainWindow(
     }
     handledInitialReadyToShow = true
 
+    // Why: in E2E headless mode, the window stays hidden to avoid stealing
+    // focus and screen real estate during test runs. Playwright interacts
+    // with the renderer via CDP, which works without a visible window.
+    if (process.env.ORCA_E2E_HEADLESS) {
+      return
+    }
     if (savedMaximized) {
       mainWindow.maximize()
     }

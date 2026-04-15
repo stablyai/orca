@@ -1,0 +1,35 @@
+import { defineConfig } from '@stablyai/playwright-test'
+
+/**
+ * Playwright config for Orca E2E tests.
+ *
+ * Run:
+ *   pnpm run test:e2e              — build + run all tests (headless)
+ *   pnpm run test:e2e:headful      — run with visible window (for pointer-capture tests)
+ *   SKIP_BUILD=1 pnpm run test:e2e — skip rebuild (faster iteration)
+ *
+ * globalSetup builds the Electron app and creates a seeded test git repo.
+ * globalTeardown cleans up the test repo.
+ * Tests use _electron.launch() to start the app — no manual setup needed.
+ */
+export default defineConfig({
+  testDir: './e2e',
+  globalSetup: './e2e/global-setup.ts',
+  globalTeardown: './e2e/global-teardown.ts',
+  timeout: 60_000,
+  expect: { timeout: 10_000 },
+  /* Run tests serially — they share a single Electron app instance */
+  fullyParallel: false,
+  workers: 1,
+  retries: 0,
+  reporter: 'list',
+  use: {
+    trace: 'on-first-retry',
+  },
+  projects: [
+    {
+      name: 'electron',
+      testMatch: '**/*.spec.ts',
+    },
+  ],
+})

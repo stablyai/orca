@@ -420,6 +420,13 @@ export function useTerminalPaneLifecycle({
     })
 
     managerRef.current = manager
+    // Why: E2E tests need to read terminal buffer content, but xterm.js renders
+    // to canvas and the accessibility addon is not loaded. Exposing the manager
+    // lets tests call serializeAddon.serialize() to read the buffer reliably.
+    if (import.meta.env.VITE_EXPOSE_STORE) {
+      ;(window as any).__paneManagers = (window as any).__paneManagers ?? new Map()
+      ;(window as any).__paneManagers.set(tabId, manager)
+    }
     const restoredPaneByLeafId = replayTerminalLayout(manager, initialLayoutRef.current, isActive)
 
     restoreScrollbackBuffers(
@@ -569,6 +576,9 @@ export function useTerminalPaneLifecycle({
       pendingWrites.clear()
       manager.destroy()
       managerRef.current = null
+      if (import.meta.env.VITE_EXPOSE_STORE) {
+        ;(window as any).__paneManagers?.delete(tabId)
+      }
       setTabPaneExpanded(tabId, false)
       setTabCanExpandPane(tabId, false)
     }

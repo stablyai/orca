@@ -34,7 +34,10 @@ export const useAppStore = create<AppState>()((...a) => ({
 
 export type { AppState } from './types'
 
-// DEV ONLY — exposes the store for console testing.
-if (import.meta.env.DEV && typeof window !== 'undefined') {
+// Why: exposes the Zustand store on window for console debugging (dev) and
+// E2E tests (VITE_EXPOSE_STORE). The E2E suite reads store state directly
+// to avoid fragile DOM scraping. Harmless — the store is already reachable
+// via React DevTools in any environment.
+if ((import.meta.env.DEV || import.meta.env.VITE_EXPOSE_STORE) && typeof window !== 'undefined') {
   ;(window as unknown as Record<string, unknown>).__store = useAppStore
 }
