@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 
-const useAppStoreMock = vi.fn(() => vi.fn())
+const setTabGroupSplitRatioMock = vi.fn()
+const useAppStoreMock = vi.fn(
+  (selector: (state: { setTabGroupSplitRatio: () => void }) => unknown) =>
+    selector({ setTabGroupSplitRatio: setTabGroupSplitRatioMock })
+)
 vi.mock('../../store', () => ({
   useAppStore: (selector: (state: { setTabGroupSplitRatio: () => void }) => unknown) =>
     useAppStoreMock(selector)
