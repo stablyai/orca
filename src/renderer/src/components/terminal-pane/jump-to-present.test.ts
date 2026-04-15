@@ -9,7 +9,7 @@ describe('getPaneJumpState', () => {
     })
   })
 
-  it('stays hidden within the reflow tolerance threshold', () => {
+  it('stays hidden within the scroll threshold', () => {
     expect(getPaneJumpState({ baseY: 24, viewportY: 24 - SCROLLED_AWAY_THRESHOLD })).toEqual({
       showJumpToPresent: false,
       hiddenLineCount: SCROLLED_AWAY_THRESHOLD

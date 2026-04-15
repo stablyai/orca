@@ -1,4 +1,6 @@
-export const SCROLLED_AWAY_THRESHOLD = 1
+// Why: raised from 1 to 5 so the button only appears after a deliberate scroll
+// (a few visible lines), not on any transient viewport nudge.
+export const SCROLLED_AWAY_THRESHOLD = 20
 
 export type PaneJumpState = {
   showJumpToPresent: boolean

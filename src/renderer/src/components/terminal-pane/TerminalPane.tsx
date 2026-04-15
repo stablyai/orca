@@ -871,7 +871,7 @@ export default function TerminalPane({
             type="button"
             aria-label="Scroll to bottom"
             title="Scroll to bottom"
-            className="absolute bottom-3 right-3 z-20 inline-flex h-8 items-center gap-1.5 rounded-full border border-zinc-700/80 bg-zinc-900/90 pl-2 pr-3.5 text-xs font-medium text-zinc-100 shadow-lg backdrop-blur-sm transition hover:bg-zinc-800/95"
+            className="absolute bottom-3 right-3 z-20 inline-flex h-8 items-center gap-1.5 rounded-md border border-zinc-700/80 bg-zinc-900/90 pl-2 pr-3.5 text-xs font-medium text-zinc-100 shadow-lg backdrop-blur-sm transition hover:bg-zinc-800/95"
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => handleJumpToPresent(pane.id)}
           >
