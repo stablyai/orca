@@ -300,6 +300,11 @@ function Terminal(): React.JSX.Element | null {
     // legacy active-tab repair, but run it as an effect after the render that
     // observed the stale activeTabId.
     setActiveTab(tabs[0].id)
+    // Why: `tabs` is intentionally the dependency here because the repair must
+    // react to tab-order/content changes, not just scalar IDs. The list comes
+    // from Zustand selectors and is small in practice, so this explicit repair
+    // effect is preferred over duplicating reconciliation state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTabId, setActiveTab, tabs])
 
   // Track which worktrees have been activated during this app session.

@@ -424,8 +424,8 @@ export function useTerminalPaneLifecycle({
     // to canvas and the accessibility addon is not loaded. Exposing the manager
     // lets tests call serializeAddon.serialize() to read the buffer reliably.
     if (import.meta.env.VITE_EXPOSE_STORE) {
-      ;(window as any).__paneManagers = (window as any).__paneManagers ?? new Map()
-      ;(window as any).__paneManagers.set(tabId, manager)
+      window.__paneManagers = window.__paneManagers ?? new Map()
+      window.__paneManagers.set(tabId, manager)
     }
     const restoredPaneByLeafId = replayTerminalLayout(manager, initialLayoutRef.current, isActive)
 
@@ -577,7 +577,7 @@ export function useTerminalPaneLifecycle({
       manager.destroy()
       managerRef.current = null
       if (import.meta.env.VITE_EXPOSE_STORE) {
-        ;(window as any).__paneManagers?.delete(tabId)
+        window.__paneManagers?.delete(tabId)
       }
       setTabPaneExpanded(tabId, false)
       setTabCanExpandPane(tabId, false)
