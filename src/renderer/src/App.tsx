@@ -725,7 +725,14 @@ function App(): React.JSX.Element {
               >
                 <div
                   className={`titlebar-left${sidebarOpen ? '' : ' absolute top-0 left-0 z-10'}`}
-                  style={{ width: sidebarOpen ? sidebarWidth : undefined }}
+                  style={{
+                    // Why: the Sidebar resize hook updates the sidebar DOM width
+                    // directly during drag and only persists to Zustand on
+                    // mouseup. In workspace view, size this header from the
+                    // wrapper's live width so it tracks those in-flight resizes
+                    // instead of leaving a stale-width gap until the drag ends.
+                    width: sidebarOpen ? '100%' : undefined
+                  }}
                 >
                   {titlebarLeftControls}
                 </div>
