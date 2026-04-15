@@ -31,8 +31,20 @@ export default defineConfig({
   },
   projects: [
     {
-      name: 'electron',
+      name: 'electron-headless',
       testMatch: '**/*.spec.ts',
+      grepInvert: /@headful/,
+      metadata: {
+        orcaHeadful: false,
+      },
+    },
+    {
+      name: 'electron-headful',
+      testMatch: '**/*.spec.ts',
+      grep: /@headful/,
+      metadata: {
+        orcaHeadful: true,
+      },
     },
   ],
 })

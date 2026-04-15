@@ -13,7 +13,13 @@
  *   electron-vite build must have run first (globalSetup handles this).
  */
 
-import { test as base, _electron as electron, type Page, type ElectronApplication } from '@stablyai/playwright-test'
+import {
+  test as base,
+  _electron as electron,
+  type Page,
+  type ElectronApplication,
+  type TestInfo
+} from '@stablyai/playwright-test'
 import { mkdtempSync, readFileSync, rmSync } from 'fs'
 import os from 'os'
 import path from 'path'
@@ -28,6 +34,10 @@ type OrcaTestFixtures = {
 type OrcaWorkerFixtures = {
   /** Absolute path to the test git repo created by globalSetup. */
   testRepoPath: string
+}
+
+function shouldLaunchHeadful(testInfo: TestInfo): boolean {
+  return testInfo.project.metadata.orcaHeadful === true
 }
 
 /**
@@ -48,9 +58,10 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
 
   // Test-scoped: one Electron app per test
   // oxlint-disable-next-line no-empty-pattern -- Playwright fixture callbacks require object destructuring here.
-  electronApp: async ({}, provideFixture) => {
+  electronApp: async ({}, provideFixture, testInfo) => {
     const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
     const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-userdata-'))
+    const headful = shouldLaunchHeadful(testInfo)
     const app = await electron.launch({
       args: [mainPath],
       // Why: keep NODE_ENV=development so window.__store is exposed and
@@ -66,7 +77,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
         ...process.env,
         NODE_ENV: 'development',
         ORCA_E2E_USER_DATA_DIR: userDataDir,
-        ...(process.env.ORCA_E2E_HEADFUL ? {} : { ORCA_E2E_HEADLESS: '1' }),
+        ...(headful ? { ORCA_E2E_HEADFUL: '1' } : { ORCA_E2E_HEADLESS: '1' }),
       },
     })
     await provideFixture(app)

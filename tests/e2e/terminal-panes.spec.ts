@@ -215,9 +215,7 @@ test.describe('Terminal Panes', () => {
    * divider, and the resize has no effect. Run with:
    *   ORCA_E2E_HEADFUL=1 pnpm run test:e2e
    */
-  test('can resize terminal panes by real mouse drag (headful)', async ({ orcaPage }) => {
-    test.skip(!process.env.ORCA_E2E_HEADFUL, 'Requires headful mode — setPointerCapture needs real pointer events')
-
+  test('@headful can resize terminal panes by real mouse drag', async ({ orcaPage }) => {
     // Split the terminal to create a resizable divider
     const panesBefore = await countVisibleTerminalPanes(orcaPage)
     await pressShortcut(orcaPage, 'd')
