@@ -9,51 +9,19 @@
 import { test, expect } from './helpers/orca-app'
 import {
   waitForSessionReady,
+  waitForActiveWorktree,
   getActiveWorktreeId,
   getActiveTabType,
   getOpenFiles,
   ensureTerminalVisible,
 } from './helpers/store'
-
-/** Open the right sidebar file explorer and wait for it to be ready. */
-async function openFileExplorer(orcaPage: import('@playwright/test').Page): Promise<void> {
-  await orcaPage.keyboard.press('Meta+Shift+e')
-  await expect
-    .poll(
-      async () => orcaPage.evaluate(() => (window as any).__store?.getState().rightSidebarOpen),
-      { timeout: 3_000 }
-    )
-    .toBe(true)
-  // Wait for the explorer content to load
-  await orcaPage
-    .locator('[data-native-file-drop-target="file-explorer"]')
-    .waitFor({ state: 'visible', timeout: 5_000 })
-}
-
-/**
- * Click a file by name in the file explorer.
- * Returns the file name clicked, or null if none of the candidates were found.
- */
-async function clickFileInExplorer(
-  orcaPage: import('@playwright/test').Page,
-  candidates: string[]
-): Promise<string | null> {
-  for (const fileName of candidates) {
-    const fileRow = orcaPage.getByText(fileName, { exact: true }).first()
-    const isVisible = await fileRow.isVisible({ timeout: 1_000 }).catch(() => false)
-    if (isVisible) {
-      await fileRow.click()
-      return fileName
-    }
-  }
-  return null
-}
+import { clickFileInExplorer, openFileExplorer } from './helpers/file-explorer'
+import { pressShortcut } from './helpers/shortcuts'
 
 test.describe('File Open & Markdown Preview', () => {
   test.beforeEach(async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
-    const worktreeId = await getActiveWorktreeId(orcaPage)
-    expect(worktreeId).not.toBeNull()
+    await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
   })
 
@@ -81,8 +49,8 @@ test.describe('File Open & Markdown Preview', () => {
    * User Prompt:
    * - you can open files (from the right sidebar)
    */
-  test('opening the right sidebar with Cmd+Shift+E shows file explorer', async ({ orcaPage }) => {
-    await orcaPage.keyboard.press('Meta+Shift+e')
+  test('opening the right sidebar with Cmd/Ctrl+Shift+E shows file explorer', async ({ orcaPage }) => {
+    await pressShortcut(orcaPage, 'e', { shift: true })
 
     // Verify the right sidebar is open and on the explorer tab
     await expect
@@ -135,37 +103,9 @@ test.describe('File Open & Markdown Preview', () => {
    * - you can open .md files and they show up as preview (from the right sidebar)
    */
   test('opening a .md file shows markdown content', async ({ orcaPage }) => {
-    const worktreeId = (await getActiveWorktreeId(orcaPage))!
-
-    // Why: the file explorer uses virtualized rendering, so .md files may be
-    // off-screen and not in the DOM. Open the file via the store, which is the
-    // same code path as double-clicking in the explorer.
-    const opened = await orcaPage.evaluate((worktreeId) => {
-      const store = (window as any).__store
-      if (!store) return false
-      const state = store.getState()
-      // Find the worktree path to build a file path
-      const allWorktrees = Object.values(state.worktreesByRepo).flat() as any[]
-      const wt = allWorktrees.find((w: any) => w.id === worktreeId)
-      if (!wt) return false
-      const candidates = ['CLAUDE.md', 'README.md', 'AGENTS.md']
-      for (const name of candidates) {
-        const filePath = `${wt.path}/${name}`
-        // Why: mode and language must be set explicitly. Without mode: 'edit',
-        // EditorPanel won't load file content. Without language: 'markdown',
-        // the isMarkdown check fails and the rich editor/preview won't render.
-        state.openFile({
-          worktreeId,
-          filePath,
-          relativePath: name,
-          mode: 'edit',
-          language: 'markdown',
-        })
-        return true
-      }
-      return false
-    }, worktreeId)
-    expect(opened).toBe(true)
+    await openFileExplorer(orcaPage)
+    const clickedFile = await clickFileInExplorer(orcaPage, ['README.md', 'CLAUDE.md'])
+    expect(clickedFile).not.toBeNull()
 
     // Wait for the editor tab to become active
     await expect
@@ -178,8 +118,8 @@ test.describe('File Open & Markdown Preview', () => {
     // elements. Both render formatted markdown — not raw source. Monaco is
     // only used in "source" mode which is not the default for .md files.
     // We verify a rich/preview surface appeared, not just a source editor.
-    // Why: the file content is loaded asynchronously after openFile(). The
-    // editor component must fetch the content, determine the render mode, then
+    // Why: the file content is loaded asynchronously after an explorer click.
+    // The editor component must fetch the content, determine the render mode, then
     // mount the appropriate surface (Tiptap or preview). Give it extra time.
     await expect
       .poll(
@@ -225,13 +165,13 @@ test.describe('File Open & Markdown Preview', () => {
     expect(openFilesBefore.length).toBeGreaterThan(0)
 
     // Switch to a terminal tab by navigating with keyboard
-    await orcaPage.keyboard.press('Meta+Shift+BracketLeft')
+    await pressShortcut(orcaPage, 'BracketLeft', { shift: true })
     await expect
       .poll(async () => getActiveTabType(orcaPage), { timeout: 3_000 })
       .not.toBe('editor')
 
     // Switch back toward the editor tab
-    await orcaPage.keyboard.press('Meta+Shift+BracketRight')
+    await pressShortcut(orcaPage, 'BracketRight', { shift: true })
     await expect
       .poll(async () => getActiveTabType(orcaPage), { timeout: 3_000 })
       .toBe('editor')

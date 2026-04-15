@@ -122,11 +122,25 @@ export async function execInTerminal(page: Page, ptyId: string, command: string)
   await sendToTerminal(page, ptyId, `${command}\r`)
 }
 
-/** Count the number of visible xterm panes (split panes). */
+/**
+ * Count the number of panes in the active terminal layout.
+ *
+ * Why: hidden-window E2E mode keeps DOM visibility signals false. The pane
+ * manager tracks the authoritative active split layout independently of CSS.
+ */
 export async function countVisibleTerminalPanes(page: Page): Promise<number> {
   return page.evaluate(() => {
-    const xterms = document.querySelectorAll('.xterm')
-    return Array.from(xterms).filter((x) => (x as HTMLElement).offsetParent !== null).length
+    const store = (window as any).__store
+    const paneManagers: Map<string, any> | undefined = (window as any).__paneManagers
+    if (!store || !paneManagers) {
+      return 0
+    }
+    const activeTabId = store.getState().activeTabId
+    if (!activeTabId) {
+      return 0
+    }
+    const manager = paneManagers.get(activeTabId)
+    return manager?.getPanes?.().length ?? 0
   })
 }
 

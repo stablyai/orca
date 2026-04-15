@@ -19,6 +19,7 @@ import {
 } from './helpers/terminal'
 import {
   waitForSessionReady,
+  waitForActiveWorktree,
   getActiveWorktreeId,
   getActiveTabType,
   getWorktreeTabs,
@@ -27,12 +28,12 @@ import {
   switchToWorktree,
   ensureTerminalVisible,
 } from './helpers/store'
+import { pressShortcut } from './helpers/shortcuts'
 
 test.describe('Terminal Panes', () => {
   test.beforeEach(async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
-    const worktreeId = await getActiveWorktreeId(orcaPage)
-    expect(worktreeId).not.toBeNull()
+    await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
   })
 
@@ -44,7 +45,7 @@ test.describe('Terminal Panes', () => {
     // Close any extra split panes back to a single pane
     let paneCount = await countVisibleTerminalPanes(orcaPage)
     while (paneCount > 1) {
-      await orcaPage.keyboard.press('Meta+w')
+      await pressShortcut(orcaPage, 'w')
       await waitForPaneCount(orcaPage, paneCount - 1).catch(() => { /* cleanup best-effort */ })
       paneCount = await countVisibleTerminalPanes(orcaPage)
     }
@@ -57,8 +58,8 @@ test.describe('Terminal Panes', () => {
   test('can split terminal pane right via keyboard shortcut', async ({ orcaPage }) => {
     const paneCountBefore = await countVisibleTerminalPanes(orcaPage)
 
-    // Cmd+D splits the active terminal pane to the right (macOS)
-    await orcaPage.keyboard.press('Meta+d')
+    // Cmd/Ctrl+D splits the active terminal pane to the right
+    await pressShortcut(orcaPage, 'd')
     await waitForPaneCount(orcaPage, paneCountBefore + 1)
 
     const paneCountAfter = await countVisibleTerminalPanes(orcaPage)
@@ -72,8 +73,8 @@ test.describe('Terminal Panes', () => {
   test('can split terminal pane down via keyboard shortcut', async ({ orcaPage }) => {
     const paneCountBefore = await countVisibleTerminalPanes(orcaPage)
 
-    // Cmd+Shift+D splits the active terminal pane down (macOS)
-    await orcaPage.keyboard.press('Meta+Shift+d')
+    // Cmd/Ctrl+Shift+D splits the active terminal pane down
+    await pressShortcut(orcaPage, 'd', { shift: true })
     await waitForPaneCount(orcaPage, paneCountBefore + 1)
 
     const paneCountAfter = await countVisibleTerminalPanes(orcaPage)
@@ -91,9 +92,9 @@ test.describe('Terminal Panes', () => {
     await execInTerminal(orcaPage, ptyId, `echo ${marker}`)
     await waitForTerminalOutput(orcaPage, marker)
 
-    // Create a new terminal tab (Cmd+T) to switch away
+    // Create a new terminal tab (Cmd/Ctrl+T) to switch away
     const worktreeId = (await getActiveWorktreeId(orcaPage))!
-    await orcaPage.keyboard.press('Meta+t')
+    await pressShortcut(orcaPage, 't')
 
     // Wait for the new tab to appear
     await expect
@@ -104,8 +105,8 @@ test.describe('Terminal Panes', () => {
     const activeType = await getActiveTabType(orcaPage)
     expect(activeType).toBe('terminal')
 
-    // Switch back to the previous tab with Cmd+Shift+[
-    await orcaPage.keyboard.press('Meta+Shift+BracketLeft')
+    // Switch back to the previous tab with Cmd/Ctrl+Shift+[
+    await pressShortcut(orcaPage, 'BracketLeft', { shift: true })
 
     // Verify the marker is still present
     await expect
@@ -113,8 +114,8 @@ test.describe('Terminal Panes', () => {
       .toBe(true)
 
     // Clean up the extra tab
-    await orcaPage.keyboard.press('Meta+Shift+BracketRight')
-    await orcaPage.keyboard.press('Meta+w')
+    await pressShortcut(orcaPage, 'BracketRight', { shift: true })
+    await pressShortcut(orcaPage, 'w')
   })
 
   /**
@@ -131,11 +132,11 @@ test.describe('Terminal Panes', () => {
     const panesBefore = await countVisibleTerminalPanes(orcaPage)
 
     // Split the terminal right
-    await orcaPage.keyboard.press('Meta+d')
+    await pressShortcut(orcaPage, 'd')
     await waitForPaneCount(orcaPage, panesBefore + 1)
 
-    // Close the newly created split pane (it should be active, Cmd+W closes it)
-    await orcaPage.keyboard.press('Meta+w')
+    // Close the newly created split pane (it should be active, Cmd/Ctrl+W closes it)
+    await pressShortcut(orcaPage, 'w')
     await waitForPaneCount(orcaPage, panesBefore)
 
     // The original pane should still have our marker
@@ -186,54 +187,15 @@ test.describe('Terminal Panes', () => {
    * User Prompt:
    * - resizing terminal panes works
    */
-  test('can resize terminal panes by dragging the divider', async ({ orcaPage }) => {
-    // Split the terminal to create a resizable divider
+  test('shows a pane divider after splitting', async ({ orcaPage }) => {
+    // Why: headless Playwright cannot exercise the real pointer-capture resize
+    // path reliably, so the default suite only verifies the precondition for
+    // resizing: splitting creates a visible divider for the active layout.
     const panesBefore = await countVisibleTerminalPanes(orcaPage)
-    await orcaPage.keyboard.press('Meta+d')
+    await pressShortcut(orcaPage, 'd')
     await waitForPaneCount(orcaPage, panesBefore + 1)
 
-    // Get the pane widths before resize
-    const paneWidthsBefore = await orcaPage.evaluate(() => {
-      const xterms = document.querySelectorAll('.xterm')
-      return Array.from(xterms)
-        .filter((x) => (x as HTMLElement).offsetParent !== null)
-        .map((x) => (x as HTMLElement).getBoundingClientRect().width)
-    })
-    expect(paneWidthsBefore.length).toBeGreaterThanOrEqual(2)
-
-    // Why: the terminal pane divider uses pointer capture (setPointerCapture)
-    // which requires a real pointing device event — synthetic PointerEvents
-    // and Playwright's mouse API don't produce valid pointer IDs for capture
-    // in headless mode. Instead, directly adjust the flex styles on the
-    // pane containers, which is the same effect the drag handler produces.
-    // See the headful counterpart below for a real drag test.
-    await orcaPage.evaluate(() => {
-      const divider = document.querySelector('.pane-divider.is-vertical')
-      if (!divider) return
-      const prev = divider.previousElementSibling as HTMLElement | null
-      const next = divider.nextElementSibling as HTMLElement | null
-      if (!prev || !next) return
-      // Shift to 70/30 ratio
-      prev.style.flex = '70 1 0%'
-      next.style.flex = '30 1 0%'
-    })
-
-    // Verify pane widths changed
-    await expect
-      .poll(
-        async () => {
-          const widthsAfter = await orcaPage.evaluate(() => {
-            const xterms = document.querySelectorAll('.xterm')
-            return Array.from(xterms)
-              .filter((x) => (x as HTMLElement).offsetParent !== null)
-              .map((x) => (x as HTMLElement).getBoundingClientRect().width)
-          })
-          if (widthsAfter.length < 2) return false
-          return paneWidthsBefore.some((w, i) => Math.abs(w - widthsAfter[i]) > 5)
-        },
-        { timeout: 5_000, message: 'Pane widths did not change after dragging divider' }
-      )
-      .toBe(true)
+    await expect(orcaPage.locator('.pane-divider.is-vertical').first()).toBeVisible({ timeout: 3_000 })
   })
 
   /**
@@ -253,7 +215,7 @@ test.describe('Terminal Panes', () => {
 
     // Split the terminal to create a resizable divider
     const panesBefore = await countVisibleTerminalPanes(orcaPage)
-    await orcaPage.keyboard.press('Meta+d')
+    await pressShortcut(orcaPage, 'd')
     await waitForPaneCount(orcaPage, panesBefore + 1)
 
     // Get the pane widths before resize
@@ -305,14 +267,14 @@ test.describe('Terminal Panes', () => {
     const panesBefore = await countVisibleTerminalPanes(orcaPage)
 
     // Split the terminal
-    await orcaPage.keyboard.press('Meta+d')
+    await pressShortcut(orcaPage, 'd')
     await waitForPaneCount(orcaPage, panesBefore + 1)
 
     const panesAfterSplit = await countVisibleTerminalPanes(orcaPage)
     expect(panesAfterSplit).toBeGreaterThanOrEqual(2)
 
     // Close the active (split) pane
-    await orcaPage.keyboard.press('Meta+w')
+    await pressShortcut(orcaPage, 'w')
     await waitForPaneCount(orcaPage, panesAfterSplit - 1)
 
     // The remaining pane should fill the available space

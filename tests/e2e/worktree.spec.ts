@@ -6,20 +6,22 @@
  */
 
 import { test, expect } from './helpers/orca-app'
-import { waitForSessionReady, getActiveWorktreeId, ensureTerminalVisible } from './helpers/store'
+import { waitForSessionReady, waitForActiveWorktree, getActiveWorktreeId, ensureTerminalVisible } from './helpers/store'
+import { pressShortcut } from './helpers/shortcuts'
 
 test.describe('New Worktree', () => {
   test.beforeEach(async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
+    await waitForActiveWorktree(orcaPage)
   })
 
   /**
    * User Prompt:
    * - new worktree
    */
-  test('Cmd+N opens the Create Worktree dialog', async ({ orcaPage }) => {
-    // Why: Cmd+N opens the create-worktree modal when at least one git repo exists
-    await orcaPage.keyboard.press('Meta+n')
+  test('Cmd/Ctrl+N opens the Create Worktree dialog', async ({ orcaPage }) => {
+    // Why: Cmd/Ctrl+N opens the create-worktree modal when at least one git repo exists
+    await pressShortcut(orcaPage, 'n')
 
     // The dialog should appear with the title "New Worktree"
     const dialog = orcaPage.getByRole('dialog')
@@ -43,7 +45,7 @@ test.describe('New Worktree', () => {
     const worktreeIdBefore = await getActiveWorktreeId(orcaPage)
 
     // Open the create worktree dialog
-    await orcaPage.keyboard.press('Meta+n')
+    await pressShortcut(orcaPage, 'n')
     const dialog = orcaPage.getByRole('dialog')
     await expect(dialog).toBeVisible({ timeout: 5_000 })
 

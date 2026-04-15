@@ -71,6 +71,16 @@ export function patchPackagedProcessPath(): void {
 }
 
 export function configureDevUserDataPath(isDev: boolean): void {
+  const e2eUserDataPath = process.env.ORCA_E2E_USER_DATA_DIR
+  if (e2eUserDataPath) {
+    // Why: the E2E suite launches a fresh Electron app for each spec. A
+    // dedicated userData path per launch prevents persisted repos, worktrees,
+    // and session state from leaking between tests through the shared dev
+    // profile while still leaving the user's real packaged profile untouched.
+    app.setPath('userData', e2eUserDataPath)
+    return
+  }
+
   if (!isDev) {
     return
   }

@@ -8,6 +8,7 @@
 import { test, expect } from './helpers/orca-app'
 import {
   waitForSessionReady,
+  waitForActiveWorktree,
   getActiveWorktreeId,
   getActiveTabType,
   getBrowserTabs,
@@ -16,12 +17,12 @@ import {
   switchToWorktree,
   ensureTerminalVisible,
 } from './helpers/store'
+import { pressShortcut } from './helpers/shortcuts'
 
 test.describe('Browser Tab', () => {
   test.beforeEach(async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
-    const worktreeId = await getActiveWorktreeId(orcaPage)
-    expect(worktreeId).not.toBeNull()
+    await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
   })
 
@@ -42,7 +43,7 @@ test.describe('Browser Tab', () => {
           store.getState().setActiveTabType('browser')
         }, browserTabs[0].id)
       }
-      await orcaPage.keyboard.press('Meta+w')
+      await pressShortcut(orcaPage, 'w')
       await expect
         .poll(async () => (await getBrowserTabs(orcaPage, worktreeId)).length, { timeout: 3_000 })
         .toBeLessThan(browserTabs.length)
@@ -64,12 +65,12 @@ test.describe('Browser Tab', () => {
    * User Prompt:
    * - Browser works and also retains state when switching tabs etc.
    */
-  test('Cmd+Shift+B opens a new browser tab', async ({ orcaPage }) => {
+  test('Cmd/Ctrl+Shift+B opens a new browser tab', async ({ orcaPage }) => {
     const worktreeId = (await getActiveWorktreeId(orcaPage))!
     const browserTabsBefore = await getBrowserTabs(orcaPage, worktreeId)
 
-    // Cmd+Shift+B creates a new browser tab
-    await orcaPage.keyboard.press('Meta+Shift+b')
+    // Cmd/Ctrl+Shift+B creates a new browser tab
+    await pressShortcut(orcaPage, 'b', { shift: true })
 
     // Wait for the browser tab to appear in the store
     await expect
@@ -90,7 +91,7 @@ test.describe('Browser Tab', () => {
     const worktreeId = (await getActiveWorktreeId(orcaPage))!
 
     // Open a browser tab
-    await orcaPage.keyboard.press('Meta+Shift+b')
+    await pressShortcut(orcaPage, 'b', { shift: true })
     await expect
       .poll(async () => getActiveTabType(orcaPage), { timeout: 5_000 })
       .toBe('browser')
@@ -115,7 +116,7 @@ test.describe('Browser Tab', () => {
     const worktreeId = (await getActiveWorktreeId(orcaPage))!
 
     // Open a browser tab
-    await orcaPage.keyboard.press('Meta+Shift+b')
+    await pressShortcut(orcaPage, 'b', { shift: true })
     await expect
       .poll(async () => getActiveTabType(orcaPage), { timeout: 5_000 })
       .toBe('browser')
@@ -126,13 +127,13 @@ test.describe('Browser Tab', () => {
     const browserTabId = browserTabsBefore[browserTabsBefore.length - 1].id
 
     // Switch to the previous tab (terminal)
-    await orcaPage.keyboard.press('Meta+Shift+BracketLeft')
+    await pressShortcut(orcaPage, 'BracketLeft', { shift: true })
     await expect
       .poll(async () => getActiveTabType(orcaPage), { timeout: 3_000 })
       .toBe('terminal')
 
     // Switch back to browser tab
-    await orcaPage.keyboard.press('Meta+Shift+BracketRight')
+    await pressShortcut(orcaPage, 'BracketRight', { shift: true })
     await expect
       .poll(async () => getActiveTabType(orcaPage), { timeout: 3_000 })
       .toBe('browser')
@@ -157,7 +158,7 @@ test.describe('Browser Tab', () => {
     const worktreeId = (await getActiveWorktreeId(orcaPage))!
 
     // Open a browser tab
-    await orcaPage.keyboard.press('Meta+Shift+b')
+    await pressShortcut(orcaPage, 'b', { shift: true })
     await expect
       .poll(async () => getActiveTabType(orcaPage), { timeout: 5_000 })
       .toBe('browser')

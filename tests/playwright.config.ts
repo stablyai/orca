@@ -18,7 +18,7 @@ export default defineConfig({
   globalTeardown: './e2e/global-teardown.ts',
   timeout: 60_000,
   expect: { timeout: 10_000 },
-  /* Run tests serially — they share a single Electron app instance */
+  /* Run tests serially to keep the Electron E2E suite predictable */
   fullyParallel: false,
   workers: 1,
   retries: 0,

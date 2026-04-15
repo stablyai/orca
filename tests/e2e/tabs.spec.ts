@@ -10,6 +10,7 @@
 import { test, expect } from './helpers/orca-app'
 import {
   waitForSessionReady,
+  waitForActiveWorktree,
   getActiveWorktreeId,
   getActiveTabId,
   getActiveTabType,
@@ -17,25 +18,25 @@ import {
   getTabBarOrder,
   ensureTerminalVisible,
 } from './helpers/store'
+import { pressShortcut } from './helpers/shortcuts'
 
 test.describe('Tabs', () => {
   test.beforeEach(async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
-    const worktreeId = await getActiveWorktreeId(orcaPage)
-    expect(worktreeId).not.toBeNull()
+    await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
   })
 
   test.afterEach(async ({ orcaPage }) => {
     // Clean up: close extra tabs back to 1 terminal tab.
-    // Closing is done via Cmd+W which closes the active terminal pane/tab.
+    // Closing is done via Cmd/Ctrl+W which closes the active terminal pane/tab.
     const worktreeId = await getActiveWorktreeId(orcaPage)
     if (!worktreeId) return
     let tabs = await getWorktreeTabs(orcaPage, worktreeId)
     while (tabs.length > 1) {
       // Switch to the last tab and close it
-      await orcaPage.keyboard.press('Meta+Shift+BracketRight')
-      await orcaPage.keyboard.press('Meta+w')
+      await pressShortcut(orcaPage, 'BracketRight', { shift: true })
+      await pressShortcut(orcaPage, 'w')
       await expect
         .poll(async () => (await getWorktreeTabs(orcaPage, worktreeId)).length, { timeout: 3_000 })
         .toBeLessThan(tabs.length)
@@ -71,11 +72,11 @@ test.describe('Tabs', () => {
    * User Prompt:
    * - New tab works
    */
-  test('Cmd+T creates a new terminal tab', async ({ orcaPage }) => {
+  test('Cmd/Ctrl+T creates a new terminal tab', async ({ orcaPage }) => {
     const worktreeId = (await getActiveWorktreeId(orcaPage))!
     const tabsBefore = await getWorktreeTabs(orcaPage, worktreeId)
 
-    await orcaPage.keyboard.press('Meta+t')
+    await pressShortcut(orcaPage, 't')
 
     // Wait for the tab to appear in the store
     await expect
@@ -93,13 +94,13 @@ test.describe('Tabs', () => {
    * User Prompt:
    * - New tab works
    */
-  test('Cmd+Shift+] and Cmd+Shift+[ switch between tabs', async ({ orcaPage }) => {
+  test('Cmd/Ctrl+Shift+] and Cmd/Ctrl+Shift+[ switch between tabs', async ({ orcaPage }) => {
     const worktreeId = (await getActiveWorktreeId(orcaPage))!
 
     // Ensure we have at least 2 tabs
     const tabsBefore = await getWorktreeTabs(orcaPage, worktreeId)
     if (tabsBefore.length < 2) {
-      await orcaPage.keyboard.press('Meta+t')
+      await pressShortcut(orcaPage, 't')
       await expect
         .poll(async () => (await getWorktreeTabs(orcaPage, worktreeId)).length, { timeout: 5_000 })
         .toBeGreaterThanOrEqual(2)
@@ -108,7 +109,7 @@ test.describe('Tabs', () => {
     const firstTabId = await getActiveTabId(orcaPage)
 
     // Switch to next tab
-    await orcaPage.keyboard.press('Meta+Shift+BracketRight')
+    await pressShortcut(orcaPage, 'BracketRight', { shift: true })
     await expect
       .poll(async () => getActiveTabId(orcaPage), { timeout: 3_000 })
       .not.toBe(firstTabId)
@@ -117,7 +118,7 @@ test.describe('Tabs', () => {
     expect(secondTabId).not.toBe(firstTabId)
 
     // Switch back to previous tab
-    await orcaPage.keyboard.press('Meta+Shift+BracketLeft')
+    await pressShortcut(orcaPage, 'BracketLeft', { shift: true })
     await expect
       .poll(async () => getActiveTabId(orcaPage), { timeout: 3_000 })
       .toBe(firstTabId)
@@ -133,7 +134,7 @@ test.describe('Tabs', () => {
     // Ensure we have at least 2 tabs
     const tabs = await getWorktreeTabs(orcaPage, worktreeId)
     if (tabs.length < 2) {
-      await orcaPage.keyboard.press('Meta+t')
+      await pressShortcut(orcaPage, 't')
       await expect
         .poll(async () => (await getWorktreeTabs(orcaPage, worktreeId)).length, { timeout: 5_000 })
         .toBeGreaterThanOrEqual(2)
@@ -185,15 +186,15 @@ test.describe('Tabs', () => {
     const worktreeId = (await getActiveWorktreeId(orcaPage))!
 
     // Create a second tab so we can close one without deactivating the worktree
-    await orcaPage.keyboard.press('Meta+t')
+    await pressShortcut(orcaPage, 't')
     await expect
       .poll(async () => (await getWorktreeTabs(orcaPage, worktreeId)).length, { timeout: 5_000 })
       .toBeGreaterThanOrEqual(2)
 
     const tabsBefore = await getWorktreeTabs(orcaPage, worktreeId)
 
-    // Close the active tab with Cmd+W
-    await orcaPage.keyboard.press('Meta+w')
+    // Close the active tab with Cmd/Ctrl+W
+    await pressShortcut(orcaPage, 'w')
 
     // Wait for tab count to decrease
     await expect
@@ -211,7 +212,7 @@ test.describe('Tabs', () => {
     // Ensure at least 2 tabs
     const tabs = await getWorktreeTabs(orcaPage, worktreeId)
     if (tabs.length < 2) {
-      await orcaPage.keyboard.press('Meta+t')
+      await pressShortcut(orcaPage, 't')
       await expect
         .poll(async () => (await getWorktreeTabs(orcaPage, worktreeId)).length, { timeout: 5_000 })
         .toBeGreaterThanOrEqual(2)
@@ -221,7 +222,7 @@ test.describe('Tabs', () => {
     expect(activeTabBefore).not.toBeNull()
 
     // Close the active tab
-    await orcaPage.keyboard.press('Meta+w')
+    await pressShortcut(orcaPage, 'w')
 
     // A neighbor tab should become active
     await expect

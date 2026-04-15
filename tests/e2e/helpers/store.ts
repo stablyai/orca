@@ -107,6 +107,34 @@ export async function waitForSessionReady(page: Page, timeoutMs = 30_000): Promi
     .toBe(true)
 }
 
+/** Wait until a worktree is active and return its ID. */
+export async function waitForActiveWorktree(page: Page, timeoutMs = 30_000): Promise<string> {
+  const existingId = await getActiveWorktreeId(page)
+  if (existingId) {
+    return existingId
+  }
+
+  const primaryWorktreeOption = page.getByRole('option', { name: /primary/i }).first()
+  const anyWorktreeOption = page.getByRole('option').first()
+  const optionToClick = (await primaryWorktreeOption.count()) > 0 ? primaryWorktreeOption : anyWorktreeOption
+
+  if ((await optionToClick.count()) > 0) {
+    // Why: isolated E2E sessions can finish hydrating with worktrees loaded but
+    // no selection restored. Clicking the sidebar option matches the real user
+    // path and drives the same activation logic the app relies on in production.
+    await optionToClick.click()
+  }
+
+  await expect
+    .poll(async () => getActiveWorktreeId(page), {
+      timeout: timeoutMs,
+      message: 'activeWorktreeId did not become available',
+    })
+    .not.toBeNull()
+
+  return (await getActiveWorktreeId(page))!
+}
+
 /** Get all worktree IDs across all repos. */
 export async function getAllWorktreeIds(page: Page): Promise<string[]> {
   return page.evaluate(() => {
@@ -142,31 +170,46 @@ export async function switchToWorktree(page: Page, worktreeId: string): Promise<
 }
 
 /**
- * Ensure the active tab is a terminal and at least one xterm pane is visible.
+ * Ensure the active tab is a terminal and that the first terminal tab exists.
  *
- * Why: after worktree switching or browser tab tests, the first .xterm in
- * DOM order may belong to a hidden worktree. This helper switches to the
- * terminal tab type and polls for any visible xterm element, avoiding the
- * pitfall of `.locator('.xterm').first()` which picks by DOM order.
+ * Why: the first terminal tab is created by a renderer effect after session
+ * hydration. Waiting on store state is more reliable than DOM visibility in
+ * hidden-window mode and avoids racing that initial auto-create step.
  */
 export async function ensureTerminalVisible(page: Page, timeoutMs = 10_000): Promise<void> {
   await page.evaluate(() => {
     const store = (window as any).__store
     if (!store) return
-    if (store.getState().activeTabType !== 'terminal') {
-      store.getState().setActiveTabType('terminal')
+    const state = store.getState()
+    if (state.activeWorktreeId) {
+      const tabs = state.tabsByWorktree[state.activeWorktreeId] ?? []
+      if (tabs.length === 0) {
+        // Why: fresh isolated E2E profiles may not have finished the UI-driven
+        // auto-create effect yet. Use the same store action to create the first
+        // terminal tab so terminal-focused specs start from a stable baseline.
+        state.createTab(state.activeWorktreeId)
+      }
+    }
+    if (state.activeTabType !== 'terminal') {
+      state.setActiveTabType('terminal')
     }
   })
   await expect
     .poll(
       async () =>
         page.evaluate(() => {
-          const xterms = document.querySelectorAll('.xterm')
-          return Array.from(xterms).some(
-            (x) => (x as HTMLElement).offsetParent !== null
-          )
+          const store = (window as any).__store
+          if (!store) {
+            return false
+          }
+          const state = store.getState()
+          if (state.activeTabType !== 'terminal' || !state.activeWorktreeId) {
+            return false
+          }
+          const tabs = state.tabsByWorktree[state.activeWorktreeId] ?? []
+          return tabs.length > 0 && tabs.some((tab: any) => tab.id === state.activeTabId)
         }),
-      { timeout: timeoutMs, message: 'No visible xterm pane found' }
+      { timeout: timeoutMs, message: 'No active terminal tab found for current worktree' }
     )
     .toBe(true)
 }

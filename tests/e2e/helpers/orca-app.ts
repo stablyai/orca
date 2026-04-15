@@ -14,19 +14,20 @@
  */
 
 import { test as base, _electron as electron, type Page, type ElectronApplication } from '@stablyai/playwright-test'
-import { readFileSync } from 'fs'
+import { mkdtempSync, readFileSync, rmSync } from 'fs'
+import os from 'os'
 import path from 'path'
 import { TEST_REPO_PATH_FILE } from '../global-setup'
 
-type OrcaWorkerFixtures = {
+type OrcaTestFixtures = {
   electronApp: ElectronApplication
   sharedPage: Page
-  /** Absolute path to the test git repo created by globalSetup. */
-  testRepoPath: string
+  orcaPage: Page
 }
 
-export type OrcaFixtures = {
-  orcaPage: Page
+type OrcaWorkerFixtures = {
+  /** Absolute path to the test git repo created by globalSetup. */
+  testRepoPath: string
 }
 
 /**
@@ -34,24 +35,25 @@ export type OrcaFixtures = {
  *
  * `orcaPage` — the main Orca renderer window.
  *
- * Worker-scoped: a single Electron instance is shared across all tests
- * (workers: 1, fullyParallel: false in config).
+ * Test-scoped: each test gets a fresh Electron instance and isolated
+ * userData directory so state cannot leak across specs through persistence.
  */
-export const test = base.extend<OrcaFixtures, OrcaWorkerFixtures>({
+export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
   // Worker-scoped: read the test repo path once
   testRepoPath: [async ({}, use) => {
     const repoPath = readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
     await use(repoPath)
   }, { scope: 'worker' }],
 
-  // Worker-scoped: one Electron app for the entire test run
-  electronApp: [async ({}, use) => {
+  // Test-scoped: one Electron app per test
+  electronApp: async ({}, use) => {
     const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
+    const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-userdata-'))
     const app = await electron.launch({
       args: [mainPath],
       // Why: keep NODE_ENV=development so window.__store is exposed and
-      // dev-only helpers (like configureDevUserDataPath) activate, isolating
-      // test runs from the user's real Orca data directory.
+      // dev-only helpers activate. ORCA_E2E_USER_DATA_DIR overrides the usual
+      // shared dev profile so every spec gets a clean persistence root.
       // Why: ORCA_E2E_HEADLESS suppresses mainWindow.show() so the app
       // window stays hidden during test runs, avoiding focus stealing and
       // screen clutter. Playwright interacts via CDP regardless.
@@ -61,16 +63,18 @@ export const test = base.extend<OrcaFixtures, OrcaWorkerFixtures>({
       env: {
         ...process.env,
         NODE_ENV: 'development',
+        ORCA_E2E_USER_DATA_DIR: userDataDir,
         ...(process.env.ORCA_E2E_HEADFUL ? {} : { ORCA_E2E_HEADLESS: '1' }),
       },
     })
     await use(app)
     await app.close()
-  }, { scope: 'worker' }],
+    rmSync(userDataDir, { recursive: true, force: true })
+  },
 
-  // Worker-scoped: grab the first BrowserWindow, add the test repo, and
-  // wait until the session is fully ready with a worktree active.
-  sharedPage: [async ({ electronApp, testRepoPath }, use) => {
+  // Test-scoped: grab the first BrowserWindow, add the test repo, and wait
+  // until the session is fully ready with a worktree active.
+  sharedPage: async ({ electronApp, testRepoPath }, use) => {
     // Why: the Electron app may take a while to create the first window,
     // especially on cold start with no prior dev userData. 60s is generous.
     const page = await electronApp.firstWindow({ timeout: 60_000 })
@@ -108,22 +112,6 @@ export const test = base.extend<OrcaFixtures, OrcaWorkerFixtures>({
       }
     })
 
-    // Activate the test repo's main worktree
-    await page.evaluate((repoPath: string) => {
-      const store = (window as any).__store
-      if (!store) return
-      const state = store.getState()
-      const allWorktrees = Object.values(state.worktreesByRepo).flat() as any[]
-      // Why: the test repo's worktree path will start with the test repo
-      // directory. Find it by path prefix.
-      const testWorktree = allWorktrees.find(
-        (wt: any) => wt.path && wt.path.startsWith(repoPath)
-      )
-      if (testWorktree) {
-        state.setActiveWorktree(testWorktree.id)
-      }
-    }, testRepoPath)
-
     // Wait for workspaceSessionReady to become true
     await page.waitForFunction(
       () => {
@@ -134,22 +122,45 @@ export const test = base.extend<OrcaFixtures, OrcaWorkerFixtures>({
       { timeout: 30_000 }
     )
 
-    // Wait for at least one terminal to be visible in the test worktree
-    // Why: use polling for any visible xterm rather than .first().waitFor()
-    // which may pick a hidden element from another worktree.
-    await page.waitForFunction(
-      () => {
-        const xterms = document.querySelectorAll('.xterm')
-        return Array.from(xterms).some(
-          (x) => (x as HTMLElement).offsetParent !== null
-        )
-      },
-      null,
-      { timeout: 15_000 }
-    )
+    // Re-activate the test repo's primary worktree after session hydration.
+    // Why: workspaceSessionReady restoration can overwrite activeWorktreeId
+    // after earlier setup calls. Selecting it here ensures every test starts on
+    // the seeded repo instead of the "Select a worktree" empty state.
+    await page.evaluate((repoPath: string) => {
+      const store = (window as any).__store
+      if (!store) return
+      const state = store.getState()
+      const allWorktrees = Object.values(state.worktreesByRepo).flat() as any[]
+      const testWorktree = allWorktrees.find(
+        (wt: any) => wt.path === repoPath || wt.path?.startsWith(repoPath)
+      )
+      if (testWorktree) {
+        state.setActiveWorktree(testWorktree.id)
+      }
+    }, testRepoPath)
+
+    // Best-effort seed of a baseline terminal tab when a fresh isolated
+    // profile has none yet.
+    // Why: terminal-focused suites call ensureTerminalVisible(), which does the
+    // authoritative wait. The shared fixture itself should not block non-
+    // terminal suites on tab creation timing.
+    await page.evaluate(() => {
+      const store = (window as any).__store
+      if (!store) {
+        return
+      }
+      const state = store.getState()
+      if (!state.activeWorktreeId) {
+        return
+      }
+      const tabs = state.tabsByWorktree[state.activeWorktreeId] ?? []
+      if (tabs.length === 0) {
+        state.createTab(state.activeWorktreeId)
+      }
+    })
 
     await use(page)
-  }, { scope: 'worker' }],
+  },
 
   // Test-scoped: each test gets the shared page
   orcaPage: async ({ sharedPage }, use) => {
