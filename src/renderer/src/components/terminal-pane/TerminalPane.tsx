@@ -869,14 +869,14 @@ export default function TerminalPane({
         return createPortal(
           <button
             type="button"
-            aria-label="Jump to present"
-            title="Jump to present"
+            aria-label="Scroll to bottom"
+            title="Scroll to bottom"
             className="absolute bottom-3 right-3 z-20 inline-flex h-8 items-center gap-1.5 rounded-full border border-zinc-700/80 bg-zinc-900/90 px-2.5 text-xs font-medium text-zinc-100 shadow-lg backdrop-blur-sm transition hover:bg-zinc-800/95"
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => handleJumpToPresent(pane.id)}
           >
             <ChevronDown className="size-3.5 shrink-0" />
-            <span>Present</span>
+            <span>Scroll to bottom</span>
           </button>,
           pane.container,
           `jump-to-present-${pane.id}`
