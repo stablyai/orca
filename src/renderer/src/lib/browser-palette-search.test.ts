@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { BrowserPage, BrowserWorkspace, Worktree } from '../../../shared/types'
-import { searchBrowserPages, formatBrowserPaletteUrl } from './browser-palette-search'
+import {
+  searchBrowserPages,
+  formatBrowserPaletteUrl,
+  isBlankBrowserUrl
+} from './browser-palette-search'
 
 function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
   return {
@@ -161,6 +165,124 @@ describe('browser-palette-search', () => {
     expect(results[0].pageId).toBe('page-1')
     expect(results[0].titleRange).toEqual({ start: 0, end: 6 })
     expect(results[1].worktreeRange).toEqual({ start: 0, end: 6 })
+  })
+
+  it('matches against formatted URLs when title does not match', () => {
+    const results = searchBrowserPages(
+      [
+        {
+          page: makePage({
+            id: 'page-1',
+            title: 'Dashboard',
+            url: 'https://app.example.com/settings'
+          }),
+          workspace: makeWorkspace({ id: 'ws-1' }),
+          worktree: makeWorktree({ id: 'wt-1' }),
+          repoName: 'repo/one',
+          worktreeSortIndex: 1,
+          isCurrentPage: false,
+          isCurrentWorktree: false
+        }
+      ],
+      'settings'
+    )
+
+    expect(results).toHaveLength(1)
+    expect(results[0].secondaryRange).toEqual({ start: 16, end: 24 })
+    expect(results[0].titleRange).toBeNull()
+  })
+
+  it('matches against raw URL when formatted URL does not match', () => {
+    const results = searchBrowserPages(
+      [
+        {
+          page: makePage({ id: 'page-1', title: 'Docs', url: 'https://docs.example.com/' }),
+          workspace: makeWorkspace({ id: 'ws-1' }),
+          worktree: makeWorktree({ id: 'wt-1' }),
+          repoName: 'repo/one',
+          worktreeSortIndex: 1,
+          isCurrentPage: false,
+          isCurrentWorktree: false
+        }
+      ],
+      'https'
+    )
+
+    expect(results).toHaveLength(1)
+    expect(results[0].secondaryRange).toEqual({ start: 0, end: 5 })
+  })
+
+  it('returns empty array when query matches nothing', () => {
+    const results = searchBrowserPages(
+      [
+        {
+          page: makePage({ id: 'page-1', title: 'Dashboard', url: 'https://example.com' }),
+          workspace: makeWorkspace({ id: 'ws-1' }),
+          worktree: makeWorktree({ id: 'wt-1', displayName: 'Feature' }),
+          repoName: 'myrepo',
+          worktreeSortIndex: 1,
+          isCurrentPage: false,
+          isCurrentWorktree: false
+        }
+      ],
+      'zzzznonexistent'
+    )
+
+    expect(results).toHaveLength(0)
+  })
+
+  it('formats blank URLs as New Tab', () => {
+    expect(formatBrowserPaletteUrl('about:blank')).toBe('New Tab')
+    expect(formatBrowserPaletteUrl('data:text/html,')).toBe('New Tab')
+  })
+
+  it('identifies blank browser URLs', () => {
+    expect(isBlankBrowserUrl('about:blank')).toBe(true)
+    expect(isBlankBrowserUrl('data:text/html,')).toBe(true)
+    expect(isBlankBrowserUrl('https://example.com')).toBe(false)
+  })
+
+  it('boosts current page and current worktree in scored results', () => {
+    const entries = [
+      {
+        page: makePage({ id: 'page-other', title: 'React Docs', url: 'https://react.dev' }),
+        workspace: makeWorkspace({
+          id: 'ws-other',
+          worktreeId: 'wt-other',
+          activePageId: 'page-other'
+        }),
+        worktree: makeWorktree({ id: 'wt-other', displayName: 'Other' }),
+        repoName: 'repo',
+        worktreeSortIndex: 1,
+        isCurrentPage: false,
+        isCurrentWorktree: false
+      },
+      {
+        page: makePage({
+          id: 'page-current',
+          workspaceId: 'ws-current',
+          worktreeId: 'wt-current',
+          title: 'React Native Docs',
+          url: 'https://reactnative.dev'
+        }),
+        workspace: makeWorkspace({
+          id: 'ws-current',
+          worktreeId: 'wt-current',
+          activePageId: 'page-current'
+        }),
+        worktree: makeWorktree({ id: 'wt-current', displayName: 'Current' }),
+        repoName: 'repo',
+        worktreeSortIndex: 1,
+        isCurrentPage: true,
+        isCurrentWorktree: true
+      }
+    ]
+
+    const results = searchBrowserPages(entries, 'react')
+
+    expect(results).toHaveLength(2)
+    expect(results[0].pageId).toBe('page-current')
+    expect(results[1].pageId).toBe('page-other')
   })
 
   it('matches the visible workspace label in browser search', () => {

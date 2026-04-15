@@ -23,6 +23,7 @@ import {
   type PaletteSearchResult
 } from '@/lib/worktree-palette-search'
 import {
+  isBlankBrowserUrl,
   searchBrowserPages,
   type BrowserPaletteSearchResult,
   type SearchableBrowserPage
@@ -31,7 +32,6 @@ import {
   ORCA_BROWSER_FOCUS_REQUEST_EVENT,
   queueBrowserFocusRequest
 } from '@/components/browser-pane/browser-focus'
-import { ORCA_BROWSER_BLANK_URL } from '../../../shared/constants'
 import type { BrowserPage, BrowserWorkspace, Worktree } from '../../../shared/types'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 
@@ -40,7 +40,6 @@ type PaletteScope = 'worktrees' | 'browser-tabs'
 type WorktreePaletteItem = {
   id: string
   type: 'worktree'
-  score: number
   match: PaletteSearchResult
   worktree: Worktree
 }
@@ -104,26 +103,6 @@ function nextScope(scope: PaletteScope, direction: 1 | -1): PaletteScope {
   const index = SCOPE_ORDER.indexOf(scope)
   const nextIndex = (index + direction + SCOPE_ORDER.length) % SCOPE_ORDER.length
   return SCOPE_ORDER[nextIndex]
-}
-
-function getWorktreeMatchScore(match: PaletteSearchResult, isCurrentWorktree: boolean): number {
-  const base =
-    match.matchedField === 'displayName'
-      ? 0
-      : match.matchedField === 'branch'
-        ? 12
-        : match.matchedField === 'comment'
-          ? 20
-          : match.matchedField === 'pr' || match.matchedField === 'issue'
-            ? 24
-            : match.matchedField === 'repo'
-              ? 32
-              : 40
-  return isCurrentWorktree ? base - 6 : base
-}
-
-function isBlankBrowserUrl(url: string): boolean {
-  return url === 'about:blank' || url === ORCA_BROWSER_BLANK_URL
 }
 
 function findBrowserSelection(pageId: string): BrowserSelection | null {
@@ -200,13 +179,16 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     return sortWorktreesRecent(all, tabsByWorktree, repoMap, prCache)
   }, [worktreesByRepo, tabsByWorktree, repoMap, prCache])
 
+  // Why: browser rows need worktree lookups for repo badge colors, and browser
+  // search intentionally includes archived worktrees. This map must cover all
+  // worktrees, not just the non-archived sortedWorktrees used for the Worktrees scope.
   const worktreeMap = useMemo(() => {
     const map = new Map<string, Worktree>()
-    for (const worktree of sortedWorktrees) {
+    for (const worktree of browserSortedWorktrees) {
       map.set(worktree.id, worktree)
     }
     return map
-  }, [sortedWorktrees])
+  }, [browserSortedWorktrees])
 
   const worktreeOrder = useMemo(
     () => new Map(browserSortedWorktrees.map((worktree, index) => [worktree.id, index])),
@@ -259,7 +241,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const worktreeItems = useMemo<WorktreePaletteItem[]>(
     () =>
       worktreeMatches
-        .map((match, index) => {
+        .map((match) => {
           const worktree = worktreeMap.get(match.worktreeId)
           if (!worktree) {
             return null
@@ -267,13 +249,12 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
           return {
             id: `worktree:${worktree.id}`,
             type: 'worktree' as const,
-            score: getWorktreeMatchScore(match, activeWorktreeId === worktree.id) + index * 0.001,
             match,
             worktree
           }
         })
         .filter((item): item is WorktreePaletteItem => item !== null),
-    [activeWorktreeId, worktreeMap, worktreeMatches]
+    [worktreeMap, worktreeMatches]
   )
 
   const browserItems = useMemo<BrowserPaletteItem[]>(
@@ -318,7 +299,15 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
               (workspace) => workspace.id === activeBrowserTabId
             )?.activePageId ?? null)
           : null
-      previousBrowserFocusTargetRef.current = 'webview'
+      // Why: capture which browser surface had focus *before* Radix Dialog
+      // steals it. By onOpenAutoFocus time, document.activeElement has already
+      // moved to the dialog content, so address-bar detection must happen here.
+      previousBrowserFocusTargetRef.current =
+        activeTabType === 'browser' &&
+        document.activeElement instanceof HTMLElement &&
+        document.activeElement.closest('[data-orca-browser-address-bar="true"]')
+          ? 'address-bar'
+          : 'webview'
       skipRestoreFocusRef.current = false
       prevQueryRef.current = ''
       prevScopeRef.current = 'worktrees'
@@ -446,27 +435,25 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         toast.error('Browser page no longer exists')
         return
       }
-      const activated = activateAndRevealWorktree(selection.worktree.id)
+      // Why: capture the workspace and page info before activateAndRevealWorktree
+      // mutates store state. Store cascades during worktree activation can remap
+      // browser workspace state, making a second findBrowserSelection unreliable.
+      const { worktree, workspace, page } = selection
+      const activated = activateAndRevealWorktree(worktree.id)
       if (!activated) {
         toast.error('Worktree no longer exists')
         return
       }
 
-      const nextSelection = findBrowserSelection(pageId)
-      if (!nextSelection) {
-        toast.error('Browser page no longer exists')
-        return
-      }
-
       const state = useAppStore.getState()
-      state.setActiveBrowserTab(nextSelection.workspace.id)
-      state.setActiveBrowserPage(nextSelection.workspace.id, pageId)
+      state.setActiveBrowserTab(workspace.id)
+      state.setActiveBrowserPage(workspace.id, pageId)
       skipRestoreFocusRef.current = true
       closeModal()
       setSelectedItemId('')
       requestBrowserFocus({
         pageId,
-        target: isBlankBrowserUrl(nextSelection.page.url) ? 'address-bar' : 'webview'
+        target: isBlankBrowserUrl(page.url) ? 'address-bar' : 'webview'
       })
     },
     [closeModal, requestBrowserFocus]
@@ -496,12 +483,8 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   }, [])
 
   const handleOpenAutoFocus = useCallback((_event: Event) => {
-    previousBrowserFocusTargetRef.current =
-      previousActiveTabTypeRef.current === 'browser' &&
-      document.activeElement instanceof HTMLElement &&
-      document.activeElement.closest('[data-orca-browser-address-bar="true"]')
-        ? 'address-bar'
-        : 'webview'
+    // No-op: address-bar detection is handled in the visible effect before
+    // Radix steals focus. This callback exists only to satisfy the prop API.
   }, [])
 
   const handleInputKeyDown = useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {

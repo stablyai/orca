@@ -35,8 +35,12 @@ function compareText(a: string, b: string): number {
   return a.localeCompare(b, undefined, { sensitivity: 'base' })
 }
 
+export function isBlankBrowserUrl(url: string): boolean {
+  return url === 'about:blank' || url === ORCA_BROWSER_BLANK_URL
+}
+
 export function formatBrowserPaletteUrl(url: string): string {
-  if (url === 'about:blank' || url === ORCA_BROWSER_BLANK_URL) {
+  if (isBlankBrowserUrl(url)) {
     return 'New Tab'
   }
   try {
