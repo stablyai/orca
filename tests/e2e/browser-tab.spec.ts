@@ -26,50 +26,6 @@ test.describe('Browser Tab', () => {
     await ensureTerminalVisible(orcaPage)
   })
 
-  test.afterEach(async ({ orcaPage }) => {
-    // Clean up: close all browser tabs created during the test
-    const worktreeId = await getActiveWorktreeId(orcaPage)
-    if (!worktreeId) {
-      return
-    }
-
-    let browserTabs = await getBrowserTabs(orcaPage, worktreeId)
-    while (browserTabs.length > 0) {
-      // Switch to browser tab type and close
-      const activeType = await getActiveTabType(orcaPage)
-      if (activeType !== 'browser') {
-        // Navigate to a browser tab
-        await orcaPage.evaluate((btId) => {
-          const store = window.__store
-          if (!store) {
-            return
-          }
-
-          store.getState().setActiveBrowserTab(btId)
-          store.getState().setActiveTabType('browser')
-        }, browserTabs[0].id)
-      }
-      await pressShortcut(orcaPage, 'w')
-      await expect
-        .poll(async () => (await getBrowserTabs(orcaPage, worktreeId)).length, { timeout: 3_000 })
-        .toBeLessThan(browserTabs.length)
-        .catch(() => { /* cleanup best-effort */ })
-      browserTabs = await getBrowserTabs(orcaPage, worktreeId)
-    }
-    // Switch back to terminal view
-    const activeType = await getActiveTabType(orcaPage)
-    if (activeType !== 'terminal') {
-      await orcaPage.evaluate(() => {
-        const store = window.__store
-        if (!store) {
-          return
-        }
-
-        store.getState().setActiveTabType('terminal')
-      })
-    }
-  })
-
   /**
    * User Prompt:
    * - Browser works and also retains state when switching tabs etc.
@@ -161,7 +117,7 @@ test.describe('Browser Tab', () => {
   test('browser tab retains state when switching worktrees and back', async ({ orcaPage }) => {
     const allWorktreeIds = await getAllWorktreeIds(orcaPage)
     if (allWorktreeIds.length < 2) {
-      test.skip(true, 'Need at least 2 worktrees to test worktree switching')
+      test.skip('Need at least 2 worktrees to test worktree switching')
     }
 
     const worktreeId = (await getActiveWorktreeId(orcaPage))!

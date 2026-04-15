@@ -17,12 +17,13 @@ export default function globalTeardown(): void {
   const testRepoDir = readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
   if (testRepoDir && existsSync(testRepoDir)) {
     // Why: git worktree add creates directories as siblings. Clean up any
-    // orca-e2e-worktree-* directories in the same parent.
+    // seeded or test-created worktrees in the same parent so reruns remain
+    // idempotent and do not leak temp repos into /tmp.
     const parentDir = path.dirname(testRepoDir)
     try {
       const siblings = readdirSync(parentDir)
       for (const name of siblings) {
-        if (name.startsWith('orca-e2e-worktree-')) {
+        if (name.startsWith('orca-e2e-worktree-') || name.startsWith('e2e-test-')) {
           rmSync(path.join(parentDir, name), { recursive: true, force: true })
         }
       }

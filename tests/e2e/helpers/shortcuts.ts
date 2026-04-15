@@ -4,9 +4,18 @@ type ShortcutOptions = {
   shift?: boolean
 }
 
+const modifierKeyByPage = new WeakMap<Page, 'Meta' | 'Control'>()
+
 async function getModifierKey(page: Page): Promise<'Meta' | 'Control'> {
+  const cached = modifierKeyByPage.get(page)
+  if (cached) {
+    return cached
+  }
+
   const isMac = await page.evaluate(() => navigator.userAgent.includes('Mac'))
-  return isMac ? 'Meta' : 'Control'
+  const modifierKey = isMac ? 'Meta' : 'Control'
+  modifierKeyByPage.set(page, modifierKey)
+  return modifierKey
 }
 
 /**

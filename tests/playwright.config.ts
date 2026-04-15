@@ -27,7 +27,9 @@ export default defineConfig({
   retries: 0,
   reporter: 'list',
   use: {
-    trace: 'on-first-retry',
+    // Why: this suite intentionally runs with retries disabled so first-failure
+    // traces are the only reliable debugging artifact we can collect in CI.
+    trace: 'retain-on-failure',
   },
   projects: [
     {

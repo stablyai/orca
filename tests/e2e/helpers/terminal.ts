@@ -63,7 +63,7 @@ export async function getTerminalContent(page: Page, charLimit = 4000): Promise<
  * PTY IDs from the Zustand store, write a unique marker to each candidate,
  * then read back from the terminal buffer via SerializeAddon.
  */
-export async function discoverActivePtyId(page: Page, maxId = 10): Promise<string> {
+export async function discoverActivePtyId(page: Page): Promise<string> {
   const marker = `__PTY_PROBE_${Date.now()}__`
 
   // Get candidate PTY IDs from the store
@@ -82,19 +82,20 @@ export async function discoverActivePtyId(page: Page, maxId = 10): Promise<strin
     return state.ptyIdsByTabId[activeTabId] ?? []
   })
 
-  const idsToProbe =
-    candidateIds.length > 0
-      ? candidateIds
-      : Array.from({ length: maxId }, (_, i) => String(i + 1))
+  if (candidateIds.length === 0) {
+    // Why: blind-probing arbitrary PTY IDs can write into unrelated shells and
+    // hides real regressions in the tab->PTY mapping the test depends on.
+    throw new Error('discoverActivePtyId: active tab has no PTY candidates in store')
+  }
 
   // Write the marker to each candidate PTY
   await page.evaluate(
-    ({ marker, idsToProbe }) => {
-      for (const id of idsToProbe) {
+    ({ marker, candidateIds }) => {
+      for (const id of candidateIds) {
         window.api.pty.write(String(id), `\x03\x15echo ${marker}_${id}\r`)
       }
     },
-    { marker, idsToProbe }
+    { marker, candidateIds }
   )
 
   // Wait for the marker to appear in the terminal buffer via SerializeAddon

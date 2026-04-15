@@ -62,14 +62,8 @@ export default function globalSetup(): void {
     `${JSON.stringify({ name: 'orca-e2e-test', version: '0.0.0', private: true }, null, 2)}\n`
   )
   writeFileSync(path.join(testRepoDir, '.gitignore'), 'node_modules/\n')
-  writeFileSync(
-    path.join(testRepoDir, 'src', 'index.ts'),
-    // mkdirSync for src/ first
-    (() => {
-      mkdirSync(path.join(testRepoDir, 'src'), { recursive: true })
-      return 'export const hello = "world"\n'
-    })()
-  )
+  mkdirSync(path.join(testRepoDir, 'src'), { recursive: true })
+  writeFileSync(path.join(testRepoDir, 'src', 'index.ts'), 'export const hello = "world"\n')
 
   execSync('git add -A', { cwd: testRepoDir, stdio: 'pipe' })
   execSync('git commit -m "Initial commit for E2E tests"', { cwd: testRepoDir, stdio: 'pipe' })

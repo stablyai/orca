@@ -27,27 +27,6 @@ test.describe('Tabs', () => {
     await ensureTerminalVisible(orcaPage)
   })
 
-  test.afterEach(async ({ orcaPage }) => {
-    // Clean up: close extra tabs back to 1 terminal tab.
-    // Closing is done via Cmd/Ctrl+W which closes the active terminal pane/tab.
-    const worktreeId = await getActiveWorktreeId(orcaPage)
-    if (!worktreeId) {
-      return
-    }
-
-    let tabs = await getWorktreeTabs(orcaPage, worktreeId)
-    while (tabs.length > 1) {
-      // Switch to the last tab and close it
-      await pressShortcut(orcaPage, 'BracketRight', { shift: true })
-      await pressShortcut(orcaPage, 'w')
-      await expect
-        .poll(async () => (await getWorktreeTabs(orcaPage, worktreeId)).length, { timeout: 3_000 })
-        .toBeLessThan(tabs.length)
-        .catch(() => { /* cleanup best-effort */ })
-      tabs = await getWorktreeTabs(orcaPage, worktreeId)
-    }
-  })
-
   /**
    * User Prompt:
    * - New tab works
