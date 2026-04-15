@@ -561,6 +561,7 @@ describe('TabsSlice', () => {
               linkedPR: null,
               isArchived: false,
               isUnread: false,
+              isPinned: false,
               sortOrder: 0,
               lastActivityAt: 0
             }
@@ -652,6 +653,7 @@ describe('TabsSlice', () => {
               linkedPR: null,
               isArchived: false,
               isUnread: false,
+              isPinned: false,
               sortOrder: 0,
               lastActivityAt: 0
             }

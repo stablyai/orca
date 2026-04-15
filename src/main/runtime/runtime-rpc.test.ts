@@ -75,6 +75,7 @@ describe('OrcaRuntimeRpcServer', () => {
         linkedPR: null,
         isArchived: false,
         isUnread: overrides?.isUnread ?? false,
+        isPinned: false,
         sortOrder: 0,
         lastActivityAt: 0
       }

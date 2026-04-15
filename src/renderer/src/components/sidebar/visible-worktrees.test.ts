@@ -17,6 +17,7 @@ function makeWorktree(id: string, repoId = 'repo1'): Worktree {
     linkedPR: null,
     isArchived: false,
     isUnread: false,
+    isPinned: false,
     sortOrder: 0,
     lastActivityAt: 0
   }

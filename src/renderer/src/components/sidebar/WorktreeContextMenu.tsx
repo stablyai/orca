@@ -14,6 +14,8 @@ import {
   Link,
   MessageSquare,
   Pencil,
+  Pin,
+  PinOff,
   XCircle,
   Trash2
 } from 'lucide-react'
@@ -60,6 +62,10 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({ worktree, 
   const handleToggleRead = useCallback(() => {
     updateWorktreeMeta(worktree.id, { isUnread: !worktree.isUnread })
   }, [worktree.id, worktree.isUnread, updateWorktreeMeta])
+
+  const handleTogglePin = useCallback(() => {
+    updateWorktreeMeta(worktree.id, { isPinned: !worktree.isPinned })
+  }, [worktree.id, worktree.isPinned, updateWorktreeMeta])
 
   const handleRename = useCallback(() => {
     openModal('edit-meta', {
@@ -155,6 +161,10 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({ worktree, 
             Copy Path
           </DropdownMenuItem>
           <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={handleTogglePin} disabled={isDeleting}>
+            {worktree.isPinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
+            {worktree.isPinned ? 'Unpin' : 'Pin'}
+          </DropdownMenuItem>
           <DropdownMenuItem onSelect={handleRename} disabled={isDeleting}>
             <Pencil className="size-3.5" />
             Rename

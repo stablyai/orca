@@ -31,6 +31,7 @@ function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): b
       worktree.linkedPR === candidate.linkedPR &&
       worktree.isArchived === candidate.isArchived &&
       worktree.isUnread === candidate.isUnread &&
+      worktree.isPinned === candidate.isPinned &&
       worktree.sortOrder === candidate.sortOrder &&
       worktree.lastActivityAt === candidate.lastActivityAt
     )

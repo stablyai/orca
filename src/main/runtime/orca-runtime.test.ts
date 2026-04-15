@@ -98,6 +98,7 @@ const store = {
       linkedPR: null,
       isArchived: false,
       isUnread: false,
+      isPinned: false,
       sortOrder: 0,
       lastActivityAt: 0
     }
@@ -711,6 +712,7 @@ describe('OrcaRuntimeService', () => {
           linkedPR: meta.linkedPR ?? existingMeta?.linkedPR ?? null,
           isArchived: meta.isArchived ?? existingMeta?.isArchived ?? false,
           isUnread: meta.isUnread ?? existingMeta?.isUnread ?? false,
+          isPinned: meta.isPinned ?? existingMeta?.isPinned ?? false,
           sortOrder: meta.sortOrder ?? existingMeta?.sortOrder ?? 0,
           lastActivityAt: meta.lastActivityAt ?? existingMeta?.lastActivityAt ?? 0
         }

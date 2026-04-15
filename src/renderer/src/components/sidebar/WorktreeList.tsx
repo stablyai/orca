@@ -94,7 +94,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       if (!row) {
         return `__stale_${index}`
       }
-      return row.type === 'header' ? `hdr:${row.key}` : `wt:${row.worktree.id}`
+      return row.type === 'header'
+        ? `hdr:${row.key}`
+        : row.type === 'separator'
+          ? `sep:${row.key}`
+          : `wt:${row.worktree.id}`
     }
   })
 
@@ -258,6 +262,21 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         {virtualItems.map((vItem) => {
           const row = rows[vItem.index]
 
+          if (row.type === 'separator') {
+            return (
+              <div
+                key={vItem.key}
+                role="separator"
+                data-index={vItem.index}
+                ref={virtualizer.measureElement}
+                className="absolute left-0 right-0"
+                style={{ transform: `translateY(${vItem.start}px)` }}
+              >
+                <div className="mx-2 my-1.5 border-t border-border/60" />
+              </div>
+            )
+          }
+
           if (row.type === 'header') {
             return (
               <div
@@ -275,19 +294,21 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   )}
                   onClick={() => toggleGroup(row.key)}
                 >
-                  <div
-                    className={cn(
-                      'flex size-4 shrink-0 items-center justify-center rounded-[4px]',
-                      row.repo ? 'text-foreground' : ''
-                    )}
-                    style={row.repo ? { color: row.repo.badgeColor } : undefined}
-                  >
-                    <row.icon className="size-3" />
-                  </div>
+                  {row.icon ? (
+                    <div
+                      className={cn(
+                        'flex size-4 shrink-0 items-center justify-center rounded-[4px]',
+                        row.repo ? 'text-foreground' : ''
+                      )}
+                      style={row.repo ? { color: row.repo.badgeColor } : undefined}
+                    >
+                      <row.icon className="size-3" />
+                    </div>
+                  ) : null}
 
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
-                      <div className="truncate text-[13px] font-semibold leading-none lowercase">
+                      <div className="truncate text-[13px] font-semibold leading-none capitalize">
                         {row.label}
                       </div>
                       <div className="rounded-full bg-black/12 px-1.5 py-0.5 text-[9px] font-medium leading-none text-muted-foreground/90">

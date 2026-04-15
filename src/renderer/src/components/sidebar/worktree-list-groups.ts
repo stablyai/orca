@@ -11,12 +11,13 @@ export type GroupHeaderRow = {
   label: string
   count: number
   tone: string
-  icon: React.ComponentType<{ className?: string }>
+  icon?: React.ComponentType<{ className?: string }>
   repo?: Repo
 }
 
+export type SeparatorRow = { type: 'separator'; key: string }
 export type WorktreeRow = { type: 'item'; worktree: Worktree; repo: Repo | undefined }
-export type Row = GroupHeaderRow | WorktreeRow
+export type Row = GroupHeaderRow | SeparatorRow | WorktreeRow
 
 export type PRGroupKey = 'done' | 'in-review' | 'in-progress' | 'closed'
 
@@ -57,6 +58,13 @@ export const REPO_GROUP_META = {
   icon: FolderGit2
 } as const
 
+export const PINNED_GROUP_KEY = 'pinned'
+
+export const PINNED_GROUP_META = {
+  label: 'Pinned',
+  tone: 'text-muted-foreground'
+} as const
+
 export function getPRGroupKey(
   worktree: Worktree,
   repoMap: Map<string, Repo>,
@@ -87,6 +95,36 @@ export function getPRGroupKey(
 }
 
 /**
+ * Emit a "Pinned" header + its items into `result`, returning the set of
+ * pinned worktree IDs so the caller can exclude them from regular groups.
+ */
+function emitPinnedGroup(
+  worktrees: Worktree[],
+  repoMap: Map<string, Repo>,
+  collapsedGroups: Set<string>,
+  result: Row[]
+): Set<string> {
+  const pinned = worktrees.filter((w) => w.isPinned)
+  if (pinned.length === 0) {
+    return new Set()
+  }
+
+  result.push({
+    type: 'header',
+    key: PINNED_GROUP_KEY,
+    label: PINNED_GROUP_META.label,
+    count: pinned.length,
+    tone: PINNED_GROUP_META.tone
+  })
+  if (!collapsedGroups.has(PINNED_GROUP_KEY)) {
+    for (const w of pinned) {
+      result.push({ type: 'item', worktree: w, repo: repoMap.get(w.repoId) })
+    }
+  }
+  return new Set(pinned.map((w) => w.id))
+}
+
+/**
  * Build the flat row list consumed by the virtualizer.
  * Extracted here to keep WorktreeList.tsx under the line-count lint limit.
  */
@@ -99,15 +137,21 @@ export function buildRows(
 ): Row[] {
   const result: Row[] = []
 
+  const pinnedIds = emitPinnedGroup(worktrees, repoMap, collapsedGroups, result)
+  const unpinned = pinnedIds.size > 0 ? worktrees.filter((w) => !pinnedIds.has(w.id)) : worktrees
+
   if (groupBy === 'none') {
-    for (const w of worktrees) {
+    if (pinnedIds.size > 0 && unpinned.length > 0) {
+      result.push({ type: 'separator', key: 'sep:pinned' })
+    }
+    for (const w of unpinned) {
       result.push({ type: 'item', worktree: w, repo: repoMap.get(w.repoId) })
     }
     return result
   }
 
   const grouped = new Map<string, { label: string; items: Worktree[]; repo?: Repo }>()
-  for (const w of worktrees) {
+  for (const w of unpinned) {
     let key: string
     let label: string
     let repo: Repo | undefined

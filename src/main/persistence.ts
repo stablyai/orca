@@ -376,6 +376,7 @@ function getDefaultWorktreeMeta(): WorktreeMeta {
     linkedPR: null,
     isArchived: false,
     isUnread: false,
+    isPinned: false,
     sortOrder: Date.now(),
     lastActivityAt: 0
   }

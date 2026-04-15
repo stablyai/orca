@@ -23,6 +23,7 @@ const worktree: Worktree = {
   isArchived: false,
   comment: '',
   isUnread: false,
+  isPinned: false,
   displayName: 'feature/super-critical',
   sortOrder: 0,
   lastActivityAt: 0

@@ -168,6 +168,7 @@ describe('mergeWorktree', () => {
       linkedPR: 10,
       isArchived: true,
       isUnread: true,
+      isPinned: true,
       sortOrder: 5,
       lastActivityAt: 1000
     }
@@ -186,6 +187,7 @@ describe('mergeWorktree', () => {
       linkedPR: 10,
       isArchived: true,
       isUnread: true,
+      isPinned: true,
       sortOrder: 5,
       lastActivityAt: 1000
     })
@@ -199,6 +201,7 @@ describe('mergeWorktree', () => {
     expect(result.linkedPR).toBeNull()
     expect(result.isArchived).toBe(false)
     expect(result.isUnread).toBe(false)
+    expect(result.isPinned).toBe(false)
     expect(result.sortOrder).toBe(0)
     expect(result.lastActivityAt).toBe(0)
   })
