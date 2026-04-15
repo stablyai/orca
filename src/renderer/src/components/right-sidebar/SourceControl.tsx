@@ -123,7 +123,7 @@ function SourceControlInner(): React.JSX.Element {
   const [scope, setScope] = useState<SourceControlScope>('all')
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
   const [baseRefDialogOpen, setBaseRefDialogOpen] = useState(false)
-  const [defaultBaseRef, setDefaultBaseRef] = useState('origin/main')
+  const [defaultBaseRef, setDefaultBaseRef] = useState<string | null>('origin/main')
   const [filterQuery, setFilterQuery] = useState('')
   const filterInputRef = useRef<HTMLInputElement>(null)
 
@@ -171,6 +171,13 @@ function SourceControlInner(): React.JSX.Element {
     if (!activeRepo || isFolder) {
       return
     }
+
+    // Why: reset to null so that effectiveBaseRef becomes falsy until the IPC
+    // resolves.  This prevents the branch compare from firing with a stale
+    // defaultBaseRef left over from a *different* repo (e.g. 'origin/master'
+    // when the new repo uses 'origin/main'), which would cause a transient
+    // "invalid-base" error every time the user switches between repos.
+    setDefaultBaseRef(null)
 
     let stale = false
     void window.api.repos
@@ -394,17 +401,25 @@ function SourceControlInner(): React.JSX.Element {
     const requestKey = `${activeWorktreeId}:${effectiveBaseRef}:${Date.now()}`
     const existingSummary =
       useAppStore.getState().gitBranchCompareSummaryByWorktree[activeWorktreeId]
-    const isBackgroundRefresh = existingSummary && existingSummary.status === 'ready'
-    if (isBackgroundRefresh) {
-      // Update the request key without resetting to loading state
+
+    // Why: only show the loading spinner for the very first branch compare
+    // request, or when the base ref has changed (user picked a new one, or
+    // getBaseRefDefault corrected a stale cross-repo value).  Polling retries
+    // — whether the previous result was 'ready' *or* an error — keep the
+    // current UI visible until the new IPC result arrives.  Resetting to
+    // 'loading' on every 5-second poll when the compare is in an error state
+    // caused a visible loading→error→loading→error flicker.
+    const baseRefChanged = existingSummary && existingSummary.baseRef !== effectiveBaseRef
+    const shouldResetToLoading = !existingSummary || baseRefChanged
+    if (shouldResetToLoading) {
+      beginGitBranchCompareRequest(activeWorktreeId, requestKey, effectiveBaseRef)
+    } else {
       useAppStore.setState((s) => ({
         gitBranchCompareRequestKeyByWorktree: {
           ...s.gitBranchCompareRequestKeyByWorktree,
           [activeWorktreeId]: requestKey
         }
       }))
-    } else {
-      beginGitBranchCompareRequest(activeWorktreeId, requestKey, effectiveBaseRef)
     }
 
     try {
