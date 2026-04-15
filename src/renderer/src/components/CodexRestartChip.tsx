@@ -2,6 +2,34 @@ import { RefreshCw } from 'lucide-react'
 import { useMemo } from 'react'
 import { useAppStore } from '../store'
 
+export function collectStaleWorktreePtyIds({
+  tabsByWorktree,
+  ptyIdsByTabId,
+  codexRestartNoticeByPtyId,
+  worktreeId
+}: {
+  tabsByWorktree: Record<string, { id: string }[]>
+  ptyIdsByTabId: Record<string, string[]>
+  codexRestartNoticeByPtyId: Record<string, unknown>
+  worktreeId: string
+}): string[] {
+  return (tabsByWorktree[worktreeId] ?? []).flatMap((tab) =>
+    (ptyIdsByTabId[tab.id] ?? []).filter((ptyId) => Boolean(codexRestartNoticeByPtyId[ptyId]))
+  )
+}
+
+export function dismissStaleWorktreePtyIds(
+  staleWorktreePtyIds: string[],
+  clearCodexRestartNotice: (ptyId: string) => void
+): void {
+  // Why: restart notices are stored per PTY, but the workspace host presents
+  // one shared prompt. Clearing all matching PTY notices keeps every pane in
+  // that worktree consistent with the dismissal.
+  for (const ptyId of staleWorktreePtyIds) {
+    clearCodexRestartNotice(ptyId)
+  }
+}
+
 export default function CodexRestartChip({
   worktreeId
 }: {
@@ -15,9 +43,12 @@ export default function CodexRestartChip({
 
   const staleWorktreePtyIds = useMemo(
     () =>
-      (tabsByWorktree[worktreeId] ?? []).flatMap((tab) =>
-        (ptyIdsByTabId[tab.id] ?? []).filter((ptyId) => Boolean(codexRestartNoticeByPtyId[ptyId]))
-      ),
+      collectStaleWorktreePtyIds({
+        tabsByWorktree,
+        ptyIdsByTabId,
+        codexRestartNoticeByPtyId,
+        worktreeId
+      }),
     [codexRestartNoticeByPtyId, ptyIdsByTabId, tabsByWorktree, worktreeId]
   )
 
@@ -42,14 +73,7 @@ export default function CodexRestartChip({
           </button>
           <button
             type="button"
-            onClick={() => {
-              // Why: restart notices are stored per PTY, but the workspace host
-              // presents one shared prompt. Clearing all matching PTY notices
-              // keeps every pane in that worktree consistent with the dismissal.
-              for (const ptyId of staleWorktreePtyIds) {
-                clearCodexRestartNotice(ptyId)
-              }
-            }}
+            onClick={() => dismissStaleWorktreePtyIds(staleWorktreePtyIds, clearCodexRestartNotice)}
             className="rounded-md px-1.5 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
           >
             Dismiss
