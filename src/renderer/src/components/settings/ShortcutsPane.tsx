@@ -130,14 +130,14 @@ const SHORTCUT_GROUP_DEFINITIONS: ShortcutGroupDefinition[] = [
     title: 'Terminal Panes',
     items: [
       {
-        action: 'Split pane right',
+        action: 'Split terminal right',
         searchKeywords: ['shortcut', 'pane', 'split'],
         // Why: on Windows/Linux, Ctrl+D must pass through as EOF (#586),
         // so split-right requires Shift on non-Mac platforms.
         keys: ({ mod, shift }) => (mod === '⌘' ? [mod, 'D'] : [mod, shift, 'D'])
       },
       {
-        action: 'Split pane down',
+        action: 'Split terminal down',
         searchKeywords: ['shortcut', 'pane', 'split'],
         // Why: on Windows/Linux, Ctrl+Shift+D is taken by split-right (#586),
         // so split-down uses Alt+Shift+D following Windows Terminal convention.
