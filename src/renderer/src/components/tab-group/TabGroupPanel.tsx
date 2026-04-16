@@ -1,14 +1,19 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
-import { Columns2, Rows2, X } from 'lucide-react'
+import { lazy, Suspense } from 'react'
+import { Columns2, Ellipsis, Rows2, X } from 'lucide-react'
 import { useAppStore } from '../../store'
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import TabBar from '../tab-bar/TabBar'
 import TerminalPane from '../terminal-pane/TerminalPane'
 import BrowserPane from '../browser-pane/BrowserPane'
 import { useTabGroupWorkspaceModel } from './useTabGroupWorkspaceModel'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
-const isMac = navigator.userAgent.includes('Mac')
 
 export default function TabGroupPanel({
   groupId,
@@ -28,36 +33,6 @@ export default function TabGroupPanel({
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
 
-  // Why: track Option/Alt key state so the split button icon can preview the
-  // alternate direction (down) before the user clicks, matching the modifier-
-  // toggle convention used in VS Code and macOS toolbars.
-  const [altHeld, setAltHeld] = useState(false)
-  useEffect(() => {
-    const clearAltHeld = (): void => {
-      setAltHeld(false)
-    }
-    const down = (e: KeyboardEvent): void => {
-      if (e.key === 'Alt') {
-        setAltHeld(true)
-      }
-    }
-    const up = (e: KeyboardEvent): void => {
-      if (e.key === 'Alt') {
-        clearAltHeld()
-      }
-    }
-    window.addEventListener('keydown', down)
-    window.addEventListener('keyup', up)
-    // Why: if the user Alt+Tabs away, this window may never receive the keyup
-    // event, so clear the preview state on blur to avoid a stuck split-down icon.
-    window.addEventListener('blur', clearAltHeld)
-    return () => {
-      window.removeEventListener('keydown', down)
-      window.removeEventListener('keyup', up)
-      window.removeEventListener('blur', clearAltHeld)
-    }
-  }, [])
-
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
   const {
     activeBrowserTab,
@@ -70,15 +45,6 @@ export default function TabGroupPanel({
     terminalTabs,
     worktreePath
   } = model
-
-  const handleSplit = useCallback(
-    (event: React.MouseEvent) => {
-      event.stopPropagation()
-      const direction = event.altKey ? 'down' : 'right'
-      commands.createSplitGroup(direction)
-    },
-    [commands]
-  )
 
   const tabBar = (
     <TabBar
@@ -160,12 +126,12 @@ export default function TabGroupPanel({
     />
   )
 
-  const actionButtonClassName =
-    'my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-opacity hover:bg-accent/50 hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent'
-  const actionChromeClassName = `ml-1.5 flex shrink-0 items-center gap-1 transition-opacity ${
+  const menuButtonClassName =
+    'my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent'
+  const actionChromeClassName = `flex shrink-0 items-center overflow-hidden transition-[width,margin,opacity] duration-150 ${
     isFocused
-      ? 'pointer-events-auto opacity-100'
-      : 'pointer-events-none opacity-0 group-focus-within/tab-group:pointer-events-auto group-focus-within/tab-group:opacity-100'
+      ? 'ml-1.5 w-7 pointer-events-auto opacity-100'
+      : 'ml-0 w-0 pointer-events-none opacity-0'
   }`
 
   return (
@@ -206,52 +172,79 @@ export default function TabGroupPanel({
               width of that controls cluster instead of the old full sidebar
               width so tabs cap at the agent badge, not at the old divider. */}
           <div className="min-w-0 flex-1 h-full">{tabBar}</div>
-          {/* Why: the split/close affordances belong to the pane they mutate,
-              not whichever group happens to render in the workspace's top-right
-              corner. Keeping a reserved action slot in every header avoids tab
-              row jitter while only the active pane shows the controls by
-              default, with focus-within preserving keyboard access. */}
+          {/* Why: pane-scoped layout actions belong with the active pane instead
+              of the global tab-bar `+`, which should keep opening tabs exactly
+              as before. The local overflow menu holds split directions and
+              close-group without changing the existing tab-creation affordance. */}
           <div
             className={actionChromeClassName}
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           >
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  aria-label={altHeld ? 'Split Editor Down' : 'Split Editor Right'}
-                  onClick={handleSplit}
-                  className={actionButtonClassName}
-                >
-                  {altHeld ? <Rows2 size={16} /> : <Columns2 size={16} />}
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={4}>
-                <div className="flex flex-col">
-                  <span>Split Right</span>
-                  {/* Why: split-button modifier hints appear in shared pane header
-                      chrome, so the label must match the current platform's
-                      modifier vocabulary instead of always showing Mac glyphs. */}
-                  <span className="text-muted-foreground">[{isMac ? '⌥' : 'Alt'}] Split Down</span>
-                </div>
-              </TooltipContent>
-            </Tooltip>
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center">
-              {hasSplitGroups ? (
-                <button
-                  type="button"
-                  aria-label="Close Group"
-                  title="Close Group"
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    commands.closeGroup()
-                  }}
-                  className={actionButtonClassName}
-                >
-                  <X className="size-4" />
-                </button>
-              ) : null}
-            </div>
+            {isFocused ? (
+              <DropdownMenu modal={false}>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="Pane Actions"
+                    title="Pane Actions"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                    }}
+                    className={menuButtonClassName}
+                  >
+                    <Ellipsis className="size-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" side="bottom" sideOffset={4}>
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      commands.createSplitGroup('right')
+                    }}
+                  >
+                    <Columns2 className="size-4" />
+                    Split Right
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      commands.createSplitGroup('down')
+                    }}
+                  >
+                    <Rows2 className="size-4" />
+                    Split Down
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      commands.createSplitGroup('left')
+                    }}
+                  >
+                    <Columns2 className="size-4" />
+                    Split Left
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      commands.createSplitGroup('up')
+                    }}
+                  >
+                    <Rows2 className="size-4" />
+                    Split Up
+                  </DropdownMenuItem>
+                  {hasSplitGroups ? (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        variant="destructive"
+                        onSelect={() => {
+                          commands.closeGroup()
+                        }}
+                      >
+                        <X className="size-4" />
+                        Close Group
+                      </DropdownMenuItem>
+                    </>
+                  ) : null}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null}
           </div>
         </div>
       </div>
