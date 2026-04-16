@@ -306,10 +306,19 @@ export function useTerminalPaneLifecycle({
         setRenamingPaneId((prev) => (prev === paneId ? null : prev))
         scheduleRuntimeGraphSync()
       },
-      onActivePaneChange: () => {
+      onActivePaneChange: (pane) => {
         scheduleRuntimeGraphSync()
         if (shouldPersistLayout) {
           persistLayoutSnapshot()
+        }
+        // Why: when the user switches focus between split panes, update the
+        // tab title to the newly active pane's last-known title so the tab
+        // label reflects the focused agent — not a stale title from the
+        // previously focused pane.
+        const paneTitles = useAppStore.getState().runtimePaneTitlesByTabId[tabId] ?? {}
+        const paneTitle = paneTitles[pane.id]
+        if (paneTitle) {
+          updateTabTitle(tabId, paneTitle)
         }
       },
       onLayoutChanged: () => {

@@ -98,7 +98,14 @@ export function connectPanePty(
   const onTitleChange = (title: string, rawTitle: string): void => {
     manager.setPaneGpuRendering(pane.id, !isGeminiTerminalTitle(rawTitle))
     deps.setRuntimePaneTitle(deps.tabId, pane.id, title)
-    deps.updateTabTitle(deps.tabId, title)
+    // Why: only the focused pane should drive the tab title — otherwise two
+    // agents in split panes cause rapid title flickering as each emits OSC
+    // sequences. Mirrors Ghostty's approach: only the active split's title
+    // propagates to the tab. When focus changes, onActivePaneChange syncs
+    // the newly active pane's stored title to the tab.
+    if (manager.getActivePane()?.id === pane.id) {
+      deps.updateTabTitle(deps.tabId, title)
+    }
 
     if (!hasConsideredInitialCacheTimerSeed) {
       hasConsideredInitialCacheTimerSeed = true
