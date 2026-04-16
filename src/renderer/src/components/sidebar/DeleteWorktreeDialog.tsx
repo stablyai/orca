@@ -12,6 +12,7 @@ import { AlertTriangle, LoaderCircle, Trash2 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { toast } from 'sonner'
 import { getDeleteWorktreeToastCopy } from './delete-worktree-toast'
+import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 
 const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   const activeModal = useAppStore((s) => s.activeModal)
@@ -82,6 +83,10 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
             showToast(toastCopy.title, {
               description: toastCopy.description,
               duration: 10000,
+              cancel: {
+                label: 'View',
+                onClick: () => activateAndRevealWorktree(targetWorktreeId)
+              },
               action: state?.canForceDelete
                 ? {
                     label: 'Force Delete',
@@ -89,12 +94,22 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
                       removeWorktree(targetWorktreeId, true)
                         .then((forceResult) => {
                           if (!forceResult.ok) {
-                            toast.error('Force delete failed', { description: forceResult.error })
+                            toast.error('Force delete failed', {
+                              description: forceResult.error,
+                              action: {
+                                label: 'View',
+                                onClick: () => activateAndRevealWorktree(targetWorktreeId)
+                              }
+                            })
                           }
                         })
                         .catch((err: unknown) => {
                           toast.error('Failed to delete worktree', {
-                            description: err instanceof Error ? err.message : String(err)
+                            description: err instanceof Error ? err.message : String(err),
+                            action: {
+                              label: 'View',
+                              onClick: () => activateAndRevealWorktree(targetWorktreeId)
+                            }
                           })
                         })
                     }
