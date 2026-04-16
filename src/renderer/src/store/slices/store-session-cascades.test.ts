@@ -919,10 +919,10 @@ describe('reconnectPersistedTerminals', () => {
     const s = store.getState()
     // Why: deferred reattach doesn't call spawn — connectPanePty handles it
     expect((mockApi.pty as Record<string, unknown>).spawn).not.toHaveBeenCalled()
-    // Why: split-pane tabs have leaf mappings, so tab-level ptyId is NOT set
-    // (it was cleared by clearTransientTerminalState). connectPanePty reads
-    // ptyIdsByLeafId instead.
-    expect(s.tabsByWorktree[wt1][0].ptyId).toBeNull()
+    // Why: reconnect restores the tab-level ptyId so getWorktreeStatus()
+    // sees the tab as active (green dot) even before the terminal mounts.
+    // connectPanePty reads ptyIdsByLeafId for per-leaf daemon sessions.
+    expect(s.tabsByWorktree[wt1][0].ptyId).toBe('daemon-session-B')
     // ptyIdsByLeafId preserved from hydration for connectPanePty to consume
     const layout = s.terminalLayoutsByTabId['tab1']
     expect(layout.ptyIdsByLeafId).toEqual({
