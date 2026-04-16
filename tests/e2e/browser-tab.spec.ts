@@ -165,7 +165,7 @@ test.describe('Browser Tab', () => {
   test('browser tab retains state when switching worktrees and back', async ({ orcaPage }) => {
     const allWorktreeIds = await getAllWorktreeIds(orcaPage)
     if (allWorktreeIds.length < 2) {
-      test.skip('Need at least 2 worktrees to test worktree switching')
+      test.skip(true, 'Need at least 2 worktrees to test worktree switching')
     }
 
     const worktreeId = (await getActiveWorktreeId(orcaPage))!

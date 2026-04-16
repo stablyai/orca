@@ -67,23 +67,6 @@ test.describe('@headful Terminal Panes', () => {
     await waitForPaneCount(orcaPage, 1, 30_000)
   })
 
-  test.afterEach(async ({ orcaPage }) => {
-    // Why: ensure we're on a terminal tab before trying to close panes.
-    // The worktree-switching test may have left us on a different view.
-    await ensureTerminalVisible(orcaPage).catch(() => {})
-
-    // Close any extra split panes back to a single pane
-    let paneCount = await countVisibleTerminalPanes(orcaPage)
-    while (paneCount > 1) {
-      await focusLastTerminalPane(orcaPage)
-      await closeActiveTerminalPane(orcaPage)
-      await waitForPaneCount(orcaPage, paneCount - 1).catch(() => {
-        /* cleanup best-effort */
-      })
-      paneCount = await countVisibleTerminalPanes(orcaPage)
-    }
-  })
-
   /**
    * User Prompt:
    * - terminal panes can be split

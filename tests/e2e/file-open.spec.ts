@@ -61,35 +61,6 @@ test.describe('File Open & Markdown Preview', () => {
     await ensureTerminalVisible(orcaPage)
   })
 
-  test.afterEach(async ({ orcaPage }) => {
-    // Clean up: close all open editor files
-    const worktreeId = await getActiveWorktreeId(orcaPage)
-    if (!worktreeId) {
-      return
-    }
-
-    const openFiles = await getOpenFiles(orcaPage, worktreeId)
-    for (const file of openFiles) {
-      await orcaPage.evaluate((fileId) => {
-        const store = window.__store
-        if (!store) {
-          return
-        }
-
-        store.getState().closeFile(fileId)
-      }, file.id)
-    }
-    // Switch back to terminal view
-    await orcaPage.evaluate(() => {
-      const store = window.__store
-      if (!store) {
-        return
-      }
-
-      store.getState().setActiveTabType('terminal')
-    })
-  })
-
   /**
    * User Prompt:
    * - you can open files (from the right sidebar)

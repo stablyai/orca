@@ -26,12 +26,14 @@ export default defineConfig({
   // substantially. The few visible-window tests that still rely on real
   // pointer interaction are marked serial in their spec file instead.
   fullyParallel: true,
-  retries: 0,
+  forbidOnly: !!process.env.CI,
+  retries: process.env.CI ? 1 : 0,
   reporter: 'list',
   use: {
     // Why: this suite intentionally runs with retries disabled so first-failure
     // traces are the only reliable debugging artifact we can collect in CI.
-    trace: 'retain-on-failure'
+    trace: 'retain-on-failure',
+    screenshot: 'only-on-failure'
   },
   projects: [
     {
