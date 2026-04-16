@@ -113,6 +113,9 @@ function SplitNode({
         // "focused", Cmd/Ctrl+W and split shortcuts can hit the wrong worktree.
         isFocused={isWorktreeActive && node.groupId === focusedGroupId}
         hasSplitGroups={hasSplitGroups}
+        // Why: only the top-right group renders the split button so it appears
+        // exactly once in the workspace, in the top-right corner of the header.
+        showSplitButton={touchesTopEdge && touchesRightEdge}
         reserveClosedExplorerToggleSpace={touchesTopEdge && touchesRightEdge}
         reserveCollapsedSidebarHeaderSpace={touchesTopEdge && touchesLeftEdge}
       />
