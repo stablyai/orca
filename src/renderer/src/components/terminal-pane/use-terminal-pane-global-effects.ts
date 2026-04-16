@@ -62,12 +62,14 @@ export function useTerminalPaneGlobalEffects({
       return
     }
     if (isVisible) {
-      // Why: resumeRendering() creates WebGL contexts for each pane, which
-      // blocks the renderer for 100–500 ms per pane on Windows (ANGLE →
-      // D3D11).  Deferring it into the rAF that runs after the pending-write
-      // drain lets the browser paint one frame with the DOM renderer so the
-      // terminal content appears immediately.  WebGL takes over seamlessly
-      // in the next frame without a visible flash.
+      // Why: resume WebGL immediately so the terminal shows its last-known
+      // state on the first painted frame. Without this, the browser paints
+      // 1+ frames of stale xterm DOM-fallback content at wrong dimensions
+      // (the "stretched" flash). On macOS, WebGL context creation is ~5 ms
+      // — fast enough to feel instant. On Windows (ANGLE → D3D11) it can
+      // take 100–500 ms, but the alternative (deferring to a rAF) leaves
+      // the terminal visibly distorted, which is a worse UX tradeoff.
+      manager.resumeRendering()
 
       fitEpochRef.current++
       const epoch = fitEpochRef.current
@@ -113,10 +115,6 @@ export function useTerminalPaneGlobalEffects({
           return
         }
         fitRanForEpochRef.current = epoch
-        // Why: suspendRendering() disposes every WebGL addon while hidden. We
-        // defer recreation until this post-drain rAF so the browser can paint
-        // one responsive frame with the DOM renderer before WebGL setup runs.
-        mgr.resumeRendering()
         if (isActive) {
           fitAndFocusPanes(mgr)
           return
