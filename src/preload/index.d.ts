@@ -10,13 +10,13 @@ import type { PreloadApi } from './api-types'
 
 type ReposApi = {
   list: () => Promise<Repo[]>
-  add: (args: { path: string; kind?: 'git' | 'folder' }) => Promise<Repo>
+  add: (args: { path: string; kind?: 'git' | 'folder' }) => Promise<{ repo: Repo } | { error: string }>
   addRemote: (args: {
     connectionId: string
     remotePath: string
     displayName?: string
     kind?: 'git' | 'folder'
-  }) => Promise<Repo>
+  }) => Promise<{ repo: Repo } | { error: string }>
   remove: (args: { repoId: string }) => Promise<void>
   update: (args: {
     repoId: string

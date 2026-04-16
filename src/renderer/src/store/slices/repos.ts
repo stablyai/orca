@@ -50,7 +50,11 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       }
       let repo: Repo
       try {
-        repo = await window.api.repos.add({ path })
+        const result = await window.api.repos.add({ path })
+        if ('error' in result) {
+          throw new Error(result.error)
+        }
+        repo = result.repo
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         if (!message.includes('Not a valid git repository')) {
@@ -93,7 +97,11 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
 
   addNonGitFolder: async (path) => {
     try {
-      const repo = await window.api.repos.add({ path, kind: 'folder' })
+      const result = await window.api.repos.add({ path, kind: 'folder' })
+      if ('error' in result) {
+        throw new Error(result.error)
+      }
+      const repo = result.repo
       const alreadyAdded = get().repos.some((r) => r.id === repo.id)
       set((s) => {
         if (s.repos.some((r) => r.id === repo.id)) {

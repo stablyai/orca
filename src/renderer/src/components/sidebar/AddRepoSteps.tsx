@@ -80,10 +80,14 @@ export function useRemoteRepo(
     setIsAddingRemote(true)
     setRemoteError(null)
     try {
-      const repo = (await window.api.repos.addRemote({
+      const result = await window.api.repos.addRemote({
         connectionId: selectedTargetId,
         remotePath: remotePath.trim()
-      })) as Repo
+      })
+      if ('error' in result) {
+        throw new Error(result.error)
+      }
+      const repo = result.repo
 
       const state = useAppStore.getState()
       const existingIdx = state.repos.findIndex((r) => r.id === repo.id)

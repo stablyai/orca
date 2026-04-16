@@ -52,13 +52,13 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.handle('repos:add', async (_event, args: { path: string; kind?: 'git' | 'folder' }) => {
     const repoKind = args.kind === 'folder' ? 'folder' : 'git'
     if (repoKind === 'git' && !isGitRepo(args.path)) {
-      throw new Error(`Not a valid git repository: ${args.path}`)
+      return { error: `Not a valid git repository: ${args.path}` }
     }
 
     // Check if already added
     const existing = store.getRepos().find((r) => r.path === args.path)
     if (existing) {
-      return existing
+      return { repo: existing }
     }
 
     const repo: Repo = {
@@ -73,7 +73,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     store.addRepo(repo)
     await rebuildAuthorizedRootsCache(store)
     notifyReposChanged(mainWindow)
-    return repo
+    return { repo }
   })
 
   ipcMain.handle(
@@ -86,17 +86,17 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         displayName?: string
         kind?: 'git' | 'folder'
       }
-    ): Promise<Repo> => {
+    ): Promise<{ repo: Repo } | { error: string }> => {
       const gitProvider = getSshGitProvider(args.connectionId)
       if (!gitProvider) {
-        throw new Error(`SSH connection "${args.connectionId}" not found or not connected`)
+        return { error: `SSH connection "${args.connectionId}" not found or not connected` }
       }
 
       const existing = store
         .getRepos()
         .find((r) => r.connectionId === args.connectionId && r.path === args.remotePath)
       if (existing) {
-        return existing
+        return { repo: existing }
       }
 
       const pathSegments = args.remotePath.replace(/\/+$/, '').split('/')
@@ -107,7 +107,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
 
       if (args.kind !== 'folder') {
         // Why: when kind is not explicitly 'folder', verify the remote path is
-        // a git repo. Throw on failure so the renderer can show the "Open as
+        // a git repo. Return an error on failure so the renderer can show the "Open as
         // Folder" confirmation dialog — matching the local add-repo behavior
         // where non-git directories require explicit user consent.
         try {
@@ -118,13 +118,13 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
               resolvedPath = check.rootPath
             }
           } else {
-            throw new Error(`Not a valid git repository: ${args.remotePath}`)
+            return { error: `Not a valid git repository: ${args.remotePath}` }
           }
         } catch (err) {
           if (err instanceof Error && err.message.includes('Not a valid git repository')) {
-            throw err
+            return { error: err.message }
           }
-          throw new Error(`Not a valid git repository: ${args.remotePath}`)
+          return { error: `Not a valid git repository: ${args.remotePath}` }
         }
       }
 
@@ -149,7 +149,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         mux.notify('session.registerRoot', { rootPath: resolvedPath })
       }
 
-      return repo
+      return { repo }
     }
   )
 

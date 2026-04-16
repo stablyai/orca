@@ -24,11 +24,15 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
     if (connectionId && folderPath) {
       void (async () => {
         try {
-          const repo = await window.api.repos.addRemote({
+          const result = await window.api.repos.addRemote({
             connectionId,
             remotePath: folderPath,
             kind: 'folder'
           })
+          if ('error' in result) {
+            throw new Error(result.error)
+          }
+          const repo = result.repo
           const state = useAppStore.getState()
           if (!state.repos.some((r) => r.id === repo.id)) {
             useAppStore.setState({ repos: [...state.repos, repo] })

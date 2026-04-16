@@ -84,11 +84,11 @@ describe('repos:addRemote', () => {
         displayName: 'project'
       })
     )
-    expect(result).toHaveProperty('id')
-    expect(result).toHaveProperty('connectionId', 'conn-1')
+    expect(result).toHaveProperty('repo.id')
+    expect(result).toHaveProperty('repo.connectionId', 'conn-1')
   })
 
-  it('uses custom displayName when provided', async () => {
+    it('uses custom displayName when provided', async () => {
     const result = await handlers.get('repos:addRemote')!(null, {
       connectionId: 'conn-1',
       remotePath: '/home/user/project',
@@ -97,10 +97,11 @@ describe('repos:addRemote', () => {
 
     expect(mockStore.addRepo).toHaveBeenCalledWith(
       expect.objectContaining({
-        displayName: 'My Server Repo'
+        displayName: 'My Server Repo',
+        path: '/home/user/project'
       })
     )
-    expect(result).toHaveProperty('displayName', 'My Server Repo')
+    expect(result).toHaveProperty('repo.displayName', 'My Server Repo')
   })
 
   it('returns existing repo if same connectionId and path already added', async () => {
@@ -120,28 +121,26 @@ describe('repos:addRemote', () => {
       remotePath: '/home/user/project'
     })
 
-    expect(result).toEqual(existing)
+    expect(result).toEqual({ repo: existing })
     expect(mockStore.addRepo).not.toHaveBeenCalled()
   })
 
   it('throws when SSH connection is not found', async () => {
-    await expect(
-      handlers.get('repos:addRemote')!(null, {
-        connectionId: 'unknown-conn',
-        remotePath: '/home/user/project'
-      })
-    ).rejects.toThrow('SSH connection "unknown-conn" not found')
+    const result = await handlers.get('repos:addRemote')!(null, {
+      connectionId: 'unknown-conn',
+      remotePath: '/home/user/project'
+    })
+    expect(result).toEqual({ error: 'SSH connection "unknown-conn" not found or not connected' })
   })
 
   it('throws when remote path is not a git repo', async () => {
     mockGitProvider.isGitRepoAsync.mockResolvedValueOnce({ isRepo: false, rootPath: null })
 
-    await expect(
-      handlers.get('repos:addRemote')!(null, {
-        connectionId: 'conn-1',
-        remotePath: '/home/user/documents'
-      })
-    ).rejects.toThrow('Not a valid git repository')
+    const result = await handlers.get('repos:addRemote')!(null, {
+      connectionId: 'conn-1',
+      remotePath: '/home/user/documents'
+    })
+    expect(result).toEqual({ error: 'Not a valid git repository: /home/user/documents' })
     expect(mockStore.addRepo).not.toHaveBeenCalled()
   })
 
@@ -158,7 +157,7 @@ describe('repos:addRemote', () => {
         path: '/home/user/documents'
       })
     )
-    expect(result).toHaveProperty('kind', 'folder')
+    expect(result).toHaveProperty('repo.kind', 'folder')
   })
 
   it('uses rootPath from git detection when available', async () => {
@@ -178,7 +177,7 @@ describe('repos:addRemote', () => {
         path: '/home/user/project'
       })
     )
-    expect(result).toHaveProperty('path', '/home/user/project')
+    expect(result).toHaveProperty('repo.path', '/home/user/project')
   })
 
   it('notifies renderer when remote repo is added', async () => {
