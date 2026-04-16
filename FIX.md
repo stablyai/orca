@@ -2,7 +2,7 @@
 
 ## The Bug
 
-When the split-group renderer path is enabled (merged in #669), the container
+When the split-group renderer path is enabled (merged recently), the container
 that hosts all split-group worktree surfaces is conditionally rendered based on
 `effectiveActiveLayout` — the layout of the **active** worktree.
 
@@ -36,18 +36,3 @@ the newly-activated worktree until its layout is established.
 4. Switch back
 5. **Before fix:** terminal scrollback and shell session are lost
 6. **After fix:** terminal content is preserved
-
-## Would E2E tests fail without this?
-
-**Yes** — the Playwright test `terminal pane retains content when switching
-worktrees and back` (in `terminal-panes.spec.ts`) does exactly this
-reproduction:
-
-1. Writes a unique marker (`echo WT_RETAIN_...`) to the terminal
-2. Switches to another worktree via `setActiveWorktree()`
-3. Switches back
-4. Asserts the marker is still in the terminal buffer
-
-Without this fix, the split-group container unmounts on step 2 (because the
-target worktree has no layout), destroying the xterm buffer. Step 4 fails
-because the marker is gone.
