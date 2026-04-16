@@ -131,7 +131,7 @@ export default function TabGroupPanel({
   const actionChromeClassName = `flex shrink-0 items-center overflow-hidden transition-[width,margin,opacity] duration-150 ${
     isFocused
       ? 'ml-1.5 w-7 pointer-events-auto opacity-100'
-      : 'ml-0 w-0 pointer-events-none opacity-0'
+      : 'ml-1.5 w-7 pointer-events-none opacity-0'
   }`
 
   return (
