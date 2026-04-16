@@ -4,8 +4,8 @@ import {
   Eraser,
   Maximize2,
   Minimize2,
-  PanelBottomOpen,
-  PanelRightOpen,
+  PanelBottomClose,
+  PanelRightClose,
   Pencil,
   X
 } from 'lucide-react'
@@ -103,14 +103,14 @@ export default function TerminalContextMenu({
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onSplitRight}>
-          <PanelRightOpen />
+          <PanelRightClose />
           Split Terminal Right
           {/* Why: on Windows/Linux, Ctrl+D must pass through as EOF (#586),
               so split-right requires Shift on non-Mac platforms. */}
           <DropdownMenuShortcut>{isMac ? `${mod}D` : `${mod}${shift}D`}</DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onSplitDown}>
-          <PanelBottomOpen />
+          <PanelBottomClose />
           Split Terminal Down
           {/* Why: on Windows/Linux, Alt+Shift+D is used for split-down because
               Ctrl+Shift+D is taken by split-right (#586). */}
