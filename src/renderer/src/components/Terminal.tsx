@@ -215,6 +215,16 @@ function Terminal(): React.JSX.Element | null {
       mountedWorktreeIdsRef.current.delete(id)
     }
   }
+  // Why: the split-group container renders ALL mounted worktrees' panes. If
+  // we only mount it when the *active* worktree has a layout, switching to a
+  // newly-activated worktree (which has no groups yet) unmounts the entire
+  // tree — destroying PaneManagers, xterm buffers, and PTY connections for
+  // every previously mounted worktree. Keeping the container alive (hidden
+  // via CSS) when any mounted worktree has a layout prevents that teardown
+  // while the legacy fallback handles the active worktree's rendering.
+  const anyMountedWorktreeHasLayout = allWorktrees.some(
+    (wt) => mountedWorktreeIdsRef.current.has(wt.id) && getEffectiveLayoutForWorktree(wt.id)
+  )
   // Auto-create first tab when worktree activates
   useEffect(() => {
     if (!workspaceSessionReady) {
@@ -826,8 +836,10 @@ function Terminal(): React.JSX.Element | null {
           — tab groups + terminal extend to the top of the window instead.
           The old summary label (workspace / active surface) is removed. */}
 
-      {effectiveActiveLayout ? (
-        <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
+      {anyMountedWorktreeHasLayout ? (
+        <div
+          className={`relative flex flex-1 min-w-0 min-h-0 overflow-hidden${effectiveActiveLayout ? '' : ' hidden'}`}
+        >
           {/* Why: each mounted worktree surface is absolutely positioned so we
               can preserve hidden trees without reflowing the active one. Keep
               a relative anchor here so those panes size to the workspace body
