@@ -48,6 +48,7 @@ export class TerminalHost {
 
     if (existing && existing.isAlive) {
       const snapshot = existing.getSnapshot()
+      existing.detachAllClients()
       const token = existing.attachClient(opts.streamClient)
       return {
         isNew: false,

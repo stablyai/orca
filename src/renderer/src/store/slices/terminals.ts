@@ -11,7 +11,6 @@ import { clearTransientTerminalState, emptyLayoutSnapshot } from './terminal-hel
 import { isClaudeAgent, detectAgentStatusFromTitle } from '@/lib/agent-status'
 import { buildOrphanTerminalCleanupPatch, getOrphanTerminalIds } from './terminal-orphan-helpers'
 import {
-  registerEagerPtyBuffer,
   ensurePtyDispatcher,
   unregisterPtyDataHandlers
 } from '@/components/terminal-pane/pty-transport'
@@ -80,10 +79,13 @@ export type TerminalSlice = {
   pendingReconnectPtyIdByTabId: Record<string, string>
   /** ANSI snapshots returned by daemon reattach, keyed by the new ptyId.
    *  TerminalPane writes these to xterm.js to restore visual state. */
-  pendingSnapshotByPtyId: Record<string, { snapshot: string; cols?: number; rows?: number }>
+  pendingSnapshotByPtyId: Record<
+    string,
+    { snapshot: string; cols?: number; rows?: number; isAlternateScreen?: boolean }
+  >
   consumePendingSnapshot: (
     ptyId: string
-  ) => { snapshot: string; cols?: number; rows?: number } | null
+  ) => { snapshot: string; cols?: number; rows?: number; isAlternateScreen?: boolean } | null
   /** Cold restore data from disk history after a daemon crash, keyed by
    *  the new ptyId. Contains read-only scrollback to display above the
    *  fresh shell prompt. */
@@ -1090,27 +1092,23 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
             .flat()
             .map((tab) => [tab.id, []] as const)
         ),
-        // Why: leaf→PTY mappings only make sense within the current renderer
-        // process. App restart reconnects fresh PTYs and must not attempt to
-        // reattach dead process IDs from the last session snapshot.
+        // Why: with the daemon backend, ptyIds are daemon session IDs that
+        // survive app restart. Preserve ptyIdsByLeafId so that
+        // reconnectPersistedTerminals can reattach each split-pane leaf
+        // to its specific daemon session (not just the tab-level ptyId).
         terminalLayoutsByTabId: Object.fromEntries(
-          Object.entries(session.terminalLayoutsByTabId)
-            .filter(([tabId]) => validTabIds.has(tabId))
-            .map(([tabId, layout]) => {
-              const { ptyIdsByLeafId: _ptyIdsByLeafId, ...restartSafeLayout } = layout
-              return [tabId, restartSafeLayout] as const
-            })
+          Object.entries(session.terminalLayoutsByTabId).filter(([tabId]) => validTabIds.has(tabId))
         )
       }
     })
   },
 
-  reconnectPersistedTerminals: async (signal) => {
+  reconnectPersistedTerminals: async (_signal) => {
     const {
       pendingReconnectWorktreeIds,
       pendingReconnectTabByWorktree,
       pendingReconnectPtyIdByTabId,
-      worktreesByRepo,
+      terminalLayoutsByTabId,
       tabsByWorktree
     } = get()
     const ids = pendingReconnectWorktreeIds ?? []
@@ -1125,174 +1123,55 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       return
     }
 
-    const allWorktrees = Object.values(worktreesByRepo).flat()
-    const worktreeMap = new Map(allWorktrees.map((w) => [w.id, w]))
-    const spawnedPtyIds: string[] = []
-
-    // Why: ensure the global IPC listener for pty:data/pty:exit events is
-    // active before any spawn calls. This guarantees that data emitted
-    // immediately after spawn (before registerEagerPtyBuffer runs) is at
-    // least delivered to the dispatcher — and since registerEagerPtyBuffer
-    // runs synchronously in the microtask continuation after await spawn(),
-    // the handler will be in place before any macrotask-queued data arrives.
+    // Why: instead of eagerly spawning PTYs at default 80×24 (which fills
+    // eager buffers with content at wrong dimensions that gets garbled on
+    // flush), we defer the actual daemon createOrAttach call to connectPanePty
+    // where fitAddon provides real dims.
+    //
+    // This loop just records the daemon session IDs each leaf/tab needs so
+    // connectPanePty can pass them as sessionId to pty.spawn at mount time.
+    // The layout's ptyIdsByLeafId (preserved from shutdown) already has per-leaf
+    // mappings. For single-pane tabs without leaf mappings, store the tab-level
+    // ptyId as a sentinel so connectPanePty knows to reattach.
     ensurePtyDispatcher()
 
     for (const worktreeId of ids) {
-      if (signal?.aborted) {
-        // StrictMode unmount — kill any PTYs we already spawned and bail.
-        await Promise.allSettled(spawnedPtyIds.map((id) => window.api.pty.kill(id)))
-        // Why: clean up all pending state so the second mount starts fresh.
-        set((s) => {
-          const nextSnapshots = { ...s.pendingSnapshotByPtyId }
-          const nextColdRestores = { ...s.pendingColdRestoreByPtyId }
-          for (const id of spawnedPtyIds) {
-            delete nextSnapshots[id]
-            delete nextColdRestores[id]
-          }
-          return {
-            workspaceSessionReady: true,
-            pendingSnapshotByPtyId: nextSnapshots,
-            pendingColdRestoreByPtyId: nextColdRestores
-          }
-        })
-        return
-      }
-
-      const worktree = worktreeMap.get(worktreeId)
-      if (!worktree) {
-        continue
-      }
-
       const tabs = tabsByWorktree[worktreeId] ?? []
-      // Why: pendingReconnectTabByWorktree was computed during hydration from
-      // the raw session data (before ptyIds were cleared). It tells us exactly
-      // which tabs had live PTYs in each worktree, so we reconnect all of them
-      // rather than just one arbitrary tab.
       const targetTabIds = pendingReconnectTabByWorktree[worktreeId] ?? []
       const tabsToReconnect: TerminalTab[] =
         targetTabIds.length > 0
           ? targetTabIds
               .map((id) => tabs.find((t) => t.id === id))
               .filter((t): t is TerminalTab => t != null)
-          : tabs.slice(0, 1) // fallback: first tab only
+          : tabs.slice(0, 1)
       if (tabsToReconnect.length === 0) {
         continue
       }
 
       for (const tab of tabsToReconnect) {
-        if (signal?.aborted) {
-          await Promise.allSettled(spawnedPtyIds.map((id) => window.api.pty.kill(id)))
-          set((s) => {
-            const nextSnapshots = { ...s.pendingSnapshotByPtyId }
-            const nextColdRestores = { ...s.pendingColdRestoreByPtyId }
-            for (const id of spawnedPtyIds) {
-              delete nextSnapshots[id]
-              delete nextColdRestores[id]
-            }
-            return {
-              workspaceSessionReady: true,
-              pendingSnapshotByPtyId: nextSnapshots,
-              pendingColdRestoreByPtyId: nextColdRestores
-            }
-          })
-          return
-        }
+        const tabId = tab.id
+        const layout = terminalLayoutsByTabId[tabId]
+        const leafPtyMap = layout?.ptyIdsByLeafId ?? {}
+        const tabLevelPtyId = pendingReconnectPtyIdByTabId[tabId]
+        const hasLeafMappings = Object.keys(leafPtyMap).length > 0
 
-        try {
-          // Why: when the PTY backend is a daemon, the old ptyId is the daemon
-          // sessionId. Passing it triggers createOrAttach which reattaches to the
-          // surviving session and returns its terminal snapshot.
-          const previousPtyId = pendingReconnectPtyIdByTabId[tab.id]
-          const spawnResult = await window.api.pty.spawn({
-            cols: 80,
-            rows: 24,
-            cwd: worktree.path,
-            worktreeId,
-            ...(previousPtyId ? { sessionId: previousPtyId } : {})
-          })
-          const ptyId = spawnResult.id
-          spawnedPtyIds.push(ptyId)
-
-          if (spawnResult.coldRestore) {
-            set((s) => ({
-              pendingColdRestoreByPtyId: {
-                ...s.pendingColdRestoreByPtyId,
-                [ptyId]: spawnResult.coldRestore!
-              }
-            }))
-          } else if (spawnResult.snapshot) {
-            set((s) => ({
-              pendingSnapshotByPtyId: {
-                ...s.pendingSnapshotByPtyId,
-                [ptyId]: {
-                  snapshot: spawnResult.snapshot!,
-                  cols: spawnResult.snapshotCols,
-                  rows: spawnResult.snapshotRows
-                }
-              }
-            }))
-          }
-
-          if (signal?.aborted) {
-            await window.api.pty.kill(ptyId)
-            await Promise.allSettled(
-              spawnedPtyIds.filter((id) => id !== ptyId).map((id) => window.api.pty.kill(id))
-            )
-            // Why: spawned PTYs are being killed — clean up any snapshot or
-            // cold restore data stored for them to prevent store leaks.
-            set((s) => {
-              const nextSnapshots = { ...s.pendingSnapshotByPtyId }
-              const nextColdRestores = { ...s.pendingColdRestoreByPtyId }
-              for (const id of spawnedPtyIds) {
-                delete nextSnapshots[id]
-                delete nextColdRestores[id]
-              }
-              return {
-                workspaceSessionReady: true,
-                pendingSnapshotByPtyId: nextSnapshots,
-                pendingColdRestoreByPtyId: nextColdRestores
-              }
-            })
-            return
-          }
-
-          const tabId = tab.id
-          // Why: re-check that the tab/worktree still exist after the async
-          // spawn. If the user deleted the worktree during the spawn round-
-          // trip, kill the orphan PTY immediately instead of registering it.
-          const currentTabs = get().tabsByWorktree[worktreeId]
-          if (!currentTabs?.some((t) => t.id === tabId)) {
-            void window.api.pty.kill(ptyId)
-            continue
-          }
-
-          // Why: register exit handler so that if the shell dies before
-          // TerminalPane attaches, the tab's ptyId is cleared and
-          // connectPanePty falls through to the normal connect() path.
-          registerEagerPtyBuffer(ptyId, (_exitedPtyId, _code) => {
-            get().clearTabPtyId(tabId, _exitedPtyId)
-          })
-
-          // Why: set ptyId directly instead of using updateTabPtyId to avoid
-          // bumpWorktreeActivity which would overwrite every reconnected
-          // worktree's lastActivityAt with the restart timestamp, destroying
-          // the relative recency sort order.
+        // Why: for single-pane tabs (no leaf mappings), store the tab-level
+        // ptyId as the daemon session to reattach. connectPanePty reads this
+        // from the tab's ptyId field to trigger the reattach path.
+        // For split-pane tabs, the layout's ptyIdsByLeafId already carries
+        // the per-leaf daemon session IDs — connectPanePty reads those
+        // via restoredPtyIdByLeafId.
+        if (!hasLeafMappings && tabLevelPtyId) {
           set((s) => {
             const next = { ...s.tabsByWorktree }
             if (!next[worktreeId]) {
               return {}
             }
-            next[worktreeId] = next[worktreeId].map((t) => (t.id === tabId ? { ...t, ptyId } : t))
-            return {
-              tabsByWorktree: next,
-              ptyIdsByTabId: {
-                ...s.ptyIdsByTabId,
-                [tabId]: [...(s.ptyIdsByTabId[tabId] ?? []), ptyId]
-              }
-            }
+            next[worktreeId] = next[worktreeId].map((t) =>
+              t.id === tabId ? { ...t, ptyId: tabLevelPtyId } : t
+            )
+            return { tabsByWorktree: next }
           })
-        } catch {
-          // PTY spawn failure — this tab stays inactive, same as today.
         }
       }
     }

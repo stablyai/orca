@@ -37,6 +37,9 @@ export type PtySpawnResult = {
   snapshotRows?: number
   /** True when the spawn reattached to an existing daemon session. */
   isReattach?: boolean
+  /** True when the reattached session uses the alternate screen buffer
+   *  (e.g., Codex CLI, vim). Normal-screen TUIs like Claude Code are false. */
+  isAlternateScreen?: boolean
   /** Present when cold-restoring from disk history after a daemon crash.
    *  Contains the saved scrollback and CWD. The new shell spawns in the
    *  saved CWD; the scrollback is written to xterm.js as read-only history. */

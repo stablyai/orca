@@ -268,6 +268,14 @@ describe('Session', () => {
       session.resize(120, 40)
       expect(resizeSpy).toHaveBeenCalledWith(120, 40)
     })
+
+    it('same-dim resize passes through without tricks', () => {
+      createSession({ cols: 80, rows: 24 })
+      const resizeSpy = vi.spyOn(subprocess, 'resize')
+      session.resize(80, 24)
+      expect(resizeSpy).toHaveBeenCalledTimes(1)
+      expect(resizeSpy).toHaveBeenCalledWith(80, 24)
+    })
   })
 
   describe('detach token guard', () => {

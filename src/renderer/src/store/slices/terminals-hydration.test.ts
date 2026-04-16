@@ -86,7 +86,7 @@ describe('hydrateWorkspaceSession', () => {
     vi.clearAllMocks()
   })
 
-  it('drops persisted ptyIdsByLeafId because restart must reconnect fresh PTYs', () => {
+  it('preserves ptyIdsByLeafId so reconnect can reattach each split-pane leaf', () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/wt-1'
     seedStore(store, {
@@ -105,7 +105,7 @@ describe('hydrateWorkspaceSession', () => {
       terminalLayoutsByTabId: {
         'tab-1': {
           ...makeLayout(),
-          ptyIdsByLeafId: { 'pane:1': 'stale-leaf-pty' },
+          ptyIdsByLeafId: { 'pane:1': 'daemon-session-1' },
           buffersByLeafId: { 'pane:1': 'buffer' }
         }
       }
@@ -113,8 +113,12 @@ describe('hydrateWorkspaceSession', () => {
 
     store.getState().hydrateWorkspaceSession(session)
 
+    // Why: ptyIdsByLeafId contains daemon session IDs that survive restart.
+    // reconnectPersistedTerminals uses them to reattach each split-pane
+    // leaf to its specific daemon session.
     expect(store.getState().terminalLayoutsByTabId['tab-1']).toEqual({
       ...makeLayout(),
+      ptyIdsByLeafId: { 'pane:1': 'daemon-session-1' },
       buffersByLeafId: { 'pane:1': 'buffer' }
     })
   })

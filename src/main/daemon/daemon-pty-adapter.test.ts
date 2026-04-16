@@ -186,13 +186,13 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
   })
 
   describe('spawn with sessionId (reattach)', () => {
-    it('returns snapshot and isReattach when reattaching to existing session', async () => {
+    it('returns full snapshot and isReattach when reattaching', async () => {
       const sessionId = 'reattach-test-session'
       const first = await adapter.spawn({ cols: 80, rows: 24, sessionId })
       expect(first.id).toBe(sessionId)
       expect(first.isReattach).toBeUndefined()
 
-      // Write data so the headless emulator captures it for a snapshot
+      // Write data so the headless emulator captures it
       lastSubprocess._simulateData('hello from shell\r\n')
       await new Promise((r) => setTimeout(r, 50))
 

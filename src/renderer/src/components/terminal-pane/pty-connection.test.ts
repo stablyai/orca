@@ -6,6 +6,8 @@ type StoreState = {
   repos: { id: string; connectionId?: string | null }[]
   cacheTimerByKey: Record<string, number | null>
   settings: { promptCacheTimerEnabled?: boolean } | null
+  consumePendingColdRestore: ReturnType<typeof vi.fn>
+  consumePendingSnapshot: ReturnType<typeof vi.fn>
 }
 
 type ConnectCallbacks = {
@@ -70,9 +72,13 @@ function createMockTransport(initialPtyId: string | null = null): MockTransport 
     attach: vi.fn(({ existingPtyId }: { existingPtyId: string }) => {
       ptyId = existingPtyId
     }),
-    connect: vi.fn(
-      async (_opts: { callbacks?: ConnectCallbacks } & Record<string, unknown>) => ptyId
-    ),
+    connect: vi.fn().mockImplementation(async (opts: { sessionId?: string }) => {
+      if (opts.sessionId) {
+        ptyId = opts.sessionId
+        return { id: opts.sessionId }
+      }
+      return ptyId
+    }),
     sendInput: vi.fn(() => true),
     resize: vi.fn(() => true),
     getPtyId: vi.fn(() => ptyId)
@@ -149,8 +155,10 @@ describe('connectPanePty', () => {
       },
       repos: [{ id: 'repo1', connectionId: null }],
       cacheTimerByKey: {},
-      settings: { promptCacheTimerEnabled: true }
-    }
+      settings: { promptCacheTimerEnabled: true },
+      consumePendingColdRestore: vi.fn(() => null),
+      consumePendingSnapshot: vi.fn(() => null)
+    } as StoreState
     globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
       callback(0)
       return 1
@@ -277,10 +285,14 @@ describe('connectPanePty', () => {
 
     connectPanePty(pane as never, manager as never, deps as never)
 
-    expect(transport.attach).toHaveBeenCalledWith(
-      expect.objectContaining({ existingPtyId: 'leaf-pty-2' })
+    // Why: Option 2 deferred reattach uses connect({ sessionId }) instead of
+    // attach({ existingPtyId }) so the daemon's createOrAttach runs at the
+    // pane's real fitAddon dimensions.
+    expect(transport.connect).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: 'leaf-pty-2' })
     )
-    expect(transport.connect).not.toHaveBeenCalled()
+    expect(transport.attach).not.toHaveBeenCalled()
+    await Promise.resolve()
     expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'leaf-pty-2')
   })
 
@@ -327,9 +339,11 @@ describe('connectPanePty', () => {
 
     connectPanePty(remountPane as never, remountManager as never, remountDeps as never)
 
-    expect(remountTransport.attach).toHaveBeenCalledWith(
-      expect.objectContaining({ existingPtyId: 'pty-restarted' })
+    expect(remountTransport.connect).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: 'pty-restarted' })
     )
+    expect(remountTransport.attach).not.toHaveBeenCalled()
+    await Promise.resolve()
     expect(remountDeps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(1, 'pty-restarted')
   })
 })

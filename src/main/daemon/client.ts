@@ -28,6 +28,10 @@ export class DaemonClient {
   private streamSocket: Socket | null = null
   private connected = false
   private disconnectArmed = false
+  // Why: multiple concurrent spawn() calls from simultaneous pane mounts
+  // all call ensureConnected(). Without a lock, each starts a separate
+  // connection attempt, overwriting sockets and triggering "Connection lost".
+  private connectingPromise: Promise<void> | null = null
 
   private pendingRequests = new Map<string, PendingRequest>()
   private eventListeners: ((event: unknown) => void)[] = []
@@ -47,7 +51,19 @@ export class DaemonClient {
     if (this.connected) {
       return
     }
+    if (this.connectingPromise) {
+      return this.connectingPromise
+    }
 
+    this.connectingPromise = this.doConnect()
+    try {
+      await this.connectingPromise
+    } finally {
+      this.connectingPromise = null
+    }
+  }
+
+  private async doConnect(): Promise<void> {
     const token = readFileSync(this.tokenPath, 'utf-8').trim()
 
     // Sequential: control first, then stream

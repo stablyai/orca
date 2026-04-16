@@ -66,6 +66,10 @@ export class HeadlessEmulator {
     }
   }
 
+  get isAlternateScreen(): boolean {
+    return this.terminal.buffer.active.type === 'alternate'
+  }
+
   getCwd(): string | null {
     return this.cwd
   }

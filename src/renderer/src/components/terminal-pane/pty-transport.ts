@@ -1,3 +1,4 @@
+/* oxlint-disable max-lines */
 import {
   detectAgentStatusFromTitle,
   clearWorkingIndicators,
@@ -14,7 +15,7 @@ import {
   ensurePtyDispatcher,
   getEagerPtyBufferHandle
 } from './pty-dispatcher'
-import type { PtyTransport, IpcPtyTransportOptions } from './pty-dispatcher'
+import type { PtyTransport, IpcPtyTransportOptions, PtyConnectResult } from './pty-dispatcher'
 import { createBellDetector } from './bell-detector'
 
 // Re-export public API so existing consumers keep working.
@@ -24,7 +25,12 @@ export {
   registerEagerPtyBuffer,
   unregisterPtyDataHandlers
 } from './pty-dispatcher'
-export type { EagerPtyHandle, PtyTransport, IpcPtyTransportOptions } from './pty-dispatcher'
+export type {
+  EagerPtyHandle,
+  PtyTransport,
+  PtyConnectResult,
+  IpcPtyTransportOptions
+} from './pty-dispatcher'
 export { extractLastOscTitle } from '../../../../shared/agent-detection'
 
 export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTransport {
@@ -201,6 +207,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           env,
           command,
           ...(connectionId ? { connectionId } : {}),
+          ...(options.sessionId ? { sessionId: options.sessionId } : {}),
           worktreeId
         })
 
@@ -212,13 +219,28 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
 
         ptyId = result.id
         connected = true
-        onPtySpawn?.(result.id)
+
+        // Why: for deferred reattach (Option 2), the daemon returns snapshot/
+        // coldRestore data from createOrAttach. Skip onPtySpawn for reattach —
+        // it would reset lastActivityAt and destroy the recency sort order.
+        if (!result.isReattach && !result.coldRestore) {
+          onPtySpawn?.(result.id)
+        }
 
         registerPtyDataHandler(result.id)
         registerPtyExitHandler(result.id)
 
         storedCallbacks.onConnect?.()
         storedCallbacks.onStatus?.('shell')
+
+        if (result.isReattach || result.coldRestore) {
+          return {
+            id: result.id,
+            snapshot: result.snapshot,
+            isAlternateScreen: result.isAlternateScreen,
+            coldRestore: result.coldRestore
+          } satisfies PtyConnectResult
+        }
         return result.id
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
@@ -252,8 +274,6 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       registerPtyDataHandler(id)
       registerPtyExitHandler(id)
 
-      // Why: replay buffered data through the real handler so title/bell/agent
-      // tracking processes the output — otherwise restored tabs keep a default title.
       const bufferHandle = getEagerPtyBufferHandle(id)
       if (bufferHandle) {
         const buffered = bufferHandle.flush()
@@ -273,7 +293,14 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         bufferHandle.dispose()
       }
 
-      // Resize to the actual terminal dimensions (eager spawn used defaults).
+      // Why: clear the display before writing the snapshot so restored
+      // content doesn't layer on top of stale output. Skip the clear for
+      // alternate-screen sessions — the snapshot already fills the screen
+      // and clearing would erase it.
+      if (!options.isAlternateScreen) {
+        storedCallbacks.onData?.('\x1b[2J\x1b[3J\x1b[H')
+      }
+
       if (options.cols && options.rows) {
         window.api.pty.resize(id, options.cols, options.rows)
       }

@@ -129,11 +129,21 @@ export function registerEagerPtyBuffer(
 // ── PtyTransport interface ───────────────────────────────────────────
 // Why: lives here so pty-transport.ts stays under the 300-line limit.
 
+export type PtyConnectResult = {
+  id: string
+  snapshot?: string
+  isAlternateScreen?: boolean
+  coldRestore?: { scrollback: string; cwd: string }
+}
+
 export type PtyTransport = {
   connect: (options: {
     url: string
     cols?: number
     rows?: number
+    /** Daemon session ID for reattach. When provided, the daemon reconnects
+     *  to an existing session instead of creating a new one. */
+    sessionId?: string
     callbacks: {
       onConnect?: () => void
       onDisconnect?: () => void
@@ -142,13 +152,17 @@ export type PtyTransport = {
       onError?: (message: string, errors?: string[]) => void
       onExit?: (code: number) => void
     }
-  }) => void | Promise<void | string>
+  }) => void | Promise<void | string | PtyConnectResult>
   /** Attach to an existing PTY that was eagerly spawned during startup.
    *  Skips pty:spawn — registers handlers and replays buffered data instead. */
   attach: (options: {
     existingPtyId: string
     cols?: number
     rows?: number
+    /** When true, the session uses the alternate screen buffer (e.g., Codex).
+     *  Skips the delayed double-resize since a single resize already triggers
+     *  a full TUI repaint without content loss. */
+    isAlternateScreen?: boolean
     callbacks: {
       onConnect?: () => void
       onDisconnect?: () => void

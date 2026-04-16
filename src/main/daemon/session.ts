@@ -37,6 +37,8 @@ export class Session {
   private _exitCode: number | null = null
   private _isTerminating = false
   private _disposed = false
+  private _cols: number
+  private _rows: number
 
   private emulator: HeadlessEmulator
   private subprocess: SubprocessHandle
@@ -49,6 +51,8 @@ export class Session {
   constructor(opts: SessionOptions) {
     this.sessionId = opts.sessionId
     this.subprocess = opts.subprocess
+    this._cols = opts.cols
+    this._rows = opts.rows
 
     this.emulator = new HeadlessEmulator({
       cols: opts.cols,
@@ -114,6 +118,8 @@ export class Session {
     if (this._state === 'exited' || this._disposed) {
       return
     }
+    this._cols = cols
+    this._rows = rows
     this.emulator.resize(cols, rows)
     this.subprocess.resize(cols, rows)
   }
@@ -151,6 +157,10 @@ export class Session {
     if (idx !== -1) {
       this.attachedClients.splice(idx, 1)
     }
+  }
+
+  detachAllClients(): void {
+    this.attachedClients.length = 0
   }
 
   getSnapshot(): TerminalSnapshot | null {

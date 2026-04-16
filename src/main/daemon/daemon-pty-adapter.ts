@@ -127,20 +127,15 @@ export class DaemonPtyAdapter implements IPtyProvider {
       return { id: sessionId }
     }
 
-    // Why: alternate-screen TUI apps (vim, claude, htop) repaint themselves
-    // when they receive SIGWINCH from the pre-snapshot resize. Writing the
-    // ANSI snapshot into xterm.js would create garbled overlapping content
-    // because the TUI immediately redraws over it. For these apps, only
-    // restore terminal modes (bracketed paste, mouse tracking, etc.) and
-    // let the resize trigger a clean full repaint.
-    const snapshotAnsi = result.snapshot.modes.alternateScreen ? '' : result.snapshot.snapshotAnsi
-
+    const isAltScreen = result.snapshot.modes.alternateScreen
+    const snapshotPayload = result.snapshot.rehydrateSequences + result.snapshot.snapshotAnsi
     return {
       id: sessionId,
-      snapshot: result.snapshot.rehydrateSequences + snapshotAnsi,
+      snapshot: snapshotPayload,
       snapshotCols: result.snapshot.cols,
       snapshotRows: result.snapshot.rows,
-      isReattach: true
+      isReattach: true,
+      isAlternateScreen: isAltScreen
     }
   }
 

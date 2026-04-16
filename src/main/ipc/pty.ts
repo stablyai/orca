@@ -330,6 +330,13 @@ export function registerPtyHandlers(
     }
   })
 
+  ipcMain.removeAllListeners('pty:signal')
+  ipcMain.on('pty:signal', (_event, args: { id: string; signal: string }) => {
+    getProviderForPty(args.id)
+      .sendSignal(args.id, args.signal)
+      .catch(() => {})
+  })
+
   ipcMain.handle('pty:kill', async (_event, args: { id: string }) => {
     // Why: try/finally ensures ptyOwnership is cleaned up even if shutdown
     // throws (e.g. SSH connection already gone). Without this, the stale

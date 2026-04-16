@@ -261,6 +261,7 @@ const api = {
       snapshotCols?: number
       snapshotRows?: number
       isReattach?: boolean
+      isAlternateScreen?: boolean
       coldRestore?: { scrollback: string; cwd: string }
     }> => ipcRenderer.invoke('pty:spawn', opts),
 
@@ -270,6 +271,10 @@ const api = {
 
     resize: (id: string, cols: number, rows: number): void => {
       ipcRenderer.send('pty:resize', { id, cols, rows })
+    },
+
+    signal: (id: string, signal: string): void => {
+      ipcRenderer.send('pty:signal', { id, signal })
     },
 
     ackColdRestore: (id: string): void => {
