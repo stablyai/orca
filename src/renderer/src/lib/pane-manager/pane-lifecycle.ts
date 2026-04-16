@@ -19,6 +19,31 @@ import { safeFit } from './pane-tree-ops'
 
 const ENABLE_WEBGL_RENDERER = true
 
+export function buildDefaultTerminalOptions(): ITerminalOptions {
+  return {
+    allowProposedApi: true,
+    cursorBlink: true,
+    cursorStyle: 'bar',
+    fontSize: 14,
+    // Cross-platform fallback chain — ensures the terminal can always find a
+    // usable monospace font regardless of OS, even if user settings haven't
+    // loaded yet. macOS-only fonts are harmlessly skipped on other platforms.
+    fontFamily:
+      '"SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", monospace',
+    fontWeight: '300',
+    fontWeightBold: '500',
+    scrollback: 10000,
+    allowTransparency: false,
+    // Why: on macOS, non-US layouts rely on Option to compose real characters
+    // like @ (German Option+L) and EUR (German Option+E). Enabling xterm's
+    // Meta mode here makes Option behave like Esc+key instead, which steals
+    // those composed characters before they reach the shell.
+    macOptionIsMeta: false,
+    macOptionClickForcesSelection: true,
+    drawBoldTextInBrightColors: true
+  }
+}
+
 function getTerminalUrlOpenHint(): string {
   return navigator.userAgent.includes('Mac')
     ? '⌘+click to open or ⇧⌘+click for system browser'
@@ -48,22 +73,7 @@ export function createPaneDOM(
   // Build terminal options
   const userOpts = options.terminalOptions?.(id) ?? {}
   const terminalOpts: ITerminalOptions = {
-    allowProposedApi: true,
-    cursorBlink: true,
-    cursorStyle: 'bar',
-    fontSize: 14,
-    // Cross-platform fallback chain — ensures the terminal can always find a
-    // usable monospace font regardless of OS, even if user settings haven't
-    // loaded yet. macOS-only fonts are harmlessly skipped on other platforms.
-    fontFamily:
-      '"SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", monospace',
-    fontWeight: '300',
-    fontWeightBold: '500',
-    scrollback: 10000,
-    allowTransparency: false,
-    macOptionIsMeta: true,
-    macOptionClickForcesSelection: true,
-    drawBoldTextInBrightColors: true,
+    ...buildDefaultTerminalOptions(),
     ...userOpts
   }
 
