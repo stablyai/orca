@@ -4,7 +4,16 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
-  main: {},
+  main: {
+    build: {
+      rollupOptions: {
+        input: {
+          index: resolve('src/main/index.ts'),
+          'daemon-entry': resolve('src/main/daemon/daemon-entry.ts')
+        }
+      }
+    }
+  },
   preload: {
     build: {
       externalizeDeps: {

@@ -20,7 +20,9 @@ module.exports = {
   // from out/shared/ (e.g. runtime-bootstrap). Both directories must be
   // unpacked so that Node's require() can resolve the cross-directory imports
   // when the CLI runs outside the asar archive.
-  asarUnpack: ['out/cli/**', 'out/shared/**', 'resources/**'],
+  // Why: daemon-entry.js is forked as a separate Node.js process and must be
+  // accessible on disk (not inside the asar archive) for child_process.fork().
+  asarUnpack: ['out/cli/**', 'out/shared/**', 'out/main/daemon-entry.js', 'out/main/chunks/**', 'resources/**'],
   win: {
     executableName: 'Orca',
     extraResources: [

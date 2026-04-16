@@ -1,0 +1,156 @@
+import { join } from 'path'
+import { app } from 'electron'
+import { mkdirSync, existsSync, unlinkSync } from 'fs'
+import { fork } from 'child_process'
+import { connect } from 'net'
+import { DaemonSpawner, type DaemonLauncher } from './daemon-spawner'
+import { DaemonPtyAdapter } from './daemon-pty-adapter'
+import { setLocalPtyProvider } from '../ipc/pty'
+
+let spawner: DaemonSpawner | null = null
+let adapter: DaemonPtyAdapter | null = null
+
+function getRuntimeDir(): string {
+  const dir = join(app.getPath('userData'), 'daemon')
+  mkdirSync(dir, { recursive: true })
+  return dir
+}
+
+function getHistoryDir(): string {
+  const dir = join(app.getPath('userData'), 'terminal-history')
+  mkdirSync(dir, { recursive: true })
+  return dir
+}
+
+function getDaemonEntryPath(): string {
+  return join(app.getAppPath(), 'out', 'main', 'daemon-entry.js')
+}
+
+// Why: before spawning a new daemon, check if an existing one is alive by
+// attempting a TCP connection to the socket. If it connects, the daemon
+// survived from a previous app session — reuse it instead of spawning.
+function probeSocket(socketPath: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (!existsSync(socketPath)) {
+      resolve(false)
+      return
+    }
+    const sock = connect({ path: socketPath })
+    const timer = setTimeout(() => {
+      sock.destroy()
+      resolve(false)
+    }, 1000)
+    sock.on('connect', () => {
+      clearTimeout(timer)
+      sock.destroy()
+      resolve(true)
+    })
+    sock.on('error', () => {
+      clearTimeout(timer)
+      resolve(false)
+    })
+  })
+}
+
+function createOutOfProcessLauncher(): DaemonLauncher {
+  return async (socketPath, tokenPath) => {
+    const alive = await probeSocket(socketPath)
+    if (alive) {
+      // Why: daemon is already running from a previous app session.
+      // No new process to manage — return a no-op shutdown handle.
+      return { shutdown: async () => {} }
+    }
+
+    // Why: stale socket file from a crashed daemon blocks the new server
+    // from binding. Remove it before spawning.
+    if (existsSync(socketPath)) {
+      unlinkSync(socketPath)
+    }
+
+    const entryPath = getDaemonEntryPath()
+    const child = fork(entryPath, ['--socket', socketPath, '--token', tokenPath], {
+      // Why: detached + unref lets the daemon outlive the Electron process.
+      // stdio 'ignore' prevents the child from holding the parent's stdout
+      // open, which would prevent Electron from exiting cleanly.
+      detached: true,
+      stdio: ['ignore', 'ignore', 'ignore', 'ipc']
+    })
+
+    // Wait for the daemon to signal readiness via IPC
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        reject(new Error('Daemon startup timed out'))
+      }, 10000)
+
+      child.on('message', (msg: unknown) => {
+        if (msg && typeof msg === 'object' && (msg as { type?: string }).type === 'ready') {
+          clearTimeout(timer)
+          // Why: disconnect IPC channel and unref so Electron can exit
+          // without waiting for the daemon. The daemon keeps running.
+          child.disconnect()
+          child.unref()
+          resolve()
+        }
+      })
+
+      child.on('error', (err) => {
+        clearTimeout(timer)
+        reject(err)
+      })
+
+      child.on('exit', (code) => {
+        clearTimeout(timer)
+        reject(new Error(`Daemon exited during startup with code ${code}`))
+      })
+    })
+
+    return {
+      shutdown: async () => {
+        if (child.pid) {
+          try {
+            process.kill(child.pid, 'SIGTERM')
+          } catch {
+            // Already dead
+          }
+        }
+      }
+    }
+  }
+}
+
+export async function initDaemonPtyProvider(): Promise<void> {
+  const runtimeDir = getRuntimeDir()
+
+  spawner = new DaemonSpawner({
+    runtimeDir,
+    launcher: createOutOfProcessLauncher()
+  })
+
+  const info = await spawner.ensureRunning()
+
+  adapter = new DaemonPtyAdapter({
+    socketPath: info.socketPath,
+    tokenPath: info.tokenPath,
+    historyPath: getHistoryDir()
+  })
+
+  setLocalPtyProvider(adapter)
+}
+
+// Why: disconnect from the daemon without killing it. The daemon runs as a
+// separate process and survives app quit — sessions stay alive for warm
+// reattach on next launch. dispose() is intentional here: it writes endedAt
+// to history files, which is correct because the daemon (and its sessions)
+// are still alive. Cold restore only triggers when the daemon itself dies.
+export function disconnectDaemon(): void {
+  adapter?.dispose()
+  adapter = null
+}
+
+/** Kill the daemon and all its sessions. Use for full cleanup only. */
+export async function shutdownDaemon(): Promise<void> {
+  adapter?.dispose()
+  adapter = null
+  await spawner?.shutdown()
+  spawner = null
+}

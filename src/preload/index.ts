@@ -254,7 +254,15 @@ const api = {
       command?: string
       connectionId?: string | null
       worktreeId?: string
-    }): Promise<{ id: string }> => ipcRenderer.invoke('pty:spawn', opts),
+      sessionId?: string
+    }): Promise<{
+      id: string
+      snapshot?: string
+      snapshotCols?: number
+      snapshotRows?: number
+      isReattach?: boolean
+      coldRestore?: { scrollback: string; cwd: string }
+    }> => ipcRenderer.invoke('pty:spawn', opts),
 
     write: (id: string, data: string): void => {
       ipcRenderer.send('pty:write', { id, data })
@@ -262,6 +270,10 @@ const api = {
 
     resize: (id: string, cols: number, rows: number): void => {
       ipcRenderer.send('pty:resize', { id, cols, rows })
+    },
+
+    ackColdRestore: (id: string): void => {
+      ipcRenderer.send('pty:ackColdRestore', { id })
     },
 
     kill: (id: string): Promise<void> => ipcRenderer.invoke('pty:kill', { id }),

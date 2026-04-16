@@ -6,6 +6,7 @@ import { StatsCollector, initStatsPath } from './stats/collector'
 import { ClaudeUsageStore, initClaudeUsagePath } from './claude-usage/store'
 import { CodexUsageStore, initCodexUsagePath } from './codex-usage/store'
 import { killAllPty } from './ipc/pty'
+import { initDaemonPtyProvider, disconnectDaemon } from './daemon/daemon-init'
 import { closeAllWatchers } from './ipc/filesystem-watcher'
 import { registerCoreHandlers } from './ipc/register-core-handlers'
 import { triggerStartupNotificationRegistration } from './ipc/notifications'
@@ -151,6 +152,11 @@ app.whenReady().then(async () => {
     userDataPath: app.getPath('userData')
   })
 
+  // Why: daemon must start before openMainWindow because registerPtyHandlers
+  // (called inside) relies on the provider already being set. Starting it
+  // alongside the other parallel servers keeps cold-start latency flat.
+  await initDaemonPtyProvider()
+
   // Why: both server binds are independent and neither blocks window creation.
   // Parallelizing them with the window open shaves ~100-200ms off cold start.
   const [win] = await Promise.all([
@@ -200,6 +206,11 @@ app.on('will-quit', () => {
   openCodeHookService.stop()
   stats?.flush()
   killAllPty()
+  // Why: in daemon mode, killAllPty is a no-op (daemon sessions survive app
+  // quit) but the client connection must be closed so sockets are released.
+  // disconnectDaemon only closes the adapter — it does NOT kill the daemon
+  // process or its sessions, preserving them for reattach on next launch.
+  disconnectDaemon()
   void closeAllWatchers()
   if (runtimeRpc) {
     void runtimeRpc.stop().catch((error) => {

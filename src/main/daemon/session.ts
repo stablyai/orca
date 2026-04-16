@@ -1,0 +1,289 @@
+import { HeadlessEmulator } from './headless-emulator'
+import type { SessionState, ShellReadyState, TerminalSnapshot } from './types'
+
+const SHELL_READY_TIMEOUT_MS = 15_000
+const KILL_TIMEOUT_MS = 5_000
+const SHELL_READY_MARKER = '\x1b]777;orca-shell-ready\x07'
+
+export type SubprocessHandle = {
+  pid: number
+  write(data: string): void
+  resize(cols: number, rows: number): void
+  kill(): void
+  signal(sig: string): void
+  onData(cb: (data: string) => void): void
+  onExit(cb: (code: number) => void): void
+}
+
+export type SessionOptions = {
+  sessionId: string
+  cols: number
+  rows: number
+  subprocess: SubprocessHandle
+  shellReadySupported: boolean
+  scrollback?: number
+}
+
+type AttachedClient = {
+  token: symbol
+  onData: (data: string) => void
+  onExit: (code: number) => void
+}
+
+export class Session {
+  readonly sessionId: string
+  private _state: SessionState = 'running'
+  private _shellState: ShellReadyState
+  private _exitCode: number | null = null
+  private _isTerminating = false
+  private _disposed = false
+
+  private emulator: HeadlessEmulator
+  private subprocess: SubprocessHandle
+  private attachedClients: AttachedClient[] = []
+  private preReadyStdinQueue: string[] = []
+  private markerBuffer = ''
+  private shellReadyTimer: ReturnType<typeof setTimeout> | null = null
+  private killTimer: ReturnType<typeof setTimeout> | null = null
+
+  constructor(opts: SessionOptions) {
+    this.sessionId = opts.sessionId
+    this.subprocess = opts.subprocess
+
+    this.emulator = new HeadlessEmulator({
+      cols: opts.cols,
+      rows: opts.rows,
+      scrollback: opts.scrollback,
+      onData: (data) => {
+        // Forward xterm.js query responses (DA1 etc.) to subprocess
+        opts.subprocess.write(data)
+      }
+    })
+
+    if (opts.shellReadySupported) {
+      this._shellState = 'pending'
+      this.shellReadyTimer = setTimeout(() => {
+        this.onShellReadyTimeout()
+      }, SHELL_READY_TIMEOUT_MS)
+    } else {
+      this._shellState = 'unsupported'
+    }
+
+    this.subprocess.onData((data) => this.handleSubprocessData(data))
+    this.subprocess.onExit((code) => this.handleSubprocessExit(code))
+  }
+
+  get state(): SessionState {
+    return this._state
+  }
+
+  get shellState(): ShellReadyState {
+    return this._shellState
+  }
+
+  get exitCode(): number | null {
+    return this._exitCode
+  }
+
+  get isAlive(): boolean {
+    return this._state !== 'exited'
+  }
+
+  get isTerminating(): boolean {
+    return this._isTerminating
+  }
+
+  get pid(): number {
+    return this.subprocess.pid
+  }
+
+  write(data: string): void {
+    if (this._state === 'exited' || this._disposed) {
+      return
+    }
+
+    if (this._shellState === 'pending') {
+      this.preReadyStdinQueue.push(data)
+      return
+    }
+
+    this.subprocess.write(data)
+  }
+
+  resize(cols: number, rows: number): void {
+    if (this._state === 'exited' || this._disposed) {
+      return
+    }
+    this.emulator.resize(cols, rows)
+    this.subprocess.resize(cols, rows)
+  }
+
+  kill(): void {
+    if (this._state === 'exited' || this._isTerminating) {
+      return
+    }
+    this._isTerminating = true
+
+    this.subprocess.kill()
+
+    this.killTimer = setTimeout(() => {
+      if (this._state !== 'exited') {
+        this.forceDispose()
+      }
+    }, KILL_TIMEOUT_MS)
+  }
+
+  signal(sig: string): void {
+    if (this._state === 'exited') {
+      return
+    }
+    this.subprocess.signal(sig)
+  }
+
+  attachClient(client: { onData: (data: string) => void; onExit: (code: number) => void }): symbol {
+    const token = Symbol('attach')
+    this.attachedClients.push({ token, ...client })
+    return token
+  }
+
+  detachClient(token: symbol): void {
+    const idx = this.attachedClients.findIndex((c) => c.token === token)
+    if (idx !== -1) {
+      this.attachedClients.splice(idx, 1)
+    }
+  }
+
+  getSnapshot(): TerminalSnapshot | null {
+    if (this._disposed) {
+      return null
+    }
+    return this.emulator.getSnapshot()
+  }
+
+  getCwd(): string | null {
+    return this.emulator.getCwd()
+  }
+
+  clearScrollback(): void {
+    if (this._disposed) {
+      return
+    }
+    this.emulator.clearScrollback()
+  }
+
+  dispose(): void {
+    if (this._disposed) {
+      return
+    }
+    this._disposed = true
+    this._state = 'exited'
+
+    if (this.shellReadyTimer) {
+      clearTimeout(this.shellReadyTimer)
+      this.shellReadyTimer = null
+    }
+    if (this.killTimer) {
+      clearTimeout(this.killTimer)
+      this.killTimer = null
+    }
+
+    this.attachedClients = []
+    this.preReadyStdinQueue = []
+    this.emulator.dispose()
+  }
+
+  private handleSubprocessData(data: string): void {
+    if (this._disposed) {
+      return
+    }
+
+    // Feed data to headless emulator for state tracking
+    this.emulator.write(data)
+
+    if (this._shellState === 'pending') {
+      this.scanForShellMarker(data)
+    }
+
+    // Broadcast to attached clients
+    for (const client of this.attachedClients) {
+      client.onData(data)
+    }
+  }
+
+  private handleSubprocessExit(code: number): void {
+    if (this._disposed) {
+      return
+    }
+
+    this._exitCode = code
+    this._state = 'exited'
+
+    if (this.killTimer) {
+      clearTimeout(this.killTimer)
+      this.killTimer = null
+    }
+    if (this.shellReadyTimer) {
+      clearTimeout(this.shellReadyTimer)
+      this.shellReadyTimer = null
+    }
+
+    for (const client of this.attachedClients) {
+      client.onExit(code)
+    }
+  }
+
+  private scanForShellMarker(data: string): void {
+    this.markerBuffer += data
+
+    const markerIdx = this.markerBuffer.indexOf(SHELL_READY_MARKER)
+    if (markerIdx !== -1) {
+      this.markerBuffer = ''
+      this.transitionToReady()
+      return
+    }
+
+    // Keep only the tail that could be the start of a partial marker match
+    const maxPartial = SHELL_READY_MARKER.length - 1
+    if (this.markerBuffer.length > maxPartial) {
+      this.markerBuffer = this.markerBuffer.slice(-maxPartial)
+    }
+  }
+
+  private transitionToReady(): void {
+    this._shellState = 'ready'
+    if (this.shellReadyTimer) {
+      clearTimeout(this.shellReadyTimer)
+      this.shellReadyTimer = null
+    }
+    this.flushPreReadyQueue()
+  }
+
+  private onShellReadyTimeout(): void {
+    this.shellReadyTimer = null
+    if (this._shellState !== 'pending') {
+      return
+    }
+    this._shellState = 'timed_out'
+    this.flushPreReadyQueue()
+  }
+
+  private flushPreReadyQueue(): void {
+    const queued = this.preReadyStdinQueue
+    this.preReadyStdinQueue = []
+    for (const data of queued) {
+      this.subprocess.write(data)
+    }
+  }
+
+  private forceDispose(): void {
+    if (this._state === 'exited') {
+      return
+    }
+    this._exitCode = -1
+    this._state = 'exited'
+
+    for (const client of this.attachedClients) {
+      client.onExit(-1)
+    }
+  }
+}

@@ -21,10 +21,29 @@ export type PtySpawnOptions = {
   /** Orca worktree identity. When present, the local provider scopes shell
    *  history to this worktree so ArrowUp only surfaces local commands. */
   worktreeId?: string
+  /** Daemon session ID for reattach. When provided, the daemon reconnects
+   *  to an existing session instead of creating a new one. */
+  sessionId?: string
 }
 
 export type PtySpawnResult = {
   id: string
+  /** ANSI snapshot of the terminal screen, present when reattaching to an
+   *  existing daemon session. Write this to xterm.js to restore visual state. */
+  snapshot?: string
+  /** Dimensions the snapshot was captured at. Resize xterm.js to these before
+   *  writing the snapshot so ANSI cursor positions land correctly. */
+  snapshotCols?: number
+  snapshotRows?: number
+  /** True when the spawn reattached to an existing daemon session. */
+  isReattach?: boolean
+  /** Present when cold-restoring from disk history after a daemon crash.
+   *  Contains the saved scrollback and CWD. The new shell spawns in the
+   *  saved CWD; the scrollback is written to xterm.js as read-only history. */
+  coldRestore?: {
+    scrollback: string
+    cwd: string
+  }
 }
 
 export type IPtyProvider = {

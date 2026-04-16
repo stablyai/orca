@@ -74,6 +74,21 @@ export type TerminalSlice = {
   workspaceSessionReady: boolean
   pendingReconnectWorktreeIds: string[]
   pendingReconnectTabByWorktree: Record<string, string[]>
+  /** Maps tabId → previous ptyId from the last session. When the PTY backend is
+   *  a daemon, the old ptyId doubles as the daemon sessionId — passing it to
+   *  spawn triggers createOrAttach which returns the surviving terminal snapshot. */
+  pendingReconnectPtyIdByTabId: Record<string, string>
+  /** ANSI snapshots returned by daemon reattach, keyed by the new ptyId.
+   *  TerminalPane writes these to xterm.js to restore visual state. */
+  pendingSnapshotByPtyId: Record<string, { snapshot: string; cols?: number; rows?: number }>
+  consumePendingSnapshot: (
+    ptyId: string
+  ) => { snapshot: string; cols?: number; rows?: number } | null
+  /** Cold restore data from disk history after a daemon crash, keyed by
+   *  the new ptyId. Contains read-only scrollback to display above the
+   *  fresh shell prompt. */
+  pendingColdRestoreByPtyId: Record<string, { scrollback: string; cwd: string }>
+  consumePendingColdRestore: (ptyId: string) => { scrollback: string; cwd: string } | null
   createTab: (worktreeId: string, targetGroupId?: string) => TerminalTab
   closeTab: (tabId: string) => void
   reorderTabs: (worktreeId: string, tabIds: string[]) => void
@@ -148,6 +163,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   workspaceSessionReady: false,
   pendingReconnectWorktreeIds: [],
   pendingReconnectTabByWorktree: {},
+  pendingReconnectPtyIdByTabId: {},
+  pendingSnapshotByPtyId: {},
+  pendingColdRestoreByPtyId: {},
   cacheTimerByKey: {},
 
   setCacheTimerStartedAt: (key, ts) => {
@@ -276,8 +294,12 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   closeTab: (tabId) => {
     set((s) => {
       const next = { ...s.tabsByWorktree }
+      let closingPtyId: string | null = null
       for (const wId of Object.keys(next)) {
         const before = next[wId]
+        if (!closingPtyId) {
+          closingPtyId = before.find((t) => t.id === tabId)?.ptyId ?? null
+        }
         const after = before.filter((t) => t.id !== tabId)
         if (after.length !== before.length) {
           next[wId] = after
@@ -329,6 +351,22 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         }
       }
 
+      // Why: if the tab had a ptyId with unconsumed snapshot or cold restore
+      // data (e.g., tab closed before TerminalPane mounted), clean it up to
+      // prevent unbounded store growth across restarts.
+      let nextSnapshots = s.pendingSnapshotByPtyId
+      let nextColdRestores = s.pendingColdRestoreByPtyId
+      if (closingPtyId) {
+        if (closingPtyId in nextSnapshots) {
+          nextSnapshots = { ...nextSnapshots }
+          delete nextSnapshots[closingPtyId]
+        }
+        if (closingPtyId in nextColdRestores) {
+          nextColdRestores = { ...nextColdRestores }
+          delete nextColdRestores[closingPtyId]
+        }
+      }
+
       return {
         tabsByWorktree: next,
         activeTabId: s.activeTabId === tabId ? null : s.activeTabId,
@@ -342,7 +380,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         pendingSetupSplitByTabId: nextPendingSetupSplitByTabId,
         pendingIssueCommandSplitByTabId: nextPendingIssueCommandSplitByTabId,
         cacheTimerByKey: nextCacheTimer,
-        tabBarOrderByWorktree: nextTabBarOrderByWorktree
+        tabBarOrderByWorktree: nextTabBarOrderByWorktree,
+        pendingSnapshotByPtyId: nextSnapshots,
+        pendingColdRestoreByPtyId: nextColdRestores
       }
     })
     for (const tabs of Object.values(get().unifiedTabsByWorktree)) {
@@ -908,6 +948,32 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     return pending
   },
 
+  consumePendingSnapshot: (ptyId) => {
+    const snapshot = get().pendingSnapshotByPtyId[ptyId]
+    if (!snapshot) {
+      return null
+    }
+    set((s) => {
+      const next = { ...s.pendingSnapshotByPtyId }
+      delete next[ptyId]
+      return { pendingSnapshotByPtyId: next }
+    })
+    return snapshot
+  },
+
+  consumePendingColdRestore: (ptyId) => {
+    const data = get().pendingColdRestoreByPtyId[ptyId]
+    if (!data) {
+      return null
+    }
+    set((s) => {
+      const next = { ...s.pendingColdRestoreByPtyId }
+      delete next[ptyId]
+      return { pendingColdRestoreByPtyId: next }
+    })
+    return data
+  },
+
   hydrateWorkspaceSession: (session) => {
     set((s) => {
       const validWorktreeIds = new Set(
@@ -974,6 +1040,19 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         }
       }
 
+      // Why: preserve the previous session's ptyId for each tab so that
+      // reconnectPersistedTerminals can pass it as sessionId to the daemon's
+      // createOrAttach RPC, triggering reattach instead of a fresh spawn.
+      const pendingReconnectPtyIdByTabId: Record<string, string> = {}
+      for (const worktreeId of pendingReconnectWorktreeIds) {
+        const rawTabs = session.tabsByWorktree[worktreeId] ?? []
+        for (const tab of rawTabs) {
+          if (tab.ptyId && validTabIds.has(tab.id)) {
+            pendingReconnectPtyIdByTabId[tab.id] = tab.ptyId
+          }
+        }
+      }
+
       // Why: restore per-worktree active terminal tab from session.
       // If the session has the map, validate that each tab ID still exists.
       // Otherwise, derive it: the active worktree gets activeTabId, others
@@ -1005,6 +1084,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         tabsByWorktree,
         pendingReconnectWorktreeIds,
         pendingReconnectTabByWorktree,
+        pendingReconnectPtyIdByTabId,
         ptyIdsByTabId: Object.fromEntries(
           Object.values(tabsByWorktree)
             .flat()
@@ -1029,6 +1109,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     const {
       pendingReconnectWorktreeIds,
       pendingReconnectTabByWorktree,
+      pendingReconnectPtyIdByTabId,
       worktreesByRepo,
       tabsByWorktree
     } = get()
@@ -1038,7 +1119,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       set({
         workspaceSessionReady: true,
         pendingReconnectWorktreeIds: [],
-        pendingReconnectTabByWorktree: {}
+        pendingReconnectTabByWorktree: {},
+        pendingReconnectPtyIdByTabId: {}
       })
       return
     }
@@ -1059,6 +1141,20 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       if (signal?.aborted) {
         // StrictMode unmount — kill any PTYs we already spawned and bail.
         await Promise.allSettled(spawnedPtyIds.map((id) => window.api.pty.kill(id)))
+        // Why: clean up all pending state so the second mount starts fresh.
+        set((s) => {
+          const nextSnapshots = { ...s.pendingSnapshotByPtyId }
+          const nextColdRestores = { ...s.pendingColdRestoreByPtyId }
+          for (const id of spawnedPtyIds) {
+            delete nextSnapshots[id]
+            delete nextColdRestores[id]
+          }
+          return {
+            workspaceSessionReady: true,
+            pendingSnapshotByPtyId: nextSnapshots,
+            pendingColdRestoreByPtyId: nextColdRestores
+          }
+        })
         return
       }
 
@@ -1086,23 +1182,77 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       for (const tab of tabsToReconnect) {
         if (signal?.aborted) {
           await Promise.allSettled(spawnedPtyIds.map((id) => window.api.pty.kill(id)))
+          set((s) => {
+            const nextSnapshots = { ...s.pendingSnapshotByPtyId }
+            const nextColdRestores = { ...s.pendingColdRestoreByPtyId }
+            for (const id of spawnedPtyIds) {
+              delete nextSnapshots[id]
+              delete nextColdRestores[id]
+            }
+            return {
+              workspaceSessionReady: true,
+              pendingSnapshotByPtyId: nextSnapshots,
+              pendingColdRestoreByPtyId: nextColdRestores
+            }
+          })
           return
         }
 
         try {
-          const { id: ptyId } = await window.api.pty.spawn({
+          // Why: when the PTY backend is a daemon, the old ptyId is the daemon
+          // sessionId. Passing it triggers createOrAttach which reattaches to the
+          // surviving session and returns its terminal snapshot.
+          const previousPtyId = pendingReconnectPtyIdByTabId[tab.id]
+          const spawnResult = await window.api.pty.spawn({
             cols: 80,
             rows: 24,
             cwd: worktree.path,
-            worktreeId
+            worktreeId,
+            ...(previousPtyId ? { sessionId: previousPtyId } : {})
           })
+          const ptyId = spawnResult.id
           spawnedPtyIds.push(ptyId)
+
+          if (spawnResult.coldRestore) {
+            set((s) => ({
+              pendingColdRestoreByPtyId: {
+                ...s.pendingColdRestoreByPtyId,
+                [ptyId]: spawnResult.coldRestore!
+              }
+            }))
+          } else if (spawnResult.snapshot) {
+            set((s) => ({
+              pendingSnapshotByPtyId: {
+                ...s.pendingSnapshotByPtyId,
+                [ptyId]: {
+                  snapshot: spawnResult.snapshot!,
+                  cols: spawnResult.snapshotCols,
+                  rows: spawnResult.snapshotRows
+                }
+              }
+            }))
+          }
 
           if (signal?.aborted) {
             await window.api.pty.kill(ptyId)
             await Promise.allSettled(
               spawnedPtyIds.filter((id) => id !== ptyId).map((id) => window.api.pty.kill(id))
             )
+            // Why: spawned PTYs are being killed — clean up any snapshot or
+            // cold restore data stored for them to prevent store leaks.
+            set((s) => {
+              const nextSnapshots = { ...s.pendingSnapshotByPtyId }
+              const nextColdRestores = { ...s.pendingColdRestoreByPtyId }
+              for (const id of spawnedPtyIds) {
+                delete nextSnapshots[id]
+                delete nextColdRestores[id]
+              }
+              return {
+                workspaceSessionReady: true,
+                pendingSnapshotByPtyId: nextSnapshots,
+                pendingColdRestoreByPtyId: nextColdRestores
+              }
+            })
             return
           }
 
@@ -1150,7 +1300,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     set({
       workspaceSessionReady: true,
       pendingReconnectWorktreeIds: [],
-      pendingReconnectTabByWorktree: {}
+      pendingReconnectTabByWorktree: {},
+      pendingReconnectPtyIdByTabId: {}
     })
   }
 })

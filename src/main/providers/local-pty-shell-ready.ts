@@ -88,8 +88,7 @@ fi
 # ~/.bashrc from ~/.bash_profile; forcing ~/.bashrc again here would duplicate
 # PATH edits, hooks, and prompt init in Orca startup-command shells.
 # Why: append the marker through PROMPT_COMMAND so it fires after the login
-# startup files have rebuilt the prompt, matching Superset's "shell ready"
-# contract without re-running user rc files.
+# startup files have rebuilt the prompt, without re-running user rc files.
 __orca_prompt_mark() {
   printf "\\033]133;A\\007"
 }

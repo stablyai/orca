@@ -311,6 +311,36 @@ export function connectPanePty(
       // whole TerminalPane with no surviving pane transports yet.
       allowInitialIdleCacheSeed = true
       deps.syncPanePtyLayoutBinding(pane.id, existingPtyId)
+
+      // Why: cold restore writes the previous session's scrollback as read-only
+      // history above the fresh shell prompt. This gives the user context about
+      // what was running before the daemon crashed.
+      const coldRestore = useAppStore.getState().consumePendingColdRestore(existingPtyId)
+      if (coldRestore) {
+        pane.terminal.write(coldRestore.scrollback)
+        // Why: dim ANSI separator distinguishes restored history from live output.
+        // \x1b[2m = dim, \x1b[0m = reset. The user can tell at a glance where
+        // the previous session ended and the new shell began.
+        pane.terminal.write('\r\n\x1b[2m--- session restored ---\x1b[0m\r\n\r\n')
+      } else {
+        // Why: when the daemon backend reattaches to a surviving session, it
+        // returns an ANSI snapshot of the terminal screen. Write it before
+        // attach() so the visual state is restored before any new data arrives
+        // and the eager-buffer replay stacks on top of the restored screen.
+        const snapshotData = useAppStore.getState().consumePendingSnapshot(existingPtyId)
+        if (snapshotData) {
+          // Why: the snapshot was captured at the daemon's terminal dimensions.
+          // Resize xterm.js to match before writing so ANSI cursor positions
+          // land on the correct cells. The attach() resize will then send the
+          // actual panel dimensions to the PTY, triggering SIGWINCH and a
+          // full TUI redraw at the real size.
+          if (snapshotData.cols && snapshotData.rows) {
+            pane.terminal.resize(snapshotData.cols, snapshotData.rows)
+          }
+          pane.terminal.write(snapshotData.snapshot)
+        }
+      }
+
       // Why: this tab already owns a PTY. Attach to it instead of spawning a
       // duplicate. Startup commands are intentionally skipped — the PTY was
       // already spawned with a fresh shell.
@@ -323,6 +353,12 @@ export function connectPanePty(
           onError: reportError
         }
       })
+
+      // Why: ack after attach succeeds so that if attach somehow fails, the
+      // daemon retains cold restore data for the next attempt.
+      if (coldRestore) {
+        window.api.pty.ackColdRestore(existingPtyId)
+      }
     } else {
       allowInitialIdleCacheSeed = false
       const pendingSpawn = hasExistingPaneTransport
