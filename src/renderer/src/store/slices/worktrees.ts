@@ -378,7 +378,6 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     const reconciledActiveTabId = worktreeId
       ? get().reconcileWorktreeTabModel(worktreeId).activeRenderableTabId
       : null
-    const now = Date.now()
     let shouldClearUnread = false
     set((s) => {
       if (!worktreeId) {
@@ -497,15 +496,13 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             ? restoredTabId
             : (worktreeTabs[0]?.id ?? null)
 
-      // Why: bump lastActivityAt so the smart sort's time-decay signal
-      // reflects navigation recency. Do NOT bump sortEpoch — that would
-      // re-sort the sidebar on every click, causing the reorder-on-click
-      // bug (PR #209). The timestamp is persisted so the next sortEpoch
-      // bump (from a background event) includes this worktree's updated score.
-      const metaUpdates: Partial<WorktreeMeta> = { lastActivityAt: now }
-      if (shouldClearUnread) {
-        metaUpdates.isUnread = false
-      }
+      // Why: focusing a worktree is not meaningful background activity for the
+      // smart sort. Writing lastActivityAt here makes the next unrelated
+      // sortEpoch bump reshuffle cards based on what the user merely looked at,
+      // which is the "jump after focus" bug reported in Slack. Keep selection
+      // side-effects limited to unread clearing; true activity signals such as
+      // PTY lifecycle and explicit edits still flow through bumpWorktreeActivity.
+      const metaUpdates: Partial<WorktreeMeta> = shouldClearUnread ? { isUnread: false } : {}
       return {
         activeWorktreeId: worktreeId,
         activeFileId,
@@ -513,7 +510,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         activeTabType,
         activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: activeTabType },
         activeTabId,
-        worktreesByRepo: applyWorktreeUpdates(s.worktreesByRepo, worktreeId, metaUpdates)
+        ...(shouldClearUnread
+          ? { worktreesByRepo: applyWorktreeUpdates(s.worktreesByRepo, worktreeId, metaUpdates) }
+          : {})
       }
     })
 
@@ -546,17 +545,16 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       return
     }
 
-    const updates: Parameters<typeof window.api.worktrees.updateMeta>[0]['updates'] = {
-      lastActivityAt: now
-    }
     if (shouldClearUnread) {
-      updates.isUnread = false
-    }
+      const updates: Parameters<typeof window.api.worktrees.updateMeta>[0]['updates'] = {
+        isUnread: false
+      }
 
-    void window.api.worktrees.updateMeta({ worktreeId, updates }).catch((err) => {
-      console.error('Failed to persist worktree activation state:', err)
-      void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
-    })
+      void window.api.worktrees.updateMeta({ worktreeId, updates }).catch((err) => {
+        console.error('Failed to persist worktree activation state:', err)
+        void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+      })
+    }
   },
 
   allWorktrees: () => Object.values(get().worktreesByRepo).flat()
