@@ -13,18 +13,7 @@ function createTestDir(): string {
   return mkdtempSync(join(tmpdir(), 'daemon-server-test-'))
 }
 
-async function _waitFor(predicate: () => boolean, timeoutMs = 2000): Promise<void> {
-  const start = Date.now()
-  while (!predicate()) {
-    if (Date.now() - start > timeoutMs) {
-      throw new Error('waitFor timed out')
-    }
-    await new Promise((r) => setTimeout(r, 10))
-  }
-}
-
 function createMockSubprocess(): SubprocessHandle {
-  let _onDataCb: ((data: string) => void) | null = null
   let onExitCb: ((code: number) => void) | null = null
   return {
     pid: 55555,
@@ -32,8 +21,8 @@ function createMockSubprocess(): SubprocessHandle {
     resize: vi.fn(),
     kill: vi.fn(() => setTimeout(() => onExitCb?.(0), 5)),
     signal: vi.fn(),
-    onData(cb) {
-      _onDataCb = cb
+    onData(_cb) {
+      /* stored for future tests */
     },
     onExit(cb) {
       onExitCb = cb

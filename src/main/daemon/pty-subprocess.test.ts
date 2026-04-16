@@ -158,7 +158,7 @@ describe('createPtySubprocess', () => {
       env: { MY_VAR: 'test-value' }
     })
 
-    const lastCall = spawnMock.mock.calls.at(-1)
+    const lastCall = spawnMock.mock.calls.at(-1)!
     const spawnEnv = lastCall[2].env
     expect(spawnEnv.MY_VAR).toBe('test-value')
   })

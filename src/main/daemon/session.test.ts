@@ -288,7 +288,7 @@ describe('Session', () => {
       })
 
       // Attach a second client (same conceptual slot but new token)
-      const _token2 = session.attachClient({
+      session.attachClient({
         onData: (d) => received.push(d),
         onExit: () => {}
       })

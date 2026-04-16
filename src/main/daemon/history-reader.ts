@@ -42,7 +42,7 @@ export class HistoryReader {
       return []
     }
 
-    let entries: ReturnType<typeof readdirSync>
+    let entries: { isDirectory(): boolean; name: string }[]
     try {
       entries = readdirSync(this.basePath, { withFileTypes: true })
     } catch {

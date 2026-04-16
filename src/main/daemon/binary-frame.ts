@@ -24,7 +24,7 @@ export type FrameParser = {
 export function createFrameParser(
   onFrame: (type: FrameType, payload: Buffer) => void
 ): FrameParser {
-  let buffer = Buffer.alloc(0)
+  let buffer: Buffer = Buffer.alloc(0)
 
   function parse(): void {
     while (buffer.length >= FRAME_HEADER_SIZE) {

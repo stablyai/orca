@@ -32,7 +32,6 @@ export class DaemonServer {
   private socketPath: string
   private tokenPath: string
 
-  private pendingHellos = new Map<Socket, { role?: string; clientId?: string }>()
   private clients = new Map<string, ConnectedClient>()
 
   constructor(opts: DaemonServerOptions) {

@@ -254,12 +254,24 @@ export type PreloadApi = {
       command?: string
       connectionId?: string | null
       worktreeId?: string
-    }) => Promise<{ id: string }>
+      sessionId?: string
+    }) => Promise<{
+      id: string
+      snapshot?: string
+      snapshotCols?: number
+      snapshotRows?: number
+      isReattach?: boolean
+      isAlternateScreen?: boolean
+      coldRestore?: { scrollback: string; cwd: string }
+    }>
     write: (id: string, data: string) => void
     resize: (id: string, cols: number, rows: number) => void
+    signal: (id: string, signal: string) => void
     kill: (id: string) => Promise<void>
+    ackColdRestore: (id: string) => void
     hasChildProcesses: (id: string) => Promise<boolean>
     getForegroundProcess: (id: string) => Promise<string | null>
+    listSessions: () => Promise<{ id: string; cwd: string; title: string }[]>
     onData: (callback: (data: { id: string; data: string }) => void) => () => void
     onExit: (callback: (data: { id: string; code: number }) => void) => () => void
     onOpenCodeStatus: (callback: (event: OpenCodeStatusEvent) => void) => () => void
