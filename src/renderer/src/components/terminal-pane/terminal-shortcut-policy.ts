@@ -130,6 +130,22 @@ export function resolveTerminalShortcutAction(
     return { type: 'sendInput', data: '\x1b\x7f' }
   }
 
+  if (
+    !event.metaKey &&
+    !event.ctrlKey &&
+    event.altKey &&
+    !event.shiftKey &&
+    (event.key === 'ArrowLeft' || event.key === 'ArrowRight')
+  ) {
+    // Why: xterm.js would otherwise emit \e[1;3D / \e[1;3C for option/alt+arrow,
+    // which default readline (bash, zsh) does not bind to backward-word /
+    // forward-word — so word navigation silently doesn't work without a custom
+    // inputrc. Translate to \eb / \ef (readline's default word-nav bindings) so
+    // option+←/→ on macOS and alt+←/→ on Linux/Windows behave like they do in
+    // iTerm2's "Esc+" option-key mode. Platform-agnostic: both produce altKey.
+    return { type: 'sendInput', data: event.key === 'ArrowLeft' ? '\x1bb' : '\x1bf' }
+  }
+
   // Why: the terminal shortcut layer is an explicit allowlist, not a generic
   // "modifier means app shortcut" rule. Keeping this list narrow prevents Orca
   // from swallowing readline/emacs control chords like Ctrl+R, Ctrl+U, Ctrl+E,

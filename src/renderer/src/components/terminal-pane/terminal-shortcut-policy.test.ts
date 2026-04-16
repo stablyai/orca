@@ -143,6 +143,58 @@ describe('resolveTerminalShortcutAction', () => {
     ).toBeNull()
   })
 
+  it('translates alt+arrow to readline word-nav escapes on both platforms', () => {
+    // macOS: option+←/→ → \eb / \ef (readline backward-word / forward-word)
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'ArrowLeft', code: 'ArrowLeft', altKey: true }),
+        true
+      )
+    ).toEqual({ type: 'sendInput', data: '\x1bb' })
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'ArrowRight', code: 'ArrowRight', altKey: true }),
+        true
+      )
+    ).toEqual({ type: 'sendInput', data: '\x1bf' })
+
+    // Linux/Windows: alt+←/→ produces the same escapes (platform-agnostic chord)
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'ArrowLeft', code: 'ArrowLeft', altKey: true }),
+        false
+      )
+    ).toEqual({ type: 'sendInput', data: '\x1bb' })
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'ArrowRight', code: 'ArrowRight', altKey: true }),
+        false
+      )
+    ).toEqual({ type: 'sendInput', data: '\x1bf' })
+
+    // alt+shift+arrow is a different chord (select-word in some shells) — don't
+    // intercept, let xterm.js / the shell handle it.
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'ArrowLeft', code: 'ArrowLeft', altKey: true, shiftKey: true }),
+        true
+      )
+    ).toBeNull()
+
+    // alt+ctrl+arrow is a different chord entirely — passthrough.
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'ArrowLeft', code: 'ArrowLeft', altKey: true, ctrlKey: true }),
+        true
+      )
+    ).toBeNull()
+
+    // Regression guard: plain ArrowLeft must still pass through untouched.
+    expect(
+      resolveTerminalShortcutAction(event({ key: 'ArrowLeft', code: 'ArrowLeft' }), true)
+    ).toBeNull()
+  })
+
   it('keeps Cmd+D and Cmd+Shift+D for split on macOS', () => {
     expect(
       resolveTerminalShortcutAction(event({ key: 'd', code: 'KeyD', metaKey: true }), true)
