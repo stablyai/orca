@@ -337,8 +337,16 @@ export function connectPanePty(
             pane.terminal.write(connectResult.snapshot)
           }
 
-          if (deps.isVisibleRef.current && ptyId) {
+          if (ptyId) {
             transport.resize(cols, rows)
+            // Why: POSIX only delivers SIGWINCH when terminal dimensions
+            // actually change. If the pane dimensions match the daemon
+            // session's stored dimensions (common for split panes across
+            // restarts), the resize above is a no-op and inline-viewport
+            // TUIs (Claude Code/Ink) never redraw. Sending SIGWINCH
+            // explicitly guarantees the TUI repaints at the correct cursor
+            // position, correcting any snapshot-vs-PTY cursor divergence.
+            window.api.pty.signal(ptyId, 'SIGWINCH')
           }
 
           scheduleRuntimeGraphSync()
