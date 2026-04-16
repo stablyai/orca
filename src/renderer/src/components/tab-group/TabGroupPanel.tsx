@@ -224,7 +224,7 @@ export default function TabGroupPanel({
                   {/* Why: split-button modifier hints appear in a shared header UI,
                       so the label must match the current platform's modifier
                       vocabulary instead of always showing Mac glyphs. */}
-                  <span className="text-muted-foreground">{isMac ? '⌥' : 'Alt'} Split Down</span>
+                  <span className="text-muted-foreground">[{isMac ? '⌥' : 'Alt'}] Split Down</span>
                 </div>
               </TooltipContent>
             </Tooltip>
