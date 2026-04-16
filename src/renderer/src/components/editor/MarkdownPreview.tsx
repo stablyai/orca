@@ -204,13 +204,10 @@ export default function MarkdownPreview({
 
       const target = event.target
       const targetInsidePreview = target instanceof Node && root.contains(target)
-      const targetIsEditable =
-        target instanceof HTMLElement &&
-        (target.isContentEditable || target.closest('input, textarea, select') !== null)
 
       if (
         isMarkdownPreviewFindShortcut(event, navigator.userAgent.includes('Mac')) &&
-        (isSearchOpen || targetInsidePreview || !targetIsEditable)
+        targetInsidePreview
       ) {
         event.preventDefault()
         event.stopPropagation()
