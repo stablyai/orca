@@ -28,7 +28,6 @@ type TerminalShellProps = {
   onCloseTab: (tabId: string) => void
   onCloseOthers: (tabId: string) => void
   onCloseTabsToRight: (tabId: string) => void
-  onReorderTabs: (worktreeId: string, tabIds: string[]) => void
   onNewTerminalTab: () => void
   onNewBrowserTab: () => void
   onNewFileTab?: () => void
@@ -65,7 +64,6 @@ export function TerminalShell({
   onCloseTab,
   onCloseOthers,
   onCloseTabsToRight,
-  onReorderTabs,
   onNewTerminalTab,
   onNewBrowserTab,
   onNewFileTab,
@@ -104,7 +102,6 @@ export function TerminalShell({
               onClose={onCloseTab}
               onCloseOthers={onCloseOthers}
               onCloseToRight={onCloseTabsToRight}
-              onReorder={onReorderTabs}
               onNewTerminalTab={onNewTerminalTab}
               onNewBrowserTab={onNewBrowserTab}
               onNewFileTab={onNewFileTab}

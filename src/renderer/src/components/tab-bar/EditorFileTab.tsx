@@ -24,6 +24,7 @@ import { STATUS_COLORS, STATUS_LABELS } from '../right-sidebar/status-display'
 import type { GitFileStatus } from '../../../../shared/types'
 import type { OpenFile } from '../../store/slices/editor'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from './SortableTab'
+import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 
 const isMac = navigator.userAgent.includes('Mac')
 const isLinux = navigator.userAgent.includes('Linux')
@@ -45,7 +46,8 @@ export default function EditorFileTab({
   onCloseToRight,
   onCloseAll,
   onPin,
-  onSplitGroup
+  onSplitGroup,
+  dragData
 }: {
   file: OpenFile & { tabId?: string }
   isActive: boolean
@@ -57,12 +59,14 @@ export default function EditorFileTab({
   onCloseAll: () => void
   onPin?: () => void
   onSplitGroup: (direction: 'left' | 'right' | 'up' | 'down', sourceVisibleTabId: string) => void
+  dragData: TabDragItemData
 }): React.JSX.Element {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     // Why: split groups can duplicate the same open file into multiple visible
     // tabs. Using the unified tab ID keeps each rendered tab draggable as a
     // distinct item instead of collapsing every copy onto the file entity ID.
-    id: file.tabId ?? file.id
+    id: file.tabId ?? file.id,
+    data: dragData
   })
 
   const style = {

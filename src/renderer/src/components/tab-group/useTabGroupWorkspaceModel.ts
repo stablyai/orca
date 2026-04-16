@@ -17,6 +17,7 @@ import { extractIpcErrorMessage } from '../../lib/ipc-error'
 import { destroyPersistentWebview } from '../browser-pane/BrowserPane'
 
 export type GroupEditorItem = OpenFile & { tabId: string }
+export type GroupBrowserItem = BrowserTabState & { tabId: string }
 
 const EMPTY_GROUPS: readonly TabGroup[] = []
 const EMPTY_UNIFIED_TABS: readonly Tab[] = []
@@ -25,6 +26,7 @@ const EMPTY_RUNTIME_TERMINAL_TABS: readonly TerminalTab[] = []
 
 type TerminalTabItem = {
   id: string
+  unifiedTabId: string
   ptyId: null
   worktreeId: string
   title: string
@@ -103,6 +105,7 @@ export function useTabGroupWorkspaceModel({
         .filter((item) => item.contentType === 'terminal')
         .map((item) => ({
           id: item.entityId,
+          unifiedTabId: item.id,
           ptyId: null,
           worktreeId,
           title: item.label,
@@ -131,15 +134,15 @@ export function useTabGroupWorkspaceModel({
     [groupTabs, worktreeState.openFiles]
   )
 
-  const browserItems = useMemo(
+  const browserItems = useMemo<GroupBrowserItem[]>(
     () =>
       groupTabs
         .filter((item) => item.contentType === 'browser')
         .map((item) => {
           const bt = worktreeState.browserTabs.find((candidate) => candidate.id === item.entityId)
-          return bt ?? null
+          return bt ? { ...bt, tabId: item.id } : null
         })
-        .filter((item): item is BrowserTabState => item !== null),
+        .filter((item): item is GroupBrowserItem => item !== null),
     [groupTabs, worktreeState.browserTabs]
   )
 

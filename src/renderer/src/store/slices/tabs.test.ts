@@ -393,6 +393,86 @@ describe('TabsSlice', () => {
       expect(state.groupsByWorktree[WT][0].tabOrder).toEqual([t1.id, 'file-b.ts'])
       expect(state.layoutByWorktree[WT]).toEqual({ type: 'leaf', groupId: sourceGroupId })
     })
+
+    it('drops a unified tab into another group and collapses an emptied source group', () => {
+      const tab = store.getState().createUnifiedTab(WT, 'editor', {
+        id: 'file-a.ts',
+        label: 'file-a.ts'
+      })
+      const sourceGroupId = store.getState().groupsByWorktree[WT][0].id
+      const targetGroupId = store.getState().createEmptySplitGroup(WT, sourceGroupId, 'right')
+      expect(targetGroupId).toBeTruthy()
+
+      const moved = store.getState().dropUnifiedTab(tab.id, { groupId: targetGroupId! })
+
+      expect(moved).toBe(true)
+      const state = store.getState()
+      expect(state.groupsByWorktree[WT]).toHaveLength(1)
+      expect(state.groupsByWorktree[WT][0].id).toBe(targetGroupId)
+      expect(state.groupsByWorktree[WT][0].tabOrder).toEqual([tab.id])
+      expect(state.layoutByWorktree[WT]).toEqual({ type: 'leaf', groupId: targetGroupId })
+      expect(state.activeGroupIdByWorktree[WT]).toBe(targetGroupId)
+    })
+
+    it('drops a unified tab onto a pane edge to create a sibling split', () => {
+      const first = store.getState().createUnifiedTab(WT, 'editor', {
+        id: 'file-a.ts',
+        label: 'file-a.ts'
+      })
+      const second = store.getState().createUnifiedTab(WT, 'editor', {
+        id: 'file-b.ts',
+        label: 'file-b.ts'
+      })
+      const sourceGroupId = store.getState().groupsByWorktree[WT][0].id
+
+      const moved = store.getState().dropUnifiedTab(second.id, {
+        groupId: sourceGroupId,
+        splitDirection: 'right'
+      })
+
+      expect(moved).toBe(true)
+      const state = store.getState()
+      expect(state.groupsByWorktree[WT]).toHaveLength(2)
+
+      const originGroup = state.groupsByWorktree[WT].find((group) => group.id === sourceGroupId)
+      expect(originGroup?.tabOrder).toEqual([first.id])
+
+      const movedTab = state.unifiedTabsByWorktree[WT].find((tab) => tab.id === second.id)
+      const newGroupId = movedTab?.groupId
+      expect(newGroupId).toBeTruthy()
+      expect(newGroupId).not.toBe(sourceGroupId)
+      expect(state.groupsByWorktree[WT].find((group) => group.id === newGroupId)?.tabOrder).toEqual(
+        [second.id]
+      )
+
+      const layout = state.layoutByWorktree[WT]
+      expect(layout.type).toBe('split')
+      if (layout.type !== 'split') {
+        throw new Error('expected split layout after edge drop')
+      }
+      expect(layout.direction).toBe('horizontal')
+      expect(layout.first).toEqual({ type: 'leaf', groupId: sourceGroupId })
+      expect(layout.second).toEqual({ type: 'leaf', groupId: newGroupId })
+    })
+
+    it('treats splitting the only tab onto its own pane body as a no-op', () => {
+      const onlyTab = store.getState().createUnifiedTab(WT, 'editor', {
+        id: 'file-a.ts',
+        label: 'file-a.ts'
+      })
+      const sourceGroupId = store.getState().groupsByWorktree[WT][0].id
+
+      const moved = store.getState().dropUnifiedTab(onlyTab.id, {
+        groupId: sourceGroupId,
+        splitDirection: 'down'
+      })
+
+      expect(moved).toBe(false)
+      const state = store.getState()
+      expect(state.groupsByWorktree[WT]).toHaveLength(1)
+      expect(state.groupsByWorktree[WT][0].tabOrder).toEqual([onlyTab.id])
+      expect(state.layoutByWorktree[WT]).toEqual({ type: 'leaf', groupId: sourceGroupId })
+    })
   })
 
   // ─── setTabLabel / setTabCustomLabel / setUnifiedTabColor ─────────

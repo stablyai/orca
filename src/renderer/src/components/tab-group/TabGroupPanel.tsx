@@ -1,4 +1,5 @@
 import { lazy, Suspense } from 'react'
+import { useDroppable } from '@dnd-kit/core'
 import { Columns2, Ellipsis, Rows2, X } from 'lucide-react'
 import { useAppStore } from '../../store'
 import {
@@ -12,6 +13,8 @@ import TabBar from '../tab-bar/TabBar'
 import TerminalPane from '../terminal-pane/TerminalPane'
 import BrowserPane from '../browser-pane/BrowserPane'
 import { useTabGroupWorkspaceModel } from './useTabGroupWorkspaceModel'
+import TabGroupDropOverlay from './TabGroupDropOverlay'
+import { getTabPaneBodyDroppableId, type TabDropZone } from './useTabDragSplit'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
 
@@ -21,7 +24,9 @@ export default function TabGroupPanel({
   isFocused,
   hasSplitGroups,
   reserveClosedExplorerToggleSpace,
-  reserveCollapsedSidebarHeaderSpace
+  reserveCollapsedSidebarHeaderSpace,
+  isTabDragActive = false,
+  activeDropZone = null
 }: {
   groupId: string
   worktreeId: string
@@ -29,6 +34,8 @@ export default function TabGroupPanel({
   hasSplitGroups: boolean
   reserveClosedExplorerToggleSpace: boolean
   reserveCollapsedSidebarHeaderSpace: boolean
+  isTabDragActive?: boolean
+  activeDropZone?: TabDropZone | null
 }): React.JSX.Element {
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
@@ -45,11 +52,21 @@ export default function TabGroupPanel({
     terminalTabs,
     worktreePath
   } = model
+  const { setNodeRef: setBodyDropRef } = useDroppable({
+    id: getTabPaneBodyDroppableId(groupId),
+    data: {
+      kind: 'pane-body',
+      groupId,
+      worktreeId
+    },
+    disabled: !isTabDragActive
+  })
 
   const tabBar = (
     <TabBar
       tabs={terminalTabs}
       activeTabId={activeTab?.contentType === 'terminal' ? activeTab.entityId : null}
+      groupId={groupId}
       worktreeId={worktreeId}
       expandedPaneByTabId={model.expandedPaneByTabId}
       onActivate={commands.activateTerminal}
@@ -77,7 +94,6 @@ export default function TabGroupPanel({
           commands.closeToRight(item.id)
         }
       }}
-      onReorder={(_, order) => commands.reorderTabBar(order)}
       onNewTerminalTab={commands.newTerminalTab}
       onNewBrowserTab={commands.newBrowserTab}
       onNewFileTab={commands.newFileTab}
@@ -249,7 +265,8 @@ export default function TabGroupPanel({
         </div>
       </div>
 
-      <div className="relative flex-1 min-h-0 overflow-hidden">
+      <div ref={setBodyDropRef} className="relative flex-1 min-h-0 overflow-hidden">
+        {activeDropZone ? <TabGroupDropOverlay zone={activeDropZone} /> : null}
         {model.groupTabs
           .filter((item) => item.contentType === 'terminal')
           .map((item) => (

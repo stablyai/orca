@@ -13,6 +13,7 @@ import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
 import type { BrowserTab as BrowserTabState } from '../../../../shared/types'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from './SortableTab'
 import { getLiveBrowserUrl } from '../browser-pane/browser-runtime'
+import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 
 function formatBrowserTabUrlLabel(url: string): string {
   if (url === ORCA_BROWSER_BLANK_URL || url === 'about:blank') {
@@ -49,7 +50,8 @@ export default function BrowserTab({
   onActivate,
   onClose,
   onCloseToRight,
-  onSplitGroup
+  onSplitGroup,
+  dragData
 }: {
   tab: BrowserTabState
   isActive: boolean
@@ -58,9 +60,11 @@ export default function BrowserTab({
   onClose: () => void
   onCloseToRight: () => void
   onSplitGroup: (direction: 'left' | 'right' | 'up' | 'down', sourceVisibleTabId: string) => void
+  dragData: TabDragItemData
 }): React.JSX.Element {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: tab.id
+    id: tab.id,
+    data: dragData
   })
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })

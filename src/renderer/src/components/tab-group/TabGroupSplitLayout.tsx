@@ -1,7 +1,9 @@
 import { useCallback, useState } from 'react'
+import { DndContext } from '@dnd-kit/core'
 import type { TabGroupLayoutNode } from '../../../../shared/types'
 import { useAppStore } from '../../store'
 import TabGroupPanel from './TabGroupPanel'
+import { type TabDropZone, useTabDragSplit } from './useTabDragSplit'
 
 const MIN_RATIO = 0.15
 const MAX_RATIO = 0.85
@@ -88,7 +90,10 @@ function SplitNode({
   hasSplitGroups,
   touchesTopEdge,
   touchesRightEdge,
-  touchesLeftEdge
+  touchesLeftEdge,
+  isTabDragActive,
+  activeDropGroupId,
+  activeDropZone
 }: {
   node: TabGroupLayoutNode
   nodePath: string
@@ -99,6 +104,9 @@ function SplitNode({
   touchesTopEdge: boolean
   touchesRightEdge: boolean
   touchesLeftEdge: boolean
+  isTabDragActive: boolean
+  activeDropGroupId: string | null
+  activeDropZone: TabDropZone | null
 }): React.JSX.Element {
   const setTabGroupSplitRatio = useAppStore((state) => state.setTabGroupSplitRatio)
 
@@ -115,6 +123,8 @@ function SplitNode({
         hasSplitGroups={hasSplitGroups}
         reserveClosedExplorerToggleSpace={touchesTopEdge && touchesRightEdge}
         reserveCollapsedSidebarHeaderSpace={touchesTopEdge && touchesLeftEdge}
+        isTabDragActive={isTabDragActive}
+        activeDropZone={activeDropGroupId === node.groupId ? activeDropZone : null}
       />
     )
   }
@@ -138,6 +148,9 @@ function SplitNode({
           touchesTopEdge={touchesTopEdge}
           touchesRightEdge={isHorizontal ? false : touchesRightEdge}
           touchesLeftEdge={touchesLeftEdge}
+          isTabDragActive={isTabDragActive}
+          activeDropGroupId={activeDropGroupId}
+          activeDropZone={activeDropZone}
         />
       </div>
       <ResizeHandle
@@ -155,6 +168,9 @@ function SplitNode({
           touchesTopEdge={isHorizontal ? touchesTopEdge : false}
           touchesRightEdge={touchesRightEdge}
           touchesLeftEdge={isHorizontal ? false : touchesLeftEdge}
+          isTabDragActive={isTabDragActive}
+          activeDropGroupId={activeDropGroupId}
+          activeDropZone={activeDropZone}
         />
       </div>
     </div>
@@ -172,19 +188,34 @@ export default function TabGroupSplitLayout({
   focusedGroupId?: string
   isWorktreeActive: boolean
 }): React.JSX.Element {
+  const dragSplit = useTabDragSplit({ worktreeId, enabled: isWorktreeActive })
+
   return (
-    <div className="flex flex-1 min-w-0 min-h-0 overflow-hidden">
-      <SplitNode
-        node={layout}
-        nodePath=""
-        worktreeId={worktreeId}
-        focusedGroupId={focusedGroupId}
-        isWorktreeActive={isWorktreeActive}
-        hasSplitGroups={layout.type === 'split'}
-        touchesTopEdge={true}
-        touchesRightEdge={true}
-        touchesLeftEdge={true}
-      />
-    </div>
+    <DndContext
+      sensors={dragSplit.sensors}
+      collisionDetection={dragSplit.collisionDetection}
+      onDragStart={dragSplit.onDragStart}
+      onDragMove={dragSplit.onDragMove}
+      onDragOver={dragSplit.onDragOver}
+      onDragEnd={dragSplit.onDragEnd}
+      onDragCancel={dragSplit.onDragCancel}
+    >
+      <div className="flex flex-1 min-w-0 min-h-0 overflow-hidden">
+        <SplitNode
+          node={layout}
+          nodePath=""
+          worktreeId={worktreeId}
+          focusedGroupId={focusedGroupId}
+          isWorktreeActive={isWorktreeActive}
+          hasSplitGroups={layout.type === 'split'}
+          touchesTopEdge={true}
+          touchesRightEdge={true}
+          touchesLeftEdge={true}
+          isTabDragActive={dragSplit.activeDrag !== null}
+          activeDropGroupId={dragSplit.hoveredDropTarget?.groupId ?? null}
+          activeDropZone={dragSplit.hoveredDropTarget?.zone ?? null}
+        />
+      </div>
+    </DndContext>
   )
 }

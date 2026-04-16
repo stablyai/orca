@@ -77,6 +77,14 @@ export type TabsSlice = {
     targetGroupId: string,
     opts?: { index?: number; activate?: boolean }
   ) => boolean
+  dropUnifiedTab: (
+    tabId: string,
+    target: {
+      groupId: string
+      index?: number
+      splitDirection?: TabSplitDirection
+    }
+  ) => boolean
   copyUnifiedTabToGroup: (
     tabId: string,
     targetGroupId: string,
@@ -884,6 +892,153 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
           [worktreeId]: nextGroups
         },
         activeGroupIdByWorktree: nextActiveGroupIdByWorktree
+      }
+    })
+    return moved
+  },
+
+  dropUnifiedTab: (tabId, target) => {
+    let moved = false
+    set((state) => {
+      const foundTab = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
+      const foundTarget = findGroupAndWorktree(state.groupsByWorktree, target.groupId)
+      if (!foundTab || !foundTarget || foundTab.worktreeId !== foundTarget.worktreeId) {
+        return {}
+      }
+
+      const { tab, worktreeId } = foundTab
+      const sourceGroup = findGroupForTab(state.groupsByWorktree, worktreeId, tab.groupId)
+      const targetGroup = foundTarget.group
+      if (!sourceGroup) {
+        return {}
+      }
+
+      const isSplitDrop = Boolean(target.splitDirection)
+      if (!isSplitDrop && tab.groupId === target.groupId) {
+        return {}
+      }
+      if (isSplitDrop && tab.groupId === target.groupId && sourceGroup.tabOrder.length <= 1) {
+        // Why: dragging the final tab in a group onto that same group's edge
+        // would create a transient sibling only to collapse the source
+        // immediately, leaving the layout unchanged while still churning focus
+        // and group IDs. Treat that as a no-op instead of faking a split.
+        return {}
+      }
+
+      moved = true
+
+      let nextGroups = state.groupsByWorktree[worktreeId] ?? []
+      let nextLayoutByWorktree = state.layoutByWorktree
+      let nextActiveGroupIdByWorktree = state.activeGroupIdByWorktree
+      let resolvedTargetGroupId = target.groupId
+
+      if (target.splitDirection) {
+        const newGroupId = globalThis.crypto.randomUUID()
+        const newGroup: TabGroup = {
+          id: newGroupId,
+          worktreeId,
+          activeTabId: null, // Placeholder; properly set in the nextGroups.map() below
+          tabOrder: []
+        }
+        const currentLayout =
+          nextLayoutByWorktree[worktreeId] ?? ({ type: 'leaf', groupId: target.groupId } as const)
+        const replacement = buildSplitNode(
+          target.groupId,
+          newGroupId,
+          target.splitDirection === 'left' || target.splitDirection === 'right'
+            ? 'horizontal'
+            : 'vertical',
+          target.splitDirection === 'left' || target.splitDirection === 'up' ? 'first' : 'second'
+        )
+
+        resolvedTargetGroupId = newGroupId
+        nextGroups = [...nextGroups, newGroup]
+        nextLayoutByWorktree = {
+          ...nextLayoutByWorktree,
+          [worktreeId]: replaceLeaf(currentLayout, target.groupId, replacement)
+        }
+        nextActiveGroupIdByWorktree = {
+          ...nextActiveGroupIdByWorktree,
+          [worktreeId]: newGroupId
+        }
+      }
+
+      const sourceOrder = sourceGroup.tabOrder.filter((id) => id !== tabId)
+      const destinationGroup =
+        nextGroups.find((group) => group.id === resolvedTargetGroupId) ?? targetGroup
+      const targetOrder = [...destinationGroup.tabOrder]
+      const targetIndex = Math.max(
+        0,
+        Math.min(target.index ?? targetOrder.length, targetOrder.length)
+      )
+      targetOrder.splice(targetIndex, 0, tabId)
+
+      nextGroups = nextGroups.map((group) => {
+        if (group.id === sourceGroup.id) {
+          return {
+            ...group,
+            activeTabId:
+              group.activeTabId === tabId ? pickNeighbor(group.tabOrder, tabId) : group.activeTabId,
+            tabOrder: sourceOrder
+          }
+        }
+        if (group.id === resolvedTargetGroupId) {
+          return {
+            ...group,
+            activeTabId: tabId,
+            tabOrder: targetOrder
+          }
+        }
+        return group
+      })
+
+      if (sourceOrder.length === 0) {
+        nextGroups = nextGroups.filter((group) => group.id !== sourceGroup.id)
+        const collapsedState = collapseGroupLayout(
+          nextLayoutByWorktree,
+          nextActiveGroupIdByWorktree,
+          worktreeId,
+          sourceGroup.id,
+          resolvedTargetGroupId
+        )
+        nextLayoutByWorktree = collapsedState.layoutByWorktree
+        nextActiveGroupIdByWorktree = collapsedState.activeGroupIdByWorktree
+      } else {
+        nextActiveGroupIdByWorktree = {
+          ...nextActiveGroupIdByWorktree,
+          [worktreeId]: resolvedTargetGroupId
+        }
+      }
+
+      const nextUnifiedTabsByWorktree = {
+        ...state.unifiedTabsByWorktree,
+        [worktreeId]: (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
+          candidate.id === tabId ? { ...candidate, groupId: resolvedTargetGroupId } : candidate
+        )
+      }
+      const nextGroupsByWorktree = {
+        ...state.groupsByWorktree,
+        [worktreeId]: nextGroups
+      }
+
+      return {
+        unifiedTabsByWorktree: nextUnifiedTabsByWorktree,
+        groupsByWorktree: nextGroupsByWorktree,
+        layoutByWorktree: nextLayoutByWorktree,
+        activeGroupIdByWorktree: nextActiveGroupIdByWorktree,
+        ...(state.activeWorktreeId === worktreeId
+          ? buildActiveSurfacePatch(
+              {
+                ...state,
+                unifiedTabsByWorktree: nextUnifiedTabsByWorktree,
+                groupsByWorktree: nextGroupsByWorktree,
+                layoutByWorktree: nextLayoutByWorktree,
+                activeGroupIdByWorktree: nextActiveGroupIdByWorktree
+              },
+              worktreeId,
+              resolvedTargetGroupId
+            )
+          : {})
       }
     })
     return moved

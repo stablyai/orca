@@ -125,7 +125,8 @@
 
 /* ── Drop overlay ─────────────────────────────────────── */
 
-.pane-drop-overlay {
+.pane-drop-overlay,
+.tab-drop-overlay {
   position: absolute;
   z-index: 9999;
   background: rgba(59, 130, 246, 0.2);

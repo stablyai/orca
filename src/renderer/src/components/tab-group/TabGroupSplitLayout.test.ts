@@ -14,6 +14,20 @@ vi.mock('./TabGroupPanel', () => ({
   default: (props: unknown) => ({ __mock: 'TabGroupPanel', props })
 }))
 
+vi.mock('./useTabDragSplit', () => ({
+  useTabDragSplit: () => ({
+    activeDrag: null,
+    collisionDetection: vi.fn(),
+    hoveredDropTarget: null,
+    onDragCancel: vi.fn(),
+    onDragEnd: vi.fn(),
+    onDragMove: vi.fn(),
+    onDragOver: vi.fn(),
+    onDragStart: vi.fn(),
+    sensors: []
+  })
+}))
+
 import TabGroupSplitLayout from './TabGroupSplitLayout'
 
 describe('TabGroupSplitLayout', () => {
@@ -25,7 +39,7 @@ describe('TabGroupSplitLayout', () => {
       isWorktreeActive
     })
 
-    const splitNodeElement = element.props.children
+    const splitNodeElement = element.props.children.props.children
     const tabGroupPanelElement = splitNodeElement.type(splitNodeElement.props)
     return tabGroupPanelElement.props as {
       groupId: string
@@ -77,7 +91,7 @@ describe('TabGroupSplitLayout', () => {
       isWorktreeActive: true
     })
 
-    const splitNodeElement = element.props.children
+    const splitNodeElement = element.props.children.props.children
     const rootElement = splitNodeElement.type(splitNodeElement.props)
     const leftChild = rootElement.props.children[0].props.children
     const rightChild = rootElement.props.children[2].props.children

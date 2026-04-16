@@ -20,6 +20,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { TerminalTab } from '../../../../shared/types'
+import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 
 type SortableTabProps = {
   tab: TerminalTab
@@ -35,6 +36,7 @@ type SortableTabProps = {
   onSetTabColor: (tabId: string, color: string | null) => void
   onToggleExpand: (tabId: string) => void
   onSplitGroup: (direction: 'left' | 'right' | 'up' | 'down', sourceVisibleTabId: string) => void
+  dragData: TabDragItemData
 }
 
 export const TAB_COLORS = [
@@ -65,10 +67,12 @@ export default function SortableTab({
   onSetCustomTitle,
   onSetTabColor,
   onToggleExpand,
-  onSplitGroup
+  onSplitGroup,
+  dragData
 }: SortableTabProps): React.JSX.Element {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: tab.id
+    id: tab.id,
+    data: dragData
   })
 
   const style = {
