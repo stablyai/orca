@@ -30,6 +30,10 @@ import BrowserPane, { destroyPersistentWebview } from './browser-pane/BrowserPan
 import { reconcileTabOrder } from './tab-bar/reconcile-order'
 import TabGroupSplitLayout from './tab-group/TabGroupSplitLayout'
 import { shouldAutoCreateInitialTerminal } from './terminal/initial-terminal'
+import {
+  getEffectiveLayoutForWorktree as getEffectiveLayout,
+  anyMountedWorktreeHasLayout as computeAnyMountedWorktreeHasLayout
+} from './terminal/split-group-mount'
 import CodexRestartChip from './CodexRestartChip'
 
 const EditorPanel = lazy(() => import('./editor/EditorPanel'))
@@ -106,18 +110,8 @@ function Terminal(): React.JSX.Element | null {
     ? (browserTabsByWorktree[activeWorktreeId] ?? [])
     : []
   const getEffectiveLayoutForWorktree = useCallback(
-    (worktreeId: string) => {
-      const layout = layoutByWorktree[worktreeId]
-      if (layout) {
-        return layout
-      }
-      const groups = groupsByWorktree[worktreeId] ?? []
-      const fallbackGroupId = activeGroupIdByWorktree[worktreeId] ?? groups[0]?.id ?? null
-      if (!fallbackGroupId) {
-        return undefined
-      }
-      return { type: 'leaf', groupId: fallbackGroupId } as const
-    },
+    (worktreeId: string) =>
+      getEffectiveLayout(worktreeId, layoutByWorktree, groupsByWorktree, activeGroupIdByWorktree),
     [activeGroupIdByWorktree, groupsByWorktree, layoutByWorktree]
   )
   const effectiveActiveLayout = activeWorktreeId
@@ -215,15 +209,12 @@ function Terminal(): React.JSX.Element | null {
       mountedWorktreeIdsRef.current.delete(id)
     }
   }
-  // Why: the split-group container renders ALL mounted worktrees' panes. If
-  // we only mount it when the *active* worktree has a layout, switching to a
-  // newly-activated worktree (which has no groups yet) unmounts the entire
-  // tree — destroying PaneManagers, xterm buffers, and PTY connections for
-  // every previously mounted worktree. Keeping the container alive (hidden
-  // via CSS) when any mounted worktree has a layout prevents that teardown
-  // while the legacy fallback handles the active worktree's rendering.
-  const anyMountedWorktreeHasLayout = allWorktrees.some(
-    (wt) => mountedWorktreeIdsRef.current.has(wt.id) && getEffectiveLayoutForWorktree(wt.id)
+  const anyMountedWorktreeHasLayout = computeAnyMountedWorktreeHasLayout(
+    allWorktrees.map((wt) => wt.id),
+    mountedWorktreeIdsRef.current,
+    layoutByWorktree,
+    groupsByWorktree,
+    activeGroupIdByWorktree
   )
   // Auto-create first tab when worktree activates
   useEffect(() => {
