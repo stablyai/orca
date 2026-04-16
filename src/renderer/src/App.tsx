@@ -721,7 +721,7 @@ function App(): React.JSX.Element {
                  layout so the terminal/editor reclaim the left edge instead of
                  leaving behind a content-width blank strip. */
               <div
-                className={`flex flex-col shrink-0${sidebarOpen ? '' : ' relative w-0 overflow-visible'}`}
+                className={`flex min-h-0 flex-col shrink-0${sidebarOpen ? '' : ' relative w-0 overflow-visible'}`}
               >
                 <div
                   className={`titlebar-left${sidebarOpen ? '' : ' absolute top-0 left-0 z-10'}`}
@@ -736,7 +736,14 @@ function App(): React.JSX.Element {
                 >
                   {titlebarLeftControls}
                 </div>
-                <Sidebar />
+                <div className="flex min-h-0 flex-1">
+                  {/* Why: the workspace-view wrapper adds a fixed 42px header
+                      above the sidebar. Without a flex-1/min-h-0 slot here,
+                      the sidebar falls back to its content height, so the
+                      worktree list loses its scroll viewport and the fixed
+                      bottom toolbar (including Add Repo) gets pushed offscreen. */}
+                  <Sidebar />
+                </div>
               </div>
             ) : (
               <Sidebar />

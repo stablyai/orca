@@ -47,7 +47,7 @@ function Sidebar(): React.JSX.Element {
       <div
         ref={containerRef}
         className={cn(
-          'relative flex-shrink-0 bg-sidebar flex flex-col overflow-hidden scrollbar-sleek-parent',
+          'relative min-h-0 flex-shrink-0 bg-sidebar flex flex-col overflow-hidden scrollbar-sleek-parent',
           isResizing ? 'transition-none' : 'transition-[width] duration-200'
         )}
         style={{
