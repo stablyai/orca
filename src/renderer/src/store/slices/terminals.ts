@@ -1155,13 +1155,14 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         const tabLevelPtyId = pendingReconnectPtyIdByTabId[tabId]
         const hasLeafMappings = Object.keys(leafPtyMap).length > 0
 
-        // Why: for single-pane tabs (no leaf mappings), store the tab-level
-        // ptyId as the daemon session to reattach. connectPanePty reads this
-        // from the tab's ptyId field to trigger the reattach path.
-        // For split-pane tabs, the layout's ptyIdsByLeafId already carries
-        // the per-leaf daemon session IDs — connectPanePty reads those
-        // via restoredPtyIdByLeafId.
-        if (!hasLeafMappings && tabLevelPtyId) {
+        // Why: restore ptyId on the tab so getWorktreeStatus() sees it as
+        // active (green dot) even before the terminal pane mounts. For
+        // single-pane tabs the tab-level ptyId doubles as the daemon
+        // session ID. For split-pane tabs the layout's ptyIdsByLeafId
+        // carries per-leaf mappings; connectPanePty reads those via
+        // restoredPtyIdByLeafId, but the tab still needs a ptyId for
+        // status and orphan detection.
+        if (tabLevelPtyId) {
           set((s) => {
             const next = { ...s.tabsByWorktree }
             if (!next[worktreeId]) {
@@ -1170,7 +1171,21 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
             next[worktreeId] = next[worktreeId].map((t) =>
               t.id === tabId ? { ...t, ptyId: tabLevelPtyId } : t
             )
-            return { tabsByWorktree: next }
+
+            // Why: populate ptyIdsByTabId so the sessions status segment
+            // can map daemon session IDs back to tabs (for bound/orphan
+            // detection and click-to-navigate). Without this, all sessions
+            // appear as orphans until the terminal pane mounts.
+            const allPtyIds = hasLeafMappings
+              ? (Object.values(leafPtyMap).filter(Boolean) as string[])
+              : [tabLevelPtyId]
+            return {
+              tabsByWorktree: next,
+              ptyIdsByTabId: {
+                ...s.ptyIdsByTabId,
+                [tabId]: allPtyIds
+              }
+            }
           })
         }
       }
