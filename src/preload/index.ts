@@ -1188,6 +1188,36 @@ const api = {
       ipcRenderer.on('ui:activateWorktree', listener)
       return () => ipcRenderer.removeListener('ui:activateWorktree', listener)
     },
+    onCreateTerminal: (
+      callback: (data: { worktreeId: string; command?: string }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { worktreeId: string; command?: string }
+      ) => callback(data)
+      ipcRenderer.on('ui:createTerminal', listener)
+      return () => ipcRenderer.removeListener('ui:createTerminal', listener)
+    },
+    onSplitTerminal: (
+      callback: (data: {
+        tabId: string
+        paneRuntimeId: number
+        direction: 'horizontal' | 'vertical'
+        command?: string
+      }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: {
+          tabId: string
+          paneRuntimeId: number
+          direction: 'horizontal' | 'vertical'
+          command?: string
+        }
+      ) => callback(data)
+      ipcRenderer.on('ui:splitTerminal', listener)
+      return () => ipcRenderer.removeListener('ui:splitTerminal', listener)
+    },
     onTerminalZoom: (callback: (direction: 'in' | 'out' | 'reset') => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, direction: 'in' | 'out' | 'reset') =>
         callback(direction)

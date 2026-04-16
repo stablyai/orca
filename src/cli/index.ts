@@ -14,6 +14,8 @@ import type {
   RuntimeTerminalShow,
   RuntimeTerminalSend,
   RuntimeTerminalWait,
+  RuntimeTerminalCreate,
+  RuntimeTerminalSplit,
   BrowserSnapshotResult,
   BrowserClickResult,
   BrowserGotoResult,
@@ -210,6 +212,27 @@ export const COMMAND_SPECS: CommandSpec[] = [
     summary: 'Stop terminals for a worktree',
     usage: 'orca terminal stop --worktree <selector> [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'worktree']
+  },
+  {
+    path: ['terminal', 'create'],
+    summary: 'Create a new terminal tab in a worktree',
+    usage: 'orca terminal create --worktree <selector> [--command <text>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'command'],
+    examples: [
+      'orca terminal create --worktree active --json',
+      'orca terminal create --worktree path:/projects/myapp --command "claude"'
+    ]
+  },
+  {
+    path: ['terminal', 'split'],
+    summary: 'Split an existing terminal pane',
+    usage:
+      'orca terminal split --terminal <handle> [--direction horizontal|vertical] [--command <text>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'direction', 'command'],
+    examples: [
+      'orca terminal split --terminal term_abc123 --direction horizontal --json',
+      'orca terminal split --terminal term_abc123 --command "codex"'
+    ]
   },
   // ── Browser automation ──
   {
@@ -797,6 +820,34 @@ export async function main(argv = process.argv.slice(2), cwd = process.cwd()): P
         worktree: await getRequiredWorktreeSelector(parsed.flags, 'worktree', cwd, client)
       })
       return printResult(result, json, (value) => `Stopped ${value.stopped} terminals.`)
+    }
+
+    if (matches(commandPath, ['terminal', 'create'])) {
+      const result = await client.call<{ terminal: RuntimeTerminalCreate }>('terminal.create', {
+        worktree: await getRequiredWorktreeSelector(parsed.flags, 'worktree', cwd, client),
+        command: getOptionalStringFlag(parsed.flags, 'command')
+      })
+      return printResult(result, json, formatTerminalCreate)
+    }
+
+    if (matches(commandPath, ['terminal', 'split'])) {
+      const directionFlag = getOptionalStringFlag(parsed.flags, 'direction')
+      if (
+        directionFlag !== undefined &&
+        directionFlag !== 'horizontal' &&
+        directionFlag !== 'vertical'
+      ) {
+        throw new RuntimeClientError(
+          'invalid_argument',
+          '--direction must be horizontal or vertical'
+        )
+      }
+      const result = await client.call<{ split: RuntimeTerminalSplit }>('terminal.split', {
+        terminal: getRequiredStringFlag(parsed.flags, 'terminal'),
+        direction: directionFlag,
+        command: getOptionalStringFlag(parsed.flags, 'command')
+      })
+      return printResult(result, json, formatTerminalSplit)
     }
 
     if (matches(commandPath, ['worktree', 'ps'])) {
@@ -2019,6 +2070,14 @@ function formatTerminalSend(result: { send: RuntimeTerminalSend }): string {
   return `Sent ${result.send.bytesWritten} bytes to ${result.send.handle}.`
 }
 
+function formatTerminalCreate(result: { terminal: RuntimeTerminalCreate }): string {
+  return `Terminal tab created in worktree ${result.terminal.worktreeId}.\nRun 'orca terminal list' to get the handle.`
+}
+
+function formatTerminalSplit(result: { split: RuntimeTerminalSplit }): string {
+  return `Pane split in tab ${result.split.tabId} (pane ${result.split.paneRuntimeId}).`
+}
+
 function formatTerminalWait(result: { wait: RuntimeTerminalWait }): string {
   return [
     `handle: ${result.wait.handle}`,
@@ -2160,6 +2219,8 @@ Terminals:
   terminal send             Send input to a live terminal
   terminal wait             Wait for a terminal condition
   terminal stop             Stop terminals for a worktree
+  terminal create           Create a new terminal tab in a worktree
+  terminal split            Split an existing terminal pane
 
 Browser Automation:
   tab create                Create a new browser tab (navigates to --url)
@@ -2356,7 +2417,10 @@ function formatGroupHelp(group: string): string {
 function formatFlagHelp(flag: string): string {
   const helpByFlag: Record<string, string> = {
     'base-branch': '--base-branch <ref>    Base branch/ref to create the worktree from',
+    command: '--command <text>       Command to run in the terminal on startup',
     comment: '--comment <text>       Comment stored in Orca metadata',
+    direction:
+      '--direction <dir>      Split direction: horizontal or vertical (default: horizontal)',
     'display-name': '--display-name <name>  Override the Orca display name',
     enter: '--enter                Append Enter after sending text',
     force: '--force                Force worktree removal when supported',

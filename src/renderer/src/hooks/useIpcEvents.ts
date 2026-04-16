@@ -6,6 +6,8 @@ import {
   activateAndRevealWorktree,
   ensureWorktreeHasInitialTerminal
 } from '@/lib/worktree-activation'
+import { SPLIT_TERMINAL_PANE_EVENT } from '@/constants/terminal'
+import type { SplitTerminalPaneDetail } from '@/constants/terminal'
 import { getVisibleWorktreeIds } from '@/components/sidebar/visible-worktrees'
 import { nextEditorFontZoomLevel, computeEditorFontSize } from '@/lib/editor-font-zoom'
 import type { UpdateStatus } from '../../../shared/types'
@@ -152,6 +154,24 @@ export function useIpcEvents(): void {
         })().catch((error) => {
           console.error('Failed to activate CLI-created worktree:', error)
         })
+      })
+    )
+
+    unsubs.push(
+      window.api.ui.onCreateTerminal(({ worktreeId, command }) => {
+        const store = useAppStore.getState()
+        const tab = store.createTab(worktreeId)
+        store.setActiveTab(tab.id)
+        if (command) {
+          store.queueTabStartupCommand(tab.id, { command })
+        }
+      })
+    )
+
+    unsubs.push(
+      window.api.ui.onSplitTerminal(({ tabId, paneRuntimeId, direction, command }) => {
+        const detail: SplitTerminalPaneDetail = { tabId, paneRuntimeId, direction, command }
+        window.dispatchEvent(new CustomEvent(SPLIT_TERMINAL_PANE_EVENT, { detail }))
       })
     )
 

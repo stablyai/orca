@@ -13,6 +13,8 @@ import type {
   RuntimeRepoSearchRefs,
   RuntimeTerminalRead,
   RuntimeTerminalSend,
+  RuntimeTerminalCreate,
+  RuntimeTerminalSplit,
   RuntimeTerminalListResult,
   RuntimeTerminalState,
   RuntimeStatus,
@@ -131,6 +133,12 @@ type RuntimeNotifier = {
   worktreesChanged(repoId: string): void
   reposChanged(): void
   activateWorktree(repoId: string, worktreeId: string, setup?: CreateWorktreeResult['setup']): void
+  createTerminal(worktreeId: string, opts: { command?: string }): void
+  splitTerminal(
+    tabId: string,
+    paneRuntimeId: number,
+    opts: { direction: 'horizontal' | 'vertical'; command?: string }
+  ): void
 }
 
 type TerminalHandleRecord = {
@@ -829,6 +837,29 @@ export class OrcaRuntimeService {
     this.invalidateResolvedWorktreeCache()
     invalidateAuthorizedRootsCache()
     this.notifier?.worktreesChanged(repo.id)
+  }
+
+  async createTerminal(
+    worktreeSelector: string,
+    opts: { command?: string } = {}
+  ): Promise<RuntimeTerminalCreate> {
+    this.assertGraphReady()
+    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+    this.notifier?.createTerminal(worktree.id, opts)
+    return { worktreeId: worktree.id }
+  }
+
+  async splitTerminal(
+    handle: string,
+    opts: { direction?: 'horizontal' | 'vertical'; command?: string } = {}
+  ): Promise<RuntimeTerminalSplit> {
+    const { leaf } = this.getLiveLeafForHandle(handle)
+    const direction = opts.direction ?? 'horizontal'
+    this.notifier?.splitTerminal(leaf.tabId, leaf.paneRuntimeId, {
+      direction,
+      command: opts.command
+    })
+    return { tabId: leaf.tabId, paneRuntimeId: leaf.paneRuntimeId }
   }
 
   async stopTerminalsForWorktree(worktreeSelector: string): Promise<{ stopped: number }> {

@@ -640,6 +640,17 @@ export type PreloadApi = {
     onActivateWorktree: (
       callback: (data: { repoId: string; worktreeId: string; setup?: WorktreeSetupLaunch }) => void
     ) => () => void
+    onCreateTerminal: (
+      callback: (data: { worktreeId: string; command?: string }) => void
+    ) => () => void
+    onSplitTerminal: (
+      callback: (data: {
+        tabId: string
+        paneRuntimeId: number
+        direction: 'horizontal' | 'vertical'
+        command?: string
+      }) => void
+    ) => () => void
     onTerminalZoom: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void
     readClipboardText: () => Promise<string>
     saveClipboardImageAsTempFile: () => Promise<string | null>

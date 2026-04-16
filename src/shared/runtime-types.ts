@@ -98,6 +98,15 @@ export type RuntimeTerminalSend = {
   bytesWritten: number
 }
 
+export type RuntimeTerminalCreate = {
+  worktreeId: string
+}
+
+export type RuntimeTerminalSplit = {
+  tabId: string
+  paneRuntimeId: number
+}
+
 export type RuntimeTerminalWaitCondition = 'exit'
 
 export type RuntimeTerminalWait = {

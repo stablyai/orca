@@ -144,6 +144,21 @@ function registerRuntimeWindowLifecycle(
       if (!mainWindow.isDestroyed()) {
         mainWindow.webContents.send('ui:activateWorktree', { repoId, worktreeId, setup })
       }
+    },
+    createTerminal: (worktreeId, opts) => {
+      if (!mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('ui:createTerminal', { worktreeId, command: opts.command })
+      }
+    },
+    splitTerminal: (tabId, paneRuntimeId, opts) => {
+      if (!mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('ui:splitTerminal', {
+          tabId,
+          paneRuntimeId,
+          direction: opts.direction,
+          command: opts.command
+        })
+      }
     }
   })
   // Why: the runtime must fail closed while the renderer graph is being torn

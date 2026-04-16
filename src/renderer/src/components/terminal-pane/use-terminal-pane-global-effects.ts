@@ -1,8 +1,10 @@
 import { useEffect, useRef } from 'react'
 import {
   FOCUS_TERMINAL_PANE_EVENT,
+  SPLIT_TERMINAL_PANE_EVENT,
   TOGGLE_TERMINAL_PANE_EXPAND_EVENT,
-  type FocusTerminalPaneDetail
+  type FocusTerminalPaneDetail,
+  type SplitTerminalPaneDetail
 } from '@/constants/terminal'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { shellEscapePath } from './pane-helpers'
@@ -229,6 +231,25 @@ export function useTerminalPaneGlobalEffects({
     }
     window.addEventListener(FOCUS_TERMINAL_PANE_EVENT, onFocusPane)
     return () => window.removeEventListener(FOCUS_TERMINAL_PANE_EVENT, onFocusPane)
+  }, [tabId, managerRef])
+
+  useEffect(() => {
+    function onSplitPane(event: Event): void {
+      const detail = (event as CustomEvent<SplitTerminalPaneDetail>).detail
+      if (!detail?.tabId || detail.tabId !== tabId) {
+        return
+      }
+      const manager = managerRef.current
+      if (!manager) {
+        return
+      }
+      const newPane = manager.splitPane(detail.paneRuntimeId, detail.direction)
+      if (newPane && detail.command) {
+        newPane.terminal.paste(`${detail.command}\r`)
+      }
+    }
+    window.addEventListener(SPLIT_TERMINAL_PANE_EVENT, onSplitPane)
+    return () => window.removeEventListener(SPLIT_TERMINAL_PANE_EVENT, onSplitPane)
   }, [tabId, managerRef])
 
   useEffect(() => {

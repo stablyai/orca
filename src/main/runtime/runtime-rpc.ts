@@ -677,6 +677,59 @@ export class OrcaRuntimeRpcServer {
       }
     }
 
+    if (request.method === 'terminal.create') {
+      try {
+        const params =
+          request.params && typeof request.params === 'object' && request.params !== null
+            ? (request.params as { worktree?: unknown; command?: unknown })
+            : null
+        const worktreeSelector = params?.worktree
+        if (typeof worktreeSelector !== 'string' || worktreeSelector.length === 0) {
+          return this.errorResponse(request.id, 'invalid_argument', 'Missing worktree selector')
+        }
+        const result = await this.runtime.createTerminal(worktreeSelector, {
+          command: typeof params?.command === 'string' ? params.command : undefined
+        })
+        return {
+          id: request.id,
+          ok: true,
+          result: { terminal: result },
+          _meta: { runtimeId: this.runtime.getRuntimeId() }
+        }
+      } catch (error) {
+        return this.runtimeErrorResponse(request.id, error)
+      }
+    }
+
+    if (request.method === 'terminal.split') {
+      try {
+        const params =
+          request.params && typeof request.params === 'object' && request.params !== null
+            ? (request.params as { terminal?: unknown; direction?: unknown; command?: unknown })
+            : null
+        const terminalHandle = params?.terminal
+        if (typeof terminalHandle !== 'string' || terminalHandle.length === 0) {
+          return this.errorResponse(request.id, 'invalid_argument', 'Missing terminal handle')
+        }
+        const direction =
+          params?.direction === 'vertical' || params?.direction === 'horizontal'
+            ? params.direction
+            : undefined
+        const result = await this.runtime.splitTerminal(terminalHandle, {
+          direction,
+          command: typeof params?.command === 'string' ? params.command : undefined
+        })
+        return {
+          id: request.id,
+          ok: true,
+          result: { split: result },
+          _meta: { runtimeId: this.runtime.getRuntimeId() }
+        }
+      } catch (error) {
+        return this.runtimeErrorResponse(request.id, error)
+      }
+    }
+
     if (request.method === 'terminal.stop') {
       try {
         const params =
