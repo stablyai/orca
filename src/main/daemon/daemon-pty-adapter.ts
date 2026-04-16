@@ -269,11 +269,13 @@ export class DaemonPtyAdapter implements IPtyProvider {
   async listProcesses(): Promise<{ id: string; cwd: string; title: string }[]> {
     await this.ensureConnected()
     const result = await this.client.request<ListSessionsResult>('listSessions', undefined)
-    return result.sessions.map((s) => ({
-      id: s.sessionId,
-      cwd: s.cwd ?? '',
-      title: 'shell'
-    }))
+    return result.sessions
+      .filter((s) => s.isAlive)
+      .map((s) => ({
+        id: s.sessionId,
+        cwd: s.cwd ?? '',
+        title: 'shell'
+      }))
   }
 
   async getDefaultShell(): Promise<string> {

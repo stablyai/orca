@@ -132,6 +132,7 @@ export function registerPtyHandlers(
   // (e.g. when macOS re-activates the app and creates a new window).
   ipcMain.removeHandler('pty:spawn')
   ipcMain.removeHandler('pty:kill')
+  ipcMain.removeHandler('pty:listSessions')
   ipcMain.removeHandler('pty:hasChildProcesses')
   ipcMain.removeHandler('pty:getForegroundProcess')
   ipcMain.removeAllListeners('pty:write')
@@ -339,14 +340,24 @@ export function registerPtyHandlers(
 
   ipcMain.handle('pty:kill', async (_event, args: { id: string }) => {
     // Why: try/finally ensures ptyOwnership is cleaned up even if shutdown
-    // throws (e.g. SSH connection already gone). Without this, the stale
-    // entry routes future lookups to a dead provider.
+    // throws (e.g. SSH connection already gone or daemon session already
+    // reaped). Swallowing the error prevents noisy renderer-side rejections
+    // when killing orphaned sessions that the daemon has already discarded.
     try {
       await getProviderForPty(args.id).shutdown(args.id, true)
+    } catch {
+      /* session already dead — cleanup below handles the rest */
     } finally {
       ptyOwnership.delete(args.id)
     }
   })
+
+  ipcMain.handle(
+    'pty:listSessions',
+    async (): Promise<{ id: string; cwd: string; title: string }[]> => {
+      return localProvider.listProcesses()
+    }
+  )
 
   ipcMain.handle(
     'pty:hasChildProcesses',

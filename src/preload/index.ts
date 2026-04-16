@@ -283,6 +283,9 @@ const api = {
 
     kill: (id: string): Promise<void> => ipcRenderer.invoke('pty:kill', { id }),
 
+    listSessions: (): Promise<{ id: string; cwd: string; title: string }[]> =>
+      ipcRenderer.invoke('pty:listSessions'),
+
     /** Check if a PTY's shell has child processes (e.g. a running command).
      *  Returns false for an idle shell prompt. */
     hasChildProcesses: (id: string): Promise<boolean> =>

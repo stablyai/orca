@@ -24,6 +24,7 @@ import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rat
 import { ProviderIcon, ProviderPanel } from './tooltip'
 import { markLiveCodexSessionsForRestart } from '@/lib/codex-session-restart'
 import { SshStatusSegment } from './SshStatusSegment'
+import { SessionsStatusSegment } from './SessionsStatusSegment'
 
 function getCodexAccountLabel(
   state: CodexRateLimitAccountsState,
@@ -453,6 +454,7 @@ function StatusBarInner(): React.JSX.Element | null {
   const showClaude = claude && statusBarItems.includes('claude')
   const showCodex = codex && statusBarItems.includes('codex')
   const showSsh = statusBarItems.includes('ssh')
+  const showSessions = statusBarItems.includes('sessions')
   const anyVisible = showClaude || showCodex
   const anyFetching = claude?.status === 'fetching' || codex?.status === 'fetching'
 
@@ -500,7 +502,10 @@ function StatusBarInner(): React.JSX.Element | null {
 
           <div className="flex-1" />
 
-          {showSsh && <SshStatusSegment compact={compact} iconOnly={iconOnly} />}
+          <div className="flex items-center gap-3">
+            {showSessions && <SessionsStatusSegment compact={compact} iconOnly={iconOnly} />}
+            {showSsh && <SshStatusSegment compact={compact} iconOnly={iconOnly} />}
+          </div>
         </div>
       </ContextMenuTrigger>
 
@@ -522,6 +527,12 @@ function StatusBarInner(): React.JSX.Element | null {
           onCheckedChange={() => toggleStatusBarItem('ssh')}
         >
           SSH Status
+        </ContextMenuCheckboxItem>
+        <ContextMenuCheckboxItem
+          checked={statusBarItems.includes('sessions')}
+          onCheckedChange={() => toggleStatusBarItem('sessions')}
+        >
+          Terminal Sessions
         </ContextMenuCheckboxItem>
       </ContextMenuContent>
     </ContextMenu>
