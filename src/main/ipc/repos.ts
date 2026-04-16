@@ -49,7 +49,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     return store.getRepos()
   })
 
-  ipcMain.handle('repos:add', async (_event, args: { path: string; kind?: 'git' | 'folder' }) => {
+  ipcMain.handle('repos:add', async (_event, args: { path: string; kind?: 'git' | 'folder' }): Promise<{ repo: Repo } | { error: string }> => {
     const repoKind = args.kind === 'folder' ? 'folder' : 'git'
     if (repoKind === 'git' && !isGitRepo(args.path)) {
       return { error: `Not a valid git repository: ${args.path}` }

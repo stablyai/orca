@@ -38,8 +38,10 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
             useAppStore.setState({ repos: [...state.repos, repo] })
           }
           await state.fetchWorktrees(repo.id)
-        } catch {
-          // Best-effort — the toast from the store handles errors
+        } catch (err) {
+          // This code path calls addRemote directly (not through the store),
+          // so the store's toast handling does not apply — log for diagnostics.
+          console.error('Failed to add remote folder:', err)
         }
       })()
     } else if (folderPath) {
