@@ -183,50 +183,53 @@ export function useTabDragSplit({
     setHoveredDropTarget(null)
   }, [])
 
-  const updateHoveredPane = useCallback((event: DragMoveEvent | DragOverEvent) => {
-    const overData = event.over?.data.current
-    if (!event.over || !isPaneDropData(overData)) {
-      // Why: using functional updater to avoid a new null reference when
-      // the state is already null — prevents unnecessary re-renders during
-      // high-frequency onDragMove events.
-      setHoveredDropTarget((prev) => (prev === null ? prev : null))
-      return
-    }
-
-    const activeData = event.active.data.current
-    if (
-      !isTabDragData(activeData) ||
-      !canDropTabIntoPaneBody({
-        activeDrag: activeData,
-        groupsByWorktree: useAppStore.getState().groupsByWorktree,
-        overGroupId: overData.groupId,
-        worktreeId
-      })
-    ) {
-      setHoveredDropTarget((prev) => (prev === null ? prev : null))
-      return
-    }
-
-    const center = getDragCenter(event)
-    if (!center) {
-      setHoveredDropTarget((prev) => (prev === null ? prev : null))
-      return
-    }
-
-    // Why: onDragMove fires at pointer-move frequency (~60 fps). Creating
-    // a new { groupId, zone } object every time would trigger a state
-    // update and full re-render of the SplitNode tree on every frame even
-    // when nothing meaningful changed. The functional updater lets us
-    // compare against the previous value and return the same reference
-    // when groupId and zone are unchanged.
-    setHoveredDropTarget((prev) => {
-      const zone = resolveDropZone(event.over!.rect, center)
-      if (prev?.groupId === overData.groupId && prev?.zone === zone) {
-        return prev
+  const updateHoveredPane = useCallback(
+    (event: DragMoveEvent | DragOverEvent) => {
+      const overData = event.over?.data.current
+      if (!event.over || !isPaneDropData(overData)) {
+        // Why: using functional updater to avoid a new null reference when
+        // the state is already null — prevents unnecessary re-renders during
+        // high-frequency onDragMove events.
+        setHoveredDropTarget((prev) => (prev === null ? prev : null))
+        return
       }
-      return { groupId: overData.groupId, zone }
-    })
-  }, [])
+
+      const activeData = event.active.data.current
+      if (
+        !isTabDragData(activeData) ||
+        !canDropTabIntoPaneBody({
+          activeDrag: activeData,
+          groupsByWorktree: useAppStore.getState().groupsByWorktree,
+          overGroupId: overData.groupId,
+          worktreeId
+        })
+      ) {
+        setHoveredDropTarget((prev) => (prev === null ? prev : null))
+        return
+      }
+
+      const center = getDragCenter(event)
+      if (!center) {
+        setHoveredDropTarget((prev) => (prev === null ? prev : null))
+        return
+      }
+
+      // Why: onDragMove fires at pointer-move frequency (~60 fps). Creating
+      // a new { groupId, zone } object every time would trigger a state
+      // update and full re-render of the SplitNode tree on every frame even
+      // when nothing meaningful changed. The functional updater lets us
+      // compare against the previous value and return the same reference
+      // when groupId and zone are unchanged.
+      setHoveredDropTarget((prev) => {
+        const zone = resolveDropZone(event.over!.rect, center)
+        if (prev?.groupId === overData.groupId && prev?.zone === zone) {
+          return prev
+        }
+        return { groupId: overData.groupId, zone }
+      })
+    },
+    [worktreeId]
+  )
 
   const onDragStart = useCallback(
     (event: DragStartEvent) => {
@@ -316,10 +319,18 @@ export function useTabDragSplit({
         const center = getDragCenter(event)
         if (center) {
           const zone = resolveDropZone(event.over.rect, center)
-          dropUnifiedTab(activeData.unifiedTabId, {
-            groupId: overData.groupId,
-            splitDirection: zone === 'center' ? undefined : zone
-          })
+          // Why: a center drop onto the tab's own pane body is a no-op in the
+          // store (non-split same-group drops are ignored), but
+          // canDropTabIntoPaneBody still allows it when the source group has
+          // >1 tab — so the overlay advertises "center" as a valid target.
+          // Skip the call in that case to avoid misleading the user via a
+          // drop that silently does nothing.
+          if (zone !== 'center' || activeData.groupId !== overData.groupId) {
+            dropUnifiedTab(activeData.unifiedTabId, {
+              groupId: overData.groupId,
+              splitDirection: zone === 'center' ? undefined : zone
+            })
+          }
         }
       }
 

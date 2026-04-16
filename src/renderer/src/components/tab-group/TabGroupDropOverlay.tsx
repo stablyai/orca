@@ -17,5 +17,7 @@ function getOverlayStyle(zone: TabDropZone): CSSProperties {
 }
 
 export default function TabGroupDropOverlay({ zone }: { zone: TabDropZone }): React.JSX.Element {
-  return <div className="tab-drop-overlay absolute" style={getOverlayStyle(zone)} />
+  return (
+    <div aria-hidden="true" className="tab-drop-overlay absolute" style={getOverlayStyle(zone)} />
+  )
 }

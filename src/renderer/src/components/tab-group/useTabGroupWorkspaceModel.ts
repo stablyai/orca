@@ -68,7 +68,6 @@ export function useTabGroupWorkspaceModel({
   const closeUnifiedTab = useAppStore((state) => state.closeUnifiedTab)
   const closeOtherTabs = useAppStore((state) => state.closeOtherTabs)
   const closeTabsToRight = useAppStore((state) => state.closeTabsToRight)
-  const reorderUnifiedTabs = useAppStore((state) => state.reorderUnifiedTabs)
   const createEmptySplitGroup = useAppStore((state) => state.createEmptySplitGroup)
   const closeEmptyGroup = useAppStore((state) => state.closeEmptyGroup)
   const createTab = useAppStore((state) => state.createTab)
@@ -379,28 +378,6 @@ export function useTabGroupWorkspaceModel({
     }
   }, [closeItem, groupTabs])
 
-  const reorderTabBar = useCallback(
-    (order: string[]) => {
-      if (!group) {
-        return
-      }
-      const itemOrder = order
-        .map(
-          (visibleId) =>
-            groupTabs.find((item) =>
-              item.contentType === 'terminal' || item.contentType === 'browser'
-                ? item.entityId === visibleId
-                : item.id === visibleId
-            )?.id
-        )
-        .filter((value): value is string => Boolean(value))
-      const orderedIds = new Set(itemOrder)
-      const remainingIds = group.tabOrder.filter((itemId) => !orderedIds.has(itemId))
-      reorderUnifiedTabs(groupId, itemOrder.concat(remainingIds))
-    },
-    [group, groupId, groupTabs, reorderUnifiedTabs]
-  )
-
   const tabBarOrder = useMemo(
     () =>
       (group?.tabOrder ?? []).map((itemId) => {
@@ -467,7 +444,6 @@ export function useTabGroupWorkspaceModel({
         setActiveTabType('terminal')
       },
       pinFile,
-      reorderTabBar,
       setTabColor,
       setTabCustomTitle
     }
