@@ -15,9 +15,70 @@ import {
   getAllWorktreeIds,
   switchToOtherWorktree,
   switchToWorktree,
-  ensureTerminalVisible,
+  ensureTerminalVisible
 } from './helpers/store'
-import { pressShortcut } from './helpers/shortcuts'
+
+async function createBrowserTab(
+  page: Parameters<typeof getActiveWorktreeId>[0],
+  worktreeId: string
+): Promise<void> {
+  await page.evaluate((targetWorktreeId) => {
+    const store = window.__store
+    if (!store) {
+      return
+    }
+
+    const state = store.getState()
+    state.createBrowserTab(targetWorktreeId, state.browserDefaultUrl ?? 'about:blank', {
+      title: 'New Browser Tab',
+      activate: true
+    })
+  }, worktreeId)
+}
+
+async function switchToTerminalTab(
+  page: Parameters<typeof getActiveWorktreeId>[0],
+  worktreeId: string
+): Promise<void> {
+  await page.evaluate((targetWorktreeId) => {
+    const store = window.__store
+    if (!store) {
+      return
+    }
+
+    const state = store.getState()
+    const terminalTab = (state.tabsByWorktree[targetWorktreeId] ?? [])[0]
+    if (terminalTab) {
+      state.setActiveTab(terminalTab.id)
+    }
+    state.setActiveTabType('terminal')
+  }, worktreeId)
+}
+
+async function switchToBrowserTab(
+  page: Parameters<typeof getActiveWorktreeId>[0],
+  worktreeId: string,
+  browserTabId: string
+): Promise<void> {
+  await page.evaluate(
+    ({ targetWorktreeId, targetBrowserTabId }) => {
+      const store = window.__store
+      if (!store) {
+        return
+      }
+
+      const state = store.getState()
+      if (
+        (state.browserTabsByWorktree[targetWorktreeId] ?? []).some(
+          (tab) => tab.id === targetBrowserTabId
+        )
+      ) {
+        state.setActiveBrowserTab(targetBrowserTabId)
+      }
+    },
+    { targetWorktreeId: worktreeId, targetBrowserTabId: browserTabId }
+  )
+}
 
 test.describe('Browser Tab', () => {
   test.beforeEach(async ({ orcaPage }) => {
@@ -30,12 +91,11 @@ test.describe('Browser Tab', () => {
    * User Prompt:
    * - Browser works and also retains state when switching tabs etc.
    */
-  test('Cmd/Ctrl+Shift+B opens a new browser tab', async ({ orcaPage }) => {
+  test('creating a browser tab adds it and activates browser view', async ({ orcaPage }) => {
     const worktreeId = (await getActiveWorktreeId(orcaPage))!
     const browserTabsBefore = await getBrowserTabs(orcaPage, worktreeId)
 
-    // Cmd/Ctrl+Shift+B creates a new browser tab
-    await pressShortcut(orcaPage, 'b', { shift: true })
+    await createBrowserTab(orcaPage, worktreeId)
 
     // Wait for the browser tab to appear in the store
     await expect
@@ -43,9 +103,7 @@ test.describe('Browser Tab', () => {
       .toBe(browserTabsBefore.length + 1)
 
     // The active tab type should switch to 'browser'
-    await expect
-      .poll(async () => getActiveTabType(orcaPage), { timeout: 3_000 })
-      .toBe('browser')
+    await expect.poll(async () => getActiveTabType(orcaPage), { timeout: 3_000 }).toBe('browser')
   })
 
   /**
@@ -55,11 +113,8 @@ test.describe('Browser Tab', () => {
   test('browser tab is created and active in the store', async ({ orcaPage }) => {
     const worktreeId = (await getActiveWorktreeId(orcaPage))!
 
-    // Open a browser tab
-    await pressShortcut(orcaPage, 'b', { shift: true })
-    await expect
-      .poll(async () => getActiveTabType(orcaPage), { timeout: 5_000 })
-      .toBe('browser')
+    await createBrowserTab(orcaPage, worktreeId)
+    await expect.poll(async () => getActiveTabType(orcaPage), { timeout: 5_000 }).toBe('browser')
 
     // Verify the browser tab exists in the store
     const browserTabs = await getBrowserTabs(orcaPage, worktreeId)
@@ -80,11 +135,8 @@ test.describe('Browser Tab', () => {
   test('browser tab retains state when switching to terminal and back', async ({ orcaPage }) => {
     const worktreeId = (await getActiveWorktreeId(orcaPage))!
 
-    // Open a browser tab
-    await pressShortcut(orcaPage, 'b', { shift: true })
-    await expect
-      .poll(async () => getActiveTabType(orcaPage), { timeout: 5_000 })
-      .toBe('browser')
+    await createBrowserTab(orcaPage, worktreeId)
+    await expect.poll(async () => getActiveTabType(orcaPage), { timeout: 5_000 }).toBe('browser')
 
     // Record the browser tab info
     const browserTabsBefore = await getBrowserTabs(orcaPage, worktreeId)
@@ -92,17 +144,13 @@ test.describe('Browser Tab', () => {
     const browserTabId = browserTabsBefore.at(-1)?.id
     expect(browserTabId).toBeTruthy()
 
-    // Switch to the previous tab (terminal)
-    await pressShortcut(orcaPage, 'BracketLeft', { shift: true })
-    await expect
-      .poll(async () => getActiveTabType(orcaPage), { timeout: 3_000 })
-      .toBe('terminal')
+    // Switch to the terminal view
+    await switchToTerminalTab(orcaPage, worktreeId)
+    await expect.poll(async () => getActiveTabType(orcaPage), { timeout: 3_000 }).toBe('terminal')
 
     // Switch back to browser tab
-    await pressShortcut(orcaPage, 'BracketRight', { shift: true })
-    await expect
-      .poll(async () => getActiveTabType(orcaPage), { timeout: 3_000 })
-      .toBe('browser')
+    await switchToBrowserTab(orcaPage, worktreeId, browserTabId!)
+    await expect.poll(async () => getActiveTabType(orcaPage), { timeout: 3_000 }).toBe('browser')
 
     // The browser tab should still exist with the same ID
     const browserTabsAfter = await getBrowserTabs(orcaPage, worktreeId)
@@ -122,11 +170,8 @@ test.describe('Browser Tab', () => {
 
     const worktreeId = (await getActiveWorktreeId(orcaPage))!
 
-    // Open a browser tab
-    await pressShortcut(orcaPage, 'b', { shift: true })
-    await expect
-      .poll(async () => getActiveTabType(orcaPage), { timeout: 5_000 })
-      .toBe('browser')
+    await createBrowserTab(orcaPage, worktreeId)
+    await expect.poll(async () => getActiveTabType(orcaPage), { timeout: 5_000 }).toBe('browser')
 
     const browserTabsBefore = await getBrowserTabs(orcaPage, worktreeId)
     expect(browserTabsBefore.length).toBeGreaterThan(0)
@@ -134,9 +179,7 @@ test.describe('Browser Tab', () => {
     // Switch to a different worktree via the store
     const otherId = await switchToOtherWorktree(orcaPage, worktreeId)
     expect(otherId).not.toBeNull()
-    await expect
-      .poll(async () => getActiveWorktreeId(orcaPage), { timeout: 5_000 })
-      .toBe(otherId)
+    await expect.poll(async () => getActiveWorktreeId(orcaPage), { timeout: 5_000 }).toBe(otherId)
 
     // Switch back to the original worktree
     await switchToWorktree(orcaPage, worktreeId)

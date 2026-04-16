@@ -20,7 +20,8 @@ import {
   type ElectronApplication,
   type TestInfo
 } from '@stablyai/playwright-test'
-import { mkdtempSync, readFileSync, rmSync } from 'fs'
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
+import { execSync } from 'child_process'
 import os from 'os'
 import path from 'path'
 import { TEST_REPO_PATH_FILE } from '../global-setup'
@@ -40,6 +41,58 @@ function shouldLaunchHeadful(testInfo: TestInfo): boolean {
   return testInfo.project.metadata.orcaHeadful === true
 }
 
+function isValidGitRepo(repoPath: string): boolean {
+  if (!repoPath || !existsSync(repoPath)) {
+    return false
+  }
+
+  try {
+    return (
+      execSync('git rev-parse --is-inside-work-tree', {
+        cwd: repoPath,
+        stdio: 'pipe',
+        encoding: 'utf8'
+      }).trim() === 'true'
+    )
+  } catch {
+    return false
+  }
+}
+
+function createSeededTestRepo(): string {
+  const testRepoDir = path.join(os.tmpdir(), `orca-e2e-repo-${Date.now()}`)
+  mkdirSync(testRepoDir, { recursive: true })
+
+  execSync('git init', { cwd: testRepoDir, stdio: 'pipe' })
+  execSync('git config user.email "e2e@test.local"', { cwd: testRepoDir, stdio: 'pipe' })
+  execSync('git config user.name "E2E Test"', { cwd: testRepoDir, stdio: 'pipe' })
+
+  writeFileSync(
+    path.join(testRepoDir, 'README.md'),
+    '# Orca E2E Test Repo\n\nThis repo was created automatically for Playwright tests.\n'
+  )
+  writeFileSync(path.join(testRepoDir, 'CLAUDE.md'), '# CLAUDE.md\n\nTest instructions for E2E.\n')
+  writeFileSync(
+    path.join(testRepoDir, 'package.json'),
+    `${JSON.stringify({ name: 'orca-e2e-test', version: '0.0.0', private: true }, null, 2)}\n`
+  )
+  writeFileSync(path.join(testRepoDir, '.gitignore'), 'node_modules/\n')
+  mkdirSync(path.join(testRepoDir, 'src'), { recursive: true })
+  writeFileSync(path.join(testRepoDir, 'src', 'index.ts'), 'export const hello = "world"\n')
+
+  execSync('git add -A', { cwd: testRepoDir, stdio: 'pipe' })
+  execSync('git commit -m "Initial commit for E2E tests"', { cwd: testRepoDir, stdio: 'pipe' })
+
+  const worktreeDir = path.join(testRepoDir, '..', `orca-e2e-worktree-${Date.now()}`)
+  execSync(`git worktree add "${worktreeDir}" -b e2e-secondary`, {
+    cwd: testRepoDir,
+    stdio: 'pipe'
+  })
+
+  writeFileSync(TEST_REPO_PATH_FILE, testRepoDir)
+  return testRepoDir
+}
+
 /**
  * Extended Playwright test with Orca-specific fixtures.
  *
@@ -51,10 +104,18 @@ function shouldLaunchHeadful(testInfo: TestInfo): boolean {
 export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
   // Worker-scoped: read the test repo path once
   // oxlint-disable-next-line no-empty-pattern -- Playwright fixture callbacks require object destructuring here.
-  testRepoPath: [async ({}, provideFixture) => {
-    const repoPath = readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
-    await provideFixture(repoPath)
-  }, { scope: 'worker' }],
+  testRepoPath: [
+    async ({}, provideFixture) => {
+      const persistedRepoPath = existsSync(TEST_REPO_PATH_FILE)
+        ? readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
+        : ''
+      const repoPath = isValidGitRepo(persistedRepoPath)
+        ? persistedRepoPath
+        : createSeededTestRepo()
+      await provideFixture(repoPath)
+    },
+    { scope: 'worker' }
+  ],
 
   // Test-scoped: one Electron app per test
   // oxlint-disable-next-line no-empty-pattern -- Playwright fixture callbacks require object destructuring here.
@@ -77,11 +138,31 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
         ...process.env,
         NODE_ENV: 'development',
         ORCA_E2E_USER_DATA_DIR: userDataDir,
-        ...(headful ? { ORCA_E2E_HEADFUL: '1' } : { ORCA_E2E_HEADLESS: '1' }),
-      },
+        ...(headful ? { ORCA_E2E_HEADFUL: '1' } : { ORCA_E2E_HEADLESS: '1' })
+      }
     })
     await provideFixture(app)
-    await app.close()
+    // Why: Electron's graceful shutdown runs before-quit/will-quit handlers,
+    // cleans up PTY child processes, and flushes session state to disk. Give
+    // it 10s for a clean exit, then SIGKILL the process tree immediately.
+    // SIGTERM doesn't reliably stop the Electron process tree on macOS.
+    const appProcess = app.process()
+    try {
+      await Promise.race([
+        app.close(),
+        new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('Timed out closing Electron app')), 10_000)
+        })
+      ])
+    } catch {
+      if (appProcess) {
+        try {
+          appProcess.kill('SIGKILL')
+        } catch {
+          /* already dead */
+        }
+      }
+    }
     rmSync(userDataDir, { recursive: true, force: true })
   },
 
@@ -95,11 +176,9 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
     await page.waitForLoadState('domcontentloaded')
 
     // Wait for the store to be available
-    await page.waitForFunction(
-      () => Boolean(window.__store),
-      null,
-      { timeout: 30_000 }
-    )
+    await page.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
+
+    const repoPath = isValidGitRepo(testRepoPath) ? testRepoPath : createSeededTestRepo()
 
     // Add the test repo via the IPC bridge
     // Why: calling window.api.repos.add() goes through the same code path as
@@ -107,7 +186,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
     // initializes properly.
     await page.evaluate(async (repoPath) => {
       await window.api.repos.add({ path: repoPath })
-    }, testRepoPath)
+    }, repoPath)
 
     // Fetch repos in the renderer store so it picks up the new repo
     await page.evaluate(async () => {
@@ -160,7 +239,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       if (testWorktree) {
         state.setActiveWorktree(testWorktree.id)
       }
-    }, testRepoPath)
+    }, repoPath)
 
     // Best-effort seed of a baseline terminal tab when a fresh isolated
     // profile has none yet.
@@ -188,7 +267,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
   // Test-scoped: each test gets the shared page
   orcaPage: async ({ sharedPage }, provideFixture) => {
     await provideFixture(sharedPage)
-  },
+  }
 })
 
 export { expect } from '@stablyai/playwright-test'

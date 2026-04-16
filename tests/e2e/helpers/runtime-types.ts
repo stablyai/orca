@@ -16,6 +16,9 @@ export type AppStore = {
 export type PaneManagerLike = {
   getActivePane?(): ManagedPane | null
   getPanes?(): ManagedPane[]
+  splitPane?(paneId: number, direction: 'vertical' | 'horizontal'): ManagedPane | null
+  closePane?(paneId: number): void
+  setActivePane?(paneId: number, opts?: { focus?: boolean }): void
 }
 
 export type ExplorerFileSummary = Pick<OpenFile, 'id' | 'filePath' | 'relativePath'>

@@ -1,86 +1,98 @@
-/**
- * Terminal interaction helpers for Orca E2E tests.
- *
- * Why: xterm.js uses a canvas renderer that does NOT respond to CDP key events
- * or ClipboardEvent paste simulation. Terminal input must go through the PTY
- * write IPC bridge: window.api.pty.write(ptyId, data).
- *
- * Terminal content is read via the SerializeAddon (loaded by the PaneManager)
- * through window.__paneManagers, which is exposed when VITE_EXPOSE_STORE=true.
- */
-
 import type { Page } from '@stablyai/playwright-test'
 import { expect } from '@stablyai/playwright-test'
 
-/**
- * Read terminal content from the active pane's serialize addon.
- *
- * Why: xterm.js v6 doesn't render a .xterm-accessibility element unless the
- * @xterm/addon-accessibility addon is loaded (it isn't). Instead, we read the
- * buffer through the SerializeAddon that the PaneManager already loads for
- * every terminal pane. window.__paneManagers is exposed via VITE_EXPOSE_STORE.
- */
-export async function getTerminalContent(page: Page, charLimit = 4000): Promise<string> {
-  return page.evaluate((charLimit) => {
+// Why: worktree restoration can render the terminal surface before the legacy
+// global activeTabId settles. Prefer the active worktree's saved terminal tab
+// pointer, then fall back to the first terminal tab.
+async function resolveActiveTabId(page: Page): Promise<string | null> {
+  return page.evaluate(() => {
     const store = window.__store
-    const paneManagers = window.__paneManagers
-    if (!store || !paneManagers) {
-      return ''
+    if (!store) {
+      return null
     }
-
-    const activeTabId = store.getState().activeTabId
-    if (!activeTabId) {
-      return ''
+    const state = store.getState()
+    const wId = state.activeWorktreeId
+    if (!wId) {
+      return null
     }
-
-    const manager = paneManagers.get(activeTabId)
-    if (!manager) {
-      return ''
+    const tabs = state.tabsByWorktree[wId] ?? []
+    if (tabs.length === 0) {
+      return null
     }
+    const pref =
+      state.activeTabType === 'terminal'
+        ? state.activeTabId
+        : (state.activeTabIdByWorktree?.[wId] ?? null)
+    if (pref && tabs.some((t) => t.id === pref)) {
+      return pref
+    }
+    return tabs[0]?.id ?? null
+  })
+}
 
-    const activePane = manager.getActivePane?.()
-    if (!activePane) {
-      // Fallback: try all panes
-      const panes = manager.getPanes?.() ?? []
-      if (panes.length === 0) {
+// Why: reads the buffer through the SerializeAddon that the PaneManager
+// already loads for every terminal pane (exposed via VITE_EXPOSE_STORE).
+export async function getTerminalContent(page: Page, charLimit = 4000): Promise<string> {
+  const tabId = await resolveActiveTabId(page)
+  if (!tabId) {
+    return ''
+  }
+  return page.evaluate(
+    ({ tabId, charLimit }) => {
+      const paneManagers = window.__paneManagers
+      if (!paneManagers) {
         return ''
       }
 
-      const text = panes[0].serializeAddon?.serialize?.() ?? ''
-      return text.slice(-charLimit)
-    }
+      const manager = paneManagers.get(tabId)
+      if (!manager) {
+        return ''
+      }
 
-    const text = activePane.serializeAddon?.serialize?.() ?? ''
-    return text.slice(-charLimit)
-  }, charLimit)
+      const activePane = manager.getActivePane?.()
+      if (!activePane) {
+        const panes = manager.getPanes?.() ?? []
+        if (panes.length === 0) {
+          return ''
+        }
+        const text = panes[0].serializeAddon?.serialize?.() ?? ''
+        return text.slice(-charLimit)
+      }
+
+      const text = activePane.serializeAddon?.serialize?.() ?? ''
+      return text.slice(-charLimit)
+    },
+    { tabId, charLimit }
+  )
 }
 
-/**
- * Discover the PTY ID of the currently visible/active terminal pane.
- *
- * Why: PTY IDs are opaque sequential integers. The mapping from visible
- * terminal -> PTY ID isn't exposed in the DOM. We get the active tab's
- * PTY IDs from the Zustand store, write a unique marker to each candidate,
- * then read back from the terminal buffer via SerializeAddon.
- */
+// Why: PTY IDs are opaque integers not exposed in the DOM. Probe each
+// candidate with a unique marker and read back via SerializeAddon.
 export async function discoverActivePtyId(page: Page): Promise<string> {
   const marker = `__PTY_PROBE_${Date.now()}__`
 
-  // Get candidate PTY IDs from the store
-  const candidateIds: string[] = await page.evaluate(() => {
-    const store = window.__store
-    if (!store) {
+  const readCandidateIds = async (): Promise<string[]> => {
+    const tabId = await resolveActiveTabId(page)
+    if (!tabId) {
       return []
     }
+    return page.evaluate((tabId) => {
+      const store = window.__store
+      if (!store) {
+        return []
+      }
+      return store.getState().ptyIdsByTabId[tabId] ?? []
+    }, tabId)
+  }
 
-    const state = store.getState()
-    const activeTabId = state.activeTabId
-    if (!activeTabId) {
-      return []
-    }
+  await expect
+    .poll(readCandidateIds, {
+      timeout: 15_000,
+      message: 'discoverActivePtyId: active tab never received PTY candidates'
+    })
+    .not.toEqual([])
 
-    return state.ptyIdsByTabId[activeTabId] ?? []
-  })
+  const candidateIds = await readCandidateIds()
 
   if (candidateIds.length === 0) {
     // Why: blind-probing arbitrary PTY IDs can write into unrelated shells and
@@ -88,7 +100,6 @@ export async function discoverActivePtyId(page: Page): Promise<string> {
     throw new Error('discoverActivePtyId: active tab has no PTY candidates in store')
   }
 
-  // Write the marker to each candidate PTY
   await page.evaluate(
     ({ marker, candidateIds }) => {
       for (const id of candidateIds) {
@@ -98,7 +109,6 @@ export async function discoverActivePtyId(page: Page): Promise<string> {
     { marker, candidateIds }
   )
 
-  // Wait for the marker to appear in the terminal buffer via SerializeAddon
   let foundPtyId: string | null = null
   await expect
     .poll(
@@ -123,7 +133,6 @@ export async function discoverActivePtyId(page: Page): Promise<string> {
   return foundPtyId
 }
 
-/** Send raw text to a specific PTY. Use \r for Enter, \x03 for Ctrl+C. */
 export async function sendToTerminal(page: Page, ptyId: string, text: string): Promise<void> {
   await page.evaluate(
     ({ ptyId, text }) => {
@@ -133,37 +142,143 @@ export async function sendToTerminal(page: Page, ptyId: string, text: string): P
   )
 }
 
-/** Send a shell command and press Enter. */
 export async function execInTerminal(page: Page, ptyId: string, command: string): Promise<void> {
   await sendToTerminal(page, ptyId, `${command}\r`)
 }
 
-/**
- * Count the number of panes in the active terminal layout.
- *
- * Why: hidden-window E2E mode keeps DOM visibility signals false. The pane
- * manager tracks the authoritative active split layout independently of CSS.
- */
-export async function countVisibleTerminalPanes(page: Page): Promise<number> {
-  return page.evaluate(() => {
-    const store = window.__store
-    const paneManagers = window.__paneManagers
-    if (!store || !paneManagers) {
-      return 0
-    }
-    const activeTabId = store.getState().activeTabId
-    if (!activeTabId) {
-      return 0
-    }
-    const manager = paneManagers.get(activeTabId)
-    return manager?.getPanes?.().length ?? 0
-  })
+export async function waitForActiveTerminalManager(page: Page, timeoutMs = 30_000): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        const tabId = await resolveActiveTabId(page)
+        if (!tabId) {
+          return false
+        }
+        return page.evaluate((tabId) => {
+          const paneManagers = window.__paneManagers
+          if (!paneManagers) {
+            return false
+          }
+          return (paneManagers.get(tabId)?.getPanes?.().length ?? 0) > 0
+        }, tabId)
+      },
+      {
+        timeout: timeoutMs,
+        message: 'Active terminal PaneManager did not finish mounting'
+      }
+    )
+    .toBe(true)
 }
 
-/**
- * Wait until terminal output contains the expected text.
- * Uses expect.poll for proper Playwright waiting behavior.
- */
+export async function splitActiveTerminalPane(
+  page: Page,
+  direction: 'vertical' | 'horizontal'
+): Promise<void> {
+  const tabId = await resolveActiveTabId(page)
+  if (!tabId) {
+    throw new Error('splitActiveTerminalPane: no active terminal tab')
+  }
+  await page.evaluate(
+    ({ tabId, direction }) => {
+      const paneManagers = window.__paneManagers
+      if (!paneManagers) {
+        throw new Error('splitActiveTerminalPane: terminal store/manager unavailable')
+      }
+
+      const manager = paneManagers.get(tabId)
+      const activePane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+      if (!manager?.splitPane || !activePane) {
+        throw new Error('splitActiveTerminalPane: active pane manager not ready')
+      }
+
+      // Why: Electron key delivery to the terminal pane layer is flaky in E2E
+      // even when the visible pane tree is mounted. Driving the active
+      // PaneManager directly still exercises the real split/layout/PTY path
+      // without depending on window-focus timing.
+      manager.splitPane(activePane.id, direction)
+    },
+    { tabId, direction }
+  )
+}
+
+export async function closeActiveTerminalPane(page: Page): Promise<void> {
+  const tabId = await resolveActiveTabId(page)
+  if (!tabId) {
+    throw new Error('closeActiveTerminalPane: no active terminal tab')
+  }
+  await page.evaluate((tabId) => {
+    const paneManagers = window.__paneManagers
+    if (!paneManagers) {
+      throw new Error('closeActiveTerminalPane: terminal store/manager unavailable')
+    }
+
+    const manager = paneManagers.get(tabId)
+    const panes = manager?.getPanes?.() ?? []
+    if (!manager?.closePane || panes.length < 2) {
+      return
+    }
+
+    const activePane = manager.getActivePane?.() ?? panes[0]
+    if (!activePane) {
+      return
+    }
+
+    manager.closePane(activePane.id)
+  }, tabId)
+}
+
+export async function focusLastTerminalPane(page: Page): Promise<void> {
+  const tabId = await resolveActiveTabId(page)
+  if (!tabId) {
+    throw new Error('focusLastTerminalPane: no active terminal tab')
+  }
+  await page.evaluate((tabId) => {
+    const paneManagers = window.__paneManagers
+    if (!paneManagers) {
+      throw new Error('focusLastTerminalPane: terminal store/manager unavailable')
+    }
+
+    const manager = paneManagers.get(tabId)
+    const panes = manager?.getPanes?.() ?? []
+    const lastPane = panes.at(-1) ?? null
+    if (!manager?.setActivePane || !lastPane) {
+      throw new Error('focusLastTerminalPane: active pane manager not ready')
+    }
+
+    manager.setActivePane(lastPane.id, { focus: true })
+  }, tabId)
+}
+
+// Why: hidden-window E2E mode keeps DOM visibility signals false. The pane
+// manager tracks the authoritative active split layout independently of CSS.
+export async function countVisibleTerminalPanes(page: Page): Promise<number> {
+  const tabId = await resolveActiveTabId(page)
+  if (!tabId) {
+    return 0
+  }
+  return page.evaluate((tabId) => {
+    const managerCount = window.__paneManagers?.get(tabId)?.getPanes?.().length ?? 0
+    if (managerCount > 0) {
+      return managerCount
+    }
+
+    const layout = window.__store?.getState().terminalLayoutsByTabId[tabId]
+    if (!layout) {
+      return 0
+    }
+
+    // Why: `root: null` means the default single-pane tab (no splits yet).
+    type N = { type: 'leaf' } | { type: 'split'; first: N | null; second: N | null } | null
+    const countLeaves = (node: N): number => {
+      if (!node || node.type === 'leaf') {
+        return 1
+      }
+      return countLeaves(node.first) + countLeaves(node.second)
+    }
+    return countLeaves(layout.root as N)
+  }, tabId)
+}
+
 export async function waitForTerminalOutput(
   page: Page,
   expected: string,
@@ -172,15 +287,11 @@ export async function waitForTerminalOutput(
   await expect
     .poll(async () => (await getTerminalContent(page)).includes(expected), {
       timeout: timeoutMs,
-      message: `Terminal did not contain "${expected}"`,
+      message: `Terminal did not contain "${expected}"`
     })
     .toBe(true)
 }
 
-/**
- * Wait until the visible terminal pane count reaches the expected value.
- * Uses expect.poll instead of arbitrary waitForTimeout.
- */
 export async function waitForPaneCount(
   page: Page,
   expectedCount: number,
@@ -189,7 +300,7 @@ export async function waitForPaneCount(
   await expect
     .poll(async () => countVisibleTerminalPanes(page), {
       timeout: timeoutMs,
-      message: `Expected ${expectedCount} visible terminal panes`,
+      message: `Expected ${expectedCount} visible terminal panes`
     })
     .toBe(expectedCount)
 }

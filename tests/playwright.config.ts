@@ -21,15 +21,17 @@ export default defineConfig({
   // healthy, so the per-test budget needs to cover startup plus assertions.
   timeout: 120_000,
   expect: { timeout: 10_000 },
-  /* Run tests serially to keep the Electron E2E suite predictable */
-  fullyParallel: false,
-  workers: 1,
+  // Why: the headless Electron specs launch isolated app instances and can
+  // safely fan out across workers, which cuts the default E2E runtime
+  // substantially. The few visible-window tests that still rely on real
+  // pointer interaction are marked serial in their spec file instead.
+  fullyParallel: true,
   retries: 0,
   reporter: 'list',
   use: {
     // Why: this suite intentionally runs with retries disabled so first-failure
     // traces are the only reliable debugging artifact we can collect in CI.
-    trace: 'retain-on-failure',
+    trace: 'retain-on-failure'
   },
   projects: [
     {
@@ -37,16 +39,16 @@ export default defineConfig({
       testMatch: '**/*.spec.ts',
       grepInvert: /@headful/,
       metadata: {
-        orcaHeadful: false,
-      },
+        orcaHeadful: false
+      }
     },
     {
       name: 'electron-headful',
       testMatch: '**/*.spec.ts',
       grep: /@headful/,
       metadata: {
-        orcaHeadful: true,
-      },
-    },
-  ],
+        orcaHeadful: true
+      }
+    }
+  ]
 })

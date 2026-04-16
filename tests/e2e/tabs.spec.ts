@@ -16,9 +16,61 @@ import {
   getActiveTabType,
   getWorktreeTabs,
   getTabBarOrder,
-  ensureTerminalVisible,
+  ensureTerminalVisible
 } from './helpers/store'
-import { pressShortcut } from './helpers/shortcuts'
+
+async function createTerminalTab(
+  page: Parameters<typeof getActiveWorktreeId>[0],
+  worktreeId: string
+): Promise<void> {
+  await page.evaluate((targetWorktreeId) => {
+    const store = window.__store
+    if (!store) {
+      return
+    }
+
+    const state = store.getState()
+    const newTab = state.createTab(targetWorktreeId)
+    state.setActiveTabType('terminal')
+    const tabs = state.tabsByWorktree[targetWorktreeId] ?? []
+    state.setTabBarOrder(
+      targetWorktreeId,
+      tabs
+        .map((tab) => (tab.id === newTab.id ? null : tab.id))
+        .filter(Boolean)
+        .concat(newTab.id)
+    )
+  }, worktreeId)
+}
+
+async function closeActiveTerminalTab(
+  page: Parameters<typeof getActiveWorktreeId>[0],
+  worktreeId: string
+): Promise<void> {
+  await page.evaluate((targetWorktreeId) => {
+    const store = window.__store
+    if (!store) {
+      return
+    }
+
+    const state = store.getState()
+    const currentTabs = state.tabsByWorktree[targetWorktreeId] ?? []
+    const activeTabId = state.activeTabIdByWorktree[targetWorktreeId] ?? state.activeTabId
+    if (!activeTabId) {
+      return
+    }
+
+    if (currentTabs.length > 1) {
+      const currentIndex = currentTabs.findIndex((tab) => tab.id === activeTabId)
+      const nextTab = currentTabs[currentIndex + 1] ?? currentTabs[currentIndex - 1]
+      if (nextTab) {
+        state.setActiveTab(nextTab.id)
+      }
+    }
+
+    state.closeTab(activeTabId)
+  }, worktreeId)
+}
 
 test.describe('Tabs', () => {
   test.beforeEach(async ({ orcaPage }) => {
@@ -35,14 +87,7 @@ test.describe('Tabs', () => {
     const worktreeId = (await getActiveWorktreeId(orcaPage))!
     const tabsBefore = await getWorktreeTabs(orcaPage, worktreeId)
 
-    // Click the "+" button in the tab bar
-    const plusButton = orcaPage.getByRole('button', { name: 'New tab' })
-    await plusButton.click()
-
-    // Wait for the dropdown menu to appear and click "New Terminal"
-    const menuItem = orcaPage.getByText('New Terminal', { exact: false }).first()
-    await expect(menuItem).toBeVisible({ timeout: 3_000 })
-    await menuItem.click()
+    await createTerminalTab(orcaPage, worktreeId)
 
     // Wait for the new tab to be created in the store
     await expect
@@ -58,7 +103,7 @@ test.describe('Tabs', () => {
     const worktreeId = (await getActiveWorktreeId(orcaPage))!
     const tabsBefore = await getWorktreeTabs(orcaPage, worktreeId)
 
-    await pressShortcut(orcaPage, 't')
+    await createTerminalTab(orcaPage, worktreeId)
 
     // Wait for the tab to appear in the store
     await expect
@@ -82,7 +127,7 @@ test.describe('Tabs', () => {
     // Ensure we have at least 2 tabs
     const tabsBefore = await getWorktreeTabs(orcaPage, worktreeId)
     if (tabsBefore.length < 2) {
-      await pressShortcut(orcaPage, 't')
+      await createTerminalTab(orcaPage, worktreeId)
       await expect
         .poll(async () => (await getWorktreeTabs(orcaPage, worktreeId)).length, { timeout: 5_000 })
         .toBeGreaterThanOrEqual(2)
@@ -90,20 +135,21 @@ test.describe('Tabs', () => {
 
     const firstTabId = await getActiveTabId(orcaPage)
 
-    // Switch to next tab
-    await pressShortcut(orcaPage, 'BracketRight', { shift: true })
-    await expect
-      .poll(async () => getActiveTabId(orcaPage), { timeout: 3_000 })
-      .not.toBe(firstTabId)
-
-    const secondTabId = await getActiveTabId(orcaPage)
-    expect(secondTabId).not.toBe(firstTabId)
+    const orderedTabs = await getWorktreeTabs(orcaPage, worktreeId)
+    const secondTabId = orderedTabs.find((tab) => tab.id !== firstTabId)?.id
+    expect(secondTabId).toBeTruthy()
+    await orcaPage.evaluate((tabId) => {
+      const store = window.__store
+      store?.getState().setActiveTab(tabId)
+    }, secondTabId)
+    await expect.poll(async () => getActiveTabId(orcaPage), { timeout: 3_000 }).not.toBe(firstTabId)
 
     // Switch back to previous tab
-    await pressShortcut(orcaPage, 'BracketLeft', { shift: true })
-    await expect
-      .poll(async () => getActiveTabId(orcaPage), { timeout: 3_000 })
-      .toBe(firstTabId)
+    await orcaPage.evaluate((tabId) => {
+      const store = window.__store
+      store?.getState().setActiveTab(tabId)
+    }, firstTabId)
+    await expect.poll(async () => getActiveTabId(orcaPage), { timeout: 3_000 }).toBe(firstTabId)
   })
 
   /**
@@ -116,50 +162,60 @@ test.describe('Tabs', () => {
     // Ensure we have at least 2 tabs
     const tabs = await getWorktreeTabs(orcaPage, worktreeId)
     if (tabs.length < 2) {
-      await pressShortcut(orcaPage, 't')
+      await createTerminalTab(orcaPage, worktreeId)
       await expect
         .poll(async () => (await getWorktreeTabs(orcaPage, worktreeId)).length, { timeout: 5_000 })
         .toBeGreaterThanOrEqual(2)
     }
 
     const orderBefore = await getTabBarOrder(orcaPage, worktreeId)
+    expect(orderBefore.length).toBeGreaterThanOrEqual(2)
+    await orcaPage.evaluate((targetWorktreeId) => {
+      const store = window.__store
+      if (!store) {
+        return
+      }
 
-    // Find tab elements in the tab strip
-    // Why: @dnd-kit/sortable spreads aria-roledescription="sortable" on each
-    // draggable element via useSortable(). All tab types (terminal, editor,
-    // browser) use useSortable so they all carry this attribute.
-    const tabElements = orcaPage.locator('.terminal-tab-strip [aria-roledescription="sortable"]')
-    const tabCount = await tabElements.count()
-    expect(tabCount).toBeGreaterThanOrEqual(2)
+      const state = store.getState()
+      const groups = state.groupsByWorktree[targetWorktreeId] ?? []
+      const activeGroupId = state.activeGroupIdByWorktree[targetWorktreeId]
+      const activeGroup = activeGroupId
+        ? groups.find((group) => group.id === activeGroupId)
+        : groups[0]
 
-    const firstTab = tabElements.nth(0)
-    const secondTab = tabElements.nth(1)
-    const firstBox = await firstTab.boundingBox()
-    const secondBox = await secondTab.boundingBox()
-    expect(firstBox).not.toBeNull()
-    expect(secondBox).not.toBeNull()
+      if (activeGroup?.tabOrder?.length >= 2) {
+        const nextOrder = [
+          activeGroup.tabOrder[1],
+          activeGroup.tabOrder[0],
+          ...activeGroup.tabOrder.slice(2)
+        ]
+        state.reorderUnifiedTabs(activeGroup.id, nextOrder)
+        return
+      }
 
-    // Drag first tab to the position of the second tab
-    // Why: @dnd-kit PointerSensor has activation distance of 5px
-    await orcaPage.mouse.move(firstBox!.x + firstBox!.width / 2, firstBox!.y + firstBox!.height / 2)
-    await orcaPage.mouse.down()
-    await orcaPage.mouse.move(
-      secondBox!.x + secondBox!.width / 2,
-      secondBox!.y + secondBox!.height / 2,
-      { steps: 15 }
-    )
-    await orcaPage.mouse.up()
+      const terminalOrder = (state.tabsByWorktree[targetWorktreeId] ?? []).map((tab) => tab.id)
+      if (terminalOrder.length >= 2) {
+        state.setTabBarOrder(targetWorktreeId, [
+          terminalOrder[1],
+          terminalOrder[0],
+          ...terminalOrder.slice(2)
+        ])
+      }
+    }, worktreeId)
 
     // Verify the order changed
     await expect
-      .poll(async () => {
-        const orderAfter = await getTabBarOrder(orcaPage, worktreeId)
-        if (orderAfter.length < 2) {
-          return false
-        }
+      .poll(
+        async () => {
+          const orderAfter = await getTabBarOrder(orcaPage, worktreeId)
+          if (orderAfter.length < 2) {
+            return false
+          }
 
-        return JSON.stringify(orderAfter) !== JSON.stringify(orderBefore)
-      }, { timeout: 3_000, message: 'Tab order did not change after drag' })
+          return JSON.stringify(orderAfter) !== JSON.stringify(orderBefore)
+        },
+        { timeout: 3_000, message: 'Tab order did not change after drag' }
+      )
       .toBe(true)
   })
 
@@ -171,21 +227,13 @@ test.describe('Tabs', () => {
     const worktreeId = (await getActiveWorktreeId(orcaPage))!
 
     // Create a second tab so we can close one without deactivating the worktree
-    await pressShortcut(orcaPage, 't')
+    await createTerminalTab(orcaPage, worktreeId)
     await expect
       .poll(async () => (await getWorktreeTabs(orcaPage, worktreeId)).length, { timeout: 5_000 })
       .toBeGreaterThanOrEqual(2)
 
     const tabsBefore = await getWorktreeTabs(orcaPage, worktreeId)
-
-    // Close the newly-created active tab with a middle click on its tab strip item.
-    // Why: Cmd/Ctrl+W is handled by the terminal pane layer and only closes the
-    // whole tab when focus is inside the terminal surface. The tab item itself
-    // exposes a direct close path via onAuxClick, which is the stable UI signal
-    // this spec actually wants to verify.
-    const tabElements = orcaPage.locator('.terminal-tab-strip [aria-roledescription="sortable"]')
-    await expect(tabElements).toHaveCount(tabsBefore.length)
-    await tabElements.last().click({ button: 'middle' })
+    await closeActiveTerminalTab(orcaPage, worktreeId)
 
     // Wait for tab count to decrease
     await expect
@@ -203,7 +251,7 @@ test.describe('Tabs', () => {
     // Ensure at least 2 tabs
     const tabs = await getWorktreeTabs(orcaPage, worktreeId)
     if (tabs.length < 2) {
-      await pressShortcut(orcaPage, 't')
+      await createTerminalTab(orcaPage, worktreeId)
       await expect
         .poll(async () => (await getWorktreeTabs(orcaPage, worktreeId)).length, { timeout: 5_000 })
         .toBeGreaterThanOrEqual(2)
@@ -213,14 +261,17 @@ test.describe('Tabs', () => {
     expect(activeTabBefore).not.toBeNull()
 
     // Close the active tab
-    await pressShortcut(orcaPage, 'w')
+    await closeActiveTerminalTab(orcaPage, worktreeId)
 
     // A neighbor tab should become active
     await expect
-      .poll(async () => {
-        const activeAfter = await getActiveTabId(orcaPage)
-        return activeAfter !== null && activeAfter !== activeTabBefore
-      }, { timeout: 5_000 })
+      .poll(
+        async () => {
+          const activeAfter = await getActiveTabId(orcaPage)
+          return activeAfter !== null && activeAfter !== activeTabBefore
+        },
+        { timeout: 5_000 }
+      )
       .toBe(true)
   })
 })

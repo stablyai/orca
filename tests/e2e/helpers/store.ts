@@ -61,14 +61,24 @@ export async function getWorktreeTabs(
     }
 
     const state = store.getState()
-    return (state.tabsByWorktree[worktreeId] ?? []).map((tab): TerminalTabSummary => ({
-      id: tab.id,
-      title: tab.customTitle || tab.title,
-    }))
+    return (state.tabsByWorktree[worktreeId] ?? []).map(
+      (tab): TerminalTabSummary => ({
+        id: tab.id,
+        title: tab.customTitle || tab.title
+      })
+    )
   }, worktreeId)
 }
 
-/** Get the tab bar order for a worktree. */
+/**
+ * Get the tab bar order for a worktree.
+ *
+ * Why: split groups manage tab order via group.tabOrder on each TabGroup,
+ * not the legacy tabBarOrderByWorktree field. Read from the active group's
+ * tabOrder so drag-reorder assertions work with the split-group model.
+ * Falls back to the legacy field for worktrees that haven't been absorbed
+ * into the split-group model yet.
+ */
 export async function getTabBarOrder(page: Page, worktreeId: string): Promise<string[]> {
   return page.evaluate((worktreeId) => {
     const store = window.__store
@@ -77,6 +87,23 @@ export async function getTabBarOrder(page: Page, worktreeId: string): Promise<st
     }
 
     const state = store.getState()
+    const groups = state.groupsByWorktree?.[worktreeId] ?? []
+    const activeGroupId = state.activeGroupIdByWorktree?.[worktreeId]
+    const activeGroup = activeGroupId
+      ? groups.find((g: { id: string }) => g.id === activeGroupId)
+      : groups[0]
+    if (activeGroup?.tabOrder?.length > 0) {
+      const unifiedTabs = state.unifiedTabsByWorktree?.[worktreeId] ?? []
+      return activeGroup.tabOrder.map((itemId: string) => {
+        const tab = unifiedTabs.find((t: { id: string }) => t.id === itemId)
+        if (!tab) {
+          return itemId
+        }
+        return tab.contentType === 'terminal' || tab.contentType === 'browser'
+          ? tab.entityId
+          : tab.id
+      })
+    }
     return state.tabBarOrderByWorktree[worktreeId] ?? []
   }, worktreeId)
 }
@@ -93,11 +120,13 @@ export async function getBrowserTabs(
     }
 
     const state = store.getState()
-    return (state.browserTabsByWorktree[worktreeId] ?? []).map((tab): BrowserTabSummary => ({
-      id: tab.id,
-      url: tab.url,
-      title: tab.title,
-    }))
+    return (state.browserTabsByWorktree[worktreeId] ?? []).map(
+      (tab): BrowserTabSummary => ({
+        id: tab.id,
+        url: tab.url,
+        title: tab.title
+      })
+    )
   }, worktreeId)
 }
 
@@ -115,11 +144,13 @@ export async function getOpenFiles(
     const state = store.getState()
     return state.openFiles
       .filter((file) => file.worktreeId === worktreeId)
-      .map((file): ExplorerFileSummary => ({
-        id: file.id,
-        filePath: file.filePath,
-        relativePath: file.relativePath,
-      }))
+      .map(
+        (file): ExplorerFileSummary => ({
+          id: file.id,
+          filePath: file.filePath,
+          relativePath: file.relativePath
+        })
+      )
   }, worktreeId)
 }
 
@@ -128,7 +159,7 @@ export async function waitForSessionReady(page: Page, timeoutMs = 30_000): Promi
   await expect
     .poll(async () => getStoreState<boolean>(page, 'workspaceSessionReady'), {
       timeout: timeoutMs,
-      message: 'workspaceSessionReady did not become true',
+      message: 'workspaceSessionReady did not become true'
     })
     .toBe(true)
 }
@@ -140,21 +171,49 @@ export async function waitForActiveWorktree(page: Page, timeoutMs = 30_000): Pro
     return existingId
   }
 
-  const primaryWorktreeOption = page.getByRole('option', { name: /primary/i }).first()
-  const anyWorktreeOption = page.getByRole('option').first()
-  const optionToClick = (await primaryWorktreeOption.count()) > 0 ? primaryWorktreeOption : anyWorktreeOption
+  const activatedFromStore = await page.evaluate(() => {
+    const store = window.__store
+    if (!store) {
+      return false
+    }
 
-  if ((await optionToClick.count()) > 0) {
-    // Why: isolated E2E sessions can finish hydrating with worktrees loaded but
-    // no selection restored. Clicking the sidebar option matches the real user
-    // path and drives the same activation logic the app relies on in production.
-    await optionToClick.click()
+    const state = store.getState()
+    if (state.activeWorktreeId) {
+      return true
+    }
+
+    const firstWorktree = Object.values(state.worktreesByRepo).flat()[0]
+    if (!firstWorktree) {
+      return false
+    }
+
+    // Why: the sidebar no longer guarantees a role="option" worktree row
+    // during hydration, so DOM-click fallback can miss the only selectable
+    // worktree and leave fresh E2E sessions stuck with activeWorktreeId=null.
+    // Activating the first loaded worktree through the store matches the app's
+    // real selection path and keeps setup independent from sidebar markup.
+    state.setActiveWorktree(firstWorktree.id)
+    return true
+  })
+
+  if (!activatedFromStore) {
+    const primaryWorktreeOption = page.getByRole('option', { name: /primary/i }).first()
+    const anyWorktreeOption = page.getByRole('option').first()
+    const optionToClick =
+      (await primaryWorktreeOption.count()) > 0 ? primaryWorktreeOption : anyWorktreeOption
+
+    if ((await optionToClick.count()) > 0) {
+      // Why: isolated E2E sessions can finish hydrating with worktrees loaded but
+      // no selection restored. Clicking the sidebar option matches the real user
+      // path and drives the same activation logic the app relies on in production.
+      await optionToClick.click()
+    }
   }
 
   await expect
     .poll(async () => getActiveWorktreeId(page), {
       timeout: timeoutMs,
-      message: 'activeWorktreeId did not become available',
+      message: 'activeWorktreeId did not become available'
     })
     .not.toBeNull()
 
@@ -176,7 +235,10 @@ export async function getAllWorktreeIds(page: Page): Promise<string[]> {
 }
 
 /** Switch to a different worktree via the store. Returns the new worktree ID or null. */
-export async function switchToOtherWorktree(page: Page, currentWorktreeId: string): Promise<string | null> {
+export async function switchToOtherWorktree(
+  page: Page,
+  currentWorktreeId: string
+): Promise<string | null> {
   return page.evaluate((currentId) => {
     const store = window.__store
     if (!store) {
@@ -266,8 +328,7 @@ export async function worktreeExists(page: Page, name: string): Promise<boolean>
     const state = store.getState()
     const allWorktrees = Object.values(state.worktreesByRepo).flat()
     return allWorktrees.some(
-      (worktree) =>
-        worktree.displayName === name || worktree.path.endsWith(`/${name}`)
+      (worktree) => worktree.displayName === name || worktree.path.endsWith(`/${name}`)
     )
   }, name)
 }
