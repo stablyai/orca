@@ -239,6 +239,81 @@ describe('createIpcPtyTransport', () => {
     expect(transport.getPtyId()).toBeNull()
   })
 
+  it('unregisterPtyDataHandlers prevents final data burst from triggering notifications', async () => {
+    const { createIpcPtyTransport, unregisterPtyDataHandlers } = await import('./pty-transport')
+    const onBell = vi.fn()
+    const onTitleChange = vi.fn()
+    const onAgentBecameIdle = vi.fn()
+    const onAgentBecameWorking = vi.fn()
+    const onPtyExit = vi.fn()
+
+    const transport = createIpcPtyTransport({
+      onBell,
+      onTitleChange,
+      onAgentBecameIdle,
+      onAgentBecameWorking,
+      onPtyExit
+    })
+
+    await transport.connect({ url: '', callbacks: {} })
+
+    // Agent starts working
+    onData?.({ id: 'pty-1', data: '\u001b]0;. Claude working\u0007' })
+    expect(onAgentBecameWorking).toHaveBeenCalledTimes(1)
+
+    // Simulate shutdownWorktreeTerminals: unregister data handlers before kill
+    unregisterPtyDataHandlers(['pty-1'])
+
+    // Final data burst from main process (flushed before exit) — contains a
+    // title change from working to idle AND a BEL. Neither should trigger a
+    // notification because the data handler was removed.
+    onData?.({ id: 'pty-1', data: '\u001b]0;Claude done\u0007\u0007' })
+    expect(onAgentBecameIdle).not.toHaveBeenCalled()
+    expect(onBell).not.toHaveBeenCalled()
+
+    // Exit handler should still work (exit handlers are kept alive)
+    onExit?.({ id: 'pty-1', code: -1 })
+    expect(onPtyExit).toHaveBeenCalledWith('pty-1')
+  })
+
+  it('unregisterPtyDataHandlers cancels staleTitleTimer so it cannot fire stale idle transition', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createIpcPtyTransport, unregisterPtyDataHandlers } = await import('./pty-transport')
+      const onTitleChange = vi.fn()
+      const onAgentBecameIdle = vi.fn()
+      const onAgentBecameWorking = vi.fn()
+
+      const transport = createIpcPtyTransport({
+        onTitleChange,
+        onAgentBecameIdle,
+        onAgentBecameWorking
+      })
+
+      await transport.connect({ url: '', callbacks: {} })
+
+      // Agent starts working — sets the title to a working indicator
+      onData?.({ id: 'pty-1', data: '\u001b]0;. Claude working\u0007' })
+      expect(onAgentBecameWorking).toHaveBeenCalledTimes(1)
+
+      // Data arrives without a title change — starts the 3 s staleTitleTimer
+      onData?.({ id: 'pty-1', data: 'some output without title\r\n' })
+
+      // Simulate shutdownWorktreeTerminals: unregister handlers which should
+      // cancel the pending staleTitleTimer AND reset the agent tracker so the
+      // accumulated working state cannot produce a stale idle transition.
+      unregisterPtyDataHandlers(['pty-1'])
+
+      // Advance past the 3 s stale-title timeout
+      vi.advanceTimersByTime(4000)
+
+      // The staleTitleTimer must NOT have fired onAgentBecameIdle
+      expect(onAgentBecameIdle).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('keeps the exit observer alive after detach so remounts do not reuse dead PTYs', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const onPtyExit = vi.fn()

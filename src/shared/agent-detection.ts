@@ -126,6 +126,9 @@ export function createAgentStatusTracker(
   onAgentExited?: () => void
 ): {
   handleTitle: (title: string) => void
+  /** Clear accumulated status so a stale working→idle transition cannot fire
+   *  after the owning transport is torn down. */
+  reset: () => void
 } {
   let lastStatus: AgentStatus | null = null
 
@@ -151,6 +154,9 @@ export function createAgentStatusTracker(
       if (newStatus !== null) {
         lastStatus = newStatus
       }
+    },
+    reset(): void {
+      lastStatus = null
     }
   }
 }

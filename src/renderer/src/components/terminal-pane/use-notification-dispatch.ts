@@ -14,6 +14,20 @@ export function useNotificationDispatch(
   return useCallback(
     (event: { source: 'agent-task-complete' | 'terminal-bell'; terminalTitle?: string }) => {
       const state = useAppStore.getState()
+
+      // Why: shutdownWorktreeTerminals clears ptyIdsByTabId synchronously
+      // before killing PTYs asynchronously. Any notification arriving after
+      // that point is stale — e.g. a staleTitleTimer that fires 3 s after
+      // shutdown, or an agent tracker transition from accumulated closure
+      // state. Checking for live PTYs at dispatch time catches ALL phantom
+      // notification sources regardless of which timer or callback produced
+      // them, rather than trying to cancel each one individually.
+      const tabs = state.tabsByWorktree[worktreeId] ?? []
+      const hasLivePtys = tabs.some((tab) => (state.ptyIdsByTabId[tab.id] ?? []).length > 0)
+      if (!hasLivePtys) {
+        return
+      }
+
       const repoId = worktreeId.includes('::') ? worktreeId.slice(0, worktreeId.indexOf('::')) : ''
       const repo = state.repos.find((c) => c.id === repoId)
       const worktree = state.allWorktrees().find((c) => c.id === worktreeId)

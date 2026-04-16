@@ -15,7 +15,30 @@ import type { OpenCodeStatusEvent } from '../../../../shared/types'
 export const ptyDataHandlers = new Map<string, (data: string) => void>()
 export const ptyExitHandlers = new Map<string, (code: number) => void>()
 export const openCodeStatusHandlers = new Map<string, (event: OpenCodeStatusEvent) => void>()
+/** Per-PTY teardown callbacks registered by each transport to clear closure
+ *  state (stale-title timer, agent tracker) that would otherwise fire after
+ *  the data handler is removed. */
+export const ptyTeardownHandlers = new Map<string, () => void>()
 let ptyDispatcherAttached = false
+
+/**
+ * Remove data and status handlers for the given PTY IDs so that any final
+ * data flushed by the main process during PTY teardown cannot trigger
+ * bell / agent-status notifications from a worktree that is being shut down.
+ * Also invokes per-transport teardown callbacks to cancel accumulated closure
+ * state (e.g. staleTitleTimer, agent tracker) that could independently fire
+ * stale notifications.
+ * Exit handlers are intentionally kept alive so the normal exit-cleanup
+ * path (unregister, clear stale timers, update store) still runs.
+ */
+export function unregisterPtyDataHandlers(ptyIds: string[]): void {
+  for (const id of ptyIds) {
+    ptyDataHandlers.delete(id)
+    openCodeStatusHandlers.delete(id)
+    ptyTeardownHandlers.get(id)?.()
+    ptyTeardownHandlers.delete(id)
+  }
+}
 
 export function ensurePtyDispatcher(): void {
   if (ptyDispatcherAttached) {

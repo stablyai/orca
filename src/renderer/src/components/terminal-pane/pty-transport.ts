@@ -10,6 +10,7 @@ import {
   ptyDataHandlers,
   ptyExitHandlers,
   openCodeStatusHandlers,
+  ptyTeardownHandlers,
   ensurePtyDispatcher,
   getEagerPtyBufferHandle
 } from './pty-dispatcher'
@@ -20,7 +21,8 @@ import { createBellDetector } from './bell-detector'
 export {
   ensurePtyDispatcher,
   getEagerPtyBufferHandle,
-  registerEagerPtyBuffer
+  registerEagerPtyBuffer,
+  unregisterPtyDataHandlers
 } from './pty-dispatcher'
 export type { EagerPtyHandle, PtyTransport, IpcPtyTransportOptions } from './pty-dispatcher'
 export { extractLastOscTitle } from '../../../../shared/agent-detection'
@@ -69,6 +71,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     ptyDataHandlers.delete(id)
     ptyExitHandlers.delete(id)
     openCodeStatusHandlers.delete(id)
+    ptyTeardownHandlers.delete(id)
   }
 
   function unregisterPtyDataAndStatusHandlers(id: string): void {
@@ -152,13 +155,18 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     })
   }
 
+  function clearAccumulatedState(): void {
+    if (staleTitleTimer) {
+      clearTimeout(staleTitleTimer)
+      staleTitleTimer = null
+    }
+    agentTracker?.reset()
+    openCodeStatus = null
+  }
+
   function registerPtyExitHandler(id: string): void {
     ptyExitHandlers.set(id, (code) => {
-      if (staleTitleTimer) {
-        clearTimeout(staleTitleTimer)
-        staleTitleTimer = null
-      }
-      openCodeStatus = null
+      clearAccumulatedState()
       connected = false
       ptyId = null
       unregisterPtyHandlers(id)
@@ -167,6 +175,13 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       onPtyExit?.(id)
     })
     openCodeStatusHandlers.set(id, applyOpenCodeStatus)
+    // Why: shutdownWorktreeTerminals bypasses the transport layer — it
+    // kills PTYs directly via IPC without calling disconnect()/destroy().
+    // This teardown callback lets unregisterPtyDataHandlers cancel
+    // accumulated closure state (staleTitleTimer, agent tracker) that
+    // would otherwise fire stale notifications after the data handler
+    // is removed but before the exit event arrives.
+    ptyTeardownHandlers.set(id, clearAccumulatedState)
   }
 
   return {

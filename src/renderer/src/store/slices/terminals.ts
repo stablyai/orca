@@ -12,7 +12,8 @@ import { isClaudeAgent, detectAgentStatusFromTitle } from '@/lib/agent-status'
 import { buildOrphanTerminalCleanupPatch, getOrphanTerminalIds } from './terminal-orphan-helpers'
 import {
   registerEagerPtyBuffer,
-  ensurePtyDispatcher
+  ensurePtyDispatcher,
+  unregisterPtyDataHandlers
 } from '@/components/terminal-pane/pty-transport'
 
 function getNextTerminalOrdinal(tabs: TerminalTab[]): number {
@@ -630,6 +631,15 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   shutdownWorktreeTerminals: async (worktreeId) => {
     const tabs = get().tabsByWorktree[worktreeId] ?? []
     const ptyIds = tabs.flatMap((tab) => get().ptyIdsByTabId[tab.id] ?? [])
+
+    // Why: the main process flushes any remaining batched PTY data before
+    // sending the exit event (pty.ts onExit handler). Without this, that
+    // final data burst flows through the still-registered ptyDataHandlers
+    // where bell detection and agent-status tracking can fire system
+    // notifications for a worktree that is already being torn down —
+    // the "phantom alerts" users see after shutting down worktrees.
+    // Removing the data handlers first ensures the final flush is a no-op.
+    unregisterPtyDataHandlers(ptyIds)
 
     set((s) => {
       const nextTabsByWorktree = {
