@@ -16,10 +16,13 @@ import type {
   RuntimeTerminalSend,
   RuntimeTerminalCreate,
   RuntimeTerminalSplit,
+  RuntimeTerminalFocus,
+  RuntimeTerminalClose,
   RuntimeTerminalListResult,
   RuntimeTerminalState,
   RuntimeStatus,
   RuntimeTerminalWait,
+  RuntimeTerminalWaitCondition,
   RuntimeWorktreePsSummary,
   RuntimeTerminalShow,
   RuntimeTerminalSummary,
@@ -135,13 +138,15 @@ type RuntimeNotifier = {
   worktreesChanged(repoId: string): void
   reposChanged(): void
   activateWorktree(repoId: string, worktreeId: string, setup?: CreateWorktreeResult['setup']): void
-  createTerminal(worktreeId: string, opts: { command?: string }): void
+  createTerminal(worktreeId: string, opts: { command?: string; title?: string }): void
   splitTerminal(
     tabId: string,
     paneRuntimeId: number,
     opts: { direction: 'horizontal' | 'vertical'; command?: string }
   ): void
   renameTerminal(tabId: string, title: string | null): void
+  focusTerminal(tabId: string, worktreeId: string): void
+  closeTerminal(tabId: string): void
 }
 
 type TerminalHandleRecord = {
@@ -157,9 +162,11 @@ type TerminalHandleRecord = {
 
 type TerminalWaiter = {
   handle: string
+  condition: RuntimeTerminalWaitCondition
   resolve: (result: RuntimeTerminalWait) => void
   reject: (error: Error) => void
   timeout: NodeJS.Timeout | null
+  pollInterval: ReturnType<typeof setInterval> | null
 }
 
 type ResolvedWorktree = {
@@ -463,20 +470,29 @@ export class OrcaRuntimeService {
   async waitForTerminal(
     handle: string,
     options?: {
+      condition?: RuntimeTerminalWaitCondition
       timeoutMs?: number
     }
   ): Promise<RuntimeTerminalWait> {
+    const condition = options?.condition ?? 'exit'
     const { leaf } = this.getLiveLeafForHandle(handle)
-    if (getTerminalState(leaf) === 'exited') {
-      return buildTerminalWaitResult(handle, leaf)
+
+    if (condition === 'exit' && getTerminalState(leaf) === 'exited') {
+      return buildTerminalWaitResult(handle, condition, leaf)
+    }
+
+    if (condition === 'tui-idle' && isTUIIdle(leaf.preview)) {
+      return buildTerminalWaitResult(handle, condition, leaf)
     }
 
     return await new Promise<RuntimeTerminalWait>((resolve, reject) => {
       const waiter: TerminalWaiter = {
         handle,
+        condition,
         resolve,
         reject,
-        timeout: null
+        timeout: null,
+        pollInterval: null
       }
 
       if (typeof options?.timeoutMs === 'number' && options.timeoutMs > 0) {
@@ -493,13 +509,43 @@ export class OrcaRuntimeService {
       }
       waiters.add(waiter)
 
+      if (condition === 'tui-idle') {
+        // Why: TUI idle has no discrete exit event — poll preview every 3s.
+        // Track last preview to detect output stabilization as a secondary signal.
+        let lastPreview = leaf.preview
+        let stableCount = 0
+        waiter.pollInterval = setInterval(() => {
+          try {
+            const live = this.getLiveLeafForHandle(handle)
+            const preview = live.leaf.preview
+            if (isTUIIdle(preview)) {
+              this.resolveWaiter(waiter, buildTerminalWaitResult(handle, condition, live.leaf))
+              return
+            }
+            if (preview === lastPreview) {
+              stableCount++
+              if (stableCount >= TUI_IDLE_STABLE_THRESHOLD) {
+                this.resolveWaiter(waiter, buildTerminalWaitResult(handle, condition, live.leaf))
+              }
+            } else {
+              stableCount = 0
+              lastPreview = preview
+            }
+          } catch {
+            this.removeWaiter(waiter)
+            reject(new Error('terminal_gone'))
+          }
+        }, TUI_IDLE_POLL_MS)
+        return
+      }
+
       // Why: the handle may go stale or exit in the small gap between the first
       // validation and waiter registration. Re-checking here keeps wait --for
       // exit honest instead of hanging on a terminal that already changed.
       try {
         const live = this.getLiveLeafForHandle(handle)
         if (getTerminalState(live.leaf) === 'exited') {
-          this.resolveWaiter(waiter, buildTerminalWaitResult(handle, live.leaf))
+          this.resolveWaiter(waiter, buildTerminalWaitResult(handle, condition, live.leaf))
         }
       } catch (error) {
         this.removeWaiter(waiter)
@@ -871,12 +917,30 @@ export class OrcaRuntimeService {
 
   async createTerminal(
     worktreeSelector: string,
-    opts: { command?: string } = {}
+    opts: { command?: string; title?: string } = {}
   ): Promise<RuntimeTerminalCreate> {
     this.assertGraphReady()
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
     this.notifier?.createTerminal(worktree.id, opts)
-    return { worktreeId: worktree.id }
+    return { worktreeId: worktree.id, title: opts.title ?? null }
+  }
+
+  async focusTerminal(handle: string): Promise<RuntimeTerminalFocus> {
+    this.assertGraphReady()
+    const { leaf } = this.getLiveLeafForHandle(handle)
+    this.notifier?.focusTerminal(leaf.tabId, leaf.worktreeId)
+    return { handle, tabId: leaf.tabId, worktreeId: leaf.worktreeId }
+  }
+
+  async closeTerminal(handle: string): Promise<RuntimeTerminalClose> {
+    this.assertGraphReady()
+    const { leaf } = this.getLiveLeafForHandle(handle)
+    let ptyKilled = false
+    if (leaf.ptyId) {
+      ptyKilled = this.ptyController?.kill(leaf.ptyId) ?? false
+    }
+    this.notifier?.closeTerminal(leaf.tabId)
+    return { handle, tabId: leaf.tabId, ptyKilled }
   }
 
   async splitTerminal(
@@ -1193,7 +1257,9 @@ export class OrcaRuntimeService {
       return
     }
     for (const waiter of [...waiters]) {
-      this.resolveWaiter(waiter, buildTerminalWaitResult(handle, leaf))
+      if (waiter.condition === 'exit') {
+        this.resolveWaiter(waiter, buildTerminalWaitResult(handle, 'exit', leaf))
+      }
     }
   }
 
@@ -1222,6 +1288,9 @@ export class OrcaRuntimeService {
   private removeWaiter(waiter: TerminalWaiter): void {
     if (waiter.timeout) {
       clearTimeout(waiter.timeout)
+    }
+    if (waiter.pollInterval) {
+      clearInterval(waiter.pollInterval)
     }
     const waiters = this.waitersByHandle.get(waiter.handle)
     if (!waiters) {
@@ -2394,10 +2463,28 @@ function buildSendPayload(action: {
   return payload.length > 0 ? payload : null
 }
 
-function buildTerminalWaitResult(handle: string, leaf: RuntimeLeafRecord): RuntimeTerminalWait {
+const TUI_IDLE_POLL_MS = 3000
+const TUI_IDLE_STABLE_THRESHOLD = 5
+const TUI_IDLE_PATTERNS = [
+  /Ask anything/i,
+  /What is the tech stack/i,
+  /How can I help/i,
+  /Enter a prompt/i,
+  /Type .* to get started/i
+]
+
+function isTUIIdle(preview: string): boolean {
+  return TUI_IDLE_PATTERNS.some((re) => re.test(preview))
+}
+
+function buildTerminalWaitResult(
+  handle: string,
+  condition: RuntimeTerminalWaitCondition,
+  leaf: RuntimeLeafRecord
+): RuntimeTerminalWait {
   return {
     handle,
-    condition: 'exit',
+    condition,
     satisfied: true,
     status: getTerminalState(leaf),
     exitCode: leaf.lastExitCode

@@ -1189,11 +1189,11 @@ const api = {
       return () => ipcRenderer.removeListener('ui:activateWorktree', listener)
     },
     onCreateTerminal: (
-      callback: (data: { worktreeId: string; command?: string }) => void
+      callback: (data: { worktreeId: string; command?: string; title?: string }) => void
     ): (() => void) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
-        data: { worktreeId: string; command?: string }
+        data: { worktreeId: string; command?: string; title?: string }
       ) => callback(data)
       ipcRenderer.on('ui:createTerminal', listener)
       return () => ipcRenderer.removeListener('ui:createTerminal', listener)
@@ -1227,6 +1227,22 @@ const api = {
       ) => callback(data)
       ipcRenderer.on('ui:renameTerminal', listener)
       return () => ipcRenderer.removeListener('ui:renameTerminal', listener)
+    },
+    onFocusTerminal: (
+      callback: (data: { tabId: string; worktreeId: string }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { tabId: string; worktreeId: string }
+      ) => callback(data)
+      ipcRenderer.on('ui:focusTerminal', listener)
+      return () => ipcRenderer.removeListener('ui:focusTerminal', listener)
+    },
+    onCloseTerminal: (callback: (data: { tabId: string }) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: { tabId: string }) =>
+        callback(data)
+      ipcRenderer.on('ui:closeTerminal', listener)
+      return () => ipcRenderer.removeListener('ui:closeTerminal', listener)
     },
     onTerminalZoom: (callback: (direction: 'in' | 'out' | 'reset') => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, direction: 'in' | 'out' | 'reset') =>

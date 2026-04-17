@@ -396,11 +396,12 @@ export class OrcaRuntimeRpcServer {
           return this.errorResponse(request.id, 'invalid_argument', 'Missing terminal handle')
         }
 
-        if (params?.for !== 'exit') {
+        const forCondition = params?.for
+        if (forCondition !== 'exit' && forCondition !== 'tui-idle') {
           return this.errorResponse(
             request.id,
-            'not_supported_in_v1',
-            'Only terminal wait --for exit is supported in focused v1'
+            'invalid_argument',
+            'Invalid --for value. Supported: exit, tui-idle'
           )
         }
 
@@ -409,7 +410,10 @@ export class OrcaRuntimeRpcServer {
             ? params.timeoutMs
             : undefined
 
-        const result = await this.runtime.waitForTerminal(terminalHandle, { timeoutMs })
+        const result = await this.runtime.waitForTerminal(terminalHandle, {
+          condition: forCondition,
+          timeoutMs
+        })
         return {
           id: request.id,
           ok: true,
@@ -722,14 +726,15 @@ export class OrcaRuntimeRpcServer {
       try {
         const params =
           request.params && typeof request.params === 'object' && request.params !== null
-            ? (request.params as { worktree?: unknown; command?: unknown })
+            ? (request.params as { worktree?: unknown; command?: unknown; title?: unknown })
             : null
         const worktreeSelector = params?.worktree
         if (typeof worktreeSelector !== 'string' || worktreeSelector.length === 0) {
           return this.errorResponse(request.id, 'invalid_argument', 'Missing worktree selector')
         }
         const result = await this.runtime.createTerminal(worktreeSelector, {
-          command: typeof params?.command === 'string' ? params.command : undefined
+          command: typeof params?.command === 'string' ? params.command : undefined,
+          title: typeof params?.title === 'string' ? params.title : undefined
         })
         return {
           id: request.id,
@@ -1962,6 +1967,50 @@ export class OrcaRuntimeRpcServer {
         return this.successResponse(request.id, result)
       } catch (error) {
         return this.browserErrorResponse(request.id, error)
+      }
+    }
+
+    if (request.method === 'terminal.focus') {
+      try {
+        const params =
+          request.params && typeof request.params === 'object' && request.params !== null
+            ? (request.params as { terminal?: unknown })
+            : null
+        const terminalHandle = params?.terminal
+        if (typeof terminalHandle !== 'string' || terminalHandle.length === 0) {
+          return this.errorResponse(request.id, 'invalid_argument', 'Missing terminal handle')
+        }
+        const result = await this.runtime.focusTerminal(terminalHandle)
+        return {
+          id: request.id,
+          ok: true,
+          result: { focus: result },
+          _meta: { runtimeId: this.runtime.getRuntimeId() }
+        }
+      } catch (error) {
+        return this.runtimeErrorResponse(request.id, error)
+      }
+    }
+
+    if (request.method === 'terminal.close') {
+      try {
+        const params =
+          request.params && typeof request.params === 'object' && request.params !== null
+            ? (request.params as { terminal?: unknown })
+            : null
+        const terminalHandle = params?.terminal
+        if (typeof terminalHandle !== 'string' || terminalHandle.length === 0) {
+          return this.errorResponse(request.id, 'invalid_argument', 'Missing terminal handle')
+        }
+        const result = await this.runtime.closeTerminal(terminalHandle)
+        return {
+          id: request.id,
+          ok: true,
+          result: { close: result },
+          _meta: { runtimeId: this.runtime.getRuntimeId() }
+        }
+      } catch (error) {
+        return this.runtimeErrorResponse(request.id, error)
       }
     }
 

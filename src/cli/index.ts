@@ -17,6 +17,8 @@ import type {
   RuntimeTerminalCreate,
   RuntimeTerminalSplit,
   RuntimeTerminalRename,
+  RuntimeTerminalFocus,
+  RuntimeTerminalClose,
   BrowserSnapshotResult,
   BrowserClickResult,
   BrowserGotoResult,
@@ -213,7 +215,8 @@ export const COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['terminal', 'wait'],
     summary: 'Wait for a terminal condition',
-    usage: 'orca terminal wait --terminal <handle> --for exit [--timeout-ms <ms>] [--json]',
+    usage:
+      'orca terminal wait --terminal <handle> --for exit|tui-idle [--timeout-ms <ms>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'for', 'timeout-ms']
   },
   {
@@ -225,12 +228,27 @@ export const COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['terminal', 'create'],
     summary: 'Create a new terminal tab in a worktree',
-    usage: 'orca terminal create --worktree <selector> [--command <text>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'command'],
+    usage:
+      'orca terminal create --worktree <selector> [--title <name>] [--command <text>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'command', 'title'],
     examples: [
       'orca terminal create --worktree active --json',
-      'orca terminal create --worktree path:/projects/myapp --command "claude"'
+      'orca terminal create --worktree path:/projects/myapp --title "RUNNER" --command "opencode"'
     ]
+  },
+  {
+    path: ['terminal', 'focus'],
+    summary: 'Bring a terminal tab to the foreground in the UI',
+    usage: 'orca terminal focus --terminal <handle> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'terminal'],
+    examples: ['orca terminal focus --terminal term_abc123']
+  },
+  {
+    path: ['terminal', 'close'],
+    summary: 'Close a terminal tab (kills PTY if running)',
+    usage: 'orca terminal close --terminal <handle> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'terminal'],
+    examples: ['orca terminal close --terminal term_abc123']
   },
   {
     path: ['terminal', 'rename'],
@@ -859,9 +877,24 @@ export async function main(argv = process.argv.slice(2), cwd = process.cwd()): P
     if (matches(commandPath, ['terminal', 'create'])) {
       const result = await client.call<{ terminal: RuntimeTerminalCreate }>('terminal.create', {
         worktree: await getRequiredWorktreeSelector(parsed.flags, 'worktree', cwd, client),
-        command: getOptionalStringFlag(parsed.flags, 'command')
+        command: getOptionalStringFlag(parsed.flags, 'command'),
+        title: getOptionalStringFlag(parsed.flags, 'title')
       })
       return printResult(result, json, formatTerminalCreate)
+    }
+
+    if (matches(commandPath, ['terminal', 'focus'])) {
+      const result = await client.call<{ focus: RuntimeTerminalFocus }>('terminal.focus', {
+        terminal: getRequiredStringFlag(parsed.flags, 'terminal')
+      })
+      return printResult(result, json, formatTerminalFocus)
+    }
+
+    if (matches(commandPath, ['terminal', 'close'])) {
+      const result = await client.call<{ close: RuntimeTerminalClose }>('terminal.close', {
+        terminal: getRequiredStringFlag(parsed.flags, 'terminal')
+      })
+      return printResult(result, json, formatTerminalClose)
     }
 
     if (matches(commandPath, ['terminal', 'split'])) {
@@ -2114,11 +2147,21 @@ function formatTerminalRename(result: { rename: RuntimeTerminalRename }): string
 }
 
 function formatTerminalCreate(result: { terminal: RuntimeTerminalCreate }): string {
-  return `Terminal tab created in worktree ${result.terminal.worktreeId}.\nRun 'orca terminal list' to get the handle.`
+  const titleNote = result.terminal.title ? ` (title: "${result.terminal.title}")` : ''
+  return `Terminal tab created in worktree ${result.terminal.worktreeId}${titleNote}.\nRun 'orca terminal list' to get the handle.`
 }
 
 function formatTerminalSplit(result: { split: RuntimeTerminalSplit }): string {
   return `Pane split in tab ${result.split.tabId} (pane ${result.split.paneRuntimeId}).`
+}
+
+function formatTerminalFocus(result: { focus: RuntimeTerminalFocus }): string {
+  return `Focused terminal ${result.focus.handle} (tab ${result.focus.tabId}).`
+}
+
+function formatTerminalClose(result: { close: RuntimeTerminalClose }): string {
+  const ptyNote = result.close.ptyKilled ? ' PTY killed.' : ''
+  return `Closed terminal ${result.close.handle}.${ptyNote}`
 }
 
 function formatTerminalWait(result: { wait: RuntimeTerminalWait }): string {
@@ -2260,11 +2303,13 @@ Terminals:
   terminal show             Show terminal metadata and preview
   terminal read             Read bounded terminal output
   terminal send             Send input to a live terminal
-  terminal wait             Wait for a terminal condition
+  terminal wait             Wait for a terminal condition (exit, tui-idle)
   terminal stop             Stop terminals for a worktree
   terminal create           Create a new terminal tab in a worktree
   terminal rename           Set or clear the title of a terminal tab
   terminal split            Split an existing terminal pane
+  terminal focus            Bring a terminal tab to the foreground
+  terminal close            Close a terminal tab
 
 Browser Automation:
   tab create                Create a new browser tab (navigates to --url)
@@ -2335,8 +2380,10 @@ Common Commands:
   orca terminal show --terminal <handle> [--json]
   orca terminal read --terminal <handle> [--json]
   orca terminal send --terminal <handle> [--text <text>] [--enter] [--interrupt] [--json]
-  orca terminal wait --terminal <handle> --for exit [--timeout-ms <ms>] [--json]
+  orca terminal wait --terminal <handle> --for exit|tui-idle [--timeout-ms <ms>] [--json]
   orca terminal stop --worktree <selector> [--json]
+  orca terminal focus --terminal <handle> [--json]
+  orca terminal close --terminal <handle> [--json]
   orca repo list [--json]
   orca repo add --path <path> [--json]
   orca repo show --repo <selector> [--json]

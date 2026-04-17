@@ -610,7 +610,9 @@ describe('OrcaRuntimeService', () => {
       activateWorktree,
       createTerminal: vi.fn(),
       splitTerminal: vi.fn(),
-      renameTerminal: vi.fn()
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn()
     })
     runtime.attachWindow(1)
 
@@ -684,7 +686,9 @@ describe('OrcaRuntimeService', () => {
       activateWorktree: vi.fn(),
       createTerminal: vi.fn(),
       splitTerminal: vi.fn(),
-      renameTerminal: vi.fn()
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn()
     })
 
     computeWorktreePathMock.mockReturnValue('/tmp/workspaces/cli-worktree')

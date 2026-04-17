@@ -641,7 +641,7 @@ export type PreloadApi = {
       callback: (data: { repoId: string; worktreeId: string; setup?: WorktreeSetupLaunch }) => void
     ) => () => void
     onCreateTerminal: (
-      callback: (data: { worktreeId: string; command?: string }) => void
+      callback: (data: { worktreeId: string; command?: string; title?: string }) => void
     ) => () => void
     onSplitTerminal: (
       callback: (data: {
@@ -654,6 +654,8 @@ export type PreloadApi = {
     onRenameTerminal: (
       callback: (data: { tabId: string; title: string | null }) => void
     ) => () => void
+    onFocusTerminal: (callback: (data: { tabId: string; worktreeId: string }) => void) => () => void
+    onCloseTerminal: (callback: (data: { tabId: string }) => void) => () => void
     onTerminalZoom: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void
     readClipboardText: () => Promise<string>
     saveClipboardImageAsTempFile: () => Promise<string | null>

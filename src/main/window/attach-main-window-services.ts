@@ -147,7 +147,11 @@ function registerRuntimeWindowLifecycle(
     },
     createTerminal: (worktreeId, opts) => {
       if (!mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('ui:createTerminal', { worktreeId, command: opts.command })
+        mainWindow.webContents.send('ui:createTerminal', {
+          worktreeId,
+          command: opts.command,
+          title: opts.title
+        })
       }
     },
     splitTerminal: (tabId, paneRuntimeId, opts) => {
@@ -163,6 +167,16 @@ function registerRuntimeWindowLifecycle(
     renameTerminal: (tabId, title) => {
       if (!mainWindow.isDestroyed()) {
         mainWindow.webContents.send('ui:renameTerminal', { tabId, title })
+      }
+    },
+    focusTerminal: (tabId, worktreeId) => {
+      if (!mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('ui:focusTerminal', { tabId, worktreeId })
+      }
+    },
+    closeTerminal: (tabId) => {
+      if (!mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('ui:closeTerminal', { tabId })
       }
     }
   })

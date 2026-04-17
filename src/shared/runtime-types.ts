@@ -106,6 +106,7 @@ export type RuntimeTerminalSend = {
 
 export type RuntimeTerminalCreate = {
   worktreeId: string
+  title: string | null
 }
 
 export type RuntimeTerminalSplit = {
@@ -113,7 +114,19 @@ export type RuntimeTerminalSplit = {
   paneRuntimeId: number
 }
 
-export type RuntimeTerminalWaitCondition = 'exit'
+export type RuntimeTerminalFocus = {
+  handle: string
+  tabId: string
+  worktreeId: string
+}
+
+export type RuntimeTerminalClose = {
+  handle: string
+  tabId: string
+  ptyKilled: boolean
+}
+
+export type RuntimeTerminalWaitCondition = 'exit' | 'tui-idle'
 
 export type RuntimeTerminalWait = {
   handle: string

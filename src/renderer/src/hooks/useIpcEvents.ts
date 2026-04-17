@@ -158,10 +158,13 @@ export function useIpcEvents(): void {
     )
 
     unsubs.push(
-      window.api.ui.onCreateTerminal(({ worktreeId, command }) => {
+      window.api.ui.onCreateTerminal(({ worktreeId, command, title }) => {
         const store = useAppStore.getState()
         const tab = store.createTab(worktreeId)
         store.setActiveTab(tab.id)
+        if (title) {
+          store.setTabCustomTitle(tab.id, title)
+        }
         if (command) {
           store.queueTabStartupCommand(tab.id, { command })
         }
@@ -178,6 +181,22 @@ export function useIpcEvents(): void {
     unsubs.push(
       window.api.ui.onRenameTerminal(({ tabId, title }) => {
         useAppStore.getState().setTabCustomTitle(tabId, title)
+      })
+    )
+
+    unsubs.push(
+      window.api.ui.onFocusTerminal(({ tabId, worktreeId }) => {
+        const store = useAppStore.getState()
+        store.setActiveWorktree(worktreeId)
+        store.setActiveView('terminal')
+        store.setActiveTab(tabId)
+        store.revealWorktreeInSidebar(worktreeId)
+      })
+    )
+
+    unsubs.push(
+      window.api.ui.onCloseTerminal(({ tabId }) => {
+        useAppStore.getState().closeTab(tabId)
       })
     )
 
