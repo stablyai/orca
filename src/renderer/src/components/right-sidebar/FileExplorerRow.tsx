@@ -302,6 +302,14 @@ export function FileExplorerRow({
           <span
             className={cn('truncate', isSelected && !nodeStatus && 'text-accent-foreground')}
             style={nodeStatus ? { color: statusColor ?? undefined } : undefined}
+            onDoubleClick={(e) => {
+              // Why: the row itself swallows double-click for "pin preview" /
+              // directory toggle. Scope rename to the filename text only so
+              // those behaviors stay intact on the icon and empty row area,
+              // matching VS Code's rename hotspot.
+              e.stopPropagation()
+              onStartRename(node)
+            }}
           >
             {node.name}
           </span>

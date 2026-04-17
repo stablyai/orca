@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import {
@@ -18,8 +18,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { normalizeRelativePath } from '@/lib/path'
+import { basename, normalizeRelativePath } from '@/lib/path'
 import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
+import { renameFileOnDisk } from '@/lib/rename-file'
+import { useAppStore } from '@/store'
 import { STATUS_COLORS, STATUS_LABELS } from '../right-sidebar/status-display'
 import type { GitFileStatus } from '../../../../shared/types'
 import type { OpenFile } from '../../store/slices/editor'
@@ -80,6 +82,79 @@ export default function EditorFileTab({
   const isConflictReview = file.mode === 'conflict-review'
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
+  const [isRenaming, setIsRenaming] = useState(false)
+  const renameInputRef = useRef<HTMLInputElement>(null)
+  // Escape fires setIsRenaming(false), which unmounts the input. The browser
+  // still fires focusout as the focused node is removed, so onBlur can invoke
+  // commitRename *after* cancel — committing the typed value against the
+  // user's intent. This flag suppresses the trailing blur-commit.
+  const renameCancelledRef = useRef(false)
+  // Only real on-disk files in edit mode are renameable. Diff, conflict-review,
+  // untitled drafts, and combined/virtual views don't point at a single concrete
+  // file we can safely rename.
+  const canRename = file.mode === 'edit' && !file.isUntitled && !file.diffSource && !file.conflict
+
+  const commitRename = (): void => {
+    if (renameCancelledRef.current) {
+      renameCancelledRef.current = false
+      setIsRenaming(false)
+      return
+    }
+    const input = renameInputRef.current
+    if (!input) {
+      setIsRenaming(false)
+      return
+    }
+    const newName = input.value.trim()
+    setIsRenaming(false)
+    if (!newName) {
+      return
+    }
+    const oldName = basename(file.filePath)
+    if (newName === oldName) {
+      return
+    }
+    const worktreePath = (() => {
+      const state = useAppStore.getState()
+      for (const worktrees of Object.values(state.worktreesByRepo)) {
+        const wt = worktrees.find((w) => w.id === file.worktreeId)
+        if (wt) {
+          return wt.path
+        }
+      }
+      return null
+    })()
+    if (!worktreePath) {
+      return
+    }
+    void renameFileOnDisk({
+      oldPath: file.filePath,
+      newName,
+      worktreeId: file.worktreeId,
+      worktreePath
+    })
+  }
+
+  useEffect(() => {
+    if (!isRenaming) {
+      return
+    }
+    const raf = requestAnimationFrame(() => {
+      const el = renameInputRef.current
+      if (!el) {
+        return
+      }
+      el.focus()
+      const name = basename(file.filePath)
+      const dotIndex = name.lastIndexOf('.')
+      if (dotIndex > 0) {
+        el.setSelectionRange(0, dotIndex)
+      } else {
+        el.select()
+      }
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [isRenaming, file.filePath])
 
   const tabStatus =
     file.relativePath === 'All Changes'
@@ -152,13 +227,50 @@ export default function EditorFileTab({
             />
           )}
           <span className="mr-1.5 flex min-w-0 items-baseline gap-1.5">
-            <span
-              className={`truncate max-w-[130px]${file.isPreview ? ' italic' : ''}`}
-              style={tabStatusColor ? { color: tabStatusColor } : undefined}
-            >
-              {getEditorDisplayLabel(file)}
-            </span>
-            {tabStatus && (
+            {isRenaming ? (
+              <input
+                ref={renameInputRef}
+                defaultValue={basename(file.filePath)}
+                // Tiny border to make the edit affordance obvious without
+                // changing overall tab height. Size matches the label span.
+                className="truncate max-w-[130px] bg-transparent text-sm text-foreground outline-none border border-ring rounded-sm px-1 py-0"
+                onPointerDown={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+                onDoubleClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    commitRename()
+                  } else if (e.key === 'Escape') {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    renameCancelledRef.current = true
+                    setIsRenaming(false)
+                  }
+                }}
+                onBlur={commitRename}
+              />
+            ) : (
+              <span
+                className={`truncate max-w-[130px]${file.isPreview ? ' italic' : ''}`}
+                style={tabStatusColor ? { color: tabStatusColor } : undefined}
+                onDoubleClick={(e) => {
+                  // Why: the outer tab's onDoubleClick pins preview tabs. Scope
+                  // rename to the filename text only so pin-on-dblclick still
+                  // works anywhere else on the tab chrome (matching VS Code).
+                  if (!canRename) {
+                    return
+                  }
+                  e.stopPropagation()
+                  setIsRenaming(true)
+                }}
+              >
+                {getEditorDisplayLabel(file)}
+              </span>
+            )}
+            {tabStatus && !isRenaming && (
               <span
                 className="shrink-0 text-[10px] leading-none font-semibold tracking-wide"
                 style={{ color: tabStatusColor }}

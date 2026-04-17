@@ -3,25 +3,12 @@ import type React from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { detectLanguage } from '@/lib/language-detect'
-import { basename, dirname, joinPath } from '@/lib/path'
+import { dirname, joinPath } from '@/lib/path'
 import { getConnectionId } from '@/lib/connection-context'
+import { extractIpcErrorMessage, renameFileOnDisk } from '@/lib/rename-file'
 import type { InlineInput } from './FileExplorerRow'
 import type { TreeNode } from './file-explorer-types'
-import { requestEditorSaveQuiesce } from '@/components/editor/editor-autosave'
 import { commitFileExplorerOp } from './fileExplorerUndoRedo'
-
-/**
- * Electron's ipcRenderer.invoke wraps errors as:
- *   "Error invoking remote method 'channel': Error: actual message"
- * Strip the wrapper so users see only the meaningful part.
- */
-function extractIpcErrorMessage(err: unknown, fallback: string): string {
-  if (!(err instanceof Error)) {
-    return fallback
-  }
-  const match = err.message.match(/Error invoking remote method '[^']*': (?:Error: )?(.+)/)
-  return match ? match[1] : err.message
-}
 
 type UseFileExplorerInlineInputParams = {
   activeWorktreeId: string | null
@@ -122,89 +109,15 @@ export function useFileExplorerInlineInput({
         return
       }
       const run = async (): Promise<void> => {
-        const remapOpenTabsForRenamedPath = (fromPath: string, toPath: string): void => {
-          const state = useAppStore.getState()
-          const filesToMove = state.openFiles.filter((file) => {
-            if (file.filePath === fromPath) {
-              return true
-            }
-            return (
-              file.filePath.startsWith(`${fromPath}/`) || file.filePath.startsWith(`${fromPath}\\`)
-            )
-          })
-
-          for (const file of filesToMove) {
-            const oldFilePath = file.filePath
-            const suffix = oldFilePath.slice(fromPath.length)
-            const updatedPath = toPath + suffix
-            const updatedRelative = updatedPath.slice(worktreePath.length + 1)
-            const draft = state.editorDrafts[file.id]
-            const wasDirty = file.isDirty
-
-            state.closeFile(oldFilePath)
-            if (file.mode !== 'edit') {
-              continue
-            }
-
-            state.openFile({
-              filePath: updatedPath,
-              relativePath: updatedRelative,
-              worktreeId: file.worktreeId,
-              language: detectLanguage(basename(updatedPath)),
-              mode: 'edit'
-            })
-
-            if (draft !== undefined) {
-              state.setEditorDraft(updatedPath, draft)
-            }
-            if (wasDirty) {
-              state.markFileDirty(updatedPath, true)
-            }
-          }
-        }
-
         const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
         if (inlineInput.type === 'rename' && inlineInput.existingPath) {
-          const parentDir = dirname(inlineInput.existingPath)
-          const oldPath = inlineInput.existingPath
-          const newPath = joinPath(parentDir, name)
-          // Why: a rename changes the file's path. Let any in-flight autosave
-          // finish first so a trailing write to the old path cannot recreate it.
-          const state = useAppStore.getState()
-          const filesToQuiesce = state.openFiles.filter(
-            (file) =>
-              file.filePath === oldPath ||
-              file.filePath.startsWith(`${oldPath}/`) ||
-              file.filePath.startsWith(`${oldPath}\\`)
-          )
-          await Promise.all(
-            filesToQuiesce.map((file) => requestEditorSaveQuiesce({ fileId: file.id }))
-          )
-          try {
-            await window.api.fs.rename({
-              oldPath,
-              newPath,
-              connectionId
-            })
-            remapOpenTabsForRenamedPath(oldPath, newPath)
-            commitFileExplorerOp({
-              undo: async () => {
-                await window.api.fs.rename({ oldPath: newPath, newPath: oldPath, connectionId })
-                await refreshDir(parentDir)
-                remapOpenTabsForRenamedPath(newPath, oldPath)
-              },
-              redo: async () => {
-                await window.api.fs.rename({ oldPath: oldPath, newPath: newPath, connectionId })
-                await refreshDir(parentDir)
-                remapOpenTabsForRenamedPath(oldPath, newPath)
-              }
-            })
-          } catch (err) {
-            toast.error(
-              extractIpcErrorMessage(err, `Failed to rename '${inlineInput.existingName}'.`)
-            )
-          }
-          await refreshDir(parentDir)
+          await renameFileOnDisk({
+            oldPath: inlineInput.existingPath,
+            newName: name,
+            worktreeId: activeWorktreeId,
+            worktreePath,
+            refreshDir
+          })
         } else {
           const fullPath = joinPath(inlineInput.parentPath, name)
           try {
