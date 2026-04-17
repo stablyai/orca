@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react'
-import { Check, ChevronsUpDown, Globe } from 'lucide-react'
+import { Check, ChevronsUpDown, FolderPlus, Globe } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Command,
@@ -9,6 +9,8 @@ import {
   CommandList
 } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { useAppStore } from '@/store'
+import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { searchRepos } from '@/lib/repo-search'
 import { cn } from '@/lib/utils'
 import type { Repo } from '../../../../shared/types'
@@ -31,6 +33,13 @@ export default function RepoCombobox({
 }: RepoComboboxProps): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
+  // Why: controlled cmdk selection so hovering the footer (which lives outside
+  // the cmdk tree) can clear the list's highlighted item — otherwise cmdk keeps
+  // the last-hovered repo visually selected while the mouse is on the footer.
+  const [commandValue, setCommandValue] = useState('')
+  const addRepo = useAppStore((s) => s.addRepo)
+  const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
+  const [isAdding, setIsAdding] = useState(false)
 
   const selectedRepo = useMemo(
     () => repos.find((repo) => repo.id === value) ?? null,
@@ -56,6 +65,26 @@ export default function RepoCombobox({
     },
     [onValueChange]
   )
+
+  const handleAddFolder = useCallback(async () => {
+    if (isAdding) {
+      return
+    }
+    setIsAdding(true)
+    try {
+      const repo = await addRepo()
+      if (repo) {
+        if (isGitRepoKind(repo)) {
+          await fetchWorktrees(repo.id)
+        }
+        onValueChange(repo.id)
+        setOpen(false)
+        setQuery('')
+      }
+    } finally {
+      setIsAdding(false)
+    }
+  }, [addRepo, fetchWorktrees, isAdding, onValueChange])
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
@@ -93,15 +122,15 @@ export default function RepoCombobox({
         className="w-[var(--radix-popover-trigger-width)] p-0"
         data-repo-combobox-root="true"
       >
-        <Command shouldFilter={false}>
+        <Command shouldFilter={false} value={commandValue} onValueChange={setCommandValue}>
           <CommandInput
             autoFocus
-            placeholder="Search repositories..."
+            placeholder="Search repos/folders..."
             value={query}
             onValueChange={setQuery}
           />
           <CommandList>
-            <CommandEmpty>No repositories match your search.</CommandEmpty>
+            <CommandEmpty>No repos/folders match your search.</CommandEmpty>
             {filteredRepos.map((repo) => (
               <CommandItem
                 key={repo.id}
@@ -134,6 +163,21 @@ export default function RepoCombobox({
               </CommandItem>
             ))}
           </CommandList>
+          {/* Why: pinned footer (outside CommandList's scroll container) so the
+              add action stays visible regardless of list length or scroll position. */}
+          <div className="border-t border-border">
+            <button
+              type="button"
+              disabled={isAdding}
+              onClick={handleAddFolder}
+              onMouseDown={(event) => event.preventDefault()}
+              onMouseEnter={() => setCommandValue('')}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <FolderPlus className="size-3.5 text-muted-foreground" />
+              <span>{isAdding ? 'Adding folder/repo…' : 'Add folder/repo'}</span>
+            </button>
+          </div>
         </Command>
       </PopoverContent>
     </Popover>
