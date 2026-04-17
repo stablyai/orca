@@ -1,0 +1,178 @@
+import { useAppStore } from '@/store'
+import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
+import { isShellProcess } from '@/lib/tui-agent-startup'
+import type { GitHubWorkItem, OrcaHooks } from '../../../shared/types'
+
+export const IS_MAC = navigator.userAgent.includes('Mac')
+export const ADD_ATTACHMENT_SHORTCUT = IS_MAC ? '⌘U' : 'Ctrl+U'
+export const CLIENT_PLATFORM: NodeJS.Platform = navigator.userAgent.includes('Windows')
+  ? 'win32'
+  : IS_MAC
+    ? 'darwin'
+    : 'linux'
+
+export type LinkedWorkItemSummary = {
+  type: 'issue' | 'pr'
+  number: number
+  title: string
+  url: string
+}
+
+export function buildAgentPromptWithContext(
+  prompt: string,
+  attachments: string[],
+  linkedUrls: string[]
+): string {
+  const trimmedPrompt = prompt.trim()
+  if (attachments.length === 0 && linkedUrls.length === 0) {
+    return trimmedPrompt
+  }
+
+  const sections: string[] = []
+  if (attachments.length > 0) {
+    const attachmentBlock = attachments.map((pathValue) => `- ${pathValue}`).join('\n')
+    sections.push(`Attachments:\n${attachmentBlock}`)
+  }
+  if (linkedUrls.length > 0) {
+    const linkBlock = linkedUrls.map((url) => `- ${url}`).join('\n')
+    sections.push(`Linked work items:\n${linkBlock}`)
+  }
+  // Why: the new-workspace flow launches each agent with a single plain-text
+  // startup prompt. Appending attachments and linked URLs keeps extra context
+  // visible to Claude/Codex/OpenCode without cluttering the visible textarea.
+  if (!trimmedPrompt) {
+    return sections.join('\n\n')
+  }
+  return `${trimmedPrompt}\n\n${sections.join('\n\n')}`
+}
+
+export function getAttachmentLabel(pathValue: string): string {
+  const segments = pathValue.split(/[/\\]/)
+  return segments.at(-1) || pathValue
+}
+
+export function getSetupConfig(
+  repo: { hookSettings?: { scripts?: { setup?: string } } } | undefined,
+  yamlHooks: OrcaHooks | null
+): { source: 'yaml' | 'legacy'; command: string } | null {
+  const yamlSetup = yamlHooks?.scripts?.setup?.trim()
+  if (yamlSetup) {
+    return { source: 'yaml', command: yamlSetup }
+  }
+  const legacySetup = repo?.hookSettings?.scripts?.setup?.trim()
+  if (legacySetup) {
+    return { source: 'legacy', command: legacySetup }
+  }
+  return null
+}
+
+export function getLinkedWorkItemSuggestedName(item: GitHubWorkItem): string {
+  const withoutLeadingNumber = item.title
+    .trim()
+    .replace(/^(?:issue|pr|pull request)\s*#?\d+\s*[:-]\s*/i, '')
+    .replace(/^#\d+\s*[:-]\s*/, '')
+    .replace(/\(#\d+\)/gi, '')
+    .replace(/\b#\d+\b/g, '')
+    .trim()
+  const seed = withoutLeadingNumber || item.title.trim()
+  return seed
+    .toLowerCase()
+    .replace(/[\\/]+/g, '-')
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^[.-]+|[.-]+$/g, '')
+    .slice(0, 48)
+    .replace(/[-._]+$/g, '')
+}
+
+export function getWorkspaceSeedName(args: {
+  explicitName: string
+  prompt: string
+  linkedIssueNumber: number | null
+  linkedPR: number | null
+}): string {
+  const { explicitName, prompt, linkedIssueNumber, linkedPR } = args
+  if (explicitName.trim()) {
+    return explicitName.trim()
+  }
+  if (linkedPR !== null) {
+    return `pr-${linkedPR}`
+  }
+  if (linkedIssueNumber !== null) {
+    return `issue-${linkedIssueNumber}`
+  }
+  if (prompt.trim()) {
+    return prompt.trim()
+  }
+  // Why: the prompt is optional in this flow. Fall back to a stable default
+  // branch/workspace seed so users can launch an empty draft without first
+  // writing a brief or naming the workspace manually.
+  return 'workspace'
+}
+
+export async function ensureAgentStartupInTerminal(args: {
+  worktreeId: string
+  startup: AgentStartupPlan
+}): Promise<void> {
+  const { worktreeId, startup } = args
+  if (startup.followupPrompt === null) {
+    return
+  }
+
+  let promptInjected = false
+
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    if (attempt > 0) {
+      await new Promise((resolve) => window.setTimeout(resolve, 150))
+    }
+
+    const state = useAppStore.getState()
+    const tabId =
+      state.activeTabIdByWorktree[worktreeId] ?? state.tabsByWorktree[worktreeId]?.[0]?.id ?? null
+    if (!tabId) {
+      continue
+    }
+
+    const ptyId = state.ptyIdsByTabId[tabId]?.[0]
+    if (!ptyId) {
+      continue
+    }
+
+    try {
+      const foreground = (await window.api.pty.getForegroundProcess(ptyId))?.toLowerCase() ?? ''
+      const agentOwnsForeground =
+        foreground === startup.expectedProcess ||
+        foreground.startsWith(`${startup.expectedProcess}.`)
+
+      if (agentOwnsForeground && !promptInjected && startup.followupPrompt) {
+        window.api.pty.write(ptyId, `${startup.followupPrompt}\r`)
+        promptInjected = true
+        return
+      }
+
+      if (agentOwnsForeground && promptInjected) {
+        return
+      }
+
+      const hasChildProcesses = await window.api.pty.hasChildProcesses(ptyId)
+      if (
+        !promptInjected &&
+        startup.followupPrompt &&
+        hasChildProcesses &&
+        !isShellProcess(foreground) &&
+        attempt >= 4
+      ) {
+        // Why: the initial agent launch is already queued on the first terminal
+        // tab. Only agents without a verified startup-prompt flag need extra
+        // help here: once the TUI owns the PTY, type the draft prompt into the
+        // live session instead of launching the binary a second time.
+        window.api.pty.write(ptyId, `${startup.followupPrompt}\r`)
+        promptInjected = true
+        return
+      }
+    } catch {
+      // Ignore transient PTY inspection failures and keep polling.
+    }
+  }
+}

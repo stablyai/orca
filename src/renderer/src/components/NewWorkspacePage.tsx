@@ -1,7 +1,8 @@
-/* eslint-disable max-lines -- Why: the new-workspace flow intentionally keeps the
-composer, task picker, and create-side effects co-located so the draft sidebar
-state and launch logic stay in one place while this surface is still evolving. */
-import React, { startTransition, useEffect, useCallback, useMemo, useRef, useState } from 'react'
+/* eslint-disable max-lines -- Why: the new-workspace page keeps the composer,
+task source controls, and GitHub task list co-located so the wiring between the
+selected repo, the draft composer, and the work-item list stays readable in one
+place while this surface is still evolving. */
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ArrowRight,
   CircleDot,
@@ -18,7 +19,6 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Dialog, DialogContent } from '@/components/ui/dialog'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,23 +30,10 @@ import RepoCombobox from '@/components/repo/RepoCombobox'
 import NewWorkspaceComposerCard from '@/components/NewWorkspaceComposerCard'
 import { cn } from '@/lib/utils'
 import { LightRays } from '@/components/ui/light-rays'
-import { parseGitHubIssueOrPRNumber } from '@/lib/github-links'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import {
-  buildAgentStartupPlan,
-  isShellProcess,
-  type AgentStartupPlan
-} from '@/lib/tui-agent-startup'
-import { isGitRepoKind } from '../../../shared/repo-kind'
-import { AGENT_CATALOG } from '@/lib/agent-catalog'
-import type {
-  GitHubWorkItem,
-  OrcaHooks,
-  SetupDecision,
-  SetupRunPolicy,
-  TuiAgent,
-  TaskViewPresetId
-} from '../../../shared/types'
+import { useComposerState } from '@/hooks/useComposerState'
+import { getLinkedWorkItemSuggestedName } from '@/lib/new-workspace'
+import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
+import type { GitHubWorkItem, TaskViewPresetId } from '../../../shared/types'
 
 type TaskSource = 'github' | 'linear'
 type TaskQueryPreset = {
@@ -104,183 +91,6 @@ function getTaskPresetQuery(presetId: TaskViewPresetId | null): string {
 }
 
 const TASK_SEARCH_DEBOUNCE_MS = 300
-const isMac = navigator.userAgent.includes('Mac')
-const ADD_ATTACHMENT_SHORTCUT = isMac ? '⌘U' : 'Ctrl+U'
-const CLIENT_PLATFORM: NodeJS.Platform = navigator.userAgent.includes('Windows')
-  ? 'win32'
-  : navigator.userAgent.includes('Mac')
-    ? 'darwin'
-    : 'linux'
-
-type RepoSlug = {
-  owner: string
-  repo: string
-}
-
-type GitHubLinkQuery = {
-  query: string
-  repoMismatch: string | null
-  directNumber: number | null
-}
-
-function buildAgentPromptWithContext(
-  prompt: string,
-  attachments: string[],
-  linkedUrls: string[]
-): string {
-  const trimmedPrompt = prompt.trim()
-  if (attachments.length === 0 && linkedUrls.length === 0) {
-    return trimmedPrompt
-  }
-
-  const sections: string[] = []
-  if (attachments.length > 0) {
-    const attachmentBlock = attachments.map((pathValue) => `- ${pathValue}`).join('\n')
-    sections.push(`Attachments:\n${attachmentBlock}`)
-  }
-  if (linkedUrls.length > 0) {
-    const linkBlock = linkedUrls.map((url) => `- ${url}`).join('\n')
-    sections.push(`Linked work items:\n${linkBlock}`)
-  }
-  // Why: the new-workspace flow launches each agent with a single plain-text
-  // startup prompt. Appending attachments and linked URLs keeps extra context
-  // visible to Claude/Codex/OpenCode without cluttering the visible textarea.
-  if (!trimmedPrompt) {
-    return sections.join('\n\n')
-  }
-  return `${trimmedPrompt}\n\n${sections.join('\n\n')}`
-}
-
-function getAttachmentLabel(pathValue: string): string {
-  const segments = pathValue.split(/[/\\]/)
-  return segments.at(-1) || pathValue
-}
-
-function normalizeGitHubLinkQuery(raw: string, repoSlug: RepoSlug | null): GitHubLinkQuery {
-  const trimmed = raw.trim()
-  if (!trimmed) {
-    return { query: '', repoMismatch: null, directNumber: null }
-  }
-
-  const direct = parseGitHubIssueOrPRNumber(trimmed)
-  if (direct !== null && !trimmed.startsWith('http')) {
-    return { query: trimmed, repoMismatch: null, directNumber: direct }
-  }
-
-  let parsedUrl: URL
-  try {
-    parsedUrl = new URL(trimmed)
-  } catch {
-    return { query: trimmed, repoMismatch: null, directNumber: null }
-  }
-
-  if (!/^(?:www\.)?github\.com$/i.test(parsedUrl.hostname)) {
-    return { query: trimmed, repoMismatch: null, directNumber: null }
-  }
-
-  const match = parsedUrl.pathname.match(/^\/([^/]+)\/([^/]+)\/(?:issues|pull)\/(\d+)(?:\/)?$/i)
-  if (!match) {
-    return { query: trimmed, repoMismatch: null, directNumber: null }
-  }
-
-  if (
-    repoSlug &&
-    (match[1].toLowerCase() !== repoSlug.owner.toLowerCase() ||
-      match[2].toLowerCase() !== repoSlug.repo.toLowerCase())
-  ) {
-    return {
-      query: '',
-      repoMismatch: `${repoSlug.owner}/${repoSlug.repo}`,
-      directNumber: null
-    }
-  }
-
-  return {
-    query: trimmed,
-    repoMismatch: null,
-    directNumber: Number.parseInt(match[3], 10)
-  }
-}
-
-function getWorkItemSearchText(item: GitHubWorkItem): string {
-  return [
-    item.type,
-    item.number,
-    item.title,
-    item.author ?? '',
-    item.labels.join(' '),
-    item.branchName ?? '',
-    item.baseRefName ?? ''
-  ]
-    .join(' ')
-    .toLowerCase()
-}
-
-async function ensureAgentStartupInTerminal(args: {
-  worktreeId: string
-  startup: AgentStartupPlan
-}): Promise<void> {
-  const { worktreeId, startup } = args
-  if (startup.followupPrompt === null) {
-    return
-  }
-
-  let promptInjected = false
-
-  for (let attempt = 0; attempt < 30; attempt += 1) {
-    if (attempt > 0) {
-      await new Promise((resolve) => window.setTimeout(resolve, 150))
-    }
-
-    const state = useAppStore.getState()
-    const tabId =
-      state.activeTabIdByWorktree[worktreeId] ?? state.tabsByWorktree[worktreeId]?.[0]?.id ?? null
-    if (!tabId) {
-      continue
-    }
-
-    const ptyId = state.ptyIdsByTabId[tabId]?.[0]
-    if (!ptyId) {
-      continue
-    }
-
-    try {
-      const foreground = (await window.api.pty.getForegroundProcess(ptyId))?.toLowerCase() ?? ''
-      const agentOwnsForeground =
-        foreground === startup.expectedProcess ||
-        foreground.startsWith(`${startup.expectedProcess}.`)
-
-      if (agentOwnsForeground && !promptInjected && startup.followupPrompt) {
-        window.api.pty.write(ptyId, `${startup.followupPrompt}\r`)
-        promptInjected = true
-        return
-      }
-
-      if (agentOwnsForeground && promptInjected) {
-        return
-      }
-
-      const hasChildProcesses = await window.api.pty.hasChildProcesses(ptyId)
-      if (
-        !promptInjected &&
-        startup.followupPrompt &&
-        hasChildProcesses &&
-        !isShellProcess(foreground) &&
-        attempt >= 4
-      ) {
-        // Why: the initial agent launch is already queued on the first terminal
-        // tab. Only agents without a verified startup-prompt flag need extra
-        // help here: once the TUI owns the PTY, type the draft prompt into the
-        // live session instead of launching the binary a second time.
-        window.api.pty.write(ptyId, `${startup.followupPrompt}\r`)
-        promptInjected = true
-        return
-      }
-    } catch {
-      // Ignore transient PTY inspection failures and keep polling.
-    }
-  }
-}
 
 function formatRelativeTime(input: string): string {
   const date = new Date(input)
@@ -305,21 +115,6 @@ function formatRelativeTime(input: string): string {
   return formatter.format(diffDays, 'day')
 }
 
-function getSetupConfig(
-  repo: { hookSettings?: { scripts?: { setup?: string } } } | undefined,
-  yamlHooks: OrcaHooks | null
-): { source: 'yaml' | 'legacy'; command: string } | null {
-  const yamlSetup = yamlHooks?.scripts?.setup?.trim()
-  if (yamlSetup) {
-    return { source: 'yaml', command: yamlSetup }
-  }
-  const legacySetup = repo?.hookSettings?.scripts?.setup?.trim()
-  if (legacySetup) {
-    return { source: 'legacy', command: legacySetup }
-  }
-  return null
-}
-
 function getTaskStatusLabel(item: GitHubWorkItem): string {
   if (item.type === 'issue') {
     return 'Open'
@@ -340,120 +135,28 @@ function getTaskStatusTone(item: GitHubWorkItem): string {
   return 'border-cyan-500/30 bg-cyan-500/10 text-cyan-700 dark:text-cyan-200'
 }
 
-function getLinkedWorkItemSuggestedName(item: GitHubWorkItem): string {
-  const withoutLeadingNumber = item.title
-    .trim()
-    .replace(/^(?:issue|pr|pull request)\s*#?\d+\s*[:-]\s*/i, '')
-    .replace(/^#\d+\s*[:-]\s*/, '')
-    .replace(/\(#\d+\)/gi, '')
-    .replace(/\b#\d+\b/g, '')
-    .trim()
-  const seed = withoutLeadingNumber || item.title.trim()
-  return seed
-    .toLowerCase()
-    .replace(/[\\/]+/g, '-')
-    .replace(/\s+/g, '-')
-    .replace(/[^a-z0-9._-]+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^[.-]+|[.-]+$/g, '')
-    .slice(0, 48)
-    .replace(/[-._]+$/g, '')
-}
-
-function getWorkspaceSeedName(args: {
-  explicitName: string
-  prompt: string
-  linkedIssueNumber: number | null
-  linkedPR: number | null
-}): string {
-  const { explicitName, prompt, linkedIssueNumber, linkedPR } = args
-  if (explicitName.trim()) {
-    return explicitName.trim()
-  }
-  if (linkedPR !== null) {
-    return `pr-${linkedPR}`
-  }
-  if (linkedIssueNumber !== null) {
-    return `issue-${linkedIssueNumber}`
-  }
-  if (prompt.trim()) {
-    return prompt.trim()
-  }
-  // Why: the prompt is optional in this flow. Fall back to a stable default
-  // branch/workspace seed so users can launch an empty draft without first
-  // writing a brief or naming the workspace manually.
-  return 'workspace'
-}
-
 export default function NewWorkspacePage(): React.JSX.Element {
-  const repos = useAppStore((s) => s.repos)
-  const activeRepoId = useAppStore((s) => s.activeRepoId)
   const settings = useAppStore((s) => s.settings)
   const pageData = useAppStore((s) => s.newWorkspacePageData)
-  const newWorkspaceDraft = useAppStore((s) => s.newWorkspaceDraft)
   const closeNewWorkspacePage = useAppStore((s) => s.closeNewWorkspacePage)
-  const openSettingsPage = useAppStore((s) => s.openSettingsPage)
-  const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
-  const setNewWorkspaceDraft = useAppStore((s) => s.setNewWorkspaceDraft)
   const clearNewWorkspaceDraft = useAppStore((s) => s.clearNewWorkspaceDraft)
-  const createWorktree = useAppStore((s) => s.createWorktree)
+  const activeModal = useAppStore((s) => s.activeModal)
+  const openModal = useAppStore((s) => s.openModal)
   const updateSettings = useAppStore((s) => s.updateSettings)
-  const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
-  const setSidebarOpen = useAppStore((s) => s.setSidebarOpen)
-  const setRightSidebarOpen = useAppStore((s) => s.setRightSidebarOpen)
-  const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
 
-  const eligibleRepos = useMemo(() => repos.filter((repo) => isGitRepoKind(repo)), [repos])
-  const initialRepoId =
-    newWorkspaceDraft?.repoId && eligibleRepos.some((repo) => repo.id === newWorkspaceDraft.repoId)
-      ? newWorkspaceDraft.repoId
-      : pageData.preselectedRepoId &&
-          eligibleRepos.some((repo) => repo.id === pageData.preselectedRepoId)
-        ? pageData.preselectedRepoId
-        : activeRepoId && eligibleRepos.some((repo) => repo.id === activeRepoId)
-          ? activeRepoId
-          : (eligibleRepos[0]?.id ?? '')
+  const { cardProps, composerRef, promptTextareaRef, submit, createDisabled } = useComposerState({
+    persistDraft: true,
+    initialRepoId: pageData.preselectedRepoId,
+    initialName: pageData.prefilledName,
+    onCreated: () => {
+      clearNewWorkspaceDraft()
+      closeNewWorkspacePage()
+    }
+  })
 
-  const [repoId, setRepoId] = useState(initialRepoId)
-  const [name, setName] = useState(newWorkspaceDraft?.name ?? pageData.prefilledName ?? '')
-  const [linkedIssue, setLinkedIssue] = useState(newWorkspaceDraft?.linkedIssue ?? '')
-  const [linkedPR, setLinkedPR] = useState<number | null>(newWorkspaceDraft?.linkedPR ?? null)
-  const [linkedWorkItem, setLinkedWorkItem] = useState(newWorkspaceDraft?.linkedWorkItem ?? null)
-  const [agentPrompt, setAgentPrompt] = useState(newWorkspaceDraft?.prompt ?? '')
-  const [note, setNote] = useState(newWorkspaceDraft?.note ?? '')
-  const [attachmentPaths, setAttachmentPaths] = useState<string[]>(
-    newWorkspaceDraft?.attachments ?? []
-  )
-  const [tuiAgent, setTuiAgent] = useState<TuiAgent>(
-    newWorkspaceDraft?.agent ?? settings?.defaultTuiAgent ?? 'claude'
-  )
-  const [detectedAgentIds, setDetectedAgentIds] = useState<Set<string> | null>(null)
-  const [yamlHooks, setYamlHooks] = useState<OrcaHooks | null>(null)
-  const [checkedHooksRepoId, setCheckedHooksRepoId] = useState<string | null>(null)
-  const [setupDecision, setSetupDecision] = useState<'run' | 'skip' | null>(null)
-  const [runIssueAutomation, setRunIssueAutomation] = useState(false)
-  const [issueCommandTemplate, setIssueCommandTemplate] = useState('')
-  const [hasLoadedIssueCommand, setHasLoadedIssueCommand] = useState(false)
-  const [creating, setCreating] = useState(false)
-  const [createError, setCreateError] = useState<string | null>(null)
-  const [modalName, setModalName] = useState('')
-  const [modalLinkedIssue, setModalLinkedIssue] = useState('')
-  const [modalLinkedPR, setModalLinkedPR] = useState<number | null>(null)
-  const [modalLinkedWorkItem, setModalLinkedWorkItem] = useState<{
-    type: 'issue' | 'pr'
-    number: number
-    title: string
-    url: string
-  } | null>(null)
-  const [modalAgentPrompt, setModalAgentPrompt] = useState('')
-  const [modalNote, setModalNote] = useState('')
-  const [modalAttachmentPaths, setModalAttachmentPaths] = useState<string[]>([])
-  const [modalTuiAgent, setModalTuiAgent] = useState<TuiAgent>(
-    newWorkspaceDraft?.agent ?? settings?.defaultTuiAgent ?? 'claude'
-  )
-  const [modalSetupDecision, setModalSetupDecision] = useState<'run' | 'skip' | null>(null)
-  const [modalCreating, setModalCreating] = useState(false)
-  const [modalCreateError, setModalCreateError] = useState<string | null>(null)
+  const { repoId, eligibleRepos, onRepoChange } = cardProps
+  const selectedRepo = eligibleRepos.find((repo) => repo.id === repoId)
+
   const [taskSource, setTaskSource] = useState<TaskSource>('github')
   const [taskSearchInput, setTaskSearchInput] = useState('')
   const [appliedTaskSearch, setAppliedTaskSearch] = useState('')
@@ -462,68 +165,8 @@ export default function NewWorkspacePage(): React.JSX.Element {
   const [tasksError, setTasksError] = useState<string | null>(null)
   const [taskRefreshNonce, setTaskRefreshNonce] = useState(0)
   const [workItems, setWorkItems] = useState<GitHubWorkItem[]>([])
-  const [linkPopoverOpen, setLinkPopoverOpen] = useState(false)
-  const [linkQuery, setLinkQuery] = useState('')
-  const [linkRepoSlug, setLinkRepoSlug] = useState<RepoSlug | null>(null)
-  const [linkItems, setLinkItems] = useState<GitHubWorkItem[]>([])
-  const [linkItemsLoading, setLinkItemsLoading] = useState(false)
-  const [linkDirectItem, setLinkDirectItem] = useState<GitHubWorkItem | null>(null)
-  const [linkDirectLoading, setLinkDirectLoading] = useState(false)
-  const [linkDebouncedQuery, setLinkDebouncedQuery] = useState('')
-  const [modalLinkPopoverOpen, setModalLinkPopoverOpen] = useState(false)
-  const [modalLinkQuery, setModalLinkQuery] = useState('')
-  const [modalLinkDirectItem, setModalLinkDirectItem] = useState<GitHubWorkItem | null>(null)
-  const [modalLinkDirectLoading, setModalLinkDirectLoading] = useState(false)
-  const [modalLinkDebouncedQuery, setModalLinkDebouncedQuery] = useState('')
-  const [advancedOpen, setAdvancedOpen] = useState(Boolean((newWorkspaceDraft?.note ?? '').trim()))
-  const [modalAdvancedOpen, setModalAdvancedOpen] = useState(false)
-  const [composerModalOpen, setComposerModalOpen] = useState(false)
-  const lastAutoNameRef = useRef(newWorkspaceDraft?.name ?? pageData.prefilledName ?? '')
-  const modalLastAutoNameRef = useRef('')
-  const nameInputRef = useRef<HTMLInputElement>(null)
-  const promptTextareaRef = useRef<HTMLTextAreaElement>(null)
-  const composerRef = useRef<HTMLDivElement>(null)
-  const modalNameInputRef = useRef<HTMLInputElement>(null)
-  const modalPromptTextareaRef = useRef<HTMLTextAreaElement>(null)
-  const modalComposerRef = useRef<HTMLDivElement>(null)
 
-  const selectedRepo = eligibleRepos.find((repo) => repo.id === repoId)
-  const parsedLinkedIssueNumber = useMemo(
-    () => (linkedIssue.trim() ? parseGitHubIssueOrPRNumber(linkedIssue) : null),
-    [linkedIssue]
-  )
-  const parsedModalLinkedIssueNumber = useMemo(
-    () => (modalLinkedIssue.trim() ? parseGitHubIssueOrPRNumber(modalLinkedIssue) : null),
-    [modalLinkedIssue]
-  )
   const defaultTaskViewPreset = settings?.defaultTaskViewPreset ?? 'all'
-  const setupConfig = useMemo(
-    () => getSetupConfig(selectedRepo, yamlHooks),
-    [selectedRepo, yamlHooks]
-  )
-  const setupPolicy: SetupRunPolicy = selectedRepo?.hookSettings?.setupRunPolicy ?? 'run-by-default'
-  const hasIssueAutomationConfig = issueCommandTemplate.length > 0
-  const canOfferIssueAutomation = parsedLinkedIssueNumber !== null && hasIssueAutomationConfig
-  const shouldRunIssueAutomation = canOfferIssueAutomation && runIssueAutomation
-  const shouldWaitForIssueAutomationCheck =
-    parsedLinkedIssueNumber !== null && !hasLoadedIssueCommand
-  const requiresExplicitSetupChoice = Boolean(setupConfig) && setupPolicy === 'ask'
-  const resolvedSetupDecision =
-    setupDecision ??
-    (!setupConfig || setupPolicy === 'ask'
-      ? null
-      : setupPolicy === 'run-by-default'
-        ? 'run'
-        : 'skip')
-  const resolvedModalSetupDecision =
-    modalSetupDecision ??
-    (!setupConfig || setupPolicy === 'ask'
-      ? null
-      : setupPolicy === 'run-by-default'
-        ? 'run'
-        : 'skip')
-  const isSetupCheckPending = Boolean(repoId) && checkedHooksRepoId !== repoId
-  const shouldWaitForSetupCheck = Boolean(selectedRepo) && isSetupCheckPending
 
   const filteredWorkItems = useMemo(() => {
     if (!activeTaskPreset) {
@@ -550,259 +193,10 @@ export default function NewWorkspacePage(): React.JSX.Element {
     })
   }, [activeTaskPreset, workItems])
 
-  const workspaceSeedName = useMemo(
-    () =>
-      getWorkspaceSeedName({
-        explicitName: name,
-        prompt: agentPrompt,
-        linkedIssueNumber: parsedLinkedIssueNumber,
-        linkedPR
-      }),
-    [agentPrompt, linkedPR, name, parsedLinkedIssueNumber]
-  )
-  const modalWorkspaceSeedName = useMemo(
-    () =>
-      getWorkspaceSeedName({
-        explicitName: modalName,
-        prompt: modalAgentPrompt,
-        linkedIssueNumber: parsedModalLinkedIssueNumber,
-        linkedPR: modalLinkedPR
-      }),
-    [modalAgentPrompt, modalLinkedPR, modalName, parsedModalLinkedIssueNumber]
-  )
-  const startupPrompt = useMemo(
-    () =>
-      buildAgentPromptWithContext(
-        agentPrompt,
-        attachmentPaths,
-        linkedWorkItem?.url ? [linkedWorkItem.url] : []
-      ),
-    [agentPrompt, attachmentPaths, linkedWorkItem?.url]
-  )
-  const modalStartupPrompt = useMemo(
-    () =>
-      buildAgentPromptWithContext(
-        modalAgentPrompt,
-        modalAttachmentPaths,
-        modalLinkedWorkItem?.url ? [modalLinkedWorkItem.url] : []
-      ),
-    [modalAgentPrompt, modalAttachmentPaths, modalLinkedWorkItem?.url]
-  )
-  const normalizedLinkQuery = useMemo(
-    () => normalizeGitHubLinkQuery(linkDebouncedQuery, linkRepoSlug),
-    [linkDebouncedQuery, linkRepoSlug]
-  )
-  const normalizedModalLinkQuery = useMemo(
-    () => normalizeGitHubLinkQuery(modalLinkDebouncedQuery, linkRepoSlug),
-    [modalLinkDebouncedQuery, linkRepoSlug]
-  )
-  const filteredLinkItems = useMemo(() => {
-    if (normalizedLinkQuery.directNumber !== null) {
-      return linkDirectItem ? [linkDirectItem] : []
-    }
-
-    const query = normalizedLinkQuery.query.trim().toLowerCase()
-    if (!query) {
-      return linkItems
-    }
-
-    return linkItems.filter((item) => getWorkItemSearchText(item).includes(query))
-  }, [linkDirectItem, linkItems, normalizedLinkQuery.directNumber, normalizedLinkQuery.query])
-  const filteredModalLinkItems = useMemo(() => {
-    if (normalizedModalLinkQuery.directNumber !== null) {
-      return modalLinkDirectItem ? [modalLinkDirectItem] : []
-    }
-
-    const query = normalizedModalLinkQuery.query.trim().toLowerCase()
-    if (!query) {
-      return linkItems
-    }
-
-    return linkItems.filter((item) => getWorkItemSearchText(item).includes(query))
-  }, [
-    linkItems,
-    modalLinkDirectItem,
-    normalizedModalLinkQuery.directNumber,
-    normalizedModalLinkQuery.query
-  ])
+  // Autofocus prompt on mount so the user can start typing immediately.
   useEffect(() => {
-    setNewWorkspaceDraft({
-      repoId: repoId || null,
-      name,
-      prompt: agentPrompt,
-      note,
-      attachments: attachmentPaths,
-      linkedWorkItem,
-      agent: tuiAgent,
-      linkedIssue,
-      linkedPR
-    })
-  }, [
-    agentPrompt,
-    attachmentPaths,
-    linkedIssue,
-    linkedPR,
-    linkedWorkItem,
-    note,
-    name,
-    repoId,
-    setNewWorkspaceDraft,
-    tuiAgent
-  ])
-
-  useEffect(() => {
-    if (!repoId && eligibleRepos[0]?.id) {
-      setRepoId(eligibleRepos[0].id)
-    }
-  }, [eligibleRepos, repoId])
-
-  useEffect(() => {
-    const timeout = window.setTimeout(() => setLinkDebouncedQuery(linkQuery), 250)
-    return () => window.clearTimeout(timeout)
-  }, [linkQuery])
-
-  useEffect(() => {
-    const timeout = window.setTimeout(() => setModalLinkDebouncedQuery(modalLinkQuery), 250)
-    return () => window.clearTimeout(timeout)
-  }, [modalLinkQuery])
-
-  useEffect(() => {
-    if (composerModalOpen) {
-      modalPromptTextareaRef.current?.focus()
-      return
-    }
     promptTextareaRef.current?.focus()
-  }, [composerModalOpen])
-
-  // Why: detect which agents are installed once on mount so the dropdown can
-  // surface installed agents first. If settings.defaultTuiAgent is null (auto),
-  // also update the selection to the first detected agent so the pre-selection
-  // reflects the user's actual environment without requiring manual configuration.
-  useEffect(() => {
-    void window.api.preflight.detectAgents().then((ids) => {
-      setDetectedAgentIds(new Set(ids))
-      if (!newWorkspaceDraft?.agent && !settings?.defaultTuiAgent && ids.length > 0) {
-        const firstInCatalogOrder = AGENT_CATALOG.find((a) => ids.includes(a.id))
-        if (firstInCatalogOrder) {
-          setTuiAgent(firstInCatalogOrder.id)
-        }
-      }
-    })
-    // Why: intentionally run only once on mount — detection is a best-effort
-    // PATH snapshot and does not need to re-run when the draft or settings change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  useEffect(() => {
-    if (!repoId) {
-      return
-    }
-
-    let cancelled = false
-    setHasLoadedIssueCommand(false)
-    setIssueCommandTemplate('')
-    setYamlHooks(null)
-    setCheckedHooksRepoId(null)
-
-    void window.api.hooks
-      .check({ repoId })
-      .then((result) => {
-        if (!cancelled) {
-          setYamlHooks(result.hooks)
-          setCheckedHooksRepoId(repoId)
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setYamlHooks(null)
-          setCheckedHooksRepoId(repoId)
-        }
-      })
-
-    void window.api.hooks
-      .readIssueCommand({ repoId })
-      .then((result) => {
-        if (!cancelled) {
-          setIssueCommandTemplate(result.effectiveContent ?? '')
-          setHasLoadedIssueCommand(true)
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setIssueCommandTemplate('')
-          setHasLoadedIssueCommand(true)
-        }
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [repoId])
-
-  useEffect(() => {
-    if (!selectedRepo) {
-      setLinkRepoSlug(null)
-      return
-    }
-
-    let cancelled = false
-    void window.api.gh
-      .repoSlug({ repoPath: selectedRepo.path })
-      .then((slug) => {
-        if (!cancelled) {
-          setLinkRepoSlug(slug)
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setLinkRepoSlug(null)
-        }
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [selectedRepo])
-
-  useEffect(() => {
-    if (shouldWaitForSetupCheck) {
-      setSetupDecision(null)
-      return
-    }
-    if (!setupConfig) {
-      setSetupDecision(null)
-      return
-    }
-    if (setupPolicy === 'ask') {
-      setSetupDecision(null)
-      return
-    }
-    setSetupDecision(setupPolicy === 'run-by-default' ? 'run' : 'skip')
-  }, [setupConfig, setupPolicy, shouldWaitForSetupCheck])
-
-  useEffect(() => {
-    if (shouldWaitForSetupCheck) {
-      setModalSetupDecision(null)
-      return
-    }
-    if (!setupConfig) {
-      setModalSetupDecision(null)
-      return
-    }
-    if (setupPolicy === 'ask') {
-      setModalSetupDecision(null)
-      return
-    }
-    setModalSetupDecision(setupPolicy === 'run-by-default' ? 'run' : 'skip')
-  }, [setupConfig, setupPolicy, shouldWaitForSetupCheck])
-
-  useEffect(() => {
-    if (!canOfferIssueAutomation) {
-      setRunIssueAutomation(false)
-      return
-    }
-    setRunIssueAutomation(true)
-  }, [canOfferIssueAutomation])
+  }, [promptTextareaRef])
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -852,189 +246,6 @@ export default function NewWorkspacePage(): React.JSX.Element {
       cancelled = true
     }
   }, [appliedTaskSearch, selectedRepo, taskRefreshNonce, taskSource])
-
-  useEffect(() => {
-    if (!linkPopoverOpen || !selectedRepo) {
-      return
-    }
-
-    let cancelled = false
-    setLinkItemsLoading(true)
-
-    void window.api.gh
-      .listWorkItems({ repoPath: selectedRepo.path, limit: 100 })
-      .then((items) => {
-        if (!cancelled) {
-          setLinkItems(items)
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setLinkItems([])
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLinkItemsLoading(false)
-        }
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [linkPopoverOpen, selectedRepo])
-
-  useEffect(() => {
-    if (!modalLinkPopoverOpen || !selectedRepo) {
-      return
-    }
-
-    let cancelled = false
-    setLinkItemsLoading(true)
-
-    void window.api.gh
-      .listWorkItems({ repoPath: selectedRepo.path, limit: 100 })
-      .then((items) => {
-        if (!cancelled) {
-          setLinkItems(items)
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setLinkItems([])
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLinkItemsLoading(false)
-        }
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [modalLinkPopoverOpen, selectedRepo])
-
-  useEffect(() => {
-    if (!linkPopoverOpen || !selectedRepo || normalizedLinkQuery.directNumber === null) {
-      setLinkDirectItem(null)
-      setLinkDirectLoading(false)
-      return
-    }
-
-    let cancelled = false
-    setLinkDirectLoading(true)
-    // Why: Superset lets users paste a full GitHub URL or type a raw issue/PR
-    // number and still get a concrete selectable result. Orca mirrors that by
-    // resolving direct lookups against the selected repo instead of requiring a
-    // text match in the recent-items list.
-    void window.api.gh
-      .workItem({ repoPath: selectedRepo.path, number: normalizedLinkQuery.directNumber })
-      .then((item) => {
-        if (!cancelled) {
-          setLinkDirectItem(item)
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setLinkDirectItem(null)
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLinkDirectLoading(false)
-        }
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [linkPopoverOpen, normalizedLinkQuery.directNumber, selectedRepo])
-
-  useEffect(() => {
-    if (!modalLinkPopoverOpen || !selectedRepo || normalizedModalLinkQuery.directNumber === null) {
-      setModalLinkDirectItem(null)
-      setModalLinkDirectLoading(false)
-      return
-    }
-
-    let cancelled = false
-    setModalLinkDirectLoading(true)
-    void window.api.gh
-      .workItem({ repoPath: selectedRepo.path, number: normalizedModalLinkQuery.directNumber })
-      .then((item) => {
-        if (!cancelled) {
-          setModalLinkDirectItem(item)
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setModalLinkDirectItem(null)
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setModalLinkDirectLoading(false)
-        }
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [modalLinkPopoverOpen, normalizedModalLinkQuery.directNumber, selectedRepo])
-
-  const applyLinkedWorkItem = useCallback(
-    (item: GitHubWorkItem): void => {
-      if (item.type === 'issue') {
-        setLinkedIssue(String(item.number))
-        setLinkedPR(null)
-      } else {
-        setLinkedIssue('')
-        setLinkedPR(item.number)
-      }
-      setLinkedWorkItem({
-        type: item.type,
-        number: item.number,
-        title: item.title,
-        url: item.url
-      })
-      const suggestedName = getLinkedWorkItemSuggestedName(item)
-      if (suggestedName && (!name.trim() || name === lastAutoNameRef.current)) {
-        setName(suggestedName)
-        lastAutoNameRef.current = suggestedName
-      }
-    },
-    [name]
-  )
-
-  const handleSelectWorkItem = (item: GitHubWorkItem): void => {
-    if (item.type === 'issue') {
-      setModalLinkedIssue(String(item.number))
-      setModalLinkedPR(null)
-    } else {
-      setModalLinkedIssue('')
-      setModalLinkedPR(item.number)
-    }
-    setModalLinkedWorkItem({
-      type: item.type,
-      number: item.number,
-      title: item.title,
-      url: item.url
-    })
-    const suggestedName = getLinkedWorkItemSuggestedName(item)
-    setModalName(suggestedName)
-    modalLastAutoNameRef.current = suggestedName
-    setModalAgentPrompt('')
-    setModalNote('')
-    setModalAttachmentPaths([])
-    setModalCreateError(null)
-    setModalLinkPopoverOpen(false)
-    setModalLinkQuery('')
-    setModalLinkDebouncedQuery('')
-    setModalLinkDirectItem(null)
-    setModalAdvancedOpen(false)
-    setComposerModalOpen(true)
-  }
 
   useEffect(() => {
     // Why: the composer should reflect the user's saved default once on mount
@@ -1092,414 +303,39 @@ export default function NewWorkspacePage(): React.JSX.Element {
     [handleApplyTaskSearch]
   )
 
-  const handleLinkPopoverChange = useCallback((open: boolean): void => {
-    setLinkPopoverOpen(open)
-    if (!open) {
-      setLinkQuery('')
-      setLinkDebouncedQuery('')
-      setLinkDirectItem(null)
-    }
-  }, [])
-
-  const handleModalLinkPopoverChange = useCallback((open: boolean): void => {
-    setModalLinkPopoverOpen(open)
-    if (!open) {
-      setModalLinkQuery('')
-      setModalLinkDebouncedQuery('')
-      setModalLinkDirectItem(null)
-    }
-  }, [])
-
-  const handleSelectLinkedItem = useCallback(
+  const handleSelectWorkItem = useCallback(
     (item: GitHubWorkItem): void => {
-      applyLinkedWorkItem(item)
-      handleLinkPopoverChange(false)
-    },
-    [applyLinkedWorkItem, handleLinkPopoverChange]
-  )
-
-  const handleSelectModalLinkedItem = useCallback(
-    (item: GitHubWorkItem): void => {
-      if (item.type === 'issue') {
-        setModalLinkedIssue(String(item.number))
-        setModalLinkedPR(null)
-      } else {
-        setModalLinkedIssue('')
-        setModalLinkedPR(item.number)
-      }
-      setModalLinkedWorkItem({
+      // Why: selecting a task from the list opens the same lightweight composer
+      // modal used by Cmd+J, so the prompt path is identical whether the user
+      // arrives via palette URL, picked issue/PR, or chose one from this list.
+      const linkedWorkItem: LinkedWorkItemSummary = {
         type: item.type,
         number: item.number,
         title: item.title,
         url: item.url
-      })
-      const suggestedName = getLinkedWorkItemSuggestedName(item)
-      if (suggestedName && (!modalName.trim() || modalName === modalLastAutoNameRef.current)) {
-        setModalName(suggestedName)
-        modalLastAutoNameRef.current = suggestedName
       }
-      handleModalLinkPopoverChange(false)
+      openModal('new-workspace-composer', {
+        linkedWorkItem,
+        prefilledName: getLinkedWorkItemSuggestedName(item),
+        initialRepoId: repoId
+      })
     },
-    [handleModalLinkPopoverChange, modalName]
+    [openModal, repoId]
   )
-
-  const handleNameChange = useCallback(
-    (event: React.ChangeEvent<HTMLInputElement>): void => {
-      const nextName = event.target.value
-      // Why: linked GitHub items should keep refreshing the suggested workspace
-      // name only while the current value is still auto-managed. As soon as the
-      // user edits the field by hand, later issue/PR selections must stop
-      // clobbering it until they clear the field again.
-      if (!nextName.trim()) {
-        lastAutoNameRef.current = ''
-      } else if (name !== lastAutoNameRef.current) {
-        lastAutoNameRef.current = ''
-      }
-      setName(nextName)
-      setCreateError(null)
-    },
-    [name]
-  )
-
-  const handleModalNameChange = useCallback(
-    (event: React.ChangeEvent<HTMLInputElement>): void => {
-      const nextName = event.target.value
-      if (!nextName.trim()) {
-        modalLastAutoNameRef.current = ''
-      } else if (modalName !== modalLastAutoNameRef.current) {
-        modalLastAutoNameRef.current = ''
-      }
-      setModalName(nextName)
-      setModalCreateError(null)
-    },
-    [modalName]
-  )
-
-  const handleAddAttachment = useCallback(async (): Promise<void> => {
-    try {
-      const selectedPath = await window.api.shell.pickAttachment()
-      if (!selectedPath) {
-        return
-      }
-      setAttachmentPaths((current) => {
-        if (current.includes(selectedPath)) {
-          return current
-        }
-        return [...current, selectedPath]
-      })
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to add attachment.'
-      toast.error(message)
-    }
-  }, [])
-
-  const handleAddModalAttachment = useCallback(async (): Promise<void> => {
-    try {
-      const selectedPath = await window.api.shell.pickAttachment()
-      if (!selectedPath) {
-        return
-      }
-      setModalAttachmentPaths((current) => {
-        if (current.includes(selectedPath)) {
-          return current
-        }
-        return [...current, selectedPath]
-      })
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to add attachment.'
-      toast.error(message)
-    }
-  }, [])
-
-  const handlePromptKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLTextAreaElement>): void => {
-      const mod = isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
-      if (!mod || event.altKey || event.shiftKey || event.key.toLowerCase() !== 'u') {
-        return
-      }
-
-      // Why: the attachment picker should only steal Cmd/Ctrl+U while the user
-      // is composing a prompt, so the shortcut is scoped to the textarea rather
-      // than registered globally for the whole new-workspace surface.
-      event.preventDefault()
-      void handleAddAttachment()
-    },
-    [handleAddAttachment]
-  )
-
-  const handleModalPromptKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLTextAreaElement>): void => {
-      const mod = isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
-      if (!mod || event.altKey || event.shiftKey || event.key.toLowerCase() !== 'u') {
-        return
-      }
-
-      event.preventDefault()
-      void handleAddModalAttachment()
-    },
-    [handleAddModalAttachment]
-  )
-
-  const handleCreate = useCallback(async (): Promise<void> => {
-    // Why: the full-page composer mirrors chat-first tools where the prompt or
-    // selected task is the primary input. When the user leaves the name blank,
-    // derive a stable branch/workspace name from the selected task or prompt
-    // instead of forcing a duplicate manual field.
-    const workspaceName = workspaceSeedName
-    if (
-      !repoId ||
-      !workspaceName ||
-      !selectedRepo ||
-      shouldWaitForSetupCheck ||
-      shouldWaitForIssueAutomationCheck ||
-      (requiresExplicitSetupChoice && !setupDecision)
-    ) {
-      return
-    }
-
-    setCreateError(null)
-    setCreating(true)
-    try {
-      const result = await createWorktree(
-        repoId,
-        workspaceName,
-        undefined,
-        (resolvedSetupDecision ?? 'inherit') as SetupDecision
-      )
-      const worktree = result.worktree
-
-      try {
-        const metaUpdates: {
-          linkedIssue?: number
-          linkedPR?: number
-          comment?: string
-        } = {}
-        if (parsedLinkedIssueNumber !== null) {
-          metaUpdates.linkedIssue = parsedLinkedIssueNumber
-        }
-        if (linkedPR !== null) {
-          metaUpdates.linkedPR = linkedPR
-        }
-        if (note.trim()) {
-          metaUpdates.comment = note.trim()
-        }
-        if (Object.keys(metaUpdates).length > 0) {
-          await updateWorktreeMeta(worktree.id, metaUpdates)
-        }
-      } catch {
-        console.error('Failed to update worktree meta after creation')
-      }
-
-      const issueCommand = shouldRunIssueAutomation
-        ? {
-            command: issueCommandTemplate.replace(/\{\{issue\}\}/g, String(parsedLinkedIssueNumber))
-          }
-        : undefined
-      const startupPlan = buildAgentStartupPlan({
-        agent: tuiAgent,
-        prompt: startupPrompt,
-        cmdOverrides: settings?.agentCmdOverrides ?? {},
-        platform: CLIENT_PLATFORM
-      })
-
-      activateAndRevealWorktree(worktree.id, {
-        setup: result.setup,
-        issueCommand,
-        ...(startupPlan ? { startup: { command: startupPlan.launchCommand } } : {})
-      })
-      if (startupPlan) {
-        void ensureAgentStartupInTerminal({
-          worktreeId: worktree.id,
-          startup: startupPlan
-        })
-      }
-      setSidebarOpen(true)
-      if (settings?.rightSidebarOpenByDefault) {
-        setRightSidebarTab('explorer')
-        setRightSidebarOpen(true)
-      }
-      clearNewWorkspaceDraft()
-      closeNewWorkspacePage()
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to create worktree.'
-      setCreateError(message)
-      toast.error(message)
-    } finally {
-      setCreating(false)
-    }
-  }, [
-    clearNewWorkspaceDraft,
-    closeNewWorkspacePage,
-    createWorktree,
-    issueCommandTemplate,
-    linkedPR,
-    note,
-    parsedLinkedIssueNumber,
-    repoId,
-    requiresExplicitSetupChoice,
-    resolvedSetupDecision,
-    selectedRepo,
-    settings?.agentCmdOverrides,
-    settings?.rightSidebarOpenByDefault,
-    setRightSidebarOpen,
-    setRightSidebarTab,
-    setSidebarOpen,
-    setupDecision,
-    tuiAgent,
-    shouldRunIssueAutomation,
-    shouldWaitForIssueAutomationCheck,
-    shouldWaitForSetupCheck,
-    startupPrompt,
-    updateWorktreeMeta,
-    workspaceSeedName
-  ])
-
-  const handleModalCreate = useCallback(async (): Promise<void> => {
-    const workspaceName = modalWorkspaceSeedName
-    if (
-      !repoId ||
-      !workspaceName ||
-      !selectedRepo ||
-      shouldWaitForSetupCheck ||
-      (requiresExplicitSetupChoice && !modalSetupDecision)
-    ) {
-      return
-    }
-
-    setModalCreateError(null)
-    setModalCreating(true)
-    try {
-      const result = await createWorktree(
-        repoId,
-        workspaceName,
-        undefined,
-        (resolvedModalSetupDecision ?? 'inherit') as SetupDecision
-      )
-      const worktree = result.worktree
-
-      try {
-        const metaUpdates: {
-          linkedIssue?: number
-          linkedPR?: number
-          comment?: string
-        } = {}
-        if (parsedModalLinkedIssueNumber !== null) {
-          metaUpdates.linkedIssue = parsedModalLinkedIssueNumber
-        }
-        if (modalLinkedPR !== null) {
-          metaUpdates.linkedPR = modalLinkedPR
-        }
-        if (modalNote.trim()) {
-          metaUpdates.comment = modalNote.trim()
-        }
-        if (Object.keys(metaUpdates).length > 0) {
-          await updateWorktreeMeta(worktree.id, metaUpdates)
-        }
-      } catch {
-        console.error('Failed to update worktree meta after creation')
-      }
-
-      const startupPlan = buildAgentStartupPlan({
-        agent: modalTuiAgent,
-        prompt: modalStartupPrompt,
-        cmdOverrides: settings?.agentCmdOverrides ?? {},
-        platform: CLIENT_PLATFORM
-      })
-
-      activateAndRevealWorktree(worktree.id, {
-        setup: result.setup,
-        ...(startupPlan ? { startup: { command: startupPlan.launchCommand } } : {})
-      })
-      if (startupPlan) {
-        void ensureAgentStartupInTerminal({
-          worktreeId: worktree.id,
-          startup: startupPlan
-        })
-      }
-      setSidebarOpen(true)
-      if (settings?.rightSidebarOpenByDefault) {
-        setRightSidebarTab('explorer')
-        setRightSidebarOpen(true)
-      }
-      clearNewWorkspaceDraft()
-      closeNewWorkspacePage()
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to create worktree.'
-      setModalCreateError(message)
-      toast.error(message)
-    } finally {
-      setModalCreating(false)
-    }
-  }, [
-    clearNewWorkspaceDraft,
-    closeNewWorkspacePage,
-    createWorktree,
-    modalLinkedPR,
-    modalNote,
-    modalSetupDecision,
-    modalStartupPrompt,
-    modalTuiAgent,
-    modalWorkspaceSeedName,
-    parsedModalLinkedIssueNumber,
-    repoId,
-    requiresExplicitSetupChoice,
-    resolvedModalSetupDecision,
-    selectedRepo,
-    settings?.agentCmdOverrides,
-    settings?.rightSidebarOpenByDefault,
-    setRightSidebarOpen,
-    setRightSidebarTab,
-    setSidebarOpen,
-    shouldWaitForSetupCheck,
-    updateWorktreeMeta
-  ])
-
-  const createDisabled =
-    !repoId ||
-    !workspaceSeedName ||
-    creating ||
-    shouldWaitForSetupCheck ||
-    shouldWaitForIssueAutomationCheck ||
-    (requiresExplicitSetupChoice && !setupDecision)
-  const modalCreateDisabled =
-    !repoId ||
-    !modalWorkspaceSeedName ||
-    modalCreating ||
-    shouldWaitForSetupCheck ||
-    (requiresExplicitSetupChoice && !modalSetupDecision)
 
   const handleDiscardDraft = useCallback((): void => {
     clearNewWorkspaceDraft()
     closeNewWorkspacePage()
   }, [clearNewWorkspaceDraft, closeNewWorkspacePage])
 
-  const handleComposerRepoChange = useCallback((value: string): void => {
-    startTransition(() => {
-      setRepoId(value)
-      setLinkedIssue('')
-      setLinkedPR(null)
-      setLinkedWorkItem(null)
-      setModalLinkedIssue('')
-      setModalLinkedPR(null)
-      setModalLinkedWorkItem(null)
-    })
-  }, [])
-
-  const handleRemoveLinkedWorkItem = useCallback((): void => {
-    setLinkedWorkItem(null)
-    setLinkedIssue('')
-    setLinkedPR(null)
-    if (name === lastAutoNameRef.current) {
-      lastAutoNameRef.current = ''
-    }
-  }, [name])
-
-  const handleOpenAgentSettings = useCallback((): void => {
-    openSettingsTarget({ pane: 'agents', repoId: null })
-    openSettingsPage()
-  }, [openSettingsPage, openSettingsTarget])
-
   useEffect(() => {
+    // Why: when the global composer modal is on top, let its own scoped key
+    // handler own Enter/Esc so we don't double-fire (e.g. modal Esc closes
+    // itself *and* this handler tries to discard the underlying page draft).
+    if (activeModal === 'new-workspace-composer') {
+      return
+    }
+
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== 'Enter' && event.key !== 'Escape') {
         return
@@ -1514,19 +350,6 @@ export default function NewWorkspacePage(): React.JSX.Element {
         // Why: Esc should first dismiss the focused control so users can back
         // out of text entry without accidentally closing the whole composer.
         // Once focus is already outside an input, Esc becomes the discard shortcut.
-        if (composerModalOpen) {
-          if (
-            target instanceof HTMLInputElement ||
-            target instanceof HTMLTextAreaElement ||
-            target instanceof HTMLSelectElement ||
-            target.isContentEditable
-          ) {
-            event.preventDefault()
-            target.blur()
-          }
-          return
-        }
-
         if (
           target instanceof HTMLInputElement ||
           target instanceof HTMLTextAreaElement ||
@@ -1543,13 +366,11 @@ export default function NewWorkspacePage(): React.JSX.Element {
         return
       }
 
-      const activeComposerRef = composerModalOpen ? modalComposerRef : composerRef
-      if (!activeComposerRef.current?.contains(target)) {
+      if (!composerRef.current?.contains(target)) {
         return
       }
 
-      const activeCreateDisabled = composerModalOpen ? modalCreateDisabled : createDisabled
-      if (activeCreateDisabled) {
+      if (createDisabled) {
         return
       }
 
@@ -1558,23 +379,12 @@ export default function NewWorkspacePage(): React.JSX.Element {
       }
 
       event.preventDefault()
-      if (composerModalOpen) {
-        void handleModalCreate()
-        return
-      }
-      void handleCreate()
+      void submit()
     }
 
     window.addEventListener('keydown', onKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
-  }, [
-    composerModalOpen,
-    createDisabled,
-    handleCreate,
-    handleDiscardDraft,
-    handleModalCreate,
-    modalCreateDisabled
-  ])
+  }, [activeModal, composerRef, createDisabled, handleDiscardDraft, submit])
 
   return (
     <div className="relative flex h-full min-h-0 flex-1 overflow-hidden bg-background dark:bg-[#1a1a1a] text-foreground">
@@ -1619,132 +429,8 @@ export default function NewWorkspacePage(): React.JSX.Element {
         <div className="mx-auto flex w-full max-w-[1120px] flex-1 flex-col min-h-0 px-5 pb-5 md:px-8 md:pb-7">
           <div className="flex-none flex flex-col gap-5">
             <section className="mx-auto w-full max-w-[860px] border-b border-border/50 pb-5">
-              <NewWorkspaceComposerCard
-                composerRef={composerRef}
-                nameInputRef={nameInputRef}
-                promptTextareaRef={promptTextareaRef}
-                eligibleRepos={eligibleRepos}
-                repoId={repoId}
-                onRepoChange={handleComposerRepoChange}
-                name={name}
-                onNameChange={handleNameChange}
-                agentPrompt={agentPrompt}
-                onAgentPromptChange={setAgentPrompt}
-                onPromptKeyDown={handlePromptKeyDown}
-                attachmentPaths={attachmentPaths}
-                getAttachmentLabel={getAttachmentLabel}
-                onAddAttachment={() => void handleAddAttachment()}
-                onRemoveAttachment={(pathValue) =>
-                  setAttachmentPaths((current) =>
-                    current.filter((currentPath) => currentPath !== pathValue)
-                  )
-                }
-                addAttachmentShortcut={ADD_ATTACHMENT_SHORTCUT}
-                linkedWorkItem={linkedWorkItem}
-                onRemoveLinkedWorkItem={handleRemoveLinkedWorkItem}
-                linkPopoverOpen={linkPopoverOpen}
-                onLinkPopoverOpenChange={handleLinkPopoverChange}
-                linkQuery={linkQuery}
-                onLinkQueryChange={setLinkQuery}
-                filteredLinkItems={filteredLinkItems}
-                linkItemsLoading={linkItemsLoading}
-                linkDirectLoading={linkDirectLoading}
-                normalizedLinkQuery={normalizedLinkQuery}
-                onSelectLinkedItem={handleSelectLinkedItem}
-                tuiAgent={tuiAgent}
-                onTuiAgentChange={setTuiAgent}
-                detectedAgentIds={detectedAgentIds as Set<TuiAgent> | null}
-                onOpenAgentSettings={handleOpenAgentSettings}
-                advancedOpen={advancedOpen}
-                onToggleAdvanced={() => setAdvancedOpen((current) => !current)}
-                createDisabled={createDisabled}
-                creating={creating}
-                onCreate={() => void handleCreate()}
-                note={note}
-                onNoteChange={setNote}
-                setupConfig={setupConfig}
-                requiresExplicitSetupChoice={requiresExplicitSetupChoice}
-                setupDecision={setupDecision}
-                onSetupDecisionChange={setSetupDecision}
-                shouldWaitForSetupCheck={shouldWaitForSetupCheck}
-                resolvedSetupDecision={resolvedSetupDecision}
-                createError={createError}
-              />
+              <NewWorkspaceComposerCard composerRef={composerRef} {...cardProps} />
             </section>
-
-            <Dialog open={composerModalOpen} onOpenChange={setComposerModalOpen}>
-              <DialogContent
-                className="max-w-[calc(100vw-2rem)] border-none bg-transparent p-0 shadow-none sm:max-w-[880px]"
-                showCloseButton={false}
-                onOpenAutoFocus={(event) => {
-                  event.preventDefault()
-                  modalPromptTextareaRef.current?.focus()
-                }}
-              >
-                <div className="mb-2 flex justify-end pr-1 text-xs text-muted-foreground">
-                  Esc closes
-                </div>
-                <NewWorkspaceComposerCard
-                  containerClassName="bg-card/98 shadow-2xl supports-[backdrop-filter]:bg-card/95"
-                  composerRef={modalComposerRef}
-                  nameInputRef={modalNameInputRef}
-                  promptTextareaRef={modalPromptTextareaRef}
-                  eligibleRepos={eligibleRepos}
-                  repoId={repoId}
-                  onRepoChange={handleComposerRepoChange}
-                  name={modalName}
-                  onNameChange={handleModalNameChange}
-                  agentPrompt={modalAgentPrompt}
-                  onAgentPromptChange={setModalAgentPrompt}
-                  onPromptKeyDown={handleModalPromptKeyDown}
-                  attachmentPaths={modalAttachmentPaths}
-                  getAttachmentLabel={getAttachmentLabel}
-                  onAddAttachment={() => void handleAddModalAttachment()}
-                  onRemoveAttachment={(pathValue) =>
-                    setModalAttachmentPaths((current) =>
-                      current.filter((currentPath) => currentPath !== pathValue)
-                    )
-                  }
-                  addAttachmentShortcut={ADD_ATTACHMENT_SHORTCUT}
-                  linkedWorkItem={modalLinkedWorkItem}
-                  onRemoveLinkedWorkItem={() => {
-                    setModalLinkedWorkItem(null)
-                    setModalLinkedIssue('')
-                    setModalLinkedPR(null)
-                    if (modalName === modalLastAutoNameRef.current) {
-                      modalLastAutoNameRef.current = ''
-                    }
-                  }}
-                  linkPopoverOpen={modalLinkPopoverOpen}
-                  onLinkPopoverOpenChange={handleModalLinkPopoverChange}
-                  linkQuery={modalLinkQuery}
-                  onLinkQueryChange={setModalLinkQuery}
-                  filteredLinkItems={filteredModalLinkItems}
-                  linkItemsLoading={linkItemsLoading}
-                  linkDirectLoading={modalLinkDirectLoading}
-                  normalizedLinkQuery={normalizedModalLinkQuery}
-                  onSelectLinkedItem={handleSelectModalLinkedItem}
-                  tuiAgent={modalTuiAgent}
-                  onTuiAgentChange={setModalTuiAgent}
-                  detectedAgentIds={detectedAgentIds as Set<TuiAgent> | null}
-                  onOpenAgentSettings={handleOpenAgentSettings}
-                  advancedOpen={modalAdvancedOpen}
-                  onToggleAdvanced={() => setModalAdvancedOpen((current) => !current)}
-                  createDisabled={modalCreateDisabled}
-                  creating={modalCreating}
-                  onCreate={() => void handleModalCreate()}
-                  note={modalNote}
-                  onNoteChange={setModalNote}
-                  setupConfig={setupConfig}
-                  requiresExplicitSetupChoice={requiresExplicitSetupChoice}
-                  setupDecision={modalSetupDecision}
-                  onSetupDecisionChange={setModalSetupDecision}
-                  shouldWaitForSetupCheck={shouldWaitForSetupCheck}
-                  resolvedSetupDecision={resolvedModalSetupDecision}
-                  createError={modalCreateError}
-                />
-              </DialogContent>
-            </Dialog>
 
             <section className="flex flex-col gap-4">
               <div className="flex flex-col gap-4">
@@ -1782,14 +468,7 @@ export default function NewWorkspacePage(): React.JSX.Element {
                     <RepoCombobox
                       repos={eligibleRepos}
                       value={repoId}
-                      onValueChange={(value) => {
-                        startTransition(() => {
-                          setRepoId(value)
-                          setLinkedIssue('')
-                          setLinkedPR(null)
-                          setLinkedWorkItem(null)
-                        })
-                      }}
+                      onValueChange={onRepoChange}
                       placeholder="Select a repository"
                       triggerClassName="h-11 w-full rounded-[10px] border border-border/50 bg-background/50 backdrop-blur-md px-3 text-sm font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none supports-[backdrop-filter]:bg-background/50"
                     />

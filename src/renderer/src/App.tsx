@@ -21,6 +21,7 @@ import Settings from './components/settings/Settings'
 import RightSidebar from './components/right-sidebar'
 import QuickOpen from './components/QuickOpen'
 import WorktreeJumpPalette from './components/WorktreeJumpPalette'
+import NewWorkspaceComposerModal from './components/NewWorkspaceComposerModal'
 import { StatusBar } from './components/status-bar/StatusBar'
 import { UpdateCard } from './components/UpdateCard'
 import { ZoomOverlay } from './components/ZoomOverlay'
@@ -797,6 +798,11 @@ function App(): React.JSX.Element {
           {showRightSidebarControls ? <RightSidebar /> : null}
         </div>
         <StatusBar />
+        {/* Why: NewWorkspaceComposerCard renders Radix <Tooltip>s that crash
+            when mounted outside a TooltipProvider ancestor. Keep the global
+            composer modal inside this provider so the card renders safely
+            whether triggered from Cmd+J or any future entry point. */}
+        <NewWorkspaceComposerModal />
       </TooltipProvider>
       <QuickOpen />
       <WorktreeJumpPalette />

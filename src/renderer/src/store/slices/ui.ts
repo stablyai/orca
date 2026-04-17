@@ -76,6 +76,7 @@ export type UISlice = {
     | 'add-repo'
     | 'quick-open'
     | 'worktree-palette'
+    | 'new-workspace-composer'
   modalData: Record<string, unknown>
   openModal: (modal: UISlice['activeModal'], data?: Record<string, unknown>) => void
   closeModal: () => void
