@@ -2,10 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { mkdtempSync, rmSync } from 'fs'
-import { DaemonSpawner } from './daemon-spawner'
+import { DaemonSpawner, getDaemonSocketPath, getDaemonTokenPath } from './daemon-spawner'
 import { startDaemon, type DaemonHandle } from './daemon-main'
 import { DaemonClient } from './client'
 import type { SubprocessHandle } from './session'
+import { PROTOCOL_VERSION } from './types'
 
 function createTestDir(): string {
   return mkdtempSync(join(tmpdir(), 'daemon-spawner-test-'))
@@ -18,6 +19,7 @@ function createMockSubprocess(): SubprocessHandle {
     write: vi.fn(),
     resize: vi.fn(),
     kill: vi.fn(() => setTimeout(() => onExitCb?.(0), 5)),
+    forceKill: vi.fn(),
     signal: vi.fn(),
     onData(_cb: (data: string) => void) {},
     onExit(cb: (code: number) => void) {
@@ -61,6 +63,18 @@ describe('DaemonSpawner', () => {
   }
 
   describe('ensureRunning', () => {
+    it('uses protocol-scoped socket and token paths', () => {
+      const socketPath = getDaemonSocketPath(dir)
+      const tokenPath = getDaemonTokenPath(dir)
+
+      if (process.platform === 'win32') {
+        expect(socketPath).toContain(`orca-terminal-host-v${PROTOCOL_VERSION}`)
+      } else {
+        expect(socketPath).toBe(join(dir, `daemon-v${PROTOCOL_VERSION}.sock`))
+      }
+      expect(tokenPath).toBe(join(dir, `daemon-v${PROTOCOL_VERSION}.token`))
+    })
+
     it('starts daemon and returns connection info', async () => {
       const s = createSpawner()
       const info = await s.ensureRunning()

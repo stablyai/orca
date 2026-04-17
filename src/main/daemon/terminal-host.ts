@@ -89,6 +89,14 @@ export class TerminalHost {
 
     const token = session.attachClient(opts.streamClient)
 
+    if (opts.command) {
+      // Why: startup commands must run inside the long-lived interactive shell
+      // the daemon keeps for the pane. Session.write() handles the shell-ready
+      // barrier for supported shells and falls back to an immediate write for
+      // unsupported ones.
+      session.write(opts.command.endsWith('\n') ? opts.command : `${opts.command}\n`)
+    }
+
     return {
       isNew: true,
       snapshot: null,
@@ -136,15 +144,19 @@ export class TerminalHost {
   listSessions(): SessionInfo[] {
     const result: SessionInfo[] = []
     for (const [, session] of this.sessions) {
+      if (!session.isAlive) {
+        continue
+      }
+      const snapshot = session.getSnapshot()
       result.push({
         sessionId: session.sessionId,
         state: session.state,
         shellState: session.shellState,
-        isAlive: session.isAlive,
-        pid: session.isAlive ? session.pid : null,
+        isAlive: true,
+        pid: session.pid,
         cwd: session.getCwd(),
-        cols: session.getSnapshot()?.cols ?? 0,
-        rows: session.getSnapshot()?.rows ?? 0,
+        cols: snapshot?.cols ?? 0,
+        rows: snapshot?.rows ?? 0,
         createdAt: 0
       })
     }
@@ -153,7 +165,8 @@ export class TerminalHost {
 
   dispose(): void {
     for (const [, session] of this.sessions) {
-      session.dispose()
+      session.detachAllClients()
+      session.kill()
     }
     this.sessions.clear()
     this.killedTombstones.clear()

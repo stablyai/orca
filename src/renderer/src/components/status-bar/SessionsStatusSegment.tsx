@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Terminal, Trash2 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -14,8 +14,9 @@ function shortCwd(cwd: string): string {
   if (!cwd) {
     return 'unknown'
   }
-  const parts = cwd.split('/')
-  return parts.length > 2 ? parts.slice(-2).join('/') : cwd
+  const separator = cwd.includes('\\') ? '\\' : '/'
+  const parts = cwd.split(/[\\/]+/).filter(Boolean)
+  return parts.length > 2 ? parts.slice(-2).join(separator) : cwd
 }
 
 function sessionLabel(session: DaemonSession): string {
@@ -88,33 +89,38 @@ export function SessionsStatusSegment({
   const [open, setOpen] = useState(false)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
+  const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
   const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
   const setActiveTab = useAppStore((s) => s.setActiveTab)
   const setActiveView = useAppStore((s) => s.setActiveView)
 
-  const boundPtyIds = new Set(
-    Object.values(tabsByWorktree)
-      .flat()
-      .map((t) => t.ptyId)
-      .filter(Boolean)
+  const boundPtyIds = useMemo(
+    () => new Set(Object.values(ptyIdsByTabId).flat().filter(Boolean)),
+    [ptyIdsByTabId]
   )
 
   // Why: ptyIdsByTabId tracks all ptyIds a tab has ever been associated with
   // (including split panes). Build a reverse map so we can navigate from a
   // daemon session ID back to the tab that owns it.
-  const ptyIdToTabId = new Map<string, string>()
-  for (const [tabId, ptyIds] of Object.entries(ptyIdsByTabId)) {
-    for (const ptyId of ptyIds) {
-      ptyIdToTabId.set(ptyId, tabId)
+  const ptyIdToTabId = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const [tabId, ptyIds] of Object.entries(ptyIdsByTabId)) {
+      for (const ptyId of ptyIds) {
+        map.set(ptyId, tabId)
+      }
     }
-  }
+    return map
+  }, [ptyIdsByTabId])
 
-  const tabIdToWorktreeId = new Map<string, string>()
-  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
-    for (const tab of tabs) {
-      tabIdToWorktreeId.set(tab.id, worktreeId)
+  const tabIdToWorktreeId = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
+      for (const tab of tabs) {
+        map.set(tab.id, worktreeId)
+      }
     }
-  }
+    return map
+  }, [tabsByWorktree])
 
   const refresh = useCallback(async () => {
     try {
@@ -137,7 +143,9 @@ export function SessionsStatusSegment({
     return () => clearInterval(interval)
   }, [refresh])
 
-  const orphanCount = sessions.filter((s) => !boundPtyIds.has(s.id)).length
+  const orphanCount = workspaceSessionReady
+    ? sessions.filter((s) => !boundPtyIds.has(s.id)).length
+    : 0
 
   const handleKill = useCallback(
     async (id: string) => {
@@ -152,10 +160,13 @@ export function SessionsStatusSegment({
   )
 
   const handleKillOrphans = useCallback(async () => {
+    if (!workspaceSessionReady) {
+      return
+    }
     const orphans = sessions.filter((s) => !boundPtyIds.has(s.id))
     await Promise.allSettled(orphans.map((s) => window.api.pty.kill(s.id)))
     await refresh()
-  }, [sessions, boundPtyIds, refresh])
+  }, [sessions, boundPtyIds, refresh, workspaceSessionReady])
 
   const handleNavigate = useCallback(
     (tabId: string) => {
@@ -201,8 +212,8 @@ export function SessionsStatusSegment({
           <div className="max-h-[240px] overflow-y-auto scrollbar-sleek">
             {[...sessions]
               .sort((a, b) => {
-                const aBound = boundPtyIds.has(a.id) ? 0 : 1
-                const bBound = boundPtyIds.has(b.id) ? 0 : 1
+                const aBound = workspaceSessionReady && boundPtyIds.has(a.id) ? 0 : 1
+                const bBound = workspaceSessionReady && boundPtyIds.has(b.id) ? 0 : 1
                 return aBound - bBound
               })
               .map((s) => {
@@ -211,7 +222,7 @@ export function SessionsStatusSegment({
                   <SessionRow
                     key={s.id}
                     session={s}
-                    isBound={boundPtyIds.has(s.id)}
+                    isBound={workspaceSessionReady && boundPtyIds.has(s.id)}
                     tabId={tabId}
                     onKill={handleKill}
                     onNavigate={handleNavigate}

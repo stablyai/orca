@@ -43,6 +43,23 @@ type ExitCallback = (payload: { id: string; code: number }) => void
 const dataListeners = new Set<DataCallback>()
 const exitListeners = new Set<ExitCallback>()
 
+function getDefaultCwd(): string {
+  if (process.platform !== 'win32') {
+    return process.env.HOME || '/'
+  }
+
+  // Why: USERPROFILE is not guaranteed in all Windows launch contexts.
+  // Falling back to bare HOMEPATH yields a drive-relative path, so combine
+  // HOMEDRIVE + HOMEPATH to keep spawned PTYs anchored to the intended home.
+  if (process.env.USERPROFILE) {
+    return process.env.USERPROFILE
+  }
+  if (process.env.HOMEDRIVE && process.env.HOMEPATH) {
+    return `${process.env.HOMEDRIVE}${process.env.HOMEPATH}`
+  }
+  return 'C:\\'
+}
+
 function disposePtyListeners(id: string): void {
   const disposables = ptyDisposables.get(id)
   if (disposables) {
@@ -95,11 +112,7 @@ export class LocalPtyProvider implements IPtyProvider {
   async spawn(args: PtySpawnOptions): Promise<PtySpawnResult> {
     const id = String(++ptyCounter)
 
-    const defaultCwd =
-      process.platform === 'win32'
-        ? process.env.USERPROFILE || process.env.HOMEPATH || 'C:\\'
-        : process.env.HOME || '/'
-
+    const defaultCwd = getDefaultCwd()
     const cwd = args.cwd || defaultCwd
     const wslInfo = process.platform === 'win32' ? parseWslPath(cwd) : null
 
@@ -112,7 +125,7 @@ export class LocalPtyProvider implements IPtyProvider {
       const escapedCwd = wslInfo.linuxPath.replace(/'/g, "'\\''")
       shellPath = 'wsl.exe'
       shellArgs = ['-d', wslInfo.distro, '--', 'bash', '-c', `cd '${escapedCwd}' && exec bash -l`]
-      effectiveCwd = process.env.USERPROFILE || process.env.HOMEPATH || 'C:\\'
+      effectiveCwd = getDefaultCwd()
       validationCwd = cwd
     } else if (process.platform === 'win32') {
       shellPath = process.env.COMSPEC || 'powershell.exe'
@@ -317,13 +330,17 @@ export class LocalPtyProvider implements IPtyProvider {
     // Why: disposePtyListeners removes the onExit callback, so the natural
     // exit cleanup path from node-pty won't fire. Cleanup and notification
     // must happen unconditionally after the try/catch.
+    // Note: clearPtyState calls disposePtyListeners internally, so we only
+    // need to call it once via clearPtyState after killing the process.
     disposePtyListeners(id)
     try {
       proc.kill()
     } catch {
       /* Process may already be dead */
     }
-    clearPtyState(id)
+    ptyProcesses.delete(id)
+    ptyShellName.delete(id)
+    ptyLoadGeneration.delete(id)
     this.opts.onExit?.(id, -1)
     for (const cb of exitListeners) {
       cb({ id, code: -1 })

@@ -12,6 +12,7 @@ function createMockSubprocess(): SubprocessHandle {
     kill: vi.fn(() => {
       setTimeout(() => onExitCb?.(0), 5)
     }),
+    forceKill: vi.fn(),
     signal: vi.fn(),
     onData(cb) {
       onDataCb = cb
@@ -132,6 +133,22 @@ describe('TerminalHost', () => {
           env: { FOO: 'bar' }
         })
       )
+    })
+
+    it('queues startup commands through the session shell-ready barrier', async () => {
+      await host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 80,
+        rows: 24,
+        command: 'echo hello',
+        shellReadySupported: true,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+
+      expect(lastSubprocess.write).not.toHaveBeenCalled()
+
+      lastSubprocess._onDataCb?.('\x1b]777;orca-shell-ready\x07')
+      expect(lastSubprocess.write).toHaveBeenCalledWith('echo hello\n')
     })
   })
 
@@ -259,6 +276,32 @@ describe('TerminalHost', () => {
       // Oldest tombstones should be evicted
       expect(host.isKilled('session-0')).toBe(false)
       expect(host.isKilled('session-1004')).toBe(true)
+    })
+  })
+
+  describe('dispose', () => {
+    it('kills live subprocesses before disposing sessions', async () => {
+      await host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 80,
+        rows: 24,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+
+      host.dispose()
+      expect(lastSubprocess.kill).toHaveBeenCalled()
+    })
+
+    it('does not list exited sessions', async () => {
+      await host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 80,
+        rows: 24,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+
+      lastSubprocess._onExitCb?.(0)
+      expect(host.listSessions()).toEqual([])
     })
   })
 })

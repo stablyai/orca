@@ -71,6 +71,38 @@ describe('HeadlessEmulator', () => {
       expect(emulator.getSnapshot().cwd).toBe('/Users/test/my project')
     })
 
+    it('normalizes Windows drive-letter OSC-7 paths', async () => {
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+      const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { value: 'win32' })
+
+      try {
+        await emulator.write('\x1b]7;file:///C:/Users/test/project\x07')
+      } finally {
+        if (platform) {
+          Object.defineProperty(process, 'platform', platform)
+        }
+      }
+
+      expect(emulator.getSnapshot().cwd).toBe('C:/Users/test/project')
+    })
+
+    it('preserves Windows UNC OSC-7 paths', async () => {
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+      const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { value: 'win32' })
+
+      try {
+        await emulator.write('\x1b]7;file://server/share/project\x07')
+      } finally {
+        if (platform) {
+          Object.defineProperty(process, 'platform', platform)
+        }
+      }
+
+      expect(emulator.getSnapshot().cwd).toBe('\\\\server\\share\\project')
+    })
+
     it('handles OSC-7 with ST terminator', async () => {
       emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
       await emulator.write('\x1b]7;file:///path/here\x1b\\')

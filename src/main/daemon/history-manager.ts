@@ -1,14 +1,6 @@
 import { join } from 'path'
-import {
-  mkdirSync,
-  writeFileSync,
-  appendFileSync,
-  readFileSync,
-  existsSync,
-  rmSync,
-  openSync,
-  closeSync
-} from 'fs'
+import { mkdirSync, writeFileSync, appendFileSync, readFileSync, existsSync, rmSync } from 'fs'
+import { getHistorySessionDirName } from './history-paths'
 
 export type SessionMeta = {
   cwd: string
@@ -28,10 +20,38 @@ export type OpenSessionOptions = {
 
 const MAX_SCROLLBACK_BYTES = 5 * 1024 * 1024
 
+function parseFileUriPath(uri: string): string | null {
+  try {
+    const url = new URL(uri)
+    if (url.protocol !== 'file:') {
+      return null
+    }
+
+    const decodedPath = decodeURIComponent(url.pathname)
+    if (process.platform !== 'win32') {
+      return decodedPath
+    }
+
+    // Why: daemon-side cwd persistence must preserve the full Windows target
+    // path from OSC-7, including UNC hosts, or cold restore can reopen in a
+    // different directory than the live shell had reached before the crash.
+    if (url.hostname) {
+      return `\\\\${url.hostname}${decodedPath.replace(/\//g, '\\')}`
+    }
+    if (/^\/[A-Za-z]:/.test(decodedPath)) {
+      return decodedPath.slice(1)
+    }
+    return decodedPath.replace(/\//g, '\\')
+  } catch {
+    return null
+  }
+}
+
 type SessionWriter = {
   dir: string
   scrollbackPath: string
   bytesWritten: number
+  cwd: string
   // Why: CSI 3J (erase scrollback) can arrive split across data chunks.
   // Buffer the trailing bytes that look like a partial CSI 3J prefix
   // so the next chunk can complete the match.
@@ -55,7 +75,8 @@ export class HistoryManager {
 
   async openSession(sessionId: string, opts: OpenSessionOptions): Promise<void> {
     try {
-      const dir = join(this.basePath, sessionId)
+      this.disabledSessions.delete(sessionId)
+      const dir = join(this.basePath, getHistorySessionDirName(sessionId))
       mkdirSync(dir, { recursive: true })
 
       const meta: SessionMeta = {
@@ -75,11 +96,16 @@ export class HistoryManager {
         writeFileSync(scrollbackPath, opts.initialScrollback)
         bytesWritten = Buffer.byteLength(opts.initialScrollback)
       } else {
-        const fd = openSync(scrollbackPath, 'w')
-        closeSync(fd)
+        writeFileSync(scrollbackPath, '')
       }
 
-      this.writers.set(sessionId, { dir, scrollbackPath, bytesWritten, partialEscape: '' })
+      this.writers.set(sessionId, {
+        dir,
+        scrollbackPath,
+        bytesWritten,
+        cwd: opts.cwd,
+        partialEscape: ''
+      })
     } catch (err) {
       this.handleWriteError(sessionId, err)
     }
@@ -97,6 +123,11 @@ export class HistoryManager {
     try {
       const combined = writer.partialEscape + data
       writer.partialEscape = ''
+      const nextCwd = this.extractLatestCwd(combined)
+      if (nextCwd && nextCwd !== writer.cwd) {
+        writer.cwd = nextCwd
+        this.updateMeta(writer.dir, { cwd: nextCwd })
+      }
 
       // Why: use lastIndexOf so that multiple CSI 3J sequences in one chunk
       // reset to the content after the *last* clear, not the first.
@@ -176,15 +207,19 @@ export class HistoryManager {
 
   async removeSession(sessionId: string): Promise<void> {
     this.writers.delete(sessionId)
-    rmSync(join(this.basePath, sessionId), { recursive: true, force: true })
+    this.disabledSessions.delete(sessionId)
+    rmSync(join(this.basePath, getHistorySessionDirName(sessionId)), {
+      recursive: true,
+      force: true
+    })
   }
 
   hasHistory(sessionId: string): boolean {
-    return existsSync(join(this.basePath, sessionId, 'meta.json'))
+    return existsSync(join(this.basePath, getHistorySessionDirName(sessionId), 'meta.json'))
   }
 
   readMeta(sessionId: string): SessionMeta | null {
-    const metaPath = join(this.basePath, sessionId, 'meta.json')
+    const metaPath = join(this.basePath, getHistorySessionDirName(sessionId), 'meta.json')
     if (!existsSync(metaPath)) {
       return null
     }
@@ -249,6 +284,22 @@ export class HistoryManager {
       }
     }
     return null
+  }
+
+  private extractLatestCwd(data: string): string | null {
+    // OSC-7 format: ESC ] 7 ; <uri> BEL  or  ESC ] 7 ; <uri> ST
+    // oxlint-disable-next-line no-control-regex -- terminal escape sequences require control chars
+    const osc7Re = /\x1b\]7;([^\x07\x1b]*?)(?:\x07|\x1b\\)/g
+    let match: RegExpExecArray | null
+    let latest: string | null = null
+    while ((match = osc7Re.exec(data)) !== null) {
+      latest = this.parseOsc7Uri(match[1])
+    }
+    return latest
+  }
+
+  private parseOsc7Uri(uri: string): string | null {
+    return parseFileUriPath(uri)
   }
 
   // Why: history is best-effort — any error should disable the session

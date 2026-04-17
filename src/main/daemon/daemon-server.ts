@@ -42,8 +42,6 @@ export class DaemonServer {
   }
 
   async start(): Promise<void> {
-    writeFileSync(this.tokenPath, this.token, { mode: 0o600 })
-
     return new Promise((resolve, reject) => {
       this.server = createServer((socket) => this.handleConnection(socket))
 
@@ -52,6 +50,7 @@ export class DaemonServer {
       })
 
       this.server.listen(this.socketPath, () => {
+        writeFileSync(this.tokenPath, this.token, { mode: 0o600 })
         try {
           chmodSync(this.socketPath, 0o600)
         } catch {

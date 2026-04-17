@@ -3,9 +3,14 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { mkdtempSync, rmSync, readFileSync, existsSync, chmodSync } from 'fs'
 import { HistoryManager } from './history-manager'
+import { getHistorySessionDirName } from './history-paths'
 
 function createTestDir(): string {
   return mkdtempSync(join(tmpdir(), 'history-mgr-test-'))
+}
+
+function sessionPath(baseDir: string, sessionId: string, file: string): string {
+  return join(baseDir, getHistorySessionDirName(sessionId), file)
 }
 
 describe('HistoryManager', () => {
@@ -26,7 +31,7 @@ describe('HistoryManager', () => {
     it('creates meta.json with session metadata', async () => {
       await mgr.openSession('sess-1', { cwd: '/home/user', cols: 80, rows: 24 })
 
-      const metaPath = join(dir, 'sess-1', 'meta.json')
+      const metaPath = sessionPath(dir, 'sess-1', 'meta.json')
       expect(existsSync(metaPath)).toBe(true)
 
       const meta = JSON.parse(readFileSync(metaPath, 'utf-8'))
@@ -41,7 +46,7 @@ describe('HistoryManager', () => {
     it('creates scrollback.bin file', async () => {
       await mgr.openSession('sess-1', { cwd: '/tmp', cols: 120, rows: 40 })
 
-      const scrollbackPath = join(dir, 'sess-1', 'scrollback.bin')
+      const scrollbackPath = sessionPath(dir, 'sess-1', 'scrollback.bin')
       expect(existsSync(scrollbackPath)).toBe(true)
     })
 
@@ -53,7 +58,7 @@ describe('HistoryManager', () => {
         initialScrollback: 'previous output\r\n'
       })
 
-      const data = readFileSync(join(dir, 'sess-1', 'scrollback.bin'), 'utf-8')
+      const data = readFileSync(sessionPath(dir, 'sess-1', 'scrollback.bin'), 'utf-8')
       expect(data).toBe('previous output\r\n')
     })
   })
@@ -65,13 +70,39 @@ describe('HistoryManager', () => {
       await mgr.appendData('sess-1', 'hello ')
       await mgr.appendData('sess-1', 'world\r\n')
 
-      const data = readFileSync(join(dir, 'sess-1', 'scrollback.bin'), 'utf-8')
+      const data = readFileSync(sessionPath(dir, 'sess-1', 'scrollback.bin'), 'utf-8')
       expect(data).toBe('hello world\r\n')
     })
 
     it('ignores data for unknown sessions', async () => {
       // Should not throw
       await mgr.appendData('nonexistent', 'data')
+    })
+
+    it('persists the latest cwd from OSC-7 updates', async () => {
+      await mgr.openSession('sess-1', { cwd: '/tmp/original', cols: 80, rows: 24 })
+
+      await mgr.appendData('sess-1', '\x1b]7;file:///tmp/updated%20cwd\x07prompt$ ')
+
+      const meta = mgr.readMeta('sess-1')
+      expect(meta?.cwd).toBe('/tmp/updated cwd')
+    })
+
+    it('persists Windows UNC cwd updates from OSC-7', async () => {
+      const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { value: 'win32' })
+
+      try {
+        await mgr.openSession('sess-1', { cwd: 'C:\\start', cols: 80, rows: 24 })
+        await mgr.appendData('sess-1', '\x1b]7;file://server/share/project\x07')
+      } finally {
+        if (platform) {
+          Object.defineProperty(process, 'platform', platform)
+        }
+      }
+
+      const meta = mgr.readMeta('sess-1')
+      expect(meta?.cwd).toBe('\\\\server\\share\\project')
     })
   })
 
@@ -80,7 +111,7 @@ describe('HistoryManager', () => {
       await mgr.openSession('sess-1', { cwd: '/tmp', cols: 80, rows: 24 })
       await mgr.closeSession('sess-1', 0)
 
-      const meta = JSON.parse(readFileSync(join(dir, 'sess-1', 'meta.json'), 'utf-8'))
+      const meta = JSON.parse(readFileSync(sessionPath(dir, 'sess-1', 'meta.json'), 'utf-8'))
       expect(meta.endedAt).toBeDefined()
       expect(meta.exitCode).toBe(0)
     })
@@ -90,7 +121,7 @@ describe('HistoryManager', () => {
       await mgr.appendData('sess-1', 'final output')
       await mgr.closeSession('sess-1', 1)
 
-      const data = readFileSync(join(dir, 'sess-1', 'scrollback.bin'), 'utf-8')
+      const data = readFileSync(sessionPath(dir, 'sess-1', 'scrollback.bin'), 'utf-8')
       expect(data).toBe('final output')
     })
 
@@ -100,7 +131,7 @@ describe('HistoryManager', () => {
       await mgr.appendData('sess-1', 'prompt$ \x1b[')
       await mgr.closeSession('sess-1', 0)
 
-      const data = readFileSync(join(dir, 'sess-1', 'scrollback.bin'), 'utf-8')
+      const data = readFileSync(sessionPath(dir, 'sess-1', 'scrollback.bin'), 'utf-8')
       expect(data).toBe('prompt$ \x1b[')
     })
 
@@ -119,7 +150,7 @@ describe('HistoryManager', () => {
       await mgr.appendData('sess-1', '\x1b[3J')
       await mgr.appendData('sess-1', 'new output\r\n')
 
-      const data = readFileSync(join(dir, 'sess-1', 'scrollback.bin'), 'utf-8')
+      const data = readFileSync(sessionPath(dir, 'sess-1', 'scrollback.bin'), 'utf-8')
       expect(data).not.toContain('old output')
       expect(data).toContain('new output')
     })
@@ -129,7 +160,7 @@ describe('HistoryManager', () => {
 
       await mgr.appendData('sess-1', 'old\x1b[3Jmiddle\x1b[3Jfresh\r\n')
 
-      const data = readFileSync(join(dir, 'sess-1', 'scrollback.bin'), 'utf-8')
+      const data = readFileSync(sessionPath(dir, 'sess-1', 'scrollback.bin'), 'utf-8')
       expect(data).not.toContain('old')
       expect(data).not.toContain('middle')
       expect(data).toBe('fresh\r\n')
@@ -143,7 +174,7 @@ describe('HistoryManager', () => {
       await mgr.appendData('sess-1', 'J')
       await mgr.appendData('sess-1', 'fresh\r\n')
 
-      const data = readFileSync(join(dir, 'sess-1', 'scrollback.bin'), 'utf-8')
+      const data = readFileSync(sessionPath(dir, 'sess-1', 'scrollback.bin'), 'utf-8')
       expect(data).not.toContain('old stuff')
       expect(data).toContain('fresh')
     })
@@ -156,7 +187,7 @@ describe('HistoryManager', () => {
       // Complete the sequence — should trigger a second reset
       await mgr.appendData('sess-1', '3Jfinal')
 
-      const data = readFileSync(join(dir, 'sess-1', 'scrollback.bin'), 'utf-8')
+      const data = readFileSync(sessionPath(dir, 'sess-1', 'scrollback.bin'), 'utf-8')
       expect(data).not.toContain('old')
       expect(data).not.toContain('new-data')
       expect(data).toBe('final')
@@ -169,12 +200,12 @@ describe('HistoryManager', () => {
       await mgr.appendData('sess-1', fiveMB)
       // Cap is hit — normal writes are blocked
       await mgr.appendData('sess-1', 'blocked')
-      let data = readFileSync(join(dir, 'sess-1', 'scrollback.bin'), 'utf-8')
+      let data = readFileSync(sessionPath(dir, 'sess-1', 'scrollback.bin'), 'utf-8')
       expect(data).not.toContain('blocked')
 
       // CSI 3J should still reset, allowing new writes
       await mgr.appendData('sess-1', '\x1b[3Jafter-clear')
-      data = readFileSync(join(dir, 'sess-1', 'scrollback.bin'), 'utf-8')
+      data = readFileSync(sessionPath(dir, 'sess-1', 'scrollback.bin'), 'utf-8')
       expect(data).toBe('after-clear')
     })
   })
@@ -189,7 +220,7 @@ describe('HistoryManager', () => {
         await mgr.appendData('sess-1', chunk)
       }
 
-      const stats = readFileSync(join(dir, 'sess-1', 'scrollback.bin'))
+      const stats = readFileSync(sessionPath(dir, 'sess-1', 'scrollback.bin'))
       expect(stats.length).toBeLessThanOrEqual(5 * 1024 * 1024 + 1024) // some tolerance
     })
   })
@@ -202,8 +233,8 @@ describe('HistoryManager', () => {
       await mgr.appendData('a', 'session-a')
       await mgr.appendData('b', 'session-b')
 
-      const dataA = readFileSync(join(dir, 'a', 'scrollback.bin'), 'utf-8')
-      const dataB = readFileSync(join(dir, 'b', 'scrollback.bin'), 'utf-8')
+      const dataA = readFileSync(sessionPath(dir, 'a', 'scrollback.bin'), 'utf-8')
+      const dataB = readFileSync(sessionPath(dir, 'b', 'scrollback.bin'), 'utf-8')
 
       expect(dataA).toBe('session-a')
       expect(dataB).toBe('session-b')
@@ -216,10 +247,10 @@ describe('HistoryManager', () => {
       await mgr.appendData('sess-1', 'data')
       await mgr.dispose()
 
-      const data = readFileSync(join(dir, 'sess-1', 'scrollback.bin'), 'utf-8')
+      const data = readFileSync(sessionPath(dir, 'sess-1', 'scrollback.bin'), 'utf-8')
       expect(data).toBe('data')
 
-      const meta = JSON.parse(readFileSync(join(dir, 'sess-1', 'meta.json'), 'utf-8'))
+      const meta = JSON.parse(readFileSync(sessionPath(dir, 'sess-1', 'meta.json'), 'utf-8'))
       expect(meta.endedAt).not.toBeNull()
       expect(meta.exitCode).toBeNull()
     })
@@ -230,7 +261,7 @@ describe('HistoryManager', () => {
       await mgr.appendData('partial', 'hello\x1b')
       await mgr.dispose()
 
-      const data = readFileSync(join(dir, 'partial', 'scrollback.bin'), 'utf-8')
+      const data = readFileSync(sessionPath(dir, 'partial', 'scrollback.bin'), 'utf-8')
       expect(data).toBe('hello\x1b')
     })
   })
@@ -242,7 +273,7 @@ describe('HistoryManager', () => {
       await mgr.closeSession('sess-1', 0)
 
       await mgr.removeSession('sess-1')
-      expect(existsSync(join(dir, 'sess-1'))).toBe(false)
+      expect(existsSync(join(dir, getHistorySessionDirName('sess-1')))).toBe(false)
     })
   })
 
@@ -281,7 +312,7 @@ describe('HistoryManager', () => {
       await mgr.appendData('disk-full', 'before-error')
 
       // Make scrollback file read-only to trigger write error
-      const scrollbackPath = join(dir, 'disk-full', 'scrollback.bin')
+      const scrollbackPath = sessionPath(dir, 'disk-full', 'scrollback.bin')
       chmodSync(scrollbackPath, 0o444)
 
       // Should not throw — error is caught and session is disabled
@@ -313,7 +344,7 @@ describe('HistoryManager', () => {
       await mgr.openSession('close-err', { cwd: '/tmp', cols: 80, rows: 24 })
 
       // Make meta.json read-only so updateMeta's writeFileSync fails
-      const metaPath = join(dir, 'close-err', 'meta.json')
+      const metaPath = sessionPath(dir, 'close-err', 'meta.json')
       chmodSync(metaPath, 0o444)
 
       // Should not throw
@@ -331,7 +362,7 @@ describe('HistoryManager', () => {
       await mgr.openSession('err-cb', { cwd: '/tmp', cols: 80, rows: 24 })
       await mgr.appendData('err-cb', 'before')
 
-      const scrollbackPath = join(dir, 'err-cb', 'scrollback.bin')
+      const scrollbackPath = sessionPath(dir, 'err-cb', 'scrollback.bin')
       chmodSync(scrollbackPath, 0o444)
 
       await mgr.appendData('err-cb', 'trigger-error')

@@ -66,24 +66,34 @@ export class DaemonClient {
   private async doConnect(): Promise<void> {
     const token = readFileSync(this.tokenPath, 'utf-8').trim()
 
-    // Sequential: control first, then stream
-    this.controlSocket = await this.connectSocket()
-    await this.sendHello(this.controlSocket, token, 'control')
-    this.setupControlParser()
+    try {
+      // Sequential: control first, then stream
+      this.controlSocket = await this.connectSocket()
+      await this.sendHello(this.controlSocket, token, 'control')
+      this.setupControlParser()
 
-    this.streamSocket = await this.connectSocket()
-    await this.sendHello(this.streamSocket, token, 'stream')
-    this.setupStreamParser()
+      this.streamSocket = await this.connectSocket()
+      await this.sendHello(this.streamSocket, token, 'stream')
+      this.setupStreamParser()
 
-    this.connected = true
-    this.disconnectArmed = true
+      this.connected = true
+      this.disconnectArmed = true
 
-    // Handle socket close
-    const handleClose = () => this.handleDisconnect()
-    this.controlSocket.on('close', handleClose)
-    this.controlSocket.on('error', handleClose)
-    this.streamSocket.on('close', handleClose)
-    this.streamSocket.on('error', handleClose)
+      // Handle socket close
+      const handleClose = () => this.handleDisconnect()
+      this.controlSocket.on('close', handleClose)
+      this.controlSocket.on('error', handleClose)
+      this.streamSocket.on('close', handleClose)
+      this.streamSocket.on('error', handleClose)
+    } catch (error) {
+      this.controlSocket?.destroy()
+      this.streamSocket?.destroy()
+      this.controlSocket = null
+      this.streamSocket = null
+      this.connected = false
+      this.disconnectArmed = false
+      throw error
+    }
   }
 
   async request<T = unknown>(type: string, payload: unknown): Promise<T> {

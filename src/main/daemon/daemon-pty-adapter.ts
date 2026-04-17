@@ -1,9 +1,13 @@
+/* oxlint-disable max-lines -- Why: history error-logging .catch() chains add ~10 lines of
+safety wiring spread across spawn/event-routing; splitting would scatter tightly coupled
+adapter ↔ history lifecycle logic. */
 import { basename } from 'path'
 import { existsSync } from 'fs'
 import { randomUUID } from 'crypto'
 import { DaemonClient } from './client'
 import { HistoryManager } from './history-manager'
 import { HistoryReader } from './history-reader'
+import { supportsPtyStartupBarrier } from './shell-ready'
 import type { CreateOrAttachResult, DaemonEvent, ListSessionsResult } from './types'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
 
@@ -35,7 +39,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
   // Why: React re-renders and StrictMode double-mounts can call createOrAttach
   // for a session the user just killed. Without tombstones, the daemon would
   // create a fresh session — resurrecting a terminal the user explicitly closed.
-  private killedSessionTombstones = new Set<string>()
+  // Uses a Map<id, timestamp> so eviction removes the oldest by insertion order,
+  // matching terminal-host.ts tombstone semantics.
+  private killedSessionTombstones = new Map<string, number>()
   // Why: React StrictMode double-mounts: mount → cold restore → unmount →
   // mount → ??? The sticky cache returns the same cold restore data on the
   // second mount until the renderer explicitly acknowledges it.
@@ -65,17 +71,26 @@ export class DaemonPtyAdapter implements IPtyProvider {
       throw new TerminalKilledError(sessionId)
     }
 
+    // Why: detect crash-recovery history before spawning a replacement PTY so
+    // the revived shell inherits the recovered cwd and dimensions instead of
+    // whatever the current renderer happened to request on mount.
+    const restoreInfo = this.historyReader?.detectColdRestore(sessionId) ?? null
+    const effectiveCwd = restoreInfo?.cwd ?? opts.cwd
+    const effectiveCols = restoreInfo?.cols ?? opts.cols
+    const effectiveRows = restoreInfo?.rows ?? opts.rows
+
     const result = await this.client.request<CreateOrAttachResult>('createOrAttach', {
       sessionId,
-      cols: opts.cols,
-      rows: opts.rows,
-      cwd: opts.cwd,
+      cols: effectiveCols,
+      rows: effectiveRows,
+      cwd: effectiveCwd,
       env: opts.env,
-      command: opts.command
+      command: opts.command,
+      shellReadySupported: opts.command ? supportsPtyStartupBarrier(opts.env ?? {}) : false
     })
 
-    if (opts.cwd) {
-      this.initialCwds.set(sessionId, opts.cwd)
+    if (effectiveCwd) {
+      this.initialCwds.set(sessionId, effectiveCwd)
     }
 
     // Why: check sticky cache first — StrictMode double-mounts call spawn
@@ -90,36 +105,34 @@ export class DaemonPtyAdapter implements IPtyProvider {
     // an unclean shutdown → return saved scrollback so the renderer can
     // display the previous terminal content. Must run BEFORE openSession
     // which would overwrite the saved history files.
-    if (result.isNew && this.historyReader) {
-      const restoreInfo = this.historyReader.detectColdRestore(sessionId)
-      if (restoreInfo) {
-        const coldRestore = { scrollback: restoreInfo.scrollback, cwd: restoreInfo.cwd }
-        this.coldRestoreCache.set(sessionId, coldRestore)
-        // Why: open a fresh history session AFTER reading cold restore data.
-        // Without this, post-restore data events are silently dropped and a
-        // second daemon crash would have no history to restore from.
-        if (this.historyManager) {
-          // Why: seed the new history with the restored scrollback so the data
-          // survives on disk. Without this, scrollback.bin is truncated to empty
-          // and a second crash before new data arrives would restore nothing.
-          void this.historyManager.openSession(sessionId, {
-            cwd: opts.cwd ?? '',
-            cols: opts.cols,
-            rows: opts.rows,
+    if (result.isNew && restoreInfo) {
+      const coldRestore = { scrollback: restoreInfo.scrollback, cwd: restoreInfo.cwd }
+      this.coldRestoreCache.set(sessionId, coldRestore)
+      // Why: seed the reopened history with the recovered metadata, not the
+      // renderer's transient mount-time size, so a second crash restores the
+      // same terminal context the daemon just revived.
+      if (this.historyManager) {
+        void this.historyManager
+          .openSession(sessionId, {
+            cwd: restoreInfo.cwd,
+            cols: restoreInfo.cols,
+            rows: restoreInfo.rows,
             initialScrollback: restoreInfo.scrollback
           })
-        }
-        return { id: sessionId, coldRestore }
+          .catch((err) => console.warn('[history] openSession failed:', sessionId, err))
       }
+      return { id: sessionId, coldRestore }
     }
 
     if (this.historyManager && result.isNew) {
-      void this.historyManager.openSession(sessionId, {
-        cwd: opts.cwd ?? '',
-        cols: opts.cols,
-        rows: opts.rows,
-        initialScrollback: result.snapshot?.snapshotAnsi
-      })
+      void this.historyManager
+        .openSession(sessionId, {
+          cwd: effectiveCwd ?? '',
+          cols: effectiveCols,
+          rows: effectiveRows,
+          initialScrollback: result.snapshot?.snapshotAnsi
+        })
+        .catch((err) => console.warn('[history] openSession failed:', sessionId, err))
     }
 
     const isReattach = !result.isNew
@@ -163,13 +176,17 @@ export class DaemonPtyAdapter implements IPtyProvider {
     // Why: user explicitly closed this terminal — clean up disk history
     // so it doesn't trigger a false cold restore on next launch.
     if (this.historyManager) {
-      void this.historyManager.removeSession(id)
+      void this.historyManager
+        .removeSession(id)
+        .catch((err) => console.warn('[history] removeSession failed:', id, err))
     }
 
-    this.killedSessionTombstones.add(id)
+    // Why: delete-then-set ensures the entry moves to the end of Map iteration
+    // order, so re-killing a session doesn't leave it as the first eviction target.
+    this.killedSessionTombstones.delete(id)
+    this.killedSessionTombstones.set(id, Date.now())
     if (this.killedSessionTombstones.size > MAX_TOMBSTONES) {
-      // Evict the oldest entry (Set iteration order is insertion order)
-      const oldest = this.killedSessionTombstones.values().next().value
+      const oldest = this.killedSessionTombstones.keys().next().value
       if (oldest) {
         this.killedSessionTombstones.delete(oldest)
       }
@@ -244,6 +261,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
     const killed: string[] = []
 
     for (const session of result.sessions) {
+      if (!session.isAlive) {
+        continue
+      }
       // Why: session IDs use the format `${worktreeId}@@${shortUuid}`. The @@
       // separator is unambiguous — worktreeIds contain hyphens and colons but
       // never @@.
@@ -324,7 +344,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.removeEventListener?.()
     this.removeEventListener = null
     if (this.historyManager) {
-      void this.historyManager.dispose()
+      void this.historyManager
+        .dispose()
+        .catch((err) => console.warn('[history] dispose failed:', err))
     }
     this.client.disconnect()
   }
@@ -357,7 +379,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
       if (event.event === 'data') {
         if (this.historyManager) {
-          void this.historyManager.appendData(event.sessionId, event.payload.data)
+          void this.historyManager
+            .appendData(event.sessionId, event.payload.data)
+            .catch((err) => console.warn('[history] appendData failed:', event.sessionId, err))
         }
         // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
         for (const listener of [...this.dataListeners]) {
@@ -365,7 +389,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
         }
       } else if (event.event === 'exit') {
         if (this.historyManager) {
-          void this.historyManager.closeSession(event.sessionId, event.payload.code)
+          void this.historyManager
+            .closeSession(event.sessionId, event.payload.code)
+            .catch((err) => console.warn('[history] closeSession failed:', event.sessionId, err))
         }
         this.initialCwds.delete(event.sessionId)
         // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration

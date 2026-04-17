@@ -1,5 +1,6 @@
 import * as pty from 'node-pty'
 import type { SubprocessHandle } from './session'
+import { getShellReadyLaunchConfig, resolvePtyShellPath } from './shell-ready'
 
 export type PtySubprocessOptions = {
   sessionId: string
@@ -8,6 +9,23 @@ export type PtySubprocessOptions = {
   cwd?: string
   env?: Record<string, string>
   command?: string
+}
+
+function getDefaultCwd(): string {
+  if (process.platform !== 'win32') {
+    return process.env.HOME || '/'
+  }
+
+  // Why: HOMEPATH alone is drive-relative (`\\Users\\name`). Pair it with
+  // HOMEDRIVE when USERPROFILE is unavailable so daemon-spawned Windows PTYs
+  // still start in a valid absolute home directory.
+  if (process.env.USERPROFILE) {
+    return process.env.USERPROFILE
+  }
+  if (process.env.HOMEDRIVE && process.env.HOMEPATH) {
+    return `${process.env.HOMEDRIVE}${process.env.HOMEPATH}`
+  }
+  return 'C:\\'
 }
 
 export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandle {
@@ -21,27 +39,24 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
 
   env.LANG ??= 'en_US.UTF-8'
 
-  let shellPath: string
+  const shellPath = resolvePtyShellPath(env)
   let shellArgs: string[]
 
   if (process.platform === 'win32') {
-    shellPath = env.COMSPEC || 'powershell.exe'
     shellArgs = []
   } else {
-    shellPath = env.SHELL || process.env.SHELL || '/bin/zsh'
-    shellArgs = ['-l']
+    const shellReadyLaunch = opts.command ? getShellReadyLaunchConfig(shellPath) : null
+    if (shellReadyLaunch) {
+      Object.assign(env, shellReadyLaunch.env)
+    }
+    shellArgs = shellReadyLaunch?.args ?? ['-l']
   }
-
-  const defaultCwd =
-    process.platform === 'win32'
-      ? process.env.USERPROFILE || process.env.HOMEPATH || 'C:\\'
-      : process.env.HOME || '/'
 
   const proc = pty.spawn(shellPath, shellArgs, {
     name: 'xterm-256color',
     cols: opts.cols,
     rows: opts.rows,
-    cwd: opts.cwd || defaultCwd,
+    cwd: opts.cwd || getDefaultCwd(),
     env
   })
 
@@ -56,6 +71,17 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     write: (data) => proc.write(data),
     resize: (cols, rows) => proc.resize(cols, rows),
     kill: () => proc.kill(),
+    forceKill: () => {
+      try {
+        process.kill(proc.pid, 'SIGKILL')
+      } catch {
+        try {
+          proc.kill()
+        } catch {
+          // Process may already be dead
+        }
+      }
+    },
     signal: (sig) => {
       try {
         process.kill(proc.pid, sig)

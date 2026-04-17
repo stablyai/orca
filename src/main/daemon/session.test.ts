@@ -29,6 +29,9 @@ function createMockSubprocess() {
       // Simulate async exit
       setTimeout(() => onExit?.(0), 5)
     },
+    forceKill() {
+      killed = true
+    },
     signal(sig: string) {
       signals.push(sig)
     },
@@ -223,12 +226,33 @@ describe('Session', () => {
       createSession()
       // Override kill to NOT trigger exit
       subprocess.kill = () => {}
+      const forceKillSpy = vi.spyOn(subprocess, 'forceKill')
 
       session.kill()
       expect(session.state).not.toBe('exited')
 
       vi.advanceTimersByTime(5_000)
       expect(session.state).toBe('exited')
+      expect(forceKillSpy).toHaveBeenCalled()
+    })
+
+    it('ignores late data and exit after force-dispose', () => {
+      createSession()
+      subprocess.kill = () => {}
+      const onData = vi.fn()
+      const onExit = vi.fn()
+      session.attachClient({ onData, onExit })
+
+      session.kill()
+      vi.advanceTimersByTime(5_000)
+
+      subprocess.simulateData('late output')
+      subprocess.simulateExit(23)
+
+      expect(onData).not.toHaveBeenCalled()
+      expect(onExit).toHaveBeenCalledTimes(1)
+      expect(onExit).toHaveBeenCalledWith(-1)
+      expect(session.exitCode).toBe(-1)
     })
   })
 

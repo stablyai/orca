@@ -132,6 +132,8 @@ export function registerEagerPtyBuffer(
 export type PtyConnectResult = {
   id: string
   snapshot?: string
+  snapshotCols?: number
+  snapshotRows?: number
   isAlternateScreen?: boolean
   coldRestore?: { scrollback: string; cwd: string }
 }

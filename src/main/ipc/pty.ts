@@ -211,6 +211,14 @@ export function registerPtyHandlers(
 
   localDataUnsub = localProvider.onData((payload) => {
     if (mainWindow.isDestroyed()) {
+      // Why: clear the pending flush timer so it doesn't fire after the window
+      // is gone. Without this, macOS app re-activation leaks orphaned timers
+      // from the previous window's registration.
+      if (flushTimer) {
+        clearTimeout(flushTimer)
+        flushTimer = null
+      }
+      pendingData.clear()
       return
     }
     const existing = pendingData.get(payload.id)
@@ -355,7 +363,27 @@ export function registerPtyHandlers(
   ipcMain.handle(
     'pty:listSessions',
     async (): Promise<{ id: string; cwd: string; title: string }[]> => {
-      return localProvider.listProcesses()
+      const providerSessions = await Promise.all([
+        Promise.resolve({
+          connectionId: null as string | null,
+          sessions: await localProvider.listProcesses()
+        }),
+        ...Array.from(sshProviders.entries(), async ([connectionId, provider]) => ({
+          connectionId,
+          sessions: await provider.listProcesses().catch(() => [])
+        }))
+      ])
+      const deduped = new Map<string, { id: string; cwd: string; title: string }>()
+      for (const { connectionId, sessions } of providerSessions) {
+        for (const session of sessions) {
+          // Why: SessionsStatusSegment kill actions only send the PTY id back
+          // through IPC. Rebuild ownership while listing so remote sessions
+          // discovered after reconnect still route to their original provider.
+          ptyOwnership.set(session.id, connectionId)
+          deduped.set(session.id, session)
+        }
+      }
+      return Array.from(deduped.values())
     }
   )
 

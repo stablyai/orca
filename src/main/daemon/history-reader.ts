@@ -1,6 +1,7 @@
 import { join } from 'path'
 import { readFileSync, existsSync, readdirSync } from 'fs'
 import type { SessionMeta } from './history-manager'
+import { getHistorySessionDirName } from './history-paths'
 
 export type ColdRestoreInfo = {
   scrollback: string
@@ -54,9 +55,10 @@ export class HistoryReader {
       if (!entry.isDirectory()) {
         continue
       }
-      const meta = this.readMeta(entry.name)
+      const sessionId = decodeURIComponent(entry.name)
+      const meta = this.readMeta(sessionId)
       if (meta && meta.endedAt === null) {
-        restorable.push(entry.name)
+        restorable.push(sessionId)
       }
     }
 
@@ -64,7 +66,7 @@ export class HistoryReader {
   }
 
   private readMeta(sessionId: string): SessionMeta | null {
-    const metaPath = join(this.basePath, sessionId, 'meta.json')
+    const metaPath = join(this.basePath, getHistorySessionDirName(sessionId), 'meta.json')
     if (!existsSync(metaPath)) {
       return null
     }
@@ -76,7 +78,11 @@ export class HistoryReader {
   }
 
   private readScrollback(sessionId: string): string {
-    const scrollbackPath = join(this.basePath, sessionId, 'scrollback.bin')
+    const scrollbackPath = join(
+      this.basePath,
+      getHistorySessionDirName(sessionId),
+      'scrollback.bin'
+    )
     if (!existsSync(scrollbackPath)) {
       return ''
     }

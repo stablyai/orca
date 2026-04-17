@@ -100,6 +100,18 @@ describe('createPtySubprocess', () => {
     expect(proc.kill).toHaveBeenCalled()
   })
 
+  it('forceKill sends SIGKILL to the child pid', () => {
+    const proc = mockPtyProcess(77)
+    spawnMock.mockReturnValue(proc)
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+
+    const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+    handle.forceKill()
+
+    expect(killSpy).toHaveBeenCalledWith(77, 'SIGKILL')
+    killSpy.mockRestore()
+  })
+
   it('routes onData events', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
@@ -161,5 +173,48 @@ describe('createPtySubprocess', () => {
     const lastCall = spawnMock.mock.calls.at(-1)!
     const spawnEnv = lastCall[2].env
     expect(spawnEnv.MY_VAR).toBe('test-value')
+  })
+
+  it('combines HOMEDRIVE and HOMEPATH for Windows default cwd', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    const originalUserProfile = process.env.USERPROFILE
+    const originalHomeDrive = process.env.HOMEDRIVE
+    const originalHomePath = process.env.HOMEPATH
+
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    delete process.env.USERPROFILE
+    process.env.HOMEDRIVE = 'D:'
+    process.env.HOMEPATH = '\\Users\\orca'
+
+    try {
+      createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+      if (originalUserProfile === undefined) {
+        delete process.env.USERPROFILE
+      } else {
+        process.env.USERPROFILE = originalUserProfile
+      }
+      if (originalHomeDrive === undefined) {
+        delete process.env.HOMEDRIVE
+      } else {
+        process.env.HOMEDRIVE = originalHomeDrive
+      }
+      if (originalHomePath === undefined) {
+        delete process.env.HOMEPATH
+      } else {
+        process.env.HOMEPATH = originalHomePath
+      }
+    }
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Array),
+      expect.objectContaining({ cwd: 'D:\\Users\\orca' })
+    )
   })
 })

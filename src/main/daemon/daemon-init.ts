@@ -23,7 +23,12 @@ function getHistoryDir(): string {
 }
 
 function getDaemonEntryPath(): string {
-  return join(app.getAppPath(), 'out', 'main', 'daemon-entry.js')
+  const appPath = app.getAppPath()
+  // Why: electron-builder unpacks daemon-entry.js so child_process.fork() can
+  // execute it from disk. In packaged apps app.getAppPath() points at
+  // app.asar, so redirect to the unpacked sibling before joining the script.
+  const basePath = app.isPackaged ? appPath.replace('app.asar', 'app.asar.unpacked') : appPath
+  return join(basePath, 'out', 'main', 'daemon-entry.js')
 }
 
 // Why: before spawning a new daemon, check if an existing one is alive by
@@ -31,7 +36,7 @@ function getDaemonEntryPath(): string {
 // survived from a previous app session — reuse it instead of spawning.
 function probeSocket(socketPath: string): Promise<boolean> {
   return new Promise((resolve) => {
-    if (!existsSync(socketPath)) {
+    if (process.platform !== 'win32' && !existsSync(socketPath)) {
       resolve(false)
       return
     }
@@ -63,7 +68,7 @@ function createOutOfProcessLauncher(): DaemonLauncher {
 
     // Why: stale socket file from a crashed daemon blocks the new server
     // from binding. Remove it before spawning.
-    if (existsSync(socketPath)) {
+    if (process.platform !== 'win32' && existsSync(socketPath)) {
       unlinkSync(socketPath)
     }
 
@@ -78,8 +83,19 @@ function createOutOfProcessLauncher(): DaemonLauncher {
 
     // Wait for the daemon to signal readiness via IPC
     await new Promise<void>((resolve, reject) => {
+      const fail = (error: Error): void => {
+        clearTimeout(timer)
+        if (child.pid) {
+          try {
+            process.kill(child.pid, 'SIGTERM')
+          } catch {
+            // Already dead
+          }
+        }
+        reject(error)
+      }
       const timer = setTimeout(() => {
-        reject(new Error('Daemon startup timed out'))
+        fail(new Error('Daemon startup timed out'))
       }, 10000)
 
       child.on('message', (msg: unknown) => {
@@ -94,13 +110,11 @@ function createOutOfProcessLauncher(): DaemonLauncher {
       })
 
       child.on('error', (err) => {
-        clearTimeout(timer)
-        reject(err)
+        fail(err)
       })
 
       child.on('exit', (code) => {
-        clearTimeout(timer)
-        reject(new Error(`Daemon exited during startup with code ${code}`))
+        fail(new Error(`Daemon exited during startup with code ${code}`))
       })
     })
 
@@ -121,29 +135,33 @@ function createOutOfProcessLauncher(): DaemonLauncher {
 export async function initDaemonPtyProvider(): Promise<void> {
   const runtimeDir = getRuntimeDir()
 
-  spawner = new DaemonSpawner({
+  const newSpawner = new DaemonSpawner({
     runtimeDir,
     launcher: createOutOfProcessLauncher()
   })
 
-  const info = await spawner.ensureRunning()
+  // Why: assign spawner/adapter only after both succeed. If ensureRunning()
+  // throws, a stale spawner would prevent shutdownDaemon() from cleaning up
+  // correctly on retry.
+  const info = await newSpawner.ensureRunning()
 
-  adapter = new DaemonPtyAdapter({
+  const newAdapter = new DaemonPtyAdapter({
     socketPath: info.socketPath,
     tokenPath: info.tokenPath,
     historyPath: getHistoryDir()
   })
 
+  spawner = newSpawner
+  adapter = newAdapter
   setLocalPtyProvider(adapter)
 }
 
 // Why: disconnect from the daemon without killing it. The daemon runs as a
 // separate process and survives app quit — sessions stay alive for warm
-// reattach on next launch. dispose() is intentional here: it writes endedAt
-// to history files, which is correct because the daemon (and its sessions)
-// are still alive. Cold restore only triggers when the daemon itself dies.
+// reattach on next launch. Leave history sessions marked "unclean" here so a
+// later daemon crash while Orca is closed is still recoverable on next launch.
 export function disconnectDaemon(): void {
-  adapter?.dispose()
+  adapter?.disconnectOnly()
   adapter = null
 }
 

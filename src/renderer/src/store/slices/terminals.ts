@@ -1047,6 +1047,13 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       // createOrAttach RPC, triggering reattach instead of a fresh spawn.
       const pendingReconnectPtyIdByTabId: Record<string, string> = {}
       for (const worktreeId of pendingReconnectWorktreeIds) {
+        const worktree = Object.values(s.worktreesByRepo)
+          .flat()
+          .find((entry) => entry.id === worktreeId)
+        const repo = worktree ? s.repos.find((entry) => entry.id === worktree.repoId) : null
+        if (repo?.connectionId) {
+          continue
+        }
         const rawTabs = session.tabsByWorktree[worktreeId] ?? []
         for (const tab of rawTabs) {
           if (tab.ptyId && validTabIds.has(tab.id)) {
@@ -1137,6 +1144,11 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
 
     for (const worktreeId of ids) {
       const tabs = tabsByWorktree[worktreeId] ?? []
+      const worktree = Object.values(get().worktreesByRepo)
+        .flat()
+        .find((entry) => entry.id === worktreeId)
+      const repo = worktree ? get().repos.find((entry) => entry.id === worktree.repoId) : null
+      const supportsDeferredReattach = !repo?.connectionId
       const targetTabIds = pendingReconnectTabByWorktree[worktreeId] ?? []
       const tabsToReconnect: TerminalTab[] =
         targetTabIds.length > 0
@@ -1162,7 +1174,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         // carries per-leaf mappings; connectPanePty reads those via
         // restoredPtyIdByLeafId, but the tab still needs a ptyId for
         // status and orphan detection.
-        if (tabLevelPtyId) {
+        if (supportsDeferredReattach && tabLevelPtyId) {
           set((s) => {
             const next = { ...s.tabsByWorktree }
             if (!next[worktreeId]) {

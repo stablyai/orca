@@ -80,7 +80,7 @@ vi.mock('../pi/titlebar-extension-service', () => ({
     clearPty: piClearPtyMock
   }
 }))
-import { registerPtyHandlers } from './pty'
+import { registerPtyHandlers, registerSshPtyProvider, unregisterSshPtyProvider } from './pty'
 
 function makeDisposable() {
   return { dispose: vi.fn() }
@@ -145,6 +145,10 @@ describe('registerPtyHandlers', () => {
       process: 'zsh',
       pid: 12345
     })
+  })
+
+  afterEach(() => {
+    unregisterSshPtyProvider('ssh-1')
   })
 
   function createMockProc() {
@@ -286,6 +290,50 @@ describe('registerPtyHandlers', () => {
       )
       expect(env.CODEX_HOME).toBe('/tmp/system-codex-home')
     })
+  })
+
+  it('lists sessions from both local and SSH providers', async () => {
+    registerPtyHandlers(mainWindow as never)
+    const sshListProcesses = vi.fn(async () => [
+      { id: 'remote-pty', cwd: '/remote', title: 'ssh-shell' }
+    ])
+    const sshShutdown = vi.fn(async () => undefined)
+    registerSshPtyProvider('ssh-1', {
+      spawn: vi.fn(),
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: sshShutdown,
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: sshListProcesses,
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+
+    await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+    const sessions = (await handlers.get('pty:listSessions')!(null, undefined)) as {
+      id: string
+      cwd: string
+      title: string
+    }[]
+
+    expect(sshListProcesses).toHaveBeenCalled()
+    expect(sessions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ cwd: '/remote', id: 'remote-pty', title: 'ssh-shell' })
+      ])
+    )
+
+    await handlers.get('pty:kill')!(null, { id: 'remote-pty' })
+    expect(sshShutdown).toHaveBeenCalledWith('remote-pty', true)
   })
 
   describe('Windows UTF-8 code page', () => {

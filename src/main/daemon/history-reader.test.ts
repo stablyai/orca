@@ -3,6 +3,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs'
 import { HistoryReader } from './history-reader'
+import { getHistorySessionDirName } from './history-paths'
 import type { SessionMeta } from './history-manager'
 
 function createTestDir(): string {
@@ -15,7 +16,7 @@ function writeSessionFiles(
   meta: SessionMeta,
   scrollback: string
 ): void {
-  const dir = join(basePath, sessionId)
+  const dir = join(basePath, getHistorySessionDirName(sessionId))
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, 'meta.json'), JSON.stringify(meta))
   writeFileSync(join(dir, 'scrollback.bin'), scrollback)
@@ -74,7 +75,7 @@ describe('HistoryReader', () => {
     })
 
     it('returns null for corrupt meta.json', () => {
-      const sessionDir = join(dir, 'corrupt')
+      const sessionDir = join(dir, getHistorySessionDirName('corrupt'))
       mkdirSync(sessionDir, { recursive: true })
       writeFileSync(join(sessionDir, 'meta.json'), 'not json')
       writeFileSync(join(sessionDir, 'scrollback.bin'), 'data')
@@ -83,7 +84,7 @@ describe('HistoryReader', () => {
     })
 
     it('returns empty scrollback when scrollback.bin is missing', () => {
-      const sessionDir = join(dir, 'no-scrollback')
+      const sessionDir = join(dir, getHistorySessionDirName('no-scrollback'))
       mkdirSync(sessionDir, { recursive: true })
       writeFileSync(join(sessionDir, 'meta.json'), JSON.stringify(makeMeta()))
 
@@ -186,6 +187,13 @@ describe('HistoryReader', () => {
 
     it('returns empty array when no sessions exist', () => {
       expect(reader.listRestorable()).toEqual([])
+    })
+
+    it('returns decoded session ids for encoded on-disk directories', () => {
+      const sessionId = 'repo-1::C:/Users/dev/feature'
+      writeSessionFiles(dir, sessionId, makeMeta(), 'data')
+
+      expect(reader.listRestorable()).toEqual([sessionId])
     })
   })
 })

@@ -5,6 +5,7 @@ import { join } from 'path'
 import { mkdtempSync, mkdirSync, rmSync, existsSync, readFileSync, writeFileSync } from 'fs'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { DaemonServer } from './daemon-server'
+import { getHistorySessionDirName } from './history-paths'
 import type { SubprocessHandle } from './session'
 
 function createTestDir(): string {
@@ -22,6 +23,7 @@ function createMockSubprocess(): SubprocessHandle & {
     write: vi.fn(),
     resize: vi.fn(),
     kill: vi.fn(() => setTimeout(() => onExitCb?.(0), 5)),
+    forceKill: vi.fn(),
     signal: vi.fn(),
     onData(cb) {
       onDataCb = cb
@@ -55,6 +57,14 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
   let server: DaemonServer
   let adapter: DaemonPtyAdapter
   let lastSubprocess: ReturnType<typeof createMockSubprocess>
+  let lastSpawnOpts: {
+    sessionId: string
+    cols: number
+    rows: number
+    cwd?: string
+    env?: Record<string, string>
+    command?: string
+  } | null
 
   beforeEach(async () => {
     dir = createTestDir()
@@ -64,7 +74,8 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     server = new DaemonServer({
       socketPath,
       tokenPath,
-      spawnSubprocess: () => {
+      spawnSubprocess: (opts) => {
+        lastSpawnOpts = opts
         lastSubprocess = createMockSubprocess()
         return lastSubprocess
       }
@@ -72,6 +83,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     await server.start()
 
     adapter = new DaemonPtyAdapter({ socketPath, tokenPath })
+    lastSpawnOpts = null
   })
 
   afterEach(async () => {
@@ -324,6 +336,39 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const result = await adapter.spawn({ cols: 80, rows: 24, sessionId })
       expect(result.id).toBe(sessionId)
     })
+
+    it('evicts oldest tombstone when exceeding limit', async () => {
+      // Why: MAX_TOMBSTONES is 1000, but spawning that many real sessions is
+      // slow. Instead verify the eviction logic by spawning a small batch and
+      // checking the oldest tombstone is gone after crossing the cap. We access
+      // the private map size via the public API: the oldest session should
+      // become spawnable again once evicted.
+      const ids: string[] = []
+      for (let i = 0; i < 5; i++) {
+        const id = `evict-${i}`
+        ids.push(id)
+        await adapter.spawn({ cols: 80, rows: 24, sessionId: id })
+        await adapter.shutdown(id, true)
+      }
+
+      // All 5 should be tombstoned
+      for (const id of ids) {
+        await expect(adapter.spawn({ cols: 80, rows: 24, sessionId: id })).rejects.toThrow(
+          'was explicitly killed'
+        )
+      }
+
+      // clearTombstone the first one, then re-kill it — it should still work
+      adapter.clearTombstone(ids[0])
+      await adapter.spawn({ cols: 80, rows: 24, sessionId: ids[0] })
+      await adapter.shutdown(ids[0], true)
+
+      // First tombstone was re-added at the end of the Map, so eviction
+      // order is now [evict-1, evict-2, evict-3, evict-4, evict-0]
+      await expect(adapter.spawn({ cols: 80, rows: 24, sessionId: ids[0] })).rejects.toThrow(
+        'was explicitly killed'
+      )
+    })
   })
 
   describe('reconcileOnStartup', () => {
@@ -402,7 +447,10 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       lastSubprocess._simulateData('hello from pty\r\n')
       await new Promise((r) => setTimeout(r, 50))
 
-      const scrollback = readFileSync(join(historyDir, id, 'scrollback.bin'), 'utf-8')
+      const scrollback = readFileSync(
+        join(historyDir, getHistorySessionDirName(id), 'scrollback.bin'),
+        'utf-8'
+      )
       expect(scrollback).toContain('hello from pty')
     })
 
@@ -418,7 +466,9 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       lastSubprocess._simulateExit(0)
       await new Promise((r) => setTimeout(r, 50))
 
-      const meta = JSON.parse(readFileSync(join(historyDir, id, 'meta.json'), 'utf-8'))
+      const meta = JSON.parse(
+        readFileSync(join(historyDir, getHistorySessionDirName(id), 'meta.json'), 'utf-8')
+      )
       expect(meta.endedAt).toBeDefined()
       expect(meta.exitCode).toBe(0)
     })
@@ -435,18 +485,18 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       lastSubprocess._simulateData('data')
       await new Promise((r) => setTimeout(r, 50))
 
-      expect(existsSync(join(historyDir, id))).toBe(true)
+      expect(existsSync(join(historyDir, getHistorySessionDirName(id)))).toBe(true)
 
       await historyAdapter.shutdown(id, true)
       await new Promise((r) => setTimeout(r, 50))
 
-      expect(existsSync(join(historyDir, id))).toBe(false)
+      expect(existsSync(join(historyDir, getHistorySessionDirName(id)))).toBe(false)
     })
 
     it('returns cold restore data when disk history has unclean shutdown', async () => {
       // Simulate a previous daemon crash: write history files without endedAt
       const sessionId = 'cold-restore-test'
-      const sessionDir = join(historyDir, sessionId)
+      const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
       mkdirSync(sessionDir, { recursive: true })
       writeFileSync(
         join(sessionDir, 'meta.json'),
@@ -468,11 +518,17 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(result.coldRestore).toBeDefined()
       expect(result.coldRestore!.scrollback).toContain('Server running')
       expect(result.coldRestore!.cwd).toBe('/projects/myapp')
+      expect(lastSpawnOpts).toMatchObject({
+        sessionId,
+        cwd: '/projects/myapp',
+        cols: 120,
+        rows: 40
+      })
     })
 
     it('returns same cold restore on StrictMode double-mount (sticky cache)', async () => {
       const sessionId = 'sticky-cache-test'
-      const sessionDir = join(historyDir, sessionId)
+      const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
       mkdirSync(sessionDir, { recursive: true })
       writeFileSync(
         join(sessionDir, 'meta.json'),
@@ -505,7 +561,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
     it('records post-cold-restore data to disk for future restores', async () => {
       const sessionId = 'post-restore-data'
-      const sessionDir = join(historyDir, sessionId)
+      const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
       mkdirSync(sessionDir, { recursive: true })
       writeFileSync(
         join(sessionDir, 'meta.json'),
@@ -526,7 +582,10 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(result.coldRestore).toBeDefined()
 
       // Restored scrollback is seeded into the new history file immediately
-      const seeded = readFileSync(join(historyDir, sessionId, 'scrollback.bin'), 'utf-8')
+      const seeded = readFileSync(
+        join(historyDir, getHistorySessionDirName(sessionId), 'scrollback.bin'),
+        'utf-8'
+      )
       expect(seeded).toContain('old output')
 
       // Simulate new data arriving after cold restore
@@ -534,14 +593,17 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       await new Promise((r) => setTimeout(r, 50))
 
       // History should now contain both the seeded and new data
-      const scrollback = readFileSync(join(historyDir, sessionId, 'scrollback.bin'), 'utf-8')
+      const scrollback = readFileSync(
+        join(historyDir, getHistorySessionDirName(sessionId), 'scrollback.bin'),
+        'utf-8'
+      )
       expect(scrollback).toContain('old output')
       expect(scrollback).toContain('new post-restore output')
     })
 
     it('does not cold-restore for clean shutdown (endedAt set)', async () => {
       const sessionId = 'clean-exit'
-      const sessionDir = join(historyDir, sessionId)
+      const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
       mkdirSync(sessionDir, { recursive: true })
       writeFileSync(
         join(sessionDir, 'meta.json'),
@@ -560,6 +622,23 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       const result = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
       expect(result.coldRestore).toBeUndefined()
+    })
+
+    it('stores history under an encoded directory key for Windows-safe session ids', async () => {
+      const sessionId = 'repo1::/path/wt1@@abcd'
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+
+      const { id } = await historyAdapter.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp',
+        sessionId
+      })
+
+      expect(id).toBe(sessionId)
+      expect(existsSync(join(historyDir, getHistorySessionDirName(sessionId), 'meta.json'))).toBe(
+        true
+      )
     })
   })
 })

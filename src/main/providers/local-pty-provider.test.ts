@@ -119,6 +119,47 @@ describe('LocalPtyProvider', () => {
       const spawnCall = spawnMock.mock.calls.at(-1)!
       expect(spawnCall[2].env.CUSTOM_VAR).toBe('custom-value')
     })
+
+    it('combines HOMEDRIVE and HOMEPATH for Windows default cwd', async () => {
+      const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+      const originalUserProfile = process.env.USERPROFILE
+      const originalHomeDrive = process.env.HOMEDRIVE
+      const originalHomePath = process.env.HOMEPATH
+
+      Object.defineProperty(process, 'platform', { value: 'win32' })
+      delete process.env.USERPROFILE
+      process.env.HOMEDRIVE = 'D:'
+      process.env.HOMEPATH = '\\Users\\orca'
+
+      try {
+        await provider.spawn({ cols: 80, rows: 24 })
+      } finally {
+        if (platform) {
+          Object.defineProperty(process, 'platform', platform)
+        }
+        if (originalUserProfile === undefined) {
+          delete process.env.USERPROFILE
+        } else {
+          process.env.USERPROFILE = originalUserProfile
+        }
+        if (originalHomeDrive === undefined) {
+          delete process.env.HOMEDRIVE
+        } else {
+          process.env.HOMEDRIVE = originalHomeDrive
+        }
+        if (originalHomePath === undefined) {
+          delete process.env.HOMEPATH
+        } else {
+          process.env.HOMEPATH = originalHomePath
+        }
+      }
+
+      expect(spawnMock).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(Array),
+        expect.objectContaining({ cwd: 'D:\\Users\\orca' })
+      )
+    })
   })
 
   describe('write', () => {

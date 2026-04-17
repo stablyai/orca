@@ -96,6 +96,7 @@ function createMockSubprocess() {
     write: vi.fn(),
     resize: vi.fn(),
     kill: vi.fn(() => setTimeout(() => onExitCb?.(0), 5)),
+    forceKill: vi.fn(),
     signal: vi.fn(),
     onData(_cb: (data: string) => void) {},
     onExit(cb: (code: number) => void) {

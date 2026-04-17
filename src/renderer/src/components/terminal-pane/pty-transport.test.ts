@@ -1,3 +1,4 @@
+/* oxlint-disable max-lines */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 describe('createIpcPtyTransport', () => {
@@ -176,6 +177,64 @@ describe('createIpcPtyTransport', () => {
       command: 'echo hello'
     })
     expect(writeMock).not.toHaveBeenCalled()
+  })
+
+  it('preserves snapshot dimensions when reattaching', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawnMock = vi.fn().mockResolvedValue({
+      id: 'pty-reattach',
+      isReattach: true,
+      snapshot: 'snapshot data',
+      snapshotCols: 132,
+      snapshotRows: 43
+    })
+
+    ;(globalThis as { window: typeof window }).window = {
+      ...originalWindow,
+      api: {
+        ...originalWindow?.api,
+        pty: {
+          ...originalWindow?.api?.pty,
+          spawn: spawnMock,
+          write: vi.fn(),
+          resize: vi.fn(),
+          kill: vi.fn(),
+          onData: vi.fn((callback: (payload: { id: string; data: string }) => void) => {
+            onData = callback
+            return () => {}
+          }),
+          onExit: vi.fn((callback: (payload: { id: string; code: number }) => void) => {
+            onExit = callback
+            return () => {}
+          }),
+          onOpenCodeStatus: vi.fn(
+            (
+              callback: (payload: {
+                ptyId: string
+                status: 'working' | 'idle' | 'permission'
+              }) => void
+            ) => {
+              onOpenCodeStatus = callback
+              return () => {}
+            }
+          )
+        }
+      }
+    } as unknown as typeof window
+
+    const transport = createIpcPtyTransport()
+    const result = await transport.connect({
+      url: '',
+      sessionId: 'pty-reattach',
+      callbacks: {}
+    })
+
+    expect(result).toEqual({
+      id: 'pty-reattach',
+      snapshot: 'snapshot data',
+      isAlternateScreen: undefined,
+      coldRestore: undefined
+    })
   })
 
   it('kills a PTY that finishes spawning after the transport was destroyed', async () => {

@@ -208,8 +208,9 @@ app.on('will-quit', () => {
   killAllPty()
   // Why: in daemon mode, killAllPty is a no-op (daemon sessions survive app
   // quit) but the client connection must be closed so sockets are released.
-  // disconnectDaemon only closes the adapter — it does NOT kill the daemon
-  // process or its sessions, preserving them for reattach on next launch.
+  // disconnectDaemon only tears down the client transport — it does NOT kill
+  // the daemon process or mark its history as cleanly ended, preserving both
+  // warm reattach and crash recovery on next launch.
   disconnectDaemon()
   void closeAllWatchers()
   if (runtimeRpc) {

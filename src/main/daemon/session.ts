@@ -10,6 +10,7 @@ export type SubprocessHandle = {
   write(data: string): void
   resize(cols: number, rows: number): void
   kill(): void
+  forceKill(): void
   signal(sig: string): void
   onData(cb: (data: string) => void): void
   onExit(cb: (code: number) => void): void
@@ -281,10 +282,27 @@ export class Session {
     if (this._state === 'exited') {
       return
     }
+    this.subprocess.forceKill()
+    this._disposed = true
     this._exitCode = -1
     this._state = 'exited'
+    this._isTerminating = false
 
-    for (const client of this.attachedClients) {
+    if (this.shellReadyTimer) {
+      clearTimeout(this.shellReadyTimer)
+      this.shellReadyTimer = null
+    }
+    if (this.killTimer) {
+      clearTimeout(this.killTimer)
+      this.killTimer = null
+    }
+
+    const clients = this.attachedClients
+    this.attachedClients = []
+    this.preReadyStdinQueue = []
+    this.emulator.dispose()
+
+    for (const client of clients) {
       client.onExit(-1)
     }
   }
