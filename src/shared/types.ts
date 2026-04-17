@@ -616,6 +616,12 @@ export type GlobalSettings = {
   terminalScopeHistoryByWorktree: boolean
   /** Which agent to pre-select in the new-workspace composer. null = auto (first detected). */
   defaultTuiAgent: TuiAgent | null
+  /** Why: worktree deletion is destructive (git worktree remove + rm -rf of the
+   *  working directory), so Orca shows a confirmation dialog by default. Users
+   *  who delete frequently can opt into skipping the dialog via a "Don't ask
+   *  again" checkbox inside it or from the General settings pane. We keep this
+   *  defaulted to false so first-time behavior stays safe. */
+  skipDeleteWorktreeConfirm: boolean
   /** Default preset in the new-workspace GitHub task view. */
   defaultTaskViewPreset: TaskViewPresetId
   /** Per-agent CLI command overrides. A missing key means use the catalog default binary name. */

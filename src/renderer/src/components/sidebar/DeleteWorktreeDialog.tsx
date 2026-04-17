@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -8,11 +8,10 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { AlertTriangle, LoaderCircle, Trash2 } from 'lucide-react'
+import { AlertTriangle, Check, LoaderCircle, Trash2 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { toast } from 'sonner'
-import { getDeleteWorktreeToastCopy } from './delete-worktree-toast'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { runWorktreeDeleteWithToast } from './delete-worktree-flow'
 
 const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   const activeModal = useAppStore((s) => s.activeModal)
@@ -21,6 +20,9 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   const removeWorktree = useAppStore((s) => s.removeWorktree)
   const clearWorktreeDeleteState = useAppStore((s) => s.clearWorktreeDeleteState)
   const allWorktrees = useAppStore((s) => s.allWorktrees)
+  const updateSettings = useAppStore((s) => s.updateSettings)
+  const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
+  const openSettingsPage = useAppStore((s) => s.openSettingsPage)
 
   const isOpen = activeModal === 'delete-worktree'
   const worktreeId = typeof modalData.worktreeId === 'string' ? modalData.worktreeId : ''
@@ -40,6 +42,17 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   // always rejects it. We block the delete button upfront so the user doesn't have to
   // discover this limitation via a confusing force-delete dead-end.
   const isMainWorktree = worktree?.isMainWorktree ?? false
+  const [dontAskAgain, setDontAskAgain] = useState(false)
+
+  // Why: the checkbox is a one-shot intent captured inside the dialog — when
+  // the dialog closes (cancel, delete, or esc) we reset it so the next open
+  // starts unchecked. Without this, toggling the box and cancelling would
+  // silently re-surface the checked state on the next delete.
+  useEffect(() => {
+    if (!isOpen) {
+      setDontAskAgain(false)
+    }
+  }, [isOpen])
 
   useEffect(() => {
     if (isOpen && worktreeId && !worktree && !isDeleting) {
@@ -64,68 +77,71 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     [clearWorktreeDeleteState, closeModal, worktreeId]
   )
 
+  const persistDontAskAgainPreference = useCallback((): void => {
+    void updateSettings({ skipDeleteWorktreeConfirm: true })
+    // Why: the toast confirms the preference was saved and points the user at
+    // where to undo it. The "Open Settings" action deep-links to the General
+    // pane so they never have to hunt for the toggle if they change their mind.
+    toast.success("We'll skip this confirmation next time.", {
+      description: 'You can change this in Settings.',
+      duration: 8000,
+      action: {
+        label: 'Open Settings',
+        onClick: () => {
+          openSettingsPage()
+          openSettingsTarget({
+            pane: 'general',
+            repoId: null,
+            sectionId: 'general-skip-delete-worktree-confirm'
+          })
+        }
+      }
+    })
+  }, [openSettingsPage, openSettingsTarget, updateSettings])
+
   const handleDelete = useCallback(
     (force = false) => {
       if (!worktreeId) {
         return
       }
-      const targetWorktreeId = worktreeId
-      removeWorktree(targetWorktreeId, force)
-        .then((result) => {
-          if (!result.ok) {
-            const state = useAppStore.getState().deleteStateByWorktreeId[targetWorktreeId]
-            const toastCopy = getDeleteWorktreeToastCopy(
-              worktreeName,
-              state?.canForceDelete ?? false,
-              result.error
-            )
-            const showToast = toastCopy.isDestructive ? toast.error : toast.info
-            showToast(toastCopy.title, {
-              description: toastCopy.description,
-              duration: 10000,
-              cancel: {
-                label: 'View',
-                onClick: () => activateAndRevealWorktree(targetWorktreeId)
-              },
-              action: state?.canForceDelete
-                ? {
-                    label: 'Force Delete',
-                    onClick: () => {
-                      removeWorktree(targetWorktreeId, true)
-                        .then((forceResult) => {
-                          if (!forceResult.ok) {
-                            toast.error('Force delete failed', {
-                              description: forceResult.error,
-                              action: {
-                                label: 'View',
-                                onClick: () => activateAndRevealWorktree(targetWorktreeId)
-                              }
-                            })
-                          }
-                        })
-                        .catch((err: unknown) => {
-                          toast.error('Failed to delete worktree', {
-                            description: err instanceof Error ? err.message : String(err),
-                            action: {
-                              label: 'View',
-                              onClick: () => activateAndRevealWorktree(targetWorktreeId)
-                            }
-                          })
-                        })
-                    }
-                  }
-                : undefined
-            })
-          }
-        })
-        .catch((err: unknown) => {
-          toast.error('Failed to delete worktree', {
-            description: err instanceof Error ? err.message : String(err)
+      // Why: force-delete is a recovery path taken after a failed first delete.
+      // Saving "don't ask again" from that state would conflate the recovery
+      // action with a broader preference. Only persist the preference on the
+      // primary (non-force) confirmation so users intentionally opt in.
+      if (dontAskAgain && !force) {
+        persistDontAskAgainPreference()
+      }
+      if (force) {
+        // Why: this branch preserves the legacy "Force Delete" button behavior
+        // inside the dialog — it runs the destructive retry directly without
+        // the shared toast wrapper, since the user is already looking at an
+        // error state and a success silently closes the dialog.
+        removeWorktree(worktreeId, true)
+          .then((result) => {
+            if (!result.ok) {
+              toast.error('Force delete failed', {
+                description: result.error
+              })
+            }
           })
-        })
+          .catch((err: unknown) => {
+            toast.error('Failed to delete worktree', {
+              description: err instanceof Error ? err.message : String(err)
+            })
+          })
+      } else {
+        runWorktreeDeleteWithToast(worktreeId, worktreeName)
+      }
       closeModal()
     },
-    [closeModal, removeWorktree, worktreeId, worktreeName]
+    [
+      closeModal,
+      dontAskAgain,
+      persistDontAskAgainPreference,
+      removeWorktree,
+      worktreeId,
+      worktreeName
+    ]
   )
 
   return (
@@ -180,6 +196,30 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
               <div className="min-w-0 flex-1 whitespace-pre-wrap break-all">{deleteError}</div>
             </div>
           </div>
+        )}
+
+        {!isMainWorktree && !canForceDelete && (
+          // Why: only show "Don't ask again" for the primary confirmation. The
+          // force-delete variant is a recovery path that shouldn't double as a
+          // preference checkpoint; see handleDelete for the matching guard.
+          <button
+            type="button"
+            role="checkbox"
+            aria-checked={dontAskAgain}
+            onClick={() => setDontAskAgain((prev) => !prev)}
+            className="flex items-center gap-2 rounded-sm px-1 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <span
+              className={`flex size-4 items-center justify-center rounded-sm border transition-colors ${
+                dontAskAgain
+                  ? 'border-foreground bg-foreground text-background'
+                  : 'border-muted-foreground/50 bg-transparent'
+              }`}
+            >
+              {dontAskAgain ? <Check className="size-3" strokeWidth={3} /> : null}
+            </span>
+            Don&apos;t ask again
+          </button>
         )}
 
         <DialogFooter>

@@ -292,6 +292,44 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
             />
           </button>
         </SearchableSetting>
+
+        {/* Why: the "Don't ask again" toast in the delete-worktree dialog
+            deep-links here, so the wrapper id must stay stable. Renaming it
+            breaks that toast action even though this pane still renders fine. */}
+        <div id="general-skip-delete-worktree-confirm" className="scroll-mt-6">
+          <SearchableSetting
+            title="Skip Delete Worktree Confirmation"
+            description="Delete worktrees from the context menu without a confirmation dialog."
+            keywords={['delete', 'worktree', 'confirm', 'dialog', 'skip', 'prompt']}
+            className="flex items-center justify-between gap-4 px-1 py-2"
+          >
+            <div className="space-y-0.5">
+              <Label>Skip Delete Worktree Confirmation</Label>
+              <p className="text-xs text-muted-foreground">
+                Delete worktrees from the context menu without a confirmation dialog. Errors still
+                surface as a toast with a Force Delete fallback.
+              </p>
+            </div>
+            <button
+              role="switch"
+              aria-checked={settings.skipDeleteWorktreeConfirm}
+              onClick={() =>
+                updateSettings({
+                  skipDeleteWorktreeConfirm: !settings.skipDeleteWorktreeConfirm
+                })
+              }
+              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
+                settings.skipDeleteWorktreeConfirm ? 'bg-foreground' : 'bg-muted-foreground/30'
+              }`}
+            >
+              <span
+                className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
+                  settings.skipDeleteWorktreeConfirm ? 'translate-x-4' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          </SearchableSetting>
+        </div>
       </section>
     ) : null,
     matchesSettingsSearch(searchQuery, GENERAL_EDITOR_SEARCH_ENTRIES) ? (

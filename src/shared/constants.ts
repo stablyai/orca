@@ -120,6 +120,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     activeCodexManagedAccountId: null,
     terminalScopeHistoryByWorktree: true,
     defaultTuiAgent: null,
+    skipDeleteWorktreeConfirm: false,
     defaultTaskViewPreset: 'all',
     agentCmdOverrides: {},
     terminalMacOptionAsAlt: 'true'

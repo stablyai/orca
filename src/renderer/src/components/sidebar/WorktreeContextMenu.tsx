@@ -22,6 +22,7 @@ import {
 import { useAppStore } from '@/store'
 import type { Worktree } from '../../../../shared/types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
+import { runWorktreeDeleteWithToast } from './delete-worktree-flow'
 
 type Props = {
   worktree: Worktree
@@ -34,6 +35,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({ worktree, 
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const openModal = useAppStore((s) => s.openModal)
   const repos = useAppStore((s) => s.repos)
+  const skipDeleteConfirm = useAppStore((s) => s.settings?.skipDeleteWorktreeConfirm ?? false)
   const shutdownWorktreeTerminals = useAppStore((s) => s.shutdownWorktreeTerminals)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
@@ -124,14 +126,28 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({ worktree, 
       return
     }
     clearWorktreeDeleteState(worktree.id)
+    // Why: when the user has opted into skipping the confirmation, jump
+    // straight to the same delete-with-toast flow the dialog would run on
+    // confirm. The force-delete fallback still surfaces through the toast's
+    // "Force Delete" action, so the user never silently loses dirty work —
+    // they just skip the redundant "are you sure?" step for clean deletes.
+    // The dialog stays the entry point for the main worktree (guarded at the
+    // DropdownMenuItem level) and for any worktree that becomes unavailable
+    // mid-action, because those cases produce dialog-specific UI.
+    if (skipDeleteConfirm && !worktree.isMainWorktree) {
+      runWorktreeDeleteWithToast(worktree.id, worktree.displayName)
+      return
+    }
     openModal('delete-worktree', { worktreeId: worktree.id })
   }, [
     worktree.id,
     worktree.repoId,
     worktree.displayName,
+    worktree.isMainWorktree,
     clearWorktreeDeleteState,
     isFolder,
-    openModal
+    openModal,
+    skipDeleteConfirm
   ])
 
   return (
