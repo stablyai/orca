@@ -67,6 +67,7 @@ type NewWorkspaceComposerCardProps = {
   agentPrompt: string
   onAgentPromptChange: (value: string) => void
   onPromptKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void
+  linkedOnlyTemplatePreview: string | null
   attachmentPaths: string[]
   getAttachmentLabel: (pathValue: string) => string
   onAddAttachment: () => void
@@ -110,12 +111,16 @@ function PromptPrefixTextarea({
   textareaRef,
   value,
   onChange,
-  onKeyDown
+  onKeyDown,
+  placeholder,
+  placeholderTone
 }: {
   textareaRef?: React.RefObject<HTMLTextAreaElement | null>
   value: string
   onChange: (value: string) => void
   onKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void
+  placeholder: string
+  placeholderTone: 'muted' | 'ghost-prompt'
 }): React.JSX.Element {
   const internalRef = React.useRef<HTMLTextAreaElement | null>(null)
 
@@ -158,8 +163,17 @@ function PromptPrefixTextarea({
           value={value}
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={onKeyDown}
-          placeholder="Describe a task to start an agent, or leave blank..."
-          className="block min-h-[110px] w-full resize-none overflow-hidden bg-transparent py-4 pl-4 pr-4 font-mono text-[15px] leading-7 text-foreground outline-none placeholder:text-muted-foreground/50"
+          placeholder={placeholder}
+          // Why: the "ghost-prompt" tone previews the exact issueCommand
+          // template that will be sent to the agent when the user submits with
+          // only a linked work item. Emphasising it with higher contrast makes
+          // it obvious this is a real pending prompt, not instructional copy.
+          className={cn(
+            'block min-h-[110px] w-full resize-none overflow-hidden bg-transparent py-4 pl-4 pr-4 font-mono text-[15px] leading-7 text-foreground outline-none',
+            placeholderTone === 'ghost-prompt'
+              ? 'placeholder:text-foreground/70'
+              : 'placeholder:text-muted-foreground/50'
+          )}
           style={{ textIndent: '2ch' }}
           spellCheck={false}
         />
@@ -253,6 +267,7 @@ export default function NewWorkspaceComposerCard({
   agentPrompt,
   onAgentPromptChange,
   onPromptKeyDown,
+  linkedOnlyTemplatePreview,
   attachmentPaths,
   getAttachmentLabel,
   onAddAttachment,
@@ -329,6 +344,10 @@ export default function NewWorkspaceComposerCard({
               value={agentPrompt}
               onChange={onAgentPromptChange}
               onKeyDown={onPromptKeyDown}
+              placeholder={
+                linkedOnlyTemplatePreview ?? 'Describe a task to start an agent, or leave blank...'
+              }
+              placeholderTone={linkedOnlyTemplatePreview ? 'ghost-prompt' : 'muted'}
             />
 
             {attachmentPaths.length > 0 || linkedWorkItem ? (
@@ -516,7 +535,9 @@ export default function NewWorkspaceComposerCard({
                   size="sm"
                   className={cn(
                     'h-8 rounded-full border-border/50 bg-background/50 px-3 backdrop-blur-md supports-[backdrop-filter]:bg-background/50 transition-opacity',
-                    !agentPrompt.trim() && 'opacity-60 hover:opacity-100 grayscale-[0.5]'
+                    !agentPrompt.trim() &&
+                      !linkedOnlyTemplatePreview &&
+                      'opacity-60 hover:opacity-100 grayscale-[0.5]'
                   )}
                 >
                   <SelectValue>
@@ -583,7 +604,9 @@ export default function NewWorkspaceComposerCard({
                 className="rounded-full px-3"
               >
                 {creating ? <LoaderCircle className="size-4 animate-spin" /> : null}
-                {agentPrompt.trim() ? 'Start Agent' : 'Create Worktree'}
+                {agentPrompt.trim() || linkedOnlyTemplatePreview
+                  ? 'Start Agent'
+                  : 'Create Worktree'}
                 <span className="ml-1 rounded-full border border-white/20 p-1 text-current/80">
                   <CornerDownLeft className="size-3" />
                 </span>

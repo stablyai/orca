@@ -61,6 +61,9 @@ export type ComposerCardProps = {
   agentPrompt: string
   onAgentPromptChange: (value: string) => void
   onPromptKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void
+  /** Rendered issueCommand template to preview inside the empty prompt
+   *  textarea when the user has linked a work item but not typed anything. */
+  linkedOnlyTemplatePreview: string | null
   attachmentPaths: string[]
   getAttachmentLabel: (pathValue: string) => string
   onAddAttachment: () => void
@@ -849,6 +852,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     agentPrompt,
     onAgentPromptChange: setAgentPrompt,
     onPromptKeyDown: handlePromptKeyDown,
+    linkedOnlyTemplatePreview: shouldApplyLinkedOnlyTemplate ? linkedOnlyTemplatePrompt : null,
     attachmentPaths,
     getAttachmentLabel,
     onAddAttachment: () => void handleAddAttachment(),
