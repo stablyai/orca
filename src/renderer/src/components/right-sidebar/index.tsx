@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Files, Search, GitBranch, ListChecks, PanelRight } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
@@ -21,7 +21,13 @@ import SearchPanel from './Search'
 import ChecksPanel from './ChecksPanel'
 
 const MIN_WIDTH = 220
-const MAX_WIDTH = 500
+// Why: long file names (e.g. construction drawing sheets, multi-part document
+// names) used to be truncated at a hard 500px cap that no drag could exceed.
+// We now let the user drag up to nearly the full window width and only keep a
+// small reserve so the rest of the app (left sidebar, editor) is not squeezed
+// to zero — the practical ceiling still scales with the user's window size.
+const MIN_NON_SIDEBAR_AREA = 320
+const ABSOLUTE_FALLBACK_MAX_WIDTH = 2000
 
 const ACTIVITY_BAR_SIDE_WIDTH = 40
 
@@ -138,11 +144,12 @@ function RightSidebarInner(): React.JSX.Element {
     : visibleItems[0].id
 
   const activityBarSideWidth = activityBarPosition === 'side' ? ACTIVITY_BAR_SIDE_WIDTH : 0
+  const maxWidth = useWindowAwareMaxWidth()
   const { containerRef, onResizeStart } = useSidebarResize<HTMLDivElement>({
     isOpen: rightSidebarOpen,
     width: rightSidebarWidth,
     minWidth: MIN_WIDTH,
-    maxWidth: MAX_WIDTH,
+    maxWidth,
     deltaSign: -1,
     renderedExtraWidth: activityBarSideWidth,
     setWidth: setRightSidebarWidth
@@ -267,6 +274,30 @@ function RightSidebarInner(): React.JSX.Element {
 
 const RightSidebar = React.memo(RightSidebarInner)
 export default RightSidebar
+
+// Why: the drag-resize max is a function of window width, not a constant, so
+// users with wide displays can expand the sidebar far enough to read long file
+// names. Falls back to a large constant in non-DOM environments (tests).
+function useWindowAwareMaxWidth(): number {
+  const [max, setMax] = useState(() => computeMaxRightSidebarWidth())
+
+  useEffect(() => {
+    function update(): void {
+      setMax(computeMaxRightSidebarWidth())
+    }
+    window.addEventListener('resize', update)
+    return () => window.removeEventListener('resize', update)
+  }, [])
+
+  return max
+}
+
+function computeMaxRightSidebarWidth(): number {
+  if (typeof window === 'undefined' || !Number.isFinite(window.innerWidth)) {
+    return ABSOLUTE_FALLBACK_MAX_WIDTH
+  }
+  return Math.max(MIN_WIDTH, window.innerWidth - MIN_NON_SIDEBAR_AREA)
+}
 
 // ─── Status indicator dot color mapping ──────
 const STATUS_DOT_COLOR: Record<CheckStatus, string> = {

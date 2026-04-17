@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type {
@@ -32,13 +33,18 @@ import {
 } from '../../../../shared/constants'
 
 const MIN_SIDEBAR_WIDTH = 220
-const MAX_SIDEBAR_WIDTH = 500
+const MAX_LEFT_SIDEBAR_WIDTH = 500
+// Why: the right sidebar drag-resize is window-relative (see right-sidebar
+// component), so persisted widths can legitimately be well above the old 500px
+// cap on wide displays. Use a large hard ceiling purely as a safety net for
+// corrupted/manually-edited values rather than as a product limit.
+const MAX_RIGHT_SIDEBAR_WIDTH = 4000
 
-function sanitizePersistedSidebarWidth(width: unknown, fallback: number): number {
+function sanitizePersistedSidebarWidth(width: unknown, fallback: number, maxWidth: number): number {
   if (typeof width !== 'number' || !Number.isFinite(width)) {
     return fallback
   }
-  return Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, width))
+  return Math.min(maxWidth, Math.max(MIN_SIDEBAR_WIDTH, width))
 }
 
 export type UISlice = {
@@ -276,8 +282,16 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         // or manually edited. Clamp widths during hydration so invalid values
         // cannot push the renderer into broken layouts before the user drags a
         // sidebar again.
-        sidebarWidth: sanitizePersistedSidebarWidth(ui.sidebarWidth, s.sidebarWidth),
-        rightSidebarWidth: sanitizePersistedSidebarWidth(ui.rightSidebarWidth, s.rightSidebarWidth),
+        sidebarWidth: sanitizePersistedSidebarWidth(
+          ui.sidebarWidth,
+          s.sidebarWidth,
+          MAX_LEFT_SIDEBAR_WIDTH
+        ),
+        rightSidebarWidth: sanitizePersistedSidebarWidth(
+          ui.rightSidebarWidth,
+          s.rightSidebarWidth,
+          MAX_RIGHT_SIDEBAR_WIDTH
+        ),
         groupBy: ui.groupBy,
         sortBy,
         // Why: "Active only" is part of the user's sidebar working set, not a

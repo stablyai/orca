@@ -42,12 +42,28 @@ describe('createUISlice hydratePersistedUI', () => {
     store.getState().hydratePersistedUI(
       makePersistedUI({
         sidebarWidth: 100,
-        rightSidebarWidth: 900
+        rightSidebarWidth: 100
       })
     )
 
     expect(store.getState().sidebarWidth).toBe(220)
-    expect(store.getState().rightSidebarWidth).toBe(500)
+    expect(store.getState().rightSidebarWidth).toBe(220)
+  })
+
+  it('preserves right sidebar widths above the former 500px cap', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        sidebarWidth: 260,
+        rightSidebarWidth: 900
+      })
+    )
+
+    // Left sidebar stays capped; right sidebar now allows wide drag targets
+    // so long file names remain readable.
+    expect(store.getState().sidebarWidth).toBe(260)
+    expect(store.getState().rightSidebarWidth).toBe(900)
   })
 
   it('falls back to existing sidebar widths when persisted values are not finite', () => {
