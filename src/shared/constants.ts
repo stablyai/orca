@@ -180,6 +180,7 @@ export function getDefaultWorkspaceSession(): WorkspaceSessionState {
     browserPagesByWorkspace: {},
     activeBrowserTabIdByWorktree: {},
     activeFileIdByWorktree: {},
-    activeTabTypeByWorktree: {}
+    activeTabTypeByWorktree: {},
+    browserUrlHistory: []
   }
 }

@@ -4,6 +4,7 @@ import type { AppState } from '../types'
 import type {
   BrowserCookieImportResult,
   BrowserCookieImportSummary,
+  BrowserHistoryEntry,
   BrowserLoadError,
   BrowserPage,
   BrowserSessionProfile,
@@ -91,6 +92,40 @@ export type BrowserSlice = {
     browserFamily: string
   ) => Promise<BrowserCookieImportResult>
   clearDefaultSessionCookies: () => Promise<boolean>
+  browserUrlHistory: BrowserHistoryEntry[]
+  addBrowserHistoryEntry: (url: string, title: string) => void
+  clearBrowserHistory: () => void
+}
+
+const MAX_BROWSER_HISTORY_ENTRIES = 200
+
+function normalizeHistoryUrl(url: string): string {
+  try {
+    const parsed = new URL(url)
+    parsed.hostname = parsed.hostname.toLowerCase()
+    parsed.protocol = parsed.protocol.toLowerCase()
+    let normalized = parsed.toString()
+    if (normalized.endsWith('/') && parsed.pathname === '/') {
+      normalized = normalized.slice(0, -1)
+    }
+    return normalized
+  } catch {
+    return url.toLowerCase()
+  }
+}
+
+function deduplicateHistory(entries: BrowserHistoryEntry[]): BrowserHistoryEntry[] {
+  const seen = new Set<string>()
+  const deduped: BrowserHistoryEntry[] = []
+  for (const entry of entries) {
+    const key = entry.normalizedUrl || normalizeHistoryUrl(entry.url)
+    if (seen.has(key)) {
+      continue
+    }
+    seen.add(key)
+    deduped.push(entry.normalizedUrl ? entry : { ...entry, normalizedUrl: key })
+  }
+  return deduped.slice(0, MAX_BROWSER_HISTORY_ENTRIES)
 }
 
 function normalizeUrl(url: string): string {
@@ -251,6 +286,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
   pendingAddressBarFocusByPageId: {},
   browserSessionProfiles: [],
   browserSessionImportState: null,
+  browserUrlHistory: [],
 
   createBrowserTab: (worktreeId, url, options) => {
     const workspaceId = globalThis.crypto.randomUUID()
@@ -967,7 +1003,8 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         activeBrowserTabIdByWorktree,
         activeBrowserTabId,
         activeTabTypeByWorktree: nextActiveTabTypeByWorktree,
-        activeTabType
+        activeTabType,
+        browserUrlHistory: deduplicateHistory(session.browserUrlHistory ?? [])
       }
     })
 
@@ -1156,5 +1193,33 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     } catch {
       return false
     }
-  }
+  },
+
+  addBrowserHistoryEntry: (url, title) => {
+    if (url === ORCA_BROWSER_BLANK_URL || url === 'about:blank' || !url) {
+      return
+    }
+    const normalized = normalizeHistoryUrl(url)
+    set((s) => {
+      const existing = s.browserUrlHistory.find((entry) => entry.normalizedUrl === normalized)
+      let next: BrowserHistoryEntry[] = existing
+        ? s.browserUrlHistory.map((entry) =>
+            entry === existing
+              ? { ...entry, title, lastVisitedAt: Date.now(), visitCount: entry.visitCount + 1 }
+              : entry
+          )
+        : [
+            { url, normalizedUrl: normalized, title, lastVisitedAt: Date.now(), visitCount: 1 },
+            ...s.browserUrlHistory
+          ]
+      if (next.length > MAX_BROWSER_HISTORY_ENTRIES) {
+        next = next
+          .sort((a, b) => b.lastVisitedAt - a.lastVisitedAt)
+          .slice(0, MAX_BROWSER_HISTORY_ENTRIES)
+      }
+      return { browserUrlHistory: next }
+    })
+  },
+
+  clearBrowserHistory: () => set({ browserUrlHistory: [] })
 })

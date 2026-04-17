@@ -65,6 +65,7 @@ import type {
 import { useGrabMode } from './useGrabMode'
 import { formatGrabPayloadAsText } from './GrabConfirmationSheet'
 import { isEditableKeyboardTarget } from './browser-keyboard'
+import BrowserAddressBar from './BrowserAddressBar'
 import BrowserFind from './BrowserFind'
 import {
   consumeBrowserFocusRequest,
@@ -377,6 +378,8 @@ function BrowserPagePane({
   const lastKnownWebviewUrlRef = useRef<string | null>(null)
   const onUpdatePageStateRef = useRef(onUpdatePageState)
   const onSetUrlRef = useRef(onSetUrl)
+  const addBrowserHistoryEntry = useAppStore((s) => s.addBrowserHistoryEntry)
+  const addBrowserHistoryEntryRef = useRef(addBrowserHistoryEntry)
   const [addressBarValue, setAddressBarValue] = useState(browserTab.url)
   const addressBarValueRef = useRef(browserTab.url)
   const [resourceNotice, setResourceNotice] = useState<string | null>(null)
@@ -957,7 +960,8 @@ function BrowserPagePane({
   useEffect(() => {
     onUpdatePageStateRef.current = onUpdatePageState
     onSetUrlRef.current = onSetUrl
-  }, [onSetUrl, onUpdatePageState])
+    addBrowserHistoryEntryRef.current = addBrowserHistoryEntry
+  }, [onSetUrl, onUpdatePageState, addBrowserHistoryEntry])
 
   const syncNavigationState = useCallback(
     (webview: Electron.WebviewTag): void => {
@@ -1110,6 +1114,7 @@ function BrowserPagePane({
         canGoForward: webview.canGoForward(),
         loadError: null
       })
+      addBrowserHistoryEntryRef.current(currentUrl, webview.getTitle() || currentUrl)
     }
 
     const handleDidNavigate = (event: { url?: string; isMainFrame?: boolean }): void => {
@@ -1133,9 +1138,10 @@ function BrowserPagePane({
 
     const handleTitleUpdate = (event: { title?: string }): void => {
       try {
-        onUpdatePageStateRef.current(browserTab.id, {
-          title: getBrowserDisplayTitle(event.title, webview.getURL() || browserTab.url)
-        })
+        const currentUrl = webview.getURL() || browserTab.url
+        const title = getBrowserDisplayTitle(event.title, currentUrl)
+        onUpdatePageStateRef.current(browserTab.id, { title })
+        addBrowserHistoryEntryRef.current(currentUrl, title)
       } catch {
         // Why: title-updated can fire before dom-ready, making getURL() throw.
       }
@@ -1541,6 +1547,31 @@ function BrowserPagePane({
     grab.rearm()
   }, [grab, showGrabToast])
 
+  const navigateToUrl = useCallback(
+    (url: string): void => {
+      setAddressBarValue(toDisplayUrl(url))
+      onSetUrlRef.current(browserTab.id, url)
+      onUpdatePageStateRef.current(browserTab.id, {
+        loading: true,
+        loadError: null,
+        title: getBrowserDisplayTitle(url, url)
+      })
+      setResourceNotice(null)
+
+      const webview = webviewRef.current
+      if (!webview) {
+        return
+      }
+      trackNextLoadingEventRef.current = url !== ORCA_BROWSER_BLANK_URL
+      lastKnownWebviewUrlRef.current = url
+      webview.src = url
+      if (url !== ORCA_BROWSER_BLANK_URL) {
+        focusWebviewNow()
+      }
+    },
+    [browserTab.id, focusWebviewNow]
+  )
+
   const submitAddressBar = (): void => {
     keepAddressBarFocusRef.current = false
     const nextUrl = normalizeBrowserNavigationUrl(addressBarValue)
@@ -1554,26 +1585,7 @@ function BrowserPagePane({
       })
       return
     }
-
-    setAddressBarValue(toDisplayUrl(nextUrl))
-    onSetUrlRef.current(browserTab.id, nextUrl)
-    onUpdatePageStateRef.current(browserTab.id, {
-      loading: true,
-      loadError: null,
-      title: getBrowserDisplayTitle(nextUrl, nextUrl)
-    })
-    setResourceNotice(null)
-
-    const webview = webviewRef.current
-    if (!webview) {
-      return
-    }
-    trackNextLoadingEventRef.current = nextUrl !== ORCA_BROWSER_BLANK_URL
-    lastKnownWebviewUrlRef.current = nextUrl
-    webview.src = nextUrl
-    if (nextUrl !== ORCA_BROWSER_BLANK_URL) {
-      focusWebviewNow()
-    }
+    navigateToUrl(nextUrl)
   }
 
   // Why: the store initially holds 'about:blank', but once the webview loads
@@ -1920,25 +1932,13 @@ function BrowserPagePane({
           )}
         </Button>
 
-        <form
-          className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-border bg-background px-3 py-1 shadow-sm"
-          onSubmit={(event) => {
-            event.preventDefault()
-            submitAddressBar()
-          }}
-        >
-          <Globe className="size-4 shrink-0 text-muted-foreground" />
-          <Input
-            ref={addressBarInputRef}
-            value={addressBarValue}
-            onChange={(event) => setAddressBarValue(event.target.value)}
-            data-orca-browser-address-bar="true"
-            className="h-auto border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
-            spellCheck={false}
-            autoCapitalize="none"
-            autoCorrect="off"
-          />
-        </form>
+        <BrowserAddressBar
+          value={addressBarValue}
+          onChange={setAddressBarValue}
+          onSubmit={submitAddressBar}
+          onNavigate={navigateToUrl}
+          inputRef={addressBarInputRef}
+        />
 
         <Button
           size="icon"

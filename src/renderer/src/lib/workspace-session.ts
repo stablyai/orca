@@ -22,6 +22,7 @@ type WorkspaceSessionSnapshot = Pick<
   | 'browserTabsByWorktree'
   | 'browserPagesByWorkspace'
   | 'activeBrowserTabIdByWorktree'
+  | 'browserUrlHistory'
   | 'unifiedTabsByWorktree'
   | 'groupsByWorktree'
   | 'layoutByWorktree'
@@ -151,6 +152,7 @@ export function buildWorkspaceSessionPayload(
       snapshot.browserPagesByWorkspace,
       snapshot.activeBrowserTabIdByWorktree
     ),
+    browserUrlHistory: snapshot.browserUrlHistory,
     unifiedTabs: snapshot.unifiedTabsByWorktree,
     tabGroups: snapshot.groupsByWorktree,
     tabGroupLayouts: snapshot.layoutByWorktree,

@@ -119,6 +119,14 @@ export type TerminalTab = {
   generation?: number
 }
 
+export type BrowserHistoryEntry = {
+  url: string
+  normalizedUrl: string
+  title: string
+  lastVisitedAt: number
+  visitCount: number
+}
+
 export type BrowserLoadError = {
   code: number
   description: string
@@ -262,6 +270,8 @@ export type WorkspaceSessionState = {
   activeBrowserTabIdByWorktree?: Record<string, string | null>
   /** Per-worktree active tab type (terminal vs editor vs browser) at shutdown. */
   activeTabTypeByWorktree?: Record<string, WorkspaceVisibleTabType>
+  /** Global browser URL history for address bar autocomplete. */
+  browserUrlHistory?: BrowserHistoryEntry[]
   /** Per-worktree last-active terminal tab ID at shutdown. */
   activeTabIdByWorktree?: Record<string, string | null>
   /** Unified tab model — present when saved by a build that includes TabsSlice.
