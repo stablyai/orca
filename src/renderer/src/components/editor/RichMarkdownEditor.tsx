@@ -24,6 +24,7 @@ import { createRichMarkdownKeyHandler } from './rich-markdown-key-handler'
 import { DOMSerializer } from '@tiptap/pm/model'
 import { TextSelection } from '@tiptap/pm/state'
 import { normalizeSoftBreaks } from './rich-markdown-normalize'
+import { autoFocusRichEditor } from './rich-markdown-auto-focus'
 import { cutVisualLine, getVisualLineRange } from './rich-markdown-visual-line'
 
 type RichMarkdownEditorProps = {
@@ -270,6 +271,12 @@ export default function RichMarkdownEditor({
       // Why: clear the flag *after* normalizeSoftBreaks so any onUpdate
       // triggered by the normalization transaction is still suppressed.
       isInitializingRef.current = false
+      // Why: MonacoEditor already auto-focuses on mount so users can start
+      // typing immediately. The rich markdown editor must do the same,
+      // otherwise opening a new markdown file (Cmd+Shift+N) or switching to
+      // an existing markdown tab leaves the cursor outside the editing
+      // surface and the user has to click before typing.
+      autoFocusRichEditor(nextEditor, rootRef.current)
     },
     onUpdate: ({ editor: nextEditor }) => {
       syncSlashMenu(nextEditor, rootRef.current, setSlashMenu)
