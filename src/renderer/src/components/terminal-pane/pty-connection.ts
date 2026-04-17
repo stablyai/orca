@@ -19,13 +19,12 @@ export function connectPanePty(
   let disposed = false
   let connectFrame: number | null = null
   let startupInjectTimer: ReturnType<typeof setTimeout> | null = null
-  // Why: setup commands must only run once — in the initial pane of the tab.
-  // Capture and clear the startup reference synchronously so that panes
-  // created later by splits or layout restoration cannot re-execute the
-  // setup script, which would be confusing and potentially destructive.
-  // Note: this intentionally mutates `deps` so the caller's object no
-  // longer carries the startup payload — preventing any later consumer
-  // from accidentally replaying it.
+  // Why: startup commands must only run once — in the pane they were
+  // targeted at. Capture `deps.startup` into a local and clear the field on
+  // the (already spread-copied) `deps` so nothing else inside this function
+  // can accidentally re-read it. The caller is responsible for clearing its
+  // own outer reference, since `deps` here is a shallow copy and our
+  // mutation does not propagate back.
   const paneStartup = deps.startup ?? null
   deps.startup = undefined
 

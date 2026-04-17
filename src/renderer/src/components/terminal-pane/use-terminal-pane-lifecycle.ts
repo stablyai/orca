@@ -293,6 +293,18 @@ export function useTerminalPaneLifecycle({
           ...ptyDeps,
           restoredLeafId
         })
+        // Why: connectPanePty receives a spread copy of ptyDeps, so the
+        // `deps.startup = undefined` it performs internally only clears its
+        // local copy. If we don't also clear the outer ptyDeps.startup here,
+        // a later user-initiated splitPane (e.g. Cmd+D, context-menu "Split
+        // Right") fires onPaneCreated again with the original startup still
+        // attached — which re-runs the initial composer prompt in the newly
+        // created pane. Clearing here ensures the initial-startup payload is
+        // consumed exactly once, by the first pane. Setup/issue splits
+        // inject their own payload via splitPaneWithOneShotStartup, which
+        // sets deps.startup immediately before splitPane() and is therefore
+        // unaffected by this clear.
+        ptyDeps.startup = null
         panePtyBindings.set(pane.id, panePtyBinding)
         scheduleRuntimeGraphSync()
         queueResizeAll(true)
