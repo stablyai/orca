@@ -15,7 +15,10 @@ import type {
   GitConflictOperation,
   GitDiffResult,
   GitStatusEntry,
+  GitHubPRFile,
+  GitHubPRFileContents,
   GitHubWorkItem,
+  GitHubWorkItemDetails,
   GitHubViewer,
   IssueInfo,
   NotificationDispatchRequest,
@@ -278,6 +281,19 @@ export type PreloadApi = {
     prForBranch: (args: { repoPath: string; branch: string }) => Promise<PRInfo | null>
     issue: (args: { repoPath: string; number: number }) => Promise<IssueInfo | null>
     workItem: (args: { repoPath: string; number: number }) => Promise<GitHubWorkItem | null>
+    workItemDetails: (args: {
+      repoPath: string
+      number: number
+    }) => Promise<GitHubWorkItemDetails | null>
+    prFileContents: (args: {
+      repoPath: string
+      prNumber: number
+      path: string
+      oldPath?: string
+      status: GitHubPRFile['status']
+      headSha: string
+      baseSha: string
+    }) => Promise<GitHubPRFileContents>
     listIssues: (args: { repoPath: string; limit?: number }) => Promise<IssueInfo[]>
     listWorkItems: (args: {
       repoPath: string

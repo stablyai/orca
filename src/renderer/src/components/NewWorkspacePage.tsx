@@ -28,6 +28,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import RepoCombobox from '@/components/repo/RepoCombobox'
 import NewWorkspaceComposerCard from '@/components/NewWorkspaceComposerCard'
+import GitHubItemDrawer from '@/components/GitHubItemDrawer'
 import { cn } from '@/lib/utils'
 import { LightRays } from '@/components/ui/light-rays'
 import { useComposerState } from '@/hooks/useComposerState'
@@ -165,6 +166,10 @@ export default function NewWorkspacePage(): React.JSX.Element {
   const [tasksError, setTasksError] = useState<string | null>(null)
   const [taskRefreshNonce, setTaskRefreshNonce] = useState(0)
   const [workItems, setWorkItems] = useState<GitHubWorkItem[]>([])
+  // Why: clicking a GitHub row opens this drawer for a read-only preview.
+  // The composer modal is only opened by the drawer's "Use" button, which
+  // calls the same handleSelectWorkItem as the old direct row-click flow.
+  const [drawerWorkItem, setDrawerWorkItem] = useState<GitHubWorkItem | null>(null)
 
   const defaultTaskViewPreset = settings?.defaultTaskViewPreset ?? 'all'
 
@@ -407,7 +412,9 @@ export default function NewWorkspacePage(): React.JSX.Element {
       )}
 
       <div className="relative z-10 flex min-h-0 flex-1 flex-col">
-        <div className="flex-none flex items-center justify-end px-5 py-3 md:px-8 md:py-4">
+        {/* Why: the Esc/discard button is left-aligned to avoid colliding with the
+            right-docked GitHub drawer and app sidebar, which also live on the right edge. */}
+        <div className="flex-none flex items-center justify-start px-5 py-3 md:px-8 md:py-4">
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -603,7 +610,7 @@ export default function NewWorkspacePage(): React.JSX.Element {
                       <button
                         key={item.id}
                         type="button"
-                        onClick={() => handleSelectWorkItem(item)}
+                        onClick={() => setDrawerWorkItem(item)}
                         className="grid w-full gap-4 px-4 py-4 text-left transition hover:bg-muted/40 lg:grid-cols-[96px_minmax(0,1.8fr)_minmax(140px,1fr)_150px_120px_90px]"
                       >
                         <div className="flex items-center">
@@ -709,6 +716,16 @@ export default function NewWorkspacePage(): React.JSX.Element {
           )}
         </div>
       </div>
+
+      <GitHubItemDrawer
+        workItem={drawerWorkItem}
+        repoPath={selectedRepo?.path ?? null}
+        onUse={(item) => {
+          setDrawerWorkItem(null)
+          handleSelectWorkItem(item)
+        }}
+        onClose={() => setDrawerWorkItem(null)}
+      />
     </div>
   )
 }

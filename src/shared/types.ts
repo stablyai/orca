@@ -376,6 +376,34 @@ export type GitHubWorkItem = {
   baseRefName?: string
 }
 
+export type GitHubPRFile = {
+  path: string
+  oldPath?: string
+  status: 'added' | 'modified' | 'removed' | 'renamed' | 'copied' | 'changed' | 'unchanged'
+  additions: number
+  deletions: number
+  /** GitHub marks files above its diff size limit as binary-like; we skip content fetches for these. */
+  isBinary: boolean
+}
+
+export type GitHubPRFileContents = {
+  original: string
+  modified: string
+  originalIsBinary: boolean
+  modifiedIsBinary: boolean
+}
+
+export type GitHubWorkItemDetails = {
+  item: GitHubWorkItem
+  body: string
+  comments: PRComment[]
+  /** Only set for PRs. Head/base SHAs used by the Files tab to fetch per-file content. */
+  headSha?: string
+  baseSha?: string
+  checks?: PRCheckDetail[]
+  files?: GitHubPRFile[]
+}
+
 // ─── Hooks (orca.yaml) ──────────────────────────────────────────────
 export type OrcaHooks = {
   scripts: {

@@ -312,6 +312,19 @@ const api = {
     workItem: (args: { repoPath: string; number: number }): Promise<unknown> =>
       ipcRenderer.invoke('gh:workItem', args),
 
+    workItemDetails: (args: { repoPath: string; number: number }): Promise<unknown> =>
+      ipcRenderer.invoke('gh:workItemDetails', args),
+
+    prFileContents: (args: {
+      repoPath: string
+      prNumber: number
+      path: string
+      oldPath?: string
+      status: string
+      headSha: string
+      baseSha: string
+    }): Promise<unknown> => ipcRenderer.invoke('gh:prFileContents', args),
+
     listIssues: (args: { repoPath: string; limit?: number }): Promise<unknown[]> =>
       ipcRenderer.invoke('gh:listIssues', args),
 
