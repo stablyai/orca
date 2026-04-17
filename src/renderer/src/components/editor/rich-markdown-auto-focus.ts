@@ -20,10 +20,16 @@ export function autoFocusRichEditor(nextEditor: Editor, rootEl: HTMLElement | nu
     if (!isNeutralFocus) {
       return
     }
+    // Why: pass 'start' (not null) to resolve to a proper TextSelection at
+    // doc position 1. With null, Tiptap keeps whatever the editor's current
+    // selection happens to be on mount — for a freshly-created empty doc
+    // that's an AllSelection, which renders as a visible 0-width highlight
+    // inside the placeholder instead of a normal blinking caret.
+    //
     // Why: `scrollIntoView: false` prevents Tiptap's focus command from
-    // scrolling the cursor (at doc start) into view, which would otherwise
-    // race with useEditorScrollRestore's RAF retry loop and clobber the
-    // cached scroll position on every tab switch.
-    nextEditor.commands.focus(null, { scrollIntoView: false })
+    // scrolling the cursor into view, which would otherwise race with
+    // useEditorScrollRestore's RAF retry loop and clobber the cached
+    // scroll position on every tab switch.
+    nextEditor.commands.focus('start', { scrollIntoView: false })
   })
 }

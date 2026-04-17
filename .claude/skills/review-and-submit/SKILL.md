@@ -133,6 +133,17 @@ fi
 
 ### 2a. Create PR
 
+**FIRST**: Push the branch to the remote so `gh pr create` doesn't fail with
+`aborted: you must first push the current branch to a remote`. The
+`create-pr` skill rebases locally but does not always push before invoking
+`gh pr create`, and `gh` refuses to create a PR for an un-pushed branch.
+
+```bash
+git push --force-with-lease -u origin HEAD
+```
+
+Then invoke:
+
 ```
 Use the Skill tool: skill: "create-pr"
 ```
