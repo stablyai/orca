@@ -21,6 +21,7 @@ const EditorPanel = lazy(() => import('../editor/EditorPanel'))
 export default function TabGroupPanel({
   groupId,
   worktreeId,
+  isWorktreeActive,
   isFocused,
   hasSplitGroups,
   reserveClosedExplorerToggleSpace,
@@ -30,6 +31,7 @@ export default function TabGroupPanel({
 }: {
   groupId: string
   worktreeId: string
+  isWorktreeActive: boolean
   isFocused: boolean
   hasSplitGroups: boolean
   reserveClosedExplorerToggleSpace: boolean
@@ -281,8 +283,15 @@ export default function TabGroupPanel({
               // Why: in multi-group splits, the active terminal in each group
               // must remain visible (display:flex) so the user sees its output,
               // but only the focused group's terminal should receive keyboard
-              // input. isVisible controls rendering; isActive controls focus.
-              isVisible={activeTab?.id === item.id && activeTab.contentType === 'terminal'}
+              // input. Hidden worktrees stay mounted offscreen, so `isVisible`
+              // must also respect worktree visibility or those detached panes
+              // keep their WebGL renderers alive and exhaust Chromium's context
+              // budget across worktrees.
+              isVisible={
+                isWorktreeActive &&
+                activeTab?.id === item.id &&
+                activeTab.contentType === 'terminal'
+              }
               onPtyExit={(ptyId) => {
                 if (commands.consumeSuppressedPtyExit(ptyId)) {
                   return
@@ -319,9 +328,14 @@ export default function TabGroupPanel({
           <div
             key={bt.id}
             className="absolute inset-0 flex min-h-0 min-w-0"
-            style={{ display: activeBrowserTab?.id === bt.id ? undefined : 'none' }}
+            style={{
+              display: isWorktreeActive && activeBrowserTab?.id === bt.id ? undefined : 'none'
+            }}
           >
-            <BrowserPane browserTab={bt} isActive={activeBrowserTab?.id === bt.id} />
+            <BrowserPane
+              browserTab={bt}
+              isActive={isWorktreeActive && activeBrowserTab?.id === bt.id}
+            />
           </div>
         ))}
       </div>
