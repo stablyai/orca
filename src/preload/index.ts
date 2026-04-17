@@ -1218,6 +1218,16 @@ const api = {
       ipcRenderer.on('ui:splitTerminal', listener)
       return () => ipcRenderer.removeListener('ui:splitTerminal', listener)
     },
+    onRenameTerminal: (
+      callback: (data: { tabId: string; title: string | null }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { tabId: string; title: string | null }
+      ) => callback(data)
+      ipcRenderer.on('ui:renameTerminal', listener)
+      return () => ipcRenderer.removeListener('ui:renameTerminal', listener)
+    },
     onTerminalZoom: (callback: (direction: 'in' | 'out' | 'reset') => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, direction: 'in' | 'out' | 'reset') =>
         callback(direction)

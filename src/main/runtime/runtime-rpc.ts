@@ -281,16 +281,22 @@ export class OrcaRuntimeRpcServer {
 
     if (request.method === 'terminal.read') {
       try {
-        const terminalHandle =
+        const params =
           request.params && typeof request.params === 'object' && request.params !== null
-            ? ((request.params as { terminal?: unknown }).terminal ?? null)
+            ? (request.params as { terminal?: unknown; cursor?: unknown })
             : null
 
+        const terminalHandle = params?.terminal ?? null
         if (typeof terminalHandle !== 'string' || terminalHandle.length === 0) {
           return this.errorResponse(request.id, 'invalid_argument', 'Missing terminal handle')
         }
 
-        const result = await this.runtime.readTerminal(terminalHandle)
+        const cursor =
+          typeof params?.cursor === 'number' && Number.isFinite(params.cursor)
+            ? params.cursor
+            : undefined
+
+        const result = await this.runtime.readTerminal(terminalHandle, { cursor })
         return {
           id: request.id,
           ok: true,
@@ -298,6 +304,41 @@ export class OrcaRuntimeRpcServer {
           _meta: {
             runtimeId: this.runtime.getRuntimeId()
           }
+        }
+      } catch (error) {
+        return this.runtimeErrorResponse(request.id, error)
+      }
+    }
+
+    if (request.method === 'terminal.rename') {
+      try {
+        const params =
+          request.params && typeof request.params === 'object' && request.params !== null
+            ? (request.params as { terminal?: unknown; title?: unknown })
+            : null
+        const terminalHandle = params?.terminal ?? null
+        if (typeof terminalHandle !== 'string' || terminalHandle.length === 0) {
+          return this.errorResponse(request.id, 'invalid_argument', 'Missing terminal handle')
+        }
+        const title =
+          params?.title === null
+            ? null
+            : typeof params?.title === 'string'
+              ? params.title
+              : undefined
+        if (title === undefined) {
+          return this.errorResponse(
+            request.id,
+            'invalid_argument',
+            'Missing --title (pass empty string or null to reset)'
+          )
+        }
+        const result = await this.runtime.renameTerminal(terminalHandle, title || null)
+        return {
+          id: request.id,
+          ok: true,
+          result: { rename: result },
+          _meta: { runtimeId: this.runtime.getRuntimeId() }
         }
       } catch (error) {
         return this.runtimeErrorResponse(request.id, error)

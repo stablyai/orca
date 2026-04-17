@@ -12,6 +12,7 @@ import type {
   RuntimeGraphStatus,
   RuntimeRepoSearchRefs,
   RuntimeTerminalRead,
+  RuntimeTerminalRename,
   RuntimeTerminalSend,
   RuntimeTerminalCreate,
   RuntimeTerminalSplit,
@@ -121,6 +122,7 @@ type RuntimeLeafRecord = RuntimeSyncedLeaf & {
   tailBuffer: string[]
   tailPartialLine: string
   tailTruncated: boolean
+  tailLinesTotal: number
   preview: string
 }
 
@@ -139,6 +141,7 @@ type RuntimeNotifier = {
     paneRuntimeId: number,
     opts: { direction: 'horizontal' | 'vertical'; command?: string }
   ): void
+  renameTerminal(tabId: string, title: string | null): void
 }
 
 type TerminalHandleRecord = {
@@ -289,6 +292,7 @@ export class OrcaRuntimeService {
         tailBuffer: existing?.ptyId === leaf.ptyId ? existing.tailBuffer : [],
         tailPartialLine: existing?.ptyId === leaf.ptyId ? existing.tailPartialLine : '',
         tailTruncated: existing?.ptyId === leaf.ptyId ? existing.tailTruncated : false,
+        tailLinesTotal: existing?.ptyId === leaf.ptyId ? existing.tailLinesTotal : 0,
         preview: existing?.ptyId === leaf.ptyId ? existing.preview : ''
       })
 
@@ -334,6 +338,7 @@ export class OrcaRuntimeService {
       leaf.tailBuffer = nextTail.lines
       leaf.tailPartialLine = nextTail.partialLine
       leaf.tailTruncated = leaf.tailTruncated || nextTail.truncated
+      leaf.tailLinesTotal += nextTail.newCompleteLines
       leaf.preview = buildPreview(leaf.tailBuffer, leaf.tailPartialLine)
     }
   }
@@ -394,19 +399,37 @@ export class OrcaRuntimeService {
     }
   }
 
-  async readTerminal(handle: string): Promise<RuntimeTerminalRead> {
+  async readTerminal(handle: string, opts: { cursor?: number } = {}): Promise<RuntimeTerminalRead> {
     const { leaf } = this.getLiveLeafForHandle(handle)
-    const tail = buildTailLines(leaf.tailBuffer, leaf.tailPartialLine)
-    return {
-      handle,
-      status: getTerminalState(leaf),
+    const allLines = buildTailLines(leaf.tailBuffer, leaf.tailPartialLine)
+    const totalLines = leaf.tailLinesTotal + (leaf.tailPartialLine.length > 0 ? 1 : 0)
+
+    let tail: string[]
+    let truncated: boolean
+
+    if (typeof opts.cursor === 'number' && opts.cursor >= 0) {
+      // Why: the buffer only retains the last MAX_TAIL_LINES lines. If the
+      // caller's cursor points to lines that were already evicted, we can only
+      // return what's still in memory and mark truncated=true to signal the gap.
+      const bufferStart = leaf.tailLinesTotal - leaf.tailBuffer.length
+      const sliceFrom = Math.max(0, opts.cursor - bufferStart)
+      tail = allLines.slice(sliceFrom)
+      truncated = opts.cursor < bufferStart
+    } else {
+      tail = allLines
       // Why: Orca does not have a truthful main-owned screen model yet,
       // especially for hidden panes. Focused v1 therefore returns the bounded
       // tail lines directly instead of duplicating the same text in a fake
       // screen field that would waste agent tokens.
+      truncated = leaf.tailTruncated
+    }
+
+    return {
+      handle,
+      status: getTerminalState(leaf),
       tail,
-      truncated: leaf.tailTruncated,
-      nextCursor: null
+      truncated,
+      nextCursor: String(totalLines)
     }
   }
 
@@ -837,6 +860,13 @@ export class OrcaRuntimeService {
     this.invalidateResolvedWorktreeCache()
     invalidateAuthorizedRootsCache()
     this.notifier?.worktreesChanged(repo.id)
+  }
+
+  async renameTerminal(handle: string, title: string | null): Promise<RuntimeTerminalRename> {
+    this.assertGraphReady()
+    const { leaf } = this.getLiveLeafForHandle(handle)
+    this.notifier?.renameTerminal(leaf.tabId, title)
+    return { handle, tabId: leaf.tabId, title }
   }
 
   async createTerminal(
@@ -2295,18 +2325,21 @@ function appendToTailBuffer(
   lines: string[]
   partialLine: string
   truncated: boolean
+  newCompleteLines: number
 } {
   const normalizedChunk = normalizeTerminalChunk(chunk)
   if (normalizedChunk.length === 0) {
     return {
       lines: previousLines,
       partialLine: previousPartialLine,
-      truncated: false
+      truncated: false,
+      newCompleteLines: 0
     }
   }
 
   const pieces = `${previousPartialLine}${normalizedChunk}`.split('\n')
   const nextPartialLine = (pieces.pop() ?? '').replace(/[ \t]+$/g, '')
+  const newCompleteLines = pieces.length
   const nextLines = [...previousLines, ...pieces.map((line) => line.replace(/[ \t]+$/g, ''))]
   let truncated = false
 
@@ -2324,7 +2357,8 @@ function appendToTailBuffer(
   return {
     lines: nextLines,
     partialLine: nextPartialLine.slice(-MAX_TAIL_CHARS),
-    truncated
+    truncated,
+    newCompleteLines
   }
 }
 

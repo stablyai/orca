@@ -651,6 +651,9 @@ export type PreloadApi = {
         command?: string
       }) => void
     ) => () => void
+    onRenameTerminal: (
+      callback: (data: { tabId: string; title: string | null }) => void
+    ) => () => void
     onTerminalZoom: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void
     readClipboardText: () => Promise<string>
     saveClipboardImageAsTempFile: () => Promise<string | null>

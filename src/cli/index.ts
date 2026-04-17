@@ -16,6 +16,7 @@ import type {
   RuntimeTerminalWait,
   RuntimeTerminalCreate,
   RuntimeTerminalSplit,
+  RuntimeTerminalRename,
   BrowserSnapshotResult,
   BrowserClickResult,
   BrowserGotoResult,
@@ -191,8 +192,16 @@ export const COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['terminal', 'read'],
     summary: 'Read bounded terminal output',
-    usage: 'orca terminal read --terminal <handle> [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'terminal']
+    usage: 'orca terminal read --terminal <handle> [--cursor <n>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'cursor'],
+    notes: [
+      'Use --cursor with the nextCursor value from a previous read to get only new output since that read.',
+      'Useful for capturing the response to a command: read before sending, then read --cursor <prev> after waiting.'
+    ],
+    examples: [
+      'orca terminal read --terminal term_abc123 --json',
+      'orca terminal read --terminal term_abc123 --cursor 42 --json'
+    ]
   },
   {
     path: ['terminal', 'send'],
@@ -221,6 +230,17 @@ export const COMMAND_SPECS: CommandSpec[] = [
     examples: [
       'orca terminal create --worktree active --json',
       'orca terminal create --worktree path:/projects/myapp --command "claude"'
+    ]
+  },
+  {
+    path: ['terminal', 'rename'],
+    summary: 'Set or clear the title of a terminal tab',
+    usage: 'orca terminal rename --terminal <handle> [--title <text>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'title'],
+    notes: ['Omit --title or pass an empty string to reset to the auto-generated title.'],
+    examples: [
+      'orca terminal rename --terminal term_abc123 --title "RUNNER"',
+      'orca terminal rename --terminal term_abc123 --json'
     ]
   },
   {
@@ -780,8 +800,14 @@ export async function main(argv = process.argv.slice(2), cwd = process.cwd()): P
     }
 
     if (matches(commandPath, ['terminal', 'read'])) {
+      const cursorFlag = getOptionalStringFlag(parsed.flags, 'cursor')
+      const cursor = cursorFlag !== undefined ? parseInt(cursorFlag, 10) : undefined
+      if (cursor !== undefined && !Number.isFinite(cursor)) {
+        throw new RuntimeClientError('invalid_argument', '--cursor must be a non-negative integer')
+      }
       const result = await client.call<{ terminal: RuntimeTerminalRead }>('terminal.read', {
-        terminal: getRequiredStringFlag(parsed.flags, 'terminal')
+        terminal: getRequiredStringFlag(parsed.flags, 'terminal'),
+        ...(cursor !== undefined ? { cursor } : {})
       })
       return printResult(result, json, formatTerminalRead)
     }
@@ -820,6 +846,14 @@ export async function main(argv = process.argv.slice(2), cwd = process.cwd()): P
         worktree: await getRequiredWorktreeSelector(parsed.flags, 'worktree', cwd, client)
       })
       return printResult(result, json, (value) => `Stopped ${value.stopped} terminals.`)
+    }
+
+    if (matches(commandPath, ['terminal', 'rename'])) {
+      const result = await client.call<{ rename: RuntimeTerminalRename }>('terminal.rename', {
+        terminal: getRequiredStringFlag(parsed.flags, 'terminal'),
+        title: getOptionalStringFlag(parsed.flags, 'title') ?? null
+      })
+      return printResult(result, json, formatTerminalRename)
     }
 
     if (matches(commandPath, ['terminal', 'create'])) {
@@ -2061,13 +2095,22 @@ function formatTerminalShow(result: { terminal: RuntimeTerminalShow }): string {
 
 function formatTerminalRead(result: { terminal: RuntimeTerminalRead }): string {
   const terminal = result.terminal
-  return [`handle: ${terminal.handle}`, `status: ${terminal.status}`, '', ...terminal.tail].join(
-    '\n'
-  )
+  const header = [
+    `handle: ${terminal.handle}`,
+    `status: ${terminal.status}`,
+    ...(terminal.nextCursor !== null ? [`cursor: ${terminal.nextCursor}`] : [])
+  ]
+  return [...header, '', ...terminal.tail].join('\n')
 }
 
 function formatTerminalSend(result: { send: RuntimeTerminalSend }): string {
   return `Sent ${result.send.bytesWritten} bytes to ${result.send.handle}.`
+}
+
+function formatTerminalRename(result: { rename: RuntimeTerminalRename }): string {
+  return result.rename.title
+    ? `Renamed terminal ${result.rename.handle} to "${result.rename.title}".`
+    : `Cleared title for terminal ${result.rename.handle}.`
 }
 
 function formatTerminalCreate(result: { terminal: RuntimeTerminalCreate }): string {
@@ -2220,6 +2263,7 @@ Terminals:
   terminal wait             Wait for a terminal condition
   terminal stop             Stop terminals for a worktree
   terminal create           Create a new terminal tab in a worktree
+  terminal rename           Set or clear the title of a terminal tab
   terminal split            Split an existing terminal pane
 
 Browser Automation:
@@ -2419,9 +2463,11 @@ function formatFlagHelp(flag: string): string {
     'base-branch': '--base-branch <ref>    Base branch/ref to create the worktree from',
     command: '--command <text>       Command to run in the terminal on startup',
     comment: '--comment <text>       Comment stored in Orca metadata',
+    cursor: '--cursor <n>           Line cursor from a previous read (returns only new output)',
     direction:
       '--direction <dir>      Split direction: horizontal or vertical (default: horizontal)',
     'display-name': '--display-name <name>  Override the Orca display name',
+    title: '--title <text>         Custom title for the terminal tab (omit to reset)',
     enter: '--enter                Append Enter after sending text',
     force: '--force                Force worktree removal when supported',
     for: '--for exit             Wait condition to satisfy',

@@ -175,6 +175,12 @@ export function useIpcEvents(): void {
       })
     )
 
+    unsubs.push(
+      window.api.ui.onRenameTerminal(({ tabId, title }) => {
+        useAppStore.getState().setTabCustomTitle(tabId, title)
+      })
+    )
+
     // Hydrate initial update status then subscribe to changes
     window.api.updater.getStatus().then((status) => {
       useAppStore.getState().setUpdateStatus(status as UpdateStatus)

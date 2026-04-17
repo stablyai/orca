@@ -332,7 +332,7 @@ describe('OrcaRuntimeService', () => {
       status: 'running',
       tail: ['hello', 'world'],
       truncated: false,
-      nextCursor: null
+      nextCursor: expect.any(String)
     })
 
     const send = await runtime.sendTerminal(terminal.handle, {
@@ -609,7 +609,8 @@ describe('OrcaRuntimeService', () => {
       reposChanged: vi.fn(),
       activateWorktree,
       createTerminal: vi.fn(),
-      splitTerminal: vi.fn()
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn()
     })
     runtime.attachWindow(1)
 
@@ -682,7 +683,8 @@ describe('OrcaRuntimeService', () => {
       reposChanged: vi.fn(),
       activateWorktree: vi.fn(),
       createTerminal: vi.fn(),
-      splitTerminal: vi.fn()
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn()
     })
 
     computeWorktreePathMock.mockReturnValue('/tmp/workspaces/cli-worktree')

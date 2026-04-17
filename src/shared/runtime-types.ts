@@ -92,6 +92,12 @@ export type RuntimeTerminalRead = {
   nextCursor: string | null
 }
 
+export type RuntimeTerminalRename = {
+  handle: string
+  tabId: string
+  title: string | null
+}
+
 export type RuntimeTerminalSend = {
   handle: string
   accepted: boolean

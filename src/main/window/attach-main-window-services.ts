@@ -159,6 +159,11 @@ function registerRuntimeWindowLifecycle(
           command: opts.command
         })
       }
+    },
+    renameTerminal: (tabId, title) => {
+      if (!mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('ui:renameTerminal', { tabId, title })
+      }
     }
   })
   // Why: the runtime must fail closed while the renderer graph is being torn
