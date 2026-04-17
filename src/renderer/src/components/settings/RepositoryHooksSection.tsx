@@ -35,7 +35,7 @@ const EXAMPLE_TEMPLATE = `scripts:
   archive: |
     echo "Cleaning up before archive"
 issueCommand: |
-  claude -p "Read issue #{{issue}} and write a design doc to docs/design-{{issue}}.md covering the approach, edge cases, and test plan." && codex exec "Review docs/design-{{issue}}.md for gaps, missing edge cases, or unclear requirements. Add feedback at the bottom."`
+  Complete {{artifact_url}}`
 
 const YAML_STATE_STYLES: Record<
   string,
@@ -400,13 +400,15 @@ export function RepositoryHooksSection({
               value={issueCommandDraft}
               onChange={(e) => setIssueCommandDraft(e.target.value)}
               onBlur={commitIssueCommand}
-              placeholder='claude -p "Read issue #{{issue}} and write a design doc to docs/design-{{issue}}.md covering the approach, edge cases, and test plan." && codex exec "Review docs/design-{{issue}}.md for gaps, missing edge cases, or unclear requirements. Add feedback at the bottom."'
+              placeholder="Complete {{artifact_url}}"
               rows={5}
               className="w-full min-w-0 resize-y rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
             />
             <p className="text-xs text-muted-foreground">
-              Use <code className="rounded bg-muted px-1 py-0.5">{'{{issue}}'}</code> for the issue
-              number.
+              Use <code className="rounded bg-muted px-1 py-0.5">{'{{artifact_url}}'}</code> for the
+              linked issue or PR URL. Leave empty to use the built-in{' '}
+              <code className="rounded bg-muted px-1 py-0.5">Complete {'{{artifact_url}}'}</code>{' '}
+              default.
             </p>
             <p className="text-xs text-muted-foreground">
               Leave blank to use the repo default from{' '}

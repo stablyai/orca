@@ -37,6 +37,32 @@ export type LinkedWorkItemSummary = {
   url: string
 }
 
+// Why: when a repo has no `orca.yaml` issueCommand and no per-user override,
+// we still want the composer to send a useful default prompt whenever the user
+// attaches a linked work item without typing anything else. "Complete <url>"
+// is the minimum viable instruction that always produces a coherent agent task.
+export const DEFAULT_ISSUE_COMMAND_TEMPLATE = 'Complete {{artifact_url}}'
+
+/**
+ * Substitute the issue-command template variables. Prefers `{{artifact_url}}`
+ * and keeps `{{issue}}` working silently for repos that have not migrated
+ * their `orca.yaml` / `.orca/issue-command` yet.
+ */
+export function renderIssueCommandTemplate(
+  template: string,
+  vars: { issueNumber: number | null; artifactUrl: string | null }
+): string {
+  const { issueNumber, artifactUrl } = vars
+  let rendered = template
+  if (artifactUrl !== null) {
+    rendered = rendered.replace(/\{\{artifact_url\}\}/g, artifactUrl)
+  }
+  if (issueNumber !== null) {
+    rendered = rendered.replace(/\{\{issue\}\}/g, String(issueNumber))
+  }
+  return rendered
+}
+
 export function buildAgentPromptWithContext(
   prompt: string,
   attachments: string[],

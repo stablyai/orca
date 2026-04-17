@@ -22,6 +22,7 @@ import type {
 import {
   ADD_ATTACHMENT_SHORTCUT,
   CLIENT_PLATFORM,
+  DEFAULT_ISSUE_COMMAND_TEMPLATE,
   IS_MAC,
   buildAgentPromptWithContext,
   ensureAgentStartupInTerminal,
@@ -29,6 +30,7 @@ import {
   getLinkedWorkItemSuggestedName,
   getSetupConfig,
   getWorkspaceSeedName,
+  renderIssueCommandTemplate,
   type LinkedWorkItemSummary
 } from '@/lib/new-workspace'
 
@@ -276,9 +278,13 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const setupPolicy: SetupRunPolicy = selectedRepo?.hookSettings?.setupRunPolicy ?? 'run-by-default'
   const hasIssueAutomationConfig = issueCommandTemplate.length > 0
   const canOfferIssueAutomation = parsedLinkedIssueNumber !== null && hasIssueAutomationConfig
-  const shouldRunIssueAutomation = canOfferIssueAutomation
+  // Why: the "no prompt + linked item" path below rehydrates the issueCommand
+  // template into the main startup prompt. When that happens we suppress the
+  // separate split pane that would otherwise run the same command twice.
+  const willApplyIssueCommandAsPrompt = !agentPrompt.trim() && Boolean(linkedWorkItem)
   const shouldWaitForIssueAutomationCheck =
-    parsedLinkedIssueNumber !== null && !hasLoadedIssueCommand
+    (parsedLinkedIssueNumber !== null || willApplyIssueCommandAsPrompt) && !hasLoadedIssueCommand
+  const shouldRunIssueAutomation = canOfferIssueAutomation && !willApplyIssueCommandAsPrompt
   const requiresExplicitSetupChoice = Boolean(setupConfig) && setupPolicy === 'ask'
   const resolvedSetupDecision =
     setupDecision ??
@@ -300,15 +306,40 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       }),
     [agentPrompt, linkedPR, name, parsedLinkedIssueNumber]
   )
-  const startupPrompt = useMemo(
-    () =>
-      buildAgentPromptWithContext(
-        agentPrompt,
-        attachmentPaths,
-        linkedWorkItem?.url ? [linkedWorkItem.url] : []
-      ),
-    [agentPrompt, attachmentPaths, linkedWorkItem?.url]
-  )
+  // Why: when the user links an issue/PR but has not typed any prompt text
+  // (attachments don't count), swap the generic "Linked work items:" context
+  // block for the repo's issueCommand template — or the built-in
+  // "Complete {{artifact_url}}" default when none is configured. This makes
+  // the common "paste a link and hit enter" flow produce a useful agent task
+  // instead of a bare URL bullet.
+  const shouldApplyLinkedOnlyTemplate =
+    !agentPrompt.trim() && Boolean(linkedWorkItem) && hasLoadedIssueCommand
+  const linkedOnlyTemplatePrompt = useMemo(() => {
+    if (!shouldApplyLinkedOnlyTemplate || !linkedWorkItem) {
+      return ''
+    }
+    const template = issueCommandTemplate.trim() || DEFAULT_ISSUE_COMMAND_TEMPLATE
+    return renderIssueCommandTemplate(template, {
+      issueNumber: linkedWorkItem.type === 'issue' ? linkedWorkItem.number : null,
+      artifactUrl: linkedWorkItem.url
+    })
+  }, [issueCommandTemplate, linkedWorkItem, shouldApplyLinkedOnlyTemplate])
+  const startupPrompt = useMemo(() => {
+    if (shouldApplyLinkedOnlyTemplate) {
+      return buildAgentPromptWithContext(linkedOnlyTemplatePrompt, attachmentPaths, [])
+    }
+    return buildAgentPromptWithContext(
+      agentPrompt,
+      attachmentPaths,
+      linkedWorkItem?.url ? [linkedWorkItem.url] : []
+    )
+  }, [
+    agentPrompt,
+    attachmentPaths,
+    linkedOnlyTemplatePrompt,
+    linkedWorkItem?.url,
+    shouldApplyLinkedOnlyTemplate
+  ])
   const normalizedLinkQuery = useMemo(
     () => normalizeGitHubLinkQuery(linkDebouncedQuery, linkRepoSlug),
     [linkDebouncedQuery, linkRepoSlug]
@@ -732,7 +763,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
 
       const issueCommand = shouldRunIssueAutomation
         ? {
-            command: issueCommandTemplate.replace(/\{\{issue\}\}/g, String(parsedLinkedIssueNumber))
+            command: renderIssueCommandTemplate(issueCommandTemplate, {
+              issueNumber: parsedLinkedIssueNumber,
+              artifactUrl: linkedWorkItem?.url ?? null
+            })
           }
         : undefined
       const startupPlan = buildAgentStartupPlan({
@@ -774,6 +808,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     createWorktree,
     issueCommandTemplate,
     linkedPR,
+    linkedWorkItem?.url,
     note,
     onCreated,
     parsedLinkedIssueNumber,
