@@ -77,6 +77,30 @@ type UseTerminalPaneLifecycleDeps = {
   setRenamingPaneId: React.Dispatch<React.SetStateAction<number | null>>
 }
 
+type StartupCommand = { command: string; env?: Record<string, string> } | null | undefined
+
+type SplitWithStartupDeps = {
+  startup?: StartupCommand
+}
+
+export function splitPaneWithOneShotStartup<TPane>(
+  deps: SplitWithStartupDeps,
+  startup: Exclude<StartupCommand, null | undefined>,
+  splitPane: () => TPane
+): TPane {
+  // Why: the startup payload is only for the pane created by this split.
+  // Pane creation fans out through onPaneCreated using a spread copy of `deps`,
+  // so connectPanePty cannot clear the caller's original object for us.
+  // Reset the shared field in finally so later user-driven splits never replay
+  // setup/issue commands, even if splitPane throws during creation.
+  deps.startup = startup
+  try {
+    return splitPane()
+  } finally {
+    deps.startup = null
+  }
+}
+
 export function useTerminalPaneLifecycle({
   tabId,
   worktreeId,
@@ -421,9 +445,11 @@ export function useTerminalPaneLifecycle({
     }
     // Why: setup split creates a right-side pane for the setup script so the
     // main (left) terminal stays immediately usable. We inject the setup command
-    // into ptyDeps.startup right before splitting — connectPanePty (called from
-    // onPaneCreated) reads it synchronously and clears it, so only the new pane
-    // gets the command. The initial pane already consumed startup=null above.
+    // into ptyDeps.startup right before splitting and clear it immediately after
+    // — connectPanePty receives a spread copy (`{...ptyDeps}`), so mutations
+    // inside connectPanePty don't propagate back to ptyDeps. Without clearing
+    // here, any later user-initiated split (e.g. Cmd+D) would re-run the setup
+    // command in the newly created pane.
     let issueAutomationAnchorPaneId: number | null = null
     // Why: capture the main shell pane *before* any splits mutate the pane list.
     // Both the setup and issue-command paths need to restore focus back to this
@@ -433,8 +459,11 @@ export function useTerminalPaneLifecycle({
 
     if (setupSplit) {
       if (initialPane) {
-        ptyDeps.startup = { command: setupSplit.command, env: setupSplit.env }
-        const setupPane = manager.splitPane(initialPane.id, 'vertical')
+        const setupPane = splitPaneWithOneShotStartup(
+          ptyDeps,
+          { command: setupSplit.command, env: setupSplit.env },
+          () => manager.splitPane(initialPane.id, 'vertical')
+        )
         issueAutomationAnchorPaneId = setupPane?.id ?? null
         // Restore focus to the main (left) pane so the user's terminal
         // receives keyboard input — the setup pane runs unattended.
@@ -455,8 +484,11 @@ export function useTerminalPaneLifecycle({
         manager.getActivePane() ??
         manager.getPanes()[0]
       if (targetPane) {
-        ptyDeps.startup = { command: issueCommandSplit.command, env: issueCommandSplit.env }
-        manager.splitPane(targetPane.id, 'vertical')
+        splitPaneWithOneShotStartup(
+          ptyDeps,
+          { command: issueCommandSplit.command, env: issueCommandSplit.env },
+          () => manager.splitPane(targetPane.id, 'vertical')
+        )
         // Why: if setup already claimed the right half, nest issue automation
         // inside that automation area instead of splitting the main shell again.
         // This preserves the primary terminal as the dominant pane while setup
