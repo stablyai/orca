@@ -19,7 +19,6 @@ import {
   SquareCode
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,14 +28,6 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '@/store'
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from '@/components/ui/dialog'
-import { Label } from '@/components/ui/label'
 import { ORCA_BROWSER_BLANK_URL, ORCA_BROWSER_PARTITION } from '../../../../shared/constants'
 import type {
   BrowserLoadError,
@@ -396,14 +387,11 @@ function BrowserPagePane({
   const grab = useGrabMode(browserTab.id)
   const createBrowserTab = useAppStore((s) => s.createBrowserTab)
   const consumeAddressBarFocusRequest = useAppStore((s) => s.consumeAddressBarFocusRequest)
-  const browserDefaultUrl = useAppStore((s) => s.browserDefaultUrl)
-  const setBrowserDefaultUrl = useAppStore((s) => s.setBrowserDefaultUrl)
   const browserSessionProfiles = useAppStore((s) => s.browserSessionProfiles)
   const sessionProfile = sessionProfileId
     ? (browserSessionProfiles.find((p) => p.id === sessionProfileId) ?? null)
     : null
   const webviewPartition = sessionProfile?.partition ?? ORCA_BROWSER_PARTITION
-  const detectedBrowsers = useAppStore((s) => s.detectedBrowsers)
   const browserSessionImportState = useAppStore((s) => s.browserSessionImportState)
   const clearBrowserSessionImportState = useAppStore((s) => s.clearBrowserSessionImportState)
 
@@ -434,29 +422,6 @@ function BrowserPagePane({
   }, [resourceNotice])
 
   const keepAddressBarFocusRef = useRef(false)
-  const [settingsOpen, setSettingsOpen] = useState(false)
-  const [homePageDraft, setHomePageDraft] = useState('')
-
-  const saveHomePage = useCallback(() => {
-    const trimmed = homePageDraft.trim()
-    if (!trimmed) {
-      // Why: empty input treated as "clear" so the user can remove a home page
-      // without having to click the separate Clear button.
-      setBrowserDefaultUrl(null)
-    } else {
-      const normalized = normalizeBrowserNavigationUrl(trimmed)
-      if (normalized && normalized !== ORCA_BROWSER_BLANK_URL) {
-        setBrowserDefaultUrl(normalized)
-      }
-      // Why: if the URL is not navigable (e.g. plain text with no scheme),
-      // leave the draft as-is so the user can correct it rather than silently
-      // discarding their input.
-      if (!normalized || normalized === ORCA_BROWSER_BLANK_URL) {
-        return
-      }
-    }
-    setSettingsOpen(false)
-  }, [homePageDraft, setBrowserDefaultUrl])
 
   // Inline toast that appears near the grabbed element instead of the global
   // bottom-right toaster, so feedback feels spatially connected to the action.
@@ -478,14 +443,6 @@ function BrowserPagePane({
     return () => clearTimeout(grabToastTimerRef.current)
   }, [])
 
-  // Why: populate the home-page draft from the stored value each time the
-  // settings dialog opens so the user sees the current setting pre-filled
-  // rather than an empty field or a stale in-memory edit.
-  useEffect(() => {
-    if (settingsOpen) {
-      setHomePageDraft(browserDefaultUrl ?? '')
-    }
-  }, [settingsOpen, browserDefaultUrl])
   const grabRef = useRef(grab)
   grabRef.current = grab
 
@@ -1757,136 +1714,6 @@ function BrowserPagePane({
           )
         : null}
 
-      {/* Browser Settings dialog — uses Radix Portal so layout is unaffected */}
-      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Browser Settings</DialogTitle>
-          </DialogHeader>
-          <div className="py-1">
-            <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              General
-            </p>
-            <div className="space-y-1.5">
-              <Label htmlFor="browser-home-page">Home Page</Label>
-              <p className="text-xs text-muted-foreground">
-                URL to open when creating a new tab. Leave empty for a blank tab.
-              </p>
-              <Input
-                id="browser-home-page"
-                value={homePageDraft}
-                onChange={(e) => setHomePageDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    saveHomePage()
-                  }
-                }}
-                placeholder="https://google.com"
-                spellCheck={false}
-                autoCapitalize="none"
-                autoCorrect="off"
-                className="h-8 text-sm"
-              />
-            </div>
-          </div>
-          <div className="border-t border-border pt-4">
-            <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Session &amp; Cookies
-            </p>
-            {sessionProfile ? (
-              <div className="mb-3 flex items-center gap-2 rounded-lg bg-accent/40 px-3 py-2">
-                <Import className="size-4 shrink-0 text-muted-foreground" />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium">{sessionProfile.label}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {sessionProfile.source
-                      ? `Imported from ${sessionProfile.source.browserFamily}${sessionProfile.source.profileName ? ` (${sessionProfile.source.profileName})` : ''}`
-                      : 'Custom session profile'}
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <p className="mb-3 text-xs text-muted-foreground">
-                Using the default shared session. Import cookies from your browser to use existing
-                logins.
-              </p>
-            )}
-            <div className="space-y-1">
-              {detectedBrowsers.map((browser) => (
-                <Button
-                  key={browser.family}
-                  variant="outline"
-                  size="sm"
-                  className="w-full justify-start gap-2"
-                  onClick={async () => {
-                    const store = useAppStore.getState()
-                    let targetProfileId = sessionProfileId
-                    if (!targetProfileId) {
-                      const profile = await store.createBrowserSessionProfile(
-                        'imported',
-                        `${browser.label} Session`
-                      )
-                      if (!profile) {
-                        return
-                      }
-                      targetProfileId = profile.id
-                    }
-                    void store.importCookiesFromBrowser(targetProfileId, browser.family)
-                    setSettingsOpen(false)
-                  }}
-                >
-                  <Import className="size-3.5" />
-                  Import from {browser.label}
-                </Button>
-              ))}
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full justify-start gap-2"
-                onClick={async () => {
-                  const store = useAppStore.getState()
-                  let targetProfileId = sessionProfileId
-                  if (!targetProfileId) {
-                    const profile = await store.createBrowserSessionProfile(
-                      'imported',
-                      'Imported Session'
-                    )
-                    if (!profile) {
-                      return
-                    }
-                    targetProfileId = profile.id
-                  }
-                  void store.importCookiesToProfile(targetProfileId)
-                  setSettingsOpen(false)
-                }}
-              >
-                <Import className="size-3.5" />
-                Import from File…
-              </Button>
-            </div>
-            {sessionProfile && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="mt-2 w-full justify-start gap-2 text-destructive hover:text-destructive"
-                onClick={async () => {
-                  await useAppStore.getState().deleteBrowserSessionProfile(sessionProfile.id)
-                  setSettingsOpen(false)
-                }}
-              >
-                Clear Imported Session
-              </Button>
-            )}
-          </div>
-          <DialogFooter>
-            <Button size="sm" onClick={saveHomePage}>
-              Save
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       <div className="relative z-10 flex items-center gap-2 border-b border-border/70 bg-background/95 px-3 py-1.5">
         <Button
           size="icon"
@@ -1992,7 +1819,7 @@ function BrowserPagePane({
           className="h-8 w-8"
           title="Browser Settings"
           onClick={() => {
-            useAppStore.getState().openSettingsTarget({ pane: 'general', repoId: null })
+            useAppStore.getState().openSettingsTarget({ pane: 'browser', repoId: null })
             useAppStore.getState().openSettingsPage()
           }}
         >

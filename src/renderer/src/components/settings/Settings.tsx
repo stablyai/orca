@@ -5,6 +5,7 @@ import {
   Bell,
   Bot,
   GitBranch,
+  Globe,
   Keyboard,
   Palette,
   Server,
@@ -18,6 +19,7 @@ import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-pref
 import { isMacUserAgent, isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
 import { SCROLLBACK_PRESETS_MB, getFallbackTerminalFonts } from './SettingsConstants'
 import { GeneralPane, GENERAL_PANE_SEARCH_ENTRIES } from './GeneralPane'
+import { BrowserPane, BROWSER_PANE_SEARCH_ENTRIES } from './BrowserPane'
 import { AppearancePane, APPEARANCE_PANE_SEARCH_ENTRIES } from './AppearancePane'
 import { ShortcutsPane, SHORTCUTS_PANE_SEARCH_ENTRIES } from './ShortcutsPane'
 import { TerminalPane } from './TerminalPane'
@@ -34,6 +36,7 @@ import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-sear
 
 type SettingsNavTarget =
   | 'general'
+  | 'browser'
   | 'git'
   | 'appearance'
   | 'terminal'
@@ -264,6 +267,13 @@ function Settings(): React.JSX.Element {
         searchEntries: terminalPaneSearchEntries
       },
       {
+        id: 'browser',
+        title: 'Browser',
+        description: 'Home page, link routing, and session cookies.',
+        icon: Globe,
+        searchEntries: BROWSER_PANE_SEARCH_ENTRIES
+      },
+      {
         id: 'notifications',
         title: 'Notifications',
         description: 'Native desktop notifications for agent and terminal events.',
@@ -485,6 +495,15 @@ function Settings(): React.JSX.Element {
                     scrollbackMode={scrollbackMode}
                     setScrollbackMode={setScrollbackMode}
                   />
+                </SettingsSection>
+
+                <SettingsSection
+                  id="browser"
+                  title="Browser"
+                  description="Home page, link routing, and session cookies."
+                  searchEntries={BROWSER_PANE_SEARCH_ENTRIES}
+                >
+                  <BrowserPane settings={settings} updateSettings={updateSettings} />
                 </SettingsSection>
 
                 <SettingsSection
