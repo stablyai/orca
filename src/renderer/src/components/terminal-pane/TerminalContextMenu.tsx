@@ -17,6 +17,7 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import { shouldIgnoreTerminalMenuPointerDownOutside } from './terminal-context-menu-dismiss'
 
 type TerminalContextMenuProps = {
   open: boolean
@@ -89,6 +90,19 @@ export default function TerminalContextMenu({
           // xterm reclaims focus after the contextmenu event; don't let
           // Radix treat that as a dismiss signal.
           e.preventDefault()
+        }}
+        onPointerDownOutside={(e) => {
+          if (
+            shouldIgnoreTerminalMenuPointerDownOutside({
+              openedAtMs: menuOpenedAtRef.current,
+              nowMs: Date.now(),
+              button: e.detail.originalEvent.button,
+              ctrlKey: e.detail.originalEvent.ctrlKey,
+              isMac
+            })
+          ) {
+            e.preventDefault()
+          }
         }}
       >
         <DropdownMenuItem onSelect={onCopy}>

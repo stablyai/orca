@@ -852,7 +852,10 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       moved = true
 
       const sourceOrder = sourceGroup.tabOrder.filter((id) => id !== tabId)
-      const targetOrder = [...targetGroup.tabOrder]
+      // Why: defensive filter so target order can't grow a duplicate if the
+      // tab id somehow already exists there (stale state, prior bug). See
+      // dropUnifiedTab for the same guard.
+      const targetOrder = targetGroup.tabOrder.filter((id) => id !== tabId)
       const targetIndex = Math.max(
         0,
         Math.min(opts?.index ?? targetOrder.length, targetOrder.length)
@@ -966,7 +969,12 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       const sourceOrder = sourceGroup.tabOrder.filter((id) => id !== tabId)
       const destinationGroup =
         nextGroups.find((group) => group.id === resolvedTargetGroupId) ?? targetGroup
-      const targetOrder = [...destinationGroup.tabOrder]
+      // Why: the target group's stored order can already contain this tab id
+      // from a prior racey write or a same-group split where the source and
+      // destination transiently share it. Splicing without filtering first
+      // would leave the same id in the order twice, which React surfaces as
+      // a duplicate-key warning in TabBar and can mis-reconcile xterm panes.
+      const targetOrder = destinationGroup.tabOrder.filter((id) => id !== tabId)
       const targetIndex = Math.max(
         0,
         Math.min(target.index ?? targetOrder.length, targetOrder.length)

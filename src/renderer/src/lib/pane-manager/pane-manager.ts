@@ -139,8 +139,22 @@ export class PaneManager {
     // final rAF runs after fitPanes (FIFO ordering) and unconditionally
     // restores the scroll-to-bottom state.
     if (wasAtBottom) {
+      const existingPaneId = existing.id
       requestAnimationFrame(() => {
-        existing.terminal.scrollToBottom()
+        // Why: replayTerminalLayout can create a PaneManager, split panes,
+        // then tear the whole manager down (e.g. when the owning worktree
+        // deactivates) before this rAF fires. Touching xterm's renderer
+        // after disposePane throws "Cannot read properties of undefined
+        // (reading 'dimensions')". Resolve the pane from the live map so
+        // we no-op instead of crashing.
+        if (this.destroyed) {
+          return
+        }
+        const live = this.panes.get(existingPaneId)
+        if (!live) {
+          return
+        }
+        live.terminal.scrollToBottom()
       })
     }
 
