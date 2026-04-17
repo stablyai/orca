@@ -615,6 +615,32 @@ describe('terminal slice behaviors', () => {
     expect(tab.ptyId).toBe('pty-1')
     expect(store.getState().ptyIdsByTabId['tab-1']).toEqual(['pty-1'])
   })
+
+  it('keeps the original tab-level PTY when a split pane adds another PTY', () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/path/wt1'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [worktreeId]: [makeTab({ id: 'tab-1', worktreeId, ptyId: 'pty-1' })]
+      },
+      ptyIdsByTabId: {
+        'tab-1': ['pty-1']
+      }
+    })
+
+    store.getState().updateTabPtyId('tab-1', 'pty-2')
+
+    const tab = store.getState().tabsByWorktree[worktreeId][0]
+    expect(tab.ptyId).toBe('pty-1')
+    expect(store.getState().ptyIdsByTabId['tab-1']).toEqual(['pty-1', 'pty-2'])
+  })
 })
 
 // ─── Reconnect persisted terminals ──────────────────────────────────

@@ -552,7 +552,23 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         if (found) {
           worktreeId = wId
         }
-        next[wId] = next[wId].map((t) => (t.id === tabId ? { ...t, ptyId } : t))
+        next[wId] = next[wId].map((t) => {
+          if (t.id !== tabId) {
+            return t
+          }
+          const existingPtyIds = s.ptyIdsByTabId[tabId] ?? []
+          const nextPtyIds = existingPtyIds.includes(ptyId)
+            ? existingPtyIds
+            : [...existingPtyIds, ptyId]
+          return {
+            ...t,
+            // Why: tab.ptyId is the single-pane fallback used by legacy attach
+            // paths. In split panes, later pane spawns must not steal that
+            // primary binding from the original pane or remount/close flows can
+            // reattach the tab to the wrong PTY and appear to "reset" panes.
+            ptyId: t.ptyId ?? nextPtyIds[0] ?? null
+          }
+        })
       }
       const existingPtyIds = s.ptyIdsByTabId[tabId] ?? []
       // Why: when a brand-new tab in the active worktree receives its first

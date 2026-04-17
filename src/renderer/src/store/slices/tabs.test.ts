@@ -787,6 +787,81 @@ describe('TabsSlice', () => {
       expect(state.groupsByWorktree[WT][0].activeTabId).toBe('/file.ts')
     })
 
+    it('deduplicates persisted tab order during unified hydration', () => {
+      store.setState({
+        worktreesByRepo: {
+          repo1: [
+            {
+              id: WT,
+              repoId: 'repo1',
+              path: '/tmp/feature',
+              head: 'abc',
+              branch: 'feature',
+              isBare: false,
+              isMainWorktree: false,
+              displayName: 'feature',
+              comment: '',
+              linkedIssue: null,
+              linkedPR: null,
+              isArchived: false,
+              isUnread: false,
+              isPinned: false,
+              sortOrder: 0,
+              lastActivityAt: 0
+            }
+          ]
+        }
+      })
+
+      const groupId = 'g-1'
+      const tabs: Tab[] = [
+        {
+          id: 't-1',
+          entityId: 't-1',
+          groupId,
+          worktreeId: WT,
+          contentType: 'terminal',
+          label: 'zsh',
+          customLabel: null,
+          color: null,
+          sortOrder: 0,
+          createdAt: 1000
+        },
+        {
+          id: '/file.ts',
+          entityId: '/file.ts',
+          groupId,
+          worktreeId: WT,
+          contentType: 'editor',
+          label: 'file.ts',
+          customLabel: null,
+          color: null,
+          sortOrder: 1,
+          createdAt: 2000
+        }
+      ]
+      const groups: TabGroup[] = [
+        {
+          id: groupId,
+          worktreeId: WT,
+          activeTabId: '/file.ts',
+          tabOrder: ['t-1', 't-1', '/file.ts', '/file.ts']
+        }
+      ]
+
+      store.getState().hydrateTabsSession({
+        activeRepoId: 'repo1',
+        activeWorktreeId: WT,
+        activeTabId: 't-1',
+        tabsByWorktree: {},
+        terminalLayoutsByTabId: {},
+        unifiedTabs: { [WT]: tabs },
+        tabGroups: { [WT]: groups }
+      })
+
+      expect(store.getState().groupsByWorktree[WT][0].tabOrder).toEqual(['t-1', '/file.ts'])
+    })
+
     it('filters out invalid worktree IDs during hydration', () => {
       store.setState({ worktreesByRepo: {} })
 
@@ -843,6 +918,18 @@ describe('TabsSlice', () => {
       store.getState().closeUnifiedTab(editor.id)
 
       expect(store.getState().groupsByWorktree[WT][0].activeTabId).toBe(term.id)
+    })
+  })
+
+  describe('tabOrder dedupe', () => {
+    it('deduplicates drag reorder payloads before persisting group order', () => {
+      const first = store.getState().createUnifiedTab(WT, 'terminal')
+      const second = store.getState().createUnifiedTab(WT, 'terminal')
+
+      const groupId = store.getState().groupsByWorktree[WT][0].id
+      store.getState().reorderUnifiedTabs(groupId, [second.id, first.id, second.id, first.id])
+
+      expect(store.getState().groupsByWorktree[WT][0].tabOrder).toEqual([second.id, first.id])
     })
   })
 

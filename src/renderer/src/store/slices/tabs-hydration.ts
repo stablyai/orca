@@ -5,6 +5,7 @@ import type {
   WorkspaceSessionState
 } from '../../../../shared/types'
 import {
+  dedupeTabOrder,
   getPersistedEditFileIdsByWorktree,
   isTransientEditorContentType,
   selectHydratedActiveGroupId
@@ -83,7 +84,10 @@ function hydrateUnifiedFormat(
 
     const validTabIds = new Set((tabsByWorktree[worktreeId] ?? []).map((t) => t.id))
     const validatedGroups = groups.map((g) => {
-      const tabOrder = g.tabOrder.filter((tid) => validTabIds.has(tid))
+      // Why: persisted tabOrder can contain duplicates from older buggy
+      // writes. Deduping during hydration restores the store invariant before
+      // later group operations branch on tab counts or neighbors.
+      const tabOrder = dedupeTabOrder(g.tabOrder.filter((tid) => validTabIds.has(tid)))
       return {
         ...g,
         tabOrder,

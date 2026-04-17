@@ -124,6 +124,19 @@ export function selectHydratedActiveGroupId(
   return candidates[0]?.id
 }
 
+export function dedupeTabOrder(tabIds: string[]): string[] {
+  const seen = new Set<string>()
+  const deduped: string[] = []
+  for (const tabId of tabIds) {
+    if (seen.has(tabId)) {
+      continue
+    }
+    seen.add(tabId)
+    deduped.push(tabId)
+  }
+  return deduped
+}
+
 /**
  * Apply a partial update to a single tab, returning the new `unifiedTabsByWorktree`
  * map. Returns `null` if the tab is not found (callers should return `{}` to the

@@ -6,46 +6,34 @@ describe('shouldIgnoreTerminalMenuPointerDownOutside', () => {
     expect(
       shouldIgnoreTerminalMenuPointerDownOutside({
         openedAtMs: 1_000,
-        nowMs: 1_050,
-        button: 0,
-        ctrlKey: false,
-        isMac: false
+        nowMs: 1_050
       })
     ).toBe(true)
   })
 
-  it('ignores secondary-button pointerdowns after the menu is open', () => {
+  it('allows secondary-button pointerdowns after the menu is open', () => {
     expect(
       shouldIgnoreTerminalMenuPointerDownOutside({
         openedAtMs: 1_000,
-        nowMs: 1_250,
-        button: 2,
-        ctrlKey: false,
-        isMac: false
+        nowMs: 1_250
       })
-    ).toBe(true)
+    ).toBe(false)
   })
 
-  it('treats macOS control-click as a context-menu gesture', () => {
+  it('allows macOS control-click after the opening-gesture window', () => {
     expect(
       shouldIgnoreTerminalMenuPointerDownOutside({
         openedAtMs: 1_000,
-        nowMs: 1_250,
-        button: 0,
-        ctrlKey: true,
-        isMac: true
+        nowMs: 1_250
       })
-    ).toBe(true)
+    ).toBe(false)
   })
 
   it('allows ordinary outside left-click dismissals', () => {
     expect(
       shouldIgnoreTerminalMenuPointerDownOutside({
         openedAtMs: 1_000,
-        nowMs: 1_250,
-        button: 0,
-        ctrlKey: false,
-        isMac: false
+        nowMs: 1_250
       })
     ).toBe(false)
   })

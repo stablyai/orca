@@ -95,10 +95,7 @@ export default function TerminalContextMenu({
           if (
             shouldIgnoreTerminalMenuPointerDownOutside({
               openedAtMs: menuOpenedAtRef.current,
-              nowMs: Date.now(),
-              button: e.detail.originalEvent.button,
-              ctrlKey: e.detail.originalEvent.ctrlKey,
-              isMac
+              nowMs: Date.now()
             })
           ) {
             e.preventDefault()
