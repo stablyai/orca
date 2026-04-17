@@ -9,7 +9,7 @@ patchedDependencies:
     hash: 12b1dc2811a859b6703ebb63be654d1682ff1bb6045713a54e7d47e28deb7776
     path: config/patches/@xterm__addon-fit@0.11.0.patch
   node-pty@1.1.0:
-    hash: d35190e5f762b8d3289f13df0ff40c7ad19dfb64ca488494cce9bea79ab5c0ad
+    hash: 02e16954edbb8e511963557e3b2c80f8a6fb230cd0c6a75ade936022f3347322
     path: patches/node-pty@1.1.0.patch
 
 importers:
@@ -138,7 +138,7 @@ importers:
         version: 0.55.1
       node-pty:
         specifier: ^1.1.0
-        version: 1.1.0(patch_hash=d35190e5f762b8d3289f13df0ff40c7ad19dfb64ca488494cce9bea79ab5c0ad)
+        version: 1.1.0(patch_hash=02e16954edbb8e511963557e3b2c80f8a6fb230cd0c6a75ade936022f3347322)
       radix-ui:
         specifier: ^1.4.3
         version: 1.4.3(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -10839,7 +10839,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  node-pty@1.1.0(patch_hash=d35190e5f762b8d3289f13df0ff40c7ad19dfb64ca488494cce9bea79ab5c0ad):
+  node-pty@1.1.0(patch_hash=02e16954edbb8e511963557e3b2c80f8a6fb230cd0c6a75ade936022f3347322):
     dependencies:
       node-addon-api: 7.1.1
 

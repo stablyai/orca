@@ -78,7 +78,12 @@ function createOutOfProcessLauncher(): DaemonLauncher {
       // stdio 'ignore' prevents the child from holding the parent's stdout
       // open, which would prevent Electron from exiting cleanly.
       detached: true,
-      stdio: ['ignore', 'ignore', 'ignore', 'ipc']
+      stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+      // Why: ELECTRON_RUN_AS_NODE makes the forked process run as a plain
+      // Node.js process instead of an Electron renderer/main process. Without
+      // it, Electron's GPU/display initialization can interfere with native
+      // module operations like node-pty's posix_spawn of the spawn-helper.
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }
     })
 
     // Wait for the daemon to signal readiness via IPC

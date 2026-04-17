@@ -1,6 +1,7 @@
 import * as pty from 'node-pty'
 import type { SubprocessHandle } from './session'
 import { getShellReadyLaunchConfig, resolvePtyShellPath } from './shell-ready'
+import { ensureNodePtySpawnHelperExecutable } from '../providers/local-pty-utils'
 
 export type PtySubprocessOptions = {
   sessionId: string
@@ -51,6 +52,11 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     }
     shellArgs = shellReadyLaunch?.args ?? ['-l']
   }
+
+  // Why: asar packaging can strip the +x bit from node-pty's spawn-helper
+  // binary. The main process fixes this via LocalPtyProvider, but the daemon
+  // runs in a separate forked process with its own code path.
+  ensureNodePtySpawnHelperExecutable()
 
   const proc = pty.spawn(shellPath, shellArgs, {
     name: 'xterm-256color',
