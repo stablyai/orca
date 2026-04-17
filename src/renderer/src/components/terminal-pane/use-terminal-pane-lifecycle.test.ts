@@ -20,14 +20,43 @@ describe('splitPaneWithOneShotStartup', () => {
     expect(createdPane).toEqual({ id: 2 })
     expect(seenStartupValues).toEqual([{ command: 'orca setup', env: { ORCA_ROLE: 'setup' } }])
     expect(deps.startup).toBeNull()
+  })
 
-    const userSplitStartup = (() => {
+  it('isolates startup payloads across sequential calls (setup then issue)', () => {
+    const deps: { startup?: { command: string; env?: Record<string, string> } | null } = {
+      startup: null
+    }
+    const seenStartupValues: (typeof deps.startup)[] = []
+
+    splitPaneWithOneShotStartup(
+      deps,
+      { command: 'orca setup', env: { ORCA_ROLE: 'setup' } },
+      () => {
+        seenStartupValues.push(deps.startup ?? null)
+        return { id: 2 }
+      }
+    )
+
+    expect(deps.startup).toBeNull()
+
+    splitPaneWithOneShotStartup(deps, { command: 'orca issue' }, () => {
       seenStartupValues.push(deps.startup ?? null)
-      return deps.startup ?? null
-    })()
+      return { id: 3 }
+    })
 
-    expect(userSplitStartup).toBeNull()
-    expect(seenStartupValues[1]).toBeNull()
+    expect(seenStartupValues).toEqual([
+      { command: 'orca setup', env: { ORCA_ROLE: 'setup' } },
+      { command: 'orca issue' }
+    ])
+    expect(deps.startup).toBeNull()
+
+    const userSplitObservedStartup = ((splitPane: () => { id: number }) => {
+      splitPane()
+      return deps.startup ?? null
+    })(() => ({ id: 4 }))
+
+    expect(userSplitObservedStartup).toBeNull()
+    expect(deps.startup).toBeNull()
   })
 
   it('clears startup even when splitPane throws', () => {

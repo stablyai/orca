@@ -77,15 +77,16 @@ type UseTerminalPaneLifecycleDeps = {
   setRenamingPaneId: React.Dispatch<React.SetStateAction<number | null>>
 }
 
-type StartupCommand = { command: string; env?: Record<string, string> } | null | undefined
+type SplitStartupPayload = { command: string; env?: Record<string, string> }
 
 type SplitWithStartupDeps = {
-  startup?: StartupCommand
+  startup?: SplitStartupPayload | null
 }
 
+/** Scopes `deps.startup` to a single call of `splitPane()`, clearing it in `finally` so later splits do not replay the payload. */
 export function splitPaneWithOneShotStartup<TPane>(
   deps: SplitWithStartupDeps,
-  startup: Exclude<StartupCommand, null | undefined>,
+  startup: SplitStartupPayload,
   splitPane: () => TPane
 ): TPane {
   // Why: the startup payload is only for the pane created by this split.
@@ -93,6 +94,9 @@ export function splitPaneWithOneShotStartup<TPane>(
   // so connectPanePty cannot clear the caller's original object for us.
   // Reset the shared field in finally so later user-driven splits never replay
   // setup/issue commands, even if splitPane throws during creation.
+  // Relies on manager.splitPane → onPaneCreated → connectPanePty reading
+  // `deps.startup` synchronously before returning; if that chain ever becomes
+  // async, this helper must switch to awaiting the split before clearing.
   deps.startup = startup
   try {
     return splitPane()
