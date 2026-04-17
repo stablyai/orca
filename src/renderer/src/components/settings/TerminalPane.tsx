@@ -2,7 +2,7 @@
    splitting individual settings into separate files would scatter related controls without a
    meaningful abstraction boundary. Mirrors the same decision made for GeneralPane.tsx. */
 import { useState } from 'react'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings, SetupScriptLaunchMode } from '../../../../shared/types'
 import {
   DEFAULT_TERMINAL_FONT_WEIGHT,
   TERMINAL_FONT_WEIGHT_MAX,
@@ -34,6 +34,7 @@ import {
   TERMINAL_LIGHT_THEME_SEARCH_ENTRIES,
   TERMINAL_PANE_STYLE_SEARCH_ENTRIES,
   TERMINAL_RIGHT_CLICK_TO_PASTE_SEARCH_ENTRY,
+  TERMINAL_SETUP_SCRIPT_SEARCH_ENTRIES,
   TERMINAL_TYPOGRAPHY_SEARCH_ENTRIES
 } from './terminal-search'
 import { DarkTerminalThemeSection, LightTerminalThemeSection } from './TerminalThemeSections'
@@ -389,6 +390,77 @@ export function TerminalPane({
         previewProps={paneStyleOptions}
         lightPreviewAppearance={lightPreviewAppearance}
       />
+    ) : null,
+    matchesSettingsSearch(searchQuery, TERMINAL_SETUP_SCRIPT_SEARCH_ENTRIES) ? (
+      <section key="setup-script" className="space-y-4">
+        <div className="space-y-1">
+          <h3 className="text-sm font-semibold">Workspace Setup Script</h3>
+          <p className="text-xs text-muted-foreground">
+            Where the repository setup script runs when a new workspace is created.
+          </p>
+        </div>
+
+        <SearchableSetting
+          title="Setup Script Location"
+          description="Where the repository setup script runs when a new workspace is created."
+          keywords={[
+            'setup',
+            'script',
+            'workspace',
+            'split',
+            'horizontal',
+            'vertical',
+            'tab',
+            'new',
+            'location',
+            'launch'
+          ]}
+          className="space-y-2"
+        >
+          <Label>Setup Script Location</Label>
+          <ToggleGroup
+            type="single"
+            value={settings.setupScriptLaunchMode}
+            onValueChange={(value) => {
+              if (!value) {
+                return
+              }
+              updateSettings({
+                setupScriptLaunchMode: value as SetupScriptLaunchMode
+              })
+            }}
+            variant="outline"
+            size="sm"
+            className="h-8 flex-wrap"
+          >
+            <ToggleGroupItem
+              value="split-vertical"
+              className="h-8 px-3 text-xs"
+              aria-label="Split vertically"
+            >
+              Split Vertically
+            </ToggleGroupItem>
+            <ToggleGroupItem
+              value="split-horizontal"
+              className="h-8 px-3 text-xs"
+              aria-label="Split horizontally"
+            >
+              Split Horizontally
+            </ToggleGroupItem>
+            <ToggleGroupItem
+              value="new-tab"
+              className="h-8 px-3 text-xs"
+              aria-label="Run in a new tab"
+            >
+              New Tab
+            </ToggleGroupItem>
+          </ToggleGroup>
+          <p className="text-xs text-muted-foreground">
+            &quot;New Tab&quot; opens the setup command in a background tab titled &quot;Setup&quot;
+            without stealing focus from your main terminal.
+          </p>
+        </SearchableSetting>
+      </section>
     ) : null,
     matchesSettingsSearch(searchQuery, TERMINAL_ADVANCED_SEARCH_ENTRIES) ? (
       <section key="advanced" className="space-y-4">

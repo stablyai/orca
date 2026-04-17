@@ -1,4 +1,4 @@
-import type { WorktreeSetupLaunch } from '../../../shared/types'
+import type { SetupSplitDirection, WorktreeSetupLaunch } from '../../../shared/types'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
 import { buildSetupRunnerCommand } from './setup-runner'
 import { useAppStore } from '@/store'
@@ -17,6 +17,7 @@ type WorktreeActivationStore = {
   tabsByWorktree: Record<string, { id: string }[]>
   createTab: (worktreeId: string) => { id: string }
   setActiveTab: (tabId: string) => void
+  setTabCustomTitle: (tabId: string, title: string | null) => void
   reconcileWorktreeTabModel: (worktreeId: string) => { renderableTabCount: number }
   queueTabStartupCommand: (
     tabId: string,
@@ -24,7 +25,7 @@ type WorktreeActivationStore = {
   ) => void
   queueTabSetupSplit: (
     tabId: string,
-    startup: { command: string; env?: Record<string, string> }
+    startup: { command: string; env?: Record<string, string>; direction: SetupSplitDirection }
   ) => void
   queueTabIssueCommandSplit: (
     tabId: string,
@@ -122,15 +123,34 @@ export function ensureWorktreeHasInitialTerminal(
     store.queueTabStartupCommand(terminalTab.id, startup)
   }
 
-  // Why: run the setup script in a split pane to the right so the main
-  // terminal stays immediately interactive. The TerminalPane reads this
-  // signal on mount, creates the initial pane clean, then splits right
-  // and injects the setup command into the new pane's PTY.
+  // Why: the setup script launch location is user-configurable. The default
+  // 'split-vertical' preserves the historical behavior (right-side split so
+  // the main terminal stays immediately interactive); 'split-horizontal'
+  // swaps the split orientation; 'new-tab' creates a separate background
+  // tab titled "Setup" without stealing focus from the main terminal.
   if (setup) {
-    store.queueTabSetupSplit(terminalTab.id, {
+    const mode = useAppStore.getState().settings?.setupScriptLaunchMode ?? 'split-vertical'
+    const setupCommand = {
       command: buildSetupRunnerCommand(setup.runnerScriptPath),
       env: setup.envVars
-    })
+    }
+    if (mode === 'new-tab') {
+      const setupTab = store.createTab(worktreeId)
+      // Why: createTab auto-activates the new tab. Revert activation so the
+      // user's focus stays on the primary terminal — per the design, the
+      // Setup tab runs unattended in the background.
+      store.setActiveTab(terminalTab.id)
+      // Why: customTitle wins over the auto-generated "Terminal N" label
+      // everywhere the tab is rendered (tab bar, switcher, session snapshots),
+      // so labeling via customTitle is the single authoritative source.
+      store.setTabCustomTitle(setupTab.id, 'Setup')
+      store.queueTabStartupCommand(setupTab.id, setupCommand)
+    } else {
+      store.queueTabSetupSplit(terminalTab.id, {
+        ...setupCommand,
+        direction: mode === 'split-horizontal' ? 'horizontal' : 'vertical'
+      })
+    }
   }
 
   // Why: when the user links a GitHub issue and opts into that repo's

@@ -10,7 +10,11 @@ import {
   handleOscLink
 } from './terminal-link-handlers'
 import type { LinkHandlerDeps } from './terminal-link-handlers'
-import type { GlobalSettings, TerminalLayoutSnapshot } from '../../../../shared/types'
+import type {
+  GlobalSettings,
+  SetupSplitDirection,
+  TerminalLayoutSnapshot
+} from '../../../../shared/types'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import {
   buildFontFamily,
@@ -30,9 +34,14 @@ type UseTerminalPaneLifecycleDeps = {
   worktreeId: string
   cwd?: string
   startup?: { command: string; env?: Record<string, string> } | null
-  /** When present, the initial pane boots clean and a right-side split pane is
-   *  created to run the setup command — keeping the main terminal interactive. */
-  setupSplit?: { command: string; env?: Record<string, string> } | null
+  /** When present, the initial pane boots clean and a split pane is created
+   *  (vertical or horizontal per the user setting) to run the setup command —
+   *  keeping the main terminal interactive. */
+  setupSplit?: {
+    command: string
+    env?: Record<string, string>
+    direction: SetupSplitDirection
+  } | null
   /** When present, a split pane is created to run the repo's configured
    *  issue-automation command with the linked issue number interpolated. */
   issueCommandSplit?: { command: string; env?: Record<string, string> } | null
@@ -466,11 +475,11 @@ export function useTerminalPaneLifecycle({
         const setupPane = splitPaneWithOneShotStartup(
           ptyDeps,
           { command: setupSplit.command, env: setupSplit.env },
-          () => manager.splitPane(initialPane.id, 'vertical')
+          () => manager.splitPane(initialPane.id, setupSplit.direction)
         )
         issueAutomationAnchorPaneId = setupPane?.id ?? null
-        // Restore focus to the main (left) pane so the user's terminal
-        // receives keyboard input — the setup pane runs unattended.
+        // Restore focus to the main pane so the user's terminal receives
+        // keyboard input — the setup pane runs unattended.
         manager.setActivePane(initialPane.id, { focus: isActive })
       }
     }
