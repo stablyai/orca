@@ -150,11 +150,15 @@ function PromptPrefixTextarea({
   }, [value])
 
   return (
-    <div className="scrollbar-sleek h-[110px] overflow-auto">
+    // Why: allow the composer to grow with the user's prompt up to ~20 rows
+    // (560px at leading-7 ≈ 28px/row) before scrolling. The inner textarea's
+    // JS-driven auto-resize sets its own height to scrollHeight, so the wrapper
+    // simply follows until the max-height cap engages and hands off to scroll.
+    <div className="scrollbar-sleek max-h-[560px] overflow-auto">
       <div className="relative">
         <span
           aria-hidden
-          className="pointer-events-none absolute left-4 top-4 select-none font-mono text-[15px] leading-7 font-bold text-foreground"
+          className="pointer-events-none absolute left-4 top-4 select-none text-[15px] leading-7 font-semibold text-foreground"
         >
           {'>'}
         </span>
@@ -176,7 +180,7 @@ function PromptPrefixTextarea({
           // only a linked work item. Emphasising it with higher contrast makes
           // it obvious this is a real pending prompt, not instructional copy.
           className={cn(
-            'block min-h-[110px] w-full resize-none overflow-hidden bg-transparent py-4 pl-4 pr-4 font-mono text-[15px] leading-7 text-foreground outline-none',
+            'block min-h-[110px] w-full resize-none overflow-hidden bg-transparent py-4 pl-4 pr-4 text-[15px] leading-7 text-foreground outline-none',
             placeholderTone === 'ghost-prompt'
               ? 'placeholder:text-foreground/70'
               : 'placeholder:text-muted-foreground/50'
@@ -327,7 +331,7 @@ export default function NewWorkspaceComposerCard({
               value={name}
               onChange={onNameChange}
               placeholder="[Optional] Workspace name"
-              className="h-10 min-w-0 flex-1 bg-transparent px-1 text-[18px] font-medium text-foreground outline-none placeholder:text-muted-foreground/90"
+              className="h-9 min-w-0 flex-1 bg-transparent px-1 text-[14px] font-medium text-foreground outline-none placeholder:text-muted-foreground/80"
             />
             <div className="w-[240px] shrink-0">
               <RepoCombobox
@@ -404,7 +408,7 @@ export default function NewWorkspaceComposerCard({
               </div>
             ) : null}
 
-            <div className="flex items-center justify-between px-3 pb-3 pt-1">
+            <div className="flex items-center justify-between px-3 pb-3 pt-2">
               <div className="flex items-center gap-1.5">
                 <Tooltip>
                   <TooltipTrigger asChild>
