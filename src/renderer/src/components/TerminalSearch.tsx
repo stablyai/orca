@@ -22,8 +22,26 @@ export default function TerminalSearch({
   const [caseSensitive, setCaseSensitive] = useState(false)
   const [regex, setRegex] = useState(false)
 
+  // Why: the default xterm SearchAddon highlights blend into common
+  // terminal backgrounds (see orca#612). Providing explicit decoration
+  // colors gives all matches a visible yellow background and the
+  // current match a brighter orange, matching the contrast VS Code and
+  // iTerm2 use for terminal search. xterm requires #RRGGBB format for
+  // the background colors.
   const searchOptions = useCallback(
-    (incremental = false) => ({ caseSensitive, regex, incremental }),
+    (incremental: boolean = false) => ({
+      caseSensitive,
+      regex,
+      incremental,
+      decorations: {
+        matchBackground: '#5c4a00',
+        matchBorder: '#cabd00',
+        matchOverviewRuler: '#ffcc00',
+        activeMatchBackground: '#c4580e',
+        activeMatchBorder: '#ffcf6b',
+        activeMatchColorOverviewRuler: '#ff9900'
+      }
+    }),
     [caseSensitive, regex]
   )
 
@@ -57,9 +75,9 @@ export default function TerminalSearch({
       return
     }
     if (searchAddon && isOpen) {
-      searchAddon.findNext(query, { caseSensitive, regex, incremental: true })
+      searchAddon.findNext(query, searchOptions(true))
     }
-  }, [query, searchAddon, isOpen, caseSensitive, regex, searchStateRef])
+  }, [query, searchAddon, isOpen, caseSensitive, regex, searchStateRef, searchOptions])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
