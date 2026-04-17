@@ -105,7 +105,7 @@ function normalizeHistoryUrl(url: string): string {
     parsed.hostname = parsed.hostname.toLowerCase()
     parsed.protocol = parsed.protocol.toLowerCase()
     let normalized = parsed.toString()
-    if (normalized.endsWith('/') && parsed.pathname === '/') {
+    if (normalized.endsWith('/')) {
       normalized = normalized.slice(0, -1)
     }
     return normalized

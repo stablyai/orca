@@ -1114,7 +1114,6 @@ function BrowserPagePane({
         canGoForward: webview.canGoForward(),
         loadError: null
       })
-      addBrowserHistoryEntryRef.current(currentUrl, webview.getTitle() || currentUrl)
     }
 
     const handleDidNavigate = (event: { url?: string; isMainFrame?: boolean }): void => {

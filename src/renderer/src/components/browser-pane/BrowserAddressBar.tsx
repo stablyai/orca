@@ -2,13 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Globe } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandItem,
-  CommandList
-} from '@/components/ui/command'
+import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui/command'
 import { useAppStore } from '@/store'
 
 const MAX_SUGGESTIONS = 8
@@ -245,7 +239,6 @@ export default function BrowserAddressBar({
                   </CommandItem>
                 ))}
               </CommandGroup>
-              <CommandEmpty>No matching URLs</CommandEmpty>
             </CommandList>
           </Command>
         </PopoverContent>
