@@ -66,6 +66,24 @@ export function getSetupConfig(
   return null
 }
 
+// Why: branch names and on-disk worktree directories must be short, lowercase,
+// and ASCII-safe. Free-form text (prompts, GitHub titles) often contains
+// emoji, CJK, or hundreds of characters, which would otherwise make
+// sanitizeWorktreeName either produce a ludicrously long name or throw
+// "Invalid worktree name" when every character is stripped.
+function slugifyForWorkspaceName(input: string): string {
+  return input
+    .trim()
+    .toLowerCase()
+    .replace(/[\\/]+/g, '-')
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^[.-]+|[.-]+$/g, '')
+    .slice(0, 48)
+    .replace(/[-._]+$/g, '')
+}
+
 export function getLinkedWorkItemSuggestedName(item: GitHubWorkItem): string {
   const withoutLeadingNumber = item.title
     .trim()
@@ -75,15 +93,7 @@ export function getLinkedWorkItemSuggestedName(item: GitHubWorkItem): string {
     .replace(/\b#\d+\b/g, '')
     .trim()
   const seed = withoutLeadingNumber || item.title.trim()
-  return seed
-    .toLowerCase()
-    .replace(/[\\/]+/g, '-')
-    .replace(/\s+/g, '-')
-    .replace(/[^a-z0-9._-]+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^[.-]+|[.-]+$/g, '')
-    .slice(0, 48)
-    .replace(/[-._]+$/g, '')
+  return slugifyForWorkspaceName(seed)
 }
 
 export function getWorkspaceSeedName(args: {
@@ -102,8 +112,16 @@ export function getWorkspaceSeedName(args: {
   if (linkedIssueNumber !== null) {
     return `issue-${linkedIssueNumber}`
   }
+  // Why: the prompt is free-form user text — it can easily exceed a sane
+  // branch-name length or be composed entirely of characters that
+  // sanitizeWorktreeName strips (emoji, CJK, punctuation). Slugify + truncate
+  // here so the downstream branch/path sanitizer always has a usable seed,
+  // and fall back to the stable default when the prompt collapses to empty.
   if (prompt.trim()) {
-    return prompt.trim()
+    const slug = slugifyForWorkspaceName(prompt)
+    if (slug) {
+      return slug
+    }
   }
   // Why: the prompt is optional in this flow. Fall back to a stable default
   // branch/workspace seed so users can launch an empty draft without first
