@@ -333,7 +333,13 @@ export default function NewWorkspacePage(): React.JSX.Element {
   const handleTaskSearchKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>): void => {
       if (event.key === 'Enter') {
-        if (shouldSuppressEnterSubmit(event, false)) {
+        // React SyntheticEvent does not expose isComposing; use nativeEvent.
+        if (
+          shouldSuppressEnterSubmit(
+            { isComposing: event.nativeEvent.isComposing, shiftKey: event.shiftKey },
+            false
+          )
+        ) {
           return
         }
         event.preventDefault()
