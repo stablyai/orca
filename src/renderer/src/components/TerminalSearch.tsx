@@ -35,7 +35,7 @@ export default function TerminalSearch({
       incremental,
       decorations: {
         matchBackground: '#5c4a00',
-        matchBorder: '#cabd00',
+        matchBorder: '#5c4a00',
         matchOverviewRuler: '#ffcc00',
         activeMatchBackground: '#c4580e',
         activeMatchBorder: '#ffcf6b',
