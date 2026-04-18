@@ -359,6 +359,14 @@ export default function NewWorkspacePage(): React.JSX.Element {
       return
     }
 
+    // Why: when the GitHub preview sheet is open, Radix's Dialog owns Esc —
+    // it closes the sheet on its own. Page-level capture would otherwise fire
+    // first and discard the whole draft while the user just meant to dismiss
+    // the preview.
+    if (drawerWorkItem) {
+      return
+    }
+
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== 'Enter' && event.key !== 'Escape') {
         return
@@ -407,7 +415,7 @@ export default function NewWorkspacePage(): React.JSX.Element {
 
     window.addEventListener('keydown', onKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
-  }, [activeModal, composerRef, createDisabled, handleDiscardDraft, submit])
+  }, [activeModal, composerRef, createDisabled, drawerWorkItem, handleDiscardDraft, submit])
 
   return (
     <div className="relative flex h-full min-h-0 flex-1 overflow-hidden bg-background dark:bg-[#1a1a1a] text-foreground">
@@ -434,8 +442,9 @@ export default function NewWorkspacePage(): React.JSX.Element {
       )}
 
       <div className="relative z-10 flex min-h-0 flex-1 flex-col">
-        {/* Why: the Esc/discard button is left-aligned to avoid colliding with the
-            right-docked GitHub drawer and app sidebar, which also live on the right edge. */}
+        {/* Why: left-aligned so it doesn't collide with the app sidebar on the
+            right edge. The GitHub preview is a modal sheet that overlays the
+            whole surface, so this button is hidden behind it while it's open. */}
         <div className="flex-none flex items-center justify-start px-5 py-3 md:px-8 md:py-4">
           <Tooltip>
             <TooltipTrigger asChild>

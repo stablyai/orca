@@ -14,10 +14,11 @@ import {
   X
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { VisuallyHidden } from 'radix-ui'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
-import { useSidebarResize } from '@/hooks/useSidebarResize'
 import { detectLanguage } from '@/lib/language-detect'
 import { cn } from '@/lib/utils'
 import { CHECK_COLOR, CHECK_ICON } from '@/components/right-sidebar/checks-helpers'
@@ -32,10 +33,6 @@ import type {
 // Why: the editor's DiffViewer loads Monaco, which is heavy and should not be
 // pulled into the drawer's bundle until the user actually opens the Files tab.
 const DiffViewer = lazy(() => import('@/components/editor/DiffViewer'))
-
-const DRAWER_MIN_WIDTH = 420
-const DRAWER_MAX_WIDTH = 920
-const DRAWER_DEFAULT_WIDTH = 560
 
 type DrawerTab = 'conversation' | 'files' | 'checks'
 
@@ -441,21 +438,11 @@ export default function GitHubItemDrawer({
   repoPath,
   onUse,
   onClose
-}: GitHubItemDrawerProps): React.JSX.Element | null {
-  const [width, setWidth] = useState(DRAWER_DEFAULT_WIDTH)
+}: GitHubItemDrawerProps): React.JSX.Element {
   const [tab, setTab] = useState<DrawerTab>('conversation')
   const [details, setDetails] = useState<GitHubWorkItemDetails | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  const { containerRef, isResizing, onResizeStart } = useSidebarResize<HTMLDivElement>({
-    isOpen: workItem !== null,
-    width,
-    minWidth: DRAWER_MIN_WIDTH,
-    maxWidth: DRAWER_MAX_WIDTH,
-    deltaSign: -1,
-    setWidth
-  })
 
   const requestIdRef = useRef(0)
 
@@ -497,225 +484,228 @@ export default function GitHubItemDrawer({
       })
   }, [repoPath, workItem])
 
-  useEffect(() => {
-    if (!workItem) {
-      return
-    }
-    const handler = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        onClose()
-      }
-    }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [onClose, workItem])
-
-  if (!workItem) {
-    return null
-  }
-
-  const Icon = workItem.type === 'pr' ? GitPullRequest : CircleDot
+  const Icon = workItem?.type === 'pr' ? GitPullRequest : CircleDot
   const body = details?.body ?? ''
   const comments = details?.comments ?? []
   const files = details?.files ?? []
   const checks = details?.checks ?? []
 
   return (
-    <div
-      ref={containerRef}
-      style={{ width: `${width}px` }}
-      className={cn(
-        'relative flex h-full shrink-0 flex-col border-l border-border/60 bg-card shadow-xl',
-        isResizing && 'select-none'
-      )}
-    >
-      {/* Left-edge resize handle */}
-      <div
-        onMouseDown={onResizeStart}
-        className="absolute left-0 top-0 z-10 h-full w-1 cursor-col-resize bg-transparent hover:bg-primary/40"
-        role="separator"
-        aria-orientation="vertical"
-        aria-label="Resize drawer"
-      />
+    // Why: the overlay sheet pops over page content rather than docking a
+    // right column — Radix's Dialog handles focus trap, Esc-to-close, and
+    // overlay click-outside, and the `slide-in-from-right` animation gives it
+    // the Mantine-style drawer feel while keeping us on shadcn primitives.
+    <Sheet open={workItem !== null} onOpenChange={(open) => !open && onClose()}>
+      <SheetContent
+        side="right"
+        showCloseButton={false}
+        className="w-full p-0 sm:max-w-[640px]"
+        onOpenAutoFocus={(event) => {
+          // Why: focusing the first actionable element inside the drawer
+          // causes the "Start workspace" footer button to receive focus and
+          // get visually highlighted on open. Preventing auto-focus keeps the
+          // drawer feeling like a passive preview until the user acts.
+          event.preventDefault()
+        }}
+      >
+        {/* Why: SheetTitle/Description are required by Radix Dialog for a11y,
+            but the visible header already carries the same info. Wrap each
+            individually with `asChild` so the visually-hidden span wraps the
+            element cleanly — nesting a <h2>/<p> inside a single <span> would
+            be invalid HTML. */}
+        <VisuallyHidden.Root asChild>
+          <SheetTitle>{workItem?.title ?? 'GitHub item'}</SheetTitle>
+        </VisuallyHidden.Root>
+        <VisuallyHidden.Root asChild>
+          <SheetDescription>
+            Read-only preview of the selected GitHub issue or pull request.
+          </SheetDescription>
+        </VisuallyHidden.Root>
 
-      {/* Header */}
-      <div className="flex-none border-b border-border/60 px-4 py-3">
-        <div className="flex items-start gap-2">
-          <Icon className="mt-1 size-4 shrink-0 text-muted-foreground" />
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <span
-                className={cn(
-                  'rounded-full border px-2 py-0.5 text-[11px] font-medium',
-                  getStateTone(workItem)
-                )}
-              >
-                {getStateLabel(workItem)}
-              </span>
-              <span className="font-mono text-[12px] text-muted-foreground">
-                #{workItem.number}
-              </span>
-            </div>
-            <h2 className="mt-1 text-[15px] font-semibold leading-tight text-foreground">
-              {workItem.title}
-            </h2>
-            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
-              <span>{workItem.author ?? 'unknown'}</span>
-              <span>· {formatRelativeTime(workItem.updatedAt)}</span>
-              {workItem.branchName && (
-                <span className="font-mono text-[10px] text-muted-foreground/80">
-                  · {workItem.branchName}
-                </span>
-              )}
-            </div>
-            {workItem.labels.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1">
-                {workItem.labels.map((label) => (
-                  <span
-                    key={label}
-                    className="rounded-full border border-border/50 bg-background/60 px-2 py-0.5 text-[10px] text-muted-foreground"
-                  >
-                    {label}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-          <div className="flex shrink-0 items-center gap-1">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-7"
-                  onClick={() => window.api.shell.openUrl(workItem.url)}
-                  aria-label="Open on GitHub"
-                >
-                  <ExternalLink className="size-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={6}>
-                Open on GitHub
-              </TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-7"
-                  onClick={onClose}
-                  aria-label="Close drawer"
-                >
-                  <X className="size-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={6}>
-                Close · Esc
-              </TooltipContent>
-            </Tooltip>
-          </div>
-        </div>
-      </div>
-
-      {/* Tabs + body */}
-      <div className="min-h-0 flex-1">
-        {error ? (
-          <div className="px-4 py-6 text-[12px] text-destructive">{error}</div>
-        ) : (
-          <Tabs
-            value={tab}
-            onValueChange={(value) => setTab(value as DrawerTab)}
-            className="flex h-full min-h-0 flex-col gap-0"
-          >
-            <TabsList
-              variant="line"
-              className="mx-4 mt-2 justify-start gap-3 border-b border-border/60"
-            >
-              <TabsTrigger value="conversation" className="px-2">
-                <MessageSquare className="size-3.5" />
-                Conversation
-              </TabsTrigger>
-              {workItem.type === 'pr' && (
-                <>
-                  <TabsTrigger value="files" className="px-2">
-                    <FileText className="size-3.5" />
-                    Files
-                    {files.length > 0 && (
-                      <span className="ml-1 text-[10px] text-muted-foreground">{files.length}</span>
-                    )}
-                  </TabsTrigger>
-                  <TabsTrigger value="checks" className="px-2">
-                    Checks
-                    {checks.length > 0 && (
-                      <span className="ml-1 text-[10px] text-muted-foreground">
-                        {checks.length}
+        {workItem && (
+          <div className="flex h-full min-h-0 flex-col">
+            {/* Header */}
+            <div className="flex-none border-b border-border/60 px-4 py-3">
+              <div className="flex items-start gap-2">
+                <Icon className="mt-1 size-4 shrink-0 text-muted-foreground" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={cn(
+                        'rounded-full border px-2 py-0.5 text-[11px] font-medium',
+                        getStateTone(workItem)
+                      )}
+                    >
+                      {getStateLabel(workItem)}
+                    </span>
+                    <span className="font-mono text-[12px] text-muted-foreground">
+                      #{workItem.number}
+                    </span>
+                  </div>
+                  <h2 className="mt-1 text-[15px] font-semibold leading-tight text-foreground">
+                    {workItem.title}
+                  </h2>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+                    <span>{workItem.author ?? 'unknown'}</span>
+                    <span>· {formatRelativeTime(workItem.updatedAt)}</span>
+                    {workItem.branchName && (
+                      <span className="font-mono text-[10px] text-muted-foreground/80">
+                        · {workItem.branchName}
                       </span>
                     )}
-                  </TabsTrigger>
-                </>
-              )}
-            </TabsList>
-
-            <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
-              <TabsContent value="conversation" className="mt-0">
-                <ConversationTab
-                  item={workItem}
-                  body={body}
-                  comments={comments}
-                  loading={loading}
-                />
-              </TabsContent>
-
-              {workItem.type === 'pr' && (
-                <TabsContent value="files" className="mt-0">
-                  {loading && files.length === 0 ? (
-                    <div className="flex items-center justify-center py-10">
-                      <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : files.length === 0 ? (
-                    <div className="px-4 py-10 text-center text-[12px] text-muted-foreground">
-                      No files changed.
-                    </div>
-                  ) : (
-                    <div>
-                      {files.map((file) => (
-                        <PRFileRow
-                          key={file.path}
-                          file={file}
-                          repoPath={repoPath ?? ''}
-                          prNumber={workItem.number}
-                          headSha={details?.headSha}
-                          baseSha={details?.baseSha}
-                        />
+                  </div>
+                  {workItem.labels.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {workItem.labels.map((label) => (
+                        <span
+                          key={label}
+                          className="rounded-full border border-border/50 bg-background/60 px-2 py-0.5 text-[10px] text-muted-foreground"
+                        >
+                          {label}
+                        </span>
                       ))}
                     </div>
                   )}
-                </TabsContent>
-              )}
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-7"
+                        onClick={() => window.api.shell.openUrl(workItem.url)}
+                        aria-label="Open on GitHub"
+                      >
+                        <ExternalLink className="size-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" sideOffset={6}>
+                      Open on GitHub
+                    </TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-7"
+                        onClick={onClose}
+                        aria-label="Close preview"
+                      >
+                        <X className="size-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" sideOffset={6}>
+                      Close · Esc
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              </div>
+            </div>
 
-              {workItem.type === 'pr' && (
-                <TabsContent value="checks" className="mt-0">
-                  <ChecksTab checks={checks} loading={loading} />
-                </TabsContent>
+            {/* Tabs + body */}
+            <div className="min-h-0 flex-1">
+              {error ? (
+                <div className="px-4 py-6 text-[12px] text-destructive">{error}</div>
+              ) : (
+                <Tabs
+                  value={tab}
+                  onValueChange={(value) => setTab(value as DrawerTab)}
+                  className="flex h-full min-h-0 flex-col gap-0"
+                >
+                  <TabsList
+                    variant="line"
+                    className="mx-4 mt-2 justify-start gap-3 border-b border-border/60"
+                  >
+                    <TabsTrigger value="conversation" className="px-2">
+                      <MessageSquare className="size-3.5" />
+                      Conversation
+                    </TabsTrigger>
+                    {workItem.type === 'pr' && (
+                      <>
+                        <TabsTrigger value="files" className="px-2">
+                          <FileText className="size-3.5" />
+                          Files
+                          {files.length > 0 && (
+                            <span className="ml-1 text-[10px] text-muted-foreground">
+                              {files.length}
+                            </span>
+                          )}
+                        </TabsTrigger>
+                        <TabsTrigger value="checks" className="px-2">
+                          Checks
+                          {checks.length > 0 && (
+                            <span className="ml-1 text-[10px] text-muted-foreground">
+                              {checks.length}
+                            </span>
+                          )}
+                        </TabsTrigger>
+                      </>
+                    )}
+                  </TabsList>
+
+                  <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
+                    <TabsContent value="conversation" className="mt-0">
+                      <ConversationTab
+                        item={workItem}
+                        body={body}
+                        comments={comments}
+                        loading={loading}
+                      />
+                    </TabsContent>
+
+                    {workItem.type === 'pr' && (
+                      <TabsContent value="files" className="mt-0">
+                        {loading && files.length === 0 ? (
+                          <div className="flex items-center justify-center py-10">
+                            <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
+                          </div>
+                        ) : files.length === 0 ? (
+                          <div className="px-4 py-10 text-center text-[12px] text-muted-foreground">
+                            No files changed.
+                          </div>
+                        ) : (
+                          <div>
+                            {files.map((file) => (
+                              <PRFileRow
+                                key={file.path}
+                                file={file}
+                                repoPath={repoPath ?? ''}
+                                prNumber={workItem.number}
+                                headSha={details?.headSha}
+                                baseSha={details?.baseSha}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </TabsContent>
+                    )}
+
+                    {workItem.type === 'pr' && (
+                      <TabsContent value="checks" className="mt-0">
+                        <ChecksTab checks={checks} loading={loading} />
+                      </TabsContent>
+                    )}
+                  </div>
+                </Tabs>
               )}
             </div>
-          </Tabs>
-        )}
-      </div>
 
-      {/* Footer */}
-      <div className="flex-none border-t border-border/60 bg-background/40 px-4 py-3">
-        <Button
-          onClick={() => onUse(workItem)}
-          className="w-full justify-center gap-2"
-          aria-label={`Start workspace from ${workItem.type === 'pr' ? 'PR' : 'issue'}`}
-        >
-          {`Start workspace from ${workItem.type === 'pr' ? 'PR' : 'issue'}`}
-          <ArrowRight className="size-4" />
-        </Button>
-      </div>
-    </div>
+            {/* Footer */}
+            <div className="flex-none border-t border-border/60 bg-background/40 px-4 py-3">
+              <Button
+                onClick={() => onUse(workItem)}
+                className="w-full justify-center gap-2"
+                aria-label={`Start workspace from ${workItem.type === 'pr' ? 'PR' : 'issue'}`}
+              >
+                {`Start workspace from ${workItem.type === 'pr' ? 'PR' : 'issue'}`}
+                <ArrowRight className="size-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+      </SheetContent>
+    </Sheet>
   )
 }
