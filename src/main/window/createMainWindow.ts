@@ -262,6 +262,44 @@ export function createMainWindow(
     event.preventDefault()
   })
 
+  // Why: mirrors the renderer's markdown-editor focus state so the main-process
+  // before-input-event handler can skip Cmd/Ctrl+B interception while TipTap
+  // owns focus. See docs/markdown-cmd-b-bold-design.md. We only carve out
+  // Cmd+B — terminal and browser-guest focus still get sidebar-toggle, which
+  // preserves the ^B-to-PTY leak protection rationale in
+  // shared/window-shortcut-policy.ts:74-77.
+  let markdownEditorFocused = false
+
+  const markdownFocusChannel = 'ui:setMarkdownEditorFocused'
+  // Why: coerce to strict boolean and verify the sender. A renderer bug or
+  // compromised IPC payload must not set the flag to a truthy non-bool (e.g.
+  // an object) and silently disable the sidebar toggle — default-deny on any
+  // non-bool. Additionally, only this main window's top-level webContents may
+  // mutate the flag, so a guest/webview or unrelated sender can't disable the
+  // Cmd+B sidebar carve-out.
+  const onMarkdownEditorFocused = (event: Electron.IpcMainEvent, focused: unknown): void => {
+    if (event.sender !== mainWindow.webContents) {
+      return
+    }
+    markdownEditorFocused = focused === true
+  }
+  ipcMain.on(markdownFocusChannel, onMarkdownEditorFocused)
+
+  // Why: renderer can't mirror focus state across a crash/reload/close.
+  // Default-deny the carve-out so Cmd+B falls back to sidebar-toggle, which is
+  // the safe behavior when focus context is unknown. Preserves the
+  // ^B-to-PTY leak invariant from shared/window-shortcut-policy.ts:74-77.
+  const resetMarkdownEditorFocus = (): void => {
+    markdownEditorFocused = false
+  }
+  mainWindow.webContents.on('render-process-gone', resetMarkdownEditorFocus)
+  mainWindow.webContents.on('destroyed', resetMarkdownEditorFocus)
+  mainWindow.webContents.on('did-start-navigation', (_e, _url, _isInPlace, isMainFrame) => {
+    if (isMainFrame) {
+      resetMarkdownEditorFocus()
+    }
+  })
+
   mainWindow.webContents.on('before-input-event', (event, input) => {
     if (input.type !== 'keyDown') {
       return
@@ -274,6 +312,24 @@ export function createMainWindow(
       } else {
         mainWindow.webContents.openDevTools({ mode: 'undocked' })
       }
+      return
+    }
+
+    // Why: TipTap owns bare Cmd/Ctrl+B for bold while the markdown editor is
+    // focused — skip interception so its keymap runs. Scoped to the bare chord
+    // (no Shift/Alt): any extra modifier signals different intent and must
+    // still resolve through the policy allowlist. Other focus contexts
+    // (terminal, browser guest) still get sidebar-toggle because ^B would
+    // otherwise reach xterm.js / guest webContents.
+    // See docs/markdown-cmd-b-bold-design.md.
+    const modForBold = process.platform === 'darwin' ? input.meta : input.control
+    if (
+      markdownEditorFocused &&
+      input.code === 'KeyB' &&
+      !input.alt &&
+      !input.shift &&
+      modForBold
+    ) {
       return
     }
 
@@ -369,8 +425,13 @@ export function createMainWindow(
 
   ipcMain.on(confirmCloseChannel, onConfirmClose)
   mainWindow.on('closed', () => {
+    // Why: default-deny the Cmd+B carve-out after the window is gone so a
+    // stale-true flag can't leak past subsequent state transitions. Paired
+    // with the webContents lifecycle resets above.
+    markdownEditorFocused = false
     ipcMain.removeListener(trafficLightChannel, onSyncTrafficLights)
     ipcMain.removeListener(confirmCloseChannel, onConfirmClose)
+    ipcMain.removeListener(markdownFocusChannel, onMarkdownEditorFocused)
   })
 
   if (is.dev && process.env.ELECTRON_RENDERER_URL) {

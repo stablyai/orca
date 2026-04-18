@@ -494,6 +494,12 @@ function App(): React.JSX.Element {
       // browser guest has focus. The renderer keeps matching handlers for
       // local-focus cases and to preserve the same guards in one place.
 
+      // Why: keep this guard. TipTap's Cmd+B bold binding depends on the
+      // window-level handler *not* toggling the sidebar when focus lives in an
+      // editable surface. The main-process before-input-event already carves out
+      // Cmd+B for the markdown editor (see createMainWindow.ts +
+      // docs/markdown-cmd-b-bold-design.md), but this renderer-side fallback
+      // still covers the blur→press IPC race and any non-carved editable surface.
       if (isEditableTarget(e.target)) {
         return
       }

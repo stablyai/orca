@@ -602,6 +602,7 @@ export type PreloadApi = {
     getZoomLevel: () => number
     setZoomLevel: (level: number) => void
     syncTrafficLights: (zoomFactor: number) => void
+    setMarkdownEditorFocused: (focused: boolean) => void
     onFullscreenChanged: (callback: (isFullScreen: boolean) => void) => () => void
     onWindowCloseRequested: (callback: (data: { isQuitting: boolean }) => void) => () => void
     confirmWindowClose: () => void

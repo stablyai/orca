@@ -131,7 +131,18 @@ fi
 
 ## Step 2: Create PR and Merge
 
-### 2a. Create PR
+### 2a. Remove local design docs
+
+Design/planning docs are local-only scratch files and must not be checked in.
+Delete any untracked markdown files in `docs/` that match design/plan
+naming patterns before pushing:
+
+```bash
+git ls-files --others --exclude-standard -- 'docs/*-design.md' 'docs/*-plan.md' 'docs/design-*.md' \
+  | xargs -I{} rm -f {}
+```
+
+### 2b. Create PR
 
 **FIRST**: Push the branch to the remote so `gh pr create` doesn't fail with
 `aborted: you must first push the current branch to a remote`. The
@@ -154,7 +165,7 @@ After `/create-pr` completes, extract PR info:
 gh pr view --json number,url --jq '.number, .url'
 ```
 
-### 2b. Wait for CI Checks
+### 2c. Wait for CI Checks
 
 Wait **2.5 minutes** before the first poll:
 
@@ -188,7 +199,7 @@ fi
 - `PENDING` → Wait 90s (`sleep 90`, `timeout: 150000`), then poll again
 - `NO_CHECKS` → Proceed to merge
 
-### 2c. Merge
+### 2d. Merge
 
 ```bash
 IS_WORKTREE=false

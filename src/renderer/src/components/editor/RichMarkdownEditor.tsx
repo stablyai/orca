@@ -162,6 +162,16 @@ export default function RichMarkdownEditor({
         return false
       }
     },
+    onFocus: () => {
+      // Why: mirror TipTap focus into the main process so the before-input-event
+      // Cmd+B carve-out in createMainWindow.ts lets the bold keymap run instead
+      // of intercepting the chord for sidebar toggle.
+      // See docs/markdown-cmd-b-bold-design.md.
+      window.api.ui.setMarkdownEditorFocused(true)
+    },
+    onBlur: () => {
+      window.api.ui.setMarkdownEditorFocused(false)
+    },
     onCreate: ({ editor: nextEditor }) => {
       // Why: markdown soft line breaks produce paragraphs with embedded `\n` chars.
       // Normalizing them into separate paragraph nodes on load ensures Cmd+X (and
@@ -233,6 +243,17 @@ export default function RichMarkdownEditor({
   useEffect(() => {
     editorRef.current = editor ?? null
   }, [editor])
+
+  // Why: TipTap's onBlur may not fire on unmount paths (tab close, HMR,
+  // component teardown while focused), leaving the main-process flag stale at
+  // `true` and silently disabling Cmd+B sidebar-toggle until the next editor
+  // focus/blur cycle. Force a `false` on unmount as a belt-and-braces reset.
+  // See docs/markdown-cmd-b-bold-design.md "Stale-flag recovery".
+  useEffect(() => {
+    return () => {
+      window.api.ui.setMarkdownEditorFocused(false)
+    }
+  }, [])
 
   // Why: use useLayoutEffect (synchronous cleanup) so the pending serialization
   // flush runs before useEditor's cleanup destroys the editor instance on tab
