@@ -493,12 +493,14 @@ describe('registerPtyHandlers', () => {
   it('spawns a plain POSIX login shell and queues startup commands for the live session', () => {
     const originalPlatform = process.platform
     const originalShell = process.env.SHELL
+    const originalZdotdir = process.env.ZDOTDIR
 
     Object.defineProperty(process, 'platform', {
       configurable: true,
       value: 'darwin'
     })
     process.env.SHELL = '/bin/zsh'
+    delete process.env.ZDOTDIR
 
     try {
       const [shell, args, options] = spawnAndGetCall({ cwd: '/tmp', command: 'printf "hello"' })
@@ -515,6 +517,11 @@ describe('registerPtyHandlers', () => {
         delete process.env.SHELL
       } else {
         process.env.SHELL = originalShell
+      }
+      if (originalZdotdir === undefined) {
+        delete process.env.ZDOTDIR
+      } else {
+        process.env.ZDOTDIR = originalZdotdir
       }
     }
   })

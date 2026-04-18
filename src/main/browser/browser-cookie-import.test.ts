@@ -217,14 +217,17 @@ describe('detectInstalledBrowsers', () => {
       expect(browser).toHaveProperty('family')
       expect(browser).toHaveProperty('label')
       expect(browser).toHaveProperty('cookiesPath')
-      expect(browser).toHaveProperty('keychainService')
-      expect(browser).toHaveProperty('keychainAccount')
+      // keychainService/keychainAccount are only present for Chromium-based browsers
+      if (['chrome', 'edge', 'arc', 'chromium'].includes(browser.family)) {
+        expect(browser).toHaveProperty('keychainService')
+        expect(browser).toHaveProperty('keychainAccount')
+      }
     }
   })
 
   it('each detected browser has a valid family', () => {
     const browsers = detectInstalledBrowsers()
-    const validFamilies = ['chrome', 'edge', 'arc', 'chromium']
+    const validFamilies = ['chrome', 'edge', 'arc', 'chromium', 'firefox', 'safari']
     for (const browser of browsers) {
       expect(validFamilies).toContain(browser.family)
     }
