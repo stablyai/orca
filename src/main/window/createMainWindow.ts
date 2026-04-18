@@ -1,3 +1,4 @@
+/* oxlint-disable max-lines */
 import { BrowserWindow, ipcMain, nativeTheme, screen, shell } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
