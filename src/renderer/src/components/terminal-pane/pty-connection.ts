@@ -283,25 +283,45 @@ export function connectPanePty(
       deps.restoredLeafId && deps.restoredPtyIdByLeafId
         ? (deps.restoredPtyIdByLeafId[deps.restoredLeafId] ?? null)
         : null
-    const existingPtyId = useAppStore
-      .getState()
-      .tabsByWorktree[deps.worktreeId]?.find((t) => t.id === deps.tabId)?.ptyId
+    const storeSnapshot = useAppStore.getState()
+    const existingPtyId = storeSnapshot.tabsByWorktree[deps.worktreeId]?.find(
+      (t) => t.id === deps.tabId
+    )?.ptyId
 
-    // Why: deferred reattach (Option 2). Instead of eagerly spawning PTYs at
-    // default 80×24 during reconnectPersistedTerminals (which fills eager
-    // buffers with content at wrong dimensions), we defer the daemon's
-    // createOrAttach to this point where fitAddon provides real dimensions.
-    // The daemon returns snapshot/coldRestore data in the spawn result.
-    const reattachSessionId =
-      restoredPtyId ?? (existingPtyId && !hasExistingPaneTransport ? existingPtyId : null)
-    if (reattachSessionId) {
+    const daemonEnabled = storeSnapshot.settings?.experimentalTerminalDaemon === true
+    // Why: restored leaf PTYs usually come from a previous app session, so
+    // they normally go back through the daemon's createOrAttach RPC to
+    // recover snapshot or cold-restore data at the pane's real dimensions.
+    // But split remounts in the current app session also carry a leaf binding
+    // in the saved layout. When the daemon is off, treating that live local
+    // PTY like a daemon session ID incorrectly spawns a fresh shell because
+    // LocalPtyProvider ignores sessionId. The reliable distinction is whether
+    // the tab still owns that PTY right now: same-session remounts keep the
+    // tab-level ptyId populated, while daemon-off cold starts clear it during
+    // session hydration.
+    const restoredSessionId = restoredPtyId ?? null
+    const detachedLivePtyId =
+      existingPtyId && !hasExistingPaneTransport
+        ? restoredSessionId
+          ? restoredSessionId === existingPtyId
+            ? restoredSessionId
+            : null
+          : existingPtyId
+        : null
+    const deferredReattachSessionId =
+      restoredSessionId && restoredSessionId !== detachedLivePtyId
+        ? restoredSessionId
+        : daemonEnabled
+          ? detachedLivePtyId
+          : null
+    if (deferredReattachSessionId) {
       allowInitialIdleCacheSeed = true
 
       const reattachPromise = transport.connect({
         url: '',
         cols,
         rows,
-        sessionId: reattachSessionId,
+        sessionId: deferredReattachSessionId,
         callbacks: {
           onData: dataCallback,
           onError: reportError
@@ -353,6 +373,28 @@ export function connectPanePty(
         .catch((err) => {
           reportError(err instanceof Error ? err.message : String(err))
         })
+    } else if (detachedLivePtyId) {
+      allowInitialIdleCacheSeed = false
+      deps.syncPanePtyLayoutBinding(pane.id, detachedLivePtyId)
+      deps.updateTabPtyId(deps.tabId, detachedLivePtyId)
+      // Why: surface synchronous attach failures (e.g., the PTY died between
+      // mount and remount, so window.api.pty.resize rejects) through
+      // reportError so the pane shows a diagnostic instead of silently
+      // leaving a blank surface. The deferred-reattach branch above uses
+      // `.catch(reportError)` for the same reason.
+      try {
+        transport.attach({
+          existingPtyId: detachedLivePtyId,
+          cols,
+          rows,
+          callbacks: {
+            onData: dataCallback,
+            onError: reportError
+          }
+        })
+      } catch (err) {
+        reportError(err instanceof Error ? err.message : String(err))
+      }
     } else {
       allowInitialIdleCacheSeed = false
       const pendingSpawn = hasExistingPaneTransport
