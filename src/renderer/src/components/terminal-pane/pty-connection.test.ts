@@ -335,9 +335,7 @@ describe('connectPanePty', () => {
     expect(transport.attach).toHaveBeenCalledWith(
       expect.objectContaining({ existingPtyId: 'pty-local-detached' })
     )
-    expect(transport.connect).not.toHaveBeenCalledWith(
-      expect.objectContaining({ sessionId: 'pty-local-detached' })
-    )
+    expect(transport.connect).not.toHaveBeenCalled()
     expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'pty-local-detached')
     expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'pty-local-detached')
   })

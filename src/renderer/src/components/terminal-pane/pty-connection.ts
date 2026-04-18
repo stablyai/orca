@@ -375,13 +375,15 @@ export function connectPanePty(
         })
     } else if (detachedLivePtyId) {
       allowInitialIdleCacheSeed = false
-      deps.syncPanePtyLayoutBinding(pane.id, detachedLivePtyId)
-      deps.updateTabPtyId(deps.tabId, detachedLivePtyId)
       // Why: surface synchronous attach failures (e.g., the PTY died between
       // mount and remount, so window.api.pty.resize rejects) through
       // reportError so the pane shows a diagnostic instead of silently
       // leaving a blank surface. The deferred-reattach branch above uses
-      // `.catch(reportError)` for the same reason.
+      // `.catch(reportError)` for the same reason. Commit the pane/tab
+      // bindings only after attach returns: if attach throws, the stale
+      // ptyId must also be cleared from the tab and a fresh spawn kicked
+      // off — otherwise the next remount reads the same dead ptyId from
+      // the store and lands in this branch again in a loop.
       try {
         transport.attach({
           existingPtyId: detachedLivePtyId,
@@ -392,8 +394,12 @@ export function connectPanePty(
             onError: reportError
           }
         })
+        deps.syncPanePtyLayoutBinding(pane.id, detachedLivePtyId)
+        deps.updateTabPtyId(deps.tabId, detachedLivePtyId)
       } catch (err) {
         reportError(err instanceof Error ? err.message : String(err))
+        deps.clearTabPtyId(deps.tabId, detachedLivePtyId)
+        startFreshSpawn()
       }
     } else {
       allowInitialIdleCacheSeed = false
