@@ -9,7 +9,11 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuPortal,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '../ui/dropdown-menu'
 import { useAppStore } from '../../store'
@@ -18,6 +22,17 @@ import { normalizeBrowserNavigationUrl } from '../../../../shared/browser-url'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
 import { BROWSER_PANE_SEARCH_ENTRIES } from './browser-search'
+
+const BROWSER_FAMILY_LABELS: Record<string, string> = {
+  chrome: 'Google Chrome',
+  chromium: 'Chromium',
+  arc: 'Arc',
+  edge: 'Microsoft Edge',
+  brave: 'Brave',
+  firefox: 'Firefox',
+  safari: 'Safari',
+  manual: 'File'
+}
 
 export { BROWSER_PANE_SEARCH_ENTRIES }
 
@@ -168,24 +183,59 @@ export function BrowserPane({ settings, updateSettings }: BrowserPaneProps): Rea
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                {detectedBrowsers.map((browser) => (
-                  <DropdownMenuItem
-                    key={browser.family}
-                    onSelect={async () => {
-                      const store = useAppStore.getState()
-                      const result = await store.importCookiesFromBrowser('default', browser.family)
-                      if (result.ok) {
-                        toast.success(
-                          `Imported ${result.summary.importedCookies} cookies from ${browser.label}.`
+                {detectedBrowsers.map((browser) =>
+                  browser.profiles.length > 1 ? (
+                    <DropdownMenuSub key={browser.family}>
+                      <DropdownMenuSubTrigger>From {browser.label}</DropdownMenuSubTrigger>
+                      <DropdownMenuPortal>
+                        <DropdownMenuSubContent>
+                          {browser.profiles.map((profile) => (
+                            <DropdownMenuItem
+                              key={profile.directory}
+                              onSelect={async () => {
+                                const store = useAppStore.getState()
+                                const result = await store.importCookiesFromBrowser(
+                                  'default',
+                                  browser.family,
+                                  profile.directory
+                                )
+                                if (result.ok) {
+                                  toast.success(
+                                    `Imported ${result.summary.importedCookies} cookies from ${browser.label} (${profile.name}).`
+                                  )
+                                } else {
+                                  toast.error(result.reason)
+                                }
+                              }}
+                            >
+                              {profile.name}
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuSubContent>
+                      </DropdownMenuPortal>
+                    </DropdownMenuSub>
+                  ) : (
+                    <DropdownMenuItem
+                      key={browser.family}
+                      onSelect={async () => {
+                        const store = useAppStore.getState()
+                        const result = await store.importCookiesFromBrowser(
+                          'default',
+                          browser.family
                         )
-                      } else {
-                        toast.error(result.reason)
-                      }
-                    }}
-                  >
-                    From {browser.label}
-                  </DropdownMenuItem>
-                ))}
+                        if (result.ok) {
+                          toast.success(
+                            `Imported ${result.summary.importedCookies} cookies from ${browser.label}.`
+                          )
+                        } else {
+                          toast.error(result.reason)
+                        }
+                      }}
+                    >
+                      From {browser.label}
+                    </DropdownMenuItem>
+                  )
+                )}
                 {detectedBrowsers.length > 0 && <DropdownMenuSeparator />}
                 <DropdownMenuItem
                   onSelect={async () => {
@@ -208,7 +258,9 @@ export function BrowserPane({ settings, updateSettings }: BrowserPaneProps): Rea
             <div className="flex w-full items-center justify-between gap-3 rounded-md border border-border/70 px-3 py-2.5">
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span className="truncate text-sm font-medium">
-                  Imported from {defaultProfile.source.browserFamily}
+                  Imported from{' '}
+                  {BROWSER_FAMILY_LABELS[defaultProfile.source.browserFamily] ??
+                    defaultProfile.source.browserFamily}
                   {defaultProfile.source.profileName
                     ? ` (${defaultProfile.source.profileName})`
                     : ''}
@@ -252,7 +304,7 @@ export function BrowserPane({ settings, updateSettings }: BrowserPaneProps): Rea
                     <span className="truncate text-sm font-medium">{profile.label}</span>
                     <span className="truncate text-[11px] text-muted-foreground">
                       {profile.source
-                        ? `Imported from ${profile.source.browserFamily}${profile.source.profileName ? ` (${profile.source.profileName})` : ''}`
+                        ? `Imported from ${BROWSER_FAMILY_LABELS[profile.source.browserFamily] ?? profile.source.browserFamily}${profile.source.profileName ? ` (${profile.source.profileName})` : ''}`
                         : 'Unused session'}
                     </span>
                   </div>
