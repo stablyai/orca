@@ -112,6 +112,15 @@ export type UseComposerStateResult = {
   createDisabled: boolean
 }
 
+// Why: both the full-page NewWorkspacePage composer and the Cmd+J modal can
+// be mounted simultaneously. Without instance scoping, a single native file
+// drop fires every subscriber and duplicates attachments/prompt edits across
+// the background draft and the visible modal. Route drops to the
+// most-recently-mounted composer only — the modal stacks on top, so the
+// modal wins when both are present, and the page takes over once the modal
+// closes.
+const composerDropStack: symbol[] = []
+
 // Why: agent detection runs `which` for every agent binary on PATH — an IPC
 // round-trip that takes 50–200ms. The set of installed agents doesn't change
 // within a session, so cache the promise at module scope to collapse all
@@ -268,6 +277,13 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const composerRef = useRef<HTMLDivElement | null>(null)
   const promptTextareaRef = useRef<HTMLTextAreaElement | null>(null)
   const nameInputRef = useRef<HTMLInputElement | null>(null)
+  // Why: the native-file-drop effect below subscribes once on mount and must
+  // read the latest agentPrompt when computing the caret-scoped insertion.
+  // Mirror the value into a ref so the listener sees fresh state without
+  // re-subscribing (which would reorder the composerDropStack and break
+  // multi-instance routing).
+  const agentPromptRef = useRef(agentPrompt)
+  agentPromptRef.current = agentPrompt
 
   const selectedRepo = eligibleRepos.find((repo) => repo.id === repoId)
   const parsedLinkedIssueNumber = useMemo(
@@ -684,6 +700,115 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to add attachment.'
       toast.error(message)
+    }
+  }, [])
+
+  // Why: native OS file drops onto the composer are captured by the preload
+  // bridge (see `data-native-file-drop-target="composer"` markers) and relayed
+  // as a gesture-scoped IPC event. Files become attachments (matching the
+  // manual picker behavior); folders are pasted inline at the textarea caret
+  // so the user can reference them as working directories in their prompt
+  // without attaching a path we can't embed as file content.
+  const instanceIdRef = useRef<symbol>(Symbol('composer'))
+  useEffect(() => {
+    const instanceId = instanceIdRef.current
+    composerDropStack.push(instanceId)
+    const unsubscribe = window.api.ui.onFileDrop((data) => {
+      if (data.target !== 'composer') {
+        return
+      }
+      // Why: only the top-of-stack composer (most recently mounted) owns the
+      // drop. Earlier subscribers stay bound to keep their own cleanup tidy
+      // but short-circuit so the event doesn't double-apply when page+modal
+      // are both alive.
+      if (composerDropStack.at(-1) !== instanceId) {
+        return
+      }
+      void (async () => {
+        const fileAttachments: string[] = []
+        const folderPaths: string[] = []
+        for (const filePath of data.paths) {
+          try {
+            await window.api.fs.authorizeExternalPath({ targetPath: filePath })
+            const stat = await window.api.fs.stat({ filePath })
+            if (stat.isDirectory) {
+              folderPaths.push(filePath)
+            } else {
+              fileAttachments.push(filePath)
+            }
+          } catch {
+            // Skip paths we cannot authorize or stat.
+          }
+        }
+
+        if (fileAttachments.length > 0) {
+          setAttachmentPaths((current) => {
+            const next = [...current]
+            for (const p of fileAttachments) {
+              if (!next.includes(p)) {
+                next.push(p)
+              }
+            }
+            return next
+          })
+        }
+
+        if (folderPaths.length > 0) {
+          // Why: de-dup within a single drop — the OS occasionally delivers
+          // the same folder twice when a user drags from a selection that
+          // includes both the item and its parent, and we don't want to
+          // insert it multiple times.
+          const uniqueFolderPaths = Array.from(new Set(folderPaths))
+          // Why: wrap paths containing shell metacharacters in double quotes
+          // (and escape embedded quotes) so the inserted text reads as a
+          // single token if the user pastes it into a terminal. Simple paths
+          // stay unadorned to match how Finder/Explorer drops appear.
+          const formatPath = (p: string): string => {
+            if (/[\s"'$`\\()[\]{}*?!;&|<>#~]/.test(p)) {
+              return `"${p.replace(/(["\\$`])/g, '\\$1')}"`
+            }
+            return p
+          }
+          const insertion = uniqueFolderPaths.map(formatPath).join(' ')
+          const textarea = promptTextareaRef.current
+          // Why: compute selection, insertion, and caret target OUTSIDE the
+          // setAgentPrompt updater so the updater stays pure. React Strict
+          // Mode double-invokes updaters in dev, and batching can delay
+          // execution — reading `textarea.selectionStart` inside the updater
+          // risks seeing a shifted caret. Read `agentPromptRef.current` for
+          // the latest prompt because this effect subscribes once and the
+          // outer closure's `agentPrompt` would be stale.
+          const current = agentPromptRef.current
+          const selStart = textarea?.selectionStart ?? current.length
+          const selEnd = textarea?.selectionEnd ?? current.length
+          const before = current.slice(0, selStart)
+          const after = current.slice(selEnd)
+          // Why: pad with single spaces when the caret sits directly against
+          // other text so the folder path doesn't merge into an adjacent word.
+          const needsLeadingSpace = before.length > 0 && !/\s$/.test(before)
+          const needsTrailingSpace = after.length > 0 && !/^\s/.test(after)
+          const padded = `${needsLeadingSpace ? ' ' : ''}${insertion}${needsTrailingSpace ? ' ' : ''}`
+          const caret = before.length + padded.length
+          if (textarea) {
+            // Restore the caret to the end of the inserted text after React flushes.
+            requestAnimationFrame(() => {
+              textarea.focus()
+              textarea.setSelectionRange(caret, caret)
+            })
+          }
+          // Why: pass a plain value (not an updater) since `before`/`after`
+          // were already resolved from `agentPromptRef.current`; this keeps
+          // the state write side-effect-free under Strict-Mode double-render.
+          setAgentPrompt(before + padded + after)
+        }
+      })()
+    })
+    return () => {
+      unsubscribe()
+      const idx = composerDropStack.lastIndexOf(instanceId)
+      if (idx !== -1) {
+        composerDropStack.splice(idx, 1)
+      }
     }
   }, [])
 

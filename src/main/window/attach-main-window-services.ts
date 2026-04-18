@@ -166,6 +166,7 @@ function registerFileDropRelay(mainWindow: BrowserWindow): void {
       args:
         | { paths: string[]; target: 'editor' }
         | { paths: string[]; target: 'terminal' }
+        | { paths: string[]; target: 'composer' }
         | { paths: string[]; target: 'file-explorer'; destinationDir: string }
     ) => {
       if (mainWindow.isDestroyed()) {

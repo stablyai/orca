@@ -582,6 +582,7 @@ export type PreloadApi = {
         data:
           | { paths: string[]; target: 'editor' }
           | { paths: string[]; target: 'terminal' }
+          | { paths: string[]; target: 'composer' }
           | { paths: string[]; target: 'file-explorer'; destinationDir: string }
       ) => void
     ) => () => void

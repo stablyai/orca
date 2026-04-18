@@ -24,6 +24,7 @@ import {
 type NativeDropResolution =
   | { target: 'editor' }
   | { target: 'terminal' }
+  | { target: 'composer' }
   | { target: 'file-explorer'; destinationDir: string }
   // Why: returned when the explorer marker was found but no destinationDir
   // could be resolved. The caller must suppress the drop entirely instead of
@@ -51,7 +52,7 @@ function resolveNativeFileDrop(event: DragEvent): NativeDropResolution | null {
     }
 
     const target = entry.dataset.nativeFileDropTarget
-    if (target === 'editor' || target === 'terminal') {
+    if (target === 'editor' || target === 'terminal' || target === 'composer') {
       return { target }
     }
     if (target === 'file-explorer') {
@@ -1089,6 +1090,7 @@ const api = {
         data:
           | { paths: string[]; target: 'editor' }
           | { paths: string[]; target: 'terminal' }
+          | { paths: string[]; target: 'composer' }
           | { paths: string[]; target: 'file-explorer'; destinationDir: string }
       ) => void
     ): (() => void) => {
@@ -1097,6 +1099,7 @@ const api = {
         data:
           | { paths: string[]; target: 'editor' }
           | { paths: string[]; target: 'terminal' }
+          | { paths: string[]; target: 'composer' }
           | { paths: string[]; target: 'file-explorer'; destinationDir: string }
       ) => callback(data)
       ipcRenderer.on('terminal:file-drop', listener)
