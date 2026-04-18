@@ -271,16 +271,31 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   // headers follow the VSCode "AnythingQuickAccess" pattern but we only render
   // them when both sections have content — a lone "WORKTREES" or "BROWSER TABS"
   // label above a single list is redundant noise.
+  //
+  // Why cap only the browser section on empty query: Cmd+J is worktree-first,
+  // and power users arrow-key through the recent-worktree list. Truncating
+  // worktrees would hide any past the cap until the user types. Instead we
+  // keep worktrees unbounded and cap the secondary Browser Tabs section to a
+  // small preview on open — users type to see more, or scroll past worktrees.
   const listEntries = useMemo<PaletteListEntry[]>(() => {
     const entries: PaletteListEntry[] = []
-    const showHeaders = worktreeItems.length > 0 && browserItems.length > 0
-    if (worktreeItems.length > 0) {
+    const bothSectionsPopulated = worktreeItems.length > 0 && browserItems.length > 0
+    const hasQuery = debouncedQuery.trim().length > 0
+    const EMPTY_QUERY_BROWSER_PREVIEW = 3
+
+    const visibleWorktreeItems = worktreeItems
+    const visibleBrowserItems =
+      !hasQuery && bothSectionsPopulated
+        ? browserItems.slice(0, EMPTY_QUERY_BROWSER_PREVIEW)
+        : browserItems
+    const showHeaders = bothSectionsPopulated
+    if (visibleWorktreeItems.length > 0) {
       if (showHeaders) {
         entries.push({ id: '__header_worktrees__', type: 'section-header', label: 'Worktrees' })
       }
-      entries.push(...worktreeItems)
+      entries.push(...visibleWorktreeItems)
     }
-    if (browserItems.length > 0) {
+    if (visibleBrowserItems.length > 0) {
       if (showHeaders) {
         entries.push({
           id: '__header_browser__',
@@ -288,10 +303,10 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
           label: 'Browser Tabs'
         })
       }
-      entries.push(...browserItems)
+      entries.push(...visibleBrowserItems)
     }
     return entries
-  }, [worktreeItems, browserItems])
+  }, [worktreeItems, browserItems, debouncedQuery])
 
   const selectableItems = useMemo<PaletteItem[]>(
     () => listEntries.filter((e): e is PaletteItem => e.type !== 'section-header'),
