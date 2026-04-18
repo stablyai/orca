@@ -70,6 +70,41 @@ function getFallbackVisibleSection(sections: SettingsNavSection[]): SettingsNavS
   return sections.at(0)
 }
 
+// Why: after a sidebar jump the target section is now in the viewport center
+// rather than the top, which can make it less obvious which section just
+// scrolled into view. Pulsing the border for a moment reassures the user that
+// their click landed on the right section.
+const SECTION_FLASH_CLASS = 'settings-section-flash'
+const SECTION_FLASH_DURATION_MS = 900
+
+function scrollSectionIntoView(sectionId: string, container: HTMLElement | null): void {
+  const target = document.getElementById(sectionId)
+  if (!target) {
+    return
+  }
+  // Why: centering a tall section pushes its heading above the viewport,
+  // which defeats the purpose of jumping to it. Only center when the whole
+  // section fits; otherwise align to the top so the title is always visible.
+  const fitsInViewport = container
+    ? target.getBoundingClientRect().height <= container.clientHeight
+    : true
+  target.scrollIntoView({ block: fitsInViewport ? 'center' : 'start' })
+}
+
+function flashSectionHighlight(sectionId: string): void {
+  const target = document.getElementById(sectionId)
+  if (!target) {
+    return
+  }
+  target.classList.remove(SECTION_FLASH_CLASS)
+  // Force a reflow so re-adding the class restarts the animation.
+  void target.offsetWidth
+  target.classList.add(SECTION_FLASH_CLASS)
+  window.setTimeout(() => {
+    target.classList.remove(SECTION_FLASH_CLASS)
+  }, SECTION_FLASH_DURATION_MS)
+}
+
 function Settings(): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
@@ -337,8 +372,8 @@ function Settings(): React.JSX.Element {
     const visibleIds = new Set(visibleNavSections.map((section) => section.id))
 
     if (scrollTargetId && pendingNavSectionId && visibleIds.has(pendingNavSectionId)) {
-      const target = document.getElementById(scrollTargetId)
-      target?.scrollIntoView({ block: 'start' })
+      scrollSectionIntoView(scrollTargetId, contentScrollRef.current)
+      flashSectionHighlight(scrollTargetId)
       setActiveSectionId(pendingNavSectionId)
       pendingNavSectionRef.current = null
       pendingScrollTargetRef.current = null
@@ -430,11 +465,8 @@ function Settings(): React.JSX.Element {
   }, [visibleNavSections])
 
   const scrollToSection = useCallback((sectionId: string) => {
-    const target = document.getElementById(sectionId)
-    if (!target) {
-      return
-    }
-    target.scrollIntoView({ block: 'start' })
+    scrollSectionIntoView(sectionId, contentScrollRef.current)
+    flashSectionHighlight(sectionId)
     setActiveSectionId(sectionId)
   }, [])
 
