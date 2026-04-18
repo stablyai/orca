@@ -46,6 +46,7 @@ import {
   getDefaultPersistedState,
   getDefaultNotificationSettings,
   getDefaultOnboardingState,
+  getDefaultVoiceSettings,
   getDefaultUIState,
   getDefaultRepoHookSettings,
   getDefaultWorkspaceSession,
@@ -431,6 +432,10 @@ export class Store {
             notifications: {
               ...getDefaultNotificationSettings(),
               ...parsed.settings?.notifications
+            },
+            voice: {
+              ...getDefaultVoiceSettings(),
+              ...parsed.settings?.voice
             }
           },
           // Why: 'recent' used to mean the weighted smart sort. One-shot

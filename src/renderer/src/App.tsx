@@ -53,6 +53,7 @@ import {
   FloatingTerminalToggleButton
 } from './components/floating-terminal/FloatingTerminalPanel'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
+import { DictationController } from './components/dictation/DictationController'
 import { useGitStatusPolling } from './components/right-sidebar/useGitStatusPolling'
 import { useEditorExternalWatch } from './hooks/useEditorExternalWatch'
 import { useAutoAckViewedAgent } from './hooks/useAutoAckViewedAgent'
@@ -1369,6 +1370,7 @@ function App(): React.JSX.Element {
           <OnboardingFlow onboarding={onboarding} onOnboardingChange={setOnboarding} />
         </Suspense>
       ) : null}
+      <DictationController />
       <Toaster closeButton toastOptions={{ className: 'font-sans text-sm' }} />
       {/* Why: rendered last so it sits after all -webkit-app-region:drag elements
           in DOM order. Electron's hit-test for drag regions is DOM-order-based and

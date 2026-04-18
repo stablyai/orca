@@ -208,6 +208,9 @@ importers:
       shadcn:
         specifier: ^4.7.0
         version: 4.7.0(@types/node@25.6.0)(typescript@5.9.3)
+      sherpa-onnx:
+        specifier: ^1.12.28
+        version: 1.12.37
       simple-git:
         specifier: ^3.36.0
         version: 3.36.0
@@ -320,6 +323,19 @@ importers:
       vitest:
         specifier: ^4.1.5
         version: 4.1.5(@types/node@25.6.0)(msw@2.14.3(@types/node@25.6.0)(typescript@5.9.3))(vite@7.3.2(@types/node@25.6.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.8.4))
+    optionalDependencies:
+      sherpa-onnx-darwin-arm64:
+        specifier: ^1.12.28
+        version: 1.13.0
+      sherpa-onnx-darwin-x64:
+        specifier: ^1.12.28
+        version: 1.13.0
+      sherpa-onnx-linux-arm64:
+        specifier: ^1.12.28
+        version: 1.13.0
+      sherpa-onnx-linux-x64:
+        specifier: ^1.12.28
+        version: 1.13.0
 
 packages:
 
@@ -5672,6 +5688,29 @@ packages:
   shebang-regex@3.0.0:
     resolution: {integrity: sha512-7++dFhtcx3353uBaq8DDR4NuxBetBzC7ZQOhmTQInHEd6bSrXdiEyzCvG07Z44UYdLShWUyXt5M/yhz8ekcb1A==}
     engines: {node: '>=8'}
+
+  sherpa-onnx-darwin-arm64@1.13.0:
+    resolution: {integrity: sha512-dBAiGDPP83CL0rMmHIG2oD+eal4eUNVLumOu5Hsae1f4YPqJ2iXeGF7bZg8HphqQk86K9TfZ4L4NO496sUtuGw==}
+    cpu: [arm64]
+    os: [darwin]
+
+  sherpa-onnx-darwin-x64@1.13.0:
+    resolution: {integrity: sha512-/iV/uAkB6dkbqEmxLW4xVrhdAnFPKfA5RTXgeIDmX5926Y30JLWeaxHAnMK2M8swqDtv0Qrh+Ega77R96mP9Sw==}
+    cpu: [x64]
+    os: [darwin]
+
+  sherpa-onnx-linux-arm64@1.13.0:
+    resolution: {integrity: sha512-szaiEu0RN/OyaYc5hwaeYvyWvNwh/hmZRHyZKbhdbx8H9ydMgQzirMtKYO//I20l2Ufz0nUPwrpVh5L59jblLg==}
+    cpu: [arm64]
+    os: [linux]
+
+  sherpa-onnx-linux-x64@1.13.0:
+    resolution: {integrity: sha512-GYiXTe4lWAICZvJiIvqacCGlxe7A/QveLcgSWHkRidlJfuZ5skLTe4gA/7KoMaxcdhE+SXnlwDUSjVdOgzcOmQ==}
+    cpu: [x64]
+    os: [linux]
+
+  sherpa-onnx@1.12.37:
+    resolution: {integrity: sha512-3luwSdHwR8BtJiiFwqHfb15FE2FX0KsN4aOBbfq9Ma23r3w9C3bprFc/WBusXk56nUbzcEN5YczN7t9w1JwdtQ==}
 
   side-channel-list@1.0.1:
     resolution: {integrity: sha512-mjn/0bi/oUURjc5Xl7IaWi/OJJJumuoJFQJfDDyO46+hBWsfaVM65TBHq2eoZBhzl9EchxOijpkbRC8SVBQU0w==}
@@ -12179,6 +12218,20 @@ snapshots:
       shebang-regex: 3.0.0
 
   shebang-regex@3.0.0: {}
+
+  sherpa-onnx-darwin-arm64@1.13.0:
+    optional: true
+
+  sherpa-onnx-darwin-x64@1.13.0:
+    optional: true
+
+  sherpa-onnx-linux-arm64@1.13.0:
+    optional: true
+
+  sherpa-onnx-linux-x64@1.13.0:
+    optional: true
+
+  sherpa-onnx@1.12.37: {}
 
   side-channel-list@1.0.1:
     dependencies:

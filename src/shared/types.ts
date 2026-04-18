@@ -3,6 +3,7 @@ import type { SshRemotePtyLease, SshTarget } from './ssh-types'
 import type { Automation, AutomationRun } from './automations-types'
 import type { WorkspaceSource } from './telemetry-events'
 import type { GitHubProjectSettings } from './github-project-types'
+import type { VoiceSettings } from './speech-types'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -1367,6 +1368,7 @@ export type GlobalSettings = {
      *  false for fresh installs (no first-launch surface). */
     existedBeforeTelemetryRelease: boolean
   }
+  voice: VoiceSettings
 }
 
 export type GhosttyImportPreview = {
@@ -1375,7 +1377,6 @@ export type GhosttyImportPreview = {
   diff: Partial<GlobalSettings>
   unsupportedKeys: string[]
   error?: string
-}
 
 // Subset of the renderer's onboarding-step Ghostty `DiscoveryState['status']`
 // values that ever ship a telemetry event. The UI-only states (`'idle'`,

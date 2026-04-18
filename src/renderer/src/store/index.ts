@@ -21,6 +21,7 @@ import { createAgentStatusSlice } from './slices/agent-status'
 import { createDiffCommentsSlice } from './slices/diffComments'
 import { createDetectedAgentsSlice } from './slices/detected-agents'
 import { createWorktreeNavHistorySlice } from './slices/worktree-nav-history'
+import { createDictationSlice } from './slices/dictation'
 import { e2eConfig } from '@/lib/e2e-config'
 import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
 
@@ -45,7 +46,8 @@ export const useAppStore = create<AppState>()((...a) => ({
   ...createAgentStatusSlice(...a),
   ...createDiffCommentsSlice(...a),
   ...createDetectedAgentsSlice(...a),
-  ...createWorktreeNavHistorySlice(...a)
+  ...createWorktreeNavHistorySlice(...a),
+  ...createDictationSlice(...a)
 }))
 
 registerHttpLinkStoreAccessor(() => useAppStore.getState())

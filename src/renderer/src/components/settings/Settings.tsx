@@ -18,6 +18,7 @@ import {
   SlidersHorizontal,
   Smartphone,
   Blocks,
+  Mic,
   SquareTerminal,
   UserCog
 } from 'lucide-react'
@@ -42,6 +43,7 @@ import { RepositoryPane, getRepositoryPaneSearchEntries } from './RepositoryPane
 import { getTerminalPaneSearchEntries } from './terminal-search'
 import { GitPane, GIT_PANE_SEARCH_ENTRIES } from './GitPane'
 import { NotificationsPane, NOTIFICATIONS_PANE_SEARCH_ENTRIES } from './NotificationsPane'
+import { VoicePane, VOICE_PANE_SEARCH_ENTRIES } from './VoicePane'
 import { SshPane, SSH_PANE_SEARCH_ENTRIES } from './SshPane'
 import { ExperimentalPane, EXPERIMENTAL_PANE_SEARCH_ENTRIES } from './ExperimentalPane'
 import { AgentsPane, AGENTS_PANE_SEARCH_ENTRIES } from './AgentsPane'
@@ -74,6 +76,7 @@ type SettingsNavTarget =
   | 'computer-use'
   | 'developer-permissions'
   | 'privacy'
+  | 'voice'
   | 'shortcuts'
   | 'stats'
   | 'ssh'
@@ -475,6 +478,13 @@ function Settings(): React.JSX.Element {
         searchEntries: PRIVACY_PANE_SEARCH_ENTRIES
       },
       {
+        id: 'voice',
+        title: 'Voice',
+        description: 'Local speech-to-text dictation with on-device models.',
+        icon: Mic,
+        searchEntries: VOICE_PANE_SEARCH_ENTRIES
+      },
+      {
         id: 'shortcuts',
         title: 'Shortcuts',
         description: 'Keyboard shortcuts for common actions.',
@@ -868,6 +878,15 @@ function Settings(): React.JSX.Element {
                   searchEntries={PRIVACY_PANE_SEARCH_ENTRIES}
                 >
                   <PrivacyPane settings={settings} />
+                </SettingsSection>
+
+                <SettingsSection
+                  id="voice"
+                  title="Voice"
+                  description="Local speech-to-text dictation with on-device models."
+                  searchEntries={VOICE_PANE_SEARCH_ENTRIES}
+                >
+                  <VoicePane settings={settings} updateSettings={updateSettings} />
                 </SettingsSection>
 
                 <SettingsSection

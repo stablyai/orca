@@ -50,6 +50,14 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
           sanitizedUpdates.telemetry !== undefined
             ? { ...s.settings.telemetry, ...sanitizedUpdates.telemetry }
             : s.settings.telemetry
+        // Why: voice is optional and partially writable (e.g. only `selectedModelId`
+        // changes), so deep-merge sibling fields like `mode` and `holdShortcut`
+        // and avoid materializing a `voice` key when neither current nor incoming
+        // settings define one.
+        const mergedVoice =
+          updates.voice !== undefined
+            ? { ...s.settings.voice, ...updates.voice }
+            : s.settings.voice
         return {
           settings: {
             ...s.settings,
@@ -58,7 +66,8 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
               ...s.settings.notifications,
               ...sanitizedUpdates.notifications
             },
-            ...(mergedTelemetry !== undefined ? { telemetry: mergedTelemetry } : {})
+            ...(mergedTelemetry !== undefined ? { telemetry: mergedTelemetry } : {}),
+            ...(mergedVoice !== undefined ? { voice: mergedVoice } : {})
           }
         }
       })

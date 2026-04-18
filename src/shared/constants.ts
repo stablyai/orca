@@ -12,6 +12,7 @@ import type {
 } from './types'
 import { DEFAULT_TERMINAL_FONT_WEIGHT } from './terminal-fonts'
 import { getDefaultTerminalQuickCommands } from './terminal-quick-commands'
+import type { VoiceSettings } from './speech-types'
 
 export const SCHEMA_VERSION = 1
 export const DEFAULT_APP_FONT_FAMILY = 'Geist'
@@ -259,7 +260,20 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
       recent: [],
       lastViewByProject: {},
       activeProject: null
-    }
+    },
+    voice: getDefaultVoiceSettings()
+  }
+}
+
+export function getDefaultVoiceSettings(): VoiceSettings {
+  return {
+    enabled: false,
+    sttModel: '',
+    modelsDir: '',
+    language: 'en',
+    dictationMode: 'toggle' as const,
+    terminalConfirmBeforeInsert: false,
+    userModels: []
   }
 }
 

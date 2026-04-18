@@ -330,6 +330,8 @@ export function setupGuestShortcutForwarding(args: {
       renderer.send('ui:openNewWorkspace')
     } else if (action?.type === 'jumpToWorktreeIndex') {
       renderer.send('ui:jumpToWorktreeIndex', action.index)
+    } else if (action?.type === 'dictationKeyDown') {
+      renderer.send('ui:dictationKeyDown')
     } else {
       return
     }

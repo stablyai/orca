@@ -32,6 +32,9 @@ module.exports = {
   // integration — dependencies inside the asar archive are invisible to
   // require(). Unpack CLI runtime deps so they resolve from
   // app.asar.unpacked/node_modules/.
+  // Why: sherpa-onnx native bindings (platform-specific subpackages) must be
+  // unpacked because they ship .node addons + .dylib/.so files that cannot be
+  // dlopen()'d from inside the asar archive.
   asarUnpack: [
     'out/cli/**',
     'out/shared/**',
@@ -39,7 +42,8 @@ module.exports = {
     'out/main/computer-sidecar.js',
     'out/main/chunks/**',
     'resources/**',
-    'node_modules/zod/**'
+    'node_modules/zod/**',
+    'node_modules/sherpa-onnx*/**'
   ],
   afterPack: async (context) => {
     const resourcesDir =

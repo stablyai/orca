@@ -32,6 +32,7 @@ import { browserSessionRegistry } from '../browser/browser-session-registry'
 import { registerShellHandlers } from './shell'
 import { registerPetHandlers } from './pet'
 import { registerUIHandlers } from './ui'
+import { registerSpeechHandlers } from './speech'
 import { registerCodexAccountHandlers } from './codex-accounts'
 import { registerAgentHookHandlers } from './agent-hooks'
 import { registerAgentTrustHandlers } from './agent-trust'
@@ -116,5 +117,6 @@ export function registerCoreHandlers(
   registerNotesHandlers(runtime)
   registerClipboardHandlers()
   registerUpdaterHandlers(store)
+  registerSpeechHandlers(store)
   warmSystemFontFamilies()
 }

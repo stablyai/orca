@@ -151,6 +151,7 @@ import type {
   ClaudeUsageSummary
 } from '../shared/claude-usage-types'
 import type { RateLimitState } from '../shared/rate-limit-types'
+import type { SpeechModelManifest, SpeechModelState } from '../shared/speech-types'
 import type { GhAuthDiagnostic } from '../shared/github-auth-types'
 import type {
   SshConnectionState,
@@ -1132,6 +1133,7 @@ export type PreloadApi = {
     onSwitchTabAcrossAllTypes: (callback: (direction: 1 | -1) => void) => () => void
     onSwitchTerminalTab: (callback: (direction: 1 | -1) => void) => () => void
     onToggleStatusBar: (callback: () => void) => () => void
+    onDictationKeyDown: (callback: () => void) => () => void
     onExportPdfRequested: (callback: () => void) => () => void
     onActivateWorktree: (
       callback: (data: {
@@ -1363,6 +1365,24 @@ export type PreloadApi = {
     }>
     revokeDevice: (args: { deviceId: string }) => Promise<{ revoked: boolean }>
     isWebSocketReady: () => Promise<{ ready: boolean; endpoint: string | null }>
+  }
+  speech: {
+    getCatalog: () => Promise<SpeechModelManifest[]>
+    getModelStates: () => Promise<SpeechModelState[]>
+    downloadModel: (modelId: string) => Promise<void>
+    cancelDownload: (modelId: string) => Promise<void>
+    deleteModel: (modelId: string) => Promise<void>
+    startDictation: (modelId: string) => Promise<void>
+    feedAudio: (samples: Float32Array, sampleRate: number) => Promise<void>
+    stopDictation: () => Promise<void>
+    onPartialTranscript: (callback: (text: string) => void) => () => void
+    onFinalTranscript: (callback: (text: string) => void) => () => void
+    onDownloadProgress: (
+      callback: (data: { modelId: string; progress: number }) => void
+    ) => () => void
+    onReady: (callback: () => void) => () => void
+    onStopped: (callback: () => void) => () => void
+    onError: (callback: (error: string) => void) => () => void
   }
 }
 

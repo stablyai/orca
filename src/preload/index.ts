@@ -76,6 +76,7 @@ import type {
   DetectedPort
 } from '../shared/ssh-types'
 import type { AgentStatusIpcPayload } from '../shared/agent-status-types'
+import type { SpeechModelManifest, SpeechModelState } from '../shared/speech-types'
 import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
 import type { RefreshAgentsResult } from './api-types'
 import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
@@ -1913,6 +1914,11 @@ const api = {
       ipcRenderer.on('export:requestPdf', listener)
       return () => ipcRenderer.removeListener('export:requestPdf', listener)
     },
+    onDictationKeyDown: (callback: () => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent) => callback()
+      ipcRenderer.on('ui:dictationKeyDown', listener)
+      return () => ipcRenderer.removeListener('ui:dictationKeyDown', listener)
+    },
     onActivateWorktree: (
       callback: (data: {
         repoId: string
@@ -2491,6 +2497,64 @@ const api = {
      *  cannot resurrect it. Fire-and-forget; no response. */
     drop: (paneKey: string): void => {
       ipcRenderer.send('agentStatus:drop', paneKey)
+    }
+  },
+
+  speech: {
+    getCatalog: (): Promise<SpeechModelManifest[]> => ipcRenderer.invoke('speech:getCatalog'),
+    getModelStates: (): Promise<SpeechModelState[]> => ipcRenderer.invoke('speech:getModelStates'),
+    downloadModel: (modelId: string): Promise<void> =>
+      ipcRenderer.invoke('speech:downloadModel', modelId),
+    cancelDownload: (modelId: string): Promise<void> =>
+      ipcRenderer.invoke('speech:cancelDownload', modelId),
+    deleteModel: (modelId: string): Promise<void> =>
+      ipcRenderer.invoke('speech:deleteModel', modelId),
+    startDictation: (modelId: string): Promise<void> =>
+      ipcRenderer.invoke('speech:startDictation', modelId),
+    feedAudio: (samples: Float32Array, sampleRate: number): Promise<void> =>
+      // Why: Float32Array data gets zeroed out when crossing the contextBridge
+      // + IPC boundary. Wrapping in a Buffer preserves the raw bytes reliably.
+      ipcRenderer.invoke(
+        'speech:feedAudio',
+        Buffer.from(samples.buffer, samples.byteOffset, samples.byteLength),
+        sampleRate
+      ),
+    stopDictation: (): Promise<void> => ipcRenderer.invoke('speech:stopDictation'),
+
+    onPartialTranscript: (callback: (text: string) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, text: string): void => callback(text)
+      ipcRenderer.on('speech:partial', listener)
+      return () => ipcRenderer.removeListener('speech:partial', listener)
+    },
+    onFinalTranscript: (callback: (text: string) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, text: string): void => callback(text)
+      ipcRenderer.on('speech:final', listener)
+      return () => ipcRenderer.removeListener('speech:final', listener)
+    },
+    onDownloadProgress: (
+      callback: (data: { modelId: string; progress: number }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { modelId: string; progress: number }
+      ): void => callback(data)
+      ipcRenderer.on('speech:downloadProgress', listener)
+      return () => ipcRenderer.removeListener('speech:downloadProgress', listener)
+    },
+    onReady: (callback: () => void): (() => void) => {
+      const listener = (): void => callback()
+      ipcRenderer.on('speech:ready', listener)
+      return () => ipcRenderer.removeListener('speech:ready', listener)
+    },
+    onStopped: (callback: () => void): (() => void) => {
+      const listener = (): void => callback()
+      ipcRenderer.on('speech:stopped', listener)
+      return () => ipcRenderer.removeListener('speech:stopped', listener)
+    },
+    onError: (callback: (error: string) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, error: string): void => callback(error)
+      ipcRenderer.on('speech:error', listener)
+      return () => ipcRenderer.removeListener('speech:error', listener)
     }
   }
 }
