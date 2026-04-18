@@ -1,0 +1,96 @@
+import { useCallback } from 'react';
+import { getLinkBubblePosition } from './RichMarkdownLinkBubble';
+/**
+ * Extracts link-editing action handlers from the editor component to reduce
+ * file size. State lives in the parent (declared before useEditor so the
+ * editor callbacks can reference the setters).
+ */
+export function useLinkBubble(editor, rootRef, linkBubble, setLinkBubble, setIsEditingLink) {
+    const startLinkEdit = useCallback(() => {
+        if (!editor) {
+            return;
+        }
+        const pos = getLinkBubblePosition(editor, rootRef.current);
+        if (pos) {
+            const href = editor.isActive('link')
+                ? editor.getAttributes('link').href || ''
+                : '';
+            setLinkBubble({ href, ...pos });
+            setIsEditingLink(true);
+        }
+    }, [editor, rootRef, setLinkBubble, setIsEditingLink]);
+    const handleLinkSave = useCallback((href) => {
+        if (!editor) {
+            return;
+        }
+        if (href) {
+            if (editor.isActive('link')) {
+                editor.chain().focus().extendMarkRange('link').setLink({ href }).run();
+            }
+            else {
+                const { from, to } = editor.state.selection;
+                if (from === to) {
+                    // No selection: insert URL as both the link text and href.
+                    editor
+                        .chain()
+                        .focus()
+                        .insertContent({
+                        type: 'text',
+                        text: href,
+                        marks: [{ type: 'link', attrs: { href } }]
+                    })
+                        .run();
+                }
+                else {
+                    editor.chain().focus().setLink({ href }).run();
+                }
+            }
+        }
+        else if (editor.isActive('link')) {
+            editor.chain().focus().extendMarkRange('link').unsetLink().run();
+        }
+        else {
+            editor.commands.focus();
+        }
+        setIsEditingLink(false);
+    }, [editor, setIsEditingLink]);
+    const handleLinkRemove = useCallback(() => {
+        if (!editor) {
+            return;
+        }
+        editor.chain().focus().extendMarkRange('link').unsetLink().run();
+        setLinkBubble(null);
+        setIsEditingLink(false);
+    }, [editor, setLinkBubble, setIsEditingLink]);
+    const handleLinkEditCancel = useCallback(() => {
+        setIsEditingLink(false);
+        if (!linkBubble?.href) {
+            setLinkBubble(null);
+        }
+        editor?.commands.focus();
+    }, [editor, linkBubble?.href, setLinkBubble, setIsEditingLink]);
+    const handleLinkOpen = useCallback(() => {
+        if (linkBubble?.href) {
+            void window.api.shell.openUrl(linkBubble.href);
+        }
+    }, [linkBubble?.href]);
+    const toggleLinkFromToolbar = useCallback(() => {
+        if (!editor) {
+            return;
+        }
+        if (editor.isActive('link')) {
+            editor.chain().focus().extendMarkRange('link').unsetLink().run();
+            setLinkBubble(null);
+        }
+        else {
+            startLinkEdit();
+        }
+    }, [editor, setLinkBubble, startLinkEdit]);
+    return {
+        handleLinkSave,
+        handleLinkRemove,
+        handleLinkEditCancel,
+        handleLinkOpen,
+        toggleLinkFromToolbar
+    };
+}

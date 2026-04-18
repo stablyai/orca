@@ -1,0 +1,41 @@
+import type { PersistedState, Repo, WorktreeMeta, GlobalSettings } from '../shared/types';
+import type { SshTarget } from '../shared/ssh-types';
+export declare function initDataPath(): void;
+export declare class Store {
+    private state;
+    private writeTimer;
+    private pendingWrite;
+    private writeGeneration;
+    private gitUsernameCache;
+    constructor();
+    private load;
+    private scheduleSave;
+    /** Wait for any in-flight async disk write to complete. Used in tests. */
+    waitForPendingWrite(): Promise<void>;
+    private writeToDiskAsync;
+    private writeToDiskSync;
+    getRepos(): Repo[];
+    getRepo(id: string): Repo | undefined;
+    addRepo(repo: Repo): void;
+    removeRepo(id: string): void;
+    updateRepo(id: string, updates: Partial<Pick<Repo, 'displayName' | 'badgeColor' | 'hookSettings' | 'worktreeBaseRef' | 'kind'>>): Repo | null;
+    private hydrateRepo;
+    getWorktreeMeta(worktreeId: string): WorktreeMeta | undefined;
+    getAllWorktreeMeta(): Record<string, WorktreeMeta>;
+    setWorktreeMeta(worktreeId: string, meta: Partial<WorktreeMeta>): WorktreeMeta;
+    removeWorktreeMeta(worktreeId: string): void;
+    getSettings(): GlobalSettings;
+    updateSettings(updates: Partial<GlobalSettings>): GlobalSettings;
+    getUI(): PersistedState['ui'];
+    updateUI(updates: Partial<PersistedState['ui']>): void;
+    getGitHubCache(): PersistedState['githubCache'];
+    setGitHubCache(cache: PersistedState['githubCache']): void;
+    getWorkspaceSession(): PersistedState['workspaceSession'];
+    setWorkspaceSession(session: PersistedState['workspaceSession']): void;
+    getSshTargets(): SshTarget[];
+    getSshTarget(id: string): SshTarget | undefined;
+    addSshTarget(target: SshTarget): void;
+    updateSshTarget(id: string, updates: Partial<Omit<SshTarget, 'id'>>): SshTarget | null;
+    removeSshTarget(id: string): void;
+    flush(): void;
+}

@@ -1,0 +1,35 @@
+import { Client as SshClient } from 'ssh2';
+import type { ClientChannel, SFTPWrapper } from 'ssh2';
+import type { SshTarget, SshConnectionState } from '../../shared/ssh-types';
+import { type SystemSshProcess } from './ssh-system-fallback';
+import { type SshConnectionCallbacks } from './ssh-connection-utils';
+export type { SshConnectionCallbacks } from './ssh-connection-utils';
+export declare class SshConnection {
+    private client;
+    private proxyProcess;
+    private systemSsh;
+    private state;
+    private callbacks;
+    private target;
+    private reconnectTimer;
+    private disposed;
+    private cachedPassphrase;
+    private cachedPassword;
+    private connectGeneration;
+    constructor(target: SshTarget, callbacks: SshConnectionCallbacks);
+    getState(): SshConnectionState;
+    getClient(): SshClient | null;
+    getTarget(): SshTarget;
+    exec(cmd: string): Promise<ClientChannel>;
+    sftp(): Promise<SFTPWrapper>;
+    connect(): Promise<void>;
+    private attemptConnect;
+    private respawnProxy;
+    private doSsh2Connect;
+    private setupDisconnectHandler;
+    private scheduleReconnect;
+    connectViaSystemSsh(): Promise<SystemSshProcess>;
+    disconnect(): Promise<void>;
+    private setState;
+}
+export { SshConnectionManager } from './ssh-connection-manager';

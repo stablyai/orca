@@ -1,0 +1,61 @@
+export type CodexUsageScope = 'orca' | 'all';
+export type CodexUsageRange = '7d' | '30d' | '90d' | 'all';
+export type CodexUsageBreakdownKind = 'model' | 'project';
+export type CodexUsageScanState = {
+    enabled: boolean;
+    isScanning: boolean;
+    lastScanStartedAt: number | null;
+    lastScanCompletedAt: number | null;
+    lastScanError: string | null;
+    hasAnyCodexData: boolean;
+};
+export type CodexUsageSummary = {
+    scope: CodexUsageScope;
+    range: CodexUsageRange;
+    sessions: number;
+    events: number;
+    inputTokens: number;
+    cachedInputTokens: number;
+    outputTokens: number;
+    reasoningOutputTokens: number;
+    totalTokens: number;
+    estimatedCostUsd: number | null;
+    topModel: string | null;
+    topProject: string | null;
+    hasAnyCodexData: boolean;
+};
+export type CodexUsageDailyPoint = {
+    day: string;
+    inputTokens: number;
+    cachedInputTokens: number;
+    outputTokens: number;
+    reasoningOutputTokens: number;
+    totalTokens: number;
+};
+export type CodexUsageBreakdownRow = {
+    key: string;
+    label: string;
+    sessions: number;
+    events: number;
+    inputTokens: number;
+    cachedInputTokens: number;
+    outputTokens: number;
+    reasoningOutputTokens: number;
+    totalTokens: number;
+    estimatedCostUsd: number | null;
+    hasInferredPricing: boolean;
+};
+export type CodexUsageSessionRow = {
+    sessionId: string;
+    lastActiveAt: string;
+    durationMinutes: number;
+    projectLabel: string;
+    model: string | null;
+    events: number;
+    inputTokens: number;
+    cachedInputTokens: number;
+    outputTokens: number;
+    reasoningOutputTokens: number;
+    totalTokens: number;
+    hasInferredPricing: boolean;
+};

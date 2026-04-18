@@ -1,0 +1,10 @@
+import type { OrcaHooks } from '../../../../shared/types';
+export type HookName = keyof OrcaHooks['scripts'];
+export declare const DEFAULT_REPO_HOOK_SETTINGS: import("../../../../shared/types").RepoHookSettings;
+export declare const MAX_THEME_RESULTS = 80;
+export declare const SCROLLBACK_PRESETS_MB: readonly [10, 25, 50, 100, 250];
+export declare const ZOOM_STEP = 0.5;
+export declare const ZOOM_MIN = -3;
+export declare const ZOOM_MAX = 5;
+export declare function zoomLevelToPercent(level: number): number;
+export declare function getFallbackTerminalFonts(): string[];

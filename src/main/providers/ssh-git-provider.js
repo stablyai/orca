@@ -1,0 +1,122 @@
+import hostedGitInfo from 'hosted-git-info';
+export class SshGitProvider {
+    connectionId;
+    mux;
+    constructor(connectionId, mux) {
+        this.connectionId = connectionId;
+        this.mux = mux;
+    }
+    getConnectionId() {
+        return this.connectionId;
+    }
+    async getStatus(worktreePath) {
+        return (await this.mux.request('git.status', { worktreePath }));
+    }
+    async getDiff(worktreePath, filePath, staged) {
+        return (await this.mux.request('git.diff', {
+            worktreePath,
+            filePath,
+            staged
+        }));
+    }
+    async stageFile(worktreePath, filePath) {
+        await this.mux.request('git.stage', { worktreePath, filePath });
+    }
+    async unstageFile(worktreePath, filePath) {
+        await this.mux.request('git.unstage', { worktreePath, filePath });
+    }
+    async bulkStageFiles(worktreePath, filePaths) {
+        await this.mux.request('git.bulkStage', { worktreePath, filePaths });
+    }
+    async bulkUnstageFiles(worktreePath, filePaths) {
+        await this.mux.request('git.bulkUnstage', { worktreePath, filePaths });
+    }
+    async discardChanges(worktreePath, filePath) {
+        await this.mux.request('git.discard', { worktreePath, filePath });
+    }
+    async detectConflictOperation(worktreePath) {
+        return (await this.mux.request('git.conflictOperation', {
+            worktreePath
+        }));
+    }
+    async getBranchCompare(worktreePath, baseRef) {
+        return (await this.mux.request('git.branchCompare', {
+            worktreePath,
+            baseRef
+        }));
+    }
+    async getBranchDiff(worktreePath, baseRef, options) {
+        return (await this.mux.request('git.branchDiff', {
+            worktreePath,
+            baseRef,
+            ...options
+        }));
+    }
+    async listWorktrees(repoPath) {
+        return (await this.mux.request('git.listWorktrees', {
+            repoPath
+        }));
+    }
+    async addWorktree(repoPath, branchName, targetDir, options) {
+        await this.mux.request('git.addWorktree', {
+            repoPath,
+            branchName,
+            targetDir,
+            ...options
+        });
+    }
+    async removeWorktree(worktreePath, force) {
+        await this.mux.request('git.removeWorktree', { worktreePath, force });
+    }
+    async exec(args, cwd) {
+        return (await this.mux.request('git.exec', { args, cwd }));
+    }
+    async isGitRepoAsync(dirPath) {
+        return (await this.mux.request('git.isGitRepo', { dirPath }));
+    }
+    // Why: isGitRepo requires synchronous return in the interface, but remote
+    // operations are async. We always return true for remote paths since the
+    // relay validates git repos on its side. The renderer already guards git
+    // operations behind worktree registration which validates the path.
+    isGitRepo(_path) {
+        return true;
+    }
+    // Why: the local getRemoteFileUrl uses hosted-git-info which requires the
+    // remote URL from .git/config. For SSH connections we must fetch the remote
+    // URL from the relay, then apply the same hosted-git-info logic locally.
+    async getRemoteFileUrl(worktreePath, relativePath, line) {
+        let remoteUrl;
+        try {
+            const result = await this.exec(['remote', 'get-url', 'origin'], worktreePath);
+            remoteUrl = result.stdout.trim();
+        }
+        catch {
+            return null;
+        }
+        if (!remoteUrl) {
+            return null;
+        }
+        const info = hostedGitInfo.fromUrl(remoteUrl);
+        if (!info) {
+            return null;
+        }
+        let defaultBranch = 'main';
+        try {
+            const refResult = await this.exec(['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'], worktreePath);
+            const ref = refResult.stdout.trim();
+            if (ref) {
+                defaultBranch = ref.replace(/^refs\/remotes\/origin\//, '');
+            }
+        }
+        catch {
+            // Fall back to 'main'
+        }
+        const browseUrl = info.browseFile(relativePath, { committish: defaultBranch });
+        if (!browseUrl) {
+            return null;
+        }
+        // Why: hosted-git-info lowercases the fragment, but GitHub convention
+        // uses uppercase L for line links (e.g. #L42). Append manually.
+        return `${browseUrl}#L${line}`;
+    }
+}

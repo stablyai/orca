@@ -45,6 +45,7 @@ export type Worktree = {
   isPinned: boolean
   sortOrder: number
   lastActivityAt: number
+  diffComments?: DiffComment[]
 } & GitWorktreeInfo
 
 // ─── Worktree metadata (persisted user-authored fields only) ─────────
@@ -58,6 +59,23 @@ export type WorktreeMeta = {
   isPinned: boolean
   sortOrder: number
   lastActivityAt: number
+  diffComments?: DiffComment[]
+}
+
+// ─── Diff line comments ──────────────────────────────────────────────
+// Why: users leave review notes on specific lines of the modified side of
+// a diff so they can be handed back to an AI agent (pasted into a terminal
+// or used to bootstrap a new agent session). Stored on WorktreeMeta so the
+// existing persistence layer writes them to orca-data.json automatically.
+export type DiffComment = {
+  id: string
+  worktreeId: string
+  filePath: string
+  lineNumber: number
+  body: string
+  createdAt: number
+  // Reserved for future "comments on the original side" — always 'modified' in v1.
+  side: 'modified'
 }
 
 // ─── Tab Group Layout ───────────────────────────────────────────────

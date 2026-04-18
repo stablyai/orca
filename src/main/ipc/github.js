@@ -1,0 +1,94 @@
+import { ipcMain } from 'electron';
+import { resolve } from 'path';
+import { getPRForBranch, getIssue, getRepoSlug, listIssues, listWorkItems, getWorkItem, getAuthenticatedViewer, getPRChecks, getPRComments, resolveReviewThread, updatePRTitle, mergePR, checkOrcaStarred, starOrca } from '../github/client';
+import { getWorkItemDetails, getPRFileContents } from '../github/work-item-details';
+// Why: returns the full Repo object instead of just the path string so that
+// callers have access to repo.id for stat tracking and other context.
+function assertRegisteredRepo(repoPath, store) {
+    const resolvedRepoPath = resolve(repoPath);
+    const repo = store.getRepos().find((r) => resolve(r.path) === resolvedRepoPath);
+    if (!repo) {
+        throw new Error('Access denied: unknown repository path');
+    }
+    return repo;
+}
+export function registerGitHubHandlers(store, stats) {
+    ipcMain.handle('gh:prForBranch', async (_event, args) => {
+        const repo = assertRegisteredRepo(args.repoPath, store);
+        const pr = await getPRForBranch(repo.path, args.branch);
+        // Emit pr_created when a PR is first detected for a branch.
+        // Why here: the renderer polls gh:prForBranch to check PR status per worktree.
+        // This captures PRs opened from any workflow (Orca UI, gh CLI, github.com).
+        if (pr && !stats.hasCountedPR(pr.url)) {
+            stats.record({
+                type: 'pr_created',
+                at: Date.now(),
+                repoId: repo.id,
+                meta: { prNumber: pr.number, prUrl: pr.url }
+            });
+        }
+        return pr;
+    });
+    ipcMain.handle('gh:issue', (_event, args) => {
+        const repo = assertRegisteredRepo(args.repoPath, store);
+        return getIssue(repo.path, args.number);
+    });
+    ipcMain.handle('gh:listIssues', (_event, args) => {
+        const repo = assertRegisteredRepo(args.repoPath, store);
+        return listIssues(repo.path, args.limit);
+    });
+    ipcMain.handle('gh:listWorkItems', (_event, args) => {
+        const repo = assertRegisteredRepo(args.repoPath, store);
+        return listWorkItems(repo.path, args.limit, args.query);
+    });
+    ipcMain.handle('gh:workItem', (_event, args) => {
+        const repo = assertRegisteredRepo(args.repoPath, store);
+        return getWorkItem(repo.path, args.number);
+    });
+    ipcMain.handle('gh:workItemDetails', (_event, args) => {
+        const repo = assertRegisteredRepo(args.repoPath, store);
+        return getWorkItemDetails(repo.path, args.number);
+    });
+    ipcMain.handle('gh:prFileContents', (_event, args) => {
+        const repo = assertRegisteredRepo(args.repoPath, store);
+        return getPRFileContents({
+            repoPath: repo.path,
+            prNumber: args.prNumber,
+            path: args.path,
+            oldPath: args.oldPath,
+            status: args.status,
+            headSha: args.headSha,
+            baseSha: args.baseSha
+        });
+    });
+    ipcMain.handle('gh:repoSlug', (_event, args) => {
+        const repo = assertRegisteredRepo(args.repoPath, store);
+        return getRepoSlug(repo.path);
+    });
+    ipcMain.handle('gh:prChecks', (_event, args) => {
+        const repo = assertRegisteredRepo(args.repoPath, store);
+        return getPRChecks(repo.path, args.prNumber, args.headSha, {
+            noCache: args.noCache
+        });
+    });
+    ipcMain.handle('gh:prComments', (_event, args) => {
+        const repo = assertRegisteredRepo(args.repoPath, store);
+        return getPRComments(repo.path, args.prNumber, { noCache: args.noCache });
+    });
+    ipcMain.handle('gh:resolveReviewThread', (_event, args) => {
+        const repo = assertRegisteredRepo(args.repoPath, store);
+        return resolveReviewThread(repo.path, args.threadId, args.resolve);
+    });
+    ipcMain.handle('gh:updatePRTitle', (_event, args) => {
+        const repo = assertRegisteredRepo(args.repoPath, store);
+        return updatePRTitle(repo.path, args.prNumber, args.title);
+    });
+    ipcMain.handle('gh:mergePR', (_event, args) => {
+        const repo = assertRegisteredRepo(args.repoPath, store);
+        return mergePR(repo.path, args.prNumber, args.method);
+    });
+    // Star operations target the Orca repo itself — no repoPath validation needed
+    ipcMain.handle('gh:viewer', () => getAuthenticatedViewer());
+    ipcMain.handle('gh:checkOrcaStarred', () => checkOrcaStarred());
+    ipcMain.handle('gh:starOrca', () => starOrca());
+}

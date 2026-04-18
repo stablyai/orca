@@ -14,6 +14,7 @@ import { createCodexUsageSlice } from './slices/codex-usage'
 import { createBrowserSlice } from './slices/browser'
 import { createRateLimitSlice } from './slices/rate-limits'
 import { createSshSlice } from './slices/ssh'
+import { createDiffCommentsSlice } from './slices/diffComments'
 import { e2eConfig } from '@/lib/e2e-config'
 
 export const useAppStore = create<AppState>()((...a) => ({
@@ -30,7 +31,8 @@ export const useAppStore = create<AppState>()((...a) => ({
   ...createCodexUsageSlice(...a),
   ...createBrowserSlice(...a),
   ...createRateLimitSlice(...a),
-  ...createSshSlice(...a)
+  ...createSshSlice(...a),
+  ...createDiffCommentsSlice(...a)
 }))
 
 export type { AppState } from './types'

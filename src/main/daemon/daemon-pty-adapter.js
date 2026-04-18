@@ -1,0 +1,343 @@
+/* oxlint-disable max-lines -- Why: history error-logging .catch() chains add ~10 lines of
+safety wiring spread across spawn/event-routing; splitting would scatter tightly coupled
+adapter ↔ history lifecycle logic. */
+import { basename } from 'path';
+import { existsSync } from 'fs';
+import { randomUUID } from 'crypto';
+import { DaemonClient } from './client';
+import { HistoryManager } from './history-manager';
+import { HistoryReader } from './history-reader';
+import { supportsPtyStartupBarrier } from './shell-ready';
+const MAX_TOMBSTONES = 1000;
+export class TerminalKilledError extends Error {
+    constructor(sessionId) {
+        super(`Session "${sessionId}" was explicitly killed`);
+        this.name = 'TerminalKilledError';
+    }
+}
+export class DaemonPtyAdapter {
+    client;
+    historyManager;
+    historyReader;
+    dataListeners = [];
+    exitListeners = [];
+    removeEventListener = null;
+    initialCwds = new Map();
+    // Why: React re-renders and StrictMode double-mounts can call createOrAttach
+    // for a session the user just killed. Without tombstones, the daemon would
+    // create a fresh session — resurrecting a terminal the user explicitly closed.
+    // Uses a Map<id, timestamp> so eviction removes the oldest by insertion order,
+    // matching terminal-host.ts tombstone semantics.
+    killedSessionTombstones = new Map();
+    // Why: React StrictMode double-mounts: mount → cold restore → unmount →
+    // mount → ??? The sticky cache returns the same cold restore data on the
+    // second mount until the renderer explicitly acknowledges it.
+    coldRestoreCache = new Map();
+    constructor(opts) {
+        this.client = new DaemonClient({
+            socketPath: opts.socketPath,
+            tokenPath: opts.tokenPath
+        });
+        this.historyManager = opts.historyPath ? new HistoryManager(opts.historyPath) : null;
+        this.historyReader = opts.historyPath ? new HistoryReader(opts.historyPath) : null;
+    }
+    getHistoryManager() {
+        return this.historyManager;
+    }
+    async spawn(opts) {
+        await this.ensureConnected();
+        const sessionId = opts.sessionId ??
+            (opts.worktreeId ? `${opts.worktreeId}@@${randomUUID().slice(0, 8)}` : randomUUID());
+        if (this.killedSessionTombstones.has(sessionId)) {
+            throw new TerminalKilledError(sessionId);
+        }
+        // Why: detect crash-recovery history before spawning a replacement PTY so
+        // the revived shell inherits the recovered cwd and dimensions instead of
+        // whatever the current renderer happened to request on mount.
+        const restoreInfo = this.historyReader?.detectColdRestore(sessionId) ?? null;
+        const effectiveCwd = restoreInfo?.cwd ?? opts.cwd;
+        const effectiveCols = restoreInfo?.cols ?? opts.cols;
+        const effectiveRows = restoreInfo?.rows ?? opts.rows;
+        const result = await this.client.request('createOrAttach', {
+            sessionId,
+            cols: effectiveCols,
+            rows: effectiveRows,
+            cwd: effectiveCwd,
+            env: opts.env,
+            command: opts.command,
+            shellReadySupported: opts.command ? supportsPtyStartupBarrier(opts.env ?? {}) : false
+        });
+        if (effectiveCwd) {
+            this.initialCwds.set(sessionId, effectiveCwd);
+        }
+        // Why: check sticky cache first — StrictMode double-mounts call spawn
+        // twice. The second call finds an existing daemon session (isNew=false)
+        // but should still return the cached cold restore data.
+        const cachedRestore = this.coldRestoreCache.get(sessionId);
+        if (cachedRestore) {
+            return { id: sessionId, coldRestore: cachedRestore };
+        }
+        // Cold restore: daemon created a new session but disk history shows
+        // an unclean shutdown → return saved scrollback so the renderer can
+        // display the previous terminal content. Must run BEFORE openSession
+        // which would overwrite the saved history files.
+        if (result.isNew && restoreInfo) {
+            const coldRestore = { scrollback: restoreInfo.scrollback, cwd: restoreInfo.cwd };
+            this.coldRestoreCache.set(sessionId, coldRestore);
+            // Why: seed the reopened history with the recovered metadata, not the
+            // renderer's transient mount-time size, so a second crash restores the
+            // same terminal context the daemon just revived.
+            if (this.historyManager) {
+                void this.historyManager
+                    .openSession(sessionId, {
+                    cwd: restoreInfo.cwd,
+                    cols: restoreInfo.cols,
+                    rows: restoreInfo.rows,
+                    initialScrollback: restoreInfo.scrollback
+                })
+                    .catch((err) => console.warn('[history] openSession failed:', sessionId, err));
+            }
+            return { id: sessionId, coldRestore };
+        }
+        if (this.historyManager && result.isNew) {
+            void this.historyManager
+                .openSession(sessionId, {
+                cwd: effectiveCwd ?? '',
+                cols: effectiveCols,
+                rows: effectiveRows,
+                initialScrollback: result.snapshot?.snapshotAnsi
+            })
+                .catch((err) => console.warn('[history] openSession failed:', sessionId, err));
+        }
+        const isReattach = !result.isNew;
+        if (!isReattach || !result.snapshot) {
+            return { id: sessionId };
+        }
+        const isAltScreen = result.snapshot.modes.alternateScreen;
+        const snapshotPayload = result.snapshot.rehydrateSequences + result.snapshot.snapshotAnsi;
+        return {
+            id: sessionId,
+            snapshot: snapshotPayload,
+            snapshotCols: result.snapshot.cols,
+            snapshotRows: result.snapshot.rows,
+            isReattach: true,
+            isAlternateScreen: isAltScreen
+        };
+    }
+    async attach(id) {
+        await this.ensureConnected();
+        await this.client.request('createOrAttach', {
+            sessionId: id,
+            cols: 80,
+            rows: 24
+        });
+    }
+    write(id, data) {
+        this.client.notify('write', { sessionId: id, data });
+    }
+    resize(id, cols, rows) {
+        this.client.notify('resize', { sessionId: id, cols, rows });
+    }
+    async shutdown(id, _immediate) {
+        await this.client.request('kill', { sessionId: id });
+        this.initialCwds.delete(id);
+        // Why: user explicitly closed this terminal — clean up disk history
+        // so it doesn't trigger a false cold restore on next launch.
+        if (this.historyManager) {
+            void this.historyManager
+                .removeSession(id)
+                .catch((err) => console.warn('[history] removeSession failed:', id, err));
+        }
+        // Why: delete-then-set ensures the entry moves to the end of Map iteration
+        // order, so re-killing a session doesn't leave it as the first eviction target.
+        this.killedSessionTombstones.delete(id);
+        this.killedSessionTombstones.set(id, Date.now());
+        if (this.killedSessionTombstones.size > MAX_TOMBSTONES) {
+            const oldest = this.killedSessionTombstones.keys().next().value;
+            if (oldest) {
+                this.killedSessionTombstones.delete(oldest);
+            }
+        }
+    }
+    ackColdRestore(sessionId) {
+        this.coldRestoreCache.delete(sessionId);
+    }
+    clearTombstone(sessionId) {
+        this.killedSessionTombstones.delete(sessionId);
+    }
+    async sendSignal(id, signal) {
+        await this.client.request('signal', { sessionId: id, signal });
+    }
+    async getCwd(id) {
+        try {
+            const result = await this.client.request('getCwd', {
+                sessionId: id
+            });
+            return result.cwd ?? '';
+        }
+        catch {
+            return '';
+        }
+    }
+    async getInitialCwd(id) {
+        return this.initialCwds.get(id) ?? '';
+    }
+    async clearBuffer(id) {
+        await this.client.request('clearScrollback', { sessionId: id });
+    }
+    acknowledgeDataEvent(_id, _charCount) {
+        // No flow control for daemon-backed terminals
+    }
+    async hasChildProcesses(_id) {
+        return false;
+    }
+    async getForegroundProcess(_id) {
+        return null;
+    }
+    async serialize(ids) {
+        const sessions = {};
+        for (const id of ids) {
+            sessions[id] = { initialCwd: this.initialCwds.get(id) };
+        }
+        return JSON.stringify(sessions);
+    }
+    async revive(_state) {
+        // Sessions already live in the daemon — no revival needed
+    }
+    /** Called on app launch. Lists daemon sessions, kills orphans whose
+     *  workspaceId no longer exists, and caches alive session IDs. */
+    async reconcileOnStartup(validWorktreeIds) {
+        await this.ensureConnected();
+        const result = await this.client.request('listSessions', undefined);
+        const alive = [];
+        const killed = [];
+        for (const session of result.sessions) {
+            if (!session.isAlive) {
+                continue;
+            }
+            // Why: session IDs use the format `${worktreeId}@@${shortUuid}`. The @@
+            // separator is unambiguous — worktreeIds contain hyphens and colons but
+            // never @@.
+            const separatorIdx = session.sessionId.lastIndexOf('@@');
+            const worktreeId = separatorIdx !== -1 ? session.sessionId.slice(0, separatorIdx) : session.sessionId;
+            if (!validWorktreeIds.has(worktreeId)) {
+                try {
+                    await this.client.request('kill', { sessionId: session.sessionId });
+                }
+                catch {
+                    /* already dead */
+                }
+                killed.push(session.sessionId);
+            }
+            else {
+                alive.push(session.sessionId);
+            }
+        }
+        return { alive, killed };
+    }
+    async listProcesses() {
+        await this.ensureConnected();
+        const result = await this.client.request('listSessions', undefined);
+        return result.sessions
+            .filter((s) => s.isAlive)
+            .map((s) => ({
+            id: s.sessionId,
+            cwd: s.cwd ?? '',
+            title: 'shell'
+        }));
+    }
+    async getDefaultShell() {
+        if (process.platform === 'win32') {
+            return process.env.COMSPEC || 'powershell.exe';
+        }
+        return process.env.SHELL || '/bin/zsh';
+    }
+    async getProfiles() {
+        if (process.platform === 'win32') {
+            return [
+                { name: 'PowerShell', path: 'powershell.exe' },
+                { name: 'Command Prompt', path: 'cmd.exe' }
+            ];
+        }
+        const shells = ['/bin/zsh', '/bin/bash', '/bin/sh'];
+        return shells.filter((s) => existsSync(s)).map((s) => ({ name: basename(s), path: s }));
+    }
+    onData(callback) {
+        this.dataListeners.push(callback);
+        return () => {
+            const idx = this.dataListeners.indexOf(callback);
+            if (idx !== -1) {
+                this.dataListeners.splice(idx, 1);
+            }
+        };
+    }
+    onReplay(_callback) {
+        return () => { };
+    }
+    onExit(callback) {
+        this.exitListeners.push(callback);
+        return () => {
+            const idx = this.exitListeners.indexOf(callback);
+            if (idx !== -1) {
+                this.exitListeners.splice(idx, 1);
+            }
+        };
+    }
+    dispose() {
+        this.removeEventListener?.();
+        this.removeEventListener = null;
+        if (this.historyManager) {
+            void this.historyManager
+                .dispose()
+                .catch((err) => console.warn('[history] dispose failed:', err));
+        }
+        this.client.disconnect();
+    }
+    // Why: for in-process daemon mode, disconnect without flushing history.
+    // dispose() writes endedAt for all sessions, which would prevent cold
+    // restore. disconnectOnly() leaves history files in unclean state so
+    // the next launch detects them as crash-recoverable.
+    disconnectOnly() {
+        this.removeEventListener?.();
+        this.removeEventListener = null;
+        this.client.disconnect();
+    }
+    async ensureConnected() {
+        await this.client.ensureConnected();
+        this.setupEventRouting();
+    }
+    setupEventRouting() {
+        if (this.removeEventListener) {
+            return;
+        }
+        this.removeEventListener = this.client.onEvent((raw) => {
+            const event = raw;
+            if (event.type !== 'event') {
+                return;
+            }
+            if (event.event === 'data') {
+                if (this.historyManager) {
+                    void this.historyManager
+                        .appendData(event.sessionId, event.payload.data)
+                        .catch((err) => console.warn('[history] appendData failed:', event.sessionId, err));
+                }
+                // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
+                for (const listener of [...this.dataListeners]) {
+                    listener({ id: event.sessionId, data: event.payload.data });
+                }
+            }
+            else if (event.event === 'exit') {
+                if (this.historyManager) {
+                    void this.historyManager
+                        .closeSession(event.sessionId, event.payload.code)
+                        .catch((err) => console.warn('[history] closeSession failed:', event.sessionId, err));
+                }
+                this.initialCwds.delete(event.sessionId);
+                // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
+                for (const listener of [...this.exitListeners]) {
+                    listener({ id: event.sessionId, code: event.payload.code });
+                }
+            }
+        });
+    }
+}

@@ -885,3 +885,137 @@
 .animate-update-card-exit {
   animation: update-card-exit 150ms ease-in both;
 }
+
+/* ── Diff comment decorations ────────────────────────────────────── */
+
+/* Why: the "+" button is appended into Monaco's editor DOM node by
+   useDiffCommentDecorator. Keep it visually subtle until hovered so it does
+   not distract from the diff itself. Left position overlaps the glyph margin
+   so the affordance reads as "add comment on this line". */
+.orca-diff-comment-add-btn {
+  position: absolute;
+  left: 4px;
+  width: 18px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  border-radius: 4px;
+  background: var(--background);
+  color: var(--muted-foreground);
+  cursor: pointer;
+  z-index: 5;
+  opacity: 0.7;
+  transition: opacity 100ms ease, color 100ms ease, background-color 100ms ease;
+}
+
+.orca-diff-comment-add-btn:hover {
+  opacity: 1;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, var(--background));
+}
+
+.orca-diff-comment-inline {
+  width: 100%;
+  padding: 4px 8px 6px;
+  box-sizing: border-box;
+}
+
+.orca-diff-comment-card {
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--muted) 40%, var(--background));
+  padding: 6px 8px;
+  font-family: var(--font-sans, system-ui, sans-serif);
+}
+
+.orca-diff-comment-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.orca-diff-comment-meta {
+  font-size: 11px;
+  color: var(--muted-foreground);
+  font-weight: 500;
+}
+
+.orca-diff-comment-delete {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+
+.orca-diff-comment-delete:hover {
+  color: var(--destructive);
+  border-color: color-mix(in srgb, var(--destructive) 40%, transparent);
+  background: color-mix(in srgb, var(--destructive) 10%, transparent);
+}
+
+.orca-diff-comment-body {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--foreground);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Popover for entering a new comment. Positioned absolutely within the
+   section container so it tracks the clicked line via `top` style. */
+.orca-diff-comment-popover {
+  position: absolute;
+  right: 24px;
+  z-index: 20;
+  width: 320px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--popover, var(--background));
+  color: var(--popover-foreground, var(--foreground));
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.orca-diff-comment-popover-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted-foreground);
+}
+
+.orca-diff-comment-popover-textarea {
+  width: 100%;
+  min-height: 56px;
+  max-height: 240px;
+  resize: none;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.4;
+  outline: none;
+}
+
+.orca-diff-comment-popover-textarea:focus {
+  border-color: color-mix(in srgb, var(--primary) 60%, var(--border));
+}
+
+.orca-diff-comment-popover-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}

@@ -4,6 +4,7 @@ restore-on-remount caching, and scroll preservation. Splitting those pieces
 across smaller files would make the lifecycle edges harder to reason about and
 more error-prone than keeping the whole viewer flow together. */
 import React, { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react'
+import { MessageSquare } from 'lucide-react'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { useAppStore } from '@/store'
 import { joinPath } from '@/lib/path'
@@ -56,6 +57,8 @@ export default function CombinedDiffViewer({
   const openAllDiffs = useAppStore((s) => s.openAllDiffs)
   const openConflictReview = useAppStore((s) => s.openConflictReview)
   const openBranchAllDiffs = useAppStore((s) => s.openBranchAllDiffs)
+  const openDiffCommentsTab = useAppStore((s) => s.openDiffCommentsTab)
+  const diffCommentCount = useAppStore((s) => s.getDiffComments(file.worktreeId).length)
   const isDark =
     settings?.theme === 'dark' ||
     (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
@@ -493,6 +496,14 @@ export default function CombinedDiffViewer({
           {isBranchMode && branchCompare ? ` vs ${branchCompare.baseRef}` : ''}
         </span>
         <div className="flex items-center gap-2">
+          <button
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            onClick={() => openDiffCommentsTab(file.worktreeId, file.filePath)}
+            title="Open diff comments tab"
+          >
+            <MessageSquare className="size-3" />
+            Comments ({diffCommentCount})
+          </button>
           {file.combinedAlternate && (
             <button
               className="text-xs text-muted-foreground hover:text-foreground transition-colors"

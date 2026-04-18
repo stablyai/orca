@@ -1,0 +1,235 @@
+/**
+ * Shell-ready startup command support for local PTYs.
+ *
+ * Why: when Orca needs to inject a startup command (e.g. issue command runner),
+ * it must wait until the shell has fully initialized before writing. This module
+ * provides shell wrapper rcfiles that emit an OSC 133;A marker after startup,
+ * and a data scanner that detects that marker so the command can be written at
+ * the right time.
+ */
+import { basename } from 'path';
+import { mkdirSync, writeFileSync, chmodSync } from 'fs';
+import { app } from 'electron';
+let didEnsureShellReadyWrappers = false;
+function quotePosixSingle(value) {
+    return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+const STARTUP_COMMAND_READY_MAX_WAIT_MS = 1500;
+const OSC_133_A = '\x1b]133;A';
+export function createShellReadyScanState() {
+    return { matchPos: 0, heldBytes: '' };
+}
+export function scanForShellReady(state, data) {
+    let output = '';
+    for (let i = 0; i < data.length; i += 1) {
+        const ch = data[i];
+        if (state.matchPos < OSC_133_A.length) {
+            if (ch === OSC_133_A[state.matchPos]) {
+                state.heldBytes += ch;
+                state.matchPos += 1;
+            }
+            else {
+                output += state.heldBytes;
+                state.heldBytes = '';
+                state.matchPos = 0;
+                if (ch === OSC_133_A[0]) {
+                    state.heldBytes = ch;
+                    state.matchPos = 1;
+                }
+                else {
+                    output += ch;
+                }
+            }
+        }
+        else if (ch === '\x07') {
+            const remaining = data.slice(i + 1);
+            state.heldBytes = '';
+            state.matchPos = 0;
+            return { output: output + remaining, matched: true };
+        }
+        else {
+            state.heldBytes += ch;
+        }
+    }
+    return { output, matched: false };
+}
+// ── Shell wrapper files ─────────────────────────────────────────────
+function getShellReadyWrapperRoot() {
+    return `${app.getPath('userData')}/shell-ready`;
+}
+export function getBashShellReadyRcfileContent() {
+    return `# Orca bash shell-ready wrapper
+[[ -f /etc/profile ]] && source /etc/profile
+if [[ -f "$HOME/.bash_profile" ]]; then
+  source "$HOME/.bash_profile"
+elif [[ -f "$HOME/.bash_login" ]]; then
+  source "$HOME/.bash_login"
+elif [[ -f "$HOME/.profile" ]]; then
+  source "$HOME/.profile"
+fi
+# Why: preserve bash's normal login-shell contract. Many users already source
+# ~/.bashrc from ~/.bash_profile; forcing ~/.bashrc again here would duplicate
+# PATH edits, hooks, and prompt init in Orca startup-command shells.
+# Why: append the marker through PROMPT_COMMAND so it fires after the login
+# startup files have rebuilt the prompt, without re-running user rc files.
+__orca_prompt_mark() {
+  printf "\\033]133;A\\007"
+}
+if [[ "$(declare -p PROMPT_COMMAND 2>/dev/null)" == "declare -a"* ]]; then
+  PROMPT_COMMAND=("\${PROMPT_COMMAND[@]}" "__orca_prompt_mark")
+else
+  _orca_prev_prompt_command="\${PROMPT_COMMAND}"
+  if [[ -n "\${_orca_prev_prompt_command}" ]]; then
+    PROMPT_COMMAND="\${_orca_prev_prompt_command};__orca_prompt_mark"
+  else
+    PROMPT_COMMAND="__orca_prompt_mark"
+  fi
+fi
+`;
+}
+function ensureShellReadyWrappers() {
+    if (didEnsureShellReadyWrappers || process.platform === 'win32') {
+        return;
+    }
+    didEnsureShellReadyWrappers = true;
+    const root = getShellReadyWrapperRoot();
+    const zshDir = `${root}/zsh`;
+    const bashDir = `${root}/bash`;
+    const zshEnv = `# Orca zsh shell-ready wrapper
+export ORCA_ORIG_ZDOTDIR="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
+[[ -f "$ORCA_ORIG_ZDOTDIR/.zshenv" ]] && source "$ORCA_ORIG_ZDOTDIR/.zshenv"
+export ZDOTDIR=${quotePosixSingle(zshDir)}
+`;
+    const zshProfile = `# Orca zsh shell-ready wrapper
+_orca_home="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
+[[ -f "$_orca_home/.zprofile" ]] && source "$_orca_home/.zprofile"
+`;
+    const zshRc = `# Orca zsh shell-ready wrapper
+_orca_home="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
+if [[ -o interactive && -f "$_orca_home/.zshrc" ]]; then
+  source "$_orca_home/.zshrc"
+fi
+`;
+    const zshLogin = `# Orca zsh shell-ready wrapper
+_orca_home="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
+if [[ -o interactive && -f "$_orca_home/.zlogin" ]]; then
+  source "$_orca_home/.zlogin"
+fi
+# Why: emit OSC 133;A only after the user's startup hooks finish so Orca knows
+# the prompt is actually ready for a long startup command paste.
+__orca_prompt_mark() {
+  printf "\\033]133;A\\007"
+}
+precmd_functions=(\${precmd_functions[@]} __orca_prompt_mark)
+`;
+    const bashRc = getBashShellReadyRcfileContent();
+    const files = [
+        [`${zshDir}/.zshenv`, zshEnv],
+        [`${zshDir}/.zprofile`, zshProfile],
+        [`${zshDir}/.zshrc`, zshRc],
+        [`${zshDir}/.zlogin`, zshLogin],
+        [`${bashDir}/rcfile`, bashRc]
+    ];
+    for (const [path, content] of files) {
+        const dir = path.slice(0, path.lastIndexOf('/'));
+        mkdirSync(dir, { recursive: true });
+        writeFileSync(path, content, 'utf8');
+        chmodSync(path, 0o644);
+    }
+}
+export function getShellReadyLaunchConfig(shellPath) {
+    const shellName = basename(shellPath).toLowerCase();
+    if (shellName === 'zsh') {
+        ensureShellReadyWrappers();
+        return {
+            args: ['-l'],
+            env: {
+                ORCA_ORIG_ZDOTDIR: process.env.ZDOTDIR || process.env.HOME || '',
+                ZDOTDIR: `${getShellReadyWrapperRoot()}/zsh`
+            },
+            supportsReadyMarker: true
+        };
+    }
+    if (shellName === 'bash') {
+        ensureShellReadyWrappers();
+        return {
+            args: ['--rcfile', `${getShellReadyWrapperRoot()}/bash/rcfile`],
+            env: {},
+            supportsReadyMarker: true
+        };
+    }
+    return {
+        args: null,
+        env: {},
+        supportsReadyMarker: false
+    };
+}
+// ── Startup command writer ──────────────────────────────────────────
+export function writeStartupCommandWhenShellReady(readyPromise, proc, startupCommand, onExit) {
+    let sent = false;
+    let postReadyTimer = null;
+    let postReadyDataDisposable = null;
+    const cleanup = () => {
+        sent = true;
+        if (postReadyTimer !== null) {
+            clearTimeout(postReadyTimer);
+            postReadyTimer = null;
+        }
+        postReadyDataDisposable?.dispose();
+        postReadyDataDisposable = null;
+    };
+    const flush = () => {
+        if (sent) {
+            return;
+        }
+        sent = true;
+        postReadyDataDisposable?.dispose();
+        postReadyDataDisposable = null;
+        if (postReadyTimer !== null) {
+            clearTimeout(postReadyTimer);
+            postReadyTimer = null;
+        }
+        // Why: run startup commands inside the same interactive shell Orca keeps
+        // open for the pane. Spawning `shell -c <command>; exec shell -l` would
+        // avoid the race, but it would also replace the session after the agent
+        // exits and break "stay in this terminal" workflows.
+        const payload = startupCommand.endsWith('\n') ? startupCommand : `${startupCommand}\n`;
+        // Why: startup commands are usually long, quoted agent launches. Writing
+        // them in one PTY call after the shell-ready barrier avoids the incremental
+        // paste behavior that still dropped characters in practice.
+        proc.write(payload);
+    };
+    readyPromise.then(() => {
+        if (sent) {
+            return;
+        }
+        // Why: the shell-ready marker (OSC 133;A) fires from precmd/PROMPT_COMMAND,
+        // before the prompt is drawn and before zle/readline switches the PTY into
+        // raw mode. Writing the command while the kernel still has ECHO enabled
+        // causes the characters to be echoed once by the kernel and then redisplayed
+        // by the line editor after the prompt — producing a visible duplicate.
+        //
+        // Strategy: wait for the next PTY data event after the ready marker. That
+        // data is the shell drawing its prompt, which means the shell is about to
+        // (or has already) switched to raw mode. A brief follow-up delay covers the
+        // gap between the last prompt write() and the tcsetattr() that enables raw
+        // mode. The 50ms fallback timeout handles the case where the prompt data
+        // arrived in the same chunk as the ready marker (no subsequent onData).
+        postReadyDataDisposable = proc.onData(() => {
+            postReadyDataDisposable?.dispose();
+            postReadyDataDisposable = null;
+            if (postReadyTimer !== null) {
+                clearTimeout(postReadyTimer);
+            }
+            postReadyTimer = setTimeout(flush, 30);
+        });
+        postReadyTimer = setTimeout(() => {
+            postReadyDataDisposable?.dispose();
+            postReadyDataDisposable = null;
+            postReadyTimer = null;
+            flush();
+        }, 50);
+    });
+    onExit(cleanup);
+}
+export { STARTUP_COMMAND_READY_MAX_WAIT_MS };

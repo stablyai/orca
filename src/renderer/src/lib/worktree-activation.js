@@ -1,0 +1,112 @@
+import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal';
+import { buildSetupRunnerCommand } from './setup-runner';
+import { useAppStore } from '@/store';
+import { findWorktreeById } from '@/store/slices/worktree-helpers';
+/**
+ * Shared activation sequence used by the worktree palette, AddRepoDialog,
+ * and AddWorktreeDialog. Covers: cross-repo `activeRepoId` switch,
+ * `activeView` back to terminal, `setActiveWorktree`, initial terminal
+ * creation, sidebar filter clearing, and sidebar reveal.
+ *
+ * The caller only passes `worktreeId`; the helper derives `repoId`
+ * internally via `findWorktreeById`. Returns early without side effects
+ * if the worktree is not found (e.g. deleted between palette open and select).
+ */
+export function activateAndRevealWorktree(worktreeId, opts) {
+    const state = useAppStore.getState();
+    const wt = findWorktreeById(state.worktreesByRepo, worktreeId);
+    if (!wt) {
+        return false;
+    }
+    // 1. Set activeRepoId if crossing repos
+    if (wt.repoId !== state.activeRepoId) {
+        state.setActiveRepo(wt.repoId);
+    }
+    // 2. Switch any non-terminal view back to terminal
+    if (state.activeView !== 'terminal') {
+        state.setActiveView('terminal');
+    }
+    // 3. Core activation: sets activeWorktreeId, restores per-worktree state,
+    // clears unread, bumps dead PTY generations, triggers GitHub refresh
+    state.setActiveWorktree(worktreeId);
+    // 4. Ensure a focusable surface exists for externally-created worktrees
+    ensureWorktreeHasInitialTerminal(useAppStore.getState(), worktreeId, opts?.startup, opts?.setup, opts?.issueCommand);
+    // 5. Clear sidebar filters that would hide the target worktree
+    // Why: revealWorktreeInSidebar relies on the worktree card being rendered
+    // in the sidebar. If sidebar filters exclude the target, the card is never
+    // rendered and the reveal silently no-ops.
+    if (state.searchQuery) {
+        state.setSearchQuery('');
+    }
+    if (state.filterRepoIds.length > 0 && !state.filterRepoIds.includes(wt.repoId)) {
+        state.setFilterRepoIds([]);
+    }
+    // 6. Reveal in sidebar
+    state.revealWorktreeInSidebar(worktreeId);
+    return true;
+}
+export function ensureWorktreeHasInitialTerminal(store, worktreeId, startup, setup, issueCommand) {
+    const { renderableTabCount } = store.reconcileWorktreeTabModel(worktreeId);
+    // Why: activation can now restore editor- or browser-only worktrees from the
+    // reconciled tab-group model. Creating a terminal just because the legacy
+    // terminal slice is empty would reopen worktrees with an unexpected extra tab.
+    if (!shouldAutoCreateInitialTerminal(renderableTabCount)) {
+        return;
+    }
+    const terminalTab = store.createTab(worktreeId);
+    store.setActiveTab(terminalTab.id);
+    // Why: the new-workspace flow can seed the first terminal with a selected
+    // coding agent and user prompt. Queue that startup command on the initial
+    // pane so the main terminal begins in the requested agent session instead of
+    // opening to an idle shell and forcing the user to repeat the same prompt.
+    if (startup) {
+        store.queueTabStartupCommand(terminalTab.id, startup);
+    }
+    // Why: the setup script launch location is user-configurable. The default
+    // 'split-vertical' preserves the historical behavior (right-side split so
+    // the main terminal stays immediately interactive); 'split-horizontal'
+    // swaps the split orientation; 'new-tab' creates a separate background
+    // tab titled "Setup" without stealing focus from the main terminal.
+    if (setup) {
+        const mode = useAppStore.getState().settings?.setupScriptLaunchMode ?? 'split-vertical';
+        const setupCommand = {
+            command: buildSetupRunnerCommand(setup.runnerScriptPath),
+            env: setup.envVars
+        };
+        if (mode === 'new-tab') {
+            const setupTab = store.createTab(worktreeId);
+            // Why: createTab auto-activates the new tab. Revert activation so the
+            // user's focus stays on the primary terminal — per the design, the
+            // Setup tab runs unattended in the background.
+            store.setActiveTab(terminalTab.id);
+            // Why: customTitle wins over the auto-generated "Terminal N" label
+            // everywhere the tab is rendered (tab bar, switcher, session snapshots),
+            // so labeling via customTitle is the single authoritative source.
+            store.setTabCustomTitle(setupTab.id, 'Setup');
+            store.queueTabStartupCommand(setupTab.id, setupCommand);
+        }
+        else {
+            store.queueTabSetupSplit(terminalTab.id, {
+                ...setupCommand,
+                direction: mode === 'split-horizontal' ? 'horizontal' : 'vertical'
+            });
+        }
+    }
+    // Why: when the user links a GitHub issue and opts into that repo's
+    // per-user issue automation, spawn a separate split pane to run the
+    // agent command. Queued independently from setup so both can start in
+    // parallel; repo bootstrap and personal issue workflows are separate
+    // concerns, so Orca should not invent a dependency between them.
+    if (issueCommand) {
+        // Why: WorktreeSetupLaunch carries a runner-script file (from main) and we
+        // shell out to bash; the NewWorkspacePage variant is already an expanded
+        // command string, so pass it through directly.
+        const queuedIssueCommand = 'runnerScriptPath' in issueCommand
+            ? {
+                command: buildSetupRunnerCommand(issueCommand.runnerScriptPath),
+                env: issueCommand.envVars
+            }
+            : { command: issueCommand.command, env: issueCommand.env };
+        store.queueTabIssueCommandSplit(terminalTab.id, queuedIssueCommand);
+    }
+}

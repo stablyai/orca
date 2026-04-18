@@ -1,0 +1,323 @@
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import { useRef, useCallback, useEffect, useLayoutEffect, useState } from 'react';
+import Editor from '@monaco-editor/react';
+import { Copy, ExternalLink } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { useAppStore } from '@/store';
+import { getConnectionId } from '@/lib/connection-context';
+import { scrollTopCache, cursorPositionCache, setWithLRU } from '@/lib/scroll-cache';
+import '@/lib/monaco-setup';
+import { computeEditorFontSize } from '@/lib/editor-font-zoom';
+import { useContextualCopySetup } from './useContextualCopySetup';
+import { computeMonacoRevealRange } from './monaco-reveal-range';
+export default function MonacoEditor({ filePath, viewStateKey, relativePath, content, language, onContentChange, onSave, revealLine, revealColumn, revealMatchLength }) {
+    const editorRef = useRef(null);
+    const revealDecorationRef = useRef(null);
+    const revealHighlightTimerRef = useRef(null);
+    const revealRafRef = useRef(null);
+    const revealInnerRafRef = useRef(null);
+    const { setupCopy, toastNode } = useContextualCopySetup();
+    // Why: The scroll throttle timer must be accessible from useLayoutEffect cleanup
+    // so we can cancel any pending write before synchronously snapshotting the final
+    // scroll position on unmount. Without this, a pending timer could fire after
+    // cleanup and overwrite the correct value with a stale one.
+    const scrollThrottleTimerRef = useRef(null);
+    const propsRef = useRef({ relativePath, language, onSave });
+    // Why: assigning during render keeps the ref current before any event handler
+    // or effect reads it, avoiding the one-render stale window that a useEffect
+    // would introduce. Refs are mutable and don't trigger re-renders, so this is
+    // safe to do unconditionally every render.
+    propsRef.current = { relativePath, language, onSave };
+    const settings = useAppStore((s) => s.settings);
+    const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel);
+    const setPendingEditorReveal = useAppStore((s) => s.setPendingEditorReveal);
+    const setEditorCursorLine = useAppStore((s) => s.setEditorCursorLine);
+    const editorFontSize = computeEditorFontSize(settings?.terminalFontSize ?? 13, editorFontZoomLevel);
+    // Gutter context menu state
+    const [gutterMenuOpen, setGutterMenuOpen] = useState(false);
+    const [gutterMenuPoint, setGutterMenuPoint] = useState({ x: 0, y: 0 });
+    const [gutterMenuLine, setGutterMenuLine] = useState(1);
+    const isDark = settings?.theme === 'dark' ||
+        (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    const clearTransientRevealHighlight = useCallback(() => {
+        if (revealHighlightTimerRef.current !== null) {
+            clearTimeout(revealHighlightTimerRef.current);
+            revealHighlightTimerRef.current = null;
+        }
+        revealDecorationRef.current?.clear();
+        revealDecorationRef.current = null;
+    }, []);
+    const cancelScheduledReveal = useCallback(() => {
+        if (revealRafRef.current !== null) {
+            cancelAnimationFrame(revealRafRef.current);
+            revealRafRef.current = null;
+        }
+        if (revealInnerRafRef.current !== null) {
+            cancelAnimationFrame(revealInnerRafRef.current);
+            revealInnerRafRef.current = null;
+        }
+    }, []);
+    const queueReveal = useCallback((editorInstance, line, column, matchLength, onApplied) => {
+        cancelScheduledReveal();
+        // Why: the search click path already waits two frames before publishing
+        // the reveal intent, but Monaco can still mount before its viewport math
+        // settles. Deferring the actual reveal by two editor-owned frames keeps
+        // scroll-to-match and inline highlight deterministic on fresh opens.
+        revealRafRef.current = requestAnimationFrame(() => {
+            revealInnerRafRef.current = requestAnimationFrame(() => {
+                performReveal(editorInstance, line, column, matchLength, clearTransientRevealHighlight, revealDecorationRef, revealHighlightTimerRef);
+                onApplied?.();
+                revealRafRef.current = null;
+                revealInnerRafRef.current = null;
+            });
+        });
+    }, [cancelScheduledReveal, clearTransientRevealHighlight]);
+    const handleMount = useCallback((editorInstance, monaco) => {
+        editorRef.current = editorInstance;
+        setupCopy(editorInstance, monaco, filePath, propsRef);
+        // Add Cmd+S save keybinding
+        editorInstance.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+            const value = editorInstance.getValue();
+            propsRef.current.onSave(value);
+        });
+        // Track cursor line for "copy path to line" feature
+        const pos = editorInstance.getPosition();
+        if (pos) {
+            setEditorCursorLine(filePath, pos.lineNumber);
+        }
+        editorInstance.onDidChangeCursorPosition((e) => {
+            setEditorCursorLine(filePath, e.position.lineNumber);
+            setWithLRU(cursorPositionCache, viewStateKey, {
+                lineNumber: e.position.lineNumber,
+                column: e.position.column
+            });
+        });
+        // Why: Writing to the Map at 60fps (every scroll frame) is unnecessary since
+        // we only need the final position when the user stops scrolling or switches
+        // tabs. A trailing throttle of ~150ms captures the resting position while
+        // avoiding excessive writes.
+        editorInstance.onDidScrollChange((e) => {
+            if (scrollThrottleTimerRef.current !== null) {
+                clearTimeout(scrollThrottleTimerRef.current);
+            }
+            scrollThrottleTimerRef.current = setTimeout(() => {
+                setWithLRU(scrollTopCache, viewStateKey, e.scrollTop);
+                scrollThrottleTimerRef.current = null;
+            }, 150);
+        });
+        // Intercept right-click on line number gutter to show Radix context menu
+        // (same approach as VSCode: custom menu instead of Monaco's built-in one)
+        editorInstance.onMouseDown((e) => {
+            if (e.event.rightButton &&
+                e.target.type === monaco.editor.MouseTargetType.GUTTER_LINE_NUMBERS) {
+                e.event.preventDefault();
+                e.event.stopPropagation();
+                const line = e.target.position?.lineNumber ?? 1;
+                editorInstance.setPosition({ lineNumber: line, column: 1 });
+                setGutterMenuLine(line);
+                setGutterMenuPoint({ x: e.event.posx, y: e.event.posy });
+                setGutterMenuOpen(true);
+            }
+        });
+        // If there's a pending reveal at mount time, execute it now
+        const reveal = useAppStore.getState().pendingEditorReveal;
+        // Why: search-result navigation sets the reveal before openFile switches
+        // the active tab. Without scoping consumption to the destination file,
+        // the previously mounted editor can clear the reveal on the first click.
+        if (reveal?.filePath === filePath) {
+            queueReveal(editorInstance, reveal.line, reveal.column, reveal.matchLength, () => {
+                useAppStore.getState().setPendingEditorReveal(null);
+            });
+        }
+        else {
+            const savedCursor = cursorPositionCache.get(viewStateKey);
+            const savedScrollTop = scrollTopCache.get(viewStateKey);
+            if (savedScrollTop !== undefined || savedCursor) {
+                // Why: Monaco renders synchronously, so a single RAF is sufficient to
+                // wait for the layout pass. Unlike react-markdown or Tiptap, there is
+                // no async content loading that would require a retry loop.
+                // Focus is deferred into the same RAF to avoid a one-frame flash where
+                // the editor is focused at scroll position 0 before restoration.
+                requestAnimationFrame(() => {
+                    if (savedCursor) {
+                        editorInstance.setPosition(savedCursor);
+                    }
+                    if (savedScrollTop !== undefined) {
+                        editorInstance.setScrollTop(savedScrollTop);
+                    }
+                    editorInstance.focus();
+                });
+            }
+            else {
+                editorInstance.focus();
+            }
+        }
+    }, [queueReveal, setupCopy, filePath, setEditorCursorLine, viewStateKey]);
+    const handleChange = useCallback((value) => {
+        if (value !== undefined) {
+            onContentChange(value);
+        }
+    }, [onContentChange]);
+    // Snapshot scroll position synchronously on unmount so tab switches always
+    // capture the latest value, even if the trailing throttle hasn't fired yet.
+    // Why useLayoutEffect: cleanup runs before @monaco-editor/react's useEffect
+    // disposes the editor instance, guaranteeing getScrollTop() reads valid state.
+    useLayoutEffect(() => {
+        return () => {
+            // Why: Cancel any pending throttled scroll write so it cannot fire after
+            // this synchronous snapshot, which would overwrite the correct final
+            // position with a stale intermediate value.
+            if (scrollThrottleTimerRef.current !== null) {
+                clearTimeout(scrollThrottleTimerRef.current);
+                scrollThrottleTimerRef.current = null;
+            }
+            const ed = editorRef.current;
+            if (ed) {
+                setWithLRU(scrollTopCache, viewStateKey, ed.getScrollTop());
+                const pos = ed.getPosition();
+                if (pos) {
+                    setWithLRU(cursorPositionCache, viewStateKey, {
+                        lineNumber: pos.lineNumber,
+                        column: pos.column
+                    });
+                }
+            }
+            cancelScheduledReveal();
+            clearTransientRevealHighlight();
+        };
+    }, [cancelScheduledReveal, clearTransientRevealHighlight, viewStateKey]);
+    // Update editor options when settings change
+    useEffect(() => {
+        if (!editorRef.current || !settings) {
+            return;
+        }
+        editorRef.current.updateOptions({
+            fontSize: editorFontSize,
+            fontFamily: settings.terminalFontFamily || 'monospace'
+        });
+    }, [editorFontSize, settings]);
+    useEffect(() => {
+        const handler = (event) => {
+            const detail = event.detail;
+            if (!detail || detail.filePath !== filePath || !detail.line) {
+                return;
+            }
+            const editor = editorRef.current;
+            if (!editor) {
+                return;
+            }
+            const targetColumn = Math.max(1, detail.column ?? 1);
+            const targetLine = Math.max(1, detail.line);
+            editor.revealPositionInCenter({ lineNumber: targetLine, column: targetColumn });
+            editor.setPosition({ lineNumber: targetLine, column: targetColumn });
+            editor.focus();
+        };
+        window.addEventListener('orca:editor-reveal-location', handler);
+        return () => window.removeEventListener('orca:editor-reveal-location', handler);
+    }, [filePath]);
+    // Navigate to line and highlight match when requested (for already-mounted editor)
+    useEffect(() => {
+        if (!revealLine || !editorRef.current) {
+            return;
+        }
+        queueReveal(editorRef.current, revealLine, revealColumn ?? 1, revealMatchLength ?? 0, () => {
+            // Why: the reveal is intentionally delayed until Monaco finishes its
+            // own post-mount layout frames. Clearing the pending payload only after
+            // the queued reveal runs prevents lost navigation if the editor
+            // unmounts before those frames execute.
+            setPendingEditorReveal(null);
+        });
+    }, [queueReveal, revealLine, revealColumn, revealMatchLength, setPendingEditorReveal]);
+    return (_jsxs("div", { className: "relative h-full", children: [_jsx(Editor, { height: "100%", language: language, value: content, theme: isDark ? 'vs-dark' : 'vs', onChange: handleChange, onMount: handleMount, options: {
+                    minimap: { enabled: false },
+                    scrollBeyondLastLine: false,
+                    wordWrap: 'on',
+                    fontSize: editorFontSize,
+                    fontFamily: settings?.terminalFontFamily || 'monospace',
+                    lineNumbers: 'on',
+                    renderLineHighlight: 'line',
+                    automaticLayout: true,
+                    tabSize: 2,
+                    smoothScrolling: true,
+                    cursorSmoothCaretAnimation: 'off',
+                    padding: { top: 0 },
+                    find: {
+                        addExtraSpaceOnTop: false,
+                        autoFindInSelection: 'never',
+                        seedSearchStringFromSelection: 'never'
+                    }
+                }, path: filePath, 
+                // Why: keepCurrentModel preserves the Monaco text model so undo/redo
+                // survives tab switches, but @monaco-editor/react's own view-state Map
+                // would become a second state owner. Orca restores cursor/scroll from
+                // its explicit caches so close/reopen semantics stay under app control.
+                saveViewState: false, keepCurrentModel: true }), toastNode, _jsxs(DropdownMenu, { open: gutterMenuOpen, onOpenChange: setGutterMenuOpen, modal: false, children: [_jsx(DropdownMenuTrigger, { asChild: true, children: _jsx("button", { "aria-hidden": true, tabIndex: -1, className: "pointer-events-none fixed size-px opacity-0", style: { left: gutterMenuPoint.x, top: gutterMenuPoint.y } }) }), _jsxs(DropdownMenuContent, { sideOffset: 0, align: "start", children: [_jsxs(DropdownMenuItem, { onSelect: () => {
+                                    window.api.ui.writeClipboardText(`${filePath}#L${gutterMenuLine}`);
+                                }, children: [_jsx(Copy, { className: "w-3.5 h-3.5 mr-1.5" }), "Copy Path to Line"] }), _jsxs(DropdownMenuItem, { onSelect: () => {
+                                    window.api.ui.writeClipboardText(`${relativePath}#L${gutterMenuLine}`);
+                                }, children: [_jsx(Copy, { className: "w-3.5 h-3.5 mr-1.5" }), "Copy Rel. Path to Line"] }), _jsxs(DropdownMenuItem, { onSelect: async () => {
+                                    // Derive worktree root from the absolute and relative paths
+                                    const worktreePath = filePath.slice(0, -(relativePath.length + 1));
+                                    const activeFile = useAppStore
+                                        .getState()
+                                        .openFiles.find((f) => f.filePath === filePath);
+                                    const connectionId = getConnectionId(activeFile?.worktreeId ?? null) ?? undefined;
+                                    const url = await window.api.git.remoteFileUrl({
+                                        worktreePath,
+                                        relativePath,
+                                        line: gutterMenuLine,
+                                        connectionId
+                                    });
+                                    if (url) {
+                                        window.api.ui.writeClipboardText(url);
+                                    }
+                                }, children: [_jsx(ExternalLink, { className: "w-3.5 h-3.5 mr-1.5" }), "Copy Remote URL"] })] })] })] }));
+}
+/** Shared reveal logic used by both onMount and useEffect */
+function performReveal(ed, line, column, matchLength, clearTransientRevealHighlight, revealDecorationRef, revealHighlightTimerRef) {
+    const model = ed.getModel();
+    if (!model) {
+        ed.focus();
+        return;
+    }
+    const range = computeMonacoRevealRange({
+        line,
+        column,
+        matchLength,
+        maxLine: model.getLineCount(),
+        lineMaxColumn: model.getLineMaxColumn(Math.min(Math.max(1, line), model.getLineCount()))
+    });
+    const shouldHighlight = matchLength > 0;
+    ed.setPosition({ lineNumber: range.startLineNumber, column: range.startColumn });
+    if (shouldHighlight) {
+        ed.setSelection(range);
+        ed.revealRangeInCenter(range);
+    }
+    else {
+        ed.setSelection({
+            startLineNumber: range.startLineNumber,
+            startColumn: range.startColumn,
+            endLineNumber: range.startLineNumber,
+            endColumn: range.startColumn
+        });
+        ed.revealPositionInCenter({ lineNumber: range.startLineNumber, column: range.startColumn });
+    }
+    clearTransientRevealHighlight();
+    if (shouldHighlight) {
+        revealDecorationRef.current = ed.createDecorationsCollection([
+            {
+                range,
+                options: {
+                    inlineClassName: 'monaco-search-result-highlight',
+                    stickiness: 1
+                }
+            }
+        ]);
+        revealHighlightTimerRef.current = setTimeout(() => {
+            revealDecorationRef.current?.clear();
+            revealDecorationRef.current = null;
+            revealHighlightTimerRef.current = null;
+        }, 1200);
+    }
+    ed.focus();
+}

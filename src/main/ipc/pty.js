@@ -1,0 +1,342 @@
+/* eslint-disable max-lines -- Why: PTY IPC is intentionally centralized in one
+main-process module so spawn-time environment scoping, lifecycle cleanup,
+foreground-process inspection, and renderer IPC stay behind a single audited
+boundary. Splitting it by line count would scatter tightly coupled terminal
+process behavior across files without a cleaner ownership seam. */
+import { ipcMain } from 'electron';
+export { getBashShellReadyRcfileContent } from '../providers/local-pty-shell-ready';
+import { openCodeHookService } from '../opencode/hook-service';
+import { piTitlebarExtensionService } from '../pi/titlebar-extension-service';
+import { LocalPtyProvider } from '../providers/local-pty-provider';
+// ─── Provider Registry ──────────────────────────────────────────────
+// Routes PTY operations by connectionId. null = local provider.
+// SSH providers will be registered here in Phase 1.
+let localProvider = new LocalPtyProvider();
+const sshProviders = new Map();
+// Why: PTY IDs are assigned at spawn time with a connectionId, but subsequent
+// write/resize/kill calls only carry the PTY ID. This map lets us route
+// post-spawn operations to the correct provider without the renderer needing
+// to track connectionId per-PTY.
+const ptyOwnership = new Map();
+function getProvider(connectionId) {
+    if (!connectionId) {
+        return localProvider;
+    }
+    const provider = sshProviders.get(connectionId);
+    if (!provider) {
+        throw new Error(`No PTY provider for connection "${connectionId}"`);
+    }
+    return provider;
+}
+function getProviderForPty(ptyId) {
+    const connectionId = ptyOwnership.get(ptyId);
+    if (connectionId === undefined) {
+        return localProvider;
+    }
+    return getProvider(connectionId);
+}
+/** Register an SSH PTY provider for a connection. */
+export function registerSshPtyProvider(connectionId, provider) {
+    sshProviders.set(connectionId, provider);
+}
+/** Remove an SSH PTY provider when a connection is closed. */
+export function unregisterSshPtyProvider(connectionId) {
+    sshProviders.delete(connectionId);
+}
+/** Get the SSH PTY provider for a connection (for dispose on cleanup). */
+export function getSshPtyProvider(connectionId) {
+    return sshProviders.get(connectionId);
+}
+/** Get the local PTY provider (for direct access in tests/runtime). */
+export function getLocalPtyProvider() {
+    // Why: callers that need LocalPtyProvider-specific methods (killOrphanedPtys,
+    // advanceGeneration, getPtyProcess) can only work with the local provider.
+    // When daemon mode is active, this returns the underlying LocalPtyProvider
+    // would not be available — callers should check for null or use getProvider().
+    return localProvider;
+}
+/** Replace the local PTY provider with a daemon-backed one.
+ *  Call before registerPtyHandlers so the IPC layer routes through the daemon. */
+export function setLocalPtyProvider(provider) {
+    localProvider = provider;
+}
+/** Get all PTY IDs owned by a given connectionId (for reconnection reattach). */
+export function getPtyIdsForConnection(connectionId) {
+    const ids = [];
+    for (const [ptyId, connId] of ptyOwnership) {
+        if (connId === connectionId) {
+            ids.push(ptyId);
+        }
+    }
+    return ids;
+}
+/**
+ * Remove all PTY ownership entries for a given connectionId.
+ * Why: when an SSH connection is closed, the remote PTYs are gone but their
+ * ownership entries linger. Without cleanup, subsequent spawn calls could
+ * look up a stale provider for those PTY IDs, and the map grows unboundedly.
+ */
+export function clearPtyOwnershipForConnection(connectionId) {
+    for (const [ptyId, connId] of ptyOwnership) {
+        if (connId === connectionId) {
+            ptyOwnership.delete(ptyId);
+        }
+    }
+}
+// ─── Provider-scoped PTY state cleanup ──────────────────────────────
+export function clearProviderPtyState(id) {
+    // Why: OpenCode and Pi both allocate PTY-scoped runtime state outside the
+    // node-pty process table. Centralizing provider cleanup avoids drift where a
+    // new teardown path forgets to remove one provider's overlay/hook state.
+    openCodeHookService.clearPty(id);
+    piTitlebarExtensionService.clearPty(id);
+}
+export function deletePtyOwnership(id) {
+    ptyOwnership.delete(id);
+}
+// Why: localProvider.onData/onExit return unsubscribe functions. Without
+// storing and calling these on re-registration, macOS app re-activation
+// creates a new BrowserWindow and re-calls registerPtyHandlers, leaking
+// duplicate listeners that forward every event twice.
+let localDataUnsub = null;
+let localExitUnsub = null;
+let didFinishLoadHandler = null;
+// ─── IPC Registration ───────────────────────────────────────────────
+export function registerPtyHandlers(mainWindow, runtime, getSelectedCodexHomePath, getSettings) {
+    // Remove any previously registered handlers so we can re-register them
+    // (e.g. when macOS re-activates the app and creates a new window).
+    ipcMain.removeHandler('pty:spawn');
+    ipcMain.removeHandler('pty:kill');
+    ipcMain.removeHandler('pty:listSessions');
+    ipcMain.removeHandler('pty:hasChildProcesses');
+    ipcMain.removeHandler('pty:getForegroundProcess');
+    ipcMain.removeAllListeners('pty:write');
+    ipcMain.removeAllListeners('pty:ackColdRestore');
+    // Configure the local provider with app-specific hooks.
+    // Why: only LocalPtyProvider has the configure() method — daemon-backed
+    // providers handle subprocess spawning internally and don't need main-process
+    // hook injection. The hooks (buildSpawnEnv, onSpawned, etc.) only make sense
+    // when the PTY lives in the Electron main process.
+    if (localProvider instanceof LocalPtyProvider) {
+        localProvider.configure({
+            isHistoryEnabled: () => getSettings?.()?.terminalScopeHistoryByWorktree ?? true,
+            buildSpawnEnv: (id, baseEnv) => {
+                const selectedCodexHomePath = getSelectedCodexHomePath?.() ?? null;
+                const openCodeHookEnv = openCodeHookService.buildPtyEnv(id);
+                if (baseEnv.OPENCODE_CONFIG_DIR) {
+                    // Why: OPENCODE_CONFIG_DIR is a singular extra config root. Replacing a
+                    // user-provided directory would silently hide their custom OpenCode
+                    // config, so preserve it and fall back to title-only detection there.
+                    delete openCodeHookEnv.OPENCODE_CONFIG_DIR;
+                }
+                Object.assign(baseEnv, openCodeHookEnv);
+                // Why: PI_CODING_AGENT_DIR owns Pi's full config/session root. Build a
+                // PTY-scoped overlay from the caller's chosen root so Pi sessions keep
+                // their user state without sharing a mutable overlay across terminals.
+                Object.assign(baseEnv, piTitlebarExtensionService.buildPtyEnv(id, baseEnv.PI_CODING_AGENT_DIR));
+                // Why: the selected Codex account should affect Codex launched inside
+                // Orca terminals too, not just Orca's background quota fetches. Inject
+                // the managed CODEX_HOME only into this PTY environment so the override
+                // stays scoped to Orca terminals instead of mutating the app process or
+                // the user's external shells.
+                if (selectedCodexHomePath) {
+                    baseEnv.CODEX_HOME = selectedCodexHomePath;
+                }
+                return baseEnv;
+            },
+            onSpawned: (id) => runtime?.onPtySpawned(id),
+            onExit: (id, code) => {
+                clearProviderPtyState(id);
+                ptyOwnership.delete(id);
+                runtime?.onPtyExit(id, code);
+            },
+            onData: (id, data, timestamp) => runtime?.onPtyData(id, data, timestamp)
+        });
+    }
+    // Wire up provider events → renderer IPC
+    localDataUnsub?.();
+    localExitUnsub?.();
+    // Why: batching PTY data into short flush windows (8ms ≈ half a frame)
+    // reduces IPC round-trips from hundreds/sec to ~120/sec under high
+    // throughput, with no perceptible latency increase for interactive use.
+    const pendingData = new Map();
+    let flushTimer = null;
+    const PTY_BATCH_INTERVAL_MS = 8;
+    const flushPendingData = () => {
+        flushTimer = null;
+        if (mainWindow.isDestroyed()) {
+            pendingData.clear();
+            return;
+        }
+        for (const [id, data] of pendingData) {
+            mainWindow.webContents.send('pty:data', { id, data });
+        }
+        pendingData.clear();
+    };
+    localDataUnsub = localProvider.onData((payload) => {
+        if (mainWindow.isDestroyed()) {
+            // Why: clear the pending flush timer so it doesn't fire after the window
+            // is gone. Without this, macOS app re-activation leaks orphaned timers
+            // from the previous window's registration.
+            if (flushTimer) {
+                clearTimeout(flushTimer);
+                flushTimer = null;
+            }
+            pendingData.clear();
+            return;
+        }
+        const existing = pendingData.get(payload.id);
+        pendingData.set(payload.id, existing ? existing + payload.data : payload.data);
+        if (!flushTimer) {
+            flushTimer = setTimeout(flushPendingData, PTY_BATCH_INTERVAL_MS);
+        }
+    });
+    localExitUnsub = localProvider.onExit((payload) => {
+        if (!mainWindow.isDestroyed()) {
+            // Why: flush any batched data for this PTY before sending the exit event,
+            // otherwise the last ≤8ms of output is silently lost because the renderer
+            // tears down the terminal on pty:exit before the batch timer fires.
+            const remaining = pendingData.get(payload.id);
+            if (remaining) {
+                mainWindow.webContents.send('pty:data', { id: payload.id, data: remaining });
+                pendingData.delete(payload.id);
+            }
+            mainWindow.webContents.send('pty:exit', payload);
+        }
+    });
+    // Kill orphaned PTY processes from previous page loads when the renderer reloads.
+    // Why: only applies to LocalPtyProvider where PTYs live in the Electron main
+    // process and can become orphaned on page reload. Daemon-backed sessions
+    // survive renderer restarts by design — orphan cleanup would kill them.
+    if (localProvider instanceof LocalPtyProvider) {
+        const lp = localProvider;
+        if (didFinishLoadHandler) {
+            mainWindow.webContents.removeListener('did-finish-load', didFinishLoadHandler);
+        }
+        didFinishLoadHandler = () => {
+            const killed = lp.killOrphanedPtys(lp.advanceGeneration() - 1);
+            for (const { id } of killed) {
+                clearProviderPtyState(id);
+                ptyOwnership.delete(id);
+                runtime?.onPtyExit(id, -1);
+            }
+        };
+        mainWindow.webContents.on('did-finish-load', didFinishLoadHandler);
+    }
+    // Why: the runtime controller must route through getProviderForPty() so that
+    // CLI commands (terminal.send, terminal.stop) work for both local and remote PTYs.
+    // Hardcoding localProvider.getPtyProcess() would silently fail for remote PTYs.
+    runtime?.setPtyController({
+        write: (ptyId, data) => {
+            const provider = getProviderForPty(ptyId);
+            try {
+                provider.write(ptyId, data);
+                return true;
+            }
+            catch {
+                return false;
+            }
+        },
+        kill: (ptyId) => {
+            const provider = getProviderForPty(ptyId);
+            // Why: shutdown() is async but the PtyController interface is sync.
+            // Swallowing the rejection prevents an unhandled promise rejection crash
+            // if the remote SSH session is already gone.
+            void provider.shutdown(ptyId, false).catch(() => { });
+            clearProviderPtyState(ptyId);
+            runtime?.onPtyExit(ptyId, -1);
+            return true;
+        }
+    });
+    // ─── IPC Handlers (thin dispatch layer) ─────────────────────────
+    ipcMain.handle('pty:spawn', async (_event, args) => {
+        const provider = getProvider(args.connectionId);
+        const result = await provider.spawn({
+            cols: args.cols,
+            rows: args.rows,
+            cwd: args.cwd,
+            env: args.env,
+            command: args.command,
+            worktreeId: args.worktreeId,
+            sessionId: args.sessionId
+        });
+        ptyOwnership.set(result.id, args.connectionId ?? null);
+        return result;
+    });
+    ipcMain.on('pty:write', (_event, args) => {
+        getProviderForPty(args.id).write(args.id, args.data);
+    });
+    // Why: resize is fire-and-forget — the renderer doesn't need a reply.
+    // Using ipcMain.on (not .handle) halves IPC traffic by avoiding the
+    // empty acknowledgement message back to the renderer.
+    ipcMain.removeAllListeners('pty:resize');
+    ipcMain.on('pty:resize', (_event, args) => {
+        getProviderForPty(args.id).resize(args.id, args.cols, args.rows);
+    });
+    // Why: fire-and-forget — clears the DaemonPtyAdapter's sticky cold restore
+    // cache after the renderer has consumed the data. No-op for non-daemon providers.
+    ipcMain.on('pty:ackColdRestore', (_event, args) => {
+        const provider = getProviderForPty(args.id);
+        if ('ackColdRestore' in provider && typeof provider.ackColdRestore === 'function') {
+            provider.ackColdRestore(args.id);
+        }
+    });
+    ipcMain.removeAllListeners('pty:signal');
+    ipcMain.on('pty:signal', (_event, args) => {
+        getProviderForPty(args.id)
+            .sendSignal(args.id, args.signal)
+            .catch(() => { });
+    });
+    ipcMain.handle('pty:kill', async (_event, args) => {
+        // Why: try/finally ensures ptyOwnership is cleaned up even if shutdown
+        // throws (e.g. SSH connection already gone or daemon session already
+        // reaped). Swallowing the error prevents noisy renderer-side rejections
+        // when killing orphaned sessions that the daemon has already discarded.
+        try {
+            await getProviderForPty(args.id).shutdown(args.id, true);
+        }
+        catch {
+            /* session already dead — cleanup below handles the rest */
+        }
+        finally {
+            ptyOwnership.delete(args.id);
+        }
+    });
+    ipcMain.handle('pty:listSessions', async () => {
+        const providerSessions = await Promise.all([
+            Promise.resolve({
+                connectionId: null,
+                sessions: await localProvider.listProcesses()
+            }),
+            ...Array.from(sshProviders.entries(), async ([connectionId, provider]) => ({
+                connectionId,
+                sessions: await provider.listProcesses().catch(() => [])
+            }))
+        ]);
+        const deduped = new Map();
+        for (const { connectionId, sessions } of providerSessions) {
+            for (const session of sessions) {
+                // Why: SessionsStatusSegment kill actions only send the PTY id back
+                // through IPC. Rebuild ownership while listing so remote sessions
+                // discovered after reconnect still route to their original provider.
+                ptyOwnership.set(session.id, connectionId);
+                deduped.set(session.id, session);
+            }
+        }
+        return Array.from(deduped.values());
+    });
+    ipcMain.handle('pty:hasChildProcesses', async (_event, args) => {
+        return getProviderForPty(args.id).hasChildProcesses(args.id);
+    });
+    ipcMain.handle('pty:getForegroundProcess', async (_event, args) => {
+        return getProviderForPty(args.id).getForegroundProcess(args.id);
+    });
+}
+/**
+ * Kill all PTY processes. Call on app quit.
+ */
+export function killAllPty() {
+    if (localProvider instanceof LocalPtyProvider) {
+        localProvider.killAll();
+    }
+}
