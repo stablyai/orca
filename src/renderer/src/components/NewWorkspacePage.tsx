@@ -34,6 +34,7 @@ import { getLinkedWorkItemSuggestedName, getTaskPresetQuery } from '@/lib/new-wo
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import type { GitHubWorkItem, TaskViewPresetId } from '../../../shared/types'
+import { shouldSuppressEnterSubmit } from './new-workspace-enter-guard'
 
 type TaskSource = 'github' | 'linear'
 type TaskQueryPreset = {
@@ -332,6 +333,9 @@ export default function NewWorkspacePage(): React.JSX.Element {
   const handleTaskSearchKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>): void => {
       if (event.key === 'Enter') {
+        if (shouldSuppressEnterSubmit(event, false)) {
+          return
+        }
         event.preventDefault()
         handleApplyTaskSearch()
       }
