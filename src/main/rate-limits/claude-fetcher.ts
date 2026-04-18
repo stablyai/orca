@@ -2,12 +2,52 @@ import { readFile } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
 import { homedir } from 'node:os'
 import path from 'node:path'
+import { ProxyAgent } from 'undici'
 import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
 import { fetchViaPty } from './claude-pty'
 
 const OAUTH_USAGE_URL = 'https://api.anthropic.com/api/oauth/usage'
 const OAUTH_BETA_HEADER = 'oauth-2025-04-20'
 const API_TIMEOUT_MS = 10_000
+
+/**
+ * Resolve an HTTP proxy dispatcher from the standard environment variables.
+ *
+ * Why: Node's built-in `fetch` (undici) does not honor `HTTP_PROXY` /
+ * `HTTPS_PROXY` / `ALL_PROXY` envvars automatically — callers must pass an
+ * explicit `dispatcher`. For users in regions where Anthropic is only
+ * reachable via proxy (see #521, #800), skipping this routing means:
+ *   1. the usage indicator silently fails, and
+ *   2. the app may hit Anthropic from an unexpected IP, which risks
+ *      triggering anti-abuse / rate-limit signals on the user's account.
+ *
+ * Precedence follows the de-facto convention: HTTPS_PROXY > ALL_PROXY >
+ * HTTP_PROXY (lower-case variants checked too). An invalid proxy URL is
+ * treated as "no proxy" rather than crashing — the usage bar is cosmetic and
+ * a typo'd envvar should not take down rate-limit polling.
+ */
+export function resolveProxyDispatcher(
+  env: NodeJS.ProcessEnv = process.env
+): ProxyAgent | undefined {
+  const proxyUrl =
+    env.HTTPS_PROXY ??
+    env.https_proxy ??
+    env.ALL_PROXY ??
+    env.all_proxy ??
+    env.HTTP_PROXY ??
+    env.http_proxy
+  if (!proxyUrl) {
+    return undefined
+  }
+  try {
+    // Validate shape up front so we don't construct a ProxyAgent that will
+    // blow up on first use with a confusing error.
+    new URL(proxyUrl)
+    return new ProxyAgent(proxyUrl)
+  } catch {
+    return undefined
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Credential reading — tries multiple sources for an OAuth bearer token
@@ -185,13 +225,18 @@ async function fetchViaOAuth(token: string): Promise<ProviderRateLimits> {
   const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS)
 
   try {
+    const dispatcher = resolveProxyDispatcher()
     const res = await fetch(OAUTH_USAGE_URL, {
       headers: {
         Authorization: `Bearer ${token}`,
         'anthropic-beta': OAUTH_BETA_HEADER
       },
-      signal: controller.signal
-    })
+      signal: controller.signal,
+      // Why: Node fetch ignores HTTP_PROXY envvars by default; attach the
+      // resolved dispatcher so users behind a corporate/regional proxy don't
+      // silently hit Anthropic directly (see #521, #800).
+      ...(dispatcher ? { dispatcher } : {})
+    } as Parameters<typeof fetch>[1])
 
     if (!res.ok) {
       throw new Error(`OAuth API returned ${res.status}`)
