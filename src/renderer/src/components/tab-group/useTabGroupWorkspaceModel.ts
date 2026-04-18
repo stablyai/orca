@@ -68,7 +68,6 @@ export function useTabGroupWorkspaceModel({
   const closeUnifiedTab = useAppStore((state) => state.closeUnifiedTab)
   const closeOtherTabs = useAppStore((state) => state.closeOtherTabs)
   const closeTabsToRight = useAppStore((state) => state.closeTabsToRight)
-  const createEmptySplitGroup = useAppStore((state) => state.createEmptySplitGroup)
   const closeEmptyGroup = useAppStore((state) => state.closeEmptyGroup)
   const createTab = useAppStore((state) => state.createTab)
   const closeTab = useAppStore((state) => state.closeTab)
@@ -81,7 +80,8 @@ export function useTabGroupWorkspaceModel({
   const closeBrowserTab = useAppStore((state) => state.closeBrowserTab)
   const setActiveBrowserTab = useAppStore((state) => state.setActiveBrowserTab)
   const setActiveWorktree = useAppStore((state) => state.setActiveWorktree)
-  const copyUnifiedTabToGroup = useAppStore((state) => state.copyUnifiedTabToGroup)
+  const dropUnifiedTab = useAppStore((state) => state.dropUnifiedTab)
+  const createEmptySplitGroup = useAppStore((state) => state.createEmptySplitGroup)
   const setTabCustomTitle = useAppStore((state) => state.setTabCustomTitle)
   const setTabColor = useAppStore((state) => state.setTabColor)
   const consumeSuppressedPtyExit = useAppStore((state) => state.consumeSuppressedPtyExit)
@@ -296,59 +296,45 @@ export function useTabGroupWorkspaceModel({
         ) ?? activeTab
 
       focusGroup(worktreeId, groupId)
-      const newGroupId = createEmptySplitGroup(worktreeId, groupId, direction)
-      if (!newGroupId || !sourceTab) {
+      if (!sourceTab) {
         return
       }
 
-      // Why: tab context-menu split actions belong to the visible tab that opened
-      // the menu. Keeping that decision inside the workspace model prevents the
-      // view layer from re-implementing "which tab is the source?" rules.
-      if (sourceTab.contentType === 'terminal') {
+      // Why: for terminals specifically, splitting a single-tab group should
+      // still produce a useful split — spawn a fresh terminal in the new pane
+      // and leave the existing one behind. Moving the only tab would collapse
+      // the split immediately (see the same-group guard in dropUnifiedTab),
+      // giving the user nothing; a new terminal preserves the old shortcut
+      // flow without duplicating a persistent tab like editors/browsers would.
+      if (sourceTab.contentType === 'terminal' && groupTabs.length <= 1) {
+        const newGroupId = createEmptySplitGroup(worktreeId, groupId, direction)
+        if (!newGroupId) {
+          return
+        }
         const terminal = createTab(worktreeId, newGroupId)
         setActiveTab(terminal.id)
         setActiveTabType('terminal')
         return
       }
 
-      if (sourceTab.contentType === 'browser') {
-        const browserTab = worktreeState.browserTabs.find(
-          (candidate) => candidate.id === sourceTab.entityId
-        )
-        if (!browserTab) {
-          return
-        }
-        createBrowserTab(browserTab.worktreeId, browserTab.url, {
-          title: browserTab.title,
-          sessionProfileId: browserTab.sessionProfileId
-        })
-        return
-      }
-
-      copyUnifiedTabToGroup(sourceTab.id, newGroupId, {
-        entityId: sourceTab.entityId,
-        label: sourceTab.label,
-        customLabel: sourceTab.customLabel,
-        color: sourceTab.color,
-        isPinned: sourceTab.isPinned
-      })
-      setActiveFile(sourceTab.entityId)
-      setActiveTabType('editor')
+      // Why: split actions MOVE the source tab into the new pane rather than
+      // leaving a duplicate in the origin. Delegating to dropUnifiedTab reuses
+      // the same split+move path as drag-to-split so keyboard/menu splits and
+      // drag splits stay behaviorally identical, including collapsing the
+      // origin group if its last tab is the one we just moved.
+      dropUnifiedTab(sourceTab.id, { groupId, splitDirection: direction })
     },
     [
       activeTab,
-      copyUnifiedTabToGroup,
-      createBrowserTab,
       createEmptySplitGroup,
       createTab,
+      dropUnifiedTab,
       focusGroup,
       groupId,
       groupTabs,
-      setActiveFile,
       setActiveTab,
       setActiveTabType,
-      worktreeId,
-      worktreeState.browserTabs
+      worktreeId
     ]
   )
 
