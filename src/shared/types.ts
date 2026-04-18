@@ -1368,7 +1368,13 @@ export type GlobalSettings = {
      *  false for fresh installs (no first-launch surface). */
     existedBeforeTelemetryRelease: boolean
   }
-  voice: VoiceSettings
+  /** Local voice/dictation configuration (Phase 1 voice feature). Optional
+   *  because profiles created before voice landed won't have the key;
+   *  `getDefaultSettings()` hydrates `getDefaultVoiceSettings()` via the
+   *  `{ ...defaults, ...parsed }` merge in persistence.ts. Treat as
+   *  effectively present at runtime — the renderer should still fall back to
+   *  defaults when reading optional sub-fields. */
+  voice?: VoiceSettings
 }
 
 export type GhosttyImportPreview = {
@@ -1377,6 +1383,7 @@ export type GhosttyImportPreview = {
   diff: Partial<GlobalSettings>
   unsupportedKeys: string[]
   error?: string
+}
 
 // Subset of the renderer's onboarding-step Ghostty `DiscoveryState['status']`
 // values that ever ship a telemetry event. The UI-only states (`'idle'`,

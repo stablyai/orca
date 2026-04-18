@@ -1,4 +1,6 @@
-import { ipcMain, BrowserWindow, systemPreferences } from 'electron'
+import { ipcMain, BrowserWindow, systemPreferences, app } from 'electron'
+import { join } from 'path'
+import { writeFile, unlink } from 'fs/promises'
 import { ModelManager } from '../speech/model-manager'
 import { SttService } from '../speech/stt-service'
 import { SPEECH_MODEL_CATALOG } from '../speech/model-catalog'
@@ -56,7 +58,9 @@ export function registerSpeechHandlers(store: Store): void {
     await getModelManager(store).deleteModel(modelId)
   })
 
-  ipcMain.handle('speech:startDictation', async (event, modelId: string) => {
+  const hotwordsFilePath = join(app.getPath('userData'), 'speech-hotwords.txt')
+
+  ipcMain.handle('speech:startDictation', async (event, modelId: string, hotwords?: string[]) => {
     const window = BrowserWindow.fromWebContents(event.sender)
     if (!window) {
       return
@@ -80,7 +84,21 @@ export function registerSpeechHandlers(store: Store): void {
       }
     }
 
-    await getSttService(store).startDictation(modelId, window)
+    let resolvedHotwordsPath: string | undefined
+    if (hotwords && hotwords.length > 0) {
+      const content = `${hotwords.map((w) => `${w} :2.0`).join('\n')}\n`
+      await writeFile(hotwordsFilePath, content, 'utf-8')
+      resolvedHotwordsPath = hotwordsFilePath
+    }
+
+    try {
+      await getSttService(store).startDictation(modelId, window, resolvedHotwordsPath)
+    } catch (err) {
+      if (resolvedHotwordsPath) {
+        unlink(hotwordsFilePath).catch(() => {})
+      }
+      throw err
+    }
   })
 
   ipcMain.handle('speech:feedAudio', async (_event, buffer: Buffer, sampleRate: number) => {
@@ -92,5 +110,6 @@ export function registerSpeechHandlers(store: Store): void {
 
   ipcMain.handle('speech:stopDictation', async () => {
     await getSttService(store).stopDictation()
+    unlink(hotwordsFilePath).catch(() => {})
   })
 }

@@ -7,6 +7,64 @@ import { dispatchClearModifierHints } from '@/hooks/useModifierHint'
 
 const IS_MAC = navigator.userAgent.includes('Mac')
 
+// Why: splits compound identifiers into space-separated lowercase words
+// so hotwords match natural speech (e.g., "DictationController" → "dictation controller").
+function splitIdentifier(name: string): string | undefined {
+  // PascalCase / camelCase → split on uppercase boundaries
+  // kebab-case / snake_case → split on - or _
+  const words = name
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[-_]+/g, ' ')
+    .toLowerCase()
+    .trim()
+  return words.includes(' ') ? words : undefined
+}
+
+function collectHotwords(): string[] {
+  const state = useAppStore.getState()
+  const seen = new Set<string>()
+  const hotwords: string[] = []
+
+  const addWord = (word: string): void => {
+    if (word && !seen.has(word)) {
+      seen.add(word)
+      hotwords.push(word)
+    }
+  }
+
+  const addFileHotwords = (relativePath: string): void => {
+    const basename = relativePath.split('/').pop() ?? ''
+    addWord(basename)
+    const dotIdx = basename.lastIndexOf('.')
+    const nameOnly = dotIdx > 0 ? basename.slice(0, dotIdx) : basename
+    if (dotIdx > 0) {
+      addWord(nameOnly)
+    }
+    const spoken = splitIdentifier(nameOnly)
+    if (spoken) {
+      addWord(spoken)
+    }
+  }
+
+  for (const file of state.openFiles) {
+    if (file.relativePath) {
+      addFileHotwords(file.relativePath)
+    }
+  }
+
+  const worktreeId = state.activeWorktreeId
+  if (worktreeId) {
+    const closed = state.recentlyClosedEditorTabsByWorktree[worktreeId] ?? []
+    for (const snap of closed) {
+      if (snap.relativePath) {
+        addFileHotwords(snap.relativePath)
+      }
+    }
+  }
+
+  return hotwords.slice(0, 50)
+}
+
 export function DictationController() {
   const dictationState = useAppStore((s) => s.dictationState)
   const setDictationState = useAppStore((s) => s.setDictationState)
@@ -28,7 +86,8 @@ export function DictationController() {
         action: {
           label: 'Open Settings',
           onClick: () => {
-            // TODO: navigate to voice settings
+            useAppStore.getState().openSettingsTarget({ pane: 'voice', repoId: null })
+            useAppStore.getState().openSettingsPage()
           }
         }
       })
@@ -43,8 +102,10 @@ export function DictationController() {
     dispatchClearModifierHints()
     setDictationState('starting')
 
+    const hotwords = collectHotwords()
+
     try {
-      await window.api.speech.startDictation(modelId)
+      await window.api.speech.startDictation(modelId, hotwords.length > 0 ? hotwords : undefined)
       await startCapture()
       setDictationState('listening')
     } catch (err) {
@@ -54,6 +115,16 @@ export function DictationController() {
         toast.error('Microphone access denied. Grant access in system settings, then restart Orca.')
       } else if (message.includes('not ready')) {
         toast('Speech model not ready. Download it in Settings > Voice.')
+      } else if (message.includes('Unknown model')) {
+        toast('Selected model is no longer available. Please choose another in Settings > Voice.', {
+          action: {
+            label: 'Open Settings',
+            onClick: () => {
+              useAppStore.getState().openSettingsTarget({ pane: 'voice', repoId: null })
+              useAppStore.getState().openSettingsPage()
+            }
+          }
+        })
       } else {
         toast.error(`Dictation failed: ${message}`)
       }
@@ -193,8 +264,12 @@ function insertText(text: string): void {
     if (selection && selection.rangeCount > 0) {
       const range = selection.getRangeAt(0)
       range.deleteContents()
-      range.insertNode(document.createTextNode(text))
-      range.collapse(false)
+      const textNode = document.createTextNode(text)
+      range.insertNode(textNode)
+      range.setStartAfter(textNode)
+      range.collapse(true)
+      selection.removeAllRanges()
+      selection.addRange(range)
     }
     return
   }

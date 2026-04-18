@@ -250,6 +250,7 @@ export type UISlice = {
       | 'repo'
       | 'agents'
       | 'accounts'
+      | 'voice'
       | 'experimental'
       | 'mobile'
       | 'ssh'

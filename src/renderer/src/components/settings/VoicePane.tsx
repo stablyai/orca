@@ -1,10 +1,18 @@
 import { useEffect, useState } from 'react'
 import type { GlobalSettings } from '../../../../shared/types'
+import { getDefaultVoiceSettings } from '../../../../shared/constants'
 import type { SpeechModelManifest, SpeechModelState } from '../../../../shared/speech-types'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { Separator } from '../ui/separator'
-import { Download, Trash2, Loader2 } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '../ui/dropdown-menu'
+import { Download, Trash2, Loader2, ChevronDown, Check } from 'lucide-react'
+import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import type { SettingsSearchEntry } from './settings-search'
 
@@ -40,14 +48,21 @@ type VoicePaneProps = {
 }
 
 export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.JSX.Element {
-  const voiceSettings = settings.voice
+  // Why: voice was made optional on GlobalSettings to keep older test fixtures
+  // and pre-voice profiles type-compatible. Persistence merges defaults at
+  // load time, so this fallback only matters during a brief render window
+  // before fetchSettings completes (or in test contexts).
+  const voiceSettings = settings.voice ?? getDefaultVoiceSettings()
   const modelStates = useAppStore((s) => s.modelStates)
   const refreshModelStates = useAppStore((s) => s.refreshModelStates)
   const [catalog, setCatalog] = useState<SpeechModelManifest[]>([])
 
   useEffect(() => {
     refreshModelStates()
-    window.api.speech.getCatalog().then(setCatalog)
+    window.api.speech
+      .getCatalog()
+      .then(setCatalog)
+      .catch(() => {})
   }, [refreshModelStates])
 
   useEffect(() => {
@@ -65,6 +80,15 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
       }
     })
   }
+
+  const getModelState = (id: string): SpeechModelState | undefined =>
+    modelStates.find((s) => s.id === id)
+
+  const selectedModel = catalog.find((m) => m.id === voiceSettings.sttModel)
+  const selectedModelState = voiceSettings.sttModel
+    ? getModelState(voiceSettings.sttModel)
+    : undefined
+  const selectedIsReady = selectedModelState?.status === 'ready'
 
   return (
     <div className="space-y-1">
@@ -152,165 +176,107 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
 
       <Separator />
 
-      <div className="px-1 py-3">
-        <Label className="mb-2 block">Speech Models</Label>
-        <p className="text-xs text-muted-foreground mb-3">
-          Download a model to enable voice dictation. Models run locally on your device.
-        </p>
-        <div className="space-y-2">
-          {catalog.map((manifest) => {
-            const state = modelStates.find((s) => s.id === manifest.id)
-            return (
-              <ModelCard
-                key={manifest.id}
-                manifest={manifest}
-                state={state}
-                isSelected={voiceSettings.sttModel === manifest.id}
-                onSelect={() => updateVoiceSettings({ sttModel: manifest.id })}
-                onDownload={() => void window.api.speech.downloadModel(manifest.id)}
-                onCancel={() => void window.api.speech.cancelDownload(manifest.id)}
-                onDelete={() =>
-                  void window.api.speech.deleteModel(manifest.id).then(refreshModelStates)
-                }
-                disabled={!voiceSettings.enabled}
-              />
-            )
-          })}
+      <div className="flex items-center justify-between gap-4 px-1 py-2">
+        <div className="space-y-0.5">
+          <Label>Speech Model</Label>
+          <p className="text-xs text-muted-foreground">
+            {selectedModel && selectedIsReady
+              ? `${selectedModel.label} — ${selectedModel.description}`
+              : 'Select and download a model to enable dictation.'}
+          </p>
         </div>
-      </div>
-    </div>
-  )
-}
-
-type ModelCardProps = {
-  manifest: SpeechModelManifest
-  state?: SpeechModelState
-  isSelected: boolean
-  onSelect: () => void
-  onDownload: () => void
-  onCancel: () => void
-  onDelete: () => void
-  disabled: boolean
-}
-
-function ModelCard({
-  manifest,
-  state,
-  isSelected,
-  onSelect,
-  onDownload,
-  onCancel,
-  onDelete,
-  disabled
-}: ModelCardProps): React.JSX.Element {
-  const status = state?.status ?? 'not-downloaded'
-  const sizeMb = Math.round(manifest.sizeBytes / 1_000_000)
-  const isReady = status === 'ready'
-  const isDownloading = status === 'downloading' || status === 'extracting'
-
-  return (
-    <button
-      type="button"
-      disabled={
-        disabled || isDownloading || (!isReady && status !== 'not-downloaded' && status !== 'error')
-      }
-      onClick={() => {
-        if (isReady && !isSelected) {
-          onSelect()
-        }
-      }}
-      className={`group relative w-full text-left rounded-lg border p-3 transition-colors ${
-        isSelected && isReady
-          ? 'border-foreground/20 bg-accent/15'
-          : isReady
-            ? 'border-border/70 hover:border-border hover:bg-accent/8'
-            : 'border-border/70'
-      } ${disabled ? 'opacity-50' : ''} ${isReady && !isSelected ? 'cursor-pointer' : ''}`}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1 space-y-1.5">
-          <div className="flex items-center gap-2">
-            {isReady && (
-              <span
-                className={`size-2 rounded-full shrink-0 transition-colors ${
-                  isSelected ? 'bg-green-500' : 'bg-muted-foreground/30'
-                }`}
-              />
-            )}
-            <span className="text-sm font-medium">{manifest.label}</span>
-            <span
-              className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                manifest.streaming
-                  ? 'bg-blue-500/10 text-blue-400'
-                  : 'bg-muted text-muted-foreground'
-              }`}
-            >
-              {manifest.streaming ? 'streaming' : 'offline'}
-            </span>
-            <span className="text-[10px] text-muted-foreground uppercase tracking-wide">
-              {manifest.language}
-            </span>
-          </div>
-
-          <p className="text-xs text-muted-foreground">{manifest.description}</p>
-
-          <span className="text-[10px] text-muted-foreground/60">{sizeMb} MB</span>
-
-          {isDownloading && state?.progress !== undefined && (
-            <div className="pt-1 space-y-1">
-              <div className="h-1 w-full rounded-full bg-muted overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-foreground/60 transition-all"
-                  style={{ width: `${Math.round(state.progress * 100)}%` }}
-                />
-              </div>
-              <span className="text-[10px] text-muted-foreground">
-                {status === 'extracting'
-                  ? 'Extracting...'
-                  : `Downloading... ${Math.round(state.progress * 100)}%`}
-              </span>
-            </div>
-          )}
-
-          {status === 'error' && state?.error && (
-            <span className="text-[10px] text-destructive">{state.error}</span>
-          )}
-        </div>
-
-        <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-          {(status === 'not-downloaded' || status === 'error') && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
             <Button
               variant="outline"
               size="sm"
-              disabled={disabled}
-              onClick={onDownload}
-              className="gap-1.5"
+              disabled={!voiceSettings.enabled}
+              className="shrink-0 gap-1.5"
             >
-              <Download className="size-3" />
-              Download
+              {selectedModel && selectedIsReady ? selectedModel.label : 'Select Model'}
+              <ChevronDown className="size-3 opacity-50" />
             </Button>
-          )}
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-96">
+            {catalog.map((manifest) => {
+              const mState = getModelState(manifest.id)
+              const isReady = mState?.status === 'ready'
+              const isDownloading =
+                mState?.status === 'downloading' || mState?.status === 'extracting'
+              const isActive = voiceSettings.sttModel === manifest.id
+              const sizeMb = Math.round(manifest.sizeBytes / 1_000_000)
 
-          {isDownloading && (
-            <Button variant="outline" size="sm" onClick={onCancel} className="gap-1.5">
-              <Loader2 className="size-3 animate-spin" />
-              Cancel
-            </Button>
-          )}
-
-          {isReady && (
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={disabled}
-              onClick={onDelete}
-              className="gap-1.5 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-            >
-              <Trash2 className="size-3" />
-            </Button>
-          )}
-        </div>
+              return (
+                <DropdownMenuItem
+                  key={manifest.id}
+                  disabled={isDownloading}
+                  onSelect={() => {
+                    if (isReady) {
+                      updateVoiceSettings({ sttModel: manifest.id })
+                    } else if (!isDownloading) {
+                      void window.api.speech
+                        .downloadModel(manifest.id)
+                        .catch(() => toast.error('Failed to download model.'))
+                    }
+                  }}
+                  className={`group flex items-center gap-2.5 py-2.5 ${
+                    !isReady && !isDownloading ? 'opacity-50' : ''
+                  }`}
+                >
+                  <span className="flex size-4 shrink-0 items-center justify-center">
+                    {isActive && isReady ? (
+                      <Check className="size-3.5" />
+                    ) : isDownloading ? (
+                      <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+                    ) : null}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm font-medium">{manifest.label}</span>
+                      <span className="text-[10px] px-1 py-px rounded-full leading-none bg-muted text-muted-foreground">
+                        {manifest.streaming ? 'streaming' : 'offline'}
+                      </span>
+                      {manifest.recommended && (
+                        <span className="text-[10px] px-1 py-px rounded-full leading-none bg-emerald-500/10 text-emerald-500">
+                          recommended
+                        </span>
+                      )}
+                      <span className="text-[10px] text-muted-foreground/60">
+                        {isDownloading && mState?.progress !== undefined
+                          ? mState.status === 'extracting'
+                            ? 'Extracting...'
+                            : `${Math.round(mState.progress * 100)}%`
+                          : `${sizeMb} MB`}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
+                      {manifest.description}
+                    </p>
+                  </div>
+                  {isReady && !isActive ? (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        void window.api.speech
+                          .deleteModel(manifest.id)
+                          .then(refreshModelStates)
+                          .catch(() => toast.error('Failed to delete model.'))
+                      }}
+                      className="shrink-0 p-1 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive transition-all rounded"
+                    >
+                      <Trash2 className="size-3" />
+                    </button>
+                  ) : !isReady && !isDownloading ? (
+                    <span className="shrink-0 p-1 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Download className="size-3" />
+                    </span>
+                  ) : null}
+                </DropdownMenuItem>
+              )
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
-    </button>
+    </div>
   )
 }

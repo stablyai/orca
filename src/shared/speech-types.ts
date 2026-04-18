@@ -1,4 +1,6 @@
-export type SpeechModelType = 'transducer' | 'paraformer' | 'whisper' | 'ctc'
+export type SpeechModelType = 'transducer' | 'paraformer' | 'whisper'
+
+export type ModelingUnit = 'bpe' | 'cjkchar' | 'cjkchar+bpe'
 
 export type SpeechModelManifest = {
   id: string
@@ -12,6 +14,8 @@ export type SpeechModelManifest = {
   files: string[]
   sampleRate: number
   streaming: boolean
+  modelingUnit?: ModelingUnit
+  recommended?: boolean
 }
 
 export type SpeechModelStatus = 'not-downloaded' | 'downloading' | 'extracting' | 'ready' | 'error'

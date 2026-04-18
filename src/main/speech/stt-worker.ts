@@ -1,5 +1,6 @@
 /* oxlint-disable typescript-eslint/no-explicit-any -- sherpa-onnx native addon has no type definitions */
 import { parentPort, workerData } from 'worker_threads'
+import { readdirSync } from 'fs'
 
 type WorkerMessage =
   | {
@@ -9,6 +10,8 @@ type WorkerMessage =
       streaming: boolean
       sampleRate: number
       files: string[]
+      hotwordsFilePath?: string
+      modelingUnit?: string
     }
   | { type: 'feed'; samples: Float32Array; sampleRate: number }
   | { type: 'stop' }
@@ -55,6 +58,53 @@ function resolveTokens(files: string[], modelDir: string): string {
   return `${modelDir}/${match}`
 }
 
+// Why: BPE models need a vocab file for hotwords token matching. The file
+// ships in the model archive but isn't listed in the manifest. We discover
+// it at runtime to avoid breaking existing downloads.
+function discoverBpeVocab(modelDir: string): string | undefined {
+  try {
+    const entries = readdirSync(modelDir)
+    const vocabFile = entries.find((f) => f.endsWith('.vocab'))
+    return vocabFile ? `${modelDir}/${vocabFile}` : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function buildHotwordsConfig(msg: Extract<WorkerMessage, { type: 'init' }>): {
+  decodingMethod: string
+  hotwordsFile?: string
+  hotwordsScore?: number
+  modelingUnit?: string
+  bpeVocab?: string
+} {
+  if (msg.modelType !== 'transducer' || !msg.hotwordsFilePath) {
+    return { decodingMethod: 'greedy_search' }
+  }
+
+  const unit = msg.modelingUnit
+  if (unit?.includes('bpe')) {
+    const bpeVocab = discoverBpeVocab(msg.modelDir)
+    if (!bpeVocab) {
+      return { decodingMethod: 'greedy_search' }
+    }
+    return {
+      decodingMethod: 'modified_beam_search',
+      hotwordsFile: msg.hotwordsFilePath,
+      hotwordsScore: 1.5,
+      modelingUnit: unit,
+      bpeVocab
+    }
+  }
+
+  return {
+    decodingMethod: 'modified_beam_search',
+    hotwordsFile: msg.hotwordsFilePath,
+    hotwordsScore: 1.5,
+    modelingUnit: unit
+  }
+}
+
 function handleInit(msg: Extract<WorkerMessage, { type: 'init' }>): void {
   try {
     sherpa = loadSherpa()
@@ -65,6 +115,7 @@ function handleInit(msg: Extract<WorkerMessage, { type: 'init' }>): void {
     offlineSampleRate = sampleRate
 
     const tokens = resolveTokens(files, modelDir)
+    const hotwords = buildHotwordsConfig(msg)
 
     if (streaming && modelType === 'transducer') {
       const config = {
@@ -80,7 +131,7 @@ function handleInit(msg: Extract<WorkerMessage, { type: 'init' }>): void {
           provider: 'cpu',
           debug: 0
         },
-        decodingMethod: 'greedy_search',
+        ...hotwords,
         enableEndpoint: 1,
         rule1MinTrailingSilence: 2.4,
         rule2MinTrailingSilence: 1.2,
@@ -140,7 +191,7 @@ function handleInit(msg: Extract<WorkerMessage, { type: 'init' }>): void {
           provider: 'cpu',
           debug: 0
         },
-        decodingMethod: 'greedy_search'
+        ...hotwords
       }
       recognizer = sherpa.createOfflineRecognizer(config)
       stream = sherpa.createOfflineStream(recognizer)

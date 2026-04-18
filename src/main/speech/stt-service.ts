@@ -8,12 +8,34 @@ export class SttService {
   private worker: Worker | null = null
   private modelManager: ModelManager
   private activeModelId: string | null = null
+  private starting = false
 
   constructor(modelManager: ModelManager) {
     this.modelManager = modelManager
   }
 
-  async startDictation(modelId: string, window: BrowserWindow): Promise<void> {
+  async startDictation(
+    modelId: string,
+    window: BrowserWindow,
+    hotwordsFilePath?: string
+  ): Promise<void> {
+    if (this.starting) {
+      return
+    }
+    this.starting = true
+
+    try {
+      await this._startDictation(modelId, window, hotwordsFilePath)
+    } finally {
+      this.starting = false
+    }
+  }
+
+  private async _startDictation(
+    modelId: string,
+    window: BrowserWindow,
+    hotwordsFilePath?: string
+  ): Promise<void> {
     if (this.worker) {
       await this.stopDictation()
     }
@@ -80,7 +102,9 @@ export class SttService {
       modelType: manifest.type,
       streaming: manifest.streaming,
       sampleRate: manifest.sampleRate,
-      files: manifest.files
+      files: manifest.files,
+      hotwordsFilePath,
+      modelingUnit: manifest.modelingUnit
     })
   }
 
@@ -110,6 +134,7 @@ export class SttService {
       })
     })
 
+    this.worker.removeAllListeners()
     this.worker = null
     this.activeModelId = null
   }

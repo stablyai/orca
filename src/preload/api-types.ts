@@ -1372,7 +1372,7 @@ export type PreloadApi = {
     downloadModel: (modelId: string) => Promise<void>
     cancelDownload: (modelId: string) => Promise<void>
     deleteModel: (modelId: string) => Promise<void>
-    startDictation: (modelId: string) => Promise<void>
+    startDictation: (modelId: string, hotwords?: string[]) => Promise<void>
     feedAudio: (samples: Float32Array, sampleRate: number) => Promise<void>
     stopDictation: () => Promise<void>
     onPartialTranscript: (callback: (text: string) => void) => () => void

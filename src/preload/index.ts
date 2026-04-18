@@ -2509,8 +2509,8 @@ const api = {
       ipcRenderer.invoke('speech:cancelDownload', modelId),
     deleteModel: (modelId: string): Promise<void> =>
       ipcRenderer.invoke('speech:deleteModel', modelId),
-    startDictation: (modelId: string): Promise<void> =>
-      ipcRenderer.invoke('speech:startDictation', modelId),
+    startDictation: (modelId: string, hotwords?: string[]): Promise<void> =>
+      ipcRenderer.invoke('speech:startDictation', modelId, hotwords),
     feedAudio: (samples: Float32Array, sampleRate: number): Promise<void> =>
       // Why: Float32Array data gets zeroed out when crossing the contextBridge
       // + IPC boundary. Wrapping in a Buffer preserves the raw bytes reliably.
