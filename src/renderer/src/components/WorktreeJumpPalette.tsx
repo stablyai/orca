@@ -38,8 +38,6 @@ import {
 import type { BrowserPage, BrowserWorkspace, Worktree } from '../../../shared/types'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 
-type PaletteScope = 'worktrees' | 'browser-tabs'
-
 type WorktreePaletteItem = {
   id: string
   type: 'worktree'
@@ -53,15 +51,21 @@ type BrowserPaletteItem = {
   result: BrowserPaletteSearchResult
 }
 
+type SectionHeader = {
+  id: string
+  type: 'section-header'
+  label: string
+}
+
 type PaletteItem = WorktreePaletteItem | BrowserPaletteItem
+
+type PaletteListEntry = PaletteItem | SectionHeader
 
 type BrowserSelection = {
   worktree: Worktree
   workspace: BrowserWorkspace
   page: BrowserPage
 }
-
-const SCOPE_ORDER: PaletteScope[] = ['worktrees', 'browser-tabs']
 
 function HighlightedText({
   text,
@@ -100,12 +104,6 @@ function FooterKey({ children }: { children: React.ReactNode }): React.JSX.Eleme
       {children}
     </span>
   )
-}
-
-function nextScope(scope: PaletteScope, direction: 1 | -1): PaletteScope {
-  const index = SCOPE_ORDER.indexOf(scope)
-  const nextIndex = (index + direction + SCOPE_ORDER.length) % SCOPE_ORDER.length
-  return SCOPE_ORDER[nextIndex]
 }
 
 function findBrowserSelection(
@@ -148,7 +146,6 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
 
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
-  const [scope, setScope] = useState<PaletteScope>('worktrees')
   const [selectedItemId, setSelectedItemId] = useState('')
   const previousWorktreeIdRef = useRef<string | null>(null)
   const previousActiveTabTypeRef = useRef<'browser' | 'editor' | 'terminal'>('terminal')
@@ -157,7 +154,6 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const wasVisibleRef = useRef(false)
   const skipRestoreFocusRef = useRef(false)
   const prevQueryRef = useRef('')
-  const prevScopeRef = useRef<PaletteScope>('worktrees')
   const listRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -270,19 +266,41 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     [browserMatches]
   )
 
-  const visibleItems = useMemo<PaletteItem[]>(() => {
-    if (scope === 'browser-tabs') {
-      return browserItems
+  // Why: merging both result sets into a single list avoids the tab-switching
+  // UX that forces users to guess which scope their target lives in. Section
+  // headers follow the VSCode "AnythingQuickAccess" pattern but we only render
+  // them when both sections have content — a lone "WORKTREES" or "BROWSER TABS"
+  // label above a single list is redundant noise.
+  const listEntries = useMemo<PaletteListEntry[]>(() => {
+    const entries: PaletteListEntry[] = []
+    const showHeaders = worktreeItems.length > 0 && browserItems.length > 0
+    if (worktreeItems.length > 0) {
+      if (showHeaders) {
+        entries.push({ id: '__header_worktrees__', type: 'section-header', label: 'Worktrees' })
+      }
+      entries.push(...worktreeItems)
     }
-    return worktreeItems
-  }, [browserItems, scope, worktreeItems])
+    if (browserItems.length > 0) {
+      if (showHeaders) {
+        entries.push({
+          id: '__header_browser__',
+          type: 'section-header',
+          label: 'Browser Tabs'
+        })
+      }
+      entries.push(...browserItems)
+    }
+    return entries
+  }, [worktreeItems, browserItems])
+
+  const selectableItems = useMemo<PaletteItem[]>(
+    () => listEntries.filter((e): e is PaletteItem => e.type !== 'section-header'),
+    [listEntries]
+  )
 
   const createWorktreeName = debouncedQuery.trim()
   const showCreateAction =
-    scope === 'worktrees' &&
-    canCreateWorktree &&
-    createWorktreeName.length > 0 &&
-    worktreeItems.length === 0
+    canCreateWorktree && createWorktreeName.length > 0 && worktreeItems.length === 0
 
   const isLoading = repos.length > 0 && Object.keys(worktreesByRepo).length === 0
   const hasAnyWorktrees = sortedWorktrees.length > 0
@@ -291,9 +309,6 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
 
   useEffect(() => {
     if (visible && !wasVisibleRef.current) {
-      // Why: the palette now supports multiple scopes, but Cmd+J still has a
-      // worktree-first contract. Reset to that scope on every open so browser
-      // exploration remains opt-in rather than sticky across sessions.
       previousWorktreeIdRef.current = activeWorktreeId
       previousActiveTabTypeRef.current = activeTabType
       previousBrowserPageIdRef.current =
@@ -313,8 +328,6 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
           : 'webview'
       skipRestoreFocusRef.current = false
       prevQueryRef.current = ''
-      prevScopeRef.current = 'worktrees'
-      setScope('worktrees')
       setQuery('')
       setDebouncedQuery('')
       setSelectedItemId('')
@@ -328,15 +341,13 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       return
     }
     const queryChanged = debouncedQuery !== prevQueryRef.current
-    const scopeChanged = scope !== prevScopeRef.current
     prevQueryRef.current = debouncedQuery
-    prevScopeRef.current = scope
 
     const firstSelectableId = showCreateAction ? '__create_worktree__' : null
 
-    if (queryChanged || scopeChanged) {
-      if (visibleItems.length > 0) {
-        setSelectedItemId(visibleItems[0].id)
+    if (queryChanged) {
+      if (selectableItems.length > 0) {
+        setSelectedItemId(selectableItems[0].id)
       } else {
         setSelectedItemId(firstSelectableId ?? '')
       }
@@ -344,7 +355,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       return
     }
 
-    if (visibleItems.length === 0) {
+    if (selectableItems.length === 0) {
       setSelectedItemId(firstSelectableId ?? '')
       return
     }
@@ -354,12 +365,12 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     }
 
     if (
-      !visibleItems.some((item) => item.id === selectedItemId) &&
+      !selectableItems.some((item) => item.id === selectedItemId) &&
       selectedItemId !== firstSelectableId
     ) {
-      setSelectedItemId(firstSelectableId ?? visibleItems[0].id)
+      setSelectedItemId(firstSelectableId ?? selectableItems[0].id)
     }
-  }, [debouncedQuery, scope, selectedItemId, showCreateAction, visible, visibleItems])
+  }, [debouncedQuery, selectedItemId, showCreateAction, visible, selectableItems])
 
   const focusFallbackSurface = useCallback(() => {
     requestAnimationFrame(() => {
@@ -613,47 +624,18 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     // Radix steals focus. This callback exists only to satisfy the prop API.
   }, [])
 
-  const handleInputKeyDown = useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (event.key !== 'Tab') {
-      return
-    }
-    // Why: the scope chips are part of the palette's search model, not the
-    // browser's focus ring. Cycling them with Tab keeps the input focused and
-    // avoids turning scope changes into a pointer-only affordance.
-    event.preventDefault()
-    setScope((current) => nextScope(current, event.shiftKey ? -1 : 1))
-  }, [])
-
-  const title = scope === 'browser-tabs' ? 'Open Browser Tab' : 'Open Worktree'
-  const description =
-    scope === 'browser-tabs'
-      ? 'Search open browser pages across all worktrees'
-      : 'Search across all worktrees by name, branch, comment, PR, or issue'
-  const placeholder =
-    scope === 'browser-tabs' ? 'Search open browser tabs...' : 'Jump to worktree...'
-
-  const resultCount = visibleItems.length
+  const resultCount = selectableItems.length
   const emptyState = (() => {
-    if (scope === 'browser-tabs') {
-      return hasAnyBrowserPages && hasQuery
-        ? {
-            title: 'No browser tabs match your search',
-            subtitle: 'Try a page title, URL, worktree name, or repo name.'
-          }
-        : {
-            title: 'No open browser tabs',
-            subtitle: 'Open a page in Orca and it will show up here.'
-          }
+    if ((hasAnyWorktrees || hasAnyBrowserPages) && hasQuery) {
+      return {
+        title: 'No results match your search',
+        subtitle: 'Try a name, branch, repo, comment, PR, page title, or URL.'
+      }
     }
-    return hasAnyWorktrees && hasQuery
-      ? {
-          title: 'No worktrees match your search',
-          subtitle: 'Try a name, branch, repo, comment, PR, or issue.'
-        }
-      : {
-          title: 'No active worktrees',
-          subtitle: 'Create one to get started, then jump back here any time.'
-        }
+    return {
+      title: 'No active worktrees or browser tabs',
+      subtitle: 'Create a worktree or open a page in Orca to get started.'
+    }
   })()
 
   return (
@@ -663,8 +645,8 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       shouldFilter={false}
       onOpenAutoFocus={handleOpenAutoFocus}
       onCloseAutoFocus={handleCloseAutoFocus}
-      title={title}
-      description={description}
+      title="Jump to..."
+      description="Search worktrees and browser tabs"
       overlayClassName="bg-black/55 backdrop-blur-[2px]"
       contentClassName="top-[13%] w-[736px] max-w-[94vw] overflow-hidden rounded-xl border border-border/70 bg-background/96 shadow-[0_26px_84px_rgba(0,0,0,0.32)] backdrop-blur-xl"
       commandProps={{
@@ -675,69 +657,39 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       }}
     >
       <CommandInput
-        placeholder={placeholder}
+        placeholder="Jump to worktree or browser tab..."
         value={query}
         onValueChange={setQuery}
-        onKeyDown={handleInputKeyDown}
         wrapperClassName="mx-3 mt-3 rounded-lg border border-border/55 bg-muted/28 px-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
         iconClassName="mr-2.5 h-4 w-4 text-muted-foreground/60"
         className="h-12 text-[14px] placeholder:text-muted-foreground/75"
       />
-      <div role="tablist" className="mx-3 mt-2 flex items-center gap-1.5 px-0.5">
-        {SCOPE_ORDER.map((candidate) => {
-          const active = candidate === scope
-          const label = candidate === 'worktrees' ? 'Worktrees' : 'Browser Tabs'
-          return (
-            <button
-              key={candidate}
-              type="button"
-              role="tab"
-              aria-selected={active}
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => setScope(candidate)}
-              className={cn(
-                'inline-flex items-center rounded-md border px-2.5 py-1 text-[11px] font-medium transition-colors',
-                active
-                  ? 'border-border bg-accent/80 text-foreground'
-                  : 'border-transparent text-muted-foreground hover:bg-accent/60 hover:text-foreground'
-              )}
-            >
-              {label}
-            </button>
-          )
-        })}
-      </div>
       <CommandList ref={listRef} className="max-h-[min(460px,62vh)] px-2.5 pb-2.5 pt-2">
         {isLoading ? (
           <PaletteState
             title="Loading jump targets"
             subtitle="Gathering your recent worktrees and open browser pages."
           />
-        ) : visibleItems.length === 0 && !showCreateAction ? (
+        ) : selectableItems.length === 0 && !showCreateAction ? (
           <CommandEmpty className="py-0">
             <PaletteState title={emptyState.title} subtitle={emptyState.subtitle} />
           </CommandEmpty>
         ) : (
           <>
-            {showCreateAction && (
-              <CommandItem
-                value="__create_worktree__"
-                onSelect={handleCreateWorktree}
-                className="group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-1.5 text-left outline-none transition-[background-color,border-color,box-shadow] data-[selected=true]:border-border data-[selected=true]:bg-neutral-100 data-[selected=true]:text-foreground dark:data-[selected=true]:bg-neutral-800"
-              >
-                <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-dashed border-border/60 bg-muted/25 text-muted-foreground/70">
-                  <Plus size={13} aria-hidden="true" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-[14px] font-semibold tracking-[-0.01em] text-foreground">
-                    {`Create worktree "${createWorktreeName}"`}
+            {listEntries.map((entry) => {
+              if (entry.type === 'section-header') {
+                return (
+                  <div
+                    key={entry.id}
+                    className="mx-0.5 mt-2 mb-0.5 px-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70 first:mt-0"
+                  >
+                    {entry.label}
                   </div>
-                </div>
-              </CommandItem>
-            )}
-            {visibleItems.map((item) => {
-              if (item.type === 'worktree') {
-                const worktree = item.worktree
+                )
+              }
+
+              if (entry.type === 'worktree') {
+                const worktree = entry.worktree
                 const repo = repoMap.get(worktree.repoId)
                 const repoName = repo?.displayName ?? ''
                 const branch = branchName(worktree.branch)
@@ -750,9 +702,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
 
                 return (
                   <CommandItem
-                    key={item.id}
-                    value={item.id}
-                    onSelect={() => handleSelectItem(item)}
+                    key={entry.id}
+                    value={entry.id}
+                    onSelect={() => handleSelectItem(entry)}
                     data-current={isCurrentWorktree ? 'true' : undefined}
                     className={cn(
                       'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
@@ -768,10 +720,10 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                         <div className="min-w-0 flex-1">
                           <div className="flex min-w-0 items-center gap-2">
                             <span className="truncate text-[14px] font-semibold tracking-[-0.01em] text-foreground">
-                              {item.match.displayNameRange ? (
+                              {entry.match.displayNameRange ? (
                                 <HighlightedText
                                   text={worktree.displayName}
-                                  matchRange={item.match.displayNameRange}
+                                  matchRange={entry.match.displayNameRange}
                                 />
                               ) : (
                                 worktree.displayName
@@ -789,25 +741,25 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                             )}
                             <span className="shrink-0 text-muted-foreground/45">·</span>
                             <span className="truncate text-[12px] font-medium text-muted-foreground/92">
-                              {item.match.branchRange ? (
+                              {entry.match.branchRange ? (
                                 <HighlightedText
                                   text={branch}
-                                  matchRange={item.match.branchRange}
+                                  matchRange={entry.match.branchRange}
                                 />
                               ) : (
                                 branch
                               )}
                             </span>
                           </div>
-                          {item.match.supportingText && (
+                          {entry.match.supportingText && (
                             <div className="mt-1.5 flex min-w-0 items-start gap-2 text-[12px] leading-5 text-muted-foreground/88">
                               <span className="shrink-0 rounded-full border border-border/45 bg-background/45 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.12em] text-muted-foreground/75">
-                                {item.match.supportingText.label}
+                                {entry.match.supportingText.label}
                               </span>
                               <span className="truncate">
                                 <HighlightedText
-                                  text={item.match.supportingText.text}
-                                  matchRange={item.match.supportingText.matchRange}
+                                  text={entry.match.supportingText.text}
+                                  matchRange={entry.match.supportingText.matchRange}
                                 />
                               </span>
                             </div>
@@ -826,10 +778,10 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                                 }
                               />
                               <span className="truncate">
-                                {item.match.repoRange ? (
+                                {entry.match.repoRange ? (
                                   <HighlightedText
                                     text={repoName}
-                                    matchRange={item.match.repoRange}
+                                    matchRange={entry.match.repoRange}
                                   />
                                 ) : (
                                   repoName
@@ -844,16 +796,16 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                 )
               }
 
-              const result = item.result
+              const result = entry.result
               const browserWorktree = worktreeMap.get(result.worktreeId)
               const browserRepo = browserWorktree ? repoMap.get(browserWorktree.repoId) : undefined
               const browserRepoName = browserRepo?.displayName ?? result.repoName
 
               return (
                 <CommandItem
-                  key={item.id}
-                  value={item.id}
-                  onSelect={() => handleSelectItem(item)}
+                  key={entry.id}
+                  value={entry.id}
+                  onSelect={() => handleSelectItem(entry)}
                   className={cn(
                     'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
                     'data-[selected=true]:border-border data-[selected=true]:bg-neutral-100 data-[selected=true]:text-foreground dark:data-[selected=true]:bg-neutral-800'
@@ -921,6 +873,25 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                 </CommandItem>
               )
             })}
+            {showCreateAction && (
+              // Why: render the create action last so cmdk does not briefly
+              // auto-select it before our effect promotes the first real match
+              // when the query only matches browser pages.
+              <CommandItem
+                value="__create_worktree__"
+                onSelect={handleCreateWorktree}
+                className="group mx-0.5 mt-1 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-1.5 text-left outline-none transition-[background-color,border-color,box-shadow] data-[selected=true]:border-border data-[selected=true]:bg-neutral-100 data-[selected=true]:text-foreground dark:data-[selected=true]:bg-neutral-800"
+              >
+                <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-dashed border-border/60 bg-muted/25 text-muted-foreground/70">
+                  <Plus size={13} aria-hidden="true" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[14px] font-semibold tracking-[-0.01em] text-foreground">
+                    {`Create worktree "${createWorktreeName}"`}
+                  </div>
+                </div>
+              </CommandItem>
+            )}
           </>
         )}
       </CommandList>
@@ -928,8 +899,6 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         <div className="flex items-center gap-2">
           <FooterKey>Enter</FooterKey>
           <span>Open</span>
-          <FooterKey>Tab</FooterKey>
-          <span>Switch</span>
           <FooterKey>Esc</FooterKey>
           <span>Close</span>
           <FooterKey>↑↓</FooterKey>
@@ -938,8 +907,8 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       </div>
       <div aria-live="polite" className="sr-only">
         {debouncedQuery.trim()
-          ? `${resultCount} results found in ${scope === 'worktrees' ? 'worktrees' : 'browser tabs'}${showCreateAction ? ', create new worktree action available' : ''}`
-          : `${resultCount} ${scope === 'worktrees' ? 'worktrees' : 'browser tabs'} available${showCreateAction ? ', create new worktree action available' : ''}`}
+          ? `${resultCount} results found${showCreateAction ? ', create new worktree action available' : ''}`
+          : `${resultCount} items available${showCreateAction ? ', create new worktree action available' : ''}`}
       </div>
     </CommandDialog>
   )
