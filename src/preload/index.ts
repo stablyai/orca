@@ -326,6 +326,15 @@ const api = {
     }
   },
 
+  feedback: {
+    submit: (args: {
+      feedback: string
+      githubLogin: string | null
+      githubEmail: string | null
+    }): Promise<{ ok: true } | { ok: false; status: number | null; error: string }> =>
+      ipcRenderer.invoke('feedback:submit', args)
+  },
+
   gh: {
     viewer: (): Promise<unknown> => ipcRenderer.invoke('gh:viewer'),
 

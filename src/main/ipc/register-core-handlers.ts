@@ -9,6 +9,7 @@ import { registerFilesystemWatcherHandlers } from './filesystem-watcher'
 import { registerClaudeUsageHandlers } from './claude-usage'
 import { registerCodexUsageHandlers } from './codex-usage'
 import { registerGitHubHandlers } from './github'
+import { registerFeedbackHandlers } from './feedback'
 import { registerStatsHandlers } from './stats'
 import { registerRateLimitHandlers } from './rate-limits'
 import { registerRuntimeHandlers } from './runtime'
@@ -61,6 +62,7 @@ export function registerCoreHandlers(
   registerCodexAccountHandlers(codexAccounts)
   registerRateLimitHandlers(rateLimits)
   registerGitHubHandlers(store, stats)
+  registerFeedbackHandlers()
   registerStatsHandlers(stats)
   registerNotificationHandlers(store)
   registerSettingsHandlers(store)

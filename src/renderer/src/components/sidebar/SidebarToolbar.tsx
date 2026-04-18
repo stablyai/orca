@@ -18,8 +18,6 @@ import type { GitHubViewer } from '../../../../shared/types'
 const GITHUB_ISSUES_URL = 'https://github.com/stablyai/orca/issues/'
 const DISCORD_URL = 'https://discord.gg/fzjDKHxv8Q'
 const X_URL = 'https://x.com/orca_build'
-const FEEDBACK_API_URL = 'https://api.onorca.dev/v1/feedback'
-const FEEDBACK_API_FALLBACK_URL = 'https://www.onorca.dev/v1/feedback'
 
 type SubmitIdentity = {
   githubLogin: string | null
@@ -41,37 +39,6 @@ function getSubmitIdentity(viewer: GitHubViewer | null, anonymous: boolean): Sub
   return {
     githubLogin: viewer.login,
     githubEmail: viewer.email
-  }
-}
-
-async function submitFeedback(body: {
-  feedback: string
-  githubLogin: string | null
-  githubEmail: string | null
-}): Promise<Response> {
-  try {
-    return await fetch(FEEDBACK_API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    })
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    // Why: DNS for the dedicated api.onorca.dev host can lag behind a deploy.
-    // Falling back to the verified website-hosted versioned endpoint keeps
-    // feedback submission working instead of forcing users to wait on DNS.
-    if (
-      message.includes('ERR_NAME_NOT_RESOLVED') ||
-      message.includes('ENOTFOUND') ||
-      message.includes('Failed to fetch')
-    ) {
-      return fetch(FEEDBACK_API_FALLBACK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      })
-    }
-    throw error
   }
 }
 
@@ -129,17 +96,19 @@ function FeedbackDialog({
     setIsSubmitting(true)
     try {
       const identity = getSubmitIdentity(viewer, submitAnonymously)
-      const response = await submitFeedback({
-        // Why: showing the exact GitHub identity in the dialog makes the
-        // default attribution explicit, and this flag lets users opt out
-        // without having to disconnect gh for the rest of Orca.
+      // Why: submission is proxied through the main process via IPC because
+      // the packaged Mac build loads the renderer from file://, which makes
+      // cross-origin fetch() fail CORS preflight. Electron's net module in
+      // the main process has no CORS restrictions and works uniformly in dev
+      // and prod.
+      const result = await window.api.feedback.submit({
         feedback: trimmed,
         githubLogin: identity.githubLogin,
         githubEmail: identity.githubEmail
       })
 
-      if (!response.ok) {
-        throw new Error(`Feedback request failed with status ${response.status}`)
+      if (!result.ok) {
+        throw new Error(`Feedback request failed: ${result.error}`)
       }
 
       toast.success('Thanks for the feedback.')

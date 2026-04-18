@@ -312,6 +312,13 @@ export type PreloadApi = {
     onExit: (callback: (data: { id: string; code: number }) => void) => () => void
     onOpenCodeStatus: (callback: (event: OpenCodeStatusEvent) => void) => () => void
   }
+  feedback: {
+    submit: (args: {
+      feedback: string
+      githubLogin: string | null
+      githubEmail: string | null
+    }) => Promise<{ ok: true } | { ok: false; status: number | null; error: string }>
+  }
   gh: {
     viewer: () => Promise<GitHubViewer | null>
     repoSlug: (args: { repoPath: string }) => Promise<{ owner: string; repo: string } | null>
