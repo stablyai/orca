@@ -86,6 +86,10 @@ export default function SortableTab({
 
   const handleRenameOpen = useCallback(() => {
     committedOrCancelledRef.current = false
+    // Why: snapshot the current title once on open. If the underlying tab.title
+    // changes mid-edit (e.g., a shell writes a new title via OSC escape), we
+    // intentionally do NOT refresh renameValue — the user's in-progress edit
+    // takes precedence so their keystrokes are never silently overwritten.
     setRenameValue(tab.customTitle ?? tab.title)
     setIsEditing(true)
   }, [tab.customTitle, tab.title])
@@ -105,6 +109,11 @@ export default function SortableTab({
     setIsEditing(false)
   }, [])
 
+  // Why: rAF defers focus()+select() until after the Input mounts so the text
+  // is pre-selected (overwriting the old title is the common case). Deps are
+  // intentionally just [isEditing] — we do NOT re-run when tab.title or
+  // tab.customTitle change mid-edit, so external title updates cannot
+  // re-focus/re-select and disrupt the user's typing.
   useEffect(() => {
     if (!isEditing) {
       return
@@ -142,6 +151,8 @@ export default function SortableTab({
         <div
           ref={setNodeRef}
           style={style}
+          data-testid="sortable-tab"
+          data-tab-title={tab.customTitle ?? tab.title}
           {...attributes}
           {...dragListeners}
           className={`group relative flex items-center h-full px-3 text-sm cursor-pointer select-none shrink-0 border-r border-border ${
@@ -206,9 +217,19 @@ export default function SortableTab({
               // would otherwise trigger tab activation or start a dnd-kit drag while
               // the user is trying to click inside the input.
               onPointerDown={(event) => event.stopPropagation()}
-              onMouseDown={(event) => event.stopPropagation()}
+              onMouseDown={(event) => {
+                // Why: stop propagation so the outer tab's activation/drag handlers
+                // don't fire on clicks inside the input. Also preventDefault on middle
+                // click (button 1) to block Linux X11 primary-selection paste into the
+                // rename field, matching the outer tab's behavior.
+                event.stopPropagation()
+                if (event.button === 1) {
+                  event.preventDefault()
+                }
+              }}
               onClick={(event) => event.stopPropagation()}
               onDoubleClick={(event) => event.stopPropagation()}
+              onAuxClick={(event) => event.stopPropagation()}
               className="h-5 max-w-[130px] mr-1.5 px-1 py-0 text-xs"
               spellCheck={false}
             />
