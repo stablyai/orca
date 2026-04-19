@@ -274,7 +274,13 @@ function SourceControlInner(): React.JSX.Element {
     setScope('all')
     setCollapsedSections(new Set())
     setBaseRefDialogOpen(false)
-    setDefaultBaseRef('origin/main')
+    // Why: do NOT reset defaultBaseRef here. It is repo-scoped, not
+    // worktree-scoped, and is resolved by the effect above on activeRepo
+    // change. Resetting it to a hard-coded 'origin/main' on every worktree
+    // switch within the same repo clobbered the correct value (e.g.
+    // 'origin/master' for repos whose default branch isn't main), causing
+    // a persistent "Branch compare unavailable" until the user switched
+    // repos and back to re-trigger the resolver.
     setFilterQuery('')
     setIsExecutingBulk(false)
   }, [activeWorktreeId])
