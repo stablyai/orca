@@ -24,7 +24,6 @@ test.describe('New Worktree', () => {
    * - new worktree
    */
   test('create-worktree modal can be opened', async ({ orcaPage }) => {
-    expect(1).toBe(2)
     await orcaPage.evaluate(() => {
       // Why: hidden Electron E2E runs do not expose the same reliable keyboard
       // and sidebar button interactions as a visible window. Opening the modal
