@@ -26,6 +26,11 @@ export default defineConfig({
   // substantially. The few visible-window tests that still rely on real
   // pointer interaction are marked serial in their spec file instead.
   fullyParallel: true,
+  // Why: Playwright defaults to workers=1 on CI, which would serialize all
+  // specs on the ubuntu-latest runner (4 vCPUs) and waste headroom. Each test
+  // launches an isolated Electron instance with its own userData dir, so they
+  // don't share state — we can safely fan out to match the runner's vCPU count.
+  workers: process.env.CI ? 4 : undefined,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: 'list',
