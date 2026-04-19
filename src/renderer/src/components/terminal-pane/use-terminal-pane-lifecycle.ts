@@ -28,7 +28,6 @@ import { connectPanePty } from './pty-connection'
 import type { PtyTransport } from './pty-transport'
 import { fitAndFocusPanes, fitPanes } from './pane-helpers'
 import { registerRuntimeTerminalTab, scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
-import { getPaneJumpState } from './jump-to-present'
 import { e2eConfig } from '@/lib/e2e-config'
 
 type UseTerminalPaneLifecycleDeps = {
