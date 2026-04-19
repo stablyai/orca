@@ -22,10 +22,32 @@ export function DiffCommentPopover({
 }: Props): React.JSX.Element {
   const [body, setBody] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const popoverRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     textareaRef.current?.focus()
   }, [])
+
+  // Why: Monaco's editor area does not bubble a synthetic React click up to
+  // the popover's onClick. Without a document-level mousedown listener, the
+  // popover has no way to detect clicks outside its own bounds. We keep the
+  // `onMouseDown={ev.stopPropagation()}` on the popover root so that this
+  // listener sees outside-clicks only.
+  useEffect(() => {
+    const onDocumentMouseDown = (ev: MouseEvent): void => {
+      if (!popoverRef.current) {
+        return
+      }
+      if (popoverRef.current.contains(ev.target as Node)) {
+        return
+      }
+      onCancel()
+    }
+    document.addEventListener('mousedown', onDocumentMouseDown)
+    return () => {
+      document.removeEventListener('mousedown', onDocumentMouseDown)
+    }
+  }, [onCancel])
 
   const autoResize = (el: HTMLTextAreaElement): void => {
     el.style.height = 'auto'
@@ -42,6 +64,7 @@ export function DiffCommentPopover({
 
   return (
     <div
+      ref={popoverRef}
       className="orca-diff-comment-popover"
       style={{ top: `${top}px` }}
       onMouseDown={(ev) => ev.stopPropagation()}

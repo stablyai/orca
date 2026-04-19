@@ -37,6 +37,12 @@ describe('formatDiffComment', () => {
     const out = formatDiffComment(makeComment({ body: 'path\\to\\"thing"' }))
     expect(out).toContain('User comment: "path\\\\to\\\\\\"thing\\""')
   })
+
+  it('escapes newlines so the body cannot break out of the fixed 4-line structure', () => {
+    const out = formatDiffComment(makeComment({ body: 'first\nsecond' }))
+    expect(out).toContain('User comment: "first\\nsecond"')
+    expect(out.split('\n')).toHaveLength(4)
+  })
 })
 
 describe('formatDiffComments', () => {
@@ -45,9 +51,19 @@ describe('formatDiffComments', () => {
       makeComment({ id: 'a', lineNumber: 1, body: 'first' }),
       makeComment({ id: 'b', lineNumber: 2, body: 'second' })
     ])
-    expect(out).toContain('Line: 1')
-    expect(out).toContain('Line: 2')
-    expect(out.split('\n\n')).toHaveLength(2)
+    expect(out).toBe(
+      [
+        'File: src/app.ts',
+        'Line: 1',
+        'User comment: "first"',
+        'Comment metadata: This comment was left on the modified branch.',
+        '',
+        'File: src/app.ts',
+        'Line: 2',
+        'User comment: "second"',
+        'Comment metadata: This comment was left on the modified branch.'
+      ].join('\n')
+    )
   })
 
   it('returns an empty string for an empty input', () => {

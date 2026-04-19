@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
-import { Trash2, MessageSquare, Terminal, Play, Clipboard } from 'lucide-react'
+import { Trash2, MessageSquare, FileCode, Play, Clipboard } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import type { OpenFile } from '@/store/slices/editor'
 import type { DiffComment } from '../../../../shared/types'
 import { formatDiffComments } from '@/lib/diff-comments-format'
@@ -41,17 +42,14 @@ function groupByFile(comments: DiffComment[]): Record<string, DiffComment[]> {
   return groups
 }
 
-export function DiffCommentsTab({
-  activeFile
-}: {
-  activeFile: OpenFile
-}): React.JSX.Element {
+export function DiffCommentsTab({ activeFile }: { activeFile: OpenFile }): React.JSX.Element {
   const worktreeId = activeFile.worktreeId
   const comments = useAppStore((s) => s.getDiffComments(worktreeId))
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const clearDiffComments = useAppStore((s) => s.clearDiffComments)
   const getActiveTab = useAppStore((s) => s.getActiveTab)
   const [agentDialogOpen, setAgentDialogOpen] = useState(false)
+  const [clearDialogOpen, setClearDialogOpen] = useState(false)
   const [pasteNotice, setPasteNotice] = useState<string | null>(null)
 
   const groups = useMemo(() => groupByFile(comments), [comments])
@@ -111,9 +109,7 @@ export function DiffCommentsTab({
               if (comments.length === 0) {
                 return
               }
-              if (confirm(`Delete all ${comments.length} comments for this worktree?`)) {
-                void clearDiffComments(worktreeId)
-              }
+              setClearDialogOpen(true)
             }}
             disabled={comments.length === 0}
           >
@@ -139,7 +135,7 @@ export function DiffCommentsTab({
             {fileEntries.map(([filePath, list]) => (
               <section key={filePath} className="px-3 py-2">
                 <header className="mb-1.5 flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                  <Terminal className="size-3" />
+                  <FileCode className="size-3" />
                   <span className="truncate">{filePath}</span>
                   <span className="tabular-nums">({list.length})</span>
                 </header>
@@ -176,6 +172,32 @@ export function DiffCommentsTab({
           </div>
         )}
       </div>
+
+      <Dialog open={clearDialogOpen} onOpenChange={setClearDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Clear all diff comments?</DialogTitle>
+          </DialogHeader>
+          <div className="text-sm text-muted-foreground">
+            This will permanently delete {comments.length} comment
+            {comments.length === 1 ? '' : 's'} for this worktree. This cannot be undone.
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setClearDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                setClearDialogOpen(false)
+                void clearDiffComments(worktreeId)
+              }}
+            >
+              Delete all
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <DiffCommentsAgentChooserDialog
         open={agentDialogOpen}

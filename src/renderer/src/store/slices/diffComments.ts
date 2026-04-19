@@ -5,9 +5,7 @@ import { findWorktreeById, getRepoIdFromWorktreeId } from './worktree-helpers'
 
 export type DiffCommentsSlice = {
   getDiffComments: (worktreeId: string, filePath?: string) => DiffComment[]
-  addDiffComment: (
-    input: Omit<DiffComment, 'id' | 'createdAt'>
-  ) => Promise<DiffComment | null>
+  addDiffComment: (input: Omit<DiffComment, 'id' | 'createdAt'>) => Promise<DiffComment | null>
   deleteDiffComment: (worktreeId: string, commentId: string) => Promise<void>
   clearDiffComments: (worktreeId: string) => Promise<void>
 }
@@ -18,6 +16,11 @@ function generateId(): string {
   }
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
 }
+
+// Why: return a stable reference when no comments exist so selectors don't
+// produce a fresh `[]` on every store update. A new array identity would
+// trigger re-renders in any consumer using referential equality.
+const EMPTY_COMMENTS: DiffComment[] = []
 
 async function persist(worktreeId: string, diffComments: DiffComment[]): Promise<void> {
   await window.api.worktrees.updateMeta({
@@ -66,15 +69,30 @@ function mutateComments(
 // Why: if the IPC write fails, the optimistic renderer state drifts from
 // disk. Roll back so what the user sees always matches what will survive a
 // reload.
+//
+// Identity guard: we only revert when the current diffComments array is
+// strictly identical (===) to the `next` array this mutation produced. If
+// another mutation has already landed (e.g. Add B succeeded while Add A was
+// still in flight), it will have replaced the array with a different
+// identity. In that case we must leave the newer state alone — rolling back
+// to our stale `previous` would erase B along with the failed A.
 function rollback(
   set: Parameters<StateCreator<AppState, [], [], DiffCommentsSlice>>[0],
   worktreeId: string,
-  previous: DiffComment[] | undefined
+  previous: DiffComment[] | undefined,
+  expectedCurrent: DiffComment[]
 ): void {
   const repoId = getRepoIdFromWorktreeId(worktreeId)
   set((s) => {
     const repoList = s.worktreesByRepo[repoId]
     if (!repoList) {
+      return {}
+    }
+    const target = repoList.find((w) => w.id === worktreeId)
+    // Why: only roll back if no other mutation landed since this one. If a
+    // later write already replaced the comments array with a different
+    // identity, our stale `previous` would erase that newer state.
+    if (target?.diffComments !== expectedCurrent) {
       return {}
     }
     const nextList: Worktree[] = repoList.map((w) =>
@@ -90,7 +108,7 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
 ) => ({
   getDiffComments: (worktreeId, filePath) => {
     const worktree = findWorktreeById(get().worktreesByRepo, worktreeId)
-    const all = worktree?.diffComments ?? []
+    const all = worktree?.diffComments ?? EMPTY_COMMENTS
     if (!filePath) {
       return all
     }
@@ -103,10 +121,7 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
       id: generateId(),
       createdAt: Date.now()
     }
-    const result = mutateComments(set, input.worktreeId, (existing) => [
-      ...existing,
-      comment
-    ])
+    const result = mutateComments(set, input.worktreeId, (existing) => [...existing, comment])
     if (!result) {
       return null
     }
@@ -115,7 +130,7 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
       return comment
     } catch (err) {
       console.error('Failed to persist diff comments:', err)
-      rollback(set, input.worktreeId, result.previous)
+      rollback(set, input.worktreeId, result.previous, result.next)
       return null
     }
   },
@@ -132,7 +147,7 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
       await persist(worktreeId, result.next)
     } catch (err) {
       console.error('Failed to persist diff comments:', err)
-      rollback(set, worktreeId, result.previous)
+      rollback(set, worktreeId, result.previous, result.next)
     }
   },
 
@@ -147,7 +162,7 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
       await persist(worktreeId, result.next)
     } catch (err) {
       console.error('Failed to persist diff comments:', err)
-      rollback(set, worktreeId, result.previous)
+      rollback(set, worktreeId, result.previous, result.next)
     }
   }
 })

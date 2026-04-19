@@ -5,7 +5,11 @@ import type { DiffComment } from '../../../shared/types'
 // because the body is surfaced inside literal quotes. Escape backslashes
 // first so that `\"` in user input does not decay into an unescaped quote.
 export function formatDiffComment(c: DiffComment): string {
-  const escaped = c.body.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+  const escaped = c.body
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/\r/g, '\\r')
+    .replace(/\n/g, '\\n')
   return [
     `File: ${c.filePath}`,
     `Line: ${c.lineNumber}`,

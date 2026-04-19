@@ -1,4 +1,4 @@
-import React, { lazy, useMemo, useState, type MutableRefObject } from 'react'
+import React, { lazy, useEffect, useMemo, useState, type MutableRefObject } from 'react'
 import { LazySection } from './LazySection'
 import { ChevronDown, ChevronRight, ExternalLink } from 'lucide-react'
 import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
@@ -130,8 +130,7 @@ export function DiffSectionItem({
     editorFontZoomLevel
   )
 
-  const [modifiedEditor, setModifiedEditor] =
-    useState<monacoEditor.ICodeEditor | null>(null)
+  const [modifiedEditor, setModifiedEditor] = useState<monacoEditor.ICodeEditor | null>(null)
   const [popover, setPopover] = useState<{ lineNumber: number; top: number } | null>(null)
 
   useDiffCommentDecorator({
@@ -142,6 +141,27 @@ export function DiffSectionItem({
     onAddCommentClick: ({ lineNumber, top }) => setPopover({ lineNumber, top }),
     onDeleteComment: (id) => void deleteDiffComment(worktreeId, id)
   })
+
+  useEffect(() => {
+    if (!modifiedEditor || !popover) {
+      return
+    }
+    const update = (): void => {
+      const top =
+        modifiedEditor.getTopForLineNumber(popover.lineNumber) - modifiedEditor.getScrollTop()
+      setPopover((prev) => (prev ? { ...prev, top } : prev))
+    }
+    const scrollSub = modifiedEditor.onDidScrollChange(update)
+    const contentSub = modifiedEditor.onDidContentSizeChange(update)
+    return () => {
+      scrollSub.dispose()
+      contentSub.dispose()
+    }
+    // Why: depend on popover.lineNumber (not the whole popover object) so the
+    // effect doesn't re-subscribe on every top update it dispatches. The guard
+    // on `popover` above handles the popover-closed case.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modifiedEditor, popover?.lineNumber])
 
   const handleSubmitComment = (body: string): void => {
     if (!popover) {

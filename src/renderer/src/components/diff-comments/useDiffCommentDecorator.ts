@@ -31,6 +31,13 @@ export function useDiffCommentDecorator({
   const hoverLineRef = useRef<number | null>(null)
   const viewZoneIdsRef = useRef<Map<string, string>>(new Map())
   const disposablesRef = useRef<IDisposable[]>([])
+  // Why: cache each comment's rendered DOM node and last-applied body so the
+  // view-zone effect can patch an existing card in place when only the body
+  // changed, rather than removing and re-adding every zone on each render.
+  // Rebuilding all zones caused visible flicker and wasted DOM work whenever
+  // a single comment was added, edited, or deleted.
+  const domNodesByCommentIdRef = useRef<Map<string, HTMLElement>>(new Map())
+  const bodyByCommentIdRef = useRef<Map<string, string>>(new Map())
   // Why: stash the consumer callbacks in refs so the decorator effect's
   // cleanup does not run on every parent render. The parent passes inline
   // arrow functions; without this, each render would tear down and re-attach
@@ -116,6 +123,15 @@ export function useDiffCommentDecorator({
       disposablesRef.current = []
       plus.removeEventListener('click', handleClick)
       plus.remove()
+      // Why: when the editor is swapped or torn down, its view zones go with
+      // it. Clear the tracking Maps so a subsequent editor mount starts from
+      // a known-empty state rather than trying to remove stale zone ids from
+      // a dead editor. The diff effect below deliberately has no cleanup so
+      // comment-only changes don't cause a full zone rebuild; this cleanup
+      // is the single place we reset zone tracking.
+      viewZoneIdsRef.current.clear()
+      domNodesByCommentIdRef.current.clear()
+      bodyByCommentIdRef.current.clear()
     }
   }, [editor])
 
@@ -124,18 +140,31 @@ export function useDiffCommentDecorator({
       return
     }
 
-    const relevant = comments.filter(
-      (c) => c.filePath === filePath && c.worktreeId === worktreeId
-    )
+    const relevant = comments.filter((c) => c.filePath === filePath && c.worktreeId === worktreeId)
+    const relevantMap = new Map(relevant.map((c) => [c.id, c] as const))
 
     const currentIds = viewZoneIdsRef.current
-    editor.changeViewZones((accessor) => {
-      for (const id of currentIds.values()) {
-        accessor.removeZone(id)
-      }
-      currentIds.clear()
+    const domNodesByCommentId = domNodesByCommentIdRef.current
+    const bodyByCommentId = bodyByCommentIdRef.current
 
+    editor.changeViewZones((accessor) => {
+      // Why: remove only the zones whose comments are gone. Rebuilding all
+      // zones on every change caused flicker and dropped focus/selection in
+      // adjacent UI; a diff-based pass keeps the untouched cards stable.
+      for (const [commentId, zoneId] of currentIds) {
+        if (!relevantMap.has(commentId)) {
+          accessor.removeZone(zoneId)
+          currentIds.delete(commentId)
+          domNodesByCommentId.delete(commentId)
+          bodyByCommentId.delete(commentId)
+        }
+      }
+
+      // Add zones for newly-added comments.
       for (const c of relevant) {
+        if (currentIds.has(c.id)) {
+          continue
+        }
         const dom = document.createElement('div')
         dom.className = 'orca-diff-comment-inline'
 
@@ -169,23 +198,50 @@ export function useDiffCommentDecorator({
         card.appendChild(body)
         dom.appendChild(card)
 
+        // Why: estimate height from line count so the zone is close to the
+        // right size on first paint. Monaco sets heightInPx authoritatively at
+        // insertion and does not re-measure the DOM node, so a fixed 72 clipped
+        // multi-line bodies. The per-line estimate handles typical review
+        // notes without needing a post-attach measurement pass.
+        const lineCount = c.body.split('\n').length
+        const heightInPx = Math.max(56, 28 + lineCount * 18)
+
         const id = accessor.addZone({
           afterLineNumber: c.lineNumber,
-          heightInPx: 72,
+          heightInPx,
           domNode: dom,
           suppressMouseDown: true
         })
         currentIds.set(c.id, id)
+        domNodesByCommentId.set(c.id, dom)
+        bodyByCommentId.set(c.id, c.body)
+      }
+
+      // Patch existing zones whose body text changed in place — avoids the
+      // full rebuild that would otherwise flicker the card.
+      for (const c of relevant) {
+        if (!currentIds.has(c.id)) {
+          continue
+        }
+        const previousBody = bodyByCommentId.get(c.id)
+        if (previousBody === c.body) {
+          continue
+        }
+        const dom = domNodesByCommentId.get(c.id)
+        if (!dom) {
+          continue
+        }
+        const bodyEl = dom.querySelector('.orca-diff-comment-body')
+        if (bodyEl) {
+          bodyEl.textContent = c.body
+        }
+        bodyByCommentId.set(c.id, c.body)
       }
     })
-
-    return () => {
-      editor.changeViewZones((accessor) => {
-        for (const id of currentIds.values()) {
-          accessor.removeZone(id)
-        }
-      })
-      currentIds.clear()
-    }
+    // Why: intentionally no cleanup. React would run cleanup BEFORE the next
+    // effect body on every `comments` identity change, wiping all zones and
+    // forcing a full rebuild — exactly the flicker this diff-based pass is
+    // meant to avoid. Zone teardown lives in the editor-scoped effect above,
+    // which only fires when the editor itself is replaced/unmounted.
   }, [editor, filePath, worktreeId, comments])
 }
