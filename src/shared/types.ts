@@ -720,7 +720,7 @@ export type PersistedUIState = {
    *  (v1→v2 rename). When this flag is absent and sortBy is 'recent', the
    *  main-process load() migrates it to 'smart' and sets this flag so the
    *  migration never re-fires — allowing users to intentionally select the
-   *  new 'recent' (creation-time) sort without it being clobbered on restart. */
+   *  new 'recent' (last-activity) sort without it being clobbered on restart. */
   _sortBySmartMigrated?: boolean
   /** Snapshot of totalAgentsSpawned captured the first time we see the current
    *  app version. Why: the nag threshold counts agents spawned *since the

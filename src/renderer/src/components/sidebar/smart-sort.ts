@@ -145,7 +145,13 @@ export function buildWorktreeComparator(
         )
       }
       case 'recent':
-        return b.sortOrder - a.sortOrder || a.displayName.localeCompare(b.displayName)
+        // Why lastActivityAt (not sortOrder): sortOrder is a snapshot of the
+        // smart-sort ranking that only gets repersisted while the user is in
+        // "Smart" mode, so it's frozen in Recent mode and ignores new terminal
+        // events, meta edits, etc. lastActivityAt is the real "recency" signal
+        // — it's bumped by bumpWorktreeActivity (PTY spawn, background events)
+        // and by meaningful meta edits (comment, isUnread).
+        return b.lastActivityAt - a.lastActivityAt || a.displayName.localeCompare(b.displayName)
       case 'repo': {
         const ra = repoMap.get(a.repoId)?.displayName ?? ''
         const rb = repoMap.get(b.repoId)?.displayName ?? ''

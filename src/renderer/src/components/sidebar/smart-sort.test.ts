@@ -384,17 +384,17 @@ describe('buildWorktreeComparator', () => {
   })
 })
 
-describe('buildWorktreeComparator — recent (sortOrder / creation time)', () => {
-  it('sorts by sortOrder descending (newest first)', () => {
+describe('buildWorktreeComparator — recent (lastActivityAt)', () => {
+  it('sorts by lastActivityAt descending (most recent first)', () => {
     const older = makeWorktree({
       id: 'older',
       displayName: 'Older',
-      sortOrder: 1000
+      lastActivityAt: 1000
     })
     const newer = makeWorktree({
       id: 'newer',
       displayName: 'Newer',
-      sortOrder: 2000
+      lastActivityAt: 2000
     })
     const worktrees = [older, newer]
 
@@ -403,39 +403,61 @@ describe('buildWorktreeComparator — recent (sortOrder / creation time)', () =>
     expect(worktrees.map((w) => w.id)).toEqual(['newer', 'older'])
   })
 
-  it('sorts worktrees with sortOrder 0 to the bottom', () => {
-    const created = makeWorktree({
-      id: 'created',
-      displayName: 'Created',
-      sortOrder: 1000
+  it('sorts worktrees with lastActivityAt 0 to the bottom', () => {
+    const touched = makeWorktree({
+      id: 'touched',
+      displayName: 'Touched',
+      lastActivityAt: 1000
     })
     const legacy = makeWorktree({
       id: 'legacy',
       displayName: 'Legacy',
-      sortOrder: 0
+      lastActivityAt: 0
     })
-    const worktrees = [legacy, created]
+    const worktrees = [legacy, touched]
 
     worktrees.sort(buildWorktreeComparator('recent', null, repoMap, null, NOW))
 
-    expect(worktrees.map((w) => w.id)).toEqual(['created', 'legacy'])
+    expect(worktrees.map((w) => w.id)).toEqual(['touched', 'legacy'])
   })
 
-  it('falls back to alphabetical when sortOrder is equal', () => {
+  it('falls back to alphabetical when lastActivityAt is equal', () => {
     const bravo = makeWorktree({
       id: 'bravo',
       displayName: 'Bravo',
-      sortOrder: 1000
+      lastActivityAt: 1000
     })
     const alpha = makeWorktree({
       id: 'alpha',
       displayName: 'Alpha',
-      sortOrder: 1000
+      lastActivityAt: 1000
     })
     const worktrees = [bravo, alpha]
 
     worktrees.sort(buildWorktreeComparator('recent', null, repoMap, null, NOW))
 
     expect(worktrees.map((w) => w.id)).toEqual(['alpha', 'bravo'])
+  })
+
+  it('ignores sortOrder entirely — activity alone determines the order', () => {
+    // A worktree with a stale high sortOrder (e.g. baked in when meta was
+    // first created) must not outrank a worktree with fresher activity.
+    const staleHighOrder = makeWorktree({
+      id: 'stale-high-order',
+      displayName: 'Orca main',
+      sortOrder: 9_999_999_999_999,
+      lastActivityAt: 1000
+    })
+    const freshActive = makeWorktree({
+      id: 'fresh-active',
+      displayName: 'Other repo',
+      sortOrder: 1,
+      lastActivityAt: 5000
+    })
+    const worktrees = [staleHighOrder, freshActive]
+
+    worktrees.sort(buildWorktreeComparator('recent', null, repoMap, null, NOW))
+
+    expect(worktrees.map((w) => w.id)).toEqual(['fresh-active', 'stale-high-order'])
   })
 })
