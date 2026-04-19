@@ -63,6 +63,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # Why: E2E runs alongside the release for visibility (failures surface as a
+  # red check on the tag), but it is NOT in `release`'s needs list. Releases
+  # already take a while and the suite is already a required check on PRs, so
+  # gating here would mostly just delay shipping without adding much signal.
+  # Matches the pattern used by noqa's app deploy, which runs E2E with
+  # continue-on-error so failures are visible but don't block the deploy.
   e2e:
     needs: resolve-release
     uses: ./.github/workflows/e2e.yml
@@ -73,7 +79,6 @@ jobs:
     needs:
       - resolve-release
       - create-release
-      - e2e
     strategy:
       fail-fast: false
       matrix:
