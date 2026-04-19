@@ -181,10 +181,27 @@ describe('installDevParentWatchdog', () => {
 })
 
 describe('enableMainProcessGpuFeatures', () => {
-  it('appends Orca GPU flags by default', async () => {
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+
+  function setPlatform(platform: NodeJS.Platform): void {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: platform
+    })
+  }
+
+  afterEach(() => {
+    if (originalPlatform) {
+      Object.defineProperty(process, 'platform', originalPlatform)
+    }
+  })
+
+  it('appends Orca GPU flags on darwin', async () => {
     const { app } = await import('electron')
     const { enableMainProcessGpuFeatures } = await import('./configure-process')
 
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    setPlatform('darwin')
     enableMainProcessGpuFeatures()
 
     expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
@@ -192,5 +209,20 @@ describe('enableMainProcessGpuFeatures', () => {
       'Vulkan,UseSkiaGraphite'
     )
     expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('enable-unsafe-webgpu')
+  })
+
+  it('skips Vulkan/SkiaGraphite/WebGPU switches on linux', async () => {
+    // Why: Chromium's Ozone/Wayland surface factory refuses to initialize
+    // with Vulkan enabled, producing a blank/transparent window on Wayland
+    // sessions (Arch/Omarchy/Hyprland, GNOME-Wayland). Guard against
+    // regressions that would reintroduce these switches on Linux.
+    const { app } = await import('electron')
+    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    setPlatform('linux')
+    enableMainProcessGpuFeatures()
+
+    expect(app.commandLine.appendSwitch).not.toHaveBeenCalled()
   })
 })

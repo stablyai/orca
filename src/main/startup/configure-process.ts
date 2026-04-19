@@ -147,6 +147,16 @@ export function installDevParentWatchdog(isDev: boolean): void {
 }
 
 export function enableMainProcessGpuFeatures(): void {
+  // Why: Chromium's Ozone/Wayland surface factory refuses to initialize when
+  // Vulkan is enabled (see wayland_surface_factory.cc), leaving the renderer
+  // unable to compose and showing a blank/transparent window on Wayland-default
+  // distros like Arch/Omarchy/Hyprland and GNOME-Wayland. Chromium's Linux
+  // Vulkan path is also flaky on X11 across Electron 41 + Mesa combinations,
+  // so we skip these switches on Linux entirely. macOS and Windows keep the
+  // Skia Graphite / WebGPU acceleration path, which works as intended.
+  if (process.platform === 'linux') {
+    return
+  }
   app.commandLine.appendSwitch('enable-features', 'Vulkan,UseSkiaGraphite')
   app.commandLine.appendSwitch('enable-unsafe-webgpu')
 }
