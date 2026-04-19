@@ -280,6 +280,33 @@
   background: color-mix(in srgb, var(--foreground) 2%, transparent);
 }
 
+.rich-markdown-editor table {
+  width: 100%;
+  margin: 1em 0;
+  border-collapse: collapse;
+  font-size: 0.95em;
+}
+
+.rich-markdown-editor th,
+.rich-markdown-editor td {
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.rich-markdown-editor th {
+  font-weight: 600;
+  font-size: 0.85em;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: color-mix(in srgb, var(--foreground) 4%, transparent);
+}
+
+.rich-markdown-editor tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--foreground) 1.5%, transparent);
+}
+
 .rich-markdown-editor code {
   padding: 0.2em 0.4em;
   border-radius: 5px;
