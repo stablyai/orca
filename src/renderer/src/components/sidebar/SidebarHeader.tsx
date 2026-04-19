@@ -3,6 +3,7 @@ import { Plus, SlidersHorizontal } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import {
   DropdownMenu,
@@ -15,6 +16,12 @@ import {
   DropdownMenuRadioItem
 } from '@/components/ui/dropdown-menu'
 import type { WorktreeCardProperty } from '../../../../shared/types'
+
+const GROUP_BY_OPTIONS = [
+  { id: 'none', label: 'All' },
+  { id: 'pr-status', label: 'PR Status' },
+  { id: 'repo', label: 'Repo' }
+] as const
 
 const PROPERTY_OPTIONS: { id: WorktreeCardProperty; label: string }[] = [
   { id: 'status', label: 'Terminal status' },
@@ -44,6 +51,8 @@ const SidebarHeader = React.memo(function SidebarHeader() {
   const toggleWorktreeCardProperty = useAppStore((s) => s.toggleWorktreeCardProperty)
   const sortBy = useAppStore((s) => s.sortBy)
   const setSortBy = useAppStore((s) => s.setSortBy)
+  const groupBy = useAppStore((s) => s.groupBy)
+  const setGroupBy = useAppStore((s) => s.setGroupBy)
 
   return (
     <div className="flex h-8 items-center justify-between px-4 mt-1">
@@ -69,7 +78,34 @@ const SidebarHeader = React.memo(function SidebarHeader() {
               View options
             </TooltipContent>
           </Tooltip>
-          <DropdownMenuContent align="end" className="w-56 pb-2">
+          <DropdownMenuContent side="right" align="start" sideOffset={8} className="w-56 pb-2">
+            <DropdownMenuLabel>Group by</DropdownMenuLabel>
+            <div className="px-2 pt-0.5 pb-1">
+              <ToggleGroup
+                type="single"
+                value={groupBy}
+                onValueChange={(v) => {
+                  if (v) {
+                    setGroupBy(v as typeof groupBy)
+                  }
+                }}
+                variant="outline"
+                size="sm"
+                className="h-6 w-full justify-start"
+              >
+                {GROUP_BY_OPTIONS.map((opt) => (
+                  <ToggleGroupItem
+                    key={opt.id}
+                    value={opt.id}
+                    className="h-6 px-2 text-[10px] data-[state=on]:bg-foreground/10 data-[state=on]:font-semibold data-[state=on]:text-foreground"
+                  >
+                    {opt.label}
+                  </ToggleGroupItem>
+                ))}
+              </ToggleGroup>
+            </div>
+
+            <DropdownMenuSeparator />
             <DropdownMenuLabel>Sort by</DropdownMenuLabel>
             <DropdownMenuRadioGroup
               value={sortBy}
