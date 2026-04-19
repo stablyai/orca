@@ -133,9 +133,6 @@ export default function SortableTab({
     <>
       <div
         onContextMenuCapture={(event) => {
-          if (isEditing) {
-            return
-          }
           event.preventDefault()
           window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
           setMenuPoint({ x: event.clientX, y: event.clientY })
