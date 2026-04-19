@@ -11,7 +11,7 @@ type Props = {
   lineNumber: number
   top: number
   onCancel: () => void
-  onSubmit: (body: string) => void
+  onSubmit: (body: string) => Promise<void>
 }
 
 export function DiffCommentPopover({
@@ -21,6 +21,15 @@ export function DiffCommentPopover({
   onSubmit
 }: Props): React.JSX.Element {
   const [body, setBody] = useState('')
+  // Why: `submitting` prevents duplicate comment rows when the user
+  // double-clicks the Comment button or hits Cmd/Ctrl+Enter twice before the
+  // IPC round-trip resolves. Iteration 1 made submission async and keeps the
+  // popover open on failure (to preserve the draft); that widened the window
+  // between the first click and `setPopover(null)` during which a second
+  // trigger would call `addDiffComment` again and produce a second row with a
+  // fresh id/createdAt. Tracked in React state (not a ref) so the button can
+  // reflect the in-flight status to the user.
+  const [submitting, setSubmitting] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const popoverRef = useRef<HTMLDivElement | null>(null)
   // Why: stable id per-instance so multiple popovers (should they ever coexist)
@@ -58,12 +67,20 @@ export function DiffCommentPopover({
     el.style.height = `${Math.min(el.scrollHeight, 240)}px`
   }
 
-  const handleSubmit = (): void => {
+  const handleSubmit = async (): Promise<void> => {
+    if (submitting) {
+      return
+    }
     const trimmed = body.trim()
     if (!trimmed) {
       return
     }
-    onSubmit(trimmed)
+    setSubmitting(true)
+    try {
+      await onSubmit(trimmed)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -97,7 +114,13 @@ export function DiffCommentPopover({
           }
           if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
             e.preventDefault()
-            handleSubmit()
+            // Why: guard against a second Cmd/Ctrl+Enter while an earlier
+            // submit is still awaiting IPC — otherwise it would enqueue a
+            // duplicate addDiffComment call.
+            if (submitting) {
+              return
+            }
+            void handleSubmit()
           }
         }}
         rows={3}
@@ -106,8 +129,8 @@ export function DiffCommentPopover({
         <Button variant="ghost" size="sm" onClick={onCancel}>
           Cancel
         </Button>
-        <Button size="sm" onClick={handleSubmit} disabled={body.trim().length === 0}>
-          Comment
+        <Button size="sm" onClick={handleSubmit} disabled={submitting || body.trim().length === 0}>
+          {submitting ? 'Saving…' : 'Comment'}
         </Button>
       </div>
     </div>

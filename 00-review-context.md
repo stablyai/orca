@@ -153,7 +153,15 @@ A review finding will call it out.
 
 ## Iteration State
 
-Current iteration: 1
-Last completed phase: Validation
-Files fixed this iteration: []
-Pending fixes: 12 (FIX-1 through FIX-12)
+Current iteration: 2 (verification)
+Last completed phase: Iteration 1 Fix
+Files fixed iteration 1 (commit 375d0593):
+ - src/preload/api-types.d.ts
+ - src/main/ipc/worktree-logic.ts
+ - src/renderer/src/store/slices/diffComments.ts
+ - src/renderer/src/components/editor/DiffSectionItem.tsx
+ - src/renderer/src/components/diff-comments/DiffCommentsTab.tsx
+ - src/renderer/src/components/diff-comments/DiffCommentPopover.tsx
+ - src/renderer/src/assets/main.css
+ - src/renderer/src/components/editor/CombinedDiffViewer.tsx
+Build status: typecheck PASSING.
