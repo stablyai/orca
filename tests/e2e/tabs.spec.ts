@@ -5,6 +5,7 @@
  * - New tab works
  * - dragging tabs around to reorder them
  * - closing tabs works
+ * - double-click a tab to rename it inline
  */
 
 import { test, expect } from './helpers/orca-app'
@@ -273,5 +274,124 @@ test.describe('Tabs', () => {
         { timeout: 5_000 }
       )
       .toBe(true)
+  })
+
+  /**
+   * User Prompt:
+   * - double-click a tab to rename it inline
+   *
+   * Why: the double-click handler lives on the outer tab div but the inline
+   * input is rendered *inside* that div, so we locate the tab by its current
+   * title, double-click it, type into the input that appears, then assert the
+   * store's customTitle is updated and isEditing has cleared.
+   */
+  async function getActiveTabTitle(
+    page: Parameters<typeof getActiveTabId>[0],
+    worktreeId: string
+  ): Promise<string> {
+    const activeId = await getActiveTabId(page)
+    expect(activeId).not.toBeNull()
+    const tabs = await getWorktreeTabs(page, worktreeId)
+    const tab = tabs.find((entry) => entry.id === activeId)
+    expect(tab).toBeDefined()
+    return tab!.title ?? ''
+  }
+
+  async function getActiveCustomTitle(
+    page: Parameters<typeof getActiveTabId>[0],
+    worktreeId: string
+  ): Promise<string | null> {
+    return page.evaluate((targetWorktreeId) => {
+      const store = window.__store
+      if (!store) {
+        return null
+      }
+
+      const state = store.getState()
+      const activeId = state.activeTabIdByWorktree[targetWorktreeId] ?? state.activeTabId
+      const tab = (state.tabsByWorktree[targetWorktreeId] ?? []).find((t) => t.id === activeId)
+      return tab?.customTitle ?? null
+    }, worktreeId)
+  }
+
+  test('double-clicking a tab opens an inline rename input and Enter commits', async ({
+    orcaPage
+  }) => {
+    const worktreeId = (await getActiveWorktreeId(orcaPage))!
+    const originalTitle = await getActiveTabTitle(orcaPage, worktreeId)
+    expect(originalTitle.length).toBeGreaterThan(0)
+
+    const tabLocator = orcaPage.getByText(originalTitle, { exact: true }).first()
+    await tabLocator.dblclick()
+
+    const renameInput = orcaPage.getByRole('textbox', {
+      name: new RegExp(`Rename tab ${originalTitle}`)
+    })
+    await expect(renameInput).toBeVisible()
+
+    await renameInput.fill('My Custom Title')
+    await renameInput.press('Enter')
+
+    await expect
+      .poll(async () => getActiveCustomTitle(orcaPage, worktreeId), { timeout: 3_000 })
+      .toBe('My Custom Title')
+    await expect(renameInput).toBeHidden()
+  })
+
+  test('Escape during inline rename discards the edit', async ({ orcaPage }) => {
+    const worktreeId = (await getActiveWorktreeId(orcaPage))!
+    const originalTitle = await getActiveTabTitle(orcaPage, worktreeId)
+
+    const tabLocator = orcaPage.getByText(originalTitle, { exact: true }).first()
+    await tabLocator.dblclick()
+
+    const renameInput = orcaPage.getByRole('textbox', {
+      name: new RegExp(`Rename tab ${originalTitle}`)
+    })
+    await expect(renameInput).toBeVisible()
+
+    await renameInput.fill('Should Be Discarded')
+    await renameInput.press('Escape')
+
+    await expect(renameInput).toBeHidden()
+    expect(await getActiveCustomTitle(orcaPage, worktreeId)).toBeNull()
+  })
+
+  test('renaming to an empty string resets the tab to its default title', async ({ orcaPage }) => {
+    const worktreeId = (await getActiveWorktreeId(orcaPage))!
+
+    // Why: seed a custom title directly via the store so this test asserts the
+    // "empty string → reset" behavior independently from the double-click flow.
+    await orcaPage.evaluate((targetWorktreeId) => {
+      const store = window.__store
+      if (!store) {
+        return
+      }
+
+      const state = store.getState()
+      const activeId = state.activeTabIdByWorktree[targetWorktreeId] ?? state.activeTabId
+      if (activeId) {
+        state.setTabCustomTitle(activeId, 'Seeded Custom')
+      }
+    }, worktreeId)
+
+    await expect
+      .poll(async () => getActiveCustomTitle(orcaPage, worktreeId), { timeout: 3_000 })
+      .toBe('Seeded Custom')
+
+    const tabLocator = orcaPage.getByText('Seeded Custom', { exact: true }).first()
+    await tabLocator.dblclick()
+
+    const renameInput = orcaPage.getByRole('textbox', {
+      name: /Rename tab Seeded Custom/
+    })
+    await expect(renameInput).toBeVisible()
+
+    await renameInput.fill('')
+    await renameInput.press('Enter')
+
+    await expect
+      .poll(async () => getActiveCustomTitle(orcaPage, worktreeId), { timeout: 3_000 })
+      .toBeNull()
   })
 })
