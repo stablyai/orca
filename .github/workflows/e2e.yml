@@ -1,0 +1,59 @@
+name: E2E
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Ref to check out (defaults to the calling workflow's ref)
+        required: false
+        type: string
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      # Why: electron-vite's globalSetup invokes a full app build, which
+      # compiles native modules via node-gyp. Mirrors the install step in
+      # pr.yml's verify job so E2E doesn't hit missing-toolchain errors.
+      - name: Install native build tools
+        run: sudo apt-get update && sudo apt-get install -y build-essential python3
+
+      # Why: Electron on Linux needs an X display even when the app
+      # suppresses mainWindow.show() via ORCA_E2E_HEADLESS. xvfb provides a
+      # virtual framebuffer so Chromium can initialize without a real display.
+      - name: Install xvfb
+        run: sudo apt-get install -y xvfb
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run E2E tests
+        run: xvfb-run --auto-servernum pnpm run test:e2e
+
+      # Why: Playwright retains traces/screenshots only on failure. Uploading
+      # them as an artifact makes post-mortem debugging on CI possible without
+      # re-running locally.
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: tests/test-results/
+          retention-days: 7
+          if-no-files-found: ignore

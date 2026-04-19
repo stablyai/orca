@@ -63,10 +63,17 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  e2e:
+    needs: resolve-release
+    uses: ./.github/workflows/e2e.yml
+    with:
+      ref: ${{ needs.resolve-release.outputs.ref }}
+
   release:
     needs:
       - resolve-release
       - create-release
+      - e2e
     strategy:
       fail-fast: false
       matrix:

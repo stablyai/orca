@@ -43,3 +43,6 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+  e2e:
+    uses: ./.github/workflows/e2e.yml
