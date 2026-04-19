@@ -24,12 +24,17 @@ afterEach(async () => {
   servers.clear()
 })
 
-function writeMetadata(userDataPath: string, endpoint: string, authToken = 'token'): void {
+function writeMetadata(
+  userDataPath: string,
+  endpoint: string,
+  authToken = 'token',
+  pid = 123
+): void {
   writeFileSync(
     join(userDataPath, 'orca-runtime.json'),
     JSON.stringify({
       runtimeId: 'runtime-1',
-      pid: 123,
+      pid,
       transport: {
         kind: 'unix',
         endpoint
@@ -39,6 +44,22 @@ function writeMetadata(userDataPath: string, endpoint: string, authToken = 'toke
     }),
     'utf8'
   )
+}
+
+function findUnusedPid(seed = 200_000): number {
+  // Why: the stale-bootstrap test must point metadata at a definitely-dead
+  // process. Hard-coding a small PID is host-dependent and flakes when that
+  // PID happens to be alive on the machine running the suite.
+  let pid = Math.max(seed, process.pid + 10_000)
+  while (pid < 2_000_000) {
+    try {
+      process.kill(pid, 0)
+      pid += 1
+    } catch {
+      return pid
+    }
+  }
+  return 2_000_000
 }
 
 // Why: these tests create Unix domain socket servers in temp directories.
@@ -102,7 +123,7 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
 
   it('reports stale_bootstrap when bootstrap artifacts exist but no runtime is reachable', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
-    writeMetadata(userDataPath, join(userDataPath, 'missing.sock'))
+    writeMetadata(userDataPath, join(userDataPath, 'missing.sock'), 'token', findUnusedPid())
 
     const client = new RuntimeClient(userDataPath, 100)
     const status = await client.getCliStatus()
