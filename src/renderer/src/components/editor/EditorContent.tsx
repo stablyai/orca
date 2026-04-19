@@ -8,6 +8,7 @@ import { RICH_MARKDOWN_MAX_SIZE_BYTES } from '../../../../shared/constants'
 import { getMarkdownRenderMode } from './markdown-render-mode'
 import { getMarkdownRichModeUnsupportedMessage } from './markdown-rich-mode'
 import { extractFrontMatter, prependFrontMatter } from './markdown-frontmatter'
+import { RichMarkdownErrorBoundary } from './RichMarkdownErrorBoundary'
 
 const MonacoEditor = lazy(() => import('./MonacoEditor'))
 const DiffViewer = lazy(() => import('./DiffViewer'))
@@ -170,18 +171,23 @@ export function EditorContent({
         <div className="flex h-full min-h-0 flex-col">
           {fm && <FrontMatterBanner raw={fm.raw} />}
           <div className="min-h-0 flex-1">
-            {/* Why: same remount reasoning as MonacoEditor — see renderMonacoEditor. */}
-            <RichMarkdownEditor
-              key={viewStateScopeId}
-              fileId={activeFile.id}
-              content={editorContent}
-              filePath={activeFile.filePath}
-              worktreeId={activeFile.worktreeId}
-              scrollCacheKey={`${editorViewStateKey}:rich`}
-              onContentChange={onContentChangeWithFm}
-              onDirtyStateHint={handleDirtyStateHint}
-              onSave={onSaveWithFm}
-            />
+            {/* Why: same remount reasoning as MonacoEditor — see renderMonacoEditor.
+                The boundary contains a TipTap/ProseMirror render crash (e.g.
+                when a setContent transaction throws under split-pane external
+                reload, issue #826) to this pane instead of letting it tear down
+                the whole renderer tree. */}
+            <RichMarkdownErrorBoundary key={viewStateScopeId} fileId={activeFile.id}>
+              <RichMarkdownEditor
+                fileId={activeFile.id}
+                content={editorContent}
+                filePath={activeFile.filePath}
+                worktreeId={activeFile.worktreeId}
+                scrollCacheKey={`${editorViewStateKey}:rich`}
+                onContentChange={onContentChangeWithFm}
+                onDirtyStateHint={handleDirtyStateHint}
+                onSave={onSaveWithFm}
+              />
+            </RichMarkdownErrorBoundary>
           </div>
         </div>
       )

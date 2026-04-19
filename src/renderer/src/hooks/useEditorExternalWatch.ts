@@ -11,6 +11,34 @@ import {
 import type { FsChangedPayload } from '../../../shared/types'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 
+// Why: atomic-write patterns (Claude Code's Edit tool, editors like vim,
+// VSCode) land as a short burst of `update` events — or `delete + create` on
+// renamers — within a few milliseconds for the same path. Dispatching an
+// `ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT` per raw event fan-outs into N full
+// `setContent` + `normalizeSoftBreaks` doc rebuilds per mounted EditorPanel,
+// which under split-pane + large markdown is enough to wedge the renderer
+// and black out the window (issue #826). Coalescing per (worktreeId + path)
+// on a short debounce collapses that burst into one reload notification.
+const EXTERNAL_RELOAD_DEBOUNCE_MS = 75
+const pendingExternalReloadTimers = new Map<string, number>()
+
+function scheduleDebouncedExternalReload(notification: {
+  worktreeId: string
+  worktreePath: string
+  relativePath: string
+}): void {
+  const key = `${notification.worktreeId}::${notification.relativePath}`
+  const existing = pendingExternalReloadTimers.get(key)
+  if (existing !== undefined) {
+    window.clearTimeout(existing)
+  }
+  const handle = window.setTimeout(() => {
+    pendingExternalReloadTimers.delete(key)
+    notifyEditorExternalFileChange(notification)
+  }, EXTERNAL_RELOAD_DEBOUNCE_MS)
+  pendingExternalReloadTimers.set(key, handle)
+}
+
 type WatchedTarget = {
   worktreeId: string
   worktreePath: string
@@ -180,7 +208,7 @@ export function useEditorExternalWatch(): void {
           // disk during the overrun stays struck through until some later
           // path-specific event happens to clear it.
           for (const notification of getOverflowExternalReloadTargets(target)) {
-            notifyEditorExternalFileChange(notification)
+            scheduleDebouncedExternalReload(notification)
           }
           // Why: `break` (not `return`) — the remaining code early-returns
           // when changedFiles is empty, so breaking out is semantically
@@ -232,7 +260,7 @@ export function useEditorExternalWatch(): void {
         if (matching.some((f) => f.isDirty)) {
           continue
         }
-        notifyEditorExternalFileChange(notification)
+        scheduleDebouncedExternalReload(notification)
       }
     }
 
@@ -250,6 +278,12 @@ export function useEditorExternalWatch(): void {
         })
       }
       targetsRef.current = []
+      // Why: deliberately do NOT clear pendingExternalReloadTimers here.
+      // The map is module-scoped, so in React StrictMode (dev) the first
+      // mount's cleanup would otherwise drop timers scheduled by the second
+      // mount. A late `notifyEditorExternalFileChange` dispatch after unmount
+      // is also harmless — it's a window event with no EditorPanel listeners
+      // attached once the editor tree is torn down.
     }
   }, [])
 }

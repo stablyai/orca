@@ -56,6 +56,35 @@ type FileContent = {
 
 type DiffContent = GitDiffResult
 
+// Why: split-pane layouts mount one EditorPanel per pane, and each panel
+// attaches its own listener to `ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT`.
+// Without coordination, a single external write fans out into N concurrent
+// `readFile` IPCs for the same path plus N independent `setContent`
+// transactions on the downstream rich editors — a meaningful contributor to
+// the black-window wedge reported in issue #826. Sharing a module-level
+// in-flight promise per (connectionId, filePath) collapses those N reads
+// into one round-trip while still letting each panel update its own local
+// state with the result.
+const inFlightFileReads = new Map<string, Promise<FileContent>>()
+const inFlightDiffReads = new Map<string, Promise<DiffContent>>()
+
+function inFlightReadKey(connectionId: string | undefined, filePath: string): string {
+  return `${connectionId ?? ''}::${filePath}`
+}
+
+function inFlightDiffKey(file: OpenFile, connectionId: string | undefined): string {
+  // Why: diff content depends on the file path AND which diff source is
+  // being rendered (unstaged/staged/branch). Branch diffs further depend
+  // on the base+head oids so switching compare points doesn't alias, and
+  // on branchOldPath so rename-detected diffs don't alias with the same
+  // post-rename path viewed without rename metadata.
+  const branch =
+    file.diffSource === 'branch' && file.branchCompare
+      ? `${file.branchCompare.baseOid ?? ''}..${file.branchCompare.headOid ?? ''}::${file.branchOldPath ?? ''}`
+      : ''
+  return `${connectionId ?? ''}::${file.diffSource ?? ''}::${file.filePath}::${branch}`
+}
+
 function EditorPanelInner({
   activeFileId: activeFileIdProp,
   activeViewStateId: activeViewStateIdProp
@@ -215,7 +244,27 @@ function EditorPanelInner({
     async (filePath: string, id: string, worktreeId?: string): Promise<void> => {
       try {
         const connectionId = getConnectionId(worktreeId ?? null) ?? undefined
-        const result = (await window.api.fs.readFile({ filePath, connectionId })) as FileContent
+        const key = inFlightReadKey(connectionId, filePath)
+        // Why: share the IPC round-trip across split-pane EditorPanels viewing
+        // the same file. The first caller starts the read and registers the
+        // promise; concurrent callers (triggered by the same external-change
+        // event) await it instead of firing duplicate reads and duplicate
+        // downstream setContent transactions.
+        let pending = inFlightFileReads.get(key)
+        if (!pending) {
+          pending = window.api.fs.readFile({ filePath, connectionId }) as Promise<FileContent>
+          inFlightFileReads.set(key, pending)
+          // Why: limit deduplication to synchronous callers (like N split panes
+          // responding to the exact same event loop dispatch). Caching the promise
+          // across time (e.g. until the IPC returns) means a new change event that
+          // fires while the read is in-flight would receive stale content.
+          queueMicrotask(() => {
+            if (inFlightFileReads.get(key) === pending) {
+              inFlightFileReads.delete(key)
+            }
+          })
+        }
+        const result = await pending
         setFileContents((prev) => ({ ...prev, [id]: result }))
       } catch (err) {
         setFileContents((prev) => ({
@@ -242,26 +291,42 @@ function EditorPanelInner({
           ? file.branchCompare
           : null
       const connectionId = getConnectionId(file.worktreeId) ?? undefined
-      const result =
-        file.diffSource === 'branch' && branchCompare
-          ? ((await window.api.git.branchDiff({
-              worktreePath,
-              compare: {
-                baseRef: branchCompare.baseRef,
-                baseOid: branchCompare.baseOid!,
-                headOid: branchCompare.headOid!,
-                mergeBase: branchCompare.mergeBase!
-              },
-              filePath: file.relativePath,
-              oldPath: file.branchOldPath,
-              connectionId
-            })) as DiffContent)
-          : ((await window.api.git.diff({
-              worktreePath,
-              filePath: file.relativePath,
-              staged: file.diffSource === 'staged',
-              connectionId
-            })) as DiffContent)
+      const key = inFlightDiffKey(file, connectionId)
+      // Why: same rationale as inFlightFileReads above — a single external
+      // change fans out to every mounted EditorPanel, and two split panes
+      // showing the same diff tab should share one git.diff IPC instead of
+      // racing two identical calls through the same git repo lock.
+      let pending = inFlightDiffReads.get(key)
+      if (!pending) {
+        pending = (
+          file.diffSource === 'branch' && branchCompare
+            ? window.api.git.branchDiff({
+                worktreePath,
+                compare: {
+                  baseRef: branchCompare.baseRef,
+                  baseOid: branchCompare.baseOid!,
+                  headOid: branchCompare.headOid!,
+                  mergeBase: branchCompare.mergeBase!
+                },
+                filePath: file.relativePath,
+                oldPath: file.branchOldPath,
+                connectionId
+              })
+            : window.api.git.diff({
+                worktreePath,
+                filePath: file.relativePath,
+                staged: file.diffSource === 'staged',
+                connectionId
+              })
+        ) as Promise<DiffContent>
+        inFlightDiffReads.set(key, pending)
+        queueMicrotask(() => {
+          if (inFlightDiffReads.get(key) === pending) {
+            inFlightDiffReads.delete(key)
+          }
+        })
+      }
+      const result = await pending
       setDiffContents((prev) => ({ ...prev, [file.id]: result }))
     } catch (err) {
       setDiffContents((prev) => ({

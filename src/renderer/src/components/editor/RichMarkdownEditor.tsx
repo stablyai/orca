@@ -428,14 +428,27 @@ export default function RichMarkdownEditor({
     // overwrite the editor state so the rich view never drifts from repo text.
     isApplyingProgrammaticUpdateRef.current = true
     try {
-      editor.commands.setContent(encodeRawMarkdownHtmlForRichEditor(content), {
-        contentType: 'markdown',
-        emitUpdate: false
-      })
-      // Why: same soft-break normalization as onCreate — external content updates
-      // may re-introduce paragraphs with embedded `\n` characters.
-      normalizeSoftBreaks(editor)
-      lastCommittedMarkdownRef.current = content
+      // Why: swallow exceptions from setContent / normalizeSoftBreaks here
+      // rather than letting them escape to the React root. Under split-pane
+      // external reload (two RichMarkdownEditor instances receiving the same
+      // Claude Code write), a throw from the TipTap/ProseMirror transaction
+      // would otherwise unmount the entire renderer and black the whole
+      // window out (issue #826). The committed-markdown ref is deliberately
+      // left pointing at the pre-failure value so the next prop change still
+      // triggers a re-sync attempt instead of being short-circuited by the
+      // `content === lastCommittedMarkdownRef.current` guard above.
+      try {
+        editor.commands.setContent(encodeRawMarkdownHtmlForRichEditor(content), {
+          contentType: 'markdown',
+          emitUpdate: false
+        })
+        // Why: same soft-break normalization as onCreate — external content updates
+        // may re-introduce paragraphs with embedded `\n` characters.
+        normalizeSoftBreaks(editor)
+        lastCommittedMarkdownRef.current = content
+      } catch (err) {
+        console.error('[RichMarkdownEditor] failed to apply external content update', err)
+      }
     } finally {
       isApplyingProgrammaticUpdateRef.current = false
     }
