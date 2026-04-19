@@ -103,8 +103,8 @@ function createSeededTestRepo(): string {
  */
 export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
   // Worker-scoped: read the test repo path once
-  // oxlint-disable-next-line no-empty-pattern -- Playwright fixture callbacks require object destructuring here.
   testRepoPath: [
+    // oxlint-disable-next-line no-empty-pattern -- Playwright fixture callbacks require object destructuring here.
     async ({}, provideFixture) => {
       const persistedRepoPath = existsSync(TEST_REPO_PATH_FILE)
         ? readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
@@ -123,6 +123,12 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
     const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
     const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-userdata-'))
     const headful = shouldLaunchHeadful(testInfo)
+    // Why: strip ELECTRON_RUN_AS_NODE before spawning. Some host shells (e.g.
+    // Orca's own agent runtime) set it so Electron behaves as a plain Node
+    // binary. Playwright's _electron.launch passes --remote-debugging-port,
+    // which Node rejects with "bad option" and the process exits immediately.
+    const { ELECTRON_RUN_AS_NODE: _unused, ...cleanEnv } = process.env
+    void _unused
     const app = await electron.launch({
       args: [mainPath],
       // Why: keep NODE_ENV=development so window.__store is exposed and
@@ -135,7 +141,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       // runs. ORCA_E2E_HEADFUL overrides this for tests that need a visible
       // window (e.g. pointer-capture drag tests).
       env: {
-        ...process.env,
+        ...cleanEnv,
         NODE_ENV: 'development',
         ORCA_E2E_USER_DATA_DIR: userDataDir,
         ...(headful ? { ORCA_E2E_HEADFUL: '1' } : { ORCA_E2E_HEADLESS: '1' })
