@@ -1,4 +1,5 @@
-import { ipcMain, net } from 'electron'
+import os from 'node:os'
+import { app, ipcMain, net } from 'electron'
 
 // Why: the production Mac build loads the renderer from a file:// origin, so a
 // cross-origin POST from fetch() triggers a CORS preflight that the feedback
@@ -14,11 +15,33 @@ export type FeedbackSubmitArgs = {
   githubEmail: string | null
 }
 
+type FeedbackSubmitBody = FeedbackSubmitArgs & {
+  appVersion: string
+  platform: NodeJS.Platform
+  osRelease: string
+  arch: string
+}
+
 export type FeedbackSubmitResult =
   | { ok: true }
   | { ok: false; status: number | null; error: string }
 
-async function postFeedback(url: string, body: FeedbackSubmitArgs): Promise<Response> {
+// Why: the Slack notification and any follow-up investigation need to know
+// which Orca build and which OS the feedback came from. The main process is
+// the only place with trusted access to these values (app.getVersion and the
+// node os module), so we enrich the payload here rather than trusting the
+// renderer.
+function buildSubmitBody(args: FeedbackSubmitArgs): FeedbackSubmitBody {
+  return {
+    ...args,
+    appVersion: app.getVersion(),
+    platform: process.platform,
+    osRelease: os.release(),
+    arch: process.arch
+  }
+}
+
+async function postFeedback(url: string, body: FeedbackSubmitBody): Promise<Response> {
   return net.fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -26,7 +49,8 @@ async function postFeedback(url: string, body: FeedbackSubmitArgs): Promise<Resp
   })
 }
 
-export async function submitFeedback(body: FeedbackSubmitArgs): Promise<FeedbackSubmitResult> {
+export async function submitFeedback(args: FeedbackSubmitArgs): Promise<FeedbackSubmitResult> {
+  const body = buildSubmitBody(args)
   try {
     const res = await postFeedback(FEEDBACK_API_URL, body)
     if (res.ok) {
