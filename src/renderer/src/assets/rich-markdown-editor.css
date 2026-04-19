@@ -298,8 +298,6 @@
 .rich-markdown-editor th {
   font-weight: 600;
   font-size: 0.85em;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
   background: color-mix(in srgb, var(--foreground) 4%, transparent);
 }
 
