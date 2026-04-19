@@ -117,16 +117,23 @@ export function getSetupConfig(
 // sanitizeWorktreeName either produce a ludicrously long name or throw
 // "Invalid worktree name" when every character is stripped.
 function slugifyForWorkspaceName(input: string): string {
-  return input
-    .trim()
-    .toLowerCase()
-    .replace(/[\\/]+/g, '-')
-    .replace(/\s+/g, '-')
-    .replace(/[^a-z0-9._-]+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^[.-]+|[.-]+$/g, '')
-    .slice(0, 48)
-    .replace(/[-._]+$/g, '')
+  return (
+    input
+      .trim()
+      .toLowerCase()
+      .replace(/[\\/]+/g, '-')
+      .replace(/\s+/g, '-')
+      .replace(/[^a-z0-9._-]+/g, '-')
+      .replace(/-+/g, '-')
+      // Why: git check-ref-format rejects any ref containing `..`, so a prompt
+      // like "../../foo" must not turn into a branch seed with internal `..`
+      // sequences (the main-process sanitizer collapses these too, but we
+      // mirror the rule here so the renderer preview matches the real name).
+      .replace(/\.{2,}/g, '.')
+      .replace(/^[.-]+|[.-]+$/g, '')
+      .slice(0, 48)
+      .replace(/[-._]+$/g, '')
+  )
 }
 
 export function getLinkedWorkItemSuggestedName(item: GitHubWorkItem): string {

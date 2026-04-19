@@ -13,6 +13,12 @@ export function sanitizeWorktreeName(input: string): string {
     .replace(/\s+/g, '-')
     .replace(/[^A-Za-z0-9._-]+/g, '-')
     .replace(/-+/g, '-')
+    // Why: git check-ref-format rejects any ref containing `..`, so a prompt
+    // like "../../foo" that survives slugification as `..-..-foo` would
+    // produce a branch name git refuses to create. Collapse runs of dots
+    // to a single dot before the leading/trailing trim so internal `..`
+    // sequences can't reach git.
+    .replace(/\.{2,}/g, '.')
     .replace(/^[.-]+|[.-]+$/g, '')
 
   if (!sanitized || sanitized === '.' || sanitized === '..') {

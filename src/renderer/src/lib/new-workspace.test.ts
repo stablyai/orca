@@ -65,6 +65,19 @@ describe('getWorkspaceSeedName', () => {
     ).toBe('workspace')
   })
 
+  it('does not leave internal ".." in the slug (git refuses such branches)', () => {
+    // Why: the original composer bug — a prompt containing "../../" in
+    // relative path references slugified to a name with internal `..`,
+    // which git rejects with "is not a valid branch name".
+    const seed = getWorkspaceSeedName({
+      explicitName: '',
+      prompt: 'For ../../ the sibling worktree from another repo',
+      linkedIssueNumber: null,
+      linkedPR: null
+    })
+    expect(seed).not.toMatch(/\.{2,}/)
+  })
+
   it('falls back to "workspace" for empty inputs', () => {
     expect(
       getWorkspaceSeedName({

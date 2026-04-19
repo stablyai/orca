@@ -42,6 +42,15 @@ describe('sanitizeWorktreeName', () => {
     expect(sanitizeWorktreeName('.hidden-')).toBe('hidden')
   })
 
+  it('collapses internal consecutive dots so git check-ref-format accepts the branch', () => {
+    // Why: a prompt containing `../../` used to slugify to `..-..-foo` and
+    // survive sanitization with `..` intact. `git branch` then rejected it
+    // with "is not a valid branch name", breaking worktree creation from the
+    // composer's auto-named branches.
+    expect(sanitizeWorktreeName('for-..-..-feature')).toBe('for-.-.-feature')
+    expect(sanitizeWorktreeName('a..b...c')).toBe('a.b.c')
+  })
+
   it('throws for empty name', () => {
     expect(() => sanitizeWorktreeName('')).toThrow('Invalid worktree name')
   })
