@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 
 // Why: rendered as a DOM sibling overlay inside the editor container rather
@@ -23,6 +23,10 @@ export function DiffCommentPopover({
   const [body, setBody] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const popoverRef = useRef<HTMLDivElement | null>(null)
+  // Why: stable id per-instance so multiple popovers (should they ever coexist)
+  // don't collide on aria-labelledby references. Screen readers announce the
+  // "Line N" label as the dialog's accessible name.
+  const labelId = useId()
 
   useEffect(() => {
     textareaRef.current?.focus()
@@ -67,10 +71,15 @@ export function DiffCommentPopover({
       ref={popoverRef}
       className="orca-diff-comment-popover"
       style={{ top: `${top}px` }}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={labelId}
       onMouseDown={(ev) => ev.stopPropagation()}
       onClick={(ev) => ev.stopPropagation()}
     >
-      <div className="orca-diff-comment-popover-label">Line {lineNumber}</div>
+      <div id={labelId} className="orca-diff-comment-popover-label">
+        Line {lineNumber}
+      </div>
       <textarea
         ref={textareaRef}
         className="orca-diff-comment-popover-textarea"

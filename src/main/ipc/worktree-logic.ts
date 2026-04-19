@@ -170,6 +170,9 @@ export function mergeWorktree(
     isPinned: meta?.isPinned ?? false,
     sortOrder: meta?.sortOrder ?? 0,
     lastActivityAt: meta?.lastActivityAt ?? 0,
+    // Why: diff comments are persisted on WorktreeMeta (see `WorktreeMeta` in
+    // shared/types) and forwarded verbatim so the renderer store mirrors
+    // on-disk state. `undefined` here means the worktree has no comments yet.
     diffComments: meta?.diffComments
   }
 }

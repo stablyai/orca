@@ -269,7 +269,11 @@ export type PreloadApi = {
   }
   repos: {
     list: () => Promise<Repo[]>
-    add: (args: { path: string; kind?: 'git' | 'folder' }) => Promise<Repo>
+    // Why: error union matches the IPC handler's return shape; renderer callers branch on `'error' in result`.
+    add: (args: {
+      path: string
+      kind?: 'git' | 'folder'
+    }) => Promise<{ repo: Repo } | { error: string }>
     remove: (args: { repoId: string }) => Promise<void>
     update: (args: {
       repoId: string
@@ -281,12 +285,13 @@ export type PreloadApi = {
     pickDirectory: () => Promise<string | null>
     clone: (args: { url: string; destination: string }) => Promise<Repo>
     cloneAbort: () => Promise<void>
+    // Why: error union matches the IPC handler's return shape; renderer callers branch on `'error' in result`.
     addRemote: (args: {
       connectionId: string
       remotePath: string
       displayName?: string
       kind?: 'git' | 'folder'
-    }) => Promise<Repo>
+    }) => Promise<{ repo: Repo } | { error: string }>
     onCloneProgress: (callback: (data: { phase: string; percent: number }) => void) => () => void
     getGitUsername: (args: { repoId: string }) => Promise<string>
     getBaseRefDefault: (args: { repoId: string }) => Promise<string>

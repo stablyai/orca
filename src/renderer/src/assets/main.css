@@ -907,13 +907,21 @@
   cursor: pointer;
   z-index: 5;
   opacity: 0.7;
-  transition: opacity 100ms ease, color 100ms ease, background-color 100ms ease;
+  transition:
+    opacity 100ms ease,
+    color 100ms ease,
+    background-color 100ms ease;
 }
 
 .orca-diff-comment-add-btn:hover {
   opacity: 1;
   color: var(--primary);
   background: color-mix(in srgb, var(--primary) 12%, var(--background));
+}
+
+.orca-diff-comment-add-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
 }
 
 .orca-diff-comment-inline {
@@ -973,7 +981,7 @@
 .orca-diff-comment-popover {
   position: absolute;
   right: 24px;
-  z-index: 20;
+  z-index: 1000;
   width: 320px;
   padding: 8px;
   border: 1px solid var(--border);

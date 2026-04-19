@@ -163,18 +163,26 @@ export function DiffSectionItem({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modifiedEditor, popover?.lineNumber])
 
-  const handleSubmitComment = (body: string): void => {
+  const handleSubmitComment = async (body: string): Promise<void> => {
     if (!popover) {
       return
     }
-    void addDiffComment({
+    // Why: await persistence before closing the popover. If addDiffComment
+    // resolves to null, the store rolled back the optimistic insert; keeping
+    // the popover open preserves the user's draft so they can retry instead
+    // of silently losing their text.
+    const result = await addDiffComment({
       worktreeId,
       filePath: section.path,
       lineNumber: popover.lineNumber,
       body,
       side: 'modified'
     })
-    setPopover(null)
+    if (result) {
+      setPopover(null)
+    } else {
+      console.error('Failed to add diff comment — draft preserved')
+    }
   }
 
   const lineStats = useMemo(
@@ -314,7 +322,11 @@ export function DiffSectionItem({
           }}
         >
           {popover && (
+            // Why: key by lineNumber so the popover remounts when the anchor
+            // line changes, resetting the internal draft body and textarea
+            // focus per anchor line instead of leaking state across lines.
             <DiffCommentPopover
+              key={popover.lineNumber}
               lineNumber={popover.lineNumber}
               top={popover.top}
               onCancel={() => setPopover(null)}

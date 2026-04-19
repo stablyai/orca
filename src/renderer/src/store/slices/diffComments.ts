@@ -4,23 +4,23 @@ import type { DiffComment, Worktree } from '../../../../shared/types'
 import { findWorktreeById, getRepoIdFromWorktreeId } from './worktree-helpers'
 
 export type DiffCommentsSlice = {
-  getDiffComments: (worktreeId: string, filePath?: string) => DiffComment[]
+  getDiffComments: (worktreeId: string) => DiffComment[]
   addDiffComment: (input: Omit<DiffComment, 'id' | 'createdAt'>) => Promise<DiffComment | null>
   deleteDiffComment: (worktreeId: string, commentId: string) => Promise<void>
   clearDiffComments: (worktreeId: string) => Promise<void>
 }
 
 function generateId(): string {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-    return crypto.randomUUID()
-  }
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+  return globalThis.crypto.randomUUID()
 }
 
 // Why: return a stable reference when no comments exist so selectors don't
 // produce a fresh `[]` on every store update. A new array identity would
 // trigger re-renders in any consumer using referential equality.
-const EMPTY_COMMENTS: DiffComment[] = []
+// Frozen + typed `readonly` so an accidental `list.push(...)` on the returned
+// value is both a runtime TypeError and a TypeScript compile error, preventing
+// the sentinel from being corrupted globally.
+const EMPTY_COMMENTS: readonly DiffComment[] = Object.freeze([])
 
 async function persist(worktreeId: string, diffComments: DiffComment[]): Promise<void> {
   await window.api.worktrees.updateMeta({
@@ -89,10 +89,17 @@ function rollback(
       return {}
     }
     const target = repoList.find((w) => w.id === worktreeId)
+    // Why: if the worktree was removed between the optimistic mutation and
+    // this rollback, there is nothing to restore. Bail out before remapping
+    // `repoList` so we don't allocate a new outer-array identity and trigger
+    // spurious subscriber notifications.
+    if (!target) {
+      return {}
+    }
     // Why: only roll back if no other mutation landed since this one. If a
     // later write already replaced the comments array with a different
     // identity, our stale `previous` would erase that newer state.
-    if (target?.diffComments !== expectedCurrent) {
+    if (target.diffComments !== expectedCurrent) {
       return {}
     }
     const nextList: Worktree[] = repoList.map((w) =>
@@ -106,13 +113,16 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
   set,
   get
 ) => ({
-  getDiffComments: (worktreeId, filePath) => {
+  getDiffComments: (worktreeId) => {
     const worktree = findWorktreeById(get().worktreesByRepo, worktreeId)
-    const all = worktree?.diffComments ?? EMPTY_COMMENTS
-    if (!filePath) {
-      return all
+    if (!worktree?.diffComments) {
+      // Why: cast the frozen sentinel to the mutable `DiffComment[]` return
+      // type. The array is frozen at runtime so accidental mutation throws;
+      // the cast only hides the `readonly` marker from consumers that never
+      // mutate the list in practice.
+      return EMPTY_COMMENTS as DiffComment[]
     }
-    return all.filter((c) => c.filePath === filePath)
+    return worktree.diffComments
   },
 
   addDiffComment: async (input) => {

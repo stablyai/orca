@@ -497,6 +497,7 @@ export default function CombinedDiffViewer({
         </span>
         <div className="flex items-center gap-2">
           <button
+            type="button"
             className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
             onClick={() => openDiffCommentsTab(file.worktreeId, file.filePath)}
             title="Open diff comments tab"

@@ -161,6 +161,7 @@ export function DiffCommentsTab({ activeFile }: { activeFile: OpenFile }): React
                         className="mt-0.5 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
                         onClick={() => void deleteDiffComment(worktreeId, c.id)}
                         title="Delete comment"
+                        aria-label={`Delete comment on line ${c.lineNumber}`}
                       >
                         <Trash2 className="size-3.5" />
                       </button>
