@@ -230,7 +230,11 @@ export default function SortableTab({
               onClick={(event) => event.stopPropagation()}
               onDoubleClick={(event) => event.stopPropagation()}
               onAuxClick={(event) => event.stopPropagation()}
-              className="h-5 max-w-[130px] mr-1.5 px-1 py-0 text-xs"
+              // Why: the base Input applies w-full min-w-0, which lets flex
+              // shrink it to ~0 when many tabs compete for horizontal space.
+              // Force a minimum width that matches the normal title box so the
+              // rename input stays usable even when the tab bar is saturated.
+              className="h-5 w-[130px] min-w-[130px] max-w-[130px] mr-1.5 px-1 py-0 text-xs"
               spellCheck={false}
             />
           ) : (
