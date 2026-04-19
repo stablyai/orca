@@ -175,6 +175,12 @@ const api = {
     add: (args: { path: string; kind?: 'git' | 'folder' }): Promise<unknown> =>
       ipcRenderer.invoke('repos:add', args),
 
+    createLocal: (args: {
+      parentPath: string
+      name: string
+      kind?: 'git' | 'folder'
+    }): Promise<unknown> => ipcRenderer.invoke('repos:createLocal', args),
+
     addRemote: (args: {
       connectionId: string
       remotePath: string
@@ -1019,6 +1025,11 @@ const api = {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('ui:toggleWorktreePalette', listener)
       return () => ipcRenderer.removeListener('ui:toggleWorktreePalette', listener)
+    },
+    onOpenAddRepo: (callback: () => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent) => callback()
+      ipcRenderer.on('ui:openAddRepo', listener)
+      return () => ipcRenderer.removeListener('ui:openAddRepo', listener)
     },
     onOpenQuickOpen: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()

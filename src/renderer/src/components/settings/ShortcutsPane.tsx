@@ -45,6 +45,11 @@ const SHORTCUT_GROUP_DEFINITIONS: ShortcutGroupDefinition[] = [
         keys: ({ mod }) => [mod, 'N']
       },
       {
+        action: 'Add repository',
+        searchKeywords: ['shortcut', 'global', 'repo', 'repository', 'folder'],
+        keys: ({ mod, shift }) => [mod, shift, 'N']
+      },
+      {
         action: 'Toggle Sidebar',
         searchKeywords: ['shortcut', 'sidebar'],
         keys: ({ mod }) => [mod, 'B']

@@ -18,6 +18,11 @@ type ReposApi = {
     path: string
     kind?: 'git' | 'folder'
   }) => Promise<{ repo: Repo } | { error: string }>
+  createLocal: (args: {
+    parentPath: string
+    name: string
+    kind?: 'git' | 'folder'
+  }) => Promise<{ repo: Repo } | { error: string }>
   addRemote: (args: {
     connectionId: string
     remotePath: string

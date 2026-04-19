@@ -367,6 +367,11 @@ export function createMainWindow(
       return
     }
 
+    if (action.type === 'openAddRepo') {
+      mainWindow.webContents.send('ui:openAddRepo')
+      return
+    }
+
     if (action.type === 'toggleWorktreePalette') {
       // Why: embedded browser guests can keep keyboard focus inside Chromium's
       // guest webContents, which bypasses the renderer's window-level keydown

@@ -1,26 +1,27 @@
+/* eslint-disable max-lines -- Why: step-specific hooks and views are intentionally colocated so add-repo wizard behavior stays synchronized across flows. */
 /**
- * Step views for AddRepoDialog: Clone, Remote, and Setup.
+ * Step views and flow hooks for AddRepoDialog.
  *
- * Why extracted: keeps AddRepoDialog.tsx under the 400-line oxlint limit
- * by moving the presentational JSX for each wizard step into separate components
- * while the parent retains all state and handlers.
+ * Why extracted: presentational JSX and per-step behavior live together so
+ * AddRepoDialog can focus on top-level orchestration and modal transitions.
  */
 import React, { useCallback, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { Folder, FolderOpen } from 'lucide-react'
+import { Folder, FolderOpen, FolderPlus, GitBranch, GitBranchPlus, Settings } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { RemoteFileBrowser } from './RemoteFileBrowser'
-import type { Repo } from '../../../../shared/types'
+import { LinkedWorktreeItem } from './LinkedWorktreeItem'
+import type { Repo, Worktree } from '../../../../shared/types'
 import type { SshTarget, SshConnectionState } from '../../../../shared/ssh-types'
 
 // ── Remote repo hook ────────────────────────────────────────────────
 
 export function useRemoteRepo(
   fetchWorktrees: (repoId: string) => Promise<void>,
-  setStep: (step: 'add' | 'clone' | 'remote' | 'setup') => void,
+  setStep: (step: 'add' | 'clone' | 'remote' | 'create' | 'setup') => void,
   setAddedRepo: (repo: Repo | null) => void,
   closeModal: () => void
 ) {
@@ -365,6 +366,193 @@ export function CloneStep({
             </div>
           </div>
         )}
+      </div>
+    </>
+  )
+}
+
+// ── Create-local step ───────────────────────────────────────────────
+
+type CreateLocalStepProps = {
+  name: string
+  parentPath: string
+  kind: 'git' | 'folder'
+  isCreating: boolean
+  error: string | null
+  onNameChange: (value: string) => void
+  onParentPathChange: (value: string) => void
+  onKindChange: (value: 'git' | 'folder') => void
+  onPickParentPath: () => void
+  onCreate: () => void
+}
+
+export function CreateLocalStep({
+  name,
+  parentPath,
+  kind,
+  isCreating,
+  error,
+  onNameChange,
+  onParentPathChange,
+  onKindChange,
+  onPickParentPath,
+  onCreate
+}: CreateLocalStepProps): React.JSX.Element {
+  const createLabel = kind === 'git' ? 'Create repository' : 'Create folder'
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>Create new repo or folder</DialogTitle>
+        <DialogDescription>
+          Choose a location, enter a name, and decide whether to initialize Git.
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="space-y-3 pt-1">
+        <div className="space-y-1">
+          <label className="text-[11px] font-medium text-muted-foreground">Type</label>
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              variant={kind === 'git' ? 'default' : 'outline'}
+              size="sm"
+              className="h-8 gap-1.5"
+              onClick={() => onKindChange('git')}
+              disabled={isCreating}
+            >
+              <GitBranch className="size-3.5" />
+              Git repo
+            </Button>
+            <Button
+              variant={kind === 'folder' ? 'default' : 'outline'}
+              size="sm"
+              className="h-8 gap-1.5"
+              onClick={() => onKindChange('folder')}
+              disabled={isCreating}
+            >
+              <FolderPlus className="size-3.5" />
+              Folder only
+            </Button>
+          </div>
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-[11px] font-medium text-muted-foreground">Name</label>
+          <Input
+            value={name}
+            onChange={(e) => onNameChange(e.target.value)}
+            placeholder="my-project"
+            className="h-8 text-xs"
+            disabled={isCreating}
+            autoFocus
+          />
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-[11px] font-medium text-muted-foreground">Location</label>
+          <div className="flex gap-2">
+            <Input
+              value={parentPath}
+              onChange={(e) => onParentPathChange(e.target.value)}
+              placeholder="/path/to/parent-folder"
+              className="h-8 text-xs flex-1"
+              disabled={isCreating}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 px-2 shrink-0"
+              onClick={onPickParentPath}
+              disabled={isCreating}
+            >
+              <Folder className="size-3.5" />
+            </Button>
+          </div>
+        </div>
+
+        {error && <p className="text-[11px] text-destructive">{error}</p>}
+
+        <Button
+          onClick={onCreate}
+          disabled={!name.trim() || !parentPath.trim() || isCreating}
+          className="w-full"
+        >
+          {isCreating ? 'Creating...' : createLabel}
+        </Button>
+      </div>
+    </>
+  )
+}
+
+// ── Setup step ──────────────────────────────────────────────────────
+
+type SetupStepProps = {
+  addedRepo: Repo | null
+  sortedWorktrees: Worktree[]
+  hasWorktrees: boolean
+  onOpenWorktree: (worktree: Worktree) => void
+  onCreateWorktree: () => void
+  onConfigureRepo: () => void
+  onSkip: () => void
+}
+
+export function SetupStep({
+  addedRepo,
+  sortedWorktrees,
+  hasWorktrees,
+  onOpenWorktree,
+  onCreateWorktree,
+  onConfigureRepo,
+  onSkip
+}: SetupStepProps): React.JSX.Element {
+  const worktreesCount = sortedWorktrees.length
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>
+          {hasWorktrees ? 'Open or create a worktree' : 'Set up your first worktree'}
+        </DialogTitle>
+        <DialogDescription>
+          {hasWorktrees
+            ? `${addedRepo?.displayName} has ${worktreesCount} worktree${worktreesCount !== 1 ? 's' : ''}. Open one to pick up where you left off, or create a new one.`
+            : `Orca uses git worktrees as isolated task environments. Create one for ${addedRepo?.displayName} to get started.`}
+        </DialogDescription>
+      </DialogHeader>
+
+      {hasWorktrees && (
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            Existing worktrees
+          </p>
+          <div className="space-y-1.5 max-h-[40vh] overflow-y-auto scrollbar-sleek pr-1">
+            {sortedWorktrees.map((worktree) => (
+              <LinkedWorktreeItem
+                key={worktree.id}
+                worktree={worktree}
+                onOpen={() => onOpenWorktree(worktree)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-col gap-3 pt-2">
+        <Button onClick={onCreateWorktree} className="w-full">
+          <GitBranchPlus className="size-4 mr-2" />
+          {hasWorktrees ? 'Create new worktree' : 'Create first worktree'}
+        </Button>
+
+        <div className="flex items-center justify-between">
+          <button
+            className="inline-flex items-center justify-center gap-1.5 text-xs text-muted-foreground/70 hover:text-foreground transition-colors cursor-pointer"
+            onClick={onConfigureRepo}
+          >
+            <Settings className="size-3" />
+            Configure repo
+          </button>
+          <Button variant="ghost" size="sm" className="text-xs" onClick={onSkip}>
+            Skip
+          </Button>
+        </div>
       </div>
     </>
   )

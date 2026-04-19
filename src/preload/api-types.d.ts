@@ -247,7 +247,15 @@ export type PreloadApi = {
   }
   repos: {
     list: () => Promise<Repo[]>
-    add: (args: { path: string; kind?: 'git' | 'folder' }) => Promise<Repo>
+    add: (args: {
+      path: string
+      kind?: 'git' | 'folder'
+    }) => Promise<{ repo: Repo } | { error: string }>
+    createLocal: (args: {
+      parentPath: string
+      name: string
+      kind?: 'git' | 'folder'
+    }) => Promise<{ repo: Repo } | { error: string }>
     remove: (args: { repoId: string }) => Promise<void>
     update: (args: {
       repoId: string
@@ -264,7 +272,7 @@ export type PreloadApi = {
       remotePath: string
       displayName?: string
       kind?: 'git' | 'folder'
-    }) => Promise<Repo>
+    }) => Promise<{ repo: Repo } | { error: string }>
     onCloneProgress: (callback: (data: { phase: string; percent: number }) => void) => () => void
     getGitUsername: (args: { repoId: string }) => Promise<string>
     getBaseRefDefault: (args: { repoId: string }) => Promise<string>
@@ -575,6 +583,7 @@ export type PreloadApi = {
     onToggleLeftSidebar: (callback: () => void) => () => void
     onToggleRightSidebar: (callback: () => void) => () => void
     onToggleWorktreePalette: (callback: () => void) => () => void
+    onOpenAddRepo: (callback: () => void) => () => void
     onOpenQuickOpen: (callback: () => void) => () => void
     onJumpToWorktreeIndex: (callback: (index: number) => void) => () => void
     onNewBrowserTab: (callback: () => void) => () => void

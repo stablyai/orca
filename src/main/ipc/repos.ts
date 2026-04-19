@@ -10,8 +10,8 @@ import { isFolderRepo } from '../../shared/repo-kind'
 import { REPO_COLORS } from '../../shared/constants'
 import { rebuildAuthorizedRootsCache } from './filesystem-auth'
 import type { ChildProcess } from 'child_process'
-import { rm } from 'fs/promises'
-import { gitSpawn } from '../git/runner'
+import { mkdir, rm } from 'fs/promises'
+import { gitExecFileAsync, gitSpawn } from '../git/runner'
 import { join, basename } from 'path'
 import {
   isGitRepo,
@@ -38,6 +38,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.removeHandler('repos:update')
   ipcMain.removeHandler('repos:pickFolder')
   ipcMain.removeHandler('repos:pickDirectory')
+  ipcMain.removeHandler('repos:createLocal')
   ipcMain.removeHandler('repos:clone')
   ipcMain.removeHandler('repos:cloneAbort')
   ipcMain.removeHandler('repos:getGitUsername')
@@ -49,32 +50,38 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     return store.getRepos()
   })
 
-  ipcMain.handle('repos:add', async (_event, args: { path: string; kind?: 'git' | 'folder' }): Promise<{ repo: Repo } | { error: string }> => {
-    const repoKind = args.kind === 'folder' ? 'folder' : 'git'
-    if (repoKind === 'git' && !isGitRepo(args.path)) {
-      return { error: `Not a valid git repository: ${args.path}` }
-    }
+  ipcMain.handle(
+    'repos:add',
+    async (
+      _event,
+      args: { path: string; kind?: 'git' | 'folder' }
+    ): Promise<{ repo: Repo } | { error: string }> => {
+      const repoKind = args.kind === 'folder' ? 'folder' : 'git'
+      if (repoKind === 'git' && !isGitRepo(args.path)) {
+        return { error: `Not a valid git repository: ${args.path}` }
+      }
 
-    // Check if already added
-    const existing = store.getRepos().find((r) => r.path === args.path)
-    if (existing) {
-      return { repo: existing }
-    }
+      // Check if already added
+      const existing = store.getRepos().find((r) => r.path === args.path)
+      if (existing) {
+        return { repo: existing }
+      }
 
-    const repo: Repo = {
-      id: randomUUID(),
-      path: args.path,
-      displayName: getRepoName(args.path),
-      badgeColor: REPO_COLORS[store.getRepos().length % REPO_COLORS.length],
-      addedAt: Date.now(),
-      kind: repoKind
-    }
+      const repo: Repo = {
+        id: randomUUID(),
+        path: args.path,
+        displayName: getRepoName(args.path),
+        badgeColor: REPO_COLORS[store.getRepos().length % REPO_COLORS.length],
+        addedAt: Date.now(),
+        kind: repoKind
+      }
 
-    store.addRepo(repo)
-    await rebuildAuthorizedRootsCache(store)
-    notifyReposChanged(mainWindow)
-    return { repo }
-  })
+      store.addRepo(repo)
+      await rebuildAuthorizedRootsCache(store)
+      notifyReposChanged(mainWindow)
+      return { repo }
+    }
+  )
 
   ipcMain.handle(
     'repos:addRemote',
@@ -200,6 +207,81 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     }
     return result.filePaths[0]
   })
+
+  ipcMain.handle(
+    'repos:createLocal',
+    async (
+      _event,
+      args: { parentPath: string; name: string; kind?: 'git' | 'folder' }
+    ): Promise<{ repo: Repo } | { error: string }> => {
+      const parentPath = args.parentPath.trim()
+      const name = args.name.trim()
+      const repoKind = args.kind === 'folder' ? 'folder' : 'git'
+      if (!parentPath) {
+        return { error: 'Parent folder is required' }
+      }
+      if (!name) {
+        return { error: 'Name is required' }
+      }
+      if (name === '.' || name === '..' || name.includes('/') || name.includes('\\')) {
+        // Why: this flow asks for a project name, not an arbitrary path. Restrict
+        // to one segment so users can't accidentally escape the chosen parent folder.
+        return { error: 'Name must be a single folder name' }
+      }
+
+      const repoPath = join(parentPath, name)
+      const existing = store.getRepos().find((r) => r.path === repoPath)
+      if (existing) {
+        return { repo: existing }
+      }
+
+      try {
+        // Why: recursive false preserves "already exists" semantics so the UI can
+        // clearly report collisions instead of silently reusing unexpected paths.
+        await mkdir(repoPath, { recursive: false })
+      } catch (err) {
+        const error = err as NodeJS.ErrnoException
+        if (error.code === 'EEXIST') {
+          return { error: `A file or folder named "${name}" already exists.` }
+        }
+        if (error.code === 'ENOENT') {
+          return { error: `Parent folder does not exist: ${parentPath}` }
+        }
+        if (error.code === 'EACCES' || error.code === 'EPERM') {
+          return { error: `Permission denied creating "${repoPath}".` }
+        }
+        return { error: error.message || `Failed to create "${repoPath}".` }
+      }
+
+      if (repoKind === 'git') {
+        try {
+          // Why: initialize from the selected parent so WSL path detection in the
+          // shared git runner stays consistent with clone behavior.
+          await gitExecFileAsync(['init', name], { cwd: parentPath })
+        } catch (err) {
+          // Why: creating a "new repo" should be atomic from the user's perspective.
+          // If git init fails, remove the just-created folder to avoid half-created state.
+          await rm(repoPath, { recursive: true, force: true }).catch(() => {})
+          const message = err instanceof Error ? err.message : String(err)
+          return { error: `Failed to initialize git repository: ${message}` }
+        }
+      }
+
+      const repo: Repo = {
+        id: randomUUID(),
+        path: repoPath,
+        displayName: getRepoName(repoPath),
+        badgeColor: REPO_COLORS[store.getRepos().length % REPO_COLORS.length],
+        addedAt: Date.now(),
+        kind: repoKind
+      }
+
+      store.addRepo(repo)
+      await rebuildAuthorizedRootsCache(store)
+      notifyReposChanged(mainWindow)
+      return { repo }
+    }
+  )
 
   ipcMain.handle('repos:cloneAbort', async () => {
     if (activeCloneProc) {

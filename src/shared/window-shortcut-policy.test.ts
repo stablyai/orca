@@ -47,6 +47,13 @@ describe('resolveWindowShortcutAction', () => {
 
     expect(
       resolveWindowShortcutAction(
+        { code: 'KeyN', key: 'N', meta: true, control: false, alt: false, shift: true },
+        'darwin'
+      )
+    ).toEqual({ type: 'openAddRepo' })
+
+    expect(
+      resolveWindowShortcutAction(
         { code: 'Digit3', key: '3', meta: true, control: false, alt: false, shift: false },
         'darwin'
       )
@@ -67,6 +74,20 @@ describe('resolveWindowShortcutAction', () => {
         'win32'
       )
     ).toEqual({ type: 'toggleWorktreePalette' })
+
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'KeyN', key: 'n', meta: false, control: true, alt: false, shift: false },
+        'win32'
+      )
+    ).toBeNull()
+
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'KeyN', key: 'N', meta: false, control: true, alt: false, shift: true },
+        'win32'
+      )
+    ).toEqual({ type: 'openAddRepo' })
   })
 
   it('accepts all supported zoom key variants', () => {

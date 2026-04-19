@@ -634,6 +634,15 @@ describe('browserManager', () => {
       },
       {
         type: 'keyDown',
+        code: 'KeyN',
+        key: 'N',
+        meta: isDarwin,
+        control: !isDarwin,
+        alt: false,
+        shift: true
+      },
+      {
+        type: 'keyDown',
         code: 'KeyL',
         key: 'l',
         meta: isDarwin,
@@ -672,9 +681,10 @@ describe('browserManager', () => {
     expect(rendererSendMock).toHaveBeenNthCalledWith(3, 'ui:closeActiveTab')
     expect(rendererSendMock).toHaveBeenNthCalledWith(4, 'ui:switchTab', 1)
     expect(rendererSendMock).toHaveBeenNthCalledWith(5, 'ui:openQuickOpen')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(6, 'ui:focusBrowserAddressBar')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(7, 'ui:reloadBrowserPage')
-    expect(rendererSendMock).toHaveBeenNthCalledWith(8, 'ui:hardReloadBrowserPage')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(6, 'ui:openAddRepo')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(7, 'ui:focusBrowserAddressBar')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(8, 'ui:reloadBrowserPage')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(9, 'ui:hardReloadBrowserPage')
   })
 
   it('cleans up prior guest listeners before re-registering the same tab', () => {

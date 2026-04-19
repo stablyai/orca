@@ -70,6 +70,13 @@ export function useIpcEvents(): void {
     )
 
     unsubs.push(
+      window.api.ui.onOpenAddRepo(() => {
+        dispatchClearModifierHints()
+        useAppStore.getState().openModal('add-repo')
+      })
+    )
+
+    unsubs.push(
       window.api.ui.onOpenQuickOpen(() => {
         dispatchClearModifierHints()
         const store = useAppStore.getState()

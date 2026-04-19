@@ -148,6 +148,7 @@ describe('useIpcEvents updater integration', () => {
           onToggleLeftSidebar: () => () => {},
           onToggleRightSidebar: () => () => {},
           onToggleWorktreePalette: () => () => {},
+          onOpenAddRepo: () => () => {},
           onOpenQuickOpen: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
           onActivateWorktree: () => () => {},
@@ -310,6 +311,7 @@ describe('useIpcEvents updater integration', () => {
           onToggleLeftSidebar: () => () => {},
           onToggleRightSidebar: () => () => {},
           onToggleWorktreePalette: () => () => {},
+          onOpenAddRepo: () => () => {},
           onOpenQuickOpen: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
           onActivateWorktree: () => () => {},
@@ -380,8 +382,10 @@ describe('useIpcEvents shortcut hint clearing', () => {
 
   it('clears modifier hints for main-process-forwarded shortcuts', async () => {
     const toggleLeftSidebarRef: { current: (() => void) | null } = { current: null }
+    const openAddRepoRef: { current: (() => void) | null } = { current: null }
     const jumpToWorktreeRef: { current: ((index: number) => void) | null } = { current: null }
     const toggleSidebar = vi.fn()
+    const openModal = vi.fn()
     const dispatchEvent = vi.fn()
     const activateAndRevealWorktree = vi.fn()
 
@@ -402,7 +406,7 @@ describe('useIpcEvents shortcut hint clearing', () => {
           toggleRightSidebar: vi.fn(),
           activeModal: 'none',
           closeModal: vi.fn(),
-          openModal: vi.fn(),
+          openModal,
           activeView: 'terminal',
           activeWorktreeId: 'wt-1',
           statusBarVisible: true,
@@ -478,6 +482,10 @@ describe('useIpcEvents shortcut hint clearing', () => {
           },
           onToggleRightSidebar: () => () => {},
           onToggleWorktreePalette: () => () => {},
+          onOpenAddRepo: (listener: () => void) => {
+            openAddRepoRef.current = listener
+            return () => {}
+          },
           onOpenQuickOpen: () => () => {},
           onJumpToWorktreeIndex: (listener: (index: number) => void) => {
             jumpToWorktreeRef.current = listener
@@ -525,18 +533,23 @@ describe('useIpcEvents shortcut hint clearing', () => {
     if (typeof toggleLeftSidebarRef.current !== 'function') {
       throw new Error('Expected toggle-left-sidebar listener to be registered')
     }
+    if (typeof openAddRepoRef.current !== 'function') {
+      throw new Error('Expected open-add-repo listener to be registered')
+    }
     if (typeof jumpToWorktreeRef.current !== 'function') {
       throw new Error('Expected jump-to-worktree listener to be registered')
     }
 
     toggleLeftSidebarRef.current()
+    openAddRepoRef.current()
     jumpToWorktreeRef.current(1)
 
     expect(dispatchEvent).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'orca:clear-modifier-hints' })
     )
-    expect(dispatchEvent).toHaveBeenCalledTimes(2)
+    expect(dispatchEvent).toHaveBeenCalledTimes(3)
     expect(toggleSidebar).toHaveBeenCalledTimes(1)
+    expect(openModal).toHaveBeenCalledWith('add-repo')
     expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-2')
   })
 })

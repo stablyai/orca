@@ -516,6 +516,16 @@ function App(): React.JSX.Element {
         return
       }
 
+      // Why: Cmd/Ctrl+N already creates a worktree; keep Add Repo on the
+      // shifted variant so both "new workspace" and "new repo/folder" are
+      // reachable without colliding.
+      if (e.shiftKey && !e.altKey && e.key.toLowerCase() === 'n') {
+        dispatchClearModifierHints()
+        e.preventDefault()
+        actions.openModal('add-repo')
+        return
+      }
+
       // Why: the new-workspace composer should not be able to reveal the right
       // sidebar at all, because that surface is intentionally distraction-free.
       if (activeView === 'new-workspace') {

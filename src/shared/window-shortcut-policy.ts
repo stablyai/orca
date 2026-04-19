@@ -12,6 +12,7 @@ export type WindowShortcutAction =
   | { type: 'toggleWorktreePalette' }
   | { type: 'toggleLeftSidebar' }
   | { type: 'toggleRightSidebar' }
+  | { type: 'openAddRepo' }
   | { type: 'openQuickOpen' }
   | { type: 'jumpToWorktreeIndex'; index: number }
 
@@ -81,6 +82,13 @@ export function resolveWindowShortcutAction(
 
   if (input.code === 'KeyL' && !input.shift) {
     return { type: 'toggleRightSidebar' }
+  }
+
+  // Why: bare Cmd/Ctrl+N already opens the new-workspace composer in the
+  // renderer, so Add Repo uses the shifted variant to avoid shortcut
+  // collisions while still feeling like "new repository".
+  if (input.code === 'KeyN' && input.shift) {
+    return { type: 'openAddRepo' }
   }
 
   if (input.code === 'KeyP' && !input.shift) {

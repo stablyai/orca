@@ -265,6 +265,8 @@ export function setupGuestShortcutForwarding(args: {
       renderer.send('ui:switchTab', input.code === 'BracketRight' ? 1 : -1)
     } else if (action?.type === 'toggleWorktreePalette') {
       renderer.send('ui:toggleWorktreePalette')
+    } else if (action?.type === 'openAddRepo') {
+      renderer.send('ui:openAddRepo')
     } else if (action?.type === 'openQuickOpen') {
       renderer.send('ui:openQuickOpen')
     } else if (action?.type === 'jumpToWorktreeIndex') {

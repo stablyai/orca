@@ -1,6 +1,7 @@
+/* eslint-disable max-lines -- Why: this modal coordinates multiple async add-repo flows (browse, clone, remote, and create-local) and keeps cross-step transition state in one place. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { FolderOpen, GitBranchPlus, Settings, ArrowLeft, Globe, Monitor } from 'lucide-react'
+import { FolderOpen, ArrowLeft, Globe, Monitor } from 'lucide-react'
 import { useAppStore } from '@/store'
 import {
   Dialog,
@@ -11,8 +12,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import { LinkedWorktreeItem } from './LinkedWorktreeItem'
-import { RemoteStep, CloneStep, useRemoteRepo } from './AddRepoSteps'
+import { RemoteStep, CloneStep, CreateLocalStep, SetupStep, useRemoteRepo } from './AddRepoSteps'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { Repo, Worktree } from '../../../../shared/types'
 
@@ -27,7 +27,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
 
-  const [step, setStep] = useState<'add' | 'clone' | 'remote' | 'setup'>('add')
+  const [step, setStep] = useState<'add' | 'clone' | 'remote' | 'create' | 'setup'>('add')
   const [addedRepo, setAddedRepo] = useState<Repo | null>(null)
   const [isAdding, setIsAdding] = useState(false)
   const [cloneUrl, setCloneUrl] = useState('')
@@ -37,6 +37,11 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   const [cloneProgress, setCloneProgress] = useState<{ phase: string; percent: number } | null>(
     null
   )
+  const [createKind, setCreateKind] = useState<'git' | 'folder'>('git')
+  const [createName, setCreateName] = useState('')
+  const [createParentPath, setCreateParentPath] = useState('')
+  const [createError, setCreateError] = useState<string | null>(null)
+  const [isCreatingLocal, setIsCreatingLocal] = useState(false)
 
   // Why: monotonic ID so stale clone callbacks can detect they were superseded.
   const cloneGenRef = useRef(0)
@@ -93,6 +98,11 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     setIsCloning(false)
     setCloneError(null)
     setCloneProgress(null)
+    setCreateKind('git')
+    setCreateName('')
+    setCreateParentPath('')
+    setCreateError(null)
+    setIsCreatingLocal(false)
     resetRemoteState()
   }, [resetRemoteState])
 
@@ -103,7 +113,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     }
   }, [isOpen, resetState])
 
-  const isInputStep = step === 'add' || step === 'clone' || step === 'remote'
+  const isInputStep = step === 'add' || step === 'clone' || step === 'remote' || step === 'create'
 
   const handleBrowse = useCallback(async () => {
     setIsAdding(true)
@@ -176,6 +186,63 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     }
   }, [cloneUrl, cloneDestination, fetchWorktrees])
 
+  const handlePickCreateParentPath = useCallback(async () => {
+    const dir = await window.api.repos.pickDirectory()
+    if (dir) {
+      setCreateParentPath(dir)
+      setCreateError(null)
+    }
+  }, [])
+
+  const handleCreateLocal = useCallback(async () => {
+    const name = createName.trim()
+    const parentPath = createParentPath.trim()
+    if (!name || !parentPath) {
+      return
+    }
+
+    setIsCreatingLocal(true)
+    setCreateError(null)
+    try {
+      const result = (await window.api.repos.createLocal({
+        name,
+        parentPath,
+        kind: createKind
+      })) as { repo: Repo } | { error: string }
+      if ('error' in result) {
+        throw new Error(result.error)
+      }
+      const repo = result.repo
+
+      // Why: eagerly upsert so downstream setup flow can resolve the created
+      // repo even before the global repos:changed event arrives.
+      const state = useAppStore.getState()
+      const existingIdx = state.repos.findIndex((r) => r.id === repo.id)
+      if (existingIdx === -1) {
+        useAppStore.setState({ repos: [...state.repos, repo] })
+      } else {
+        const updated = [...state.repos]
+        updated[existingIdx] = repo
+        useAppStore.setState({ repos: updated })
+      }
+
+      if (isGitRepoKind(repo)) {
+        toast.success('Repository created', { description: repo.displayName })
+        setAddedRepo(repo)
+        await fetchWorktrees(repo.id)
+        setStep('setup')
+      } else {
+        toast.success('Folder created', { description: repo.displayName })
+        closeModal()
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      setCreateError(message)
+    } finally {
+      setIsCreatingLocal(false)
+    }
+  }, [createName, createParentPath, createKind, fetchWorktrees, closeModal])
+
   const handleOpenWorktree = useCallback(
     (worktree: Worktree) => {
       activateAndRevealWorktree(worktree.id)
@@ -216,7 +283,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
       <DialogContent className="sm:max-w-lg">
         {/* Step indicator row — back button (step 2 only), dots, X is rendered by DialogContent */}
         <div className="flex items-center justify-center -mt-1">
-          {(step === 'clone' || step === 'remote') && (
+          {(step === 'clone' || step === 'remote' || step === 'create') && (
             <button
               className="absolute left-6 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
               onClick={handleBack}
@@ -299,7 +366,38 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
                 </div>
               </Button>
             </div>
+
+            <div className="pt-3 flex justify-center">
+              <button
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer underline underline-offset-2"
+                onClick={() => setStep('create')}
+              >
+                Create a new repo or folder
+              </button>
+            </div>
           </>
+        ) : step === 'create' ? (
+          <CreateLocalStep
+            name={createName}
+            parentPath={createParentPath}
+            kind={createKind}
+            isCreating={isCreatingLocal}
+            error={createError}
+            onNameChange={(value) => {
+              setCreateName(value)
+              setCreateError(null)
+            }}
+            onParentPathChange={(value) => {
+              setCreateParentPath(value)
+              setCreateError(null)
+            }}
+            onKindChange={(value) => {
+              setCreateKind(value)
+              setCreateError(null)
+            }}
+            onPickParentPath={handlePickCreateParentPath}
+            onCreate={handleCreateLocal}
+          />
         ) : step === 'remote' ? (
           <RemoteStep
             sshTargets={sshTargets}
@@ -336,63 +434,18 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
             onClone={handleClone}
           />
         ) : (
-          <>
-            <DialogHeader>
-              <DialogTitle>
-                {hasWorktrees ? 'Open or create a worktree' : 'Set up your first worktree'}
-              </DialogTitle>
-              <DialogDescription>
-                {hasWorktrees
-                  ? `${addedRepo?.displayName} has ${worktrees.length} worktree${worktrees.length !== 1 ? 's' : ''}. Open one to pick up where you left off, or create a new one.`
-                  : `Orca uses git worktrees as isolated task environments. Create one for ${addedRepo?.displayName} to get started.`}
-              </DialogDescription>
-            </DialogHeader>
-
-            {hasWorktrees && (
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Existing worktrees
-                </p>
-                <div className="space-y-1.5 max-h-[40vh] overflow-y-auto scrollbar-sleek pr-1">
-                  {sortedWorktrees.map((wt) => (
-                    <LinkedWorktreeItem
-                      key={wt.id}
-                      worktree={wt}
-                      onOpen={() => handleOpenWorktree(wt)}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="flex flex-col gap-3 pt-2">
-              <Button onClick={handleCreateWorktree} className="w-full">
-                <GitBranchPlus className="size-4 mr-2" />
-                {hasWorktrees ? 'Create new worktree' : 'Create first worktree'}
-              </Button>
-
-              <div className="flex items-center justify-between">
-                <button
-                  className="inline-flex items-center justify-center gap-1.5 text-xs text-muted-foreground/70 hover:text-foreground transition-colors cursor-pointer"
-                  onClick={handleConfigureRepo}
-                >
-                  <Settings className="size-3" />
-                  Configure repo
-                </button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-xs"
-                  onClick={() => {
-                    closeModal()
-                    resetState()
-                  }}
-                >
-                  Skip
-                </Button>
-              </div>
-            </div>
-          </>
+          <SetupStep
+            addedRepo={addedRepo}
+            sortedWorktrees={sortedWorktrees}
+            hasWorktrees={hasWorktrees}
+            onOpenWorktree={handleOpenWorktree}
+            onCreateWorktree={handleCreateWorktree}
+            onConfigureRepo={handleConfigureRepo}
+            onSkip={() => {
+              closeModal()
+              resetState()
+            }}
+          />
         )}
       </DialogContent>
     </Dialog>
