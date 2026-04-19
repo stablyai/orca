@@ -9,15 +9,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { TerminalTab } from '../../../../shared/types'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
@@ -83,23 +74,39 @@ export default function SortableTab({
   }
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
-  const [renameOpen, setRenameOpen] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
   const [renameValue, setRenameValue] = useState('')
   const renameInputRef = useRef<HTMLInputElement>(null)
+  // Why: React's synthetic onBlur fires during the Input's unmount when isEditing flips
+  // to false. Without this guard, pressing Escape (or committing via Enter) would cause
+  // the blur handler to run commitRename a second time and overwrite the title with the
+  // uncommitted edits the user just discarded. This ref lets cancelRename/commitRename
+  // mark the rename as already resolved so the unmount-driven blur is a no-op.
+  const committedOrCancelledRef = useRef(false)
 
   const handleRenameOpen = useCallback(() => {
+    committedOrCancelledRef.current = false
     setRenameValue(tab.customTitle ?? tab.title)
-    setRenameOpen(true)
+    setIsEditing(true)
   }, [tab.customTitle, tab.title])
 
-  const handleRenameSubmit = useCallback(() => {
+  const commitRename = useCallback(() => {
+    if (committedOrCancelledRef.current) {
+      return
+    }
+    committedOrCancelledRef.current = true
     const trimmed = renameValue.trim()
     onSetCustomTitle(tab.id, trimmed.length > 0 ? trimmed : null)
-    setRenameOpen(false)
+    setIsEditing(false)
   }, [renameValue, onSetCustomTitle, tab.id])
 
+  const cancelRename = useCallback(() => {
+    committedOrCancelledRef.current = true
+    setIsEditing(false)
+  }, [])
+
   useEffect(() => {
-    if (!renameOpen) {
+    if (!isEditing) {
       return
     }
     const frame = requestAnimationFrame(() => {
@@ -107,7 +114,7 @@ export default function SortableTab({
       renameInputRef.current?.select()
     })
     return () => cancelAnimationFrame(frame)
-  }, [renameOpen])
+  }, [isEditing])
 
   useEffect(() => {
     const closeMenu = (): void => setMenuOpen(false)
@@ -115,10 +122,20 @@ export default function SortableTab({
     return () => window.removeEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
   }, [])
 
+  // Why: while editing, suppress dnd-kit drag listeners and tab-activation/double-click
+  // handlers so typing/clicking inside the inline input doesn't start a drag, re-open the
+  // editor, or steal focus away from the input. We still spread `attributes` unconditionally
+  // so dnd-kit's a11y attributes (aria-roledescription, etc.) remain on the element — only
+  // the pointer listeners are gated so a drag can't start while typing.
+  const dragListeners = isEditing ? undefined : listeners
+
   return (
     <>
       <div
         onContextMenuCapture={(event) => {
+          if (isEditing) {
+            return
+          }
           event.preventDefault()
           window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
           setMenuPoint({ x: event.clientX, y: event.clientY })
@@ -129,18 +146,25 @@ export default function SortableTab({
           ref={setNodeRef}
           style={style}
           {...attributes}
-          {...listeners}
+          {...dragListeners}
           className={`group relative flex items-center h-full px-3 text-sm cursor-pointer select-none shrink-0 border-r border-border ${
             isActive
               ? 'bg-accent/40 text-foreground border-b-transparent'
               : 'bg-card text-muted-foreground hover:text-foreground hover:bg-accent/50'
           }`}
+          onDoubleClick={(e) => {
+            if (isEditing) {
+              return
+            }
+            e.stopPropagation()
+            handleRenameOpen()
+          }}
           onPointerDown={(e) => {
-            if (e.button !== 0) {
+            if (isEditing || e.button !== 0) {
               return
             }
             onActivate(tab.id)
-            listeners?.onPointerDown?.(e)
+            dragListeners?.onPointerDown?.(e)
           }}
           onMouseDown={(e) => {
             // Why: prevent default browser middle-click behavior (auto-scroll)
@@ -152,6 +176,9 @@ export default function SortableTab({
             }
           }}
           onAuxClick={(e) => {
+            if (isEditing) {
+              return
+            }
             if (e.button === 1) {
               e.preventDefault()
               e.stopPropagation()
@@ -162,14 +189,42 @@ export default function SortableTab({
           <TerminalIcon
             className={`w-3.5 h-3.5 mr-1.5 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
           />
-          <span className="truncate max-w-[130px] mr-1.5">{tab.customTitle ?? tab.title}</span>
-          {tab.color && (
+          {isEditing ? (
+            <Input
+              ref={renameInputRef}
+              value={renameValue}
+              aria-label={`Rename tab ${tab.customTitle ?? tab.title}`}
+              onChange={(event) => setRenameValue(event.target.value)}
+              onBlur={commitRename}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  commitRename()
+                } else if (event.key === 'Escape') {
+                  event.preventDefault()
+                  cancelRename()
+                }
+              }}
+              // Why: stop pointer/mouse events from bubbling to the outer div, which
+              // would otherwise trigger tab activation or start a dnd-kit drag while
+              // the user is trying to click inside the input.
+              onPointerDown={(event) => event.stopPropagation()}
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={(event) => event.stopPropagation()}
+              onDoubleClick={(event) => event.stopPropagation()}
+              className="h-5 max-w-[130px] mr-1.5 px-1 py-0 text-xs"
+              spellCheck={false}
+            />
+          ) : (
+            <span className="truncate max-w-[130px] mr-1.5">{tab.customTitle ?? tab.title}</span>
+          )}
+          {tab.color && !isEditing && (
             <span
               className="mr-1.5 size-2 rounded-full shrink-0"
               style={{ backgroundColor: tab.color }}
             />
           )}
-          {isExpanded && (
+          {isExpanded && !isEditing && (
             <button
               className={`mr-1 flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${
                 isActive
@@ -187,20 +242,22 @@ export default function SortableTab({
               <Minimize2 className="w-3 h-3" />
             </button>
           )}
-          <button
-            className={`flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${
-              isActive
-                ? 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted'
-            }`}
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation()
-              onClose(tab.id)
-            }}
-          >
-            <X className="w-3 h-3" />
-          </button>
+          {!isEditing && (
+            <button
+              className={`flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${
+                isActive
+                  ? 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                  : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted'
+              }`}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation()
+                onClose(tab.id)
+              }}
+            >
+              <X className="w-3 h-3" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -272,44 +329,6 @@ export default function SortableTab({
           </div>
         </DropdownMenuContent>
       </DropdownMenu>
-      <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="text-sm">Change Tab Title</DialogTitle>
-            <DialogDescription className="text-xs">
-              Leave empty to reset to the default title.
-            </DialogDescription>
-          </DialogHeader>
-          <form
-            className="space-y-3"
-            onSubmit={(event) => {
-              event.preventDefault()
-              handleRenameSubmit()
-            }}
-          >
-            <Input
-              ref={renameInputRef}
-              value={renameValue}
-              onChange={(event) => setRenameValue(event.target.value)}
-              className="h-8 text-xs"
-              autoFocus
-            />
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setRenameOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" size="sm">
-                Save
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
     </>
   )
 }
