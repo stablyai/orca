@@ -29,7 +29,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import RepoCombobox from '@/components/repo/RepoCombobox'
 import GitHubItemDrawer from '@/components/GitHubItemDrawer'
 import { cn } from '@/lib/utils'
-import { LightRays } from '@/components/ui/light-rays'
 import { getLinkedWorkItemSuggestedName, getTaskPresetQuery } from '@/lib/new-workspace'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { isGitRepoKind } from '../../../shared/repo-kind'
@@ -411,29 +410,7 @@ export default function NewWorkspacePage(): React.JSX.Element {
   }, [closeNewWorkspacePage, drawerWorkItem])
 
   return (
-    <div className="relative flex h-full min-h-0 flex-1 overflow-hidden bg-background dark:bg-[#1a1a1a] text-foreground">
-      {/* Why: 3 rays at blur=20 looks visually equivalent to 6 at 44 while
-          cutting the compositor cost of the backdrop roughly 3x — the large
-          blur radius + mix-blend-screen pass dominated paint time during
-          page mount on integrated GPUs. */}
-      <LightRays
-        count={3}
-        color="rgba(120, 160, 255, 0.15)"
-        blur={20}
-        speed={16}
-        length="60vh"
-        className="z-0"
-      />
-
-      {selectedRepo?.badgeColor && (
-        <div
-          className="pointer-events-none absolute inset-0 z-0 opacity-30 transition-opacity duration-700 ease-in-out"
-          style={{
-            background: `radial-gradient(circle at top right, ${selectedRepo.badgeColor}, transparent 75%)`
-          }}
-        />
-      )}
-
+    <div className="relative flex h-full min-h-0 flex-1 overflow-hidden bg-background text-foreground">
       <div className="relative z-10 flex min-h-0 flex-1 flex-col">
         {/* Why: left-aligned so it doesn't collide with the app sidebar on the
             right edge. The GitHub preview is a modal sheet that overlays the
@@ -476,8 +453,8 @@ export default function NewWorkspacePage(): React.JSX.Element {
                               className={cn(
                                 'group flex h-11 w-11 items-center justify-center rounded-xl border transition',
                                 active
-                                  ? 'border-border/50 bg-background/50 backdrop-blur-md supports-[backdrop-filter]:bg-background/50'
-                                  : 'border-border/50 bg-transparent hover:bg-muted/40',
+                                  ? 'border-border bg-muted/70 shadow-sm'
+                                  : 'border-border/70 bg-muted/30 hover:bg-muted/60 hover:border-border',
                                 source.disabled && 'cursor-not-allowed opacity-55'
                               )}
                             >
@@ -497,13 +474,13 @@ export default function NewWorkspacePage(): React.JSX.Element {
                       value={repoId}
                       onValueChange={setRepoId}
                       placeholder="Select a repository"
-                      triggerClassName="h-11 w-full rounded-[10px] border border-border/50 bg-background/50 backdrop-blur-md px-3 text-sm font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none supports-[backdrop-filter]:bg-background/50"
+                      triggerClassName="h-11 w-full rounded-[10px] border border-border/50 bg-muted/50 px-3 text-sm font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
                     />
                   </div>
                 </div>
 
                 {taskSource === 'github' && (
-                  <div className="rounded-[16px] border border-border/50 bg-background/40 backdrop-blur-md p-4 shadow-sm supports-[backdrop-filter]:bg-background/40">
+                  <div className="rounded-[16px] border border-border/50 bg-muted/50 p-4 shadow-sm">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div className="flex flex-wrap gap-2">
                         {TASK_QUERY_PRESETS.map((option) => {
@@ -569,7 +546,7 @@ export default function NewWorkspacePage(): React.JSX.Element {
                           onChange={handleTaskSearchChange}
                           onKeyDown={handleTaskSearchKeyDown}
                           placeholder="GitHub search, e.g. assignee:@me is:open"
-                          className="h-10 border-border/50 bg-background/50 pl-10 pr-10 backdrop-blur-md supports-[backdrop-filter]:bg-background/50"
+                          className="h-10 border-border/50 bg-background pl-10 pr-10"
                         />
                         {taskSearchInput || appliedTaskSearch ? (
                           <button
@@ -595,7 +572,7 @@ export default function NewWorkspacePage(): React.JSX.Element {
           </div>
 
           {taskSource === 'github' ? (
-            <div className="mt-4 flex flex-1 flex-col min-h-0 rounded-[16px] border border-border/50 bg-background/30 backdrop-blur-md supports-[backdrop-filter]:bg-background/30 overflow-hidden shadow-sm">
+            <div className="mt-4 flex min-h-0 max-h-full flex-col rounded-[16px] border border-border/50 bg-muted/50 overflow-hidden shadow-sm">
               <div className="flex-none hidden grid-cols-[96px_minmax(0,1.8fr)_minmax(140px,1fr)_150px_120px_90px] gap-4 border-b border-border/50 px-4 py-3 text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground lg:grid">
                 <span>ID</span>
                 <span>Title / Context</span>
@@ -606,12 +583,47 @@ export default function NewWorkspacePage(): React.JSX.Element {
               </div>
 
               <div
-                className="flex-1 overflow-y-auto scrollbar-sleek"
+                className="min-h-0 flex-initial overflow-y-auto scrollbar-sleek"
                 style={{ scrollbarGutter: 'stable' }}
               >
                 {tasksError ? (
                   <div className="border-b border-border px-4 py-4 text-sm text-destructive">
                     {tasksError}
+                  </div>
+                ) : null}
+
+                {tasksLoading && filteredWorkItems.length === 0 ? (
+                  // Why: shimmer skeleton stands in for the first ~3 rows while
+                  // the initial fetch is in flight, so the card is never empty
+                  // or collapsed during load. Only shown when we have no cached
+                  // items — on revalidate we keep the stale list visible.
+                  <div className="divide-y divide-border/50">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <div
+                        key={i}
+                        className="grid w-full gap-4 px-4 py-4 lg:grid-cols-[96px_minmax(0,1.8fr)_minmax(140px,1fr)_150px_120px_90px]"
+                      >
+                        <div className="flex items-center">
+                          <div className="h-7 w-16 animate-pulse rounded-lg bg-muted/70" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="h-4 w-3/5 animate-pulse rounded bg-muted/70" />
+                          <div className="mt-2 h-3 w-2/5 animate-pulse rounded bg-muted/60" />
+                        </div>
+                        <div className="flex items-center">
+                          <div className="h-3 w-24 animate-pulse rounded bg-muted/60" />
+                        </div>
+                        <div className="flex items-center">
+                          <div className="h-5 w-14 animate-pulse rounded-full bg-muted/70" />
+                        </div>
+                        <div className="flex items-center">
+                          <div className="h-3 w-20 animate-pulse rounded bg-muted/60" />
+                        </div>
+                        <div className="flex items-center justify-start lg:justify-end">
+                          <div className="h-7 w-16 animate-pulse rounded-xl bg-muted/70" />
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 ) : null}
 
