@@ -301,6 +301,18 @@ export class PaneManager {
     for (const pane of this.panes.values()) {
       if (pane.gpuRenderingEnabled && !pane.webglAddon) {
         attachWebgl(pane)
+        // Why: the fitPanes() optimization skips panes whose dimensions are
+        // unchanged (common when a worktree goes hidden→visible at the same
+        // window size). But the fresh WebGL canvas created by attachWebgl()
+        // has no painted content — without an explicit refresh the terminal
+        // appears frozen until something forces a dimension change (e.g. a
+        // split). This mirrors the onContextLoss handler in attachWebgl which
+        // calls the same refresh after falling back to the DOM renderer.
+        try {
+          pane.terminal.refresh(0, pane.terminal.rows - 1)
+        } catch {
+          /* ignore — pane may not be fully initialised yet */
+        }
       }
     }
   }
