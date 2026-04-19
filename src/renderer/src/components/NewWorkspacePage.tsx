@@ -34,7 +34,7 @@ import { getLinkedWorkItemSuggestedName, getTaskPresetQuery } from '@/lib/new-wo
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import type { GitHubWorkItem, TaskViewPresetId } from '../../../shared/types'
-import { shouldSuppressEnterSubmit } from './new-workspace-enter-guard'
+import { shouldSuppressEnterSubmit } from '@/lib/new-workspace-enter-guard'
 
 type TaskSource = 'github' | 'linear'
 type TaskQueryPreset = {

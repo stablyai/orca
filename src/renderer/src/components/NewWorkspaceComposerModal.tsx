@@ -4,7 +4,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog'
 import NewWorkspaceComposerCard from '@/components/NewWorkspaceComposerCard'
 import { useComposerState } from '@/hooks/useComposerState'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
-import { shouldSuppressEnterSubmit } from './new-workspace-enter-guard'
+import { shouldSuppressEnterSubmit } from '@/lib/new-workspace-enter-guard'
 
 type ComposerModalData = {
   prefilledName?: string
