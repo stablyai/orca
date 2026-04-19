@@ -484,11 +484,13 @@
   border-top: 1px solid var(--border);
 }
 
-.rich-markdown-editor a {
+.rich-markdown-editor a,
+.rich-markdown-editor .ProseMirror a {
   color: #0969da;
   text-decoration: underline;
   text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
   text-underline-offset: 2px;
+  cursor: pointer;
 }
 
 .dark .rich-markdown-editor a {

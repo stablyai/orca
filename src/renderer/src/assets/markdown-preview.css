@@ -131,6 +131,7 @@
 /* Links use a proper blue instead of --primary (which is near-black/white and
    visually indistinguishable from body text). */
 .markdown-body a {
+  cursor: pointer !important;
   text-decoration: underline;
   text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
   text-underline-offset: 2px;

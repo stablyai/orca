@@ -23,11 +23,17 @@ import { createRichMarkdownKeyHandler } from './rich-markdown-key-handler'
 import { normalizeSoftBreaks } from './rich-markdown-normalize'
 import { autoFocusRichEditor } from './rich-markdown-auto-focus'
 import { handleRichMarkdownCut } from './rich-markdown-cut-handler'
+import { toast } from 'sonner'
+import {
+  absolutePathToFileUri as toFileUrlForOsEscape,
+  resolveMarkdownLinkTarget
+} from './markdown-internal-links'
 
 type RichMarkdownEditorProps = {
   fileId: string
   content: string
   filePath: string
+  worktreeId: string
   scrollCacheKey: string
   onContentChange: (content: string) => void
   onDirtyStateHint: (dirty: boolean) => void
@@ -42,6 +48,7 @@ export default function RichMarkdownEditor({
   fileId,
   content,
   filePath,
+  worktreeId,
   scrollCacheKey,
   onContentChange,
   onDirtyStateHint,
@@ -49,6 +56,16 @@ export default function RichMarkdownEditor({
 }: RichMarkdownEditorProps): React.JSX.Element {
   const rootRef = useRef<HTMLDivElement | null>(null)
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
+  const activateMarkdownLink = useAppStore((s) => s.activateMarkdownLink)
+  const worktreeRoot = useAppStore((s) => {
+    for (const list of Object.values(s.worktreesByRepo)) {
+      const wt = list.find((w) => w.id === worktreeId)
+      if (wt) {
+        return wt.path
+      }
+    }
+    return null
+  })
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
   const [slashMenu, setSlashMenu] = useState<SlashMenuState | null>(null)
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(0)
@@ -143,9 +160,11 @@ export default function RichMarkdownEditor({
         setSelectedCommandIndex,
         setSlashMenu
       }),
-      // Why: Cmd/Ctrl+click on a link opens it in the system browser, matching
-      // VS Code and other editor conventions. Without the modifier, clicks just
-      // position the cursor normally for editing.
+      // Why: Cmd/Ctrl-click activates links via the shared classifier +
+      // dispatcher, so in-worktree .md links open in an Orca tab instead of the
+      // OS default handler. Cmd/Ctrl+Shift-click is the OS escape hatch, kept
+      // symmetric with MarkdownPreview. Without a modifier the click falls
+      // through to TipTap's default cursor-positioning behavior.
       handleClick: (_view, _pos, event) => {
         const ed = editorRef.current
         if (!ed) {
@@ -154,10 +173,40 @@ export default function RichMarkdownEditor({
         const modKey = isMac ? event.metaKey : event.ctrlKey
         if (modKey && ed.isActive('link')) {
           const href = (ed.getAttributes('link').href as string) || ''
-          if (href) {
-            void window.api.shell.openUrl(href)
+          if (!href) {
+            return false
+          }
+          if (event.shiftKey) {
+            const classified = resolveMarkdownLinkTarget(href, filePath, worktreeRoot)
+            if (!classified) {
+              return true
+            }
+            if (classified.kind === 'external') {
+              void window.api.shell.openUrl(classified.url)
+              return true
+            }
+            if (classified.kind === 'markdown') {
+              void window.api.shell.pathExists(classified.absolutePath).then((exists) => {
+                if (!exists) {
+                  toast.error(`File not found: ${classified.relativePath}`)
+                  return
+                }
+                void window.api.shell.openFileUri(toFileUrlForOsEscape(classified.absolutePath))
+              })
+              return true
+            }
+            if (classified.kind === 'file') {
+              void window.api.shell.openFileUri(classified.uri)
+              return true
+            }
             return true
           }
+          void activateMarkdownLink(href, {
+            sourceFilePath: filePath,
+            worktreeId,
+            worktreeRoot
+          })
+          return true
         }
         return false
       }
@@ -294,7 +343,11 @@ export default function RichMarkdownEditor({
     handleLinkEditCancel,
     handleLinkOpen,
     toggleLinkFromToolbar
-  } = useLinkBubble(editor, rootRef, linkBubble, setLinkBubble, setIsEditingLink)
+  } = useLinkBubble(editor, rootRef, linkBubble, setLinkBubble, setIsEditingLink, {
+    sourceFilePath: filePath,
+    worktreeId,
+    worktreeRoot
+  })
 
   const {
     activeMatchIndex,

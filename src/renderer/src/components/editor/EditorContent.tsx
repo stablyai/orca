@@ -176,6 +176,7 @@ export function EditorContent({
               fileId={activeFile.id}
               content={editorContent}
               filePath={activeFile.filePath}
+              worktreeId={activeFile.worktreeId}
               scrollCacheKey={`${editorViewStateKey}:rich`}
               onContentChange={onContentChangeWithFm}
               onDirtyStateHint={handleDirtyStateHint}
@@ -201,6 +202,7 @@ export function EditorContent({
               key={viewStateScopeId}
               content={currentContent}
               filePath={activeFile.filePath}
+              worktreeId={activeFile.worktreeId}
               scrollCacheKey={`${editorViewStateKey}:preview`}
             />
           </div>

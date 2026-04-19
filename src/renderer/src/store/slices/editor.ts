@@ -2,6 +2,8 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import { joinPath } from '@/lib/path'
+import { toast } from 'sonner'
+import { resolveMarkdownLinkTarget } from '@/components/editor/markdown-internal-links'
 import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary,
@@ -163,8 +165,16 @@ export type EditorSlice = {
   setActiveTabType: (type: WorkspaceVisibleTabType) => void
   openFile: (
     file: Omit<OpenFile, 'id' | 'isDirty'>,
-    options?: { preview?: boolean; targetGroupId?: string }
+    options?: { preview?: boolean; targetGroupId?: string; recordReplacedPreview?: boolean }
   ) => void
+  // Why: dispatcher for markdown link activation. Lives on the slice because it
+  // sequences openFile, setMarkdownViewMode, and setPendingEditorReveal around
+  // an async Monaco remount — all reading/writing state in this slice. See
+  // docs/markdown-internal-link-opening-design.md.
+  activateMarkdownLink: (
+    rawHref: string | undefined,
+    ctx: { sourceFilePath: string; worktreeId: string; worktreeRoot: string | null }
+  ) => Promise<void>
   pinFile: (fileId: string, tabId?: string) => void
   closeFile: (fileId: string) => void
   closeAllFiles: () => void
@@ -401,6 +411,24 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const existing = s.openFiles.find((f) => f.id === id)
       const worktreeId = file.worktreeId
       const isPreview = options?.preview ?? false
+      const recordReplacedPreview = options?.recordReplacedPreview ?? false
+      // Why: resolve the target group up-front so preview replacement can be
+      // scoped to that group. Opening as preview in group B must not evict a
+      // preview tab belonging to group A (split tab groups).
+      const targetGroupId =
+        options?.targetGroupId ??
+        s.activeGroupIdByWorktree?.[worktreeId] ??
+        s.groupsByWorktree?.[worktreeId]?.[0]?.id ??
+        undefined
+      const previewTabByEntity = new Map<string, string>()
+      if (targetGroupId) {
+        const tabsForWorktree = s.unifiedTabsByWorktree?.[worktreeId] ?? []
+        for (const tab of tabsForWorktree) {
+          if (tab.groupId === targetGroupId && tab.isPreview && tab.contentType === 'editor') {
+            previewTabByEntity.set(tab.entityId, tab.id)
+          }
+        }
+      }
 
       const activeResult = {
         activeFileId: id,
@@ -446,12 +474,23 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         }
       }
 
-      // If opening as preview, replace the existing preview tab for this worktree
+      // If opening as preview, replace the existing preview tab.
+      // Why: preview replacement is scoped to `worktreeId + targetGroupId` so
+      // link clicks in group B do not silently evict previews from group A.
+      // Falls back to worktree-wide when group plumbing is unavailable (e.g.
+      // in tests that don't populate unifiedTabsByWorktree), matching the
+      // prior behavior.
       let newFiles = s.openFiles
       if (isPreview) {
-        const existingPreviewIdx = s.openFiles.findIndex(
-          (f) => f.worktreeId === worktreeId && f.isPreview
-        )
+        const existingPreviewIdx = s.openFiles.findIndex((f) => {
+          if (f.worktreeId !== worktreeId || !f.isPreview) {
+            return false
+          }
+          if (previewTabByEntity.size === 0) {
+            return true
+          }
+          return previewTabByEntity.has(f.id)
+        })
         if (existingPreviewIdx !== -1) {
           const replacedPreview = s.openFiles[existingPreviewIdx]
           const nextEditorDrafts =
@@ -492,11 +531,29 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                 }
               }
             : {}
+          // Why: link-activation replaces previews by default, so users walking
+          // A → B → C can't reach A via Cmd/Ctrl+Shift+T unless we push the
+          // evicted preview onto the recently-closed stack. Gated with
+          // recordReplacedPreview so file-explorer single-click (which
+          // semantically *wants* silent eviction) is unaffected.
+          let nextRecentlyClosed = s.recentlyClosedEditorTabsByWorktree
+          if (recordReplacedPreview && replacedPreview.id !== id) {
+            const { id: _rid, isDirty: _rdirty, ...snap } = replacedPreview
+            const stack = s.recentlyClosedEditorTabsByWorktree[worktreeId] ?? []
+            nextRecentlyClosed = {
+              ...s.recentlyClosedEditorTabsByWorktree,
+              [worktreeId]: [snap as ClosedEditorTabSnapshot, ...stack].slice(
+                0,
+                MAX_RECENT_CLOSED_EDITOR_TABS
+              )
+            }
+          }
           return {
             openFiles: newFiles,
             editorDrafts: nextEditorDrafts,
             editorCursorLine: nextEditorCursorLine,
             markdownViewMode: nextMarkdownViewMode,
+            recentlyClosedEditorTabsByWorktree: nextRecentlyClosed,
             ...previewTabBarUpdate,
             ...activeResult
           }
@@ -1593,6 +1650,82 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   // Editor navigation
   pendingEditorReveal: null,
   setPendingEditorReveal: (reveal) => set({ pendingEditorReveal: reveal }),
+
+  activateMarkdownLink: async (rawHref, ctx) => {
+    const target = resolveMarkdownLinkTarget(rawHref, ctx.sourceFilePath, ctx.worktreeRoot)
+    if (!target) {
+      return
+    }
+    if (target.kind === 'anchor') {
+      return
+    }
+    if (target.kind === 'external') {
+      void window.api.shell.openUrl(target.url)
+      return
+    }
+    if (target.kind === 'file') {
+      void window.api.shell.openFileUri(target.uri)
+      return
+    }
+
+    // target.kind === 'markdown'
+    const { absolutePath, relativePath, line, column } = target
+    const exists = await window.api.shell.pathExists(absolutePath)
+    if (!exists) {
+      toast.error(`File not found: ${relativePath}`)
+      return
+    }
+
+    const state = get()
+    const existing = state.openFiles.find((f) => f.filePath === absolutePath)
+    const fileId = existing?.id ?? absolutePath
+
+    // Why: pendingEditorReveal is consumed by MonacoEditor on mount. If the
+    // file opens/stays in rich mode, the reveal is silently dropped. Flip to
+    // source before openFile/setActiveFile so Monaco is the surface that
+    // mounts or is already mounted when the reveal lands. Rich-mode line
+    // reveal is tracked as a follow-up (design doc §open-q 1).
+    if (line !== undefined) {
+      get().setMarkdownViewMode(fileId, 'source')
+    }
+
+    if (!existing) {
+      get().openFile(
+        {
+          filePath: absolutePath,
+          relativePath,
+          worktreeId: ctx.worktreeId,
+          language: 'markdown',
+          mode: 'edit'
+        },
+        {
+          preview: true,
+          targetGroupId: get().activeGroupIdByWorktree?.[ctx.worktreeId],
+          recordReplacedPreview: true
+        }
+      )
+    } else {
+      get().setActiveFile(existing.id)
+    }
+
+    if (line !== undefined) {
+      // Why: double-RAF matches search-match-open.ts. openFile may replace a
+      // preview, remounting Monaco asynchronously; the mount's own
+      // setPendingEditorReveal(null) would otherwise clobber a reveal scheduled
+      // in the same tick.
+      get().setPendingEditorReveal(null)
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          get().setPendingEditorReveal({
+            filePath: absolutePath,
+            line,
+            column: column ?? 1,
+            matchLength: 0
+          })
+        })
+      })
+    }
+  },
 
   // Why: only edit-mode files are restored — diffs and conflict views depend on
   // transient git state that may have changed between sessions. Restoring them

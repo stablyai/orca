@@ -9,9 +9,11 @@ import type { Components } from 'react-markdown'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useAppStore } from '@/store'
+import { toast } from 'sonner'
 import { computeEditorFontSize } from '@/lib/editor-font-zoom'
 import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
 import { getMarkdownPreviewLinkTarget } from './markdown-preview-links'
+import { absolutePathToFileUri, resolveMarkdownLinkTarget } from './markdown-internal-links'
 import { useLocalImageSrc } from './useLocalImageSrc'
 import CodeBlockCopyButton from './CodeBlockCopyButton'
 import MermaidBlock from './MermaidBlock'
@@ -25,14 +27,27 @@ import {
 type MarkdownPreviewProps = {
   content: string
   filePath: string
+  worktreeId: string
   scrollCacheKey: string
 }
 
 export default function MarkdownPreview({
   content,
   filePath,
+  worktreeId,
   scrollCacheKey
 }: MarkdownPreviewProps): React.JSX.Element {
+  const activateMarkdownLink = useAppStore((s) => s.activateMarkdownLink)
+  const worktreeRoot = useAppStore((s) => {
+    for (const list of Object.values(s.worktreesByRepo)) {
+      const wt = list.find((w) => w.id === worktreeId)
+      if (wt) {
+        return wt.path
+      }
+    }
+    return null
+  })
+  const isMac = navigator.userAgent.includes('Mac')
   const rootRef = useRef<HTMLDivElement>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -240,30 +255,55 @@ export default function MarkdownPreview({
 
         event.preventDefault()
 
-        const target = getMarkdownPreviewLinkTarget(href, filePath)
-        if (!target) {
+        // Why: Cmd/Ctrl+Shift-click is the OS escape hatch — always hand the
+        // link to the system default handler, bypassing the classifier. For a
+        // dangling in-worktree .md, pre-check existence so the user sees a
+        // toast instead of the silent no-op from shell.openFileUri.
+        const modKey = isMac ? event.metaKey : event.ctrlKey
+        if (modKey && event.shiftKey) {
+          const osTarget = getMarkdownPreviewLinkTarget(href, filePath)
+          if (!osTarget) {
+            return
+          }
+          let parsed: URL
+          try {
+            parsed = new URL(osTarget)
+          } catch {
+            return
+          }
+          if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+            void window.api.shell.openUrl(parsed.toString())
+            return
+          }
+          if (parsed.protocol === 'file:') {
+            const classified = resolveMarkdownLinkTarget(href, filePath, worktreeRoot)
+            if (classified?.kind === 'markdown') {
+              // Why: use the classifier's stripped absolutePath (no `:line:col`
+              // or `#L10` suffix) so the OS handler receives a clean file URI.
+              const cleanUri = absolutePathToFileUri(classified.absolutePath)
+              void window.api.shell.pathExists(classified.absolutePath).then((exists) => {
+                if (!exists) {
+                  toast.error(`File not found: ${classified.relativePath}`)
+                  return
+                }
+                void window.api.shell.openFileUri(cleanUri)
+              })
+              return
+            }
+            void window.api.shell.openFileUri(parsed.toString())
+          }
           return
         }
 
-        let parsed: URL
-        try {
-          parsed = new URL(target)
-        } catch {
-          return
-        }
-
-        if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
-          void window.api.shell.openUrl(parsed.toString())
-          return
-        }
-
-        if (parsed.protocol === 'file:') {
-          void window.api.shell.openFileUri(parsed.toString())
-        }
+        void activateMarkdownLink(href, {
+          sourceFilePath: filePath,
+          worktreeId,
+          worktreeRoot
+        })
       }
 
       return (
-        <a {...props} href={href} onClick={handleClick}>
+        <a {...props} href={href} onClick={handleClick} style={{ cursor: 'pointer' }}>
           {children}
         </a>
       )
