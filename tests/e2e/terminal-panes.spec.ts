@@ -34,16 +34,14 @@ import {
 } from './helpers/store'
 import { pressShortcut } from './helpers/shortcuts'
 
-// Why: hidden Electron windows do not reliably finish mounting the terminal
-// PaneManager/PTY surface, which leaves pane counts at 0 and no live PTY IDs
-// for content assertions. Run the whole pane suite in the visible-window
-// project so split, retention, and divider behavior exercise the real xterm
-// lifecycle instead of a hidden-window artifact.
-// Why: the @headful subset depends on a visible BrowserWindow and real pointer
-// interaction for divider drags. Keep the file serial so Playwright does not
-// try to run multiple visible Electron windows from this suite at once.
+// Why: only the pointer-drag resize test needs a visible window (pointer
+// capture requires a real pointer id). Every other pane operation here is
+// driven through the exposed PaneManager API and runs fine headless, so the
+// suite itself is not tagged — just the one test that needs it.
+// Why: keep the suite serial so when the headful test does run, Playwright
+// does not try to open multiple visible Electron windows at once.
 test.describe.configure({ mode: 'serial' })
-test.describe('@headful Terminal Panes', () => {
+test.describe('Terminal Panes', () => {
   test.beforeEach(async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
