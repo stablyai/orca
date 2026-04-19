@@ -182,6 +182,8 @@ describe('installDevParentWatchdog', () => {
 
 describe('enableMainProcessGpuFeatures', () => {
   const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+  const originalWaylandDisplay = process.env.WAYLAND_DISPLAY
+  const originalXdgSessionType = process.env.XDG_SESSION_TYPE
 
   function setPlatform(platform: NodeJS.Platform): void {
     Object.defineProperty(process, 'platform', {
@@ -193,6 +195,16 @@ describe('enableMainProcessGpuFeatures', () => {
   afterEach(() => {
     if (originalPlatform) {
       Object.defineProperty(process, 'platform', originalPlatform)
+    }
+    if (originalWaylandDisplay === undefined) {
+      delete process.env.WAYLAND_DISPLAY
+    } else {
+      process.env.WAYLAND_DISPLAY = originalWaylandDisplay
+    }
+    if (originalXdgSessionType === undefined) {
+      delete process.env.XDG_SESSION_TYPE
+    } else {
+      process.env.XDG_SESSION_TYPE = originalXdgSessionType
     }
   })
 
@@ -211,16 +223,53 @@ describe('enableMainProcessGpuFeatures', () => {
     expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('enable-unsafe-webgpu')
   })
 
-  it('skips Vulkan/SkiaGraphite/WebGPU switches on linux', async () => {
-    // Why: Chromium's Ozone/Wayland surface factory refuses to initialize
-    // with Vulkan enabled, producing a blank/transparent window on Wayland
-    // sessions (Arch/Omarchy/Hyprland, GNOME-Wayland). Guard against
-    // regressions that would reintroduce these switches on Linux.
+  it('appends Orca GPU flags on linux X11 sessions', async () => {
+    // Why: Chromium's X11 Vulkan path works, so we keep Skia Graphite / WebGPU
+    // acceleration on X11. Only Wayland hits the wayland_surface_factory.cc
+    // incompatibility and needs the gate.
     const { app } = await import('electron')
     const { enableMainProcessGpuFeatures } = await import('./configure-process')
 
     vi.mocked(app.commandLine.appendSwitch).mockClear()
     setPlatform('linux')
+    delete process.env.WAYLAND_DISPLAY
+    process.env.XDG_SESSION_TYPE = 'x11'
+    enableMainProcessGpuFeatures()
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
+      'enable-features',
+      'Vulkan,UseSkiaGraphite'
+    )
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('enable-unsafe-webgpu')
+  })
+
+  it('skips Vulkan/SkiaGraphite/WebGPU switches when WAYLAND_DISPLAY is set', async () => {
+    // Why: Chromium's Ozone/Wayland surface factory hard-aborts with Vulkan
+    // enabled (wayland_surface_factory.cc:251), producing a blank/transparent
+    // window on Wayland-default distros (Arch/Omarchy/Hyprland, GNOME-Wayland).
+    const { app } = await import('electron')
+    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    setPlatform('linux')
+    process.env.WAYLAND_DISPLAY = 'wayland-0'
+    delete process.env.XDG_SESSION_TYPE
+    enableMainProcessGpuFeatures()
+
+    expect(app.commandLine.appendSwitch).not.toHaveBeenCalled()
+  })
+
+  it('skips switches when XDG_SESSION_TYPE=wayland without WAYLAND_DISPLAY', async () => {
+    // Why: belt-and-suspenders — some nested/manually-started Wayland sessions
+    // advertise XDG_SESSION_TYPE=wayland without yet having WAYLAND_DISPLAY
+    // set in the process's environment at launch time.
+    const { app } = await import('electron')
+    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    setPlatform('linux')
+    delete process.env.WAYLAND_DISPLAY
+    process.env.XDG_SESSION_TYPE = 'wayland'
     enableMainProcessGpuFeatures()
 
     expect(app.commandLine.appendSwitch).not.toHaveBeenCalled()
