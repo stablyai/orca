@@ -11,7 +11,7 @@ import type {
 import { getPRConflictSummary } from './conflict-summary'
 import { execFileAsync, ghExecFileAsync, acquire, release, getOwnerRepo } from './gh-utils'
 export { _resetOwnerRepoCache } from './gh-utils'
-export { getIssue, listIssues } from './issues'
+export { getIssue, listIssues, createIssue } from './issues'
 import {
   mapCheckRunRESTStatus,
   mapCheckRunRESTConclusion,

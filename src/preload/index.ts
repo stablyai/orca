@@ -367,6 +367,13 @@ const api = {
     listIssues: (args: { repoPath: string; limit?: number }): Promise<unknown[]> =>
       ipcRenderer.invoke('gh:listIssues', args),
 
+    createIssue: (args: {
+      repoPath: string
+      title: string
+      body: string
+    }): Promise<{ ok: true; number: number; url: string } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('gh:createIssue', args),
+
     listWorkItems: (args: {
       repoPath: string
       limit?: number

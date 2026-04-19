@@ -446,6 +446,34 @@ export default function GitHubItemDrawer({
 
   const requestIdRef = useRef(0)
 
+  // Why: when this drawer opens immediately after another Radix overlay
+  // (e.g. the New Issue dialog) closed, Radix may leave `pointer-events: none`
+  // on <body>. That silently kills clicks on the header's Close/open-in-GitHub
+  // buttons. Poll a few frames to clear it whenever Radix re-applies it during
+  // its own mount sequence.
+  useEffect(() => {
+    if (!workItem) {
+      return
+    }
+    let cancelled = false
+    let count = 0
+    const tick = (): void => {
+      if (cancelled) {
+        return
+      }
+      if (document.body.style.pointerEvents === 'none') {
+        document.body.style.pointerEvents = ''
+      }
+      if (count++ < 5) {
+        requestAnimationFrame(tick)
+      }
+    }
+    tick()
+    return () => {
+      cancelled = true
+    }
+  }, [workItem])
+
   useEffect(() => {
     if (!workItem || !repoPath) {
       setDetails(null)

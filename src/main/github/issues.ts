@@ -71,3 +71,53 @@ export async function listIssues(repoPath: string, limit = 20): Promise<IssueInf
     release()
   }
 }
+
+/**
+ * Create a new GitHub issue. Uses `gh api` with explicit owner/repo so the
+ * call does not depend on the current working directory having a remote that
+ * matches the repo the user picked in the tasks page.
+ */
+export async function createIssue(
+  repoPath: string,
+  title: string,
+  body: string
+): Promise<{ ok: true; number: number; url: string } | { ok: false; error: string }> {
+  const trimmedTitle = title.trim()
+  if (!trimmedTitle) {
+    return { ok: false, error: 'Title is required' }
+  }
+  const ownerRepo = await getOwnerRepo(repoPath)
+  if (!ownerRepo) {
+    return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
+  }
+  await acquire()
+  try {
+    const { stdout } = await ghExecFileAsync(
+      [
+        'api',
+        '-X',
+        'POST',
+        `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues`,
+        '-f',
+        `title=${trimmedTitle}`,
+        '-f',
+        `body=${body}`
+      ],
+      { cwd: repoPath }
+    )
+    const data = JSON.parse(stdout) as { number?: number; html_url?: string; url?: string }
+    if (typeof data.number !== 'number') {
+      return { ok: false, error: 'Unexpected response from GitHub' }
+    }
+    return {
+      ok: true,
+      number: data.number,
+      url: String(data.html_url ?? data.url ?? '')
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    return { ok: false, error: message }
+  } finally {
+    release()
+  }
+}

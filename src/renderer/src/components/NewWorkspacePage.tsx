@@ -11,6 +11,7 @@ import {
   Github,
   GitPullRequest,
   LoaderCircle,
+  Plus,
   RefreshCw,
   Search,
   X
@@ -19,6 +20,14 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from '@/components/ui/dialog'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -206,6 +215,10 @@ export default function NewWorkspacePage(): React.JSX.Element {
   // The composer modal is only opened by the drawer's "Use" button, which
   // calls the same handleSelectWorkItem as the old direct row-click flow.
   const [drawerWorkItem, setDrawerWorkItem] = useState<GitHubWorkItem | null>(null)
+  const [newIssueOpen, setNewIssueOpen] = useState(false)
+  const [newIssueTitle, setNewIssueTitle] = useState('')
+  const [newIssueBody, setNewIssueBody] = useState('')
+  const [newIssueSubmitting, setNewIssueSubmitting] = useState(false)
 
   const filteredWorkItems = useMemo(() => {
     if (!activeTaskPreset) {
@@ -368,12 +381,73 @@ export default function NewWorkspacePage(): React.JSX.Element {
     [openModal, repoId]
   )
 
+  const handleCreateNewIssue = useCallback(async (): Promise<void> => {
+    if (!selectedRepo) {
+      return
+    }
+    const title = newIssueTitle.trim()
+    if (!title || newIssueSubmitting) {
+      return
+    }
+    setNewIssueSubmitting(true)
+    try {
+      const result = await window.api.gh.createIssue({
+        repoPath: selectedRepo.path,
+        title,
+        body: newIssueBody
+      })
+      if (!result.ok) {
+        toast.error(result.error || 'Failed to create issue.')
+        return
+      }
+      toast.success(`Opened issue #${result.number}`, {
+        action: result.url
+          ? {
+              label: 'View',
+              onClick: () => window.open(result.url, '_blank')
+            }
+          : undefined
+      })
+      setNewIssueOpen(false)
+      setNewIssueTitle('')
+      setNewIssueBody('')
+      // Why: bump the nonce so the list refetches and shows the new issue.
+      setTaskRefreshNonce((current) => current + 1)
+
+      // Why: auto-open the new issue in the side drawer so the user sees
+      // exactly what was filed. Use an optimistic stub first so the drawer
+      // has immediate content, then refine with the full `workItem` fetch.
+      const stub: GitHubWorkItem = {
+        id: `issue:${String(result.number)}`,
+        type: 'issue',
+        number: result.number,
+        title,
+        state: 'open',
+        url: result.url,
+        labels: [],
+        updatedAt: new Date().toISOString(),
+        author: null
+      }
+      setDrawerWorkItem(stub)
+      void window.api.gh
+        .workItem({ repoPath: selectedRepo.path, number: result.number })
+        .then((full) => {
+          if (full) {
+            setDrawerWorkItem(full)
+          }
+        })
+        .catch(() => {})
+    } finally {
+      setNewIssueSubmitting(false)
+    }
+  }, [newIssueBody, newIssueSubmitting, newIssueTitle, selectedRepo])
+
   useEffect(() => {
     // Why: when the GitHub preview sheet is open, Radix's Dialog owns Esc —
     // it closes the sheet on its own. Page-level capture would otherwise fire
     // first and pop the tasks page while the user just meant to dismiss the
     // preview.
-    if (drawerWorkItem) {
+    if (drawerWorkItem || newIssueOpen) {
       return
     }
 
@@ -407,7 +481,7 @@ export default function NewWorkspacePage(): React.JSX.Element {
 
     window.addEventListener('keydown', onKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
-  }, [closeNewWorkspacePage, drawerWorkItem])
+  }, [closeNewWorkspacePage, drawerWorkItem, newIssueOpen])
 
   return (
     <div className="relative flex h-full min-h-0 flex-1 overflow-hidden bg-background text-foreground">
@@ -514,6 +588,27 @@ export default function NewWorkspacePage(): React.JSX.Element {
                       </div>
 
                       <div className="flex shrink-0 items-center gap-2">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={() => {
+                                setNewIssueTitle('')
+                                setNewIssueBody('')
+                                setNewIssueOpen(true)
+                              }}
+                              disabled={!selectedRepo}
+                              aria-label="New GitHub issue"
+                              className="border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
+                            >
+                              <Plus className="size-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" sideOffset={6}>
+                            New GitHub issue
+                          </TooltipContent>
+                        </Tooltip>
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Button
@@ -760,6 +855,80 @@ export default function NewWorkspacePage(): React.JSX.Element {
           )}
         </div>
       </div>
+
+      <Dialog
+        open={newIssueOpen}
+        onOpenChange={(open) => {
+          if (!newIssueSubmitting) {
+            setNewIssueOpen(open)
+          }
+        }}
+      >
+        <DialogContent
+          className="sm:max-w-lg"
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+              event.preventDefault()
+              void handleCreateNewIssue()
+            }
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>New GitHub issue</DialogTitle>
+            <DialogDescription>
+              Opens a new issue in {selectedRepo?.displayName ?? 'this repository'}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-medium text-muted-foreground">Title</label>
+              <Input
+                autoFocus
+                value={newIssueTitle}
+                onChange={(e) => setNewIssueTitle(e.target.value)}
+                placeholder="Short summary"
+                disabled={newIssueSubmitting}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-medium text-muted-foreground">
+                Description (optional, markdown)
+              </label>
+              <textarea
+                value={newIssueBody}
+                onChange={(e) => setNewIssueBody(e.target.value)}
+                placeholder="What's going on?"
+                rows={6}
+                disabled={newIssueSubmitting}
+                className="w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 resize-none max-h-60 overflow-y-auto"
+              />
+            </div>
+            <p className="text-[10px] text-muted-foreground">Cmd/Ctrl+Enter to submit.</p>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setNewIssueOpen(false)}
+              disabled={newIssueSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void handleCreateNewIssue()}
+              disabled={!selectedRepo || !newIssueTitle.trim() || newIssueSubmitting}
+            >
+              {newIssueSubmitting ? (
+                <>
+                  <LoaderCircle className="size-4 animate-spin" />
+                  Creating…
+                </>
+              ) : (
+                'Create issue'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <GitHubItemDrawer
         workItem={drawerWorkItem}

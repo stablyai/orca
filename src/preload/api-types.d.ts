@@ -343,6 +343,11 @@ export type PreloadApi = {
       baseSha: string
     }) => Promise<GitHubPRFileContents>
     listIssues: (args: { repoPath: string; limit?: number }) => Promise<IssueInfo[]>
+    createIssue: (args: {
+      repoPath: string
+      title: string
+      body: string
+    }) => Promise<{ ok: true; number: number; url: string } | { ok: false; error: string }>
     listWorkItems: (args: {
       repoPath: string
       limit?: number

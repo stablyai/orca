@@ -10,6 +10,7 @@ import {
   listIssues,
   listWorkItems,
   getWorkItem,
+  createIssue,
   getAuthenticatedViewer,
   getPRChecks,
   getPRComments,
@@ -60,6 +61,14 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
     const repo = assertRegisteredRepo(args.repoPath, store)
     return listIssues(repo.path, args.limit)
   })
+
+  ipcMain.handle(
+    'gh:createIssue',
+    (_event, args: { repoPath: string; title: string; body: string }) => {
+      const repo = assertRegisteredRepo(args.repoPath, store)
+      return createIssue(repo.path, args.title, args.body)
+    }
+  )
 
   ipcMain.handle(
     'gh:listWorkItems',
