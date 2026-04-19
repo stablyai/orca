@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
 import { homedir } from 'node:os'
 import path from 'node:path'
-import { ProxyAgent } from 'undici'
+import { net, session } from 'electron'
 import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
 import { fetchViaPty } from './claude-pty'
 
@@ -10,42 +10,48 @@ const OAUTH_USAGE_URL = 'https://api.anthropic.com/api/oauth/usage'
 const OAUTH_BETA_HEADER = 'oauth-2025-04-20'
 const API_TIMEOUT_MS = 10_000
 
+let proxyConfigured = false
+
 /**
- * Resolve an HTTP proxy dispatcher from the standard environment variables.
+ * Bridge standard HTTP proxy env vars into Electron's session proxy config.
  *
- * Why: Node's built-in `fetch` (undici) does not honor `HTTP_PROXY` /
- * `HTTPS_PROXY` / `ALL_PROXY` envvars automatically — callers must pass an
- * explicit `dispatcher`. For users in regions where Anthropic is only
- * reachable via proxy (see #521, #800), skipping this routing means:
- *   1. the usage indicator silently fails, and
- *   2. the app may hit Anthropic from an unexpected IP, which risks
- *      triggering anti-abuse / rate-limit signals on the user's account.
- *
- * Precedence follows the de-facto convention: HTTPS_PROXY > ALL_PROXY >
- * HTTP_PROXY (lower-case variants checked too). An invalid proxy URL is
- * treated as "no proxy" rather than crashing — the usage bar is cosmetic and
- * a typo'd envvar should not take down rate-limit polling.
+ * Why: Electron's net.fetch uses Chromium's networking stack which respects
+ * OS-level proxy settings but ignores HTTP_PROXY / HTTPS_PROXY env vars.
+ * Users in regions where api.anthropic.com is only reachable via proxy (see
+ * #521, #800) often set these env vars rather than configuring system proxy.
+ * Without this bridge, the usage indicator silently fails and the app may hit
+ * Anthropic from an unexpected IP, risking rate-limit signals on the account.
  */
-export function resolveProxyDispatcher(
-  env: NodeJS.ProcessEnv = process.env
-): ProxyAgent | undefined {
-  const proxyUrl =
-    env.HTTPS_PROXY ??
-    env.https_proxy ??
-    env.ALL_PROXY ??
-    env.all_proxy ??
-    env.HTTP_PROXY ??
-    env.http_proxy
-  if (!proxyUrl) {
-    return undefined
+async function ensureProxyFromEnv(): Promise<void> {
+  if (proxyConfigured) {
+    return
   }
+  proxyConfigured = true
+
+  // Why: app.resolveProxy does NOT reflect session-level proxy config —
+  // only session.defaultSession.resolveProxy does.
+  const resolved = await session.defaultSession.resolveProxy(OAUTH_USAGE_URL)
+  if (resolved !== 'DIRECT') {
+    return
+  }
+
+  const proxyUrl =
+    process.env.HTTPS_PROXY ??
+    process.env.https_proxy ??
+    process.env.ALL_PROXY ??
+    process.env.all_proxy ??
+    process.env.HTTP_PROXY ??
+    process.env.http_proxy
+  if (!proxyUrl) {
+    return
+  }
+
   try {
-    // Validate shape up front so we don't construct a ProxyAgent that will
-    // blow up on first use with a confusing error.
     new URL(proxyUrl)
-    return new ProxyAgent(proxyUrl)
+    await session.defaultSession.setProxy({ proxyRules: proxyUrl })
   } catch {
-    return undefined
+    // Invalid proxy URL — degrade to direct connection rather than crashing.
+    // The usage bar is cosmetic; a typo'd envvar should not break polling.
   }
 }
 
@@ -221,22 +227,21 @@ function mapWindow(
 }
 
 async function fetchViaOAuth(token: string): Promise<ProviderRateLimits> {
+  await ensureProxyFromEnv()
+
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS)
 
   try {
-    const dispatcher = resolveProxyDispatcher()
-    const res = await fetch(OAUTH_USAGE_URL, {
+    // Why: net.fetch uses Chromium's networking stack which respects OS proxy
+    // settings and certificates. Env var proxies are bridged by ensureProxyFromEnv.
+    const res = await net.fetch(OAUTH_USAGE_URL, {
       headers: {
         Authorization: `Bearer ${token}`,
         'anthropic-beta': OAUTH_BETA_HEADER
       },
-      signal: controller.signal,
-      // Why: Node fetch ignores HTTP_PROXY envvars by default; attach the
-      // resolved dispatcher so users behind a corporate/regional proxy don't
-      // silently hit Anthropic directly (see #521, #800).
-      ...(dispatcher ? { dispatcher } : {})
-    } as Parameters<typeof fetch>[1])
+      signal: controller.signal
+    })
 
     if (!res.ok) {
       throw new Error(`OAuth API returned ${res.status}`)
