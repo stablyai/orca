@@ -147,9 +147,6 @@ export function installDevParentWatchdog(isDev: boolean): void {
 }
 
 function isLinuxWaylandSession(): boolean {
-  if (process.platform !== 'linux') {
-    return false
-  }
   // Why: WAYLAND_DISPLAY is set directly by the Wayland compositor and is the
   // same signal Electron's own ELECTRON_OZONE_PLATFORM_HINT=auto logic uses.
   // XDG_SESSION_TYPE is the login-manager/PAM signal and is the belt-and-
@@ -157,7 +154,10 @@ function isLinuxWaylandSession(): boolean {
   // start (nested Wayland, manual session startup). Both are inherited from
   // the parent process, so they're available before app.whenReady where the
   // GPU command-line switches must be appended.
-  return Boolean(process.env.WAYLAND_DISPLAY) || process.env.XDG_SESSION_TYPE === 'wayland'
+  return (
+    process.platform === 'linux' &&
+    (Boolean(process.env.WAYLAND_DISPLAY) || process.env.XDG_SESSION_TYPE === 'wayland')
+  )
 }
 
 export function enableMainProcessGpuFeatures(): void {
