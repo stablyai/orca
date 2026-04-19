@@ -50,27 +50,36 @@ describe('BrowserSessionRegistry', () => {
 
   it('creates an isolated profile with a unique partition', () => {
     const profile = browserSessionRegistry.createProfile('isolated', 'Test Isolated')
-    expect(profile.scope).toBe('isolated')
-    expect(profile.partition).toMatch(/^persist:orca-browser-session-/)
-    expect(profile.partition).not.toBe(ORCA_BROWSER_PARTITION)
-    expect(profile.label).toBe('Test Isolated')
-    expect(profile.source).toBeNull()
+    expect(profile).not.toBeNull()
+    expect(profile!.scope).toBe('isolated')
+    expect(profile!.partition).toMatch(/^persist:orca-browser-session-/)
+    expect(profile!.partition).not.toBe(ORCA_BROWSER_PARTITION)
+    expect(profile!.label).toBe('Test Isolated')
+    expect(profile!.source).toBeNull()
+  })
+
+  it('rejects creating a profile with scope default', () => {
+    const profile = browserSessionRegistry.createProfile('default', 'Sneaky')
+    expect(profile).toBeNull()
   })
 
   it('allows created profile partitions', () => {
     const profile = browserSessionRegistry.createProfile('isolated', 'Allowed')
-    expect(browserSessionRegistry.isAllowedPartition(profile.partition)).toBe(true)
+    expect(profile).not.toBeNull()
+    expect(browserSessionRegistry.isAllowedPartition(profile!.partition)).toBe(true)
   })
 
   it('creates an imported profile', () => {
     const profile = browserSessionRegistry.createProfile('imported', 'My Import')
-    expect(profile.scope).toBe('imported')
-    expect(profile.partition).toMatch(/^persist:orca-browser-session-/)
+    expect(profile).not.toBeNull()
+    expect(profile!.scope).toBe('imported')
+    expect(profile!.partition).toMatch(/^persist:orca-browser-session-/)
   })
 
   it('resolves partition for a known profile', () => {
     const profile = browserSessionRegistry.createProfile('isolated', 'Resolve Test')
-    expect(browserSessionRegistry.resolvePartition(profile.id)).toBe(profile.partition)
+    expect(profile).not.toBeNull()
+    expect(browserSessionRegistry.resolvePartition(profile!.id)).toBe(profile!.partition)
   })
 
   it('resolves default partition for null/undefined profileId', () => {
@@ -91,7 +100,8 @@ describe('BrowserSessionRegistry', () => {
 
   it('updates profile source', () => {
     const profile = browserSessionRegistry.createProfile('imported', 'Source Test')
-    const updated = browserSessionRegistry.updateProfileSource(profile.id, {
+    expect(profile).not.toBeNull()
+    const updated = browserSessionRegistry.updateProfileSource(profile!.id, {
       browserFamily: 'edge',
       importedAt: Date.now()
     })
@@ -101,11 +111,12 @@ describe('BrowserSessionRegistry', () => {
 
   it('deletes a non-default profile', async () => {
     const profile = browserSessionRegistry.createProfile('isolated', 'Delete Test')
-    expect(browserSessionRegistry.isAllowedPartition(profile.partition)).toBe(true)
-    const deleted = await browserSessionRegistry.deleteProfile(profile.id)
+    expect(profile).not.toBeNull()
+    expect(browserSessionRegistry.isAllowedPartition(profile!.partition)).toBe(true)
+    const deleted = await browserSessionRegistry.deleteProfile(profile!.id)
     expect(deleted).toBe(true)
-    expect(browserSessionRegistry.isAllowedPartition(profile.partition)).toBe(false)
-    expect(browserSessionRegistry.getProfile(profile.id)).toBeNull()
+    expect(browserSessionRegistry.isAllowedPartition(profile!.partition)).toBe(false)
+    expect(browserSessionRegistry.getProfile(profile!.id)).toBeNull()
   })
 
   it('refuses to delete the default profile', async () => {
@@ -116,14 +127,14 @@ describe('BrowserSessionRegistry', () => {
 
   it('hydrates profiles from persisted data', () => {
     const fakeProfile = {
-      id: 'hydrate-test-id',
+      id: '00000000-0000-0000-0000-000000000001',
       scope: 'imported' as const,
-      partition: 'persist:orca-browser-session-hydrate-test-id',
+      partition: 'persist:orca-browser-session-00000000-0000-0000-0000-000000000001',
       label: 'Hydrated',
       source: { browserFamily: 'manual' as const, importedAt: 1000 }
     }
     browserSessionRegistry.hydrateFromPersisted([fakeProfile])
-    expect(browserSessionRegistry.getProfile('hydrate-test-id')).not.toBeNull()
+    expect(browserSessionRegistry.getProfile('00000000-0000-0000-0000-000000000001')).not.toBeNull()
     expect(browserSessionRegistry.isAllowedPartition(fakeProfile.partition)).toBe(true)
   })
 

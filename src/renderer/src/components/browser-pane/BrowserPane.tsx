@@ -11,11 +11,9 @@ import {
   ExternalLink,
   Globe,
   Image,
-  Import,
   Loader2,
   OctagonX,
   RefreshCw,
-  Settings,
   SquareCode
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -57,6 +55,7 @@ import { useGrabMode } from './useGrabMode'
 import { formatGrabPayloadAsText } from './GrabConfirmationSheet'
 import { isEditableKeyboardTarget } from './browser-keyboard'
 import BrowserAddressBar from './BrowserAddressBar'
+import { BrowserToolbarMenu } from './BrowserToolbarMenu'
 import BrowserFind from './BrowserFind'
 import {
   consumeBrowserFocusRequest,
@@ -1803,28 +1802,11 @@ function BrowserPagePane({
           <ExternalLink className="size-4" />
         </Button>
 
-        {sessionProfile && (
-          <div
-            className="flex h-6 items-center gap-1 rounded-md bg-accent/60 px-2 text-[10px] font-medium text-muted-foreground"
-            title={`Session: ${sessionProfile.label}${sessionProfile.source?.browserFamily ? ` (${sessionProfile.source.browserFamily})` : ''}`}
-          >
-            <Import className="size-3" />
-            {sessionProfile.label}
-          </div>
-        )}
-
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-8 w-8"
-          title="Browser Settings"
-          onClick={() => {
-            useAppStore.getState().openSettingsTarget({ pane: 'browser', repoId: null })
-            useAppStore.getState().openSettingsPage()
-          }}
-        >
-          <Settings className="size-4" />
-        </Button>
+        <BrowserToolbarMenu
+          currentProfileId={sessionProfileId}
+          workspaceId={workspaceId}
+          onDestroyWebview={() => destroyPersistentWebview(browserTab.id)}
+        />
       </div>
       {downloadState ? (
         <div className="flex items-center gap-3 border-b border-border/60 bg-amber-500/10 px-3 py-2 text-xs text-foreground/90">

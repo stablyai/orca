@@ -1,38 +1,18 @@
 import { useEffect, useState } from 'react'
-import { Import, Loader2, Trash2 } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import type { GlobalSettings } from '../../../../shared/types'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuPortal,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger
-} from '../ui/dropdown-menu'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog'
 import { useAppStore } from '../../store'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
 import { normalizeBrowserNavigationUrl } from '../../../../shared/browser-url'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
 import { BROWSER_PANE_SEARCH_ENTRIES } from './browser-search'
-
-const BROWSER_FAMILY_LABELS: Record<string, string> = {
-  chrome: 'Google Chrome',
-  chromium: 'Chromium',
-  arc: 'Arc',
-  edge: 'Microsoft Edge',
-  brave: 'Brave',
-  firefox: 'Firefox',
-  safari: 'Safari',
-  manual: 'File'
-}
+import { BrowserProfileRow } from './BrowserProfileRow'
 
 export { BROWSER_PANE_SEARCH_ENTRIES }
 
@@ -45,12 +25,17 @@ export function BrowserPane({ settings, updateSettings }: BrowserPaneProps): Rea
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const browserDefaultUrl = useAppStore((s) => s.browserDefaultUrl)
   const setBrowserDefaultUrl = useAppStore((s) => s.setBrowserDefaultUrl)
-  const detectedBrowsers = useAppStore((s) => s.detectedBrowsers)
   const browserSessionProfiles = useAppStore((s) => s.browserSessionProfiles)
+  const detectedBrowsers = useAppStore((s) => s.detectedBrowsers)
   const browserSessionImportState = useAppStore((s) => s.browserSessionImportState)
+  const defaultBrowserSessionProfileId = useAppStore((s) => s.defaultBrowserSessionProfileId)
+  const setDefaultBrowserSessionProfileId = useAppStore((s) => s.setDefaultBrowserSessionProfileId)
   const defaultProfile = browserSessionProfiles.find((p) => p.id === 'default')
-  const orphanedProfiles = browserSessionProfiles.filter((p) => p.scope !== 'default')
+  const nonDefaultProfiles = browserSessionProfiles.filter((p) => p.scope !== 'default')
   const [homePageDraft, setHomePageDraft] = useState(browserDefaultUrl ?? '')
+  const [newProfileDialogOpen, setNewProfileDialogOpen] = useState(false)
+  const [newProfileName, setNewProfileName] = useState('')
+  const [isCreatingProfile, setIsCreatingProfile] = useState(false)
 
   // Why: sync draft with store value whenever it changes externally (e.g. the
   // in-app browser tab's address bar saves a home page). Without this, the
@@ -145,7 +130,7 @@ export function BrowserPane({ settings, updateSettings }: BrowserPaneProps): Rea
       {showCookies ? (
         <SearchableSetting
           title="Session & Cookies"
-          description="Import cookies from Chrome, Edge, or other browsers to use existing logins inside Orca."
+          description="Manage browser profiles and import cookies from Chrome, Edge, or other browsers."
           keywords={[
             'cookies',
             'session',
@@ -163,173 +148,120 @@ export function BrowserPane({ settings, updateSettings }: BrowserPaneProps): Rea
             <div className="space-y-0.5">
               <Label>Session &amp; Cookies</Label>
               <p className="text-xs text-muted-foreground">
-                Import cookies from your system browser to reuse existing logins inside Orca.
+                Select a default profile for new browser tabs. Import cookies and switch profiles
+                per-tab via the <strong>···</strong> toolbar menu.
               </p>
             </div>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="xs"
-                  className="shrink-0 gap-1.5"
-                  disabled={browserSessionImportState?.status === 'importing'}
-                >
-                  {browserSessionImportState?.status === 'importing' ? (
-                    <Loader2 className="size-3 animate-spin" />
-                  ) : (
-                    <Import className="size-3" />
-                  )}
-                  Import Cookies
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {detectedBrowsers.map((browser) =>
-                  browser.profiles.length > 1 ? (
-                    <DropdownMenuSub key={browser.family}>
-                      <DropdownMenuSubTrigger>From {browser.label}</DropdownMenuSubTrigger>
-                      <DropdownMenuPortal>
-                        <DropdownMenuSubContent>
-                          {browser.profiles.map((profile) => (
-                            <DropdownMenuItem
-                              key={profile.directory}
-                              onSelect={async () => {
-                                const store = useAppStore.getState()
-                                const result = await store.importCookiesFromBrowser(
-                                  'default',
-                                  browser.family,
-                                  profile.directory
-                                )
-                                if (result.ok) {
-                                  toast.success(
-                                    `Imported ${result.summary.importedCookies} cookies from ${browser.label} (${profile.name}).`
-                                  )
-                                } else {
-                                  toast.error(result.reason)
-                                }
-                              }}
-                            >
-                              {profile.name}
-                            </DropdownMenuItem>
-                          ))}
-                        </DropdownMenuSubContent>
-                      </DropdownMenuPortal>
-                    </DropdownMenuSub>
-                  ) : (
-                    <DropdownMenuItem
-                      key={browser.family}
-                      onSelect={async () => {
-                        const store = useAppStore.getState()
-                        const result = await store.importCookiesFromBrowser(
-                          'default',
-                          browser.family
-                        )
-                        if (result.ok) {
-                          toast.success(
-                            `Imported ${result.summary.importedCookies} cookies from ${browser.label}.`
-                          )
-                        } else {
-                          toast.error(result.reason)
-                        }
-                      }}
-                    >
-                      From {browser.label}
-                    </DropdownMenuItem>
-                  )
-                )}
-                {detectedBrowsers.length > 0 && <DropdownMenuSeparator />}
-                <DropdownMenuItem
-                  onSelect={async () => {
-                    const store = useAppStore.getState()
-                    const result = await store.importCookiesToProfile('default')
-                    if (result.ok) {
-                      toast.success(`Imported ${result.summary.importedCookies} cookies from file.`)
-                    } else if (result.reason !== 'canceled') {
-                      toast.error(result.reason)
-                    }
-                  }}
-                >
-                  From File…
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <Button
+              variant="outline"
+              size="xs"
+              onClick={() => setNewProfileDialogOpen(true)}
+              className="shrink-0 gap-1.5"
+            >
+              <Plus className="size-3" />
+              Add Profile
+            </Button>
           </div>
 
-          {defaultProfile?.source ? (
-            <div className="flex w-full items-center justify-between gap-3 rounded-md border border-border/70 px-3 py-2.5">
-              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span className="truncate text-sm font-medium">
-                  Imported from{' '}
-                  {BROWSER_FAMILY_LABELS[defaultProfile.source.browserFamily] ??
-                    defaultProfile.source.browserFamily}
-                  {defaultProfile.source.profileName
-                    ? ` (${defaultProfile.source.profileName})`
-                    : ''}
-                </span>
-                {defaultProfile.source.importedAt ? (
-                  <span className="truncate text-[11px] text-muted-foreground">
-                    {new Date(defaultProfile.source.importedAt).toLocaleDateString(undefined, {
-                      month: 'short',
-                      day: 'numeric',
-                      hour: 'numeric',
-                      minute: '2-digit'
-                    })}
-                  </span>
-                ) : null}
-              </div>
-              <Button
-                variant="ghost"
-                size="xs"
-                className="gap-1 text-muted-foreground hover:text-destructive"
-                onClick={async () => {
-                  const ok = await useAppStore.getState().clearDefaultSessionCookies()
-                  if (ok) {
-                    toast.success('Cookies cleared.')
-                  }
-                }}
-              >
-                <Trash2 className="size-3" />
-                Clear
-              </Button>
-            </div>
-          ) : null}
-
-          {orphanedProfiles.length > 0 ? (
-            <div className="space-y-2">
-              {orphanedProfiles.map((profile) => (
-                <div
-                  key={profile.id}
-                  className="flex w-full items-center justify-between gap-3 rounded-md border border-border/70 px-3 py-2.5"
-                >
-                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                    <span className="truncate text-sm font-medium">{profile.label}</span>
-                    <span className="truncate text-[11px] text-muted-foreground">
-                      {profile.source
-                        ? `Imported from ${BROWSER_FAMILY_LABELS[profile.source.browserFamily] ?? profile.source.browserFamily}${profile.source.profileName ? ` (${profile.source.profileName})` : ''}`
-                        : 'Unused session'}
-                    </span>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    className="gap-1 text-muted-foreground hover:text-destructive"
-                    onClick={async () => {
-                      const ok = await useAppStore
-                        .getState()
-                        .deleteBrowserSessionProfile(profile.id)
-                      if (ok) {
-                        toast.success('Session removed.')
-                      }
-                    }}
-                  >
-                    <Trash2 className="size-3" />
-                    Remove
-                  </Button>
-                </div>
-              ))}
-            </div>
-          ) : null}
+          <div className="space-y-2">
+            <BrowserProfileRow
+              profile={
+                defaultProfile ?? {
+                  id: 'default',
+                  scope: 'default',
+                  partition: '',
+                  label: 'Default',
+                  source: null
+                }
+              }
+              detectedBrowsers={detectedBrowsers}
+              importState={browserSessionImportState}
+              isActive={(defaultBrowserSessionProfileId ?? 'default') === 'default'}
+              onSelect={() => setDefaultBrowserSessionProfileId(null)}
+              isDefault
+            />
+            {nonDefaultProfiles.map((profile) => (
+              <BrowserProfileRow
+                key={profile.id}
+                profile={profile}
+                detectedBrowsers={detectedBrowsers}
+                importState={browserSessionImportState}
+                isActive={(defaultBrowserSessionProfileId ?? 'default') === profile.id}
+                onSelect={() => setDefaultBrowserSessionProfileId(profile.id)}
+              />
+            ))}
+          </div>
         </SearchableSetting>
       ) : null}
+
+      <Dialog
+        open={newProfileDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setNewProfileDialogOpen(false)
+            setNewProfileName('')
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-sm" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle className="text-base">New Browser Profile</DialogTitle>
+          </DialogHeader>
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault()
+              const trimmed = newProfileName.trim()
+              if (!trimmed) {
+                return
+              }
+              setIsCreatingProfile(true)
+              try {
+                const profile = await useAppStore
+                  .getState()
+                  .createBrowserSessionProfile('isolated', trimmed)
+                if (profile) {
+                  setNewProfileDialogOpen(false)
+                  setNewProfileName('')
+                  toast.success(`Profile "${profile.label}" created.`)
+                } else {
+                  toast.error('Failed to create profile.')
+                }
+              } finally {
+                setIsCreatingProfile(false)
+              }
+            }}
+          >
+            <Input
+              value={newProfileName}
+              onChange={(e) => setNewProfileName(e.target.value)}
+              placeholder="Profile name"
+              autoFocus
+              maxLength={50}
+              className="mb-4"
+            />
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setNewProfileDialogOpen(false)
+                  setNewProfileName('')
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={!newProfileName.trim() || isCreatingProfile}
+              >
+                {isCreatingProfile ? 'Creating…' : 'Create'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -1323,6 +1323,20 @@ export async function importCookiesFromBrowser(
   const partitionName = targetPartition.replace('persist:', '')
   const liveCookiesPath = join(app.getPath('userData'), 'Partitions', partitionName, 'Cookies')
 
+  // Why: Electron only creates the partition's Cookies SQLite file after the
+  // session has actually stored a cookie. For newly created profiles that have
+  // never been used by a webview, the file won't exist yet. Setting and
+  // removing a throwaway cookie forces Electron to initialize the database.
+  if (!existsSync(liveCookiesPath)) {
+    try {
+      await targetSession.cookies.set({ url: 'https://localhost', name: '__init', value: '1' })
+      await targetSession.cookies.remove('https://localhost', '__init')
+      await targetSession.cookies.flushStore()
+    } catch {
+      // ignore — the set/remove may fail but flushStore should still create the file
+    }
+  }
+
   if (!existsSync(liveCookiesPath)) {
     rmSync(tmpDir, { recursive: true, force: true })
     return { ok: false, reason: 'Target cookie database not found. Open a browser tab first.' }

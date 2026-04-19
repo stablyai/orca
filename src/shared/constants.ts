@@ -18,6 +18,17 @@ export const ORCA_BROWSER_PARTITION = 'persist:orca-browser'
 // data URL while still rejecting arbitrary renderer-provided data URLs.
 export const ORCA_BROWSER_BLANK_URL = 'data:text/html,'
 
+export const BROWSER_FAMILY_LABELS: Record<string, string> = {
+  chrome: 'Google Chrome',
+  chromium: 'Chromium',
+  arc: 'Arc',
+  edge: 'Microsoft Edge',
+  brave: 'Brave',
+  firefox: 'Firefox',
+  safari: 'Safari',
+  manual: 'File'
+}
+
 // Pick a default terminal font that is likely to exist on the current OS.
 // buildFontFamily() adds the full cross-platform fallback chain, so this only
 // affects what users see in Settings as the initial value.

@@ -1,6 +1,13 @@
 import { app, type Session, session } from 'electron'
 import { randomUUID } from 'node:crypto'
-import { copyFileSync, existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import {
+  copyFileSync,
+  existsSync,
+  readFileSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { join } from 'node:path'
 import { ORCA_BROWSER_PARTITION } from '../../shared/constants'
 import type { BrowserSessionProfile, BrowserSessionProfileScope } from '../../shared/types'
@@ -10,6 +17,7 @@ type BrowserSessionMeta = {
   defaultSource: BrowserSessionProfile['source']
   userAgent: string | null
   pendingCookieDbPath: string | null
+  profiles: BrowserSessionProfile[]
 }
 
 // Why: the registry is the single source of truth for which Electron partitions
@@ -43,10 +51,14 @@ class BrowserSessionRegistry {
     return this.loadPersistedMeta().defaultSource
   }
 
+  // Why: write-to-temp-then-rename is atomic on all supported platforms.
+  // A crash mid-write would only lose the temp file, not corrupt the live one.
   private persistMeta(updates: Partial<BrowserSessionMeta>): void {
     try {
       const existing = this.loadPersistedMeta()
-      writeFileSync(this.metadataPath, JSON.stringify({ ...existing, ...updates }))
+      const tmpPath = `${this.metadataPath}.tmp`
+      writeFileSync(tmpPath, JSON.stringify({ ...existing, ...updates }))
+      renameSync(tmpPath, this.metadataPath)
     } catch {
       // best-effort
     }
@@ -59,6 +71,13 @@ class BrowserSessionRegistry {
     })
   }
 
+  // Why: non-default profiles are in-memory only unless explicitly persisted.
+  // Without this, created profiles vanish on app restart.
+  private persistProfiles(): void {
+    const nonDefault = [...this.profiles.values()].filter((p) => p.id !== 'default')
+    this.persistMeta({ profiles: nonDefault })
+  }
+
   private loadPersistedMeta(): BrowserSessionMeta {
     try {
       const raw = readFileSync(this.metadataPath, 'utf-8')
@@ -66,10 +85,11 @@ class BrowserSessionRegistry {
       return {
         defaultSource: data?.defaultSource ?? null,
         userAgent: data?.userAgent ?? null,
-        pendingCookieDbPath: data?.pendingCookieDbPath ?? null
+        pendingCookieDbPath: data?.pendingCookieDbPath ?? null,
+        profiles: Array.isArray(data?.profiles) ? data.profiles : []
       }
     } catch {
-      return { defaultSource: null, userAgent: null, pendingCookieDbPath: null }
+      return { defaultSource: null, userAgent: null, pendingCookieDbPath: null, profiles: [] }
     }
   }
 
@@ -94,6 +114,9 @@ class BrowserSessionRegistry {
       if (current && current.source === null) {
         this.profiles.set('default', { ...current, source: meta.defaultSource })
       }
+    }
+    if (meta.profiles.length > 0) {
+      this.hydrateFromPersisted(meta.profiles)
     }
   }
 
@@ -222,13 +245,19 @@ class BrowserSessionRegistry {
     return this.profiles.get(profileId)?.partition ?? ORCA_BROWSER_PARTITION
   }
 
-  createProfile(scope: BrowserSessionProfileScope, label: string): BrowserSessionProfile {
+  createProfile(scope: BrowserSessionProfileScope, label: string): BrowserSessionProfile | null {
+    // Why: only the constructor may create the default profile. Allowing the
+    // renderer to pass scope:'default' would create a second profile sharing
+    // ORCA_BROWSER_PARTITION, causing confusion on delete (clearing storage
+    // for the shared partition).
+    if (scope === 'default') {
+      return null
+    }
     const id = randomUUID()
     // Why: partition names are deterministic from the profile id so main can
     // reconstruct the allowlist on restart from persisted profile metadata
     // without needing a separate partition→profile mapping.
-    const partition =
-      scope === 'default' ? ORCA_BROWSER_PARTITION : `persist:orca-browser-session-${id}`
+    const partition = `persist:orca-browser-session-${id}`
     const profile: BrowserSessionProfile = {
       id,
       scope,
@@ -237,9 +266,8 @@ class BrowserSessionRegistry {
       source: null
     }
     this.profiles.set(id, profile)
-    if (partition !== ORCA_BROWSER_PARTITION) {
-      this.setupSessionPolicies(partition)
-    }
+    this.setupSessionPolicies(partition)
+    this.persistProfiles()
     return profile
   }
 
@@ -255,6 +283,8 @@ class BrowserSessionRegistry {
     this.profiles.set(profileId, updated)
     if (profileId === 'default') {
       this.persistSource(source)
+    } else {
+      this.persistProfiles()
     }
     return updated
   }
@@ -265,6 +295,7 @@ class BrowserSessionRegistry {
       return false
     }
     this.profiles.delete(profileId)
+    this.persistProfiles()
 
     // Why: clearing the partition's storage prevents orphaned cookies/cache from
     // lingering after the user deletes an imported or isolated session profile.
@@ -303,9 +334,23 @@ class BrowserSessionRegistry {
   // Why: on startup, main must reconstruct the set of valid partitions from
   // persisted session profiles so restored webviews are not denied by
   // will-attach-webview before the renderer mounts them.
+  // Why: profiles are deserialized from a JSON file on disk. A corrupted or
+  // tampered file could inject an arbitrary partition into the allowlist that
+  // will-attach-webview trusts, so we validate the expected shape before
+  // registering anything.
+  private static readonly PARTITION_RE = /^persist:orca-browser-session-[\da-f-]{36}$/
+
   hydrateFromPersisted(profiles: BrowserSessionProfile[]): void {
     for (const profile of profiles) {
-      if (profile.id === 'default') {
+      if (profile.id === 'default' || profile.scope === 'default') {
+        continue
+      }
+      if (
+        typeof profile.id !== 'string' ||
+        typeof profile.partition !== 'string' ||
+        typeof profile.label !== 'string' ||
+        !BrowserSessionRegistry.PARTITION_RE.test(profile.partition)
+      ) {
         continue
       }
       this.profiles.set(profile.id, profile)

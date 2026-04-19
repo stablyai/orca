@@ -70,6 +70,7 @@ export type BrowserSlice = {
   setBrowserTabUrl: (pageId: string, url: string) => void
   setBrowserPageUrl: (pageId: string, url: string) => void
   hydrateBrowserSession: (session: WorkspaceSessionState) => void
+  switchBrowserTabProfile: (workspaceId: string, profileId: string | null) => void
   browserSessionProfiles: BrowserSessionProfile[]
   browserSessionImportState: {
     profileId: string
@@ -101,6 +102,8 @@ export type BrowserSlice = {
   browserUrlHistory: BrowserHistoryEntry[]
   addBrowserHistoryEntry: (url: string, title: string) => void
   clearBrowserHistory: () => void
+  defaultBrowserSessionProfileId: string | null
+  setDefaultBrowserSessionProfileId: (profileId: string | null) => void
 }
 
 const MAX_BROWSER_HISTORY_ENTRIES = 200
@@ -293,16 +296,28 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
   browserSessionProfiles: [],
   browserSessionImportState: null,
   browserUrlHistory: [],
+  defaultBrowserSessionProfileId: null,
+
+  setDefaultBrowserSessionProfileId: (profileId) => {
+    set({ defaultBrowserSessionProfileId: profileId })
+  },
 
   createBrowserTab: (worktreeId, url, options) => {
     const workspaceId = globalThis.crypto.randomUUID()
     const page = buildBrowserPage(workspaceId, worktreeId, url, options?.title)
+    // Why: when no explicit profile is passed, inherit the user's chosen default
+    // profile. This lets users set a preferred profile in Settings that all new
+    // browser tabs use automatically.
+    const sessionProfileId =
+      options?.sessionProfileId !== undefined
+        ? options.sessionProfileId
+        : get().defaultBrowserSessionProfileId
     const browserTab = buildWorkspaceFromPage(
       workspaceId,
       worktreeId,
       page,
       [page.id],
-      options?.sessionProfileId
+      sessionProfileId
     )
 
     set((s) => {
@@ -1064,6 +1079,25 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     }
   },
 
+  switchBrowserTabProfile: (workspaceId, profileId) => {
+    set((s) => {
+      for (const [worktreeId, tabs] of Object.entries(s.browserTabsByWorktree)) {
+        const tabIndex = tabs.findIndex((t) => t.id === workspaceId)
+        if (tabIndex !== -1) {
+          const updatedTabs = [...tabs]
+          updatedTabs[tabIndex] = { ...updatedTabs[tabIndex], sessionProfileId: profileId }
+          return {
+            browserTabsByWorktree: {
+              ...s.browserTabsByWorktree,
+              [worktreeId]: updatedTabs
+            }
+          }
+        }
+      }
+      return {}
+    })
+  },
+
   fetchBrowserSessionProfiles: async () => {
     try {
       const profiles = (await window.api.browser.sessionListProfiles()) as BrowserSessionProfile[]
@@ -1095,7 +1129,10 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       const ok = await window.api.browser.sessionDeleteProfile({ profileId })
       if (ok) {
         set((s) => ({
-          browserSessionProfiles: s.browserSessionProfiles.filter((p) => p.id !== profileId)
+          browserSessionProfiles: s.browserSessionProfiles.filter((p) => p.id !== profileId),
+          ...(s.defaultBrowserSessionProfileId === profileId
+            ? { defaultBrowserSessionProfileId: null }
+            : {})
         }))
       }
       return ok
