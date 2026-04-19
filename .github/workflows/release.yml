@@ -102,8 +102,17 @@ jobs:
         with:
           run_install: false
 
+      # Why: pnpm install triggers electron's postinstall, which downloads the
+      # Electron binary from GitHub release assets. GitHub's download CDN
+      # occasionally returns 504s that fail the whole release. Retry on
+      # failure so transient network errors don't require a manual re-run.
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: pnpm install --frozen-lockfile
 
       - name: Verify macOS signing environment
         if: matrix.platform == 'mac'
@@ -125,9 +134,20 @@ jobs:
       # be signed with an Apple cert whose chain Windows cannot validate,
       # breaking the auto-updater with "certificate chain could not be built
       # to a trusted root authority" (issue #631).
+      #
+      # Why retry: electron-builder downloads NSIS/winCodeSign/squirrel
+      # binaries and the Electron runtime from GitHub release assets during
+      # publish. GitHub's download CDN occasionally returns 504s that fail
+      # the whole release. Retry on failure so transient network errors
+      # don't require a manual re-run.
       - name: Publish release artifacts (macOS)
         if: matrix.platform == 'mac'
-        run: ${{ matrix.release_command }}
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 45
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: ${{ matrix.release_command }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_LINK: ${{ secrets.MAC_CERTS }}
@@ -138,7 +158,12 @@ jobs:
 
       - name: Publish release artifacts
         if: matrix.platform != 'mac'
-        run: ${{ matrix.release_command }}
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 30
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: ${{ matrix.release_command }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
