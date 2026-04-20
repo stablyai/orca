@@ -121,6 +121,8 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalScopeHistoryByWorktree: true,
     defaultTuiAgent: null,
     defaultTaskViewPreset: 'all',
+    enableGitHubTasks: true,
+    enableLinearTasks: true,
     agentCmdOverrides: {},
     terminalMacOptionAsAlt: 'true'
   }

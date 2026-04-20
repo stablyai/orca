@@ -618,6 +618,12 @@ export type GlobalSettings = {
   defaultTuiAgent: TuiAgent | null
   /** Default preset in the new-workspace GitHub task view. */
   defaultTaskViewPreset: TaskViewPresetId
+  /** When false, the GitHub source is hidden from the new-workspace task pane.
+   *  Users who don't use GitHub can disable it to keep the page uncluttered. Defaults to true. */
+  enableGitHubTasks: boolean
+  /** When false, the Linear source is hidden from the new-workspace task pane.
+   *  Users who don't use Linear can disable it to keep the page uncluttered. Defaults to true. */
+  enableLinearTasks: boolean
   /** Per-agent CLI command overrides. A missing key means use the catalog default binary name. */
   agentCmdOverrides: Partial<Record<TuiAgent, string>>
   /** Why: macOS terminals must choose between letting Option compose layout

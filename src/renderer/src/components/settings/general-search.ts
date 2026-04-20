@@ -10,6 +10,16 @@ export const GENERAL_WORKSPACE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     title: 'Nest Workspaces',
     description: 'Create worktrees inside a repo-named subfolder.',
     keywords: ['nested', 'subfolder', 'directory']
+  },
+  {
+    title: 'Enable GitHub Tasks',
+    description: 'Show GitHub issues and PRs in the task pane on the new workspace page.',
+    keywords: ['tasks', 'github', 'issues', 'prs', 'pane', 'hide', 'show', 'new workspace']
+  },
+  {
+    title: 'Enable Linear Tasks',
+    description: 'Show Linear issues in the task pane on the new workspace page.',
+    keywords: ['tasks', 'linear', 'issues', 'pane', 'hide', 'show', 'new workspace']
   }
 ]
 

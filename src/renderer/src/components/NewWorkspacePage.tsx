@@ -160,9 +160,27 @@ export default function NewWorkspacePage(): React.JSX.Element {
   // caused a throwaway empty-query fetch followed by a second fetch for the
   // real default — doubling the time-to-first-paint of the list.
   const defaultTaskViewPreset = settings?.defaultTaskViewPreset ?? 'all'
+  // Why: when the user disables a task source in Settings, we hide its button
+  // and skip fetches for it. If both are disabled the pane is omitted entirely.
+  const enableGitHubTasks = settings?.enableGitHubTasks ?? true
+  const enableLinearTasks = settings?.enableLinearTasks ?? true
+  const showTasksPane = enableGitHubTasks || enableLinearTasks
+  const enabledSources = SOURCE_OPTIONS.filter(
+    (s) => (s.id === 'github' && enableGitHubTasks) || (s.id === 'linear' && enableLinearTasks)
+  )
+
   const initialTaskQuery = getTaskPresetQuery(defaultTaskViewPreset)
 
   const [taskSource, setTaskSource] = useState<TaskSource>('github')
+
+  // Why: if the currently selected source gets disabled via Settings, auto-switch
+  // to the first available source so the pane doesn't go blank.
+  useEffect(() => {
+    if (!enabledSources.some((s) => s.id === taskSource) && enabledSources.length > 0) {
+      setTaskSource(enabledSources[0].id)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabledSources]) // taskSource intentionally omitted: we only auto-switch when sources change, not on every render
   const [taskSearchInput, setTaskSearchInput] = useState(initialTaskQuery)
   const [appliedTaskSearch, setAppliedTaskSearch] = useState(initialTaskQuery)
   const [activeTaskPreset, setActiveTaskPreset] = useState<TaskViewPresetId | null>(
@@ -461,11 +479,12 @@ export default function NewWorkspacePage(): React.JSX.Element {
               <NewWorkspaceComposerCard composerRef={composerRef} {...cardProps} />
             </section>
 
+            {showTasksPane && (
             <section className="flex flex-col gap-4">
               <div className="flex flex-col gap-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    {SOURCE_OPTIONS.map((source) => {
+                    {enabledSources.map((source) => {
                       const active = taskSource === source.id
                       return (
                         <Tooltip key={source.id}>
@@ -594,9 +613,10 @@ export default function NewWorkspacePage(): React.JSX.Element {
                 )}
               </div>
             </section>
+            )}
           </div>
 
-          {taskSource === 'github' ? (
+          {showTasksPane && (taskSource === 'github' ? (
             <div className="mt-4 flex flex-1 flex-col min-h-0 rounded-[16px] border border-border/50 bg-background/30 backdrop-blur-md supports-[backdrop-filter]:bg-background/30 overflow-hidden shadow-sm">
               <div className="flex-none hidden grid-cols-[96px_minmax(0,1.8fr)_minmax(140px,1fr)_150px_120px_90px] gap-4 border-b border-border/50 px-4 py-3 text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground lg:grid">
                 <span>ID</span>
@@ -747,10 +767,11 @@ export default function NewWorkspacePage(): React.JSX.Element {
             <div className="mt-4 px-1 py-6">
               <p className="text-sm text-muted-foreground">Coming soon</p>
             </div>
-          )}
+          ))}
         </div>
       </div>
 
+      {showTasksPane && (
       <GitHubItemDrawer
         workItem={drawerWorkItem}
         repoPath={selectedRepo?.path ?? null}
@@ -760,6 +781,7 @@ export default function NewWorkspacePage(): React.JSX.Element {
         }}
         onClose={() => setDrawerWorkItem(null)}
       />
+      )}
     </div>
   )
 }

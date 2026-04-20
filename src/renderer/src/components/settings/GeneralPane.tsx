@@ -310,6 +310,62 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
             />
           </button>
         </SearchableSetting>
+
+        <SearchableSetting
+          title="Enable GitHub Tasks"
+          description="Show GitHub issues and pull requests in the task pane on the new workspace page."
+          keywords={['tasks', 'github', 'issues', 'prs', 'pane', 'hide', 'show', 'new workspace']}
+          className="flex items-center justify-between gap-4 px-1 py-2"
+        >
+          <div className="space-y-0.5">
+            <Label>Enable GitHub Tasks</Label>
+            <p className="text-xs text-muted-foreground">
+              Show GitHub issues and PRs in the task pane on the new workspace page.
+            </p>
+          </div>
+          <button
+            role="switch"
+            aria-checked={settings.enableGitHubTasks ?? true}
+            onClick={() => updateSettings({ enableGitHubTasks: !(settings.enableGitHubTasks ?? true) })}
+            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
+              (settings.enableGitHubTasks ?? true) ? 'bg-foreground' : 'bg-muted-foreground/30'
+            }`}
+          >
+            <span
+              className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
+                (settings.enableGitHubTasks ?? true) ? 'translate-x-4' : 'translate-x-0.5'
+              }`}
+            />
+          </button>
+        </SearchableSetting>
+
+        <SearchableSetting
+          title="Enable Linear Tasks"
+          description="Show Linear issues in the task pane on the new workspace page."
+          keywords={['tasks', 'linear', 'issues', 'pane', 'hide', 'show', 'new workspace']}
+          className="flex items-center justify-between gap-4 px-1 py-2"
+        >
+          <div className="space-y-0.5">
+            <Label>Enable Linear Tasks</Label>
+            <p className="text-xs text-muted-foreground">
+              Show Linear issues in the task pane on the new workspace page.
+            </p>
+          </div>
+          <button
+            role="switch"
+            aria-checked={settings.enableLinearTasks ?? true}
+            onClick={() => updateSettings({ enableLinearTasks: !(settings.enableLinearTasks ?? true) })}
+            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
+              (settings.enableLinearTasks ?? true) ? 'bg-foreground' : 'bg-muted-foreground/30'
+            }`}
+          >
+            <span
+              className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
+                (settings.enableLinearTasks ?? true) ? 'translate-x-4' : 'translate-x-0.5'
+              }`}
+            />
+          </button>
+        </SearchableSetting>
       </section>
     ) : null,
     matchesSettingsSearch(searchQuery, GENERAL_BROWSER_SEARCH_ENTRIES) ? (
