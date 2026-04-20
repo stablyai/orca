@@ -295,29 +295,6 @@ function App(): React.JSX.Element {
     return () => window.removeEventListener('beforeunload', captureAndFlush)
   }, [])
 
-  // Periodically capture terminal scrollback buffers and persist to disk.
-  // Why: the shutdown path captures buffers in beforeunload, but periodic
-  // saves provide a safety net so scrollback is available on restart even
-  // if an unexpected exit (crash, force-kill) bypasses normal shutdown.
-  useEffect(() => {
-    const PERIODIC_SAVE_INTERVAL_MS = 3 * 60_000
-    const timer = window.setInterval(() => {
-      if (!useAppStore.getState().workspaceSessionReady || shutdownBufferCaptures.size === 0) {
-        return
-      }
-      for (const capture of shutdownBufferCaptures) {
-        try {
-          capture()
-        } catch {
-          // Don't let one pane's failure block the rest.
-        }
-      }
-      const state = useAppStore.getState()
-      void window.api.session.set(buildWorkspaceSessionPayload(state))
-    }, PERIODIC_SAVE_INTERVAL_MS)
-    return () => window.clearInterval(timer)
-  }, [])
-
   useEffect(() => {
     if (!persistedUIReady) {
       return
