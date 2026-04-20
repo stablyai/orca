@@ -112,6 +112,16 @@ describe('getMermaidSvgBaseSize', () => {
     ).toEqual({ width: 320, height: 240 })
   })
 
+  it('falls back to the viewBox when svg dimensions are percentages', () => {
+    expect(
+      getMermaidSvgBaseSize({
+        width: '100%',
+        height: '100%',
+        viewBox: '0 0 320 240'
+      })
+    ).toEqual({ width: 320, height: 240 })
+  })
+
   it('returns null when neither dimensions nor a valid viewBox exist', () => {
     expect(
       getMermaidSvgBaseSize({

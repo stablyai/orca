@@ -63,7 +63,12 @@ function parseMermaidDimension(value: string | null): number | null {
     return null
   }
 
-  const match = value.trim().match(/^([0-9]+(?:\.[0-9]+)?)/)
+  const trimmed = value.trim()
+  if (trimmed.endsWith('%')) {
+    return null
+  }
+
+  const match = trimmed.match(/^([0-9]+(?:\.[0-9]+)?)(?:px)?$/)
   if (!match) {
     return null
   }

@@ -28,18 +28,22 @@ const INITIAL_TRANSLATE: Translate = { x: 0, y: 0 }
 // where one render can clobber another's temporary DOM node. Serializing all
 // render calls through a single promise chain avoids this.
 //
-// The queue is replaced with a fresh promise after each render completes so
-// that old .then() closures (which capture containerRef, content, and id)
-// become unreachable and can be GC'd. Without this, the chain grows with
-// every MermaidBlock mount/unmount cycle for the lifetime of the renderer.
+// The queue tail is collapsed back to a single resolved promise only when the
+// completed render is still the newest scheduled job. That keeps renders fully
+// serialized while still dropping old .then() closures once the queue drains.
 let renderQueue: Promise<void> = Promise.resolve()
 
 function enqueueRender(fn: () => Promise<void>): void {
-  renderQueue = renderQueue.then(fn, fn).then(() => {
-    // Why: collapse the chain back to a single resolved promise so previous
-    // closures do not remain reachable through a growing .then() chain.
-    renderQueue = Promise.resolve()
+  const scheduled = renderQueue.then(fn, fn)
+  const tail = scheduled.finally(() => {
+    // Why: only collapse the queue when no newer render has already chained
+    // onto it. Resetting unconditionally would let later renders start early
+    // and reintroduce mermaid.render() races between blocks.
+    if (renderQueue === tail) {
+      renderQueue = Promise.resolve()
+    }
   })
+  renderQueue = tail
 }
 
 /**
