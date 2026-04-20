@@ -74,6 +74,21 @@ async function focusActiveTerminal(page: Page): Promise<void> {
   })
 }
 
+// Why: handleRequestClosePane pops a "Close Terminal?" dialog when the pane
+// reports a running child process. Under E2E, a freshly split pane's
+// proc.process is briefly unset so the check returns true spuriously. Click
+// Close when the dialog appears so the test's chord-routing assertion stays
+// deterministic; no-op when it doesn't.
+async function confirmCloseDialogIfShown(page: Page): Promise<void> {
+  const confirmButton = page.getByRole('button', { name: 'Close', exact: true })
+  try {
+    await confirmButton.waitFor({ state: 'visible', timeout: 500 })
+    await confirmButton.click()
+  } catch {
+    // Dialog did not appear — pane closed directly.
+  }
+}
+
 async function pressAndExpectWrite(
   page: Page,
   app: ElectronApplication,
@@ -214,8 +229,14 @@ test.describe('Terminal Shortcuts', () => {
       .toBe(false)
 
     // Cmd/Ctrl+W closes the active split pane (not the whole tab: >1 pane).
+    // Why: the close handler checks hasChildProcesses async; a freshly
+    // spawned pane can transiently report a running child (node-pty's
+    // proc.process lags the spawn), which surfaces a confirmation dialog
+    // instead of closing immediately. Confirm it if it appears — the test
+    // only needs to prove the chord routed to the close handler.
     await focusActiveTerminal(orcaPage)
     await orcaPage.keyboard.press(`${mod}+w`)
+    await confirmCloseDialogIfShown(orcaPage)
     await waitForPaneCount(orcaPage, panesBeforeSplit)
 
     // Split horizontally (chord varies by platform — see splitHorizontalChord).
@@ -225,14 +246,19 @@ test.describe('Terminal Shortcuts', () => {
     await waitForPaneCount(orcaPage, panesBeforeHSplit + 1)
     await focusActiveTerminal(orcaPage)
     await orcaPage.keyboard.press(`${mod}+w`)
+    await confirmCloseDialogIfShown(orcaPage)
     await waitForPaneCount(orcaPage, panesBeforeHSplit)
 
     // Cmd/Ctrl+F toggles the search overlay.
     await focusActiveTerminal(orcaPage)
     await orcaPage.keyboard.press(`${mod}+f`)
-    await expect(orcaPage.locator('[data-terminal-search-root]').first()).toBeVisible({
-      timeout: 3_000
-    })
+    const searchInput = orcaPage.locator('[data-terminal-search-root] input').first()
+    // Why: Escape is handled by TerminalSearch's React onKeyDown, which only
+    // fires when focus is inside the overlay. The overlay auto-focuses its
+    // input via a useEffect, but Playwright can press Escape before that
+    // effect runs and the keystroke goes to the xterm textarea instead.
+    // Wait for the input to actually be focused before pressing Escape.
+    await expect(searchInput).toBeFocused({ timeout: 3_000 })
     await orcaPage.keyboard.press('Escape')
     await expect(orcaPage.locator('[data-terminal-search-root]').first()).toBeHidden({
       timeout: 3_000
