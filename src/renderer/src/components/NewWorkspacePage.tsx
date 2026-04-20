@@ -170,8 +170,9 @@ export default function NewWorkspacePage(): React.JSX.Element {
   )
 
   const initialTaskQuery = getTaskPresetQuery(defaultTaskViewPreset)
+  const initialTaskSource = enabledSources[0]?.id ?? 'github'
 
-  const [taskSource, setTaskSource] = useState<TaskSource>('github')
+  const [taskSource, setTaskSource] = useState<TaskSource>(initialTaskSource)
 
   // Why: if the currently selected source gets disabled via Settings, auto-switch
   // to the first available source so the pane doesn't go blank.
