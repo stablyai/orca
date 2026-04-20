@@ -295,6 +295,18 @@ function App(): React.JSX.Element {
     return () => window.removeEventListener('beforeunload', captureAndFlush)
   }, [])
 
+  // Why there is no periodic scrollback save: PR #461 added a 3-minute
+  // setInterval that re-serialized every mounted TerminalPane's scrollback
+  // so a crash wouldn't lose in-session output. With many panes of
+  // accumulated output, each tick blocked the renderer main thread for
+  // several seconds (serialize is synchronous and does a binary search on
+  // >512KB buffers), causing visible input lag across the whole app.
+  // The durable replacement is the out-of-process terminal daemon
+  // (PR #729), which preserves buffers across renderer crashes with no
+  // main-thread work. Non-daemon users lose in-session scrollback on an
+  // unexpected exit — an acceptable tradeoff vs. periodic UI stalls, and
+  // in line with how most terminal apps behave.
+
   useEffect(() => {
     if (!persistedUIReady) {
       return
