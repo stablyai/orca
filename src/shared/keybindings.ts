@@ -171,7 +171,7 @@ export function getDefaultKeybindings(isMac: boolean): Record<KeybindingActionId
     toggleFileExplorer: `${mod}+Shift+E`,
     toggleSearch: `${mod}+Shift+F`,
     toggleSourceControl: `${mod}+Shift+G`,
-    zoomIn: isMac ? `${mod}++` : `${mod}+Shift++`,
+    zoomIn: isMac ? `${mod}+Plus` : `${mod}+Shift+Plus`,
     zoomOut: isMac ? `${mod}+-` : `${mod}+Shift+-`,
     resetSize: `${mod}+0`,
     forceReload: `${mod}+Shift+R`,
@@ -194,8 +194,55 @@ export function getDefaultKeybindings(isMac: boolean): Record<KeybindingActionId
   }
 }
 
+function splitKeyCombo(combo: string): string[] {
+  return combo
+    .replaceAll('++', '+Plus')
+    .split('+')
+    .filter((part) => part.length > 0)
+}
+
+function normalizeRecordedKey(key: string, code: string): string {
+  if (code === 'BracketLeft') {
+    return '['
+  }
+  if (code === 'BracketRight') {
+    return ']'
+  }
+  if (code === 'Equal') {
+    return key === '+' ? 'Plus' : '='
+  }
+  if (code === 'Minus') {
+    return '-'
+  }
+  if (code === 'Backspace') {
+    return 'Backspace'
+  }
+  if (code === 'Enter') {
+    return 'Enter'
+  }
+  if (code === 'Space') {
+    return 'Space'
+  }
+  if (code === 'ArrowUp') {
+    return 'Up'
+  }
+  if (code === 'ArrowDown') {
+    return 'Down'
+  }
+  if (code === 'ArrowLeft') {
+    return 'Left'
+  }
+  if (code === 'ArrowRight') {
+    return 'Right'
+  }
+  if (key.length === 1) {
+    return key.toUpperCase()
+  }
+  return key
+}
+
 export function parseKeyCombo(combo: string, isMac: boolean): string[] {
-  return combo.split('+').map((part) => {
+  return splitKeyCombo(combo).map((part) => {
     if (isMac) {
       if (part === 'Cmd') {
         return '\u2318'
@@ -221,6 +268,9 @@ export function parseKeyCombo(combo: string, isMac: boolean): string[] {
       if (part === 'Backspace') {
         return '\u232B'
       }
+    }
+    if (part === 'Plus') {
+      return '+'
     }
     return part
   })
@@ -260,21 +310,7 @@ export function keyEventToCombo(e: KeyboardEvent, isMac: boolean): string {
 
   const key = e.key
   if (!['Meta', 'Control', 'Alt', 'Shift'].includes(key)) {
-    if (key === 'ArrowUp') {
-      parts.push('Up')
-    } else if (key === 'ArrowDown') {
-      parts.push('Down')
-    } else if (key === 'ArrowLeft') {
-      parts.push('Left')
-    } else if (key === 'ArrowRight') {
-      parts.push('Right')
-    } else if (key === ' ') {
-      parts.push('Space')
-    } else if (key.length === 1) {
-      parts.push(key.toUpperCase())
-    } else {
-      parts.push(key)
-    }
+    parts.push(normalizeRecordedKey(key, e.code))
   }
 
   return parts.join('+')
@@ -282,5 +318,5 @@ export function keyEventToCombo(e: KeyboardEvent, isMac: boolean): string {
 
 export function matchesKeyCombo(e: KeyboardEvent, combo: string, isMac: boolean): boolean {
   const eventCombo = keyEventToCombo(e, isMac)
-  return eventCombo === combo
+  return eventCombo === splitKeyCombo(combo).join('+')
 }

@@ -5,7 +5,7 @@ import { isGitRepoKind } from '../../shared/repo-kind'
 
 import { Minimize2, PanelLeft, PanelRight } from 'lucide-react'
 import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
-import { syncZoomCSSVar } from '@/lib/ui-zoom'
+import { applyUIZoom, syncZoomCSSVar } from '@/lib/ui-zoom'
 import { Toaster } from '@/components/ui/sonner'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from './store'
@@ -29,6 +29,7 @@ import { useGlobalFileDrop } from './hooks/useGlobalFileDrop'
 import { registerUpdaterBeforeUnloadBypass } from './lib/updater-beforeunload'
 import { buildWorkspaceSessionPayload } from './lib/workspace-session'
 import { countWorkingAgents } from './lib/agent-status'
+import { matchesKeyCombo, resolveKeybinding } from '../../shared/keybindings'
 
 const isMac = navigator.userAgent.includes('Mac')
 
@@ -105,7 +106,6 @@ function App(): React.JSX.Element {
   const rightSidebarWidth = useAppStore((s) => s.rightSidebarWidth)
   const setRightSidebarOpen = useAppStore((s) => s.setRightSidebarOpen)
   const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
-  const closeModal = useAppStore((s) => s.closeModal)
   const isFullScreen = useAppStore((s) => s.isFullScreen)
 
   // Subscribe to IPC push events
@@ -386,12 +386,13 @@ function App(): React.JSX.Element {
   }
 
   useEffect(() => {
+    const resolve = (id: Parameters<typeof resolveKeybinding>[0]): string =>
+      resolveKeybinding(id, settings?.keybindings ?? {}, isMac)
+
     const onKeyDown = (e: KeyboardEvent): void => {
       if (e.repeat) {
         return
       }
-      // Accept Cmd on macOS, Ctrl on other platforms
-      const mod = isMac ? e.metaKey : e.ctrlKey
 
       // Note: Cmd/Ctrl+P (quick-open) and Cmd/Ctrl+1-9 (jump-to-worktree) are
       // handled via before-input-event in createMainWindow.ts, which forwards
@@ -402,26 +403,23 @@ function App(): React.JSX.Element {
       if (isEditableTarget(e.target)) {
         return
       }
-      if (!mod) {
-        return
-      }
 
       // Cmd/Ctrl+B — toggle left sidebar
-      if (!e.altKey && !e.shiftKey && e.key.toLowerCase() === 'b') {
+      if (matchesKeyCombo(e, resolve('toggleSidebar'), isMac)) {
         e.preventDefault()
         toggleSidebar()
         return
       }
 
       // Cmd/Ctrl+L — toggle right sidebar
-      if (!e.altKey && !e.shiftKey && e.key.toLowerCase() === 'l') {
+      if (matchesKeyCombo(e, resolve('toggleRightSidebar'), isMac)) {
         e.preventDefault()
         toggleRightSidebar()
         return
       }
 
       // Cmd/Ctrl+N — create worktree
-      if (!e.altKey && !e.shiftKey && e.key.toLowerCase() === 'n') {
+      if (matchesKeyCombo(e, resolve('createWorktree'), isMac)) {
         if (!repos.some((repo) => isGitRepoKind(repo))) {
           return
         }
@@ -431,7 +429,7 @@ function App(): React.JSX.Element {
       }
 
       // Cmd/Ctrl+Shift+E — toggle right sidebar / explorer tab
-      if (e.shiftKey && !e.altKey && e.key.toLowerCase() === 'e') {
+      if (matchesKeyCombo(e, resolve('toggleFileExplorer'), isMac)) {
         e.preventDefault()
         setRightSidebarTab('explorer')
         setRightSidebarOpen(true)
@@ -439,7 +437,7 @@ function App(): React.JSX.Element {
       }
 
       // Cmd/Ctrl+Shift+F — toggle right sidebar / search tab
-      if (e.shiftKey && !e.altKey && e.key.toLowerCase() === 'f') {
+      if (matchesKeyCombo(e, resolve('toggleSearch'), isMac)) {
         e.preventDefault()
         setRightSidebarTab('search')
         setRightSidebarOpen(true)
@@ -447,10 +445,28 @@ function App(): React.JSX.Element {
       }
 
       // Cmd/Ctrl+Shift+G — toggle right sidebar / source control tab
-      if (e.shiftKey && !e.altKey && e.key.toLowerCase() === 'g') {
+      if (matchesKeyCombo(e, resolve('toggleSourceControl'), isMac)) {
         e.preventDefault()
         setRightSidebarTab('source-control')
         setRightSidebarOpen(true)
+        return
+      }
+
+      if (matchesKeyCombo(e, resolve('zoomIn'), isMac)) {
+        e.preventDefault()
+        applyUIZoom(window.api.ui.getZoomLevel() + 1)
+        return
+      }
+
+      if (matchesKeyCombo(e, resolve('zoomOut'), isMac)) {
+        e.preventDefault()
+        applyUIZoom(window.api.ui.getZoomLevel() - 1)
+        return
+      }
+
+      if (matchesKeyCombo(e, resolve('resetSize'), isMac)) {
+        e.preventDefault()
+        applyUIZoom(0)
       }
     }
 
@@ -460,8 +476,8 @@ function App(): React.JSX.Element {
     activeView,
     activeWorktreeId,
     openModal,
-    closeModal,
     repos,
+    settings?.keybindings,
     toggleSidebar,
     toggleRightSidebar,
     setRightSidebarTab,

@@ -24,6 +24,7 @@ import { isUpdaterQuitAndInstallInProgress } from '@/lib/updater-beforeunload'
 import EditorAutosaveController from './editor/EditorAutosaveController'
 import BrowserPane, { destroyPersistentWebview } from './browser-pane/BrowserPane'
 import { reconcileTabOrder } from './tab-bar/reconcile-order'
+import { matchesKeyCombo, resolveKeybinding } from '../../../shared/keybindings'
 
 const EditorPanel = lazy(() => import('./editor/EditorPanel'))
 
@@ -51,6 +52,7 @@ export default function Terminal(): React.JSX.Element | null {
   const activeBrowserTabId = useAppStore((s) => s.activeBrowserTabId)
   const activeTabType = useAppStore((s) => s.activeTabType)
   const setActiveTabType = useAppStore((s) => s.setActiveTabType)
+  const settings = useAppStore((s) => s.settings)
   const setActiveFile = useAppStore((s) => s.setActiveFile)
   const closeFile = useAppStore((s) => s.closeFile)
   const closeAllFiles = useAppStore((s) => s.closeAllFiles)
@@ -479,10 +481,13 @@ export default function Terminal(): React.JSX.Element | null {
     }
 
     const isMac = navigator.userAgent.includes('Mac')
+    const resolve = (id: Parameters<typeof resolveKeybinding>[0]): string =>
+      resolveKeybinding(id, settings?.keybindings ?? {}, isMac)
     const onKeyDown = (e: KeyboardEvent): void => {
-      const mod = isMac ? e.metaKey : e.ctrlKey
+      const mod = isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey
+
       // Cmd/Ctrl+T - new terminal tab
-      if (mod && e.key === 't' && !e.shiftKey && !e.repeat) {
+      if (matchesKeyCombo(e, resolve('newTab'), isMac) && !e.repeat) {
         e.preventDefault()
         handleNewTab()
         return
@@ -500,7 +505,7 @@ export default function Terminal(): React.JSX.Element | null {
       // in keyboard-handlers.ts so it can close individual split panes and
       // show a confirmation dialog. We still preventDefault here so Electron
       // doesn't close the window as its default Cmd+W action.
-      if (mod && e.key === 'w' && !e.shiftKey && !e.repeat) {
+      if (matchesKeyCombo(e, resolve('closeTab'), isMac) && !e.repeat) {
         e.preventDefault()
         const state = useAppStore.getState()
         if (state.activeTabType === 'editor' && state.activeFileId) {
@@ -511,13 +516,12 @@ export default function Terminal(): React.JSX.Element | null {
         return
       }
 
-      // Cmd/Ctrl+Shift+] and Cmd/Ctrl+Shift+[ - switch tabs
-      // Why: use e.code instead of e.key because on macOS, Shift+[ reports '{'
-      // as the key value (the shifted character), not '['.
+      // Cmd/Ctrl+Shift+] and Cmd/Ctrl+Shift+[ - switch tabs. Use the shared
+      // matcher so custom bindings and shifted punctuation normalize through
+      // the same code path as the settings recorder.
       if (
-        mod &&
-        e.shiftKey &&
-        (e.code === 'BracketRight' || e.code === 'BracketLeft') &&
+        (matchesKeyCombo(e, resolve('nextTab'), isMac) ||
+          matchesKeyCombo(e, resolve('prevTab'), isMac)) &&
         !e.repeat
       ) {
         const state = useAppStore.getState()
@@ -560,7 +564,7 @@ export default function Terminal(): React.JSX.Element | null {
                 ? state.activeBrowserTabId
                 : state.activeTabId
           const idx = allTabIds.findIndex((t) => t.id === currentId)
-          const dir = e.code === 'BracketRight' ? 1 : -1
+          const dir = matchesKeyCombo(e, resolve('nextTab'), isMac) ? 1 : -1
           const next = allTabIds[(idx + dir + allTabIds.length) % allTabIds.length]
           if (next.type === 'terminal') {
             setActiveTab(next.id)
@@ -584,7 +588,8 @@ export default function Terminal(): React.JSX.Element | null {
     handleCloseTab,
     handleCloseBrowserTab,
     handleCloseFile,
-    setActiveTab
+    setActiveTab,
+    settings?.keybindings
   ])
 
   // Warn on window close if there are unsaved editor files

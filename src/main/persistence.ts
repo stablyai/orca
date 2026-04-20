@@ -230,10 +230,10 @@ export class Store {
         ...this.state.settings.notifications,
         ...updates.notifications
       },
-      keybindings: {
-        ...this.state.settings.keybindings,
-        ...updates.keybindings
-      }
+      keybindings:
+        updates.keybindings !== undefined
+          ? updates.keybindings
+          : this.state.settings.keybindings
     }
     this.scheduleSave()
     return this.state.settings

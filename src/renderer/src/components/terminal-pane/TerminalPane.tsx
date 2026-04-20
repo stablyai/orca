@@ -386,7 +386,8 @@ export default function TerminalPane({
     persistLayoutSnapshot,
     toggleExpandPane,
     setSearchOpen,
-    onRequestClosePane: handleRequestClosePane
+    onRequestClosePane: handleRequestClosePane,
+    keybindings: settings?.keybindings
   })
 
   useTerminalPaneGlobalEffects({

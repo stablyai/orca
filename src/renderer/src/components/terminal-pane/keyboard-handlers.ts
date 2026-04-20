@@ -49,10 +49,6 @@ export function useTerminalKeyboardShortcuts({
       if (isEditableTarget(e.target)) {
         return
       }
-      const mod = isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey
-      if (!mod || e.altKey) {
-        return
-      }
 
       const manager = managerRef.current
       if (!manager) {

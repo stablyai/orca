@@ -193,6 +193,26 @@ describe('Store', () => {
     expect(store.getSettings().rightSidebarOpenByDefault).toBe(true)
   })
 
+  it('replaces keybindings instead of merging them when settings update deletes overrides', async () => {
+    const store = await createStore()
+    store.updateSettings({
+      keybindings: {
+        toggleSidebar: 'Ctrl+Alt+B',
+        toggleSearch: 'Ctrl+Alt+F'
+      }
+    })
+
+    store.updateSettings({
+      keybindings: {
+        toggleSearch: 'Ctrl+Alt+F'
+      }
+    })
+
+    expect(store.getSettings().keybindings).toEqual({
+      toggleSearch: 'Ctrl+Alt+F'
+    })
+  })
+
   // ── 5. addRepo and getRepo ──────────────────────────────────────────
 
   it('addRepo stores a repo retrievable by getRepo', async () => {
