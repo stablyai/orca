@@ -176,6 +176,26 @@ export function resolveTerminalShortcutAction(
     return { type: 'sendInput', data: event.key === 'ArrowLeft' ? '\x1bb' : '\x1bf' }
   }
 
+  if (
+    !isMac &&
+    !event.metaKey &&
+    event.ctrlKey &&
+    !event.altKey &&
+    !event.shiftKey &&
+    (event.key === 'ArrowLeft' || event.key === 'ArrowRight')
+  ) {
+    // Why: Windows Terminal, GNOME Terminal, and Konsole all bind Ctrl+←/→ for
+    // word navigation on Linux/Windows — but xterm.js emits \e[1;5D / \e[1;5C,
+    // which default readline (bash, zsh) does not bind to backward-word /
+    // forward-word. Translate to \eb / \ef (same bytes as our Alt+Arrow rule)
+    // so Ctrl+←/→ works for word-nav matching user expectations on those
+    // platforms without requiring a custom inputrc.
+    //
+    // Mac-gated: Ctrl+Arrow on macOS is reserved for Mission Control / Spaces
+    // navigation at the OS level and should never reach the app.
+    return { type: 'sendInput', data: event.key === 'ArrowLeft' ? '\x1bb' : '\x1bf' }
+  }
+
   // Why: with macOptionIsMeta disabled (to let non-US keyboard layouts compose
   // characters like @ and €), xterm.js no longer translates Option+letter into
   // Esc+letter automatically. We match on event.code (physical key) rather than

@@ -110,14 +110,6 @@ describe('resolveTerminalShortcutAction', () => {
         true
       )
     ).toBeNull()
-
-    // Non-Mac Ctrl+Arrow must pass through unchanged (readline's word-nav there).
-    expect(
-      resolveTerminalShortcutAction(
-        event({ key: 'ArrowLeft', code: 'ArrowLeft', ctrlKey: true }),
-        false
-      )
-    ).toBeNull()
   })
 
   it('uses ctrl as the non-mac pane modifier but still requires shift for tab-safe chords', () => {
