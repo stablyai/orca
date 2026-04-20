@@ -4,6 +4,22 @@ import type { RefObject } from 'react'
 import { detectLanguage } from '@/lib/language-detect'
 import type { TreeNode } from './file-explorer-types'
 
+function toFileUrl(filePath: string): string {
+  const normalizedPath = filePath.replaceAll('\\', '/')
+  const segments = normalizedPath.split('/').map((segment, index) => {
+    if (index === 0 && /^[A-Za-z]:$/.test(segment)) {
+      return segment
+    }
+    return encodeURIComponent(segment)
+  })
+
+  if (normalizedPath.startsWith('/')) {
+    return `file://${segments.join('/')}`
+  }
+
+  return `file:///${segments.join('/')}`
+}
+
 type UseFileExplorerHandlersParams = {
   activeWorktreeId: string | null
   openFile: (params: {
@@ -17,6 +33,7 @@ type UseFileExplorerHandlersParams = {
   toggleDir: (worktreeId: string, dirPath: string) => void
   setSelectedPath: (path: string) => void
   scrollRef: RefObject<HTMLDivElement | null>
+  createBrowserTab: (worktreeId: string, url: string, options?: { title?: string }) => void
 }
 
 type UseFileExplorerHandlersReturn = {
@@ -31,7 +48,8 @@ export function useFileExplorerHandlers({
   pinFile,
   toggleDir,
   setSelectedPath,
-  scrollRef
+  scrollRef,
+  createBrowserTab
 }: UseFileExplorerHandlersParams): UseFileExplorerHandlersReturn {
   const handleClick = useCallback(
     (node: TreeNode) => {
@@ -43,15 +61,22 @@ export function useFileExplorerHandlers({
         toggleDir(activeWorktreeId, node.path)
         return
       }
+      const language = detectLanguage(node.name)
+      if (language === 'html') {
+        // Open HTML files in the built-in browser pane instead of the editor
+        // so the user sees the rendered page rather than source markup.
+        createBrowserTab(activeWorktreeId, toFileUrl(node.path))
+        return
+      }
       openFile({
         filePath: node.path,
         relativePath: node.relativePath,
         worktreeId: activeWorktreeId,
-        language: detectLanguage(node.name),
+        language,
         mode: 'edit'
       })
     },
-    [activeWorktreeId, openFile, toggleDir, setSelectedPath]
+    [activeWorktreeId, openFile, toggleDir, setSelectedPath, createBrowserTab]
   )
 
   const handleDoubleClick = useCallback(

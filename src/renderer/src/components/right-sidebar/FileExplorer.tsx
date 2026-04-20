@@ -33,6 +33,7 @@ function FileExplorerInner(): React.JSX.Element {
   const clearPendingExplorerReveal = useAppStore((s) => s.clearPendingExplorerReveal)
   const openFile = useAppStore((s) => s.openFile)
   const pinFile = useAppStore((s) => s.pinFile)
+  const createBrowserTab = useAppStore((s) => s.createBrowserTab)
   const activeFileId = useAppStore((s) => s.activeFileId)
   const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
   const openFiles = useAppStore((s) => s.openFiles)
@@ -256,7 +257,8 @@ function FileExplorerInner(): React.JSX.Element {
     pinFile,
     toggleDir,
     setSelectedPath,
-    scrollRef
+    scrollRef,
+    createBrowserTab
   })
 
   const handleDuplicate = useFileDuplicate({ worktreePath, refreshDir })
