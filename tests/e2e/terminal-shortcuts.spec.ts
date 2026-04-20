@@ -99,6 +99,13 @@ async function pressAndExpectWrite(
 const isMac = process.platform === 'darwin'
 const mod = isMac ? 'Meta' : 'Control'
 
+// Why: split chords differ by platform. On macOS Cmd+D splits vertically and
+// Cmd+Shift+D horizontally. On Linux/Windows Ctrl+D is reserved for EOF
+// (see terminal-shortcut-policy.ts and #586), so vertical is Ctrl+Shift+D
+// and horizontal is Alt+Shift+D (Windows Terminal convention).
+const splitVerticalChord = isMac ? `${mod}+d` : `${mod}+Shift+d`
+const splitHorizontalChord = isMac ? `${mod}+Shift+d` : 'Alt+Shift+d'
+
 // Why: serial mode is load-bearing. Tests mutate shared Electron app state
 // (pane layout, terminal buffer, expand toggle) and the pty:write spy log is
 // a single main-process singleton. Parallel execution would interleave chord
@@ -170,10 +177,10 @@ test.describe('Terminal Shortcuts', () => {
       })
       .toBe(false)
 
-    // Cmd/Ctrl+D splits vertically.
+    // Split vertically (chord varies by platform — see splitVerticalChord).
     const panesBeforeSplit = await countVisibleTerminalPanes(orcaPage)
     await focusActiveTerminal(orcaPage)
-    await orcaPage.keyboard.press(`${mod}+d`)
+    await orcaPage.keyboard.press(splitVerticalChord)
     await waitForPaneCount(orcaPage, panesBeforeSplit + 1)
 
     // Cmd/Ctrl+] and Cmd/Ctrl+[ cycle focus (no pane-count change).
@@ -184,7 +191,7 @@ test.describe('Terminal Shortcuts', () => {
     expect(await countVisibleTerminalPanes(orcaPage)).toBe(panesBeforeSplit + 1)
 
     // Cmd/Ctrl+Shift+Enter toggles expand on the active pane. Requires >1 pane,
-    // so it runs while the split from Cmd+D is still open.
+    // so it runs while the vertical split from above is still open.
     const readExpanded = async (): Promise<boolean> =>
       orcaPage.evaluate(() => {
         const state = window.__store?.getState()
@@ -211,10 +218,10 @@ test.describe('Terminal Shortcuts', () => {
     await orcaPage.keyboard.press(`${mod}+w`)
     await waitForPaneCount(orcaPage, panesBeforeSplit)
 
-    // Cmd/Ctrl+Shift+D splits horizontally.
+    // Split horizontally (chord varies by platform — see splitHorizontalChord).
     const panesBeforeHSplit = await countVisibleTerminalPanes(orcaPage)
     await focusActiveTerminal(orcaPage)
-    await orcaPage.keyboard.press(`${mod}+Shift+d`)
+    await orcaPage.keyboard.press(splitHorizontalChord)
     await waitForPaneCount(orcaPage, panesBeforeHSplit + 1)
     await focusActiveTerminal(orcaPage)
     await orcaPage.keyboard.press(`${mod}+w`)
