@@ -14,8 +14,16 @@ describe('browser-url helpers', () => {
     expect(normalizeBrowserNavigationUrl('about:blank')).toBe(ORCA_BROWSER_BLANK_URL)
   })
 
-  it('rejects non-web schemes for in-app navigation', () => {
-    expect(normalizeBrowserNavigationUrl('file:///etc/passwd')).toBeNull()
+  it('allows local file URLs for in-app navigation only', () => {
+    expect(normalizeBrowserNavigationUrl('file:///etc/passwd')).toBe('file:///etc/passwd')
+    expect(normalizeBrowserNavigationUrl('file://localhost/etc/passwd')).toBe(
+      'file:///etc/passwd'
+    )
+    expect(normalizeBrowserNavigationUrl('file://remote-host/etc/passwd')).toBeNull()
+    expect(normalizeExternalBrowserUrl('file:///etc/passwd')).toBeNull()
+  })
+
+  it('rejects non-browser schemes for in-app navigation', () => {
     expect(normalizeBrowserNavigationUrl('javascript:alert(1)')).toBeNull()
     expect(normalizeExternalBrowserUrl('about:blank')).toBeNull()
   })

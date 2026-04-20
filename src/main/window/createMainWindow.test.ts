@@ -141,6 +141,14 @@ describe('createMainWindow', () => {
     )
     expect(allowBlankEvent.preventDefault).not.toHaveBeenCalled()
 
+    const allowFileEvent = { preventDefault: vi.fn() }
+    windowHandlers['will-attach-webview'](
+      allowFileEvent as never,
+      { partition: 'persist:orca-browser' } as never,
+      { src: 'file:///tmp/example.html' } as never
+    )
+    expect(allowFileEvent.preventDefault).not.toHaveBeenCalled()
+
     const denyInlineHtmlEvent = { preventDefault: vi.fn() }
     windowHandlers['will-attach-webview'](
       denyInlineHtmlEvent as never,

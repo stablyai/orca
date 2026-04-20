@@ -1578,7 +1578,7 @@ function BrowserPagePane({
       onUpdatePageStateRef.current(browserTab.id, {
         loadError: {
           code: 0,
-          description: 'Enter a valid http(s) or localhost URL.',
+          description: 'Enter a valid http(s), localhost, or local file URL.',
           validatedUrl: addressBarValue.trim() || 'about:blank'
         }
       })

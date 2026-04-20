@@ -199,7 +199,7 @@ describe('browserManager', () => {
     )
   })
 
-  it('blocks non-web guest navigations after attach', () => {
+  it('allows local file guest navigations after attach', () => {
     const guest = {
       isDestroyed: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
@@ -220,7 +220,7 @@ describe('browserManager', () => {
     expect(willNavigateHandler).toBeTypeOf('function')
     const preventDefault = vi.fn()
     willNavigateHandler?.({ preventDefault }, 'file:///etc/passwd')
-    expect(preventDefault).toHaveBeenCalledTimes(1)
+    expect(preventDefault).not.toHaveBeenCalled()
   })
 
   it('unregisterAll clears tracked guests and context-menu listeners', () => {
