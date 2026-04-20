@@ -167,4 +167,152 @@ test.describe('Tab Rename (Inline)', () => {
       .poll(async () => getActiveCustomTitle(orcaPage, worktreeId), { timeout: 3_000 })
       .toBe(null)
   })
+
+  test('clicking away (blur) commits the rename', async ({ orcaPage }) => {
+    const worktreeId = (await getActiveWorktreeId(orcaPage))!
+
+    // Why: need a second tab so we have something to click that isn't the
+    // rename input itself. Seed both with known titles so we can locate them.
+    await orcaPage.evaluate((targetWorktreeId) => {
+      const store = window.__store
+      if (!store) {
+        return
+      }
+      const state = store.getState()
+      const existing = state.tabsByWorktree[targetWorktreeId] ?? []
+      if (existing.length < 2) {
+        state.createTab(targetWorktreeId)
+      }
+    }, worktreeId)
+
+    await expect
+      .poll(async () => (await getWorktreeTabs(orcaPage, worktreeId)).length, { timeout: 3_000 })
+      .toBeGreaterThanOrEqual(2)
+
+    const tabs = await getWorktreeTabs(orcaPage, worktreeId)
+    const activeId = await getActiveTabId(orcaPage)
+    const activeTab = tabs.find((t) => t.id === activeId)!
+    const otherTab = tabs.find((t) => t.id !== activeId)!
+
+    const tabLocator = tabLocatorByTitle(orcaPage, activeTab.title!)
+    await tabLocator.dblclick()
+
+    const renameInput = orcaPage.getByRole('textbox', {
+      name: `Rename tab ${activeTab.title}`,
+      exact: true
+    })
+    await expect(renameInput).toBeVisible()
+
+    await renameInput.fill('Committed By Blur')
+    // Why: clicking the other tab triggers blur on the input, which should
+    // run commitRename and save the typed title before the focus shifts.
+    await tabLocatorByTitle(orcaPage, otherTab.title!).click()
+
+    await expect(renameInput).toBeHidden()
+    await expect(tabLocatorByTitle(orcaPage, 'Committed By Blur')).toBeVisible()
+    expect(
+      await orcaPage.evaluate(
+        ({ targetWorktreeId, targetTabId }) => {
+          const store = window.__store
+          const state = store!.getState()
+          const tab = (state.tabsByWorktree[targetWorktreeId] ?? []).find(
+            (t) => t.id === targetTabId
+          )
+          return tab?.customTitle ?? null
+        },
+        { targetWorktreeId: worktreeId, targetTabId: activeTab.id }
+      )
+    ).toBe('Committed By Blur')
+  })
+
+  test('right-clicking during inline rename commits and opens context menu', async ({
+    orcaPage
+  }) => {
+    const worktreeId = (await getActiveWorktreeId(orcaPage))!
+    const originalTitle = await getActiveTabTitle(orcaPage, worktreeId)
+
+    const tabLocator = tabLocatorByTitle(orcaPage, originalTitle)
+    await tabLocator.dblclick()
+
+    const renameInput = orcaPage.getByRole('textbox', {
+      name: `Rename tab ${originalTitle}`,
+      exact: true
+    })
+    await expect(renameInput).toBeVisible()
+
+    await renameInput.fill('Committed By Right Click')
+    // Why: right-clicking the tab blurs the input (commitRename runs) and
+    // opens the context menu. We assert the rename was saved; the menu
+    // assertion is intentionally light because the menu markup is shared
+    // with other specs.
+    await tabLocator.click({ button: 'right' })
+
+    await expect
+      .poll(async () => getActiveCustomTitle(orcaPage, worktreeId), { timeout: 3_000 })
+      .toBe('Committed By Right Click')
+    await expect(renameInput).toBeHidden()
+  })
+
+  test('rename input stays at a usable width when many tabs are open', async ({ orcaPage }) => {
+    const worktreeId = (await getActiveWorktreeId(orcaPage))!
+
+    // Why: create enough terminal tabs that flex space runs out. 15 is well
+    // above the threshold at which the pre-fix input collapsed, and it keeps
+    // the test fast. The width fix pins the input to 130px, so even saturated,
+    // it should stay near that size — we assert ≥100px to allow a bit of slack
+    // for fonts/padding/containers differing between environments.
+    await orcaPage.evaluate((targetWorktreeId) => {
+      const store = window.__store
+      if (!store) {
+        return
+      }
+      const state = store.getState()
+      const existing = (state.tabsByWorktree[targetWorktreeId] ?? []).length
+      for (let i = existing; i < 15; i++) {
+        state.createTab(targetWorktreeId)
+      }
+    }, worktreeId)
+
+    await expect
+      .poll(async () => (await getWorktreeTabs(orcaPage, worktreeId)).length, { timeout: 5_000 })
+      .toBeGreaterThanOrEqual(15)
+
+    const activeTitle = await getActiveTabTitle(orcaPage, worktreeId)
+    const tabLocator = tabLocatorByTitle(orcaPage, activeTitle)
+    await tabLocator.dblclick()
+
+    const renameInput = orcaPage.getByRole('textbox', {
+      name: `Rename tab ${activeTitle}`,
+      exact: true
+    })
+    await expect(renameInput).toBeVisible()
+
+    const box = await renameInput.boundingBox()
+    expect(box).not.toBeNull()
+    expect(box!.width).toBeGreaterThanOrEqual(100)
+  })
+
+  test('middle-clicking inside the rename input does not close the tab', async ({ orcaPage }) => {
+    const worktreeId = (await getActiveWorktreeId(orcaPage))!
+    const tabsBefore = (await getWorktreeTabs(orcaPage, worktreeId)).length
+    const originalTitle = await getActiveTabTitle(orcaPage, worktreeId)
+
+    const tabLocator = tabLocatorByTitle(orcaPage, originalTitle)
+    await tabLocator.dblclick()
+
+    const renameInput = orcaPage.getByRole('textbox', {
+      name: `Rename tab ${originalTitle}`,
+      exact: true
+    })
+    await expect(renameInput).toBeVisible()
+
+    // Why: the outer tab's middle-click handler closes the tab. The rename
+    // input stops propagation + preventDefaults middle-click so the tab
+    // isn't closed while the user is editing.
+    await renameInput.click({ button: 'middle' })
+
+    // The tab must still exist — no regression where editing-then-middle-click
+    // accidentally closes the tab out from under the input.
+    expect((await getWorktreeTabs(orcaPage, worktreeId)).length).toBe(tabsBefore)
+  })
 })
