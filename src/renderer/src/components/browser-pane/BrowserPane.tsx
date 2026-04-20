@@ -1192,12 +1192,16 @@ function BrowserPagePane({
       }
     }
     // Why: this effect mounts and wires up webview event listeners once per tab
-    // identity. browserTab.url and webviewPartition are intentionally excluded:
-    // re-running on URL changes would detach/reattach the webview, cancelling
-    // in-progress navigations. Callbacks use refs so they always see current values.
+    // identity. browserTab.url is intentionally excluded: re-running on URL
+    // changes would detach/reattach the webview, cancelling in-progress
+    // navigations. Callbacks use refs so they always see current values.
+    // webviewPartition IS included: switching profiles changes the partition,
+    // which requires destroying and recreating the webview since Electron does
+    // not allow changing a webview's partition after creation.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     browserTab.id,
+    webviewPartition,
     workspaceId,
     worktreeId,
     createBrowserTab,

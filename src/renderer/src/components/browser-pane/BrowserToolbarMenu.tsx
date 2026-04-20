@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle
@@ -46,6 +47,9 @@ export function BrowserToolbarMenu({
   const [newProfileDialogOpen, setNewProfileDialogOpen] = useState(false)
   const [newProfileName, setNewProfileName] = useState('')
   const [isCreatingProfile, setIsCreatingProfile] = useState(false)
+  const [pendingSwitchProfileId, setPendingSwitchProfileId] = useState<string | null | undefined>(
+    undefined
+  )
 
   const effectiveProfileId = currentProfileId ?? 'default'
 
@@ -61,25 +65,22 @@ export function BrowserToolbarMenu({
     if (targetId === effectiveProfileId) {
       return
     }
+    setPendingSwitchProfileId(profileId)
+  }
 
-    // Why: Electron webviews cannot change partition after creation, so switching
-    // requires destroying and recreating the webview. This loses all in-page state
-    // (form data, scroll position, JS runtime). The confirmation ensures the user
-    // isn't surprised by the reload.
-    const confirmed = window.confirm(
-      'Switching profiles will reload this page. Any unsaved form data will be lost.'
-    )
-    if (!confirmed) {
+  const confirmSwitchProfile = (): void => {
+    if (pendingSwitchProfileId === undefined) {
       return
     }
-
+    const targetId = pendingSwitchProfileId ?? 'default'
     // Why: Must destroy before store update. The webviewRegistry is keyed by
     // workspace ID (stable across switches). Without explicit destroy, the mount
     // effect would reclaim the old webview with the stale partition.
     onDestroyWebview()
-    switchBrowserTabProfile(workspaceId, profileId)
+    switchBrowserTabProfile(workspaceId, pendingSwitchProfileId)
     const profile = browserSessionProfiles.find((p) => p.id === targetId)
     toast.success(`Switched to ${profile?.label ?? 'Default'} profile`)
+    setPendingSwitchProfileId(undefined)
   }
 
   const handleCreateProfile = async (): Promise<void> => {
@@ -226,6 +227,36 @@ export function BrowserToolbarMenu({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      <Dialog
+        open={pendingSwitchProfileId !== undefined}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingSwitchProfileId(undefined)
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-sm" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle className="text-base">Switch Profile</DialogTitle>
+            <DialogDescription className="text-xs">
+              Switching profiles will reload this page. Any unsaved form data will be lost.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPendingSwitchProfileId(undefined)}
+            >
+              Cancel
+            </Button>
+            <Button size="sm" onClick={confirmSwitchProfile}>
+              Switch
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={newProfileDialogOpen} onOpenChange={setNewProfileDialogOpen}>
         <DialogContent className="sm:max-w-sm" showCloseButton={false}>
