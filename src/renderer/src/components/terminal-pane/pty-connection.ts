@@ -372,13 +372,21 @@ export function connectPanePty(
           }
 
           if (connectResult?.coldRestore) {
+            // Why: restoreScrollbackBuffers() already wrote the saved xterm
+            // buffer before this rAF ran. The cold-restore scrollback from
+            // disk history overlaps with that content. Without clearing first,
+            // the terminal shows duplicated output.
+            pane.terminal.write('\x1b[2J\x1b[3J\x1b[H')
             pane.terminal.write(connectResult.coldRestore.scrollback)
             pane.terminal.write('\r\n\x1b[2m--- session restored ---\x1b[0m\r\n\r\n')
             window.api.pty.ackColdRestore(ptyId!)
           } else if (connectResult?.snapshot) {
-            if (!connectResult.isAlternateScreen) {
-              pane.terminal.write('\x1b[2J\x1b[3J\x1b[H')
-            }
+            // Why: always clear before writing the daemon snapshot to prevent
+            // duplication with the scrollback that restoreScrollbackBuffers()
+            // wrote earlier. The alt-screen case previously skipped this,
+            // leaving stale scrollback in the normal buffer that reappeared
+            // when the user exited the TUI (e.g. Claude Code).
+            pane.terminal.write('\x1b[2J\x1b[3J\x1b[H')
             pane.terminal.write(connectResult.snapshot)
           }
 
