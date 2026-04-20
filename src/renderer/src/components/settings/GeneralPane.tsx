@@ -1091,15 +1091,8 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
                 const isBusy = openCodeAction !== 'idle'
 
                 return (
-                  <button
+                  <div
                     key={account.id}
-                    type="button"
-                    onClick={() =>
-                      void runOpenCodeAccountAction(`select:${account.id}`, () =>
-                        window.api.openCodeAccounts.select({ accountId: account.id })
-                      )
-                    }
-                    disabled={isBusy}
                     className={`flex w-full items-center justify-between gap-3 rounded-md border px-3 py-2.5 text-left transition-colors ${
                       isActive
                         ? 'border-foreground/20 bg-accent/15'
@@ -1107,7 +1100,16 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
                     }`}
                   >
                     <div className="flex w-full items-center justify-between gap-3 max-md:flex-col max-md:items-start">
-                      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void runOpenCodeAccountAction(`select:${account.id}`, () =>
+                            window.api.openCodeAccounts.select({ accountId: account.id })
+                          )
+                        }
+                        disabled={isBusy}
+                        className="flex min-w-0 flex-1 flex-col gap-0.5 text-left"
+                      >
                         <div className="flex min-w-0 items-center gap-2">
                           <span className="truncate text-sm font-medium">{account.label}</span>
                           {isActive ? (
@@ -1128,7 +1130,7 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
                             {formatAccountTimestamp(account.lastAuthenticatedAt)}
                           </span>
                         </div>
-                      </div>
+                      </button>
 
                       <div className="flex shrink-0 items-center justify-end gap-1 max-md:w-full max-md:flex-wrap">
                         <Button
@@ -1169,7 +1171,7 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
                         </Button>
                       </div>
                     </div>
-                  </button>
+                  </div>
                 )
               })}
             </div>

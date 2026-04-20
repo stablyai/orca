@@ -2,7 +2,7 @@
 account lifecycle, credential-file writes, and managed-path safety together so
 the trusted boundary around Orca-managed API keys stays easy to audit. */
 import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { join, relative, resolve, sep } from 'node:path'
 import { app } from 'electron'
 import type {
@@ -105,12 +105,11 @@ export class OpenCodeAccountService {
         ? null
         : settings.activeOpenCodeManagedAccountId
 
+    this.safeRemoveManagedDataRoot(account.managedDataPath, account.id)
     this.store.updateSettings({
       openCodeManagedAccounts: nextAccounts,
       activeOpenCodeManagedAccountId: nextActiveId
     })
-
-    this.safeRemoveManagedDataRoot(account.managedDataPath)
     return this.getSnapshot()
   }
 
@@ -133,7 +132,7 @@ export class OpenCodeAccountService {
     }
 
     try {
-      return this.assertManagedDataPath(account.managedDataPath)
+      return this.assertManagedDataPath(account.managedDataPath, account.id)
     } catch (error) {
       // Why: if the managed OpenCode data root disappears or is tampered with,
       // the safest fallback is to clear Orca's override and let terminals use
@@ -231,10 +230,10 @@ export class OpenCodeAccountService {
     // ownership marker at the managed root lets Orca later prove the path is
     // one it created before deleting anything recursively.
     writeFileSync(join(managedDataPath, '.orca-managed-opencode-data'), `${accountId}\n`, 'utf-8')
-    return this.assertManagedDataPath(managedDataPath)
+    return this.assertManagedDataPath(managedDataPath, accountId)
   }
 
-  private assertManagedDataPath(candidatePath: string): string {
+  private assertManagedDataPath(candidatePath: string, expectedAccountId?: string): string {
     const rootPath = this.getManagedAccountsRoot()
     const resolvedCandidate = resolve(candidatePath)
     const resolvedRoot = resolve(rootPath)
@@ -251,8 +250,15 @@ export class OpenCodeAccountService {
       throw new Error('Managed OpenCode data root escaped Orca account storage.')
     }
 
-    if (!existsSync(join(canonicalCandidate, '.orca-managed-opencode-data'))) {
+    const markerPath = join(canonicalCandidate, '.orca-managed-opencode-data')
+    if (!existsSync(markerPath)) {
       throw new Error('Managed OpenCode data root is missing Orca ownership marker.')
+    }
+    if (expectedAccountId) {
+      const markerAccountId = readFileSync(markerPath, 'utf-8').trim()
+      if (markerAccountId !== expectedAccountId) {
+        throw new Error('Managed OpenCode data root marker did not match the saved account id.')
+      }
     }
 
     return canonicalCandidate
@@ -278,15 +284,20 @@ export class OpenCodeAccountService {
     )
   }
 
-  private safeRemoveManagedDataRoot(candidatePath: string): void {
+  private safeRemoveManagedDataRoot(candidatePath: string, expectedAccountId: string): void {
     let managedDataPath: string
     try {
-      managedDataPath = this.assertManagedDataPath(candidatePath)
+      managedDataPath = this.assertManagedDataPath(candidatePath, expectedAccountId)
     } catch (error) {
       console.warn('[opencode-accounts] Refusing to remove untrusted managed data root:', error)
-      return
+      throw error
     }
 
-    rmSync(managedDataPath, { recursive: true, force: true })
+    try {
+      rmSync(managedDataPath, { recursive: true, force: true })
+    } catch (error) {
+      console.warn('[opencode-accounts] Failed to remove managed data root:', error)
+      throw new Error('OpenCode account removal failed while deleting the managed data root.')
+    }
   }
 }
