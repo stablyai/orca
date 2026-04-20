@@ -160,8 +160,12 @@ export function useIpcEvents(): void {
     unsubs.push(
       window.api.ui.onCreateTerminal(({ worktreeId, command, title }) => {
         const store = useAppStore.getState()
+        store.setActiveView('terminal')
+        store.setActiveWorktree(worktreeId)
         const tab = store.createTab(worktreeId)
+        store.setActiveTabType('terminal')
         store.setActiveTab(tab.id)
+        store.revealWorktreeInSidebar(worktreeId)
         if (title) {
           store.setTabCustomTitle(tab.id, title)
         }

@@ -409,7 +409,6 @@ export class OrcaRuntimeService {
   async readTerminal(handle: string, opts: { cursor?: number } = {}): Promise<RuntimeTerminalRead> {
     const { leaf } = this.getLiveLeafForHandle(handle)
     const allLines = buildTailLines(leaf.tailBuffer, leaf.tailPartialLine)
-    const totalLines = leaf.tailLinesTotal + (leaf.tailPartialLine.length > 0 ? 1 : 0)
 
     let tail: string[]
     let truncated: boolean
@@ -436,7 +435,10 @@ export class OrcaRuntimeService {
       status: getTerminalState(leaf),
       tail,
       truncated,
-      nextCursor: String(totalLines)
+      // Why: cursors advance by completed lines only. If we count the current
+      // partial line here, later reads can skip continued output on that same
+      // line because no new complete line was emitted yet.
+      nextCursor: String(leaf.tailLinesTotal)
     }
   }
 
@@ -510,26 +512,17 @@ export class OrcaRuntimeService {
       waiters.add(waiter)
 
       if (condition === 'tui-idle') {
-        // Why: TUI idle has no discrete exit event — poll preview every 3s.
-        // Track last preview to detect output stabilization as a secondary signal.
-        let lastPreview = leaf.preview
-        let stableCount = 0
+        // Why: `tui-idle` is meant to detect known prompt/ready states, not
+        // "no new bytes arrived for a while". Long-running TUIs can sit on a
+        // stable screen for many seconds while still being busy or waiting on
+        // human input inside a modal state, so silent stabilization is not a
+        // safe substitute for an explicit idle prompt match.
         waiter.pollInterval = setInterval(() => {
           try {
             const live = this.getLiveLeafForHandle(handle)
             const preview = live.leaf.preview
             if (isTUIIdle(preview)) {
               this.resolveWaiter(waiter, buildTerminalWaitResult(handle, condition, live.leaf))
-              return
-            }
-            if (preview === lastPreview) {
-              stableCount++
-              if (stableCount >= TUI_IDLE_STABLE_THRESHOLD) {
-                this.resolveWaiter(waiter, buildTerminalWaitResult(handle, condition, live.leaf))
-              }
-            } else {
-              stableCount = 0
-              lastPreview = preview
             }
           } catch {
             this.removeWaiter(waiter)
@@ -2464,7 +2457,6 @@ function buildSendPayload(action: {
 }
 
 const TUI_IDLE_POLL_MS = 3000
-const TUI_IDLE_STABLE_THRESHOLD = 5
 const TUI_IDLE_PATTERNS = [
   /Ask anything/i,
   /What is the tech stack/i,

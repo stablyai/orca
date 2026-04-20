@@ -396,6 +396,172 @@ describe('useIpcEvents updater integration', () => {
     expect(clearTabPtyId).toHaveBeenCalledWith('tab-1')
     expect(clearTabPtyId).not.toHaveBeenCalledWith('tab-2')
   })
+
+  it('activates the target worktree when CLI creates a terminal there', async () => {
+    const createTab = vi.fn(() => ({ id: 'tab-new' }))
+    const setActiveView = vi.fn()
+    const setActiveWorktree = vi.fn()
+    const setActiveTabType = vi.fn()
+    const setActiveTab = vi.fn()
+    const revealWorktreeInSidebar = vi.fn()
+    const setTabCustomTitle = vi.fn()
+    const queueTabStartupCommand = vi.fn()
+    const createTerminalListenerRef: {
+      current:
+        | ((data: { worktreeId: string; command?: string; title?: string }) => void)
+        | null
+    } = { current: null }
+
+    vi.resetModules()
+    vi.unstubAllGlobals()
+
+    vi.doMock('react', async () => {
+      const actual = await vi.importActual<typeof ReactModule>('react')
+      return {
+        ...actual,
+        useEffect: (effect: () => void | (() => void)) => {
+          effect()
+        }
+      }
+    })
+
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        getState: () => ({
+          setUpdateStatus: vi.fn(),
+          createTab,
+          setActiveView,
+          setActiveWorktree,
+          setActiveTabType,
+          setActiveTab,
+          revealWorktreeInSidebar,
+          setTabCustomTitle,
+          queueTabStartupCommand,
+          fetchRepos: vi.fn(),
+          fetchWorktrees: vi.fn(),
+          activeModal: null,
+          closeModal: vi.fn(),
+          openModal: vi.fn(),
+          activeWorktreeId: 'wt-1',
+          activeView: 'terminal',
+          setActiveRepo: vi.fn(),
+          setIsFullScreen: vi.fn(),
+          updateBrowserPageState: vi.fn(),
+          activeTabType: 'terminal',
+          editorFontZoomLevel: 0,
+          setEditorFontZoomLevel: vi.fn(),
+          setRateLimitsFromPush: vi.fn(),
+          setSshConnectionState: vi.fn(),
+          setSshTargetLabels: vi.fn(),
+          enqueueSshCredentialRequest: vi.fn(),
+          removeSshCredentialRequest: vi.fn(),
+          clearTabPtyId: vi.fn(),
+          settings: { terminalFontSize: 13 }
+        })
+      }
+    }))
+
+    vi.doMock('@/lib/ui-zoom', () => ({
+      applyUIZoom: vi.fn()
+    }))
+    vi.doMock('@/lib/worktree-activation', () => ({
+      activateAndRevealWorktree: vi.fn(),
+      ensureWorktreeHasInitialTerminal: vi.fn()
+    }))
+    vi.doMock('@/components/sidebar/visible-worktrees', () => ({
+      getVisibleWorktreeIds: () => []
+    }))
+    vi.doMock('@/lib/editor-font-zoom', () => ({
+      nextEditorFontZoomLevel: vi.fn(() => 0),
+      computeEditorFontSize: vi.fn(() => 13)
+    }))
+    vi.doMock('@/components/settings/SettingsConstants', () => ({
+      zoomLevelToPercent: vi.fn(() => 100),
+      ZOOM_MIN: -3,
+      ZOOM_MAX: 3
+    }))
+    vi.doMock('@/lib/zoom-events', () => ({
+      dispatchZoomLevelChanged: vi.fn()
+    }))
+
+    vi.stubGlobal('window', {
+      api: {
+        repos: { onChanged: () => () => {} },
+        worktrees: { onChanged: () => () => {} },
+        ui: {
+          onOpenSettings: () => () => {},
+          onToggleLeftSidebar: () => () => {},
+          onToggleRightSidebar: () => () => {},
+          onToggleWorktreePalette: () => () => {},
+          onOpenQuickOpen: () => () => {},
+          onJumpToWorktreeIndex: () => () => {},
+          onActivateWorktree: () => () => {},
+          onCreateTerminal: (
+            listener: (data: { worktreeId: string; command?: string; title?: string }) => void
+          ) => {
+            createTerminalListenerRef.current = listener
+            return () => {}
+          },
+          onSplitTerminal: () => () => {},
+          onRenameTerminal: () => () => {},
+          onFocusTerminal: () => () => {},
+          onCloseTerminal: () => () => {},
+          onNewBrowserTab: () => () => {},
+          onNewTerminalTab: () => () => {},
+          onCloseActiveTab: () => () => {},
+          onSwitchTab: () => () => {},
+          onToggleStatusBar: () => () => {},
+          onFullscreenChanged: () => () => {},
+          onTerminalZoom: () => () => {},
+          getZoomLevel: () => 0,
+          set: vi.fn()
+        },
+        updater: {
+          getStatus: () => Promise.resolve({ state: 'idle' }),
+          onStatus: () => () => {},
+          onClearDismissal: () => () => {}
+        },
+        browser: {
+          onGuestLoadFailed: () => () => {},
+          onOpenLinkInOrcaTab: () => () => {}
+        },
+        rateLimits: {
+          get: () => Promise.resolve({ limits: {}, lastUpdatedAt: Date.now() }),
+          onUpdate: () => () => {}
+        },
+        ssh: {
+          listTargets: () => Promise.resolve([]),
+          getState: () => Promise.resolve(null),
+          onStateChanged: () => () => {},
+          onCredentialRequest: () => () => {},
+          onCredentialResolved: () => () => {}
+        }
+      }
+    })
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+    useIpcEvents()
+    await Promise.resolve()
+
+    if (typeof createTerminalListenerRef.current !== 'function') {
+      throw new Error('Expected create-terminal listener to be registered')
+    }
+
+    createTerminalListenerRef.current({
+      worktreeId: 'wt-2',
+      title: 'Runner',
+      command: 'opencode'
+    })
+
+    expect(setActiveView).toHaveBeenCalledWith('terminal')
+    expect(setActiveWorktree).toHaveBeenCalledWith('wt-2')
+    expect(createTab).toHaveBeenCalledWith('wt-2')
+    expect(setActiveTabType).toHaveBeenCalledWith('terminal')
+    expect(setActiveTab).toHaveBeenCalledWith('tab-new')
+    expect(revealWorktreeInSidebar).toHaveBeenCalledWith('wt-2')
+    expect(setTabCustomTitle).toHaveBeenCalledWith('tab-new', 'Runner')
+    expect(queueTabStartupCommand).toHaveBeenCalledWith('tab-new', { command: 'opencode' })
+  })
 })
 
 describe('useIpcEvents browser tab close routing', () => {

@@ -291,6 +291,17 @@ export class OrcaRuntimeRpcServer {
           return this.errorResponse(request.id, 'invalid_argument', 'Missing terminal handle')
         }
 
+        if (
+          params?.cursor !== undefined &&
+          (!Number.isInteger(params.cursor) || (params.cursor as number) < 0)
+        ) {
+          return this.errorResponse(
+            request.id,
+            'invalid_argument',
+            'Cursor must be a non-negative integer'
+          )
+        }
+
         const cursor =
           typeof params?.cursor === 'number' && Number.isFinite(params.cursor)
             ? params.cursor

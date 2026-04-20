@@ -384,6 +384,55 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('keeps partial-line output readable across cursor-based pagination', async () => {
+    const runtime = new OrcaRuntimeService(store)
+
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          title: 'Claude',
+          activeLeafId: 'pane:1',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          leafId: 'pane:1',
+          paneRuntimeId: 1,
+          ptyId: 'pty-1'
+        }
+      ]
+    })
+
+    const [terminal] = (await runtime.listTerminals()).terminals
+    runtime.onPtyData('pty-1', 'hel', 100)
+
+    const firstRead = await runtime.readTerminal(terminal.handle)
+    expect(firstRead.tail).toEqual(['hel'])
+    expect(firstRead.nextCursor).toBe('0')
+
+    runtime.onPtyData('pty-1', 'lo', 101)
+
+    const secondRead = await runtime.readTerminal(terminal.handle, {
+      cursor: Number(firstRead.nextCursor)
+    })
+    expect(secondRead.tail).toEqual(['hello'])
+    expect(secondRead.nextCursor).toBe('0')
+
+    runtime.onPtyData('pty-1', '\nworld\n', 102)
+
+    const thirdRead = await runtime.readTerminal(terminal.handle, {
+      cursor: Number(secondRead.nextCursor)
+    })
+    expect(thirdRead.tail).toEqual(['hello', 'world'])
+    expect(thirdRead.nextCursor).toBe('2')
+  })
+
   it('fails terminal waits closed when the handle goes stale during reload', async () => {
     const runtime = new OrcaRuntimeService(store)
 
@@ -414,6 +463,49 @@ describe('OrcaRuntimeService', () => {
     runtime.markRendererReloading(1)
 
     await expect(waitPromise).rejects.toThrow('terminal_handle_stale')
+  })
+
+  it('does not treat a stable but non-idle preview as tui-idle', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+
+      runtime.attachWindow(1)
+      runtime.syncWindowGraph(1, {
+        tabs: [
+          {
+            tabId: 'tab-1',
+            worktreeId: 'repo-1::/tmp/worktree-a',
+            title: 'Claude',
+            activeLeafId: 'pane:1',
+            layout: null
+          }
+        ],
+        leaves: [
+          {
+            tabId: 'tab-1',
+            worktreeId: 'repo-1::/tmp/worktree-a',
+            leafId: 'pane:1',
+            paneRuntimeId: 1,
+            ptyId: 'pty-1'
+          }
+        ]
+      })
+      runtime.onPtyData('pty-1', 'running migration step 4/9\n', 123)
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      const waitPromise = runtime.waitForTerminal(terminal.handle, {
+        condition: 'tui-idle',
+        timeoutMs: 1_000
+      })
+      const timeoutAssertion = expect(waitPromise).rejects.toThrow('timeout')
+
+      await vi.advanceTimersByTimeAsync(12_000)
+
+      await timeoutAssertion
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('builds a compact worktree summary from persisted and live runtime state', async () => {

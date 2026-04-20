@@ -819,8 +819,11 @@ export async function main(argv = process.argv.slice(2), cwd = process.cwd()): P
 
     if (matches(commandPath, ['terminal', 'read'])) {
       const cursorFlag = getOptionalStringFlag(parsed.flags, 'cursor')
-      const cursor = cursorFlag !== undefined ? parseInt(cursorFlag, 10) : undefined
-      if (cursor !== undefined && !Number.isFinite(cursor)) {
+      const cursor =
+        cursorFlag !== undefined && /^\d+$/.test(cursorFlag)
+          ? Number.parseInt(cursorFlag, 10)
+          : undefined
+      if (cursorFlag !== undefined && cursor === undefined) {
         throw new RuntimeClientError('invalid_argument', '--cursor must be a non-negative integer')
       }
       const result = await client.call<{ terminal: RuntimeTerminalRead }>('terminal.read', {
