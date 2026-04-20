@@ -41,17 +41,43 @@ export default function ScriptRunner(): React.JSX.Element | null {
     if (!worktreePath) {
       return
     }
-    void detectPackageManager(worktreePath).then(setPackageManager)
+    let cancelled = false
+    void detectPackageManager(worktreePath).then((manager) => {
+      if (!cancelled) {
+        setPackageManager(manager)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
   }, [worktreePath])
 
   useEffect(() => {
-    if (scripts && !selectedScript) {
-      const first = Object.keys(scripts)[0]
-      if (first) {
-        setSelectedScript(first)
-      }
+    const scriptNames = scripts ? Object.keys(scripts) : []
+    if (scriptNames.length === 0) {
+      setSelectedScript(null)
+      return
+    }
+    if (!selectedScript || !scripts[selectedScript]) {
+      setSelectedScript(scriptNames[0] ?? null)
     }
   }, [scripts, selectedScript])
+
+  useEffect(() => {
+    const previousScripts = runningScriptsRef.current
+    setSelectedScript(null)
+    setCommandOverrides({})
+    setRunningScripts([])
+    setActiveTabId(null)
+
+    // Why: running scripts belong to the previously active worktree. Leaving
+    // them alive while the sidebar retargets to another worktree would mix
+    // output, commands, and stop actions across unrelated repos.
+    for (const script of previousScripts) {
+      script.transport.disconnect()
+      script.terminal.dispose()
+    }
+  }, [worktreePath])
 
   // Cleanup all PTYs on unmount
   useEffect(() => {

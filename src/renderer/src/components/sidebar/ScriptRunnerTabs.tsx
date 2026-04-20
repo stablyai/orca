@@ -15,36 +15,7 @@ export function ScriptRunnerTabs({
   setActiveTabId,
   handleCloseTab
 }: ScriptRunnerTabsProps): React.JSX.Element | null {
-  const terminalContainerRef = useRef<HTMLDivElement>(null)
   const activeScript = runningScripts.find((s) => s.id === activeTabId)
-
-  // Mount active tab's terminal to the container
-  useEffect(() => {
-    const container = terminalContainerRef.current
-    if (!container || !activeScript) {
-      return
-    }
-
-    container.innerHTML = ''
-    activeScript.terminal.open(container)
-    requestAnimationFrame(() => activeScript.fitAddon.fit())
-  }, [activeScript])
-
-  // Resize terminal when container resizes
-  useEffect(() => {
-    const container = terminalContainerRef.current
-    if (!container || !activeScript) {
-      return
-    }
-
-    const observer = new ResizeObserver(() => {
-      activeScript.fitAddon.fit()
-      activeScript.transport.resize(activeScript.terminal.cols, activeScript.terminal.rows)
-    })
-    observer.observe(container)
-
-    return () => observer.disconnect()
-  }, [activeScript])
 
   if (runningScripts.length === 0) {
     return (
@@ -64,47 +35,90 @@ export function ScriptRunnerTabs({
     <>
       <div className="flex shrink-0 overflow-x-auto border-t border-sidebar-border bg-background/30 scrollbar-none">
         {runningScripts.map((script) => (
-          <button
+          <div
             key={script.id}
-            onClick={() => setActiveTabId(script.id)}
-            className={`group flex shrink-0 items-center gap-1.5 border-r border-sidebar-border px-2.5 py-1 text-[11px] transition-colors ${
-              script.id === activeTabId
-                ? 'bg-background text-foreground'
-                : 'text-muted-foreground hover:text-foreground'
+            className={`group flex shrink-0 items-center border-r border-sidebar-border ${
+              script.id === activeTabId ? 'bg-background text-foreground' : 'text-muted-foreground'
             }`}
           >
-            <span
-              className={`size-1.5 rounded-full shrink-0 ${
-                script.exited
-                  ? script.exitCode === 0
-                    ? 'bg-muted-foreground/40'
-                    : 'bg-red-500'
-                  : 'bg-emerald-500'
-              }`}
-            />
-            <span className="max-w-[50px] truncate">{script.name}</span>
-            <span
-              role="button"
-              tabIndex={0}
-              onClick={(e) => {
-                e.stopPropagation()
-                handleCloseTab(script.id)
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.stopPropagation()
-                  handleCloseTab(script.id)
-                }
-              }}
-              className="rounded-sm p-0.5 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-accent"
+            <button
+              type="button"
+              onClick={() => setActiveTabId(script.id)}
+              className="flex min-w-0 items-center gap-1.5 px-2.5 py-1 text-[11px] transition-colors hover:text-foreground"
+            >
+              <span
+                className={`size-1.5 rounded-full shrink-0 ${
+                  script.exited
+                    ? script.exitCode === 0
+                      ? 'bg-muted-foreground/40'
+                      : 'bg-red-500'
+                    : 'bg-emerald-500'
+                }`}
+              />
+              <span className="max-w-[50px] truncate">{script.name}</span>
+            </button>
+            <button
+              type="button"
+              aria-label={`Close ${script.name}`}
+              onClick={() => handleCloseTab(script.id)}
+              className="mr-1 rounded-sm p-0.5 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-accent hover:text-foreground"
             >
               <X className="size-2.5" />
-            </span>
-          </button>
+            </button>
+          </div>
         ))}
       </div>
 
-      <div ref={terminalContainerRef} className="min-h-[120px] flex-1 overflow-hidden" />
+      <div className="min-h-[120px] flex-1 overflow-hidden">
+        {runningScripts.map((script) => (
+          <ScriptTerminalPane
+            key={script.id}
+            script={script}
+            active={script.id === activeScript?.id}
+          />
+        ))}
+      </div>
     </>
+  )
+}
+
+function ScriptTerminalPane({
+  script,
+  active
+}: {
+  script: RunningScript
+  active: boolean
+}): React.JSX.Element {
+  const terminalContainerRef = useRef<HTMLDivElement>(null)
+  const openedRef = useRef(false)
+
+  useEffect(() => {
+    const container = terminalContainerRef.current
+    if (!container || !active) {
+      return
+    }
+
+    if (!openedRef.current) {
+      script.terminal.open(container)
+      openedRef.current = true
+    }
+
+    const fit = (): void => {
+      script.fitAddon.fit()
+      script.transport.resize(script.terminal.cols, script.terminal.rows)
+    }
+
+    requestAnimationFrame(fit)
+
+    const observer = new ResizeObserver(fit)
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [active, script])
+
+  return (
+    <div
+      ref={terminalContainerRef}
+      className={active ? 'h-full min-h-[120px] overflow-hidden' : 'hidden'}
+    />
   )
 }
