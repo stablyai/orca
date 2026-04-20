@@ -209,6 +209,14 @@ describe('resolveTerminalShortcutAction', () => {
       )
     ).toBeNull()
 
+    // Ctrl+Alt+Arrow (Linux workspace switching on some desktops) must pass through on non-Mac.
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'ArrowLeft', code: 'ArrowLeft', ctrlKey: true, altKey: true }),
+        false
+      )
+    ).toBeNull()
+
     // Regression guard: plain ArrowLeft must still pass through untouched.
     expect(
       resolveTerminalShortcutAction(event({ key: 'ArrowLeft', code: 'ArrowLeft' }), true)
