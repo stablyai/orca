@@ -1,5 +1,5 @@
 import type { ManagedPaneInternal, ScrollState } from './pane-manager-types'
-import { restoreScrollState } from './pane-tree-ops'
+import { restoreScrollState } from './pane-scroll'
 
 // Why: reparenting a terminal container during split resets the viewport
 // scroll position (browser clears scrollTop on DOM move). This schedules a
