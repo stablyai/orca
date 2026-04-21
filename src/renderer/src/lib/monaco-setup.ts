@@ -43,6 +43,21 @@ monacoTS.javascriptDefaults.setDiagnosticsOptions({
   diagnosticCodesToIgnore: [2307, 2792]
 })
 
+// Why: .tsx/.jsx files share the base 'typescript'/'javascript' language ids
+// in Monaco's registry (there is no separate 'typescriptreact' id), so the
+// compiler options on those defaults apply to both. Without jsx enabled, the
+// worker raises TS17004 "Cannot use JSX unless the '--jsx' flag is provided"
+// on every JSX tag. Preserve mode is enough to allow parsing without forcing
+// an emit transform (we never emit — this is a read-only language service).
+monacoTS.typescriptDefaults.setCompilerOptions({
+  ...monacoTS.typescriptDefaults.getCompilerOptions(),
+  jsx: monacoTS.JsxEmit.Preserve
+})
+monacoTS.javascriptDefaults.setCompilerOptions({
+  ...monacoTS.javascriptDefaults.getCompilerOptions(),
+  jsx: monacoTS.JsxEmit.Preserve
+})
+
 // Configure Monaco to use the locally bundled editor instead of CDN
 loader.config({ monaco })
 
