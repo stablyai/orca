@@ -120,24 +120,33 @@ export function restoreScrollState(terminal: Terminal, state: ScrollState): void
 // Why: xterm 6's Viewport._sync() updates scrollDimensions after resize but
 // skips the scrollPosition update when ydisp matches _latestYDisp (a stale
 // internal value). This leaves the scrollbar thumb at a wrong position even
-// though the rendered content is correct. A scroll jiggle (-1/+1) forces
-// _sync() to fire with a differing ydisp, which triggers setScrollPosition
-// and syncs the scrollbar.
+// though the rendered content is correct.
 //
-// Why deferred: fit() queues an async _sync() that updates scrollHeight via
-// the terminal's refresh callback. If the terminal got wider (fewer wraps →
-// smaller scrollHeight), _sync reduces scrollHeight AFTER our synchronous
-// jiggle, causing the browser to clamp scrollTop. _sync then skips
-// setScrollPosition because ydisp === _latestYDisp. The deferred jiggle
-// runs after _sync has settled, re-syncing scrollTop to the correct ydisp.
+// Immediate jiggle: scrollLines(-1/+1) triggers _sync with a differing ydisp,
+// which calls setScrollPosition. This fixes the common case in the same JS turn.
+//
+// Why double-rAF: fit() queues an async _sync() via addRefreshCallback, which
+// fires AFTER the renderer's rAF. That _sync calls setScrollDimensions with a
+// new (potentially smaller) scrollHeight, causing the SmoothScrollableElement to
+// clamp scrollTop. But _sync skips setScrollPosition because _latestYDisp was
+// never updated to the new target (the Viewport's _handleScroll sees diff=0
+// after each scrollToLine because buffer.ydisp already matches). A single rAF
+// may fire before the render's refresh callback, so a double-rAF guarantees we
+// run after _sync has settled. Re-applying scrollToLine forces a new _sync with
+// the correct ydisp, which calls setScrollPosition (ydisp !== stale _latestYDisp).
 function forceViewportScrollbarSync(terminal: Terminal): void {
   jiggleScroll(terminal)
   requestAnimationFrame(() => {
-    try {
-      jiggleScroll(terminal)
-    } catch {
-      /* terminal may have been disposed */
-    }
+    requestAnimationFrame(() => {
+      try {
+        const buf = terminal.buffer.active
+        if (buf.viewportY < buf.baseY) {
+          terminal.scrollToLine(buf.viewportY)
+        }
+      } catch {
+        /* terminal may have been disposed */
+      }
+    })
   })
 }
 
