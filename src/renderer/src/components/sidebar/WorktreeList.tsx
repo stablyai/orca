@@ -279,7 +279,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                 className="absolute left-0 right-0"
                 style={{ transform: `translateY(${vItem.start}px)` }}
               >
-                <div className="mx-2 my-1.5 border-t border-border/60" />
+                <div className="mx-2 my-1.5 border-t border-foreground/15" />
               </div>
             )
           }
