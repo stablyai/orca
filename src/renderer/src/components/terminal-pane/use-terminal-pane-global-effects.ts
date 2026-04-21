@@ -71,13 +71,14 @@ export function useTerminalPaneGlobalEffects({
       return
     }
     if (isVisible) {
+      // Why: capture scroll states BEFORE resumeRendering() because WebGL
+      // context recreation and refresh() can fire xterm.js internal scroll
+      // events that corrupt viewportY. This is the same pre-corruption
+      // capture strategy used for sidebar toggles and divider drags.
+      const preResumeScrollStates = manager.captureAllScrollStates()
+
       // Why: resume WebGL immediately so the terminal shows its last-known
-      // state on the first painted frame. Without this, the browser paints
-      // 1+ frames of stale xterm DOM-fallback content at wrong dimensions
-      // (the "stretched" flash). On macOS, WebGL context creation is ~5 ms
-      // — fast enough to feel instant. On Windows (ANGLE → D3D11) it can
-      // take 100–500 ms, but the alternative (deferring to a rAF) leaves
-      // the terminal visibly distorted, which is a worse UX tradeoff.
+      // state on the first painted frame.
       manager.resumeRendering()
 
       fitEpochRef.current++
@@ -125,10 +126,10 @@ export function useTerminalPaneGlobalEffects({
         }
         fitRanForEpochRef.current = epoch
         if (isActive) {
-          fitAndFocusPanes(mgr)
+          fitAndFocusPanes(mgr, preResumeScrollStates)
           return
         }
-        fitPanes(mgr)
+        fitPanes(mgr, preResumeScrollStates)
       }
 
       if (entries.length === 0) {
