@@ -14,10 +14,10 @@ import {
   BellOff,
   Link,
   MessageSquare,
+  Moon,
   Pencil,
   Pin,
   PinOff,
-  XCircle,
   Trash2
 } from 'lucide-react'
 import { useAppStore } from '@/store'
@@ -209,7 +209,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({ worktree, 
           <Tooltip>
             <TooltipTrigger asChild>
               <DropdownMenuItem onSelect={handleCloseTerminals} disabled={isDeleting}>
-                <XCircle className="size-3.5" />
+                <Moon className="size-3.5" />
                 Sleep
               </DropdownMenuItem>
             </TooltipTrigger>
