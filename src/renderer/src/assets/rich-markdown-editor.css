@@ -233,7 +233,9 @@
   appearance: none;
   width: 16px;
   height: 16px;
-  border: 1.5px solid color-mix(in srgb, var(--foreground) 35%, transparent);
+  /* Why: bumped from 35% to 55% so the unchecked border stays legible in
+     dark mode where low-alpha foreground nearly disappears on --background. */
+  border: 1.5px solid color-mix(in srgb, var(--foreground) 55%, transparent);
   border-radius: 4px;
   background: transparent;
   cursor: pointer;
@@ -253,7 +255,10 @@
   top: 1px;
   width: 5px;
   height: 9px;
-  border: solid white;
+  /* Why: --primary flips between dark and light per theme, so a hardcoded
+     white tick is invisible in dark mode (light-on-light). Use the paired
+     token so the tick always contrasts against the filled box. */
+  border: solid var(--primary-foreground);
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
 }

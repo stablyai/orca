@@ -297,8 +297,43 @@
   margin: 0.25em 0;
 }
 
+/* Why: native checkbox rendering has poor contrast against the dark
+   preview background (the default Electron/WebKit look is a faded gray on
+   gray). Render our own checkbox using theme tokens so both the unchecked
+   border and the checked fill remain legible in light and dark themes,
+   matching the rich editor's task list. */
 .markdown-body li > input[type='checkbox'] {
+  appearance: none;
+  width: 16px;
+  height: 16px;
   margin-right: 0.5em;
+  border: 1.5px solid color-mix(in srgb, var(--foreground) 55%, transparent);
+  border-radius: 4px;
+  background: transparent;
+  position: relative;
+  /* Why: nudge the box down so it aligns with the text baseline of the
+     adjacent list-item text (remark-gfm renders the checkbox inline, not
+     in a flex container, so we can't rely on align-items here). */
+  vertical-align: -2px;
+}
+
+.markdown-body li > input[type='checkbox']:checked {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.markdown-body li > input[type='checkbox']:checked::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 5px;
+  height: 9px;
+  /* Why: use primary-foreground so the tick contrasts against --primary in
+     both themes (white-on-dark in light mode, dark-on-light in dark mode). */
+  border: solid var(--primary-foreground);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
 }
 
 .markdown-body blockquote {
