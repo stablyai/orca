@@ -1212,7 +1212,7 @@ function DiffCommentsInlineList({
   if (comments.length === 0) {
     return (
       <div className="px-6 py-2 text-[11px] text-muted-foreground">
-        No comments yet. Hover a line in the diff view and click the + in the gutter.
+        Hover over a line in the diff view and click the + to add a comment.
       </div>
     )
   }
