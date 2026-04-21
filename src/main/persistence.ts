@@ -78,12 +78,34 @@ export class Store {
         const parsed = JSON.parse(raw) as PersistedState
         // Merge with defaults in case new fields were added
         const defaults = getDefaultPersistedState(homedir())
+        // Why: before the layout-aware 'auto' mode shipped (issue #903),
+        // terminalMacOptionAsAlt defaulted to 'true' globally. That silently
+        // broke Option-layer characters (@ on Turkish via Option+Q, @ on
+        // German via Option+L, € on French via Option+E) for non-US users.
+        // We can't distinguish a persisted 'true' that the user chose
+        // explicitly from one they inherited from the old default — so on
+        // first launch after upgrade, flip 'true' back to 'auto' and let
+        // the renderer's keyboard-layout probe pick the right value per
+        // layout. US users land on 'true' via detection (no change); non-US
+        // users land on 'false' (correct). 'false'/'left'/'right' are
+        // definitionally explicit choices (they never matched the old
+        // default) so we carry those forward unchanged. The migrated flag
+        // guards against re-running this on subsequent launches.
+        const rawOptionAsAlt = parsed.settings?.terminalMacOptionAsAlt
+        const alreadyMigrated = parsed.settings?.terminalMacOptionAsAltMigrated === true
+        const migratedOptionAsAlt: 'auto' | 'true' | 'false' | 'left' | 'right' = alreadyMigrated
+          ? (rawOptionAsAlt ?? 'auto')
+          : rawOptionAsAlt === undefined || rawOptionAsAlt === 'true'
+            ? 'auto'
+            : rawOptionAsAlt
         return {
           ...defaults,
           ...parsed,
           settings: {
             ...defaults.settings,
             ...parsed.settings,
+            terminalMacOptionAsAlt: migratedOptionAsAlt,
+            terminalMacOptionAsAltMigrated: true,
             notifications: {
               ...getDefaultNotificationSettings(),
               ...parsed.settings?.notifications

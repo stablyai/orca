@@ -38,6 +38,8 @@ import {
   TERMINAL_SETUP_SCRIPT_SEARCH_ENTRIES,
   TERMINAL_TYPOGRAPHY_SEARCH_ENTRIES
 } from './terminal-search'
+import { useDetectedOptionAsAlt } from '@/lib/keyboard-layout/use-effective-mac-option-as-alt'
+import { detectedCategoryToDefault } from '@/lib/keyboard-layout/detect-option-as-alt'
 import { DarkTerminalThemeSection, LightTerminalThemeSection } from './TerminalThemeSections'
 
 type TerminalPaneProps = {
@@ -72,6 +74,14 @@ export function TerminalPane({
     systemPrefersDark
   )
   const paneStyleOptions = resolvePaneStyleOptions(settings)
+  const detectedLayout = useDetectedOptionAsAlt()
+  const autoDetectedDefault = detectedCategoryToDefault(detectedLayout)
+  const detectedLayoutLabel =
+    detectedLayout === 'us'
+      ? 'US English — Option sends Alt/Esc sequences'
+      : detectedLayout === 'non-us'
+        ? 'non-US layout — Option composes characters like @, €, [, ]'
+        : 'unknown layout — Option composes characters (safe default)'
   const scrollbackMb = Math.max(1, Math.round(settings.terminalScrollbackBytes / 1_000_000))
   const isPreset = SCROLLBACK_PRESETS_MB.includes(
     scrollbackMb as (typeof SCROLLBACK_PRESETS_MB)[number]
@@ -625,7 +635,7 @@ export function TerminalPane({
           >
             <Label>Option as Alt</Label>
             <div className="flex w-fit gap-1 rounded-md border border-border/50 p-1">
-              {(['true', 'left', 'right', 'false'] as const).map((option) => (
+              {(['auto', 'true', 'left', 'right', 'false'] as const).map((option) => (
                 <button
                   key={option}
                   onClick={() => updateSettings({ terminalMacOptionAsAlt: option })}
@@ -635,22 +645,30 @@ export function TerminalPane({
                       : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
-                  {option === 'false'
-                    ? 'Off'
-                    : option === 'true'
-                      ? 'Both'
-                      : option === 'left'
-                        ? 'Left'
-                        : 'Right'}
+                  {option === 'auto'
+                    ? 'Auto'
+                    : option === 'false'
+                      ? 'Off'
+                      : option === 'true'
+                        ? 'Both'
+                        : option === 'left'
+                          ? 'Left'
+                          : 'Right'}
                 </button>
               ))}
             </div>
             <p className="text-xs text-muted-foreground">
-              {settings.terminalMacOptionAsAlt === 'false'
-                ? 'Option composes special characters for your keyboard layout. Core readline shortcuts (Option+B/F/D) are handled automatically.'
-                : settings.terminalMacOptionAsAlt === 'true'
-                  ? 'Both Option keys send Alt/Esc sequences for full readline and shell support. Special character input via Option is unavailable.'
-                  : `The ${settings.terminalMacOptionAsAlt} Option key sends Alt/Esc sequences; the other composes special characters.`}
+              {settings.terminalMacOptionAsAlt === 'auto'
+                ? `Auto — detected: ${detectedLayoutLabel}. ${
+                    autoDetectedDefault === 'true'
+                      ? 'Both Option keys act as Alt, matching macOS power-user readline expectations. Switch to "Off" if you need to type Option-layer characters.'
+                      : 'Option composes your keyboard layout’s special characters (@, €, [, ], etc.). Core readline shortcuts (Option+B/F/D) are handled automatically.'
+                  }`
+                : settings.terminalMacOptionAsAlt === 'false'
+                  ? 'Option composes special characters for your keyboard layout. Core readline shortcuts (Option+B/F/D) are handled automatically.'
+                  : settings.terminalMacOptionAsAlt === 'true'
+                    ? 'Both Option keys send Alt/Esc sequences for full readline and shell support. Special character input via Option is unavailable.'
+                    : `The ${settings.terminalMacOptionAsAlt} Option key sends Alt/Esc sequences; the other composes special characters.`}
             </p>
           </SearchableSetting>
         ) : null}

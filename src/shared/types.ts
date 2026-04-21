@@ -661,11 +661,24 @@ export type GlobalSettings = {
   agentCmdOverrides: Partial<Record<TuiAgent, string>>
   /** Why: macOS terminals must choose between letting Option compose layout
    *  characters (@ on German, € on French) or treating Option as Meta/Esc for
-   *  readline shortcuts. Mirrors Ghostty's macos-option-as-alt setting.
-   *  'false' = compose (default, for non-US keyboards);
-   *  'true' = full Meta on both Option keys;
+   *  readline shortcuts. Mirrors Ghostty's macos-option-as-alt setting — and
+   *  like Ghostty, defaults to 'auto', which fingerprints the active keyboard
+   *  layout via navigator.keyboard.getLayoutMap() at runtime and picks
+   *  'true' for US / US-International and 'false' for everything else.
+   *  'auto'  = layout-aware (default). See docs/terminal-option-key-layout-aware-default.md.
+   *  'false' = compose (for non-US keyboards);
+   *  'true'  = full Meta on both Option keys;
    *  'left' / 'right' = only that Option key acts as Meta, the other composes. */
-  terminalMacOptionAsAlt: 'true' | 'false' | 'left' | 'right'
+  terminalMacOptionAsAlt: 'auto' | 'true' | 'false' | 'left' | 'right'
+  /** One-shot migration guard for the 'auto' rollout. Before this field landed,
+   *  the field defaulted to 'true' for everyone, meaning a persisted 'true'
+   *  could either be an explicit user choice or just the old default. On first
+   *  launch after upgrade, if this flag is false and the persisted value is
+   *  'true', we reset to 'auto' so non-US users stop getting their keyboard
+   *  broken by the stale global default. US users land on 'true' anyway via
+   *  detection, so no visible behavior change. Then we flip this flag to true
+   *  and never migrate again. */
+  terminalMacOptionAsAltMigrated: boolean
   /** Experimental: persist terminal sessions across app restarts via an
    *  out-of-process daemon (src/main/daemon/**). Opt-in because the daemon
    *  protocol is still stabilizing — some sessions have been observed to go

@@ -73,6 +73,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     defaultTaskViewPreset: 'all',
     agentCmdOverrides: {},
     terminalMacOptionAsAlt: 'false',
+    terminalMacOptionAsAltMigrated: true,
     experimentalTerminalDaemon: false,
     experimentalTerminalDaemonNoticeShown: false,
     ...overrides

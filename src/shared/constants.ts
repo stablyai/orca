@@ -142,7 +142,14 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     skipDeleteWorktreeConfirm: false,
     defaultTaskViewPreset: 'all',
     agentCmdOverrides: {},
-    terminalMacOptionAsAlt: 'true',
+    // Why: 'auto' runs a layout-aware probe at boot (see
+    // src/renderer/src/lib/keyboard-layout/*) that picks 'true' for US and
+    // US-International and 'false' for every other layout. This mirrors
+    // Ghostty's detectOptionAsAlt() and ensures users on Turkish, German,
+    // French, etc. can type Option+Q/L/E characters like @, €, [, ] out of
+    // the box (issue #903) while US users keep Option-as-Alt readline chords.
+    terminalMacOptionAsAlt: 'auto',
+    terminalMacOptionAsAltMigrated: false,
     experimentalTerminalDaemon: false,
     experimentalTerminalDaemonNoticeShown: false
   }

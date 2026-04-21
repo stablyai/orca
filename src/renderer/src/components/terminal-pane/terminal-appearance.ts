@@ -10,13 +10,15 @@ import {
 import { buildFontFamily } from './layout-serialization'
 import { captureScrollState, restoreScrollState } from '@/lib/pane-manager/pane-tree-ops'
 import type { PtyTransport } from './pty-transport'
+import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-option-as-alt'
 
 export function applyTerminalAppearance(
   manager: PaneManager,
   settings: GlobalSettings,
   systemPrefersDark: boolean,
   paneFontSizes: Map<number, number>,
-  paneTransports: Map<number, PtyTransport>
+  paneTransports: Map<number, PtyTransport>,
+  effectiveMacOptionAsAlt: EffectiveMacOptionAsAlt
 ): void {
   const appearance = resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
   const paneStyles = resolvePaneStyleOptions(settings)
@@ -35,7 +37,13 @@ export function applyTerminalAppearance(
     pane.terminal.options.fontFamily = buildFontFamily(settings.terminalFontFamily)
     pane.terminal.options.fontWeight = terminalFontWeights.fontWeight
     pane.terminal.options.fontWeightBold = terminalFontWeights.fontWeightBold
-    pane.terminal.options.macOptionIsMeta = settings.terminalMacOptionAsAlt === 'true'
+    // Why: xterm's macOptionIsMeta only flips on the 'true' mode. 'left' and
+    // 'right' are handled in the keydown policy (terminal-shortcut-policy),
+    // which needs Option to stay composable at the xterm level for the
+    // non-Meta side. Treating only 'true' as Meta here matches the pre-
+    // detection behavior; the detection layer simply decides *what* value
+    // `effectiveMacOptionAsAlt` carries.
+    pane.terminal.options.macOptionIsMeta = effectiveMacOptionAsAlt === 'true'
     pane.terminal.options.lineHeight = settings.terminalLineHeight
     try {
       const state = captureScrollState(pane.terminal)

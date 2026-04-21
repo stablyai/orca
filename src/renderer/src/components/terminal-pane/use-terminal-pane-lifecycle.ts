@@ -24,6 +24,7 @@ import {
 } from './layout-serialization'
 import { applyExpandedLayoutTo, restoreExpandedLayoutFrom } from './expand-collapse'
 import { applyTerminalAppearance } from './terminal-appearance'
+import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-option-as-alt'
 import { connectPanePty } from './pty-connection'
 import type { PtyTransport } from './pty-transport'
 import { fitAndFocusPanes, fitPanes } from './pane-helpers'
@@ -50,6 +51,11 @@ type UseTerminalPaneLifecycleDeps = {
   systemPrefersDark: boolean
   settings: GlobalSettings | null | undefined
   settingsRef: React.RefObject<GlobalSettings | null | undefined>
+  /** Resolved Option-as-Alt value: `'auto'` has already been mapped to
+   *  `'true' | 'false'` via the keyboard-layout probe. Passed separately
+   *  from `settings` because the probe lives outside the settings store. */
+  effectiveMacOptionAsAlt: EffectiveMacOptionAsAlt
+  effectiveMacOptionAsAltRef: React.RefObject<EffectiveMacOptionAsAlt>
   initialLayoutRef: React.RefObject<TerminalLayoutSnapshot>
   managerRef: React.RefObject<PaneManager | null>
   containerRef: React.RefObject<HTMLDivElement | null>
@@ -126,6 +132,8 @@ export function useTerminalPaneLifecycle({
   systemPrefersDark,
   settings,
   settingsRef,
+  effectiveMacOptionAsAlt,
+  effectiveMacOptionAsAltRef,
   initialLayoutRef,
   managerRef,
   containerRef,
@@ -174,7 +182,8 @@ export function useTerminalPaneLifecycle({
       currentSettings,
       systemPrefersDarkRef.current,
       paneFontSizesRef.current,
-      paneTransportsRef.current
+      paneTransportsRef.current,
+      effectiveMacOptionAsAltRef.current
     )
   }
 
@@ -433,7 +442,7 @@ export function useTerminalPaneLifecycle({
           ),
           cursorStyle: currentSettings?.terminalCursorStyle ?? 'bar',
           cursorBlink: currentSettings?.terminalCursorBlink ?? true,
-          macOptionIsMeta: currentSettings?.terminalMacOptionAsAlt === 'true',
+          macOptionIsMeta: effectiveMacOptionAsAltRef.current === 'true',
           lineHeight: currentSettings?.terminalLineHeight ?? 1
         }
       },
@@ -621,6 +630,11 @@ export function useTerminalPaneLifecycle({
       return
     }
     applyAppearance(manager)
+    // Why: effectiveMacOptionAsAlt changes when the OS keyboard layout
+    // switches mid-session (focus-in probe re-runs) or when the user flips
+    // the explicit override. Either triggers a live re-apply of
+    // macOptionIsMeta on every pane, matching Ghostty's "change takes effect
+    // immediately" behavior.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings, systemPrefersDark])
+  }, [settings, systemPrefersDark, effectiveMacOptionAsAlt])
 }

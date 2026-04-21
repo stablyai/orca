@@ -17,6 +17,7 @@ import { EMPTY_LAYOUT, paneLeafId, serializeTerminalLayout } from './layout-seri
 import { createExpandCollapseActions } from './expand-collapse'
 import { useTerminalKeyboardShortcuts, type SearchState } from './keyboard-handlers'
 import type { MacOptionAsAlt } from './terminal-shortcut-policy'
+import { useEffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/use-effective-mac-option-as-alt'
 import { useTerminalFontZoom } from './useTerminalFontZoom'
 import CloseTerminalDialog from './CloseTerminalDialog'
 import { TerminalErrorToast } from './TerminalErrorToast'
@@ -147,8 +148,15 @@ export default function TerminalPane({
 
   const settingsRef = useRef(settings)
   settingsRef.current = settings
-  const macOptionAsAltRef = useRef<MacOptionAsAlt>(settings?.terminalMacOptionAsAlt ?? 'false')
-  macOptionAsAltRef.current = settings?.terminalMacOptionAsAlt ?? 'false'
+  // Why: the persisted setting can be 'auto' (default) or one of the four
+  // explicit modes. useEffectiveMacOptionAsAlt resolves 'auto' into
+  // 'true' | 'false' based on the probe's current layout category (US → 'true',
+  // anything else → 'false'), and re-renders when the OS layout changes.
+  // Downstream keyboard handlers read the ref, so the ref also tracks the
+  // effective value, not the raw setting.
+  const effectiveMacOptionAsAlt = useEffectiveMacOptionAsAlt(settings?.terminalMacOptionAsAlt)
+  const macOptionAsAltRef = useRef<MacOptionAsAlt>(effectiveMacOptionAsAlt)
+  macOptionAsAltRef.current = effectiveMacOptionAsAlt
   const onPtyExitRef = useRef(onPtyExit)
   onPtyExitRef.current = onPtyExit
 
@@ -325,6 +333,8 @@ export default function TerminalPane({
     systemPrefersDark,
     settings,
     settingsRef,
+    effectiveMacOptionAsAlt,
+    effectiveMacOptionAsAltRef: macOptionAsAltRef,
     initialLayoutRef,
     managerRef,
     containerRef,
