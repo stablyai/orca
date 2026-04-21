@@ -98,6 +98,50 @@ export class BrowserManager {
   private readonly downloadsById = new Map<string, ActiveDownload>()
   private readonly grabSessionController = new BrowserGrabSessionController()
 
+  // Why: Page.addScriptToEvaluateOnNewDocument (via the CDP debugger) is the
+  // only reliable way to run JS before page scripts on every navigation.
+  // The previous approach — executeJavaScript on did-start-navigation — ran
+  // on the OLD page context during navigation, so overrides were never
+  // present when the new page's Turnstile script executed.
+  private injectAntiDetection(guest: Electron.WebContents): void {
+    const attach = (): void => {
+      if (guest.isDestroyed()) {
+        return
+      }
+      try {
+        if (!guest.debugger.isAttached()) {
+          guest.debugger.attach('1.3')
+        }
+        const { ANTI_DETECTION_SCRIPT } = require('./anti-detection')
+        void guest.debugger
+          .sendCommand('Page.enable', {})
+          .then(() =>
+            guest.debugger.sendCommand('Page.addScriptToEvaluateOnNewDocument', {
+              source: ANTI_DETECTION_SCRIPT
+            })
+          )
+          .catch(() => {})
+      } catch {
+        /* best-effort — debugger may be unavailable */
+      }
+    }
+
+    try {
+      attach()
+      // Why: the CDP proxy and bridge detach the debugger when they stop,
+      // which removes addScriptToEvaluateOnNewDocument injections. Re-attach
+      // so manual browsing retains anti-detection overrides after agent
+      // sessions end.
+      guest.debugger.on('detach', () => {
+        if (!guest.isDestroyed()) {
+          setTimeout(attach, 100)
+        }
+      })
+    } catch {
+      /* best-effort */
+    }
+  }
+
   private resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId: number): string | null {
     return this.tabIdByWebContentsId.get(guestWebContentsId) ?? null
   }
@@ -333,6 +377,13 @@ export class BrowserManager {
       return
     }
     this.policyAttachedGuestIds.add(guest.id)
+
+    // Why: Cloudflare Turnstile and similar bot detectors probe browser APIs
+    // (navigator.webdriver, plugins, window.chrome) that differ in Electron
+    // webviews vs real Chrome. Inject overrides on every page load so manual
+    // browsing passes challenges even without the CDP debugger attached.
+    this.injectAntiDetection(guest)
+
     // Why: background throttling must be disabled so agent-driven screenshots
     // (Page.captureScreenshot via CDP proxy) can capture frames even when the
     // Orca window is not the focused foreground app. With throttling enabled,
@@ -373,6 +424,12 @@ export class BrowserManager {
     })
 
     const navigationGuard = (event: Electron.Event, url: string): void => {
+      // Why: blob: URLs are same-origin (inherit the creator's origin) and are
+      // used by Cloudflare Turnstile to load challenge resources inside iframes.
+      // Blocking them triggers error 600010 ("bot behavior detected").
+      if (url.startsWith('blob:')) {
+        return
+      }
       if (!normalizeBrowserNavigationUrl(url)) {
         // Why: `will-attach-webview` only validates the initial src. Main must
         // keep enforcing the same allowlist for later guest navigations too.

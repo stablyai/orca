@@ -1,4 +1,8 @@
-import { app, type Session, session } from 'electron'
+/* eslint-disable max-lines -- Why: the registry is the single source of truth for
+   browser session profiles, partition allowlisting, cookie import staging, and
+   per-partition permission/download policies. Splitting further would scatter the
+   security boundary across modules. */
+import { app, session } from 'electron'
 import { randomUUID } from 'node:crypto'
 import {
   copyFileSync,
@@ -12,6 +16,7 @@ import { join } from 'node:path'
 import { ORCA_BROWSER_PARTITION } from '../../shared/constants'
 import type { BrowserSessionProfile, BrowserSessionProfileScope } from '../../shared/types'
 import { browserManager } from './browser-manager'
+import { cleanElectronUserAgent, setupClientHintsOverride } from './browser-session-ua'
 
 type BrowserSessionMeta = {
   defaultSource: BrowserSessionProfile['source']
@@ -107,7 +112,18 @@ class BrowserSessionRegistry {
     if (meta.userAgent) {
       const sess = session.fromPartition(ORCA_BROWSER_PARTITION)
       sess.setUserAgent(meta.userAgent)
-      this.setupClientHintsOverride(sess, meta.userAgent)
+      setupClientHintsOverride(sess, meta.userAgent)
+    } else {
+      // Why: even without an imported session, the default Electron UA contains
+      // "Electron/X.X.X" and the app name which trip Cloudflare Turnstile.
+      try {
+        const sess = session.fromPartition(ORCA_BROWSER_PARTITION)
+        const cleanUA = cleanElectronUserAgent(sess.getUserAgent())
+        sess.setUserAgent(cleanUA)
+        setupClientHintsOverride(sess, cleanUA)
+      } catch {
+        /* session not available yet (e.g. unit tests or pre-ready) */
+      }
     }
     if (meta.defaultSource) {
       const current = this.profiles.get('default')
@@ -118,46 +134,6 @@ class BrowserSessionRegistry {
     if (meta.profiles.length > 0) {
       this.hydrateFromPersisted(meta.profiles)
     }
-  }
-
-  // Why: Electron's actual Chromium version (e.g. 134) differs from the source
-  // browser's version (e.g. Edge 147). The sec-ch-ua Client Hints headers
-  // reveal the real version, creating a mismatch that Google's anti-fraud
-  // detection flags as CookieMismatch on accounts.google.com. Override Client
-  // Hints on outgoing requests to match the source browser's UA.
-  setupClientHintsOverride(sess: Session, ua: string): void {
-    const chromeMatch = ua.match(/Chrome\/([\d.]+)/)
-    if (!chromeMatch) {
-      return
-    }
-    const fullChromeVersion = chromeMatch[1]
-    const majorVersion = fullChromeVersion.split('.')[0]
-
-    let brand = 'Google Chrome'
-    let brandFullVersion = fullChromeVersion
-
-    const edgeMatch = ua.match(/Edg\/([\d.]+)/)
-    if (edgeMatch) {
-      brand = 'Microsoft Edge'
-      brandFullVersion = edgeMatch[1]
-    }
-    const brandMajor = brandFullVersion.split('.')[0]
-
-    const secChUa = `"${brand}";v="${brandMajor}", "Chromium";v="${majorVersion}", "Not/A)Brand";v="24"`
-    const secChUaFull = `"${brand}";v="${brandFullVersion}", "Chromium";v="${fullChromeVersion}", "Not/A)Brand";v="24.0.0.0"`
-
-    sess.webRequest.onBeforeSendHeaders({ urls: ['https://*/*'] }, (details, callback) => {
-      const headers = details.requestHeaders
-      for (const key of Object.keys(headers)) {
-        const lower = key.toLowerCase()
-        if (lower === 'sec-ch-ua') {
-          headers[key] = secChUa
-        } else if (lower === 'sec-ch-ua-full-version-list') {
-          headers[key] = secChUaFull
-        }
-      }
-      callback({ requestHeaders: headers })
-    })
   }
 
   // Why: the import writes cookies to a staging DB because CookieMonster holds
@@ -373,10 +349,30 @@ class BrowserSessionRegistry {
     this.configuredPartitions.add(partition)
 
     const sess = session.fromPartition(partition)
+    if (typeof sess.getUserAgent === 'function') {
+      const cleanUA = cleanElectronUserAgent(sess.getUserAgent())
+      sess.setUserAgent(cleanUA)
+      setupClientHintsOverride(sess, cleanUA)
+    }
     // Why: clipboard-read and clipboard-sanitized-write are required for agent-browser's
     // clipboard commands to work. Without these, navigator.clipboard.writeText/readText
     // throws NotAllowedError even when invoked via CDP with userGesture:true.
     const autoGranted = new Set(['fullscreen', 'clipboard-read', 'clipboard-sanitized-write'])
+    // Why: Turnstile and other bot detectors probe permissions via
+    // navigator.permissions.query(). In real Chrome most permissions return
+    // 'prompt', but Electron's default is 'denied' for everything not in
+    // autoGranted. Returning true for passive CHECK queries (read-only probes)
+    // makes the fingerprint look like a normal browser. REQUEST handlers
+    // remain gated so actual permission grants still require approval.
+    const passiveAllowed = new Set([
+      ...autoGranted,
+      'notifications',
+      'geolocation',
+      'media',
+      'midi',
+      'idle-detection',
+      'storage-access'
+    ])
     sess.setPermissionRequestHandler((webContents, permission, callback) => {
       const allowed = autoGranted.has(permission)
       if (!allowed) {
@@ -389,7 +385,7 @@ class BrowserSessionRegistry {
       callback(allowed)
     })
     sess.setPermissionCheckHandler((_webContents, permission) => {
-      return autoGranted.has(permission)
+      return passiveAllowed.has(permission)
     })
     sess.setDisplayMediaRequestHandler((_request, callback) => {
       callback({ video: undefined, audio: undefined })

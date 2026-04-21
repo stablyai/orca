@@ -18,6 +18,7 @@ vi.mock('./browser-manager', () => ({
 }))
 
 import { browserSessionRegistry } from './browser-session-registry'
+import { setupClientHintsOverride } from './browser-session-ua'
 import { ORCA_BROWSER_PARTITION } from '../../shared/constants'
 
 describe('BrowserSessionRegistry', () => {
@@ -153,7 +154,7 @@ describe('BrowserSessionRegistry', () => {
       const edgeUa =
         'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.6890.3 Safari/537.36 Edg/147.0.3210.5'
 
-      browserSessionRegistry.setupClientHintsOverride(mockSess, edgeUa)
+      setupClientHintsOverride(mockSess, edgeUa)
 
       expect(onBeforeSendHeaders).toHaveBeenCalledWith(
         { urls: ['https://*/*'] },
@@ -178,7 +179,7 @@ describe('BrowserSessionRegistry', () => {
       const chromeUa =
         'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.6890.3 Safari/537.36'
 
-      browserSessionRegistry.setupClientHintsOverride(mockSess, chromeUa)
+      setupClientHintsOverride(mockSess, chromeUa)
 
       const callback = vi.fn()
       const listener = onBeforeSendHeaders.mock.calls[0][1]
@@ -192,10 +193,7 @@ describe('BrowserSessionRegistry', () => {
       const onBeforeSendHeaders = vi.fn()
       const mockSess = { webRequest: { onBeforeSendHeaders } } as never
 
-      browserSessionRegistry.setupClientHintsOverride(
-        mockSess,
-        'Mozilla/5.0 (compatible; MSIE 10.0)'
-      )
+      setupClientHintsOverride(mockSess, 'Mozilla/5.0 (compatible; MSIE 10.0)')
 
       expect(onBeforeSendHeaders).not.toHaveBeenCalled()
     })
@@ -203,10 +201,7 @@ describe('BrowserSessionRegistry', () => {
     it('leaves non-Client-Hints headers unchanged', () => {
       const onBeforeSendHeaders = vi.fn()
       const mockSess = { webRequest: { onBeforeSendHeaders } } as never
-      browserSessionRegistry.setupClientHintsOverride(
-        mockSess,
-        'Mozilla/5.0 Chrome/147.0.0.0 Safari/537.36'
-      )
+      setupClientHintsOverride(mockSess, 'Mozilla/5.0 Chrome/147.0.0.0 Safari/537.36')
 
       const callback = vi.fn()
       const listener = onBeforeSendHeaders.mock.calls[0][1]

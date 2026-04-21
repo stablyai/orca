@@ -46,6 +46,7 @@ import {
   type SnapshotResult
 } from './snapshot-engine'
 import type { BrowserManager } from './browser-manager'
+import { ANTI_DETECTION_SCRIPT } from './anti-detection'
 
 export class BrowserError extends Error {
   constructor(
@@ -1156,6 +1157,13 @@ export class CdpBridge {
       autoAttach: true,
       waitForDebuggerOnStart: false,
       flatten: true
+    })
+
+    // Why: attaching the CDP debugger sets navigator.webdriver = true and
+    // exposes other automation signals that Cloudflare Turnstile checks.
+    // Override them on every new document load so challenges succeed.
+    await sender('Page.addScriptToEvaluateOnNewDocument', {
+      source: ANTI_DETECTION_SCRIPT
     })
 
     // Why: remove any stale listeners from a previous attach cycle to prevent

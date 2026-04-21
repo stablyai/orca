@@ -46,6 +46,7 @@ import type {
   BrowserSessionProfileSource
 } from '../../shared/types'
 import { browserSessionRegistry } from './browser-session-registry'
+import { setupClientHintsOverride } from './browser-session-ua'
 
 // ---------------------------------------------------------------------------
 // Browser detection
@@ -1578,7 +1579,7 @@ export async function importCookiesFromBrowser(
     const ua = getUserAgentForBrowser(browser.family)
     if (ua) {
       targetSession.setUserAgent(ua)
-      browserSessionRegistry.setupClientHintsOverride(targetSession, ua)
+      setupClientHintsOverride(targetSession, ua)
       browserSessionRegistry.persistUserAgent(ua)
       diag(`  set UA for partition: ${ua.substring(0, 80)}...`)
     }

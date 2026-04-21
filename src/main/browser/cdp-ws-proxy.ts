@@ -2,6 +2,7 @@ import { WebSocketServer, WebSocket } from 'ws'
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'http'
 import type { WebContents } from 'electron'
 import { captureScreenshot } from './cdp-screenshot'
+import { ANTI_DETECTION_SCRIPT } from './anti-detection'
 
 export class CdpWsProxy {
   private httpServer: Server | null = null
@@ -96,9 +97,12 @@ export class CdpWsProxy {
     const url = req.url ?? ''
     if (url === '/json/version' || url === '/json/version/') {
       res.writeHead(200, { 'Content-Type': 'application/json' })
+      // Why: agent-browser reads this endpoint to identify the browser. Returning
+      // "Orca/CdpWsProxy" leaks that this is an embedded automation surface, which
+      // could affect downstream detection heuristics.
       res.end(
         JSON.stringify({
-          Browser: 'Orca/CdpWsProxy',
+          Browser: 'Chrome/Headless',
           'Protocol-Version': '1.3',
           webSocketDebuggerUrl: `ws://127.0.0.1:${this.port}`
         })
@@ -134,6 +138,19 @@ export class CdpWsProxy {
       }
     }
     this.attached = true
+
+    // Why: attaching the CDP debugger sets navigator.webdriver = true and
+    // exposes other automation signals that Cloudflare Turnstile checks.
+    // Inject before any page loads so challenges succeed.
+    try {
+      await this.webContents.debugger.sendCommand('Page.enable', {})
+      await this.webContents.debugger.sendCommand('Page.addScriptToEvaluateOnNewDocument', {
+        source: ANTI_DETECTION_SCRIPT
+      })
+    } catch {
+      /* best-effort — page domain may not be ready yet */
+    }
+
     this.debuggerMessageHandler = (_event: unknown, ...rest: unknown[]) => {
       const [method, params, sessionId] = rest as [
         string,
@@ -209,11 +226,13 @@ export class CdpWsProxy {
       return
     }
     if (msg.method === 'Browser.getVersion') {
+      // Why: returning "Orca/Electron" identifies this as an embedded automation
+      // surface to agent-browser. Use a generic Chrome product string instead.
       this.sendResult(
         clientId,
         {
           protocolVersion: '1.3',
-          product: 'Orca/Electron',
+          product: 'Chrome/Headless',
           userAgent: '',
           jsVersion: ''
         },

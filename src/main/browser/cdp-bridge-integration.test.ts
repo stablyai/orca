@@ -159,6 +159,8 @@ function createMockGuest(id: number, url: string, title: string) {
         return {}
       case 'Target.setAutoAttach':
         return {}
+      case 'Page.addScriptToEvaluateOnNewDocument':
+        return { identifier: 'mock-script-id' }
       case 'Runtime.enable':
         return {}
       default:
