@@ -120,11 +120,28 @@ export function restoreScrollState(terminal: Terminal, state: ScrollState): void
 // Why: xterm 6's Viewport._sync() updates scrollDimensions after resize but
 // skips the scrollPosition update when ydisp matches _latestYDisp (a stale
 // internal value). This leaves the scrollbar thumb at a wrong position even
-// though the rendered content is correct. A scroll jiggle (-1/+1) in the
-// same JS turn forces _sync() to fire with a differing ydisp, which triggers
-// setScrollPosition and syncs the scrollbar. No paint occurs between the two
-// synchronous calls so the intermediate state is never visible.
+// though the rendered content is correct. A scroll jiggle (-1/+1) forces
+// _sync() to fire with a differing ydisp, which triggers setScrollPosition
+// and syncs the scrollbar.
+//
+// Why deferred: fit() queues an async _sync() that updates scrollHeight via
+// the terminal's refresh callback. If the terminal got wider (fewer wraps →
+// smaller scrollHeight), _sync reduces scrollHeight AFTER our synchronous
+// jiggle, causing the browser to clamp scrollTop. _sync then skips
+// setScrollPosition because ydisp === _latestYDisp. The deferred jiggle
+// runs after _sync has settled, re-syncing scrollTop to the correct ydisp.
 function forceViewportScrollbarSync(terminal: Terminal): void {
+  jiggleScroll(terminal)
+  requestAnimationFrame(() => {
+    try {
+      jiggleScroll(terminal)
+    } catch {
+      /* terminal may have been disposed */
+    }
+  })
+}
+
+function jiggleScroll(terminal: Terminal): void {
   const buf = terminal.buffer.active
   if (buf.viewportY > 0) {
     terminal.scrollLines(-1)
