@@ -159,6 +159,13 @@ test.describe('Terminal Shortcuts', () => {
     await pressAndExpectWrite(orcaPage, electronApp, 'Alt+ArrowLeft', '\x1bb')
     await pressAndExpectWrite(orcaPage, electronApp, 'Alt+ArrowRight', '\x1bf')
 
+    // Ctrl+←/→ on non-mac → readline backward-word / forward-word (\eb / \ef).
+    // Mac-gated: Ctrl+Arrow on macOS is reserved for Mission Control / Spaces.
+    if (!isMac) {
+      await pressAndExpectWrite(orcaPage, electronApp, 'Control+ArrowLeft', '\x1bb')
+      await pressAndExpectWrite(orcaPage, electronApp, 'Control+ArrowRight', '\x1bf')
+    }
+
     // Alt+Backspace → Esc+DEL (readline backward-kill-word).
     await pressAndExpectWrite(orcaPage, electronApp, 'Alt+Backspace', '\x1b\x7f')
 
