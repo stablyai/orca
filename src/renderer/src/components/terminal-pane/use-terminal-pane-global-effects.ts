@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import {
   FOCUS_TERMINAL_PANE_EVENT,
+  LAYOUT_WILL_CHANGE_EVENT,
   TOGGLE_TERMINAL_PANE_EXPAND_EVENT,
   type FocusTerminalPaneDetail
 } from '@/constants/terminal'
@@ -324,4 +325,38 @@ export function useTerminalPaneGlobalEffects({
       }
     })
   }, [isActiveRef, managerRef, paneTransportsRef])
+
+  // Why: instant layout changes (sidebar toggle via Cmd+L / Cmd+B) resize the
+  // terminal container synchronously. xterm.js fires internal scroll events on
+  // the viewport div during this synchronous reflow, corrupting scrollTop before
+  // any ResizeObserver callback can capture state. By locking scroll states in
+  // response to a synchronous event dispatched BEFORE the state change, we
+  // guarantee capture happens while the viewport is still at its original
+  // position — the same pattern that keeps divider drag scroll stable.
+  useEffect(() => {
+    let unlockTimer: ReturnType<typeof setTimeout> | null = null
+    const onLayoutWillChange = (): void => {
+      const manager = managerRef.current
+      if (!manager || !isVisibleRef.current) {
+        return
+      }
+      manager.lockAllScrollStates()
+      // Why: 300ms > ResizeObserver debounce (150ms) + one fit cycle, ensuring
+      // fitAllPanesInternal has restored from the lock before we clear it.
+      if (unlockTimer !== null) {
+        clearTimeout(unlockTimer)
+      }
+      unlockTimer = setTimeout(() => {
+        unlockTimer = null
+        managerRef.current?.unlockAllScrollStates()
+      }, 300)
+    }
+    window.addEventListener(LAYOUT_WILL_CHANGE_EVENT, onLayoutWillChange)
+    return () => {
+      window.removeEventListener(LAYOUT_WILL_CHANGE_EVENT, onLayoutWillChange)
+      if (unlockTimer !== null) {
+        clearTimeout(unlockTimer)
+      }
+    }
+  }, [managerRef, isVisibleRef])
 }

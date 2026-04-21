@@ -342,3 +342,24 @@ export function disposePane(
   }
   panes.delete(pane.id)
 }
+
+export function suspendAllRendering(panes: Map<number, ManagedPaneInternal>): void {
+  for (const pane of panes.values()) {
+    disposeWebgl(pane)
+  }
+}
+
+export function resumeAllRendering(panes: Map<number, ManagedPaneInternal>): void {
+  for (const pane of panes.values()) {
+    if (pane.gpuRenderingEnabled && !pane.webglAddon) {
+      attachWebgl(pane)
+      // Why: fresh WebGL canvas from attachWebgl() has no painted content;
+      // without refresh the terminal appears frozen when dims are unchanged.
+      try {
+        pane.terminal.refresh(0, pane.terminal.rows - 1)
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+}

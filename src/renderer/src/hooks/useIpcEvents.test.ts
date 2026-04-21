@@ -1053,7 +1053,7 @@ describe('useIpcEvents shortcut hint clearing', () => {
     expect(dispatchEvent).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'orca:clear-modifier-hints' })
     )
-    expect(dispatchEvent).toHaveBeenCalledTimes(2)
+    expect(dispatchEvent).toHaveBeenCalledTimes(3)
     expect(toggleSidebar).toHaveBeenCalledTimes(1)
     expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-2')
   })
