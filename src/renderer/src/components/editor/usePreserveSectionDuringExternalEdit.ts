@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from 'react'
 // and applies the latest pending content once the selection is released.
 export function usePreserveSectionDuringExternalEdit(
   content: string,
-  bodyRef: React.RefObject<HTMLDivElement>
+  bodyRef: React.RefObject<HTMLDivElement | null>
 ): string {
   const [renderedContent, setRenderedContent] = useState(content)
   const pendingContentRef = useRef(content)
@@ -38,16 +38,23 @@ export function usePreserveSectionDuringExternalEdit(
       setRenderedContent(content)
       return
     }
+    // Why: cap the deferral so a forgotten selection (user walked away with
+    // text highlighted) can't freeze the preview indefinitely while the file
+    // keeps changing on disk. After the cap elapses we apply the pending
+    // content even if the selection is still held — the user loses a
+    // highlight they'd abandoned anyway, which is preferable to stale content.
+    const MAX_DEFER_MS = 3000
+    const deadline = performance.now() + MAX_DEFER_MS
     let frameId = 0
     const waitForSelectionRelease = (): void => {
-      if (hasSelectionInsideBody()) {
-        frameId = window.requestAnimationFrame(waitForSelectionRelease)
+      if (performance.now() >= deadline || !hasSelectionInsideBody()) {
+        setRenderedContent(pendingContentRef.current)
         return
       }
-      setRenderedContent(pendingContentRef.current)
+      frameId = window.requestAnimationFrame(waitForSelectionRelease)
     }
     frameId = window.requestAnimationFrame(waitForSelectionRelease)
     return () => window.cancelAnimationFrame(frameId)
-  }, [content, renderedContent])
+  }, [bodyRef, content, renderedContent])
   return renderedContent
 }
