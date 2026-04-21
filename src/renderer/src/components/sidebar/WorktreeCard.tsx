@@ -161,25 +161,42 @@ const WorktreeCard = React.memo(function WorktreeCard({
   // Stable click handler – ignore clicks that are really text selections.
   // Why: if the SSH connection is down, show a reconnect dialog instead of
   // activating the worktree — all remote operations would fail anyway.
-  const handleClick = useCallback(() => {
-    const selection = window.getSelection()
-    if (selection && selection.toString().length > 0) {
-      return
-    }
-    if (useAppStore.getState().activeView !== 'terminal') {
-      // Why: the sidebar remains visible during the new-workspace flow, so
-      // clicking a real worktree should switch the main pane back to that
-      // worktree instead of leaving the create surface visible.
-      setActiveView('terminal')
-    }
-    // Why: always activate the worktree so the user can see terminal history,
-    // editor state, etc. even when SSH is disconnected. Show the reconnect
-    // dialog as a non-blocking overlay rather than a gate.
-    setActiveWorktree(worktree.id)
-    if (isSshDisconnected) {
-      setShowDisconnectedDialog(true)
-    }
-  }, [worktree.id, setActiveView, setActiveWorktree, isSshDisconnected])
+  const handleClick = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      const selection = window.getSelection()
+      // Why: only suppress the click when the selection is *inside this card*
+      // (a real drag-select on the card's own text). A selection anchored
+      // elsewhere — e.g. inside the markdown preview while the AI is streaming
+      // writes — must not block worktree switching, otherwise the user can't
+      // leave the current worktree without first clicking into a terminal to
+      // clear the foreign selection.
+      if (selection && selection.toString().length > 0) {
+        const card = event.currentTarget
+        const anchor = selection.anchorNode
+        const focus = selection.focusNode
+        const selectionInsideCard =
+          (anchor instanceof Node && card.contains(anchor)) ||
+          (focus instanceof Node && card.contains(focus))
+        if (selectionInsideCard) {
+          return
+        }
+      }
+      if (useAppStore.getState().activeView !== 'terminal') {
+        // Why: the sidebar remains visible during the new-workspace flow, so
+        // clicking a real worktree should switch the main pane back to that
+        // worktree instead of leaving the create surface visible.
+        setActiveView('terminal')
+      }
+      // Why: always activate the worktree so the user can see terminal history,
+      // editor state, etc. even when SSH is disconnected. Show the reconnect
+      // dialog as a non-blocking overlay rather than a gate.
+      setActiveWorktree(worktree.id)
+      if (isSshDisconnected) {
+        setShowDisconnectedDialog(true)
+      }
+    },
+    [worktree.id, setActiveView, setActiveWorktree, isSshDisconnected]
+  )
 
   const handleDoubleClick = useCallback(() => {
     openModal('edit-meta', {

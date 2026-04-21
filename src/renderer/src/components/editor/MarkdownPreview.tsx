@@ -24,6 +24,7 @@ import {
   isMarkdownPreviewFindShortcut,
   setActiveMarkdownPreviewSearchMatch
 } from './markdown-preview-search'
+import { usePreserveSectionDuringExternalEdit } from './usePreserveSectionDuringExternalEdit'
 
 type MarkdownPreviewProps = {
   content: string
@@ -64,7 +65,9 @@ export default function MarkdownPreview({
     settings?.theme === 'dark' ||
     (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
 
-  const frontMatter = useMemo(() => extractFrontMatter(content), [content])
+  const renderedContent = usePreserveSectionDuringExternalEdit(content, bodyRef)
+
+  const frontMatter = useMemo(() => extractFrontMatter(renderedContent), [renderedContent])
   const frontMatterInner = useMemo(() => {
     if (!frontMatter) {
       return ''
@@ -148,7 +151,7 @@ export default function MarkdownPreview({
     // Why: content is included so the restore loop re-triggers when markdown
     // content arrives or changes (e.g., async file load), since scrollHeight
     // depends on rendered content and may not be large enough until then.
-  }, [scrollCacheKey, content])
+  }, [scrollCacheKey, renderedContent])
 
   const moveToMatch = useCallback((direction: 1 | -1) => {
     const matches = matchesRef.current
@@ -205,7 +208,7 @@ export default function MarkdownPreview({
     })
 
     return () => clearMarkdownPreviewSearchHighlights(body)
-  }, [content, isSearchOpen, query])
+  }, [renderedContent, isSearchOpen, query])
 
   useEffect(() => {
     setActiveMarkdownPreviewSearchMatch(matchesRef.current, activeMatchIndex)
@@ -465,7 +468,7 @@ export default function MarkdownPreview({
           remarkPlugins={[remarkGfm, remarkFrontmatter]}
           rehypePlugins={[rehypeSlug, rehypeHighlight]}
         >
-          {content}
+          {renderedContent}
         </Markdown>
       </div>
     </div>
