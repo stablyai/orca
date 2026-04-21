@@ -53,8 +53,13 @@ export class Session {
       cols: opts.cols,
       rows: opts.rows,
       scrollback: opts.scrollback,
+      // Why: xterm.js generates query responses (DA1, DSR) asynchronously.
+      // If the subprocess has already exited, writing to it would hit a dead
+      // NAPI handle. Check session state before forwarding.
       onData: (data) => {
-        // Forward xterm.js query responses (DA1 etc.) to subprocess
+        if (this._state === 'exited' || this._disposed) {
+          return
+        }
         opts.subprocess.write(data)
       }
     })

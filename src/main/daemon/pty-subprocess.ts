@@ -72,11 +72,48 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   proc.onData((data) => onDataCb?.(data))
   proc.onExit(({ exitCode }) => onExitCb?.(exitCode))
 
+  // Why: node-pty's native NAPI layer throws a C++ Napi::Error when
+  // write/resize/kill is called on a PTY whose underlying fd is already
+  // closed. This happens in the race window between the child process
+  // exiting and the JS onExit callback firing. An uncaught Napi::Error
+  // propagates to std::terminate, killing the entire daemon process.
+  let dead = false
+  proc.onExit(() => {
+    dead = true
+  })
+
   return {
     pid: proc.pid,
-    write: (data) => proc.write(data),
-    resize: (cols, rows) => proc.resize(cols, rows),
-    kill: () => proc.kill(),
+    write: (data) => {
+      if (dead) {
+        return
+      }
+      try {
+        proc.write(data)
+      } catch {
+        dead = true
+      }
+    },
+    resize: (cols, rows) => {
+      if (dead) {
+        return
+      }
+      try {
+        proc.resize(cols, rows)
+      } catch {
+        dead = true
+      }
+    },
+    kill: () => {
+      if (dead) {
+        return
+      }
+      try {
+        proc.kill()
+      } catch {
+        dead = true
+      }
+    },
     forceKill: () => {
       try {
         process.kill(proc.pid, 'SIGKILL')

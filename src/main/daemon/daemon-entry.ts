@@ -33,6 +33,16 @@ export function parseArgs(argv: string[]): { socketPath: string; tokenPath: stri
 async function main(): Promise<void> {
   const { socketPath, tokenPath } = parseArgs(process.argv.slice(2))
 
+  // Why: node-pty can throw a C++ Napi::Error that escapes all JS try/catch
+  // blocks (e.g. writing to a PTY whose fd was closed between the native
+  // exit signal and the JS onExit callback). Without this handler, Node's
+  // default behavior is to print the stack and exit — killing the entire
+  // daemon and all terminal sessions. Logging and continuing is safe because
+  // the individual PTY is already dead; the daemon itself is still healthy.
+  process.on('uncaughtException', (err) => {
+    console.error('[daemon] Uncaught exception (suppressed):', err)
+  })
+
   let daemon: DaemonHandle | null = null
 
   const shutdown = async (): Promise<void> => {

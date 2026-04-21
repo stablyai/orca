@@ -287,9 +287,15 @@ export function useTerminalPaneGlobalEffects({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isVisible])
 
+  // Why: only the active tab's terminal should process file drops. Registering
+  // a listener per mounted tab causes a MaxListenersExceededWarning when 11+
+  // tabs are open. Gating on isActive ensures at most one listener exists.
   useEffect(() => {
+    if (!isActive) {
+      return
+    }
     return window.api.ui.onFileDrop((data) => {
-      if (!isActiveRef.current || data.target !== 'terminal') {
+      if (data.target !== 'terminal') {
         return
       }
       const manager = managerRef.current
@@ -314,5 +320,5 @@ export function useTerminalPaneGlobalEffects({
         transport.sendInput(`${shellEscapePath(path)} `)
       }
     })
-  }, [isActiveRef, managerRef, paneTransportsRef])
+  }, [isActive, managerRef, paneTransportsRef])
 }
