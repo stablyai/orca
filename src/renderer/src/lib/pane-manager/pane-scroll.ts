@@ -69,6 +69,19 @@ export function restoreScrollState(terminal: Terminal, state: ScrollState): void
   if (target >= 0) {
     terminal.scrollToLine(target)
     forceViewportScrollbarSync(terminal)
+    return
+  }
+  // Why: content matching fails when the first visible line is blank or when
+  // reflow changes content beyond recognition. Without a fallback, the
+  // terminal stays wherever xterm.js left it after the reflow — often the
+  // top. Proportional positioning approximates the original scroll position
+  // by mapping the old ratio into the new buffer dimensions.
+  if (hintRatio !== undefined) {
+    const newTotalLines = terminal.buffer.active.baseY + terminal.rows
+    const fallbackLine = Math.round(hintRatio * newTotalLines)
+    const clampedLine = Math.min(fallbackLine, terminal.buffer.active.baseY)
+    terminal.scrollToLine(clampedLine)
+    forceViewportScrollbarSync(terminal)
   }
 }
 
