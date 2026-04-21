@@ -51,8 +51,14 @@ export function useRichMarkdownSearch({
           : -1
 
   const openSearch = useCallback(() => {
-    setIsSearchOpen(true)
-  }, [])
+    if (isSearchOpen) {
+      // Why: same-value setState is a no-op so the focus effect won't re-fire.
+      searchInputRef.current?.focus()
+      searchInputRef.current?.select()
+    } else {
+      setIsSearchOpen(true)
+    }
+  }, [isSearchOpen])
 
   const closeSearch = useCallback(() => {
     setIsSearchOpen(false)
