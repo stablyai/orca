@@ -6,6 +6,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   FolderOpen,
   Copy,
@@ -205,10 +206,18 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({ worktree, 
             {worktree.comment ? 'Edit Comment' : 'Add Comment'}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={handleCloseTerminals} disabled={isDeleting}>
-            <XCircle className="size-3.5" />
-            Shutdown
-          </DropdownMenuItem>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DropdownMenuItem onSelect={handleCloseTerminals} disabled={isDeleting}>
+                <XCircle className="size-3.5" />
+                Sleep
+              </DropdownMenuItem>
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={8} className="max-w-[240px]">
+              Close all terminals in this workspace to free up memory and CPU. They&apos;ll be
+              re-created when you reopen it.
+            </TooltipContent>
+          </Tooltip>
           {/* Why: `git worktree remove` always rejects the main worktree, so we
              disable the item upfront. Radix forwards unknown props to the DOM
              element, so `title` works directly without a wrapper span — this
