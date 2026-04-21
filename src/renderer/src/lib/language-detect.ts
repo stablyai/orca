@@ -8,10 +8,14 @@ function extname(filePath: string): string {
 }
 
 const EXT_TO_LANGUAGE: Record<string, string> = {
+  // Why: Monaco's built-in language registry maps .tsx/.cts/.mts onto the
+  // 'typescript' language id and .jsx/.mjs/.cjs onto 'javascript' — there is
+  // no separate 'typescriptreact'/'javascriptreact' id. Returning the base id
+  // is what gives .tsx/.jsx files syntax highlighting in the editor.
   '.ts': 'typescript',
-  '.tsx': 'typescriptreact',
+  '.tsx': 'typescript',
   '.js': 'javascript',
-  '.jsx': 'javascriptreact',
+  '.jsx': 'javascript',
   '.mjs': 'javascript',
   '.cjs': 'javascript',
   '.json': 'json',
