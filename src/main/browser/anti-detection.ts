@@ -55,12 +55,17 @@ export const ANTI_DETECTION_SCRIPT = `(function() {
       };
     };
   }
-  // Why: Electron's Permission API defaults to 'denied' for notifications,
-  // which differs from real Chrome where the default is 'prompt'. Bot
-  // detectors compare this against expected defaults.
+  // Why: Electron's Permission API defaults to 'denied' for most permissions,
+  // but real Chrome returns 'prompt' for ungranted permissions. Returning
+  // 'denied' is a strong bot signal. Override the query result for common
+  // permissions that Turnstile and similar detectors probe.
+  const promptPerms = new Set([
+    'notifications', 'geolocation', 'camera', 'microphone',
+    'midi', 'idle-detection', 'storage-access'
+  ]);
   const origQuery = Permissions.prototype.query;
   Permissions.prototype.query = function(desc) {
-    if (desc.name === 'notifications') {
+    if (promptPerms.has(desc.name)) {
       return Promise.resolve({ state: 'prompt', onchange: null });
     }
     return origQuery.call(this, desc);

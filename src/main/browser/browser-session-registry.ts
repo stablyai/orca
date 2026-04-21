@@ -358,21 +358,6 @@ class BrowserSessionRegistry {
     // clipboard commands to work. Without these, navigator.clipboard.writeText/readText
     // throws NotAllowedError even when invoked via CDP with userGesture:true.
     const autoGranted = new Set(['fullscreen', 'clipboard-read', 'clipboard-sanitized-write'])
-    // Why: Turnstile and other bot detectors probe permissions via
-    // navigator.permissions.query(). In real Chrome most permissions return
-    // 'prompt', but Electron's default is 'denied' for everything not in
-    // autoGranted. Returning true for passive CHECK queries (read-only probes)
-    // makes the fingerprint look like a normal browser. REQUEST handlers
-    // remain gated so actual permission grants still require approval.
-    const passiveAllowed = new Set([
-      ...autoGranted,
-      'notifications',
-      'geolocation',
-      'media',
-      'midi',
-      'idle-detection',
-      'storage-access'
-    ])
     sess.setPermissionRequestHandler((webContents, permission, callback) => {
       const allowed = autoGranted.has(permission)
       if (!allowed) {
@@ -385,7 +370,7 @@ class BrowserSessionRegistry {
       callback(allowed)
     })
     sess.setPermissionCheckHandler((_webContents, permission) => {
-      return passiveAllowed.has(permission)
+      return autoGranted.has(permission)
     })
     sess.setDisplayMediaRequestHandler((_request, callback) => {
       callback({ video: undefined, audio: undefined })

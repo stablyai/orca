@@ -33,6 +33,7 @@ import {
   setupGuestContextMenu,
   setupGuestShortcutForwarding
 } from './browser-guest-ui'
+import { ANTI_DETECTION_SCRIPT } from './anti-detection'
 
 export type BrowserGuestRegistration = {
   browserPageId?: string
@@ -103,16 +104,20 @@ export class BrowserManager {
   // The previous approach — executeJavaScript on did-start-navigation — ran
   // on the OLD page context during navigation, so overrides were never
   // present when the new page's Turnstile script executed.
-  private injectAntiDetection(guest: Electron.WebContents): void {
+  //
+  // Returns a cleanup function that removes the detach listener and prevents
+  // further re-attach attempts.
+  private injectAntiDetection(guest: Electron.WebContents): () => void {
+    let disposed = false
+
     const attach = (): void => {
-      if (guest.isDestroyed()) {
+      if (disposed || guest.isDestroyed()) {
         return
       }
       try {
         if (!guest.debugger.isAttached()) {
           guest.debugger.attach('1.3')
         }
-        const { ANTI_DETECTION_SCRIPT } = require('./anti-detection')
         void guest.debugger
           .sendCommand('Page.enable', {})
           .then(() =>
@@ -126,19 +131,31 @@ export class BrowserManager {
       }
     }
 
+    // Why: the CDP proxy and bridge detach the debugger when they stop,
+    // which removes addScriptToEvaluateOnNewDocument injections. Re-attach
+    // so manual browsing retains anti-detection overrides after agent
+    // sessions end. The 500ms delay avoids racing with the proxy/bridge if
+    // it is mid-restart (detach → re-attach).
+    const onDetach = (): void => {
+      if (!disposed && !guest.isDestroyed()) {
+        setTimeout(attach, 500)
+      }
+    }
+
     try {
       attach()
-      // Why: the CDP proxy and bridge detach the debugger when they stop,
-      // which removes addScriptToEvaluateOnNewDocument injections. Re-attach
-      // so manual browsing retains anti-detection overrides after agent
-      // sessions end.
-      guest.debugger.on('detach', () => {
-        if (!guest.isDestroyed()) {
-          setTimeout(attach, 100)
-        }
-      })
+      guest.debugger.on('detach', onDetach)
     } catch {
       /* best-effort */
+    }
+
+    return () => {
+      disposed = true
+      try {
+        guest.debugger.off('detach', onDetach)
+      } catch {
+        /* guest may already be destroyed */
+      }
     }
   }
 
@@ -382,7 +399,7 @@ export class BrowserManager {
     // (navigator.webdriver, plugins, window.chrome) that differ in Electron
     // webviews vs real Chrome. Inject overrides on every page load so manual
     // browsing passes challenges even without the CDP debugger attached.
-    this.injectAntiDetection(guest)
+    const disposeAntiDetection = this.injectAntiDetection(guest)
 
     // Why: background throttling must be disabled so agent-driven screenshots
     // (Page.captureScreenshot via CDP proxy) can capture frames even when the
@@ -426,8 +443,10 @@ export class BrowserManager {
     const navigationGuard = (event: Electron.Event, url: string): void => {
       // Why: blob: URLs are same-origin (inherit the creator's origin) and are
       // used by Cloudflare Turnstile to load challenge resources inside iframes.
-      // Blocking them triggers error 600010 ("bot behavior detected").
-      if (url.startsWith('blob:')) {
+      // Blocking them triggers error 600010 ("bot behavior detected"). Only
+      // allow blobs whose embedded origin is http(s) to maintain defense-in-depth
+      // against blob:null or other opaque-origin blobs.
+      if (url.startsWith('blob:https://') || url.startsWith('blob:http://')) {
         return
       }
       if (!normalizeBrowserNavigationUrl(url)) {
@@ -462,6 +481,7 @@ export class BrowserManager {
     // guest surface is torn down, preventing the callbacks from preventing GC of
     // the underlying WebContents wrapper.
     this.policyCleanupByGuestId.set(guest.id, () => {
+      disposeAntiDetection()
       if (!guest.isDestroyed()) {
         guest.off('will-navigate', navigationGuard)
         guest.off('will-redirect', navigationGuard)

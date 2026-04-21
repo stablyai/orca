@@ -100,9 +100,12 @@ export class CdpWsProxy {
       // Why: agent-browser reads this endpoint to identify the browser. Returning
       // "Orca/CdpWsProxy" leaks that this is an embedded automation surface, which
       // could affect downstream detection heuristics.
+      // Why: process.versions.chrome contains the exact Chromium version
+      // bundled with Electron, producing a realistic version string.
+      const chromeVersion = process.versions.chrome ?? '134.0.0.0'
       res.end(
         JSON.stringify({
-          Browser: 'Chrome/Headless',
+          Browser: `Chrome/${chromeVersion}`,
           'Protocol-Version': '1.3',
           webSocketDebuggerUrl: `ws://127.0.0.1:${this.port}`
         })
@@ -228,11 +231,12 @@ export class CdpWsProxy {
     if (msg.method === 'Browser.getVersion') {
       // Why: returning "Orca/Electron" identifies this as an embedded automation
       // surface to agent-browser. Use a generic Chrome product string instead.
+      const chromeVersion = process.versions.chrome ?? '134.0.0.0'
       this.sendResult(
         clientId,
         {
           protocolVersion: '1.3',
-          product: 'Chrome/Headless',
+          product: `Chrome/${chromeVersion}`,
           userAgent: '',
           jsVersion: ''
         },
