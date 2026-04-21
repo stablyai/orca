@@ -30,6 +30,7 @@ import {
   absolutePathToFileUri as toFileUrlForOsEscape,
   resolveMarkdownLinkTarget
 } from './markdown-internal-links'
+import { scrollToAnchorInEditor } from './markdown-anchor-scroll'
 
 type RichMarkdownEditorProps = {
   fileId: string
@@ -167,50 +168,49 @@ export default function RichMarkdownEditor({
       // OS default handler. Cmd/Ctrl+Shift-click is the OS escape hatch, kept
       // symmetric with MarkdownPreview. Without a modifier the click falls
       // through to TipTap's default cursor-positioning behavior.
-      handleClick: (_view, _pos, event) => {
+      // Why: ProseMirror fires handleClick before updating the selection, so
+      // ed.isActive('link') reads the *old* cursor position. We resolve the
+      // link mark directly at the clicked pos instead.
+      handleClick: (view, pos, event) => {
         const ed = editorRef.current
-        if (!ed) {
+        const modKey = isMac ? event.metaKey : event.ctrlKey
+        if (!ed || !modKey) {
           return false
         }
-        const modKey = isMac ? event.metaKey : event.ctrlKey
-        if (modKey && ed.isActive('link')) {
-          const href = (ed.getAttributes('link').href as string) || ''
-          if (!href) {
-            return false
-          }
-          if (event.shiftKey) {
-            const classified = resolveMarkdownLinkTarget(href, filePath, worktreeRoot)
-            if (!classified) {
-              return true
-            }
-            if (classified.kind === 'external') {
-              void window.api.shell.openUrl(classified.url)
-              return true
-            }
-            if (classified.kind === 'markdown') {
-              void window.api.shell.pathExists(classified.absolutePath).then((exists) => {
-                if (!exists) {
-                  toast.error(`File not found: ${classified.relativePath}`)
-                  return
-                }
-                void window.api.shell.openFileUri(toFileUrlForOsEscape(classified.absolutePath))
-              })
-              return true
-            }
-            if (classified.kind === 'file') {
-              void window.api.shell.openFileUri(classified.uri)
-              return true
-            }
-            return true
-          }
-          void activateMarkdownLink(href, {
-            sourceFilePath: filePath,
-            worktreeId,
-            worktreeRoot
-          })
+        const linkMark = view.state.doc
+          .resolve(pos)
+          .marks()
+          .find((m) => m.type.name === 'link')
+        const href = linkMark ? (linkMark.attrs.href as string) || '' : ''
+        if (!href) {
+          return false
+        }
+        if (href.startsWith('#')) {
+          scrollToAnchorInEditor(rootRef.current, href.slice(1))
           return true
         }
-        return false
+        if (event.shiftKey) {
+          const classified = resolveMarkdownLinkTarget(href, filePath, worktreeRoot)
+          if (!classified) {
+            return true
+          }
+          if (classified.kind === 'external') {
+            void window.api.shell.openUrl(classified.url)
+          } else if (classified.kind === 'markdown') {
+            void window.api.shell.pathExists(classified.absolutePath).then((exists) => {
+              if (!exists) {
+                toast.error(`File not found: ${classified.relativePath}`)
+                return
+              }
+              void window.api.shell.openFileUri(toFileUrlForOsEscape(classified.absolutePath))
+            })
+          } else if (classified.kind === 'file') {
+            void window.api.shell.openFileUri(classified.uri)
+          }
+          return true
+        }
+        void activateMarkdownLink(href, { sourceFilePath: filePath, worktreeId, worktreeRoot })
+        return true
       }
     },
     onFocus: () => {

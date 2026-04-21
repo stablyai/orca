@@ -3,6 +3,7 @@ import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkFrontmatter from 'remark-frontmatter'
 import rehypeHighlight from 'rehype-highlight'
+import rehypeSlug from 'rehype-slug'
 import { extractFrontMatter } from './markdown-frontmatter'
 import { ChevronDown, ChevronUp, X } from 'lucide-react'
 import type { Components } from 'react-markdown'
@@ -249,7 +250,27 @@ export default function MarkdownPreview({
   const components: Components = {
     a: ({ href, children, ...props }) => {
       const handleClick = (event: React.MouseEvent<HTMLAnchorElement>): void => {
-        if (!href || href.startsWith('#')) {
+        if (!href) {
+          return
+        }
+
+        // Why: anchor links target headings within the same preview. rehype-slug
+        // adds matching id attributes to headings so querySelector can find them.
+        // No modifier key required — same-page scroll is non-destructive.
+        if (href.startsWith('#')) {
+          event.preventDefault()
+          // Why: anchors in markdown are often URL-encoded (e.g. `#%C3%A9-foo`)
+          // while rehype-slug produces unicode ids, so decode before matching.
+          let id = href.slice(1)
+          try {
+            id = decodeURIComponent(id)
+          } catch {
+            // Malformed %-escapes: fall back to the raw fragment.
+          }
+          const el = rootRef.current?.querySelector(`[id="${CSS.escape(id)}"]`)
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          }
           return
         }
 
@@ -442,7 +463,7 @@ export default function MarkdownPreview({
         <Markdown
           components={components}
           remarkPlugins={[remarkGfm, remarkFrontmatter]}
-          rehypePlugins={[rehypeHighlight]}
+          rehypePlugins={[rehypeSlug, rehypeHighlight]}
         >
           {content}
         </Markdown>

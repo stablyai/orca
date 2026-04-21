@@ -3,6 +3,7 @@ import type { Editor } from '@tiptap/react'
 import { getLinkBubblePosition } from './RichMarkdownLinkBubble'
 import type { LinkBubbleState } from './RichMarkdownLinkBubble'
 import { useAppStore } from '@/store'
+import { scrollToAnchorInEditor } from './markdown-anchor-scroll'
 
 /**
  * Extracts link-editing action handlers from the editor component to reduce
@@ -100,6 +101,10 @@ export function useLinkBubble(
     if (!linkBubble?.href) {
       return
     }
+    if (linkBubble.href.startsWith('#')) {
+      scrollToAnchorInEditor(rootRef.current, linkBubble.href.slice(1))
+      return
+    }
     void activateMarkdownLink(linkBubble.href, {
       sourceFilePath: linkContext.sourceFilePath,
       worktreeId: linkContext.worktreeId,
@@ -110,7 +115,8 @@ export function useLinkBubble(
     linkBubble?.href,
     linkContext.sourceFilePath,
     linkContext.worktreeId,
-    linkContext.worktreeRoot
+    linkContext.worktreeRoot,
+    rootRef
   ])
 
   const toggleLinkFromToolbar = useCallback(() => {
