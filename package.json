@@ -79,6 +79,7 @@
     "dompurify": "^3.4.0",
     "electron-updater": "^6.8.3",
     "hosted-git-info": "^9.0.2",
+    "html-to-image": "^1.11.13",
     "lowlight": "^3.3.0",
     "lucide-react": "^0.577.0",
     "mermaid": "^11.14.0",

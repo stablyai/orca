@@ -124,6 +124,9 @@ importers:
       hosted-git-info:
         specifier: ^9.0.2
         version: 9.0.2
+      html-to-image:
+        specifier: ^1.11.13
+        version: 1.11.13
       lowlight:
         specifier: ^3.3.0
         version: 3.3.0
@@ -190,7 +193,7 @@ importers:
         version: 1.59.1
       '@stablyai/playwright-test':
         specifier: ^2.1.13
-        version: 2.1.13(@playwright/test@1.59.1)(zod@3.25.76)
+        version: 2.1.13(@playwright/test@1.59.1)(zod@4.3.6)
       '@tailwindcss/vite':
         specifier: ^4.2.2
         version: 4.2.2(vite@7.3.1(@types/node@25.5.0)(jiti@2.6.1)(lightningcss@1.32.0)(yaml@2.8.3))
@@ -4035,6 +4038,9 @@ packages:
     resolution: {integrity: sha512-M422h7o/BR3rmCQ8UHi7cyyMqKltdP9Uo+J2fXK+RSAY+wTcKOIRyhTuKv4qn+DJf3g+PL890AzId5KZpX+CBg==}
     engines: {node: ^20.17.0 || >=22.9.0}
 
+  html-to-image@1.11.13:
+    resolution: {integrity: sha512-cuOPoI7WApyhBElTTb9oqsawRvZ0rHhaHwghRLlTuffoD1B2aDemlCruLeZrUIIdvG7gs9xeELEPm6PhuASqrg==}
+
   html-url-attributes@3.0.1:
     resolution: {integrity: sha512-ol6UPyBWqsrO6EJySPz2O7ZSr856WDrEzM5zMqp+FJJLGMW35cLYmmZnl0vztAZxRUoNZJFTCohfjuIJ8I4QBQ==}
 
@@ -7873,27 +7879,27 @@ snapshots:
 
   '@sindresorhus/merge-streams@4.0.0': {}
 
-  '@stablyai/playwright-base@2.1.13(@playwright/test@1.59.1)(zod@3.25.76)':
+  '@stablyai/playwright-base@2.1.13(@playwright/test@1.59.1)(zod@4.3.6)':
     dependencies:
       '@playwright/test': 1.59.1
       jpeg-js: 0.4.4
       p-retry: 4.6.2
       pngjs: 7.0.0
     optionalDependencies:
-      zod: 3.25.76
+      zod: 4.3.6
 
-  '@stablyai/playwright-test@2.1.13(@playwright/test@1.59.1)(zod@3.25.76)':
+  '@stablyai/playwright-test@2.1.13(@playwright/test@1.59.1)(zod@4.3.6)':
     dependencies:
       '@playwright/test': 1.59.1
-      '@stablyai/playwright': 2.1.13(@playwright/test@1.59.1)(zod@3.25.76)
-      '@stablyai/playwright-base': 2.1.13(@playwright/test@1.59.1)(zod@3.25.76)
+      '@stablyai/playwright': 2.1.13(@playwright/test@1.59.1)(zod@4.3.6)
+      '@stablyai/playwright-base': 2.1.13(@playwright/test@1.59.1)(zod@4.3.6)
     transitivePeerDependencies:
       - zod
 
-  '@stablyai/playwright@2.1.13(@playwright/test@1.59.1)(zod@3.25.76)':
+  '@stablyai/playwright@2.1.13(@playwright/test@1.59.1)(zod@4.3.6)':
     dependencies:
       '@playwright/test': 1.59.1
-      '@stablyai/playwright-base': 2.1.13(@playwright/test@1.59.1)(zod@3.25.76)
+      '@stablyai/playwright-base': 2.1.13(@playwright/test@1.59.1)(zod@4.3.6)
     transitivePeerDependencies:
       - zod
 
@@ -9968,6 +9974,8 @@ snapshots:
   hosted-git-info@9.0.2:
     dependencies:
       lru-cache: 11.2.7
+
+  html-to-image@1.11.13: {}
 
   html-url-attributes@3.0.1: {}
 

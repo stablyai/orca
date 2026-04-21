@@ -25,6 +25,7 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import { ClaudeUsageDailyChart } from './ClaudeUsageDailyChart'
 import { ClaudeUsageLoadingState } from './ClaudeUsageLoadingState'
+import { ShareUsageButton } from './ShareUsageButton'
 import { StatCard } from './StatCard'
 
 const RANGE_OPTIONS: ClaudeUsageRange[] = ['7d', '30d', '90d', 'all']
@@ -137,6 +138,9 @@ export function ClaudeUsagePane(): React.JSX.Element {
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2 self-start">
+          {summary && daily.length > 0 && (
+            <ShareUsageButton provider="claude" summary={summary} daily={daily} range={range} />
+          )}
           <DropdownMenu>
             <TooltipProvider delayDuration={250}>
               <Tooltip>
