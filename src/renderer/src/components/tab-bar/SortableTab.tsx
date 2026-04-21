@@ -157,7 +157,7 @@ export default function SortableTab({
           {...dragListeners}
           className={`group relative flex items-center h-full px-3 text-sm cursor-pointer select-none shrink-0 border-r border-border ${
             isActive
-              ? 'bg-accent/40 text-foreground border-b-transparent'
+              ? 'bg-accent text-foreground border-b-transparent'
               : 'bg-card text-muted-foreground hover:text-foreground hover:bg-accent/50'
           }`}
           onDoubleClick={(e) => {
