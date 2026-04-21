@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: this component co-locates the rich markdown editor surface, toolbar, search, and slash menu so tightly coupled editor state stays in one place. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { EditorContent, useEditor } from '@tiptap/react'
 import type { Editor } from '@tiptap/react'
@@ -365,7 +366,8 @@ export default function RichMarkdownEditor({
   } = useRichMarkdownSearch({
     editor,
     isMac,
-    rootRef
+    rootRef,
+    scrollContainerRef
   })
   useEffect(() => {
     openSearchRef.current = openSearch

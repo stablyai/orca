@@ -12,11 +12,13 @@ import {
 export function useRichMarkdownSearch({
   editor,
   isMac,
-  rootRef
+  rootRef,
+  scrollContainerRef
 }: {
   editor: Editor | null
   isMac: boolean
   rootRef: RefObject<HTMLDivElement | null>
+  scrollContainerRef: RefObject<HTMLDivElement | null>
 }) {
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
@@ -64,8 +66,12 @@ export function useRichMarkdownSearch({
         return
       }
 
+      // Why: rawActiveMatchIndex starts at -1 before the user navigates, but the
+      // derived activeMatchIndex is already 0 (first match shown). Using 0 as the
+      // base when raw is -1 ensures the first Enter press advances to match 1
+      // instead of computing (-1+1)%N = 0 and leaving the effect unchanged.
       setRawActiveMatchIndex((currentIndex) => {
-        const baseIndex = currentIndex >= 0 ? currentIndex : direction === 1 ? -1 : 0
+        const baseIndex = Math.max(currentIndex, 0)
         return (baseIndex + direction + matchCount) % matchCount
       })
     },
@@ -117,31 +123,40 @@ export function useRichMarkdownSearch({
     }
 
     const query = isSearchOpen ? searchQuery : ''
-    editor.view.dispatch(
-      editor.state.tr.setMeta(richMarkdownSearchPluginKey, {
-        activeIndex: activeMatchIndex,
-        query
-      })
-    )
 
-    if (!query || activeMatchIndex < 0) {
-      return
-    }
-
-    const activeMatch = matches[activeMatchIndex]
-    if (!activeMatch) {
-      return
-    }
-
-    // Why: rich-mode find should navigate within the editor model instead of
-    // the rendered DOM so highlight positions stay correct while the user edits.
-    // Updating the ProseMirror selection keeps scroll-to-match aligned with the
-    // actual markdown document rather than the transient browser layout.
+    // Why: combining decoration meta and selection+scrollIntoView into one
+    // transaction avoids a split-dispatch where the first dispatch updates
+    // editor.state and the second dispatch's scrollIntoView can be lost
+    // when ProseMirror coalesces view updates.
     const tr = editor.state.tr
-    tr.setSelection(TextSelection.create(tr.doc, activeMatch.from, activeMatch.to))
-    tr.scrollIntoView()
+    tr.setMeta(richMarkdownSearchPluginKey, {
+      activeIndex: activeMatchIndex,
+      query
+    })
+
+    const activeMatch = query && activeMatchIndex >= 0 ? matches[activeMatchIndex] : null
+    if (activeMatch) {
+      tr.setSelection(TextSelection.create(tr.doc, activeMatch.from, activeMatch.to))
+    }
+
     editor.view.dispatch(tr)
-  }, [activeMatchIndex, editor, isSearchOpen, matches, searchQuery])
+
+    // Why: ProseMirror's tr.scrollIntoView() delegates to the view's
+    // scrollDOMIntoView which may fail to reach the outer flex scroll container
+    // (the editor element itself has min-height: 100% and no overflow).
+    // Reading coordsAtPos *after* the dispatch and manually scrolling the
+    // container mirrors the approach used by MarkdownPreview search.
+    if (activeMatch) {
+      const container = scrollContainerRef.current
+      if (container) {
+        const coords = editor.view.coordsAtPos(activeMatch.from)
+        const containerRect = container.getBoundingClientRect()
+        const relativeTop = coords.top - containerRect.top
+        const targetScroll = container.scrollTop + relativeTop - containerRect.height / 2
+        container.scrollTo({ top: targetScroll, behavior: 'instant' })
+      }
+    }
+  }, [activeMatchIndex, editor, isSearchOpen, matches, scrollContainerRef, searchQuery])
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {

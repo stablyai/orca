@@ -121,7 +121,7 @@
 }
 
 .rich-markdown-search-match[data-active='true'] {
-  background: color-mix(in srgb, #fb923c 60%, transparent);
+  background: color-mix(in srgb, #38bdf8 50%, transparent);
 }
 
 .rich-markdown-editor {
