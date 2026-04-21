@@ -767,16 +767,9 @@ export default function NewWorkspacePage(): React.JSX.Element {
                         </div>
 
                         <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            {item.type === 'pr' ? (
-                              <GitPullRequest className="size-4 text-muted-foreground" />
-                            ) : (
-                              <CircleDot className="size-4 text-muted-foreground" />
-                            )}
-                            <h3 className="truncate text-[15px] font-semibold text-foreground">
-                              {item.title}
-                            </h3>
-                          </div>
+                          <h3 className="truncate text-[15px] font-semibold text-foreground">
+                            {item.title}
+                          </h3>
                           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
                             <span>{item.author ?? 'unknown author'}</span>
                             <span>{selectedRepo?.displayName}</span>
