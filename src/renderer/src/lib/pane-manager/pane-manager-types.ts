@@ -77,6 +77,11 @@ export type ManagedPaneInternal = {
   // terminal to a completely wrong position. Capturing once at drag start
   // and reusing that state for every restore eliminates accumulation.
   pendingDragScrollState: ScrollState | null
+  // Why: sidebar toggles and worktree switches resize the terminal container
+  // synchronously, corrupting scroll before ResizeObserver fires. Separate
+  // from pendingDragScrollState so a keyboard sidebar toggle during an active
+  // divider drag doesn't steal the drag's lock.
+  pendingLayoutScrollState: ScrollState | null
 } & ManagedPane
 
 export type DropZone = 'top' | 'bottom' | 'left' | 'right'

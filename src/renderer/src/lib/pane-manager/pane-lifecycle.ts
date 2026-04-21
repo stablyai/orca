@@ -135,7 +135,8 @@ export function createPaneDOM(
     webglAddon: null,
     compositionHandler: null,
     pendingSplitScrollState: null,
-    pendingDragScrollState: null
+    pendingDragScrollState: null,
+    pendingLayoutScrollState: null
   }
 
   // Focus handler: clicking a pane makes it active and explicitly focuses
@@ -277,6 +278,9 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
           } else if (pane.pendingDragScrollState) {
             pane.fitAddon.fit()
             restoreScrollState(pane.terminal, pane.pendingDragScrollState)
+          } else if (pane.pendingLayoutScrollState) {
+            pane.fitAddon.fit()
+            restoreScrollState(pane.terminal, pane.pendingLayoutScrollState)
           } else {
             const scrollState = captureScrollState(pane.terminal)
             pane.fitAddon.fit()

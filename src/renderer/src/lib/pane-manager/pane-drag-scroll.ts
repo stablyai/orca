@@ -32,35 +32,38 @@ export function captureAllPaneScrollStates(
 ): Map<number, ScrollState> {
   const states = new Map<number, ScrollState>()
   for (const pane of panes.values()) {
-    if (!pane.pendingSplitScrollState && !pane.pendingDragScrollState) {
+    if (
+      !pane.pendingSplitScrollState &&
+      !pane.pendingDragScrollState &&
+      !pane.pendingLayoutScrollState
+    ) {
       states.set(pane.id, captureScrollState(pane.terminal))
     }
   }
   return states
 }
 
-// Why: instant layout changes (sidebar toggle) resize the terminal container
-// synchronously, which can corrupt xterm.js scroll state before any
-// ResizeObserver callback fires. Locking reuses the same pendingDragScrollState
-// mechanism that keeps divider drag stable: capture once before the layout
-// change, and let fitAllPanesInternal restore from the lock on every fit.
 export function lockAllPaneScrollStates(panes: Map<number, ManagedPaneInternal>): void {
   for (const pane of panes.values()) {
-    if (!pane.pendingSplitScrollState && !pane.pendingDragScrollState) {
-      pane.pendingDragScrollState = captureScrollState(pane.terminal)
+    if (
+      !pane.pendingSplitScrollState &&
+      !pane.pendingDragScrollState &&
+      !pane.pendingLayoutScrollState
+    ) {
+      pane.pendingLayoutScrollState = captureScrollState(pane.terminal)
     }
   }
 }
 
 export function unlockAllPaneScrollStates(panes: Map<number, ManagedPaneInternal>): void {
   for (const pane of panes.values()) {
-    if (pane.pendingDragScrollState) {
+    if (pane.pendingLayoutScrollState) {
       try {
-        restoreScrollState(pane.terminal, pane.pendingDragScrollState)
+        restoreScrollState(pane.terminal, pane.pendingLayoutScrollState)
       } catch {
         /* ignore */
       }
-      pane.pendingDragScrollState = null
+      pane.pendingLayoutScrollState = null
     }
   }
 }

@@ -34,6 +34,11 @@ export function safeFit(pane: ManagedPaneInternal): void {
       restoreScrollState(pane.terminal, pane.pendingDragScrollState)
       return
     }
+    if (pane.pendingLayoutScrollState) {
+      pane.fitAddon.fit()
+      restoreScrollState(pane.terminal, pane.pendingLayoutScrollState)
+      return
+    }
     const state = captureScrollState(pane.terminal)
     pane.fitAddon.fit()
     restoreScrollState(pane.terminal, state)
@@ -59,6 +64,11 @@ export function fitAllPanesInternal(
       if (pane.pendingDragScrollState) {
         pane.fitAddon.fit()
         restoreScrollState(pane.terminal, pane.pendingDragScrollState)
+        continue
+      }
+      if (pane.pendingLayoutScrollState) {
+        pane.fitAddon.fit()
+        restoreScrollState(pane.terminal, pane.pendingLayoutScrollState)
         continue
       }
       // Why: use pre-captured state when available because the ResizeObserver
