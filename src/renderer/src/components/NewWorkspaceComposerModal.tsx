@@ -77,7 +77,15 @@ function ComposerModalBody({
   // so the user can tweak agents without losing their in-progress workspace
   // name/repo selection.
   const [agentSettingsOpen, setAgentSettingsOpen] = useState(false)
-  const [quickAgentTouched, setQuickAgentTouched] = useState(false)
+  // Why: once the user picks an agent, their choice wins and must not be
+  // overwritten when the derived "preferred" value changes (e.g. detection
+  // finishes and adds more installed agents to the set). Track that with an
+  // override rather than an effect that mirrors a prop into state — deriving
+  // during render keeps the selection in sync with the detected set without
+  // triggering an extra commit.
+  const [quickAgentOverride, setQuickAgentOverride] = useState<TuiAgent | null | undefined>(
+    undefined
+  )
   const preferredQuickAgent = useMemo<TuiAgent | null>(() => {
     const pref = settings?.defaultTuiAgent
     if (pref === 'blank') {
@@ -91,17 +99,10 @@ function ComposerModalBody({
     const detected = cardProps.detectedAgentIds
     return AGENT_CATALOG.find((agent) => detected === null || detected.has(agent.id))?.id ?? null
   }, [cardProps.detectedAgentIds, settings?.defaultTuiAgent])
-  const [quickAgent, setQuickAgent] = useState<TuiAgent | null>(preferredQuickAgent)
-
-  useEffect(() => {
-    if (!quickAgentTouched) {
-      setQuickAgent(preferredQuickAgent)
-    }
-  }, [preferredQuickAgent, quickAgentTouched])
+  const quickAgent = quickAgentOverride === undefined ? preferredQuickAgent : quickAgentOverride
 
   const handleQuickAgentChange = useCallback((agent: TuiAgent | null) => {
-    setQuickAgentTouched(true)
-    setQuickAgent(agent)
+    setQuickAgentOverride(agent)
   }, [])
 
   const handleCreate = useCallback(async (): Promise<void> => {
