@@ -53,9 +53,28 @@ export function captureScrollState(terminal: Terminal): ScrollState {
   const buf = terminal.buffer.active
   const viewportY = buf.viewportY
   const wasAtBottom = viewportY >= buf.baseY
-  const firstVisibleLineContent = buf.getLine(viewportY)?.translateToString(true)?.trimEnd() ?? ''
   const totalLines = buf.baseY + terminal.rows
-  return { wasAtBottom, firstVisibleLineContent, viewportY, totalLines }
+
+  // Why: if the viewport starts at a wrapped continuation row, its content
+  // won't appear as a line start after reflow (column count change shifts
+  // wrap points). Walk backward to the logical line start — that content
+  // always remains a line start regardless of column width, making content
+  // matching reliable for long-line terminals like Claude Code.
+  let anchorY = viewportY
+  while (anchorY > 0 && buf.getLine(anchorY)?.isWrapped) {
+    anchorY--
+  }
+  const firstVisibleLineContent = buf.getLine(anchorY)?.translateToString(true)?.trimEnd() ?? ''
+  const logicalLineOffset = viewportY - anchorY
+
+  return {
+    wasAtBottom,
+    firstVisibleLineContent,
+    viewportY,
+    totalLines,
+    cols: terminal.cols,
+    logicalLineOffset
+  }
 }
 
 export function restoreScrollState(terminal: Terminal, state: ScrollState): void {
@@ -67,7 +86,20 @@ export function restoreScrollState(terminal: Terminal, state: ScrollState): void
   const hintRatio = state.totalLines > 0 ? state.viewportY / state.totalLines : undefined
   const target = findLineByContent(terminal, state.firstVisibleLineContent, hintRatio)
   if (target >= 0) {
-    terminal.scrollToLine(target)
+    // Why: the anchor may be the logical line start (several wrapped rows
+    // above the actual viewport row). After reflow the logical line may
+    // wrap into fewer or more rows. Scale the offset by the column ratio
+    // to approximate the new wrap count, then add it to the matched line.
+    let scrollTarget = target
+    if (state.logicalLineOffset > 0) {
+      const newCols = terminal.cols
+      const scaledOffset =
+        state.cols > 0 && newCols > 0
+          ? Math.round(state.logicalLineOffset * (state.cols / newCols))
+          : state.logicalLineOffset
+      scrollTarget = Math.min(target + scaledOffset, terminal.buffer.active.baseY)
+    }
+    terminal.scrollToLine(scrollTarget)
     forceViewportScrollbarSync(terminal)
     return
   }

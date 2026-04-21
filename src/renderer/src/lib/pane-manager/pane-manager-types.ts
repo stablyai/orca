@@ -53,6 +53,12 @@ export type ScrollState = {
   firstVisibleLineContent: string
   viewportY: number
   totalLines: number
+  cols: number
+  // Why: number of wrapped rows between the logical line start and the
+  // viewport row. When the anchor is the logical line start (not the
+  // viewport row itself), this offset lets restoreScrollState approximate
+  // the correct viewport position after reflow changes wrap points.
+  logicalLineOffset: number
 }
 
 export type ManagedPaneInternal = {
