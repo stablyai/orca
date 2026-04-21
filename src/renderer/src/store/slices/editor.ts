@@ -224,6 +224,7 @@ export type EditorSlice = {
     compare: GitBranchCompareSummary,
     alternate?: CombinedDiffAlternate
   ) => void
+
   // Cursor line tracking per file
   editorCursorLine: Record<string, number>
   setEditorCursorLine: (fileId: string, line: number) => void

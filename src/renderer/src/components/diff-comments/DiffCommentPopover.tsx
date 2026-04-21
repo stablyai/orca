@@ -32,6 +32,15 @@ export function DiffCommentPopover({
   const [submitting, setSubmitting] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const popoverRef = useRef<HTMLDivElement | null>(null)
+  // Why: stash onCancel in a ref so the document mousedown listener below can
+  // read the freshest callback without listing `onCancel` in its dependency
+  // array. Parents (DiffSectionItem, DiffViewer) pass a new arrow function on
+  // every render and the popover re-renders frequently (scroll tracking updates
+  // `top`, font zoom, etc.), which would otherwise tear down and re-attach the
+  // document listener on every parent render. Mirrors the pattern in
+  // useDiffCommentDecorator.tsx.
+  const onCancelRef = useRef(onCancel)
+  onCancelRef.current = onCancel
   // Why: stable id per-instance so multiple popovers (should they ever coexist)
   // don't collide on aria-labelledby references. Screen readers announce the
   // "Line N" label as the dialog's accessible name.
@@ -54,13 +63,16 @@ export function DiffCommentPopover({
       if (popoverRef.current.contains(ev.target as Node)) {
         return
       }
-      onCancel()
+      // Why: read the latest onCancel from the ref rather than closing over it
+      // so the listener does not need to be re-registered on every parent
+      // render (see onCancelRef comment above).
+      onCancelRef.current()
     }
     document.addEventListener('mousedown', onDocumentMouseDown)
     return () => {
       document.removeEventListener('mousedown', onDocumentMouseDown)
     }
-  }, [onCancel])
+  }, [])
 
   const autoResize = (el: HTMLTextAreaElement): void => {
     el.style.height = 'auto'

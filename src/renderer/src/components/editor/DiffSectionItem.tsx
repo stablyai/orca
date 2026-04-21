@@ -221,6 +221,15 @@ export function DiffSectionItem({
     updateHeight()
 
     setModifiedEditor(modified)
+    // Why: Monaco disposes inner editors when the DiffEditor container is
+    // unmounted (e.g. section collapse, tab change). Clearing the state
+    // prevents decorator effects and scroll subscriptions from invoking
+    // methods on a disposed editor instance, and avoids `popover` pointing
+    // at a line in an editor that no longer exists.
+    modified.onDidDispose(() => {
+      setModifiedEditor(null)
+      setPopover(null)
+    })
 
     if (!isEditable) {
       return
