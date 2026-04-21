@@ -1,4 +1,9 @@
-import type { DropZone, ManagedPaneInternal, PaneStyleOptions } from './pane-manager-types'
+import type {
+  DropZone,
+  ManagedPaneInternal,
+  PaneStyleOptions,
+  ScrollState
+} from './pane-manager-types'
 import { createDivider } from './pane-divider'
 import { captureScrollState, restoreScrollState } from './pane-scroll'
 
@@ -37,7 +42,10 @@ export function safeFit(pane: ManagedPaneInternal): void {
   }
 }
 
-export function fitAllPanesInternal(panes: Map<number, ManagedPaneInternal>): void {
+export function fitAllPanesInternal(
+  panes: Map<number, ManagedPaneInternal>,
+  preCapturedStates?: Map<number, ScrollState>
+): void {
   for (const pane of panes.values()) {
     try {
       const dims = pane.fitAddon.proposeDimensions()
@@ -53,7 +61,12 @@ export function fitAllPanesInternal(panes: Map<number, ManagedPaneInternal>): vo
         restoreScrollState(pane.terminal, pane.pendingDragScrollState)
         continue
       }
-      const state = captureScrollState(pane.terminal)
+      // Why: use pre-captured state when available because the ResizeObserver
+      // debounce (150ms) gives async events (WebGL context loss, viewport
+      // _sync) time to corrupt the scroll position before we run. Capturing
+      // at the instant the ResizeObserver fires preserves the true pre-resize
+      // viewport position.
+      const state = preCapturedStates?.get(pane.id) ?? captureScrollState(pane.terminal)
       pane.fitAddon.fit()
       restoreScrollState(pane.terminal, state)
     } catch {

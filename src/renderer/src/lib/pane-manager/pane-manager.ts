@@ -3,7 +3,8 @@ import type {
   PaneStyleOptions,
   ManagedPane,
   ManagedPaneInternal,
-  DropZone
+  DropZone,
+  ScrollState
 } from './pane-manager-types'
 import {
   createDivider,
@@ -182,8 +183,18 @@ export class PaneManager {
     return Array.from(this.panes.values()).map((p) => this.toPublic(p))
   }
 
-  fitAllPanes(): void {
-    fitAllPanesInternal(this.panes)
+  fitAllPanes(preCapturedStates?: Map<number, ScrollState>): void {
+    fitAllPanesInternal(this.panes, preCapturedStates)
+  }
+
+  captureAllScrollStates(): Map<number, ScrollState> {
+    const states = new Map<number, ScrollState>()
+    for (const pane of this.panes.values()) {
+      if (!pane.pendingSplitScrollState && !pane.pendingDragScrollState) {
+        states.set(pane.id, captureScrollState(pane.terminal))
+      }
+    }
+    return states
   }
 
   getActivePane(): ManagedPane | null {

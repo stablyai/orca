@@ -5,6 +5,7 @@ import {
   type FocusTerminalPaneDetail
 } from '@/constants/terminal'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
+import type { ScrollState } from '@/lib/pane-manager/pane-manager-types'
 import { shellEscapePath } from './pane-helpers'
 import { fitAndFocusPanes, fitPanes, hasDimensionsChanged } from './pane-helpers'
 import type { PtyTransport } from './pty-transport'
@@ -253,28 +254,36 @@ export function useTerminalPaneGlobalEffects({
     // terminal running at a stale column count.
     const RESIZE_DEBOUNCE_MS = 150
     let timerId: ReturnType<typeof setTimeout> | null = null
+    // Why: scroll states must be captured at the instant the ResizeObserver
+    // fires, not 150ms later when the debounced fit runs. During the debounce
+    // window, async events (WebGL context loss, xterm.js Viewport._sync)
+    // can corrupt the scroll position, so a later capture would record the
+    // wrong viewportY. Capturing eagerly preserves the true pre-resize state.
+    let pendingScrollStates: Map<number, ScrollState> | null = null
     const resizeObserver = new ResizeObserver(() => {
+      const manager = managerRef.current
+      if (manager) {
+        pendingScrollStates = manager.captureAllScrollStates()
+      }
       if (timerId !== null) {
         clearTimeout(timerId)
       }
       timerId = setTimeout(() => {
         timerId = null
-        const manager = managerRef.current
-        if (!manager) {
+        const mgr = managerRef.current
+        if (!mgr) {
           return
         }
-        // Why: apply the same epoch-based deduplication as the isActive
-        // effect's rAF path.  Read the current epoch at fire time (not a
-        // captured value) because the ResizeObserver persists across the
-        // activation.  Dimension changes (e.g. window resize) bypass the
-        // dedup so legitimate refits are never suppressed.
         const currentEpoch = fitEpochRef.current
-        const dimensionsChanged = hasDimensionsChanged(manager)
+        const dimensionsChanged = hasDimensionsChanged(mgr)
         if (!dimensionsChanged && fitRanForEpochRef.current >= currentEpoch) {
+          pendingScrollStates = null
           return
         }
         fitRanForEpochRef.current = currentEpoch
-        fitPanes(manager)
+        const states = pendingScrollStates
+        pendingScrollStates = null
+        fitPanes(mgr, states ?? undefined)
       }, RESIZE_DEBOUNCE_MS)
     })
     resizeObserver.observe(container)
