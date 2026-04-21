@@ -382,6 +382,14 @@ export function createMainWindow(
       return
     }
 
+    if (action.type === 'openNewWorkspace') {
+      // Why: routed through the main process so focus contexts that bypass
+      // the renderer's window-level keydown (contentEditable markdown editor,
+      // browser-guest webContents) still reach the new-workspace composer.
+      mainWindow.webContents.send('ui:openNewWorkspace')
+      return
+    }
+
     if (action.type === 'jumpToWorktreeIndex') {
       // Forward Cmd/Ctrl+1-9 for quick worktree switching
       mainWindow.webContents.send('ui:jumpToWorktreeIndex', action.index)

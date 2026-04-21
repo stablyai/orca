@@ -267,6 +267,8 @@ export function setupGuestShortcutForwarding(args: {
       renderer.send('ui:toggleWorktreePalette')
     } else if (action?.type === 'openQuickOpen') {
       renderer.send('ui:openQuickOpen')
+    } else if (action?.type === 'openNewWorkspace') {
+      renderer.send('ui:openNewWorkspace')
     } else if (action?.type === 'jumpToWorktreeIndex') {
       renderer.send('ui:jumpToWorktreeIndex', action.index)
     } else {

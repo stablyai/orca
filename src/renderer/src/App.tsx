@@ -1,7 +1,6 @@
 /* eslint-disable max-lines */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { DEFAULT_STATUS_BAR_ITEMS, DEFAULT_WORKTREE_CARD_PROPERTIES } from '../../shared/constants'
-import { isGitRepoKind } from '../../shared/repo-kind'
 
 import { Minimize2, PanelLeft, PanelRight } from 'lucide-react'
 import { FOCUS_TERMINAL_PANE_EVENT, TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
@@ -116,7 +115,6 @@ function App(): React.JSX.Element {
   const expandedPaneByTabId = useAppStore((s) => s.expandedPaneByTabId)
   const canExpandPaneByTabId = useAppStore((s) => s.canExpandPaneByTabId)
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
-  const repos = useAppStore((s) => s.repos)
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const groupBy = useAppStore((s) => s.groupBy)
@@ -505,16 +503,11 @@ function App(): React.JSX.Element {
         return
       }
 
-      // Cmd/Ctrl+N — new workspace (opens the lightweight composer modal)
-      if (!e.altKey && !e.shiftKey && e.key.toLowerCase() === 'n') {
-        if (!repos.some((repo) => isGitRepoKind(repo))) {
-          return
-        }
-        dispatchClearModifierHints()
-        e.preventDefault()
-        actions.openModal('new-workspace-composer')
-        return
-      }
+      // Why: Cmd/Ctrl+N is handled via the main-process before-input-event
+      // allowlist (see window-shortcut-policy.ts / useIpcEvents.ts) so it works
+      // globally — including when focus lives inside the markdown rich editor
+      // (contentEditable) or a browser guest webContents, both of which bypass
+      // this renderer-side window keydown listener.
 
       // Why: the new-workspace composer should not be able to reveal the right
       // sidebar at all, because that surface is intentionally distraction-free.
@@ -566,7 +559,7 @@ function App(): React.JSX.Element {
 
     window.addEventListener('keydown', onKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
-  }, [activeView, activeWorktreeId, actions, repos])
+  }, [activeView, activeWorktreeId, actions])
 
   useLayoutEffect(() => {
     const controls = titlebarLeftControlsRef.current

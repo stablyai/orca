@@ -16,6 +16,7 @@ import { dispatchZoomLevelChanged } from '@/lib/zoom-events'
 import { resolveZoomTarget } from './resolve-zoom-target'
 import { handleSwitchTab } from './ipc-tab-switch'
 import { dispatchClearModifierHints } from './useModifierHint'
+import { isGitRepoKind } from '../../../shared/repo-kind'
 
 export { resolveZoomTarget } from './resolve-zoom-target'
 
@@ -76,6 +77,20 @@ export function useIpcEvents(): void {
         if (store.activeView === 'terminal' && store.activeWorktreeId !== null) {
           store.openModal('quick-open')
         }
+      })
+    )
+
+    unsubs.push(
+      window.api.ui.onOpenNewWorkspace(() => {
+        // Why: mirror the renderer's App.tsx Cmd+N guard — only open the
+        // composer when there is at least one real git repo configured, so
+        // users on a fresh install don't get a modal with nothing to target.
+        const store = useAppStore.getState()
+        if (!store.repos.some((repo) => isGitRepoKind(repo))) {
+          return
+        }
+        dispatchClearModifierHints()
+        store.openModal('new-workspace-composer')
       })
     )
 

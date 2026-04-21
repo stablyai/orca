@@ -149,6 +149,7 @@ describe('useIpcEvents updater integration', () => {
           onToggleRightSidebar: () => () => {},
           onToggleWorktreePalette: () => () => {},
           onOpenQuickOpen: () => () => {},
+          onOpenNewWorkspace: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
           onActivateWorktree: () => () => {},
           onNewBrowserTab: () => () => {},
@@ -317,6 +318,7 @@ describe('useIpcEvents updater integration', () => {
           onToggleRightSidebar: () => () => {},
           onToggleWorktreePalette: () => () => {},
           onOpenQuickOpen: () => () => {},
+          onOpenNewWorkspace: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
           onActivateWorktree: () => () => {},
           onNewBrowserTab: () => () => {},
@@ -488,6 +490,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onToggleRightSidebar: () => () => {},
           onToggleWorktreePalette: () => () => {},
           onOpenQuickOpen: () => () => {},
+          onOpenNewWorkspace: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
           onActivateWorktree: () => () => {},
           onNewBrowserTab: () => () => {},
@@ -652,6 +655,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onToggleRightSidebar: () => () => {},
           onToggleWorktreePalette: () => () => {},
           onOpenQuickOpen: () => () => {},
+          onOpenNewWorkspace: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
           onActivateWorktree: () => () => {},
           onNewBrowserTab: () => () => {},
@@ -811,6 +815,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onToggleRightSidebar: () => () => {},
           onToggleWorktreePalette: () => () => {},
           onOpenQuickOpen: () => () => {},
+          onOpenNewWorkspace: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
           onActivateWorktree: () => () => {},
           onNewBrowserTab: () => () => {},
@@ -985,6 +990,7 @@ describe('useIpcEvents shortcut hint clearing', () => {
           onToggleRightSidebar: () => () => {},
           onToggleWorktreePalette: () => () => {},
           onOpenQuickOpen: () => () => {},
+          onOpenNewWorkspace: () => () => {},
           onJumpToWorktreeIndex: (listener: (index: number) => void) => {
             jumpToWorktreeRef.current = listener
             return () => {}

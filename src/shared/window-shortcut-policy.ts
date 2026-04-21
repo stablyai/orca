@@ -13,6 +13,7 @@ export type WindowShortcutAction =
   | { type: 'toggleLeftSidebar' }
   | { type: 'toggleRightSidebar' }
   | { type: 'openQuickOpen' }
+  | { type: 'openNewWorkspace' }
   | { type: 'jumpToWorktreeIndex'; index: number }
 
 export function isWindowShortcutModifierChord(
@@ -85,6 +86,14 @@ export function resolveWindowShortcutAction(
 
   if (input.code === 'KeyP' && !input.shift) {
     return { type: 'openQuickOpen' }
+  }
+
+  // Why: Cmd/Ctrl+N opens the new-workspace composer. Routed through the
+  // main process so it reaches the renderer even when focus lives inside
+  // a contentEditable surface (markdown rich editor) or a browser guest
+  // webContents, both of which bypass the renderer's window-level keydown.
+  if (input.code === 'KeyN' && !input.shift) {
+    return { type: 'openNewWorkspace' }
   }
 
   if (input.key && input.key >= '1' && input.key <= '9' && !input.shift) {
