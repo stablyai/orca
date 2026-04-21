@@ -896,6 +896,7 @@
   position: absolute;
   left: 4px;
   width: 18px;
+  height: 18px;
   display: none;
   align-items: center;
   justify-content: center;
@@ -926,8 +927,15 @@
 
 .orca-diff-comment-inline {
   width: 100%;
-  padding: 4px 8px 6px;
+  /* Why: match the popover's horizontal inset so the saved card lines up with
+     the new-comment popover that preceded it. Both anchor at `left: 56px` and
+     cap at 420px wide. */
+  padding: 4px 24px 6px 56px;
   box-sizing: border-box;
+}
+
+.orca-diff-comment-inline > .orca-diff-comment-card {
+  max-width: 420px;
 }
 
 .orca-diff-comment-card {
@@ -953,8 +961,10 @@
 }
 
 .orca-diff-comment-delete {
-  font-size: 11px;
-  padding: 2px 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
   border-radius: 4px;
   border: 1px solid transparent;
   background: transparent;
@@ -977,12 +987,15 @@
 }
 
 /* Popover for entering a new comment. Positioned absolutely within the
-   section container so it tracks the clicked line via `top` style. */
+   section container so it tracks the clicked line via `top` style. Anchored
+   near the content (past the gutter) rather than the far right, so it reads
+   as attached to the line it comments on instead of floating in empty space. */
 .orca-diff-comment-popover {
   position: absolute;
+  left: 56px;
   right: 24px;
+  max-width: 420px;
   z-index: 1000;
-  width: 320px;
   padding: 8px;
   border: 1px solid var(--border);
   border-radius: 6px;

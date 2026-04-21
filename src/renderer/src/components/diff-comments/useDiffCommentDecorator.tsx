@@ -1,7 +1,9 @@
 import { useEffect, useRef } from 'react'
 import * as monaco from 'monaco-editor'
 import type { editor as monacoEditor, IDisposable } from 'monaco-editor'
+import { createRoot, type Root } from 'react-dom/client'
 import type { DiffComment } from '../../../../shared/types'
+import { DiffCommentCard } from './DiffCommentCard'
 
 // Why: Monaco glyph-margin *decorations* don't expose click events in a way
 // that lets us show a polished popover anchored to a line. So instead we own a
@@ -20,6 +22,13 @@ type DecoratorArgs = {
   onDeleteComment: (commentId: string) => void
 }
 
+type ZoneEntry = {
+  zoneId: string
+  domNode: HTMLElement
+  root: Root
+  lastBody: string
+}
+
 export function useDiffCommentDecorator({
   editor,
   filePath,
@@ -29,15 +38,12 @@ export function useDiffCommentDecorator({
   onDeleteComment
 }: DecoratorArgs): void {
   const hoverLineRef = useRef<number | null>(null)
-  const viewZoneIdsRef = useRef<Map<string, string>>(new Map())
+  // Why: one React root per view zone. Body updates re-render into the
+  // existing root, so Monaco's zone DOM stays in place and only the card
+  // contents update — matching the diff-based pass that replaced the previous
+  // hand-built DOM implementation.
+  const zonesRef = useRef<Map<string, ZoneEntry>>(new Map())
   const disposablesRef = useRef<IDisposable[]>([])
-  // Why: cache each comment's rendered DOM node and last-applied body so the
-  // view-zone effect can patch an existing card in place when only the body
-  // changed, rather than removing and re-adding every zone on each render.
-  // Rebuilding all zones caused visible flicker and wasted DOM work whenever
-  // a single comment was added, edited, or deleted.
-  const domNodesByCommentIdRef = useRef<Map<string, HTMLElement>>(new Map())
-  const bodyByCommentIdRef = useRef<Map<string, string>>(new Map())
   // Why: stash the consumer callbacks in refs so the decorator effect's
   // cleanup does not run on every parent render. The parent passes inline
   // arrow functions; without this, each render would tear down and re-attach
@@ -72,11 +78,35 @@ export function useDiffCommentDecorator({
       return typeof h === 'number' && h > 0 ? h : 19
     }
 
+    // Why: cache last-applied style values so positionAtLine skips redundant
+    // DOM writes during mousemove. Monaco's onMouseMove fires at high
+    // frequency, and every style assignment to an element currently under the
+    // cursor can retrigger hover state and cause flicker.
+    let lastTop: number | null = null
+    let lastDisplay: string | null = null
+
+    const setDisplay = (value: string): void => {
+      if (lastDisplay === value) {
+        return
+      }
+      plus.style.display = value
+      lastDisplay = value
+    }
+
+    // Why: keep the button a fixed 18px square (height set in CSS) and
+    // vertically center it within the hovered line's box. Previously the
+    // height tracked the line height, producing a rectangle on editors with
+    // taller line-heights. Centering relative to lineHeight keeps the button
+    // sitting neatly on whatever line the cursor is on.
+    const BUTTON_SIZE = 18
     const positionAtLine = (lineNumber: number): void => {
-      const top = editor.getTopForLineNumber(lineNumber) - editor.getScrollTop()
-      plus.style.top = `${top}px`
-      plus.style.height = `${getLineHeight()}px`
-      plus.style.display = 'flex'
+      const lineTop = editor.getTopForLineNumber(lineNumber) - editor.getScrollTop()
+      const top = Math.round(lineTop + (getLineHeight() - BUTTON_SIZE) / 2)
+      if (top !== lastTop) {
+        plus.style.top = `${top}px`
+        lastTop = top
+      }
+      setDisplay('flex')
     }
 
     const handleClick = (ev: MouseEvent): void => {
@@ -93,9 +123,19 @@ export function useDiffCommentDecorator({
     plus.addEventListener('click', handleClick)
 
     const onMouseMove = editor.onMouseMove((e) => {
+      // Why: Monaco reports null position when the cursor is over overlay DOM
+      // that sits inside the editor — including our own "+" button. Hiding on
+      // null would create a flicker loop: cursor enters button → null → hide
+      // → cursor is now over line text → show → repeat. Keep the button
+      // visible at its last line while the cursor is on it. The onMouseLeave
+      // handler still hides it when the cursor leaves the editor entirely.
+      const srcEvent = e.event?.browserEvent as MouseEvent | undefined
+      if (srcEvent && plus.contains(srcEvent.target as Node)) {
+        return
+      }
       const ln = e.target.position?.lineNumber ?? null
       if (ln == null) {
-        plus.style.display = 'none'
+        setDisplay('none')
         return
       }
       hoverLineRef.current = ln
@@ -106,7 +146,7 @@ export function useDiffCommentDecorator({
     // Monaco's content area reports leave but before the button element does)
     // still resolves to the last-hovered line instead of silently dropping.
     const onMouseLeave = editor.onMouseLeave(() => {
-      plus.style.display = 'none'
+      setDisplay('none')
     })
     const onScroll = editor.onDidScrollChange(() => {
       if (hoverLineRef.current != null) {
@@ -124,14 +164,15 @@ export function useDiffCommentDecorator({
       plus.removeEventListener('click', handleClick)
       plus.remove()
       // Why: when the editor is swapped or torn down, its view zones go with
-      // it. Clear the tracking Maps so a subsequent editor mount starts from
-      // a known-empty state rather than trying to remove stale zone ids from
-      // a dead editor. The diff effect below deliberately has no cleanup so
-      // comment-only changes don't cause a full zone rebuild; this cleanup
-      // is the single place we reset zone tracking.
-      viewZoneIdsRef.current.clear()
-      domNodesByCommentIdRef.current.clear()
-      bodyByCommentIdRef.current.clear()
+      // it. Unmount the React roots and clear tracking so a subsequent editor
+      // mount starts from a known-empty state rather than trying to remove
+      // stale zone ids from a dead editor. The diff effect below deliberately
+      // has no cleanup so comment-only changes don't cause a full zone
+      // rebuild; this cleanup is the single place we reset zone tracking.
+      for (const entry of zonesRef.current.values()) {
+        entry.root.unmount()
+      }
+      zonesRef.current.clear()
     }
   }, [editor])
 
@@ -143,60 +184,46 @@ export function useDiffCommentDecorator({
     const relevant = comments.filter((c) => c.filePath === filePath && c.worktreeId === worktreeId)
     const relevantMap = new Map(relevant.map((c) => [c.id, c] as const))
 
-    const currentIds = viewZoneIdsRef.current
-    const domNodesByCommentId = domNodesByCommentIdRef.current
-    const bodyByCommentId = bodyByCommentIdRef.current
+    const zones = zonesRef.current
+    // Why: unmounting a React root inside Monaco's changeViewZones callback
+    // triggers synchronous DOM mutations that Monaco isn't expecting mid-flush
+    // and can race with its zone bookkeeping. Collect roots to unmount, run
+    // the Monaco batch, then unmount afterwards.
+    const rootsToUnmount: Root[] = []
 
     editor.changeViewZones((accessor) => {
       // Why: remove only the zones whose comments are gone. Rebuilding all
       // zones on every change caused flicker and dropped focus/selection in
       // adjacent UI; a diff-based pass keeps the untouched cards stable.
-      for (const [commentId, zoneId] of currentIds) {
+      for (const [commentId, entry] of zones) {
         if (!relevantMap.has(commentId)) {
-          accessor.removeZone(zoneId)
-          currentIds.delete(commentId)
-          domNodesByCommentId.delete(commentId)
-          bodyByCommentId.delete(commentId)
+          accessor.removeZone(entry.zoneId)
+          rootsToUnmount.push(entry.root)
+          zones.delete(commentId)
         }
       }
 
       // Add zones for newly-added comments.
       for (const c of relevant) {
-        if (currentIds.has(c.id)) {
+        if (zones.has(c.id)) {
           continue
         }
         const dom = document.createElement('div')
         dom.className = 'orca-diff-comment-inline'
+        // Why: swallow mousedown on the whole zone so the editor does not
+        // steal focus (or start a selection drag) when the user interacts
+        // with anything inside the card. Delete still fires because click is
+        // attached directly on the button.
+        dom.addEventListener('mousedown', (ev) => ev.stopPropagation())
 
-        const card = document.createElement('div')
-        card.className = 'orca-diff-comment-card'
-
-        const header = document.createElement('div')
-        header.className = 'orca-diff-comment-header'
-        const meta = document.createElement('span')
-        meta.className = 'orca-diff-comment-meta'
-        meta.textContent = `Comment · line ${c.lineNumber}`
-        const del = document.createElement('button')
-        del.type = 'button'
-        del.className = 'orca-diff-comment-delete'
-        del.title = 'Delete comment'
-        del.textContent = 'Delete'
-        del.addEventListener('mousedown', (ev) => ev.stopPropagation())
-        del.addEventListener('click', (ev) => {
-          ev.preventDefault()
-          ev.stopPropagation()
-          onDeleteCommentRef.current(c.id)
-        })
-        header.appendChild(meta)
-        header.appendChild(del)
-
-        const body = document.createElement('div')
-        body.className = 'orca-diff-comment-body'
-        body.textContent = c.body
-
-        card.appendChild(header)
-        card.appendChild(body)
-        dom.appendChild(card)
+        const root = createRoot(dom)
+        root.render(
+          <DiffCommentCard
+            lineNumber={c.lineNumber}
+            body={c.body}
+            onDelete={() => onDeleteCommentRef.current(c.id)}
+          />
+        )
 
         // Why: estimate height from line count so the zone is close to the
         // right size on first paint. Monaco sets heightInPx authoritatively at
@@ -206,38 +233,50 @@ export function useDiffCommentDecorator({
         const lineCount = c.body.split('\n').length
         const heightInPx = Math.max(56, 28 + lineCount * 18)
 
-        const id = accessor.addZone({
+        // Why: suppressMouseDown: false so clicks inside the zone (Delete
+        // button) reach our DOM listeners. With true, Monaco intercepts the
+        // mousedown and routes it to the editor, so the Delete button never
+        // fires. The delete/body mousedown listeners stopPropagation so the
+        // editor still doesn't steal focus on interaction.
+        const zoneId = accessor.addZone({
           afterLineNumber: c.lineNumber,
           heightInPx,
           domNode: dom,
-          suppressMouseDown: true
+          suppressMouseDown: false
         })
-        currentIds.set(c.id, id)
-        domNodesByCommentId.set(c.id, dom)
-        bodyByCommentId.set(c.id, c.body)
+        zones.set(c.id, { zoneId, domNode: dom, root, lastBody: c.body })
       }
 
-      // Patch existing zones whose body text changed in place — avoids the
-      // full rebuild that would otherwise flicker the card.
+      // Patch existing zones whose body text changed in place — re-render the
+      // same root with new props instead of removing/re-adding the zone.
       for (const c of relevant) {
-        if (!currentIds.has(c.id)) {
+        const entry = zones.get(c.id)
+        if (!entry) {
           continue
         }
-        const previousBody = bodyByCommentId.get(c.id)
-        if (previousBody === c.body) {
+        if (entry.lastBody === c.body) {
           continue
         }
-        const dom = domNodesByCommentId.get(c.id)
-        if (!dom) {
-          continue
-        }
-        const bodyEl = dom.querySelector('.orca-diff-comment-body')
-        if (bodyEl) {
-          bodyEl.textContent = c.body
-        }
-        bodyByCommentId.set(c.id, c.body)
+        entry.root.render(
+          <DiffCommentCard
+            lineNumber={c.lineNumber}
+            body={c.body}
+            onDelete={() => onDeleteCommentRef.current(c.id)}
+          />
+        )
+        entry.lastBody = c.body
       }
     })
+
+    // Why: deferred unmount so Monaco has finished its zone batch before we
+    // tear down the React trees that were inside those zones.
+    if (rootsToUnmount.length > 0) {
+      queueMicrotask(() => {
+        for (const root of rootsToUnmount) {
+          root.unmount()
+        }
+      })
+    }
     // Why: intentionally no cleanup. React would run cleanup BEFORE the next
     // effect body on every `comments` identity change, wiping all zones and
     // forcing a full rebuild — exactly the flicker this diff-based pass is

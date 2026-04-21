@@ -16,15 +16,10 @@ function makeComment(overrides: Partial<DiffComment> = {}): DiffComment {
 }
 
 describe('formatDiffComment', () => {
-  it('emits the fixed four-line structure', () => {
+  it('emits the fixed three-line structure', () => {
     const out = formatDiffComment(makeComment())
     expect(out).toBe(
-      [
-        'File: src/app.ts',
-        'Line: 10',
-        'User comment: "Needs validation"',
-        'Comment metadata: This comment was left on the modified branch.'
-      ].join('\n')
+      ['File: src/app.ts', 'Line: 10', 'User comment: "Needs validation"'].join('\n')
     )
   })
 
@@ -38,10 +33,10 @@ describe('formatDiffComment', () => {
     expect(out).toContain('User comment: "path\\\\to\\\\\\"thing\\""')
   })
 
-  it('escapes newlines so the body cannot break out of the fixed 4-line structure', () => {
+  it('escapes newlines so the body cannot break out of the fixed 3-line structure', () => {
     const out = formatDiffComment(makeComment({ body: 'first\nsecond' }))
     expect(out).toContain('User comment: "first\\nsecond"')
-    expect(out.split('\n')).toHaveLength(4)
+    expect(out.split('\n')).toHaveLength(3)
   })
 })
 
@@ -56,12 +51,10 @@ describe('formatDiffComments', () => {
         'File: src/app.ts',
         'Line: 1',
         'User comment: "first"',
-        'Comment metadata: This comment was left on the modified branch.',
         '',
         'File: src/app.ts',
         'Line: 2',
-        'User comment: "second"',
-        'Comment metadata: This comment was left on the modified branch.'
+        'User comment: "second"'
       ].join('\n')
     )
   })

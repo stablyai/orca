@@ -10,12 +10,7 @@ export function formatDiffComment(c: DiffComment): string {
     .replace(/"/g, '\\"')
     .replace(/\r/g, '\\r')
     .replace(/\n/g, '\\n')
-  return [
-    `File: ${c.filePath}`,
-    `Line: ${c.lineNumber}`,
-    `User comment: "${escaped}"`,
-    `Comment metadata: This comment was left on the modified branch.`
-  ].join('\n')
+  return [`File: ${c.filePath}`, `Line: ${c.lineNumber}`, `User comment: "${escaped}"`].join('\n')
 }
 
 export function formatDiffComments(comments: DiffComment[]): string {

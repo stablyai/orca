@@ -7,7 +7,6 @@ export type DiffCommentsSlice = {
   getDiffComments: (worktreeId: string) => DiffComment[]
   addDiffComment: (input: Omit<DiffComment, 'id' | 'createdAt'>) => Promise<DiffComment | null>
   deleteDiffComment: (worktreeId: string, commentId: string) => Promise<void>
-  clearDiffComments: (worktreeId: string) => Promise<void>
 }
 
 function generateId(): string {
@@ -150,21 +149,6 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
       const next = existing.filter((c) => c.id !== commentId)
       return next.length === existing.length ? null : next
     })
-    if (!result) {
-      return
-    }
-    try {
-      await persist(worktreeId, result.next)
-    } catch (err) {
-      console.error('Failed to persist diff comments:', err)
-      rollback(set, worktreeId, result.previous, result.next)
-    }
-  },
-
-  clearDiffComments: async (worktreeId) => {
-    const result = mutateComments(set, worktreeId, (existing) =>
-      existing.length === 0 ? null : []
-    )
     if (!result) {
       return
     }

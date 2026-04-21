@@ -12,9 +12,13 @@ import {
   FilePlus,
   FileQuestion,
   ArrowRightLeft,
+  Check,
+  Copy,
   FolderOpen,
   GitMerge,
   GitPullRequestArrow,
+  MessageSquare,
+  Trash,
   TriangleAlert,
   CircleCheck,
   Search,
@@ -43,6 +47,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { BaseRefPicker } from '@/components/settings/BaseRefPicker'
+import { formatDiffComment, formatDiffComments } from '@/lib/diff-comments-format'
 import {
   notifyEditorExternalFileChange,
   requestEditorSaveQuiesce
@@ -50,6 +55,7 @@ import {
 import { getConnectionId } from '@/lib/connection-context'
 import { PullRequestIcon } from './checks-helpers'
 import type {
+  DiffComment,
   GitBranchChangeEntry,
   GitBranchCompareSummary,
   GitConflictKind,
@@ -119,6 +125,47 @@ function SourceControlInner(): React.JSX.Element {
   const openBranchDiff = useAppStore((s) => s.openBranchDiff)
   const openAllDiffs = useAppStore((s) => s.openAllDiffs)
   const openBranchAllDiffs = useAppStore((s) => s.openBranchAllDiffs)
+  const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
+  const diffCommentsForActive = useAppStore((s) =>
+    activeWorktreeId ? s.getDiffComments(activeWorktreeId) : []
+  )
+  const diffCommentCount = diffCommentsForActive.length
+  // Why: per-file counts are fed into each UncommittedEntryRow so a comment
+  // badge can appear next to the status letter. Compute once per render so
+  // rows don't each re-filter the full list.
+  const diffCommentCountByPath = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const c of diffCommentsForActive) {
+      map.set(c.filePath, (map.get(c.filePath) ?? 0) + 1)
+    }
+    return map
+  }, [diffCommentsForActive])
+  const [diffCommentsExpanded, setDiffCommentsExpanded] = useState(false)
+  const [diffCommentsCopied, setDiffCommentsCopied] = useState(false)
+
+  const handleCopyDiffComments = useCallback(async (): Promise<void> => {
+    if (diffCommentsForActive.length === 0) {
+      return
+    }
+    const text = formatDiffComments(diffCommentsForActive)
+    try {
+      await window.api.ui.writeClipboardText(text)
+      setDiffCommentsCopied(true)
+    } catch {
+      // Why: swallow — clipboard write can fail when the window isn't focused.
+      // No dedicated error surface is warranted for a best-effort copy action.
+    }
+  }, [diffCommentsForActive])
+
+  // Why: auto-dismiss the "copied" indicator so the button returns to its
+  // default icon after a brief confirmation window.
+  useEffect(() => {
+    if (!diffCommentsCopied) {
+      return
+    }
+    const handle = window.setTimeout(() => setDiffCommentsCopied(false), 1500)
+    return () => window.clearTimeout(handle)
+  }, [diffCommentsCopied])
 
   const [scope, setScope] = useState<SourceControlScope>('all')
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
@@ -645,6 +692,67 @@ function SourceControlInner(): React.JSX.Element {
           </div>
         )}
 
+        {/* Why: Diff-comments live on the worktree and apply across every diff
+            view the user opens. The header row expands inline to show per-file
+            comment previews plus a Copy-all action so the user can hand the
+            set off to whichever tool they want without leaving the sidebar. */}
+        {activeWorktreeId && worktreePath && (
+          <div className="border-b border-border">
+            <div className="flex items-center gap-1 pl-3 pr-2 py-1.5">
+              <button
+                type="button"
+                className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-xs text-muted-foreground hover:text-foreground transition-colors"
+                onClick={() => setDiffCommentsExpanded((prev) => !prev)}
+                aria-expanded={diffCommentsExpanded}
+                title={diffCommentsExpanded ? 'Collapse comments' : 'Expand comments'}
+              >
+                <ChevronDown
+                  className={cn(
+                    'size-3 shrink-0 transition-transform',
+                    !diffCommentsExpanded && '-rotate-90'
+                  )}
+                />
+                <MessageSquare className="size-3.5 shrink-0" />
+                <span>Comments</span>
+                {diffCommentCount > 0 && (
+                  <span className="text-[11px] leading-none text-muted-foreground tabular-nums">
+                    {diffCommentCount}
+                  </span>
+                )}
+              </button>
+              {diffCommentCount > 0 && (
+                <TooltipProvider delayDuration={400}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        className="inline-flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                        onClick={() => void handleCopyDiffComments()}
+                        aria-label="Copy all comments to clipboard"
+                      >
+                        {diffCommentsCopied ? (
+                          <Check className="size-3.5" />
+                        ) : (
+                          <Copy className="size-3.5" />
+                        )}
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" sideOffset={6}>
+                      Copy all comments
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+            </div>
+            {diffCommentsExpanded && (
+              <DiffCommentsInlineList
+                comments={diffCommentsForActive}
+                onDelete={(id) => void deleteDiffComment(activeWorktreeId, id)}
+              />
+            )}
+          </div>
+        )}
+
         {/* Filter input for searching changed files across all sections */}
         <div className="flex items-center gap-1.5 border-b border-border px-3 py-1.5">
           <Search className="size-3.5 shrink-0 text-muted-foreground" />
@@ -796,6 +904,7 @@ function SourceControlInner(): React.JSX.Element {
                             onStage={handleStage}
                             onUnstage={handleUnstage}
                             onDiscard={handleDiscard}
+                            commentCount={diffCommentCountByPath.get(entry.path) ?? 0}
                           />
                         )
                       })}
@@ -849,6 +958,7 @@ function SourceControlInner(): React.JSX.Element {
                     worktreePath={worktreePath}
                     onRevealInExplorer={revealInExplorer}
                     onOpen={() => openCommittedDiff(entry)}
+                    commentCount={diffCommentCountByPath.get(entry.path) ?? 0}
                   />
                 ))}
             </div>
@@ -1052,6 +1162,108 @@ function SectionHeader({
   )
 }
 
+function DiffCommentsInlineList({
+  comments,
+  onDelete
+}: {
+  comments: DiffComment[]
+  onDelete: (commentId: string) => void
+}): React.JSX.Element {
+  // Why: group by filePath so the inline list mirrors the structure in the
+  // Comments tab — a compact section per file with line-number prefixes.
+  const groups = useMemo(() => {
+    const map = new Map<string, DiffComment[]>()
+    for (const c of comments) {
+      const list = map.get(c.filePath) ?? []
+      list.push(c)
+      map.set(c.filePath, list)
+    }
+    for (const list of map.values()) {
+      list.sort((a, b) => a.lineNumber - b.lineNumber)
+    }
+    return Array.from(map.entries())
+  }, [comments])
+
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+
+  // Why: auto-dismiss the per-row "copied" indicator so the button returns to
+  // its default icon after a brief confirmation window. Matches the top-level
+  // Copy button's behavior.
+  useEffect(() => {
+    if (!copiedId) {
+      return
+    }
+    const handle = window.setTimeout(() => setCopiedId(null), 1500)
+    return () => window.clearTimeout(handle)
+  }, [copiedId])
+
+  const handleCopyOne = useCallback(async (c: DiffComment): Promise<void> => {
+    try {
+      await window.api.ui.writeClipboardText(formatDiffComment(c))
+      setCopiedId(c.id)
+    } catch {
+      // Why: swallow — clipboard write can fail when the window isn't focused.
+    }
+  }, [])
+
+  if (comments.length === 0) {
+    return (
+      <div className="px-6 py-2 text-[11px] text-muted-foreground">
+        No comments yet. Hover a line in the diff view and click the + in the gutter.
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-muted/20">
+      {groups.map(([filePath, list]) => (
+        <div key={filePath} className="px-3 py-1.5">
+          <div className="truncate text-[10px] font-medium text-muted-foreground">{filePath}</div>
+          <ul className="mt-1 space-y-1">
+            {list.map((c) => (
+              <li
+                key={c.id}
+                className="group flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-accent/40"
+              >
+                <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[10px] leading-none tabular-nums text-muted-foreground">
+                  L{c.lineNumber}
+                </span>
+                <div className="min-w-0 flex-1 whitespace-pre-wrap break-words text-[11px] leading-snug text-foreground">
+                  {c.body}
+                </div>
+                <button
+                  type="button"
+                  className="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100"
+                  onClick={(ev) => {
+                    ev.stopPropagation()
+                    void handleCopyOne(c)
+                  }}
+                  title="Copy comment"
+                  aria-label={`Copy comment on line ${c.lineNumber}`}
+                >
+                  {copiedId === c.id ? <Check className="size-3" /> : <Copy className="size-3" />}
+                </button>
+                <button
+                  type="button"
+                  className="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                  onClick={(ev) => {
+                    ev.stopPropagation()
+                    onDelete(c.id)
+                  }}
+                  title="Delete comment"
+                  aria-label={`Delete comment on line ${c.lineNumber}`}
+                >
+                  <Trash className="size-3" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function ConflictSummaryCard({
   conflictOperation,
   unresolvedCount,
@@ -1143,7 +1355,8 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   onOpen,
   onStage,
   onUnstage,
-  onDiscard
+  onDiscard,
+  commentCount
 }: {
   entryKey: string
   entry: GitStatusEntry
@@ -1157,6 +1370,7 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   onStage: (filePath: string) => Promise<void>
   onUnstage: (filePath: string) => Promise<void>
   onDiscard: (filePath: string) => Promise<void>
+  commentCount: number
 }): React.JSX.Element {
   const StatusIcon = STATUS_ICONS[entry.status] ?? FileQuestion
   const fileName = basename(entry.path)
@@ -1229,6 +1443,18 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
             <div className="truncate text-[11px] text-muted-foreground">{conflictLabel}</div>
           )}
         </div>
+        {commentCount > 0 && (
+          // Why: show a small comment marker on any row that has diff comments
+          // so the user can tell at a glance which files have review notes
+          // attached, without opening the Comments tab.
+          <span
+            className="flex shrink-0 items-center gap-0.5 text-[10px] text-muted-foreground"
+            title={`${commentCount} comment${commentCount === 1 ? '' : 's'}`}
+          >
+            <MessageSquare className="size-3" />
+            <span className="tabular-nums">{commentCount}</span>
+          </span>
+        )}
         {entry.conflictStatus ? (
           <ConflictBadge entry={entry} />
         ) : (
@@ -1317,13 +1543,15 @@ function BranchEntryRow({
   currentWorktreeId,
   worktreePath,
   onRevealInExplorer,
-  onOpen
+  onOpen,
+  commentCount
 }: {
   entry: GitBranchChangeEntry
   currentWorktreeId: string
   worktreePath: string
   onRevealInExplorer: (worktreeId: string, absolutePath: string) => void
   onOpen: () => void
+  commentCount: number
 }): React.JSX.Element {
   const StatusIcon = STATUS_ICONS[entry.status] ?? FileQuestion
   const fileName = basename(entry.path)
@@ -1351,6 +1579,15 @@ function BranchEntryRow({
           <span className="text-foreground">{fileName}</span>
           {dirPath && <span className="ml-1.5 text-[11px] text-muted-foreground">{dirPath}</span>}
         </span>
+        {commentCount > 0 && (
+          <span
+            className="flex shrink-0 items-center gap-0.5 text-[10px] text-muted-foreground"
+            title={`${commentCount} comment${commentCount === 1 ? '' : 's'}`}
+          >
+            <MessageSquare className="size-3" />
+            <span className="tabular-nums">{commentCount}</span>
+          </span>
+        )}
         <span
           className="w-4 shrink-0 text-center text-[10px] font-bold"
           style={{ color: STATUS_COLORS[entry.status] }}

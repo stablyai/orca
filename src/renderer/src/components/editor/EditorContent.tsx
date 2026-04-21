@@ -13,9 +13,6 @@ import { RichMarkdownErrorBoundary } from './RichMarkdownErrorBoundary'
 const MonacoEditor = lazy(() => import('./MonacoEditor'))
 const DiffViewer = lazy(() => import('./DiffViewer'))
 const CombinedDiffViewer = lazy(() => import('./CombinedDiffViewer'))
-const DiffCommentsTab = lazy(() =>
-  import('../diff-comments/DiffCommentsTab').then((m) => ({ default: m.DiffCommentsTab }))
-)
 const RichMarkdownEditor = lazy(() => import('./RichMarkdownEditor'))
 const MarkdownPreview = lazy(() => import('./MarkdownPreview'))
 const ImageViewer = lazy(() => import('./ImageViewer'))
@@ -226,10 +223,6 @@ export function EditorContent({
     return <div className="h-full min-h-0">{renderMonacoEditor(fc)}</div>
   }
 
-  if (activeFile.mode === 'diff-comments') {
-    return <DiffCommentsTab activeFile={activeFile} />
-  }
-
   if (activeFile.mode === 'conflict-review') {
     return (
       <ConflictReviewPanel
@@ -362,6 +355,7 @@ export function EditorContent({
       relativePath={activeFile.relativePath}
       sideBySide={sideBySide}
       editable={isEditable}
+      worktreeId={activeFile.worktreeId}
       onContentChange={isEditable ? handleContentChange : undefined}
       onSave={isEditable ? handleSave : undefined}
     />
