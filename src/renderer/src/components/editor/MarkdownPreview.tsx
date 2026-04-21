@@ -154,16 +154,24 @@ export default function MarkdownPreview({
   }, [scrollCacheKey, renderedContent])
 
   const moveToMatch = useCallback((direction: 1 | -1) => {
-    const matches = matchesRef.current
-    if (matches.length === 0) {
+    if (matchesRef.current.length === 0) {
       return
     }
-    setActiveMatchIndex((currentIndex) => {
-      const baseIndex = currentIndex >= 0 ? currentIndex : direction === 1 ? -1 : 0
-      const nextIndex = (baseIndex + direction + matches.length) % matches.length
-      return nextIndex
+    setActiveMatchIndex((cur) => {
+      const base = cur >= 0 ? cur : direction === 1 ? -1 : 0
+      return (base + direction + matchesRef.current.length) % matchesRef.current.length
     })
   }, [])
+
+  const openSearch = useCallback(() => {
+    if (isSearchOpen) {
+      // Why: same-value setState is a no-op so the focus effect won't re-fire.
+      inputRef.current?.focus()
+      inputRef.current?.select()
+    } else {
+      setIsSearchOpen(true)
+    }
+  }, [isSearchOpen])
 
   const closeSearch = useCallback(() => {
     setIsSearchOpen(false)
@@ -197,15 +205,9 @@ export default function MarkdownPreview({
     const matches = applyMarkdownPreviewSearchHighlights(body, query)
     matchesRef.current = matches
     setMatchCount(matches.length)
-    setActiveMatchIndex((currentIndex) => {
-      if (matches.length === 0) {
-        return -1
-      }
-      if (currentIndex >= 0 && currentIndex < matches.length) {
-        return currentIndex
-      }
-      return 0
-    })
+    setActiveMatchIndex((cur) =>
+      matches.length === 0 ? -1 : cur >= 0 && cur < matches.length ? cur : 0
+    )
 
     return () => clearMarkdownPreviewSearchHighlights(body)
   }, [renderedContent, isSearchOpen, query])
@@ -230,7 +232,7 @@ export default function MarkdownPreview({
       ) {
         event.preventDefault()
         event.stopPropagation()
-        setIsSearchOpen(true)
+        openSearch()
         return
       }
 
@@ -248,7 +250,7 @@ export default function MarkdownPreview({
 
     window.addEventListener('keydown', handleKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true })
-  }, [closeSearch, isSearchOpen, setIsSearchOpen])
+  }, [closeSearch, isSearchOpen, openSearch])
 
   const components: Components = {
     a: ({ href, children, ...props }) => {
