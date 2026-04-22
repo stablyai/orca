@@ -515,25 +515,30 @@ export default function TaskPage(): React.JSX.Element {
             so render a matching 42px strip here to keep the top band
             continuous with the sidebar header and tab rows. When the sidebar
             is collapsed, App.tsx floats its titlebar-left controls (traffic
-            lights, sidebar toggle, agent badge) over this strip; reserve that
-            measured width on the left so the "Tasks" label never sits behind
-            those controls. The strip is drag-region so the window stays
-            movable from this band, matching other top chrome. Skipped in
-            non-workspace mode because App.tsx already owns the top titlebar
-            and a second strip would produce a duplicate band. */}
+            lights, sidebar toggle, agent badge) over the top-left of this
+            page at z-10. Our page wrapper also sits at z-10 and paints later
+            in DOM, so a solid-background strip spanning the full row would
+            hide those controls (notably the sidebar-expand toggle). Keep the
+            reserved region transparent and only paint bg/border on the
+            remainder — the floating titlebar-left carries its own matching
+            bg + border-bottom, so the two segments read as one continuous
+            band. The strip is drag-region so the window stays movable here,
+            matching other top chrome. Skipped in non-workspace mode because
+            App.tsx already owns the top titlebar and a second strip would
+            produce a duplicate band. */}
         {workspaceActive ? (
           <div
-            className="flex-none h-[42px] border-b border-border bg-card"
+            className="flex-none flex h-[42px]"
             style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
           >
-            <div
-              className="flex h-full items-center px-4 text-sm font-medium text-muted-foreground"
-              style={{
-                paddingLeft: reserveCollapsedHeaderSpace
-                  ? 'var(--collapsed-sidebar-header-width)'
-                  : undefined
-              }}
-            >
+            {reserveCollapsedHeaderSpace ? (
+              <div
+                aria-hidden
+                className="h-full shrink-0"
+                style={{ width: 'var(--collapsed-sidebar-header-width)' }}
+              />
+            ) : null}
+            <div className="flex h-full flex-1 items-center border-b border-border bg-card px-4 text-sm font-medium text-muted-foreground">
               <span>Tasks</span>
             </div>
           </div>
