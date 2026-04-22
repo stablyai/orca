@@ -13,7 +13,12 @@ import { registerSshGitProvider } from '../providers/ssh-git-dispatch'
 import { SshPortForwardManager } from '../ssh/ssh-port-forward'
 import type { SshTarget, SshConnectionState, SshConnectionStatus } from '../../shared/ssh-types'
 import { isAuthError } from '../ssh/ssh-connection-utils'
-import { cleanupConnection, wireUpSshPtyEvents, reestablishRelayStack } from './ssh-relay-helpers'
+import {
+  cleanupConnection,
+  wireUpSshPtyEvents,
+  reestablishRelayStack,
+  registerRelayRoots
+} from './ssh-relay-helpers'
 import { registerSshBrowseHandler } from './ssh-browse'
 import { requestCredential, registerCredentialHandler } from './ssh-passphrase'
 
@@ -90,7 +95,8 @@ export function registerSshHandlers(
           getMainWindow,
           connectionManager,
           activeMultiplexers,
-          portForwardManager
+          portForwardManager,
+          store
         )
       }
     }
@@ -171,6 +177,8 @@ export function registerSshHandlers(
 
       const mux = new SshChannelMultiplexer(transport)
       activeMultiplexers.set(args.targetId, mux)
+
+      registerRelayRoots(mux, args.targetId, store)
 
       const ptyProvider = new SshPtyProvider(args.targetId, mux)
       registerSshPtyProvider(args.targetId, ptyProvider)

@@ -15,16 +15,22 @@ export type SshSlice = {
    * so components can look up labels without per-component IPC calls. */
   sshTargetLabels: Map<string, string>
   sshCredentialQueue: SshCredentialRequest[]
+  /** Incremented when an SSH target transitions to 'connected'. Allows
+   * components like the file explorer to re-trigger data loads that failed
+   * before the connection was established. */
+  sshConnectedGeneration: number
   setSshConnectionState: (targetId: string, state: SshConnectionState) => void
   setSshTargetLabels: (labels: Map<string, string>) => void
   enqueueSshCredentialRequest: (req: SshCredentialRequest) => void
   removeSshCredentialRequest: (requestId: string) => void
+  bumpSshConnectedGeneration: () => void
 }
 
 export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) => ({
   sshConnectionStates: new Map(),
   sshTargetLabels: new Map(),
   sshCredentialQueue: [],
+  sshConnectedGeneration: 0,
 
   setSshConnectionState: (targetId, state) =>
     set((s) => {
@@ -39,5 +45,7 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
   removeSshCredentialRequest: (requestId) =>
     set((s) => ({
       sshCredentialQueue: s.sshCredentialQueue.filter((req) => req.requestId !== requestId)
-    }))
+    })),
+  bumpSshConnectedGeneration: () =>
+    set((s) => ({ sshConnectedGeneration: s.sshConnectedGeneration + 1 }))
 })

@@ -25,6 +25,24 @@ import {
 import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
 import type { SshPortForwardManager } from '../ssh/ssh-port-forward'
 import type { SshConnectionManager } from '../ssh/ssh-connection'
+import type { Store } from '../persistence'
+
+// Why: the relay's RelayContext starts with rootsRegistered=false and rejects
+// all FS operations until at least one root is registered via
+// session.registerRoot. This must be called after every relay deploy — both
+// initial connect and reconnection — because each deploy creates a fresh
+// RelayContext on the remote host.
+export function registerRelayRoots(
+  mux: SshChannelMultiplexer,
+  connectionId: string,
+  store: Store
+): void {
+  for (const repo of store.getRepos()) {
+    if (repo.connectionId === connectionId) {
+      mux.notify('session.registerRoot', { rootPath: repo.path })
+    }
+  }
+}
 
 export function cleanupConnection(
   targetId: string,
@@ -98,7 +116,8 @@ export async function reestablishRelayStack(
   getMainWindow: () => BrowserWindow | null,
   connectionManager: SshConnectionManager | null,
   activeMultiplexers: Map<string, SshChannelMultiplexer>,
-  portForwardManager?: SshPortForwardManager | null
+  portForwardManager?: SshPortForwardManager | null,
+  store?: Store | null
 ): Promise<void> {
   const conn = connectionManager?.getConnection(targetId)
   if (!conn) {
@@ -153,6 +172,10 @@ export async function reestablishRelayStack(
 
     const mux = new SshChannelMultiplexer(transport)
     activeMultiplexers.set(targetId, mux)
+
+    if (store) {
+      registerRelayRoots(mux, targetId, store)
+    }
 
     const ptyProvider = new SshPtyProvider(targetId, mux)
     registerSshPtyProvider(targetId, ptyProvider)

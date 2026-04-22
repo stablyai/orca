@@ -463,6 +463,11 @@ export function useIpcEvents(): void {
         }
 
         if (state.status === 'connected') {
+          // Why: the file explorer may have tried (and failed) to load the tree
+          // before the SSH connection was established. Bumping the generation
+          // lets it detect that providers are now available and retry.
+          store.bumpSshConnectedGeneration()
+
           void Promise.all(remoteRepos.map((r) => store.fetchWorktrees(r.id))).then(() => {
             // Why: terminal panes that failed to spawn (no PTY provider on cold
             // start) sit inert. Bumping generation forces TerminalPane to remount

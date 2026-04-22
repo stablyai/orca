@@ -27,6 +27,7 @@ import { useFileExplorerWatch } from './useFileExplorerWatch'
 function FileExplorerInner(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const sshConnectedGeneration = useAppStore((s) => s.sshConnectedGeneration)
   const expandedDirs = useAppStore((s) => s.expandedDirs)
   const toggleDir = useAppStore((s) => s.toggleDir)
   const pendingExplorerReveal = useAppStore((s) => s.pendingExplorerReveal)
@@ -136,6 +137,21 @@ function FileExplorerInner(): React.JSX.Element {
     resetAndLoad()
     clearFileExplorerUndoHistory()
   }, [worktreePath]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Why: on app startup the file explorer loads before SSH providers are
+  // registered, so readDir fails for remote worktrees. When the SSH
+  // connection is later established, sshConnectedGeneration bumps and this
+  // effect retries the load. Only retries when there was a prior error to
+  // avoid redundant reloads for local worktrees.
+  const sshGenRef = useRef(sshConnectedGeneration)
+  useEffect(() => {
+    if (sshConnectedGeneration > sshGenRef.current) {
+      sshGenRef.current = sshConnectedGeneration
+      if (worktreePath && rootError) {
+        resetAndLoad()
+      }
+    }
+  }, [sshConnectedGeneration]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => clearFlashTimeout, [clearFlashTimeout])
 
