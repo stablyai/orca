@@ -182,9 +182,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
         }
       }
       if (useAppStore.getState().activeView !== 'terminal') {
-        // Why: the sidebar remains visible during the new-workspace flow, so
-        // clicking a real worktree should switch the main pane back to that
-        // worktree instead of leaving the create surface visible.
+        // Why: the sidebar remains visible on the tasks page, so clicking a
+        // real worktree should switch the main pane back to that worktree
+        // instead of leaving the tasks surface visible.
         setActiveView('terminal')
       }
       // Why: always activate the worktree so the user can see terminal history,

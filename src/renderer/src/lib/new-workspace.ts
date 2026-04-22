@@ -4,10 +4,10 @@ import { isShellProcess } from '@/lib/tui-agent-startup'
 import type { GitHubWorkItem, OrcaHooks, TaskViewPresetId } from '../../../shared/types'
 
 /**
- * Why: the NewWorkspacePage's preset buttons and the openNewWorkspacePage
- * prefetcher both need to compute the same GitHub query string for a given
- * preset id. Keep the mapping here so the prefetch warms exactly the cache
- * key the page will look up on mount.
+ * Why: the TaskPage's preset buttons and the openTaskPage prefetcher both need
+ * to compute the same GitHub query string for a given preset id. Keep the
+ * mapping here so the prefetch warms exactly the cache key the page will look
+ * up on mount.
  */
 export function getTaskPresetQuery(presetId: TaskViewPresetId | null): string {
   switch (presetId) {

@@ -14,7 +14,7 @@ function LinearIcon({ className }: { className?: string }): React.JSX.Element {
 }
 
 const SidebarNav = React.memo(function SidebarNav() {
-  const openNewWorkspacePage = useAppStore((s) => s.openNewWorkspacePage)
+  const openTaskPage = useAppStore((s) => s.openTaskPage)
   const activeView = useAppStore((s) => s.activeView)
   const repos = useAppStore((s) => s.repos)
   const canBrowseTasks = repos.some((repo) => isGitRepoKind(repo))
@@ -33,14 +33,14 @@ const SidebarNav = React.memo(function SidebarNav() {
     const firstGitRepo = activeRepo ?? repos.find((r) => isGitRepoKind(r))
     if (firstGitRepo?.path) {
       // Why: warm the exact cache key the page will read on mount — must
-      // match NewWorkspacePage's `initialTaskQuery` derived from the same
-      // default preset, otherwise the prefetch lands in a key the page
-      // never reads and we pay the full round-trip after click.
+      // match TaskPage's `initialTaskQuery` derived from the same default
+      // preset, otherwise the prefetch lands in a key the page never reads
+      // and we pay the full round-trip after click.
       prefetchWorkItems(firstGitRepo.path, 36, getTaskPresetQuery(defaultTaskViewPreset))
     }
   }, [activeRepoId, canBrowseTasks, defaultTaskViewPreset, prefetchWorkItems, repos])
 
-  const tasksActive = activeView === 'new-workspace'
+  const tasksActive = activeView === 'tasks'
 
   return (
     <div className="flex flex-col gap-0.5 px-2 pt-2 pb-1">
@@ -50,7 +50,7 @@ const SidebarNav = React.memo(function SidebarNav() {
           if (!canBrowseTasks) {
             return
           }
-          openNewWorkspacePage()
+          openTaskPage()
         }}
         onPointerEnter={handlePrefetch}
         onFocus={handlePrefetch}

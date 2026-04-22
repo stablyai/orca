@@ -47,8 +47,8 @@ export type UseComposerStateOptions = {
   /** Invoked after a successful createWorktree. The caller usually closes its
    *  surface here (palette modal, full page, etc.). */
   onCreated?: () => void
-  /** Optional external repoId override — used by NewWorkspacePage's task list
-   *  which wants to drive repo selection from the page header, not the card. */
+  /** Optional external repoId override — used by TaskPage's work-item list
+   *  which drives repo selection from the page header, not the card. */
   repoIdOverride?: string
   onRepoIdOverrideChange?: (value: string) => void
 }
@@ -114,8 +114,8 @@ export type UseComposerStateResult = {
   createDisabled: boolean
 }
 
-// Why: both the full-page NewWorkspacePage composer and the Cmd+J modal can
-// be mounted simultaneously. Without instance scoping, a single native file
+// Why: both the full-page TaskPage composer and the Cmd+J modal can be
+// mounted simultaneously. Without instance scoping, a single native file
 // drop fires every subscriber and duplicates attachments/prompt edits across
 // the background draft and the visible modal. Route drops to the
 // most-recently-mounted composer only — the modal stacks on top, so the

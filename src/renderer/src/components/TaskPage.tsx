@@ -139,10 +139,10 @@ function getTaskStatusTone(item: GitHubWorkItem): string {
   return 'border-cyan-500/30 bg-cyan-500/10 text-cyan-700 dark:text-cyan-200'
 }
 
-export default function NewWorkspacePage(): React.JSX.Element {
+export default function TaskPage(): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
-  const pageData = useAppStore((s) => s.newWorkspacePageData)
-  const closeNewWorkspacePage = useAppStore((s) => s.closeNewWorkspacePage)
+  const pageData = useAppStore((s) => s.taskPageData)
+  const closeTaskPage = useAppStore((s) => s.closeTaskPage)
   const activeModal = useAppStore((s) => s.activeModal)
   const repos = useAppStore((s) => s.repos)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
@@ -150,6 +150,15 @@ export default function NewWorkspacePage(): React.JSX.Element {
   const updateSettings = useAppStore((s) => s.updateSettings)
   const fetchWorkItems = useAppStore((s) => s.fetchWorkItems)
   const getCachedWorkItems = useAppStore((s) => s.getCachedWorkItems)
+  // Why: in workspace view, App.tsx floats the titlebar-left strip (traffic
+  // lights, sidebar toggle, agent badge) over the top-left of this page when
+  // the sidebar is collapsed. Without reserving space underneath, the Close
+  // button sits behind the macOS traffic lights and the user cannot exit the
+  // page. Mirror TabGroupPanel's use of --collapsed-sidebar-header-width so
+  // the Close button always clears that floating strip.
+  const sidebarOpen = useAppStore((s) => s.sidebarOpen)
+  const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const reserveCollapsedHeaderSpace = activeWorktreeId !== null && !sidebarOpen
 
   const eligibleRepos = useMemo(() => repos.filter((repo) => isGitRepoKind(repo)), [repos])
 
@@ -489,27 +498,37 @@ export default function NewWorkspacePage(): React.JSX.Element {
       }
 
       event.preventDefault()
-      closeNewWorkspacePage()
+      closeTaskPage()
     }
 
     window.addEventListener('keydown', onKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
-  }, [activeModal, closeNewWorkspacePage, drawerWorkItem, newIssueOpen])
+  }, [activeModal, closeTaskPage, drawerWorkItem, newIssueOpen])
 
   return (
     <div className="relative flex h-full min-h-0 flex-1 overflow-hidden bg-background text-foreground">
       <div className="relative z-10 flex min-h-0 flex-1 flex-col">
         {/* Why: left-aligned so it doesn't collide with the app sidebar on the
-            right edge. The GitHub preview is a modal sheet that overlays the
-            whole surface, so this button is hidden behind it while it's open. */}
-        <div className="flex-none flex items-center justify-start px-5 py-3 md:px-8 md:py-4">
+            right edge. When a worktree is active and the left sidebar is
+            collapsed, App.tsx floats a titlebar-height strip (traffic lights,
+            sidebar toggle, agent badge) over the top-left of this page; we
+            reserve that exact width — the same measurement the tab rows use —
+            so the Close button never slides behind those controls. */}
+        <div
+          className="flex-none flex items-center justify-start px-5 py-3 md:px-8 md:py-4"
+          style={{
+            paddingLeft: reserveCollapsedHeaderSpace
+              ? 'var(--collapsed-sidebar-header-width)'
+              : undefined
+          }}
+        >
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon"
                 className="size-8 rounded-full z-10"
-                onClick={closeNewWorkspacePage}
+                onClick={closeTaskPage}
                 aria-label="Close tasks"
               >
                 <X className="size-4" />

@@ -15,7 +15,7 @@ import Sidebar from './components/Sidebar'
 import Terminal from './components/Terminal'
 import { shutdownBufferCaptures } from './components/terminal-pane/TerminalPane'
 import Landing from './components/Landing'
-import NewWorkspacePage from './components/NewWorkspacePage'
+import TaskPage from './components/TaskPage'
 import Settings from './components/settings/Settings'
 import RightSidebar from './components/right-sidebar'
 import QuickOpen from './components/QuickOpen'
@@ -447,9 +447,9 @@ function App(): React.JSX.Element {
   // full-width titlebar is replaced by a sidebar-width left header so the
   // terminal + tab groups extend to the very top of the window.
   const workspaceActive = activeView !== 'settings' && activeWorktreeId !== null
-  // Why: suppress right sidebar controls on new-workspace page since that
-  // surface is intentionally distraction-free (no right sidebar).
-  const showRightSidebarControls = activeView !== 'settings' && activeView !== 'new-workspace'
+  // Why: suppress right sidebar controls on the tasks page since that surface
+  // is intentionally distraction-free (no right sidebar).
+  const showRightSidebarControls = activeView !== 'settings' && activeView !== 'tasks'
 
   const handleToggleExpand = (): void => {
     if (!effectiveActiveTabId) {
@@ -509,9 +509,9 @@ function App(): React.JSX.Element {
       // (contentEditable) or a browser guest webContents, both of which bypass
       // this renderer-side window keydown listener.
 
-      // Why: the new-workspace composer should not be able to reveal the right
-      // sidebar at all, because that surface is intentionally distraction-free.
-      if (activeView === 'new-workspace') {
+      // Why: the tasks page should not be able to reveal the right sidebar at
+      // all, because that surface is intentionally distraction-free.
+      if (activeView === 'tasks') {
         return
       }
 
@@ -739,9 +739,9 @@ function App(): React.JSX.Element {
   ) : null
 
   useEffect(() => {
-    if (activeView === 'new-workspace' && rightSidebarOpen) {
-      // Why: hide the right sidebar immediately when entering the composer so
-      // a previous open state can't bleed into the dedicated workspace flow.
+    if (activeView === 'tasks' && rightSidebarOpen) {
+      // Why: hide the right sidebar immediately when entering the tasks page
+      // so a previous open state can't bleed into that distraction-free view.
       actions.setRightSidebarOpen(false)
     }
   }, [activeView, rightSidebarOpen, actions])
@@ -759,7 +759,7 @@ function App(): React.JSX.Element {
         {/* Why: in workspace view (split groups always enabled), the full-width
             titlebar is removed so tab groups + terminal extend to the top of
             the window. Left titlebar controls move to a header above the sidebar.
-            Settings, landing, and new-workspace views keep the full-width titlebar. */}
+            Settings, landing, and the tasks page keep the full-width titlebar. */}
         {!workspaceActive ? (
           <div className="titlebar">
             <div
@@ -853,14 +853,14 @@ function App(): React.JSX.Element {
                 <Terminal />
               </div>
               {activeView === 'settings' ? <Settings /> : null}
-              {activeView === 'new-workspace' ? <NewWorkspacePage /> : null}
+              {activeView === 'tasks' ? <TaskPage /> : null}
               {activeView === 'terminal' && !activeWorktreeId ? <Landing /> : null}
             </div>
           </div>
           {/* Why: keep RightSidebar mounted even when closed so that its
               child components (FileExplorer, SourceControl, etc.) and their
               filesystem watchers + cached directory trees survive across
-              open/close toggles. Unmount on new-workspace view since that
+              open/close toggles. Unmount on the tasks view since that
               surface is intentionally distraction-free. */}
           {showRightSidebarControls ? <RightSidebar /> : null}
         </div>

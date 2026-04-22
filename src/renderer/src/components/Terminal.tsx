@@ -1010,7 +1010,7 @@ function Terminal(): React.JSX.Element | null {
                 return null
               }
               // Why: use strict equality with 'terminal' instead of !== 'settings'
-              // so the terminal/browser surface hides on the new-workspace page too.
+              // so the terminal/browser surface hides on the tasks page too.
               const isVisible = activeView === 'terminal' && worktree.id === activeWorktreeId
               return (
                 <div
@@ -1068,7 +1068,7 @@ function Terminal(): React.JSX.Element | null {
               .filter((wt) => mountedWorktreeIdsRef.current.has(wt.id))
               .map((worktree) => {
                 // Why: use strict equality with 'terminal' instead of !== 'settings'
-                // so the terminal/browser surface hides on the new-workspace page too.
+                // so the terminal/browser surface hides on the tasks page too.
                 const isVisible = activeView === 'terminal' && worktree.id === activeWorktreeId
                 return (
                   <div
@@ -1114,7 +1114,7 @@ function Terminal(): React.JSX.Element | null {
             {allWorktrees.map((worktree) => {
               const browserTabs = browserTabsByWorktree[worktree.id] ?? []
               // Why: use strict equality with 'terminal' instead of !== 'settings'
-              // so browser panes also hide on the new-workspace page.
+              // so browser panes also hide on the tasks page.
               const isVisibleWorktree =
                 activeView === 'terminal' && worktree.id === activeWorktreeId
               if (browserTabs.length === 0) {

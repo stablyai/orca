@@ -11,10 +11,9 @@ import type {
   WorktreeCardProperty
 } from '../../../../shared/types'
 
-// Why: mirrors the preset→query mapping used by NewWorkspacePage's preset
-// buttons. Keeping a local copy here avoids a store ↔ lib circular import
-// while letting openNewWorkspacePage warm exactly the cache key the page will
-// read on mount.
+// Why: mirrors the preset→query mapping used by TaskPage's preset buttons.
+// Keeping a local copy here avoids a store ↔ lib circular import while letting
+// openTaskPage warm exactly the cache key the page will read on mount.
 function presetToQuery(presetId: TaskViewPresetId | null): string {
   switch (presetId) {
     case 'my-issues':
@@ -53,11 +52,11 @@ export type UISlice = {
   toggleSidebar: () => void
   setSidebarOpen: (open: boolean) => void
   setSidebarWidth: (width: number) => void
-  activeView: 'terminal' | 'settings' | 'new-workspace'
-  previousViewBeforeNewWorkspace: 'terminal' | 'settings'
-  previousViewBeforeSettings: 'terminal' | 'new-workspace'
+  activeView: 'terminal' | 'settings' | 'tasks'
+  previousViewBeforeTasks: 'terminal' | 'settings'
+  previousViewBeforeSettings: 'terminal' | 'tasks'
   setActiveView: (view: UISlice['activeView']) => void
-  newWorkspacePageData: {
+  taskPageData: {
     preselectedRepoId?: string
     prefilledName?: string
   }
@@ -77,8 +76,8 @@ export type UISlice = {
     linkedIssue: string
     linkedPR: number | null
   } | null
-  openNewWorkspacePage: (data?: UISlice['newWorkspacePageData']) => void
-  closeNewWorkspacePage: () => void
+  openTaskPage: (data?: UISlice['taskPageData']) => void
+  closeTaskPage: () => void
   setNewWorkspaceDraft: (draft: NonNullable<UISlice['newWorkspaceDraft']>) => void
   clearNewWorkspaceDraft: () => void
   openSettingsPage: () => void
@@ -167,25 +166,23 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   setSidebarWidth: (width) => set({ sidebarWidth: width }),
 
   activeView: 'terminal',
-  previousViewBeforeNewWorkspace: 'terminal',
+  previousViewBeforeTasks: 'terminal',
   previousViewBeforeSettings: 'terminal',
   setActiveView: (view) => set({ activeView: view }),
-  newWorkspacePageData: {},
+  taskPageData: {},
   newWorkspaceDraft: null,
-  openNewWorkspacePage: (data = {}) => {
+  openTaskPage: (data = {}) => {
     set((state) => ({
-      activeView: 'new-workspace',
-      previousViewBeforeNewWorkspace:
-        state.activeView === 'new-workspace'
-          ? state.previousViewBeforeNewWorkspace
-          : state.activeView,
-      newWorkspacePageData: data
+      activeView: 'tasks',
+      previousViewBeforeTasks:
+        state.activeView === 'tasks' ? state.previousViewBeforeTasks : state.activeView,
+      taskPageData: data
     }))
     // Why: prefetch the GitHub work-item list in parallel with React's first
-    // render of the NewWorkspacePage — by the time the page's own effect runs,
-    // the SWR cache is either already populated or the request is in-flight
-    // and will be deduped. This removes ~300–800ms of perceived latency on
-    // initial page load.
+    // render of the TaskPage — by the time the page's own effect runs, the SWR
+    // cache is either already populated or the request is in-flight and will
+    // be deduped. This removes ~300–800ms of perceived latency on initial
+    // page load.
     const state = get()
     const targetRepoId =
       data.preselectedRepoId ?? state.activeRepoId ?? state.repos.find((r) => r.path)?.id ?? null
@@ -195,10 +192,10 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       state.prefetchWorkItems(repo.path, 36, presetToQuery(preset))
     }
   },
-  closeNewWorkspacePage: () =>
+  closeTaskPage: () =>
     set((state) => ({
-      activeView: state.previousViewBeforeNewWorkspace,
-      newWorkspacePageData: {}
+      activeView: state.previousViewBeforeTasks,
+      taskPageData: {}
     })),
   setNewWorkspaceDraft: (draft) => set({ newWorkspaceDraft: draft }),
   clearNewWorkspaceDraft: () => set({ newWorkspaceDraft: null }),
@@ -206,9 +203,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set((state) => ({
       activeView: 'settings',
       // Why: Settings is a temporary detour from either terminal or the
-      // full-page new-workspace composer. Preserve the originating view so the
-      // Settings back action restores an in-progress workspace draft instead of
-      // always dumping the user into terminal.
+      // full-page tasks view. Preserve the originating view so the Settings
+      // back action restores an in-progress workspace draft instead of always
+      // dumping the user into terminal.
       previousViewBeforeSettings:
         state.activeView === 'settings' ? state.previousViewBeforeSettings : state.activeView
     })),
