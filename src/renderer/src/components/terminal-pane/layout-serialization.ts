@@ -4,6 +4,7 @@ import type {
   TerminalPaneSplitDirection
 } from '../../../../shared/types'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
+import { replayIntoTerminal, type ReplayingPanesRef } from './replay-guard'
 
 export const EMPTY_LAYOUT: TerminalLayoutSnapshot = {
   root: null,
@@ -198,7 +199,8 @@ function collectLeafIds(
 export function restoreScrollbackBuffers(
   manager: PaneManager,
   savedBuffers: Record<string, string> | undefined,
-  restoredPaneByLeafId: Map<string, number>
+  restoredPaneByLeafId: Map<string, number>,
+  replayingPanesRef: ReplayingPanesRef
 ): void {
   if (!savedBuffers) {
     return
@@ -224,10 +226,15 @@ export function restoreScrollbackBuffers(
         buf = buf.slice(0, lastOn)
       }
       if (buf.length > 0) {
-        pane.terminal.write(buf)
+        // Why replayIntoTerminal: the serialized buffer can contain query
+        // sequences that leaked in via the pendingWritesRef flush before
+        // serialization (see TerminalPane capture hook). Writing those
+        // through xterm would trigger auto-replies that land in the new
+        // shell's stdin. See replay-guard.ts.
+        replayIntoTerminal(pane, replayingPanesRef, buf)
         // Ensure cursor is on a new line so the new shell prompt
         // doesn't trigger zsh's PROMPT_EOL_MARK (%) indicator.
-        pane.terminal.write('\r\n')
+        replayIntoTerminal(pane, replayingPanesRef, '\r\n')
       }
     } catch {
       // If restore fails, continue with blank terminal.

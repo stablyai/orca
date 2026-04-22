@@ -118,6 +118,83 @@ describe('createIpcPtyTransport', () => {
     expect(onBell).not.toHaveBeenCalled()
   })
 
+  it('routes eager-buffered bytes through onReplayData so the renderer can engage the replay guard', async () => {
+    const { createIpcPtyTransport, registerEagerPtyBuffer } = await import('./pty-transport')
+
+    // Why: eager-buffered bytes often contain query sequences (e.g. DA1 `\x1b[c`)
+    // left over from a previous session. Routing them through onData instead of
+    // onReplayData would bypass pty-connection's replay guard and xterm would
+    // auto-reply to those queries, leaking stray input into the shell.
+    const bufferedPayload = 'hello[cworld'
+
+    const handle = registerEagerPtyBuffer('pty-restored', vi.fn())
+    onData?.({
+      id: 'pty-restored',
+      data: bufferedPayload
+    })
+
+    const transport = createIpcPtyTransport()
+    const onDataCallback = vi.fn()
+    const onReplayData = vi.fn()
+
+    transport.attach({
+      existingPtyId: 'pty-restored',
+      callbacks: {
+        onData: onDataCallback,
+        onReplayData
+      }
+    })
+
+    expect(handle.flush()).toBe('')
+    expect(onReplayData).toHaveBeenCalledWith(bufferedPayload)
+    expect(onDataCallback).not.toHaveBeenCalledWith(bufferedPayload)
+  })
+
+  it('routes the attach-time clear sequence through onReplayData for non-alternate-screen sessions', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+
+    const transport = createIpcPtyTransport()
+    const onDataCallback = vi.fn()
+    const onReplayData = vi.fn()
+
+    transport.attach({
+      existingPtyId: 'pty-attached',
+      callbacks: {
+        onData: onDataCallback,
+        onReplayData
+      }
+    })
+
+    // Why: the clear preamble must travel the replay path so any subsequent
+    // snapshot bytes sit under the same replay guard in pty-connection.ts.
+    const clear = '\x1b[2J\x1b[3J\x1b[H'
+    expect(onReplayData).toHaveBeenCalledWith(clear)
+    expect(onDataCallback).not.toHaveBeenCalledWith(clear)
+  })
+
+  it('skips the attach-time clear sequence for alternate-screen sessions', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+
+    const transport = createIpcPtyTransport()
+    const onDataCallback = vi.fn()
+    const onReplayData = vi.fn()
+
+    transport.attach({
+      existingPtyId: 'pty-alt-screen',
+      isAlternateScreen: true,
+      callbacks: {
+        onData: onDataCallback,
+        onReplayData
+      }
+    })
+
+    // Why: alternate-screen snapshots already fill the viewport; emitting the
+    // clear would erase the restored content. Neither path should see it.
+    const clear = '\x1b[2J\x1b[3J\x1b[H'
+    expect(onReplayData).not.toHaveBeenCalledWith(clear)
+    expect(onDataCallback).not.toHaveBeenCalledWith(clear)
+  })
+
   it('passes startup commands through PTY spawn instead of writing them after connect', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawnMock = vi.fn().mockResolvedValue({ id: 'pty-1' })

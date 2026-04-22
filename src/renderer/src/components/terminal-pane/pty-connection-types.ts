@@ -1,4 +1,5 @@
 import type { PtyTransport } from './pty-transport'
+import type { ReplayingPanesRef } from './replay-guard'
 
 export type PtyConnectionDeps = {
   tabId: string
@@ -9,6 +10,7 @@ export type PtyConnectionDeps = {
   restoredPtyIdByLeafId?: Record<string, string>
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
   pendingWritesRef: React.RefObject<Map<number, string>>
+  replayingPanesRef: ReplayingPanesRef
   isActiveRef: React.RefObject<boolean>
   isVisibleRef: React.RefObject<boolean>
   onPtyExitRef: React.RefObject<(ptyId: string) => void>

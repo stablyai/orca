@@ -125,6 +125,7 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     restoredPtyIdByLeafId: {},
     paneTransportsRef: { current: new Map() },
     pendingWritesRef: { current: new Map() },
+    replayingPanesRef: { current: new Map() },
     isActiveRef: { current: true },
     isVisibleRef: { current: true },
     onPtyExitRef: { current: vi.fn() },
@@ -227,6 +228,47 @@ describe('connectPanePty', () => {
     expect(transport.sendInput).not.toHaveBeenCalledWith(
       expect.stringContaining("claude 'say test'")
     )
+  })
+
+  it('drops xterm onData while pane is replaying restored bytes', async () => {
+    // Regression: during cold-restore / snapshot replay, xterm auto-replies
+    // to embedded query sequences (DA1, DECRQM, OSC 10/11, focus, CPR) via
+    // onData. Those replies must not pipe through to transport.sendInput, or
+    // they land as stray characters ("?1;2c", "2026;2$y", ...) on the new
+    // shell's prompt. See replay-guard.ts.
+    const { connectPanePty } = await import('./pty-connection')
+
+    const transport = createMockTransport('pty-live')
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] }
+    }
+
+    const pane = createPane(1)
+    let onDataHandler: ((data: string) => void) | null = null
+    pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
+      onDataHandler = handler
+      return { dispose: vi.fn() }
+    }) as typeof pane.terminal.onData)
+    const manager = createManager(1)
+    const replayingPanesRef = { current: new Map<number, number>([[1, 1]]) }
+    const deps = createDeps({ replayingPanesRef })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    expect(onDataHandler).toBeDefined()
+    if (!onDataHandler) {
+      throw new Error('expected onData handler to be registered')
+    }
+    // Simulate xterm emitting a DA1 auto-reply during replay parse.
+    ;(onDataHandler as (data: string) => void)('\x1b[?1;2c')
+    expect(transport.sendInput).not.toHaveBeenCalled()
+
+    // Once replay completes (guard cleared), real keystrokes flow through.
+    replayingPanesRef.current.delete(1)
+    ;(onDataHandler as (data: string) => void)('a')
+    expect(transport.sendInput).toHaveBeenCalledWith('a')
   })
 
   it('blocks input to stale Codex panes until they restart', async () => {

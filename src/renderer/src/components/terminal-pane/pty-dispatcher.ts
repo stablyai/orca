@@ -150,6 +150,11 @@ export type PtyTransport = {
       onConnect?: () => void
       onDisconnect?: () => void
       onData?: (data: string) => void
+      /** Replay bytes from a prior session (eager buffers, attach-time screen
+       *  clears). Routed separately from onData so the renderer can engage
+       *  the replay guard — otherwise xterm auto-replies to embedded query
+       *  sequences leak into the shell. See replay-guard.ts. */
+      onReplayData?: (data: string) => void
       onStatus?: (shell: string) => void
       onError?: (message: string, errors?: string[]) => void
       onExit?: (code: number) => void
@@ -169,6 +174,8 @@ export type PtyTransport = {
       onConnect?: () => void
       onDisconnect?: () => void
       onData?: (data: string) => void
+      /** See note on connect.callbacks.onReplayData. */
+      onReplayData?: (data: string) => void
       onStatus?: (shell: string) => void
       onError?: (message: string, errors?: string[]) => void
       onExit?: (code: number) => void

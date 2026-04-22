@@ -67,6 +67,11 @@ export default function TerminalPane({
   const paneLastThemeModeRef = useRef<Map<number, 'dark' | 'light'>>(new Map())
   const panePtyBindingsRef = useRef<Map<number, IDisposable>>(new Map())
   const pendingWritesRef = useRef<Map<number, string>>(new Map())
+  // Why: tracks panes currently replaying recorded PTY bytes into xterm
+  // (cold-restore, daemon snapshot, scrollback restore, eager-buffer flush).
+  // While non-zero, pty-connection.ts drops xterm onData so auto-replies to
+  // embedded query sequences don't leak to the shell. See replay-guard.ts.
+  const replayingPanesRef = useRef<Map<number, number>>(new Map())
   const isActiveRef = useRef(isActive)
   isActiveRef.current = isActive
   const isVisibleRef = useRef(isVisible)
@@ -347,6 +352,7 @@ export default function TerminalPane({
     paneLastThemeModeRef,
     panePtyBindingsRef,
     pendingWritesRef,
+    replayingPanesRef,
     isActiveRef,
     isVisibleRef,
     onPtyExitRef,
@@ -408,6 +414,7 @@ export default function TerminalPane({
         startup: { command: 'codex' },
         paneTransportsRef,
         pendingWritesRef,
+        replayingPanesRef,
         isActiveRef,
         isVisibleRef,
         onPtyExitRef,
