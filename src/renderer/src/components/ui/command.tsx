@@ -107,8 +107,12 @@ function CommandInput({
   )
 }
 
-function CommandList({ className, ...props }: React.ComponentProps<typeof CommandPrimitive.List>) {
-  const listRef = React.useRef<HTMLDivElement>(null)
+function CommandList({
+  className,
+  ref,
+  ...props
+}: React.ComponentProps<typeof CommandPrimitive.List>) {
+  const internalRef = React.useRef<HTMLDivElement>(null)
 
   // Why: Radix Dialog applies react-remove-scroll which calls preventDefault()
   // on wheel events for portaled elements (e.g. Popover) outside the Dialog's
@@ -117,7 +121,7 @@ function CommandList({ className, ...props }: React.ComponentProps<typeof Comman
   // directly on the list takes over scrolling manually so it works regardless
   // of whether a scroll-lock is active.
   React.useEffect(() => {
-    const el = listRef.current
+    const el = internalRef.current
     if (!el) {
       return
     }
@@ -132,9 +136,21 @@ function CommandList({ className, ...props }: React.ComponentProps<typeof Comman
     return () => el.removeEventListener('wheel', onWheel)
   }, [])
 
+  const mergedRef = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      internalRef.current = node
+      if (typeof ref === 'function') {
+        ref(node)
+      } else if (ref) {
+        ref.current = node
+      }
+    },
+    [ref]
+  )
+
   return (
     <CommandPrimitive.List
-      ref={listRef}
+      ref={mergedRef}
       data-slot="command-list"
       className={cn(
         'max-h-[min(400px,60vh)] overflow-y-auto overflow-x-hidden scrollbar-sleek scroll-pb-4 scroll-pt-4',
