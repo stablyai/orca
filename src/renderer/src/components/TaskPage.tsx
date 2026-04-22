@@ -527,18 +527,30 @@ export default function TaskPage(): React.JSX.Element {
             App.tsx already owns the top titlebar and a second strip would
             produce a duplicate band. */}
         {workspaceActive ? (
-          <div
-            className="flex-none flex h-[42px]"
-            style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-          >
+          <div className="flex-none flex h-[42px]">
             {reserveCollapsedHeaderSpace ? (
+              // Why: the floating titlebar-left hosts real interactive chrome
+              // (sidebar-expand toggle, agent badge) under this segment. Both
+              // pointer-events-none AND WebkitAppRegion='no-drag' are needed:
+              // without pointer-events-none, this transparent div absorbs
+              // clicks before they reach the toggle; without no-drag, Electron
+              // marks the area as window-drag and still consumes clicks even
+              // when the element itself is click-through.
               <div
                 aria-hidden
-                className="h-full shrink-0"
-                style={{ width: 'var(--collapsed-sidebar-header-width)' }}
+                className="h-full shrink-0 pointer-events-none"
+                style={
+                  {
+                    width: 'var(--collapsed-sidebar-header-width)',
+                    WebkitAppRegion: 'no-drag'
+                  } as React.CSSProperties
+                }
               />
             ) : null}
-            <div className="flex h-full flex-1 items-center border-b border-border bg-card px-4 text-sm font-medium text-muted-foreground">
+            <div
+              className="flex h-full flex-1 items-center border-b border-border bg-card px-4 text-sm font-medium text-muted-foreground"
+              style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+            >
               <span>Tasks</span>
             </div>
           </div>
