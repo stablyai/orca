@@ -116,7 +116,7 @@
     "@types/ws": "^8.18.1",
     "@typescript/native-preview": "7.0.0-dev.20260406.1",
     "@vitejs/plugin-react": "^5.2.0",
-    "electron": "^41.1.0",
+    "electron": "^41.2.2",
     "electron-builder": "^26.8.1",
     "electron-vite": "^5.0.0",
     "husky": "^9.1.7",
