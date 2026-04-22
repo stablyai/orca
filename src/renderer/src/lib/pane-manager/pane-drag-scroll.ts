@@ -24,7 +24,6 @@ export function lockDragScroll(el: HTMLElement, panes: Map<number, ManagedPaneIn
 // safeFit / fitAllPanesInternal restore from the original captured state.
 const SIGWINCH_SETTLE_MS = 500
 
-// TEMPORARY: set to true to test without the settling delay
 export function unlockDragScroll(el: HTMLElement, panes: Map<number, ManagedPaneInternal>): void {
   for (const pane of findManagedPanesUnder(el, panes)) {
     if (pane.pendingDragScrollState) {
@@ -42,29 +41,51 @@ export function unlockDragScroll(el: HTMLElement, panes: Map<number, ManagedPane
       // dimensions to the PTY when the drag ends.
       pane.container.dispatchEvent(new CustomEvent('pane-drag-end'))
 
-      // Why: keep pendingDragScrollState set so that safeFit,
-      // fitAllPanesInternal, and captureAllPaneScrollStates continue
-      // using the locked state while SIGWINCH redraws settle. The PTY
-      // resize we just flushed causes interactive programs to redraw,
-      // which corrupts viewportY. Without this guard the ResizeObserver
-      // captures the corrupted position.
-      setTimeout(() => {
-        if (pane.pendingDragScrollState === originalState) {
-          try {
-            restoreScrollState(pane.terminal, originalState)
-          } catch {
-            /* ignore */
-          }
-          pane.pendingDragScrollState = null
-          // Why: during the settling period isPaneDragResizing was true,
-          // so any terminal.onResize events were suppressed and stored as
-          // pending. Dispatch pane-drag-end again so pty-connection.ts
-          // flushes any accumulated resize to the PTY.
-          pane.container.dispatchEvent(new CustomEvent('pane-drag-end'))
-        }
-      }, SIGWINCH_SETTLE_MS)
+      // Why: the PTY resize we just flushed causes SIGWINCH → Claude
+      // Code / Ink redraws → viewportY corruption. We keep the lock
+      // and actively restore scroll every frame during the settling
+      // period so the user never sees the viewport jump. Without this,
+      // there is a visible flash where the viewport jumps to line 0
+      // before the settling timeout fires.
+      startSettlingLoop(pane, originalState)
     }
   }
+}
+
+function startSettlingLoop(pane: ManagedPaneInternal, originalState: ScrollState): void {
+  let rafId: number | null = null
+
+  const restoreFrame = (): void => {
+    if (pane.pendingDragScrollState !== originalState) {
+      return
+    }
+    try {
+      restoreScrollState(pane.terminal, originalState)
+    } catch {
+      /* ignore */
+    }
+    rafId = requestAnimationFrame(restoreFrame)
+  }
+  rafId = requestAnimationFrame(restoreFrame)
+
+  setTimeout(() => {
+    if (rafId !== null) {
+      cancelAnimationFrame(rafId)
+    }
+    if (pane.pendingDragScrollState === originalState) {
+      try {
+        restoreScrollState(pane.terminal, originalState)
+      } catch {
+        /* ignore */
+      }
+      pane.pendingDragScrollState = null
+      // Why: during the settling period isPaneDragResizing was true,
+      // so any terminal.onResize events were suppressed and stored as
+      // pending. Dispatch pane-drag-end again so pty-connection.ts
+      // flushes any accumulated resize to the PTY.
+      pane.container.dispatchEvent(new CustomEvent('pane-drag-end'))
+    }
+  }, SIGWINCH_SETTLE_MS)
 }
 
 export function captureAllPaneScrollStates(
