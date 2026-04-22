@@ -10,9 +10,9 @@ import { isFolderRepo } from '../../shared/repo-kind'
 import { REPO_COLORS } from '../../shared/constants'
 import { rebuildAuthorizedRootsCache } from './filesystem-auth'
 import type { ChildProcess } from 'child_process'
-import { rm } from 'fs/promises'
-import { gitSpawn } from '../git/runner'
-import { join, basename } from 'path'
+import { access, mkdir, readdir, rm } from 'fs/promises'
+import { gitExecFileAsync, gitSpawn } from '../git/runner'
+import { basename, join } from 'path'
 import {
   isGitRepo,
   getGitUsername,
@@ -44,6 +44,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.removeHandler('repos:getBaseRefDefault')
   ipcMain.removeHandler('repos:searchBaseRefs')
   ipcMain.removeHandler('repos:addRemote')
+  ipcMain.removeHandler('repos:create')
 
   ipcMain.handle('repos:list', () => {
     return store.getRepos()
@@ -155,6 +156,92 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         mux.notify('session.registerRoot', { rootPath: resolvedPath })
       }
 
+      return { repo }
+    }
+  )
+
+  // Creates a new repo or folder from scratch (orca#763). An empty initial
+  // commit is required for git repos so HEAD has a branch ref — Orca's
+  // worktree features all need one.
+  ipcMain.handle(
+    'repos:create',
+    async (
+      _event,
+      args: { parentPath: string; name: string; kind: 'git' | 'folder' }
+    ): Promise<{ repo: Repo } | { error: string }> => {
+      const name = args.name?.trim() ?? ''
+      const parentPath = args.parentPath?.trim() ?? ''
+
+      if (!name) {
+        return { error: 'Name cannot be empty' }
+      }
+      // Block slashes and ./.. so the name can't escape the chosen parent.
+      // The UI already disables submit in these cases; this guards direct IPC use.
+      if (/[\\/]/.test(name) || name === '.' || name === '..') {
+        return { error: 'Name cannot contain slashes or be "." / ".."' }
+      }
+      if (!parentPath) {
+        return { error: 'Parent directory is required' }
+      }
+
+      const targetPath = join(parentPath, name)
+
+      // Empty pre-existing directories are allowed (e.g. one the user made in
+      // Finder first). Non-empty ones are rejected so we don't overwrite files.
+      let createdDir = false
+      try {
+        await access(targetPath)
+        const entries = await readdir(targetPath)
+        if (entries.length > 0) {
+          return {
+            error: `"${name}" already exists at this location and is not empty.`
+          }
+        }
+      } catch {
+        try {
+          await mkdir(targetPath, { recursive: false })
+          createdDir = true
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err)
+          return { error: `Failed to create directory: ${message}` }
+        }
+      }
+
+      if (args.kind === 'git') {
+        try {
+          await gitExecFileAsync(['init'], { cwd: targetPath })
+          await gitExecFileAsync(['commit', '--allow-empty', '-m', 'Initial commit'], {
+            cwd: targetPath
+          })
+        } catch (err) {
+          // Only remove the directory if we made it. A pre-existing folder the
+          // user picked must survive so they can retry after fixing git config.
+          if (createdDir) {
+            await rm(targetPath, { recursive: true, force: true }).catch(() => {})
+          }
+          const message = err instanceof Error ? err.message : String(err)
+          if (/Please tell me who you are|user\.name|user\.email/i.test(message)) {
+            return {
+              error:
+                'Git author identity is not configured. Run `git config --global user.name "Your Name"` and `git config --global user.email "you@example.com"`, then try again.'
+            }
+          }
+          return { error: `Failed to initialize git repository: ${message}` }
+        }
+      }
+
+      const repo: Repo = {
+        id: randomUUID(),
+        path: targetPath,
+        displayName: name,
+        badgeColor: REPO_COLORS[store.getRepos().length % REPO_COLORS.length],
+        addedAt: Date.now(),
+        kind: args.kind
+      }
+
+      store.addRepo(repo)
+      await rebuildAuthorizedRootsCache(store)
+      notifyReposChanged(mainWindow)
       return { repo }
     }
   )

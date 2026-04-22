@@ -292,6 +292,12 @@ export type PreloadApi = {
       displayName?: string
       kind?: 'git' | 'folder'
     }) => Promise<{ repo: Repo } | { error: string }>
+    // Why: error union matches the IPC handler's return shape; renderer callers branch on `'error' in result`.
+    create: (args: {
+      parentPath: string
+      name: string
+      kind: 'git' | 'folder'
+    }) => Promise<{ repo: Repo } | { error: string }>
     onCloneProgress: (callback: (data: { phase: string; percent: number }) => void) => () => void
     getGitUsername: (args: { repoId: string }) => Promise<string>
     getBaseRefDefault: (args: { repoId: string }) => Promise<string | null>

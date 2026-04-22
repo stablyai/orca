@@ -182,6 +182,12 @@ const api = {
       kind?: 'git' | 'folder'
     }): Promise<unknown> => ipcRenderer.invoke('repos:addRemote', args),
 
+    create: (args: {
+      parentPath: string
+      name: string
+      kind: 'git' | 'folder'
+    }): Promise<unknown> => ipcRenderer.invoke('repos:create', args),
+
     remove: (args: { repoId: string }): Promise<void> => ipcRenderer.invoke('repos:remove', args),
 
     update: (args: { repoId: string; updates: Record<string, unknown> }): Promise<unknown> =>
