@@ -175,6 +175,39 @@ export function useIpcEvents(): void {
       })
     )
 
+    // Why: CLI-driven terminal creation sends a request and waits for the
+    // tabId reply so it can resolve a handle the caller can use immediately.
+    // This mirrors the browser's onRequestTabCreate/replyTabCreate pattern.
+    unsubs.push(
+      window.api.ui.onRequestTerminalCreate((data) => {
+        try {
+          const store = useAppStore.getState()
+          store.setActiveView('terminal')
+          store.setActiveWorktree(data.worktreeId)
+          const tab = store.createTab(data.worktreeId)
+          store.setActiveTabType('terminal')
+          store.setActiveTab(tab.id)
+          store.revealWorktreeInSidebar(data.worktreeId)
+          if (data.title) {
+            store.setTabCustomTitle(tab.id, data.title)
+          }
+          if (data.command) {
+            store.queueTabStartupCommand(tab.id, { command: data.command })
+          }
+          window.api.ui.replyTerminalCreate({
+            requestId: data.requestId,
+            tabId: tab.id,
+            title: data.title ?? tab.title
+          })
+        } catch (err) {
+          window.api.ui.replyTerminalCreate({
+            requestId: data.requestId,
+            error: err instanceof Error ? err.message : 'Terminal creation failed'
+          })
+        }
+      })
+    )
+
     unsubs.push(
       window.api.ui.onSplitTerminal(({ tabId, paneRuntimeId, direction, command }) => {
         const detail: SplitTerminalPaneDetail = { tabId, paneRuntimeId, direction, command }

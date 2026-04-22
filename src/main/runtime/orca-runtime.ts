@@ -214,6 +214,7 @@ export class OrcaRuntimeService {
   private leaves = new Map<string, RuntimeLeafRecord>()
   private handles = new Map<string, TerminalHandleRecord>()
   private handleByLeafKey = new Map<string, string>()
+  private graphSyncCallbacks: (() => void)[] = []
   private waitersByHandle = new Map<string, Set<TerminalWaiter>>()
   private ptyController: RuntimePtyController | null = null
   private notifier: RuntimeNotifier | null = null
@@ -320,6 +321,13 @@ export class OrcaRuntimeService {
     this.leaves = nextLeaves
     this.graphStatus = 'ready'
     this.refreshWritableFlags()
+
+    // Why: createTerminal waits for the renderer's graph sync to populate the
+    // new leaf so it can return a handle. Drain callbacks after leaves update.
+    for (const cb of [...this.graphSyncCallbacks]) {
+      cb()
+    }
+
     return this.getStatus()
   }
 
@@ -939,9 +947,94 @@ export class OrcaRuntimeService {
     opts: { command?: string; title?: string } = {}
   ): Promise<RuntimeTerminalCreate> {
     this.assertGraphReady()
+    const win = this.getAuthoritativeWindow()
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
-    this.notifier?.createTerminal(worktree.id, opts)
-    return { worktreeId: worktree.id, title: opts.title ?? null }
+    const requestId = randomUUID()
+
+    // Why: terminal creation is a renderer-side Zustand store operation (like
+    // browser tab creation). The main process sends a request, the renderer
+    // creates the tab and replies with the tabId so we can resolve the handle.
+    const reply = await new Promise<{ tabId: string; title: string }>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        ipcMain.removeListener('terminal:tabCreateReply', handler)
+        reject(new Error('Terminal creation timed out'))
+      }, 10_000)
+
+      const handler = (
+        _event: Electron.IpcMainEvent,
+        r: { requestId: string; tabId?: string; title?: string; error?: string }
+      ): void => {
+        if (r.requestId !== requestId) {
+          return
+        }
+        clearTimeout(timer)
+        ipcMain.removeListener('terminal:tabCreateReply', handler)
+        if (r.error) {
+          reject(new Error(r.error))
+        } else {
+          resolve({ tabId: r.tabId!, title: r.title ?? opts.title ?? '' })
+        }
+      }
+      ipcMain.on('terminal:tabCreateReply', handler)
+      win.webContents.send('terminal:requestTabCreate', {
+        requestId,
+        worktreeId: worktree.id,
+        command: opts.command,
+        title: opts.title
+      })
+    })
+
+    // Why: the renderer created the tab immediately, but the graph sync that
+    // populates this.leaves may not have arrived yet. Wait for the leaf to
+    // appear so we can return a valid handle the caller can use right away.
+    const handle = await this.waitForTerminalHandle(reply.tabId)
+    return { handle, worktreeId: worktree.id, title: reply.title }
+  }
+
+  private waitForTerminalHandle(tabId: string, timeoutMs = 10_000): Promise<string> {
+    const existing = this.resolveHandleForTab(tabId)
+    if (existing) {
+      return Promise.resolve(existing)
+    }
+
+    return new Promise<string>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        const idx = this.graphSyncCallbacks.indexOf(check)
+        if (idx !== -1) {
+          this.graphSyncCallbacks.splice(idx, 1)
+        }
+        reject(new Error('Timed out waiting for terminal handle after creation'))
+      }, timeoutMs)
+
+      const check = (): void => {
+        const handle = this.resolveHandleForTab(tabId)
+        if (handle) {
+          clearTimeout(timer)
+          const idx = this.graphSyncCallbacks.indexOf(check)
+          if (idx !== -1) {
+            this.graphSyncCallbacks.splice(idx, 1)
+          }
+          resolve(handle)
+        }
+      }
+      this.graphSyncCallbacks.push(check)
+      // Why: the graph sync may have fired between the initial check and
+      // callback registration. Re-check immediately to avoid a missed wake-up.
+      check()
+    })
+  }
+
+  // Why: a leaf appears in the graph before its PTY spawns. If we issue a
+  // handle while ptyId is null, the next graph sync after PTY spawn will
+  // change ptyId and invalidate the handle. Wait for a connected PTY so
+  // the handle is stable and immediately usable for send/read/wait.
+  private resolveHandleForTab(tabId: string): string | null {
+    for (const leaf of this.leaves.values()) {
+      if (leaf.tabId === tabId && leaf.ptyId !== null) {
+        return this.issueHandle(leaf)
+      }
+    }
+    return null
   }
 
   async focusTerminal(handle: string): Promise<RuntimeTerminalFocus> {
@@ -969,11 +1062,67 @@ export class OrcaRuntimeService {
     this.assertGraphReady()
     const { leaf } = this.getLiveLeafForHandle(handle)
     const direction = opts.direction ?? 'horizontal'
+
+    // Why: snapshot current leaf keys for this tab so we can detect the new
+    // pane that appears after the split via graph sync delta.
+    const leafKeysBefore = new Set<string>()
+    for (const [key, l] of this.leaves) {
+      if (l.tabId === leaf.tabId) {
+        leafKeysBefore.add(key)
+      }
+    }
+
     this.notifier?.splitTerminal(leaf.tabId, leaf.paneRuntimeId, {
       direction,
       command: opts.command
     })
-    return { tabId: leaf.tabId, paneRuntimeId: leaf.paneRuntimeId }
+
+    const newHandle = await this.waitForNewLeafInTab(leaf.tabId, leafKeysBefore)
+    return { handle: newHandle, tabId: leaf.tabId, paneRuntimeId: leaf.paneRuntimeId }
+  }
+
+  private waitForNewLeafInTab(
+    tabId: string,
+    existingLeafKeys: Set<string>,
+    timeoutMs = 10_000
+  ): Promise<string> {
+    const tryResolve = (): string | null => {
+      for (const [key, leaf] of this.leaves) {
+        if (leaf.tabId === tabId && !existingLeafKeys.has(key) && leaf.ptyId !== null) {
+          return this.issueHandle(leaf)
+        }
+      }
+      return null
+    }
+
+    const existing = tryResolve()
+    if (existing) {
+      return Promise.resolve(existing)
+    }
+
+    return new Promise<string>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        const idx = this.graphSyncCallbacks.indexOf(check)
+        if (idx !== -1) {
+          this.graphSyncCallbacks.splice(idx, 1)
+        }
+        reject(new Error('Timed out waiting for split pane handle'))
+      }, timeoutMs)
+
+      const check = (): void => {
+        const handle = tryResolve()
+        if (handle) {
+          clearTimeout(timer)
+          const idx = this.graphSyncCallbacks.indexOf(check)
+          if (idx !== -1) {
+            this.graphSyncCallbacks.splice(idx, 1)
+          }
+          resolve(handle)
+        }
+      }
+      this.graphSyncCallbacks.push(check)
+      check()
+    })
   }
 
   async stopTerminalsForWorktree(worktreeSelector: string): Promise<{ stopped: number }> {

@@ -227,18 +227,25 @@ export const COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['terminal', 'create'],
-    summary: 'Create a new terminal tab in a worktree',
+    summary: 'Create a new terminal tab in the current worktree',
     usage:
-      'orca terminal create --worktree <selector> [--title <name>] [--command <text>] [--json]',
+      'orca terminal create [--worktree <selector>] [--title <name>] [--command <text>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'command', 'title'],
     examples: [
-      'orca terminal create --worktree active --json',
+      'orca terminal create --json',
       'orca terminal create --worktree path:/projects/myapp --title "RUNNER" --command "opencode"'
     ]
   },
   {
+    path: ['terminal', 'switch'],
+    summary: 'Switch to a terminal tab in the UI',
+    usage: 'orca terminal switch --terminal <handle> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'terminal'],
+    examples: ['orca terminal switch --terminal term_abc123']
+  },
+  {
     path: ['terminal', 'focus'],
-    summary: 'Bring a terminal tab to the foreground in the UI',
+    summary: 'Switch to a terminal tab in the UI (alias for terminal switch)',
     usage: 'orca terminal focus --terminal <handle> [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'terminal'],
     examples: ['orca terminal focus --terminal term_abc123']
@@ -879,14 +886,17 @@ export async function main(argv = process.argv.slice(2), cwd = process.cwd()): P
 
     if (matches(commandPath, ['terminal', 'create'])) {
       const result = await client.call<{ terminal: RuntimeTerminalCreate }>('terminal.create', {
-        worktree: await getRequiredWorktreeSelector(parsed.flags, 'worktree', cwd, client),
+        worktree: await getBrowserWorktreeSelector(parsed.flags, cwd, client),
         command: getOptionalStringFlag(parsed.flags, 'command'),
         title: getOptionalStringFlag(parsed.flags, 'title')
       })
       return printResult(result, json, formatTerminalCreate)
     }
 
-    if (matches(commandPath, ['terminal', 'focus'])) {
+    if (
+      matches(commandPath, ['terminal', 'focus']) ||
+      matches(commandPath, ['terminal', 'switch'])
+    ) {
       const result = await client.call<{ focus: RuntimeTerminalFocus }>('terminal.focus', {
         terminal: getRequiredStringFlag(parsed.flags, 'terminal')
       })
@@ -2151,11 +2161,11 @@ function formatTerminalRename(result: { rename: RuntimeTerminalRename }): string
 
 function formatTerminalCreate(result: { terminal: RuntimeTerminalCreate }): string {
   const titleNote = result.terminal.title ? ` (title: "${result.terminal.title}")` : ''
-  return `Terminal tab created in worktree ${result.terminal.worktreeId}${titleNote}.\nRun 'orca terminal list' to get the handle.`
+  return `Created terminal ${result.terminal.handle}${titleNote}`
 }
 
 function formatTerminalSplit(result: { split: RuntimeTerminalSplit }): string {
-  return `Pane split in tab ${result.split.tabId} (pane ${result.split.paneRuntimeId}).`
+  return `Split pane ${result.split.handle} in tab ${result.split.tabId}`
 }
 
 function formatTerminalFocus(result: { focus: RuntimeTerminalFocus }): string {

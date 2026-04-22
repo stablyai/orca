@@ -105,11 +105,13 @@ export type RuntimeTerminalSend = {
 }
 
 export type RuntimeTerminalCreate = {
+  handle: string
   worktreeId: string
   title: string | null
 }
 
 export type RuntimeTerminalSplit = {
+  handle: string
   tabId: string
   paneRuntimeId: number
 }

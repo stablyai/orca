@@ -143,12 +143,13 @@ orca terminal send --terminal <handle> --text "continue" --enter --json
 orca terminal wait --terminal <handle> --for exit --timeout-ms 5000 --json
 orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 30000 --json
 orca terminal stop --worktree id:<worktreeId> --json
-orca terminal create --worktree active --title "My Terminal" --json
-orca terminal create --worktree active --command "npm test" --json
+orca terminal create --json
+orca terminal create --title "My Terminal" --json
+orca terminal create --worktree path:/projects/myapp --command "npm test" --json
 orca terminal split --terminal <handle> --direction vertical --json
 orca terminal split --terminal <handle> --direction horizontal --command "npm run dev" --json
 orca terminal rename --terminal <handle> --title "New Name" --json
-orca terminal focus --terminal <handle> --json
+orca terminal switch --terminal <handle> --json
 orca terminal close --terminal <handle> --json
 ```
 
@@ -170,8 +171,8 @@ Why: terminal handles are runtime-scoped and may go stale after reloads. If Orca
 - Orca only injects `ORCA_WORKTREE_PATH`-style variables for some setup-hook flows, so they are not a general detection contract for agents.
 - Use `terminal list` to reacquire handles after Orca reloads.
 - Use `terminal read` before `terminal send` unless the next input is obvious.
-- Use `terminal wait --for exit` only when the task actually depends on process completion.
-- Use `terminal wait --for tui-idle` to wait for an agent CLI (Claude Code, Gemini, Codex, etc.) to finish its current task. This detects the working→idle OSC title transition. Always pass `--timeout-ms` as a safety net — unsupported CLIs will hang until timeout.
+- Use `terminal wait --terminal <handle> --for exit` only when the task actually depends on process completion.
+- Use `terminal wait --terminal <handle> --for tui-idle` to wait for an agent CLI (Claude Code, Gemini, Codex, etc.) to finish its current task. This detects the working→idle OSC title transition. Always pass `--timeout-ms` as a safety net — unsupported CLIs will hang until timeout.
 - Use `terminal create` to spin up new terminal tabs programmatically, optionally with a `--command` for startup and `--title` for labeling.
 - Use `terminal split` to create split panes within an existing terminal tab. Pass `--command` to run a command in the new pane.
 - Prefer Orca worktree selectors over hardcoded paths when Orca identity already exists.

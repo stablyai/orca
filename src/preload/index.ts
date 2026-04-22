@@ -1198,6 +1198,29 @@ const api = {
       ipcRenderer.on('ui:createTerminal', listener)
       return () => ipcRenderer.removeListener('ui:createTerminal', listener)
     },
+    onRequestTerminalCreate: (
+      callback: (data: {
+        requestId: string
+        worktreeId: string
+        command?: string
+        title?: string
+      }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { requestId: string; worktreeId: string; command?: string; title?: string }
+      ) => callback(data)
+      ipcRenderer.on('terminal:requestTabCreate', listener)
+      return () => ipcRenderer.removeListener('terminal:requestTabCreate', listener)
+    },
+    replyTerminalCreate: (reply: {
+      requestId: string
+      tabId?: string
+      title?: string
+      error?: string
+    }): void => {
+      ipcRenderer.send('terminal:tabCreateReply', reply)
+    },
     onSplitTerminal: (
       callback: (data: {
         tabId: string
