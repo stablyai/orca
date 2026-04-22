@@ -510,22 +510,29 @@ export default function TaskPage(): React.JSX.Element {
 
   return (
     <div className="relative flex h-full min-h-0 flex-1 overflow-hidden bg-background text-foreground">
-      <div className="relative z-10 flex min-h-0 flex-1 flex-col">
+      {/* Why: no z-index here. App.tsx's floating titlebar-left (traffic lights
+          + sidebar-expand toggle + agent badge) is absolutely positioned at
+          z-10 in the root stacking context when the sidebar is collapsed. If
+          this wrapper also sits at z-10 it ties with titlebar-left on
+          z-index and wins on DOM order (later sibling), so even though our
+          top-left spacer is pointer-events-none, the click still lands on
+          this wrapper behind the spacer instead of falling through to the
+          sidebar toggle. Keeping this at z-auto lets titlebar-left's z-10
+          paint above our content and receive the click cleanly. */}
+      <div className="relative flex min-h-0 flex-1 flex-col">
         {/* Why: in workspace view App.tsx suppresses its full-width titlebar,
             so render a matching 42px strip here to keep the top band
             continuous with the sidebar header and tab rows. When the sidebar
             is collapsed, App.tsx floats its titlebar-left controls (traffic
             lights, sidebar toggle, agent badge) over the top-left of this
-            page at z-10. Our page wrapper also sits at z-10 and paints later
-            in DOM, so a solid-background strip spanning the full row would
-            hide those controls (notably the sidebar-expand toggle). Keep the
-            reserved region transparent and only paint bg/border on the
-            remainder — the floating titlebar-left carries its own matching
-            bg + border-bottom, so the two segments read as one continuous
-            band. The strip is drag-region so the window stays movable here,
-            matching other top chrome. Skipped in non-workspace mode because
-            App.tsx already owns the top titlebar and a second strip would
-            produce a duplicate band. */}
+            page at z-10, and the page wrapper stays at z-auto so that float
+            always paints above our content. Keep the reserved region
+            transparent so the floating titlebar-left's own bg + border-bottom
+            is what the user sees on the left — the two segments then read as
+            one continuous band. The painted remainder is a drag-region so the
+            window stays movable here, matching other top chrome. Skipped in
+            non-workspace mode because App.tsx already owns the top titlebar
+            and a second strip would produce a duplicate band. */}
         {workspaceActive ? (
           <div className="flex-none flex h-[42px]">
             {reserveCollapsedHeaderSpace ? (
