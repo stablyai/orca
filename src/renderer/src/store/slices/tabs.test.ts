@@ -94,6 +94,7 @@ import { createBrowserSlice } from './browser'
 import { createRateLimitSlice } from './rate-limits'
 import { createSshSlice } from './ssh'
 import { createDiffCommentsSlice } from './diffComments'
+import { createDetectedAgentsSlice } from './detected-agents'
 
 const WT = 'repo1::/tmp/feature'
 
@@ -113,7 +114,8 @@ function createTestStore() {
     ...createBrowserSlice(...a),
     ...createRateLimitSlice(...a),
     ...createSshSlice(...a),
-    ...createDiffCommentsSlice(...a)
+    ...createDiffCommentsSlice(...a),
+    ...createDetectedAgentsSlice(...a)
   }))
 }
 

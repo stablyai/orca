@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Check, ChevronDown, ExternalLink, RefreshCw, Terminal } from 'lucide-react'
 import type { GlobalSettings, TuiAgent } from '../../../../shared/types'
 import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
+import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { cn } from '@/lib/utils'
@@ -204,30 +205,17 @@ function AgentRow({
 }
 
 export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React.JSX.Element {
-  const [detectedIds, setDetectedIds] = useState<Set<string> | null>(null)
-  const [isRefreshing, setIsRefreshing] = useState(false)
-
-  useEffect(() => {
-    void window.api.preflight.detectAgents().then((ids) => {
-      setDetectedIds(new Set(ids))
-    })
-  }, [])
-
-  const handleRefresh = useCallback(async (): Promise<void> => {
-    // Why: refresh re-spawns the user's login shell to re-capture PATH
-    // (preflight:refreshAgents on the main side). This handles the
-    // "installed a new CLI, Orca doesn't see it yet" case without a restart.
-    if (isRefreshing) {
-      return
-    }
-    setIsRefreshing(true)
-    try {
-      const result = await window.api.preflight.refreshAgents()
-      setDetectedIds(new Set(result.agents))
-    } finally {
-      setIsRefreshing(false)
-    }
-  }, [isRefreshing])
+  const { detectedIds: detectedList, isRefreshing, refresh } = useDetectedAgents()
+  // Why: refresh re-spawns the user's login shell to re-capture PATH
+  // (preflight:refreshAgents on the main side). This handles the
+  // "installed a new CLI, Orca doesn't see it yet" case without a restart.
+  const handleRefresh = (): void => {
+    void refresh()
+  }
+  const detectedIds = useMemo<Set<string> | null>(
+    () => (detectedList ? new Set(detectedList) : null),
+    [detectedList]
+  )
 
   const defaultAgent = settings.defaultTuiAgent
   const cmdOverrides = settings.agentCmdOverrides ?? {}
@@ -338,7 +326,7 @@ export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React
             </span>
             <button
               type="button"
-              onClick={() => void handleRefresh()}
+              onClick={handleRefresh}
               disabled={isRefreshing}
               title="Re-read your shell PATH and re-detect installed agents"
               className={cn(

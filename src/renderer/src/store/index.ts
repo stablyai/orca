@@ -15,6 +15,7 @@ import { createBrowserSlice } from './slices/browser'
 import { createRateLimitSlice } from './slices/rate-limits'
 import { createSshSlice } from './slices/ssh'
 import { createDiffCommentsSlice } from './slices/diffComments'
+import { createDetectedAgentsSlice } from './slices/detected-agents'
 import { e2eConfig } from '@/lib/e2e-config'
 
 export const useAppStore = create<AppState>()((...a) => ({
@@ -32,7 +33,8 @@ export const useAppStore = create<AppState>()((...a) => ({
   ...createBrowserSlice(...a),
   ...createRateLimitSlice(...a),
   ...createSshSlice(...a),
-  ...createDiffCommentsSlice(...a)
+  ...createDiffCommentsSlice(...a),
+  ...createDetectedAgentsSlice(...a)
 }))
 
 export type { AppState } from './types'

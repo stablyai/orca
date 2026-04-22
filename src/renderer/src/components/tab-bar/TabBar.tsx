@@ -12,6 +12,7 @@ import type { OpenFile } from '../../store/slices/editor'
 import SortableTab from './SortableTab'
 import EditorFileTab from './EditorFileTab'
 import BrowserTab from './BrowserTab'
+import { QuickLaunchAgentMenuItems } from './QuickLaunchButton'
 import { reconcileTabOrder } from './reconcile-order'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import {
@@ -428,6 +429,11 @@ function TabBarInner({
               <DropdownMenuShortcut>{NEW_FILE_SHORTCUT}</DropdownMenuShortcut>
             </DropdownMenuItem>
           )}
+          <QuickLaunchAgentMenuItems
+            worktreeId={worktreeId}
+            groupId={resolvedGroupId}
+            onFocusTerminal={focusTerminalTabSurface}
+          />
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

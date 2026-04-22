@@ -1,7 +1,6 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
-import { detectAgentsCached } from '@/lib/detect-agents-cached'
 import { waitForAgentReady } from '@/lib/agent-ready-wait'
 import { buildAgentStartupPlan } from '@/lib/tui-agent-startup'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -106,7 +105,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   }
 
   const settings = store.settings
-  const detectedIds = new Set(await detectAgentsCached())
+  const detectedIds = new Set(await store.ensureDetectedAgents())
   const effectiveAgent = pickAgent(settings?.defaultTuiAgent, detectedIds)
 
   const setupResolution = await resolveSetupDecision(repoId, repo)

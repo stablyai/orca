@@ -11,7 +11,6 @@ import { parseGitHubIssueOrPRNumber, normalizeGitHubLinkQuery } from '@/lib/gith
 import type { RepoSlug } from '@/lib/github-links'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { buildAgentStartupPlan } from '@/lib/tui-agent-startup'
-import { detectAgentsCached } from '@/lib/detect-agents-cached'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import type {
   GitHubWorkItem,
@@ -237,7 +236,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const [tuiAgent, setTuiAgent] = useState<TuiAgent>(
     persistDraft ? (newWorkspaceDraft?.agent ?? fallbackDefaultAgent) : fallbackDefaultAgent
   )
-  const [detectedAgentIds, setDetectedAgentIds] = useState<Set<TuiAgent> | null>(null)
+  const detectedAgentList = useAppStore((s) => s.detectedAgentIds)
+  const ensureDetectedAgents = useAppStore((s) => s.ensureDetectedAgents)
+  const detectedAgentIds = useMemo<Set<TuiAgent> | null>(
+    () => (detectedAgentList ? new Set(detectedAgentList) : null),
+    [detectedAgentList]
+  )
 
   const [yamlHooks, setYamlHooks] = useState<OrcaHooks | null>(null)
   const [checkedHooksRepoId, setCheckedHooksRepoId] = useState<string | null>(null)
@@ -415,15 +419,15 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     }
   }, [eligibleRepos, repoId, setRepoId])
 
-  // Detect installed agents once on mount (cached at module scope so the
-  // page composer and quick-composer modal share a single IPC round-trip).
+  // Detect installed agents once on mount via the shared store slice so the
+  // page composer, quick-composer modal, settings pane, and tab-bar quick-launch
+  // share a single IPC round-trip and stay in sync on refresh.
   useEffect(() => {
     let cancelled = false
-    void detectAgentsCached().then((ids) => {
+    void ensureDetectedAgents().then((ids) => {
       if (cancelled) {
         return
       }
-      setDetectedAgentIds(new Set(ids))
       if (!newWorkspaceDraft?.agent && !settings?.defaultTuiAgent && ids.length > 0) {
         const firstInCatalogOrder = AGENT_CATALOG.find((a) => ids.includes(a.id))
         if (firstInCatalogOrder) {
