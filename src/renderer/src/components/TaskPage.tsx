@@ -150,15 +150,18 @@ export default function TaskPage(): React.JSX.Element {
   const updateSettings = useAppStore((s) => s.updateSettings)
   const fetchWorkItems = useAppStore((s) => s.fetchWorkItems)
   const getCachedWorkItems = useAppStore((s) => s.getCachedWorkItems)
-  // Why: in workspace view, App.tsx floats the titlebar-left strip (traffic
-  // lights, sidebar toggle, agent badge) over the top-left of this page when
-  // the sidebar is collapsed. Without reserving space underneath, the Close
-  // button sits behind the macOS traffic lights and the user cannot exit the
-  // page. Mirror TabGroupPanel's use of --collapsed-sidebar-header-width so
-  // the Close button always clears that floating strip.
+  // Why: in workspace view (a worktree is active) App.tsx hides its
+  // full-width titlebar, so this page renders its own 42px titlebar strip to
+  // keep the top band continuous with the sidebar header and tab rows. When
+  // the sidebar is also collapsed, App.tsx floats its titlebar-left controls
+  // (traffic lights, sidebar toggle, agent badge) over our strip — reserve
+  // the measured width of those controls on the left so our "Tasks" label
+  // never sits behind them. In non-workspace mode App.tsx already owns the
+  // top titlebar, so skip our strip to avoid a duplicate band.
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
-  const reserveCollapsedHeaderSpace = activeWorktreeId !== null && !sidebarOpen
+  const workspaceActive = activeWorktreeId !== null
+  const reserveCollapsedHeaderSpace = workspaceActive && !sidebarOpen
 
   const eligibleRepos = useMemo(() => repos.filter((repo) => isGitRepoKind(repo)), [repos])
 
@@ -508,26 +511,44 @@ export default function TaskPage(): React.JSX.Element {
   return (
     <div className="relative flex h-full min-h-0 flex-1 overflow-hidden bg-background text-foreground">
       <div className="relative z-10 flex min-h-0 flex-1 flex-col">
-        {/* Why: left-aligned so it doesn't collide with the app sidebar on the
-            right edge. When a worktree is active and the left sidebar is
-            collapsed, App.tsx floats a titlebar-height strip (traffic lights,
-            sidebar toggle, agent badge) over the top-left of this page; we
-            reserve that exact width — the same measurement the tab rows use —
-            so the Close button never slides behind those controls. */}
-        <div
-          className="flex-none flex items-center justify-start px-5 py-3 md:px-8 md:py-4"
-          style={{
-            paddingLeft: reserveCollapsedHeaderSpace
-              ? 'var(--collapsed-sidebar-header-width)'
-              : undefined
-          }}
-        >
+        {/* Why: in workspace view App.tsx suppresses its full-width titlebar,
+            so render a matching 42px strip here to keep the top band
+            continuous with the sidebar header and tab rows. When the sidebar
+            is collapsed, App.tsx floats its titlebar-left controls (traffic
+            lights, sidebar toggle, agent badge) over this strip; reserve that
+            measured width on the left so the "Tasks" label never sits behind
+            those controls. The strip is drag-region so the window stays
+            movable from this band, matching other top chrome. Skipped in
+            non-workspace mode because App.tsx already owns the top titlebar
+            and a second strip would produce a duplicate band. */}
+        {workspaceActive ? (
+          <div
+            className="flex-none h-[42px] border-b border-border bg-card"
+            style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+          >
+            <div
+              className="flex h-full items-center px-4 text-sm font-medium text-muted-foreground"
+              style={{
+                paddingLeft: reserveCollapsedHeaderSpace
+                  ? 'var(--collapsed-sidebar-header-width)'
+                  : undefined
+              }}
+            >
+              <span>Tasks</span>
+            </div>
+          </div>
+        ) : null}
+
+        {/* Why: Close sits in its own row below the titlebar strip so it can
+            never overlap the floating macOS traffic lights. Kept left-aligned
+            to stay out of the app sidebar on the right edge. */}
+        <div className="flex-none flex items-center justify-start px-5 pt-3 pb-1 md:px-8 md:pt-4">
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon"
-                className="size-8 rounded-full z-10"
+                className="size-8 rounded-full"
                 onClick={closeTaskPage}
                 aria-label="Close tasks"
               >
