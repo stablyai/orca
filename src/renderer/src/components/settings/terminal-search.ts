@@ -175,12 +175,16 @@ export const TERMINAL_SETUP_SCRIPT_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   }
 ]
 
-export const TERMINAL_WINDOWS_SEARCH_ENTRIES: SettingsSearchEntry[] = [
+export const TERMINAL_WINDOWS_SHELL_SEARCH_ENTRY: SettingsSearchEntry[] = [
   {
     title: 'Default Shell',
     description: 'Choose the default shell for new terminal panes on Windows.',
     keywords: ['terminal', 'windows', 'shell', 'powershell', 'cmd', 'command prompt', 'default']
-  },
+  }
+]
+
+export const TERMINAL_WINDOWS_SEARCH_ENTRIES: SettingsSearchEntry[] = [
+  ...TERMINAL_WINDOWS_SHELL_SEARCH_ENTRY,
   {
     title: 'Right-click to paste',
     description:
@@ -189,7 +193,14 @@ export const TERMINAL_WINDOWS_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   }
 ]
 
-export const TERMINAL_RIGHT_CLICK_TO_PASTE_SEARCH_ENTRY = TERMINAL_WINDOWS_SEARCH_ENTRIES
+export const TERMINAL_RIGHT_CLICK_TO_PASTE_SEARCH_ENTRY: SettingsSearchEntry[] = [
+  {
+    title: 'Right-click to paste',
+    description:
+      'On Windows, right-click pastes the clipboard into the terminal. Use Ctrl+right-click to open the context menu.',
+    keywords: ['terminal', 'windows', 'right click', 'paste', 'context menu']
+  }
+]
 
 export function getTerminalPaneSearchEntries(platform: {
   isWindows: boolean
