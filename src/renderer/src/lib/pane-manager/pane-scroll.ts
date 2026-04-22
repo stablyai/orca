@@ -94,19 +94,6 @@ export function restoreScrollState(terminal: Terminal, state: ScrollState): void
           : state.logicalLineOffset
       scrollTarget = Math.min(target + scaledOffset, terminal.buffer.active.baseY)
     }
-    console.log(
-      '[restoreScrollState] content-match',
-      JSON.stringify({
-        target,
-        scrollTarget,
-        logicalLineOffset: state.logicalLineOffset,
-        oldCols: state.cols,
-        newCols: terminal.cols,
-        viewportYBefore: state.viewportY,
-        baseY: terminal.buffer.active.baseY,
-        contentPrefix: state.firstVisibleLineContent.substring(0, 30)
-      })
-    )
     scrollToLineSync(terminal, scrollTarget)
     return
   }
@@ -114,17 +101,6 @@ export function restoreScrollState(terminal: Terminal, state: ScrollState): void
     const newTotalLines = terminal.buffer.active.baseY + terminal.rows
     const fallbackLine = Math.round(hintRatio * newTotalLines)
     const clampedLine = Math.min(fallbackLine, terminal.buffer.active.baseY)
-    console.log(
-      '[restoreScrollState] proportional-fallback',
-      JSON.stringify({
-        hintRatio,
-        newTotalLines,
-        fallbackLine,
-        clampedLine,
-        baseY: terminal.buffer.active.baseY,
-        contentPrefix: state.firstVisibleLineContent.substring(0, 30)
-      })
-    )
     scrollToLineSync(terminal, clampedLine)
   }
 }
