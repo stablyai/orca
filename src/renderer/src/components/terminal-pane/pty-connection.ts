@@ -27,6 +27,17 @@ function isCodexPaneStale(args: { tabId: string; panePtyId: string | null }): bo
   return false
 }
 
+// Why: daemon session IDs use the format `${worktreeId}@@${shortUuid}`.
+// This validates that a session ID actually belongs to the given worktree,
+// preventing cross-workspace contamination during restore.
+function isSessionOwnedByWorktree(sessionId: string, worktreeId: string): boolean {
+  const separatorIdx = sessionId.lastIndexOf('@@')
+  if (separatorIdx === -1) {
+    return true
+  }
+  return sessionId.slice(0, separatorIdx) === worktreeId
+}
+
 export function connectPanePty(
   pane: ManagedPane,
   manager: PaneManager,
@@ -334,12 +345,22 @@ export function connectPanePty(
             : null
           : existingPtyId
         : null
-    const deferredReattachSessionId =
+    const candidateReattachSessionId =
       restoredSessionId && restoredSessionId !== detachedLivePtyId
         ? restoredSessionId
         : daemonEnabled
           ? detachedLivePtyId
           : null
+    // Why: daemon session IDs encode `${worktreeId}@@${uuid}`. After a daemon
+    // crash + cold restore, corrupted or stale session-to-tab mappings can
+    // cause a tab in workspace A to hold a ptyId from workspace B. Restoring
+    // that session would paint the wrong terminal content in this pane. Drop
+    // the reattach and spawn a fresh session instead.
+    const deferredReattachSessionId =
+      candidateReattachSessionId &&
+      isSessionOwnedByWorktree(candidateReattachSessionId, deps.worktreeId)
+        ? candidateReattachSessionId
+        : null
     if (deferredReattachSessionId) {
       allowInitialIdleCacheSeed = true
 
