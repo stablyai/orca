@@ -32,6 +32,14 @@ vi.mock('@/lib/language-detect', () => ({
   detectLanguage: () => 'plaintext'
 }))
 
+// Why: the real helper reads worktreesByRepo/activeRepoId/etc. from the store
+// and orchestrates side effects that are out of scope for the link-handler
+// unit tests. Mock it so these tests only assert on routing (browser tab vs.
+// openFile), not on activation internals.
+vi.mock('@/lib/worktree-activation', () => ({
+  activateAndRevealWorktree: vi.fn()
+}))
+
 function setPlatform(userAgent: string): void {
   vi.stubGlobal('navigator', { userAgent })
 }
