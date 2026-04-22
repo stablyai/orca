@@ -53,7 +53,7 @@ function render() {
       `${cols}×${rows} | Ctrl+C to exit \x1b[0m`
   )
 
-  const output = lines.join('\n') + '\n'
+  const output = `${lines.join('\n')}\n`
   process.stdout.write(output)
   lastLineCount = lines.length
 }
