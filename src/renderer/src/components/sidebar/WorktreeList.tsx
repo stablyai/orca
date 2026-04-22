@@ -18,6 +18,7 @@ import {
 } from './worktree-list-groups'
 import { computeVisibleWorktreeIds, setVisibleWorktreeIds } from './visible-worktrees'
 import { useModifierHint } from '@/hooks/useModifierHint'
+import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 
 // How long to wait after a sortEpoch bump before actually re-sorting.
 // Prevents jarring position shifts when background events (AI starting work,
@@ -52,7 +53,6 @@ function getWorktreeOptionId(worktreeId: string): string {
 type VirtualizedWorktreeViewportProps = {
   rows: Row[]
   activeWorktreeId: string | null
-  setActiveWorktree: (worktreeId: string | null) => void
   groupBy: 'none' | 'repo' | 'pr-status'
   toggleGroup: (key: string) => void
   collapsedGroups: Set<string>
@@ -69,7 +69,6 @@ type VirtualizedWorktreeViewportProps = {
 const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewport({
   rows,
   activeWorktreeId,
-  setActiveWorktree,
   groupBy,
   toggleGroup,
   collapsedGroups,
@@ -180,14 +179,16 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       }
 
       const nextWorktreeId = worktreeRows[nextIndex].worktree.id
-      setActiveWorktree(nextWorktreeId)
+      // Why: keyboard cycling between worktrees is still real navigation, so
+      // it must flow through the same activation helper that records history.
+      activateAndRevealWorktree(nextWorktreeId)
 
       const rowIndex = rows.findIndex((r) => r.type === 'item' && r.worktree.id === nextWorktreeId)
       if (rowIndex !== -1) {
         virtualizer.scrollToIndex(rowIndex, { align: 'auto' })
       }
     },
-    [rows, activeWorktreeId, setActiveWorktree, virtualizer]
+    [rows, activeWorktreeId, virtualizer]
   )
 
   useEffect(() => {
@@ -390,7 +391,6 @@ const WorktreeList = React.memo(function WorktreeList() {
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const repos = useAppStore((s) => s.repos)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
-  const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
   const searchQuery = useAppStore((s) => s.searchQuery)
   const groupBy = useAppStore((s) => s.groupBy)
   const sortBy = useAppStore((s) => s.sortBy)
@@ -688,7 +688,6 @@ const WorktreeList = React.memo(function WorktreeList() {
       key={viewportResetKey}
       rows={rows}
       activeWorktreeId={selectedSidebarWorktreeId}
-      setActiveWorktree={setActiveWorktree}
       groupBy={groupBy}
       toggleGroup={toggleGroup}
       collapsedGroups={collapsedGroups}

@@ -209,17 +209,22 @@ export function setupGuestShortcutForwarding(args: {
     if (input.type !== 'keyDown') {
       return
     }
-    // Why: the history-navigate chord (Cmd/Ctrl+Alt+Arrow) is evaluated
-    // BEFORE the generic modifier-chord gate because that gate rejects Alt.
-    // Without an early return here, the chord would fall through into the
-    // gate-rejection path and the keystroke would be silently dropped.
-    const earlyAction = resolveWindowShortcutAction(input, process.platform)
-    if (earlyAction?.type === 'worktreeHistoryNavigate') {
+    // Why: resolve the policy action once per keystroke. The history-navigate
+    // chord (Cmd/Ctrl+Alt+Arrow) is the only allowlisted chord that carries
+    // Alt and must be handled before the generic modifier-chord gate below,
+    // which rejects Alt. Every other chord handled further down can reuse
+    // the same `action` rather than re-running the full predicate chain.
+    const action = resolveWindowShortcutAction(input, process.platform)
+    if (action?.type === 'worktreeHistoryNavigate') {
+      // Why: preventDefault unconditionally — if we cannot resolve the
+      // renderer (torn-down tab or teardown race), dropping the keystroke
+      // into the guest's webContents would let Chromium / the guest page
+      // handle Cmd+Alt+Arrow as their own chord (e.g. guest-side text
+      // navigation). Consistency with the main-window path is preserved
+      // only by suppressing the event here too.
+      event.preventDefault()
       const renderer = resolveRenderer(browserTabId)
-      if (renderer) {
-        renderer.send('ui:worktreeHistoryNavigate', earlyAction.direction)
-        event.preventDefault()
-      }
+      renderer?.send('ui:worktreeHistoryNavigate', action.direction)
       return
     }
 
@@ -235,11 +240,6 @@ export function setupGuestShortcutForwarding(args: {
     if (!renderer) {
       return
     }
-
-    // Why: centralizing the shared subset still keeps guest forwarding in
-    // lockstep with the main window for the chords that must never steal
-    // readline control input above the terminal.
-    const action = resolveWindowShortcutAction(input, process.platform)
 
     if (input.code === 'KeyB' && input.shift) {
       renderer.send('ui:newBrowserTab')

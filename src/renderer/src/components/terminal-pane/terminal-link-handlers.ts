@@ -10,6 +10,7 @@ import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
 import { absolutePathToFileUri } from '@/components/editor/markdown-internal-links'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
+import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 
 export type LinkHandlerDeps = {
   worktreeId: string
@@ -52,7 +53,9 @@ function isHtmlFilePath(filePath: string): boolean {
 function openHtmlFileInBrowser(filePath: string, worktreeId: string): void {
   const store = useAppStore.getState()
   if (worktreeId) {
-    store.setActiveWorktree(worktreeId)
+    // Why: following an HTML file link changes which worktree is foregrounded,
+    // so it must record a history visit before opening the browser tab.
+    activateAndRevealWorktree(worktreeId)
   }
   const fileUrl = absolutePathToFileUri(filePath)
   const title = filePath.split(/[/\\]/).pop() ?? filePath
@@ -104,7 +107,10 @@ export function openDetectedFilePath(
 
     const store = useAppStore.getState()
     if (worktreeId) {
-      store.setActiveWorktree(worktreeId)
+      // Why: terminal file links can jump across worktrees. Reusing the shared
+      // activation path keeps those jumps in the same history stack as sidebar
+      // and palette navigation before the editor opens the destination file.
+      activateAndRevealWorktree(worktreeId)
     }
 
     store.openFile({

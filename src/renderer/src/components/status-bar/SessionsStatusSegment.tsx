@@ -7,6 +7,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '../../store'
+import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 
 type DaemonSession = { id: string; cwd: string; title: string }
 
@@ -90,7 +91,6 @@ export function SessionsStatusSegment({
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
-  const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
   const setActiveTab = useAppStore((s) => s.setActiveTab)
   const setActiveView = useAppStore((s) => s.setActiveView)
 
@@ -172,12 +172,15 @@ export function SessionsStatusSegment({
     (tabId: string) => {
       const worktreeId = tabIdToWorktreeId.get(tabId)
       if (worktreeId) {
-        setActiveWorktree(worktreeId)
+        // Why: opening a session from the status bar is another worktree jump,
+        // so route it through the shared activation path before restoring the
+        // specific tab inside that worktree.
+        activateAndRevealWorktree(worktreeId)
       }
       setActiveView('terminal')
       setActiveTab(tabId)
     },
-    [tabIdToWorktreeId, setActiveWorktree, setActiveView, setActiveTab]
+    [tabIdToWorktreeId, setActiveView, setActiveTab]
   )
 
   return (

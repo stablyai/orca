@@ -1,8 +1,13 @@
 import { createStore, type StoreApi } from 'zustand/vanilla'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import type { AppState } from '../types'
 import type { Worktree } from '../../../../shared/types'
-import { createWorktreeNavHistorySlice, setWorktreeNavActivator } from './worktree-nav-history'
+import {
+  canGoBackWorktreeHistory,
+  canGoForwardWorktreeHistory,
+  createWorktreeNavHistorySlice,
+  setWorktreeNavActivator
+} from './worktree-nav-history'
 
 type MinimalState = Pick<
   AppState,
@@ -87,6 +92,12 @@ describe('worktree-nav-history slice: recordWorktreeVisit', () => {
 })
 
 describe('worktree-nav-history slice: goBack / goForward', () => {
+  // Why: reset the module-level activator after every test so a mid-test
+  // throw cannot leak mock state into sibling tests in the same worker.
+  afterEach(() => {
+    setWorktreeNavActivator(null)
+  })
+
   it('moves the index without mutating the history array on success', () => {
     const store = createHistoryStore(['a', 'b', 'c'])
     // Install activator that simulates a successful activation.
@@ -103,8 +114,6 @@ describe('worktree-nav-history slice: goBack / goForward', () => {
 
     store.getState().goForwardWorktree()
     expect(store.getState().worktreeNavHistoryIndex).toBe(2)
-
-    setWorktreeNavActivator(null)
   })
 
   it('leaves the index untouched when activator returns false', () => {
@@ -117,8 +126,6 @@ describe('worktree-nav-history slice: goBack / goForward', () => {
     store.getState().goBackWorktree()
     expect(store.getState().worktreeNavHistoryIndex).toBe(1)
     expect(store.getState().isNavigatingHistory).toBe(false)
-
-    setWorktreeNavActivator(null)
   })
 
   it('skips deleted worktrees when searching for the prev live entry', () => {
@@ -138,8 +145,6 @@ describe('worktree-nav-history slice: goBack / goForward', () => {
     store.getState().goBackWorktree()
     expect(activated).toEqual(['a'])
     expect(store.getState().worktreeNavHistoryIndex).toBe(0)
-
-    setWorktreeNavActivator(null)
   })
 
   it('no-ops when the entire direction is dead', () => {
@@ -159,8 +164,6 @@ describe('worktree-nav-history slice: goBack / goForward', () => {
     store.getState().goBackWorktree()
     expect(activated).toEqual([])
     expect(store.getState().worktreeNavHistoryIndex).toBe(2)
-
-    setWorktreeNavActivator(null)
   })
 
   it('two rapid back presses each decrement the index by one', () => {
@@ -176,7 +179,43 @@ describe('worktree-nav-history slice: goBack / goForward', () => {
 
     expect(store.getState().worktreeNavHistoryIndex).toBe(0)
     expect(store.getState().isNavigatingHistory).toBe(false)
+  })
+})
 
-    setWorktreeNavActivator(null)
+describe('worktree-nav-history selectors', () => {
+  it('reports back availability only when a live prior entry exists', () => {
+    const store = createHistoryStore(['c'])
+    store.setState({
+      worktreeNavHistory: ['a', 'b', 'c'],
+      worktreeNavHistoryIndex: 2
+    })
+
+    expect(canGoBackWorktreeHistory(store.getState() as AppState)).toBe(false)
+
+    store.setState({
+      worktreesByRepo: {
+        'repo-1': [makeWorktree('a'), makeWorktree('c')]
+      }
+    })
+
+    expect(canGoBackWorktreeHistory(store.getState() as AppState)).toBe(true)
+  })
+
+  it('reports forward availability only when a live next entry exists', () => {
+    const store = createHistoryStore(['a'])
+    store.setState({
+      worktreeNavHistory: ['a', 'b', 'c'],
+      worktreeNavHistoryIndex: 0
+    })
+
+    expect(canGoForwardWorktreeHistory(store.getState() as AppState)).toBe(false)
+
+    store.setState({
+      worktreesByRepo: {
+        'repo-1': [makeWorktree('a'), makeWorktree('c')]
+      }
+    })
+
+    expect(canGoForwardWorktreeHistory(store.getState() as AppState)).toBe(true)
   })
 })

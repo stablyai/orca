@@ -37,7 +37,7 @@ export function setWorktreeNavActivator(fn: ActivateFn | null): void {
   activator = fn
 }
 
-function findPrevLiveIndex(state: AppState): number | null {
+export function findPrevLiveWorktreeHistoryIndex(state: AppState): number | null {
   for (let i = state.worktreeNavHistoryIndex - 1; i >= 0; i--) {
     const id = state.worktreeNavHistory[i]
     if (findWorktreeById(state.worktreesByRepo, id)) {
@@ -47,7 +47,7 @@ function findPrevLiveIndex(state: AppState): number | null {
   return null
 }
 
-function findNextLiveIndex(state: AppState): number | null {
+export function findNextLiveWorktreeHistoryIndex(state: AppState): number | null {
   for (let i = state.worktreeNavHistoryIndex + 1; i < state.worktreeNavHistory.length; i++) {
     const id = state.worktreeNavHistory[i]
     if (findWorktreeById(state.worktreesByRepo, id)) {
@@ -55,6 +55,14 @@ function findNextLiveIndex(state: AppState): number | null {
     }
   }
   return null
+}
+
+export function canGoBackWorktreeHistory(state: AppState): boolean {
+  return findPrevLiveWorktreeHistoryIndex(state) !== null
+}
+
+export function canGoForwardWorktreeHistory(state: AppState): boolean {
+  return findNextLiveWorktreeHistoryIndex(state) !== null
 }
 
 export const createWorktreeNavHistorySlice: StateCreator<
@@ -101,14 +109,25 @@ export const createWorktreeNavHistorySlice: StateCreator<
     if (state.worktreeNavHistoryIndex <= 0) {
       return
     }
-    const targetIndex = findPrevLiveIndex(state)
+    const targetIndex = findPrevLiveWorktreeHistoryIndex(state)
     if (targetIndex === null) {
       return
     }
     if (!activator) {
+      // Why: a silent no-op here would mean the back/forward chord simply
+      // does nothing with no diagnostic. The activator is registered at
+      // module init by worktree-activation.ts, so a missing activator means
+      // either test setup forgot to install one or the production import
+      // graph regressed.
+      console.warn('goBackWorktree called before worktree activator was registered')
       return
     }
     const targetId = state.worktreeNavHistory[targetIndex]
+    // Why: capture-and-restore (not force false) so re-entrant navigation
+    // (e.g. a store subscriber synchronously triggers another goBack) does
+    // not race on the boolean — the outer call's `finally` restores its own
+    // prior value rather than clobbering state set by an inner call.
+    const prevNavigating = get().isNavigatingHistory
     set({ isNavigatingHistory: true })
     try {
       // Why: activateAndRevealWorktree returns `ActivateAndRevealResult | false`;
@@ -119,7 +138,7 @@ export const createWorktreeNavHistorySlice: StateCreator<
         set({ worktreeNavHistoryIndex: targetIndex })
       }
     } finally {
-      set({ isNavigatingHistory: false })
+      set({ isNavigatingHistory: prevNavigating })
     }
   },
 
@@ -128,14 +147,16 @@ export const createWorktreeNavHistorySlice: StateCreator<
     if (state.worktreeNavHistoryIndex >= state.worktreeNavHistory.length - 1) {
       return
     }
-    const targetIndex = findNextLiveIndex(state)
+    const targetIndex = findNextLiveWorktreeHistoryIndex(state)
     if (targetIndex === null) {
       return
     }
     if (!activator) {
+      console.warn('goForwardWorktree called before worktree activator was registered')
       return
     }
     const targetId = state.worktreeNavHistory[targetIndex]
+    const prevNavigating = get().isNavigatingHistory
     set({ isNavigatingHistory: true })
     try {
       const result = activator(targetId)
@@ -143,7 +164,7 @@ export const createWorktreeNavHistorySlice: StateCreator<
         set({ worktreeNavHistoryIndex: targetIndex })
       }
     } finally {
-      set({ isNavigatingHistory: false })
+      set({ isNavigatingHistory: prevNavigating })
     }
   }
 })

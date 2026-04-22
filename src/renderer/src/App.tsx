@@ -39,6 +39,10 @@ import { countWorkingAgents, getWorkingAgentsPerWorktree } from './lib/agent-sta
 import { activateAndRevealWorktree } from './lib/worktree-activation'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { findWorktreeById, getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
+import {
+  canGoBackWorktreeHistory,
+  canGoForwardWorktreeHistory
+} from '@/store/slices/worktree-nav-history'
 import { dispatchClearModifierHints } from './hooks/useModifierHint'
 
 const isMac = navigator.userAgent.includes('Mac')
@@ -126,10 +130,8 @@ function App(): React.JSX.Element {
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const isFullScreen = useAppStore((s) => s.isFullScreen)
   const settings = useAppStore((s) => s.settings)
-  const canGoBackWorktree = useAppStore((s) => s.worktreeNavHistoryIndex > 0)
-  const canGoForwardWorktree = useAppStore(
-    (s) => s.worktreeNavHistoryIndex < s.worktreeNavHistory.length - 1
-  )
+  const canGoBackWorktree = useAppStore(canGoBackWorktreeHistory)
+  const canGoForwardWorktree = useAppStore(canGoForwardWorktreeHistory)
   const titlebarLeftControlsRef = useRef<HTMLDivElement | null>(null)
   const [collapsedSidebarHeaderWidth, setCollapsedSidebarHeaderWidth] = useState(0)
 
