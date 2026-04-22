@@ -676,6 +676,15 @@ export class OrcaRuntimeService {
     const workspaceRoot = wslHome ? join(wslHome, 'orca', 'workspaces') : settings.workspaceDir
     worktreePath = ensurePathWithinWorkspace(worktreePath, workspaceRoot)
     const baseBranch = args.baseBranch || repo.worktreeBaseRef || getDefaultBaseRef(repo.path)
+    if (!baseBranch) {
+      // Why: getDefaultBaseRef returns null when no suitable ref exists.
+      // Don't fabricate 'origin/main' — passing it to addWorktree would
+      // produce an opaque git failure. Surface a clear error so the CLI
+      // caller can pick an explicit --base ref.
+      throw new Error(
+        'Could not resolve a default base ref for this repo. Pass an explicit --base and try again.'
+      )
+    }
 
     const remote = baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'
     try {

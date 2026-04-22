@@ -51,6 +51,21 @@ vi.mock('../ipc/filesystem-auth', () => ({
   invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock
 }))
 
+// Why: the CLI create-worktree path calls getDefaultBaseRef to resolve a
+// fallback base branch. Real resolution shells out to `git` against the
+// test's fabricated repo path, which has no refs, so we stub it to a
+// predictable 'origin/main'. The runtime no longer silently fabricates this
+// default, so tests that want the legacy behavior must express it via the mock.
+vi.mock('../git/repo', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>
+  return {
+    ...actual,
+    getDefaultBaseRef: vi.fn().mockReturnValue('origin/main'),
+    getBranchConflictKind: vi.fn().mockResolvedValue(null),
+    getGitUsername: vi.fn().mockReturnValue('')
+  }
+})
+
 afterEach(() => {
   vi.mocked(listWorktrees).mockResolvedValue(MOCK_GIT_WORKTREES)
   vi.mocked(addWorktree).mockReset()

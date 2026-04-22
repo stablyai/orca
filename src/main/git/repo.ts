@@ -152,8 +152,14 @@ function hasGitRef(path: string, ref: string): boolean {
 /**
  * Resolve the default base ref for new worktrees.
  * Prefer the remote primary branch over a potentially stale local branch.
+ *
+ * Why: returns `null` when no candidate ref is resolvable. Previously this
+ * fell through to a hardcoded `'origin/main'` even when that ref did not
+ * exist, which silently handed `git worktree add` a bad ref and produced
+ * an opaque git error. Callers now fail loudly with a useful message, or
+ * degrade gracefully for non-creation uses (e.g. hosted URL building).
  */
-export function getDefaultBaseRef(path: string): string {
+export function getDefaultBaseRef(path: string): string | null {
   try {
     const ref = gitExecFileSync(['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'], {
       cwd: path
@@ -179,14 +185,14 @@ export function getDefaultBaseRef(path: string): string {
     return 'master'
   }
 
-  return 'origin/main'
+  return null
 }
 
-export async function getBaseRefDefault(path: string): Promise<string> {
+export async function getBaseRefDefault(path: string): Promise<string | null> {
   return getDefaultBaseRefAsync(path)
 }
 
-async function getDefaultBaseRefAsync(path: string): Promise<string> {
+async function getDefaultBaseRefAsync(path: string): Promise<string | null> {
   try {
     const { stdout } = await gitExecFileAsync(
       ['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'],
@@ -213,7 +219,7 @@ async function getDefaultBaseRefAsync(path: string): Promise<string> {
     return 'master'
   }
 
-  return 'origin/main'
+  return null
 }
 
 export async function searchBaseRefs(path: string, query: string, limit = 25): Promise<string[]> {
@@ -318,7 +324,11 @@ export function getRemoteFileUrl(
     return null
   }
 
-  const defaultBranch = getDefaultBaseRef(repoPath).replace(/^origin\//, '')
+  const defaultBaseRef = getDefaultBaseRef(repoPath)
+  if (!defaultBaseRef) {
+    return null
+  }
+  const defaultBranch = defaultBaseRef.replace(/^origin\//, '')
   const browseUrl = info.browseFile(relativePath, { committish: defaultBranch })
   if (!browseUrl) {
     return null

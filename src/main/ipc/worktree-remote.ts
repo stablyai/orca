@@ -79,6 +79,11 @@ export async function createRemoteWorktree(
   const remotePath = `${repo.path}/../${sanitizedName}`
 
   // Determine base branch
+  // Why: previously fell back to a hardcoded 'origin/main' when
+  // symbolic-ref failed. That silently handed addWorktree a ref that may
+  // not exist on the remote (e.g. repos whose primary branch is master or
+  // develop), producing an opaque git error. Fail here with a clear
+  // message so the UI can surface it and prompt the user to pick a base.
   let baseBranch = args.baseBranch || repo.worktreeBaseRef
   if (!baseBranch) {
     try {
@@ -88,8 +93,13 @@ export async function createRemoteWorktree(
       )
       baseBranch = stdout.trim()
     } catch {
-      baseBranch = 'origin/main'
+      // Fall through — baseBranch stays unset.
     }
+  }
+  if (!baseBranch) {
+    throw new Error(
+      'Could not resolve a default base ref for this repo. Pick a base branch explicitly and try again.'
+    )
   }
 
   // Fetch latest
@@ -226,8 +236,20 @@ export async function createLocalWorktree(
     )
   }
 
-  // Determine base branch
+  // Determine base branch.
+  //
+  // Why: getDefaultBaseRef may return null when none of origin/HEAD,
+  // origin/main, origin/master, local main, or local master exist. In that
+  // case we must not fall back to a hardcoded 'origin/main' — passing a
+  // non-existent ref to `git worktree add` produces an opaque error. Fail
+  // here with a clear message so the UI can prompt the user to pick a base
+  // branch explicitly.
   const baseBranch = args.baseBranch || repo.worktreeBaseRef || getDefaultBaseRef(repo.path)
+  if (!baseBranch) {
+    throw new Error(
+      'Could not resolve a default base ref for this repo. Pick a base branch explicitly and try again.'
+    )
+  }
   const setupScript = getEffectiveHooks(repo)?.scripts.setup
   // Why: `ask` is a pre-create choice gate, not a post-create side effect.
   // Resolve it before mutating git state so missing UI input cannot strand

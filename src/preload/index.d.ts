@@ -37,7 +37,7 @@ type ReposApi = {
   cloneAbort: () => Promise<void>
   onCloneProgress: (callback: (data: { phase: string; percent: number }) => void) => () => void
   getGitUsername: (args: { repoId: string }) => Promise<string>
-  getBaseRefDefault: (args: { repoId: string }) => Promise<string>
+  getBaseRefDefault: (args: { repoId: string }) => Promise<string | null>
   searchBaseRefs: (args: { repoId: string; query: string; limit?: number }) => Promise<string[]>
   onChanged: (callback: () => void) => () => void
 }

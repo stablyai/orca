@@ -173,7 +173,10 @@ function SourceControlInner(): React.JSX.Element {
   const [scope, setScope] = useState<SourceControlScope>('all')
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
   const [baseRefDialogOpen, setBaseRefDialogOpen] = useState(false)
-  const [defaultBaseRef, setDefaultBaseRef] = useState<string | null>('origin/main')
+  // Why: start null rather than 'origin/main' so branch compare doesn't fire
+  // with a fabricated ref before the IPC resolves. effectiveBaseRef stays
+  // falsy until we have a real answer from the main process.
+  const [defaultBaseRef, setDefaultBaseRef] = useState<string | null>(null)
   const [filterQuery, setFilterQuery] = useState('')
   const filterInputRef = useRef<HTMLInputElement>(null)
 
@@ -238,8 +241,11 @@ function SourceControlInner(): React.JSX.Element {
         }
       })
       .catch(() => {
+        // Why: leave defaultBaseRef null on failure instead of fabricating
+        // 'origin/main'. effectiveBaseRef stays falsy, so branch compare and
+        // PR fetch skip running against a ref that may not exist.
         if (!stale) {
-          setDefaultBaseRef('origin/main')
+          setDefaultBaseRef(null)
         }
       })
 

@@ -49,32 +49,38 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     return store.getRepos()
   })
 
-  ipcMain.handle('repos:add', async (_event, args: { path: string; kind?: 'git' | 'folder' }): Promise<{ repo: Repo } | { error: string }> => {
-    const repoKind = args.kind === 'folder' ? 'folder' : 'git'
-    if (repoKind === 'git' && !isGitRepo(args.path)) {
-      return { error: `Not a valid git repository: ${args.path}` }
-    }
+  ipcMain.handle(
+    'repos:add',
+    async (
+      _event,
+      args: { path: string; kind?: 'git' | 'folder' }
+    ): Promise<{ repo: Repo } | { error: string }> => {
+      const repoKind = args.kind === 'folder' ? 'folder' : 'git'
+      if (repoKind === 'git' && !isGitRepo(args.path)) {
+        return { error: `Not a valid git repository: ${args.path}` }
+      }
 
-    // Check if already added
-    const existing = store.getRepos().find((r) => r.path === args.path)
-    if (existing) {
-      return { repo: existing }
-    }
+      // Check if already added
+      const existing = store.getRepos().find((r) => r.path === args.path)
+      if (existing) {
+        return { repo: existing }
+      }
 
-    const repo: Repo = {
-      id: randomUUID(),
-      path: args.path,
-      displayName: getRepoName(args.path),
-      badgeColor: REPO_COLORS[store.getRepos().length % REPO_COLORS.length],
-      addedAt: Date.now(),
-      kind: repoKind
-    }
+      const repo: Repo = {
+        id: randomUUID(),
+        path: args.path,
+        displayName: getRepoName(args.path),
+        badgeColor: REPO_COLORS[store.getRepos().length % REPO_COLORS.length],
+        addedAt: Date.now(),
+        kind: repoKind
+      }
 
-    store.addRepo(repo)
-    await rebuildAuthorizedRootsCache(store)
-    notifyReposChanged(mainWindow)
-    return { repo }
-  })
+      store.addRepo(repo)
+      await rebuildAuthorizedRootsCache(store)
+      notifyReposChanged(mainWindow)
+      return { repo }
+    }
+  )
 
   ipcMain.handle(
     'repos:addRemote',
@@ -347,14 +353,17 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.handle('repos:getBaseRefDefault', async (_event, args: { repoId: string }) => {
     const repo = store.getRepo(args.repoId)
     if (!repo || isFolderRepo(repo)) {
-      return 'origin/main'
+      // Why: folder-mode repos have no git state to resolve a base ref from.
+      // Return null so the renderer can decline to use a fabricated default
+      // (e.g. avoid running a branch compare against a ref that doesn't exist).
+      return null
     }
     // Why: remote repos need the relay to resolve symbolic-ref on the
     // remote host where the git data lives.
     if (repo.connectionId) {
       const provider = getSshGitProvider(repo.connectionId)
       if (!provider) {
-        return 'origin/main'
+        return null
       }
       try {
         const result = await provider.exec(
@@ -366,9 +375,11 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           return ref.replace(/^refs\/remotes\//, '')
         }
       } catch {
-        // Fall through to default
+        // Fall through — no symbolic-ref on the remote.
       }
-      return 'origin/main'
+      // Why: don't fabricate 'origin/main'. Let the renderer surface "no
+      // default" and prompt the user to pick a base branch.
+      return null
     }
     return getBaseRefDefault(repo.path)
   })

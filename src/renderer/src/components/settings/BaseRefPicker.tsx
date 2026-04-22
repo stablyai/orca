@@ -16,7 +16,10 @@ export function BaseRefPicker({
   onSelect,
   onUsePrimary
 }: BaseRefPickerProps): React.JSX.Element {
-  const [defaultBaseRef, setDefaultBaseRef] = useState('origin/main')
+  // Why: null until the IPC resolves (or when the repo has no default base ref
+  // available). We avoid seeding with 'origin/main' because that would display
+  // a fabricated default in repos that don't actually have origin/main.
+  const [defaultBaseRef, setDefaultBaseRef] = useState<string | null>(null)
   const [baseRefQuery, setBaseRefQuery] = useState('')
   const [baseRefResults, setBaseRefResults] = useState<string[]>([])
   const [isSearchingBaseRefs, setIsSearchingBaseRefs] = useState(false)
@@ -32,7 +35,7 @@ export function BaseRefPicker({
         }
       } catch {
         if (!stale) {
-          setDefaultBaseRef('origin/main')
+          setDefaultBaseRef(null)
         }
       }
     }
@@ -93,11 +96,15 @@ export function BaseRefPicker({
     <div className="space-y-2.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <div className="text-sm font-medium text-foreground">{effectiveBaseRef}</div>
+          <div className="text-sm font-medium text-foreground">
+            {effectiveBaseRef ?? 'No default base ref'}
+          </div>
           <p className="text-xs text-muted-foreground">
             {currentBaseRef
               ? 'Pinned for this repo'
-              : `Following primary branch (${defaultBaseRef})`}
+              : defaultBaseRef
+                ? `Following primary branch (${defaultBaseRef})`
+                : 'Pick a base branch below'}
           </p>
         </div>
         {onUsePrimary && (
