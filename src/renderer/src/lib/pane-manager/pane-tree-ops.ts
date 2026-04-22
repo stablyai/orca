@@ -31,7 +31,16 @@ export function safeFit(pane: ManagedPaneInternal): void {
     }
     if (pane.pendingDragScrollState) {
       pane.fitAddon.fit()
-      restoreScrollState(pane.terminal, pane.pendingDragScrollState)
+      // Why: fit() → resize() → queueSync() schedules a deferred _sync via
+      // addRefreshCallback that updates the Scrollable's dimensions in the next
+      // animation frame. Any scroll position we set synchronously here can be
+      // silently clamped when that deferred _sync calls setScrollDimensions
+      // (with _suppressOnScrollHandler=true, so clamping updates neither
+      // _latestYDisp nor buffer.ydisp). By scheduling our restore via the same
+      // addRefreshCallback mechanism, we run AFTER the deferred _sync has
+      // corrected the Scrollable dimensions, so our setScrollPosition operates
+      // against accurate maxScrollTop and isn't clamped.
+      deferredDragScrollRestore(pane)
       return
     }
     if (pane.pendingLayoutScrollState) {
@@ -45,6 +54,28 @@ export function safeFit(pane: ManagedPaneInternal): void {
   } catch {
     // Container may not have dimensions yet
   }
+}
+
+function deferredDragScrollRestore(pane: ManagedPaneInternal): void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const renderService = (pane.terminal as any)._core?._renderService
+  if (!renderService?.addRefreshCallback) {
+    if (pane.pendingDragScrollState) {
+      restoreScrollState(pane.terminal, pane.pendingDragScrollState)
+    }
+    return
+  }
+  renderService.addRefreshCallback(() => {
+    try {
+      const state = pane.pendingDragScrollState
+      if (!state) {
+        return
+      }
+      restoreScrollState(pane.terminal, state)
+    } catch {
+      /* pane may have been disposed */
+    }
+  })
 }
 
 export function fitAllPanesInternal(

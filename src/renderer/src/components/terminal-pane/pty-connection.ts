@@ -192,9 +192,34 @@ export function connectPanePty(
     transport.sendInput(data)
   })
 
+  // Why: during divider drag, each fit() fires terminal.onResize which sends
+  // SIGWINCH to the PTY. Interactive programs (Claude Code) redraw on SIGWINCH,
+  // writing new content that corrupts scroll position between capture and
+  // restore. We fully suppress PTY resize during drag and store the latest
+  // pending dimensions. When the drag ends, `pane-drag-end` fires on the pane
+  // container and we flush the final dimensions in one shot — no debounce
+  // timer that could fire mid-drag if the user pauses.
+  let pendingDragResize: { cols: number; rows: number } | null = null
   const onResizeDisposable = pane.terminal.onResize(({ cols, rows }) => {
+    if (manager.isPaneDragResizing(pane.id)) {
+      pendingDragResize = { cols, rows }
+      return
+    }
     transport.resize(cols, rows)
   })
+
+  // Why: `unlockDragScroll` dispatches this event after clearing the drag
+  // scroll lock and restoring scroll state. At this point the terminal has
+  // its final dimensions from the last fit() but the PTY hasn't been told
+  // yet. Flush the pending resize so the PTY (and Claude Code) redraws at
+  // the correct size exactly once.
+  const onDragEnd = (): void => {
+    if (pendingDragResize) {
+      transport.resize(pendingDragResize.cols, pendingDragResize.rows)
+      pendingDragResize = null
+    }
+  }
+  pane.container.addEventListener('pane-drag-end', onDragEnd)
 
   // Defer PTY spawn/attach to next frame so FitAddon has time to calculate
   // the correct terminal dimensions from the laid-out container.
@@ -493,6 +518,8 @@ export function connectPanePty(
         clearTimeout(startupInjectTimer)
         startupInjectTimer = null
       }
+      pane.container.removeEventListener('pane-drag-end', onDragEnd)
+      pendingDragResize = null
       if (connectFrame !== null) {
         // Why: StrictMode and split-group remounts can dispose a pane binding
         // before its deferred PTY attach/spawn work runs. Cancel that queued

@@ -79,17 +79,12 @@ export function captureScrollState(terminal: Terminal): ScrollState {
 
 export function restoreScrollState(terminal: Terminal, state: ScrollState): void {
   if (state.wasAtBottom) {
-    terminal.scrollToBottom()
-    forceViewportScrollbarSync(terminal)
+    scrollToLineSync(terminal, terminal.buffer.active.baseY)
     return
   }
   const hintRatio = state.totalLines > 0 ? state.viewportY / state.totalLines : undefined
   const target = findLineByContent(terminal, state.firstVisibleLineContent, hintRatio)
   if (target >= 0) {
-    // Why: the anchor may be the logical line start (several wrapped rows
-    // above the actual viewport row). After reflow the logical line may
-    // wrap into fewer or more rows. Scale the offset by the column ratio
-    // to approximate the new wrap count, then add it to the matched line.
     let scrollTarget = target
     if (state.logicalLineOffset > 0) {
       const newCols = terminal.cols
@@ -99,58 +94,112 @@ export function restoreScrollState(terminal: Terminal, state: ScrollState): void
           : state.logicalLineOffset
       scrollTarget = Math.min(target + scaledOffset, terminal.buffer.active.baseY)
     }
-    terminal.scrollToLine(scrollTarget)
-    forceViewportScrollbarSync(terminal)
+    console.log(
+      '[restoreScrollState] content-match',
+      JSON.stringify({
+        target,
+        scrollTarget,
+        logicalLineOffset: state.logicalLineOffset,
+        oldCols: state.cols,
+        newCols: terminal.cols,
+        viewportYBefore: state.viewportY,
+        baseY: terminal.buffer.active.baseY,
+        contentPrefix: state.firstVisibleLineContent.substring(0, 30)
+      })
+    )
+    scrollToLineSync(terminal, scrollTarget)
     return
   }
-  // Why: content matching fails when the first visible line is blank or when
-  // reflow changes content beyond recognition. Without a fallback, the
-  // terminal stays wherever xterm.js left it after the reflow — often the
-  // top. Proportional positioning approximates the original scroll position
-  // by mapping the old ratio into the new buffer dimensions.
   if (hintRatio !== undefined) {
     const newTotalLines = terminal.buffer.active.baseY + terminal.rows
     const fallbackLine = Math.round(hintRatio * newTotalLines)
     const clampedLine = Math.min(fallbackLine, terminal.buffer.active.baseY)
-    terminal.scrollToLine(clampedLine)
-    forceViewportScrollbarSync(terminal)
+    console.log(
+      '[restoreScrollState] proportional-fallback',
+      JSON.stringify({
+        hintRatio,
+        newTotalLines,
+        fallbackLine,
+        clampedLine,
+        baseY: terminal.buffer.active.baseY,
+        contentPrefix: state.firstVisibleLineContent.substring(0, 30)
+      })
+    )
+    scrollToLineSync(terminal, clampedLine)
   }
 }
 
-// Why: xterm 6's Viewport._sync() updates scrollDimensions after resize but
-// skips the scrollPosition update when ydisp matches _latestYDisp (a stale
-// internal value). This leaves the scrollbar thumb at a wrong position even
-// though the rendered content is correct.
+// Why: the public terminal.scrollToLine(line) goes through
+// CoreBrowserTerminal.scrollLines → viewport.scrollLines, which calls
+// SmoothScrollableElement.setScrollPosition WITHOUT updating Viewport's
+// _latestYDisp. A subsequent queued _sync (from resize) then sees
+// ydisp === _latestYDisp (stale) and skips setScrollPosition, leaving the
+// SmoothScrollableElement's internal scrollTop out of sync with the buffer.
+// When the user later scrolls (mouse wheel), the SmoothScrollableElement
+// adjusts from its stale scrollTop, causing the terminal to jump.
 //
-// Immediate jiggle: scrollLines(-1/+1) triggers _sync with a differing ydisp,
-// which calls setScrollPosition. This fixes the common case in the same JS turn.
-//
-// Why double-rAF: fit() queues an async _sync() via addRefreshCallback, which
-// fires AFTER the renderer's rAF. That _sync calls setScrollDimensions with a
-// new (potentially smaller) scrollHeight, causing the SmoothScrollableElement to
-// clamp scrollTop. But _sync skips setScrollPosition because _latestYDisp was
-// never updated to the new target (the Viewport's _handleScroll sees diff=0
-// after each scrollToLine because buffer.ydisp already matches). A single rAF
-// may fire before the render's refresh callback, so a double-rAF guarantees we
-// run after _sync has settled. Re-applying scrollToLine forces a new _sync with
-// the correct ydisp, which calls setScrollPosition (ydisp !== stale _latestYDisp).
-function forceViewportScrollbarSync(terminal: Terminal): void {
-  jiggleScroll(terminal)
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      try {
-        const buf = terminal.buffer.active
-        if (buf.viewportY < buf.baseY) {
-          terminal.scrollToLine(buf.viewportY)
-        }
-      } catch {
-        /* terminal may have been disposed */
+// Viewport.scrollToLine(line, disableSmoothScroll=true) directly sets
+// _latestYDisp = line before calling setScrollPosition, keeping the
+// scrollbar state in sync. We access this through _core._viewport which
+// is an internal API (tested against @xterm/xterm 6.0.0). Falls back to
+// the public API + scroll jiggle if internals are unavailable.
+function scrollToLineSync(terminal: Terminal, line: number): void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const viewport = (terminal as any)._core?._viewport
+  if (viewport && typeof viewport._sync === 'function') {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const cellH = (terminal as any)._core?._renderService?.dimensions?.css?.cell?.height
+      const scrollableEl = viewport._scrollableElement
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const bufLines = (terminal as any)._core?._bufferService?.buffer?.lines?.length
+
+      // Why: _sync(line) calls setScrollDimensions (possibly with stale
+      // renderer values) then setScrollPosition. If the stale dimensions
+      // give a maxScrollTop smaller than our target, the position is
+      // silently clamped. We call _sync first to let it do its thing,
+      // then OVERRIDE with correct dimensions computed from the actual
+      // buffer state, then re-set the scroll position. The second
+      // setScrollDimensions + setScrollPosition pair operates against
+      // accurate maxScrollTop so the target isn't clamped.
+      viewport._latestYDisp = undefined
+      viewport._sync(line)
+
+      if (
+        cellH &&
+        bufLines &&
+        scrollableEl?.setScrollDimensions &&
+        scrollableEl?.setScrollPosition
+      ) {
+        // Why: suppress _handleScroll during our dimension fix-up to
+        // prevent stale scroll events from overwriting buffer.ydisp.
+        viewport._suppressOnScrollHandler = true
+        scrollableEl.setScrollDimensions({
+          height: cellH * terminal.rows,
+          scrollHeight: cellH * bufLines
+        })
+        viewport._suppressOnScrollHandler = false
+
+        scrollableEl.setScrollPosition({ scrollTop: line * cellH })
       }
-    })
-  })
+
+      viewport._latestYDisp = line
+    } catch {
+      terminal.scrollToLine(line)
+      forceViewportScrollbarSync(terminal)
+    }
+    return
+  }
+  terminal.scrollToLine(line)
+  forceViewportScrollbarSync(terminal)
 }
 
-function jiggleScroll(terminal: Terminal): void {
+// Why: fallback for when the internal viewport API is unavailable. The
+// scroll jiggle (-1/+1) triggers _handleScroll with diff≠0, which updates
+// _latestYDisp. Less reliable than the direct viewport.scrollToLine path
+// because it reads from the SmoothScrollableElement's potentially-stale
+// scrollTop, but better than nothing.
+function forceViewportScrollbarSync(terminal: Terminal): void {
   const buf = terminal.buffer.active
   if (buf.viewportY > 0) {
     terminal.scrollLines(-1)

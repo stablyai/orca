@@ -1,3 +1,4 @@
+/* oxlint-disable max-lines */
 import type {
   PaneManagerOptions,
   PaneStyleOptions,
@@ -205,6 +206,11 @@ export class PaneManager {
 
   unlockAllScrollStates(): void {
     unlockAllPaneScrollStates(this.panes)
+  }
+
+  isPaneDragResizing(paneId: number): boolean {
+    const pane = this.panes.get(paneId)
+    return pane?.pendingDragScrollState != null
   }
 
   getActivePane(): ManagedPane | null {
