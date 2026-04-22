@@ -24,9 +24,15 @@ export function findTextMatchRanges(text: string, query: string): { start: numbe
 
     matches.push({
       start: matchStart,
-      end: matchStart + query.length
+      // Why: use normalizedQuery.length (not query.length) because matchStart
+      // is an index into the locale-lowercased text. toLocaleLowerCase() can
+      // change string length (e.g. Turkish İ, German ß→ss), so the original
+      // query length would produce wrong range boundaries.
+      end: matchStart + normalizedQuery.length
     })
-    searchStart = matchStart + query.length
+    // Why: advance by at least 1 to guarantee forward progress even if a
+    // future locale edge-case produces a zero-length normalizedQuery.
+    searchStart = matchStart + Math.max(normalizedQuery.length, 1)
   }
 
   return matches

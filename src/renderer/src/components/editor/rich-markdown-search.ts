@@ -16,6 +16,7 @@ type RichMarkdownSearchState = {
 
 type RichMarkdownSearchMeta = {
   activeIndex: number
+  matches: RichMarkdownSearchMatch[]
   query: string
 }
 
@@ -76,15 +77,28 @@ export function createRichMarkdownSearchPlugin(): Plugin<RichMarkdownSearchState
           }
         }
 
-        if (!meta && !tr.docChanged) {
-          return pluginState
+        // Why: when meta carries pre-computed matches from the React layer,
+        // build decorations directly without re-walking the document. When the
+        // doc changes without new meta (user edits while searching), remap
+        // existing decorations until the React layer recomputes and dispatches
+        // fresh matches. This avoids the old double-walk that froze the UI.
+        if (meta) {
+          return {
+            activeIndex,
+            decorations: buildSearchDecorationsFromMatches(tr.doc, meta.matches, activeIndex),
+            query
+          }
         }
 
-        return {
-          activeIndex,
-          decorations: buildSearchDecorations(tr.doc, query, activeIndex),
-          query
+        if (tr.docChanged) {
+          return {
+            activeIndex: pluginState.activeIndex,
+            decorations: pluginState.decorations.map(tr.mapping, tr.doc),
+            query: pluginState.query
+          }
         }
+
+        return pluginState
       }
     },
     props: {
@@ -95,12 +109,11 @@ export function createRichMarkdownSearchPlugin(): Plugin<RichMarkdownSearchState
   })
 }
 
-function buildSearchDecorations(
+function buildSearchDecorationsFromMatches(
   doc: ProseMirrorNode,
-  query: string,
+  matches: RichMarkdownSearchMatch[],
   activeIndex: number
 ): DecorationSet {
-  const matches = findRichMarkdownSearchMatches(doc, query)
   if (matches.length === 0) {
     return DecorationSet.empty
   }
