@@ -422,6 +422,41 @@ export class OrcaRuntimeService {
     }
   }
 
+  // Why: when --terminal is omitted, the CLI auto-resolves to the active
+  // terminal in the current worktree — matching browser's implicit active tab.
+  async resolveActiveTerminal(worktreeSelector?: string): Promise<string> {
+    this.assertGraphReady()
+
+    const targetWorktreeId = worktreeSelector
+      ? (await this.resolveWorktreeSelector(worktreeSelector)).id
+      : null
+
+    // Prefer the tab's activeLeafId — this is the pane the user last focused
+    for (const tab of this.tabs.values()) {
+      if (targetWorktreeId && tab.worktreeId !== targetWorktreeId) {
+        continue
+      }
+      if (!tab.activeLeafId) {
+        continue
+      }
+      const leafKey = this.getLeafKey(tab.tabId, tab.activeLeafId)
+      const leaf = this.leaves.get(leafKey)
+      if (leaf) {
+        return this.issueHandle(leaf)
+      }
+    }
+
+    // Fallback: any leaf in the target worktree
+    for (const leaf of this.leaves.values()) {
+      if (targetWorktreeId && leaf.worktreeId !== targetWorktreeId) {
+        continue
+      }
+      return this.issueHandle(leaf)
+    }
+
+    throw new Error('no_active_terminal')
+  }
+
   async showTerminal(handle: string): Promise<RuntimeTerminalShow> {
     const graphEpoch = this.captureReadyGraphEpoch()
     const worktreesById = await this.getResolvedWorktreeMap()

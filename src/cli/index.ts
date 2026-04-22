@@ -188,20 +188,21 @@ export const COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['terminal', 'show'],
     summary: 'Show terminal metadata and preview',
-    usage: 'orca terminal show --terminal <handle> [--json]',
+    usage: 'orca terminal show [--terminal <handle>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'terminal']
   },
   {
     path: ['terminal', 'read'],
     summary: 'Read bounded terminal output',
-    usage: 'orca terminal read --terminal <handle> [--cursor <n>] [--json]',
+    usage: 'orca terminal read [--terminal <handle>] [--cursor <n>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'cursor'],
     notes: [
+      'Omit --terminal to target the active terminal in the current worktree.',
       'Use --cursor with the nextCursor value from a previous read to get only new output since that read.',
       'Useful for capturing the response to a command: read before sending, then read --cursor <prev> after waiting.'
     ],
     examples: [
-      'orca terminal read --terminal term_abc123 --json',
+      'orca terminal read --json',
       'orca terminal read --terminal term_abc123 --cursor 42 --json'
     ]
   },
@@ -209,14 +210,14 @@ export const COMMAND_SPECS: CommandSpec[] = [
     path: ['terminal', 'send'],
     summary: 'Send input to a live terminal',
     usage:
-      'orca terminal send --terminal <handle> [--text <text>] [--enter] [--interrupt] [--json]',
+      'orca terminal send [--terminal <handle>] [--text <text>] [--enter] [--interrupt] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'text', 'enter', 'interrupt']
   },
   {
     path: ['terminal', 'wait'],
     summary: 'Wait for a terminal condition',
     usage:
-      'orca terminal wait --terminal <handle> --for exit|tui-idle [--timeout-ms <ms>] [--json]',
+      'orca terminal wait [--terminal <handle>] --for exit|tui-idle [--timeout-ms <ms>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'for', 'timeout-ms']
   },
   {
@@ -239,28 +240,28 @@ export const COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['terminal', 'switch'],
     summary: 'Switch to a terminal tab in the UI',
-    usage: 'orca terminal switch --terminal <handle> [--json]',
+    usage: 'orca terminal switch [--terminal <handle>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'terminal'],
     examples: ['orca terminal switch --terminal term_abc123']
   },
   {
     path: ['terminal', 'focus'],
     summary: 'Switch to a terminal tab in the UI (alias for terminal switch)',
-    usage: 'orca terminal focus --terminal <handle> [--json]',
+    usage: 'orca terminal focus [--terminal <handle>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'terminal'],
     examples: ['orca terminal focus --terminal term_abc123']
   },
   {
     path: ['terminal', 'close'],
     summary: 'Close a terminal tab (kills PTY if running)',
-    usage: 'orca terminal close --terminal <handle> [--json]',
+    usage: 'orca terminal close [--terminal <handle>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'terminal'],
     examples: ['orca terminal close --terminal term_abc123']
   },
   {
     path: ['terminal', 'rename'],
     summary: 'Set or clear the title of a terminal tab',
-    usage: 'orca terminal rename --terminal <handle> [--title <text>] [--json]',
+    usage: 'orca terminal rename [--terminal <handle>] [--title <text>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'title'],
     notes: ['Omit --title or pass an empty string to reset to the auto-generated title.'],
     examples: [
@@ -272,7 +273,7 @@ export const COMMAND_SPECS: CommandSpec[] = [
     path: ['terminal', 'split'],
     summary: 'Split an existing terminal pane',
     usage:
-      'orca terminal split --terminal <handle> [--direction horizontal|vertical] [--command <text>] [--json]',
+      'orca terminal split [--terminal <handle>] [--direction horizontal|vertical] [--command <text>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'direction', 'command'],
     examples: [
       'orca terminal split --terminal term_abc123 --direction horizontal --json',
@@ -819,7 +820,7 @@ export async function main(argv = process.argv.slice(2), cwd = process.cwd()): P
 
     if (matches(commandPath, ['terminal', 'show'])) {
       const result = await client.call<{ terminal: RuntimeTerminalShow }>('terminal.show', {
-        terminal: getRequiredStringFlag(parsed.flags, 'terminal')
+        terminal: await getTerminalHandle(parsed.flags, cwd, client)
       })
       return printResult(result, json, formatTerminalShow)
     }
@@ -834,7 +835,7 @@ export async function main(argv = process.argv.slice(2), cwd = process.cwd()): P
         throw new RuntimeClientError('invalid_argument', '--cursor must be a non-negative integer')
       }
       const result = await client.call<{ terminal: RuntimeTerminalRead }>('terminal.read', {
-        terminal: getRequiredStringFlag(parsed.flags, 'terminal'),
+        terminal: await getTerminalHandle(parsed.flags, cwd, client),
         ...(cursor !== undefined ? { cursor } : {})
       })
       return printResult(result, json, formatTerminalRead)
@@ -842,7 +843,7 @@ export async function main(argv = process.argv.slice(2), cwd = process.cwd()): P
 
     if (matches(commandPath, ['terminal', 'send'])) {
       const result = await client.call<{ send: RuntimeTerminalSend }>('terminal.send', {
-        terminal: getRequiredStringFlag(parsed.flags, 'terminal'),
+        terminal: await getTerminalHandle(parsed.flags, cwd, client),
         text: getOptionalStringFlag(parsed.flags, 'text'),
         enter: parsed.flags.get('enter') === true,
         interrupt: parsed.flags.get('interrupt') === true
@@ -855,7 +856,7 @@ export async function main(argv = process.argv.slice(2), cwd = process.cwd()): P
       const result = await client.call<{ wait: RuntimeTerminalWait }>(
         'terminal.wait',
         {
-          terminal: getRequiredStringFlag(parsed.flags, 'terminal'),
+          terminal: await getTerminalHandle(parsed.flags, cwd, client),
           for: getRequiredStringFlag(parsed.flags, 'for'),
           timeoutMs
         },
@@ -878,7 +879,7 @@ export async function main(argv = process.argv.slice(2), cwd = process.cwd()): P
 
     if (matches(commandPath, ['terminal', 'rename'])) {
       const result = await client.call<{ rename: RuntimeTerminalRename }>('terminal.rename', {
-        terminal: getRequiredStringFlag(parsed.flags, 'terminal'),
+        terminal: await getTerminalHandle(parsed.flags, cwd, client),
         title: getOptionalStringFlag(parsed.flags, 'title') ?? null
       })
       return printResult(result, json, formatTerminalRename)
@@ -898,14 +899,14 @@ export async function main(argv = process.argv.slice(2), cwd = process.cwd()): P
       matches(commandPath, ['terminal', 'switch'])
     ) {
       const result = await client.call<{ focus: RuntimeTerminalFocus }>('terminal.focus', {
-        terminal: getRequiredStringFlag(parsed.flags, 'terminal')
+        terminal: await getTerminalHandle(parsed.flags, cwd, client)
       })
       return printResult(result, json, formatTerminalFocus)
     }
 
     if (matches(commandPath, ['terminal', 'close'])) {
       const result = await client.call<{ close: RuntimeTerminalClose }>('terminal.close', {
-        terminal: getRequiredStringFlag(parsed.flags, 'terminal')
+        terminal: await getTerminalHandle(parsed.flags, cwd, client)
       })
       return printResult(result, json, formatTerminalClose)
     }
@@ -923,7 +924,7 @@ export async function main(argv = process.argv.slice(2), cwd = process.cwd()): P
         )
       }
       const result = await client.call<{ split: RuntimeTerminalSplit }>('terminal.split', {
-        terminal: getRequiredStringFlag(parsed.flags, 'terminal'),
+        terminal: await getTerminalHandle(parsed.flags, cwd, client),
         direction: directionFlag,
         command: getOptionalStringFlag(parsed.flags, 'command')
       })
@@ -1960,6 +1961,23 @@ async function getBrowserWorktreeSelector(
     // Not inside a managed worktree — no filter
     return undefined
   }
+}
+
+// Why: mirrors browser's implicit active-tab targeting. When --terminal is
+// omitted, resolve the active terminal in the current worktree so commands
+// like `orca terminal send --text "hello" --enter` Just Work.
+async function getTerminalHandle(
+  flags: Map<string, string | boolean>,
+  cwd: string,
+  client: RuntimeClient
+): Promise<string> {
+  const explicit = getOptionalStringFlag(flags, 'terminal')
+  if (explicit) {
+    return explicit
+  }
+  const worktree = await getBrowserWorktreeSelector(flags, cwd, client)
+  const response = await client.call<{ handle: string }>('terminal.resolveActive', { worktree })
+  return response.result.handle
 }
 
 async function getBrowserCommandTarget(

@@ -151,9 +151,15 @@ orca terminal split --terminal <handle> --direction horizontal --command "npm ru
 orca terminal rename --terminal <handle> --title "New Name" --json
 orca terminal switch --terminal <handle> --json
 orca terminal close --terminal <handle> --json
+orca terminal send --text "echo hello" --enter --json
+orca terminal read --json
 ```
 
+Why: `--terminal` is optional for most commands. When omitted, Orca auto-resolves to the active terminal in the current worktree (same as browser commands target the active tab). Use explicit `--terminal <handle>` when operating on a specific pane.
+
 Why: terminal handles are runtime-scoped and may go stale after reloads. If Orca returns `terminal_handle_stale`, reacquire a fresh handle with `terminal list`.
+
+Why: `--direction horizontal` splits the pane **left and right** (new pane appears to the right). `--direction vertical` splits the pane **top and bottom** (new pane appears below). This matches VS Code's split convention. Default is horizontal.
 
 ## Agent Guidance
 

@@ -254,6 +254,25 @@ export class OrcaRuntimeRpcServer {
       }
     }
 
+    if (request.method === 'terminal.resolveActive') {
+      try {
+        const params =
+          request.params && typeof request.params === 'object' && request.params !== null
+            ? (request.params as { worktree?: unknown })
+            : null
+        const worktree = typeof params?.worktree === 'string' ? params.worktree : undefined
+        const handle = await this.runtime.resolveActiveTerminal(worktree)
+        return {
+          id: request.id,
+          ok: true,
+          result: { handle },
+          _meta: { runtimeId: this.runtime.getRuntimeId() }
+        }
+      } catch (error) {
+        return this.runtimeErrorResponse(request.id, error)
+      }
+    }
+
     if (request.method === 'terminal.show') {
       try {
         const terminalHandle =
@@ -2094,6 +2113,7 @@ export class OrcaRuntimeRpcServer {
       message === 'terminal_not_writable' ||
       message === 'terminal_exited' ||
       message === 'terminal_gone' ||
+      message === 'no_active_terminal' ||
       message === 'repo_not_found' ||
       message === 'timeout' ||
       message === 'invalid_limit'
