@@ -98,6 +98,11 @@ export type LocalPtyProviderOptions = {
    *  significant shell-startup slowdown with heavy rc files. When absent,
    *  defaults to the prior behavior (on). */
   isForceHyperlinkEnabled?: () => boolean
+  /** Why: COMSPEC is always cmd.exe on a stock Windows machine, so reading it
+   *  directly would ignore the user's shell preference. This callback lets the
+   *  IPC layer inject the persisted setting without coupling the provider to the
+   *  settings store. Returns undefined when no preference is set. */
+  getWindowsShell?: () => string | undefined
   onSpawned?: (id: string) => void
   onExit?: (id: string, code: number) => void
   onData?: (id: string, data: string, timestamp: number) => void
@@ -134,7 +139,7 @@ export class LocalPtyProvider implements IPtyProvider {
       effectiveCwd = getDefaultCwd()
       validationCwd = cwd
     } else if (process.platform === 'win32') {
-      shellPath = process.env.COMSPEC || 'powershell.exe'
+      shellPath = this.opts.getWindowsShell?.() || process.env.COMSPEC || 'powershell.exe'
       // Why: use path.win32.basename so backslash-separated Windows paths
       // are parsed correctly even when tests mock process.platform on Linux CI.
       const shellBasename = pathWin32.basename(shellPath).toLowerCase()
@@ -447,7 +452,7 @@ export class LocalPtyProvider implements IPtyProvider {
 
   async getDefaultShell(): Promise<string> {
     if (process.platform === 'win32') {
-      return process.env.COMSPEC || 'powershell.exe'
+      return this.opts.getWindowsShell?.() || process.env.COMSPEC || 'powershell.exe'
     }
     return process.env.SHELL || '/bin/zsh'
   }

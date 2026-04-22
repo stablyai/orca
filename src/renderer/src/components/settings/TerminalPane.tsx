@@ -329,11 +329,40 @@ export function TerminalPane({
           </SearchableSetting>
         </div>
 
-        {/* Why: the Windows-only right-click toggle lives in this section, so the
-            section must also match that search term or settings search would hide
-            the control even though it is present. */}
-        {isWindows &&
-          matchesSettingsSearch(searchQuery, TERMINAL_RIGHT_CLICK_TO_PASTE_SEARCH_ENTRY) && (
+        {/* Why: Windows-only controls live in this section so the section header
+            stays visible whenever any Windows setting matches the search query. */}
+        {isWindows && matchesSettingsSearch(searchQuery, TERMINAL_RIGHT_CLICK_TO_PASTE_SEARCH_ENTRY) && (
+          <>
+            <SearchableSetting
+              title="Default Shell"
+              description="Choose the default shell for new terminal panes on Windows."
+              keywords={['terminal', 'windows', 'shell', 'powershell', 'cmd', 'command prompt', 'default']}
+              className="space-y-2"
+            >
+              <Label>Default Shell</Label>
+              <div className="flex w-fit gap-1 rounded-md border border-border/50 p-1">
+                {([
+                  { label: 'PowerShell', value: 'powershell.exe' },
+                  { label: 'Command Prompt', value: 'cmd.exe' }
+                ] as const).map(({ label, value }) => (
+                  <button
+                    key={value}
+                    onClick={() => updateSettings({ terminalWindowsShell: value })}
+                    className={`rounded-sm px-3 py-1 text-sm transition-colors ${
+                      (settings.terminalWindowsShell ?? 'powershell.exe') === value
+                        ? 'bg-accent font-medium text-accent-foreground'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Shell used when opening a new terminal pane. Takes effect for new terminals.
+              </p>
+            </SearchableSetting>
+
             <SearchableSetting
               title="Right-click to paste"
               description="On Windows, right-click pastes the clipboard into the terminal. Use Ctrl+right-click to open the context menu."
@@ -366,7 +395,8 @@ export function TerminalPane({
                 />
               </button>
             </SearchableSetting>
-          )}
+          </>
+        )}
 
         <SearchableSetting
           title="Focus Follows Mouse"

@@ -120,6 +120,10 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     // box. Other platforms ignore this field because the UI never exposes it,
     // and Ctrl+right-click still opens the context menu when paste is enabled.
     terminalRightClickToPaste: true,
+    // Why: COMSPEC on a stock Windows machine always resolves to cmd.exe, so
+    // falling back to COMSPEC would silently open CMD instead of PowerShell.
+    // Defaulting to powershell.exe matches what users expect from a modern IDE.
+    terminalWindowsShell: 'powershell.exe',
     // Default false: opt-in only (matches Ghostty's default). Existing users
     // on upgrade inherit this default via persistence.ts's
     // { ...defaults.settings, ...parsed.settings } merge, so enabling

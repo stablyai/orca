@@ -177,6 +177,11 @@ export const TERMINAL_SETUP_SCRIPT_SEARCH_ENTRIES: SettingsSearchEntry[] = [
 
 export const TERMINAL_WINDOWS_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
+    title: 'Default Shell',
+    description: 'Choose the default shell for new terminal panes on Windows.',
+    keywords: ['terminal', 'windows', 'shell', 'powershell', 'cmd', 'command prompt', 'default']
+  },
+  {
     title: 'Right-click to paste',
     description:
       'On Windows, right-click pastes the clipboard into the terminal. Use Ctrl+right-click to open the context menu.',

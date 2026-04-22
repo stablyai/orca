@@ -654,6 +654,11 @@ export type GlobalSettings = {
    *  The setting stays Windows-only so macOS/Linux keep their existing context
    *  menu behavior and users can still reach the menu with Ctrl+right-click. */
   terminalRightClickToPaste: boolean
+  /** Why: COMSPEC always points to cmd.exe on stock Windows, so without an
+   *  explicit setting the terminal would always open CMD instead of the
+   *  user's preferred shell. Defaults to 'powershell.exe' which is the
+   *  modern choice for an IDE context. Only consulted on Windows. */
+  terminalWindowsShell: string
   terminalFocusFollowsMouse: boolean
   /** Why: mirrors X11 / gnome-terminal "copy on select" UX — making a terminal
    *  selection copies it to the system clipboard automatically, so users can

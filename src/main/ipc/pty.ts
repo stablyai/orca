@@ -147,6 +147,7 @@ export function registerPtyHandlers(
     localProvider.configure({
       isHistoryEnabled: () => getSettings?.()?.terminalScopeHistoryByWorktree ?? true,
       isForceHyperlinkEnabled: () => getSettings?.()?.terminalForceHyperlink ?? true,
+      getWindowsShell: () => getSettings?.()?.terminalWindowsShell,
       buildSpawnEnv: (id, baseEnv) => {
         const selectedCodexHomePath = getSelectedCodexHomePath?.() ?? null
 

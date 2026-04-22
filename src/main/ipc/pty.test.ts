@@ -455,6 +455,27 @@ describe('registerPtyHandlers', () => {
         expect.any(Object)
       )
     })
+
+    it('uses terminalWindowsShell setting over COMSPEC when provided', () => {
+      // Why: COMSPEC always points to cmd.exe on stock Windows, so without the
+      // setting the terminal would ignore the user's shell preference.
+      process.env.COMSPEC = 'C:\\Windows\\system32\\cmd.exe'
+
+      registerPtyHandlers(mainWindow as never, undefined, undefined, () => ({
+        terminalWindowsShell: 'powershell.exe'
+      } as never))
+      handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+
+      expect(spawnMock).toHaveBeenCalledWith(
+        'powershell.exe',
+        [
+          '-NoExit',
+          '-Command',
+          'try { . $PROFILE } catch {}; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
+        ],
+        expect.any(Object)
+      )
+    })
   })
 
   it('rejects missing WSL worktree cwd instead of validating only the fallback Windows cwd', async () => {
