@@ -412,16 +412,20 @@ describe('OrcaRuntimeService', () => {
     const [terminal] = (await runtime.listTerminals()).terminals
     runtime.onPtyData('pty-1', 'hel', 100)
 
+    // Non-cursor reads include the partial line for UI display
     const firstRead = await runtime.readTerminal(terminal.handle)
     expect(firstRead.tail).toEqual(['hel'])
     expect(firstRead.nextCursor).toBe('0')
 
     runtime.onPtyData('pty-1', 'lo', 101)
 
+    // Cursor-based reads exclude partial lines to prevent duplication:
+    // without this, the consumer would see "hello" now as a partial, then
+    // see "hello" again as a completed line on the next read.
     const secondRead = await runtime.readTerminal(terminal.handle, {
       cursor: Number(firstRead.nextCursor)
     })
-    expect(secondRead.tail).toEqual(['hello'])
+    expect(secondRead.tail).toEqual([])
     expect(secondRead.nextCursor).toBe('0')
 
     runtime.onPtyData('pty-1', '\nworld\n', 102)

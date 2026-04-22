@@ -32,6 +32,7 @@ import type { PtyTransport } from './pty-transport'
 import { fitAndFocusPanes, fitPanes } from './pane-helpers'
 import { registerRuntimeTerminalTab, scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { e2eConfig } from '@/lib/e2e-config'
+import { SPLIT_TERMINAL_PANE_EVENT, type SplitTerminalPaneDetail } from '@/constants/terminal'
 
 type UseTerminalPaneLifecycleDeps = {
   tabId: string
@@ -668,7 +669,31 @@ export function useTerminalPaneLifecycle({
     persistLayoutSnapshot()
     scheduleRuntimeGraphSync()
 
+    // Why: CLI-driven splits go through splitPaneWithOneShotStartup so the
+    // startup command is delivered via the PTY connection path (which waits
+    // for shell readiness) instead of terminal.paste() which can lose input
+    // if the shell hasn't started reading stdin yet.
+    function onCliSplitPane(event: Event): void {
+      const detail = (event as CustomEvent<SplitTerminalPaneDetail>).detail
+      if (!detail?.tabId || detail.tabId !== tabId) {
+        return
+      }
+      const mgr = managerRef.current
+      if (!mgr) {
+        return
+      }
+      if (detail.command) {
+        splitPaneWithOneShotStartup(ptyDeps, { command: detail.command }, () =>
+          mgr.splitPane(detail.paneRuntimeId, detail.direction)
+        )
+      } else {
+        mgr.splitPane(detail.paneRuntimeId, detail.direction)
+      }
+    }
+    window.addEventListener(SPLIT_TERMINAL_PANE_EVENT, onCliSplitPane)
+
     return () => {
+      window.removeEventListener(SPLIT_TERMINAL_PANE_EVENT, onCliSplitPane)
       const tabStillExists = Boolean(
         useAppStore
           .getState()

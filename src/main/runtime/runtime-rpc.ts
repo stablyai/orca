@@ -2092,6 +2092,8 @@ export class OrcaRuntimeRpcServer {
       message === 'selector_ambiguous' ||
       message === 'terminal_handle_stale' ||
       message === 'terminal_not_writable' ||
+      message === 'terminal_exited' ||
+      message === 'terminal_gone' ||
       message === 'repo_not_found' ||
       message === 'timeout' ||
       message === 'invalid_limit'

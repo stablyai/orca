@@ -419,7 +419,11 @@ export class OrcaRuntimeService {
       // return what's still in memory and mark truncated=true to signal the gap.
       const bufferStart = leaf.tailLinesTotal - leaf.tailBuffer.length
       const sliceFrom = Math.max(0, opts.cursor - bufferStart)
-      tail = allLines.slice(sliceFrom)
+      // Why: cursor-based reads return only completed lines, excluding the
+      // trailing partial line. Including the partial would cause duplication:
+      // the consumer sees "hel" now, then "hello\n" on the next read after
+      // the line completes — same content delivered twice.
+      tail = leaf.tailBuffer.slice(sliceFrom)
       truncated = opts.cursor < bufferStart
     } else {
       tail = allLines
@@ -940,6 +944,7 @@ export class OrcaRuntimeService {
     handle: string,
     opts: { direction?: 'horizontal' | 'vertical'; command?: string } = {}
   ): Promise<RuntimeTerminalSplit> {
+    this.assertGraphReady()
     const { leaf } = this.getLiveLeafForHandle(handle)
     const direction = opts.direction ?? 'horizontal'
     this.notifier?.splitTerminal(leaf.tabId, leaf.paneRuntimeId, {
@@ -1252,6 +1257,12 @@ export class OrcaRuntimeService {
     for (const waiter of [...waiters]) {
       if (waiter.condition === 'exit') {
         this.resolveWaiter(waiter, buildTerminalWaitResult(handle, 'exit', leaf))
+      } else {
+        // Why: if the terminal exited, conditions like tui-idle can never be
+        // satisfied. Reject immediately instead of letting the poll interval
+        // spin until timeout on a dead process.
+        this.removeWaiter(waiter)
+        waiter.reject(new Error('terminal_exited'))
       }
     }
   }

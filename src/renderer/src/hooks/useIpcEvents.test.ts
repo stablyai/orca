@@ -407,9 +407,7 @@ describe('useIpcEvents updater integration', () => {
     const setTabCustomTitle = vi.fn()
     const queueTabStartupCommand = vi.fn()
     const createTerminalListenerRef: {
-      current:
-        | ((data: { worktreeId: string; command?: string; title?: string }) => void)
-        | null
+      current: ((data: { worktreeId: string; command?: string; title?: string }) => void) | null
     } = { current: null }
 
     vi.resetModules()
@@ -494,6 +492,7 @@ describe('useIpcEvents updater integration', () => {
           onToggleRightSidebar: () => () => {},
           onToggleWorktreePalette: () => () => {},
           onOpenQuickOpen: () => () => {},
+          onOpenNewWorkspace: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
           onActivateWorktree: () => () => {},
           onCreateTerminal: (
@@ -507,6 +506,10 @@ describe('useIpcEvents updater integration', () => {
           onFocusTerminal: () => () => {},
           onCloseTerminal: () => () => {},
           onNewBrowserTab: () => () => {},
+          onRequestTabCreate: () => () => {},
+          replyTabCreate: () => {},
+          onRequestTabClose: () => () => {},
+          replyTabClose: vi.fn(),
           onNewTerminalTab: () => () => {},
           onCloseActiveTab: () => () => {},
           onSwitchTab: () => () => {},
@@ -523,7 +526,9 @@ describe('useIpcEvents updater integration', () => {
         },
         browser: {
           onGuestLoadFailed: () => () => {},
-          onOpenLinkInOrcaTab: () => () => {}
+          onOpenLinkInOrcaTab: () => () => {},
+          onNavigationUpdate: () => () => {},
+          onActivateView: () => () => {}
         },
         rateLimits: {
           get: () => Promise.resolve({ limits: {}, lastUpdatedAt: Date.now() }),
@@ -672,6 +677,11 @@ describe('useIpcEvents browser tab close routing', () => {
           onJumpToWorktreeIndex: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
           onActivateWorktree: () => () => {},
+          onCreateTerminal: () => () => {},
+          onSplitTerminal: () => () => {},
+          onRenameTerminal: () => () => {},
+          onFocusTerminal: () => () => {},
+          onCloseTerminal: () => () => {},
           onNewBrowserTab: () => () => {},
           onRequestTabCreate: () => () => {},
           replyTabCreate: () => {},
@@ -838,6 +848,11 @@ describe('useIpcEvents browser tab close routing', () => {
           onJumpToWorktreeIndex: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
           onActivateWorktree: () => () => {},
+          onCreateTerminal: () => () => {},
+          onSplitTerminal: () => () => {},
+          onRenameTerminal: () => () => {},
+          onFocusTerminal: () => () => {},
+          onCloseTerminal: () => () => {},
           onNewBrowserTab: () => () => {},
           onRequestTabCreate: () => () => {},
           replyTabCreate: () => {},
@@ -999,6 +1014,11 @@ describe('useIpcEvents browser tab close routing', () => {
           onJumpToWorktreeIndex: () => () => {},
           onWorktreeHistoryNavigate: () => () => {},
           onActivateWorktree: () => () => {},
+          onCreateTerminal: () => () => {},
+          onSplitTerminal: () => () => {},
+          onRenameTerminal: () => () => {},
+          onFocusTerminal: () => () => {},
+          onCloseTerminal: () => () => {},
           onNewBrowserTab: () => () => {},
           onRequestTabCreate: () => () => {},
           replyTabCreate: () => {},
@@ -1178,6 +1198,11 @@ describe('useIpcEvents shortcut hint clearing', () => {
           },
           onWorktreeHistoryNavigate: () => () => {},
           onActivateWorktree: () => () => {},
+          onCreateTerminal: () => () => {},
+          onSplitTerminal: () => () => {},
+          onRenameTerminal: () => () => {},
+          onFocusTerminal: () => () => {},
+          onCloseTerminal: () => () => {},
           onNewBrowserTab: () => () => {},
           onRequestTabCreate: () => () => {},
           replyTabCreate: () => {},
