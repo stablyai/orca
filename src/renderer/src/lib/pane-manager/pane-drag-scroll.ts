@@ -119,14 +119,54 @@ export function lockAllPaneScrollStates(panes: Map<number, ManagedPaneInternal>)
 export function unlockAllPaneScrollStates(panes: Map<number, ManagedPaneInternal>): void {
   for (const pane of panes.values()) {
     if (pane.pendingLayoutScrollState) {
+      const originalState = pane.pendingLayoutScrollState
+
       try {
-        restoreScrollState(pane.terminal, pane.pendingLayoutScrollState)
+        restoreScrollState(pane.terminal, originalState)
+      } catch {
+        /* ignore */
+      }
+
+      // Why: PTY resize is NOT suppressed during layout changes (unlike
+      // drag), so SIGWINCH fires immediately when fit() runs. Interactive
+      // TUIs (Claude Code / Ink) redraw on SIGWINCH, corrupting viewportY.
+      // The settling loop restores scroll every frame for 500ms, absorbing
+      // these redraws. The lock stays active so fitAllPanesInternal
+      // continues using the original captured state during settling.
+      startLayoutSettlingLoop(pane, originalState)
+    }
+  }
+}
+
+function startLayoutSettlingLoop(pane: ManagedPaneInternal, originalState: ScrollState): void {
+  let rafId: number | null = null
+
+  const restoreFrame = (): void => {
+    if (pane.pendingLayoutScrollState !== originalState) {
+      return
+    }
+    try {
+      restoreScrollState(pane.terminal, originalState)
+    } catch {
+      /* ignore */
+    }
+    rafId = requestAnimationFrame(restoreFrame)
+  }
+  rafId = requestAnimationFrame(restoreFrame)
+
+  setTimeout(() => {
+    if (rafId !== null) {
+      cancelAnimationFrame(rafId)
+    }
+    if (pane.pendingLayoutScrollState === originalState) {
+      try {
+        restoreScrollState(pane.terminal, originalState)
       } catch {
         /* ignore */
       }
       pane.pendingLayoutScrollState = null
     }
-  }
+  }, SIGWINCH_SETTLE_MS)
 }
 
 function findManagedPanesUnder(

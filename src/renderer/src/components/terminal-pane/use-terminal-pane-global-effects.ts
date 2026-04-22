@@ -342,15 +342,19 @@ export function useTerminalPaneGlobalEffects({
         return
       }
       manager.lockAllScrollStates()
-      // Why: 300ms > ResizeObserver debounce (150ms) + one fit cycle, ensuring
-      // fitAllPanesInternal has restored from the lock before we clear it.
+      // Why: the sidebar CSS transition (200ms) + ResizeObserver debounce (150ms)
+      // means the final fitAllPanesInternal runs at ~350ms. The unlock must fire
+      // AFTER that fit so the locked state is used for the definitive restore.
+      // 500ms provides margin for CSS transition variance and frame scheduling.
+      // unlockAllScrollStates starts a 500ms settling rAF loop, so the lock
+      // actually persists until ~1000ms total, absorbing any SIGWINCH redraws.
       if (unlockTimer !== null) {
         clearTimeout(unlockTimer)
       }
       unlockTimer = setTimeout(() => {
         unlockTimer = null
         managerRef.current?.unlockAllScrollStates()
-      }, 300)
+      }, 500)
     }
     window.addEventListener(LAYOUT_WILL_CHANGE_EVENT, onLayoutWillChange)
     return () => {
