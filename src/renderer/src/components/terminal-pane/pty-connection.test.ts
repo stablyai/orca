@@ -103,6 +103,10 @@ function createPane(paneId: number) {
     },
     fitAddon: {
       fit: vi.fn()
+    },
+    container: {
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
     }
   }
 }
