@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useMemo } from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import { Columns2, Ellipsis, Rows2, X } from 'lucide-react'
 import { useAppStore } from '../../store'
@@ -69,6 +69,14 @@ export default function TabGroupPanel({
   // moving a tab between groups only swaps which anchor-name the overlay
   // targets, never reparenting the `<webview>` (which would reload it).
   const bodyAnchorName = browserSlotAnchorName(groupId)
+  // Why: memoize the style object so the literal isn't recreated on every
+  // render. A fresh object every render would make the body `<div>` appear
+  // to have a new `style` prop on every parent re-render, which defeats any
+  // downstream memoization keyed on referential equality.
+  const bodyAnchorStyle = useMemo(
+    () => ({ anchorName: bodyAnchorName }) as React.CSSProperties,
+    [bodyAnchorName]
+  )
 
   const tabBar = (
     <TabBar
@@ -277,7 +285,7 @@ export default function TabGroupPanel({
       <div
         ref={setBodyDropRef}
         className="relative flex-1 min-h-0 overflow-hidden"
-        style={{ anchorName: bodyAnchorName } as React.CSSProperties}
+        style={bodyAnchorStyle}
       >
         {activeDropZone ? <TabGroupDropOverlay zone={activeDropZone} /> : null}
         {model.groupTabs

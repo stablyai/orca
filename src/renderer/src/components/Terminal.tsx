@@ -1241,7 +1241,14 @@ function Terminal(): React.JSX.Element | null {
 // so the `<webview>` is never reparented (and never reloads). Mirrors
 // VS Code's OverlayWebview claim/release pattern, with the browser doing all
 // layout tracking for free.
-function WorktreeSplitSurface({
+//
+// Why `React.memo`: Terminal.tsx has many store subscriptions and re-renders
+// on unrelated updates (terminal keystrokes, editor edits, focus changes).
+// Without memoization, every Terminal re-render would cascade into
+// BrowserPaneOverlayLayer and its BrowserPane subtrees. Memoizing here means
+// the surface only re-renders when its own props (worktreeId / layout /
+// focusedGroupId / isVisible) actually change.
+const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   worktreeId,
   layout,
   focusedGroupId,
@@ -1267,6 +1274,6 @@ function WorktreeSplitSurface({
       <BrowserPaneOverlayLayer worktreeId={worktreeId} isWorktreeActive={isVisible} />
     </div>
   )
-}
+})
 
 export default React.memo(Terminal)

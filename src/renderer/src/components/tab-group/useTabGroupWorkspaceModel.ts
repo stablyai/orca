@@ -145,14 +145,6 @@ export function useTabGroupWorkspaceModel({
     [groupTabs, worktreeState.browserTabs]
   )
 
-  const activeBrowserTab = useMemo(
-    () =>
-      activeTab?.contentType === 'browser'
-        ? (worktreeState.browserTabs.find((bt) => bt.id === activeTab.entityId) ?? null)
-        : null,
-    [activeTab, worktreeState.browserTabs]
-  )
-
   const runtimeTerminalTabById = useMemo(
     () => new Map(worktreeState.runtimeTerminalTabs.map((tab) => [tab.id, tab])),
     [worktreeState.runtimeTerminalTabs]
@@ -381,7 +373,6 @@ export function useTabGroupWorkspaceModel({
   return {
     group,
     activeTab,
-    activeBrowserTab,
     browserItems,
     editorItems,
     terminalTabs,
