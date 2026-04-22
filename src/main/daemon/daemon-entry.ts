@@ -39,8 +39,24 @@ async function main(): Promise<void> {
   // default behavior is to print the stack and exit — killing the entire
   // daemon and all terminal sessions. Logging and continuing is safe because
   // the individual PTY is already dead; the daemon itself is still healthy.
+  // Non-PTY errors (logic bugs, corrupt state) are re-thrown so they still
+  // crash the daemon — masking those would hide real issues.
   process.on('uncaughtException', (err) => {
-    console.error('[daemon] Uncaught exception (suppressed):', err)
+    const msg = err?.message ?? ''
+    const isNativeError =
+      err?.name === 'Error' &&
+      (msg.includes('pty') ||
+        msg.includes('Pty') ||
+        msg.includes('EIO') ||
+        msg.includes('EPIPE') ||
+        msg.includes('EBADF') ||
+        msg.includes('ENXIO'))
+    if (isNativeError) {
+      console.error('[daemon] Native PTY exception (suppressed):', err)
+      return
+    }
+    console.error('[daemon] Uncaught exception (fatal):', err)
+    throw err
   })
 
   let daemon: DaemonHandle | null = null
