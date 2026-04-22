@@ -41,6 +41,10 @@ type RichMarkdownEditorProps = {
   onContentChange: (content: string) => void
   onDirtyStateHint: (dirty: boolean) => void
   onSave: (content: string) => void
+  // Why: front-matter is stripped from the rich editor's content but we still
+  // want it visible to the user. It renders between the toolbar and the editor
+  // surface so the formatting toolbar stays at the top of the pane.
+  headerSlot?: React.ReactNode
 }
 
 const richMarkdownExtensions = createRichMarkdownExtensions({
@@ -55,7 +59,8 @@ export default function RichMarkdownEditor({
   scrollCacheKey,
   onContentChange,
   onDirtyStateHint,
-  onSave
+  onSave,
+  headerSlot
 }: RichMarkdownEditorProps): React.JSX.Element {
   const rootRef = useRef<HTMLDivElement | null>(null)
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
@@ -495,6 +500,7 @@ export default function RichMarkdownEditor({
         onToggleLink={toggleLinkFromToolbar}
         onImagePick={handleLocalImagePick}
       />
+      {headerSlot}
       <RichMarkdownSearchBar
         activeMatchIndex={activeMatchIndex}
         isOpen={isSearchOpen}

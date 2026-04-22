@@ -169,7 +169,6 @@ export function EditorContent({
 
       return (
         <div className="flex h-full min-h-0 flex-col">
-          {fm && <FrontMatterBanner raw={fm.raw} />}
           <div className="min-h-0 flex-1">
             {/* Why: same remount reasoning as MonacoEditor — see renderMonacoEditor.
                 The boundary contains a TipTap/ProseMirror render crash (e.g.
@@ -186,6 +185,11 @@ export function EditorContent({
                 onContentChange={onContentChangeWithFm}
                 onDirtyStateHint={handleDirtyStateHint}
                 onSave={onSaveWithFm}
+                // Why: render the front-matter banner below the editor toolbar
+                // (inside the editor shell) so formatting controls remain at
+                // the top of the pane — the banner is read-only context, not
+                // a header above the toolbar.
+                headerSlot={fm ? <FrontMatterBanner raw={fm.raw} /> : null}
               />
             </RichMarkdownErrorBoundary>
           </div>
