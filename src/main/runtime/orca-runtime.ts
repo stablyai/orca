@@ -1,6 +1,8 @@
 /* eslint-disable max-lines -- Why: the Orca runtime is the authoritative live control plane for the CLI, so handle validation, selector resolution, wait state, and summaries are kept together to avoid split-brain behavior. */
 /* eslint-disable unicorn/no-useless-spread -- Why: waiter sets and handle keys are cloned intentionally before mutation so resolution and rejection can safely remove entries while iterating. */
 /* eslint-disable no-control-regex -- Why: terminal normalization must strip ANSI and OSC control sequences from PTY output before returning bounded text to agents. */
+import { extractLastOscTitle, detectAgentStatusFromTitle } from '../../shared/agent-detection'
+import type { AgentStatus } from '../../shared/agent-detection'
 import { gitExecFileAsync, gitExecFileSync } from '../git/runner'
 import { isWslPath, parseWslPath, getWslHome } from '../wsl'
 import { randomUUID } from 'crypto'
@@ -127,6 +129,7 @@ type RuntimeLeafRecord = RuntimeSyncedLeaf & {
   tailTruncated: boolean
   tailLinesTotal: number
   preview: string
+  lastAgentStatus: AgentStatus | null
 }
 
 type RuntimePtyController = {
@@ -166,7 +169,6 @@ type TerminalWaiter = {
   resolve: (result: RuntimeTerminalWait) => void
   reject: (error: Error) => void
   timeout: NodeJS.Timeout | null
-  pollInterval: ReturnType<typeof setInterval> | null
 }
 
 type ResolvedWorktree = {
@@ -300,7 +302,8 @@ export class OrcaRuntimeService {
         tailPartialLine: existing?.ptyId === leaf.ptyId ? existing.tailPartialLine : '',
         tailTruncated: existing?.ptyId === leaf.ptyId ? existing.tailTruncated : false,
         tailLinesTotal: existing?.ptyId === leaf.ptyId ? existing.tailLinesTotal : 0,
-        preview: existing?.ptyId === leaf.ptyId ? existing.preview : ''
+        preview: existing?.ptyId === leaf.ptyId ? existing.preview : '',
+        lastAgentStatus: existing?.ptyId === leaf.ptyId ? existing.lastAgentStatus : null
       })
 
       if (existing && (existing.ptyId !== leaf.ptyId || existing.ptyGeneration !== ptyGeneration)) {
@@ -334,6 +337,13 @@ export class OrcaRuntimeService {
     // tail buffer logic normalizes away the OSC sequences we need.
     this.agentDetector?.onData(ptyId, data, at)
 
+    // Why: extract OSC title from raw PTY data before tail-buffer processing
+    // strips the escape sequences. Agent CLIs (Claude Code, Gemini, etc.)
+    // announce status via OSC 0/1/2 title sequences — this is the same
+    // detection path the renderer uses for notifications and sidebar badges.
+    const oscTitle = extractLastOscTitle(data)
+    const agentStatus = oscTitle ? detectAgentStatusFromTitle(oscTitle) : null
+
     for (const leaf of this.leaves.values()) {
       if (leaf.ptyId !== ptyId) {
         continue
@@ -347,6 +357,18 @@ export class OrcaRuntimeService {
       leaf.tailTruncated = leaf.tailTruncated || nextTail.truncated
       leaf.tailLinesTotal += nextTail.newCompleteLines
       leaf.preview = buildPreview(leaf.tailBuffer, leaf.tailPartialLine)
+
+      if (agentStatus !== null) {
+        const prevStatus = leaf.lastAgentStatus
+        leaf.lastAgentStatus = agentStatus
+        // Why: resolve tui-idle waiters only on working→idle, not working→permission.
+        // Permission means the agent is blocked on user approval (e.g. Gemini's
+        // "y/n" prompt) — it hasn't finished its task. Resolving tui-idle here
+        // would cause the CLI consumer to proceed while the agent is still waiting.
+        if (prevStatus === 'working' && agentStatus === 'idle') {
+          this.resolveTuiIdleWaiters(leaf)
+        }
+      }
     }
   }
 
@@ -487,25 +509,43 @@ export class OrcaRuntimeService {
       return buildTerminalWaitResult(handle, condition, leaf)
     }
 
-    if (condition === 'tui-idle' && isTUIIdle(leaf.preview)) {
+    // Why: if the agent already transitioned to idle (or permission) before the
+    // waiter was registered, resolve immediately. This uses the same OSC title
+    // detection that powers the renderer's "Task complete" notifications.
+    // Why: only 'idle' satisfies tui-idle, not 'permission'. Permission means the
+    // agent is blocked on user approval, not finished with its task.
+    if (condition === 'tui-idle' && leaf.lastAgentStatus === 'idle') {
+      // Why: reset so the next `wait --for tui-idle` blocks until a fresh
+      // working→idle transition instead of resolving instantly from a stale
+      // status left over from a previous agent session.
+      leaf.lastAgentStatus = null
       return buildTerminalWaitResult(handle, condition, leaf)
     }
 
     return await new Promise<RuntimeTerminalWait>((resolve, reject) => {
+      // Why: tui-idle depends on OSC title transitions from a recognized agent.
+      // If no agent is detected, the waiter would hang forever. Enforce a default
+      // timeout so unsupported CLIs fail predictably instead of silently blocking.
+      const effectiveTimeoutMs =
+        typeof options?.timeoutMs === 'number' && options.timeoutMs > 0
+          ? options.timeoutMs
+          : condition === 'tui-idle'
+            ? TUI_IDLE_DEFAULT_TIMEOUT_MS
+            : 0
+
       const waiter: TerminalWaiter = {
         handle,
         condition,
         resolve,
         reject,
-        timeout: null,
-        pollInterval: null
+        timeout: null
       }
 
-      if (typeof options?.timeoutMs === 'number' && options.timeoutMs > 0) {
+      if (effectiveTimeoutMs > 0) {
         waiter.timeout = setTimeout(() => {
           this.removeWaiter(waiter)
           reject(new Error('timeout'))
-        }, options.timeoutMs)
+        }, effectiveTimeoutMs)
       }
 
       let waiters = this.waitersByHandle.get(handle)
@@ -515,33 +555,15 @@ export class OrcaRuntimeService {
       }
       waiters.add(waiter)
 
-      if (condition === 'tui-idle') {
-        // Why: `tui-idle` is meant to detect known prompt/ready states, not
-        // "no new bytes arrived for a while". Long-running TUIs can sit on a
-        // stable screen for many seconds while still being busy or waiting on
-        // human input inside a modal state, so silent stabilization is not a
-        // safe substitute for an explicit idle prompt match.
-        waiter.pollInterval = setInterval(() => {
-          try {
-            const live = this.getLiveLeafForHandle(handle)
-            const preview = live.leaf.preview
-            if (isTUIIdle(preview)) {
-              this.resolveWaiter(waiter, buildTerminalWaitResult(handle, condition, live.leaf))
-            }
-          } catch {
-            this.removeWaiter(waiter)
-            reject(new Error('terminal_gone'))
-          }
-        }, TUI_IDLE_POLL_MS)
-        return
-      }
-
       // Why: the handle may go stale or exit in the small gap between the first
       // validation and waiter registration. Re-checking here keeps wait --for
       // exit honest instead of hanging on a terminal that already changed.
       try {
         const live = this.getLiveLeafForHandle(handle)
         if (getTerminalState(live.leaf) === 'exited') {
+          this.resolveWaiter(waiter, buildTerminalWaitResult(handle, condition, live.leaf))
+        } else if (condition === 'tui-idle' && live.leaf.lastAgentStatus === 'idle') {
+          live.leaf.lastAgentStatus = null
           this.resolveWaiter(waiter, buildTerminalWaitResult(handle, condition, live.leaf))
         }
       } catch (error) {
@@ -1267,6 +1289,22 @@ export class OrcaRuntimeService {
     }
   }
 
+  private resolveTuiIdleWaiters(leaf: RuntimeLeafRecord): void {
+    const handle = this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId))
+    if (!handle) {
+      return
+    }
+    const waiters = this.waitersByHandle.get(handle)
+    if (!waiters || waiters.size === 0) {
+      return
+    }
+    for (const waiter of [...waiters]) {
+      if (waiter.condition === 'tui-idle') {
+        this.resolveWaiter(waiter, buildTerminalWaitResult(handle, 'tui-idle', leaf))
+      }
+    }
+  }
+
   private resolveWaiter(waiter: TerminalWaiter, result: RuntimeTerminalWait): void {
     this.removeWaiter(waiter)
     waiter.resolve(result)
@@ -1292,9 +1330,6 @@ export class OrcaRuntimeService {
   private removeWaiter(waiter: TerminalWaiter): void {
     if (waiter.timeout) {
       clearTimeout(waiter.timeout)
-    }
-    if (waiter.pollInterval) {
-      clearInterval(waiter.pollInterval)
     }
     const waiters = this.waitersByHandle.get(waiter.handle)
     if (!waiters) {
@@ -2467,18 +2502,11 @@ function buildSendPayload(action: {
   return payload.length > 0 ? payload : null
 }
 
-const TUI_IDLE_POLL_MS = 3000
-const TUI_IDLE_PATTERNS = [
-  /Ask anything/i,
-  /What is the tech stack/i,
-  /How can I help/i,
-  /Enter a prompt/i,
-  /Type .* to get started/i
-]
-
-function isTUIIdle(preview: string): boolean {
-  return TUI_IDLE_PATTERNS.some((re) => re.test(preview))
-}
+// Why: tui-idle relies on recognized agent CLIs setting OSC titles. If the
+// terminal runs an unsupported CLI (or a plain shell), no title transition
+// will ever fire. A 5-minute ceiling prevents indefinite hangs while still
+// giving real agent tasks plenty of time to complete.
+const TUI_IDLE_DEFAULT_TIMEOUT_MS = 5 * 60 * 1000
 
 function buildTerminalWaitResult(
   handle: string,

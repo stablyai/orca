@@ -141,7 +141,15 @@ orca terminal show --terminal <handle> --json
 orca terminal read --terminal <handle> --json
 orca terminal send --terminal <handle> --text "continue" --enter --json
 orca terminal wait --terminal <handle> --for exit --timeout-ms 5000 --json
+orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 30000 --json
 orca terminal stop --worktree id:<worktreeId> --json
+orca terminal create --worktree active --title "My Terminal" --json
+orca terminal create --worktree active --command "npm test" --json
+orca terminal split --terminal <handle> --direction vertical --json
+orca terminal split --terminal <handle> --direction horizontal --command "npm run dev" --json
+orca terminal rename --terminal <handle> --title "New Name" --json
+orca terminal focus --terminal <handle> --json
+orca terminal close --terminal <handle> --json
 ```
 
 Why: terminal handles are runtime-scoped and may go stale after reloads. If Orca returns `terminal_handle_stale`, reacquire a fresh handle with `terminal list`.
@@ -163,6 +171,9 @@ Why: terminal handles are runtime-scoped and may go stale after reloads. If Orca
 - Use `terminal list` to reacquire handles after Orca reloads.
 - Use `terminal read` before `terminal send` unless the next input is obvious.
 - Use `terminal wait --for exit` only when the task actually depends on process completion.
+- Use `terminal wait --for tui-idle` to wait for an agent CLI (Claude Code, Gemini, Codex, etc.) to finish its current task. This detects the working→idle OSC title transition. Always pass `--timeout-ms` as a safety net — unsupported CLIs will hang until timeout.
+- Use `terminal create` to spin up new terminal tabs programmatically, optionally with a `--command` for startup and `--title` for labeling.
+- Use `terminal split` to create split panes within an existing terminal tab. Pass `--command` to run a command in the new pane.
 - Prefer Orca worktree selectors over hardcoded paths when Orca identity already exists.
 - If the user asks for CLI UX feedback, test the public `orca` command first. Only inspect `src/cli` or use `node out/cli/index.js` if the public command is missing or the task is explicitly about implementation internals.
 - If a command fails, prefer retrying with the public `orca` command before concluding the CLI is broken, unless the failure already came from `orca` itself.
@@ -539,7 +550,7 @@ When `orca tab create` opens a new tab, it is automatically set as the active ta
 
 - Orca CLI only talks to a running Orca editor.
 - Terminal handles are ephemeral and tied to the current Orca runtime.
-- `terminal wait` in focused v1 supports only `--for exit`.
+- `terminal wait` supports `--for exit` (wait for process exit) and `--for tui-idle` (wait for a recognized agent CLI like Claude Code, Gemini, or Codex to finish its current task, detected via OSC title transitions). `tui-idle` defaults to a 5-minute timeout if `--timeout-ms` is not specified.
 - Orca is the source of truth for worktree/terminal orchestration; do not duplicate that state with manual assumptions.
 - The public `orca` command is the interface users experience. Agents should validate and use that surface, not repo-local implementation entrypoints.
 

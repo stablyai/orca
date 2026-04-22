@@ -469,7 +469,7 @@ describe('OrcaRuntimeService', () => {
     await expect(waitPromise).rejects.toThrow('terminal_handle_stale')
   })
 
-  it('does not treat a stable but non-idle preview as tui-idle', async () => {
+  it('tui-idle times out when PTY data has no agent OSC title transitions', async () => {
     vi.useFakeTimers()
     try {
       const runtime = new OrcaRuntimeService(store)
@@ -510,6 +510,48 @@ describe('OrcaRuntimeService', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('tui-idle resolves on agent working→idle OSC title transition', async () => {
+    const runtime = new OrcaRuntimeService(store)
+
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          title: 'Claude',
+          activeLeafId: 'pane:1',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          leafId: 'pane:1',
+          paneRuntimeId: 1,
+          ptyId: 'pty-1'
+        }
+      ]
+    })
+
+    // Simulate agent starting work (braille spinner = working)
+    runtime.onPtyData('pty-1', '\x1b]0;\u280b Working on task\x07output\n', 100)
+
+    const [terminal] = (await runtime.listTerminals()).terminals
+    const waitPromise = runtime.waitForTerminal(terminal.handle, {
+      condition: 'tui-idle',
+      timeoutMs: 5_000
+    })
+
+    // Simulate agent finishing (✳ = Claude Code idle)
+    runtime.onPtyData('pty-1', '\x1b]0;\u2733 Task complete\x07done\n', 200)
+
+    const result = await waitPromise
+    expect(result.condition).toBe('tui-idle')
+    expect(result.satisfied).toBe(true)
   })
 
   it('builds a compact worktree summary from persisted and live runtime state', async () => {

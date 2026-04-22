@@ -495,6 +495,7 @@ describe('useIpcEvents updater integration', () => {
           onOpenNewWorkspace: () => () => {},
           onJumpToWorktreeIndex: () => () => {},
           onActivateWorktree: () => () => {},
+          onWorktreeHistoryNavigate: () => () => {},
           onCreateTerminal: (
             listener: (data: { worktreeId: string; command?: string; title?: string }) => void
           ) => {
