@@ -95,6 +95,7 @@ import { createRateLimitSlice } from './rate-limits'
 import { createSshSlice } from './ssh'
 import { createDiffCommentsSlice } from './diffComments'
 import { createDetectedAgentsSlice } from './detected-agents'
+import { createWorktreeNavHistorySlice } from './worktree-nav-history'
 
 const WT = 'repo1::/tmp/feature'
 
@@ -115,7 +116,8 @@ function createTestStore() {
     ...createRateLimitSlice(...a),
     ...createSshSlice(...a),
     ...createDiffCommentsSlice(...a),
-    ...createDetectedAgentsSlice(...a)
+    ...createDetectedAgentsSlice(...a),
+    ...createWorktreeNavHistorySlice(...a)
   }))
 }
 

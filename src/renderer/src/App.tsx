@@ -2,7 +2,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { DEFAULT_STATUS_BAR_ITEMS, DEFAULT_WORKTREE_CARD_PROPERTIES } from '../../shared/constants'
 
-import { Minimize2, PanelLeft, PanelRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Minimize2, PanelLeft, PanelRight } from 'lucide-react'
 import { FOCUS_TERMINAL_PANE_EVENT, TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
 import { syncZoomCSSVar } from '@/lib/ui-zoom'
 import { toast } from 'sonner'
@@ -126,6 +126,10 @@ function App(): React.JSX.Element {
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const isFullScreen = useAppStore((s) => s.isFullScreen)
   const settings = useAppStore((s) => s.settings)
+  const canGoBackWorktree = useAppStore((s) => s.worktreeNavHistoryIndex > 0)
+  const canGoForwardWorktree = useAppStore(
+    (s) => s.worktreeNavHistoryIndex < s.worktreeNavHistory.length - 1
+  )
   const titlebarLeftControlsRef = useRef<HTMLDivElement | null>(null)
   const [collapsedSidebarHeaderWidth, setCollapsedSidebarHeaderWidth] = useState(0)
 
@@ -491,6 +495,33 @@ function App(): React.JSX.Element {
       if (isEditableTarget(e.target)) {
         return
       }
+
+      // Cmd/Ctrl+Alt+Arrow — worktree history back/forward. Handled before the
+      // `mod && !alt` branch below since this is the one renderer-side shortcut
+      // that intentionally requires Alt.
+      if (
+        e.altKey &&
+        !e.shiftKey &&
+        (isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey) &&
+        (e.code === 'ArrowLeft' || e.code === 'ArrowRight')
+      ) {
+        // Why: hidden buttons in non-terminal views mean the shortcut must be
+        // a no-op there too — navigating worktree history from Settings or
+        // Tasks is not a meaningful action.
+        if (activeView !== 'terminal') {
+          return
+        }
+        dispatchClearModifierHints()
+        e.preventDefault()
+        const store = useAppStore.getState()
+        if (e.code === 'ArrowLeft') {
+          store.goBackWorktree()
+        } else {
+          store.goForwardWorktree()
+        }
+        return
+      }
+
       if (!mod) {
         return
       }
@@ -718,6 +749,44 @@ function App(): React.JSX.Element {
           </PopoverContent>
         </Popover>
       ) : null}
+      {/* Why: Back/Forward navigate worktree-activation history. Only
+          meaningful while viewing a worktree (terminal view); hidden in
+          Settings/Tasks/Landing to keep the titlebar compact and the
+          semantics unambiguous. */}
+      {activeView === 'terminal' && (
+        <>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                className="sidebar-toggle"
+                onClick={() => useAppStore.getState().goBackWorktree()}
+                disabled={!canGoBackWorktree}
+                aria-label="Go back"
+              >
+                <ChevronLeft size={16} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={6}>
+              {`Go back (${isMac ? '⌘⌥←' : 'Ctrl+Alt+←'})`}
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                className="sidebar-toggle"
+                onClick={() => useAppStore.getState().goForwardWorktree()}
+                disabled={!canGoForwardWorktree}
+                aria-label="Go forward"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={6}>
+              {`Go forward (${isMac ? '⌘⌥→' : 'Ctrl+Alt+→'})`}
+            </TooltipContent>
+          </Tooltip>
+        </>
+      )}
     </div>
   )
 

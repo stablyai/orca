@@ -209,6 +209,20 @@ export function setupGuestShortcutForwarding(args: {
     if (input.type !== 'keyDown') {
       return
     }
+    // Why: the history-navigate chord (Cmd/Ctrl+Alt+Arrow) is evaluated
+    // BEFORE the generic modifier-chord gate because that gate rejects Alt.
+    // Without an early return here, the chord would fall through into the
+    // gate-rejection path and the keystroke would be silently dropped.
+    const earlyAction = resolveWindowShortcutAction(input, process.platform)
+    if (earlyAction?.type === 'worktreeHistoryNavigate') {
+      const renderer = resolveRenderer(browserTabId)
+      if (renderer) {
+        renderer.send('ui:worktreeHistoryNavigate', earlyAction.direction)
+        event.preventDefault()
+      }
+      return
+    }
+
     // Why: browser guests need a broader modifier-chord gate than the main
     // window because they also forward guest-specific tab shortcuts
     // (Cmd/Ctrl+T/W/Shift+B/Shift+[ / ]) in addition to the shared allowlist

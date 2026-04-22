@@ -109,6 +109,25 @@ export function useIpcEvents(): void {
     )
 
     unsubs.push(
+      window.api.ui.onWorktreeHistoryNavigate((direction) => {
+        dispatchClearModifierHints()
+        const store = useAppStore.getState()
+        // Why: mirror the button-visibility rule — worktree history navigation
+        // is only meaningful in the terminal (worktree) view. Settings/Tasks
+        // transitions aren't worktree activations and the buttons are hidden,
+        // so the shortcut no-ops there too.
+        if (store.activeView !== 'terminal') {
+          return
+        }
+        if (direction === 'back') {
+          store.goBackWorktree()
+        } else {
+          store.goForwardWorktree()
+        }
+      })
+    )
+
+    unsubs.push(
       window.api.ui.onToggleStatusBar(() => {
         const store = useAppStore.getState()
         store.setStatusBarVisible(!store.statusBarVisible)

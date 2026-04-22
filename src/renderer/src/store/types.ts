@@ -14,6 +14,7 @@ import type { RateLimitSlice } from './slices/rate-limits'
 import type { SshSlice } from './slices/ssh'
 import type { DiffCommentsSlice } from './slices/diffComments'
 import type { DetectedAgentsSlice } from './slices/detected-agents'
+import type { WorktreeNavHistorySlice } from './slices/worktree-nav-history'
 
 export type AppState = RepoSlice &
   WorktreeSlice &
@@ -30,4 +31,5 @@ export type AppState = RepoSlice &
   RateLimitSlice &
   SshSlice &
   DiffCommentsSlice &
-  DetectedAgentsSlice
+  DetectedAgentsSlice &
+  WorktreeNavHistorySlice

@@ -103,6 +103,82 @@ describe('resolveWindowShortcutAction', () => {
     ).toEqual({ type: 'zoom', direction: 'reset' })
   })
 
+  it('resolves the worktree-history chord despite carrying Alt', () => {
+    expect(
+      resolveWindowShortcutAction(
+        {
+          code: 'ArrowLeft',
+          key: 'ArrowLeft',
+          meta: true,
+          control: false,
+          alt: true,
+          shift: false
+        },
+        'darwin'
+      )
+    ).toEqual({ type: 'worktreeHistoryNavigate', direction: 'back' })
+
+    expect(
+      resolveWindowShortcutAction(
+        {
+          code: 'ArrowRight',
+          key: 'ArrowRight',
+          meta: true,
+          control: false,
+          alt: true,
+          shift: false
+        },
+        'darwin'
+      )
+    ).toEqual({ type: 'worktreeHistoryNavigate', direction: 'forward' })
+
+    expect(
+      resolveWindowShortcutAction(
+        {
+          code: 'ArrowLeft',
+          key: 'ArrowLeft',
+          meta: false,
+          control: true,
+          alt: true,
+          shift: false
+        },
+        'linux'
+      )
+    ).toEqual({ type: 'worktreeHistoryNavigate', direction: 'back' })
+  })
+
+  it('rejects the history chord when Shift is also held', () => {
+    expect(
+      resolveWindowShortcutAction(
+        {
+          code: 'ArrowLeft',
+          key: 'ArrowLeft',
+          meta: true,
+          control: false,
+          alt: true,
+          shift: true
+        },
+        'darwin'
+      )
+    ).toBeNull()
+  })
+
+  it('leaves Alt+Arrow without a primary modifier untouched (word-nav territory)', () => {
+    expect(
+      resolveWindowShortcutAction(
+        {
+          code: 'ArrowLeft',
+          key: 'ArrowLeft',
+          meta: false,
+          control: false,
+          alt: true,
+          shift: false
+        },
+        'darwin'
+      )
+    ).toBeNull()
+  })
+
   it('exposes the shared platform modifier gate used by browser guests', () => {
     expect(
       isWindowShortcutModifierChord({ meta: true, control: false, alt: false }, 'darwin')

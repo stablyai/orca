@@ -24,6 +24,7 @@ import { createRateLimitSlice } from './rate-limits'
 import { createSshSlice } from './ssh'
 import { createDiffCommentsSlice } from './diffComments'
 import { createDetectedAgentsSlice } from './detected-agents'
+import { createWorktreeNavHistorySlice } from './worktree-nav-history'
 
 export const TEST_REPO = {
   id: 'repo1',
@@ -50,7 +51,8 @@ export function createTestStore() {
     ...createRateLimitSlice(...a),
     ...createSshSlice(...a),
     ...createDiffCommentsSlice(...a),
-    ...createDetectedAgentsSlice(...a)
+    ...createDetectedAgentsSlice(...a),
+    ...createWorktreeNavHistorySlice(...a)
   }))
 }
 

@@ -15,6 +15,7 @@ export type WindowShortcutAction =
   | { type: 'openQuickOpen' }
   | { type: 'openNewWorkspace' }
   | { type: 'jumpToWorktreeIndex'; index: number }
+  | { type: 'worktreeHistoryNavigate'; direction: 'back' | 'forward' }
 
 export function isWindowShortcutModifierChord(
   input: Pick<WindowShortcutInput, 'meta' | 'control' | 'alt'>,
@@ -22,6 +23,19 @@ export function isWindowShortcutModifierChord(
 ): boolean {
   const modifierPressed = platform === 'darwin' ? input.meta : input.control
   return Boolean(modifierPressed) && !input.alt
+}
+
+// Why: worktree history navigation is the first allowlisted chord that
+// intentionally carries Alt, so it needs its own predicate. The shared
+// isWindowShortcutModifierChord helper deliberately rejects Alt because its
+// callers (zoom, sidebar toggles, palette, jump indices) must not steal
+// Alt-combinations used by shells and readline.
+function isHistoryNavigateChord(input: WindowShortcutInput, platform: NodeJS.Platform): boolean {
+  const primary = platform === 'darwin' ? input.meta : input.control
+  // Why: excluding Shift reserves Cmd/Ctrl+Alt+Shift+Arrow for future chords
+  // (e.g. "close back/forward entry" or cross-stack selection) without
+  // taking a breaking-change hit on the v1 chord binding.
+  return Boolean(primary) && Boolean(input.alt) && !input.shift
 }
 
 function isZoomInShortcut(input: WindowShortcutInput): boolean {
@@ -49,6 +63,20 @@ export function resolveWindowShortcutAction(
   input: WindowShortcutInput,
   platform: NodeJS.Platform
 ): WindowShortcutAction | null {
+  // Why: evaluate the history-navigate chord BEFORE the standard modifier-chord
+  // gate because that gate rejects Alt. Keying on input.code (not input.key)
+  // mirrors the other policy entries and avoids layout / modifier drift.
+  if (isHistoryNavigateChord(input, platform)) {
+    if (input.code === 'ArrowLeft') {
+      return { type: 'worktreeHistoryNavigate', direction: 'back' }
+    }
+    if (input.code === 'ArrowRight') {
+      return { type: 'worktreeHistoryNavigate', direction: 'forward' }
+    }
+    // Fall through: other Cmd/Ctrl+Alt combos continue to the renderer/PTTY.
+    return null
+  }
+
   if (!isWindowShortcutModifierChord(input, platform)) {
     return null
   }

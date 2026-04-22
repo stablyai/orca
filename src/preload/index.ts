@@ -1082,6 +1082,14 @@ const api = {
       ipcRenderer.on('ui:jumpToWorktreeIndex', listener)
       return () => ipcRenderer.removeListener('ui:jumpToWorktreeIndex', listener)
     },
+    onWorktreeHistoryNavigate: (
+      callback: (direction: 'back' | 'forward') => void
+    ): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, direction: 'back' | 'forward') =>
+        callback(direction)
+      ipcRenderer.on('ui:worktreeHistoryNavigate', listener)
+      return () => ipcRenderer.removeListener('ui:worktreeHistoryNavigate', listener)
+    },
     onNewBrowserTab: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('ui:newBrowserTab', listener)

@@ -618,6 +618,7 @@ export type PreloadApi = {
     onOpenQuickOpen: (callback: () => void) => () => void
     onOpenNewWorkspace: (callback: () => void) => () => void
     onJumpToWorktreeIndex: (callback: (index: number) => void) => () => void
+    onWorktreeHistoryNavigate: (callback: (direction: 'back' | 'forward') => void) => () => void
     onNewBrowserTab: (callback: () => void) => () => void
     onRequestTabCreate: (
       callback: (data: { requestId: string; url: string; worktreeId?: string }) => void
