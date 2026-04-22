@@ -26,7 +26,9 @@ import {
 } from './editor/editor-autosave'
 import { isUpdaterQuitAndInstallInProgress } from '@/lib/updater-beforeunload'
 import EditorAutosaveController from './editor/EditorAutosaveController'
+import type { TabGroupLayoutNode } from '../../../shared/types'
 import BrowserPane, { destroyPersistentWebview } from './browser-pane/BrowserPane'
+import BrowserPaneOverlayLayer from './browser-pane/BrowserPaneOverlayLayer'
 import { reconcileTabOrder } from './tab-bar/reconcile-order'
 import TabGroupSplitLayout from './tab-group/TabGroupSplitLayout'
 import { shouldAutoCreateInitialTerminal } from './terminal/initial-terminal'
@@ -1013,19 +1015,13 @@ function Terminal(): React.JSX.Element | null {
               // so the terminal/browser surface hides on the new-workspace page too.
               const isVisible = activeView === 'terminal' && worktree.id === activeWorktreeId
               return (
-                <div
+                <WorktreeSplitSurface
                   key={`tab-groups-${worktree.id}`}
-                  className={isVisible ? 'absolute inset-0 flex' : 'absolute inset-0 hidden'}
-                  aria-hidden={!isVisible}
-                >
-                  <CodexRestartChip worktreeId={worktree.id} />
-                  <TabGroupSplitLayout
-                    layout={layout}
-                    worktreeId={worktree.id}
-                    focusedGroupId={activeGroupIdByWorktree[worktree.id]}
-                    isWorktreeActive={isVisible}
-                  />
-                </div>
+                  worktreeId={worktree.id}
+                  layout={layout}
+                  focusedGroupId={activeGroupIdByWorktree[worktree.id]}
+                  isVisible={isVisible}
+                />
               )
             })}
         </div>
@@ -1233,6 +1229,42 @@ function Terminal(): React.JSX.Element | null {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+// Why: each TabGroupPanel tags its body element with an `anchor-name`, and
+// a single worktree-level BrowserPaneOverlayLayer renders every browser tab
+// for this worktree once — keyed by browserTab.id only — and pins each pane
+// to the owning group's anchor via CSS `position-anchor`. Moving a tab
+// between groups now only changes which anchor-name the overlay references,
+// so the `<webview>` is never reparented (and never reloads). Mirrors
+// VS Code's OverlayWebview claim/release pattern, with the browser doing all
+// layout tracking for free.
+function WorktreeSplitSurface({
+  worktreeId,
+  layout,
+  focusedGroupId,
+  isVisible
+}: {
+  worktreeId: string
+  layout: TabGroupLayoutNode
+  focusedGroupId?: string
+  isVisible: boolean
+}): React.JSX.Element {
+  return (
+    <div
+      className={isVisible ? 'absolute inset-0 flex' : 'absolute inset-0 hidden'}
+      aria-hidden={!isVisible}
+    >
+      <CodexRestartChip worktreeId={worktreeId} />
+      <TabGroupSplitLayout
+        layout={layout}
+        worktreeId={worktreeId}
+        focusedGroupId={focusedGroupId}
+        isWorktreeActive={isVisible}
+      />
+      <BrowserPaneOverlayLayer worktreeId={worktreeId} isWorktreeActive={isVisible} />
     </div>
   )
 }
