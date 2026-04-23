@@ -85,6 +85,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     experimentalTerminalDaemon: false,
     experimentalTerminalDaemonNoticeShown: false,
     terminalForceHyperlink: true,
+    terminalWindowsShell: 'powershell.exe',
     ...overrides
   }
 }
