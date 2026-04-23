@@ -182,14 +182,16 @@ function FileExplorerInner(): React.JSX.Element {
     refreshDir,
     refreshTree,
     inlineInput,
-    dragSourcePath
+    dragSourcePath,
+    isNativeDragOver
   })
 
   useFileExplorerImport({
     worktreePath,
     activeWorktreeId,
     refreshDir,
-    clearNativeDragState
+    clearNativeDragState,
+    setSelectedPath
   })
 
   const totalCount = flatRows.length + (inlineInputIndex >= 0 ? 1 : 0)
