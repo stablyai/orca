@@ -65,14 +65,14 @@
     "@tiptap/pm": "^3.22.4",
     "@tiptap/react": "^3.22.4",
     "@tiptap/starter-kit": "^3.22.4",
-    "@xterm/addon-fit": "^0.11.0",
-    "@xterm/addon-search": "^0.16.0",
-    "@xterm/addon-serialize": "^0.14.0",
-    "@xterm/addon-unicode11": "^0.9.0",
-    "@xterm/addon-web-links": "^0.12.0",
-    "@xterm/addon-webgl": "0.20.0-beta.196",
-    "@xterm/headless": "^6.1.0-beta.197",
-    "@xterm/xterm": "6.1.0-beta.197",
+    "@xterm/addon-fit": "0.12.0-beta.198",
+    "@xterm/addon-search": "0.17.0-beta.198",
+    "@xterm/addon-serialize": "0.15.0-beta.198",
+    "@xterm/addon-unicode11": "0.10.0-beta.198",
+    "@xterm/addon-web-links": "0.13.0-beta.198",
+    "@xterm/addon-webgl": "0.20.0-beta.197",
+    "@xterm/headless": "6.1.0-beta.198",
+    "@xterm/xterm": "6.1.0-beta.198",
     "agent-browser": "~0.24.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -151,7 +151,6 @@
       "node-pty"
     ],
     "patchedDependencies": {
-      "@xterm/addon-fit@0.11.0": "config/patches/@xterm__addon-fit@0.11.0.patch",
       "node-pty@1.1.0": "patches/node-pty@1.1.0.patch"
     }
   }
