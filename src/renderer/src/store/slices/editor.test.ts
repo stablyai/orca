@@ -13,6 +13,11 @@ vi.mock('sonner', () => ({
   toast: { error: toastErrorMock }
 }))
 
+const { openHttpLinkMock } = vi.hoisted(() => ({ openHttpLinkMock: vi.fn() }))
+vi.mock('@/lib/http-link-routing', () => ({
+  openHttpLink: openHttpLinkMock
+}))
+
 function createEditorStore(): StoreApi<AppState> {
   // Only the editor slice + activeWorktreeId are needed for these tests.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -482,6 +487,7 @@ describe('createEditorSlice activateMarkdownLink', () => {
     openUrlMock.mockReset()
     openFileUriMock.mockReset()
     pathExistsMock.mockReset()
+    openHttpLinkMock.mockReset()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ;(globalThis as any).window = (globalThis as any).window ?? {}
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -558,14 +564,15 @@ describe('createEditorSlice activateMarkdownLink', () => {
     })
   })
 
-  it('delegates external links to shell.openUrl', async () => {
+  it('delegates external links to openHttpLink with the ctx worktreeId', async () => {
     const store = createEditorStore()
     await store.getState().activateMarkdownLink('https://example.com', {
       sourceFilePath: '/repo/docs/note.md',
       worktreeId: 'wt-1',
       worktreeRoot: '/repo'
     })
-    expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
+    expect(openHttpLinkMock).toHaveBeenCalledWith('https://example.com/', { worktreeId: 'wt-1' })
+    expect(openUrlMock).not.toHaveBeenCalled()
     expect(store.getState().openFiles).toEqual([])
   })
 

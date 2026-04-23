@@ -11,6 +11,7 @@ import { getConnectionId } from '@/lib/connection-context'
 import { absolutePathToFileUri } from '@/components/editor/markdown-internal-links'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { openHttpLink } from '@/lib/http-link-routing'
 
 export type LinkHandlerDeps = {
   worktreeId: string
@@ -257,19 +258,10 @@ export function handleOscLink(
   }
 
   if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
-    const store = useAppStore.getState()
-    // Why: openLinksInApp controls whether Cmd/Ctrl+click routes http(s) URLs
-    // into Orca's embedded browser or passes them to the system browser.
-    // Shift is always the explicit override to the system browser regardless of
-    // the setting. Default is true so new installs get in-app routing.
-    const routeToOrca =
-      deps.worktreeId && !event?.shiftKey && store.settings?.openLinksInApp !== false
-    if (routeToOrca) {
-      store.setActiveWorktree(deps.worktreeId)
-      store.createBrowserTab(deps.worktreeId, parsed.toString())
-      return
-    }
-    void window.api.shell.openUrl(parsed.toString())
+    openHttpLink(parsed.toString(), {
+      worktreeId: deps.worktreeId,
+      forceSystemBrowser: Boolean(event?.shiftKey)
+    })
     return
   }
 

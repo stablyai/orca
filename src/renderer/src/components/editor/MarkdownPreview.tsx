@@ -25,6 +25,7 @@ import {
   setActiveMarkdownPreviewSearchMatch
 } from './markdown-preview-search'
 import { usePreserveSectionDuringExternalEdit } from './usePreserveSectionDuringExternalEdit'
+import { openHttpLink } from '@/lib/http-link-routing'
 
 type MarkdownPreviewProps = {
   content: string
@@ -298,7 +299,7 @@ export default function MarkdownPreview({
             return
           }
           if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
-            void window.api.shell.openUrl(parsed.toString())
+            openHttpLink(parsed.toString(), { forceSystemBrowser: true })
             return
           }
           if (parsed.protocol === 'file:') {

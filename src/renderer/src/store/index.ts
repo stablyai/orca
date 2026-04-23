@@ -18,6 +18,7 @@ import { createDiffCommentsSlice } from './slices/diffComments'
 import { createDetectedAgentsSlice } from './slices/detected-agents'
 import { createWorktreeNavHistorySlice } from './slices/worktree-nav-history'
 import { e2eConfig } from '@/lib/e2e-config'
+import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
 
 export const useAppStore = create<AppState>()((...a) => ({
   ...createRepoSlice(...a),
@@ -38,6 +39,8 @@ export const useAppStore = create<AppState>()((...a) => ({
   ...createDetectedAgentsSlice(...a),
   ...createWorktreeNavHistorySlice(...a)
 }))
+
+registerHttpLinkStoreAccessor(() => useAppStore.getState())
 
 export type { AppState } from './types'
 

@@ -8,6 +8,7 @@ import {
   isTerminalLinkActivation,
   openDetectedFilePath
 } from './terminal-link-handlers'
+import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
 
 const openUrlMock = vi.fn()
 const openFileUriMock = vi.fn()
@@ -50,6 +51,7 @@ function setPlatform(userAgent: string): void {
 beforeEach(() => {
   vi.clearAllMocks()
   storeState.settings = undefined
+  registerHttpLinkStoreAccessor(() => storeState)
   vi.stubGlobal('window', {
     api: {
       shell: {
@@ -123,7 +125,10 @@ describe('handleOscLink', () => {
 
     handleOscLink('https://example.com', { metaKey: true, ctrlKey: false, shiftKey: false }, deps)
 
-    expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/')
+    expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/', {
+      activate: true
+    })
+    expect(setActiveWorktreeMock).toHaveBeenCalledWith('wt-1')
     expect(openUrlMock).not.toHaveBeenCalled()
   })
 

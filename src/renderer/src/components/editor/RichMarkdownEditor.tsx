@@ -25,6 +25,7 @@ import { createRichMarkdownKeyHandler } from './rich-markdown-key-handler'
 import { normalizeSoftBreaks } from './rich-markdown-normalize'
 import { autoFocusRichEditor } from './rich-markdown-auto-focus'
 import { handleRichMarkdownCut } from './rich-markdown-cut-handler'
+import { openHttpLink } from '@/lib/http-link-routing'
 import { toast } from 'sonner'
 import {
   absolutePathToFileUri as toFileUrlForOsEscape,
@@ -200,7 +201,7 @@ export default function RichMarkdownEditor({
             return true
           }
           if (classified.kind === 'external') {
-            void window.api.shell.openUrl(classified.url)
+            openHttpLink(classified.url, { forceSystemBrowser: true })
           } else if (classified.kind === 'markdown') {
             void window.api.shell.pathExists(classified.absolutePath).then((exists) => {
               if (!exists) {

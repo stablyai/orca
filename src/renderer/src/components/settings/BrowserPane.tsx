@@ -168,16 +168,25 @@ export function BrowserPane({ settings, updateSettings }: BrowserPaneProps): Rea
 
       {showLinkRouting ? (
         <SearchableSetting
-          title="Terminal Link Routing"
-          description="Cmd/Ctrl+click opens terminal http(s) links in Orca. Shift+Cmd/Ctrl+click uses the system browser."
-          keywords={['browser', 'preview', 'links', 'localhost', 'webview']}
+          title="Link Routing"
+          description="Open http(s) links in Orca's built-in browser — from the terminal, markdown, and the editor. Shift+Cmd/Ctrl+click always uses your system browser."
+          keywords={[
+            'browser',
+            'preview',
+            'links',
+            'localhost',
+            'webview',
+            'markdown',
+            'file',
+            'editor'
+          ]}
           className="flex items-center justify-between gap-4 px-1 py-2"
         >
           <div className="space-y-0.5">
-            <Label>Terminal Link Routing</Label>
+            <Label>Link Routing</Label>
             <p className="text-xs text-muted-foreground">
-              Cmd/Ctrl+click opens terminal links in Orca. Shift+Cmd/Ctrl+click opens the same link
-              in your system browser.
+              Open http(s) links in Orca&apos;s built-in browser — from the terminal, markdown, and
+              the editor. Shift+Cmd/Ctrl+click always uses your system browser.
             </p>
           </div>
           <button

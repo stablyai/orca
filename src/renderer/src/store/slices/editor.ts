@@ -4,6 +4,7 @@ import type { AppState } from '../types'
 import { joinPath } from '@/lib/path'
 import { toast } from 'sonner'
 import { resolveMarkdownLinkTarget } from '@/components/editor/markdown-internal-links'
+import { openHttpLink } from '@/lib/http-link-routing'
 import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary,
@@ -1705,7 +1706,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       return
     }
     if (target.kind === 'external') {
-      void window.api.shell.openUrl(target.url)
+      openHttpLink(target.url, { worktreeId: ctx.worktreeId })
       return
     }
     if (target.kind === 'file') {
