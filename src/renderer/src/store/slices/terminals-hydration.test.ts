@@ -80,6 +80,7 @@ globalThis.window = { api: mockApi }
 
 import type { WorkspaceSessionState } from '../../../../shared/types'
 import { createTestStore, makeLayout, makeTab, makeWorktree, seedStore } from './store-test-helpers'
+import { canGoBackWorktreeHistory } from './worktree-nav-history'
 
 describe('hydrateWorkspaceSession', () => {
   beforeEach(() => {
@@ -155,6 +156,12 @@ describe('hydrateWorkspaceSession', () => {
     const store = createTestStore()
     seedStore(store, { worktreesByRepo: {} })
 
+    // Why: pre-seed non-default stale values so the assertions below can only
+    // pass if hydration actively overwrites the fields. Without this, the
+    // slice's default `[]` / `-1` would satisfy the expectations even if
+    // hydrateWorkspaceSession never touched nav history in this branch.
+    store.setState({ worktreeNavHistory: ['stale-a', 'stale-b'], worktreeNavHistoryIndex: 1 })
+
     const session: WorkspaceSessionState = {
       activeRepoId: null,
       activeWorktreeId: null,
@@ -177,6 +184,12 @@ describe('hydrateWorkspaceSession', () => {
     const store = createTestStore()
     seedStore(store, { worktreesByRepo: { repo1: [] } })
 
+    // Why: pre-seed non-default stale values so the assertions below can only
+    // pass if hydration actively overwrites the fields. Without this, the
+    // slice's default `[]` / `-1` would satisfy the expectations even if
+    // hydrateWorkspaceSession never cleared nav history for an invalid worktree.
+    store.setState({ worktreeNavHistory: ['stale-a', 'stale-b'], worktreeNavHistoryIndex: 1 })
+
     const session: WorkspaceSessionState = {
       activeRepoId: 'repo1',
       activeWorktreeId: 'repo1::/missing',
@@ -190,5 +203,39 @@ describe('hydrateWorkspaceSession', () => {
     expect(store.getState().activeWorktreeId).toBeNull()
     expect(store.getState().worktreeNavHistory).toEqual([])
     expect(store.getState().worktreeNavHistoryIndex).toBe(-1)
+  })
+
+  it('records a subsequent visit on top of the hydration seed so Back is enabled after the first click', () => {
+    // Why: pins down the PR's user-visible contract — after hydration seeds
+    // the restored worktree at index 0, the very first sidebar click appends
+    // a new entry at index 1, which is what makes Back enabled immediately.
+    // Without the seed, the first click would produce a single-entry history
+    // and Back would stay disabled until a second click.
+    const store = createTestStore()
+    const wt1 = 'repo1::/wt-1'
+    const wt2 = 'repo1::/wt-2'
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: wt1, repoId: 'repo1', path: '/wt-1' }),
+          makeWorktree({ id: wt2, repoId: 'repo1', path: '/wt-2' })
+        ]
+      }
+    })
+
+    const session: WorkspaceSessionState = {
+      activeRepoId: 'repo1',
+      activeWorktreeId: wt1,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {}
+    }
+
+    store.getState().hydrateWorkspaceSession(session)
+    store.getState().recordWorktreeVisit(wt2)
+
+    expect(store.getState().worktreeNavHistory).toEqual([wt1, wt2])
+    expect(store.getState().worktreeNavHistoryIndex).toBe(1)
+    expect(canGoBackWorktreeHistory(store.getState())).toBe(true)
   })
 })
