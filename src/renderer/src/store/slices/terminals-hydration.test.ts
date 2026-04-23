@@ -122,4 +122,73 @@ describe('hydrateWorkspaceSession', () => {
       buffersByLeafId: { 'pane:1': 'buffer' }
     })
   })
+
+  it('seeds worktree nav history with the restored active worktree', () => {
+    // Why: without seeding, the first sidebar click after startup becomes the
+    // only history entry, so Back stays disabled until the user clicks a
+    // second worktree. Seeding here ensures the restored worktree is already
+    // at index 0 so the very first user-driven switch has a prior entry to
+    // go Back to.
+    const store = createTestStore()
+    const worktreeId = 'repo1::/wt-1'
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1', path: '/wt-1' })]
+      }
+    })
+
+    const session: WorkspaceSessionState = {
+      activeRepoId: 'repo1',
+      activeWorktreeId: worktreeId,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {}
+    }
+
+    store.getState().hydrateWorkspaceSession(session)
+
+    expect(store.getState().worktreeNavHistory).toEqual([worktreeId])
+    expect(store.getState().worktreeNavHistoryIndex).toBe(0)
+  })
+
+  it('leaves nav history empty when no active worktree is restored', () => {
+    const store = createTestStore()
+    seedStore(store, { worktreesByRepo: {} })
+
+    const session: WorkspaceSessionState = {
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {}
+    }
+
+    store.getState().hydrateWorkspaceSession(session)
+
+    expect(store.getState().worktreeNavHistory).toEqual([])
+    expect(store.getState().worktreeNavHistoryIndex).toBe(-1)
+  })
+
+  it('drops invalid restored worktree from nav history seed', () => {
+    // Why: hydrateWorkspaceSession validates activeWorktreeId against the
+    // current worktreesByRepo and sets it to null when stale. The history
+    // seed must follow that validation, not the raw session field — otherwise
+    // a deleted worktree would sit at history[0] and fail activation on Back.
+    const store = createTestStore()
+    seedStore(store, { worktreesByRepo: { repo1: [] } })
+
+    const session: WorkspaceSessionState = {
+      activeRepoId: 'repo1',
+      activeWorktreeId: 'repo1::/missing',
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {}
+    }
+
+    store.getState().hydrateWorkspaceSession(session)
+
+    expect(store.getState().activeWorktreeId).toBeNull()
+    expect(store.getState().worktreeNavHistory).toEqual([])
+    expect(store.getState().worktreeNavHistoryIndex).toBe(-1)
+  })
 })

@@ -1139,6 +1139,15 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         pendingReconnectWorktreeIds,
         pendingReconnectTabByWorktree,
         pendingReconnectPtyIdByTabId,
+        // Why: seed worktree nav history with the hydrated active worktree so
+        // the first user-driven activation (e.g. a sidebar click to a different
+        // worktree) has a prior entry to go Back to. Without this the restored
+        // startup worktree is never recorded — recordWorktreeVisit only runs
+        // inside activateAndRevealWorktree, which hydration bypasses — so Back
+        // stays disabled until a second click produces the first-ever history
+        // pair.
+        worktreeNavHistory: activeWorktreeId ? [activeWorktreeId] : [],
+        worktreeNavHistoryIndex: activeWorktreeId ? 0 : -1,
         ptyIdsByTabId: Object.fromEntries(
           Object.values(tabsByWorktree)
             .flat()
