@@ -60,6 +60,8 @@ export type ManagedPaneInternal = {
   linkTooltip: HTMLElement
   gpuRenderingEnabled: boolean
   webglAddon: WebglAddon | null
+  fitResizeObserver: ResizeObserver | null
+  pendingObservedFitRafId: number | null
   serializeAddon: SerializeAddon
   unicode11Addon: Unicode11Addon
   webLinksAddon: WebLinksAddon

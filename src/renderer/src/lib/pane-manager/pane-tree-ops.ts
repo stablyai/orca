@@ -18,8 +18,23 @@ type TreeOpsCallbacks = {
   onLayoutChanged?: () => void
 }
 
+function getProposedDimensions(pane: ManagedPaneInternal): { cols: number; rows: number } | null {
+  try {
+    return pane.fitAddon.proposeDimensions() ?? null
+  } catch {
+    return null
+  }
+}
+
 export function safeFit(pane: ManagedPaneInternal): void {
   try {
+    const dims = getProposedDimensions(pane)
+    if (dims && dims.cols === pane.terminal.cols && dims.rows === pane.terminal.rows) {
+      // Why: divider drags fire refits every frame, but most frames do not
+      // cross a cell boundary. Skipping those avoids FitAddon.clear()+refresh()
+      // churn, which was causing visible terminal blinking while resizing.
+      return
+    }
     if (pane.pendingSplitScrollState) {
       pane.fitAddon.fit()
       return
@@ -40,7 +55,7 @@ export function safeFit(pane: ManagedPaneInternal): void {
 export function fitAllPanesInternal(panes: Map<number, ManagedPaneInternal>): void {
   for (const pane of panes.values()) {
     try {
-      const dims = pane.fitAddon.proposeDimensions()
+      const dims = getProposedDimensions(pane)
       if (dims && dims.cols === pane.terminal.cols && dims.rows === pane.terminal.rows) {
         continue
       }

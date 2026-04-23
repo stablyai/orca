@@ -94,11 +94,6 @@ function attachDividerDrag(
     callbacks.lockDragScroll(nextEl)
   }
 
-  // Why: fitAddon.fit() triggers a full xterm.js reflow which can take
-  // hundreds of ms with large scrollbacks. Gating behind rAF caps refit
-  // to once per paint frame instead of once per pointer event (~250Hz).
-  let refitRafId: number | null = null
-
   const onPointerMove = (e: PointerEvent): void => {
     if (!dragging || !prevEl || !nextEl) {
       return
@@ -121,20 +116,11 @@ function attachDividerDrag(
       newPrev = totalSize - MIN_PANE_SIZE
     }
 
+    // Why: keep drag-time work to flex layout only; pane-local ResizeObservers
+    // schedule the terminal fit on the next frame so the divider stays smooth.
     // Use flex-grow proportionally
     prevEl.style.flex = `${newPrev} 1 0%`
     nextEl.style.flex = `${newNext} 1 0%`
-
-    // Refit terminals in affected panes (throttled to one per animation frame)
-    if (refitRafId === null) {
-      const p = prevEl
-      const n = nextEl
-      refitRafId = requestAnimationFrame(() => {
-        refitRafId = null
-        callbacks.refitPanesUnder(p)
-        callbacks.refitPanesUnder(n)
-      })
-    }
   }
 
   const onPointerUp = (e: PointerEvent): void => {
@@ -142,10 +128,6 @@ function attachDividerDrag(
       return
     }
     dragging = false
-    if (refitRafId !== null) {
-      cancelAnimationFrame(refitRafId)
-      refitRafId = null
-    }
     divider.releasePointerCapture(e.pointerId)
     divider.classList.remove('is-dragging')
     // Final refit at the exact drop position, then unlock drag scroll state

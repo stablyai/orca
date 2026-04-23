@@ -12,6 +12,10 @@ import type { DragReorderState } from './pane-drag-reorder'
 import type { DragReorderCallbacks } from './pane-drag-reorder'
 import { attachPaneDrag } from './pane-drag-reorder'
 import { safeFit, captureScrollState, restoreScrollState } from './pane-tree-ops'
+import {
+  attachPaneFitResizeObserver,
+  detachPaneFitResizeObserver
+} from './pane-fit-resize-observer'
 
 // ---------------------------------------------------------------------------
 // Pane creation, terminal open/close, addon management
@@ -128,6 +132,8 @@ export function createPaneDOM(
     linkTooltip,
     gpuRenderingEnabled: ENABLE_WEBGL_RENDERER,
     fitAddon,
+    fitResizeObserver: null,
+    pendingObservedFitRafId: null,
     searchAddon,
     serializeAddon,
     unicode11Addon,
@@ -223,6 +229,8 @@ export function openTerminal(pane: ManagedPaneInternal): void {
     attachWebgl(pane)
   }
 
+  attachPaneFitResizeObserver(pane)
+
   // Initial fit (deferred to ensure layout has settled)
   requestAnimationFrame(() => {
     safeFit(pane)
@@ -301,6 +309,7 @@ export function disposePane(
   pane: ManagedPaneInternal,
   panes: Map<number, ManagedPaneInternal>
 ): void {
+  detachPaneFitResizeObserver(pane)
   if (pane.compositionHandler) {
     pane.terminal.element?.removeEventListener('compositionstart', pane.compositionHandler, true)
     pane.compositionHandler = null
