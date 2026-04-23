@@ -67,6 +67,7 @@ export default function QuickOpen(): React.JSX.Element | null {
   const [files, setFiles] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadedFilesKey, setLoadedFilesKey] = useState('')
 
   const worktreePath = activeWorktree?.path ?? null
 
@@ -91,6 +92,10 @@ export default function QuickOpen(): React.JSX.Element | null {
     () => getConnectionId(activeWorktreeId ?? null) ?? undefined,
     [activeWorktreeId]
   )
+  const filesRequestKey = useMemo(
+    () => `${worktreePath ?? ''}\n${connectionId ?? ''}\n${excludePathsKey}`,
+    [connectionId, excludePathsKey, worktreePath]
+  )
 
   // Why: reset input only on open. Keeping this out of the file-load effect
   // prevents unrelated store updates (which can produce a new excludePaths
@@ -109,6 +114,13 @@ export default function QuickOpen(): React.JSX.Element | null {
 
     if (!worktreePath) {
       setFiles([])
+      setLoadedFilesKey('')
+      setLoadError(null)
+      setLoading(false)
+      return
+    }
+
+    if (loadedFilesKey === filesRequestKey && loadError === null) {
       return
     }
 
@@ -131,6 +143,7 @@ export default function QuickOpen(): React.JSX.Element | null {
       .then((result) => {
         if (!cancelled) {
           setFiles(result)
+          setLoadedFilesKey(filesRequestKey)
         }
       })
       .catch((error) => {
@@ -150,7 +163,15 @@ export default function QuickOpen(): React.JSX.Element | null {
     return () => {
       cancelled = true
     }
-  }, [visible, worktreePath, connectionId, excludePathsKey])
+  }, [
+    visible,
+    worktreePath,
+    connectionId,
+    excludePathsKey,
+    filesRequestKey,
+    loadedFilesKey,
+    loadError
+  ])
 
   // Filter files by fuzzy match
   const filtered = useMemo(() => {

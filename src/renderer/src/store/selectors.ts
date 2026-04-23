@@ -5,20 +5,22 @@ import type { AppState } from './types'
 
 const EMPTY_WORKTREES: Worktree[] = []
 const EMPTY_TABS: TerminalTab[] = []
-const EMPTY_WORKTREE_MAP = new Map<string, Worktree>()
 
-// Why: these caches let hot selectors reuse the flattened worktree array/map
-// across unrelated store updates. Zustand still runs selectors on each write,
-// so avoiding repeated Object.values(...).flat() cuts wasted render work.
-let cachedWorktreesByRepo: AppState['worktreesByRepo'] | null = null
-let cachedAllWorktrees: Worktree[] = EMPTY_WORKTREES
-let cachedWorktreeMap: Map<string, Worktree> = EMPTY_WORKTREE_MAP
-let cachedRepos: AppState['repos'] | null = null
-let cachedRepoMap = new Map<string, Repo>()
+type WorktreeSnapshot = {
+  allWorktrees: Worktree[]
+  worktreeMap: Map<string, Worktree>
+}
 
-function getCachedAllWorktrees(worktreesByRepo: AppState['worktreesByRepo']): Worktree[] {
-  if (worktreesByRepo === cachedWorktreesByRepo) {
-    return cachedAllWorktrees
+// Why: Zustand reruns selectors on every write, so hot-path flatten/map work
+// needs cross-render caching. WeakMap ties each snapshot to the store slice ref
+// without pinning old test/dev instances in memory once that slice is replaced.
+const worktreeSnapshotCache = new WeakMap<AppState['worktreesByRepo'], WorktreeSnapshot>()
+const repoMapCache = new WeakMap<AppState['repos'], Map<string, Repo>>()
+
+function getWorktreeSnapshot(worktreesByRepo: AppState['worktreesByRepo']): WorktreeSnapshot {
+  const cachedSnapshot = worktreeSnapshotCache.get(worktreesByRepo)
+  if (cachedSnapshot) {
+    return cachedSnapshot
   }
 
   const allWorktrees = Object.values(worktreesByRepo).flat()
@@ -27,27 +29,32 @@ function getCachedAllWorktrees(worktreesByRepo: AppState['worktreesByRepo']): Wo
     worktreeMap.set(worktree.id, worktree)
   }
 
-  cachedWorktreesByRepo = worktreesByRepo
-  cachedAllWorktrees = allWorktrees
-  cachedWorktreeMap = worktreeMap
-  return allWorktrees
+  const snapshot = { allWorktrees, worktreeMap }
+  worktreeSnapshotCache.set(worktreesByRepo, snapshot)
+  return snapshot
+}
+
+function getCachedAllWorktrees(worktreesByRepo: AppState['worktreesByRepo']): Worktree[] {
+  return getWorktreeSnapshot(worktreesByRepo).allWorktrees
 }
 
 function getCachedWorktreeMap(worktreesByRepo: AppState['worktreesByRepo']): Map<string, Worktree> {
-  if (worktreesByRepo !== cachedWorktreesByRepo) {
-    getCachedAllWorktrees(worktreesByRepo)
+  const snapshot = worktreeSnapshotCache.get(worktreesByRepo)
+  if (snapshot) {
+    return snapshot.worktreeMap
   }
-  return cachedWorktreeMap
+  return getWorktreeSnapshot(worktreesByRepo).worktreeMap
 }
 
 function getCachedRepoMap(repos: AppState['repos']): Map<string, Repo> {
-  if (repos === cachedRepos) {
-    return cachedRepoMap
+  const cachedMap = repoMapCache.get(repos)
+  if (cachedMap) {
+    return cachedMap
   }
 
-  cachedRepos = repos
-  cachedRepoMap = new Map(repos.map((repo) => [repo.id, repo]))
-  return cachedRepoMap
+  const repoMap = new Map(repos.map((repo) => [repo.id, repo]))
+  repoMapCache.set(repos, repoMap)
+  return repoMap
 }
 
 export function getAllWorktreesFromState(state: Pick<AppState, 'worktreesByRepo'>): Worktree[] {

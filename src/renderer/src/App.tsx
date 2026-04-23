@@ -135,6 +135,7 @@ function App(): React.JSX.Element {
   const canGoForwardWorktree = useAppStore(canGoForwardWorktreeHistory)
   const titlebarLeftControlsRef = useRef<HTMLDivElement | null>(null)
   const [collapsedSidebarHeaderWidth, setCollapsedSidebarHeaderWidth] = useState(0)
+  const [mountedLazyModalIds, setMountedLazyModalIds] = useState(() => new Set<string>())
 
   // Subscribe to IPC push events
   useIpcEvents()
@@ -620,6 +621,26 @@ function App(): React.JSX.Element {
     sidebarOpen
   ])
 
+  useEffect(() => {
+    if (
+      activeModal !== 'quick-open' &&
+      activeModal !== 'worktree-palette' &&
+      activeModal !== 'new-workspace-composer'
+    ) {
+      return
+    }
+    setMountedLazyModalIds((currentIds) => {
+      if (currentIds.has(activeModal)) {
+        return currentIds
+      }
+      const nextIds = new Set(currentIds)
+      // Why: lazy-load these modals only after first use, then keep them mounted
+      // so repeat opens preserve their local state and avoid re-fetch flashes.
+      nextIds.add(activeModal)
+      return nextIds
+    })
+  }, [activeModal])
+
   // Why: extracted so both the full-width titlebar (settings/landing) and
   // the sidebar-width left header (workspace view) can share the same
   // controls without duplicating the agent badge popover.
@@ -944,12 +965,12 @@ function App(): React.JSX.Element {
             composer modal inside this provider so the card renders safely
             whether triggered from Cmd+J or any future entry point. */}
         <Suspense fallback={null}>
-          {activeModal === 'new-workspace-composer' ? <NewWorkspaceComposerModal /> : null}
+          {mountedLazyModalIds.has('new-workspace-composer') ? <NewWorkspaceComposerModal /> : null}
         </Suspense>
       </TooltipProvider>
       <Suspense fallback={null}>
-        {activeModal === 'quick-open' ? <QuickOpen /> : null}
-        {activeModal === 'worktree-palette' ? <WorktreeJumpPalette /> : null}
+        {mountedLazyModalIds.has('quick-open') ? <QuickOpen /> : null}
+        {mountedLazyModalIds.has('worktree-palette') ? <WorktreeJumpPalette /> : null}
       </Suspense>
       <UpdateCard />
       <StarNagCard />

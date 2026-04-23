@@ -1,11 +1,6 @@
 import { useCallback, useEffect, useMemo } from 'react'
 import { useAppStore } from '@/store'
-import {
-  getRepoMapFromState,
-  useActiveWorktree,
-  useAllWorktrees,
-  useRepoById
-} from '@/store/selectors'
+import { useActiveWorktree, useAllWorktrees, useRepoById, useRepoMap } from '@/store/selectors'
 import type { GitConflictOperation, GitStatusResult } from '../../../../shared/types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getConnectionId } from '@/lib/connection-context'
@@ -20,6 +15,7 @@ export function useGitStatusPolling(): void {
   const setGitStatus = useAppStore((s) => s.setGitStatus)
   const setConflictOperation = useAppStore((s) => s.setConflictOperation)
   const conflictOperationByWorktree = useAppStore((s) => s.gitConflictOperationByWorktree)
+  const repoMap = useRepoMap()
 
   const worktreePath = activeWorktree?.path ?? null
   const activeRepoId = activeWorktree?.repoId ?? null
@@ -38,7 +34,7 @@ export function useGitStatusPolling(): void {
       }
       const worktree = allWorktrees.find((entry) => entry.id === worktreeId)
       if (worktree) {
-        const repo = getRepoMapFromState(useAppStore.getState()).get(worktree.repoId)
+        const repo = repoMap.get(worktree.repoId)
         if (repo && !isGitRepoKind(repo)) {
           continue
         }
@@ -46,7 +42,7 @@ export function useGitStatusPolling(): void {
       }
     }
     return result
-  }, [allWorktrees, conflictOperationByWorktree, activeWorktreeId])
+  }, [allWorktrees, conflictOperationByWorktree, activeWorktreeId, repoMap])
 
   const fetchStatus = useCallback(async () => {
     if (!activeWorktreeId || !worktreePath || !activeRepoSupportsGit) {

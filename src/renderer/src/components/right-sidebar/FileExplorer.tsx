@@ -18,7 +18,6 @@ import { useFileExplorerReveal } from './useFileExplorerReveal'
 import { useFileExplorerInlineInput } from './useFileExplorerInlineInput'
 import { clearFileExplorerUndoHistory } from './fileExplorerUndoRedo'
 import { useFileExplorerKeys } from './useFileExplorerKeys'
-import { useActiveWorktreePath } from './useActiveWorktreePath'
 import { useFileDuplicate } from './useFileDuplicate'
 import { useFileExplorerDragDrop } from './useFileExplorerDragDrop'
 import { useFileExplorerImport } from './useFileExplorerImport'
@@ -40,7 +39,7 @@ function FileExplorerInner(): React.JSX.Element {
   const openFiles = useAppStore((s) => s.openFiles)
   const closeFile = useAppStore((s) => s.closeFile)
 
-  const worktreePath = useActiveWorktreePath(activeWorktree?.path ?? null)
+  const worktreePath = activeWorktree?.path ?? null
 
   const expanded = useMemo(
     () =>

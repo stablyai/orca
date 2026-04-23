@@ -3,7 +3,12 @@ import React, { useMemo, useCallback, useRef, useState, useEffect, useLayoutEffe
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { ChevronDown, CircleX, Plus } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { useAllWorktrees, useRepoMap, useWorktreeMap } from '@/store/selectors'
+import {
+  getAllWorktreesFromState,
+  useAllWorktrees,
+  useRepoMap,
+  useWorktreeMap
+} from '@/store/selectors'
 import WorktreeCard from './WorktreeCard'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -490,7 +495,9 @@ const WorktreeList = React.memo(function WorktreeList() {
   // first render (and epoch bumps) would use stale/empty data from the ref.
   const sortedIds = useMemo(() => {
     const state = useAppStore.getState()
-    const nonArchivedWorktrees = allWorktrees.filter((worktree) => !worktree.isArchived)
+    const nonArchivedWorktrees = getAllWorktreesFromState(state).filter(
+      (worktree) => !worktree.isArchived
+    )
 
     // Why cold-start detection: the smart score is dominated by ephemeral
     // signals (running jobs +60, live terminals +12, needs attention +35)
@@ -522,7 +529,7 @@ const WorktreeList = React.memo(function WorktreeList() {
     // memo, but its change signals that the sort order should be recomputed.
     // The debounce prevents jarring mid-interaction position shifts.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [allWorktrees, debouncedSortEpoch, repoMap, sortBy])
+  }, [debouncedSortEpoch, repoMap, sortBy])
 
   // Persist the computed sort order so the sidebar can be restored after
   // restart. Only persist during live sessions (sessionHasHadPty latched) —
