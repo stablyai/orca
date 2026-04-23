@@ -228,6 +228,30 @@ export function searchWithRg(
   })
 }
 
+// ─── rg availability check ──────────────────────────────────────────
+
+let rgAvailableCache: boolean | null = null
+
+export function checkRgAvailable(): Promise<boolean> {
+  if (rgAvailableCache !== null) {
+    return Promise.resolve(rgAvailableCache)
+  }
+  return new Promise((resolve) => {
+    const child = execFile('rg', ['--version'])
+    child.once('error', () => {
+      rgAvailableCache = false
+      resolve(false)
+    })
+    child.once('close', (code) => {
+      if (rgAvailableCache !== null) {
+        return
+      }
+      rgAvailableCache = code === 0
+      resolve(rgAvailableCache)
+    })
+  })
+}
+
 // ─── rg-based file listing ───────────────────────────────────────────
 
 /**

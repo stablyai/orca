@@ -19,8 +19,10 @@ import {
   IMAGE_MIME_TYPES,
   isBinaryBuffer,
   searchWithRg,
-  listFilesWithRg
+  listFilesWithRg,
+  checkRgAvailable
 } from './fs-handler-utils'
+import { listFilesWithGit, searchWithGitGrep } from './fs-handler-git-fallback'
 
 type WatchState = {
   rootPath: string
@@ -199,6 +201,18 @@ export class FsHandler {
       DEFAULT_MAX_RESULTS
     )
 
+    const rgAvailable = await checkRgAvailable()
+    if (!rgAvailable) {
+      return searchWithGitGrep(rootPath, query, {
+        caseSensitive,
+        wholeWord,
+        useRegex,
+        includePattern,
+        excludePattern,
+        maxResults
+      })
+    }
+
     return searchWithRg(rootPath, query, {
       caseSensitive,
       wholeWord,
@@ -212,6 +226,10 @@ export class FsHandler {
   private async listFiles(params: Record<string, unknown>): Promise<string[]> {
     const rootPath = params.rootPath as string
     await this.context.validatePathResolved(rootPath)
+    const rgAvailable = await checkRgAvailable()
+    if (!rgAvailable) {
+      return listFilesWithGit(rootPath)
+    }
     return listFilesWithRg(rootPath)
   }
 
