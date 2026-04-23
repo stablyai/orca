@@ -157,10 +157,25 @@ export function mapGhosttyToOrca(
       continue
     }
 
+    if (key === 'background-blur-radius') {
+      const v = value as string
+      const num = Number(v)
+      if (!Number.isFinite(num) || Number.isNaN(num)) {
+        unsupportedKeys.push(key)
+        continue
+      }
+      diff.windowBackgroundBlur = num > 0
+      continue
+    }
+
     if (key === 'window-padding-color') {
       const v = value as string
       if (HEX_COLOR_RE.test(v)) {
         diff.terminalPanePaddingColor = v
+      } else if (v.toLowerCase() === 'extend' || v.toLowerCase() === 'background') {
+        // Why: Ghostty's 'extend' and 'background' mean "inherit the terminal
+        // background color for padding", which is already Orca's default when
+        // terminalPanePaddingColor is undefined. No diff needed.
       } else {
         unsupportedKeys.push(key)
       }

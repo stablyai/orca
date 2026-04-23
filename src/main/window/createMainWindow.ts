@@ -77,6 +77,20 @@ export function createMainWindow(
     }
   })()
 
+  const settings = store?.getSettings()
+  const blur = settings?.windowBackgroundBlur ?? false
+  // Why: native blur requires platform-specific Electron APIs. macOS uses
+  // vibrancy (needs transparent: true), Windows uses backgroundMaterial.
+  // Linux has no native equivalent. Blur only applies at window creation;
+  // changing the setting requires a restart.
+  const platformBlurOptions = blur
+    ? process.platform === 'darwin'
+      ? { vibrancy: 'under-window' as const, transparent: true }
+      : process.platform === 'win32'
+        ? { backgroundMaterial: 'acrylic' as const }
+        : {}
+    : {}
+
   const mainWindow = new BrowserWindow({
     width: savedBounds?.width ?? defaultBounds.width,
     height: savedBounds?.height ?? defaultBounds.height,
@@ -98,6 +112,7 @@ export function createMainWindow(
         }
       : {}),
     icon: is.dev ? devIcon : icon,
+    ...platformBlurOptions,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: true,

@@ -782,6 +782,7 @@ export type GlobalSettings = {
   terminalColorOverrides?: TerminalColorOverrides
   terminalPanePaddingColor?: string
   terminalPaddingBalance?: boolean
+  windowBackgroundBlur?: boolean
   /** Why: Windows terminals conventionally use right-click as a paste gesture.
    *  The setting stays Windows-only so macOS/Linux keep their existing context
    *  menu behavior and users can still reach the menu with Ctrl+right-click. */

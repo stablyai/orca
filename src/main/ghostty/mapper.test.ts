@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { mapGhosttyToOrca } from './mapper'
 
-describe('mapGhosttyToOrca', () => {
+describe('mapGhosttyToOrca — font & cursor', () => {
   it('maps supported keys to GlobalSettings', () => {
     const result = mapGhosttyToOrca({
       'font-family': 'JetBrains Mono',
@@ -16,48 +16,20 @@ describe('mapGhosttyToOrca', () => {
     expect(result.unsupportedKeys).toEqual([])
   })
 
-  it('marks unsupported keys as unsupported', () => {
-    const result = mapGhosttyToOrca({
-      'background-blur-radius': '20',
-      'unknown-key': 'value'
-    })
-    expect(result.diff).toEqual({})
-    expect(result.unsupportedKeys).toEqual(['background-blur-radius', 'unknown-key'])
-  })
-
-  it('handles a mix of supported and unsupported keys', () => {
-    const result = mapGhosttyToOrca({
-      'font-family': 'Fira Code',
-      'font-size': '13',
-      'background-blur-radius': '20'
-    })
-    expect(result.diff).toEqual({
-      terminalFontFamily: 'Fira Code',
-      terminalFontSize: 13
-    })
-    expect(result.unsupportedKeys).toEqual(['background-blur-radius'])
-  })
-
   it('skips invalid font-size values', () => {
-    const result = mapGhosttyToOrca({
-      'font-size': 'not-a-number'
-    })
+    const result = mapGhosttyToOrca({ 'font-size': 'not-a-number' })
     expect(result.diff).toEqual({})
     expect(result.unsupportedKeys).toEqual(['font-size'])
   })
 
   it('skips invalid cursor-style values', () => {
-    const result = mapGhosttyToOrca({
-      'cursor-style': 'beam'
-    })
+    const result = mapGhosttyToOrca({ 'cursor-style': 'beam' })
     expect(result.diff).toEqual({})
     expect(result.unsupportedKeys).toEqual(['cursor-style'])
   })
 
   it('returns zero font-size as unsupported', () => {
-    const result = mapGhosttyToOrca({
-      'font-size': '0'
-    })
+    const result = mapGhosttyToOrca({ 'font-size': '0' })
     expect(result.diff).toEqual({})
     expect(result.unsupportedKeys).toEqual(['font-size'])
   })
@@ -103,49 +75,53 @@ describe('mapGhosttyToOrca', () => {
     expect(result.diff).toEqual({})
     expect(result.unsupportedKeys).toEqual(['focus-follows-mouse'])
   })
+})
 
-  it('maps macos-option-as-alt on to terminalMacOptionAsAlt true', () => {
+describe('mapGhosttyToOrca — macos-option-as-alt', () => {
+  it('maps on to true', () => {
     const result = mapGhosttyToOrca({ 'macos-option-as-alt': 'on' }, true)
     expect(result.diff).toEqual({ terminalMacOptionAsAlt: 'true' })
     expect(result.unsupportedKeys).toEqual([])
   })
 
-  it('maps macos-option-as-alt true to terminalMacOptionAsAlt true', () => {
+  it('maps true to true', () => {
     const result = mapGhosttyToOrca({ 'macos-option-as-alt': 'true' }, true)
     expect(result.diff).toEqual({ terminalMacOptionAsAlt: 'true' })
     expect(result.unsupportedKeys).toEqual([])
   })
 
-  it('maps macos-option-as-alt off to terminalMacOptionAsAlt false', () => {
+  it('maps off to false', () => {
     const result = mapGhosttyToOrca({ 'macos-option-as-alt': 'off' }, true)
     expect(result.diff).toEqual({ terminalMacOptionAsAlt: 'false' })
     expect(result.unsupportedKeys).toEqual([])
   })
 
-  it('maps macos-option-as-alt left to terminalMacOptionAsAlt left', () => {
+  it('maps left to left', () => {
     const result = mapGhosttyToOrca({ 'macos-option-as-alt': 'left' }, true)
     expect(result.diff).toEqual({ terminalMacOptionAsAlt: 'left' })
     expect(result.unsupportedKeys).toEqual([])
   })
 
-  it('maps macos-option-as-alt right to terminalMacOptionAsAlt right', () => {
+  it('maps right to right', () => {
     const result = mapGhosttyToOrca({ 'macos-option-as-alt': 'right' }, true)
     expect(result.diff).toEqual({ terminalMacOptionAsAlt: 'right' })
     expect(result.unsupportedKeys).toEqual([])
   })
 
-  it('rejects invalid macos-option-as-alt value', () => {
+  it('rejects invalid value', () => {
     const result = mapGhosttyToOrca({ 'macos-option-as-alt': 'maybe' }, true)
     expect(result.diff).toEqual({})
     expect(result.unsupportedKeys).toEqual(['macos-option-as-alt'])
   })
 
-  it('treats macos-option-as-alt as unsupported on non-macOS', () => {
+  it('treats as unsupported on non-macOS', () => {
     const result = mapGhosttyToOrca({ 'macos-option-as-alt': 'true' }, false)
     expect(result.diff).toEqual({})
     expect(result.unsupportedKeys).toEqual(['macos-option-as-alt'])
   })
+})
 
+describe('mapGhosttyToOrca — background & colors', () => {
   it('maps background-opacity to terminalBackgroundOpacity', () => {
     const result = mapGhosttyToOrca({ 'background-opacity': '0.72' })
     expect(result.diff).toEqual({ terminalBackgroundOpacity: 0.72 })
@@ -164,97 +140,92 @@ describe('mapGhosttyToOrca', () => {
     expect(result.unsupportedKeys).toEqual(['background-opacity'])
   })
 
-  it('maps background to terminalColorOverrides.background', () => {
+  it('maps background-blur-radius > 0 to windowBackgroundBlur true', () => {
+    const result = mapGhosttyToOrca({ 'background-blur-radius': '20' })
+    expect(result.diff).toEqual({ windowBackgroundBlur: true })
+    expect(result.unsupportedKeys).toEqual([])
+  })
+
+  it('maps background-blur-radius = 0 to windowBackgroundBlur false', () => {
+    const result = mapGhosttyToOrca({ 'background-blur-radius': '0' })
+    expect(result.diff).toEqual({ windowBackgroundBlur: false })
+    expect(result.unsupportedKeys).toEqual([])
+  })
+
+  it('rejects invalid background-blur-radius', () => {
+    const result = mapGhosttyToOrca({ 'background-blur-radius': 'heavy' })
+    expect(result.diff).toEqual({})
+    expect(result.unsupportedKeys).toEqual(['background-blur-radius'])
+  })
+
+  it('maps background with hash to terminalColorOverrides.background', () => {
     const result = mapGhosttyToOrca({ background: '#111111' })
-    expect(result.diff).toEqual({
-      terminalColorOverrides: { background: '#111111' }
-    })
-    expect(result.unsupportedKeys).toEqual([])
-  })
-
-  it('maps foreground to terminalColorOverrides.foreground', () => {
-    const result = mapGhosttyToOrca({ foreground: '#eeeeee' })
-    expect(result.diff).toEqual({
-      terminalColorOverrides: { foreground: '#eeeeee' }
-    })
-    expect(result.unsupportedKeys).toEqual([])
-  })
-
-  it('maps cursor-color to terminalColorOverrides.cursor', () => {
-    const result = mapGhosttyToOrca({ 'cursor-color': '#ff00ff' })
-    expect(result.diff).toEqual({
-      terminalColorOverrides: { cursor: '#ff00ff' }
-    })
-    expect(result.unsupportedKeys).toEqual([])
-  })
-
-  it('maps selection-background to terminalColorOverrides.selectionBackground', () => {
-    const result = mapGhosttyToOrca({ 'selection-background': '#333333' })
-    expect(result.diff).toEqual({
-      terminalColorOverrides: { selectionBackground: '#333333' }
-    })
-    expect(result.unsupportedKeys).toEqual([])
-  })
-
-  it('maps selection-foreground to terminalColorOverrides.selectionForeground', () => {
-    const result = mapGhosttyToOrca({ 'selection-foreground': '#cccccc' })
-    expect(result.diff).toEqual({
-      terminalColorOverrides: { selectionForeground: '#cccccc' }
-    })
+    expect(result.diff).toEqual({ terminalColorOverrides: { background: '#111111' } })
     expect(result.unsupportedKeys).toEqual([])
   })
 
   it('maps background without hash to terminalColorOverrides.background', () => {
     const result = mapGhosttyToOrca({ background: '111111' })
-    expect(result.diff).toEqual({
-      terminalColorOverrides: { background: '111111' }
-    })
+    expect(result.diff).toEqual({ terminalColorOverrides: { background: '111111' } })
+    expect(result.unsupportedKeys).toEqual([])
+  })
+
+  it('maps foreground to terminalColorOverrides.foreground', () => {
+    const result = mapGhosttyToOrca({ foreground: '#eeeeee' })
+    expect(result.diff).toEqual({ terminalColorOverrides: { foreground: '#eeeeee' } })
     expect(result.unsupportedKeys).toEqual([])
   })
 
   it('maps foreground without hash to terminalColorOverrides.foreground', () => {
     const result = mapGhosttyToOrca({ foreground: 'eeeeee' })
-    expect(result.diff).toEqual({
-      terminalColorOverrides: { foreground: 'eeeeee' }
-    })
+    expect(result.diff).toEqual({ terminalColorOverrides: { foreground: 'eeeeee' } })
+    expect(result.unsupportedKeys).toEqual([])
+  })
+
+  it('maps cursor-color to terminalColorOverrides.cursor', () => {
+    const result = mapGhosttyToOrca({ 'cursor-color': '#ff00ff' })
+    expect(result.diff).toEqual({ terminalColorOverrides: { cursor: '#ff00ff' } })
     expect(result.unsupportedKeys).toEqual([])
   })
 
   it('maps cursor-color without hash to terminalColorOverrides.cursor', () => {
     const result = mapGhosttyToOrca({ 'cursor-color': 'ff00ff' })
-    expect(result.diff).toEqual({
-      terminalColorOverrides: { cursor: 'ff00ff' }
-    })
+    expect(result.diff).toEqual({ terminalColorOverrides: { cursor: 'ff00ff' } })
     expect(result.unsupportedKeys).toEqual([])
   })
 
-  it('maps selection-background without hash to terminalColorOverrides.selectionBackground', () => {
+  it('maps selection-background to terminalColorOverrides.selectionBackground', () => {
+    const result = mapGhosttyToOrca({ 'selection-background': '#333333' })
+    expect(result.diff).toEqual({ terminalColorOverrides: { selectionBackground: '#333333' } })
+    expect(result.unsupportedKeys).toEqual([])
+  })
+
+  it('maps selection-background without hash', () => {
     const result = mapGhosttyToOrca({ 'selection-background': '333333' })
-    expect(result.diff).toEqual({
-      terminalColorOverrides: { selectionBackground: '333333' }
-    })
+    expect(result.diff).toEqual({ terminalColorOverrides: { selectionBackground: '333333' } })
     expect(result.unsupportedKeys).toEqual([])
   })
 
-  it('maps selection-foreground without hash to terminalColorOverrides.selectionForeground', () => {
+  it('maps selection-foreground to terminalColorOverrides.selectionForeground', () => {
+    const result = mapGhosttyToOrca({ 'selection-foreground': '#cccccc' })
+    expect(result.diff).toEqual({ terminalColorOverrides: { selectionForeground: '#cccccc' } })
+    expect(result.unsupportedKeys).toEqual([])
+  })
+
+  it('maps selection-foreground without hash', () => {
     const result = mapGhosttyToOrca({ 'selection-foreground': 'cccccc' })
-    expect(result.diff).toEqual({
-      terminalColorOverrides: { selectionForeground: 'cccccc' }
-    })
+    expect(result.diff).toEqual({ terminalColorOverrides: { selectionForeground: 'cccccc' } })
     expect(result.unsupportedKeys).toEqual([])
   })
 
   it('rejects invalid hex color and continues parsing others', () => {
-    const result = mapGhosttyToOrca({
-      foreground: '#12ZZ12',
-      background: '#111111'
-    })
-    expect(result.diff).toEqual({
-      terminalColorOverrides: { background: '#111111' }
-    })
+    const result = mapGhosttyToOrca({ foreground: '#12ZZ12', background: '#111111' })
+    expect(result.diff).toEqual({ terminalColorOverrides: { background: '#111111' } })
     expect(result.unsupportedKeys).toEqual(['foreground'])
   })
+})
 
+describe('mapGhosttyToOrca — palette', () => {
   it('maps palette array to terminalColorOverrides ANSI fields', () => {
     const result = mapGhosttyToOrca({
       palette: ['0=#000000', '1=#ff0000', '3=#ffaa00', '15=#ffffff']
@@ -271,24 +242,20 @@ describe('mapGhosttyToOrca', () => {
   })
 
   it('ignores unknown palette indices', () => {
-    const result = mapGhosttyToOrca({
-      palette: ['27=#abcdef']
-    })
+    const result = mapGhosttyToOrca({ palette: ['27=#abcdef'] })
     expect(result.diff).toEqual({})
     expect(result.unsupportedKeys).toEqual([])
   })
 
   it('ignores palette entries with invalid hex', () => {
-    const result = mapGhosttyToOrca({
-      palette: ['0=#000000', '1=gggggg']
-    })
-    expect(result.diff).toEqual({
-      terminalColorOverrides: { black: '#000000' }
-    })
+    const result = mapGhosttyToOrca({ palette: ['0=#000000', '1=gggggg'] })
+    expect(result.diff).toEqual({ terminalColorOverrides: { black: '#000000' } })
     expect(result.unsupportedKeys).toEqual([])
   })
+})
 
-  it('maps window-padding-color to terminalPanePaddingColor', () => {
+describe('mapGhosttyToOrca — window & padding', () => {
+  it('maps window-padding-color hex to terminalPanePaddingColor', () => {
     const result = mapGhosttyToOrca({ 'window-padding-color': '#202020' })
     expect(result.diff).toEqual({ terminalPanePaddingColor: '#202020' })
     expect(result.unsupportedKeys).toEqual([])
@@ -300,15 +267,54 @@ describe('mapGhosttyToOrca', () => {
     expect(result.unsupportedKeys).toEqual(['window-padding-color'])
   })
 
+  it('treats window-padding-color extend as default behavior (not unsupported)', () => {
+    const result = mapGhosttyToOrca({ 'window-padding-color': 'extend' })
+    expect(result.diff).toEqual({})
+    expect(result.unsupportedKeys).toEqual([])
+  })
+
+  it('treats window-padding-color background as default behavior (not unsupported)', () => {
+    const result = mapGhosttyToOrca({ 'window-padding-color': 'background' })
+    expect(result.diff).toEqual({})
+    expect(result.unsupportedKeys).toEqual([])
+  })
+
+  it('treats window-padding-color EXTEND case-insensitively', () => {
+    const result = mapGhosttyToOrca({ 'window-padding-color': 'EXTEND' })
+    expect(result.diff).toEqual({})
+    expect(result.unsupportedKeys).toEqual([])
+  })
+
   it('maps window-padding-balance to terminalPaddingBalance', () => {
     const result = mapGhosttyToOrca({ 'window-padding-balance': 'true' })
     expect(result.diff).toEqual({ terminalPaddingBalance: true })
     expect(result.unsupportedKeys).toEqual([])
   })
+})
 
-  it('marks unsupported keys as unsupported', () => {
+describe('mapGhosttyToOrca — unsupported keys', () => {
+  it('marks unknown keys as unsupported', () => {
+    const result = mapGhosttyToOrca({ 'unknown-key': 'value' })
+    expect(result.diff).toEqual({})
+    expect(result.unsupportedKeys).toEqual(['unknown-key'])
+  })
+
+  it('handles a mix of supported and unsupported keys', () => {
     const result = mapGhosttyToOrca({
-      'background-blur-radius': '20',
+      'font-family': 'Fira Code',
+      'font-size': '13',
+      'background-blur-radius': '20'
+    })
+    expect(result.diff).toEqual({
+      terminalFontFamily: 'Fira Code',
+      terminalFontSize: 13,
+      windowBackgroundBlur: true
+    })
+    expect(result.unsupportedKeys).toEqual([])
+  })
+
+  it('marks all intentionally unsupported keys', () => {
+    const result = mapGhosttyToOrca({
       'window-decoration': 'true',
       'window-step-resize': 'true',
       'window-height': '1000',
@@ -319,7 +325,6 @@ describe('mapGhosttyToOrca', () => {
     })
     expect(result.diff).toEqual({})
     expect(result.unsupportedKeys).toEqual([
-      'background-blur-radius',
       'window-decoration',
       'window-step-resize',
       'window-height',
