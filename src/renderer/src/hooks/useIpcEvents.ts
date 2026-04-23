@@ -182,12 +182,20 @@ export function useIpcEvents(): void {
       window.api.ui.onRequestTerminalCreate((data) => {
         try {
           const store = useAppStore.getState()
+          const worktreeId = data.worktreeId ?? store.activeWorktreeId
+          if (!worktreeId) {
+            window.api.ui.replyTerminalCreate({
+              requestId: data.requestId,
+              error: 'No active worktree'
+            })
+            return
+          }
           store.setActiveView('terminal')
-          store.setActiveWorktree(data.worktreeId)
-          const tab = store.createTab(data.worktreeId)
+          store.setActiveWorktree(worktreeId)
+          const tab = store.createTab(worktreeId)
           store.setActiveTabType('terminal')
           store.setActiveTab(tab.id)
-          store.revealWorktreeInSidebar(data.worktreeId)
+          store.revealWorktreeInSidebar(worktreeId)
           if (data.title) {
             store.setTabCustomTitle(tab.id, data.title)
           }

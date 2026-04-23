@@ -2339,8 +2339,9 @@ Terminals:
   terminal create           Create a new terminal tab in a worktree
   terminal rename           Set or clear the title of a terminal tab
   terminal split            Split an existing terminal pane
-  terminal focus            Bring a terminal tab to the foreground
-  terminal close            Close a terminal tab
+  terminal switch           Bring a terminal tab to the foreground
+  terminal focus            Alias for terminal switch
+  terminal close            Close a terminal pane (or tab if last pane)
 
 Browser Automation:
   tab create                Create a new browser tab (navigates to --url)
@@ -2408,13 +2409,15 @@ Common Commands:
   orca worktree rm --worktree <selector> [--force] [--json]
   orca worktree ps [--limit <n>] [--json]
   orca terminal list [--worktree <selector>] [--limit <n>] [--json]
-  orca terminal show --terminal <handle> [--json]
-  orca terminal read --terminal <handle> [--json]
-  orca terminal send --terminal <handle> [--text <text>] [--enter] [--interrupt] [--json]
-  orca terminal wait --terminal <handle> --for exit|tui-idle [--timeout-ms <ms>] [--json]
+  orca terminal show [--terminal <handle>] [--json]
+  orca terminal read [--terminal <handle>] [--json]
+  orca terminal send [--terminal <handle>] [--text <text>] [--enter] [--interrupt] [--json]
+  orca terminal wait [--terminal <handle>] --for exit|tui-idle [--timeout-ms <ms>] [--json]
   orca terminal stop --worktree <selector> [--json]
-  orca terminal focus --terminal <handle> [--json]
-  orca terminal close --terminal <handle> [--json]
+  orca terminal create [--worktree <selector>] [--title <name>] [--command <text>] [--json]
+  orca terminal split [--terminal <handle>] [--direction horizontal|vertical] [--json]
+  orca terminal switch [--terminal <handle>] [--json]
+  orca terminal close [--terminal <handle>] [--json]
   orca repo list [--json]
   orca repo add --path <path> [--json]
   orca repo show --repo <selector> [--json]

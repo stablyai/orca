@@ -758,10 +758,10 @@ export class OrcaRuntimeRpcServer {
           request.params && typeof request.params === 'object' && request.params !== null
             ? (request.params as { worktree?: unknown; command?: unknown; title?: unknown })
             : null
-        const worktreeSelector = params?.worktree
-        if (typeof worktreeSelector !== 'string' || worktreeSelector.length === 0) {
-          return this.errorResponse(request.id, 'invalid_argument', 'Missing worktree selector')
-        }
+        const worktreeSelector =
+          typeof params?.worktree === 'string' && params.worktree.length > 0
+            ? params.worktree
+            : undefined
         const result = await this.runtime.createTerminal(worktreeSelector, {
           command: typeof params?.command === 'string' ? params.command : undefined,
           title: typeof params?.title === 'string' ? params.title : undefined

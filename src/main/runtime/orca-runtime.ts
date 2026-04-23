@@ -978,12 +978,16 @@ export class OrcaRuntimeService {
   }
 
   async createTerminal(
-    worktreeSelector: string,
+    worktreeSelector?: string,
     opts: { command?: string; title?: string } = {}
   ): Promise<RuntimeTerminalCreate> {
     this.assertGraphReady()
     const win = this.getAuthoritativeWindow()
-    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+    // Why: mirrors browserTabCreate — when no worktree is specified, pass
+    // undefined so the renderer uses its current active worktree.
+    const worktreeId = worktreeSelector
+      ? (await this.resolveWorktreeSelector(worktreeSelector)).id
+      : undefined
     const requestId = randomUUID()
 
     // Why: terminal creation is a renderer-side Zustand store operation (like
@@ -1013,7 +1017,7 @@ export class OrcaRuntimeService {
       ipcMain.on('terminal:tabCreateReply', handler)
       win.webContents.send('terminal:requestTabCreate', {
         requestId,
-        worktreeId: worktree.id,
+        worktreeId,
         command: opts.command,
         title: opts.title
       })
@@ -1023,7 +1027,7 @@ export class OrcaRuntimeService {
     // populates this.leaves may not have arrived yet. Wait for the leaf to
     // appear so we can return a valid handle the caller can use right away.
     const handle = await this.waitForTerminalHandle(reply.tabId)
-    return { handle, worktreeId: worktree.id, title: reply.title }
+    return { handle, worktreeId: worktreeId ?? '', title: reply.title }
   }
 
   private waitForTerminalHandle(tabId: string, timeoutMs = 10_000): Promise<string> {
