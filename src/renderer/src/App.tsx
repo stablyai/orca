@@ -100,6 +100,7 @@ function App(): React.JSX.Element {
   )
 
   const activeView = useAppStore((s) => s.activeView)
+  const activeModal = useAppStore((s) => s.activeModal)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const activeTabId = useAppStore((s) => s.activeTabId)
