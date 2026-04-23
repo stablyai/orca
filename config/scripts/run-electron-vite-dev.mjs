@@ -11,8 +11,10 @@ delete process.env.ELECTRON_RUN_AS_NODE
 const require = createRequire(import.meta.url)
 // Why: tests inject a tiny fake CLI here so they can verify Ctrl+C tears down
 // the full child tree without depending on a real electron-vite install.
+// Restricted to test environments to prevent process injection via env in
+// production/dev runs where an attacker could control ORCA_ELECTRON_VITE_CLI.
 const electronViteCli =
-  process.env.ORCA_ELECTRON_VITE_CLI ||
+  (process.env.NODE_ENV === 'test' && process.env.ORCA_ELECTRON_VITE_CLI) ||
   path.join(path.dirname(require.resolve('electron-vite/package.json')), 'bin', 'electron-vite.js')
 const forwardedArgs = ['dev', ...process.argv.slice(2)]
 const child = spawn(process.execPath, [electronViteCli, ...forwardedArgs], {
