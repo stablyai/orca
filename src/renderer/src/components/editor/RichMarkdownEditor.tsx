@@ -501,18 +501,23 @@ export default function RichMarkdownEditor({
         onImagePick={handleLocalImagePick}
       />
       {headerSlot}
-      <RichMarkdownSearchBar
-        activeMatchIndex={activeMatchIndex}
-        isOpen={isSearchOpen}
-        matchCount={matchCount}
-        onClose={closeSearch}
-        onMoveToMatch={moveToMatch}
-        onQueryChange={setSearchQuery}
-        query={searchQuery}
-        searchInputRef={searchInputRef}
-      />
-      <div ref={scrollContainerRef} className="min-h-0 flex-1 overflow-auto scrollbar-editor">
-        <EditorContent editor={editor} />
+      {/* Why: wrap scroll area + search bar in a relative container so the
+          search bar overlays the content (Monaco-style) instead of occupying
+          layout space and shifting the document down when opened. */}
+      <div className="relative min-h-0 flex-1">
+        <div ref={scrollContainerRef} className="h-full overflow-auto scrollbar-editor">
+          <EditorContent editor={editor} />
+        </div>
+        <RichMarkdownSearchBar
+          activeMatchIndex={activeMatchIndex}
+          isOpen={isSearchOpen}
+          matchCount={matchCount}
+          onClose={closeSearch}
+          onMoveToMatch={moveToMatch}
+          onQueryChange={setSearchQuery}
+          query={searchQuery}
+          searchInputRef={searchInputRef}
+        />
       </div>
       {linkBubble ? (
         <RichMarkdownLinkBubble

@@ -48,18 +48,17 @@
 }
 
 .rich-markdown-search {
-  position: sticky;
-  top: 0;
+  /* Why: overlay the editor like Monaco's find widget instead of occupying
+     layout space — otherwise opening cmd+f shifts the document content down. */
+  position: absolute;
+  top: 8px;
+  right: 12px;
   z-index: 20;
   display: flex;
   align-items: center;
   gap: 0;
   width: fit-content;
-  max-width: min(100%, 460px);
-  margin-left: auto;
-  margin-right: 12px;
-  margin-top: 8px;
-  margin-bottom: 6px;
+  max-width: min(calc(100% - 24px), 460px);
   padding: 0 2px 0 4px;
   border: 1px solid var(--border);
   border-radius: 4px;
