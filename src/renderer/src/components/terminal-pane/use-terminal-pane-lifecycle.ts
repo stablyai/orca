@@ -29,6 +29,7 @@ import {
   mode2031SequenceFor
 } from './terminal-appearance'
 import { parseOsc52 } from './osc52-clipboard'
+import { installMouseHideWhileTyping } from './mouse-hide-while-typing'
 import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-option-as-alt'
 import { resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { connectPanePty } from './pty-connection'
@@ -197,6 +198,7 @@ export function useTerminalPaneLifecycle({
   const selectionDisposablesRef = useRef(new Map<number, IDisposable>())
   const mode2031DisposablesRef = useRef(new Map<number, IDisposable[]>())
   const osc52DisposablesRef = useRef(new Map<number, IDisposable>())
+  const mouseHideDisposablesRef = useRef(new Map<number, IDisposable>())
 
   const applyAppearance = (manager: PaneManager): void => {
     const currentSettings = settingsRef.current
@@ -245,6 +247,7 @@ export function useTerminalPaneLifecycle({
     const pendingWrites = pendingWritesRef.current
     const linkDisposables = linkProviderDisposablesRef.current
     const selectionDisposables = selectionDisposablesRef.current
+    const mouseHideDisposables = mouseHideDisposablesRef.current
     const worktreePath =
       useAppStore
         .getState()
@@ -394,6 +397,12 @@ export function useTerminalPaneLifecycle({
           })
         })
         selectionDisposablesRef.current.set(pane.id, selectionDisposable)
+        // Hide mouse cursor while typing — classic terminal UX, scoped to the
+        // pane container so other UI elements keep their cursor.
+        if (settingsRef.current?.terminalMouseHideWhileTyping) {
+          const mouseHideDisposable = installMouseHideWhileTyping(pane.terminal, pane.container)
+          mouseHideDisposablesRef.current.set(pane.id, mouseHideDisposable)
+        }
         pane.terminal.options.linkHandler = {
           allowNonHttpProtocols: true,
           activate: (event, text) => {
@@ -467,6 +476,11 @@ export function useTerminalPaneLifecycle({
         if (osc52Disposable) {
           osc52Disposable.dispose()
           osc52DisposablesRef.current.delete(paneId)
+        }
+        const mouseHideDisposable = mouseHideDisposablesRef.current.get(paneId)
+        if (mouseHideDisposable) {
+          mouseHideDisposable.dispose()
+          mouseHideDisposablesRef.current.delete(paneId)
         }
         const transport = paneTransportsRef.current.get(paneId)
         const panePtyBinding = panePtyBindings.get(paneId)
@@ -783,6 +797,10 @@ export function useTerminalPaneLifecycle({
         disposable.dispose()
       }
       selectionDisposables.clear()
+      for (const disposable of mouseHideDisposables.values()) {
+        disposable.dispose()
+      }
+      mouseHideDisposables.clear()
       for (const transport of paneTransports.values()) {
         if (tabStillExists && transport.getPtyId()) {
           // Why: moving a terminal tab between groups currently rehomes the
