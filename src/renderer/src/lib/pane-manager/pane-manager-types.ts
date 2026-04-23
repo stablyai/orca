@@ -34,6 +34,8 @@ export type PaneStyleOptions = {
   focusFollowsMouse?: boolean
   panePaddingColor?: string
   paddingBalance?: boolean
+  paddingX?: number
+  paddingY?: number
 }
 
 export type ManagedPane = {

@@ -141,6 +141,12 @@ export function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
 
+const HEX_COLOR_RE = /^#?([0-9a-fA-F]{3}){1,2}$/
+
+function isHexColor(value: string): boolean {
+  return HEX_COLOR_RE.test(value)
+}
+
 export function applyTerminalAppearance(
   manager: PaneManager,
   settings: GlobalSettings,
@@ -168,6 +174,13 @@ export function applyTerminalAppearance(
   if (settings.terminalBackgroundOpacity !== undefined && theme?.background) {
     paneBackground = hexToRgba(theme.background, settings.terminalBackgroundOpacity)
     theme = { ...theme, background: paneBackground }
+  }
+
+  // Why: Ghostty's cursor-opacity applies alpha to the cursor color. We only
+  // convert when the resolved cursor is a hex value; named CSS colors are
+  // left untouched because hexToRgba expects a hex input.
+  if (settings.terminalCursorOpacity !== undefined && theme?.cursor && isHexColor(theme.cursor)) {
+    theme = { ...theme, cursor: hexToRgba(theme.cursor, settings.terminalCursorOpacity) }
   }
 
   const terminalFontWeights = resolveTerminalFontWeights(settings.terminalFontWeight)
@@ -220,6 +233,8 @@ export function applyTerminalAppearance(
     dividerThicknessPx: paneStyles.dividerThicknessPx,
     focusFollowsMouse: paneStyles.focusFollowsMouse,
     panePaddingColor: settings.terminalPanePaddingColor,
-    paddingBalance: settings.terminalPaddingBalance
+    paddingBalance: settings.terminalPaddingBalance,
+    paddingX: settings.terminalPaddingX,
+    paddingY: settings.terminalPaddingY
   })
 }

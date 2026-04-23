@@ -554,22 +554,27 @@ export function useTerminalPaneLifecycle({
       terminalOptions: () => {
         const currentSettings = settingsRef.current
         const terminalFontWeights = resolveTerminalFontWeights(currentSettings?.terminalFontWeight)
+        const scrollbackLimit = currentSettings?.terminalScrollbackLimit
         return {
           fontSize: currentSettings?.terminalFontSize ?? 14,
           fontFamily: buildFontFamily(currentSettings?.terminalFontFamily ?? ''),
           fontWeight: terminalFontWeights.fontWeight,
           fontWeightBold: terminalFontWeights.fontWeightBold,
-          scrollback: Math.min(
-            50_000,
-            Math.max(
-              1000,
-              Math.round((currentSettings?.terminalScrollbackBytes ?? 10_000_000) / 200)
-            )
-          ),
+          scrollback:
+            scrollbackLimit !== undefined
+              ? scrollbackLimit
+              : Math.min(
+                  50_000,
+                  Math.max(
+                    1000,
+                    Math.round((currentSettings?.terminalScrollbackBytes ?? 10_000_000) / 200)
+                  )
+                ),
           cursorStyle: currentSettings?.terminalCursorStyle ?? 'bar',
           cursorBlink: currentSettings?.terminalCursorBlink ?? true,
           macOptionIsMeta: effectiveMacOptionAsAltRef.current === 'true',
-          lineHeight: currentSettings?.terminalLineHeight ?? 1
+          lineHeight: currentSettings?.terminalLineHeight ?? 1,
+          wordSeparator: currentSettings?.terminalWordSeparator
         }
       },
       onLinkClick: (event, url) => {

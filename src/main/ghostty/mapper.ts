@@ -192,6 +192,107 @@ export function mapGhosttyToOrca(
       continue
     }
 
+    if (key === 'split-divider-color') {
+      const v = value as string
+      if (HEX_COLOR_RE.test(v)) {
+        diff.terminalDividerColorDark = v
+        diff.terminalDividerColorLight = v
+      } else {
+        unsupportedKeys.push(key)
+      }
+      continue
+    }
+
+    if (key === 'unfocused-split-opacity') {
+      const v = value as string
+      const num = Number(v)
+      if (!Number.isFinite(num) || num < 0 || num > 1) {
+        unsupportedKeys.push(key)
+        continue
+      }
+      diff.terminalInactivePaneOpacity = num
+      continue
+    }
+
+    if (key === 'scrollback-limit') {
+      const v = value as string
+      const num = Number(v)
+      if (!Number.isFinite(num) || Number.isNaN(num) || !Number.isInteger(num) || num < 0) {
+        unsupportedKeys.push(key)
+        continue
+      }
+      diff.terminalScrollbackLimit = num
+      continue
+    }
+
+    if (key === 'window-padding-x') {
+      const v = value as string
+      const num = Number(v)
+      if (!Number.isFinite(num) || Number.isNaN(num) || !Number.isInteger(num)) {
+        unsupportedKeys.push(key)
+        continue
+      }
+      diff.terminalPaddingX = num
+      continue
+    }
+
+    if (key === 'window-padding-y') {
+      const v = value as string
+      const num = Number(v)
+      if (!Number.isFinite(num) || Number.isNaN(num) || !Number.isInteger(num)) {
+        unsupportedKeys.push(key)
+        continue
+      }
+      diff.terminalPaddingY = num
+      continue
+    }
+
+    if (key === 'cursor-text') {
+      const v = value as string
+      if (HEX_COLOR_RE.test(v)) {
+        colorOverrides.cursorAccent = v
+      } else {
+        unsupportedKeys.push(key)
+      }
+      continue
+    }
+
+    if (key === 'bold-color') {
+      const v = value as string
+      if (HEX_COLOR_RE.test(v)) {
+        colorOverrides.bold = v
+      } else {
+        unsupportedKeys.push(key)
+      }
+      continue
+    }
+
+    if (key === 'mouse-hide-while-typing') {
+      const v = value as string
+      if (v !== 'true' && v !== 'false') {
+        unsupportedKeys.push(key)
+        continue
+      }
+      diff.terminalMouseHideWhileTyping = v === 'true'
+      continue
+    }
+
+    if (key === 'selection-word-chars') {
+      diff.terminalWordSeparator = value as string
+      continue
+    }
+
+    if (key === 'cursor-opacity') {
+      const v = value as string
+      const num = Number(v)
+      if (!Number.isFinite(num) || num < 0 || num > 1) {
+        unsupportedKeys.push(key)
+        continue
+      }
+      diff.terminalCursorOpacity = num
+      continue
+    }
+
     const mappedKey = SUPPORTED_KEY_MAP[key]
     if (!mappedKey) {
       unsupportedKeys.push(key)

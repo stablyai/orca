@@ -223,4 +223,10 @@ export function applyRootBackground(root: HTMLElement, styleOptions: PaneStyleOp
   if (styleOptions.paddingBalance !== undefined) {
     root.style.setProperty('--pane-padding-balance', styleOptions.paddingBalance ? '1' : '0')
   }
+  if (styleOptions.paddingX !== undefined) {
+    root.style.setProperty('--pane-padding-x', `${styleOptions.paddingX}px`)
+  }
+  if (styleOptions.paddingY !== undefined) {
+    root.style.setProperty('--pane-padding-y', `${styleOptions.paddingY}px`)
+  }
 }

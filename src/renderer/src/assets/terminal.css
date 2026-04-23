@@ -235,16 +235,15 @@
   caret-color: rgba(255, 255, 255, 0.6);
 }
 
-/* Baseline xterm-container layout — the 4px inset padding that pane-lifecycle.ts
-   previously set as inline styles now lives here so that the data-has-title
-   CSS attribute selector override can take effect (CSS attribute selectors
-   cannot override inline styles). */
+/* Baseline xterm-container layout — padding is driven by CSS custom properties
+   so Ghostty-imported window-padding-x/y can be applied without inline styles.
+   The fallback 4px preserves the legacy default. */
 .xterm-container {
   position: relative;
-  width: calc(100% - 4px);
-  height: calc(100% - 4px);
-  margin-top: 4px;
-  margin-left: 4px;
+  width: calc(100% - var(--pane-padding-x, 4px));
+  height: calc(100% - var(--pane-padding-y, 4px));
+  margin-top: var(--pane-padding-y, 4px);
+  margin-left: var(--pane-padding-x, 4px);
 }
 
 /* When a pane has a title, shift the terminal content down to make room.

@@ -733,6 +733,7 @@ export type TerminalColorOverrides = {
   foreground?: string
   background?: string
   cursor?: string
+  cursorAccent?: string
   selectionBackground?: string
   selectionForeground?: string
   black?: string
@@ -751,6 +752,10 @@ export type TerminalColorOverrides = {
   brightMagenta?: string
   brightCyan?: string
   brightWhite?: string
+  // Why: xterm.js ITheme does not expose a `bold` key, but Ghostty users
+  // expect the setting to be preserved so a future renderer CSS override
+  // or xterm upgrade can honour it without a migration.
+  bold?: string
 }
 
 export type GlobalSettings = {
@@ -782,6 +787,12 @@ export type GlobalSettings = {
   terminalColorOverrides?: TerminalColorOverrides
   terminalPanePaddingColor?: string
   terminalPaddingBalance?: boolean
+  terminalScrollbackLimit?: number
+  terminalPaddingX?: number
+  terminalPaddingY?: number
+  terminalMouseHideWhileTyping?: boolean
+  terminalWordSeparator?: string
+  terminalCursorOpacity?: number
   windowBackgroundBlur?: boolean
   /** Why: Windows terminals conventionally use right-click as a paste gesture.
    *  The setting stays Windows-only so macOS/Linux keep their existing context
