@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Files, Search, GitBranch, ListChecks, PanelRight } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { useActiveWorktree, useRepoById } from '@/store/selectors'
+import { getRepoMapFromState, useActiveWorktree, useRepoById } from '@/store/selectors'
 import { cn } from '@/lib/utils'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
 import type { RightSidebarTab, ActivityBarPosition } from '@/store/slices/editor'
@@ -45,7 +45,7 @@ function getActiveChecksStatus(state: ReturnType<typeof useAppStore.getState>): 
     return null
   }
 
-  const activeRepo = state.repos.find((repo) => repo.id === activeWorktree.repoId)
+  const activeRepo = getRepoMapFromState(state).get(activeWorktree.repoId)
   if (!activeRepo) {
     return null
   }

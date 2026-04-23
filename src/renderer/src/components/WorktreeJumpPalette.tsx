@@ -3,7 +3,7 @@ import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useSt
 import { toast } from 'sonner'
 import { Globe, Plus } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { useAllWorktrees } from '@/store/selectors'
+import { getRepoMapFromState, useAllWorktrees } from '@/store/selectors'
 import {
   CommandDialog,
   CommandInput,
@@ -581,7 +581,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
 
       const repoForLookup =
         (state.activeRepoId ? (repoMap.get(state.activeRepoId) ?? null) : null) ||
-        state.repos.find((r) => isGitRepoKind(r))
+        [...getRepoMapFromState(state).values()].find((repo) => isGitRepoKind(repo))
       if (!repoForLookup || !isGitRepoKind(repoForLookup)) {
         openComposer({ prefilledName: trimmed })
         return

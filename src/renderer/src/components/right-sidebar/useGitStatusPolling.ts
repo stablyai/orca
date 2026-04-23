@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo } from 'react'
 import { useAppStore } from '@/store'
-import { useActiveWorktree, useAllWorktrees, useRepoById } from '@/store/selectors'
+import {
+  getRepoMapFromState,
+  useActiveWorktree,
+  useAllWorktrees,
+  useRepoById
+} from '@/store/selectors'
 import type { GitConflictOperation, GitStatusResult } from '../../../../shared/types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getConnectionId } from '@/lib/connection-context'
@@ -33,7 +38,7 @@ export function useGitStatusPolling(): void {
       }
       const worktree = allWorktrees.find((entry) => entry.id === worktreeId)
       if (worktree) {
-        const repo = useAppStore.getState().repos.find((entry) => entry.id === worktree.repoId)
+        const repo = getRepoMapFromState(useAppStore.getState()).get(worktree.repoId)
         if (repo && !isGitRepoKind(repo)) {
           continue
         }
