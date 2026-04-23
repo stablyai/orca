@@ -178,7 +178,7 @@ export function registerSshHandlers(
       const mux = new SshChannelMultiplexer(transport)
       activeMultiplexers.set(args.targetId, mux)
 
-      registerRelayRoots(mux, args.targetId, store)
+      await registerRelayRoots(mux, args.targetId, store)
 
       const ptyProvider = new SshPtyProvider(args.targetId, mux)
       registerSshPtyProvider(args.targetId, ptyProvider)

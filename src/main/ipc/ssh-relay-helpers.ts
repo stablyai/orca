@@ -32,16 +32,41 @@ import type { Store } from '../persistence'
 // session.registerRoot. This must be called after every relay deploy — both
 // initial connect and reconnection — because each deploy creates a fresh
 // RelayContext on the remote host.
-export function registerRelayRoots(
+//
+// Registers repo roots first (synchronous notify), then discovers linked
+// worktree paths via git.listWorktrees and registers those too. Linked
+// worktrees can live anywhere on disk (e.g. /home/user/worktrees/feature-x)
+// and would be rejected as "Path outside authorized workspace" without this.
+export async function registerRelayRoots(
   mux: SshChannelMultiplexer,
   connectionId: string,
   store: Store
-): void {
-  for (const repo of store.getRepos()) {
-    if (repo.connectionId === connectionId) {
-      mux.notify('session.registerRoot', { rootPath: repo.path })
-    }
+): Promise<void> {
+  const remoteRepos = store.getRepos().filter((r) => r.connectionId === connectionId)
+
+  for (const repo of remoteRepos) {
+    mux.notify('session.registerRoot', { rootPath: repo.path })
   }
+
+  // Why: git.listWorktrees is a request (not a notification) that requires
+  // the repo root to be registered first. Run after the repo root notify
+  // calls above so the relay accepts the path.
+  await Promise.all(
+    remoteRepos.map(async (repo) => {
+      try {
+        const worktrees = (await mux.request('git.listWorktrees', {
+          repoPath: repo.path
+        })) as { path: string }[]
+        for (const wt of worktrees) {
+          if (wt.path !== repo.path) {
+            mux.notify('session.registerRoot', { rootPath: wt.path })
+          }
+        }
+      } catch {
+        // git worktree list may fail for folder-mode repos — not fatal
+      }
+    })
+  )
 }
 
 export function cleanupConnection(
@@ -174,7 +199,7 @@ export async function reestablishRelayStack(
     activeMultiplexers.set(targetId, mux)
 
     if (store) {
-      registerRelayRoots(mux, targetId, store)
+      await registerRelayRoots(mux, targetId, store)
     }
 
     const ptyProvider = new SshPtyProvider(targetId, mux)

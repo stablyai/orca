@@ -19,6 +19,7 @@ import { gitExecFileAsync } from '../git/runner'
 import { isWslPath, parseWslPath, getWslHome } from '../wsl'
 import { createSetupRunnerScript, getEffectiveHooks, shouldRunSetupForCreate } from '../hooks'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
+import { getActiveMultiplexer } from './ssh'
 import type { SshGitProvider } from '../providers/ssh-git-provider'
 import {
   sanitizeWorktreeName,
@@ -108,6 +109,15 @@ export async function createRemoteWorktree(
     await provider.exec(['fetch', remote], repo.path)
   } catch {
     /* best-effort */
+  }
+
+  // Why: the relay validates that targetDir is within a registered root.
+  // The new worktree lives as a sibling of the repo (repo.path/../name),
+  // outside the repo root. Register it before addWorktree so the relay
+  // accepts the path.
+  const mux = getActiveMultiplexer(repo.connectionId!)
+  if (mux) {
+    mux.notify('session.registerRoot', { rootPath: remotePath })
   }
 
   // Create worktree via relay
