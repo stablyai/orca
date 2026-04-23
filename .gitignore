@@ -61,6 +61,7 @@ tmp/
 .tmp/
 design-docs/
 .context/
+.atl/
 
 # Local-only design/planning docs (not checked in)
 docs/*-design.md
