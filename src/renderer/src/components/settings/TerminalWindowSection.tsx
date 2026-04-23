@@ -22,6 +22,11 @@ const COLOR_OVERRIDE_GROUPS: {
       { key: 'background', label: 'Background', description: 'Terminal background color' },
       { key: 'cursor', label: 'Cursor', description: 'Cursor color' },
       {
+        key: 'cursorAccent',
+        label: 'Cursor Text',
+        description: 'Color of text under the cursor (block cursor)'
+      },
+      {
         key: 'selectionBackground',
         label: 'Selection Background',
         description: 'Background color of selected text'
@@ -30,6 +35,11 @@ const COLOR_OVERRIDE_GROUPS: {
         key: 'selectionForeground',
         label: 'Selection Foreground',
         description: 'Text color of selected text'
+      },
+      {
+        key: 'bold',
+        label: 'Bold Text',
+        description: 'Color for bold text. Falls back to the normal color if not set.'
       }
     ]
   },
@@ -166,6 +176,94 @@ export function TerminalWindowSection({
           fallback=""
           onChange={(value) => updateSettings({ terminalPanePaddingColor: value || undefined })}
         />
+      </SearchableSetting>
+
+      <SearchableSetting
+        title="Scrollback Lines"
+        description="Number of lines kept in scrollback buffer. 0 means unlimited."
+        keywords={['scrollback', 'lines', 'buffer', 'history']}
+      >
+        <NumberField
+          label="Scrollback Lines"
+          description="Number of lines kept in scrollback buffer. 0 means unlimited."
+          value={settings.terminalScrollbackLimit ?? 10000}
+          defaultValue={10000}
+          min={0}
+          max={999999}
+          step={1000}
+          suffix="lines (0 = unlimited)"
+          onChange={(value) => updateSettings({ terminalScrollbackLimit: Math.max(0, value) })}
+        />
+      </SearchableSetting>
+
+      <SearchableSetting
+        title="Horizontal Padding"
+        description="Horizontal padding around the terminal grid in pixels."
+        keywords={['padding', 'horizontal', 'spacing', 'margin']}
+      >
+        <NumberField
+          label="Horizontal Padding"
+          description="Horizontal padding around the terminal grid in pixels."
+          value={settings.terminalPaddingX ?? 4}
+          defaultValue={4}
+          min={0}
+          max={512}
+          step={1}
+          suffix="px"
+          onChange={(value) => updateSettings({ terminalPaddingX: Math.max(0, value) })}
+        />
+      </SearchableSetting>
+
+      <SearchableSetting
+        title="Vertical Padding"
+        description="Vertical padding around the terminal grid in pixels."
+        keywords={['padding', 'vertical', 'spacing', 'margin']}
+      >
+        <NumberField
+          label="Vertical Padding"
+          description="Vertical padding around the terminal grid in pixels."
+          value={settings.terminalPaddingY ?? 4}
+          defaultValue={4}
+          min={0}
+          max={512}
+          step={1}
+          suffix="px"
+          onChange={(value) => updateSettings({ terminalPaddingY: Math.max(0, value) })}
+        />
+      </SearchableSetting>
+
+      <SearchableSetting
+        title="Hide Mouse While Typing"
+        description="Hide the mouse cursor when typing in the terminal."
+        keywords={['mouse', 'hide', 'typing', 'cursor']}
+        className="flex items-center justify-between gap-4 px-1 py-2"
+      >
+        <div className="space-y-0.5">
+          <Label>Hide Mouse While Typing</Label>
+          <p className="text-xs text-muted-foreground">
+            Hide the mouse cursor when typing in the terminal.
+          </p>
+        </div>
+        <button
+          role="switch"
+          aria-checked={settings.terminalMouseHideWhileTyping ?? false}
+          onClick={() =>
+            updateSettings({
+              terminalMouseHideWhileTyping: !settings.terminalMouseHideWhileTyping
+            })
+          }
+          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
+            (settings.terminalMouseHideWhileTyping ?? false)
+              ? 'bg-foreground'
+              : 'bg-muted-foreground/30'
+          }`}
+        >
+          <span
+            className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
+              (settings.terminalMouseHideWhileTyping ?? false) ? 'translate-x-4' : 'translate-x-0.5'
+            }`}
+          />
+        </button>
       </SearchableSetting>
 
       <SearchableSetting

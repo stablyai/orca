@@ -33,6 +33,11 @@ export const TERMINAL_CURSOR_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     title: 'Blinking Cursor',
     description: 'Uses the blinking variant of the selected cursor shape.',
     keywords: ['terminal', 'cursor', 'blink']
+  },
+  {
+    title: 'Cursor Opacity',
+    description: 'Opacity of the terminal cursor.',
+    keywords: ['terminal', 'cursor', 'opacity', 'transparency']
   }
 ]
 
@@ -108,6 +113,11 @@ export const TERMINAL_ADVANCED_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     title: 'Scrollback Size',
     description: 'Maximum terminal scrollback buffer size.',
     keywords: ['terminal', 'scrollback', 'buffer', 'memory']
+  },
+  {
+    title: 'Word Separators',
+    description: 'Characters treated as word boundaries for double-click selection.',
+    keywords: ['word', 'separator', 'boundary', 'double-click', 'selection']
   }
 ]
 
@@ -162,6 +172,26 @@ export const TERMINAL_WINDOW_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     title: 'Padding Color',
     description: 'Color of the padding area around the terminal content.',
     keywords: ['padding', 'color', 'background', 'border']
+  },
+  {
+    title: 'Scrollback Lines',
+    description: 'Number of lines kept in scrollback buffer. 0 means unlimited.',
+    keywords: ['scrollback', 'lines', 'buffer', 'history']
+  },
+  {
+    title: 'Horizontal Padding',
+    description: 'Horizontal padding around the terminal grid in pixels.',
+    keywords: ['padding', 'horizontal', 'spacing', 'margin']
+  },
+  {
+    title: 'Vertical Padding',
+    description: 'Vertical padding around the terminal grid in pixels.',
+    keywords: ['padding', 'vertical', 'spacing', 'margin']
+  },
+  {
+    title: 'Hide Mouse While Typing',
+    description: 'Hide the mouse cursor when typing in the terminal.',
+    keywords: ['mouse', 'hide', 'typing', 'cursor']
   },
   {
     title: 'Color Overrides',

@@ -333,6 +333,28 @@ export function TerminalPane({
               />
             </button>
           </SearchableSetting>
+
+          <SearchableSetting
+            title="Cursor Opacity"
+            description="Opacity of the terminal cursor."
+            keywords={['terminal', 'cursor', 'opacity', 'transparency']}
+          >
+            <NumberField
+              label="Cursor Opacity"
+              description="Opacity of the terminal cursor."
+              value={settings.terminalCursorOpacity ?? 1}
+              defaultValue={1}
+              min={0}
+              max={1}
+              step={0.05}
+              suffix="0 to 1"
+              onChange={(value) =>
+                updateSettings({
+                  terminalCursorOpacity: clampNumber(value, 0, 1)
+                })
+              }
+            />
+          </SearchableSetting>
         </div>
       </section>
     ) : null,
@@ -723,6 +745,26 @@ export function TerminalPane({
           ) : null}
         </SearchableSetting>
 
+        <SearchableSetting
+          title="Word Separators"
+          description="Characters treated as word boundaries for double-click selection."
+          keywords={['word', 'separator', 'boundary', 'double-click', 'selection']}
+          className="space-y-2"
+        >
+          <Label>Word Separators</Label>
+          <Input
+            value={settings.terminalWordSeparator ?? ''}
+            onChange={(e) => {
+              const value = e.target.value
+              updateSettings({ terminalWordSeparator: value || undefined })
+            }}
+            placeholder={` ()[]{},'"\``}
+            className="max-w-sm"
+          />
+          <p className="text-xs text-muted-foreground">
+            Characters treated as word boundaries for double-click selection.
+          </p>
+        </SearchableSetting>
         {isMac ? (
           <SearchableSetting
             title="Option as Alt"
