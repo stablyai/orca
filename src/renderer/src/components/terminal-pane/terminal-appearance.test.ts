@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { Terminal } from '@xterm/headless'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import {
+  hexToRgba,
   installMode2031Handlers,
   maybePushMode2031Flip,
   mode2031SequenceFor
@@ -130,7 +131,6 @@ describe('maybePushMode2031Flip', () => {
     expect(last.get(2)).toBe('dark')
   })
 })
-
 describe('installMode2031Handlers', () => {
   // Regression coverage for the "random characters on restart" bug: a restored
   // xterm buffer may contain `CSI ?2031h` emitted by the previous session's
@@ -370,5 +370,23 @@ describe('installMode2031Handlers', () => {
       term1.dispose()
       term2.dispose()
     }
+  })
+})
+
+describe('hexToRgba', () => {
+  it('converts 6-char hex to rgba', () => {
+    expect(hexToRgba('#1a1a1a', 0.72)).toBe('rgba(26, 26, 26, 0.72)')
+  })
+
+  it('converts 3-char shorthand hex to rgba', () => {
+    expect(hexToRgba('#f0f', 0.5)).toBe('rgba(255, 0, 255, 0.5)')
+  })
+
+  it('handles full opacity', () => {
+    expect(hexToRgba('#000000', 1)).toBe('rgba(0, 0, 0, 1)')
+  })
+
+  it('handles zero opacity', () => {
+    expect(hexToRgba('#ffffff', 0)).toBe('rgba(255, 255, 255, 0)')
   })
 })

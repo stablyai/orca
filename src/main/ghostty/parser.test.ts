@@ -49,4 +49,24 @@ cursor-style = bar
       'cursor-style': 'bar'
     })
   })
+
+  it('returns array for duplicate keys', () => {
+    const input = `
+palette = 0=#000000
+palette = 1=#ff0000
+palette = 2=#00ff00
+`
+    const result = parseGhosttyConfig(input)
+    expect(result.palette).toEqual(['0=#000000', '1=#ff0000', '2=#00ff00'])
+  })
+
+  it('keeps single value as string when key is not duplicated', () => {
+    const input = `
+font-family = JetBrains Mono
+palette = 0=#000000
+`
+    const result = parseGhosttyConfig(input)
+    expect(result['font-family']).toBe('JetBrains Mono')
+    expect(result.palette).toBe('0=#000000')
+  })
 })

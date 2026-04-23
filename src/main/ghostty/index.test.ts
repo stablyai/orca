@@ -60,9 +60,10 @@ background = #1a1a1a
     )
     expect(result.diff).toEqual({
       terminalFontFamily: 'JetBrains Mono',
-      terminalFontSize: 14
+      terminalFontSize: 14,
+      terminalColorOverrides: { background: '#1a1a1a' }
     })
-    expect(result.unsupportedKeys).toEqual(['background'])
+    expect(result.unsupportedKeys).toEqual([])
   })
 
   it('omits values that match current settings', async () => {
@@ -78,6 +79,26 @@ background = #1a1a1a
       createStore({
         terminalFontFamily: 'Menlo',
         terminalFontSize: 12
+      })
+    )
+
+    expect(result.found).toBe(true)
+    expect(result.diff).toEqual({})
+    expect(result.unsupportedKeys).toEqual([])
+  })
+
+  it('omits object values that are deeply equal to current settings', async () => {
+    statMock.mockImplementation(async (p: string) => {
+      if (p === '/Users/alice/Library/Application Support/com.mitchellh.ghostty/config') {
+        return { isFile: () => true }
+      }
+      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+    })
+    readFileMock.mockResolvedValue('background = #1a1a1a\nforeground = #e0e0e0\n')
+
+    const result = await previewGhosttyImport(
+      createStore({
+        terminalColorOverrides: { background: '#1a1a1a', foreground: '#e0e0e0' }
       })
     )
 

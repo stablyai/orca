@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../shared/types'
+import type { GlobalSettings, TerminalColorOverrides } from '../../shared/types'
 
 export type GhosttyImportPreview = {
   found: boolean
@@ -7,9 +7,29 @@ export type GhosttyImportPreview = {
   unsupportedKeys: string[]
 }
 
-// Why: background and foreground are intentionally omitted — GlobalSettings
-// has no raw terminal color fields (themes are name-based). Color keys are
-// treated as unsupported to keep import safe and avoid silent data loss.
+// Why: Ghostty allows colors with or without the leading hash.
+const HEX_COLOR_RE = /^#?([0-9a-fA-F]{3}){1,2}$/
+
+const PALETTE_INDEX_MAP: Record<number, keyof TerminalColorOverrides> = {
+  0: 'black',
+  1: 'red',
+  2: 'green',
+  3: 'yellow',
+  4: 'blue',
+  5: 'magenta',
+  6: 'cyan',
+  7: 'white',
+  8: 'brightBlack',
+  9: 'brightRed',
+  10: 'brightGreen',
+  11: 'brightYellow',
+  12: 'brightBlue',
+  13: 'brightMagenta',
+  14: 'brightCyan',
+  15: 'brightWhite'
+}
+
+// Simple keys that map 1:1 to GlobalSettings fields.
 const SUPPORTED_KEY_MAP: Record<string, keyof GlobalSettings> = {
   'font-family': 'terminalFontFamily',
   'font-size': 'terminalFontSize',
@@ -23,53 +43,185 @@ const SUPPORTED_KEY_MAP: Record<string, keyof GlobalSettings> = {
   'focus-follows-mouse': 'terminalFocusFollowsMouse'
 }
 
-export function mapGhosttyToOrca(parsed: Record<string, string>): {
+export function mapGhosttyToOrca(
+  parsed: Record<string, string | string[]>,
+  isMacOS = process.platform === 'darwin'
+): {
   diff: Partial<GlobalSettings>
   unsupportedKeys: string[]
 } {
   const diff: Partial<GlobalSettings> = {}
   const unsupportedKeys: string[] = []
+  const colorOverrides: TerminalColorOverrides = {}
 
-  for (const [key, value] of Object.entries(parsed)) {
+  for (const [key, rawValue] of Object.entries(parsed)) {
+    const value = Array.isArray(rawValue) ? rawValue[0] : rawValue
+
+    if (key === 'macos-option-as-alt') {
+      if (!isMacOS) {
+        unsupportedKeys.push(key)
+        continue
+      }
+      const v = value as string
+      if (v === 'true' || v === 'on') {
+        diff.terminalMacOptionAsAlt = 'true'
+      } else if (v === 'false' || v === 'off') {
+        diff.terminalMacOptionAsAlt = 'false'
+      } else if (v === 'left' || v === 'right') {
+        diff.terminalMacOptionAsAlt = v
+      } else {
+        unsupportedKeys.push(key)
+      }
+      continue
+    }
+
+    if (key === 'background-opacity') {
+      const v = value as string
+      const num = Number(v)
+      if (!Number.isFinite(num) || num < 0 || num > 1) {
+        unsupportedKeys.push(key)
+        continue
+      }
+      diff.terminalBackgroundOpacity = num
+      continue
+    }
+
+    if (key === 'background') {
+      const v = value as string
+      if (HEX_COLOR_RE.test(v)) {
+        colorOverrides.background = v
+      } else {
+        unsupportedKeys.push(key)
+      }
+      continue
+    }
+
+    if (key === 'foreground') {
+      const v = value as string
+      if (HEX_COLOR_RE.test(v)) {
+        colorOverrides.foreground = v
+      } else {
+        unsupportedKeys.push(key)
+      }
+      continue
+    }
+
+    if (key === 'cursor-color') {
+      const v = value as string
+      if (HEX_COLOR_RE.test(v)) {
+        colorOverrides.cursor = v
+      } else {
+        unsupportedKeys.push(key)
+      }
+      continue
+    }
+
+    if (key === 'selection-background') {
+      const v = value as string
+      if (HEX_COLOR_RE.test(v)) {
+        colorOverrides.selectionBackground = v
+      } else {
+        unsupportedKeys.push(key)
+      }
+      continue
+    }
+
+    if (key === 'selection-foreground') {
+      const v = value as string
+      if (HEX_COLOR_RE.test(v)) {
+        colorOverrides.selectionForeground = v
+      } else {
+        unsupportedKeys.push(key)
+      }
+      continue
+    }
+
+    if (key === 'palette') {
+      const entries = Array.isArray(rawValue) ? rawValue : [rawValue]
+      for (const entry of entries) {
+        const eqIdx = entry.indexOf('=')
+        if (eqIdx === -1) {
+          continue
+        }
+        const idxStr = entry.slice(0, eqIdx).trim()
+        const color = entry.slice(eqIdx + 1).trim()
+        const index = parseInt(idxStr, 10)
+        if (Number.isNaN(index) || !HEX_COLOR_RE.test(color)) {
+          continue
+        }
+        const mapped = PALETTE_INDEX_MAP[index]
+        if (mapped) {
+          colorOverrides[mapped] = color
+        }
+      }
+      continue
+    }
+
+    if (key === 'window-padding-color') {
+      const v = value as string
+      if (HEX_COLOR_RE.test(v)) {
+        diff.terminalPanePaddingColor = v
+      } else {
+        unsupportedKeys.push(key)
+      }
+      continue
+    }
+
+    if (key === 'window-padding-balance') {
+      const v = value as string
+      if (v !== 'true' && v !== 'false') {
+        unsupportedKeys.push(key)
+        continue
+      }
+      diff.terminalPaddingBalance = v === 'true'
+      continue
+    }
+
     const mappedKey = SUPPORTED_KEY_MAP[key]
     if (!mappedKey) {
       unsupportedKeys.push(key)
       continue
     }
 
+    const v = value as string
+
     if (mappedKey === 'terminalFontSize') {
-      const num = Number(value)
+      const num = Number(v)
       if (!Number.isFinite(num) || num <= 0) {
         unsupportedKeys.push(key)
         continue
       }
       diff[mappedKey] = num
     } else if (mappedKey === 'terminalFontWeight') {
-      const num = Number(value)
+      const num = Number(v)
       if (!Number.isFinite(num) || num < 100 || num > 900) {
         unsupportedKeys.push(key)
         continue
       }
       diff[mappedKey] = num
     } else if (mappedKey === 'terminalCursorStyle') {
-      if (value !== 'bar' && value !== 'block' && value !== 'underline') {
+      if (v !== 'bar' && v !== 'block' && v !== 'underline') {
         unsupportedKeys.push(key)
         continue
       }
-      diff[mappedKey] = value
+      diff[mappedKey] = v
     } else if (mappedKey === 'terminalCursorBlink' || mappedKey === 'terminalFocusFollowsMouse') {
       // Why: Ghostty uses 'true'/'false' strings for booleans; anything else
       // is treated as unsupported rather than silently coerced.
-      if (value !== 'true' && value !== 'false') {
+      if (v !== 'true' && v !== 'false') {
         unsupportedKeys.push(key)
         continue
       }
-      diff[mappedKey] = value === 'true'
+      diff[mappedKey] = v === 'true'
     } else {
       // Why: TypeScript's strict assignment checking for Partial<T>[K] requires
       // a cast because GlobalSettings has no index signature.
-      ;(diff as Record<string, string | number>)[mappedKey] = value
+      ;(diff as Record<string, string | number>)[mappedKey] = v
     }
+  }
+
+  if (Object.keys(colorOverrides).length > 0) {
+    diff.terminalColorOverrides = colorOverrides
   }
 
   return { diff, unsupportedKeys }

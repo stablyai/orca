@@ -127,6 +127,20 @@ export function maybePushMode2031Flip(
   return true
 }
 
+export function hexToRgba(hex: string, alpha: number): string {
+  let clean = hex.replace('#', '')
+  if (clean.length === 3) {
+    clean = clean
+      .split('')
+      .map((c) => c + c)
+      .join('')
+  }
+  const r = parseInt(clean.slice(0, 2), 16)
+  const g = parseInt(clean.slice(2, 4), 16)
+  const b = parseInt(clean.slice(4, 6), 16)
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
 export function applyTerminalAppearance(
   manager: PaneManager,
   settings: GlobalSettings,
@@ -139,13 +153,34 @@ export function applyTerminalAppearance(
 ): void {
   const appearance = resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
   const paneStyles = resolvePaneStyleOptions(settings)
-  const theme: ITheme | null = appearance.theme ?? getBuiltinTheme(appearance.themeName)
-  const paneBackground = theme?.background ?? '#000000'
+  let theme: ITheme | null = appearance.theme ?? getBuiltinTheme(appearance.themeName)
+
+  // Why: merge user-imported Ghostty color overrides on top of the resolved
+  // base theme so individual colors can be tweaked without losing the rest.
+  if (theme && settings.terminalColorOverrides) {
+    theme = { ...theme, ...settings.terminalColorOverrides }
+  }
+
+  let paneBackground = theme?.background ?? '#000000'
+
+  // Why: Ghostty's background-opacity controls the terminal's base alpha.
+  // We convert the hex background to rgba and enable xterm transparency.
+  if (settings.terminalBackgroundOpacity !== undefined && theme?.background) {
+    paneBackground = hexToRgba(theme.background, settings.terminalBackgroundOpacity)
+    theme = { ...theme, background: paneBackground }
+  }
+
   const terminalFontWeights = resolveTerminalFontWeights(settings.terminalFontWeight)
 
   for (const pane of manager.getPanes()) {
     if (theme) {
       pane.terminal.options.theme = theme
+    }
+    if (
+      settings.terminalBackgroundOpacity !== undefined &&
+      settings.terminalBackgroundOpacity < 1
+    ) {
+      pane.terminal.options.allowTransparency = true
     }
     pane.terminal.options.cursorStyle = settings.terminalCursorStyle
     pane.terminal.options.cursorBlink = settings.terminalCursorBlink
@@ -183,6 +218,8 @@ export function applyTerminalAppearance(
     activePaneOpacity: paneStyles.activePaneOpacity,
     opacityTransitionMs: paneStyles.opacityTransitionMs,
     dividerThicknessPx: paneStyles.dividerThicknessPx,
-    focusFollowsMouse: paneStyles.focusFollowsMouse
+    focusFollowsMouse: paneStyles.focusFollowsMouse,
+    panePaddingColor: settings.terminalPanePaddingColor,
+    paddingBalance: settings.terminalPaddingBalance
   })
 }

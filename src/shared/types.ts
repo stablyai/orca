@@ -729,6 +729,30 @@ export type SetupScriptLaunchMode = 'split-vertical' | 'split-horizontal' | 'new
 /** Direction used when the setup script launch mode is a split. */
 export type SetupSplitDirection = 'vertical' | 'horizontal'
 
+export type TerminalColorOverrides = {
+  foreground?: string
+  background?: string
+  cursor?: string
+  selectionBackground?: string
+  selectionForeground?: string
+  black?: string
+  red?: string
+  green?: string
+  yellow?: string
+  blue?: string
+  magenta?: string
+  cyan?: string
+  white?: string
+  brightBlack?: string
+  brightRed?: string
+  brightGreen?: string
+  brightYellow?: string
+  brightBlue?: string
+  brightMagenta?: string
+  brightCyan?: string
+  brightWhite?: string
+}
+
 export type GlobalSettings = {
   workspaceDir: string
   nestWorkspaces: boolean
@@ -754,6 +778,10 @@ export type GlobalSettings = {
   terminalActivePaneOpacity: number
   terminalPaneOpacityTransitionMs: number
   terminalDividerThicknessPx: number
+  terminalBackgroundOpacity?: number
+  terminalColorOverrides?: TerminalColorOverrides
+  terminalPanePaddingColor?: string
+  terminalPaddingBalance?: boolean
   /** Why: Windows terminals conventionally use right-click as a paste gesture.
    *  The setting stays Windows-only so macOS/Linux keep their existing context
    *  menu behavior and users can still reach the menu with Ctrl+right-click. */

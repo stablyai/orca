@@ -18,6 +18,15 @@ type GhosttyImportModalProps = {
   applied?: boolean
 }
 
+function formatDiffValue(value: unknown): string {
+  if (value && typeof value === 'object') {
+    return Object.entries(value)
+      .map(([k, v]) => `${k}: ${String(v)}`)
+      .join(', ')
+  }
+  return String(value)
+}
+
 export function GhosttyImportModal({
   open,
   onOpenChange,
@@ -54,7 +63,7 @@ export function GhosttyImportModal({
                   {Object.entries(preview.diff).map(([key, value]) => (
                     <li key={key} className="flex justify-between gap-2">
                       <span className="text-muted-foreground">{key}</span>
-                      <span className="font-mono">{String(value)}</span>
+                      <span className="font-mono">{formatDiffValue(value)}</span>
                     </li>
                   ))}
                 </ul>
@@ -66,7 +75,7 @@ export function GhosttyImportModal({
                   {Object.entries(preview.diff).map(([key, value]) => (
                     <li key={key} className="flex justify-between gap-2">
                       <span className="text-muted-foreground">{key}</span>
-                      <span className="font-mono">{String(value)}</span>
+                      <span className="font-mono">{formatDiffValue(value)}</span>
                     </li>
                   ))}
                 </ul>
