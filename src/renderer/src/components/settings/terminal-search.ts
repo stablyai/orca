@@ -134,6 +134,14 @@ export const TERMINAL_MAC_OPTION_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   }
 ]
 
+export const TERMINAL_GHOSTTY_IMPORT_SEARCH_ENTRIES: SettingsSearchEntry[] = [
+  {
+    title: 'Import from Ghostty',
+    description: 'One-time import of supported Ghostty terminal settings.',
+    keywords: ['ghostty', 'import', 'terminal', 'config', 'settings']
+  }
+]
+
 export const TERMINAL_SETUP_SCRIPT_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Setup Script Location',
@@ -196,6 +204,7 @@ export function getTerminalPaneSearchEntries(platform: {
     ...TERMINAL_DARK_THEME_SEARCH_ENTRIES,
     ...TERMINAL_LIGHT_THEME_SEARCH_ENTRIES,
     ...TERMINAL_SETUP_SCRIPT_SEARCH_ENTRIES,
+    ...TERMINAL_GHOSTTY_IMPORT_SEARCH_ENTRIES,
     ...TERMINAL_ADVANCED_SEARCH_ENTRIES,
     ...(platform.isMac ? TERMINAL_MAC_OPTION_SEARCH_ENTRIES : [])
   ]

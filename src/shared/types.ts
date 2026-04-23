@@ -875,6 +875,13 @@ export type GlobalSettings = {
   experimentalTerminalDaemonNoticeShown: boolean
 }
 
+export type GhosttyImportPreview = {
+  found: boolean
+  configPath?: string
+  diff: Partial<GlobalSettings>
+  unsupportedKeys: string[]
+}
+
 export type NotificationEventSource = 'agent-task-complete' | 'terminal-bell' | 'test'
 
 export type NotificationDispatchRequest = {

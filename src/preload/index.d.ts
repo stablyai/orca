@@ -1,6 +1,7 @@
 import type { ElectronAPI } from '@electron-toolkit/preload'
 import type {
   CreateWorktreeResult,
+  GhosttyImportPreview,
   GitHubPRFile,
   GitHubPRFileContents,
   GitHubWorkItem,
@@ -144,6 +145,7 @@ type SettingsApi = {
   get: () => Promise<GlobalSettings>
   set: (args: Partial<GlobalSettings>) => Promise<GlobalSettings>
   listFonts: () => Promise<string[]>
+  previewGhosttyImport: () => Promise<GhosttyImportPreview>
 }
 
 type CliApi = {

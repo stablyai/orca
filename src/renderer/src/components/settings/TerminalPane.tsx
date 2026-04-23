@@ -31,6 +31,7 @@ import {
   TERMINAL_ADVANCED_SEARCH_ENTRIES,
   TERMINAL_CURSOR_SEARCH_ENTRIES,
   TERMINAL_DARK_THEME_SEARCH_ENTRIES,
+  TERMINAL_GHOSTTY_IMPORT_SEARCH_ENTRIES,
   TERMINAL_LIGHT_THEME_SEARCH_ENTRIES,
   TERMINAL_MAC_OPTION_SEARCH_ENTRIES,
   TERMINAL_PANE_STYLE_SEARCH_ENTRIES,
@@ -42,6 +43,8 @@ import {
 import { useDetectedOptionAsAlt } from '@/lib/keyboard-layout/use-effective-mac-option-as-alt'
 import { detectedCategoryToDefault } from '@/lib/keyboard-layout/detect-option-as-alt'
 import { DarkTerminalThemeSection, LightTerminalThemeSection } from './TerminalThemeSections'
+import { GhosttyImportModal } from './GhosttyImportModal'
+import { useGhosttyImport } from './useGhosttyImport'
 
 type TerminalPaneProps = {
   settings: GlobalSettings
@@ -65,6 +68,7 @@ export function TerminalPane({
   const isMac = isMacUserAgent()
   const [themeSearchDark, setThemeSearchDark] = useState('')
   const [themeSearchLight, setThemeSearchLight] = useState('')
+  const ghostty = useGhosttyImport(updateSettings)
 
   const darkPreviewAppearance = resolveEffectiveTerminalAppearance(
     { ...settings, theme: 'dark' },
@@ -132,6 +136,19 @@ export function TerminalPane({
             Shell used when opening a new terminal pane. Takes effect for new terminals.
           </p>
         </SearchableSetting>
+      </section>
+    ) : null,
+    matchesSettingsSearch(searchQuery, TERMINAL_GHOSTTY_IMPORT_SEARCH_ENTRIES) ? (
+      <section key="ghostty-import" className="space-y-4">
+        <div className="space-y-1">
+          <h3 className="text-sm font-semibold">Import</h3>
+          <p className="text-xs text-muted-foreground">
+            Import supported settings from your Ghostty terminal config.
+          </p>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => void ghostty.handleClick()}>
+          Import from Ghostty
+        </Button>
       </section>
     ) : null,
     matchesSettingsSearch(searchQuery, TERMINAL_TYPOGRAPHY_SEARCH_ENTRIES) ? (
@@ -773,6 +790,14 @@ export function TerminalPane({
           {section}
         </div>
       ))}
+      <GhosttyImportModal
+        open={ghostty.open}
+        onOpenChange={ghostty.handleOpenChange}
+        preview={ghostty.preview}
+        loading={ghostty.loading}
+        onApply={ghostty.handleApply}
+        applied={ghostty.applied}
+      />
     </div>
   )
 }

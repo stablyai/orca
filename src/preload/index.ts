@@ -509,7 +509,10 @@ const api = {
     set: (args: Record<string, unknown>): Promise<unknown> =>
       ipcRenderer.invoke('settings:set', args),
 
-    listFonts: (): Promise<string[]> => ipcRenderer.invoke('settings:listFonts')
+    listFonts: (): Promise<string[]> => ipcRenderer.invoke('settings:listFonts'),
+
+    previewGhosttyImport: (): Promise<unknown> =>
+      ipcRenderer.invoke('settings:previewGhosttyImport')
   },
 
   codexAccounts: {
