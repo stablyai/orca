@@ -3,6 +3,7 @@ import React, { useMemo, useCallback, useRef, useState, useEffect, useLayoutEffe
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { ChevronDown, CircleX, Plus } from 'lucide-react'
 import { useAppStore } from '@/store'
+import { useAllWorktrees, useRepoMap, useWorktreeMap } from '@/store/selectors'
 import WorktreeCard from './WorktreeCard'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -388,8 +389,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
 
 const WorktreeList = React.memo(function WorktreeList() {
   // ── Granular selectors (each is a primitive or shallow-stable ref) ──
+  const allWorktrees = useAllWorktrees()
+  const repoMap = useRepoMap()
+  const worktreeMap = useWorktreeMap()
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
-  const repos = useAppStore((s) => s.repos)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const searchQuery = useAppStore((s) => s.searchQuery)
   const groupBy = useAppStore((s) => s.groupBy)
@@ -428,15 +431,13 @@ const WorktreeList = React.memo(function WorktreeList() {
   // can apply immediately when the list shape changes.
   const worktreeCount = useMemo(() => {
     let count = 0
-    for (const ws of Object.values(worktreesByRepo)) {
-      for (const w of ws) {
-        if (!w.isArchived) {
-          count++
-        }
+    for (const worktree of allWorktrees) {
+      if (!worktree.isArchived) {
+        count++
       }
     }
     return count
-  }, [worktreesByRepo])
+  }, [allWorktrees])
 
   // Why debounce: sort scores include a time-decaying activity component.
   // Recomputing instantly on every sortEpoch bump (e.g. AI starting work,
@@ -476,13 +477,6 @@ const WorktreeList = React.memo(function WorktreeList() {
   // reverts, so the cold-start path is only used on actual cold start.
   const sessionHasHadPty = useRef(false)
 
-  const repoMap = useMemo(() => {
-    const m = new Map<string, Repo>()
-    for (const r of repos) {
-      m.set(r.id, r)
-    }
-    return m
-  }, [repos])
   // ── Stable sort order ──────────────────────────────────────────
   // The sort order is cached and only recomputed when `sortEpoch` changes
   // (worktree add/remove, terminal activity, backend refresh, etc.).
@@ -496,9 +490,7 @@ const WorktreeList = React.memo(function WorktreeList() {
   // first render (and epoch bumps) would use stale/empty data from the ref.
   const sortedIds = useMemo(() => {
     const state = useAppStore.getState()
-    const allWorktrees: Worktree[] = Object.values(state.worktreesByRepo)
-      .flat()
-      .filter((w) => !w.isArchived)
+    const nonArchivedWorktrees = allWorktrees.filter((worktree) => !worktree.isArchived)
 
     // Why cold-start detection: the smart score is dominated by ephemeral
     // signals (running jobs +60, live terminals +12, needs attention +35)
@@ -514,24 +506,23 @@ const WorktreeList = React.memo(function WorktreeList() {
       if (hasAnyLivePty) {
         sessionHasHadPty.current = true
       } else {
-        allWorktrees.sort(
+        nonArchivedWorktrees.sort(
           (a, b) => b.sortOrder - a.sortOrder || a.displayName.localeCompare(b.displayName)
         )
-        return allWorktrees.map((w) => w.id)
+        return nonArchivedWorktrees.map((w) => w.id)
       }
     }
 
-    const currentRepoMap = new Map(state.repos.map((r) => [r.id, r]))
     const currentTabs = state.tabsByWorktree
-    allWorktrees.sort(
-      buildWorktreeComparator(sortBy, currentTabs, currentRepoMap, state.prCache, Date.now())
+    nonArchivedWorktrees.sort(
+      buildWorktreeComparator(sortBy, currentTabs, repoMap, state.prCache, Date.now())
     )
-    return allWorktrees.map((w) => w.id)
+    return nonArchivedWorktrees.map((w) => w.id)
     // debouncedSortEpoch is an intentional trigger: it's not read inside the
     // memo, but its change signals that the sort order should be recomputed.
     // The debounce prevents jarring mid-interaction position shifts.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSortEpoch, sortBy, repos])
+  }, [allWorktrees, debouncedSortEpoch, repoMap, sortBy])
 
   // Persist the computed sort order so the sidebar can be restored after
   // restart. Only persist during live sessions (sessionHasHadPty latched) —
@@ -557,16 +548,8 @@ const WorktreeList = React.memo(function WorktreeList() {
       prCache,
       issueCache
     })
-    // Resolve IDs back to Worktree objects for rendering
-    const allMap = new Map<string, Worktree>()
-    for (const ws of Object.values(worktreesByRepo)) {
-      for (const w of ws) {
-        allMap.set(w.id, w)
-      }
-    }
-    return ids.map((id) => allMap.get(id)).filter((w): w is Worktree => w != null)
+    return ids.map((id) => worktreeMap.get(id)).filter((w): w is Worktree => w != null)
   }, [
-    worktreesByRepo,
     filterRepoIds,
     searchQuery,
     showActiveOnly,
@@ -576,7 +559,9 @@ const WorktreeList = React.memo(function WorktreeList() {
     browserTabsByWorktree,
     sortedIds,
     prCache,
-    issueCache
+    issueCache,
+    worktreeMap,
+    worktreesByRepo
   ])
 
   const worktrees = visibleWorktrees

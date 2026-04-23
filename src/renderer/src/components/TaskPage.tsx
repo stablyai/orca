@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
+import { useRepoMap } from '@/store/selectors'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -147,6 +148,7 @@ export default function TaskPage(): React.JSX.Element {
   const closeTaskPage = useAppStore((s) => s.closeTaskPage)
   const activeModal = useAppStore((s) => s.activeModal)
   const repos = useAppStore((s) => s.repos)
+  const repoMap = useRepoMap()
   const openModal = useAppStore((s) => s.openModal)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const fetchWorkItemsAcrossRepos = useAppStore((s) => s.fetchWorkItemsAcrossRepos)
@@ -914,7 +916,7 @@ export default function TaskPage(): React.JSX.Element {
 
                 <div className="divide-y divide-border/50">
                   {filteredWorkItems.map((item) => {
-                    const itemRepo = repos.find((r) => r.id === item.repoId)
+                    const itemRepo = repoMap.get(item.repoId) ?? null
                     return (
                       // Why: the row is a clickable container rather than a
                       // <button> because it holds nested interactive elements
@@ -1139,8 +1141,9 @@ export default function TaskPage(): React.JSX.Element {
         repoPath={
           // Why: the drawer is for a single item — resolve its repoPath from the
           // item's own repoId (set when fan-out merged the list) so it works in
-          // cross-repo mode too.
-          drawerWorkItem ? (repos.find((r) => r.id === drawerWorkItem.repoId)?.path ?? null) : null
+          // cross-repo mode too. Reusing the memoized repo map avoids an O(n)
+          // scan on every render while the drawer is open.
+          drawerWorkItem ? (repoMap.get(drawerWorkItem.repoId)?.path ?? null) : null
         }
         onUse={(item) => {
           setDrawerWorkItem(null)

@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
 import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
 import { useAppStore } from '../store'
+import { useAllWorktrees } from '../store/selectors'
 import { findWorktreeById } from '../store/slices/worktree-helpers'
 import { createUntitledMarkdownFile } from '../lib/create-untitled-markdown'
 import { extractIpcErrorMessage } from '../lib/ipc-error'
@@ -39,9 +40,9 @@ import CodexRestartChip from './CodexRestartChip'
 const EditorPanel = lazy(() => import('./editor/EditorPanel'))
 
 function Terminal(): React.JSX.Element | null {
+  const allWorktrees = useAllWorktrees()
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeView = useAppStore((s) => s.activeView)
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const activeTabId = useAppStore((s) => s.activeTabId)
   const createTab = useAppStore((s) => s.createTab)
@@ -82,7 +83,6 @@ function Terminal(): React.JSX.Element | null {
     () => (activeWorktreeId ? (tabsByWorktree[activeWorktreeId] ?? []) : []),
     [activeWorktreeId, tabsByWorktree]
   )
-  const allWorktrees = Object.values(worktreesByRepo).flat()
 
   // Why: the TabBar is rendered into the titlebar via a portal so tabs share
   // the same row as the "Orca" title. The target element is created by App.tsx.

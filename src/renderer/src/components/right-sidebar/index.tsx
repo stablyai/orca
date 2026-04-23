@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Files, Search, GitBranch, ListChecks, PanelRight } from 'lucide-react'
 import { useAppStore } from '@/store'
+import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { cn } from '@/lib/utils'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
 import type { RightSidebarTab, ActivityBarPosition } from '@/store/slices/editor'
 import type { CheckStatus } from '../../../../shared/types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
+import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import {
   ContextMenu,
@@ -35,26 +37,10 @@ function branchDisplayName(branch: string): string {
   return branch.replace(/^refs\/heads\//, '')
 }
 
-function findWorktreeById(
-  worktreesByRepo: ReturnType<typeof useAppStore.getState>['worktreesByRepo'],
-  worktreeId: string | null
-) {
-  if (!worktreeId) {
-    return null
-  }
-
-  for (const worktrees of Object.values(worktreesByRepo)) {
-    const worktree = worktrees.find((entry) => entry.id === worktreeId)
-    if (worktree) {
-      return worktree
-    }
-  }
-
-  return null
-}
-
 function getActiveChecksStatus(state: ReturnType<typeof useAppStore.getState>): CheckStatus | null {
-  const activeWorktree = findWorktreeById(state.worktreesByRepo, state.activeWorktreeId)
+  const activeWorktree = state.activeWorktreeId
+    ? findWorktreeById(state.worktreesByRepo, state.activeWorktreeId)
+    : null
   if (!activeWorktree) {
     return null
   }
@@ -115,6 +101,7 @@ const ACTIVITY_ITEMS: ActivityBarItem[] = [
 ]
 
 function RightSidebarInner(): React.JSX.Element {
+  const activeWorktree = useActiveWorktree()
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarWidth = useAppStore((s) => s.rightSidebarWidth)
   const setRightSidebarWidth = useAppStore((s) => s.setRightSidebarWidth)
@@ -127,10 +114,7 @@ function RightSidebarInner(): React.JSX.Element {
 
   // Why: source control and checks are meaningless for non-git folders.
   // Hide those tabs so the activity bar only shows relevant actions.
-  const activeRepo = useAppStore((s) => {
-    const wt = findWorktreeById(s.worktreesByRepo, s.activeWorktreeId)
-    return wt ? (s.repos.find((r) => r.id === wt.repoId) ?? null) : null
-  })
+  const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
   const isFolder = activeRepo ? isFolderRepo(activeRepo) : false
   const visibleItems = useMemo(
     () => (isFolder ? ACTIVITY_ITEMS.filter((item) => !item.gitOnly) : ACTIVITY_ITEMS),

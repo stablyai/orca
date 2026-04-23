@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Loader2 } from 'lucide-react'
 import { useAppStore } from '@/store'
+import { useActiveWorktree } from '@/store/selectors'
 import { dirname } from '@/lib/path'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
@@ -26,7 +27,7 @@ import { useFileExplorerWatch } from './useFileExplorerWatch'
 
 function FileExplorerInner(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const activeWorktree = useActiveWorktree()
   const sshConnectedGeneration = useAppStore((s) => s.sshConnectedGeneration)
   const expandedDirs = useAppStore((s) => s.expandedDirs)
   const toggleDir = useAppStore((s) => s.toggleDir)
@@ -39,7 +40,7 @@ function FileExplorerInner(): React.JSX.Element {
   const openFiles = useAppStore((s) => s.openFiles)
   const closeFile = useAppStore((s) => s.closeFile)
 
-  const worktreePath = useActiveWorktreePath(activeWorktreeId, worktreesByRepo)
+  const worktreePath = useActiveWorktreePath(activeWorktree?.path ?? null)
 
   const expanded = useMemo(
     () =>

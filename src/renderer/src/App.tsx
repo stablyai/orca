@@ -1,5 +1,5 @@
 /* eslint-disable max-lines */
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { DEFAULT_STATUS_BAR_ITEMS, DEFAULT_WORKTREE_CARD_PROPERTIES } from '../../shared/constants'
 
 import { ChevronLeft, ChevronRight, Minimize2, PanelLeft, PanelRight } from 'lucide-react'
@@ -14,13 +14,7 @@ import { useIpcEvents } from './hooks/useIpcEvents'
 import Sidebar from './components/Sidebar'
 import Terminal from './components/Terminal'
 import { shutdownBufferCaptures } from './components/terminal-pane/TerminalPane'
-import Landing from './components/Landing'
-import TaskPage from './components/TaskPage'
-import Settings from './components/settings/Settings'
 import RightSidebar from './components/right-sidebar'
-import QuickOpen from './components/QuickOpen'
-import WorktreeJumpPalette from './components/WorktreeJumpPalette'
-import NewWorkspaceComposerModal from './components/NewWorkspaceComposerModal'
 import { StatusBar } from './components/status-bar/StatusBar'
 import { UpdateCard } from './components/UpdateCard'
 import { StarNagCard } from './components/StarNagCard'
@@ -46,6 +40,12 @@ import {
 import { dispatchClearModifierHints } from './hooks/useModifierHint'
 
 const isMac = navigator.userAgent.includes('Mac')
+const Landing = lazy(() => import('./components/Landing'))
+const TaskPage = lazy(() => import('./components/TaskPage'))
+const Settings = lazy(() => import('./components/settings/Settings'))
+const QuickOpen = lazy(() => import('./components/QuickOpen'))
+const WorktreeJumpPalette = lazy(() => import('./components/WorktreeJumpPalette'))
+const NewWorkspaceComposerModal = lazy(() => import('./components/NewWorkspaceComposerModal'))
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
@@ -700,9 +700,9 @@ function App(): React.JSX.Element {
                           {wt?.displayName ?? fallbackName}
                         </span>
                       </button>
-                      {agents.map((agent, index) => (
+                      {agents.map((agent) => (
                         <button
-                          key={index}
+                          key={`${agent.tabId}:${agent.paneId ?? 'none'}:${agent.label}`}
                           className="titlebar-agent-hovercard-agent"
                           onClick={() => {
                             activateAndRevealWorktree(worktreeId)
@@ -923,9 +923,11 @@ function App(): React.JSX.Element {
               >
                 <Terminal />
               </div>
-              {activeView === 'settings' ? <Settings /> : null}
-              {activeView === 'tasks' ? <TaskPage /> : null}
-              {activeView === 'terminal' && !activeWorktreeId ? <Landing /> : null}
+              <Suspense fallback={null}>
+                {activeView === 'settings' ? <Settings /> : null}
+                {activeView === 'tasks' ? <TaskPage /> : null}
+                {activeView === 'terminal' && !activeWorktreeId ? <Landing /> : null}
+              </Suspense>
             </div>
           </div>
           {/* Why: keep RightSidebar mounted even when closed so that its
@@ -940,10 +942,14 @@ function App(): React.JSX.Element {
             when mounted outside a TooltipProvider ancestor. Keep the global
             composer modal inside this provider so the card renders safely
             whether triggered from Cmd+J or any future entry point. */}
-        <NewWorkspaceComposerModal />
+        <Suspense fallback={null}>
+          {activeModal === 'new-workspace-composer' ? <NewWorkspaceComposerModal /> : null}
+        </Suspense>
       </TooltipProvider>
-      <QuickOpen />
-      <WorktreeJumpPalette />
+      <Suspense fallback={null}>
+        {activeModal === 'quick-open' ? <QuickOpen /> : null}
+        {activeModal === 'worktree-palette' ? <WorktreeJumpPalette /> : null}
+      </Suspense>
       <UpdateCard />
       <StarNagCard />
       <ZoomOverlay />

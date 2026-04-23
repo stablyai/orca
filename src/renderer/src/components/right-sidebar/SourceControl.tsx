@@ -25,6 +25,7 @@ import {
   X
 } from 'lucide-react'
 import { useAppStore } from '@/store'
+import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { detectLanguage } from '@/lib/language-detect'
 import { basename, dirname, joinPath } from '@/lib/path'
 import { cn } from '@/lib/utils'
@@ -104,10 +105,10 @@ const CONFLICT_KIND_LABELS: Record<GitConflictKind, string> = {
 
 function SourceControlInner(): React.JSX.Element {
   const sourceControlRef = useRef<HTMLDivElement>(null)
+  const activeWorktree = useActiveWorktree()
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
-  const repos = useAppStore((s) => s.repos)
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
   const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
   const gitConflictOperationByWorktree = useAppStore((s) => s.gitConflictOperationByWorktree)
   const gitBranchChangesByWorktree = useAppStore((s) => s.gitBranchChangesByWorktree)
@@ -180,23 +181,6 @@ function SourceControlInner(): React.JSX.Element {
   const [filterQuery, setFilterQuery] = useState('')
   const filterInputRef = useRef<HTMLInputElement>(null)
 
-  const activeWorktree = useMemo(() => {
-    if (!activeWorktreeId) {
-      return null
-    }
-    for (const worktrees of Object.values(worktreesByRepo)) {
-      const worktree = worktrees.find((entry) => entry.id === activeWorktreeId)
-      if (worktree) {
-        return worktree
-      }
-    }
-    return null
-  }, [activeWorktreeId, worktreesByRepo])
-
-  const activeRepo = useMemo(
-    () => repos.find((repo) => repo.id === activeWorktree?.repoId) ?? null,
-    [activeWorktree?.repoId, repos]
-  )
   const isFolder = activeRepo ? isFolderRepo(activeRepo) : false
   const worktreePath = activeWorktree?.path ?? null
   const entries = useMemo(

@@ -1,6 +1,7 @@
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useAppStore } from '@/store'
+import { useActiveWorktree } from '@/store/selectors'
 import { getConnectionId } from '@/lib/connection-context'
 import type { SearchFileResult, SearchMatch } from '../../../../shared/types'
 import { buildSearchRows } from './search-rows'
@@ -14,8 +15,8 @@ const SEARCH_VIRTUAL_OVERSCAN = 12
 const EMPTY_COLLAPSED_FILES = new Set<string>()
 
 export default function Search(): React.JSX.Element {
+  const activeWorktree = useActiveWorktree()
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const openFile = useAppStore((s) => s.openFile)
   const setPendingEditorReveal = useAppStore((s) => s.setPendingEditorReveal)
 
@@ -82,19 +83,7 @@ export default function Search(): React.JSX.Element {
     updateActiveSearchState({ loading: false })
   }, [updateActiveSearchState])
 
-  // Find active worktree path
-  const worktreePath = useMemo(() => {
-    if (!activeWorktreeId) {
-      return null
-    }
-    for (const worktrees of Object.values(worktreesByRepo)) {
-      const wt = worktrees.find((w) => w.id === activeWorktreeId)
-      if (wt) {
-        return wt.path
-      }
-    }
-    return null
-  }, [activeWorktreeId, worktreesByRepo])
+  const worktreePath = activeWorktree?.path ?? null
 
   // Focus input on mount
   useEffect(() => {
