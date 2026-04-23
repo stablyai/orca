@@ -563,8 +563,4 @@ When `orca tab create` opens a new tab, it is automatically set as the active ta
 
 ## References
 
-See these docs in this repo when behavior is unclear:
-
-- `docs/orca-cli-focused-v1-status.md`
-- `docs/orca-cli-v1-spec.md`
-- `docs/orca-runtime-layer-design.md`
+When behavior is unclear, refer to the design docs in `docs/` relevant to the feature area.
