@@ -221,6 +221,70 @@ test.describe('Tabs', () => {
   })
 
   /**
+   * Regression: after a drag-reorder, Cmd/Ctrl+Shift+[ must walk tabs in
+   * the new visible order. The pre-fix bug read a stale legacy order
+   * (`tabBarOrderByWorktree`), so pressing "left" three times cycled
+   * 3 → 1 → 2 instead of 3 → 2 → 1 once tabs had been rearranged.
+   */
+  test('Cmd/Ctrl+Shift+[ walks tabs in drag-reordered order', async ({ orcaPage }) => {
+    const isMac = process.platform === 'darwin'
+    const mod = isMac ? 'Meta' : 'Control'
+    const worktreeId = (await getActiveWorktreeId(orcaPage))!
+
+    // Ensure at least 3 terminal tabs so the order cycle is non-trivial.
+    while ((await getWorktreeTabs(orcaPage, worktreeId)).length < 3) {
+      await createTerminalTab(orcaPage, worktreeId)
+    }
+    await expect
+      .poll(async () => (await getWorktreeTabs(orcaPage, worktreeId)).length, { timeout: 5_000 })
+      .toBeGreaterThanOrEqual(3)
+
+    const initialOrder = await getTabBarOrder(orcaPage, worktreeId)
+    expect(initialOrder.length).toBeGreaterThanOrEqual(3)
+    const [a, b, c] = initialOrder
+
+    // Reorder via the same store call drag/drop uses: move the first tab to
+    // the end so the visible order becomes [b, c, a].
+    await orcaPage.evaluate(
+      ({ targetWorktreeId, newOrderTail }) => {
+        const store = window.__store
+        if (!store) {
+          return
+        }
+        const state = store.getState()
+        const groups = state.groupsByWorktree[targetWorktreeId] ?? []
+        const activeGroupId = state.activeGroupIdByWorktree[targetWorktreeId]
+        const activeGroup = activeGroupId
+          ? groups.find((group) => group.id === activeGroupId)
+          : groups[0]
+        if (!activeGroup) {
+          return
+        }
+        const [first, ...rest] = activeGroup.tabOrder
+        state.reorderUnifiedTabs(activeGroup.id, [...rest, first])
+        void newOrderTail
+      },
+      { targetWorktreeId: worktreeId, newOrderTail: [b, c, a] }
+    )
+    await expect
+      .poll(async () => getTabBarOrder(orcaPage, worktreeId), { timeout: 3_000 })
+      .toEqual([b, c, a])
+
+    // Activate the last tab in the new visible order, then walk left twice.
+    // Expected cycle: a → c → b (i.e. walks the *new* order in reverse).
+    await orcaPage.evaluate((tabId) => {
+      window.__store?.getState().setActiveTab(tabId)
+    }, a)
+    await expect.poll(async () => getActiveTabId(orcaPage), { timeout: 3_000 }).toBe(a)
+
+    await orcaPage.keyboard.press(`${mod}+Shift+BracketLeft`)
+    await expect.poll(async () => getActiveTabId(orcaPage), { timeout: 3_000 }).toBe(c)
+
+    await orcaPage.keyboard.press(`${mod}+Shift+BracketLeft`)
+    await expect.poll(async () => getActiveTabId(orcaPage), { timeout: 3_000 }).toBe(b)
+  })
+
+  /**
    * User Prompt:
    * - closing tabs works
    */
