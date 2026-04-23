@@ -21,7 +21,7 @@ import {
 import { basename, normalizeRelativePath } from '@/lib/path'
 import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
 import { renameFileOnDisk } from '@/lib/rename-file'
-import { useAppStore } from '@/store'
+import { useWorktreeById } from '@/store/selectors'
 import { STATUS_COLORS, STATUS_LABELS } from '../right-sidebar/status-display'
 import type { GitFileStatus } from '../../../../shared/types'
 import type { OpenFile } from '../../store/slices/editor'
@@ -63,6 +63,7 @@ export default function EditorFileTab({
   onSplitGroup: (direction: 'left' | 'right' | 'up' | 'down', sourceVisibleTabId: string) => void
   dragData: TabDragItemData
 }): React.JSX.Element {
+  const worktree = useWorktreeById(file.worktreeId)
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     // Why: split groups can duplicate the same open file into multiple visible
     // tabs. Using the unified tab ID keeps each rendered tab draggable as a
@@ -114,16 +115,7 @@ export default function EditorFileTab({
     if (newName === oldName) {
       return
     }
-    const worktreePath = (() => {
-      const state = useAppStore.getState()
-      for (const worktrees of Object.values(state.worktreesByRepo)) {
-        const wt = worktrees.find((w) => w.id === file.worktreeId)
-        if (wt) {
-          return wt.path
-        }
-      }
-      return null
-    })()
+    const worktreePath = worktree?.path ?? null
     if (!worktreePath) {
       return
     }

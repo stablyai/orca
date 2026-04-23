@@ -1,6 +1,7 @@
 import React from 'react'
 import { Github, ListChecks } from 'lucide-react'
 import { useAppStore } from '@/store'
+import { useRepoMap } from '@/store/selectors'
 import { cn } from '@/lib/utils'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getTaskPresetQuery } from '@/lib/new-workspace'
@@ -17,6 +18,7 @@ const SidebarNav = React.memo(function SidebarNav() {
   const openTaskPage = useAppStore((s) => s.openTaskPage)
   const activeView = useAppStore((s) => s.activeView)
   const repos = useAppStore((s) => s.repos)
+  const repoMap = useRepoMap()
   const canBrowseTasks = repos.some((repo) => isGitRepoKind(repo))
 
   // Why: warm the GitHub work-item cache on hover/focus so by the time the
@@ -29,8 +31,9 @@ const SidebarNav = React.memo(function SidebarNav() {
     if (!canBrowseTasks) {
       return
     }
-    const activeRepo = repos.find((r) => r.id === activeRepoId && isGitRepoKind(r))
-    const firstGitRepo = activeRepo ?? repos.find((r) => isGitRepoKind(r))
+    const activeRepo = activeRepoId ? (repoMap.get(activeRepoId) ?? null) : null
+    const activeGitRepo = activeRepo && isGitRepoKind(activeRepo) ? activeRepo : null
+    const firstGitRepo = activeGitRepo ?? repos.find((r) => isGitRepoKind(r))
     if (firstGitRepo?.path) {
       // Why: warm the exact cache key the page will read on mount — must
       // match TaskPage's `initialTaskQuery` derived from the same default
@@ -43,7 +46,7 @@ const SidebarNav = React.memo(function SidebarNav() {
         getTaskPresetQuery(defaultTaskViewPreset)
       )
     }
-  }, [activeRepoId, canBrowseTasks, defaultTaskViewPreset, prefetchWorkItems, repos])
+  }, [activeRepoId, canBrowseTasks, defaultTaskViewPreset, prefetchWorkItems, repoMap, repos])
 
   const tasksActive = activeView === 'tasks'
 

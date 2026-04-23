@@ -50,6 +50,20 @@ function getCachedRepoMap(repos: AppState['repos']): Map<string, Repo> {
   return cachedRepoMap
 }
 
+export function getAllWorktreesFromState(state: Pick<AppState, 'worktreesByRepo'>): Worktree[] {
+  return getCachedAllWorktrees(state.worktreesByRepo)
+}
+
+export function getWorktreeMapFromState(
+  state: Pick<AppState, 'worktreesByRepo'>
+): Map<string, Worktree> {
+  return getCachedWorktreeMap(state.worktreesByRepo)
+}
+
+export function getRepoMapFromState(state: Pick<AppState, 'repos'>): Map<string, Repo> {
+  return getCachedRepoMap(state.repos)
+}
+
 // ─── Repos ──────────────────────────────────────────────────────────
 export const useRepos = () => useAppStore((s) => s.repos)
 export const useActiveRepoId = () => useAppStore((s) => s.activeRepoId)

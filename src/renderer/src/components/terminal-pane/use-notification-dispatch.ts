@@ -1,5 +1,6 @@
 import { useCallback } from 'react'
 import { useAppStore } from '@/store'
+import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
 
 /**
  * Returns a stable dispatch function for terminal notifications.
@@ -29,8 +30,8 @@ export function useNotificationDispatch(
       }
 
       const repoId = worktreeId.includes('::') ? worktreeId.slice(0, worktreeId.indexOf('::')) : ''
-      const repo = state.repos.find((c) => c.id === repoId)
-      const worktree = state.allWorktrees().find((c) => c.id === worktreeId)
+      const repo = getRepoMapFromState(state).get(repoId)
+      const worktree = getWorktreeMapFromState(state).get(worktreeId)
 
       void window.api.notifications.dispatch({
         source: event.source,

@@ -580,7 +580,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       }
 
       const repoForLookup =
-        (state.activeRepoId && state.repos.find((r) => r.id === state.activeRepoId)) ||
+        (state.activeRepoId ? (repoMap.get(state.activeRepoId) ?? null) : null) ||
         state.repos.find((r) => isGitRepoKind(r))
       if (!repoForLookup || !isGitRepoKind(repoForLookup)) {
         openComposer({ prefilledName: trimmed })
@@ -619,7 +619,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
 
     // Case 3: plain name — open composer prefilled.
     openComposer(trimmed ? { prefilledName: trimmed } : {})
-  }, [allWorktrees, closeModal, createWorktreeName, openModal])
+  }, [allWorktrees, closeModal, createWorktreeName, openModal, repoMap])
 
   const handleCloseAutoFocus = useCallback((e: Event) => {
     e.preventDefault()
