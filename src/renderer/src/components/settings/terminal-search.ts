@@ -142,6 +142,34 @@ export const TERMINAL_GHOSTTY_IMPORT_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   }
 ]
 
+export const TERMINAL_WINDOW_SEARCH_ENTRIES: SettingsSearchEntry[] = [
+  {
+    title: 'Background Opacity',
+    description: 'Controls the transparency of the terminal background.',
+    keywords: ['opacity', 'transparency', 'background', 'alpha']
+  },
+  {
+    title: 'Window Blur',
+    description: 'Apply background blur to the terminal window. Requires restart.',
+    keywords: ['window', 'blur', 'background', 'transparency', 'vibrancy']
+  },
+  {
+    title: 'Padding Balance',
+    description: 'Balance terminal padding evenly on all sides.',
+    keywords: ['padding', 'balance', 'spacing', 'margin']
+  },
+  {
+    title: 'Padding Color',
+    description: 'Color of the padding area around the terminal content.',
+    keywords: ['padding', 'color', 'background', 'border']
+  },
+  {
+    title: 'Color Overrides',
+    description: 'Override individual terminal colors.',
+    keywords: ['color', 'override', 'ansi', 'palette', 'theme']
+  }
+]
+
 export const TERMINAL_SETUP_SCRIPT_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Setup Script Location',
@@ -203,6 +231,7 @@ export function getTerminalPaneSearchEntries(platform: {
     ...(platform.isWindows ? TERMINAL_WINDOWS_SEARCH_ENTRIES : []),
     ...TERMINAL_DARK_THEME_SEARCH_ENTRIES,
     ...TERMINAL_LIGHT_THEME_SEARCH_ENTRIES,
+    ...TERMINAL_WINDOW_SEARCH_ENTRIES,
     ...TERMINAL_SETUP_SCRIPT_SEARCH_ENTRIES,
     ...TERMINAL_GHOSTTY_IMPORT_SEARCH_ENTRIES,
     ...TERMINAL_ADVANCED_SEARCH_ENTRIES,
