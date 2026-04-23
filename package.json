@@ -48,6 +48,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
+    "@linear/sdk": "^82.1.0",
     "@monaco-editor/react": "^4.7.0",
     "@parcel/watcher": "^2.5.6",
     "@tanstack/react-virtual": "^3.13.23",

@@ -73,6 +73,7 @@ describe('OrcaRuntimeRpcServer', () => {
         comment: '',
         linkedIssue: 123,
         linkedPR: null,
+        linkedLinearIssue: null,
         isArchived: false,
         isUnread: overrides?.isUnread ?? false,
         isPinned: false,

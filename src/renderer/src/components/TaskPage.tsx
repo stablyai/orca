@@ -11,6 +11,7 @@ import {
   Github,
   GitPullRequest,
   LoaderCircle,
+  Lock,
   Plus,
   RefreshCw,
   Search,
@@ -39,12 +40,13 @@ import RepoMultiCombobox from '@/components/ui/repo-multi-combobox'
 import RepoDotLabel from '@/components/repo/RepoDotLabel'
 import { stripRepoQualifiers } from '../../../shared/task-query'
 import GitHubItemDrawer from '@/components/GitHubItemDrawer'
+import LinearItemDrawer from '@/components/LinearItemDrawer'
 import { cn } from '@/lib/utils'
 import { getLinkedWorkItemSuggestedName, getTaskPresetQuery } from '@/lib/new-workspace'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
 import { isGitRepoKind } from '../../../shared/repo-kind'
-import type { GitHubWorkItem, TaskViewPresetId } from '../../../shared/types'
+import type { GitHubWorkItem, LinearIssue, TaskViewPresetId } from '../../../shared/types'
 import { shouldSuppressEnterSubmit } from '@/lib/new-workspace-enter-guard'
 
 type TaskSource = 'github' | 'linear'
@@ -89,6 +91,16 @@ const TASK_QUERY_PRESETS: TaskQueryPreset[] = [
   { id: 'review', label: 'Needs My Review', query: getTaskPresetQuery('review') },
   { id: 'prs', label: 'PRs', query: getTaskPresetQuery('prs') },
   { id: 'my-prs', label: 'My PRs', query: getTaskPresetQuery('my-prs') }
+]
+
+type LinearPresetId = 'assigned' | 'created' | 'all' | 'completed'
+type LinearPreset = { id: LinearPresetId; label: string }
+
+const LINEAR_PRESETS: LinearPreset[] = [
+  { id: 'all', label: 'All' },
+  { id: 'assigned', label: 'My Issues' },
+  { id: 'created', label: 'Created' },
+  { id: 'completed', label: 'Completed' }
 ]
 
 const TASK_SEARCH_DEBOUNCE_MS = 300
@@ -141,6 +153,20 @@ function getTaskStatusTone(item: GitHubWorkItem): string {
   return 'border-cyan-500/30 bg-cyan-500/10 text-cyan-700 dark:text-cyan-200'
 }
 
+// Why: Linear encodes priority as an integer (0–4). Map to human-readable
+// labels so the table column is scannable without memorising the scale.
+const LINEAR_PRIORITY_LABELS: Record<number, string> = {
+  0: 'None',
+  1: 'Urgent',
+  2: 'High',
+  3: 'Medium',
+  4: 'Low'
+}
+
+function getLinearPriorityLabel(priority: number): string {
+  return LINEAR_PRIORITY_LABELS[priority] ?? 'None'
+}
+
 export default function TaskPage(): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const pageData = useAppStore((s) => s.taskPageData)
@@ -151,6 +177,12 @@ export default function TaskPage(): React.JSX.Element {
   const updateSettings = useAppStore((s) => s.updateSettings)
   const fetchWorkItemsAcrossRepos = useAppStore((s) => s.fetchWorkItemsAcrossRepos)
   const getCachedWorkItems = useAppStore((s) => s.getCachedWorkItems)
+  const linearStatus = useAppStore((s) => s.linearStatus)
+  const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
+  const connectLinear = useAppStore((s) => s.connectLinear)
+  const searchLinearIssues = useAppStore((s) => s.searchLinearIssues)
+  const listLinearIssues = useAppStore((s) => s.listLinearIssues)
+  const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
   // Why: in workspace view (a worktree is active) App.tsx hides its
   // full-width titlebar, so this page renders its own 42px titlebar strip to
   // keep the top band continuous with the sidebar header and tab rows. When
@@ -246,7 +278,17 @@ export default function TaskPage(): React.JSX.Element {
   const defaultTaskViewPreset = settings?.defaultTaskViewPreset ?? 'all'
   const initialTaskQuery = getTaskPresetQuery(defaultTaskViewPreset)
 
-  const [taskSource, setTaskSource] = useState<TaskSource>('github')
+  const [taskSource, setTaskSource] = useState<TaskSource>(pageData.taskSource ?? 'github')
+
+  // Why: pageData.taskSource changes when the user clicks a specific source
+  // icon in the sidebar while the task page is already open. useState only
+  // initializes once, so sync from the store when the value changes.
+  useEffect(() => {
+    if (pageData.taskSource) {
+      setTaskSource(pageData.taskSource)
+    }
+  }, [pageData.taskSource])
+
   const [taskSearchInput, setTaskSearchInput] = useState(initialTaskQuery)
   const [appliedTaskSearch, setAppliedTaskSearch] = useState(initialTaskQuery)
   const [activeTaskPreset, setActiveTaskPreset] = useState<TaskViewPresetId | null>(
@@ -291,6 +333,22 @@ export default function TaskPage(): React.JSX.Element {
   const [newIssueTitle, setNewIssueTitle] = useState('')
   const [newIssueBody, setNewIssueBody] = useState('')
   const [newIssueSubmitting, setNewIssueSubmitting] = useState(false)
+
+  const [drawerLinearIssue, setDrawerLinearIssue] = useState<LinearIssue | null>(null)
+
+  // Linear tab state
+  const [linearIssues, setLinearIssues] = useState<LinearIssue[]>([])
+  const [linearLoading, setLinearLoading] = useState(false)
+  const [linearError, setLinearError] = useState<string | null>(null)
+  const [linearSearchInput, setLinearSearchInput] = useState('')
+  const [activeLinearPreset, setActiveLinearPreset] = useState<LinearPresetId>('all')
+  const [linearRefreshNonce, setLinearRefreshNonce] = useState(0)
+  const [linearConnectOpen, setLinearConnectOpen] = useState(false)
+  const [linearApiKeyDraft, setLinearApiKeyDraft] = useState('')
+  const [linearConnectState, setLinearConnectState] = useState<'idle' | 'connecting' | 'error'>(
+    'idle'
+  )
+  const [linearConnectError, setLinearConnectError] = useState<string | null>(null)
 
   const filteredWorkItems = useMemo(() => {
     if (!activeTaskPreset) {
@@ -551,7 +609,7 @@ export default function TaskPage(): React.JSX.Element {
 
   useEffect(() => {
     // Why: when a modal is open, let it own Esc dismissal.
-    if (drawerWorkItem || newIssueOpen || activeModal !== 'none') {
+    if (drawerWorkItem || drawerLinearIssue || newIssueOpen || activeModal !== 'none') {
       return
     }
 
@@ -585,7 +643,141 @@ export default function TaskPage(): React.JSX.Element {
 
     window.addEventListener('keydown', onKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
-  }, [activeModal, closeTaskPage, drawerWorkItem, newIssueOpen])
+  }, [activeModal, closeTaskPage, drawerLinearIssue, drawerWorkItem, newIssueOpen])
+
+  // Why: check Linear connection status on mount so the UI can show the
+  // correct connected/disconnected state without requiring a settings visit.
+  useEffect(() => {
+    void checkLinearConnection()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Why: debounce the Linear search input so we don't fire a request on every
+  // keystroke — matches the 300ms cadence used for GitHub search.
+  const [appliedLinearSearch, setAppliedLinearSearch] = useState('')
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setAppliedLinearSearch(linearSearchInput)
+    }, TASK_SEARCH_DEBOUNCE_MS)
+    return () => window.clearTimeout(timeout)
+  }, [linearSearchInput])
+
+  // Why: fetch Linear issues when the tab is active and the account is
+  // connected. An empty search falls back to `listLinearIssues` (assigned
+  // issues) so the default view shows the user's own work.
+  useEffect(() => {
+    if (taskSource !== 'linear') {
+      return
+    }
+    if (!linearStatus.connected) {
+      return
+    }
+
+    let cancelled = false
+    setLinearLoading(true)
+    setLinearError(null)
+
+    const trimmed = appliedLinearSearch.trim()
+    const request =
+      trimmed.length > 0
+        ? searchLinearIssues(trimmed, WORK_ITEM_LIMIT)
+        : listLinearIssues(activeLinearPreset, WORK_ITEM_LIMIT)
+
+    void request
+      .then((issues) => {
+        if (cancelled) {
+          return
+        }
+        setLinearIssues(issues)
+        setLinearLoading(false)
+      })
+      .catch((err) => {
+        if (cancelled) {
+          return
+        }
+        setLinearError(err instanceof Error ? err.message : 'Failed to load Linear issues.')
+        setLinearLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+    // Why: searchLinearIssues and listLinearIssues are stable zustand selectors;
+    // depending on them would re-run the effect on unrelated store updates.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    taskSource,
+    linearStatus.connected,
+    appliedLinearSearch,
+    activeLinearPreset,
+    linearRefreshNonce
+  ])
+
+  // Why: for Linear issues the "Use" flow opens the composer with the issue
+  // info adapted to the LinkedWorkItemSummary shape. Linear identifiers are
+  // strings (e.g. "ENG-123") so we use 0 as a placeholder number since the
+  // URL is the primary artifact the agent will act on.
+  const openComposerForLinearItem = useCallback(
+    (issue: LinearIssue): void => {
+      const linkedWorkItem: LinkedWorkItemSummary = {
+        type: 'issue',
+        number: 0,
+        title: issue.title,
+        url: issue.url
+      }
+      openModal('new-workspace-composer', {
+        linkedWorkItem,
+        prefilledName: getLinkedWorkItemSuggestedName(issue)
+      })
+    },
+    [openModal]
+  )
+
+  const handleUseLinearItem = useCallback(
+    (issue: LinearIssue): void => {
+      const repoId = primaryRepo?.id
+      if (!repoId) {
+        openComposerForLinearItem(issue)
+        return
+      }
+      // Why: unlike GitHub issues (fetchable via `gh`), Linear has no CLI —
+      // paste the full issue context so the agent can act on it without needing
+      // to fetch anything externally.
+      const parts = [
+        `[${issue.identifier}] ${issue.title}`,
+        `Status: ${issue.state.name} · Team: ${issue.team.name}`,
+        issue.assignee ? `Assignee: ${issue.assignee.displayName}` : null,
+        issue.labels.length > 0 ? `Labels: ${issue.labels.join(', ')}` : null,
+        `URL: ${issue.url}`,
+        issue.description ? `\n${issue.description}` : null
+      ]
+      const pasteContent = parts.filter(Boolean).join('\n')
+      void launchWorkItemDirect({
+        item: { title: issue.title, url: issue.url, type: 'issue', number: null, pasteContent },
+        repoId,
+        openModalFallback: () => openComposerForLinearItem(issue)
+      })
+    },
+    [openComposerForLinearItem, primaryRepo?.id]
+  )
+
+  const handleLinearConnect = useCallback(async (): Promise<void> => {
+    const key = linearApiKeyDraft.trim()
+    if (!key) {
+      return
+    }
+    setLinearConnectState('connecting')
+    setLinearConnectError(null)
+    const result = await connectLinear(key)
+    if (result.ok) {
+      setLinearApiKeyDraft('')
+      setLinearConnectState('idle')
+      setLinearConnectOpen(false)
+    } else {
+      setLinearConnectState('error')
+      setLinearConnectError(result.error)
+    }
+  }, [connectLinear, linearApiKeyDraft])
 
   return (
     <div className="relative flex h-full min-h-0 flex-1 overflow-hidden bg-background text-foreground">
@@ -698,7 +890,9 @@ export default function TaskPage(): React.JSX.Element {
                       )
                     })}
                   </div>
-                  <div className="w-[200px]">
+                  {/* Why: Linear issues are not repo-scoped, so the repo
+                      selector is only relevant for the GitHub tab. */}
+                  <div className={cn('w-[200px]', taskSource !== 'github' && 'invisible')}>
                     <RepoMultiCombobox
                       repos={eligibleRepos}
                       selected={repoSelection}
@@ -724,7 +918,7 @@ export default function TaskPage(): React.JSX.Element {
                   </div>
                 </div>
 
-                {taskSource === 'github' && (
+                {taskSource === 'github' ? (
                   <div className="rounded-md rounded-b-none border border-border/50 bg-muted/50 p-3 shadow-sm">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div className="flex flex-wrap gap-2">
@@ -834,7 +1028,98 @@ export default function TaskPage(): React.JSX.Element {
                       </div>
                     </div>
                   </div>
-                )}
+                ) : linearStatus.connected ? (
+                  <div className="rounded-md rounded-b-none border border-border/50 bg-muted/50 p-3 shadow-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex flex-wrap gap-2">
+                        {LINEAR_PRESETS.map((preset) => {
+                          const active = !linearSearchInput && activeLinearPreset === preset.id
+                          return (
+                            <button
+                              key={preset.id}
+                              type="button"
+                              onClick={() => {
+                                setLinearSearchInput('')
+                                setAppliedLinearSearch('')
+                                setActiveLinearPreset(preset.id)
+                                setLinearRefreshNonce((n) => n + 1)
+                              }}
+                              className={cn(
+                                'rounded-md border px-2 py-1 text-xs transition',
+                                active
+                                  ? 'border-border/50 bg-foreground/90 text-background backdrop-blur-md'
+                                  : 'border-border/50 bg-transparent text-foreground hover:bg-muted/50'
+                              )}
+                            >
+                              {preset.label}
+                            </button>
+                          )
+                        })}
+                      </div>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => setLinearRefreshNonce((n) => n + 1)}
+                            disabled={linearLoading}
+                            aria-label="Refresh Linear issues"
+                            className="border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
+                          >
+                            {linearLoading ? (
+                              <LoaderCircle className="size-4 animate-spin" />
+                            ) : (
+                              <RefreshCw className="size-4" />
+                            )}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" sideOffset={6}>
+                          Refresh Linear issues
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                    <div className="mt-3 flex items-center gap-3">
+                      <div className="relative min-w-[320px] flex-1">
+                        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                          value={linearSearchInput}
+                          onChange={(e) => setLinearSearchInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              if (
+                                shouldSuppressEnterSubmit(
+                                  { isComposing: e.nativeEvent.isComposing, shiftKey: e.shiftKey },
+                                  false
+                                )
+                              ) {
+                                return
+                              }
+                              e.preventDefault()
+                              setAppliedLinearSearch(linearSearchInput.trim())
+                              setLinearRefreshNonce((n) => n + 1)
+                            }
+                          }}
+                          placeholder="Search Linear issues..."
+                          className="h-8 rounded-md border-border/50 bg-background pl-8 pr-8 text-xs"
+                        />
+                        {linearSearchInput ? (
+                          <button
+                            type="button"
+                            aria-label="Clear search"
+                            onClick={() => {
+                              setLinearSearchInput('')
+                              setAppliedLinearSearch('')
+                              setLinearRefreshNonce((n) => n + 1)
+                            }}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
+                          >
+                            <X className="size-4" />
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </section>
           </div>
@@ -1050,9 +1335,206 @@ export default function TaskPage(): React.JSX.Element {
                 </div>
               </div>
             </div>
+          ) : !linearStatusChecked ? (
+            <div className="mt-4 flex items-center justify-center py-14">
+              <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : !linearStatus.connected ? (
+            <div className="mt-4 flex flex-col items-center justify-center rounded-md border border-border/50 bg-muted/50 px-6 py-14 text-center shadow-sm">
+              <LinearIcon className="mb-4 size-8 text-muted-foreground/60" />
+              <p className="text-base font-medium text-foreground">Connect your Linear account</p>
+              <p className="mt-2 max-w-sm text-sm text-muted-foreground">
+                Browse and start work on your assigned Linear issues directly from here.
+              </p>
+              <Button
+                className="mt-5"
+                onClick={() => {
+                  setLinearApiKeyDraft('')
+                  setLinearConnectState('idle')
+                  setLinearConnectError(null)
+                  setLinearConnectOpen(true)
+                }}
+              >
+                Connect Linear
+              </Button>
+            </div>
           ) : (
-            <div className="mt-4 px-1 py-6">
-              <p className="text-sm text-muted-foreground">Coming soon</p>
+            /* Connected state: Linear issues table */
+            <div className="flex min-h-0 max-h-full flex-col rounded-md border border-t-0 border-border/50 bg-muted/50 overflow-hidden rounded-t-none shadow-sm">
+              <div className="flex-none grid grid-cols-[90px_minmax(0,3fr)_100px_120px_80px_90px_80px] gap-3 border-b border-border/50 px-3 py-2 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                <span>Identifier</span>
+                <span>Title</span>
+                <span>Team</span>
+                <span>Status</span>
+                <span>Priority</span>
+                <span>Updated</span>
+                <span />
+              </div>
+
+              <div
+                className="min-h-0 flex-initial overflow-y-auto scrollbar-sleek"
+                style={{ scrollbarGutter: 'stable' }}
+              >
+                {linearError ? (
+                  <div className="border-b border-border px-4 py-4 text-sm text-destructive">
+                    {linearError}
+                  </div>
+                ) : null}
+
+                {linearLoading && linearIssues.length === 0 ? (
+                  // Why: shimmer skeleton matches the GitHub tab pattern — 3 placeholder
+                  // rows while the initial fetch is in flight so the card never flashes empty.
+                  <div className="divide-y divide-border/50">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <div
+                        key={i}
+                        className="grid w-full gap-2 px-3 py-2 grid-cols-[90px_minmax(0,3fr)_100px_120px_80px_90px_80px]"
+                      >
+                        <div className="flex items-center">
+                          <div className="h-7 w-16 animate-pulse rounded-lg bg-muted/70" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="h-4 w-3/5 animate-pulse rounded bg-muted/70" />
+                          <div className="mt-2 h-3 w-2/5 animate-pulse rounded bg-muted/60" />
+                        </div>
+                        <div className="flex items-center">
+                          <div className="h-3 w-16 animate-pulse rounded bg-muted/60" />
+                        </div>
+                        <div className="flex items-center">
+                          <div className="h-5 w-16 animate-pulse rounded-full bg-muted/70" />
+                        </div>
+                        <div className="flex items-center">
+                          <div className="h-3 w-12 animate-pulse rounded bg-muted/60" />
+                        </div>
+                        <div className="flex items-center">
+                          <div className="h-3 w-16 animate-pulse rounded bg-muted/60" />
+                        </div>
+                        <div className="flex items-center justify-start lg:justify-end">
+                          <div className="h-7 w-16 animate-pulse rounded-xl bg-muted/70" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                {!linearLoading && linearIssues.length === 0 && !linearError ? (
+                  <div className="px-4 py-10 text-center">
+                    <p className="text-base font-medium text-foreground">No Linear issues found</p>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      {linearSearchInput
+                        ? 'Try a different search query.'
+                        : 'No assigned issues. Try searching for something.'}
+                    </p>
+                  </div>
+                ) : null}
+
+                <div className="divide-y divide-border/50">
+                  {linearIssues.map((issue) => (
+                    <div
+                      key={issue.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setDrawerLinearIssue(issue)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          setDrawerLinearIssue(issue)
+                        }
+                      }}
+                      className="cursor-pointer grid w-full gap-2 px-3 py-2 text-left transition hover:bg-muted/40 grid-cols-[90px_minmax(0,3fr)_100px_120px_80px_90px_80px]"
+                    >
+                      <div className="flex items-center">
+                        <span className="inline-flex items-center gap-1 rounded-md border border-border/50 bg-muted/40 px-1.5 py-0.5 text-muted-foreground">
+                          <span className="font-mono text-[11px] font-normal">
+                            {issue.identifier}
+                          </span>
+                        </span>
+                      </div>
+
+                      <div className="min-w-0">
+                        <h3 className="truncate text-[15px] font-semibold text-foreground">
+                          {issue.title}
+                        </h3>
+                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+                          {issue.assignee ? <span>{issue.assignee.displayName}</span> : null}
+                          {issue.labels.slice(0, 3).map((label) => (
+                            <span
+                              key={label}
+                              className="rounded-full border border-border/50 bg-background/80 px-1.5 py-0 text-[10px] text-muted-foreground"
+                            >
+                              {label}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="min-w-0 flex items-center text-xs text-muted-foreground">
+                        <span className="truncate">{issue.team.name}</span>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        {/* Why: render the status dot using the color Linear
+                              provides per-state so users recognise their workflow
+                              colours without a separate legend. */}
+                        <span
+                          className="inline-block size-2 shrink-0 rounded-full"
+                          style={{ backgroundColor: issue.state.color }}
+                        />
+                        <span className="truncate text-xs text-muted-foreground">
+                          {issue.state.name}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center text-xs text-muted-foreground">
+                        {getLinearPriorityLabel(issue.priority)}
+                      </div>
+
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="flex items-center text-[11px] text-muted-foreground">
+                            {formatRelativeTime(issue.updatedAt)}
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" sideOffset={6}>
+                          {new Date(issue.updatedAt).toLocaleString()}
+                        </TooltipContent>
+                      </Tooltip>
+
+                      <div className="flex items-center justify-start gap-1 lg:justify-end">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleUseLinearItem(issue)
+                          }}
+                          className="inline-flex items-center gap-1 rounded-md border border-border/50 bg-background/80 px-2 py-1 text-[11px] text-foreground transition hover:bg-muted/60"
+                        >
+                          Use
+                          <ArrowRight className="size-3" />
+                        </button>
+                        <DropdownMenu modal={false}>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              type="button"
+                              onClick={(e) => e.stopPropagation()}
+                              className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-muted/60 hover:text-foreground"
+                              aria-label="More actions"
+                            >
+                              <EllipsisVertical className="size-4" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onSelect={() => window.open(issue.url, '_blank')}>
+                              <ExternalLink className="size-4" />
+                              Open in browser
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -1148,6 +1630,101 @@ export default function TaskPage(): React.JSX.Element {
         }}
         onClose={() => setDrawerWorkItem(null)}
       />
+
+      <LinearItemDrawer
+        issue={drawerLinearIssue}
+        onUse={(issue) => {
+          setDrawerLinearIssue(null)
+          handleUseLinearItem(issue)
+        }}
+        onClose={() => setDrawerLinearIssue(null)}
+      />
+
+      <Dialog
+        open={linearConnectOpen}
+        onOpenChange={(open) => {
+          if (linearConnectState !== 'connecting') {
+            setLinearConnectOpen(open)
+          }
+        }}
+      >
+        <DialogContent
+          className="sm:max-w-md"
+          onKeyDown={(e) => {
+            if (
+              e.key === 'Enter' &&
+              linearApiKeyDraft.trim() &&
+              linearConnectState !== 'connecting'
+            ) {
+              e.preventDefault()
+              void handleLinearConnect()
+            }
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>Connect Linear</DialogTitle>
+            <DialogDescription>
+              Paste a Personal API key to browse your assigned issues.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3">
+            <Input
+              autoFocus
+              type="password"
+              placeholder="lin_api_..."
+              value={linearApiKeyDraft}
+              onChange={(e) => {
+                setLinearApiKeyDraft(e.target.value)
+                if (linearConnectState === 'error') {
+                  setLinearConnectState('idle')
+                  setLinearConnectError(null)
+                }
+              }}
+              disabled={linearConnectState === 'connecting'}
+            />
+            {linearConnectState === 'error' && linearConnectError && (
+              <p className="text-xs text-destructive">{linearConnectError}</p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Create a key at{' '}
+              <button
+                className="text-primary underline-offset-2 hover:underline"
+                onClick={() =>
+                  window.api.shell.openUrl('https://linear.app/settings/account/security')
+                }
+              >
+                Linear Settings → Security
+              </button>
+            </p>
+            <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
+              <Lock className="size-3 shrink-0" />
+              Your key is encrypted via the OS keychain and stored locally.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setLinearConnectOpen(false)}
+              disabled={linearConnectState === 'connecting'}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void handleLinearConnect()}
+              disabled={!linearApiKeyDraft.trim() || linearConnectState === 'connecting'}
+            >
+              {linearConnectState === 'connecting' ? (
+                <>
+                  <LoaderCircle className="size-4 animate-spin" />
+                  Verifying…
+                </>
+              ) : (
+                'Connect'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

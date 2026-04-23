@@ -21,6 +21,9 @@ import type {
   GitHubWorkItemDetails,
   GitHubViewer,
   IssueInfo,
+  LinearViewer,
+  LinearConnectionStatus,
+  LinearIssue,
   NotificationDispatchRequest,
   NotificationDispatchResult,
   OpenCodeStatusEvent,
@@ -163,6 +166,7 @@ export type DetectedBrowserInfo = {
 export type PreflightStatus = {
   git: { installed: boolean }
   gh: { installed: boolean; authenticated: boolean }
+  linear: { connected: boolean }
 }
 
 export type RefreshAgentsResult = {
@@ -408,6 +412,19 @@ export type PreloadApi = {
     }) => Promise<{ ok: true } | { ok: false; error: string }>
     checkOrcaStarred: () => Promise<boolean | null>
     starOrca: () => Promise<boolean>
+  }
+  linear: {
+    connect: (args: {
+      apiKey: string
+    }) => Promise<{ ok: true; viewer: LinearViewer } | { ok: false; error: string }>
+    disconnect: () => Promise<void>
+    status: () => Promise<LinearConnectionStatus>
+    searchIssues: (args: { query: string; limit?: number }) => Promise<LinearIssue[]>
+    listIssues: (args?: {
+      filter?: 'assigned' | 'created' | 'all' | 'completed'
+      limit?: number
+    }) => Promise<LinearIssue[]>
+    getIssue: (args: { id: string }) => Promise<LinearIssue | null>
   }
   starNag: {
     onShow: (callback: () => void) => () => void

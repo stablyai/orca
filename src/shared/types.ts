@@ -40,6 +40,7 @@ export type Worktree = {
   comment: string
   linkedIssue: number | null
   linkedPR: number | null
+  linkedLinearIssue: string | null
   isArchived: boolean
   isUnread: boolean
   isPinned: boolean
@@ -54,6 +55,7 @@ export type WorktreeMeta = {
   comment: string
   linkedIssue: number | null
   linkedPR: number | null
+  linkedLinearIssue: string | null
   isArchived: boolean
   isUnread: boolean
   isPinned: boolean
@@ -434,6 +436,42 @@ export type GitHubWorkItemDetails = {
   baseSha?: string
   checks?: PRCheckDetail[]
   files?: GitHubPRFile[]
+}
+
+// ─── Linear ─────────────────────────────────────────────────────────
+export type LinearViewer = {
+  displayName: string
+  email: string | null
+  organizationName: string
+}
+
+export type LinearConnectionStatus = {
+  connected: boolean
+  viewer: LinearViewer | null
+}
+
+export type LinearIssue = {
+  id: string
+  identifier: string
+  title: string
+  description?: string
+  url: string
+  state: {
+    name: string
+    type: string
+    color: string
+  }
+  team: {
+    name: string
+    key: string
+  }
+  labels: string[]
+  assignee?: {
+    displayName: string
+    avatarUrl?: string
+  }
+  priority: number
+  updatedAt: string
 }
 
 // ─── Hooks (orca.yaml) ──────────────────────────────────────────────

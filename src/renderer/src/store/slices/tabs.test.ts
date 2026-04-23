@@ -86,6 +86,7 @@ import { createTabsSlice } from './tabs'
 import { createUISlice } from './ui'
 import { createSettingsSlice } from './settings'
 import { createGitHubSlice } from './github'
+import { createLinearSlice } from './linear'
 import { createEditorSlice } from './editor'
 import { createStatsSlice } from './stats'
 import { createClaudeUsageSlice } from './claude-usage'
@@ -108,6 +109,7 @@ function createTestStore() {
     ...createUISlice(...a),
     ...createSettingsSlice(...a),
     ...createGitHubSlice(...a),
+    ...createLinearSlice(...a),
     ...createEditorSlice(...a),
     ...createStatsSlice(...a),
     ...createClaudeUsageSlice(...a),
@@ -765,6 +767,7 @@ describe('TabsSlice', () => {
               comment: '',
               linkedIssue: null,
               linkedPR: null,
+              linkedLinearIssue: null,
               isArchived: false,
               isUnread: false,
               isPinned: false,
@@ -857,6 +860,7 @@ describe('TabsSlice', () => {
               comment: '',
               linkedIssue: null,
               linkedPR: null,
+              linkedLinearIssue: null,
               isArchived: false,
               isUnread: false,
               isPinned: false,
@@ -929,6 +933,7 @@ describe('TabsSlice', () => {
               comment: '',
               linkedIssue: null,
               linkedPR: null,
+              linkedLinearIssue: null,
               isArchived: false,
               isUnread: false,
               isPinned: false,

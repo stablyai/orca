@@ -29,6 +29,7 @@ function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
     isMainWorktree: overrides.isMainWorktree ?? false,
     linkedIssue: overrides.linkedIssue ?? null,
     linkedPR: overrides.linkedPR ?? null,
+    linkedLinearIssue: null,
     isArchived: overrides.isArchived ?? false,
     comment: overrides.comment ?? '',
     isUnread: overrides.isUnread ?? false,

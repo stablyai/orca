@@ -425,6 +425,28 @@ const api = {
     starOrca: (): Promise<boolean> => ipcRenderer.invoke('gh:starOrca')
   },
 
+  linear: {
+    connect: (args: {
+      apiKey: string
+    }): Promise<{ ok: true; viewer: unknown } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('linear:connect', args),
+
+    disconnect: (): Promise<void> => ipcRenderer.invoke('linear:disconnect'),
+
+    status: (): Promise<unknown> => ipcRenderer.invoke('linear:status'),
+
+    searchIssues: (args: { query: string; limit?: number }): Promise<unknown[]> =>
+      ipcRenderer.invoke('linear:searchIssues', args),
+
+    listIssues: (args?: {
+      filter?: 'assigned' | 'created' | 'all' | 'completed'
+      limit?: number
+    }): Promise<unknown[]> => ipcRenderer.invoke('linear:listIssues', args),
+
+    getIssue: (args: { id: string }): Promise<unknown> =>
+      ipcRenderer.invoke('linear:getIssue', args)
+  },
+
   starNag: {
     onShow: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent): void => callback()
@@ -468,6 +490,7 @@ const api = {
     }): Promise<{
       git: { installed: boolean }
       gh: { installed: boolean; authenticated: boolean }
+      linear: { connected: boolean }
     }> => ipcRenderer.invoke('preflight:check', args),
     detectAgents: (): Promise<string[]> => ipcRenderer.invoke('preflight:detectAgents'),
     refreshAgents: (): Promise<{
