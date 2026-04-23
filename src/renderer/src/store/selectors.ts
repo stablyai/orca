@@ -77,10 +77,8 @@ export const useActiveRepoId = () => useAppStore((s) => s.activeRepoId)
 export const useActiveRepo = () =>
   useAppStore(useShallow((s) => s.repos.find((r) => r.id === s.activeRepoId) ?? null))
 export const useRepoMap = () => useAppStore((s) => getCachedRepoMap(s.repos))
-export const useRepoById = (repoId: string | null) => {
-  const repoMap = useRepoMap()
-  return repoId ? (repoMap.get(repoId) ?? null) : null
-}
+export const useRepoById = (repoId: string | null) =>
+  useAppStore((s) => (repoId ? (getCachedRepoMap(s.repos).get(repoId) ?? null) : null))
 
 // ─── Worktrees ──────────────────────────────────────────────────────
 export const useActiveWorktreeId = () => useAppStore((s) => s.activeWorktreeId)
@@ -88,10 +86,10 @@ export const useWorktreesForRepo = (repoId: string | null) =>
   useAppStore((s) => (repoId ? (s.worktreesByRepo[repoId] ?? EMPTY_WORKTREES) : EMPTY_WORKTREES))
 export const useAllWorktrees = () => useAppStore((s) => getCachedAllWorktrees(s.worktreesByRepo))
 export const useWorktreeMap = () => useAppStore((s) => getCachedWorktreeMap(s.worktreesByRepo))
-export const useWorktreeById = (worktreeId: string | null) => {
-  const worktreeMap = useWorktreeMap()
-  return worktreeId ? (worktreeMap.get(worktreeId) ?? null) : null
-}
+export const useWorktreeById = (worktreeId: string | null) =>
+  useAppStore((s) =>
+    worktreeId ? (getCachedWorktreeMap(s.worktreesByRepo).get(worktreeId) ?? null) : null
+  )
 export const useActiveWorktree = () => {
   const activeWorktreeId = useActiveWorktreeId()
   return useWorktreeById(activeWorktreeId)

@@ -1,5 +1,5 @@
 /* oxlint-disable max-lines */
-import React, { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { File } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useActiveWorktree, useWorktreesForRepo } from '@/store/selectors'
@@ -67,7 +67,7 @@ export default function QuickOpen(): React.JSX.Element | null {
   const [files, setFiles] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [loadedFilesKey, setLoadedFilesKey] = useState('')
+  const lastFilesRequestKeyRef = useRef('')
 
   const worktreePath = activeWorktree?.path ?? null
 
@@ -114,18 +114,17 @@ export default function QuickOpen(): React.JSX.Element | null {
 
     if (!worktreePath) {
       setFiles([])
-      setLoadedFilesKey('')
       setLoadError(null)
       setLoading(false)
       return
     }
 
-    if (loadedFilesKey === filesRequestKey && loadError === null) {
-      return
-    }
-
     let cancelled = false
-    setFiles([])
+    const requestKeyChanged = lastFilesRequestKeyRef.current !== filesRequestKey
+    if (requestKeyChanged) {
+      setFiles([])
+    }
+    lastFilesRequestKeyRef.current = filesRequestKey
     setLoadError(null)
     setLoading(true)
 
@@ -143,7 +142,6 @@ export default function QuickOpen(): React.JSX.Element | null {
       .then((result) => {
         if (!cancelled) {
           setFiles(result)
-          setLoadedFilesKey(filesRequestKey)
         }
       })
       .catch((error) => {
@@ -163,15 +161,7 @@ export default function QuickOpen(): React.JSX.Element | null {
     return () => {
       cancelled = true
     }
-  }, [
-    visible,
-    worktreePath,
-    connectionId,
-    excludePathsKey,
-    filesRequestKey,
-    loadedFilesKey,
-    loadError
-  ])
+  }, [visible, worktreePath, connectionId, excludePathsKey, filesRequestKey])
 
   // Filter files by fuzzy match
   const filtered = useMemo(() => {
