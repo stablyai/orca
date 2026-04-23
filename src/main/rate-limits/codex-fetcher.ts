@@ -315,10 +315,20 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
         ...(options?.codexHomePath ? { CODEX_HOME: options.codexHomePath } : {})
       }
     })
+    const termDisposables: { dispose: () => void }[] = []
+    const disposeTermListeners = (): void => {
+      for (const disposable of termDisposables.splice(0)) {
+        disposable.dispose()
+      }
+    }
 
     const timeout = setTimeout(() => {
       if (!resolved) {
         resolved = true
+        // Why: killing a hidden PTY without disposing node-pty's NAPI listener
+        // handles leaves ThreadSafeFunction callbacks alive into Electron
+        // shutdown, which can abort the app while Node cleans up its env.
+        disposeTermListeners()
         term.kill()
         resolve({
           provider: 'codex',
@@ -331,7 +341,7 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
       }
     }, PTY_TIMEOUT_MS)
 
-    term.onData((data) => {
+    const onDataDisposable = term.onData((data) => {
       output += data
 
       // Wait for prompt, then send /status
@@ -349,6 +359,7 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
           }
           resolved = true
           clearTimeout(timeout)
+          disposeTermListeners()
           term.kill()
 
           // eslint-disable-next-line no-control-regex
@@ -366,8 +377,12 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
         }, 500)
       }
     })
+    if (onDataDisposable) {
+      termDisposables.push(onDataDisposable)
+    }
 
-    term.onExit(() => {
+    const onExitDisposable = term.onExit(() => {
+      disposeTermListeners()
       if (!resolved) {
         resolved = true
         clearTimeout(timeout)
@@ -384,6 +399,9 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
         })
       }
     })
+    if (onExitDisposable) {
+      termDisposables.push(onExitDisposable)
+    }
   })
 }
 

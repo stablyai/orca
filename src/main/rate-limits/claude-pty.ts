@@ -150,10 +150,20 @@ export async function fetchViaPty(): Promise<ProviderRateLimits> {
       rows: 40,
       env: { ...process.env, TERM: 'xterm-256color' }
     })
+    const termDisposables: { dispose: () => void }[] = []
+    const disposeTermListeners = (): void => {
+      for (const disposable of termDisposables.splice(0)) {
+        disposable.dispose()
+      }
+    }
 
     const timeout = setTimeout(() => {
       if (!resolved) {
         resolved = true
+        // Why: node-pty's NAPI callbacks can outlive the Electron JS
+        // environment if we kill the hidden PTY without disposing them first,
+        // which matches Orca's documented SIGABRT failure mode on shutdown.
+        disposeTermListeners()
         term.kill()
         // Even on timeout, try to parse whatever we collected
         // eslint-disable-next-line no-control-regex
@@ -205,6 +215,7 @@ export async function fetchViaPty(): Promise<ProviderRateLimits> {
       if (enterInterval) {
         clearInterval(enterInterval)
       }
+      disposeTermListeners()
       term.kill()
 
       // eslint-disable-next-line no-control-regex
@@ -243,7 +254,7 @@ export async function fetchViaPty(): Promise<ProviderRateLimits> {
       startEnterPresses()
     }, STARTUP_DELAY_MS)
 
-    term.onData((data) => {
+    const onDataDisposable = term.onData((data) => {
       output += data
 
       // eslint-disable-next-line no-control-regex
@@ -278,8 +289,12 @@ export async function fetchViaPty(): Promise<ProviderRateLimits> {
         }
       }
     })
+    if (onDataDisposable) {
+      termDisposables.push(onDataDisposable)
+    }
 
-    term.onExit(() => {
+    const onExitDisposable = term.onExit(() => {
+      disposeTermListeners()
       if (enterInterval) {
         clearInterval(enterInterval)
       }
@@ -299,5 +314,8 @@ export async function fetchViaPty(): Promise<ProviderRateLimits> {
         })
       }
     })
+    if (onExitDisposable) {
+      termDisposables.push(onExitDisposable)
+    }
   })
 }
