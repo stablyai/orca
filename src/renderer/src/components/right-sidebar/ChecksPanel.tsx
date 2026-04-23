@@ -327,7 +327,7 @@ export default function ChecksPanel(): React.JSX.Element {
   }, [pr])
 
   // ── Empty state ──
-  if (!worktree) {
+  if (!activeWorktree) {
     return (
       <div className="px-4 py-6">
         <div className="text-sm font-medium text-foreground">No worktree selected</div>
@@ -478,8 +478,8 @@ export default function ChecksPanel(): React.JSX.Element {
         )}
 
         {/* Merge / Delete Worktree actions */}
-        {worktree && repo && (
-          <PRActions pr={pr} repo={repo} worktree={worktree} onRefreshPR={handleRefreshPR} />
+        {activeWorktree && repo && (
+          <PRActions pr={pr} repo={repo} worktree={activeWorktree} onRefreshPR={handleRefreshPR} />
         )}
       </div>
 
