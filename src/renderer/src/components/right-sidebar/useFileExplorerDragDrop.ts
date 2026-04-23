@@ -232,7 +232,12 @@ export function useFileExplorerDragDrop({
     nativeRootDragCounterRef.current = 0
     setIsNativeDragOver(false)
     setNativeDropTargetDir(null)
-  }, [])
+    // Why: for native OS file drops the preload intercepts the drop event and
+    // stops propagation, so React's onDrop (which calls stopDragEdgeScroll)
+    // never fires. Without this, the edge-scroll rAF loop keeps running with
+    // the last recorded cursor Y, continuously overriding the user's scroll.
+    stopDragEdgeScroll()
+  }, [stopDragEdgeScroll])
 
   const rootDragHandlers = {
     onDragOver: useCallback(
