@@ -854,6 +854,11 @@ export default function TerminalPane({
             return
           }
           transport.sendInput(shellEscapePath(filePath))
+          // Move focus to the terminal so the user can keep typing where the
+          // dropped path just landed. Without this, focus stays on the file
+          // tree row that originated the drag and subsequent keystrokes do
+          // not reach the pty — #978.
+          pane.terminal.focus()
         }}
       />
       {terminalError && isActive && (
