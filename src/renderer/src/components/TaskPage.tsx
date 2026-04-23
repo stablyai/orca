@@ -1090,6 +1090,12 @@ export default function TaskPage(): React.JSX.Element {
                 autoFocus
                 value={newIssueTitle}
                 onChange={(e) => setNewIssueTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                    e.preventDefault()
+                    void handleCreateNewIssue()
+                  }
+                }}
                 placeholder="Short summary"
                 disabled={newIssueSubmitting}
               />

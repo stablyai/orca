@@ -41,7 +41,13 @@ export function SshTargetForm({
   onCancel
 }: SshTargetFormProps): React.JSX.Element {
   return (
-    <div className="space-y-4 rounded-lg border border-border/50 bg-card/40 p-4">
+    <form
+      className="space-y-4 rounded-lg border border-border/50 bg-card/40 p-4"
+      onSubmit={(e) => {
+        e.preventDefault()
+        onSave()
+      }}
+    >
       <p className="text-sm font-medium">{editingId ? 'Edit SSH Target' : 'New SSH Target'}</p>
 
       <div className="grid grid-cols-2 gap-4">
@@ -119,13 +125,13 @@ export function SshTargetForm({
       </div>
 
       <div className="flex items-center gap-2">
-        <Button size="sm" onClick={onSave}>
+        <Button type="submit" size="sm">
           {editingId ? 'Save Changes' : 'Add Target'}
         </Button>
-        <Button variant="ghost" size="sm" onClick={onCancel}>
+        <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
           Cancel
         </Button>
       </div>
-    </div>
+    </form>
   )
 }

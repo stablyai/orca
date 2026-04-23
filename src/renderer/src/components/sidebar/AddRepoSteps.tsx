@@ -242,6 +242,14 @@ export function RemoteStep({
             <Input
               value={remotePath}
               onChange={(e) => onRemotePathChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                  e.preventDefault()
+                  if (selectedTargetId && remotePath.trim() && !isAddingRemote) {
+                    onAdd()
+                  }
+                }
+              }}
               placeholder="/home/user/project"
               className="h-8 text-xs flex-1"
               disabled={isAddingRemote}
@@ -297,6 +305,15 @@ export function CloneStep({
   onPickDestination,
   onClone
 }: CloneStepProps): React.JSX.Element {
+  const canClone = !!cloneUrl.trim() && !!cloneDestination.trim() && !isCloning
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
+    if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+      e.preventDefault()
+      if (canClone) {
+        onClone()
+      }
+    }
+  }
   return (
     <>
       <DialogHeader>
@@ -310,6 +327,7 @@ export function CloneStep({
           <Input
             value={cloneUrl}
             onChange={(e) => onUrlChange(e.target.value)}
+            onKeyDown={handleKeyDown}
             placeholder="https://github.com/user/repo.git"
             className="h-8 text-xs"
             disabled={isCloning}
@@ -323,6 +341,7 @@ export function CloneStep({
             <Input
               value={cloneDestination}
               onChange={(e) => onDestChange(e.target.value)}
+              onKeyDown={handleKeyDown}
               placeholder="/path/to/destination"
               className="h-8 text-xs flex-1"
               disabled={isCloning}
