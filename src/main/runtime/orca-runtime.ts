@@ -149,7 +149,7 @@ type RuntimeNotifier = {
   ): void
   renameTerminal(tabId: string, title: string | null): void
   focusTerminal(tabId: string, worktreeId: string): void
-  closeTerminal(tabId: string): void
+  closeTerminal(tabId: string, paneRuntimeId?: number): void
 }
 
 type TerminalHandleRecord = {
@@ -1063,6 +1063,16 @@ export class OrcaRuntimeService {
   // handle while ptyId is null, the next graph sync after PTY spawn will
   // change ptyId and invalidate the handle. Wait for a connected PTY so
   // the handle is stable and immediately usable for send/read/wait.
+  private countLeavesInTab(tabId: string): number {
+    let count = 0
+    for (const leaf of this.leaves.values()) {
+      if (leaf.tabId === tabId) {
+        count++
+      }
+    }
+    return count
+  }
+
   private resolveHandleForTab(tabId: string): string | null {
     for (const leaf of this.leaves.values()) {
       if (leaf.tabId === tabId && leaf.ptyId !== null) {
@@ -1086,7 +1096,17 @@ export class OrcaRuntimeService {
     if (leaf.ptyId) {
       ptyKilled = this.ptyController?.kill(leaf.ptyId) ?? false
     }
-    this.notifier?.closeTerminal(leaf.tabId)
+    // Why: killing the PTY in a multi-pane tab is sufficient — the renderer's
+    // PTY exit handler already calls PaneManager.closePane() for split layouts.
+    // Sending an additional IPC close would race with the exit handler and
+    // incorrectly close the entire tab (the pane count drops to 1 before the
+    // IPC arrives, triggering the single-pane fallback path).
+    // We only send the notifier close when the PTY wasn't killed (e.g. PTY not
+    // yet spawned) or when this is the only pane in the tab.
+    const siblingCount = this.countLeavesInTab(leaf.tabId)
+    if (!ptyKilled || siblingCount <= 1) {
+      this.notifier?.closeTerminal(leaf.tabId, leaf.paneRuntimeId)
+    }
     return { handle, tabId: leaf.tabId, ptyKilled }
   }
 

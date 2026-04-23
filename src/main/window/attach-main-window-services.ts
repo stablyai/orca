@@ -174,9 +174,9 @@ function registerRuntimeWindowLifecycle(
         mainWindow.webContents.send('ui:focusTerminal', { tabId, worktreeId })
       }
     },
-    closeTerminal: (tabId) => {
+    closeTerminal: (tabId, paneRuntimeId) => {
       if (!mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('ui:closeTerminal', { tabId })
+        mainWindow.webContents.send('ui:closeTerminal', { tabId, paneRuntimeId })
       }
     }
   })

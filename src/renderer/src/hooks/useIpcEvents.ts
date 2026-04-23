@@ -6,8 +6,8 @@ import {
   activateAndRevealWorktree,
   ensureWorktreeHasInitialTerminal
 } from '@/lib/worktree-activation'
-import { SPLIT_TERMINAL_PANE_EVENT } from '@/constants/terminal'
-import type { SplitTerminalPaneDetail } from '@/constants/terminal'
+import { SPLIT_TERMINAL_PANE_EVENT, CLOSE_TERMINAL_PANE_EVENT } from '@/constants/terminal'
+import type { SplitTerminalPaneDetail, CloseTerminalPaneDetail } from '@/constants/terminal'
 import { getVisibleWorktreeIds } from '@/components/sidebar/visible-worktrees'
 import { nextEditorFontZoomLevel, computeEditorFontSize } from '@/lib/editor-font-zoom'
 import type { UpdateStatus } from '../../../shared/types'
@@ -232,8 +232,16 @@ export function useIpcEvents(): void {
     )
 
     unsubs.push(
-      window.api.ui.onCloseTerminal(({ tabId }) => {
-        useAppStore.getState().closeTab(tabId)
+      window.api.ui.onCloseTerminal(({ tabId, paneRuntimeId }) => {
+        if (paneRuntimeId != null) {
+          // Why: when targeting a specific pane in a split layout, dispatch to the
+          // lifecycle hook so PaneManager.closePane() handles sibling promotion.
+          // The lifecycle hook falls through to closeTab() if this is the last pane.
+          const detail: CloseTerminalPaneDetail = { tabId, paneRuntimeId }
+          window.dispatchEvent(new CustomEvent(CLOSE_TERMINAL_PANE_EVENT, { detail }))
+        } else {
+          useAppStore.getState().closeTab(tabId)
+        }
       })
     )
 

@@ -1261,9 +1261,13 @@ const api = {
       ipcRenderer.on('ui:focusTerminal', listener)
       return () => ipcRenderer.removeListener('ui:focusTerminal', listener)
     },
-    onCloseTerminal: (callback: (data: { tabId: string }) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, data: { tabId: string }) =>
-        callback(data)
+    onCloseTerminal: (
+      callback: (data: { tabId: string; paneRuntimeId?: number }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { tabId: string; paneRuntimeId?: number }
+      ) => callback(data)
       ipcRenderer.on('ui:closeTerminal', listener)
       return () => ipcRenderer.removeListener('ui:closeTerminal', listener)
     },

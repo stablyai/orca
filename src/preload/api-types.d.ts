@@ -655,7 +655,9 @@ export type PreloadApi = {
       callback: (data: { tabId: string; title: string | null }) => void
     ) => () => void
     onFocusTerminal: (callback: (data: { tabId: string; worktreeId: string }) => void) => () => void
-    onCloseTerminal: (callback: (data: { tabId: string }) => void) => () => void
+    onCloseTerminal: (
+      callback: (data: { tabId: string; paneRuntimeId?: number }) => void
+    ) => () => void
     onTerminalZoom: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void
     readClipboardText: () => Promise<string>
     saveClipboardImageAsTempFile: () => Promise<string | null>
