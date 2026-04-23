@@ -62,4 +62,46 @@ describe('mapGhosttyToOrca', () => {
     expect(result.diff).toEqual({})
     expect(result.unsupportedKeys).toEqual(['font-size'])
   })
+
+  it('maps font-weight to terminalFontWeight', () => {
+    const result = mapGhosttyToOrca({ 'font-weight': '700' })
+    expect(result.diff).toEqual({ terminalFontWeight: 700 })
+    expect(result.unsupportedKeys).toEqual([])
+  })
+
+  it('rejects out-of-range font-weight', () => {
+    const result = mapGhosttyToOrca({ 'font-weight': '50' })
+    expect(result.diff).toEqual({})
+    expect(result.unsupportedKeys).toEqual(['font-weight'])
+  })
+
+  it('maps cursor-style-blink true to terminalCursorBlink', () => {
+    const result = mapGhosttyToOrca({ 'cursor-style-blink': 'true' })
+    expect(result.diff).toEqual({ terminalCursorBlink: true })
+    expect(result.unsupportedKeys).toEqual([])
+  })
+
+  it('maps cursor-style-blink false to terminalCursorBlink', () => {
+    const result = mapGhosttyToOrca({ 'cursor-style-blink': 'false' })
+    expect(result.diff).toEqual({ terminalCursorBlink: false })
+    expect(result.unsupportedKeys).toEqual([])
+  })
+
+  it('rejects invalid cursor-style-blink value', () => {
+    const result = mapGhosttyToOrca({ 'cursor-style-blink': 'yes' })
+    expect(result.diff).toEqual({})
+    expect(result.unsupportedKeys).toEqual(['cursor-style-blink'])
+  })
+
+  it('maps focus-follows-mouse to terminalFocusFollowsMouse', () => {
+    const result = mapGhosttyToOrca({ 'focus-follows-mouse': 'true' })
+    expect(result.diff).toEqual({ terminalFocusFollowsMouse: true })
+    expect(result.unsupportedKeys).toEqual([])
+  })
+
+  it('rejects invalid focus-follows-mouse value', () => {
+    const result = mapGhosttyToOrca({ 'focus-follows-mouse': '1' })
+    expect(result.diff).toEqual({})
+    expect(result.unsupportedKeys).toEqual(['focus-follows-mouse'])
+  })
 })
