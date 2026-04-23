@@ -1201,14 +1201,14 @@ const api = {
     onRequestTerminalCreate: (
       callback: (data: {
         requestId: string
-        worktreeId: string
+        worktreeId?: string
         command?: string
         title?: string
       }) => void
     ): (() => void) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
-        data: { requestId: string; worktreeId: string; command?: string; title?: string }
+        data: { requestId: string; worktreeId?: string; command?: string; title?: string }
       ) => callback(data)
       ipcRenderer.on('terminal:requestTabCreate', listener)
       return () => ipcRenderer.removeListener('terminal:requestTabCreate', listener)

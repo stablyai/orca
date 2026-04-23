@@ -709,7 +709,7 @@ export function useTerminalPaneLifecycle({
       if (!mgr) {
         return
       }
-      if (mgr.panes.size <= 1) {
+      if (mgr.getPanes().length <= 1) {
         useAppStore.getState().closeTab(tabId)
       } else {
         mgr.closePane(detail.paneRuntimeId)

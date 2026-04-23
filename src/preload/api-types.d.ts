@@ -643,6 +643,20 @@ export type PreloadApi = {
     onCreateTerminal: (
       callback: (data: { worktreeId: string; command?: string; title?: string }) => void
     ) => () => void
+    onRequestTerminalCreate: (
+      callback: (data: {
+        requestId: string
+        worktreeId?: string
+        command?: string
+        title?: string
+      }) => void
+    ) => () => void
+    replyTerminalCreate: (reply: {
+      requestId: string
+      tabId?: string
+      title?: string
+      error?: string
+    }) => void
     onSplitTerminal: (
       callback: (data: {
         tabId: string
