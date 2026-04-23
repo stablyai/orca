@@ -98,6 +98,9 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
 
   disconnectLinear: async () => {
     await window.api.linear.disconnect()
+    inflightIssueRequests.clear()
+    inflightSearchRequests.clear()
+    inflightListRequests.clear()
     set({
       linearStatus: { connected: false, viewer: null },
       linearIssueCache: {},

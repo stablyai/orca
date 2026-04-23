@@ -70,14 +70,19 @@ export function IntegrationsPane(): React.JSX.Element {
     }
     setLinearConnectState('connecting')
     setLinearConnectError(null)
-    const result = await connectLinear(linearApiKeyDraft.trim())
-    if (result.ok) {
-      setLinearApiKeyDraft('')
-      setLinearConnectState('idle')
-      setLinearDialogOpen(false)
-    } else {
+    try {
+      const result = await connectLinear(linearApiKeyDraft.trim())
+      if (result.ok) {
+        setLinearApiKeyDraft('')
+        setLinearConnectState('idle')
+        setLinearDialogOpen(false)
+      } else {
+        setLinearConnectState('error')
+        setLinearConnectError(result.error)
+      }
+    } catch (error) {
       setLinearConnectState('error')
-      setLinearConnectError(result.error)
+      setLinearConnectError(error instanceof Error ? error.message : 'Connection failed')
     }
   }
 

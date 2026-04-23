@@ -91,6 +91,9 @@ const SidebarNav = React.memo(function SidebarNav() {
             tabIndex={-1}
             onClick={(e) => {
               e.stopPropagation()
+              if (!canBrowseTasks) {
+                return
+              }
               openTaskPage({ taskSource: 'linear' })
             }}
             className="rounded p-0.5 text-muted-foreground/70 transition-colors hover:text-foreground"

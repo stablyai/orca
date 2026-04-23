@@ -768,14 +768,19 @@ export default function TaskPage(): React.JSX.Element {
     }
     setLinearConnectState('connecting')
     setLinearConnectError(null)
-    const result = await connectLinear(key)
-    if (result.ok) {
-      setLinearApiKeyDraft('')
-      setLinearConnectState('idle')
-      setLinearConnectOpen(false)
-    } else {
+    try {
+      const result = await connectLinear(key)
+      if (result.ok) {
+        setLinearApiKeyDraft('')
+        setLinearConnectState('idle')
+        setLinearConnectOpen(false)
+      } else {
+        setLinearConnectState('error')
+        setLinearConnectError(result.error)
+      }
+    } catch (error) {
       setLinearConnectState('error')
-      setLinearConnectError(result.error)
+      setLinearConnectError(error instanceof Error ? error.message : 'Connection failed')
     }
   }, [connectLinear, linearApiKeyDraft])
 
