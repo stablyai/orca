@@ -1,4 +1,5 @@
 import { Session, type SubprocessHandle } from './session'
+import { normalizePtySize } from './daemon-pty-size'
 import type { SessionInfo, TerminalSnapshot, ShellReadyState } from './types'
 import { SessionNotFoundError } from './types'
 
@@ -72,11 +73,12 @@ export class TerminalHost {
 
     // Clear tombstone if re-creating a killed session
     this.killedTombstones.delete(opts.sessionId)
+    const size = normalizePtySize(opts.cols, opts.rows)
 
     const subprocess = this.spawnSubprocess({
       sessionId: opts.sessionId,
-      cols: opts.cols,
-      rows: opts.rows,
+      cols: size.cols,
+      rows: size.rows,
       cwd: opts.cwd,
       env: opts.env,
       command: opts.command
@@ -84,8 +86,8 @@ export class TerminalHost {
 
     const session = new Session({
       sessionId: opts.sessionId,
-      cols: opts.cols,
-      rows: opts.rows,
+      cols: size.cols,
+      rows: size.rows,
       subprocess,
       shellReadySupported: opts.shellReadySupported ?? false
     })

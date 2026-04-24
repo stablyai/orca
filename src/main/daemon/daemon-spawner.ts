@@ -59,17 +59,24 @@ export class DaemonSpawner {
   }
 }
 
-export function getDaemonSocketPath(runtimeDir: string): string {
+export function getDaemonSocketPath(
+  runtimeDir: string,
+  protocolVersion = PROTOCOL_VERSION
+): string {
   // Why: Windows IPC servers use named pipes rather than filesystem socket
   // files. Include the protocol version in the endpoint name so a daemon from
   // an older build is never reused after a breaking protocol change.
   if (process.platform === 'win32') {
     const suffix = createHash('sha256').update(runtimeDir).digest('hex').slice(0, 12)
-    return `\\\\?\\pipe\\orca-terminal-host-v${PROTOCOL_VERSION}-${suffix}`
+    return `\\\\?\\pipe\\orca-terminal-host-v${protocolVersion}-${suffix}`
   }
-  return join(runtimeDir, `daemon-v${PROTOCOL_VERSION}.sock`)
+  return join(runtimeDir, `daemon-v${protocolVersion}.sock`)
 }
 
-export function getDaemonTokenPath(runtimeDir: string): string {
-  return join(runtimeDir, `daemon-v${PROTOCOL_VERSION}.token`)
+export function getDaemonTokenPath(runtimeDir: string, protocolVersion = PROTOCOL_VERSION): string {
+  return join(runtimeDir, `daemon-v${protocolVersion}.token`)
+}
+
+export function getDaemonPidPath(runtimeDir: string, protocolVersion = PROTOCOL_VERSION): string {
+  return join(runtimeDir, `daemon-v${protocolVersion}.pid`)
 }

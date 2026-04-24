@@ -1,5 +1,8 @@
 // ─── Protocol Version ────────────────────────────────────────────────
-export const PROTOCOL_VERSION = 1
+// Why: v1 daemons can survive app updates and keep using tmp-backed
+// shell-ready rcfiles. v2 forces a fresh daemon with durable wrapper paths.
+export const PROTOCOL_VERSION = 2
+export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [1] as const
 
 // ─── Session State Machine ──────────────────────────────────────────
 export type SessionState = 'created' | 'spawning' | 'running' | 'exiting' | 'exited'
@@ -141,6 +144,11 @@ export type ShutdownRequest = {
   }
 }
 
+export type PingRequest = {
+  id: string
+  type: 'ping'
+}
+
 export type DaemonRequest =
   | CreateOrAttachRequest
   | CancelCreateOrAttachRequest
@@ -153,6 +161,7 @@ export type DaemonRequest =
   | GetCwdRequest
   | ClearScrollbackRequest
   | ShutdownRequest
+  | PingRequest
 
 // ─── RPC Responses (Daemon → Client, on control socket) ────────────
 

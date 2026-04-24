@@ -112,6 +112,15 @@ describe('DaemonServer', () => {
       expect(result.sessions).toHaveLength(1)
     })
 
+    it('handles ping health checks', async () => {
+      await startServer()
+      const c = await connectClient()
+
+      const result = await c.request<{ pong: boolean }>('ping', undefined)
+
+      expect(result).toEqual({ pong: true })
+    })
+
     it('handles write (fire-and-forget)', async () => {
       await startServer()
       const c = await connectClient()
