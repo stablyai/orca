@@ -19,6 +19,7 @@ import { resolveZoomTarget } from './resolve-zoom-target'
 import { handleSwitchTab } from './ipc-tab-switch'
 import { dispatchClearModifierHints } from './useModifierHint'
 import { parseAgentStatusPayload } from '../../../shared/agent-status-types'
+import { AGENT_DASHBOARD_ENABLED } from '../../../shared/constants'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 
 export { resolveZoomTarget } from './resolve-zoom-target'
@@ -660,43 +661,45 @@ export function useIpcEvents(): void {
     // Re-parse it here so the renderer enforces the same normalization rules
     // (state enum, field truncation) regardless of whether the source was a
     // hook callback or an OSC fallback path.
-    unsubs.push(
-      window.api.agentStatus.onSet((data) => {
-        const payload = parseAgentStatusPayload(
-          JSON.stringify({
-            state: data.state,
-            prompt: data.prompt,
-            agentType: data.agentType,
-            toolName: data.toolName,
-            toolInput: data.toolInput,
-            lastAssistantMessage: data.lastAssistantMessage,
-            interrupted: data.interrupted
-          })
-        )
-        if (!payload) {
-          return
-        }
-        const store = useAppStore.getState()
-        // Why: look up the terminal title for agent type inference — hook
-        // payloads do not include the current title, but the store may already
-        // know it from OSC title tracking.
-        const currentTitle = findTerminalTitleForPaneKey(store, data.paneKey)
-        // Why: a paneKey that no longer resolves to a live tab belongs to a pane
-        // that has already been torn down. Dropping here prevents orphan entries
-        // from accumulating in agentStatusByPaneKey.
-        const [tabId] = data.paneKey.split(':')
-        if (!tabId) {
-          return
-        }
-        const tabExists = Object.values(store.tabsByWorktree).some((tabs) =>
-          tabs.some((t) => t.id === tabId)
-        )
-        if (!tabExists) {
-          return
-        }
-        store.setAgentStatus(data.paneKey, payload, currentTitle)
-      })
-    )
+    if (AGENT_DASHBOARD_ENABLED) {
+      unsubs.push(
+        window.api.agentStatus.onSet((data) => {
+          const payload = parseAgentStatusPayload(
+            JSON.stringify({
+              state: data.state,
+              prompt: data.prompt,
+              agentType: data.agentType,
+              toolName: data.toolName,
+              toolInput: data.toolInput,
+              lastAssistantMessage: data.lastAssistantMessage,
+              interrupted: data.interrupted
+            })
+          )
+          if (!payload) {
+            return
+          }
+          const store = useAppStore.getState()
+          // Why: look up the terminal title for agent type inference — hook
+          // payloads do not include the current title, but the store may already
+          // know it from OSC title tracking.
+          const currentTitle = findTerminalTitleForPaneKey(store, data.paneKey)
+          // Why: a paneKey that no longer resolves to a live tab belongs to a pane
+          // that has already been torn down. Dropping here prevents orphan entries
+          // from accumulating in agentStatusByPaneKey.
+          const [tabId] = data.paneKey.split(':')
+          if (!tabId) {
+            return
+          }
+          const tabExists = Object.values(store.tabsByWorktree).some((tabs) =>
+            tabs.some((t) => t.id === tabId)
+          )
+          if (!tabExists) {
+            return
+          }
+          store.setAgentStatus(data.paneKey, payload, currentTitle)
+        })
+      )
+    }
 
     return () => unsubs.forEach((fn) => fn())
   }, [])

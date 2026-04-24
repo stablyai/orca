@@ -38,6 +38,7 @@ import { agentHookServer } from './agent-hooks/server'
 import { claudeHookService } from './claude/hook-service'
 import { codexHookService } from './codex/hook-service'
 import { geminiHookService } from './gemini/hook-service'
+import { AGENT_DASHBOARD_ENABLED } from '../shared/constants'
 import { AgentBrowserBridge } from './browser/agent-browser-bridge'
 import { browserManager } from './browser/browser-manager'
 
@@ -144,17 +145,19 @@ function openMainWindow(): BrowserWindow {
     }
   })
   mainWindow = window
-  agentHookServer.setListener(({ paneKey, tabId, worktreeId, payload }) => {
-    if (mainWindow?.isDestroyed()) {
-      return
-    }
-    mainWindow?.webContents.send('agentStatus:set', {
-      paneKey,
-      tabId,
-      worktreeId,
-      ...payload
+  if (AGENT_DASHBOARD_ENABLED) {
+    agentHookServer.setListener(({ paneKey, tabId, worktreeId, payload }) => {
+      if (mainWindow?.isDestroyed()) {
+        return
+      }
+      mainWindow?.webContents.send('agentStatus:set', {
+        paneKey,
+        tabId,
+        worktreeId,
+        ...payload
+      })
     })
-  })
+  }
   return window
 }
 
@@ -183,15 +186,17 @@ app.whenReady().then(async () => {
   nativeTheme.themeSource = store.getSettings().theme ?? 'system'
   // Why: managed hook installation mutates user-global agent config.
   // Startup must fail open so a malformed local config never bricks Orca.
-  for (const installManagedHooks of [
-    () => claudeHookService.install(),
-    () => codexHookService.install(),
-    () => geminiHookService.install()
-  ]) {
-    try {
-      installManagedHooks()
-    } catch (error) {
-      console.error('[agent-hooks] Failed to install managed hooks:', error)
+  if (AGENT_DASHBOARD_ENABLED) {
+    for (const installManagedHooks of [
+      () => claudeHookService.install(),
+      () => codexHookService.install(),
+      () => geminiHookService.install()
+    ]) {
+      try {
+        installManagedHooks()
+      } catch (error) {
+        console.error('[agent-hooks] Failed to install managed hooks:', error)
+      }
     }
   }
 
@@ -256,12 +261,16 @@ app.whenReady().then(async () => {
   // Parallelizing them with the window open shaves ~100-200ms off cold start.
   const [win] = await Promise.all([
     Promise.resolve(openMainWindow()),
-    agentHookServer.start({ env: app.isPackaged ? 'production' : 'development' }).catch((error) => {
-      // Why: Claude/Codex/Gemini/OpenCode hook callbacks are sidebar enrichment
-      // only. Orca must still boot even if the local loopback receiver cannot
-      // bind on this launch.
-      console.error('[agent-hooks] Failed to start local hook server:', error)
-    }),
+    AGENT_DASHBOARD_ENABLED
+      ? agentHookServer
+          .start({ env: app.isPackaged ? 'production' : 'development' })
+          .catch((error) => {
+            // Why: Claude/Codex/Gemini/OpenCode hook callbacks are sidebar enrichment
+            // only. Orca must still boot even if the local loopback receiver cannot
+            // bind on this launch.
+            console.error('[agent-hooks] Failed to start local hook server:', error)
+          })
+      : Promise.resolve(),
     runtimeRpc.start().catch((error) => {
       console.error('[runtime] Failed to start local RPC transport:', error)
     })
@@ -302,7 +311,9 @@ app.on('will-quit', () => {
   // so without this ordering, running agents would produce orphaned
   // agent_start events with no matching stops.
   starNag?.stop()
-  agentHookServer.stop()
+  if (AGENT_DASHBOARD_ENABLED) {
+    agentHookServer.stop()
+  }
   stats?.flush()
   // Why: agent-browser daemon processes would otherwise linger after Orca quits,
   // holding ports and leaving stale session state on disk.

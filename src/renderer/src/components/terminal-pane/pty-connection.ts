@@ -4,6 +4,7 @@ import type { IDisposable } from '@xterm/xterm'
 import { isGeminiTerminalTitle, isClaudeAgent } from '@/lib/agent-status'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
+import { AGENT_DASHBOARD_ENABLED } from '../../../../shared/constants'
 import type { PtyConnectResult } from './pty-transport'
 import { createIpcPtyTransport } from './pty-transport'
 import { shouldSeedCacheTimerOnInitialTitle } from './cache-timer-seeding'
@@ -207,6 +208,9 @@ export function connectPanePty(
     // Without this, the OSC parser in pty-transport strips sequences from xterm
     // output but the status never reaches the store or dashboard/hover UI.
     onAgentStatus: (payload) => {
+      if (!AGENT_DASHBOARD_ENABLED) {
+        return
+      }
       const title = useAppStore.getState().runtimePaneTitlesByTabId?.[deps.tabId]?.[pane.id]
       useAppStore.getState().setAgentStatus(cacheKey, payload, title)
     }
