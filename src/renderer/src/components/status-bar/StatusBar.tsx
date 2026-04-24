@@ -222,6 +222,10 @@ function WindowLabel({ w, label }: { w: RateLimitWindow; label: string }): React
 // Provider segment
 // ---------------------------------------------------------------------------
 
+// Why: only Flash and the latest Pro Preview are shown in the status bar —
+// the rest (Flash Lite, older previews) are secondary and would clutter the bar.
+const STATUS_BAR_BUCKET_NAMES = new Set(['Flash', '3.1 Pro Preview'])
+
 function ProviderSegment({
   p,
   compact
@@ -275,14 +279,12 @@ function ProviderSegment({
   // Has data (ok, fetching with stale data, or error with stale data)
   const isStale = p.status === 'error'
 
-  // Why: when buckets are present show each one individually so the user sees
-  // per-model usage at a glance (e.g. "Flash 93% · 3.1 Pro Preview 7%")
-  // instead of only the most-constrained summary.
   if (p.buckets && p.buckets.length > 0) {
+    const visibleBuckets = p.buckets.filter((b) => STATUS_BAR_BUCKET_NAMES.has(b.name))
     return (
       <span className="inline-flex items-center gap-1.5">
         <ProviderIcon provider={provider} />
-        {p.buckets.map((bucket, i) => {
+        {visibleBuckets.map((bucket, i) => {
           const left = Math.max(0, Math.round(100 - bucket.usedPercent))
           return (
             <React.Fragment key={bucket.name}>
@@ -293,6 +295,9 @@ function ProviderSegment({
             </React.Fragment>
           )
         })}
+        {visibleBuckets.length === 0 && p.session && (
+          <WindowLabel w={p.session} label={formatWindowLabel(p.session.windowMinutes)} />
+        )}
         {isStale && <AlertTriangle size={11} className="text-muted-foreground/80" />}
       </span>
     )
