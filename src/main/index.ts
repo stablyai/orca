@@ -142,6 +142,12 @@ function openMainWindow(): BrowserWindow {
   window.on('closed', () => {
     if (mainWindow === window) {
       mainWindow = null
+      if (AGENT_DASHBOARD_ENABLED) {
+        // Why: the listener closure captured the (now-destroyed) window; clear
+        // it so hook POSTs during the windowless state do not fire a no-op
+        // listener that retains the stale window reference.
+        agentHookServer.setListener(null)
+      }
     }
   })
   mainWindow = window

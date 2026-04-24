@@ -200,47 +200,67 @@ function normalizeOptionalMultilineField(value: unknown, maxLength: number): str
 }
 
 /**
+ * Normalize and validate an already-parsed agent status object. Shared by the
+ * JSON string entry point (`parseAgentStatusPayload`) and the object entry
+ * point (`normalizeAgentStatusPayload`) so both paths enforce identical field
+ * rules. Returns null when the payload is malformed or the state is invalid.
+ */
+function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload | null {
+  if (typeof parsed !== 'object' || parsed === null) {
+    return null
+  }
+  const obj = parsed as Record<string, unknown>
+  // Why: explicit typeof guard ensures non-string values (e.g. numbers)
+  // are rejected rather than relying on Set.has returning false for
+  // mismatched types.
+  if (typeof obj.state !== 'string') {
+    return null
+  }
+  const state = obj.state
+  if (!VALID_STATES.has(state)) {
+    return null
+  }
+  return {
+    state: state as AgentStatusState,
+    prompt: normalizeField(obj.prompt),
+    // Why: route through normalizeOptionalField so agentType gets the same
+    // trim / collapse-newlines / truncate / empty→undefined treatment as the
+    // other single-line string fields (toolName, toolInput, prompt). Inline
+    // trim+slice left embedded newlines intact, which broke single-line UI
+    // rendering and equality checks when a payload contained e.g.
+    // `agentType: "claude\nrogue"`.
+    agentType: normalizeOptionalField(obj.agentType, AGENT_TYPE_MAX_LENGTH),
+    toolName: normalizeOptionalField(obj.toolName, AGENT_STATUS_TOOL_NAME_MAX_LENGTH),
+    toolInput: normalizeOptionalField(obj.toolInput, AGENT_STATUS_TOOL_INPUT_MAX_LENGTH),
+    lastAssistantMessage: normalizeOptionalMultilineField(
+      obj.lastAssistantMessage,
+      AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH
+    ),
+    // Why: only meaningful on `done`. Coerce to undefined on other states so
+    // the field doesn't leak stale truth through state transitions.
+    interrupted: obj.interrupted === true && state === 'done' ? true : undefined
+  }
+}
+
+/**
+ * Normalize an already-structured agent status object (e.g. arriving via IPC
+ * where the payload has already been deserialized by Electron). Skips the
+ * JSON.stringify → JSON.parse round-trip that `parseAgentStatusPayload`
+ * requires, which matters because hook events can fire many times per second
+ * during a tool-use run.
+ */
+export function normalizeAgentStatusPayload(payload: unknown): ParsedAgentStatusPayload | null {
+  return normalizeAgentStatusObject(payload)
+}
+
+/**
  * Parse and validate an agent status JSON payload received from explicit
  * hook integrations or OSC 9999. Returns null if the payload is malformed or
  * has an invalid state.
  */
 export function parseAgentStatusPayload(json: string): ParsedAgentStatusPayload | null {
   try {
-    const parsed = JSON.parse(json)
-    if (typeof parsed !== 'object' || parsed === null) {
-      return null
-    }
-    const obj = parsed as Record<string, unknown>
-    // Why: explicit typeof guard ensures non-string values (e.g. numbers)
-    // are rejected rather than relying on Set.has returning false for
-    // mismatched types.
-    if (typeof obj.state !== 'string') {
-      return null
-    }
-    const state = obj.state
-    if (!VALID_STATES.has(state)) {
-      return null
-    }
-    return {
-      state: state as AgentStatusState,
-      prompt: normalizeField(obj.prompt),
-      // Why: route through normalizeOptionalField so agentType gets the same
-      // trim / collapse-newlines / truncate / empty→undefined treatment as the
-      // other single-line string fields (toolName, toolInput, prompt). Inline
-      // trim+slice left embedded newlines intact, which broke single-line UI
-      // rendering and equality checks when a payload contained e.g.
-      // `agentType: "claude\nrogue"`.
-      agentType: normalizeOptionalField(obj.agentType, AGENT_TYPE_MAX_LENGTH),
-      toolName: normalizeOptionalField(obj.toolName, AGENT_STATUS_TOOL_NAME_MAX_LENGTH),
-      toolInput: normalizeOptionalField(obj.toolInput, AGENT_STATUS_TOOL_INPUT_MAX_LENGTH),
-      lastAssistantMessage: normalizeOptionalMultilineField(
-        obj.lastAssistantMessage,
-        AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH
-      ),
-      // Why: only meaningful on `done`. Coerce to undefined on other states so
-      // the field doesn't leak stale truth through state transitions.
-      interrupted: obj.interrupted === true && state === 'done' ? true : undefined
-    }
+    return normalizeAgentStatusObject(JSON.parse(json))
   } catch {
     return null
   }

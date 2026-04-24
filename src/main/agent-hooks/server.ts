@@ -110,6 +110,18 @@ function readJsonBody(req: IncomingMessage): Promise<unknown> {
       settled = true
       reject(err)
     })
+    // Why: req.destroy() (called by the slowloris setTimeout in the route
+    // handler) emits 'close'/'aborted' but not 'end' or 'error'. Without this
+    // handler the promise would never settle and the chunk buffers would be
+    // retained for the process lifetime, letting a slow client that holds a
+    // valid token accumulate pending closures indefinitely.
+    req.on('close', () => {
+      if (settled) {
+        return
+      }
+      settled = true
+      reject(new Error('aborted'))
+    })
   })
 }
 
@@ -327,43 +339,84 @@ function readLastAssistantFromTranscript(transcriptPath: unknown): string | unde
     }
     const fd = openSync(transcriptPath, 'r')
     try {
-      // Why: track unhandled trailing bytes as raw Buffer across iterations so
-      // multi-byte UTF-8 codepoints that straddle chunk boundaries are not
-      // corrupted. `carryBytes` holds bytes from the earliest partial line we
-      // saw; when the next (earlier) chunk arrives we concat and decode once.
+      // Why: track unhandled leading bytes as a raw Buffer across iterations
+      // so multi-byte UTF-8 codepoints that straddle chunk boundaries are not
+      // corrupted. A previous implementation decoded the combined chunk then
+      // re-encoded `lines[0]` back to UTF-8 for the carry; when a chunk
+      // started mid-codepoint the decode produced U+FFFD replacement chars
+      // and the re-encode baked those replacements into the carry bytes
+      // permanently, mis-joining every subsequent chunk. Splitting on \n at
+      // the byte level (0x0a) and only decoding complete-line regions keeps
+      // the carry byte-exact.
       let carryBytes: Buffer = Buffer.alloc(0)
       let bytesRead = 0
       while (bytesRead < size && bytesRead < TRANSCRIPT_MAX_SCAN_BYTES) {
         const chunkSize = Math.min(size - bytesRead, TRANSCRIPT_CHUNK_BYTES)
         const position = size - bytesRead - chunkSize
         const buffer = Buffer.alloc(chunkSize)
-        // Why: readSync may return fewer bytes than requested (short reads);
-        // only the first `n` bytes are valid — decoding the unused tail would
-        // produce NUL bytes that break JSON.parse.
-        const n = readSync(fd, buffer, 0, chunkSize, position)
+        // Why: readSync may return fewer bytes than requested (short reads).
+        // Loop until the full window is read (or EOF) before processing so the
+        // backward scan windows stay aligned — a bare `bytesRead += n` would
+        // advance from the last read's tail and either re-read overlapping
+        // bytes on the next iteration or miss lines entirely if short reads
+        // accumulate. Rare on local regular files but fs quirks exist.
+        let filled = 0
+        while (filled < chunkSize) {
+          const n = readSync(fd, buffer, filled, chunkSize - filled, position + filled)
+          if (n === 0) {
+            break
+          }
+          filled += n
+        }
+        const n = filled
         bytesRead += n
         if (n === 0) {
           break
         }
+        // Why: the newly-read chunk is earlier in the file than `carryBytes`
+        // (which came from the *previous* iteration's partial first line),
+        // so concatenation order is chunk first, carry second.
         const combined = Buffer.concat([buffer.subarray(0, n), carryBytes])
-        const text = combined.toString('utf8')
-        const lines = text.split('\n')
-        // Why: unless we've reached the very start of the file, the first line
-        // is still potentially partial — carry it forward for the next chunk
-        // to complete. At start-of-file every line is complete, so scan all.
         const atStart = bytesRead >= size
-        const startIdx = atStart ? 0 : 1
-        for (let i = lines.length - 1; i >= startIdx; i--) {
-          const line = lines[i].trim()
-          if (line.length === 0) {
-            continue
-          }
-          const extracted = extractAssistantTextFromLine(line)
-          if (extracted !== undefined) {
-            return extracted
+
+        // Find the first newline in the raw bytes. Everything before it is
+        // a (still) potentially-partial line when we haven't reached SOF;
+        // everything from it onward is a sequence of complete lines we can
+        // decode safely.
+        const firstNewline = combined.indexOf(0x0a)
+        let completeRegion: Buffer
+        let nextCarry: Buffer
+        if (atStart) {
+          // At start-of-file there is no earlier chunk; every line is complete.
+          completeRegion = combined
+          nextCarry = Buffer.alloc(0)
+        } else if (firstNewline === -1) {
+          // No newline in the combined bytes: the entire region is one
+          // potentially-partial line — carry all of it forward.
+          completeRegion = Buffer.alloc(0)
+          nextCarry = combined
+        } else {
+          // Bytes [0, firstNewline) are the partial-line carry; bytes
+          // [firstNewline+1, end) are the complete-line region. Dropping the
+          // newline itself avoids an empty leading "" line after split.
+          nextCarry = combined.subarray(0, firstNewline)
+          completeRegion = combined.subarray(firstNewline + 1)
+        }
+
+        if (completeRegion.length > 0) {
+          const lines = completeRegion.toString('utf8').split('\n')
+          for (let i = lines.length - 1; i >= 0; i--) {
+            const line = lines[i].trim()
+            if (line.length === 0) {
+              continue
+            }
+            const extracted = extractAssistantTextFromLine(line)
+            if (extracted !== undefined) {
+              return extracted
+            }
           }
         }
-        carryBytes = atStart ? Buffer.alloc(0) : Buffer.from(lines[0], 'utf8')
+        carryBytes = nextCarry
       }
       return undefined
     } finally {
@@ -724,7 +777,17 @@ function normalizeHookPayload(
   const record = body as Record<string, unknown>
   const paneKey = typeof record.paneKey === 'string' ? record.paneKey.trim() : ''
   const hookPayload = record.payload
-  if (!paneKey || typeof hookPayload !== 'object' || hookPayload === null) {
+  // Why: paneKey comes from an authenticated-but-potentially-malicious local
+  // client; bound its size so pathological clients cannot blow up the
+  // per-pane caches (lastPromptByPaneKey / lastToolByPaneKey) with multi-MB
+  // keys. 200 chars is well above any legitimate `${tabId}:${paneId}` value.
+  const MAX_PANE_KEY_LEN = 200
+  if (
+    !paneKey ||
+    paneKey.length > MAX_PANE_KEY_LEN ||
+    typeof hookPayload !== 'object' ||
+    hookPayload === null
+  ) {
     return null
   }
 
@@ -894,6 +957,20 @@ export class AgentHookServer {
     this.token = ''
     this.env = 'production'
     this.onAgentStatus = null
+    // Why: drop all per-pane cache entries on shutdown so a subsequent start()
+    // in the same process (e.g. during tests or a settings-driven restart)
+    // does not inherit stale prompt/tool state from the previous run.
+    lastPromptByPaneKey.clear()
+    lastToolByPaneKey.clear()
+  }
+
+  clearPaneState(paneKey: string): void {
+    // Why: callers invoke this on PTY teardown so the per-pane caches do not
+    // accumulate entries for dead panes over the process lifetime. Without
+    // this, every closed pane leaves its prompt + tool snapshot pinned in
+    // memory for the life of the main process.
+    lastPromptByPaneKey.delete(paneKey)
+    lastToolByPaneKey.delete(paneKey)
   }
 
   buildPtyEnv(): Record<string, string> {

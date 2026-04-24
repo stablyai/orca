@@ -202,6 +202,13 @@ export class ClaudeHookService {
     // entries from older builds even if the current scriptPath has moved.
     const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
     for (const [eventName, definitions] of Object.entries(nextHooks)) {
+      // Why: a malformed settings.json entry (non-array value for an event
+      // name) would make removeManagedCommands throw via definitions.flatMap.
+      // Skip — we cannot sweep something we cannot parse, and remove() must
+      // fail open so a broken user config never blocks uninstall.
+      if (!Array.isArray(definitions)) {
+        continue
+      }
       const cleaned = removeManagedCommands(definitions, isManagedCommand)
       if (cleaned.length === 0) {
         delete nextHooks[eventName]

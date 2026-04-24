@@ -9,6 +9,7 @@ import {
   unlinkSync
 } from 'fs'
 import { dirname, join } from 'path'
+import { randomUUID } from 'crypto'
 
 export type HookCommandConfig = {
   type: 'command'
@@ -96,7 +97,13 @@ export function writeHooksJson(configPath: string, config: HooksConfig): void {
   // Why: write to a temp file then rename so a crash or disk-full mid-write
   // leaves the original untouched. This is the only safe way to update a
   // config file the user may have hand-edited.
-  const tmpPath = join(dir, `.${Date.now()}.tmp`)
+  //
+  // Why randomUUID: Date.now() alone collides when two install() calls fire in
+  // the same millisecond targeting the same dir (e.g. a future caller that
+  // installs multiple agents sharing a config dir, or rapid reinstalls from
+  // the settings UI). A collision would corrupt one of the two writes. The
+  // UUID suffix makes the tmp path unique per call.
+  const tmpPath = join(dir, `.${Date.now()}-${randomUUID()}.tmp`)
   const serialized = `${JSON.stringify(config, null, 2)}\n`
 
   // Why: skip the write (and therefore the .bak rotation) when the on-disk

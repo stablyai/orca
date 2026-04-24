@@ -1,5 +1,4 @@
 import type { ElectronAPI } from '@electron-toolkit/preload'
-import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import type {
   CreateWorktreeResult,
   GitHubPRFile,
@@ -153,12 +152,6 @@ type CliApi = {
   remove: () => Promise<CliInstallStatus>
 }
 
-type AgentHooksApi = {
-  claudeStatus: () => Promise<AgentHookInstallStatus>
-  codexStatus: () => Promise<AgentHookInstallStatus>
-  geminiStatus: () => Promise<AgentHookInstallStatus>
-}
-
 type NotificationsApi = {
   dispatch: (args: NotificationDispatchRequest) => Promise<NotificationDispatchResult>
   openSystemSettings: () => Promise<void>
@@ -228,7 +221,6 @@ type Api = PreloadApi & {
   gh: GhApi
   settings: SettingsApi
   cli: CliApi
-  agentHooks: AgentHooksApi
   notifications: NotificationsApi
   shell: ShellApi
   agentStatus: AgentStatusApi

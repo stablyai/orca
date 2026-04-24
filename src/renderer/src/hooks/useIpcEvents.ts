@@ -18,7 +18,7 @@ import { dispatchZoomLevelChanged } from '@/lib/zoom-events'
 import { resolveZoomTarget } from './resolve-zoom-target'
 import { handleSwitchTab } from './ipc-tab-switch'
 import { dispatchClearModifierHints } from './useModifierHint'
-import { parseAgentStatusPayload } from '../../../shared/agent-status-types'
+import { normalizeAgentStatusPayload } from '../../../shared/agent-status-types'
 import { AGENT_DASHBOARD_ENABLED } from '../../../shared/constants'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 
@@ -664,39 +664,36 @@ export function useIpcEvents(): void {
     if (AGENT_DASHBOARD_ENABLED) {
       unsubs.push(
         window.api.agentStatus.onSet((data) => {
-          const payload = parseAgentStatusPayload(
-            JSON.stringify({
-              state: data.state,
-              prompt: data.prompt,
-              agentType: data.agentType,
-              toolName: data.toolName,
-              toolInput: data.toolInput,
-              lastAssistantMessage: data.lastAssistantMessage,
-              interrupted: data.interrupted
-            })
-          )
+          // Why: the IPC payload is already a structured object — pass it
+          // straight to the object-input normalizer instead of round-tripping
+          // through JSON.stringify/JSON.parse. Hook events can fire many times
+          // per second during a tool-use run, so this avoids the per-event
+          // serialization cost.
+          const payload = normalizeAgentStatusPayload({
+            state: data.state,
+            prompt: data.prompt,
+            agentType: data.agentType,
+            toolName: data.toolName,
+            toolInput: data.toolInput,
+            lastAssistantMessage: data.lastAssistantMessage,
+            interrupted: data.interrupted
+          })
           if (!payload) {
             return
           }
           const store = useAppStore.getState()
-          // Why: look up the terminal title for agent type inference — hook
-          // payloads do not include the current title, but the store may already
-          // know it from OSC title tracking.
-          const currentTitle = findTerminalTitleForPaneKey(store, data.paneKey)
-          // Why: a paneKey that no longer resolves to a live tab belongs to a pane
-          // that has already been torn down. Dropping here prevents orphan entries
+          // Why: resolve tab existence and terminal title in a single pass.
+          // Previously the code walked store.tabsByWorktree twice — once to
+          // look up the tab-level title (when the pane-level title was
+          // missing) and again for the explicit tabExists check. A paneKey
+          // that no longer resolves to a live tab belongs to a pane that has
+          // already been torn down; dropping here prevents orphan entries
           // from accumulating in agentStatusByPaneKey.
-          const [tabId] = data.paneKey.split(':')
-          if (!tabId) {
+          const { exists, title } = resolvePaneKey(store, data.paneKey)
+          if (!exists) {
             return
           }
-          const tabExists = Object.values(store.tabsByWorktree).some((tabs) =>
-            tabs.some((t) => t.id === tabId)
-          )
-          if (!tabExists) {
-            return
-          }
-          store.setAgentStatus(data.paneKey, payload, currentTitle)
+          store.setAgentStatus(data.paneKey, payload, title)
         })
       )
     }
@@ -705,29 +702,45 @@ export function useIpcEvents(): void {
   }, [])
 }
 
-/** Resolve a paneKey (tabId:paneId) to the current terminal title, if any.
- *  Used for agent type inference when the CLI payload omits agentType. */
-function findTerminalTitleForPaneKey(
+/** Resolve a paneKey (tabId:paneId) to both a liveness check and the current
+ *  terminal title, in a single walk of tabsByWorktree. Used for agent type
+ *  inference when the CLI payload omits agentType, plus to drop status updates
+ *  targeted at panes whose tabs have already been torn down.
+ *  Why combined: callers need both pieces per hook event, and hook events can
+ *  fire many times per second during a tool-use run. Two separate O(N) scans
+ *  over the same map is wasteful; one pass returns both. */
+function resolvePaneKey(
   store: ReturnType<typeof useAppStore.getState>,
   paneKey: string
-): string | undefined {
+): { exists: boolean; title: string | undefined } {
   const [tabId, paneIdRaw] = paneKey.split(':')
   if (!tabId) {
-    return undefined
+    return { exists: false, title: undefined }
   }
   // Why: split panes track per-pane titles in runtimePaneTitlesByTabId; prefer
   // the pane's own title over the tab-level (last-winning) title so agent type
   // inference attributes status to the correct pane.
   const paneTitles = store.runtimePaneTitlesByTabId?.[tabId]
   const paneIdNum = paneIdRaw !== undefined ? Number(paneIdRaw) : NaN
-  if (paneTitles && !Number.isNaN(paneIdNum) && paneTitles[paneIdNum]) {
-    return paneTitles[paneIdNum]
-  }
+  const rawPaneTitle = paneTitles && !Number.isNaN(paneIdNum) ? paneTitles[paneIdNum] : undefined
+  // Why: treat an empty-string paneTitle as "no title" so the tab-level
+  // fallback still fires. `paneTitle ?? tabTitle` alone would short-circuit on
+  // '' and also erase any previously-cached terminalTitle in the store
+  // (`terminalTitle ?? existing?.terminalTitle` resolves to '').
+  const paneTitle = rawPaneTitle && rawPaneTitle.length > 0 ? rawPaneTitle : undefined
+  let exists = false
+  let tabTitle: string | undefined
   for (const tabs of Object.values(store.tabsByWorktree)) {
-    const tab = tabs.find((t) => t.id === tabId)
-    if (tab?.title) {
-      return tab.title
+    for (const tab of tabs) {
+      if (tab.id === tabId) {
+        exists = true
+        tabTitle = tab.title
+        break
+      }
+    }
+    if (exists) {
+      break
     }
   }
-  return undefined
+  return { exists, title: paneTitle ?? tabTitle }
 }

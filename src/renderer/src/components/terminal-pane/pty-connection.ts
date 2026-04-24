@@ -211,8 +211,14 @@ export function connectPanePty(
       if (!AGENT_DASHBOARD_ENABLED) {
         return
       }
-      const title = useAppStore.getState().runtimePaneTitlesByTabId?.[deps.tabId]?.[pane.id]
-      useAppStore.getState().setAgentStatus(cacheKey, payload, title)
+      // Why: capture the store snapshot once so the title lookup and the
+      // setAgentStatus call observe the same state. Re-reading getState()
+      // between the two lines opens a brief window where the title could
+      // shift (OSC title update landing in between) and the status would be
+      // stored against a title that was never paired with it.
+      const state = useAppStore.getState()
+      const title = state.runtimePaneTitlesByTabId?.[deps.tabId]?.[pane.id]
+      state.setAgentStatus(cacheKey, payload, title)
     }
   })
   const hasExistingPaneTransport = deps.paneTransportsRef.current.size > 0

@@ -167,6 +167,13 @@ export class CodexHookService {
       if (managedEvents.has(eventName)) {
         continue
       }
+      if (!Array.isArray(definitions)) {
+        // Why: a malformed hooks.json entry (non-array value for an event name)
+        // would make removeManagedCommands throw. Skip instead — we aren't
+        // going to sweep something we can't parse, and the install() for
+        // managed events below still runs.
+        continue
+      }
       const cleaned = removeManagedCommands(definitions, isManagedCommand)
       if (cleaned.length === 0) {
         delete nextHooks[eventName]
@@ -208,6 +215,12 @@ export class CodexHookService {
     // entries from older builds even if the current scriptPath has moved.
     const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
     for (const [eventName, definitions] of Object.entries(nextHooks)) {
+      if (!Array.isArray(definitions)) {
+        // Why: a malformed hooks.json entry (non-array value for an event name)
+        // would make removeManagedCommands throw. Skip instead — we have no
+        // managed commands to remove from something we can't parse.
+        continue
+      }
       const cleaned = removeManagedCommands(definitions, isManagedCommand)
       if (cleaned.length === 0) {
         delete nextHooks[eventName]

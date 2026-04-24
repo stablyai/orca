@@ -4,6 +4,20 @@ import { mkdirSync, writeFileSync, rmSync } from 'fs'
 
 const ORCA_OPENCODE_PLUGIN_FILE = 'orca-opencode-status.js'
 
+// Why: ptyId today is allocated by Orca (safe UUID-shape), but both entry
+// points construct a filesystem path with it and one of them calls
+// rmSync(..., recursive) on the result. Reject obviously unsafe IDs as a
+// belt-and-braces guard so a future caller (or a bug that forwards an
+// external ID) cannot escape userData/opencode-hooks/.
+function isSafePtyId(ptyId: string): boolean {
+  if (!ptyId || ptyId.length === 0 || ptyId.length > 128) {
+    return false
+  }
+  // Allow alphanumeric, dash, underscore, period (but not leading period or
+  // any slashes/backslashes).
+  return /^[A-Za-z0-9_-][A-Za-z0-9_.-]*$/.test(ptyId) && !ptyId.includes('..')
+}
+
 function getOpenCodePluginSource(): string {
   // Why: the plugin runs inside the OpenCode Node process and POSTs to the
   // unified agent-hooks server shared with Claude/Codex/Gemini. It reads the
@@ -160,6 +174,9 @@ function getOpenCodePluginSource(): string {
 // pipeline as Claude/Codex/Gemini.
 export class OpenCodeHookService {
   clearPty(ptyId: string): void {
+    if (!isSafePtyId(ptyId)) {
+      return
+    }
     // Why: writePluginConfig creates a directory per PTY under userData. Without
     // cleanup these accumulate across sessions since ptyId is a monotonically
     // increasing counter. Remove the directory when the PTY is torn down.
@@ -190,6 +207,9 @@ export class OpenCodeHookService {
   }
 
   private writePluginConfig(ptyId: string): string | null {
+    if (!isSafePtyId(ptyId)) {
+      return null
+    }
     const configDir = join(app.getPath('userData'), 'opencode-hooks', ptyId)
     const pluginsDir = join(configDir, 'plugins')
     try {
