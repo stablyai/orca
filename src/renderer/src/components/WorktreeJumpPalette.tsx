@@ -138,6 +138,11 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const allWorktrees = useAllWorktrees()
   const repos = useAppStore((s) => s.repos)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
+  // Why: getWorktreeStatus needs per-pane titles so split-pane tabs with a
+  // working agent in a non-focused pane still surface as 'working' in the
+  // jump palette. Without this, clicking between panes would desync the
+  // palette's spinner from the sidebar's spinner.
+  const runtimePaneTitlesByTabId = useAppStore((s) => s.runtimePaneTitlesByTabId)
   const prCache = useAppStore((s) => s.prCache)
   const issueCache = useAppStore((s) => s.issueCache)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
@@ -701,7 +706,8 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                 const branch = branchName(worktree.branch)
                 const status = getWorktreeStatus(
                   tabsByWorktree[worktree.id] ?? [],
-                  browserTabsByWorktree[worktree.id] ?? []
+                  browserTabsByWorktree[worktree.id] ?? [],
+                  runtimePaneTitlesByTabId
                 )
                 const statusLabel = getWorktreeStatusLabel(status)
                 const isCurrentWorktree = activeWorktreeId === worktree.id
