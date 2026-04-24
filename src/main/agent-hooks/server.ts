@@ -71,7 +71,16 @@ function extractPromptText(hookPayload: Record<string, unknown>): string {
   return ''
 }
 
-function readJsonBody(req: IncomingMessage): Promise<unknown> {
+function parseFormEncodedBody(body: string): Record<string, string> {
+  const params = new URLSearchParams(body)
+  const parsed: Record<string, string> = {}
+  for (const [key, value] of params.entries()) {
+    parsed[key] = value
+  }
+  return parsed
+}
+
+function readRequestBody(req: IncomingMessage): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = []
     let byteLength = 0
@@ -103,6 +112,21 @@ function readJsonBody(req: IncomingMessage): Promise<unknown> {
         // `.toString('utf8')` would corrupt emoji or non-ASCII inside assistant
         // messages.
         const body = chunks.length > 0 ? Buffer.concat(chunks).toString('utf8') : ''
+        const contentType = req.headers['content-type'] ?? ''
+        if (typeof contentType === 'string' && contentType.includes('application/json')) {
+          resolve(body ? JSON.parse(body) : {})
+          return
+        }
+        if (
+          typeof contentType === 'string' &&
+          contentType.includes('application/x-www-form-urlencoded')
+        ) {
+          resolve(parseFormEncodedBody(body))
+          return
+        }
+        // Why: existing managed scripts POST JSON and the updated Unix scripts
+        // POST form-encoded data. Default to JSON for unknown/missing content
+        // types so legacy callers that omit the header still behave as before.
         resolve(body ? JSON.parse(body) : {})
       } catch (error) {
         reject(error)
@@ -137,7 +161,18 @@ function readJsonBody(req: IncomingMessage): Promise<unknown> {
 // what finished; it's reset on the next UserPromptSubmit.
 const lastPromptByPaneKey = new Map<string, string>()
 
-function resolvePrompt(paneKey: string, promptText: string): string {
+function resolvePrompt(
+  paneKey: string,
+  promptText: string,
+  options?: { resetOnNewTurn?: boolean }
+): string {
+  if (options?.resetOnNewTurn) {
+    // Why: some turn-boundary events (e.g. Codex SessionStart, OpenCode
+    // SessionBusy) do not carry the new prompt yet. Clearing here prevents the
+    // previous turn's prompt from leaking into the new working state until a
+    // later prompt-bearing event arrives.
+    lastPromptByPaneKey.delete(paneKey)
+  }
   if (promptText) {
     lastPromptByPaneKey.set(paneKey, promptText)
     return promptText
@@ -622,7 +657,9 @@ function normalizeClaudeEvent(
   return parseAgentStatusPayload(
     JSON.stringify({
       state,
-      prompt: resolvePrompt(paneKey, promptText),
+      prompt: resolvePrompt(paneKey, promptText, {
+        resetOnNewTurn: isNewTurnEvent('claude', eventName)
+      }),
       agentType: 'claude',
       toolName: snapshot.toolName,
       toolInput: snapshot.toolInput,
@@ -663,7 +700,9 @@ function normalizeGeminiEvent(
   return parseAgentStatusPayload(
     JSON.stringify({
       state,
-      prompt: resolvePrompt(paneKey, promptText),
+      prompt: resolvePrompt(paneKey, promptText, {
+        resetOnNewTurn: isNewTurnEvent('gemini', eventName)
+      }),
       agentType: 'gemini',
       toolName: snapshot.toolName,
       toolInput: snapshot.toolInput,
@@ -706,7 +745,9 @@ function normalizeCodexEvent(
   return parseAgentStatusPayload(
     JSON.stringify({
       state,
-      prompt: resolvePrompt(paneKey, promptText),
+      prompt: resolvePrompt(paneKey, promptText, {
+        resetOnNewTurn: isNewTurnEvent('codex', eventName)
+      }),
       agentType: 'codex',
       toolName: snapshot.toolName,
       toolInput: snapshot.toolInput,
@@ -752,7 +793,9 @@ function normalizeOpenCodeEvent(
   return parseAgentStatusPayload(
     JSON.stringify({
       state,
-      prompt: resolvePrompt(paneKey, promptText),
+      prompt: resolvePrompt(paneKey, promptText, {
+        resetOnNewTurn: isNewTurnEvent('opencode', eventName)
+      }),
       agentType: 'opencode',
       toolName: snapshot.toolName,
       toolInput: snapshot.toolInput,
@@ -781,7 +824,17 @@ function normalizeHookPayload(
 
   const record = body as Record<string, unknown>
   const paneKey = typeof record.paneKey === 'string' ? record.paneKey.trim() : ''
-  const hookPayload = record.payload
+  const rawPayload = record.payload
+  const hookPayload =
+    typeof rawPayload === 'string'
+      ? (() => {
+          try {
+            return JSON.parse(rawPayload)
+          } catch {
+            return null
+          }
+        })()
+      : rawPayload
   // Why: paneKey comes from an authenticated-but-potentially-malicious local
   // client; bound its size so pathological clients cannot blow up the
   // per-pane caches (lastPromptByPaneKey / lastToolByPaneKey) with multi-MB
@@ -898,7 +951,7 @@ export class AgentHookServer {
       })
 
       try {
-        const body = await readJsonBody(req)
+        const body = await readRequestBody(req)
         // Why: match on pathname only so a future debugging addition of a
         // query string or trailing slash from a hook sender does not silently
         // 404 a valid, token-authenticated request.
@@ -1009,6 +1062,7 @@ export const agentHookServer = new AgentHookServer()
 // having to spin up a real HTTP server just to assert field shaping.
 export const _internals = {
   normalizeHookPayload,
+  parseFormEncodedBody,
   resetCachesForTests: (): void => {
     lastPromptByPaneKey.clear()
     lastToolByPaneKey.clear()

@@ -106,6 +106,51 @@ describe('AgentHookServer listener replay', () => {
       server.stop()
     }
   })
+
+  it('accepts form-encoded hook posts from Unix managed scripts', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const params = new URLSearchParams({
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'repo::/tmp/worktree with "quotes"',
+        env: 'production',
+        version: env.ORCA_AGENT_HOOK_VERSION ?? '',
+        payload: JSON.stringify({
+          hook_event_name: 'UserPromptSubmit',
+          prompt: 'form encoded'
+        })
+      })
+
+      const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+        },
+        body: params
+      })
+      expect(response.status).toBe(204)
+
+      const listener = vi.fn()
+      server.setListener(listener)
+
+      expect(listener).toHaveBeenCalledWith({
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'repo::/tmp/worktree with "quotes"',
+        payload: expect.objectContaining({
+          state: 'working',
+          prompt: 'form encoded',
+          agentType: 'claude'
+        })
+      })
+    } finally {
+      server.stop()
+    }
+  })
 })
 
 describe('Claude hook normalization', () => {
@@ -459,6 +504,24 @@ describe('Codex hook normalization', () => {
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.lastAssistantMessage).toBeUndefined()
   })
+
+  it('SessionStart clears the cached prompt from a prior session until a new prompt arrives', () => {
+    _internals.normalizeHookPayload(
+      'codex',
+      buildBody({
+        hook_event_name: 'UserPromptSubmit',
+        prompt: 'stale prompt'
+      }),
+      'production'
+    )
+    const result = _internals.normalizeHookPayload(
+      'codex',
+      buildBody({ hook_event_name: 'SessionStart' }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('working')
+    expect(result?.payload.prompt).toBe('')
+  })
 })
 
 describe('Gemini hook normalization', () => {
@@ -546,6 +609,21 @@ describe('OpenCode hook normalization', () => {
     )
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.agentType).toBe('opencode')
+  })
+
+  it('SessionBusy clears the cached prompt from the prior turn until a new user MessagePart arrives', () => {
+    _internals.normalizeHookPayload(
+      'opencode',
+      buildBody({ hook_event_name: 'MessagePart', role: 'user', text: 'old prompt' }),
+      'production'
+    )
+    const result = _internals.normalizeHookPayload(
+      'opencode',
+      buildBody({ hook_event_name: 'SessionBusy' }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('working')
+    expect(result?.payload.prompt).toBe('')
   })
 
   it('SessionIdle maps to done', () => {
