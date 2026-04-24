@@ -13,7 +13,7 @@
 import { createServer, createConnection, type Socket, type Server } from 'net'
 import { homedir } from 'os'
 import { resolve, join } from 'path'
-import { unlinkSync, existsSync } from 'fs'
+import { unlinkSync, existsSync, chmodSync } from 'fs'
 import { RELAY_SENTINEL } from './protocol'
 import { RelayDispatcher } from './dispatcher'
 import { RelayContext } from './context'
@@ -24,6 +24,7 @@ import { PreflightHandler } from './preflight-handler'
 
 const DEFAULT_GRACE_MS = 5 * 60 * 1000
 const SOCK_NAME = 'relay.sock'
+const CONNECT_TIMEOUT_MS = 5_000
 
 function parseArgs(argv: string[]): {
   graceTimeMs: number
@@ -64,7 +65,14 @@ function parseArgs(argv: string[]): {
 function runConnectMode(sockPath: string): void {
   const sock = createConnection({ path: sockPath })
 
+  const connectTimeout = setTimeout(() => {
+    process.stderr.write(`[relay-connect] Connection timed out after ${CONNECT_TIMEOUT_MS}ms\n`)
+    sock.destroy()
+    process.exit(1)
+  }, CONNECT_TIMEOUT_MS)
+
   sock.on('connect', () => {
+    clearTimeout(connectTimeout)
     // Why: the client-side waitForSentinel expects this exact string
     // before it starts sending framed data.  Emitting it here lets the
     // deploy code use the same sentinel-detection path for both fresh
@@ -75,16 +83,13 @@ function runConnectMode(sockPath: string): void {
   })
 
   sock.on('error', (err) => {
+    clearTimeout(connectTimeout)
     process.stderr.write(`[relay-connect] Socket error: ${err.message}\n`)
     process.exit(1)
   })
 
   sock.on('close', () => {
     process.exit(0)
-  })
-
-  process.stdin.on('end', () => {
-    sock.end()
   })
 }
 
@@ -108,8 +113,16 @@ function main(): void {
     process.exit(1)
   })
 
+  // Why: stdoutAlive tracks whether process.stdout is still writable.
+  // After stdin ends (SSH channel dropped), the stdout pipe goes dead.
+  // Without this guard, keepalive frames and pty.data notifications would
+  // write to a dead pipe, silently failing or throwing EPIPE.  When a
+  // socket client reconnects, setWrite swaps the callback to the socket.
+  let stdoutAlive = true
   const dispatcher = new RelayDispatcher((data) => {
-    process.stdout.write(data)
+    if (stdoutAlive) {
+      process.stdout.write(data)
+    }
   })
 
   const context = new RelayContext()
@@ -160,9 +173,13 @@ function main(): void {
     const server = createServer((sock) => {
       // Why: only one client at a time.  If a second reconnect arrives
       // (e.g. user restarts again quickly), close the stale bridge so the
-      // new one takes over cleanly.
+      // new one takes over cleanly.  We null activeSocket BEFORE destroying
+      // so the old socket's close handler sees it's been replaced and
+      // skips starting the grace timer.
       if (activeSocket) {
-        activeSocket.destroy()
+        const replaced = activeSocket
+        activeSocket = null
+        replaced.destroy()
       }
       activeSocket = sock
 
@@ -180,17 +197,23 @@ function main(): void {
       })
 
       sock.on('close', () => {
+        // Why: only start the grace timer if THIS socket is still the
+        // active one.  If it was replaced by a newer connection (see
+        // above), activeSocket was already nulled and reassigned — starting
+        // the grace timer here would incorrectly begin shutdown while a
+        // live client is connected.
         if (activeSocket === sock) {
           activeSocket = null
+          startGrace()
         }
-        startGrace()
       })
 
       sock.on('error', () => {
         if (activeSocket === sock) {
           activeSocket = null
         }
-        startGrace()
+        // Why: Node emits 'error' then 'close' — grace timer starts in
+        // the close handler. Duplicating it here would reset the window.
       })
     })
 
@@ -198,7 +221,17 @@ function main(): void {
       process.stderr.write(`[relay] Socket server error: ${err.message}\n`)
     })
 
-    server.listen(sockPath)
+    server.listen(sockPath, () => {
+      // Why: the socket inherits the process umask (often 0o022), which
+      // leaves it world-readable on shared hosts. chmod 0o600 restricts
+      // access to the owning user, preventing other local users from
+      // connecting and hijacking PTY sessions.
+      try {
+        chmodSync(sockPath, 0o600)
+      } catch {
+        process.stderr.write('[relay] Warning: could not chmod socket to 0600\n')
+      }
+    })
     return server
   }
 
@@ -212,15 +245,18 @@ function main(): void {
   })
 
   process.stdin.on('end', () => {
-    // Why: stdin closed means the SSH channel dropped.  Switch dispatcher
-    // output to the socket (if one is connected) or start the grace timer.
-    // The socket server stays up so a reconnect bridge can attach.
+    // Why: stdout is piped to the SSH channel — once stdin closes the
+    // channel is gone and stdout writes would hit a dead pipe.  Mark it
+    // dead so the dispatcher's write callback becomes a no-op until a
+    // socket client reconnects and calls setWrite with a live target.
+    stdoutAlive = false
     if (!activeSocket) {
       startGrace()
     }
   })
 
   process.stdin.on('error', () => {
+    stdoutAlive = false
     if (!activeSocket) {
       startGrace()
     }

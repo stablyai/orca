@@ -432,7 +432,51 @@ export function connectPanePty(
           if (disposed) {
             return
           }
-          startFreshSpawn()
+          // Why: the persisted session ID was stored before shutdown so we
+          // can reattach to the relay's surviving PTY.  Reading it here
+          // (after SSH connect succeeds) ensures the store still has the
+          // mapping.  If no session ID exists, fall back to a fresh shell.
+          const snap = useAppStore.getState()
+          const pendingSessionId = snap.tabsByWorktree[deps.worktreeId]?.find(
+            (t) => t.id === deps.tabId
+          )?.ptyId
+          if (pendingSessionId) {
+            const reattachPromise = transport.connect({
+              url: '',
+              cols,
+              rows,
+              sessionId: pendingSessionId,
+              callbacks: {
+                onData: dataCallback,
+                onReplayData: replayDataCallback,
+                onError: reportError
+              }
+            })
+            void Promise.resolve(reattachPromise)
+              .then((result) => {
+                if (disposed) {
+                  return
+                }
+                const ptyId =
+                  result && typeof result === 'object' && 'id' in result
+                    ? (result as { id: string }).id
+                    : typeof result === 'string'
+                      ? result
+                      : transport.getPtyId()
+                if (ptyId) {
+                  deps.syncPanePtyLayoutBinding(pane.id, ptyId)
+                  deps.updateTabPtyId(deps.tabId, ptyId)
+                }
+              })
+              .catch(() => {
+                if (disposed) {
+                  return
+                }
+                startFreshSpawn()
+              })
+          } else {
+            startFreshSpawn()
+          }
         })()
         return
       }

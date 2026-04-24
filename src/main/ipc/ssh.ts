@@ -156,6 +156,12 @@ export function registerSshHandlers(
       // Explicitly broadcast so the UI leaves 'connecting'.
       const errObj = err instanceof Error ? err : new Error(String(err))
       const status: SshConnectionStatus = isAuthError(errObj) ? 'auth-failed' : 'error'
+      // Why: if a credential prompt was shown before the failure, the target
+      // would stay in credentialRequestedForTarget. A later successful connect
+      // that doesn't prompt would then incorrectly persist lastRequiredPassphrase
+      // = true, causing startup to defer this target even though it no longer
+      // needs a passphrase.
+      credentialRequestedForTarget.delete(args.targetId)
       const win = getMainWindow()
       if (win && !win.isDestroyed()) {
         win.webContents.send('ssh:state-changed', {

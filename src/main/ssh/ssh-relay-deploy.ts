@@ -281,7 +281,9 @@ async function launchRelay(
   // Non-login SSH shells may not have node in PATH, so we source the
   // user's profile to pick up nvm/fnm/brew PATH entries.
   const nodePath = await resolveRemoteNodePath(conn)
-  const graceTime = graceTimeSeconds ?? 300
+  // Why: graceTimeSeconds originates from user-editable SshTarget config.
+  // Clamping to integer prevents shell injection if the type ever loosened.
+  const graceTime = Math.max(60, Math.min(3600, Math.floor(graceTimeSeconds ?? 300)))
   const escapedDir = shellEscape(remoteDir)
   const escapedNode = shellEscape(nodePath)
   const sockFile = `${remoteDir}/relay.sock`
