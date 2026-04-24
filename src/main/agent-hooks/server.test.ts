@@ -611,10 +611,15 @@ describe('OpenCode hook normalization', () => {
     expect(result?.payload.agentType).toBe('opencode')
   })
 
-  it('SessionBusy clears the cached prompt from the prior turn until a new user MessagePart arrives', () => {
+  it('SessionBusy does NOT clear the cached user prompt', () => {
+    // Why: OpenCode emits the user's MessagePart (message.updated) *before*
+    // SessionBusy fires — the session goes idle→busy only after OpenCode begins
+    // processing the prompt. So the cached prompt at SessionBusy is the current
+    // turn's prompt, not the previous turn's. Clearing on SessionBusy would
+    // clobber the data the dashboard needs to render for this turn.
     _internals.normalizeHookPayload(
       'opencode',
-      buildBody({ hook_event_name: 'MessagePart', role: 'user', text: 'old prompt' }),
+      buildBody({ hook_event_name: 'MessagePart', role: 'user', text: 'new prompt' }),
       'production'
     )
     const result = _internals.normalizeHookPayload(
@@ -623,7 +628,7 @@ describe('OpenCode hook normalization', () => {
       'production'
     )
     expect(result?.payload.state).toBe('working')
-    expect(result?.payload.prompt).toBe('')
+    expect(result?.payload.prompt).toBe('new prompt')
   })
 
   it('SessionIdle maps to done', () => {

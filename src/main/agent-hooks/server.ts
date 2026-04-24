@@ -598,10 +598,13 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
   if (source === 'gemini') {
     return eventName === 'BeforeAgent'
   }
-  // Why: OpenCode's plugin emits SessionBusy when the session transitions
-  // idle→busy (i.e. a new turn is starting). That's the only boundary the
-  // plugin observes; there's no separate UserPromptSubmit analogue.
-  return eventName === 'SessionBusy'
+  // Why: OpenCode has no UserPromptSubmit analogue, AND the plugin emits the
+  // user's MessagePart *before* SessionBusy (message.updated fires on prompt
+  // submission; session.status goes busy only once OpenCode begins processing).
+  // So resetting on SessionBusy would clobber the user prompt that was just
+  // cached. The role=user MessagePart itself naturally overwrites the cache
+  // with each new turn, so no separate reset is needed here.
+  return false
 }
 
 function extractToolFields(
