@@ -54,7 +54,7 @@ describe('fetchOpenCodeGoRateLimits', () => {
     expect(result.session).toBeNull()
     expect(result.weekly).toBeNull()
     expect(result.monthly).toBeNull()
-    expect(result.error).toBeNull()
+    expect(result.error).toBe('Session cookie not configured')
     expect(netFetchMock).not.toHaveBeenCalled()
   })
 

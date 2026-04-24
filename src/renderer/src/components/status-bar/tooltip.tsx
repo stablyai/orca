@@ -175,7 +175,7 @@ export function ProviderTooltip({ p }: { p: ProviderRateLimits | null }): React.
           <ProviderIcon provider={p.provider} />
           {name}
         </div>
-        <div className="text-background/60">{p.error ?? 'CLI not found'}</div>
+        <div className="text-background/60">{p.error ?? 'Unavailable'}</div>
       </div>
     )
   }
@@ -257,7 +257,7 @@ export function ProviderPanel({
           <ProviderIcon provider={p.provider} />
           {name}
         </div>
-        <div className={mutedClass}>{p.error ?? 'CLI not found'}</div>
+        <div className={mutedClass}>{p.error ?? 'Unavailable'}</div>
       </div>
     )
   }

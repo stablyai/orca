@@ -140,7 +140,7 @@ export async function fetchOpenCodeGoRateLimits(
       weekly: null,
       monthly: null,
       updatedAt: Date.now(),
-      error: null,
+      error: 'Session cookie not configured',
       status: 'unavailable'
     }
   }
