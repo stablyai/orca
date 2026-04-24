@@ -25,6 +25,7 @@ describe('createIpcPtyTransport', () => {
             onData = callback
             return () => {}
           }),
+          onReplay: vi.fn(() => () => {}),
           onExit: vi.fn((callback: (payload: { id: string; code: number }) => void) => {
             onExit = callback
             return () => {}
@@ -210,6 +211,7 @@ describe('createIpcPtyTransport', () => {
             onData = callback
             return () => {}
           }),
+          onReplay: vi.fn(() => () => {}),
           onExit: vi.fn((callback: (payload: { id: string; code: number }) => void) => {
             onExit = callback
             return () => {}
@@ -265,6 +267,7 @@ describe('createIpcPtyTransport', () => {
             onData = callback
             return () => {}
           }),
+          onReplay: vi.fn(() => () => {}),
           onExit: vi.fn((callback: (payload: { id: string; code: number }) => void) => {
             onExit = callback
             return () => {}
@@ -312,6 +315,7 @@ describe('createIpcPtyTransport', () => {
             onData = callback
             return () => {}
           }),
+          onReplay: vi.fn(() => () => {}),
           onExit: vi.fn((callback: (payload: { id: string; code: number }) => void) => {
             onExit = callback
             return () => {}
