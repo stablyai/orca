@@ -56,6 +56,9 @@ function createSnapshot(overrides: Partial<AppState> = {}): AppState {
       ]
     },
     activeBrowserTabIdByWorktree: { 'wt-1': 'browser-1' },
+    sshConnectionStates: new Map(),
+    repos: [],
+    worktreesByRepo: {},
     browserPagesByWorkspace: {
       'browser-1': [
         {

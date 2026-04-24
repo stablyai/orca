@@ -181,6 +181,7 @@ describe('connectPanePty', () => {
       cacheTimerByKey: {},
       settings: { promptCacheTimerEnabled: true },
       codexRestartNoticeByPtyId: {},
+      deferredSshReconnectTargets: [],
       consumePendingColdRestore: vi.fn(() => null),
       consumePendingSnapshot: vi.fn(() => null),
       removeAgentStatus: vi.fn()
