@@ -16,5 +16,22 @@ export const EXPERIMENTAL_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
       'scrollback',
       'reattach'
     ]
+  },
+  {
+    title: 'Symlinks on worktrees',
+    description:
+      'Automatically symlink configured files or folders into newly created worktrees so shared state (envs, caches, installs) stays connected.',
+    keywords: [
+      'experimental',
+      'worktree',
+      'worktrees',
+      'symlink',
+      'symlinks',
+      'link',
+      'links',
+      'shared',
+      'env',
+      'node_modules'
+    ]
   }
 ]

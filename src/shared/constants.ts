@@ -170,7 +170,8 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalMacOptionAsAlt: 'auto',
     terminalMacOptionAsAltMigrated: false,
     experimentalTerminalDaemon: false,
-    experimentalTerminalDaemonNoticeShown: false
+    experimentalTerminalDaemonNoticeShown: false,
+    experimentalWorktreeSymlinks: false
   }
 }
 

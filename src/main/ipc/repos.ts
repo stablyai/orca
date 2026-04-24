@@ -203,7 +203,15 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       args: {
         repoId: string
         updates: Partial<
-          Pick<Repo, 'displayName' | 'badgeColor' | 'hookSettings' | 'worktreeBaseRef' | 'kind'>
+          Pick<
+            Repo,
+            | 'displayName'
+            | 'badgeColor'
+            | 'hookSettings'
+            | 'worktreeBaseRef'
+            | 'kind'
+            | 'symlinkPaths'
+          >
         >
       }
     ) => {

@@ -31,6 +31,7 @@ import {
   areWorktreePathsEqual
 } from './worktree-logic'
 import { invalidateAuthorizedRootsCache } from './filesystem-auth'
+import { createWorktreeSymlinks } from './worktree-symlinks'
 
 export function notifyWorktreesChanged(mainWindow: BrowserWindow, repoId: string): void {
   if (!mainWindow.isDestroyed()) {
@@ -144,6 +145,12 @@ export async function createRemoteWorktree(
   }
   const meta = store.setWorktreeMeta(worktreeId, metaUpdates)
   const worktree = mergeWorktree(repo.id, created, meta)
+
+  // Why: `experimentalWorktreeSymlinks` is intentionally not wired up for
+  // remote (SSH) worktrees. Creating symlinks on the remote host would
+  // require a new relay method and authorization surface; the feature is
+  // local-only until that protocol work is in scope. Remote repos with
+  // `symlinkPaths` configured have them silently ignored here.
 
   notifyWorktreesChanged(mainWindow, repo.id)
   return { worktree }
@@ -310,6 +317,15 @@ export async function createLocalWorktree(
   // an immediate rebuild, which can spawn `git worktree list` per repo and
   // adds 100ms+ to every create.
   invalidateAuthorizedRootsCache()
+
+  // Why: create user-configured symlinks from the primary checkout into the
+  // new worktree before any setup script runs, so scripts that reuse shared
+  // state (e.g. `node_modules`, `.env`) see the links already in place.
+  // Gated on the experimental flag so disabling the feature globally skips
+  // the work even when a repo still has paths configured.
+  if (settings.experimentalWorktreeSymlinks && repo.symlinkPaths && repo.symlinkPaths.length > 0) {
+    await createWorktreeSymlinks(repo.path, created.path, repo.symlinkPaths)
+  }
 
   let setup: CreateWorktreeResult['setup']
   if (setupScript && shouldLaunchSetup) {
