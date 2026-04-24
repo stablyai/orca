@@ -32,28 +32,49 @@ function parseQuotaResponse(data: unknown): QuotaBucket[] {
   return []
 }
 
-// Model ID mapping
+// Model ID mapping — keep short names for known stable IDs.
 const MODEL_ID_TO_BUCKET_NAME: Record<string, string> = {
   'gemini-2.5-pro': 'Pro',
   'gemini-2.5-flash': 'Flash',
-  'gemini-2.0-flash-lite': 'Flash Lite'
+  'gemini-2.5-flash-lite': 'Flash Lite',
+  'gemini-2.0-flash': '2.0 Flash',
+  'gemini-2.0-flash-lite': '2.0 Flash Lite',
+  'gemini-1.5-pro': '1.5 Pro',
+  'gemini-1.5-flash': '1.5 Flash',
+  'gemini-exp': 'Exp',
+  'gemini-experimental': 'Exp'
+}
+
+// Why: strip the "gemini-" prefix and title-case the rest so unknown future
+// model IDs render as something readable (e.g. "gemini-3.0-ultra" → "3.0 Ultra")
+// rather than the raw API string.
+function humanizeModelId(modelId: string): string {
+  const withoutPrefix = modelId.replace(/^gemini-/i, '')
+  return withoutPrefix
+    .split('-')
+    .map((part) => (part.length > 0 ? part[0]!.toUpperCase() + part.slice(1) : part))
+    .join(' ')
 }
 
 export function getBucketName(modelId: string): string {
-  return MODEL_ID_TO_BUCKET_NAME[modelId] ?? `Unknown (${modelId})`
+  return MODEL_ID_TO_BUCKET_NAME[modelId] ?? humanizeModelId(modelId)
 }
+
+// Why: Gemini CLI quota buckets reset on a 1-hour rolling window. The window
+// size is always 60 minutes — resetsAt is only used for the "Resets in X"
+// countdown, not to derive the window duration.
+const GEMINI_BUCKET_WINDOW_MINUTES = 60
 
 function buildRateLimitBucket(b: QuotaBucket): RateLimitBucket {
   const usedPercent = Math.min(100, Math.max(0, Math.round((1 - b.remainingFraction) * 100)))
 
   const resetsAtTime = new Date(b.resetTime).getTime()
   const resetsAt = !isNaN(resetsAtTime) ? resetsAtTime : null
-  const windowMinutes = resetsAt !== null ? Math.round((resetsAt - Date.now()) / 60000) : 60
 
   return {
     name: getBucketName(b.modelId),
     usedPercent,
-    windowMinutes,
+    windowMinutes: GEMINI_BUCKET_WINDOW_MINUTES,
     resetsAt,
     resetDescription: null
   }

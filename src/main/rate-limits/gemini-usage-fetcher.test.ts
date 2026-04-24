@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RateLimitBucket } from '../../shared/rate-limit-types'
 import {
   authJsonGoogle,
   authJsonGoogleExpired,
@@ -44,72 +43,9 @@ vi.mock('electron', () => ({
   net: { fetch: netFetchMock }
 }))
 
-import { fetchGeminiRateLimits, getBucketName, deriveSessionSummary } from './gemini-usage-fetcher'
+import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
 
-describe('getBucketName', () => {
-  it('maps known model IDs to stable names', () => {
-    expect(getBucketName('gemini-2.5-pro')).toBe('Pro')
-    expect(getBucketName('gemini-2.5-flash')).toBe('Flash')
-    expect(getBucketName('gemini-2.0-flash-lite')).toBe('Flash Lite')
-  })
-
-  it('returns a deterministic fallback for unknown model IDs', () => {
-    expect(getBucketName('gemini-experimental')).toBe('Unknown (gemini-experimental)')
-    expect(getBucketName('some-random-id')).toBe('Unknown (some-random-id)')
-  })
-})
-
-describe('deriveSessionSummary', () => {
-  it('returns null for empty buckets', () => {
-    expect(deriveSessionSummary([])).toBeNull()
-  })
-
-  it('picks the most constrained bucket (highest usedPercent) as session summary', () => {
-    const buckets: RateLimitBucket[] = [
-      { name: 'Pro', usedPercent: 30, windowMinutes: 300, resetsAt: null, resetDescription: null },
-      {
-        name: 'Flash',
-        usedPercent: 80,
-        windowMinutes: 300,
-        resetsAt: null,
-        resetDescription: null
-      },
-      {
-        name: 'Flash Lite',
-        usedPercent: 10,
-        windowMinutes: 300,
-        resetsAt: null,
-        resetDescription: null
-      }
-    ]
-    const summary = deriveSessionSummary(buckets)
-    expect(summary).not.toBeNull()
-    expect(summary!.usedPercent).toBe(80)
-    expect(summary!.windowMinutes).toBe(300)
-  })
-
-  it('preserves reset metadata from the most constrained bucket', () => {
-    const buckets: RateLimitBucket[] = [
-      {
-        name: 'Pro',
-        usedPercent: 30,
-        windowMinutes: 300,
-        resetsAt: 1000,
-        resetDescription: '2:00 PM'
-      },
-      {
-        name: 'Flash',
-        usedPercent: 80,
-        windowMinutes: 300,
-        resetsAt: 2000,
-        resetDescription: '3:00 PM'
-      }
-    ]
-    const summary = deriveSessionSummary(buckets)
-    expect(summary!.resetsAt).toBe(2000)
-    expect(summary!.resetDescription).toBe('3:00 PM')
-  })
-})
+// getBucketName and deriveSessionSummary unit tests live in gemini-bucket-helpers.test.ts
 
 describe('fetchGeminiRateLimits', () => {
   beforeEach(() => {
@@ -216,7 +152,7 @@ describe('fetchGeminiRateLimits', () => {
 
     expect(result.status).toBe('ok')
     expect(result.buckets).toHaveLength(1)
-    expect(result.buckets![0].name).toBe('Unknown (gemini-experimental)')
+    expect(result.buckets![0].name).toBe('Exp')
     expect(result.session!.usedPercent).toBe(50)
   })
 

@@ -274,12 +274,27 @@ function ProviderSegment({
 
   // Has data (ok, fetching with stale data, or error with stale data)
   const isStale = p.status === 'error'
+
+  // Why: when buckets are present the session summary is derived from the most
+  // constrained bucket. Show that bucket's name so the user knows which model
+  // is the binding constraint (e.g. "93% Pro 1h" instead of a bare "93% 1h").
+  const mostConstrainedBucketName =
+    p.buckets && p.buckets.length > 0 && p.session
+      ? (p.buckets.reduce((worst, b) => (b.usedPercent > worst.usedPercent ? b : worst)).name ??
+        null)
+      : null
+
   return (
     <span className="inline-flex items-center gap-1.5">
       <ProviderIcon provider={provider} />
       {p.session && !compact && <MiniBar leftPct={Math.max(0, 100 - p.session.usedPercent)} />}
       {p.session && (
-        <WindowLabel w={p.session} label={formatWindowLabel(p.session.windowMinutes)} />
+        <WindowLabel
+          w={p.session}
+          label={[mostConstrainedBucketName, formatWindowLabel(p.session.windowMinutes)]
+            .filter(Boolean)
+            .join(' ')}
+        />
       )}
       {p.session && p.weekly && <span className="text-muted-foreground">&middot;</span>}
       {p.weekly && <WindowLabel w={p.weekly} label={formatWindowLabel(p.weekly.windowMinutes)} />}
