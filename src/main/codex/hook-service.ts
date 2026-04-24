@@ -3,6 +3,7 @@ import { join } from 'path'
 import { app } from 'electron'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
+  createManagedCommandMatcher,
   readHooksJson,
   removeManagedCommands,
   writeHooksJson,
@@ -29,12 +30,12 @@ function getConfigPath(): string {
   return join(homedir(), '.codex', 'hooks.json')
 }
 
+function getManagedScriptFileName(): string {
+  return process.platform === 'win32' ? 'codex-hook.cmd' : 'codex-hook.sh'
+}
+
 function getManagedScriptPath(): string {
-  return join(
-    app.getPath('userData'),
-    'agent-hooks',
-    process.platform === 'win32' ? 'codex-hook.cmd' : 'codex-hook.sh'
-  )
+  return join(app.getPath('userData'), 'agent-hooks', getManagedScriptFileName())
 }
 
 function getManagedCommand(scriptPath: string): string {
@@ -152,6 +153,12 @@ export class CodexHookService {
     const nextHooks = { ...config.hooks }
     const managedEvents = new Set<string>(CODEX_EVENTS)
 
+    // Why: match by script filename (not exact command string) so a fresh
+    // install sweeps stale entries left by older builds or a different
+    // Electron userData path (dev vs. prod). Without this, repeated installs
+    // accumulate duplicate hook entries pointing at defunct scripts.
+    const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
+
     // Why: sweep managed entries out of events we no longer subscribe to
     // (e.g., PreToolUse from a prior install). Without this, users who
     // already had PreToolUse registered would keep firing stale hooks on
@@ -160,10 +167,7 @@ export class CodexHookService {
       if (managedEvents.has(eventName)) {
         continue
       }
-      const cleaned = removeManagedCommands(
-        definitions,
-        (currentCommand) => currentCommand === command
-      )
+      const cleaned = removeManagedCommands(definitions, isManagedCommand)
       if (cleaned.length === 0) {
         delete nextHooks[eventName]
       } else {
@@ -173,7 +177,7 @@ export class CodexHookService {
 
     for (const eventName of CODEX_EVENTS) {
       const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
-      const cleaned = removeManagedCommands(current, (currentCommand) => currentCommand === command)
+      const cleaned = removeManagedCommands(current, isManagedCommand)
       const definition: HookDefinition = {
         hooks: [{ type: 'command', command }]
       }
@@ -188,7 +192,6 @@ export class CodexHookService {
 
   remove(): AgentHookInstallStatus {
     const configPath = getConfigPath()
-    const scriptPath = getManagedScriptPath()
     const config = readHooksJson(configPath)
     if (!config) {
       return {
@@ -200,13 +203,12 @@ export class CodexHookService {
       }
     }
 
-    const command = getManagedCommand(scriptPath)
     const nextHooks = { ...config.hooks }
+    // Why: same broad matcher as install(), so remove() also cleans up stale
+    // entries from older builds even if the current scriptPath has moved.
+    const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
     for (const [eventName, definitions] of Object.entries(nextHooks)) {
-      const cleaned = removeManagedCommands(
-        definitions,
-        (currentCommand) => currentCommand === command
-      )
+      const cleaned = removeManagedCommands(definitions, isManagedCommand)
       if (cleaned.length === 0) {
         delete nextHooks[eventName]
       } else {

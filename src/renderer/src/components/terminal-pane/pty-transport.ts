@@ -40,41 +40,11 @@ export { extractLastOscTitle } from '../../../../shared/agent-detection'
 // Why OSC 9999: avoids known-used codes (7=cwd, 133=VS Code, 777=Superset,
 // 1337=iTerm2, 9001=Warp). Agents report structured status by printing
 // printf '\x1b]9999;{"state":"working","prompt":"..."}\x07'
-// eslint-disable-next-line no-control-regex -- intentional terminal escape sequence matching
-const OSC_AGENT_STATUS_RE = /\x1b\]9999;([^\x07\x1b]*?)(?:\x07|\x1b\\)/g
 const OSC_AGENT_STATUS_PREFIX = '\x1b]9999;'
 
 export type ProcessedAgentStatusChunk = {
   cleanData: string
   payloads: ParsedAgentStatusPayload[]
-}
-
-/**
- * Extract all OSC 9999 payloads from a data chunk and return the last valid one.
- * Returns null if no valid agent status sequence is found.
- */
-export function extractAgentStatusOsc(data: string): ParsedAgentStatusPayload | null {
-  let last: ParsedAgentStatusPayload | null = null
-  let m: RegExpExecArray | null
-  OSC_AGENT_STATUS_RE.lastIndex = 0
-  while ((m = OSC_AGENT_STATUS_RE.exec(data)) !== null) {
-    const parsed = parseAgentStatusPayload(m[1])
-    if (parsed) {
-      last = parsed
-    }
-  }
-  return last
-}
-
-/**
- * Strip all OSC 9999 sequences from data before it reaches the terminal emulator.
- * Why: OSC 9999 is a custom Orca protocol — xterm.js would display it as garbage
- * or silently ignore it, but stripping is safer and avoids any emulator-specific
- * behavior with unknown OSC codes.
- */
-export function stripAgentStatusOsc(data: string): string {
-  OSC_AGENT_STATUS_RE.lastIndex = 0
-  return data.replace(OSC_AGENT_STATUS_RE, '')
 }
 
 function findAgentStatusTerminator(
@@ -241,7 +211,11 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       // PTY reads do not drop valid status updates or print escape garbage.
       const processed = processAgentStatusChunk(data)
       data = processed.cleanData
-      if (onAgentStatus) {
+      // Why: mirror the onBell / onAgentBecameIdle guard below — during eager-buffer
+      // replay we must not surface stale agent-status payloads from a prior app
+      // session into the live store. The parser still consumes the bytes so they
+      // do not leak into xterm, we just suppress the callback.
+      if (onAgentStatus && !suppressAttentionEvents) {
         for (const payload of processed.payloads) {
           onAgentStatus(payload)
         }

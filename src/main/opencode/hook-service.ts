@@ -159,10 +159,7 @@ function getOpenCodePluginSource(): string {
 // agent-hooks server (/hook/opencode), so OpenCode rides the same status
 // pipeline as Claude/Codex/Gemini.
 export class OpenCodeHookService {
-  private registeredPtyIds = new Set<string>()
-
   clearPty(ptyId: string): void {
-    this.registeredPtyIds.delete(ptyId)
     // Why: writePluginConfig creates a directory per PTY under userData. Without
     // cleanup these accumulate across sessions since ptyId is a monotonically
     // increasing counter. Remove the directory when the PTY is torn down.
@@ -204,7 +201,6 @@ export class OpenCodeHookService {
       // still spawn without the OpenCode status plugin.
       return null
     }
-    this.registeredPtyIds.add(ptyId)
     return configDir
   }
 }

@@ -35,6 +35,12 @@ type AgentHookEventPayload = {
 // script that fires on every keystroke doesn't flood the logs.
 const warnedVersions = new Set<string>()
 const warnedEnvs = new Set<string>()
+// Why: cap the warning Sets so a buggy or malicious local client that varies
+// its `version`/`env` fields per request cannot grow these Sets without bound
+// for the process lifetime. Once saturated, we drop further warnings (and skip
+// inserting the new key) — the diagnostic value of "warn once" is preserved
+// for the common case while memory stays bounded against untrusted input.
+const MAX_WARNED_KEYS = 32
 
 // Why: Claude documents `prompt` on UserPromptSubmit; other agents may use
 // different field names. Probe a small allowlist so we can surface the real
@@ -726,7 +732,12 @@ function normalizeHookPayload(
   // We accept the request (fail-open) but log once so stale installs are
   // diagnosable instead of silently degrading.
   const version = readStringField(record, 'version')
-  if (version && version !== ORCA_HOOK_PROTOCOL_VERSION && !warnedVersions.has(version)) {
+  if (
+    version &&
+    version !== ORCA_HOOK_PROTOCOL_VERSION &&
+    !warnedVersions.has(version) &&
+    warnedVersions.size < MAX_WARNED_KEYS
+  ) {
     warnedVersions.add(version)
     console.warn(
       `[agent-hooks] received hook v${version}; server expects v${ORCA_HOOK_PROTOCOL_VERSION}. ` +
@@ -742,7 +753,7 @@ function normalizeHookPayload(
   const clientEnv = readStringField(record, 'env')
   if (clientEnv && clientEnv !== expectedEnv) {
     const key = `${clientEnv}->${expectedEnv}`
-    if (!warnedEnvs.has(key)) {
+    if (!warnedEnvs.has(key) && warnedEnvs.size < MAX_WARNED_KEYS) {
       warnedEnvs.add(key)
       console.warn(
         `[agent-hooks] received ${clientEnv} hook on ${expectedEnv} server. ` +
@@ -814,14 +825,18 @@ export class AgentHookServer {
 
       try {
         const body = await readJsonBody(req)
+        // Why: match on pathname only so a future debugging addition of a
+        // query string or trailing slash from a hook sender does not silently
+        // 404 a valid, token-authenticated request.
+        const pathname = new URL(req.url ?? '/', 'http://127.0.0.1').pathname
         const source: AgentHookSource | null =
-          req.url === '/hook/claude'
+          pathname === '/hook/claude'
             ? 'claude'
-            : req.url === '/hook/codex'
+            : pathname === '/hook/codex'
               ? 'codex'
-              : req.url === '/hook/gemini'
+              : pathname === '/hook/gemini'
                 ? 'gemini'
-                : req.url === '/hook/opencode'
+                : pathname === '/hook/opencode'
                   ? 'opencode'
                   : null
         if (!source) {
