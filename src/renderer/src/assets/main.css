@@ -373,7 +373,7 @@
    close together as a single navigation group, while the standard
    .sidebar-toggle spacing stays unchanged for other titlebar icons. */
 .sidebar-toggle-compact {
-  padding: 4px 4px;
+  padding: 4px 5px;
 }
 
 .sidebar-toggle:disabled {
