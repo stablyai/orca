@@ -12,7 +12,16 @@ export type AgentStatusState = (typeof AGENT_STATUS_STATES)[number]
 export type WellKnownAgentType = 'claude' | 'codex' | 'gemini' | 'opencode' | 'aider' | 'unknown'
 export type AgentType = WellKnownAgentType | (string & {})
 
-/** A snapshot of a previous agent state, used to render activity blocks. */
+/** A snapshot of a previous agent state, used to render activity blocks.
+ *  Why: intentionally narrower than AgentStatusEntry — omits toolName,
+ *  toolInput, and lastAssistantMessage. History rows record what STATE the
+ *  agent was in and what PROMPT was being handled; tool context is
+ *  per-event/per-turn and doesn't meaningfully apply to a historical state
+ *  snapshot. Carrying tool/assistant payloads on every transition would also
+ *  bloat memory on long sessions (capped at AGENT_STATE_HISTORY_MAX entries
+ *  per agent). The current state's tool/assistant fields live on
+ *  AgentStatusEntry only, and activity-block rendering intentionally shows
+ *  state + prompt + duration summaries rather than tool traces. */
 export type AgentStateHistoryEntry = {
   state: AgentStatusState
   prompt: string

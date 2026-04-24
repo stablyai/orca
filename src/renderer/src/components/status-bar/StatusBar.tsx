@@ -21,6 +21,7 @@ import { ClaudeIcon, OpenAIIcon } from './icons'
 import { markLiveCodexSessionsForRestart } from '@/lib/codex-session-restart'
 import { SshStatusSegment } from './SshStatusSegment'
 import { SessionsStatusSegment } from './SessionsStatusSegment'
+import { UpdateStatusSegment } from './UpdateStatusSegment'
 
 function getCodexAccountLabel(
   state: CodexRateLimitAccountsState,
@@ -520,6 +521,7 @@ function StatusBarInner(): React.JSX.Element | null {
       <div className="flex-1" />
 
       <div className="flex items-center gap-3">
+        <UpdateStatusSegment compact={compact} iconOnly={iconOnly} />
         {showSessions && <SessionsStatusSegment compact={compact} iconOnly={iconOnly} />}
         {showSsh && <SshStatusSegment compact={compact} iconOnly={iconOnly} />}
       </div>

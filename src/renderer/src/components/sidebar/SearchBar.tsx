@@ -163,7 +163,7 @@ const SearchBar = React.memo(function SearchBar() {
                     }}
                   >
                     <FolderPlus className="absolute left-2.5 size-3.5 text-muted-foreground" />
-                    Add repo
+                    Add project
                   </DropdownMenuItem>
                 </>
               )}

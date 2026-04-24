@@ -159,7 +159,7 @@ const SidebarHeader = React.memo(function SidebarHeader() {
           <TooltipContent side="right" sideOffset={6}>
             {canCreateWorktree
               ? `New workspace (${newWorktreeShortcutLabel})`
-              : 'Add a Git repo to create worktrees'}
+              : 'Add a Git project to create worktrees'}
           </TooltipContent>
         </Tooltip>
       </div>

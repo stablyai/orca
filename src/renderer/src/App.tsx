@@ -917,7 +917,7 @@ function App(): React.JSX.Element {
                       above the sidebar. Without a flex-1/min-h-0 slot here,
                       the sidebar falls back to its content height, so the
                       worktree list loses its scroll viewport and the fixed
-                      bottom toolbar (including Add Repo) gets pushed offscreen. */}
+                      bottom toolbar (including Add Project) gets pushed offscreen. */}
                   <Sidebar />
                 </div>
               </div>
@@ -931,7 +931,10 @@ function App(): React.JSX.Element {
                 open or closed. Its height matches the 42px workspace strip
                 used by the sidebar and tab rows. */}
             {workspaceActive && !rightSidebarOpen && (
-              <div className="absolute top-0 right-0 z-10 flex items-center h-[42px]">
+              <div
+                className="absolute top-0 right-0 z-10 flex items-center h-[42px]"
+                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+              >
                 {rightSidebarToggle}
               </div>
             )}

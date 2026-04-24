@@ -276,7 +276,7 @@ export default function NewWorkspaceComposerCard({
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={6}>
-                Add repo
+                Add project
               </TooltipContent>
             </Tooltip>
           </div>

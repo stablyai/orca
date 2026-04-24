@@ -185,7 +185,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   )
 
   const handleCreateWorktree = useCallback(() => {
-    // Why: small delay so the Add Repo dialog close animation finishes before
+    // Why: small delay so the Add Project dialog close animation finishes before
     // the composer modal takes focus; otherwise the dialog teardown can steal
     // the first focus frame from the composer's prompt textarea.
     closeModal()
@@ -231,7 +231,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
               onClick={handleBack}
             >
               <ArrowLeft className="size-3" />
-              Add another repo
+              Add another project
             </button>
           )}
           <div className="flex items-center gap-1.5">
@@ -247,11 +247,11 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
         {step === 'add' ? (
           <>
             <DialogHeader>
-              <DialogTitle>Add a repository</DialogTitle>
+              <DialogTitle>Add a project</DialogTitle>
               <DialogDescription>
                 {repos.length === 0
-                  ? 'Add a repository to get started with Orca.'
-                  : 'Add another repository to manage with Orca.'}
+                  ? 'Add a project to get started with Orca.'
+                  : 'Add another project to manage with Orca.'}
               </DialogDescription>
             </DialogHeader>
 
@@ -266,7 +266,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
                 <div>
                   <p className="text-sm font-medium">Browse folder</p>
                   <p className="text-[11px] text-muted-foreground font-normal mt-0.5">
-                    Local repo or folder
+                    Local Git project or folder
                   </p>
                 </div>
               </Button>
@@ -292,7 +292,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
               >
                 <Monitor className="size-6 text-muted-foreground" />
                 <div>
-                  <p className="text-sm font-medium">Remote repo</p>
+                  <p className="text-sm font-medium">Remote project</p>
                   <p className="text-[11px] text-muted-foreground font-normal mt-0.5">
                     SSH connected target
                   </p>
@@ -377,7 +377,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
                   onClick={handleConfigureRepo}
                 >
                   <Settings className="size-3" />
-                  Configure repo
+                  Configure project
                 </button>
                 <Button
                   variant="ghost"

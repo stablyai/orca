@@ -184,6 +184,53 @@ describe('dismissUpdate nudge-aware', () => {
   })
 })
 
+// ── updateCardCollapsed ──────────────────────────────────────────────
+
+describe('updateCardCollapsed', () => {
+  it('defaults to false', () => {
+    const store = createTestStore()
+    expect(store.getState().updateCardCollapsed).toBe(false)
+  })
+
+  it('setUpdateCardCollapsed toggles the flag without persisting', () => {
+    const store = createTestStore()
+
+    store.getState().setUpdateCardCollapsed(true)
+    expect(store.getState().updateCardCollapsed).toBe(true)
+    expect(window.api.ui.set).not.toHaveBeenCalledWith(
+      expect.objectContaining({ updateCardCollapsed: expect.anything() })
+    )
+
+    store.getState().setUpdateCardCollapsed(false)
+    expect(store.getState().updateCardCollapsed).toBe(false)
+  })
+
+  it('resets to false on every state transition so new phases re-surface', () => {
+    const store = createTestStore()
+
+    setState(store, { state: 'downloading', percent: 20, version: '1.2.0' })
+    store.getState().setUpdateCardCollapsed(true)
+    expect(store.getState().updateCardCollapsed).toBe(true)
+
+    // Why: percent-only updates are not transitions and must not reset.
+    setState(store, { state: 'downloading', percent: 50, version: '1.2.0' })
+    expect(store.getState().updateCardCollapsed).toBe(true)
+
+    setState(store, { state: 'downloaded', version: '1.2.0' })
+    expect(store.getState().updateCardCollapsed).toBe(false)
+  })
+
+  it('re-surfaces the card when downloading transitions to error', () => {
+    const store = createTestStore()
+
+    setState(store, { state: 'downloading', percent: 80, version: '1.2.0' })
+    store.getState().setUpdateCardCollapsed(true)
+
+    setState(store, { state: 'error', message: 'ENOSPC' })
+    expect(store.getState().updateCardCollapsed).toBe(false)
+  })
+})
+
 // ── markUpdateReassuranceSeen ────────────────────────────────────────
 
 describe('markUpdateReassuranceSeen', () => {

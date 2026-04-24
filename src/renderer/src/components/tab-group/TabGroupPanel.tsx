@@ -190,27 +190,32 @@ export default function TabGroupPanel({
           can show multiple groups at once, while the window titlebar only has
           one shared center slot. Rendering true tab chrome here preserves
           per-group titles without making groups fight over one portal target. */}
-      <div className="h-[42px] shrink-0 border-b border-border bg-card">
-        <div
-          className={`flex h-full items-stretch pr-1.5${
-            reserveClosedExplorerToggleSpace && !rightSidebarOpen ? ' pr-10' : ''
-          }`}
-          style={{
-            paddingLeft:
-              reserveCollapsedSidebarHeaderSpace && !sidebarOpen
-                ? 'var(--collapsed-sidebar-header-width)'
-                : undefined
-          }}
-        >
-          {/* Why: when the right sidebar is closed, App.tsx renders a floating
-              explorer toggle in the top-right corner of the workspace. Only the
-              top-right tab group can sit underneath that button, so reserve
-              space in just that one header instead of pushing every group in. */}
-          {/* Why: collapsing the left worktree sidebar should let the terminal
-              reclaim the full left edge, but the top-left tab row should still
-              stop where the remaining titlebar controls end. Use the measured
-              width of that controls cluster instead of the old full sidebar
-              width so tabs cap at the agent badge, not at the old divider. */}
+      {/* Why: the macOS window uses hiddenInset titleBarStyle, so the only
+          way to drag-move the window is via -webkit-app-region: drag. Without
+          this, the empty space after tabs in the center column is dead — the
+          user can only drag from the tiny left-sidebar header strip. */}
+      <div
+        className="h-[42px] shrink-0 border-b border-border bg-card"
+        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+      >
+        <div className="flex h-full items-stretch pr-1.5">
+          {/* Why: Electron's native drag hit-test only respects no-drag on DOM
+              descendants, not z-index siblings. When the left sidebar is
+              collapsed, its header floats absolutely (z-10) over this tab row
+              from a separate DOM branch. An explicit no-drag spacer here
+              punches a hole in the drag surface so the floating sidebar toggle
+              and other titlebar controls remain clickable. */}
+          {reserveCollapsedSidebarHeaderSpace && !sidebarOpen ? (
+            <div
+              className="shrink-0"
+              style={
+                {
+                  width: 'var(--collapsed-sidebar-header-width)',
+                  WebkitAppRegion: 'no-drag'
+                } as React.CSSProperties
+              }
+            />
+          ) : null}
           <div className="min-w-0 flex-1 h-full">{tabBar}</div>
           {/* Why: pane-scoped layout actions belong with the active pane instead
               of the global tab-bar `+`, which should keep opening tabs exactly
@@ -286,6 +291,18 @@ export default function TabGroupPanel({
               </DropdownMenu>
             ) : null}
           </div>
+          {/* Why: Electron's native drag hit-test ignores z-index — a no-drag
+              element only overrides drag when it's a DOM descendant, not a
+              sibling in another branch. The floating right-sidebar toggle in
+              App.tsx sits in a separate DOM tree, so we need an explicit
+              no-drag child here to punch a hole in the drag surface beneath it
+              and let clicks through to the toggle. */}
+          {reserveClosedExplorerToggleSpace && !rightSidebarOpen ? (
+            <div
+              className="shrink-0 w-10"
+              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+            />
+          ) : null}
         </div>
       </div>
 
