@@ -369,6 +369,13 @@
   color: var(--foreground);
 }
 
+/* Why: tighter padding for the back/forward pair so the arrows sit
+   close together as a single navigation group, while the standard
+   .sidebar-toggle spacing stays unchanged for other titlebar icons. */
+.sidebar-toggle-compact {
+  padding: 4px 4px;
+}
+
 .sidebar-toggle:disabled {
   cursor: default;
   opacity: 0.45;

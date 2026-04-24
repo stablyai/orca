@@ -782,16 +782,16 @@ function App(): React.JSX.Element {
           container so the sidebar-collapse spacer stays sized to the left
           controls only. */}
       {activeView === 'terminal' && (
-        <div className="ml-auto flex items-center">
+        <div className="ml-auto mr-2 flex items-center">
           <Tooltip>
             <TooltipTrigger asChild>
               <button
-                className="sidebar-toggle"
+                className="sidebar-toggle sidebar-toggle-compact"
                 onClick={() => useAppStore.getState().goBackWorktree()}
                 disabled={!canGoBackWorktree}
                 aria-label="Go back"
               >
-                <ArrowLeft size={14} />
+                <ArrowLeft size={12} />
               </button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
@@ -801,12 +801,12 @@ function App(): React.JSX.Element {
           <Tooltip>
             <TooltipTrigger asChild>
               <button
-                className="sidebar-toggle"
+                className="sidebar-toggle sidebar-toggle-compact"
                 onClick={() => useAppStore.getState().goForwardWorktree()}
                 disabled={!canGoForwardWorktree}
                 aria-label="Go forward"
               >
-                <ArrowRight size={14} />
+                <ArrowRight size={12} />
               </button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
