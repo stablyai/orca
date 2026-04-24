@@ -26,20 +26,18 @@ jobs:
           private-key: ${{ secrets.BUFO_BOT_PRIVATE_KEY }}
           owner: stablyai
 
-      - name: Create tracking issue
+      - name: Add PR to project
         uses: actions/github-script@v7
         env:
           PROJECT_OWNER: stablyai
           PROJECT_NUMBER: '13'
           INTERNAL_TEAM_SLUG: stably-eng
-          TRACKING_LABEL: community-pr
         with:
           github-token: ${{ steps.app-token.outputs.token }}
           script: |
             const projectOwner = process.env.PROJECT_OWNER;
             const projectNumber = Number(process.env.PROJECT_NUMBER);
             const internalTeamSlug = process.env.INTERNAL_TEAM_SLUG;
-            const trackingLabel = process.env.TRACKING_LABEL;
             const owner = context.repo.owner;
             const repo = context.repo.repo;
 
@@ -54,8 +52,6 @@ jobs:
             });
 
             const author = pr.user.login;
-            const markerText = `community-pr-tracker-${owner}-${repo}-${pr.number}`;
-            const marker = `<!-- ${markerText} -->`;
 
             const skippedAuthors = new Set([
               'github-actions[bot]',
@@ -85,55 +81,6 @@ jobs:
               core.info(`Skipping internal PR author ${author}.`);
               return;
             }
-
-            const existingTrackingIssues = await github.paginate(
-              github.rest.search.issuesAndPullRequests,
-              {
-                q: `repo:${owner}/${repo} is:issue in:body ${markerText}`,
-                per_page: 100,
-              },
-            );
-
-            if (existingTrackingIssues.length > 0) {
-              core.info(`Tracking issue already exists for PR #${pr.number}: ${existingTrackingIssues[0].html_url}`);
-              return;
-            }
-
-            try {
-              await github.rest.issues.getLabel({
-                owner,
-                repo,
-                name: trackingLabel,
-              });
-            } catch (error) {
-              if (error.status !== 404) {
-                throw error;
-              }
-
-              await github.rest.issues.createLabel({
-                owner,
-                repo,
-                name: trackingLabel,
-                color: '0E8A16',
-                description: 'Tracks external community pull requests.',
-              });
-            }
-
-            const issue = await github.rest.issues.create({
-              owner,
-              repo,
-              title: `Review community PR #${pr.number}: ${pr.title}`,
-              body: [
-                marker,
-                '',
-                `Community PR opened by @${author}:`,
-                '',
-                pr.html_url,
-                '',
-                'Use this issue for triage, ownership, priority, and review tracking.',
-              ].join('\n'),
-              labels: [trackingLabel],
-            });
 
             const projectResult = await github.graphql(
               `
@@ -165,8 +112,8 @@ jobs:
               `,
               {
                 projectId,
-                contentId: issue.data.node_id,
+                contentId: pr.node_id,
               },
             );
 
-            core.info(`Created ${issue.data.html_url} and added it to project ${projectOwner}/${projectNumber}.`);
+            core.info(`Added PR #${pr.number} (${pr.html_url}) to project ${projectOwner}/${projectNumber}.`);
