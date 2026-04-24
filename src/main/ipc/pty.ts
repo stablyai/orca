@@ -101,6 +101,11 @@ export function getPtyIdsForConnection(connectionId: string): string[] {
 export function clearPtyOwnershipForConnection(connectionId: string): void {
   for (const [ptyId, connId] of ptyOwnership) {
     if (connId === connectionId) {
+      // Why: remote PTYs are gone after the SSH connection closes — their
+      // paneKey-scoped caches (agent-hooks server, OpenCode, Pi) must be swept
+      // the same way a local onExit would, otherwise they leak indefinitely
+      // for the process lifetime.
+      clearProviderPtyState(ptyId)
       ptyOwnership.delete(ptyId)
     }
   }
@@ -374,8 +379,12 @@ export function registerPtyHandlers(
       // spawn (see pty-connection.ts). Recording the mapping here lets
       // clearProviderPtyState clear the agent-hooks server's per-paneKey
       // caches when the PTY exits.
+      // Why: args.env arrives as untrusted JSON over IPC — the static
+      // Record<string, string> type is not actually enforced at the boundary.
+      // Narrow to a bounded string so malformed or oversized values cannot
+      // pollute ptyPaneKey or the downstream clearPaneState call.
       const paneKey = args.env?.ORCA_PANE_KEY
-      if (paneKey) {
+      if (typeof paneKey === 'string' && paneKey.length > 0 && paneKey.length <= 256) {
         ptyPaneKey.set(result.id, paneKey)
       }
       return result
@@ -420,6 +429,13 @@ export function registerPtyHandlers(
     } catch {
       /* session already dead — cleanup below handles the rest */
     } finally {
+      // Why: onExit clears provider state for LocalPtyProvider, but remote
+      // SSH and daemon shutdown paths do not emit onExit through the local
+      // provider's listener. Call clearProviderPtyState explicitly here so
+      // the hook-server paneKey cache and OpenCode/Pi PTY-scoped state are
+      // cleared on explicit kill. clearProviderPtyState is idempotent — safe
+      // if onExit already ran.
+      clearProviderPtyState(args.id)
       ptyOwnership.delete(args.id)
     }
   })

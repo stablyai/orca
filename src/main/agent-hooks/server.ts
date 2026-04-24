@@ -916,8 +916,14 @@ export class AgentHookServer {
     if (!listener) {
       return
     }
+    // Why: replay is best-effort per pane so one throwing listener call can't
+    // starve subsequent panes from being replayed.
     for (const payload of lastStatusByPaneKey.values()) {
-      listener(payload)
+      try {
+        listener(payload)
+      } catch (err) {
+        console.error('[agent-hooks] replay listener threw', err)
+      }
     }
   }
 
@@ -1028,6 +1034,10 @@ export class AgentHookServer {
     lastPromptByPaneKey.clear()
     lastToolByPaneKey.clear()
     lastStatusByPaneKey.clear()
+    // Why: across stop()/start() cycles the warn-once Sets would otherwise
+    // suppress legitimate new warnings after a restart.
+    warnedVersions.clear()
+    warnedEnvs.clear()
   }
 
   clearPaneState(paneKey: string): void {
@@ -1067,5 +1077,9 @@ export const _internals = {
     lastPromptByPaneKey.clear()
     lastToolByPaneKey.clear()
     lastStatusByPaneKey.clear()
+    // Why: across test runs the warn-once Sets would otherwise suppress
+    // legitimate new warnings that a later test expects to observe.
+    warnedVersions.clear()
+    warnedEnvs.clear()
   }
 }

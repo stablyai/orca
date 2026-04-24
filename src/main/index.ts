@@ -143,6 +143,14 @@ function openMainWindow(): BrowserWindow {
     if (mainWindow === window) {
       mainWindow = null
     }
+    if (AGENT_DASHBOARD_ENABLED) {
+      // Why: detach the agent hook listener on window close so the server
+      // never fires into a destroyed webContents during the gap before
+      // reopen (e.g. macOS dock re-activation). This also ensures the
+      // replay-loop through lastStatusByPaneKey runs only on deliberate
+      // window recreations instead of stacking on top of stale listeners.
+      agentHookServer.setListener(null)
+    }
   })
   mainWindow = window
   if (AGENT_DASHBOARD_ENABLED) {
