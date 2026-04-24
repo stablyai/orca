@@ -2,7 +2,7 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { DEFAULT_STATUS_BAR_ITEMS, DEFAULT_WORKTREE_CARD_PROPERTIES } from '../../shared/constants'
 
-import { ChevronLeft, ChevronRight, Minimize2, PanelLeft, PanelRight } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Minimize2, PanelLeft, PanelRight } from 'lucide-react'
 import { FOCUS_TERMINAL_PANE_EVENT, TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
 import { syncZoomCSSVar } from '@/lib/ui-zoom'
 import { toast } from 'sonner'
@@ -787,7 +787,7 @@ function App(): React.JSX.Element {
                 disabled={!canGoBackWorktree}
                 aria-label="Go back"
               >
-                <ChevronLeft size={16} />
+                <ArrowLeft size={16} />
               </button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
@@ -802,7 +802,7 @@ function App(): React.JSX.Element {
                 disabled={!canGoForwardWorktree}
                 aria-label="Go forward"
               >
-                <ChevronRight size={16} />
+                <ArrowRight size={16} />
               </button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
