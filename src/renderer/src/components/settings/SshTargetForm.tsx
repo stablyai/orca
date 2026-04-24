@@ -12,6 +12,7 @@ export type EditingTarget = {
   identityFile: string
   proxyCommand: string
   jumpHost: string
+  relayGracePeriodSeconds: string
 }
 
 export const EMPTY_FORM: EditingTarget = {
@@ -22,7 +23,8 @@ export const EMPTY_FORM: EditingTarget = {
   username: '',
   identityFile: '',
   proxyCommand: '',
-  jumpHost: ''
+  jumpHost: '',
+  relayGracePeriodSeconds: '300'
 }
 
 type SshTargetFormProps = {
@@ -120,6 +122,22 @@ export function SshTargetForm({
           />
           <p className="text-[11px] text-muted-foreground">
             Optional. Equivalent to ProxyJump / ssh -J.
+          </p>
+        </div>
+        <div className="col-span-2 space-y-1.5">
+          <Label>Relay Grace Period (seconds)</Label>
+          <Input
+            type="number"
+            value={form.relayGracePeriodSeconds}
+            onChange={(e) =>
+              onFormChange((f) => ({ ...f, relayGracePeriodSeconds: e.target.value }))
+            }
+            placeholder="300"
+            min={60}
+            max={3600}
+          />
+          <p className="text-[11px] text-muted-foreground">
+            How long the relay keeps terminals alive after disconnect. Default: 300 (5 minutes).
           </p>
         </div>
       </div>

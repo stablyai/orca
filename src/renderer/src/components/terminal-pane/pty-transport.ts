@@ -11,6 +11,7 @@ import {
 } from '../../../../shared/agent-detection'
 import {
   ptyDataHandlers,
+  ptyReplayHandlers,
   ptyExitHandlers,
   ptyTeardownHandlers,
   ensurePtyDispatcher,
@@ -188,12 +189,14 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
 
   function unregisterPtyHandlers(id: string): void {
     ptyDataHandlers.delete(id)
+    ptyReplayHandlers.delete(id)
     ptyExitHandlers.delete(id)
     ptyTeardownHandlers.delete(id)
   }
 
   function unregisterPtyDataAndStatusHandlers(id: string): void {
     ptyDataHandlers.delete(id)
+    ptyReplayHandlers.delete(id)
   }
 
   function applyObservedTerminalTitle(title: string): void {
@@ -211,6 +214,16 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   // Why: shared by connect() and attach() to avoid duplicating title/bell/exit
   // logic across the two code paths that register a PTY.
   function registerPtyDataHandler(id: string): void {
+    // Why: relay pty.attach sends replay data via a dedicated pty:replay IPC
+    // channel. Route it through onReplayData so the renderer engages the
+    // replay guard and xterm auto-replies do not leak into the shell.
+    ptyReplayHandlers.set(id, (data) => {
+      if (storedCallbacks.onReplayData) {
+        storedCallbacks.onReplayData(data)
+      } else {
+        storedCallbacks.onData?.(data)
+      }
+    })
     ptyDataHandlers.set(id, (data) => {
       // Why: OSC 9999 is a renderer-only control protocol. Parse it before
       // xterm sees the bytes, and keep parser state across chunks so partial
@@ -325,38 +338,42 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           ...(options.sessionId ? { sessionId: options.sessionId } : {}),
           worktreeId
         })
+        const spawnResult = result as PtyConnectResult & { isReattach?: boolean }
 
         // If destroyed while spawn was in flight, kill the new pty and bail
         if (destroyed) {
-          window.api.pty.kill(result.id)
+          window.api.pty.kill(spawnResult.id)
           return
         }
 
-        ptyId = result.id
+        ptyId = spawnResult.id
         connected = true
 
         // Why: for deferred reattach (Option 2), the daemon returns snapshot/
         // coldRestore data from createOrAttach. Skip onPtySpawn for reattach —
         // it would reset lastActivityAt and destroy the recency sort order.
-        if (!result.isReattach && !result.coldRestore) {
-          onPtySpawn?.(result.id)
+        if (!spawnResult.isReattach && !spawnResult.coldRestore) {
+          onPtySpawn?.(spawnResult.id)
         }
 
-        registerPtyDataHandler(result.id)
-        registerPtyExitHandler(result.id)
+        registerPtyDataHandler(spawnResult.id)
+        registerPtyExitHandler(spawnResult.id)
 
         storedCallbacks.onConnect?.()
         storedCallbacks.onStatus?.('shell')
 
-        if (result.isReattach || result.coldRestore) {
+        if (spawnResult.isReattach || spawnResult.coldRestore || spawnResult.sessionExpired) {
           return {
-            id: result.id,
-            snapshot: result.snapshot,
-            isAlternateScreen: result.isAlternateScreen,
-            coldRestore: result.coldRestore
+            id: spawnResult.id,
+            snapshot: spawnResult.snapshot,
+            snapshotCols: spawnResult.snapshotCols,
+            snapshotRows: spawnResult.snapshotRows,
+            isAlternateScreen: spawnResult.isAlternateScreen,
+            sessionExpired: spawnResult.sessionExpired,
+            coldRestore: spawnResult.coldRestore
           } satisfies PtyConnectResult
         }
-        return result.id
+        return spawnResult.id
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         // Why: on cold start, SSH provider isn't registered yet so pty:spawn

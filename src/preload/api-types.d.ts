@@ -358,6 +358,7 @@ export type PreloadApi = {
     getForegroundProcess: (id: string) => Promise<string | null>
     listSessions: () => Promise<{ id: string; cwd: string; title: string }[]>
     onData: (callback: (data: { id: string; data: string }) => void) => () => void
+    onReplay: (callback: (data: { id: string; data: string }) => void) => () => void
     onExit: (callback: (data: { id: string; code: number }) => void) => () => void
   }
   feedback: {

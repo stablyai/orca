@@ -118,6 +118,17 @@ export function wireUpSshPtyEvents(
       win.webContents.send('pty:data', payload)
     }
   })
+  // Why: after pty.attach, the relay sends pty.replay with buffered output
+  // from the grace window. Without this, reattached terminals render blank.
+  // Uses a dedicated pty:replay channel (not pty:data) so the renderer can
+  // route it through the replay-guarded onReplayData callback, which
+  // suppresses xterm auto-replies to embedded query sequences.
+  ptyProvider.onReplay((payload) => {
+    const win = getMainWindow()
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('pty:replay', payload)
+    }
+  })
   ptyProvider.onExit((payload) => {
     clearProviderPtyState(payload.id)
     // Why: without this, the ownership entry for the exited remote PTY lingers,

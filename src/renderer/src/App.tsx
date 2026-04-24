@@ -89,6 +89,7 @@ function App(): React.JSX.Element {
       fetchBrowserSessionProfiles: s.fetchBrowserSessionProfiles,
       fetchDetectedBrowsers: s.fetchDetectedBrowsers,
       reconnectPersistedTerminals: s.reconnectPersistedTerminals,
+      setDeferredSshReconnectTargets: s.setDeferredSshReconnectTargets,
       hydratePersistedUI: s.hydratePersistedUI,
       openModal: s.openModal,
       closeModal: s.closeModal,
@@ -181,6 +182,46 @@ function App(): React.JSX.Element {
           actions.hydrateBrowserSession(session)
           await actions.fetchBrowserSessionProfiles()
           await actions.fetchDetectedBrowsers()
+
+          // Why: SSH connections must be re-established BEFORE terminal
+          // reconnect so that reconnectPersistedTerminals can route SSH-backed
+          // tabs through pty.attach on the relay. Passphrase-protected targets
+          // are deferred to tab focus to avoid stacking credential dialogs at
+          // startup before the user has context.
+          const connectionIds = session.activeConnectionIdsAtShutdown ?? []
+          if (connectionIds.length > 0) {
+            const SSH_RECONNECT_TIMEOUT_MS = 15_000
+            const allTargets = await window.api.ssh.listTargets()
+            const targetMap = new Map(allTargets.map((t) => [t.id, t]))
+            const targets = connectionIds.map((targetId) => ({
+              targetId,
+              needsPassphrase: targetMap.get(targetId)?.lastRequiredPassphrase ?? false
+            }))
+
+            const eagerTargets = targets.filter((t) => !t.needsPassphrase)
+            const deferredTargets = targets.filter((t) => t.needsPassphrase)
+
+            if (deferredTargets.length > 0) {
+              actions.setDeferredSshReconnectTargets(deferredTargets.map((t) => t.targetId))
+            }
+
+            await Promise.allSettled(
+              eagerTargets.map(({ targetId }) =>
+                Promise.race([
+                  window.api.ssh.connect({ targetId }),
+                  new Promise((_, reject) =>
+                    setTimeout(
+                      () => reject(new Error('SSH reconnect timeout')),
+                      SSH_RECONNECT_TIMEOUT_MS
+                    )
+                  )
+                ]).catch((err) => {
+                  console.warn(`SSH auto-reconnect failed for ${targetId}:`, err)
+                })
+              )
+            )
+          }
+
           await actions.reconnectPersistedTerminals(abortController.signal)
           syncZoomCSSVar()
         }

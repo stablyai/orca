@@ -14,6 +14,14 @@ export type SshTarget = {
   proxyCommand?: string
   /** Jump host (ProxyJump), if any. */
   jumpHost?: string
+  /** Grace period in seconds before relay shuts down after disconnect.
+   *  Default: 300 (5 minutes). */
+  relayGracePeriodSeconds?: number
+  /** Set to true after a successful connection that triggered a credential
+   *  prompt (passphrase or password). Persisted so startup reconnect can
+   *  partition targets into eager (no passphrase) vs deferred (passphrase)
+   *  without attempting a connection first. */
+  lastRequiredPassphrase?: boolean
 }
 
 export type SshConnectionStatus =

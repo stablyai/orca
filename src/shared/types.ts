@@ -310,6 +310,13 @@ export type WorkspaceSessionState = {
   tabGroupLayouts?: Record<string, TabGroupLayoutNode>
   /** Per-worktree focused group at shutdown. */
   activeGroupIdByWorktree?: Record<string, string>
+  /** SSH target IDs that were connected at shutdown. Used on startup to
+   *  auto-reconnect before attempting remote PTY reattach. */
+  activeConnectionIdsAtShutdown?: string[]
+  /** Maps tab IDs to their remote relay PTY session IDs. Populated at
+   *  shutdown from renderer state so remote PTYs can be reattached via
+   *  the relay's pty.attach RPC on startup. */
+  remoteSessionIdsByTabId?: Record<string, string>
 }
 
 // ─── GitHub ──────────────────────────────────────────────────────────

@@ -41,6 +41,10 @@ export type PtySpawnResult = {
   /** True when the reattached session uses the alternate screen buffer
    *  (e.g., Codex CLI, vim). Normal-screen TUIs like Claude Code are false. */
   isAlternateScreen?: boolean
+  /** True when the caller requested reattach (sessionId was provided) but the
+   *  relay PTY was gone (grace window elapsed). The renderer uses this to show
+   *  a brief "Session expired — new shell started" message. */
+  sessionExpired?: boolean
   /** Present when cold-restoring from disk history after a daemon crash.
    *  Contains the saved scrollback and CWD. The new shell spawns in the
    *  saved CWD; the scrollback is written to xterm.js as read-only history. */

@@ -27,6 +27,9 @@ type WorkspaceSessionSnapshot = Pick<
   | 'groupsByWorktree'
   | 'layoutByWorktree'
   | 'activeGroupIdByWorktree'
+  | 'sshConnectionStates'
+  | 'repos'
+  | 'worktreesByRepo'
 >
 
 /** Build the editor-file portion of the workspace session for persistence.
@@ -131,6 +134,32 @@ export function buildWorkspaceSessionPayload(
     .filter(([, tabs]) => tabs.some((tab) => tab.ptyId))
     .map(([worktreeId]) => worktreeId)
 
+  // Why: sshConnectionStates is a Map<string, SshConnectionState>, not a plain
+  // object. Object.entries() on a Map returns [] — must use Array.from().
+  const connectedTargetIds = Array.from(snapshot.sshConnectionStates.entries())
+    .filter(([, state]) => state.status === 'connected')
+    .map(([targetId]) => targetId)
+
+  // Why: the renderer already has tab.ptyId for every terminal tab and knows
+  // which worktrees are SSH-backed via repo.connectionId. Deriving the map
+  // here avoids a sync IPC round-trip during beforeunload, which is fragile
+  // (can be dropped by Chromium under shutdown time pressure).
+  const remoteSessionIdsByTabId: Record<string, string> = {}
+  for (const [worktreeId, tabs] of Object.entries(snapshot.tabsByWorktree)) {
+    const worktree = Object.values(snapshot.worktreesByRepo)
+      .flat()
+      .find((w) => w.id === worktreeId)
+    const repo = worktree ? snapshot.repos.find((r) => r.id === worktree.repoId) : null
+    if (!repo?.connectionId) {
+      continue
+    }
+    for (const tab of tabs) {
+      if (tab.ptyId) {
+        remoteSessionIdsByTabId[tab.id] = tab.ptyId
+      }
+    }
+  }
+
   return {
     activeRepoId: snapshot.activeRepoId,
     activeWorktreeId: snapshot.activeWorktreeId,
@@ -156,6 +185,9 @@ export function buildWorkspaceSessionPayload(
     unifiedTabs: snapshot.unifiedTabsByWorktree,
     tabGroups: snapshot.groupsByWorktree,
     tabGroupLayouts: snapshot.layoutByWorktree,
-    activeGroupIdByWorktree: snapshot.activeGroupIdByWorktree
+    activeGroupIdByWorktree: snapshot.activeGroupIdByWorktree,
+    activeConnectionIdsAtShutdown: connectedTargetIds.length > 0 ? connectedTargetIds : undefined,
+    remoteSessionIdsByTabId:
+      Object.keys(remoteSessionIdsByTabId).length > 0 ? remoteSessionIdsByTabId : undefined
   }
 }

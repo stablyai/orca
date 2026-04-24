@@ -410,6 +410,34 @@ export function connectPanePty(
       }
     }
 
+    // Why: if this tab is backed by a deferred SSH target (passphrase-protected),
+    // trigger the SSH connection now that the user has focused the tab. This must
+    // run before session ID resolution because the SSH provider isn't registered
+    // until after connect succeeds — without the connection, pty.spawn would fail
+    // with "No PTY provider for connection".
+    if (connectionId) {
+      const deferredTargets = useAppStore.getState().deferredSshReconnectTargets
+      if (deferredTargets.includes(connectionId)) {
+        void (async () => {
+          try {
+            await window.api.ssh.connect({ targetId: connectionId })
+            useAppStore.getState().removeDeferredSshReconnectTarget(connectionId)
+          } catch (err) {
+            console.warn(`Deferred SSH reconnect failed for ${connectionId}:`, err)
+            reportError(
+              `SSH connection failed: ${err instanceof Error ? err.message : String(err)}`
+            )
+            return
+          }
+          if (disposed) {
+            return
+          }
+          startFreshSpawn()
+        })()
+        return
+      }
+    }
+
     // Why: re-read session IDs inside the rAF instead of capturing before.
     // The session could be cleaned up during the one-frame gap, and
     // reading stale IDs would cause a reattach to a dead session.

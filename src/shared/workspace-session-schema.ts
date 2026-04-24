@@ -188,7 +188,9 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
   unifiedTabs: z.record(z.string(), z.array(tabSchema)).optional(),
   tabGroups: z.record(z.string(), z.array(tabGroupSchema)).optional(),
   tabGroupLayouts: z.record(z.string(), tabGroupLayoutNodeSchema).optional(),
-  activeGroupIdByWorktree: z.record(z.string(), z.string()).optional()
+  activeGroupIdByWorktree: z.record(z.string(), z.string()).optional(),
+  activeConnectionIdsAtShutdown: z.array(z.string()).optional(),
+  remoteSessionIdsByTabId: z.record(z.string(), z.string()).optional()
 })
 
 export type ParsedWorkspaceSession =

@@ -68,9 +68,16 @@ export function registerSshHandlers(
 
   registerCredentialHandler(getMainWindow)
 
+  // Why: tracks whether a credential prompt was triggered during the current
+  // ssh:connect call. Used to set lastRequiredPassphrase on the target so
+  // startup reconnect can defer passphrase-protected targets to tab focus.
+  const credentialRequestedForTarget = new Set<string>()
+
   const callbacks: SshConnectionCallbacks = {
-    onCredentialRequest: (targetId, kind, detail) =>
-      requestCredential(getMainWindow, targetId, kind, detail),
+    onCredentialRequest: (targetId, kind, detail) => {
+      credentialRequestedForTarget.add(targetId)
+      return requestCredential(getMainWindow, targetId, kind, detail)
+    },
     onStateChange: (targetId: string, state: SshConnectionState) => {
       if (testingTargets.has(targetId)) {
         return
@@ -173,7 +180,11 @@ export function registerSshHandlers(
         reconnectAttempt: 0
       })
 
-      const { transport } = await deployAndLaunchRelay(conn)
+      const { transport } = await deployAndLaunchRelay(
+        conn,
+        undefined,
+        target.relayGracePeriodSeconds
+      )
 
       const mux = new SshChannelMultiplexer(transport)
       activeMultiplexers.set(args.targetId, mux)
@@ -215,6 +226,14 @@ export function registerSshHandlers(
     } finally {
       explicitRelaySetupTargets.delete(args.targetId)
     }
+
+    // Why: persist whether this connection required a credential prompt so
+    // startup reconnect can partition targets into eager vs deferred without
+    // re-probing keys. Updated on every successful connect so the flag stays
+    // current as users add/remove passphrases from their keys.
+    const requiredPassphrase = credentialRequestedForTarget.has(args.targetId)
+    credentialRequestedForTarget.delete(args.targetId)
+    sshStore!.updateTarget(args.targetId, { lastRequiredPassphrase: requiredPassphrase })
 
     return connectionManager!.getState(args.targetId)
   })

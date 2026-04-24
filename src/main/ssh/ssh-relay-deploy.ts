@@ -41,7 +41,8 @@ const RELAY_DEPLOY_TIMEOUT_MS = 120_000
  */
 export async function deployAndLaunchRelay(
   conn: SshConnection,
-  onProgress?: (status: string) => void
+  onProgress?: (status: string) => void,
+  graceTimeSeconds?: number
 ): Promise<RelayDeployResult> {
   let timeoutHandle: ReturnType<typeof setTimeout>
   const timeoutPromise = new Promise<never>((_resolve, reject) => {
@@ -51,7 +52,10 @@ export async function deployAndLaunchRelay(
   })
 
   try {
-    return await Promise.race([deployAndLaunchRelayInner(conn, onProgress), timeoutPromise])
+    return await Promise.race([
+      deployAndLaunchRelayInner(conn, onProgress, graceTimeSeconds),
+      timeoutPromise
+    ])
   } finally {
     clearTimeout(timeoutHandle!)
   }
@@ -59,7 +63,8 @@ export async function deployAndLaunchRelay(
 
 async function deployAndLaunchRelayInner(
   conn: SshConnection,
-  onProgress?: (status: string) => void
+  onProgress?: (status: string) => void,
+  graceTimeSeconds?: number
 ): Promise<RelayDeployResult> {
   onProgress?.('Detecting remote platform...')
   console.log('[ssh-relay] Detecting remote platform...')
@@ -103,7 +108,7 @@ async function deployAndLaunchRelayInner(
 
   onProgress?.('Starting relay...')
   console.log('[ssh-relay] Launching relay...')
-  const transport = await launchRelay(conn, remoteRelayDir)
+  const transport = await launchRelay(conn, remoteRelayDir, graceTimeSeconds)
   console.log('[ssh-relay] Relay started successfully')
 
   return { transport, platform }
@@ -265,17 +270,22 @@ function getLocalRelayPath(platform: RelayPlatform): string | null {
   return null
 }
 
-async function launchRelay(conn: SshConnection, remoteDir: string): Promise<MultiplexerTransport> {
+async function launchRelay(
+  conn: SshConnection,
+  remoteDir: string,
+  graceTimeSeconds?: number
+): Promise<MultiplexerTransport> {
   // Why: Phase 1 of the plan requires Node.js on the remote. We use the
   // system `node` rather than bundling a node binary, keeping the relay
   // package small (~100KB JS vs ~60MB with embedded node).
   // Non-login SSH shells may not have node in PATH, so we source the
   // user's profile to pick up nvm/fnm/brew PATH entries.
   const nodePath = await resolveRemoteNodePath(conn)
+  const graceTime = graceTimeSeconds ?? 300
   // Why: both remoteDir and nodePath come from the remote host and could
   // contain shell metacharacters. Single-quote escaping prevents injection.
   const channel = await conn.exec(
-    `cd ${shellEscape(remoteDir)} && ${shellEscape(nodePath)} relay.js --grace-time 60`
+    `cd ${shellEscape(remoteDir)} && ${shellEscape(nodePath)} relay.js --grace-time ${graceTime}`
   )
   return waitForSentinel(channel)
 }
