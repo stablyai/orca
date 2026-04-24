@@ -1,8 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { RateLimitBucket } from '../../shared/rate-limit-types'
+import {
+  authJsonGoogle,
+  authJsonGoogleExpired,
+  makeResponse,
+  quotaResponse
+} from './gemini-usage-fetcher.test-fixtures'
 
-const { readFileMock, execSyncMock, netFetchMock } = vi.hoisted(() => ({
+const { readFileMock, netFetchMock } = vi.hoisted(() => ({
   readFileMock: vi.fn(),
-  execSyncMock: vi.fn(),
   netFetchMock: vi.fn()
 }))
 
@@ -10,58 +16,109 @@ vi.mock('node:fs/promises', () => ({
   readFile: readFileMock
 }))
 
-vi.mock('node:child_process', () => ({
-  execSync: execSyncMock
-}))
-
 vi.mock('electron', () => ({
   net: { fetch: netFetchMock }
 }))
 
-import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
+import { fetchGeminiRateLimits, getBucketName, deriveSessionSummary } from './gemini-usage-fetcher'
 
-function makeResponse(body: unknown, status = 200): Response {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    json: async () => body,
-    text: async () => (typeof body === 'string' ? body : JSON.stringify(body))
-  } as Response
-}
+describe('getBucketName', () => {
+  it('maps known model IDs to stable names', () => {
+    expect(getBucketName('gemini-2.5-pro')).toBe('Pro')
+    expect(getBucketName('gemini-2.5-flash')).toBe('Flash')
+    expect(getBucketName('gemini-2.0-flash-lite')).toBe('Flash Lite')
+  })
+
+  it('returns a deterministic fallback for unknown model IDs', () => {
+    expect(getBucketName('gemini-experimental')).toBe('Unknown (gemini-experimental)')
+    expect(getBucketName('some-random-id')).toBe('Unknown (some-random-id)')
+  })
+})
+
+describe('deriveSessionSummary', () => {
+  it('returns null for empty buckets', () => {
+    expect(deriveSessionSummary([])).toBeNull()
+  })
+
+  it('picks the most constrained bucket (highest usedPercent) as session summary', () => {
+    const buckets: RateLimitBucket[] = [
+      { name: 'Pro', usedPercent: 30, windowMinutes: 300, resetsAt: null, resetDescription: null },
+      {
+        name: 'Flash',
+        usedPercent: 80,
+        windowMinutes: 300,
+        resetsAt: null,
+        resetDescription: null
+      },
+      {
+        name: 'Flash Lite',
+        usedPercent: 10,
+        windowMinutes: 300,
+        resetsAt: null,
+        resetDescription: null
+      }
+    ]
+    const summary = deriveSessionSummary(buckets)
+    expect(summary).not.toBeNull()
+    expect(summary!.usedPercent).toBe(80)
+    expect(summary!.windowMinutes).toBe(300)
+  })
+
+  it('preserves reset metadata from the most constrained bucket', () => {
+    const buckets: RateLimitBucket[] = [
+      {
+        name: 'Pro',
+        usedPercent: 30,
+        windowMinutes: 300,
+        resetsAt: 1000,
+        resetDescription: '2:00 PM'
+      },
+      {
+        name: 'Flash',
+        usedPercent: 80,
+        windowMinutes: 300,
+        resetsAt: 2000,
+        resetDescription: '3:00 PM'
+      }
+    ]
+    const summary = deriveSessionSummary(buckets)
+    expect(summary!.resetsAt).toBe(2000)
+    expect(summary!.resetDescription).toBe('3:00 PM')
+  })
+})
 
 describe('fetchGeminiRateLimits', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-04-24T12:00:00.000Z'))
     readFileMock.mockReset()
-    execSyncMock.mockReset()
     netFetchMock.mockReset()
   })
 
-  const validCreds = {
-    access_token: 'valid-token',
-    refresh_token: 'refresh-token',
-    expiry_date: new Date('2026-04-24T13:00:00.000Z').getTime()
-  }
-
-  const expiredCreds = {
-    access_token: 'expired-token',
-    refresh_token: 'refresh-token',
-    expiry_date: new Date('2026-04-24T11:00:00.000Z').getTime()
-  }
-
-  const oauth2JsContent = `
-    const OAUTH_CLIENT_ID = 'client-id-123';
-    const OAUTH_CLIENT_SECRET = 'client-secret-456';
-  `
-
-  const quotaResponse = [
-    { remainingFraction: 0.75, resetTime: '2026-04-24T13:00:00.000Z', modelId: 'gemini-pro' },
-    { remainingFraction: 0.9, resetTime: '2026-04-24T14:00:00.000Z', modelId: 'gemini-flash' }
-  ]
-
-  it('returns unavailable when credentials are not found', async () => {
+  function setupAuthJsonNotFound(): void {
     readFileMock.mockRejectedValue({ code: 'ENOENT' })
+  }
+
+  function setupAuthJsonGoogleValid(): void {
+    readFileMock.mockImplementation(async (filePath: string) => {
+      if (filePath.includes('auth.json')) {
+        return JSON.stringify(authJsonGoogle)
+      }
+      throw { code: 'ENOENT' }
+    })
+  }
+
+  function setupAuthJsonGoogleExpired(): void {
+    readFileMock.mockImplementation(async (filePath: string) => {
+      if (filePath.includes('auth.json')) {
+        return JSON.stringify(authJsonGoogleExpired)
+      }
+      throw { code: 'ENOENT' }
+    })
+  }
+
+  it('returns unavailable when no auth.json and no oauth_creds.json exist', async () => {
+    setupAuthJsonNotFound()
 
     const result = await fetchGeminiRateLimits()
 
@@ -72,18 +129,18 @@ describe('fetchGeminiRateLimits', () => {
     expect(result.error).toContain('credentials not found')
   })
 
-  it('returns quota with correct usedPercent for pro and flash when token is valid', async () => {
-    readFileMock.mockResolvedValue(JSON.stringify(validCreds))
-    netFetchMock
-      .mockResolvedValueOnce(makeResponse({ cloudaicompanionProject: 'proj-123' }))
-      .mockResolvedValueOnce(makeResponse(quotaResponse))
+  it('returns quota via auth.json with valid token (single window)', async () => {
+    setupAuthJsonGoogleValid()
+    netFetchMock.mockResolvedValueOnce(makeResponse(quotaResponse))
 
     const result = await fetchGeminiRateLimits()
 
     expect(result.status).toBe('ok')
     expect(result.provider).toBe('gemini')
     expect(result.error).toBeNull()
+    expect(result.weekly).toBeNull()
 
+    // Minimum remainingFraction is 0.75 -> usedPercent 25
     expect(result.session).toEqual({
       usedPercent: 25,
       windowMinutes: 60,
@@ -91,213 +148,151 @@ describe('fetchGeminiRateLimits', () => {
       resetDescription: null
     })
 
-    expect(result.weekly).toEqual({
-      usedPercent: 10,
-      windowMinutes: 120,
-      resetsAt: new Date('2026-04-24T14:00:00.000Z').getTime(),
-      resetDescription: null
-    })
-  })
-
-  it('refreshes token when expired and returns quota', async () => {
-    readFileMock.mockImplementation(async (filePath: string) => {
-      if (filePath.includes('oauth_creds.json')) {
-        return JSON.stringify(expiredCreds)
-      }
-      if (filePath.includes('oauth2.js')) {
-        return oauth2JsContent
-      }
-      throw new Error('Unexpected readFile call')
-    })
-    execSyncMock.mockReturnValue('/usr/local/bin/gemini')
-    netFetchMock
-      .mockResolvedValueOnce(makeResponse({ access_token: 'new-token' }))
-      .mockResolvedValueOnce(makeResponse({ cloudaicompanionProject: 'proj-123' }))
-      .mockResolvedValueOnce(makeResponse(quotaResponse))
-
-    const result = await fetchGeminiRateLimits()
-
-    expect(result.status).toBe('ok')
-    expect(result.provider).toBe('gemini')
-    expect(result.error).toBeNull()
-    expect(result.session).not.toBeNull()
-
-    const refreshCall = netFetchMock.mock.calls.find(
-      (call) => typeof call[0] === 'string' && call[0].includes('oauth2.googleapis.com')
-    )
-    expect(refreshCall).toBeDefined()
-  })
-
-  it('returns error when token refresh fails', async () => {
-    readFileMock.mockImplementation(async (filePath: string) => {
-      if (filePath.includes('oauth_creds.json')) {
-        return JSON.stringify(expiredCreds)
-      }
-      if (filePath.includes('oauth2.js')) {
-        return oauth2JsContent
-      }
-      throw new Error('Unexpected readFile call')
-    })
-    execSyncMock.mockReturnValue('/usr/local/bin/gemini')
-    netFetchMock.mockResolvedValueOnce(makeResponse({ error: 'invalid_grant' }, 400))
-
-    const result = await fetchGeminiRateLimits()
-
-    expect(result.status).toBe('error')
-    expect(result.error).toContain('Token refresh failed')
-    expect(result.session).toBeNull()
-    expect(result.weekly).toBeNull()
-  })
-
-  it('proceeds with empty projectId when loadCodeAssist fails', async () => {
-    readFileMock.mockResolvedValue(JSON.stringify(validCreds))
-    netFetchMock
-      .mockResolvedValueOnce(makeResponse('Internal Server Error', 500))
-      .mockResolvedValueOnce(makeResponse(quotaResponse))
-
-    const result = await fetchGeminiRateLimits()
-
-    expect(result.status).toBe('ok')
-    expect(result.session).not.toBeNull()
+    expect(result.buckets).toHaveLength(2)
+    expect(result.buckets![0].name).toBe('Pro')
+    expect(result.buckets![0].usedPercent).toBe(25)
+    expect(result.buckets![1].name).toBe('Flash')
+    expect(result.buckets![1].usedPercent).toBe(10)
 
     const quotaCall = netFetchMock.mock.calls.find(
       (call) => typeof call[0] === 'string' && call[0].includes('retrieveUserQuota')
     )
     expect(quotaCall).toBeDefined()
     const quotaBody = JSON.parse((quotaCall![1] as RequestInit).body as string)
-    expect(quotaBody.project).toBe('')
+    expect(quotaBody.project).toBe('proj-123')
   })
 
-  it('maps mixed pro/flash buckets correctly with lowest remainingFraction winning', async () => {
-    const mixedResponse = [
-      { remainingFraction: 0.8, resetTime: '2026-04-24T13:00:00.000Z', modelId: 'gemini-pro-1.5' },
-      { remainingFraction: 0.5, resetTime: '2026-04-24T13:30:00.000Z', modelId: 'gemini-pro-2.0' },
-      {
-        remainingFraction: 0.9,
-        resetTime: '2026-04-24T14:00:00.000Z',
-        modelId: 'gemini-flash-1.5'
-      },
-      { remainingFraction: 0.6, resetTime: '2026-04-24T14:30:00.000Z', modelId: 'gemini-flash-2.0' }
-    ]
-
-    readFileMock.mockResolvedValue(JSON.stringify(validCreds))
-    netFetchMock
-      .mockResolvedValueOnce(makeResponse({ cloudaicompanionProject: 'proj-123' }))
-      .mockResolvedValueOnce(makeResponse(mixedResponse))
+  it('maps unknown model IDs to fallback bucket names', async () => {
+    setupAuthJsonGoogleValid()
+    netFetchMock.mockResolvedValueOnce(
+      makeResponse([
+        {
+          remainingFraction: 0.5,
+          resetTime: '2026-04-24T13:00:00.000Z',
+          modelId: 'gemini-experimental'
+        }
+      ])
+    )
 
     const result = await fetchGeminiRateLimits()
 
     expect(result.status).toBe('ok')
-    // pro: lowest remainingFraction is 0.5 -> usedPercent 50
-    expect(result.session).toEqual({
-      usedPercent: 50,
-      windowMinutes: 90,
-      resetsAt: new Date('2026-04-24T13:30:00.000Z').getTime(),
-      resetDescription: null
-    })
-    // flash: lowest remainingFraction is 0.6 -> usedPercent 40
-    expect(result.weekly).toEqual({
-      usedPercent: 40,
-      windowMinutes: 150,
-      resetsAt: new Date('2026-04-24T14:30:00.000Z').getTime(),
-      resetDescription: null
-    })
+    expect(result.buckets).toHaveLength(1)
+    expect(result.buckets![0].name).toBe('Unknown (gemini-experimental)')
+    expect(result.session!.usedPercent).toBe(50)
   })
 
-  it('returns session null when no pro buckets exist', async () => {
-    const flashOnly = [
-      { remainingFraction: 0.7, resetTime: '2026-04-24T13:00:00.000Z', modelId: 'gemini-flash' }
-    ]
-
-    readFileMock.mockResolvedValue(JSON.stringify(validCreds))
-    netFetchMock
-      .mockResolvedValueOnce(makeResponse({ cloudaicompanionProject: 'proj-123' }))
-      .mockResolvedValueOnce(makeResponse(flashOnly))
+  it('handles empty bucket list with null session', async () => {
+    setupAuthJsonGoogleValid()
+    netFetchMock.mockResolvedValueOnce(makeResponse([]))
 
     const result = await fetchGeminiRateLimits()
 
     expect(result.status).toBe('ok')
+    expect(result.buckets).toEqual([])
     expect(result.session).toBeNull()
-    expect(result.weekly).not.toBeNull()
-    expect(result.weekly?.usedPercent).toBe(30)
   })
 
-  it('returns error on 401 from quota fetch when token refresh fails', async () => {
-    readFileMock.mockImplementation(async (filePath: string) => {
-      if (filePath.includes('oauth_creds.json')) {
-        return JSON.stringify(validCreds)
-      }
-      if (filePath.includes('oauth2.js')) {
-        return oauth2JsContent
-      }
-      throw new Error('Unexpected readFile call')
-    })
-    execSyncMock.mockReturnValue('/usr/local/bin/gemini')
-    netFetchMock
-      .mockResolvedValueOnce(makeResponse({ cloudaicompanionProject: 'proj-123' }))
-      .mockResolvedValueOnce(makeResponse('Unauthorized', 401))
-      .mockResolvedValueOnce(makeResponse({ error: 'invalid_grant' }, 400))
+  it('returns error when auth.json token is expired', async () => {
+    setupAuthJsonGoogleExpired()
 
     const result = await fetchGeminiRateLimits()
 
     expect(result.status).toBe('error')
-    expect(result.error).toContain('Token refresh failed')
+    expect(result.error).toContain('Token refresh unavailable for auth.json source')
+    expect(result.session).toBeNull()
+    expect(netFetchMock).not.toHaveBeenCalled()
+  })
+
+  it('returns error when auth.json refresh fails', async () => {
+    setupAuthJsonGoogleExpired()
+
+    const result = await fetchGeminiRateLimits()
+
+    expect(result.status).toBe('error')
+    expect(result.error).toContain('Token refresh unavailable for auth.json source')
     expect(result.session).toBeNull()
     expect(result.weekly).toBeNull()
   })
 
-  it('refreshes token on 401 from quota fetch and retries successfully', async () => {
-    readFileMock.mockImplementation(async (filePath: string) => {
-      if (filePath.includes('oauth_creds.json')) {
-        return JSON.stringify(validCreds)
-      }
-      if (filePath.includes('oauth2.js')) {
-        return oauth2JsContent
-      }
-      throw new Error('Unexpected readFile call')
-    })
-    execSyncMock.mockReturnValue('/usr/local/bin/gemini')
-    netFetchMock
-      .mockResolvedValueOnce(makeResponse({ cloudaicompanionProject: 'proj-123' }))
-      .mockResolvedValueOnce(makeResponse('Unauthorized', 401))
-      .mockResolvedValueOnce(makeResponse({ access_token: 'refreshed-token' }))
-      .mockResolvedValueOnce(makeResponse({ cloudaicompanionProject: 'proj-123' }))
-      .mockResolvedValueOnce(makeResponse(quotaResponse))
+  it('handles wrapped buckets response from quota API', async () => {
+    setupAuthJsonGoogleValid()
+    netFetchMock.mockResolvedValueOnce(makeResponse({ buckets: quotaResponse }))
 
     const result = await fetchGeminiRateLimits()
 
     expect(result.status).toBe('ok')
-    expect(result.error).toBeNull()
-    expect(result.session).not.toBeNull()
-
-    const refreshCall = netFetchMock.mock.calls.find(
-      (call) => typeof call[0] === 'string' && call[0].includes('oauth2.googleapis.com')
-    )
-    expect(refreshCall).toBeDefined()
+    expect(result.session?.usedPercent).toBe(25)
   })
 
-  it('returns error when quota fetch 401 and retry also 401', async () => {
+  it('handles top-level array response from quota API', async () => {
+    setupAuthJsonGoogleValid()
+    netFetchMock.mockResolvedValueOnce(makeResponse(quotaResponse))
+
+    const result = await fetchGeminiRateLimits()
+
+    expect(result.status).toBe('ok')
+    expect(result.session?.usedPercent).toBe(25)
+  })
+
+  it('uses managedProjectId when projectId is empty in pipe-delimited refresh', async () => {
+    const authWithEmptyProject = {
+      google: {
+        type: 'oauth',
+        access: 'auth-json-access-token',
+        expires: new Date('2026-04-24T13:00:00.000Z').getTime(),
+        refresh: 'refresh-token-abc||managed-789'
+      }
+    }
     readFileMock.mockImplementation(async (filePath: string) => {
-      if (filePath.includes('oauth_creds.json')) {
-        return JSON.stringify(validCreds)
+      if (filePath.includes('auth.json')) {
+        return JSON.stringify(authWithEmptyProject)
       }
-      if (filePath.includes('oauth2.js')) {
-        return oauth2JsContent
-      }
-      throw new Error('Unexpected readFile call')
+      throw { code: 'ENOENT' }
     })
-    execSyncMock.mockReturnValue('/usr/local/bin/gemini')
-    netFetchMock
-      .mockResolvedValueOnce(makeResponse({ cloudaicompanionProject: 'proj-123' }))
-      .mockResolvedValueOnce(makeResponse('Unauthorized', 401))
-      .mockResolvedValueOnce(makeResponse({ access_token: 'refreshed-token' }))
-      .mockResolvedValueOnce(makeResponse({ cloudaicompanionProject: 'proj-123' }))
-      .mockResolvedValueOnce(makeResponse('Unauthorized', 401))
+    netFetchMock.mockResolvedValueOnce(makeResponse(quotaResponse))
+
+    await fetchGeminiRateLimits()
+
+    const quotaCall = netFetchMock.mock.calls.find(
+      (call) => typeof call[0] === 'string' && call[0].includes('retrieveUserQuota')
+    )
+    expect(quotaCall).toBeDefined()
+    const quotaBody = JSON.parse((quotaCall![1] as RequestInit).body as string)
+    expect(quotaBody.project).toBe('managed-789')
+  })
+
+  it('returns error when auth.json quota fetch returns 401', async () => {
+    setupAuthJsonGoogleValid()
+    netFetchMock.mockResolvedValueOnce(makeResponse('Unauthorized', 401))
 
     const result = await fetchGeminiRateLimits()
 
     expect(result.status).toBe('error')
-    expect(result.error).toContain('Quota fetch failed (401)')
+    expect(result.error).toContain('Token refresh unavailable for auth.json source')
+    expect(result.session).toBeNull()
+  })
+
+  it('returns error when auth.json quota fetch returns 401 repeatedly', async () => {
+    setupAuthJsonGoogleValid()
+    netFetchMock.mockResolvedValueOnce(makeResponse('Unauthorized', 401))
+
+    const result = await fetchGeminiRateLimits()
+
+    expect(result.status).toBe('error')
+    expect(result.error).toContain('Token refresh unavailable for auth.json source')
+    expect(result.session).toBeNull()
+    expect(result.weekly).toBeNull()
+  })
+
+  it('returns error when auth.json quota fetch returns 401 without retry path', async () => {
+    setupAuthJsonGoogleValid()
+    netFetchMock.mockResolvedValueOnce(makeResponse('Unauthorized', 401))
+
+    const result = await fetchGeminiRateLimits()
+
+    expect(result.status).toBe('error')
+    expect(result.error).toContain('Token refresh unavailable for auth.json source')
     expect(result.session).toBeNull()
     expect(result.weekly).toBeNull()
   })

@@ -11,12 +11,18 @@ export type RateLimitWindow = {
 
 export type ProviderRateLimitStatus = 'idle' | 'fetching' | 'ok' | 'error' | 'unavailable'
 
+export type RateLimitBucket = RateLimitWindow & {
+  name: string
+}
+
 export type ProviderRateLimits = {
   provider: 'claude' | 'codex' | 'gemini' | 'opencode-go'
   /** 5-hour session window, null if not available. */
   session: RateLimitWindow | null
   /** 7-day weekly window, null if not available. */
   weekly: RateLimitWindow | null
+  /** Named per-model buckets (Gemini only). */
+  buckets?: RateLimitBucket[]
   /** Unix ms timestamp of the last successful data update. */
   updatedAt: number
   /** Human-readable error message, null when status is 'ok'. */

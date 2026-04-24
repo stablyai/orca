@@ -222,6 +222,51 @@ describe('RateLimitService', () => {
     expect(state.opencodeGo?.session?.usedPercent).toBe(40)
   })
 
+  it('preserves Gemini buckets through getState after fetch', async () => {
+    const service = new RateLimitService()
+
+    const geminiWithBuckets: ProviderRateLimits = {
+      provider: 'gemini',
+      session: { usedPercent: 80, windowMinutes: 300, resetsAt: null, resetDescription: null },
+      weekly: null,
+      buckets: [
+        {
+          name: 'Pro',
+          usedPercent: 30,
+          windowMinutes: 300,
+          resetsAt: null,
+          resetDescription: null
+        },
+        {
+          name: 'Flash',
+          usedPercent: 80,
+          windowMinutes: 300,
+          resetsAt: null,
+          resetDescription: null
+        }
+      ],
+      updatedAt: Date.now(),
+      error: null,
+      status: 'ok'
+    }
+
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
+    vi.mocked(fetchGeminiRateLimits).mockResolvedValueOnce(geminiWithBuckets)
+    vi.mocked(fetchOpenCodeGoRateLimits).mockResolvedValueOnce(
+      okProvider('opencode-go', 0, Date.now())
+    )
+
+    await service.refresh()
+
+    const state = service.getState()
+    expect(state.gemini?.buckets).toHaveLength(2)
+    expect(state.gemini?.buckets![0].name).toBe('Pro')
+    expect(state.gemini?.buckets![1].name).toBe('Flash')
+    // Why: session summary is derived from bucket data and must match the most constrained bucket.
+    expect(state.gemini?.session?.usedPercent).toBe(80)
+  })
+
   it('isolates provider failures so one error does not block others', async () => {
     const service = new RateLimitService()
     service.setSettingsResolver(() => ({ opencodeSessionCookie: '' }))

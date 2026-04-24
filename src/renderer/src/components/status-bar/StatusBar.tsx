@@ -625,9 +625,11 @@ function StatusBarInner(): React.JSX.Element | null {
   // configured but currently unavailable.
   const showClaude = claude && statusBarItems.includes('claude')
   const showCodex = codex && statusBarItems.includes('codex')
-  const showGemini = gemini && gemini.status !== 'unavailable' && statusBarItems.includes('gemini')
-  const showOpencodeGo =
-    opencodeGo && opencodeGo.status !== 'unavailable' && statusBarItems.includes('opencode-go')
+  // Why: hide only when the state hasn't loaded yet (null), not when unavailable.
+  // Gemini shows if credentials exist; OpenCode Go shows always so users can see
+  // the provider and know to configure the cookie in Settings.
+  const showGemini = gemini !== null && statusBarItems.includes('gemini')
+  const showOpencodeGo = opencodeGo !== null && statusBarItems.includes('opencode-go')
   const showSsh = statusBarItems.includes('ssh')
   const showSessions = statusBarItems.includes('sessions')
   const showMemory = statusBarItems.includes('memory')

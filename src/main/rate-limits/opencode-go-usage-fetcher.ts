@@ -1,80 +1,36 @@
 import { net } from 'electron'
-import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
+import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 
 const OPENCODE_SERVER_URL = 'https://opencode.ai/_server'
 const API_TIMEOUT_MS = 10_000
 
-// Why: OpenCode Go returns usage as serialized JS objects (text/javascript)
-// rather than JSON. We regex-extract values because the format is stable
-// and avoids eval() of untrusted server output.
+function parseUsageFromJs(text: string): {
+  primaryUsed: number
+  primaryLimit: number
+  secondaryUsed: number
+  secondaryLimit: number
+} | null {
+  // Extract the first two "used":<num> and "limit":<num> pairs from the
+  // text/javascript payload. Primary (rolling) is the first pair; secondary
+  // (weekly) is the second pair.
+  const usedMatches = [...text.matchAll(/"used":\s*(\d+)/g)]
+  const limitMatches = [...text.matchAll(/"limit":\s*(\d+)/g)]
 
-function extractWorkspaceId(body: string): string | null {
-  const match = body.match(/wrk_[A-Za-z0-9]+/)
-  return match ? match[0] : null
-}
-
-function extractUsageBlock(body: string, blockName: string): string | null {
-  const pattern = new RegExp(`${blockName}\\s*:\\s*\\{([^}]*)\\}`)
-  const match = body.match(pattern)
-  return match ? match[1] : null
-}
-
-function parseUsagePercent(block: string): number | null {
-  const match = block.match(/usagePercent\s*:\s*(-?\d+\.?\d*)/)
-  if (!match) {
+  if (usedMatches.length === 0 || limitMatches.length === 0) {
     return null
   }
-  const val = parseFloat(match[1])
-  return isNaN(val) ? null : val
-}
 
-function parseResetInSec(block: string): number | null {
-  const match = block.match(/resetInSec\s*:\s*(\d+)/)
-  if (!match) {
-    return null
-  }
-  const val = parseInt(match[1], 10)
-  return isNaN(val) ? null : val
-}
+  const primaryUsed = parseInt(usedMatches[0][1], 10)
+  const primaryLimit = parseInt(limitMatches[0][1], 10)
 
-function buildWindow(block: string | null, windowMinutes: number): RateLimitWindow | null {
-  if (!block) {
-    return null
-  }
-  const usedPercent = parseUsagePercent(block)
-  const resetInSec = parseResetInSec(block)
-  if (usedPercent === null) {
-    return null
-  }
-  return {
-    usedPercent: Math.min(100, Math.max(0, usedPercent)),
-    windowMinutes,
-    resetsAt: resetInSec !== null ? Date.now() + resetInSec * 1000 : null,
-    resetDescription: null
-  }
-}
+  const secondaryUsed = usedMatches.length > 1 ? parseInt(usedMatches[1][1], 10) : 0
+  const secondaryLimit = limitMatches.length > 1 ? parseInt(limitMatches[1][1], 10) : 0
 
-async function postToServer(body: unknown, cookie: string): Promise<Response> {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS)
-
-  try {
-    return await net.fetch(OPENCODE_SERVER_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Cookie: cookie
-      },
-      body: JSON.stringify(body),
-      signal: controller.signal
-    })
-  } finally {
-    clearTimeout(timeout)
-  }
+  return { primaryUsed, primaryLimit, secondaryUsed, secondaryLimit }
 }
 
 export async function fetchOpenCodeGoRateLimits(cookie: string): Promise<ProviderRateLimits> {
-  if (!cookie) {
+  if (!cookie.trim()) {
     return {
       provider: 'opencode-go',
       session: null,
@@ -85,35 +41,43 @@ export async function fetchOpenCodeGoRateLimits(cookie: string): Promise<Provide
     }
   }
 
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS)
+
   try {
-    // Step 1: fetch workspace ID
-    const workspaceRes = await postToServer({ path: 'workspaces', args: [] }, cookie)
-    if (!workspaceRes.ok) {
+    // Step 1: workspaces — validates the session cookie
+    const workspacesRes = await net.fetch(OPENCODE_SERVER_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Cookie: cookie
+      },
+      body: JSON.stringify({ method: 'workspaces' }),
+      signal: controller.signal
+    })
+
+    if (!workspacesRes.ok) {
       return {
         provider: 'opencode-go',
         session: null,
         weekly: null,
         updatedAt: Date.now(),
-        error: `Workspace fetch failed (${workspaceRes.status})`,
+        error: `Workspaces fetch failed (${workspacesRes.status})`,
         status: 'error'
       }
     }
 
-    const workspaceBody = await workspaceRes.text()
-    const workspaceId = extractWorkspaceId(workspaceBody)
-    if (!workspaceId) {
-      return {
-        provider: 'opencode-go',
-        session: null,
-        weekly: null,
-        updatedAt: Date.now(),
-        error: 'Workspace ID not found in response',
-        status: 'error'
-      }
-    }
+    // Step 2: subscription.get — fetches usage data as text/javascript
+    const subRes = await net.fetch(OPENCODE_SERVER_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Cookie: cookie
+      },
+      body: JSON.stringify({ method: 'subscription.get' }),
+      signal: controller.signal
+    })
 
-    // Step 2: fetch subscription usage
-    const subRes = await postToServer({ path: 'subscription.get', args: [{ workspaceId }] }, cookie)
     if (!subRes.ok) {
       return {
         provider: 'opencode-go',
@@ -125,27 +89,46 @@ export async function fetchOpenCodeGoRateLimits(cookie: string): Promise<Provide
       }
     }
 
-    const subBody = await subRes.text()
-    const rollingBlock = extractUsageBlock(subBody, 'rollingUsage')
-    const weeklyBlock = extractUsageBlock(subBody, 'weeklyUsage')
+    const subText = await subRes.text()
+    const parsed = parseUsageFromJs(subText)
 
-    const session = buildWindow(rollingBlock, 300)
-    const weekly = buildWindow(weeklyBlock, 10080)
-
-    if (!session) {
+    if (!parsed || parsed.primaryLimit === 0) {
       return {
         provider: 'opencode-go',
         session: null,
         weekly: null,
         updatedAt: Date.now(),
-        error: 'Failed to parse usage data from response',
+        error: 'Invalid usage data',
         status: 'error'
       }
     }
 
+    const sessionUsedPercent = Math.min(
+      100,
+      Math.max(0, Math.round((parsed.primaryUsed / parsed.primaryLimit) * 100))
+    )
+
+    const weekly =
+      parsed.secondaryLimit > 0
+        ? {
+            usedPercent: Math.min(
+              100,
+              Math.max(0, Math.round((parsed.secondaryUsed / parsed.secondaryLimit) * 100))
+            ),
+            windowMinutes: 10080,
+            resetsAt: null,
+            resetDescription: null
+          }
+        : null
+
     return {
       provider: 'opencode-go',
-      session,
+      session: {
+        usedPercent: sessionUsedPercent,
+        windowMinutes: 300,
+        resetsAt: null,
+        resetDescription: null
+      },
       weekly,
       updatedAt: Date.now(),
       error: null,
@@ -161,5 +144,7 @@ export async function fetchOpenCodeGoRateLimits(cookie: string): Promise<Provide
       error: message,
       status: 'error'
     }
+  } finally {
+    clearTimeout(timeout)
   }
 }

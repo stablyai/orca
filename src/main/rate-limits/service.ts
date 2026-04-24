@@ -335,6 +335,7 @@ export class RateLimitService {
     const codexProvenance = codexHomePath ? `managed:${codexHomePath}` : 'system'
     const codexGeneration = this.codexFetchGeneration
     const previousState = this.state
+    const cookie = this.settingsResolver?.().opencodeSessionCookie ?? ''
 
     // Mark all providers as fetching while keeping previous data visible.
     // Codex account changes clear Codex separately before this method is
@@ -347,13 +348,11 @@ export class RateLimitService {
       opencodeGo: this.withFetchingStatus(previousState.opencodeGo, 'opencode-go')
     })
 
-    const opencodeSessionCookie = this.settingsResolver?.().opencodeSessionCookie ?? ''
-
     const [claudeResult, codexResult, geminiResult, opencodeGoResult] = await Promise.allSettled([
       fetchClaudeRateLimits({ authPreparation: claudeAuthPreparation }),
       fetchCodexRateLimits({ codexHomePath }),
       fetchGeminiRateLimits(),
-      fetchOpenCodeGoRateLimits(opencodeSessionCookie)
+      fetchOpenCodeGoRateLimits(cookie)
     ])
 
     const claude =

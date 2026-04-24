@@ -1,8 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { netFetchMock } = vi.hoisted(() => ({
-  netFetchMock: vi.fn()
-}))
+const netFetchMock = vi.hoisted(() => vi.fn())
 
 vi.mock('electron', () => ({
   net: { fetch: netFetchMock }
@@ -27,6 +25,7 @@ describe('fetchOpenCodeGoRateLimits', () => {
 
   it('returns unavailable when cookie is empty', async () => {
     const result = await fetchOpenCodeGoRateLimits('')
+
     expect(result.status).toBe('unavailable')
     expect(result.provider).toBe('opencode-go')
     expect(result.session).toBeNull()
@@ -35,120 +34,150 @@ describe('fetchOpenCodeGoRateLimits', () => {
     expect(netFetchMock).not.toHaveBeenCalled()
   })
 
+  it('returns unavailable when cookie is only whitespace', async () => {
+    const result = await fetchOpenCodeGoRateLimits('   ')
+
+    expect(result.status).toBe('unavailable')
+    expect(netFetchMock).not.toHaveBeenCalled()
+  })
+
   it('returns correct primary and secondary windows for a valid response', async () => {
     netFetchMock
-      .mockResolvedValueOnce(makeResponse('{id:"wrk_abc123",name:"workspace"}'))
+      .mockResolvedValueOnce(makeResponse('some workspaces js'))
       .mockResolvedValueOnce(
         makeResponse(
-          '{rollingUsage:{usagePercent:45.5,resetInSec:3600},weeklyUsage:{usagePercent:12,resetInSec:604800}}'
+          'window.__usage = { "primary": { "used": 150, "limit": 500 }, "secondary": { "used": 20, "limit": 100 } };'
         )
       )
 
-    const result = await fetchOpenCodeGoRateLimits('session=valid')
+    const result = await fetchOpenCodeGoRateLimits('session=abc123')
 
     expect(netFetchMock).toHaveBeenCalledTimes(2)
+    expect(netFetchMock).toHaveBeenNthCalledWith(
+      1,
+      'https://opencode.ai/_server',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          'Content-Type': 'application/json',
+          Cookie: 'session=abc123'
+        }),
+        body: JSON.stringify({ method: 'workspaces' })
+      })
+    )
+    expect(netFetchMock).toHaveBeenNthCalledWith(
+      2,
+      'https://opencode.ai/_server',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          'Content-Type': 'application/json',
+          Cookie: 'session=abc123'
+        }),
+        body: JSON.stringify({ method: 'subscription.get' })
+      })
+    )
+
     expect(result.status).toBe('ok')
     expect(result.provider).toBe('opencode-go')
     expect(result.error).toBeNull()
-
     expect(result.session).toEqual({
-      usedPercent: 45.5,
+      usedPercent: 30,
       windowMinutes: 300,
-      resetsAt: Date.now() + 3600 * 1000,
+      resetsAt: null,
       resetDescription: null
     })
-
     expect(result.weekly).toEqual({
-      usedPercent: 12,
+      usedPercent: 20,
       windowMinutes: 10080,
-      resetsAt: Date.now() + 604800 * 1000,
+      resetsAt: null,
       resetDescription: null
     })
   })
 
-  it('returns error on 401 response from workspace fetch', async () => {
-    netFetchMock.mockResolvedValueOnce(makeResponse('Unauthorized', 401))
-
-    const result = await fetchOpenCodeGoRateLimits('session=bad')
-
-    expect(result.status).toBe('error')
-    expect(result.error).toBe('Workspace fetch failed (401)')
-    expect(result.session).toBeNull()
-    expect(result.weekly).toBeNull()
-  })
-
-  it('returns error when response body is malformed and cannot be parsed', async () => {
+  it('returns ok with null weekly when secondary limit is missing', async () => {
     netFetchMock
-      .mockResolvedValueOnce(makeResponse('{id:"wrk_abc123"}'))
-      .mockResolvedValueOnce(makeResponse('not javascript at all'))
+      .mockResolvedValueOnce(makeResponse('some workspaces js'))
+      .mockResolvedValueOnce(
+        makeResponse('window.__usage = { "primary": { "used": 10, "limit": 100 } };')
+      )
 
-    const result = await fetchOpenCodeGoRateLimits('session=valid')
+    const result = await fetchOpenCodeGoRateLimits('session=abc123')
 
-    expect(result.status).toBe('error')
-    expect(result.error).toBe('Failed to parse usage data from response')
-    expect(result.session).toBeNull()
-    expect(result.weekly).toBeNull()
-  })
-
-  it('returns error when workspace fetch succeeds but subscription fetch fails', async () => {
-    netFetchMock
-      .mockResolvedValueOnce(makeResponse('{id:"wrk_abc123",name:"workspace"}'))
-      .mockResolvedValueOnce(makeResponse('Internal Server Error', 500))
-
-    const result = await fetchOpenCodeGoRateLimits('session=valid')
-
-    expect(result.status).toBe('error')
-    expect(result.error).toBe('Subscription fetch failed (500)')
-    expect(result.session).toBeNull()
-    expect(result.weekly).toBeNull()
-  })
-
-  it('returns error when workspace ID is not found in response', async () => {
-    netFetchMock.mockResolvedValueOnce(makeResponse('{items:[]}'))
-
-    const result = await fetchOpenCodeGoRateLimits('session=valid')
-
-    expect(result.status).toBe('error')
-    expect(result.error).toBe('Workspace ID not found in response')
-    expect(result.session).toBeNull()
+    expect(result.status).toBe('ok')
+    expect(result.session?.usedPercent).toBe(10)
     expect(result.weekly).toBeNull()
   })
 
   it('caps usedPercent at 100 and floors at 0', async () => {
     netFetchMock
-      .mockResolvedValueOnce(makeResponse('{id:"wrk_abc123"}'))
+      .mockResolvedValueOnce(makeResponse('ok'))
       .mockResolvedValueOnce(
         makeResponse(
-          '{rollingUsage:{usagePercent:150,resetInSec:100},weeklyUsage:{usagePercent:-10,resetInSec:200}}'
+          'window.__usage = { "primary": { "used": 150, "limit": 100 }, "secondary": { "used": -10, "limit": 50 } };'
         )
       )
 
-    const result = await fetchOpenCodeGoRateLimits('session=valid')
+    const result = await fetchOpenCodeGoRateLimits('session=abc123')
 
     expect(result.status).toBe('ok')
     expect(result.session?.usedPercent).toBe(100)
     expect(result.weekly?.usedPercent).toBe(0)
   })
 
-  it('works when weeklyUsage is missing but rollingUsage is present', async () => {
-    netFetchMock
-      .mockResolvedValueOnce(makeResponse('{id:"wrk_abc123"}'))
-      .mockResolvedValueOnce(makeResponse('{rollingUsage:{usagePercent:50,resetInSec:1000}}'))
+  it('returns error on 401 from workspaces fetch', async () => {
+    netFetchMock.mockResolvedValueOnce(makeResponse('Unauthorized', 401))
 
-    const result = await fetchOpenCodeGoRateLimits('session=valid')
+    const result = await fetchOpenCodeGoRateLimits('session=abc123')
 
-    expect(result.status).toBe('ok')
-    expect(result.session).not.toBeNull()
+    expect(result.status).toBe('error')
+    expect(result.error).toBe('Workspaces fetch failed (401)')
+    expect(result.session).toBeNull()
     expect(result.weekly).toBeNull()
+  })
+
+  it('returns error on 401 from subscription fetch', async () => {
+    netFetchMock
+      .mockResolvedValueOnce(makeResponse('ok'))
+      .mockResolvedValueOnce(makeResponse('Unauthorized', 401))
+
+    const result = await fetchOpenCodeGoRateLimits('session=abc123')
+
+    expect(result.status).toBe('error')
+    expect(result.error).toBe('Subscription fetch failed (401)')
+  })
+
+  it('returns error when usage data cannot be parsed', async () => {
+    netFetchMock
+      .mockResolvedValueOnce(makeResponse('ok'))
+      .mockResolvedValueOnce(makeResponse('window.__usage = {};'))
+
+    const result = await fetchOpenCodeGoRateLimits('session=abc123')
+
+    expect(result.status).toBe('error')
+    expect(result.error).toBe('Invalid usage data')
+  })
+
+  it('returns error when primary limit is zero', async () => {
+    netFetchMock
+      .mockResolvedValueOnce(makeResponse('ok'))
+      .mockResolvedValueOnce(
+        makeResponse('window.__usage = { "primary": { "used": 0, "limit": 0 } };')
+      )
+
+    const result = await fetchOpenCodeGoRateLimits('session=abc123')
+
+    expect(result.status).toBe('error')
+    expect(result.error).toBe('Invalid usage data')
   })
 
   it('never logs the cookie in error messages', async () => {
     netFetchMock.mockRejectedValueOnce(new Error('network timeout'))
 
-    const result = await fetchOpenCodeGoRateLimits('session=super-secret')
+    const result = await fetchOpenCodeGoRateLimits('session=secret123')
 
     expect(result.status).toBe('error')
     expect(result.error).toBe('network timeout')
-    expect(result.error).not.toContain('super-secret')
+    expect(result.error).not.toContain('secret123')
   })
 })

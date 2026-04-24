@@ -72,6 +72,23 @@ function ErrorMessage({
 }
 
 // ---------------------------------------------------------------------------
+// Window section derivation
+// ---------------------------------------------------------------------------
+
+export function getWindowSections(
+  p: ProviderRateLimits
+): { label: string; window: RateLimitWindow | null }[] {
+  if (p.buckets?.length) {
+    const bucketSections = p.buckets.map((b) => ({ label: b.name, window: b as RateLimitWindow }))
+    return [...bucketSections, { label: 'Weekly', window: p.weekly }]
+  }
+  return [
+    { label: 'Session', window: p.session },
+    { label: 'Weekly', window: p.weekly }
+  ]
+}
+
+// ---------------------------------------------------------------------------
 // Tooltip — progress bar section for a single window
 // ---------------------------------------------------------------------------
 
@@ -182,11 +199,9 @@ export function ProviderTooltip({ p }: { p: ProviderRateLimits | null }): React.
       {/* Divider */}
       <div className="border-t border-background/15" />
 
-      {/* Session window */}
-      <TooltipWindowSection w={p.session} label="Session" />
-
-      {/* Weekly window */}
-      <TooltipWindowSection w={p.weekly} label="Weekly" />
+      {getWindowSections(p).map((s) => (
+        <TooltipWindowSection key={s.label} w={s.window} label={s.label} />
+      ))}
 
       {/* Stale data warning */}
       {p.error ? <ErrorMessage message={p.error} inverted /> : null}
@@ -294,8 +309,9 @@ export function ProviderPanel({
 
       <div className={`border-t ${dividerClass}`} />
 
-      <PanelWindowSection w={p.session} label="Session" />
-      <PanelWindowSection w={p.weekly} label="Weekly" />
+      {getWindowSections(p).map((s) => (
+        <PanelWindowSection key={s.label} w={s.window} label={s.label} />
+      ))}
 
       {p.error ? <ErrorMessage message={p.error} inverted={inverted} /> : null}
     </div>
