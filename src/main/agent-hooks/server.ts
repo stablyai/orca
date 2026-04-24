@@ -41,6 +41,11 @@ const warnedEnvs = new Set<string>()
 // inserting the new key) — the diagnostic value of "warn once" is preserved
 // for the common case while memory stays bounded against untrusted input.
 const MAX_WARNED_KEYS = 32
+// Why: hook events can arrive while Orca is windowless (common on macOS when
+// the user closes the window but leaves the app running). Retain the latest
+// normalized status per pane so reopening the window can replay current agent
+// state instead of showing nothing until the next hook event happens.
+const lastStatusByPaneKey = new Map<string, AgentHookEventPayload>()
 
 // Why: Claude documents `prompt` on UserPromptSubmit; other agents may use
 // different field names. Probe a small allowlist so we can surface the real
@@ -855,6 +860,12 @@ export class AgentHookServer {
 
   setListener(listener: ((payload: AgentHookEventPayload) => void) | null): void {
     this.onAgentStatus = listener
+    if (!listener) {
+      return
+    }
+    for (const payload of lastStatusByPaneKey.values()) {
+      listener(payload)
+    }
   }
 
   async start(options?: { env?: string }): Promise<void> {
@@ -910,6 +921,7 @@ export class AgentHookServer {
 
         const payload = normalizeHookPayload(source, body, this.env)
         if (payload) {
+          lastStatusByPaneKey.set(payload.paneKey, payload)
           this.onAgentStatus?.(payload)
         }
 
@@ -962,6 +974,7 @@ export class AgentHookServer {
     // does not inherit stale prompt/tool state from the previous run.
     lastPromptByPaneKey.clear()
     lastToolByPaneKey.clear()
+    lastStatusByPaneKey.clear()
   }
 
   clearPaneState(paneKey: string): void {
@@ -971,6 +984,7 @@ export class AgentHookServer {
     // memory for the life of the main process.
     lastPromptByPaneKey.delete(paneKey)
     lastToolByPaneKey.delete(paneKey)
+    lastStatusByPaneKey.delete(paneKey)
   }
 
   buildPtyEnv(): Record<string, string> {
@@ -998,5 +1012,6 @@ export const _internals = {
   resetCachesForTests: (): void => {
     lastPromptByPaneKey.clear()
     lastToolByPaneKey.clear()
+    lastStatusByPaneKey.clear()
   }
 }

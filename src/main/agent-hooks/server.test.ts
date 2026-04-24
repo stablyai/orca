@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { _internals } from './server'
+import { AgentHookServer, _internals } from './server'
 
 const PANE = 'tab-1:0'
 
@@ -33,6 +33,79 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks()
+})
+
+describe('AgentHookServer listener replay', () => {
+  it('replays the latest retained pane status when a listener attaches after windowless events', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      expect(env.ORCA_AGENT_HOOK_PORT).toBeTruthy()
+      expect(env.ORCA_AGENT_HOOK_TOKEN).toBeTruthy()
+
+      const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+        },
+        body: JSON.stringify(
+          buildBody({
+            hook_event_name: 'UserPromptSubmit',
+            prompt: 'replay me'
+          })
+        )
+      })
+      expect(response.status).toBe(204)
+
+      const listener = vi.fn()
+      server.setListener(listener)
+
+      expect(listener).toHaveBeenCalledTimes(1)
+      expect(listener).toHaveBeenCalledWith({
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: expect.objectContaining({
+          state: 'working',
+          prompt: 'replay me',
+          agentType: 'claude'
+        })
+      })
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('does not replay cleared pane state to a newly attached listener', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/codex`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+        },
+        body: JSON.stringify(
+          buildBody({
+            hook_event_name: 'UserPromptSubmit',
+            prompt: 'clear me'
+          })
+        )
+      })
+
+      server.clearPaneState(PANE)
+      const listener = vi.fn()
+      server.setListener(listener)
+
+      expect(listener).not.toHaveBeenCalled()
+    } finally {
+      server.stop()
+    }
+  })
 })
 
 describe('Claude hook normalization', () => {

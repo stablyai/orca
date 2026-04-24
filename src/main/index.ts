@@ -142,12 +142,6 @@ function openMainWindow(): BrowserWindow {
   window.on('closed', () => {
     if (mainWindow === window) {
       mainWindow = null
-      if (AGENT_DASHBOARD_ENABLED) {
-        // Why: the listener closure captured the (now-destroyed) window; clear
-        // it so hook POSTs during the windowless state do not fire a no-op
-        // listener that retains the stale window reference.
-        agentHookServer.setListener(null)
-      }
     }
   })
   mainWindow = window
@@ -263,20 +257,24 @@ app.whenReady().then(async () => {
   }
   setAppRuntimeFlags({ daemonEnabledAtStartup: daemonStarted })
 
-  // Why: all server binds are independent and neither blocks window creation.
-  // Parallelizing them with the window open shaves ~100-200ms off cold start.
+  if (AGENT_DASHBOARD_ENABLED) {
+    try {
+      // Why: PTY spawn env reads ORCA_AGENT_HOOK_* from the live server state.
+      // Start the hook server before opening the window so restored/spawned
+      // terminals never race ahead without hook env on first launch.
+      await agentHookServer.start({ env: app.isPackaged ? 'production' : 'development' })
+    } catch (error) {
+      // Why: Claude/Codex/Gemini/OpenCode hook callbacks are sidebar
+      // enrichment only. Orca must still boot even if the local loopback
+      // receiver cannot bind on this launch.
+      console.error('[agent-hooks] Failed to start local hook server:', error)
+    }
+  }
+
+  // Why: once the hook server is ready (or has already failed open), window
+  // creation and runtime RPC startup are independent.
   const [win] = await Promise.all([
     Promise.resolve(openMainWindow()),
-    AGENT_DASHBOARD_ENABLED
-      ? agentHookServer
-          .start({ env: app.isPackaged ? 'production' : 'development' })
-          .catch((error) => {
-            // Why: Claude/Codex/Gemini/OpenCode hook callbacks are sidebar enrichment
-            // only. Orca must still boot even if the local loopback receiver cannot
-            // bind on this launch.
-            console.error('[agent-hooks] Failed to start local hook server:', error)
-          })
-      : Promise.resolve(),
     runtimeRpc.start().catch((error) => {
       console.error('[runtime] Failed to start local RPC transport:', error)
     })
