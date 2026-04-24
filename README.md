@@ -105,7 +105,7 @@ Orca ships with a built-in browser right inside your worktree. Preview your app 
 
 **Agent orchestration from your terminal.**
 
-Let your AI agent control your IDE. Use AI to add repos to your IDE, spin up worktrees, and update the current worktree's comment with meaningful progress checkpoints directly from the terminal. Ships with the Orca IDE (install under Settings).
+Let your AI agent control your IDE. Use AI to add projects to your IDE, spin up worktrees, and update the current worktree's comment with meaningful progress checkpoints directly from the terminal. Ships with the Orca IDE (install under Settings).
 
 ```bash
 npx skills add https://github.com/stablyai/orca --skill orca-cli

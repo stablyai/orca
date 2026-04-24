@@ -195,7 +195,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   })
 
   // Why: pickDirectory is a generic "choose a folder" picker, separate from
-  // pickFolder which is specifically the "add repo" flow. Clone needs a
+  // pickFolder which is specifically the "add project" flow. Clone needs a
   // destination directory that may not be a git repo yet.
   ipcMain.handle('repos:pickDirectory', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {

@@ -9,7 +9,7 @@ export type RemoteDirEntry = {
 // Why: the relay's fs.readDir enforces workspace root ACLs, which aren't
 // registered until a repo is added. This handler uses a raw SSH exec channel
 // to list directories, allowing the user to browse the remote filesystem
-// during the "add remote repo" flow before any roots exist.
+// during the "add remote project" flow before any roots exist.
 export function registerSshBrowseHandler(
   getConnectionManager: () => SshConnectionManager | null
 ): void {

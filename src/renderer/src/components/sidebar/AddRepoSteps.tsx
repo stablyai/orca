@@ -16,7 +16,7 @@ import { RemoteFileBrowser } from './RemoteFileBrowser'
 import type { Repo } from '../../../../shared/types'
 import type { SshTarget, SshConnectionState } from '../../../../shared/ssh-types'
 
-// ── Remote repo hook ────────────────────────────────────────────────
+// ── Remote project hook ─────────────────────────────────────────────
 
 export function useRemoteRepo(
   fetchWorktrees: (repoId: string) => Promise<void>,
@@ -99,14 +99,14 @@ export function useRemoteRepo(
         useAppStore.setState({ repos: updated })
       }
 
-      toast.success('Remote repository added', { description: repo.displayName })
+      toast.success('Remote project added', { description: repo.displayName })
       setAddedRepo(repo)
       await fetchWorktrees(repo.id)
       setStep('setup')
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       if (message.includes('Not a valid git repository')) {
-        // Why: match the local add-repo flow — show confirmation dialog so
+        // Why: match the local add-project flow — show confirmation dialog so
         // users understand git features will be unavailable, rather than
         // silently adding as a folder.
         closeModal()
@@ -187,7 +187,7 @@ export function RemoteStep({
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Open remote repo</DialogTitle>
+        <DialogTitle>Open remote project</DialogTitle>
         <DialogDescription>
           Choose a connected SSH target and enter the path to a Git repository.
         </DialogDescription>
@@ -273,7 +273,7 @@ export function RemoteStep({
           disabled={!selectedTargetId || !remotePath.trim() || isAddingRemote}
           className="w-full"
         >
-          {isAddingRemote ? 'Adding...' : 'Add remote repo'}
+          {isAddingRemote ? 'Adding...' : 'Add remote project'}
         </Button>
       </div>
     </>

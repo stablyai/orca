@@ -917,7 +917,7 @@ function App(): React.JSX.Element {
                       above the sidebar. Without a flex-1/min-h-0 slot here,
                       the sidebar falls back to its content height, so the
                       worktree list loses its scroll viewport and the fixed
-                      bottom toolbar (including Add Repo) gets pushed offscreen. */}
+                      bottom toolbar (including Add Project) gets pushed offscreen. */}
                   <Sidebar />
                 </div>
               </div>
