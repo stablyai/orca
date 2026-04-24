@@ -3,15 +3,15 @@ import { renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { grantDirAcl, isPermissionError } from '../win32-utils'
 
-export function writeFileAtomically(
+export async function writeFileAtomically(
   targetPath: string,
   contents: string,
   options?: { mode?: number }
-): void {
+): Promise<void> {
   const tmpPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`
   try {
     writeFileSync(tmpPath, contents, { encoding: 'utf-8', mode: options?.mode })
-    renameWithRetry(tmpPath, targetPath)
+    await renameWithRetry(tmpPath, targetPath)
   } catch (error) {
     rmSync(tmpPath, { force: true })
     // Why: on Windows, Chromium's renderer initialization calls
@@ -42,7 +42,7 @@ export function writeFileAtomically(
 // Why: on Windows, renameSync can fail with EPERM/EACCES if another process
 // (antivirus, Codex CLI) holds the target file open. A short retry avoids
 // transient failures without masking real permission errors.
-function renameWithRetry(source: string, target: string): void {
+async function renameWithRetry(source: string, target: string): Promise<void> {
   const maxAttempts = process.platform === 'win32' ? 3 : 1
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
@@ -52,10 +52,7 @@ function renameWithRetry(source: string, target: string): void {
       const code = (error as NodeJS.ErrnoException).code
       if (attempt < maxAttempts && (code === 'EPERM' || code === 'EACCES')) {
         const delayMs = attempt * 50
-        const until = Date.now() + delayMs
-        while (Date.now() < until) {
-          /* busy-wait: setTimeout is async and callers must stay sync */
-        }
+        await new Promise((resolve) => setTimeout(resolve, delayMs))
         continue
       }
       throw error

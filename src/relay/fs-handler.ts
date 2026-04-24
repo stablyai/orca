@@ -142,7 +142,7 @@ export class FsHandler {
     const targetPath = expandTilde(params.targetPath as string)
     await this.context.validatePathResolved(targetPath)
     const recursive = params.recursive as boolean | undefined
-    const stats = await stat(targetPath)
+    const stats = await lstat(targetPath)
     if (stats.isDirectory() && !recursive) {
       throw new Error('Cannot delete directory without recursive flag')
     }

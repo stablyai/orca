@@ -29,6 +29,7 @@ type AuthJson = {
 
 export async function readAuthJson(): Promise<AuthJson | null> {
   const candidates = [
+    process.env.APPDATA ? path.join(process.env.APPDATA, 'opencode', 'auth.json') : null,
     process.env.XDG_DATA_HOME
       ? path.join(process.env.XDG_DATA_HOME, 'opencode', 'auth.json')
       : null,
@@ -76,11 +77,16 @@ export async function readGeminiCredentials(): Promise<GeminiCredentials | null>
   }
 }
 
+export type RefreshTokenResult = {
+  accessToken: string | null
+  newRefreshToken: string | null
+}
+
 export async function refreshAccessToken(
   refreshToken: string,
   clientId: string,
   clientSecret: string
-): Promise<string | null> {
+): Promise<RefreshTokenResult> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS)
 
@@ -98,11 +104,14 @@ export async function refreshAccessToken(
     })
 
     if (!res.ok) {
-      return null
+      return { accessToken: null, newRefreshToken: null }
     }
 
-    const data = (await res.json()) as { access_token?: string }
-    return typeof data.access_token === 'string' ? data.access_token : null
+    const data = (await res.json()) as { access_token?: string; refresh_token?: string }
+    return {
+      accessToken: typeof data.access_token === 'string' ? data.access_token : null,
+      newRefreshToken: typeof data.refresh_token === 'string' ? data.refresh_token : null
+    }
   } finally {
     clearTimeout(timeout)
   }
@@ -124,11 +133,14 @@ export async function loadProjectId(accessToken: string): Promise<string> {
     })
 
     if (!res.ok) {
-      return ''
+      throw new Error(`Failed to load Gemini project ID (HTTP ${res.status})`)
     }
 
     const data = (await res.json()) as { cloudaicompanionProject?: string }
-    return typeof data.cloudaicompanionProject === 'string' ? data.cloudaicompanionProject : ''
+    if (typeof data.cloudaicompanionProject !== 'string') {
+      throw new Error('Gemini project ID not found in API response')
+    }
+    return data.cloudaicompanionProject
   } finally {
     clearTimeout(timeout)
   }
@@ -137,7 +149,9 @@ export async function loadProjectId(accessToken: string): Promise<string> {
 // Why: accepts a plain refresh token string so both the oauth_creds.json path
 // (GeminiCredentials) and the auth.json path (pipe-split string) can share
 // the same bundle credential extraction without coupling to either struct.
-export async function tryRefreshTokenFromBundle(refreshToken: string): Promise<string | null> {
+export async function tryRefreshTokenFromBundle(
+  refreshToken: string
+): Promise<RefreshTokenResult | null> {
   const clientCreds = await extractOAuthClientCredentials()
   if (!clientCreds) {
     return null

@@ -201,7 +201,13 @@ export function searchWithGitGrep(
     if (opts.wholeWord) {
       pattern = `\\b${pattern}\\b`
     }
-    const matchRegex = new RegExp(pattern, `g${opts.caseSensitive ? '' : 'i'}`)
+
+    let matchRegex: RegExp
+    try {
+      matchRegex = new RegExp(pattern, `g${opts.caseSensitive ? '' : 'i'}`)
+    } catch {
+      return resolve({ files: [], totalMatches: 0, truncated: false })
+    }
 
     const resolveOnce = (): void => {
       if (done) {

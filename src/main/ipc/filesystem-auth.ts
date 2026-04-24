@@ -136,41 +136,36 @@ export async function resolveAuthorizedPath(
   store: Store,
   options: ResolveAuthorizedPathOptions = {}
 ): Promise<string> {
+  // Why: canonicalize the target path immediately to resolve any symlinks.
+  // This prevents "symlink jailbreak" attacks where a symlink points outside
+  // allowed roots.
   const resolvedTarget = resolve(targetPath)
-  if (!(await isPathAllowedIncludingRegisteredWorktrees(resolvedTarget, store))) {
-    throw new Error(PATH_ACCESS_DENIED_MESSAGE)
-  }
-
-  if (options.preserveSymlink) {
-    // Canonicalize the parent so symlinks in ancestors cannot redirect us
-    // outside allowed roots, but keep the final segment untouched so callers
-    // (delete/rename) act on the link itself.
-    const realParent = await realpath(dirname(resolvedTarget))
-    const candidateTarget = resolve(realParent, basename(resolvedTarget))
-    if (!(await isPathAllowedIncludingRegisteredWorktrees(candidateTarget, store))) {
-      throw new Error(PATH_ACCESS_DENIED_MESSAGE)
-    }
-    return candidateTarget
-  }
-
+  let realTarget: string
   try {
-    const realTarget = await realpath(resolvedTarget)
-    if (!(await isPathAllowedIncludingRegisteredWorktrees(realTarget, store))) {
-      throw new Error(PATH_ACCESS_DENIED_MESSAGE)
-    }
-    return realTarget
+    realTarget = await realpath(resolvedTarget)
   } catch (error) {
     if (!isENOENT(error)) {
       throw error
     }
-
+    // If the path doesn't exist, canonicalize its parent and re-resolve
     const realParent = await realpath(dirname(resolvedTarget))
-    const candidateTarget = resolve(realParent, basename(resolvedTarget))
-    if (!(await isPathAllowedIncludingRegisteredWorktrees(candidateTarget, store))) {
-      throw new Error(PATH_ACCESS_DENIED_MESSAGE)
-    }
-    return candidateTarget
+    realTarget = resolve(realParent, basename(resolvedTarget))
   }
+
+  if (!(await isPathAllowedIncludingRegisteredWorktrees(realTarget, store))) {
+    throw new Error(PATH_ACCESS_DENIED_MESSAGE)
+  }
+
+  if (options.preserveSymlink) {
+    // Why: for rename/delete, we must return the authorized path but ensure
+    // the leaf itself is not resolved (if it's a symlink). We already verified
+    // the canonical realTarget is allowed. Now we return the path with
+    // canonicalized parent but raw leaf.
+    const realParent = await realpath(dirname(resolvedTarget))
+    return resolve(realParent, basename(resolvedTarget))
+  }
+
+  return realTarget
 }
 
 async function isPathAllowedIncludingRegisteredWorktrees(

@@ -26,8 +26,13 @@ export function normalizeCookieInput(raw: string): string {
   if (trimmed.includes(';') || /^(?:auth|__Host-auth)=/i.test(trimmed)) {
     return trimmed
   }
-  // Bare token — wrap it so filterAuthCookie can pick it up.
-  return `auth=${trimmed}`
+  // Only wrap if it looks like an Iron Session seal (starts with Fe26.2**)
+  // or a reasonably structured bare token (alphanumeric with dots/dashes).
+  // Otherwise, leave it alone to fail predictably instead of sending malformed auth.
+  if (trimmed.startsWith('Fe26.2**') || /^[a-zA-Z0-9.\-_]+$/.test(trimmed)) {
+    return `auth=${trimmed}`
+  }
+  return trimmed
 }
 
 function filterAuthCookie(raw: string): string {
@@ -95,7 +100,7 @@ type ParsedSubscription = {
 function parseSubscriptionFromPageText(text: string): ParsedSubscription | null {
   // Why: OpenCode usage is scraped from HTML-embedded JS. Add defensive checks
   // for payload size and missing fields to prevent brittle regex failures.
-  if (!text || text.length > 1_000_000) {
+  if (!text || text.length > 10_000_000) {
     return null
   }
 

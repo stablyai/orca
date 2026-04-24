@@ -98,6 +98,12 @@ describe('fetchOpenCodeGoRateLimits', () => {
     it('trims surrounding whitespace before wrapping', () => {
       expect(normalizeCookieInput('  Fe26.2**abc  ')).toBe('auth=Fe26.2**abc')
     })
+
+    it('does not wrap unknown or malformed tokens', () => {
+      expect(normalizeCookieInput('invalid token format')).toBe('invalid token format')
+      expect(normalizeCookieInput('{}')).toBe('{}')
+      expect(normalizeCookieInput('{"token":"abc"}')).toBe('{"token":"abc"}')
+    })
   })
 
   it('accepts a bare token (auto-wraps to auth=<token>)', async () => {

@@ -15,6 +15,10 @@ import {
 
 const API_TIMEOUT_MS = 10_000
 const RETRIEVE_QUOTA_URL = 'https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota'
+const CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
+
+// ── In-memory cache for credentials to avoid redundant I/O ────────────
+let cachedCreds: { data: ProviderRateLimits; timestamp: number } | null = null
 
 type QuotaBucket = {
   remainingFraction: number
@@ -40,18 +44,9 @@ function parseQuotaResponse(data: unknown): QuotaBucket[] {
   } else if (data && typeof data === 'object' && 'buckets' in data && Array.isArray(data.buckets)) {
     rawBuckets = data.buckets
   }
-  // Why: API response casting is blind — use a type guard to ensure the
-  // objects match the expected QuotaBucket structure before processing.
-  return rawBuckets.filter((b) => {
-    if (isQuotaBucket(b)) {
-      return true
-    }
-    console.warn('[gemini-usage-fetcher] skipping invalid quota bucket:', b)
-    return false
-  })
+  return rawBuckets.filter((b) => isQuotaBucket(b))
 }
 
-// Model ID mapping — keep short names for known stable IDs.
 const MODEL_ID_TO_BUCKET_NAME: Record<string, string> = {
   'gemini-2.5-pro': 'Pro',
   'gemini-2.5-flash': 'Flash',
@@ -64,9 +59,6 @@ const MODEL_ID_TO_BUCKET_NAME: Record<string, string> = {
   'gemini-experimental': 'Exp'
 }
 
-// Why: strip the "gemini-" prefix and title-case the rest so unknown future
-// model IDs render as something readable (e.g. "gemini-3.0-ultra" → "3.0 Ultra")
-// rather than the raw API string.
 function humanizeModelId(modelId: string): string {
   const withoutPrefix = modelId.replace(/^gemini-/i, '')
   return withoutPrefix
@@ -79,22 +71,16 @@ export function getBucketName(modelId: string): string {
   return MODEL_ID_TO_BUCKET_NAME[modelId] ?? humanizeModelId(modelId)
 }
 
-// Why: Gemini CLI quota buckets reset on a 1-hour rolling window. The window
-// size is always 60 minutes — resetsAt is only used for the "Resets in X"
-// countdown, not to derive the window duration.
 const GEMINI_BUCKET_WINDOW_MINUTES = 60
 
 function buildRateLimitBucket(b: QuotaBucket): RateLimitBucket {
   const usedPercent = Math.min(100, Math.max(0, Math.round((1 - b.remainingFraction) * 100)))
-
   const resetsAtTime = new Date(b.resetTime).getTime()
-  const resetsAt = !isNaN(resetsAtTime) ? resetsAtTime : null
-
   return {
     name: getBucketName(b.modelId),
     usedPercent,
     windowMinutes: GEMINI_BUCKET_WINDOW_MINUTES,
-    resetsAt,
+    resetsAt: !isNaN(resetsAtTime) ? resetsAtTime : null,
     resetDescription: null
   }
 }
@@ -138,11 +124,9 @@ async function fetchQuota(accessToken: string, projectId: string): Promise<Provi
 
     const data = (await res.json()) as unknown
     const buckets = parseQuotaResponse(data).map(buildRateLimitBucket)
-    const session = deriveSessionSummary(buckets)
-
     return {
       provider: 'gemini',
-      session,
+      session: deriveSessionSummary(buckets),
       weekly: null,
       buckets,
       updatedAt: Date.now(),
@@ -156,83 +140,42 @@ async function fetchQuota(accessToken: string, projectId: string): Promise<Provi
 
 async function fetchViaAuthJson(auth: GoogleAuthEntry): Promise<ProviderRateLimits> {
   let accessToken = auth.access
+  const refreshToken = (auth.refresh || '').split('|')[0] ?? ''
+  const effectiveProjectId =
+    (auth.refresh || '').split('|')[1] || (auth.refresh || '').split('|')[2]
 
-  // Why: opencode stores the auth.json refresh field as a pipe-delimited string:
-  // "<refresh_token>|<projectId>|<managedProjectId>". The first segment is the
-  // actual OAuth refresh token; the rest carry project metadata.
-  const refreshParts = auth.refresh.split('|')
-  if (refreshParts.length < 3) {
+  if (auth.expires < Date.now() || !accessToken) {
+    const refreshResult = await tryRefreshTokenFromBundle(refreshToken)
+    if (!refreshResult?.accessToken) {
+      return {
+        provider: 'gemini',
+        session: null,
+        weekly: null,
+        updatedAt: Date.now(),
+        error: 'Token refresh failed',
+        status: 'error'
+      }
+    }
+    accessToken = refreshResult.accessToken
+  }
+
+  if (!effectiveProjectId) {
     return {
       provider: 'gemini',
       session: null,
       weekly: null,
       updatedAt: Date.now(),
-      error: `Malformed auth.json refresh token (expected 3 parts, got ${refreshParts.length})`,
+      error: 'Gemini project ID not found in auth.json',
       status: 'error'
     }
   }
 
-  const refreshToken = refreshParts[0] ?? ''
-  const projectId = refreshParts[1] ?? ''
-  const managedProjectId = refreshParts[2] ?? ''
-  const effectiveProjectId = projectId || managedProjectId
-
-  if (auth.expires < Date.now()) {
-    if (!refreshToken) {
-      return {
-        provider: 'gemini',
-        session: null,
-        weekly: null,
-        updatedAt: Date.now(),
-        error: 'Token expired and no refresh token available',
-        status: 'error'
-      }
-    }
-
-    // Why: reuse the same bundle-extracted client credentials used for the
-    // oauth_creds.json path — both share the same Google OAuth app registration.
-    const newToken = await tryRefreshTokenFromBundle(refreshToken)
-    if (!newToken) {
-      return {
-        provider: 'gemini',
-        session: null,
-        weekly: null,
-        updatedAt: Date.now(),
-        error: 'Token refresh failed',
-        status: 'error'
-      }
-    }
-    accessToken = newToken
-  }
-
   const result = await fetchQuota(accessToken, effectiveProjectId)
-
-  // Why: server may reject the token even when expiry_date is locally valid;
-  // attempt one refresh before giving up.
-  if (result.status === 'error' && result.error?.includes('Quota fetch failed (401)')) {
-    if (!refreshToken) {
-      return {
-        provider: 'gemini',
-        session: null,
-        weekly: null,
-        updatedAt: Date.now(),
-        error: 'Token refresh unavailable for auth.json source',
-        status: 'error'
-      }
+  if (result.status === 'error' && result.error?.includes('401')) {
+    const refreshResult = await tryRefreshTokenFromBundle(refreshToken)
+    if (refreshResult?.accessToken) {
+      return fetchQuota(refreshResult.accessToken, effectiveProjectId)
     }
-
-    const newToken = await tryRefreshTokenFromBundle(refreshToken)
-    if (!newToken) {
-      return {
-        provider: 'gemini',
-        session: null,
-        weekly: null,
-        updatedAt: Date.now(),
-        error: 'Token refresh failed',
-        status: 'error'
-      }
-    }
-    return fetchQuota(newToken, effectiveProjectId)
   }
 
   return result
@@ -242,8 +185,8 @@ async function fetchViaOauthCreds(creds: GeminiCredentials): Promise<ProviderRat
   let accessToken = creds.access_token
 
   if (creds.expiry_date < Date.now()) {
-    const newToken = await tryRefreshTokenFromBundle(creds.refresh_token)
-    if (!newToken) {
+    const refreshResult = await tryRefreshTokenFromBundle(creds.refresh_token)
+    if (!refreshResult?.accessToken) {
       return {
         provider: 'gemini',
         session: null,
@@ -253,7 +196,7 @@ async function fetchViaOauthCreds(creds: GeminiCredentials): Promise<ProviderRat
         status: 'error'
       }
     }
-    accessToken = newToken
+    accessToken = refreshResult.accessToken
   }
 
   let projectId = ''
@@ -263,63 +206,67 @@ async function fetchViaOauthCreds(creds: GeminiCredentials): Promise<ProviderRat
     projectId = ''
   }
 
-  let result = await fetchQuota(accessToken, projectId)
+  if (!projectId) {
+    return {
+      provider: 'gemini',
+      session: null,
+      weekly: null,
+      updatedAt: Date.now(),
+      error: 'Gemini project ID not found',
+      status: 'error'
+    }
+  }
 
-  // Why: server may reject tokens early even when expiry_date is valid locally.
-  if (result.status === 'error' && result.error?.includes('Quota fetch failed (401)')) {
-    const newToken = await tryRefreshTokenFromBundle(creds.refresh_token)
-    if (!newToken) {
-      return {
-        provider: 'gemini',
-        session: null,
-        weekly: null,
-        updatedAt: Date.now(),
-        error: 'Token refresh failed',
-        status: 'error'
+  const result = await fetchQuota(accessToken, projectId)
+  if (result.status === 'error' && result.error?.includes('401')) {
+    const refreshResult = await tryRefreshTokenFromBundle(creds.refresh_token)
+    if (refreshResult?.accessToken) {
+      projectId = await loadProjectId(refreshResult.accessToken).catch(() => '')
+      if (projectId) {
+        return fetchQuota(refreshResult.accessToken, projectId)
       }
     }
-    accessToken = newToken
-
-    try {
-      projectId = await loadProjectId(accessToken)
-    } catch {
-      projectId = ''
-    }
-
-    result = await fetchQuota(accessToken, projectId)
   }
 
   return result
 }
 
 export async function fetchGeminiRateLimits(): Promise<ProviderRateLimits> {
+  if (cachedCreds && Date.now() - cachedCreds.timestamp < CACHE_TTL_MS) {
+    return cachedCreds.data
+  }
+
   try {
     const authJson = await readAuthJson()
+    let result: ProviderRateLimits
+
     if (authJson?.google?.type === 'oauth') {
-      return await fetchViaAuthJson(authJson.google)
+      result = await fetchViaAuthJson(authJson.google)
+    } else {
+      const creds = await readGeminiCredentials()
+      result = !creds
+        ? {
+            provider: 'gemini',
+            session: null,
+            weekly: null,
+            updatedAt: Date.now(),
+            error: 'Gemini CLI credentials not found',
+            status: 'unavailable'
+          }
+        : await fetchViaOauthCreds(creds)
     }
 
-    const creds = await readGeminiCredentials()
-    if (!creds) {
-      return {
-        provider: 'gemini',
-        session: null,
-        weekly: null,
-        updatedAt: Date.now(),
-        error: 'Gemini CLI credentials not found',
-        status: 'unavailable'
-      }
+    if (result.status !== 'error') {
+      cachedCreds = { data: result, timestamp: Date.now() }
     }
-
-    return await fetchViaOauthCreds(creds)
+    return result
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error'
     return {
       provider: 'gemini',
       session: null,
       weekly: null,
       updatedAt: Date.now(),
-      error: message,
+      error: err instanceof Error ? err.message : 'Unknown error',
       status: 'error'
     }
   }

@@ -91,7 +91,7 @@ export function useFileDeletion({
         // We capture content first but only commit the undo entry after the
         // delete succeeds — otherwise a failed delete would poison the stack.
         let undoContent: string | undefined
-        if (!node.isDirectory) {
+        if (!node.isDirectory && !isRemote) {
           try {
             const rf = await window.api.fs.readFile({ filePath: node.path, connectionId })
             if (!rf.isBinary) {

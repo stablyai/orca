@@ -40,7 +40,111 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.removeHandler('repos:update')
   ipcMain.removeHandler('repos:pickFolder')
   ipcMain.removeHandler('repos:pickDirectory')
-  ipcMain.removeHandler('repos:clone')
+  ipcMain.handle(
+    'repos:clone',
+    async (_event, args: { url: string; destination: string }): Promise<Repo> => {
+      // Why: the user picks a parent directory (e.g. ~/projects) and we derive
+      // the repo folder name from the URL (e.g. "orca" from .../orca.git).
+      // This matches the default git clone behavior where the last path segment
+      // of the URL becomes the directory name.
+      const repoName = basename(args.url.replace(/\.git\/?$/, ''))
+      if (!repoName) {
+        throw new Error('Could not determine repository name from URL')
+      }
+      const clonePath = join(args.destination, repoName)
+
+      // Why: use spawn instead of execFile so there is no maxBuffer limit.
+      // git clone writes progress to stderr which can exceed Node's default
+      // 1 MB buffer on large or submodule-heavy repos. We only keep the tail
+      // of stderr for error reporting and discard stdout entirely.
+      // Why: use --progress to force git to emit progress even when stderr
+      // is not a TTY. Without it, git suppresses progress output when piped.
+      await new Promise<void>((resolve, reject) => {
+        // Why: clone destination may be a WSL path (e.g. user picks a WSL
+        // directory). Use the parent destination as the cwd so the runner
+        // detects WSL and routes through wsl.exe.
+        // Why: use the '--' separator to isolate the URL argument and prevent
+        // malicious URLs from being interpreted as git flags (command injection).
+        const proc = gitSpawn(['clone', '--progress', '--', args.url, clonePath], {
+          cwd: args.destination,
+          stdio: ['ignore', 'ignore', 'pipe']
+        })
+        activeCloneProc = proc
+        activeClonePath = clonePath
+
+        let stderrTail = ''
+        proc.stderr!.on('data', (chunk: Buffer) => {
+          const text = chunk.toString()
+          stderrTail = (stderrTail + text).slice(-4096)
+
+          // Why: git progress lines use \r to overwrite in-place. Split on
+          // both \r and \n to find the latest progress fragment, then extract
+          // the phase name and percentage for the renderer.
+          const lines = text.split(/[\r\n]+/)
+          for (const line of lines) {
+            const match = line.match(/^([\w\s]+):\s+(\d+)%/)
+            if (match && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('repos:clone-progress', {
+                phase: match[1].trim(),
+                percent: parseInt(match[2], 10)
+              })
+            }
+          }
+        })
+
+        proc.on('error', (err) => reject(new Error(`Clone failed: ${err.message}`)))
+
+        proc.on('close', (code, signal) => {
+          // Why: only clear the ref if it still points to this process.
+          // A quick abort-and-retry can reassign activeCloneProc to a new
+          // spawn before this handler fires, and nulling it would make the
+          // new clone unabortable.
+          if (activeCloneProc === proc) {
+            activeCloneProc = null
+            activeClonePath = null
+          }
+          if (signal === 'SIGTERM') {
+            reject(new Error('Clone aborted'))
+          } else if (code === 0) {
+            resolve()
+          } else {
+            const lastLine = stderrTail.trim().split('\n').pop() ?? 'unknown error'
+            reject(new Error(`Clone failed: ${lastLine}`))
+          }
+        })
+      })
+
+      // Why: check after clone (not before) because the path didn't exist
+      // before cloning. But if the user somehow had a folder repo at this path
+      // that git clone succeeded into (empty dir), reuse that entry and upgrade
+      // its kind to 'git' instead of creating a duplicate.
+      const existing = store.getRepos().find((r) => r.path === clonePath)
+      if (existing) {
+        if (isFolderRepo(existing)) {
+          const updated = store.updateRepo(existing.id, { kind: 'git' })
+          if (updated) {
+            notifyReposChanged(mainWindow)
+            return updated
+          }
+        }
+        return existing
+      }
+
+      const repo: Repo = {
+        id: randomUUID(),
+        path: clonePath,
+        displayName: getRepoName(clonePath),
+        badgeColor: REPO_COLORS[store.getRepos().length % REPO_COLORS.length],
+        addedAt: Date.now(),
+        kind: 'git'
+      }
+
+      store.addRepo(repo)
+      await rebuildAuthorizedRootsCache(store)
+      notifyReposChanged(mainWindow)
+      return repo
+    }
+  )
   ipcMain.removeHandler('repos:cloneAbort')
   ipcMain.removeHandler('repos:getGitUsername')
   ipcMain.removeHandler('repos:getBaseRefDefault')
@@ -254,110 +358,6 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       }
     }
   })
-
-  ipcMain.handle(
-    'repos:clone',
-    async (_event, args: { url: string; destination: string }): Promise<Repo> => {
-      // Why: the user picks a parent directory (e.g. ~/projects) and we derive
-      // the repo folder name from the URL (e.g. "orca" from .../orca.git).
-      // This matches the default git clone behavior where the last path segment
-      // of the URL becomes the directory name.
-      const repoName = basename(args.url.replace(/\.git\/?$/, ''))
-      if (!repoName) {
-        throw new Error('Could not determine repository name from URL')
-      }
-      const clonePath = join(args.destination, repoName)
-
-      // Why: use spawn instead of execFile so there is no maxBuffer limit.
-      // git clone writes progress to stderr which can exceed Node's default
-      // 1 MB buffer on large or submodule-heavy repos. We only keep the tail
-      // of stderr for error reporting and discard stdout entirely.
-      // Why: use --progress to force git to emit progress even when stderr
-      // is not a TTY. Without it, git suppresses progress output when piped.
-      await new Promise<void>((resolve, reject) => {
-        // Why: clone destination may be a WSL path (e.g. user picks a WSL
-        // directory). Use the parent destination as the cwd so the runner
-        // detects WSL and routes through wsl.exe.
-        const proc = gitSpawn(['clone', '--progress', args.url, clonePath], {
-          cwd: args.destination,
-          stdio: ['ignore', 'ignore', 'pipe']
-        })
-        activeCloneProc = proc
-        activeClonePath = clonePath
-
-        let stderrTail = ''
-        proc.stderr!.on('data', (chunk: Buffer) => {
-          const text = chunk.toString()
-          stderrTail = (stderrTail + text).slice(-4096)
-
-          // Why: git progress lines use \r to overwrite in-place. Split on
-          // both \r and \n to find the latest progress fragment, then extract
-          // the phase name and percentage for the renderer.
-          const lines = text.split(/[\r\n]+/)
-          for (const line of lines) {
-            const match = line.match(/^([\w\s]+):\s+(\d+)%/)
-            if (match && !mainWindow.isDestroyed()) {
-              mainWindow.webContents.send('repos:clone-progress', {
-                phase: match[1].trim(),
-                percent: parseInt(match[2], 10)
-              })
-            }
-          }
-        })
-
-        proc.on('error', (err) => reject(new Error(`Clone failed: ${err.message}`)))
-
-        proc.on('close', (code, signal) => {
-          // Why: only clear the ref if it still points to this process.
-          // A quick abort-and-retry can reassign activeCloneProc to a new
-          // spawn before this handler fires, and nulling it would make the
-          // new clone unabortable.
-          if (activeCloneProc === proc) {
-            activeCloneProc = null
-            activeClonePath = null
-          }
-          if (signal === 'SIGTERM') {
-            reject(new Error('Clone aborted'))
-          } else if (code === 0) {
-            resolve()
-          } else {
-            const lastLine = stderrTail.trim().split('\n').pop() ?? 'unknown error'
-            reject(new Error(`Clone failed: ${lastLine}`))
-          }
-        })
-      })
-
-      // Why: check after clone (not before) because the path didn't exist
-      // before cloning. But if the user somehow had a folder repo at this path
-      // that git clone succeeded into (empty dir), reuse that entry and upgrade
-      // its kind to 'git' instead of creating a duplicate.
-      const existing = store.getRepos().find((r) => r.path === clonePath)
-      if (existing) {
-        if (isFolderRepo(existing)) {
-          const updated = store.updateRepo(existing.id, { kind: 'git' })
-          if (updated) {
-            notifyReposChanged(mainWindow)
-            return updated
-          }
-        }
-        return existing
-      }
-
-      const repo: Repo = {
-        id: randomUUID(),
-        path: clonePath,
-        displayName: getRepoName(clonePath),
-        badgeColor: REPO_COLORS[store.getRepos().length % REPO_COLORS.length],
-        addedAt: Date.now(),
-        kind: 'git'
-      }
-
-      store.addRepo(repo)
-      await rebuildAuthorizedRootsCache(store)
-      notifyReposChanged(mainWindow)
-      return repo
-    }
-  )
 
   ipcMain.handle('repos:getGitUsername', async (_event, args: { repoId: string }) => {
     const repo = store.getRepo(args.repoId)

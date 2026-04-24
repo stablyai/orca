@@ -1,3 +1,4 @@
+import type { Issue, IssueSearchResult } from '@linear/sdk'
 import type {
   LinearIssue,
   LinearIssueUpdate,
@@ -40,7 +41,10 @@ export async function searchIssues(query: string, limit = 20): Promise<LinearIss
   await acquire()
   try {
     const result = await client.searchIssues(query, { first: limit })
-    return await Promise.all(result.nodes.map(mapLinearIssue))
+    // Why: mapLinearIssue triggers lazy-loaded GraphQL requests for relations
+    // (state, team, assignee). To avoid a massive N+1 burst or a slow
+    // sequential execution, we map issues in small parallel batches.
+    return await mapInBatches(result.nodes, 5)
   } catch (error) {
     if (isAuthError(error)) {
       clearToken()
@@ -70,6 +74,7 @@ export async function listIssues(
   await acquire()
   try {
     const orderBy = 'updatedAt' as never
+    let nodes: Issue[] = []
 
     if (filter === 'assigned') {
       const viewer = await client.viewer
@@ -78,36 +83,37 @@ export async function listIssues(
         orderBy,
         filter: ACTIVE_STATE_FILTER
       })
-      return await Promise.all(connection.nodes.map(mapLinearIssue))
-    }
-
-    if (filter === 'created') {
+      nodes = connection.nodes
+    } else if (filter === 'created') {
       const viewer = await client.viewer
       const connection = await viewer.createdIssues({
         first: limit,
         orderBy,
         filter: ACTIVE_STATE_FILTER
       })
-      return await Promise.all(connection.nodes.map(mapLinearIssue))
-    }
-
-    if (filter === 'completed') {
+      nodes = connection.nodes
+    } else if (filter === 'completed') {
       const viewer = await client.viewer
       const connection = await viewer.assignedIssues({
         first: limit,
         orderBy,
         filter: COMPLETED_STATE_FILTER
       })
-      return await Promise.all(connection.nodes.map(mapLinearIssue))
+      nodes = connection.nodes
+    } else {
+      // 'all' — all active issues across the workspace
+      const connection = await client.issues({
+        first: limit,
+        orderBy,
+        filter: ACTIVE_STATE_FILTER
+      })
+      nodes = connection.nodes
     }
 
-    // 'all' — all active issues across the workspace
-    const connection = await client.issues({
-      first: limit,
-      orderBy,
-      filter: ACTIVE_STATE_FILTER
-    })
-    return await Promise.all(connection.nodes.map(mapLinearIssue))
+    // Why: mapLinearIssue triggers lazy-loaded GraphQL requests for relations
+    // (state, team, assignee). To avoid a massive N+1 burst or a slow
+    // sequential execution, we map issues in small parallel batches.
+    return await mapInBatches(nodes, 5)
   } catch (error) {
     if (isAuthError(error)) {
       clearToken()
@@ -314,4 +320,20 @@ export async function getTeamMembers(teamId: string): Promise<LinearMember[]> {
   } finally {
     release()
   }
+}
+
+/**
+ * Process an array in fixed-size parallel batches.
+ */
+async function mapInBatches(
+  items: (Issue | IssueSearchResult)[],
+  batchSize: number
+): Promise<LinearIssue[]> {
+  const results: LinearIssue[] = []
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize)
+    const batchResults = await Promise.all(batch.map((item) => mapLinearIssue(item)))
+    results.push(...batchResults)
+  }
+  return results
 }

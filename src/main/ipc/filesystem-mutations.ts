@@ -25,27 +25,6 @@ function rethrowWithUserMessage(error: unknown, targetPath: string): never {
 }
 
 /**
- * Ensure `targetPath` does not already exist. Throws if it does.
- *
- * Note: this is a non-atomic check — a concurrent operation could create the
- * path between `lstat` and the caller's next action. Acceptable for a desktop
- * app with low concurrency; `createFile` uses the `wx` flag for an atomic
- * alternative where possible.
- */
-async function assertNotExists(targetPath: string): Promise<void> {
-  try {
-    await lstat(targetPath)
-    throw new Error(
-      `A file or folder named '${basename(targetPath)}' already exists in this location`
-    )
-  } catch (error) {
-    if (!isENOENT(error)) {
-      throw error
-    }
-  }
-}
-
-/**
  * IPC handlers for file/folder creation and renaming.
  * Deletion is handled separately via `fs:deletePath` (shell.trashItem).
  */
@@ -82,8 +61,16 @@ export function registerFilesystemMutationHandlers(store: Store): void {
         return provider.createDir(args.dirPath)
       }
       const dirPath = await resolveAuthorizedPath(args.dirPath, store)
-      await assertNotExists(dirPath)
-      await mkdir(dirPath, { recursive: true })
+      // Why: mkdir with {recursive: true} is idempotent and doesn't throw if
+      // the leaf directory exists. To satisfy the requirement that we don't
+      // silently overwrite/noop when a folder exists, we ensure the parent
+      // exists then attempt an atomic mkdir of the leaf.
+      await mkdir(dirname(dirPath), { recursive: true })
+      try {
+        await mkdir(dirPath)
+      } catch (error) {
+        rethrowWithUserMessage(error, dirPath)
+      }
     }
   )
 
@@ -111,7 +98,22 @@ export function registerFilesystemMutationHandlers(store: Store): void {
       // accidentally write into a symlinked destination name.
       const oldPath = await resolveAuthorizedPath(args.oldPath, store, { preserveSymlink: true })
       const newPath = await resolveAuthorizedPath(args.newPath, store, { preserveSymlink: true })
-      await assertNotExists(newPath)
+
+      // Why: Node's rename() silently overwrites files. To prevent this, we
+      // perform a check. Note that rename() does not have an atomic 'no-clobber'
+      // flag on all platforms, so this remains a non-atomic check as noted in
+      // the original code.
+      try {
+        await lstat(newPath)
+        throw new Error(
+          `A file or folder named '${basename(newPath)}' already exists in this location`
+        )
+      } catch (error) {
+        if (!isENOENT(error)) {
+          throw error
+        }
+      }
+
       await rename(oldPath, newPath)
     }
   )
@@ -278,15 +280,20 @@ async function preScanForSymlinks(dirPath: string): Promise<boolean> {
  * Recursively copy a directory and all its contents. Uses copyFile for
  * individual files to leverage native OS copy primitives instead of
  * buffering entire files into memory.
+ *
+ * Why: process entries in parallel within each directory level to avoid
+ * blocking the IPC thread on large directory structures.
  */
 async function recursiveCopyDir(srcDir: string, destDir: string): Promise<void> {
   await mkdir(destDir, { recursive: true })
   const entries = await readdir(srcDir, { withFileTypes: true })
-  for (const entry of entries) {
-    const srcPath = join(srcDir, entry.name)
-    const dstPath = join(destDir, entry.name)
-    await (entry.isDirectory() ? recursiveCopyDir(srcPath, dstPath) : copyFile(srcPath, dstPath))
-  }
+  await Promise.all(
+    entries.map(async (entry) => {
+      const srcPath = join(srcDir, entry.name)
+      const dstPath = join(destDir, entry.name)
+      return entry.isDirectory() ? recursiveCopyDir(srcPath, dstPath) : copyFile(srcPath, dstPath)
+    })
+  )
 }
 
 /**

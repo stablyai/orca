@@ -46,7 +46,7 @@ export class CodexRuntimeHomeService {
     return this.getRuntimeHomePath()
   }
 
-  syncForCurrentSelection(): void {
+  async syncForCurrentSelection(): Promise<void> {
     this.captureSystemDefaultSnapshotIfNeeded()
 
     const settings = this.store.getSettings()
@@ -81,12 +81,12 @@ export class CodexRuntimeHomeService {
     }
 
     this.lastSyncedAccountId = activeAccount.id
-    this.writeRuntimeAuth(readFileSync(activeAuthPath, 'utf-8'))
+    await this.writeRuntimeAuth(readFileSync(activeAuthPath, 'utf-8'))
   }
 
-  private safeSyncForCurrentSelection(): void {
+  private async safeSyncForCurrentSelection(): Promise<void> {
     try {
-      this.syncForCurrentSelection()
+      await this.syncForCurrentSelection()
     } catch (error) {
       console.warn('[codex-runtime-home] Failed to sync runtime auth state:', error)
     }
@@ -142,7 +142,7 @@ export class CodexRuntimeHomeService {
     return join(app.getPath('userData'), 'codex-accounts')
   }
 
-  private migrateLegacyManagedStateIfNeeded(): void {
+  private async migrateLegacyManagedStateIfNeeded(): Promise<void> {
     if (existsSync(this.getMigrationMarkerPath())) {
       return
     }
@@ -155,14 +155,14 @@ export class CodexRuntimeHomeService {
       if (!accountId) {
         continue
       }
-      this.migrateLegacyHistory(managedHomePath)
+      await this.migrateLegacyHistory(managedHomePath)
       this.migrateLegacySessions(managedHomePath, accountId)
     }
 
     // Why: migration is intentionally one-shot. Re-importing every startup
     // would keep replaying stale managed-home state back into ~/.codex and
     // make the shared runtime feel nondeterministic.
-    writeFileAtomically(
+    await writeFileAtomically(
       this.getMigrationMarkerPath(),
       `${JSON.stringify({ completedAt: Date.now(), migratedHomeCount: managedHomes.length })}\n`
     )

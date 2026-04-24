@@ -91,7 +91,7 @@ function clearViewerOnDisk(): void {
 export function saveToken(apiKey: string): void {
   const dir = join(homedir(), '.orca')
   if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true })
+    mkdirSync(dir, { recursive: true, mode: 0o700 })
   }
   const tokenPath = getTokenPath()
   // Why: safeStorage uses the OS keychain (macOS Keychain, Windows DPAPI,
@@ -125,9 +125,18 @@ export function loadToken(options: { force?: boolean } = {}): string | null {
   }
   try {
     const raw = readFileSync(tokenPath)
-    cachedToken = safeStorage.isEncryptionAvailable()
-      ? safeStorage.decryptString(raw)
-      : raw.toString('utf-8')
+    if (safeStorage.isEncryptionAvailable()) {
+      try {
+        // Why: if encryption is available but the file was stored as plaintext
+        // (e.g. key saved on a headless machine and moved here), decryptString
+        // will throw. We fall back to plaintext in that case.
+        cachedToken = safeStorage.decryptString(raw)
+      } catch {
+        cachedToken = raw.toString('utf-8')
+      }
+    } else {
+      cachedToken = raw.toString('utf-8')
+    }
     return cachedToken
   } catch {
     return null
@@ -232,6 +241,8 @@ export async function testConnection(): Promise<
   if (!token) {
     return { ok: false, error: 'No API key stored.' }
   }
+
+  await acquire()
   try {
     const client = new LinearClient({ apiKey: token })
     const me = await client.viewer
@@ -251,6 +262,8 @@ export async function testConnection(): Promise<
     }
     const message = error instanceof Error ? error.message : 'Test failed'
     return { ok: false, error: message }
+  } finally {
+    release()
   }
 }
 
