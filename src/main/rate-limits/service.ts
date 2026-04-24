@@ -31,6 +31,7 @@ export class RateLimitService {
   private fetchIdleResolvers: (() => void)[] = []
   private codexFetchGeneration = 0
   private claudeFetchGeneration = 0
+  private lastOpencodeConfigHash = ''
   private codexHomePathResolver: (() => string | null) | null = null
   private claudeAuthPreparationResolver: (() => Promise<ClaudeRuntimeAuthPreparation>) | null = null
   private settingsResolver:
@@ -343,6 +344,12 @@ export class RateLimitService {
     const cookie = settings?.opencodeSessionCookie ?? ''
     const workspaceIdOverride = settings?.opencodeWorkspaceId ?? ''
 
+    // Detect if configuration changed — if it did, we must discard any stale
+    // data because it belongs to a different session/workspace.
+    const currentConfigHash = `${cookie}|${workspaceIdOverride}`
+    const opencodeConfigChanged = currentConfigHash !== this.lastOpencodeConfigHash
+    this.lastOpencodeConfigHash = currentConfigHash
+
     // Mark all providers as fetching while keeping previous data visible.
     // Codex account changes clear Codex separately before this method is
     // called, so ordinary refreshes still preserve the current values.
@@ -351,7 +358,9 @@ export class RateLimitService {
       claude: this.withFetchingStatus(previousState.claude, 'claude'),
       codex: this.withFetchingStatus(previousState.codex, 'codex'),
       gemini: this.withFetchingStatus(previousState.gemini, 'gemini'),
-      opencodeGo: this.withFetchingStatus(previousState.opencodeGo, 'opencode-go')
+      opencodeGo: opencodeConfigChanged
+        ? this.withFetchingStatus(null, 'opencode-go')
+        : this.withFetchingStatus(previousState.opencodeGo, 'opencode-go')
     })
 
     const [claudeResult, codexResult, geminiResult, opencodeGoResult] = await Promise.allSettled([
@@ -407,6 +416,7 @@ export class RateLimitService {
             provider: 'opencode-go',
             session: null,
             weekly: null,
+            monthly: null,
             updatedAt: Date.now(),
             error:
               opencodeGoResult.reason instanceof Error
@@ -437,7 +447,9 @@ export class RateLimitService {
         ? this.applyStalePolicy(codex, previousState.codex)
         : this.state.codex,
       gemini: this.applyStalePolicy(gemini, previousState.gemini),
-      opencodeGo: this.applyStalePolicy(opencodeGo, previousState.opencodeGo)
+      opencodeGo: opencodeConfigChanged
+        ? opencodeGo
+        : this.applyStalePolicy(opencodeGo, previousState.opencodeGo)
     })
 
     this.lastFetchAt = Date.now()

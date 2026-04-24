@@ -326,4 +326,45 @@ describe('RateLimitService', () => {
     expect(state.opencodeGo?.session).toBeNull()
     expect(state.opencodeGo?.error).toBe('Session cookie not configured')
   })
+
+  it('discards stale data when Workspace ID override is changed', async () => {
+    const service = new RateLimitService()
+    let workspaceId = 'wrk_A'
+    service.setSettingsResolver(() => ({
+      opencodeSessionCookie: 'session=valid',
+      opencodeWorkspaceId: workspaceId
+    }))
+
+    // 1. Success fetch for Workspace A
+    vi.mocked(fetchOpenCodeGoRateLimits).mockResolvedValue(
+      okProvider('opencode-go', 40, Date.now())
+    )
+    await service.refresh()
+    expect(service.getState().opencodeGo?.session?.usedPercent).toBe(40)
+
+    // 2. Change Workspace ID to B -> old data from A should be discarded
+    workspaceId = 'wrk_B'
+    vi.mocked(fetchOpenCodeGoRateLimits).mockResolvedValue(
+      okProvider('opencode-go', 10, Date.now())
+    )
+    await service.refresh()
+    expect(service.getState().opencodeGo?.session?.usedPercent).toBe(10)
+
+    // 3. Clear Workspace ID (automatic) but it fails -> should show error, NOT stale data from B
+    workspaceId = ''
+    vi.mocked(fetchOpenCodeGoRateLimits).mockResolvedValue({
+      provider: 'opencode-go',
+      session: null,
+      weekly: null,
+      monthly: null,
+      updatedAt: Date.now(),
+      error: 'No workspace ID found',
+      status: 'error'
+    })
+    await service.refresh()
+    const state = service.getState()
+    expect(state.opencodeGo?.status).toBe('error')
+    expect(state.opencodeGo?.session).toBeNull()
+    expect(state.opencodeGo?.error).toBe('No workspace ID found')
+  })
 })
