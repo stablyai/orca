@@ -1,9 +1,11 @@
 /* oxlint-disable max-lines */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { POST_REPLAY_FOCUS_REPORTING_RESET, POST_REPLAY_MODE_RESET } from './layout-serialization'
 
 type StoreState = {
   tabsByWorktree: Record<string, { id: string; ptyId: string | null; title?: string }[]>
   ptyIdsByTabId?: Record<string, string[]>
+  unreadTerminalTabs?: Record<string, true>
   worktreesByRepo: Record<string, { id: string; repoId: string; path: string }[]>
   repos: { id: string; connectionId?: string | null }[]
   cacheTimerByKey: Record<string, number | null>
@@ -169,6 +171,7 @@ describe('connectPanePty', () => {
       ptyIdsByTabId: {
         'tab-1': ['tab-pty']
       },
+      unreadTerminalTabs: {},
       worktreesByRepo: {
         repo1: [{ id: 'wt-1', repoId: 'repo1', path: '/tmp/wt-1' }]
       },
@@ -436,6 +439,52 @@ describe('connectPanePty', () => {
     expect(transport.attach).not.toHaveBeenCalled()
     await Promise.resolve()
     expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'leaf-pty-2')
+  })
+
+  it('resets focus reporting after daemon snapshot replay without applying the full mode reset', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+      if (sessionId) {
+        return { id: sessionId, snapshot: '\x1b[?1004hrestored snapshot' }
+      }
+      return null
+    })
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty' }]
+      },
+      settings: {
+        ...mockStoreState.settings,
+        experimentalTerminalDaemon: true
+      }
+    } as StoreState
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      restoredLeafId: 'pane:1',
+      restoredPtyIdByLeafId: { 'pane:1': 'tab-pty' }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await Promise.resolve()
+
+    expect(pane.terminal.write).toHaveBeenCalledWith('\x1b[2J\x1b[3J\x1b[H', expect.any(Function))
+    expect(pane.terminal.write).toHaveBeenCalledWith(
+      '\x1b[?1004hrestored snapshot',
+      expect.any(Function)
+    )
+    expect(pane.terminal.write).toHaveBeenCalledWith(
+      POST_REPLAY_FOCUS_REPORTING_RESET,
+      expect.any(Function)
+    )
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(
+      POST_REPLAY_MODE_RESET,
+      expect.any(Function)
+    )
   })
 
   it('reuses the existing local PTY on split remount when the daemon is disabled', async () => {

@@ -70,6 +70,11 @@ export function createBellDetector(): BellDetector {
             pendingOscEscape = false
           } else if (char === '\x1b') {
             pendingEscape = true
+          } else if (char === '\x07') {
+            // A bare ESC is not a valid introducer for any sequence that
+            // consumes a following BEL. Treat the BEL as a real terminal
+            // bell rather than silently swallowing it with the orphan ESC.
+            return true
           }
           continue
         }

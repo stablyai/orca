@@ -341,8 +341,15 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       delete nextPtyIdsByTabId[tabId]
       const nextRuntimePaneTitlesByTabId = { ...s.runtimePaneTitlesByTabId }
       delete nextRuntimePaneTitlesByTabId[tabId]
-      const nextUnreadTerminalTabs = { ...s.unreadTerminalTabs }
-      delete nextUnreadTerminalTabs[tabId]
+      // Why: preserve the unreadTerminalTabs reference when the closing tab had
+      // no unread flag — avoids a no-op top-level state allocation that would
+      // force re-evaluation of full-state selectors on unrelated closeTab calls.
+      // Mirrors the sibling pattern in tabs.ts (focusGroup, reconcileWorktreeTabModel).
+      let nextUnreadTerminalTabs = s.unreadTerminalTabs
+      if (s.unreadTerminalTabs[tabId]) {
+        nextUnreadTerminalTabs = { ...s.unreadTerminalTabs }
+        delete nextUnreadTerminalTabs[tabId]
+      }
       const nextPendingStartupByTabId = { ...s.pendingStartupByTabId }
       delete nextPendingStartupByTabId[tabId]
       const nextPendingSetupSplitByTabId = { ...s.pendingSetupSplitByTabId }
@@ -401,7 +408,12 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         activeTabIdByWorktree: nextActiveTabIdByWorktree,
         ptyIdsByTabId: nextPtyIdsByTabId,
         runtimePaneTitlesByTabId: nextRuntimePaneTitlesByTabId,
-        unreadTerminalTabs: nextUnreadTerminalTabs,
+        // Why: skip writing unreadTerminalTabs when the reference is unchanged —
+        // avoids a no-op top-level state allocation that would force re-evaluation
+        // of full-state selectors. Mirrors the sibling pattern in tabs.ts.
+        ...(nextUnreadTerminalTabs !== s.unreadTerminalTabs
+          ? { unreadTerminalTabs: nextUnreadTerminalTabs }
+          : {}),
         expandedPaneByTabId: nextExpanded,
         canExpandPaneByTabId: nextCanExpand,
         terminalLayoutsByTabId: nextLayouts,
@@ -863,12 +875,21 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       // tab that is no longer running and cannot be cleared by focus because
       // focus events for a killed pane never arrive. Drop them here so a later
       // remount starts clean.
-      const nextUnreadTerminalTabs = { ...s.unreadTerminalTabs }
+      // Why: preserve the unreadTerminalTabs reference when none of the shutting-
+      // down tabs had an unread flag — avoids a no-op top-level state allocation
+      // that would force re-evaluation of full-state selectors on unrelated
+      // shutdown calls. Mirrors the sibling pattern in tabs.ts.
+      let nextUnreadTerminalTabs = s.unreadTerminalTabs
       for (const tab of tabs) {
         delete nextRuntimePaneTitlesByTabId[tab.id]
         delete nextPendingSetupSplitByTabId[tab.id]
         delete nextPendingIssueCommandSplitByTabId[tab.id]
-        delete nextUnreadTerminalTabs[tab.id]
+        if (nextUnreadTerminalTabs[tab.id]) {
+          if (nextUnreadTerminalTabs === s.unreadTerminalTabs) {
+            nextUnreadTerminalTabs = { ...s.unreadTerminalTabs }
+          }
+          delete nextUnreadTerminalTabs[tab.id]
+        }
         const existingLayout = nextTerminalLayoutsByTabId[tab.id]
         if (existingLayout?.ptyIdsByLeafId) {
           nextTerminalLayoutsByTabId[tab.id] = {
@@ -906,7 +927,12 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         pendingSetupSplitByTabId: nextPendingSetupSplitByTabId,
         pendingIssueCommandSplitByTabId: nextPendingIssueCommandSplitByTabId,
         terminalLayoutsByTabId: nextTerminalLayoutsByTabId,
-        unreadTerminalTabs: nextUnreadTerminalTabs,
+        // Why: skip writing unreadTerminalTabs when the reference is unchanged —
+        // avoids a no-op top-level state allocation that would force re-evaluation
+        // of full-state selectors. Mirrors the sibling pattern in tabs.ts.
+        ...(nextUnreadTerminalTabs !== s.unreadTerminalTabs
+          ? { unreadTerminalTabs: nextUnreadTerminalTabs }
+          : {}),
         browserTabsByWorktree: nextBrowserTabsByWorktree,
         activeBrowserTabIdByWorktree: nextActiveBrowserTabIdByWorktree,
         ...(shouldResetGlobalBrowser

@@ -21,13 +21,13 @@ export const AGENT_NAMES = ['claude', 'codex', 'copilot', 'gemini', 'opencode', 
 // Why: idle keywords used inside `detectAgentStatusFromTitle` to map titles
 // like "Codex done", "OpenCode ready", "Aider idle" to AgentStatus 'idle'.
 // `as const` so consumers receive literal-union types.
-export const STRONG_IDLE_KEYWORDS = ['ready', 'idle', 'done'] as const
+const STRONG_IDLE_KEYWORDS = ['ready', 'idle', 'done'] as const
 
 // Why: working keywords used inside `detectAgentStatusFromTitle` to map
 // titles like "Codex working", "Aider thinking", "OpenCode running" to
 // AgentStatus 'working'. Shared with `clearWorkingIndicators` so both stay
 // in lock-step when stripping working indicators from stale titles.
-export const STRONG_WORKING_KEYWORDS = ['working', 'thinking', 'running'] as const
+const STRONG_WORKING_KEYWORDS = ['working', 'thinking', 'running'] as const
 
 // Why: match STRONG_IDLE_KEYWORDS only when not adjacent to characters that
 // would make the "keyword" part of a larger token. Plain `\b` alone is
@@ -88,9 +88,7 @@ const OSC_TITLE_RE = /\x1b\]([012]);([^\x07\x1b]*?)(?:\x07|\x1b\\)/g
  */
 export function extractLastOscTitle(data: string): string | null {
   let last: string | null = null
-  let m: RegExpExecArray | null
-  OSC_TITLE_RE.lastIndex = 0
-  while ((m = OSC_TITLE_RE.exec(data)) !== null) {
+  for (const m of data.matchAll(OSC_TITLE_RE)) {
     last = m[2]
   }
   return last
@@ -241,10 +239,7 @@ export function normalizeTerminalTitle(title: string): string {
   // Why: Pi's titlebar extension animates every 80ms with different braille
   // frames. Collapsing those frames into one stable label avoids renderer
   // churn while preserving the working/idle transition Orca keys off.
-  if (
-    isPiTerminalTitle(title) ||
-    (containsBrailleSpinner(title) && title.includes(PI_IDLE_PREFIX))
-  ) {
+  if (isPiAgentTitle(title)) {
     const status = detectAgentStatusFromTitle(title)
     if (status === 'working') {
       return '\u280b Pi'

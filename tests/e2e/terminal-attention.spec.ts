@@ -204,14 +204,14 @@ test.describe('Terminal attention', () => {
     const secondTabId = await createTerminalTab(orcaPage, worktreeId)
     await waitForActiveTerminalManager(orcaPage, 30_000)
 
-    await activateTerminalTab(orcaPage, firstTabId)
-
-    // Simulate what scrollback replay does: a DECSET 1004 byte landing in
-    // xterm. This is the exact byte Claude Code emits at startup, and the
-    // exact byte SerializeAddon captures in a post-restart scrollback dump.
-    // The post-replay reset in layout-serialization.ts should cancel it
-    // out — so this write, immediately followed by the reset, produces a
-    // terminal with mode 1004 off.
+    // secondTabId is already active after createTerminalTab. Simulate what
+    // scrollback replay does: a DECSET 1004 byte landing in xterm. This is
+    // the exact byte Claude Code emits at startup, and the exact byte
+    // SerializeAddon captures in a post-restart scrollback dump. The
+    // post-replay reset in layout-serialization.ts should cancel it out —
+    // so this write, immediately followed by the reset, produces a terminal
+    // with mode 1004 off. We write while secondTabId has focus so the
+    // DECSET lands on the tab whose xterm we want to verify.
     await orcaPage.evaluate(
       ({ tabId, modeReset }) => {
         const managers = window.__paneManagers
@@ -229,11 +229,50 @@ test.describe('Terminal attention', () => {
       { tabId: secondTabId, modeReset: POST_REPLAY_MODE_RESET }
     )
 
-    // If mode 1004 were still on, the tab switch we just did (activate
-    // firstTabId) would have emitted `\e[O` into the shell and produced a
-    // BEL. Flush any pending output with a marker OSC title and assert
-    // that no unread indicator appeared.
-    const secondTabPtyId = await discoverActivePtyId(orcaPage)
+    // Now trigger a focus change. The DECSET happened while secondTabId was
+    // active; the subsequent focus change to firstTabId causes a focus-out
+    // on secondTabId's xterm. If POST_REPLAY_MODE_RESET failed to disable
+    // mode 1004, xterm would emit `\e[O` down secondTabId's PTY and zsh
+    // would ring the bell. Flush pending output with a marker OSC title
+    // and assert that no unread indicator appeared.
+    await activateTerminalTab(orcaPage, firstTabId)
+
+    // Resolve secondTabId's PTY directly from the store. We can't use
+    // discoverActivePtyId here — firstTabId is the active tab now, so that
+    // helper would return the wrong PTY and the marker flush would not
+    // guarantee secondTabId's pending output has been drained.
+    // Why: waitForActiveTerminalManager only waits for the pane manager to
+    // have panes — it does NOT wait for updateTabPtyId to fire, which
+    // happens asynchronously after pty.spawn resolves in pty-connection.ts.
+    // Poll so we don't race the spawn callback on slow CI.
+    await expect
+      .poll(
+        async () =>
+          orcaPage.evaluate((targetTabId) => {
+            const store = window.__store
+            if (!store) {
+              return null
+            }
+            return store.getState().ptyIdsByTabId[targetTabId]?.[0] ?? null
+          }, secondTabId),
+        {
+          timeout: 10_000,
+          message: `No PTY registered for tab ${secondTabId}`
+        }
+      )
+      .not.toBeNull()
+
+    const secondTabPtyId = await orcaPage.evaluate((targetTabId) => {
+      const store = window.__store
+      if (!store) {
+        throw new Error('window.__store is unavailable')
+      }
+      const pty = store.getState().ptyIdsByTabId[targetTabId]?.[0]
+      if (!pty) {
+        throw new Error(`No PTY found for tab ${targetTabId}`)
+      }
+      return pty
+    }, secondTabId)
     const MARKER_TITLE = 'mode-reset-marker'
     await execInTerminal(
       orcaPage,

@@ -9,7 +9,7 @@ import { createIpcPtyTransport } from './pty-transport'
 import { shouldSeedCacheTimerOnInitialTitle } from './cache-timer-seeding'
 import type { PtyConnectionDeps } from './pty-connection-types'
 import { isPaneReplaying, replayIntoTerminal } from './replay-guard'
-import { POST_REPLAY_MODE_RESET } from './layout-serialization'
+import { POST_REPLAY_MODE_RESET, POST_REPLAY_FOCUS_REPORTING_RESET } from './layout-serialization'
 
 const pendingSpawnByTabId = new Map<string, Promise<string | null>>()
 
@@ -149,6 +149,11 @@ export function connectPanePty(
   // scrollback replay so the mode state matches the fresh shell
   // underneath. See POST_REPLAY_MODE_RESET in layout-serialization.ts.
   const onBell = (): void => {
+    // Why: restored Claude Code sessions have been observed to emit a real
+    // standalone BEL some time after daemon snapshot reattach, even when Orca
+    // did not just forward focus/control input. Treat the BEL as authoritative
+    // PTY output here; any product-side suppression should be an explicit UX
+    // decision higher up, not a transport-layer guess.
     deps.markWorktreeUnread(deps.worktreeId)
     deps.markTerminalTabUnread(deps.tabId)
     deps.dispatchNotification({ source: 'terminal-bell' })
@@ -486,6 +491,13 @@ export function connectPanePty(
             // Why replayIntoTerminal: same rationale as the cold-restore path.
             replayIntoTerminal(pane, deps.replayingPanesRef, '\x1b[2J\x1b[3J\x1b[H')
             replayIntoTerminal(pane, deps.replayingPanesRef, connectResult.snapshot)
+            // Why: snapshot restore keeps a live daemon session, so we avoid
+            // the broader POST_REPLAY_MODE_RESET bundle here. Focus reporting
+            // is the unsafe exception: preserving `?1004h` causes xterm to send
+            // `\e[I` / `\e[O` on pane focus/blur, and restored shells can ring
+            // BEL when no TUI is actively consuming them. Reset only 1004 so
+            // live-session mouse/paste modes stay intact while phantom bells stop.
+            replayIntoTerminal(pane, deps.replayingPanesRef, POST_REPLAY_FOCUS_REPORTING_RESET)
           }
 
           if (ptyId) {

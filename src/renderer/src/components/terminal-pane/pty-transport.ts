@@ -330,6 +330,13 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
               clearTimeout(staleTitleTimer)
               staleTitleTimer = null
             }
+            // Why: eager-buffered bytes may end mid-OSC (truncated/partial session
+            // data), leaving bellDetector with inOsc = true. Without resetting, the
+            // next real BEL in live data would be silently classified as an OSC
+            // terminator and dropped. BEL is the sole attention signal per the PR
+            // design, so this reset guards the attention pipeline against a silent
+            // regression driven by replay state leaking into the live stream.
+            bellDetector.reset()
           }
         }
         bufferHandle.dispose()

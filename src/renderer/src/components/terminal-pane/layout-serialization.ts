@@ -30,6 +30,15 @@ export const EMPTY_LAYOUT: TerminalLayoutSnapshot = {
 export const POST_REPLAY_MODE_RESET =
   '\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1004l\x1b[?1006l\x1b[?2004l'
 
+// Why: daemon snapshot restore reattaches to a live session, so we avoid the
+// full POST_REPLAY_MODE_RESET bundle there — a still-running TUI may still
+// rely on mouse or bracketed-paste modes. Focus reporting is the exception:
+// if xterm preserves `?1004h` across snapshot replay, pane focus/blur emits
+// `\e[I` / `\e[O` into the PTY and shells like zsh ring BEL when no TUI is
+// actively consuming them. Clearing only 1004 preserves the other live-session
+// modes while preventing phantom bells on restored background tabs.
+export const POST_REPLAY_FOCUS_REPORTING_RESET = '\x1b[?1004l'
+
 export function paneLeafId(paneId: number): string {
   return `pane:${paneId}`
 }
