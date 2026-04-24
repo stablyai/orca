@@ -750,4 +750,43 @@ describe('updater', () => {
 
     expect((autoUpdaterMock as Record<string, unknown>).verifyUpdateCodeSignature).toBeUndefined()
   })
+
+  // Why: a user running an RC (e.g. 1.3.17-rc.1) must stay on the RC channel
+  // so the default "Check for Updates" path can find the next RC. The generic
+  // /releases/latest/download/ feed only exposes non-prerelease releases.
+  it('auto-enables the RC channel at setup when running a prerelease build', async () => {
+    appMock.getVersion.mockReturnValue('1.3.17-rc.1')
+    autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
+
+    const { setupAutoUpdater } = await import('./updater')
+
+    const mainWindow = { webContents: { send: vi.fn() } }
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+
+    expect(autoUpdaterMock.allowPrerelease).toBe(true)
+    expect(autoUpdaterMock.setFeedURL).toHaveBeenCalledWith({
+      provider: 'github',
+      owner: 'stablyai',
+      repo: 'orca'
+    })
+    expect(autoUpdaterMock.setFeedURL).not.toHaveBeenCalledWith(
+      expect.objectContaining({ provider: 'generic' })
+    )
+  })
+
+  it('keeps the generic feed at setup when running a stable release', async () => {
+    appMock.getVersion.mockReturnValue('1.3.17')
+    autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
+
+    const { setupAutoUpdater } = await import('./updater')
+
+    const mainWindow = { webContents: { send: vi.fn() } }
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+
+    expect(autoUpdaterMock.allowPrerelease).not.toBe(true)
+    expect(autoUpdaterMock.setFeedURL).toHaveBeenCalledWith({
+      provider: 'generic',
+      url: 'https://github.com/stablyai/orca/releases/latest/download'
+    })
+  })
 })
