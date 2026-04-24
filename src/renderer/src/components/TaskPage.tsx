@@ -24,6 +24,13 @@ import { useRepoMap } from '@/store/selectors'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select'
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -574,13 +581,10 @@ export default function TaskPage(): React.JSX.Element {
     [eligibleRepos, repoSelection]
   )
 
-  // Why: many single-repo-only affordances (new-issue dialog target, drawer
-  // repo path lookup, optimistic stub) need *a* repo. When exactly one is
-  // selected we use it; otherwise we pick the first to keep the UI
-  // functional, and disable the single-repo features that don't make sense
-  // cross-repo (new-issue button) explicitly.
+  // Why: many affordances (new-issue dialog default, drawer repo path lookup,
+  // optimistic stub) need *a* repo. First selected is used as the default;
+  // cross-repo dialogs still let the user override per-action.
   const primaryRepo = selectedRepos[0] ?? null
-  const isSingleRepo = selectedRepos.length === 1
 
   // Why: seed the preset + query from the user's saved default synchronously
   // so the first fetch effect issues exactly one request keyed to the final
@@ -671,6 +675,15 @@ export default function TaskPage(): React.JSX.Element {
   const [newIssueTitle, setNewIssueTitle] = useState('')
   const [newIssueBody, setNewIssueBody] = useState('')
   const [newIssueSubmitting, setNewIssueSubmitting] = useState(false)
+  const [newIssueRepoId, setNewIssueRepoId] = useState<string | null>(null)
+
+  // Why: resolve the target repo from the user's choice, falling back to the
+  // first selected repo if the chosen id drops out of the selection while the
+  // dialog is open — keeps submit always landing on a valid repo.
+  const newIssueTargetRepo = useMemo(
+    () => selectedRepos.find((r) => r.id === newIssueRepoId) ?? selectedRepos[0] ?? null,
+    [selectedRepos, newIssueRepoId]
+  )
 
   const [drawerLinearIssueId, setDrawerLinearIssueId] = useState<string | null>(null)
   const [drawerLinearIssueFallback, setDrawerLinearIssueFallback] = useState<LinearIssue | null>(
@@ -909,7 +922,7 @@ export default function TaskPage(): React.JSX.Element {
   )
 
   const handleCreateNewIssue = useCallback(async (): Promise<void> => {
-    if (!primaryRepo || !isSingleRepo) {
+    if (!newIssueTargetRepo) {
       return
     }
     const title = newIssueTitle.trim()
@@ -919,7 +932,7 @@ export default function TaskPage(): React.JSX.Element {
     setNewIssueSubmitting(true)
     try {
       const result = await window.api.gh.createIssue({
-        repoPath: primaryRepo.path,
+        repoPath: newIssueTargetRepo.path,
         title,
         body: newIssueBody
       })
@@ -946,7 +959,7 @@ export default function TaskPage(): React.JSX.Element {
       // has immediate content, then refine with the full `workItem` fetch.
       const stub: GitHubWorkItem = {
         id: `issue:${String(result.number)}`,
-        repoId: primaryRepo.id,
+        repoId: newIssueTargetRepo.id,
         type: 'issue',
         number: result.number,
         title,
@@ -957,9 +970,9 @@ export default function TaskPage(): React.JSX.Element {
         author: null
       }
       setDrawerWorkItem(stub)
-      const stubRepoId = primaryRepo.id
+      const stubRepoId = newIssueTargetRepo.id
       void window.api.gh
-        .workItem({ repoPath: primaryRepo.path, number: result.number })
+        .workItem({ repoPath: newIssueTargetRepo.path, number: result.number })
         .then((full) => {
           if (full) {
             // Why: `full` is `Omit<GitHubWorkItem, 'repoId'>` (IPC shape).
@@ -974,14 +987,7 @@ export default function TaskPage(): React.JSX.Element {
     } finally {
       setNewIssueSubmitting(false)
     }
-  }, [
-    isSingleRepo,
-    newIssueBody,
-    newIssueSubmitting,
-    newIssueTitle,
-    primaryRepo,
-    setDrawerWorkItem
-  ])
+  }, [newIssueBody, newIssueSubmitting, newIssueTargetRepo, newIssueTitle, setDrawerWorkItem])
 
   useEffect(() => {
     // Why: when a modal is open, let it own Esc dismissal.
@@ -1342,9 +1348,10 @@ export default function TaskPage(): React.JSX.Element {
                               onClick={() => {
                                 setNewIssueTitle('')
                                 setNewIssueBody('')
+                                setNewIssueRepoId(primaryRepo?.id ?? null)
                                 setNewIssueOpen(true)
                               }}
-                              disabled={!primaryRepo || !isSingleRepo}
+                              disabled={!newIssueTargetRepo}
                               aria-label="New GitHub issue"
                               className="border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
                             >
@@ -1352,9 +1359,7 @@ export default function TaskPage(): React.JSX.Element {
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent side="bottom" sideOffset={6}>
-                            {isSingleRepo
-                              ? 'New GitHub issue'
-                              : 'Select a single repo to create an issue'}
+                            New GitHub issue
                           </TooltipContent>
                         </Tooltip>
                         <Tooltip>
@@ -1925,10 +1930,33 @@ export default function TaskPage(): React.JSX.Element {
           <DialogHeader>
             <DialogTitle>New GitHub issue</DialogTitle>
             <DialogDescription>
-              Opens a new issue in {primaryRepo?.displayName ?? 'this repository'}.
+              {selectedRepos.length > 1
+                ? 'Opens a new issue in the selected repository.'
+                : `Opens a new issue in ${newIssueTargetRepo?.displayName ?? 'this repository'}.`}
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3">
+            {selectedRepos.length > 1 ? (
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] font-medium text-muted-foreground">Repository</label>
+                <Select
+                  value={newIssueRepoId ?? undefined}
+                  onValueChange={(v) => setNewIssueRepoId(v)}
+                  disabled={newIssueSubmitting}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {selectedRepos.map((r) => (
+                      <SelectItem key={r.id} value={r.id}>
+                        <RepoDotLabel name={r.displayName} color={r.badgeColor} />
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-medium text-muted-foreground">Title</label>
               <Input
@@ -1970,9 +1998,7 @@ export default function TaskPage(): React.JSX.Element {
             </Button>
             <Button
               onClick={() => void handleCreateNewIssue()}
-              disabled={
-                !primaryRepo || !isSingleRepo || !newIssueTitle.trim() || newIssueSubmitting
-              }
+              disabled={!newIssueTargetRepo || !newIssueTitle.trim() || newIssueSubmitting}
             >
               {newIssueSubmitting ? (
                 <>
