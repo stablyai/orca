@@ -791,7 +791,7 @@ function App(): React.JSX.Element {
                 disabled={!canGoBackWorktree}
                 aria-label="Go back"
               >
-                <ArrowLeft size={13} />
+                <ArrowLeft size={12} />
               </button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
@@ -806,7 +806,7 @@ function App(): React.JSX.Element {
                 disabled={!canGoForwardWorktree}
                 aria-label="Go forward"
               >
-                <ArrowRight size={13} />
+                <ArrowRight size={12} />
               </button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
