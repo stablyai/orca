@@ -117,35 +117,71 @@ async function fetchQuota(accessToken: string, projectId: string): Promise<Provi
 async function fetchViaAuthJson(auth: GoogleAuthEntry): Promise<ProviderRateLimits> {
   let accessToken = auth.access
 
+  // Why: opencode stores the auth.json refresh field as a pipe-delimited string:
+  // "<refresh_token>|<projectId>|<managedProjectId>". The first segment is the
+  // actual OAuth refresh token; the rest carry project metadata.
   const refreshParts = auth.refresh.split('|')
+  const refreshToken = refreshParts[0] ?? ''
   const projectId = refreshParts[1] ?? ''
   const managedProjectId = refreshParts[2] ?? ''
   const effectiveProjectId = projectId || managedProjectId
 
   if (auth.expires < Date.now()) {
-    return {
-      provider: 'gemini',
-      session: null,
-      weekly: null,
-      updatedAt: Date.now(),
-      error: 'Token refresh unavailable for auth.json source',
-      status: 'error'
+    if (!refreshToken) {
+      return {
+        provider: 'gemini',
+        session: null,
+        weekly: null,
+        updatedAt: Date.now(),
+        error: 'Token expired and no refresh token available',
+        status: 'error'
+      }
     }
+
+    // Why: reuse the same bundle-extracted client credentials used for the
+    // oauth_creds.json path — both share the same Google OAuth app registration.
+    const newToken = await tryRefreshTokenFromBundle(refreshToken)
+    if (!newToken) {
+      return {
+        provider: 'gemini',
+        session: null,
+        weekly: null,
+        updatedAt: Date.now(),
+        error: 'Token refresh failed',
+        status: 'error'
+      }
+    }
+    accessToken = newToken
   }
 
   const result = await fetchQuota(accessToken, effectiveProjectId)
 
-  // Why: auth.json gives us project metadata but not a safe refresh path inside
-  // Orca, so a rejected token must fail closed instead of embedding secrets.
+  // Why: server may reject the token even when expiry_date is locally valid;
+  // attempt one refresh before giving up.
   if (result.status === 'error' && result.error?.includes('Quota fetch failed (401)')) {
-    return {
-      provider: 'gemini',
-      session: null,
-      weekly: null,
-      updatedAt: Date.now(),
-      error: 'Token refresh unavailable for auth.json source',
-      status: 'error'
+    if (!refreshToken) {
+      return {
+        provider: 'gemini',
+        session: null,
+        weekly: null,
+        updatedAt: Date.now(),
+        error: 'Token refresh unavailable for auth.json source',
+        status: 'error'
+      }
     }
+
+    const newToken = await tryRefreshTokenFromBundle(refreshToken)
+    if (!newToken) {
+      return {
+        provider: 'gemini',
+        session: null,
+        weekly: null,
+        updatedAt: Date.now(),
+        error: 'Token refresh failed',
+        status: 'error'
+      }
+    }
+    return fetchQuota(newToken, effectiveProjectId)
   }
 
   return result
@@ -155,7 +191,7 @@ async function fetchViaOauthCreds(creds: GeminiCredentials): Promise<ProviderRat
   let accessToken = creds.access_token
 
   if (creds.expiry_date < Date.now()) {
-    const newToken = await tryRefreshTokenFromBundle(creds)
+    const newToken = await tryRefreshTokenFromBundle(creds.refresh_token)
     if (!newToken) {
       return {
         provider: 'gemini',
@@ -180,7 +216,7 @@ async function fetchViaOauthCreds(creds: GeminiCredentials): Promise<ProviderRat
 
   // Why: server may reject tokens early even when expiry_date is valid locally.
   if (result.status === 'error' && result.error?.includes('Quota fetch failed (401)')) {
-    const newToken = await tryRefreshTokenFromBundle(creds)
+    const newToken = await tryRefreshTokenFromBundle(creds.refresh_token)
     if (!newToken) {
       return {
         provider: 'gemini',

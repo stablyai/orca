@@ -7,13 +7,37 @@ import {
   quotaResponse
 } from './gemini-usage-fetcher.test-fixtures'
 
-const { readFileMock, netFetchMock } = vi.hoisted(() => ({
+const {
+  readFileMock,
+  existsSyncMock,
+  readdirSyncMock,
+  readFileSyncMock,
+  realpathSyncMock,
+  execSyncMock,
+  netFetchMock
+} = vi.hoisted(() => ({
   readFileMock: vi.fn(),
+  existsSyncMock: vi.fn(),
+  readdirSyncMock: vi.fn(),
+  readFileSyncMock: vi.fn(),
+  realpathSyncMock: vi.fn(),
+  execSyncMock: vi.fn(),
   netFetchMock: vi.fn()
 }))
 
 vi.mock('node:fs/promises', () => ({
   readFile: readFileMock
+}))
+
+vi.mock('node:fs', () => ({
+  existsSync: existsSyncMock,
+  readdirSync: readdirSyncMock,
+  readFileSync: readFileSyncMock,
+  realpathSync: realpathSyncMock
+}))
+
+vi.mock('node:child_process', () => ({
+  execSync: execSyncMock
 }))
 
 vi.mock('electron', () => ({
@@ -92,7 +116,21 @@ describe('fetchGeminiRateLimits', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-04-24T12:00:00.000Z'))
     readFileMock.mockReset()
+    existsSyncMock.mockReset()
+    realpathSyncMock.mockReset()
+    execSyncMock.mockReset()
     netFetchMock.mockReset()
+    // Why: default to "gemini binary not found" so credential extraction
+    // short-circuits; individual tests override this when they need refresh.
+    execSyncMock.mockImplementation(() => {
+      throw new Error('not found')
+    })
+    realpathSyncMock.mockImplementation((p: string) => p)
+    existsSyncMock.mockReturnValue(false)
+    readdirSyncMock.mockReturnValue([])
+    readFileSyncMock.mockImplementation(() => {
+      throw new Error('ENOENT')
+    })
   })
 
   function setupAuthJsonNotFound(): void {
@@ -193,26 +231,40 @@ describe('fetchGeminiRateLimits', () => {
     expect(result.session).toBeNull()
   })
 
-  it('returns error when auth.json token is expired', async () => {
+  it('returns error when auth.json token is expired and bundle credentials unavailable', async () => {
+    // execSyncMock already throws by default (gemini not found) → refresh fails
     setupAuthJsonGoogleExpired()
 
     const result = await fetchGeminiRateLimits()
 
     expect(result.status).toBe('error')
-    expect(result.error).toContain('Token refresh unavailable for auth.json source')
+    expect(result.error).toContain('Token refresh failed')
     expect(result.session).toBeNull()
-    expect(netFetchMock).not.toHaveBeenCalled()
   })
 
-  it('returns error when auth.json refresh fails', async () => {
+  it('returns ok when auth.json token is expired but bundle refresh succeeds', async () => {
     setupAuthJsonGoogleExpired()
+    execSyncMock.mockReturnValue('/opt/homebrew/bin/gemini')
+    realpathSyncMock.mockReturnValue('/opt/homebrew/Cellar/gemini-cli/0.38.2/bin/gemini')
+    readFileMock.mockImplementation(async (filePath: string) => {
+      if (filePath.includes('auth.json')) {
+        const { authJsonGoogleExpired } = await import('./gemini-usage-fetcher.test-fixtures')
+        return JSON.stringify(authJsonGoogleExpired)
+      }
+      if (filePath.includes('oauth2.js')) {
+        const { oauth2JsContent } = await import('./gemini-usage-fetcher.test-fixtures')
+        return oauth2JsContent
+      }
+      throw { code: 'ENOENT' }
+    })
+    netFetchMock
+      .mockResolvedValueOnce(makeResponse({ access_token: 'refreshed-token' }))
+      .mockResolvedValueOnce(makeResponse(quotaResponse))
 
     const result = await fetchGeminiRateLimits()
 
-    expect(result.status).toBe('error')
-    expect(result.error).toContain('Token refresh unavailable for auth.json source')
-    expect(result.session).toBeNull()
-    expect(result.weekly).toBeNull()
+    expect(result.status).toBe('ok')
+    expect(result.session).not.toBeNull()
   })
 
   it('handles wrapped buckets response from quota API', async () => {
@@ -262,38 +314,42 @@ describe('fetchGeminiRateLimits', () => {
     expect(quotaBody.project).toBe('managed-789')
   })
 
-  it('returns error when auth.json quota fetch returns 401', async () => {
+  it('returns error when auth.json quota fetch returns 401 and bundle credentials unavailable', async () => {
+    // execSyncMock throws by default → credential extraction fails → refresh fails
     setupAuthJsonGoogleValid()
     netFetchMock.mockResolvedValueOnce(makeResponse('Unauthorized', 401))
 
     const result = await fetchGeminiRateLimits()
 
     expect(result.status).toBe('error')
-    expect(result.error).toContain('Token refresh unavailable for auth.json source')
-    expect(result.session).toBeNull()
-  })
-
-  it('returns error when auth.json quota fetch returns 401 repeatedly', async () => {
-    setupAuthJsonGoogleValid()
-    netFetchMock.mockResolvedValueOnce(makeResponse('Unauthorized', 401))
-
-    const result = await fetchGeminiRateLimits()
-
-    expect(result.status).toBe('error')
-    expect(result.error).toContain('Token refresh unavailable for auth.json source')
+    expect(result.error).toContain('Token refresh failed')
     expect(result.session).toBeNull()
     expect(result.weekly).toBeNull()
   })
 
-  it('returns error when auth.json quota fetch returns 401 without retry path', async () => {
+  it('retries with refreshed token when auth.json quota fetch returns 401 and bundle succeeds', async () => {
     setupAuthJsonGoogleValid()
-    netFetchMock.mockResolvedValueOnce(makeResponse('Unauthorized', 401))
+    execSyncMock.mockReturnValue('/opt/homebrew/bin/gemini')
+    realpathSyncMock.mockReturnValue('/opt/homebrew/Cellar/gemini-cli/0.38.2/bin/gemini')
+    readFileMock.mockImplementation(async (filePath: string) => {
+      if (filePath.includes('auth.json')) {
+        const { authJsonGoogle } = await import('./gemini-usage-fetcher.test-fixtures')
+        return JSON.stringify(authJsonGoogle)
+      }
+      if (filePath.includes('oauth2.js')) {
+        const { oauth2JsContent } = await import('./gemini-usage-fetcher.test-fixtures')
+        return oauth2JsContent
+      }
+      throw { code: 'ENOENT' }
+    })
+    netFetchMock
+      .mockResolvedValueOnce(makeResponse('Unauthorized', 401))
+      .mockResolvedValueOnce(makeResponse({ access_token: 'retried-token' }))
+      .mockResolvedValueOnce(makeResponse(quotaResponse))
 
     const result = await fetchGeminiRateLimits()
 
-    expect(result.status).toBe('error')
-    expect(result.error).toContain('Token refresh unavailable for auth.json source')
-    expect(result.session).toBeNull()
-    expect(result.weekly).toBeNull()
+    expect(result.status).toBe('ok')
+    expect(result.session).not.toBeNull()
   })
 })
