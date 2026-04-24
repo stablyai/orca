@@ -782,7 +782,7 @@ function App(): React.JSX.Element {
           container so the sidebar-collapse spacer stays sized to the left
           controls only. */}
       {activeView === 'terminal' && (
-        <div className="ml-auto mr-2 flex items-center">
+        <div className="ml-auto mr-3 flex items-center">
           <Tooltip>
             <TooltipTrigger asChild>
               <button
