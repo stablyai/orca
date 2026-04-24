@@ -155,6 +155,7 @@ export function useDiffCommentDecorator({
     })
 
     disposablesRef.current = [onMouseMove, onMouseLeave, onScroll]
+    const zones = zonesRef.current
 
     return () => {
       for (const d of disposablesRef.current) {
@@ -169,10 +170,10 @@ export function useDiffCommentDecorator({
       // stale zone ids from a dead editor. The diff effect below deliberately
       // has no cleanup so comment-only changes don't cause a full zone
       // rebuild; this cleanup is the single place we reset zone tracking.
-      for (const entry of zonesRef.current.values()) {
+      for (const entry of zones.values()) {
         entry.root.unmount()
       }
-      zonesRef.current.clear()
+      zones.clear()
     }
   }, [editor])
 

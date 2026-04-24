@@ -42,7 +42,20 @@ function QuickLaunchAgentMenuItemsInner({
   groupId,
   onFocusTerminal
 }: QuickLaunchAgentMenuItemsProps): React.JSX.Element | null {
-  const { detectedIds } = useDetectedAgents()
+  // Why: must be a reactive selector (not getConnectionId() which reads a
+  // snapshot via getState()). This ensures the component re-renders when the
+  // SSH connection state changes. Returns undefined when the worktree isn't
+  // found (store not hydrated), null for local repos, string for remote.
+  const connectionId = useAppStore((s) => {
+    const allWorktrees = Object.values(s.worktreesByRepo ?? {}).flat()
+    const worktree = allWorktrees.find((w) => w.id === worktreeId)
+    if (!worktree) {
+      return undefined
+    }
+    const repo = s.repos?.find((r) => r.id === worktree.repoId)
+    return repo?.connectionId ?? null
+  })
+  const { detectedIds } = useDetectedAgents(connectionId)
   const defaultAgent = useAppStore((s) => s.settings?.defaultTuiAgent)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)

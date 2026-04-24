@@ -1,4 +1,8 @@
-import { app, BrowserWindow, nativeImage, nativeTheme } from 'electron'
+/* eslint-disable max-lines -- Why: this is Orca's main-process entry point;
+   it owns app lifecycle, service wiring, window creation, and hook/daemon
+   startup. Splitting by line count would fragment tightly coupled startup
+   logic across files without a cleaner ownership seam. */
+import { app, BrowserWindow, nativeImage, nativeTheme, systemPreferences } from 'electron'
 import { electronApp, is } from '@electron-toolkit/utils'
 import devIcon from '../../resources/icon-dev.png?asset'
 import { Store, initDataPath } from './persistence'
@@ -33,6 +37,8 @@ import { attachMainWindowServices } from './window/attach-main-window-services'
 import { createMainWindow } from './window/createMainWindow'
 import { CodexAccountService } from './codex-accounts/service'
 import { CodexRuntimeHomeService } from './codex-accounts/runtime-home-service'
+import { ClaudeAccountService } from './claude-accounts/service'
+import { ClaudeRuntimeAuthService } from './claude-accounts/runtime-auth-service'
 import { StarNagService } from './star-nag/service'
 import { agentHookServer } from './agent-hooks/server'
 import { claudeHookService } from './claude/hook-service'
@@ -53,10 +59,32 @@ let claudeUsage: ClaudeUsageStore | null = null
 let codexUsage: CodexUsageStore | null = null
 let codexAccounts: CodexAccountService | null = null
 let codexRuntimeHome: CodexRuntimeHomeService | null = null
+let claudeAccounts: ClaudeAccountService | null = null
+let claudeRuntimeAuth: ClaudeRuntimeAuthService | null = null
 let runtime: OrcaRuntimeService | null = null
 let rateLimits: RateLimitService | null = null
 let runtimeRpc: OrcaRuntimeRpcServer | null = null
 let starNag: StarNagService | null = null
+
+function triggerStartupMicrophoneRegistration(): void {
+  if (process.platform !== 'darwin') {
+    return
+  }
+  try {
+    const status = systemPreferences.getMediaAccessStatus('microphone')
+    if (status !== 'not-determined') {
+      return
+    }
+    // Why: terminal child processes (sox/ffmpeg/voice CLIs) cannot reliably
+    // surface the TCC dialog themselves. Prompt once from the app process after
+    // the window is visible so mic capture in embedded terminals can work.
+    void systemPreferences.askForMediaAccess('microphone').catch((error: unknown) => {
+      console.error('[permissions] Failed to request microphone access:', error)
+    })
+  } catch (error) {
+    console.error('[permissions] Failed to check microphone access status:', error)
+  }
+}
 
 installUncaughtPipeErrorGuard()
 // Why: propagate the Orca app version into `process.env` so PTY-env
@@ -119,6 +147,14 @@ function openMainWindow(): BrowserWindow {
   if (!codexRuntimeHome) {
     throw new Error('Codex runtime home service must be initialized before opening the main window')
   }
+  if (!claudeAccounts) {
+    throw new Error('Claude account service must be initialized before opening the main window')
+  }
+  if (!claudeRuntimeAuth) {
+    throw new Error(
+      'Claude runtime auth service must be initialized before opening the main window'
+    )
+  }
 
   const window = createMainWindow(store, {
     getIsQuitting: () => isQuitting,
@@ -133,10 +169,17 @@ function openMainWindow(): BrowserWindow {
     claudeUsage,
     codexUsage,
     codexAccounts,
+    claudeAccounts,
     rateLimits,
     window.webContents.id
   )
-  attachMainWindowServices(window, store, runtime, () => codexRuntimeHome!.prepareForCodexLaunch())
+  attachMainWindowServices(
+    window,
+    store,
+    runtime,
+    () => codexRuntimeHome!.prepareForCodexLaunch(),
+    () => claudeRuntimeAuth!.prepareForClaudeLaunch()
+  )
   rateLimits.attach(window)
   rateLimits.start()
   window.on('closed', () => {
@@ -185,7 +228,10 @@ app.whenReady().then(async () => {
   rateLimits = new RateLimitService()
   codexRuntimeHome = new CodexRuntimeHomeService(store)
   codexAccounts = new CodexAccountService(store, rateLimits, codexRuntimeHome)
+  claudeRuntimeAuth = new ClaudeRuntimeAuthService(store)
+  claudeAccounts = new ClaudeAccountService(store, rateLimits, claudeRuntimeAuth)
   rateLimits.setCodexHomePathResolver(() => codexRuntimeHome!.prepareForRateLimitFetch())
+  rateLimits.setClaudeAuthPreparationResolver(() => claudeRuntimeAuth!.prepareForRateLimitFetch())
   runtime = new OrcaRuntimeService(store, stats)
   starNag = new StarNagService(store, stats)
   starNag.start()
@@ -294,6 +340,7 @@ app.whenReady().then(async () => {
   // window, making it impossible for the user to click "Allow".
   win.once('show', () => {
     triggerStartupNotificationRegistration(store!)
+    triggerStartupMicrophoneRegistration()
   })
 
   app.on('activate', () => {

@@ -128,7 +128,7 @@ async function getPRFiles(repoPath: string, prNumber: number): Promise<GitHubPRF
 async function getIssueBodyAndComments(
   repoPath: string,
   issueNumber: number
-): Promise<{ body: string; comments: PRComment[] }> {
+): Promise<{ body: string; comments: PRComment[]; assignees: string[] }> {
   const ownerRepo = await getOwnerRepo(repoPath)
   try {
     if (ownerRepo) {
@@ -152,7 +152,10 @@ async function getIssueBodyAndComments(
           { cwd: repoPath }
         )
       ])
-      const issue = JSON.parse(issueResult.stdout) as { body?: string | null }
+      const issue = JSON.parse(issueResult.stdout) as {
+        body?: string | null
+        assignees?: { login: string }[]
+      }
       type RESTComment = {
         id: number
         user: { login: string; avatar_url: string } | null
@@ -170,11 +173,12 @@ async function getIssueBodyAndComments(
           url: c.html_url
         })
       )
-      return { body: issue.body ?? '', comments }
+      const assignees = (issue.assignees ?? []).map((a) => a.login)
+      return { body: issue.body ?? '', comments, assignees }
     }
     // Fallback: non-GitHub remote
     const { stdout } = await ghExecFileAsync(
-      ['issue', 'view', String(issueNumber), '--json', 'body,comments'],
+      ['issue', 'view', String(issueNumber), '--json', 'body,comments,assignees'],
       { cwd: repoPath }
     )
     const data = JSON.parse(stdout) as {
@@ -185,6 +189,7 @@ async function getIssueBodyAndComments(
         createdAt: string
         url: string
       }[]
+      assignees?: { login: string }[]
     }
     const comments = (data.comments ?? []).map(
       (c, i): PRComment => ({
@@ -196,9 +201,10 @@ async function getIssueBodyAndComments(
         url: c.url ?? ''
       })
     )
-    return { body: data.body ?? '', comments }
+    const fallbackAssignees = (data.assignees ?? []).map((a) => a.login)
+    return { body: data.body ?? '', comments, assignees: fallbackAssignees }
   } catch {
-    return { body: '', comments: [] }
+    return { body: '', comments: [], assignees: [] }
   }
 }
 
@@ -238,8 +244,8 @@ export async function getWorkItemDetails(
   await acquire()
   try {
     if (item.type === 'issue') {
-      const { body, comments } = await getIssueBodyAndComments(repoPath, item.number)
-      return { item, body, comments }
+      const { body, comments, assignees } = await getIssueBodyAndComments(repoPath, item.number)
+      return { item, body, comments, assignees }
     }
 
     // PR: fetch body + comments + checks + files + head/base SHAs in parallel.

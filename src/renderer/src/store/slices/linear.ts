@@ -2,6 +2,7 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { LinearViewer, LinearConnectionStatus, LinearIssue } from '../../../../shared/types'
 import type { CacheEntry } from './github'
+import { clearLinearMetadataCache } from '../../hooks/useIssueMetadata'
 
 const CACHE_TTL = 60_000 // 60s — same as GitHub work-items TTL
 const MAX_CACHE_ENTRIES = 500
@@ -52,6 +53,7 @@ export type LinearSlice = {
     filter?: 'assigned' | 'created' | 'all' | 'completed',
     limit?: number
   ) => Promise<LinearIssue[]>
+  patchLinearIssue: (issueId: string, patch: Partial<LinearIssue>) => void
 }
 
 export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (set, get) => ({
@@ -101,6 +103,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     inflightIssueRequests.clear()
     inflightSearchRequests.clear()
     inflightListRequests.clear()
+    clearLinearMetadataCache()
     set({
       linearStatus: { connected: false, viewer: null },
       linearIssueCache: {},
@@ -222,5 +225,42 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
 
     inflightListRequests.set(cacheKey, promise)
     return promise
+  },
+
+  patchLinearIssue: (issueId, patch) => {
+    set((s) => {
+      let changed = false
+
+      const nextIssueCache = { ...s.linearIssueCache }
+      const issueEntry = nextIssueCache[issueId]
+      if (issueEntry?.data) {
+        // Why: set fetchedAt to 0 so the next fetchLinearIssue call
+        // actually hits IPC instead of returning the stale optimistic data.
+        nextIssueCache[issueId] = {
+          ...issueEntry,
+          data: { ...issueEntry.data, ...patch },
+          fetchedAt: 0
+        }
+        changed = true
+      }
+
+      const nextSearchCache = { ...s.linearSearchCache }
+      for (const key of Object.keys(nextSearchCache)) {
+        const entry = nextSearchCache[key]
+        if (!entry?.data) {
+          continue
+        }
+        const idx = entry.data.findIndex((item) => item.id === issueId)
+        if (idx === -1) {
+          continue
+        }
+        const updatedItems = [...entry.data]
+        updatedItems[idx] = { ...updatedItems[idx], ...patch }
+        nextSearchCache[key] = { ...entry, data: updatedItems }
+        changed = true
+      }
+
+      return changed ? { linearIssueCache: nextIssueCache, linearSearchCache: nextSearchCache } : {}
+    })
   }
 })

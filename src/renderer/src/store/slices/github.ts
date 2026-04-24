@@ -194,6 +194,7 @@ export type GitHubSlice = {
    * "new workspace" buttons) to warm the cache before the page mounts.
    */
   prefetchWorkItems: (repoId: string, repoPath: string, limit?: number, query?: string) => void
+  patchWorkItem: (itemId: string, patch: Partial<GitHubWorkItem>) => void
 }
 
 export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (set, get) => ({
@@ -621,6 +622,28 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     if (worktree.linkedIssue) {
       void get().fetchIssue(repo.path, worktree.linkedIssue)
     }
+  },
+
+  patchWorkItem: (itemId, patch) => {
+    set((s) => {
+      const nextCache = { ...s.workItemsCache }
+      let changed = false
+      for (const key of Object.keys(nextCache)) {
+        const entry = nextCache[key]
+        if (!entry?.data) {
+          continue
+        }
+        const idx = entry.data.findIndex((item) => item.id === itemId)
+        if (idx === -1) {
+          continue
+        }
+        const updatedItems = [...entry.data]
+        updatedItems[idx] = { ...updatedItems[idx], ...patch }
+        nextCache[key] = { ...entry, data: updatedItems }
+        changed = true
+      }
+      return changed ? { workItemsCache: nextCache } : {}
+    })
   },
 
   // Why: worktree switches previously force-refreshed GitHub data on every

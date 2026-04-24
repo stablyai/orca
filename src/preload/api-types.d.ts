@@ -6,6 +6,7 @@ import type {
   BrowserSessionProfile,
   BrowserSessionProfileScope,
   BrowserSessionProfileSource,
+  ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState,
   CreateWorktreeResult,
   DirEntry,
@@ -24,6 +25,12 @@ import type {
   LinearViewer,
   LinearConnectionStatus,
   LinearIssue,
+  LinearIssueUpdate,
+  LinearComment,
+  LinearWorkflowState,
+  LinearLabel,
+  LinearMember,
+  GitHubIssueUpdate,
   NotificationDispatchRequest,
   NotificationDispatchResult,
   OrcaHooks,
@@ -179,6 +186,7 @@ export type PreflightApi = {
   check: (args?: { force?: boolean }) => Promise<PreflightStatus>
   detectAgents: () => Promise<string[]>
   refreshAgents: () => Promise<RefreshAgentsResult>
+  detectRemoteAgents: (args: { connectionId: string }) => Promise<string[]>
 }
 
 export type ExportApi = {
@@ -409,6 +417,18 @@ export type PreloadApi = {
       prNumber: number
       method?: 'merge' | 'squash' | 'rebase'
     }) => Promise<{ ok: true } | { ok: false; error: string }>
+    updateIssue: (args: {
+      repoPath: string
+      number: number
+      updates: GitHubIssueUpdate
+    }) => Promise<{ ok: true } | { ok: false; error: string }>
+    addIssueComment: (args: {
+      repoPath: string
+      number: number
+      body: string
+    }) => Promise<{ ok: true; id: number } | { ok: false; error: string }>
+    listLabels: (args: { repoPath: string }) => Promise<string[]>
+    listAssignableUsers: (args: { repoPath: string }) => Promise<string[]>
     checkOrcaStarred: () => Promise<boolean | null>
     starOrca: () => Promise<boolean>
   }
@@ -424,6 +444,18 @@ export type PreloadApi = {
       limit?: number
     }) => Promise<LinearIssue[]>
     getIssue: (args: { id: string }) => Promise<LinearIssue | null>
+    updateIssue: (args: {
+      id: string
+      updates: LinearIssueUpdate
+    }) => Promise<{ ok: true } | { ok: false; error: string }>
+    addIssueComment: (args: {
+      issueId: string
+      body: string
+    }) => Promise<{ ok: true; id: string } | { ok: false; error: string }>
+    issueComments: (args: { issueId: string }) => Promise<LinearComment[]>
+    teamStates: (args: { teamId: string }) => Promise<LinearWorkflowState[]>
+    teamLabels: (args: { teamId: string }) => Promise<LinearLabel[]>
+    teamMembers: (args: { teamId: string }) => Promise<LinearMember[]>
   }
   starNag: {
     onShow: (callback: () => void) => () => void
@@ -442,6 +474,13 @@ export type PreloadApi = {
     reauthenticate: (args: { accountId: string }) => Promise<CodexRateLimitAccountsState>
     remove: (args: { accountId: string }) => Promise<CodexRateLimitAccountsState>
     select: (args: { accountId: string | null }) => Promise<CodexRateLimitAccountsState>
+  }
+  claudeAccounts: {
+    list: () => Promise<ClaudeRateLimitAccountsState>
+    add: () => Promise<ClaudeRateLimitAccountsState>
+    reauthenticate: (args: { accountId: string }) => Promise<ClaudeRateLimitAccountsState>
+    remove: (args: { accountId: string }) => Promise<ClaudeRateLimitAccountsState>
+    select: (args: { accountId: string | null }) => Promise<ClaudeRateLimitAccountsState>
   }
   cli: {
     getInstallStatus: () => Promise<CliInstallStatus>

@@ -14,7 +14,10 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '../../store'
-import type { CodexRateLimitAccountsState } from '../../../../shared/types'
+import type {
+  ClaudeRateLimitAccountsState,
+  CodexRateLimitAccountsState
+} from '../../../../shared/types'
 import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
 import { ProviderIcon, ProviderPanel } from './tooltip'
 import { ClaudeIcon, OpenAIIcon } from './icons'
@@ -31,6 +34,150 @@ function getCodexAccountLabel(
     return 'System default'
   }
   return state.accounts.find((account) => account.id === accountId)?.email ?? 'Codex account'
+}
+
+function ClaudeSwitcherMenu({
+  claude,
+  compact,
+  iconOnly
+}: {
+  claude: ProviderRateLimits
+  compact: boolean
+  iconOnly: boolean
+}): React.JSX.Element {
+  const [open, setOpen] = useState(false)
+  const [accountsExpanded, setAccountsExpanded] = useState(false)
+  const [accounts, setAccounts] = useState<ClaudeRateLimitAccountsState>({
+    accounts: [],
+    activeAccountId: null
+  })
+  const [isSwitching, setIsSwitching] = useState(false)
+  const openSettingsPage = useAppStore((s) => s.openSettingsPage)
+  const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
+  const fetchSettings = useAppStore((s) => s.fetchSettings)
+  const claudeAccountSyncKey = useAppStore((s) => {
+    const settings = s.settings
+    if (!settings) {
+      return 'no-settings'
+    }
+    return `${settings.activeClaudeManagedAccountId ?? 'system'}:${settings.claudeManagedAccounts.map((account) => `${account.id}:${account.updatedAt}`).join('|')}`
+  })
+
+  const loadAccounts = useCallback(async () => {
+    const next = await window.api.claudeAccounts.list()
+    setAccounts(next)
+  }, [])
+
+  useEffect(() => {
+    void loadAccounts().catch((error) => {
+      console.error('Failed to load Claude accounts for status bar:', error)
+    })
+  }, [loadAccounts, open, claudeAccountSyncKey])
+
+  useEffect(() => {
+    if (!open) {
+      setAccountsExpanded(false)
+    }
+  }, [open])
+
+  const handleSelectAccount = async (accountId: string | null): Promise<void> => {
+    if (isSwitching) {
+      return
+    }
+    setIsSwitching(true)
+    try {
+      const next = await window.api.claudeAccounts.select({ accountId })
+      setAccounts(next)
+      await fetchSettings()
+      setAccountsExpanded(false)
+    } catch (error) {
+      console.error('Failed to switch Claude account from status bar:', error)
+    } finally {
+      setIsSwitching(false)
+    }
+  }
+
+  const activeAccountLabel =
+    accounts.activeAccountId === null
+      ? 'System default'
+      : (accounts.accounts.find((account) => account.id === accounts.activeAccountId)?.email ??
+        'Managed')
+  const availableSwitchTargets = [
+    ...(accounts.activeAccountId === null
+      ? []
+      : [{ id: null as string | null, label: 'System default' }]),
+    ...accounts.accounts
+      .filter((account) => account.id !== accounts.activeAccountId)
+      .map((account) => ({ id: account.id, label: account.email }))
+  ]
+
+  return (
+    <ProviderDetailsMenu
+      provider={claude}
+      compact={compact}
+      iconOnly={iconOnly}
+      ariaLabel="Open Claude details and account switcher"
+      open={open}
+      onOpenChange={setOpen}
+    >
+      <DropdownMenuLabel>Claude Account</DropdownMenuLabel>
+      <DropdownMenuItem
+        onSelect={(event) => {
+          event.preventDefault()
+          setAccountsExpanded((prev) => !prev)
+        }}
+      >
+        <span className="max-w-[180px] truncate text-[12px] text-foreground">
+          {activeAccountLabel}
+        </span>
+        {accountsExpanded ? (
+          <ChevronDown className="ml-auto size-3.5 text-muted-foreground/85" />
+        ) : (
+          <ChevronRight className="ml-auto size-3.5 text-muted-foreground/85" />
+        )}
+      </DropdownMenuItem>
+      {accountsExpanded ? (
+        <div className="px-1 pb-1">
+          <div className="px-2 py-1 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+            Switch to
+          </div>
+          <div className="max-h-[220px] overflow-y-auto rounded-md border border-border/60 bg-accent/5 p-1">
+            {availableSwitchTargets.length === 0 ? (
+              <div className="px-2 py-1.5 text-[11px] text-muted-foreground">No other accounts</div>
+            ) : null}
+            {availableSwitchTargets.map((target) => (
+              <DropdownMenuItem
+                key={target.id ?? 'system'}
+                disabled={isSwitching}
+                onSelect={(event) => {
+                  event.preventDefault()
+                  void handleSelectAccount(target.id)
+                }}
+              >
+                <span className="max-w-[220px] truncate">{target.label}</span>
+              </DropdownMenuItem>
+            ))}
+          </div>
+          <div className="px-2 py-1.5 text-[10px] leading-4 text-muted-foreground">
+            Restart live Claude terminals before continuing old conversations after switching.
+          </div>
+        </div>
+      ) : null}
+      <DropdownMenuSeparator />
+      <DropdownMenuItem
+        onSelect={() => {
+          openSettingsTarget({
+            pane: 'general',
+            repoId: null,
+            sectionId: 'general-claude-accounts'
+          })
+          openSettingsPage()
+        }}
+      >
+        Manage Accounts…
+      </DropdownMenuItem>
+    </ProviderDetailsMenu>
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -487,14 +634,7 @@ function StatusBarInner(): React.JSX.Element | null {
       }}
     >
       <div className="flex items-center gap-3">
-        {showClaude && (
-          <ProviderDetailsMenu
-            provider={claude}
-            compact={compact}
-            iconOnly={iconOnly}
-            ariaLabel="Open Claude usage details"
-          />
-        )}
+        {showClaude && <ClaudeSwitcherMenu claude={claude} compact={compact} iconOnly={iconOnly} />}
         {showCodex && <CodexSwitcherMenu codex={codex} compact={compact} iconOnly={iconOnly} />}
         {anyVisible && (
           <Tooltip>

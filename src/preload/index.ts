@@ -412,6 +412,26 @@ const api = {
     }): Promise<{ ok: true } | { ok: false; error: string }> =>
       ipcRenderer.invoke('gh:mergePR', args),
 
+    updateIssue: (args: {
+      repoPath: string
+      number: number
+      updates: unknown
+    }): Promise<{ ok: true } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('gh:updateIssue', args),
+
+    addIssueComment: (args: {
+      repoPath: string
+      number: number
+      body: string
+    }): Promise<{ ok: true; id: number } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('gh:addIssueComment', args),
+
+    listLabels: (args: { repoPath: string }): Promise<string[]> =>
+      ipcRenderer.invoke('gh:listLabels', args),
+
+    listAssignableUsers: (args: { repoPath: string }): Promise<string[]> =>
+      ipcRenderer.invoke('gh:listAssignableUsers', args),
+
     checkOrcaStarred: (): Promise<boolean | null> => ipcRenderer.invoke('gh:checkOrcaStarred'),
     starOrca: (): Promise<boolean> => ipcRenderer.invoke('gh:starOrca')
   },
@@ -435,7 +455,31 @@ const api = {
     }): Promise<unknown[]> => ipcRenderer.invoke('linear:listIssues', args),
 
     getIssue: (args: { id: string }): Promise<unknown> =>
-      ipcRenderer.invoke('linear:getIssue', args)
+      ipcRenderer.invoke('linear:getIssue', args),
+
+    updateIssue: (args: {
+      id: string
+      updates: unknown
+    }): Promise<{ ok: true } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('linear:updateIssue', args),
+
+    addIssueComment: (args: {
+      issueId: string
+      body: string
+    }): Promise<{ ok: true; id: string } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('linear:addIssueComment', args),
+
+    issueComments: (args: { issueId: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('linear:issueComments', args),
+
+    teamStates: (args: { teamId: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('linear:teamStates', args),
+
+    teamLabels: (args: { teamId: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('linear:teamLabels', args),
+
+    teamMembers: (args: { teamId: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('linear:teamMembers', args)
   },
 
   starNag: {
@@ -469,6 +513,17 @@ const api = {
       ipcRenderer.invoke('codexAccounts:select', args)
   },
 
+  claudeAccounts: {
+    list: (): Promise<unknown> => ipcRenderer.invoke('claudeAccounts:list'),
+    add: (): Promise<unknown> => ipcRenderer.invoke('claudeAccounts:add'),
+    reauthenticate: (args: { accountId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('claudeAccounts:reauthenticate', args),
+    remove: (args: { accountId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('claudeAccounts:remove', args),
+    select: (args: { accountId: string | null }): Promise<unknown> =>
+      ipcRenderer.invoke('claudeAccounts:select', args)
+  },
+
   cli: {
     getInstallStatus: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:getInstallStatus'),
     install: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:install'),
@@ -497,7 +552,9 @@ const api = {
       agents: string[]
       addedPathSegments: string[]
       shellHydrationOk: boolean
-    }> => ipcRenderer.invoke('preflight:refreshAgents')
+    }> => ipcRenderer.invoke('preflight:refreshAgents'),
+    detectRemoteAgents: (args: { connectionId: string }): Promise<string[]> =>
+      ipcRenderer.invoke('preflight:detectRemoteAgents', args)
   },
 
   notifications: {

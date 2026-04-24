@@ -98,18 +98,37 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         return { error: `SSH connection "${args.connectionId}" not found or not connected` }
       }
 
+      let repoKind: 'git' | 'folder' = args.kind ?? 'git'
+      let resolvedPath = args.remotePath
+
+      // Why: `~` is a shell expansion that Node's fs APIs don't understand.
+      // Resolve tilde paths to absolute paths via the relay before storing,
+      // so all downstream fs operations (readDir, stat, etc.) work correctly.
+      if (resolvedPath === '~' || resolvedPath === '~/' || resolvedPath.startsWith('~/')) {
+        const mux = getActiveMultiplexer(args.connectionId)
+        if (mux) {
+          try {
+            const result = (await mux.request('session.resolveHome', {
+              path: resolvedPath
+            })) as { resolvedPath: string }
+            resolvedPath = result.resolvedPath
+          } catch {
+            // Relay may not support resolveHome yet — fall through to raw path
+          }
+        }
+      }
+
+      // Why: check for duplicates after tilde resolution so that adding `~/`
+      // when `/home/ubuntu` is already stored correctly detects the duplicate.
       const existing = store
         .getRepos()
-        .find((r) => r.connectionId === args.connectionId && r.path === args.remotePath)
+        .find((r) => r.connectionId === args.connectionId && r.path === resolvedPath)
       if (existing) {
         return { repo: existing }
       }
 
-      const pathSegments = args.remotePath.replace(/\/+$/, '').split('/')
-      const folderName = pathSegments.at(-1) || args.remotePath
-
-      let repoKind: 'git' | 'folder' = args.kind ?? 'git'
-      let resolvedPath = args.remotePath
+      const pathSegments = resolvedPath.replace(/\/+$/, '').split('/')
+      let folderName = pathSegments.at(-1) || resolvedPath
 
       if (args.kind !== 'folder') {
         // Why: when kind is not explicitly 'folder', verify the remote path is
@@ -117,7 +136,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         // Folder" confirmation dialog — matching the local add-repo behavior
         // where non-git directories require explicit user consent.
         try {
-          const check = await gitProvider.isGitRepoAsync(args.remotePath)
+          const check = await gitProvider.isGitRepoAsync(resolvedPath)
           if (check.isRepo) {
             repoKind = 'git'
             if (check.rootPath) {
@@ -134,10 +153,20 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         }
       }
 
+      // When folderName is the home directory basename (e.g. 'ubuntu'),
+      // use SSH target label for a more descriptive name
+      let displayName = args.displayName || folderName
+      if (!args.displayName && (args.remotePath === '~' || args.remotePath === '~/')) {
+        const sshTarget = store.getSshTarget(args.connectionId)
+        if (sshTarget) {
+          displayName = sshTarget.label
+        }
+      }
+
       const repo: Repo = {
         id: randomUUID(),
         path: resolvedPath,
-        displayName: args.displayName || folderName,
+        displayName,
         badgeColor: REPO_COLORS[store.getRepos().length % REPO_COLORS.length],
         addedAt: Date.now(),
         kind: repoKind,

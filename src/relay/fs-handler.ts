@@ -13,6 +13,7 @@ import {
 import { extname } from 'path'
 import type { RelayDispatcher } from './dispatcher'
 import type { RelayContext } from './context'
+import { expandTilde } from './context'
 import {
   MAX_FILE_SIZE,
   DEFAULT_MAX_RESULTS,
@@ -58,7 +59,7 @@ export class FsHandler {
   }
 
   private async readDir(params: Record<string, unknown>) {
-    const dirPath = params.dirPath as string
+    const dirPath = expandTilde(params.dirPath as string)
     await this.context.validatePathResolved(dirPath)
     const entries = await readdir(dirPath, { withFileTypes: true })
     return entries
@@ -76,7 +77,7 @@ export class FsHandler {
   }
 
   private async readFile(params: Record<string, unknown>) {
-    const filePath = params.filePath as string
+    const filePath = expandTilde(params.filePath as string)
     await this.context.validatePathResolved(filePath)
     const stats = await stat(filePath)
     if (stats.size > MAX_FILE_SIZE) {
@@ -97,7 +98,7 @@ export class FsHandler {
   }
 
   private async writeFile(params: Record<string, unknown>) {
-    const filePath = params.filePath as string
+    const filePath = expandTilde(params.filePath as string)
     await this.context.validatePathResolved(filePath)
     const content = params.content as string
     try {
@@ -114,7 +115,7 @@ export class FsHandler {
   }
 
   private async stat(params: Record<string, unknown>) {
-    const filePath = params.filePath as string
+    const filePath = expandTilde(params.filePath as string)
     await this.context.validatePathResolved(filePath)
     // Why: lstat is used instead of stat so that symlinks are reported as
     // symlinks rather than being silently followed. stat() follows symlinks,
@@ -130,7 +131,7 @@ export class FsHandler {
   }
 
   private async deletePath(params: Record<string, unknown>) {
-    const targetPath = params.targetPath as string
+    const targetPath = expandTilde(params.targetPath as string)
     await this.context.validatePathResolved(targetPath)
     const recursive = params.recursive as boolean | undefined
     const stats = await stat(targetPath)
@@ -141,7 +142,7 @@ export class FsHandler {
   }
 
   private async createFile(params: Record<string, unknown>) {
-    const filePath = params.filePath as string
+    const filePath = expandTilde(params.filePath as string)
     // Why: symlinks in parent directories can redirect creation outside the
     // workspace. validatePathResolved follows symlinks before checking roots.
     await this.context.validatePathResolved(filePath)
@@ -151,22 +152,22 @@ export class FsHandler {
   }
 
   private async createDir(params: Record<string, unknown>) {
-    const dirPath = params.dirPath as string
+    const dirPath = expandTilde(params.dirPath as string)
     await this.context.validatePathResolved(dirPath)
     await mkdir(dirPath, { recursive: true })
   }
 
   private async rename(params: Record<string, unknown>) {
-    const oldPath = params.oldPath as string
-    const newPath = params.newPath as string
+    const oldPath = expandTilde(params.oldPath as string)
+    const newPath = expandTilde(params.newPath as string)
     await this.context.validatePathResolved(oldPath)
     await this.context.validatePathResolved(newPath)
     await rename(oldPath, newPath)
   }
 
   private async copy(params: Record<string, unknown>) {
-    const source = params.source as string
-    const destination = params.destination as string
+    const source = expandTilde(params.source as string)
+    const destination = expandTilde(params.destination as string)
     // Why: cp follows symlinks — a symlink inside the workspace pointing to
     // /etc would copy sensitive files into the workspace where readFile can
     // exfiltrate them.
@@ -176,7 +177,7 @@ export class FsHandler {
   }
 
   private async realpath(params: Record<string, unknown>) {
-    const filePath = params.filePath as string
+    const filePath = expandTilde(params.filePath as string)
     this.context.validatePath(filePath)
     const resolved = await realpath(filePath)
     // Why: a symlink inside the workspace may resolve to a path outside it.
@@ -187,7 +188,7 @@ export class FsHandler {
 
   private async search(params: Record<string, unknown>) {
     const query = params.query as string
-    const rootPath = params.rootPath as string
+    const rootPath = expandTilde(params.rootPath as string)
     // Why: a symlink inside the workspace pointing to a directory outside it
     // would let rg search (and return content from) files beyond the workspace.
     await this.context.validatePathResolved(rootPath)
@@ -224,7 +225,7 @@ export class FsHandler {
   }
 
   private async listFiles(params: Record<string, unknown>): Promise<string[]> {
-    const rootPath = params.rootPath as string
+    const rootPath = expandTilde(params.rootPath as string)
     await this.context.validatePathResolved(rootPath)
     const rgAvailable = await checkRgAvailable()
     if (!rgAvailable) {
@@ -234,7 +235,7 @@ export class FsHandler {
   }
 
   private async watch(params: Record<string, unknown>) {
-    const rootPath = params.rootPath as string
+    const rootPath = expandTilde(params.rootPath as string)
     this.context.validatePath(rootPath)
 
     if (this.watches.size >= 20) {
@@ -277,7 +278,7 @@ export class FsHandler {
   }
 
   private unwatch(params: Record<string, unknown>): void {
-    const rootPath = params.rootPath as string
+    const rootPath = expandTilde(params.rootPath as string)
     const state = this.watches.get(rootPath)
     if (state) {
       state.unwatchFn?.()

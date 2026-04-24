@@ -17,6 +17,7 @@ export type PtySpawnOptions = {
   rows: number
   cwd?: string
   env?: Record<string, string>
+  envToDelete?: string[]
   command?: string
   /** Orca worktree identity. When present, the local provider scopes shell
    *  history to this worktree so ArrowUp only surfaces local commands. */

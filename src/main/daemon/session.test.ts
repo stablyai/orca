@@ -156,6 +156,27 @@ describe('Session', () => {
     })
   })
 
+  describe('emulator does not reply to terminal queries', () => {
+    // Why: daemon emulator parses in-process synchronously — before
+    // handleSubprocessData forwards bytes to the renderer over IPC — so any
+    // auto-reply it emits races ahead of the renderer's xterm and clobbers
+    // it with default-xterm values (no theme, stale cursor). The renderer is
+    // the authoritative responder; a daemon-side reply to any query is a bug.
+    it.each([
+      ['OSC 11 background-color', '\x1b]11;?\x07'],
+      ['DA1 device-attributes', '\x1b[c'],
+      ['DSR cursor-position', '\x1b[6n']
+    ])('does not reply to %s query', async (_label, query) => {
+      createSession({ shellReadySupported: false })
+      subprocess.simulateData(query)
+      // xterm.js fires terminal.write's completion callback via a microtask;
+      // two resolved-promise awaits flush any nested scheduling.
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(subprocess.written).toEqual([])
+    })
+  })
+
   describe('shell readiness gating', () => {
     it('buffers writes during pending state', () => {
       createSession({ shellReadySupported: true })

@@ -65,6 +65,14 @@ export const GENERAL_CACHE_TIMER_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   }
 ]
 
+export const GENERAL_CLAUDE_ACCOUNTS_SEARCH_ENTRIES: SettingsSearchEntry[] = [
+  {
+    title: 'Claude Accounts',
+    description: 'Manage which Claude account Orca uses while preserving shared chat context.',
+    keywords: ['claude', 'account', 'switch', 'active', 'status bar', 'quota']
+  }
+]
+
 export const GENERAL_CODEX_ACCOUNTS_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Codex Accounts',
@@ -82,7 +90,17 @@ export const GENERAL_AGENT_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Default Agent',
     description: 'Pre-select an AI coding agent in the new-workspace composer.',
-    keywords: ['agent', 'default', 'claude', 'codex', 'opencode', 'pi', 'gemini', 'aider', 'copilot']
+    keywords: [
+      'agent',
+      'default',
+      'claude',
+      'codex',
+      'opencode',
+      'pi',
+      'gemini',
+      'aider',
+      'copilot'
+    ]
   }
 ]
 
@@ -99,6 +117,7 @@ export const GENERAL_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   ...GENERAL_EDITOR_SEARCH_ENTRIES,
   ...GENERAL_CLI_SEARCH_ENTRIES,
   ...GENERAL_CACHE_TIMER_SEARCH_ENTRIES,
+  ...GENERAL_CLAUDE_ACCOUNTS_SEARCH_ENTRIES,
   ...GENERAL_CODEX_ACCOUNTS_SEARCH_ENTRIES,
   ...GENERAL_UPDATE_SEARCH_ENTRIES,
   ...GENERAL_SUPPORT_SEARCH_ENTRIES

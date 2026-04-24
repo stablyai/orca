@@ -259,6 +259,7 @@ describe('useIpcEvents updater integration', () => {
       setSshTargetLabels: vi.fn(),
       enqueueSshCredentialRequest: vi.fn(),
       removeSshCredentialRequest: vi.fn(),
+      clearRemoteDetectedAgents: vi.fn(),
       clearTabPtyId,
       repos: [{ id: 'repo-1', connectionId: 'conn-1' }],
       worktreesByRepo: {
@@ -399,6 +400,7 @@ describe('useIpcEvents updater integration', () => {
     )
     expect(clearTabPtyId).toHaveBeenCalledWith('tab-1')
     expect(clearTabPtyId).not.toHaveBeenCalledWith('tab-2')
+    expect(storeState.clearRemoteDetectedAgents).toHaveBeenCalledWith('conn-1')
   })
 
   it('activates the target worktree when CLI creates a terminal there', async () => {

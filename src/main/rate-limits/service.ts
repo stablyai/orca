@@ -5,6 +5,7 @@ import type { BrowserWindow } from 'electron'
 import type { RateLimitState, ProviderRateLimits } from '../../shared/rate-limit-types'
 import { fetchClaudeRateLimits } from './claude-fetcher'
 import { fetchCodexRateLimits } from './codex-fetcher'
+import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
 
 // Why: quota state does not need near-real-time polling, and a less aggressive
 // default reduces avoidable Claude /usage pressure. We intentionally use a
@@ -23,14 +24,21 @@ export class RateLimitService {
   private isFetching = false
   private fullFetchQueued = false
   private codexOnlyFetchQueued = false
+  private claudeOnlyFetchQueued = false
   private fetchIdleResolvers: (() => void)[] = []
   private codexFetchGeneration = 0
+  private claudeFetchGeneration = 0
   private codexHomePathResolver: (() => string | null) | null = null
+  private claudeAuthPreparationResolver: (() => Promise<ClaudeRuntimeAuthPreparation>) | null = null
 
   constructor() {}
 
   setCodexHomePathResolver(resolver: () => string | null): void {
     this.codexHomePathResolver = resolver
+  }
+
+  setClaudeAuthPreparationResolver(resolver: () => Promise<ClaudeRuntimeAuthPreparation>): void {
+    this.claudeAuthPreparationResolver = resolver
   }
 
   attach(mainWindow: BrowserWindow): void {
@@ -92,6 +100,16 @@ export class RateLimitService {
       codex: this.withFetchingStatus(null, 'codex')
     })
     await this.fetchCodexOnly({ force: true })
+    return this.state
+  }
+
+  async refreshForClaudeAccountChange(): Promise<RateLimitState> {
+    this.claudeFetchGeneration += 1
+    this.updateState({
+      ...this.state,
+      claude: this.withFetchingStatus(null, 'claude')
+    })
+    await this.fetchClaudeOnly({ force: true })
     return this.state
   }
 
@@ -171,6 +189,10 @@ export class RateLimitService {
           this.codexOnlyFetchQueued = false
           await this.runFetchCodexOnlyCycle()
         }
+        if (this.claudeOnlyFetchQueued) {
+          this.claudeOnlyFetchQueued = false
+          await this.runFetchClaudeOnlyCycle()
+        }
       }
     } finally {
       this.isFetching = false
@@ -202,6 +224,45 @@ export class RateLimitService {
           this.codexOnlyFetchQueued = false
           shouldContinue = true
         }
+        if (this.claudeOnlyFetchQueued) {
+          this.claudeOnlyFetchQueued = false
+          await this.runFetchClaudeOnlyCycle()
+        }
+      }
+    } finally {
+      this.isFetching = false
+      this.resolveFetchIdleWaiters()
+    }
+  }
+
+  private async fetchClaudeOnly(options?: { force?: boolean }): Promise<void> {
+    if (this.isFetching) {
+      if (options?.force) {
+        this.claudeOnlyFetchQueued = true
+        return this.waitForFetchIdle()
+      }
+      return
+    }
+    this.isFetching = true
+
+    try {
+      let shouldContinue = true
+      while (shouldContinue) {
+        await this.runFetchClaudeOnlyCycle()
+        shouldContinue = false
+        if (this.fullFetchQueued) {
+          this.fullFetchQueued = false
+          await this.runFetchAllCycle()
+          continue
+        }
+        if (this.claudeOnlyFetchQueued) {
+          this.claudeOnlyFetchQueued = false
+          shouldContinue = true
+        }
+        if (this.codexOnlyFetchQueued) {
+          this.codexOnlyFetchQueued = false
+          await this.runFetchCodexOnlyCycle()
+        }
       }
     } finally {
       this.isFetching = false
@@ -210,7 +271,12 @@ export class RateLimitService {
   }
 
   private waitForFetchIdle(): Promise<void> {
-    if (!this.isFetching && !this.fullFetchQueued && !this.codexOnlyFetchQueued) {
+    if (
+      !this.isFetching &&
+      !this.fullFetchQueued &&
+      !this.codexOnlyFetchQueued &&
+      !this.claudeOnlyFetchQueued
+    ) {
       return Promise.resolve()
     }
     // Why: explicit refresh callers need to await the queued follow-up cycle
@@ -222,7 +288,12 @@ export class RateLimitService {
   }
 
   private resolveFetchIdleWaiters(): void {
-    if (this.isFetching || this.fullFetchQueued || this.codexOnlyFetchQueued) {
+    if (
+      this.isFetching ||
+      this.fullFetchQueued ||
+      this.codexOnlyFetchQueued ||
+      this.claudeOnlyFetchQueued
+    ) {
       return
     }
     const resolvers = this.fetchIdleResolvers
@@ -250,6 +321,9 @@ export class RateLimitService {
   }
 
   private async runFetchAllCycle(): Promise<void> {
+    const claudeAuthPreparation = await this.claudeAuthPreparationResolver?.()
+    const claudeProvenance = claudeAuthPreparation?.provenance ?? 'system'
+    const claudeGeneration = this.claudeFetchGeneration
     const codexHomePath = this.codexHomePathResolver?.() ?? null
     const codexProvenance = codexHomePath ? `managed:${codexHomePath}` : 'system'
     const codexGeneration = this.codexFetchGeneration
@@ -264,7 +338,7 @@ export class RateLimitService {
     })
 
     const [claude, codex] = await Promise.all([
-      fetchClaudeRateLimits().catch(
+      fetchClaudeRateLimits({ authPreparation: claudeAuthPreparation }).catch(
         (err): ProviderRateLimits => ({
           provider: 'claude',
           session: null,
@@ -287,16 +361,22 @@ export class RateLimitService {
     ])
 
     const latestCodexHomePath = this.codexHomePathResolver?.() ?? null
+    const latestClaudeAuthPreparation = await this.claudeAuthPreparationResolver?.()
+    const latestClaudeProvenance = latestClaudeAuthPreparation?.provenance ?? 'system'
     const latestCodexProvenance = latestCodexHomePath ? `managed:${latestCodexHomePath}` : 'system'
     const shouldApplyCodex =
       codexGeneration === this.codexFetchGeneration && codexProvenance === latestCodexProvenance
+    const shouldApplyClaude =
+      claudeGeneration === this.claudeFetchGeneration && claudeProvenance === latestClaudeProvenance
 
     // Why: account switches can race in-flight Codex fetches. Only apply a
     // Codex result if both the selected-account provenance and the request
     // generation still match, otherwise an old account could overwrite the
     // newly selected account's quota state.
     this.updateState({
-      claude: this.applyStalePolicy(claude, previousState.claude),
+      claude: shouldApplyClaude
+        ? this.applyStalePolicy(claude, previousState.claude)
+        : this.state.claude,
       codex: shouldApplyCodex ? this.applyStalePolicy(codex, previousState.codex) : this.state.codex
     })
 
@@ -333,6 +413,43 @@ export class RateLimitService {
     this.updateState({
       ...this.state,
       codex: shouldApplyCodex ? this.applyStalePolicy(codex, previousState.codex) : this.state.codex
+    })
+
+    this.lastFetchAt = Date.now()
+  }
+
+  private async runFetchClaudeOnlyCycle(): Promise<void> {
+    const claudeAuthPreparation = await this.claudeAuthPreparationResolver?.()
+    const claudeProvenance = claudeAuthPreparation?.provenance ?? 'system'
+    const claudeGeneration = this.claudeFetchGeneration
+    const previousState = this.state
+
+    this.updateState({
+      ...previousState,
+      claude: this.withFetchingStatus(previousState.claude, 'claude')
+    })
+
+    const claude = await fetchClaudeRateLimits({ authPreparation: claudeAuthPreparation }).catch(
+      (err): ProviderRateLimits => ({
+        provider: 'claude',
+        session: null,
+        weekly: null,
+        updatedAt: Date.now(),
+        error: err instanceof Error ? err.message : 'Unknown error',
+        status: 'error'
+      })
+    )
+
+    const latestClaudeAuthPreparation = await this.claudeAuthPreparationResolver?.()
+    const latestClaudeProvenance = latestClaudeAuthPreparation?.provenance ?? 'system'
+    const shouldApplyClaude =
+      claudeGeneration === this.claudeFetchGeneration && claudeProvenance === latestClaudeProvenance
+
+    this.updateState({
+      ...this.state,
+      claude: shouldApplyClaude
+        ? this.applyStalePolicy(claude, previousState.claude)
+        : this.state.claude
     })
 
     this.lastFetchAt = Date.now()

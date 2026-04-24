@@ -13,7 +13,11 @@ import type { BrowserTab as BrowserTabState } from '../../../../shared/types'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from './SortableTab'
 import { getLiveBrowserUrl } from '../browser-pane/browser-runtime'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
-import { getDropIndicatorClasses, type DropIndicator } from './drop-indicator'
+import {
+  ACTIVE_TAB_INDICATOR_CLASSES,
+  getDropIndicatorClasses,
+  type DropIndicator
+} from './drop-indicator'
 
 function formatBrowserTabUrlLabel(url: string): string {
   if (url === ORCA_BROWSER_BLANK_URL || url === 'about:blank') {
@@ -132,6 +136,7 @@ export default function BrowserTab({
             }
           }}
         >
+          {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
           <Globe
             className={`w-3.5 h-3.5 mr-1.5 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
           />

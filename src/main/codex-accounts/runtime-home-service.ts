@@ -21,7 +21,7 @@ import { writeFileAtomically } from './fs-utils'
 export class CodexRuntimeHomeService {
   // Why: tracks whether auth.json is currently managed by Orca. When null,
   // Orca does NOT own auth.json and must not overwrite external changes
-  // (e.g. user running `codex login` or using cc-switch). The snapshot
+  // (e.g. user running `codex login` or another auth tool). The snapshot
   // restore only fires on the managed→system-default transition.
   private lastSyncedAccountId: string | null = null
 
@@ -58,8 +58,8 @@ export class CodexRuntimeHomeService {
       // Why: only restore the snapshot when transitioning FROM a managed
       // account back to system default. When no managed account was ever
       // active, auth.json belongs to the user and Orca must not touch it.
-      // This prevents overwriting external auth changes (codex login,
-      // cc-switch, or other tools) on every PTY launch / rate-limit fetch.
+      // This prevents overwriting external auth changes (codex login or other
+      // tools) on every PTY launch / rate-limit fetch.
       if (this.lastSyncedAccountId !== null) {
         this.restoreSystemDefaultSnapshot()
         this.lastSyncedAccountId = null

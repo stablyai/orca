@@ -1,8 +1,8 @@
 import { tmpdir } from 'os'
-import { basename, join } from 'path'
-import { chmodSync, mkdirSync, writeFileSync } from 'fs'
+import { basename, dirname, join } from 'path'
+import { chmodSync, existsSync, mkdirSync, writeFileSync } from 'fs'
 
-const SHELL_READY_WRAPPER_ROOT = join(tmpdir(), 'orca-shell-ready')
+const ORCA_USER_DATA_PATH_ENV = 'ORCA_USER_DATA_PATH'
 const SHELL_READY_MARKER = '\\033]777;orca-shell-ready\\007'
 
 let didEnsureShellReadyWrappers = false
@@ -11,14 +11,39 @@ function quotePosixSingle(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`
 }
 
+function getShellReadyWrapperRoot(): string {
+  const userDataPath = process.env[ORCA_USER_DATA_PATH_ENV]
+  // Why: older/test launchers may not seed ORCA_USER_DATA_PATH. Keep a
+  // fallback so daemon startup does not fail before the parent can be fixed.
+  return join(userDataPath || tmpdir(), userDataPath ? 'shell-ready' : 'orca-shell-ready')
+}
+
+function getRequiredShellReadyWrapperPaths(root = getShellReadyWrapperRoot()): string[] {
+  return [
+    join(root, 'zsh', '.zshenv'),
+    join(root, 'zsh', '.zprofile'),
+    join(root, 'zsh', '.zshrc'),
+    join(root, 'zsh', '.zlogin'),
+    join(root, 'bash', 'rcfile')
+  ]
+}
+
+function shellReadyWrappersExist(): boolean {
+  return getRequiredShellReadyWrapperPaths().every((path) => existsSync(path))
+}
+
 function ensureShellReadyWrappers(): void {
-  if (didEnsureShellReadyWrappers || process.platform === 'win32') {
+  if (process.platform === 'win32') {
+    return
+  }
+  if (didEnsureShellReadyWrappers && shellReadyWrappersExist()) {
     return
   }
   didEnsureShellReadyWrappers = true
 
-  const zshDir = join(SHELL_READY_WRAPPER_ROOT, 'zsh')
-  const bashDir = join(SHELL_READY_WRAPPER_ROOT, 'bash')
+  const root = getShellReadyWrapperRoot()
+  const zshDir = join(root, 'zsh')
+  const bashDir = join(root, 'bash')
 
   const zshEnv = `# Orca daemon zsh shell-ready wrapper
 export ORCA_ORIG_ZDOTDIR="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
@@ -78,7 +103,7 @@ fi
   ] as const
 
   for (const [path, content] of files) {
-    mkdirSync(path.slice(0, path.lastIndexOf('/')), { recursive: true })
+    mkdirSync(dirname(path), { recursive: true })
     writeFileSync(path, content, 'utf8')
     chmodSync(path, 0o644)
   }
@@ -108,11 +133,12 @@ export function getShellReadyLaunchConfig(shellPath: string): {
 
   if (shellName === 'zsh') {
     ensureShellReadyWrappers()
+    const root = getShellReadyWrapperRoot()
     return {
       args: ['-l'],
       env: {
         ORCA_ORIG_ZDOTDIR: process.env.ZDOTDIR || process.env.HOME || '',
-        ZDOTDIR: join(SHELL_READY_WRAPPER_ROOT, 'zsh')
+        ZDOTDIR: join(root, 'zsh')
       },
       supportsReadyMarker: true
     }
@@ -120,8 +146,9 @@ export function getShellReadyLaunchConfig(shellPath: string): {
 
   if (shellName === 'bash') {
     ensureShellReadyWrappers()
+    const root = getShellReadyWrapperRoot()
     return {
-      args: ['--rcfile', join(SHELL_READY_WRAPPER_ROOT, 'bash', 'rcfile')],
+      args: ['--rcfile', join(root, 'bash', 'rcfile')],
       env: {},
       supportsReadyMarker: true
     }

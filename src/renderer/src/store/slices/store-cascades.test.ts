@@ -1,14 +1,19 @@
 /* eslint-disable max-lines */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { buildWorktreeComparator } from '@/components/sidebar/smart-sort'
+import type * as AgentStatusModule from '@/lib/agent-status'
 
 // Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 
 // Mock agent-status (imported by terminal-helpers)
-vi.mock('@/lib/agent-status', () => ({
-  detectAgentStatusFromTitle: vi.fn().mockReturnValue(null)
-}))
+vi.mock('@/lib/agent-status', async (importOriginal) => {
+  const actual = await importOriginal<typeof AgentStatusModule>()
+  return {
+    ...actual,
+    detectAgentStatusFromTitle: vi.fn().mockReturnValue(null)
+  }
+})
 
 // Mock window.api before anything uses it
 const mockApi = {
@@ -876,6 +881,73 @@ describe('setActiveWorktree', () => {
 
     const replacement = store.getState().createTab(wt)
     expect(replacement.title).toBe('Terminal 1')
+  })
+
+  // Why: unread flags are ephemeral UI state — they must not linger past the
+  // lifetime of the tab/pane they point at. A stale flag on a closed tab
+  // would render a bell the user can never dismiss because the tab (and
+  // therefore every focus path that clears it) is gone.
+  it('drops unreadTerminalTabs for a closed tab', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      }
+    })
+
+    const closing = store.getState().createTab(wt)
+    const surviving = store.getState().createTab(wt)
+
+    // Seed flags directly — the self-guarded mark actions intentionally
+    // refuse the currently-active tab, but this test's subject is closeTab's
+    // cleanup behavior, not the guards.
+    store.setState({
+      unreadTerminalTabs: {
+        [closing.id]: true as const,
+        [surviving.id]: true as const
+      }
+    })
+
+    store.getState().closeTab(closing.id)
+
+    const s = store.getState()
+    expect(s.unreadTerminalTabs[closing.id]).toBeUndefined()
+    // Siblings untouched.
+    expect(s.unreadTerminalTabs[surviving.id]).toBe(true)
+  })
+
+  // Why: shutdownWorktreeTerminals tears down every PTY in the worktree. The
+  // focus events that would normally clear unread (bell-in-focused-pane,
+  // activate-tab) never arrive for dead PTYs, so the flags have to be
+  // dropped by the shutdown path itself.
+  it('drops unread flags for every tab in a shutdown worktree', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      }
+    })
+
+    const tabA = store.getState().createTab(wt)
+    const tabB = store.getState().createTab(wt)
+
+    // Seed flags directly (see closeTab test for why).
+    store.setState({
+      unreadTerminalTabs: {
+        [tabA.id]: true as const,
+        [tabB.id]: true as const
+      }
+    })
+
+    await store.getState().shutdownWorktreeTerminals(wt)
+
+    const s = store.getState()
+    expect(s.unreadTerminalTabs[tabA.id]).toBeUndefined()
+    expect(s.unreadTerminalTabs[tabB.id]).toBeUndefined()
   })
 
   it('returns to the landing state when closing the last terminal tab in the active worktree', () => {

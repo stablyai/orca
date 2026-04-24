@@ -30,6 +30,10 @@ export function shouldClearModifierHintOnKeyUp(
   return isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey
 }
 
+export function isPlatformModifierHeld(e: Pick<KeyboardEvent, 'metaKey' | 'ctrlKey'>): boolean {
+  return isMac ? e.metaKey : e.ctrlKey
+}
+
 /**
  * Tracks whether the user is holding the platform modifier key (Cmd on Mac,
  * Ctrl on Linux/Windows) long enough to show number-hint badges on worktree
@@ -40,8 +44,13 @@ export function shouldClearModifierHintOnKeyUp(
  * - After 750 ms of uninterrupted hold, `showHints` becomes true.
  * - Any other key pressed while the modifier is held cancels the timer —
  *   the user is executing a shortcut, not looking for help.
- * - Hints vanish instantly on keyup (no fade-out delay).
- * - Window blur resets state to handle Cmd+Tab away without a keyup event.
+ * - Hints vanish on keyup, on `blur`, on `visibilitychange` to hidden, or
+ *   on the next pointerdown/keydown whose modifier flag reports released.
+ *   Why the extra signals: keyup can fail to reach this window when focus
+ *   lives inside an embedded <webview> or when the OS intercepts the chord
+ *   (Cmd+Tab, Cmd+Space). `visibilitychange` is MDN's recommended pattern
+ *   for this cleanup. The next-event modifier check catches the remaining
+ *   cases the moment the user does anything.
  * - `e.repeat` events are ignored so the timer only starts once.
  */
 export function useModifierHint(enabled: boolean = true): { showHints: boolean } {
@@ -67,7 +76,6 @@ export function useModifierHint(enabled: boolean = true): { showHints: boolean }
         return
       }
 
-      // If the modifier key itself was pressed (not as part of a combo)
       // Why cross-modifier exclusion: on Mac, Ctrl+Cmd is often a system shortcut
       // (e.g. Ctrl+Cmd+Q to lock screen); on non-Mac, Meta+Ctrl is similarly not
       // an intentional hint request. Exclude the other platform modifier to avoid
@@ -76,6 +84,14 @@ export function useModifierHint(enabled: boolean = true): { showHints: boolean }
         if (!timerRef.current) {
           timerRef.current = setTimeout(() => setShowHints(true), 750)
         }
+        return
+      }
+
+      // Self-heal: if we missed the modifier's keyup (focus was in a webview,
+      // OS intercepted the chord, etc.), the next keydown's modifier flag is
+      // authoritative.
+      if (!isPlatformModifierHeld(e)) {
+        clear()
         return
       }
 
@@ -91,19 +107,39 @@ export function useModifierHint(enabled: boolean = true): { showHints: boolean }
       }
     }
 
+    // Why pointerdown: a click after the modifier was silently released (focus
+    // was in a webview while user released Cmd) should hide stale hints
+    // immediately, before any other interaction looks wrong.
+    const onPointerDown = (e: PointerEvent): void => {
+      if (!isPlatformModifierHeld(e)) {
+        clear()
+      }
+    }
+
+    // Why visibilitychange: MDN's recommended cleanup hook for modifier state
+    // when the page becomes hidden (app switch, tab switch, minimize). More
+    // comprehensive than `blur` alone.
+    const onVisibilityChange = (): void => {
+      if (document.hidden) {
+        clear()
+      }
+    }
+
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup', onKeyUp)
-    window.addEventListener(CLEAR_MODIFIER_HINTS_EVENT, clear)
-    // Why blur: if the user Cmd+Tabs away, the keyup event may never fire
-    // inside this window, leaving hints stuck in the visible state.
+    window.addEventListener('pointerdown', onPointerDown)
     window.addEventListener('blur', clear)
+    window.addEventListener(CLEAR_MODIFIER_HINTS_EVENT, clear)
+    document.addEventListener('visibilitychange', onVisibilityChange)
 
     return () => {
       clear()
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
-      window.removeEventListener(CLEAR_MODIFIER_HINTS_EVENT, clear)
+      window.removeEventListener('pointerdown', onPointerDown)
       window.removeEventListener('blur', clear)
+      window.removeEventListener(CLEAR_MODIFIER_HINTS_EVENT, clear)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
     }
   }, [enabled])
 

@@ -20,5 +20,8 @@ export function clearTransientTerminalState(tab: TerminalTab, index: number): Te
 function getResetTitle(tab: TerminalTab, index: number): string {
   const fallbackTitle =
     tab.customTitle?.trim() || tab.defaultTitle?.trim() || `Terminal ${index + 1}`
+  // Why: reset any recognized agent title on hydration. The prior-session
+  // agent is no longer running after a restart, so showing a stale
+  // "Claude done" or spinner would be misleading.
   return detectAgentStatusFromTitle(tab.title) ? fallbackTitle : tab.title
 }

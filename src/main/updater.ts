@@ -11,7 +11,12 @@ import {
   markMacQuitAndInstallInFlight
 } from './updater-mac-install'
 import { registerAutoUpdaterHandlers } from './updater-events'
-import { compareVersions, isBenignCheckFailure, statusesEqual } from './updater-fallback'
+import {
+  compareVersions,
+  isBenignCheckFailure,
+  isPrereleaseVersion,
+  statusesEqual
+} from './updater-fallback'
 import { fetchNudge, shouldApplyNudge } from './updater-nudge'
 
 const AUTO_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
@@ -476,15 +481,24 @@ export function setupAutoUpdater(
     ;(autoUpdater as NsisUpdater).verifyUpdateCodeSignature = () => Promise.resolve(null)
   }
 
-  // Use the generic provider with GitHub's /releases/latest/download/ URL so
-  // electron-updater always fetches the manifest (latest-mac.yml, latest.yml,
-  // latest-linux.yml) from the latest non-prerelease release. This sidesteps
-  // the broken /releases/latest API endpoint (returns 406) and automatically
-  // excludes RC/prerelease versions without client-side filtering.
-  autoUpdater.setFeedURL({
-    provider: 'generic',
-    url: 'https://github.com/stablyai/orca/releases/latest/download'
-  })
+  // Why: a user already running a prerelease (e.g. 1.3.17-rc.1) must stay on
+  // the RC channel so "Check for Updates" can find the next RC (1.3.17-rc.2).
+  // The generic /releases/latest/download/ feed only advertises non-prerelease
+  // releases, so without this they'd never see the follow-up RC. Users on a
+  // stable release keep the generic feed and must Shift-click to opt in.
+  if (isPrereleaseVersion(app.getVersion())) {
+    enableIncludePrerelease()
+  } else {
+    // Use the generic provider with GitHub's /releases/latest/download/ URL so
+    // electron-updater always fetches the manifest (latest-mac.yml, latest.yml,
+    // latest-linux.yml) from the latest non-prerelease release. This sidesteps
+    // the broken /releases/latest API endpoint (returns 406) and automatically
+    // excludes RC/prerelease versions without client-side filtering.
+    autoUpdater.setFeedURL({
+      provider: 'generic',
+      url: 'https://github.com/stablyai/orca/releases/latest/download'
+    })
+  }
 
   if (autoUpdaterInitialized) {
     return

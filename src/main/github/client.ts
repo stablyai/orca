@@ -13,7 +13,15 @@ import { sortWorkItemsByUpdatedAt } from '../../shared/work-items'
 import { getPRConflictSummary } from './conflict-summary'
 import { execFileAsync, ghExecFileAsync, acquire, release, getOwnerRepo } from './gh-utils'
 export { _resetOwnerRepoCache } from './gh-utils'
-export { getIssue, listIssues, createIssue } from './issues'
+export {
+  getIssue,
+  listIssues,
+  createIssue,
+  updateIssue,
+  addIssueComment,
+  listLabels,
+  listAssignableUsers
+} from './issues'
 import {
   mapCheckRunRESTStatus,
   mapCheckRunRESTConclusion,

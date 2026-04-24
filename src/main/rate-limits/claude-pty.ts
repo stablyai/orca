@@ -1,5 +1,7 @@
 import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
 import { resolveClaudeCommand } from '../codex-cli/command'
+import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
+import { applyClaudeEnvPatch } from '../claude-accounts/environment'
 
 const PTY_TIMEOUT_MS = 25_000
 
@@ -125,7 +127,9 @@ function describeClaudeUsageFailure(output: string): string {
   return 'Claude usage is unavailable right now.'
 }
 
-export async function fetchViaPty(): Promise<ProviderRateLimits> {
+export async function fetchViaPty(options?: {
+  authPreparation?: ClaudeRuntimeAuthPreparation
+}): Promise<ProviderRateLimits> {
   const pty = await import('node-pty')
 
   return new Promise<ProviderRateLimits>((resolve) => {
@@ -144,11 +148,17 @@ export async function fetchViaPty(): Promise<ProviderRateLimits> {
     const spawnFile = isWin32 ? 'cmd.exe' : claudeCommand
     const spawnArgs = isWin32 ? ['/c', claudeCommand] : []
 
+    const spawnEnv = applyClaudeEnvPatch(
+      { ...process.env, TERM: 'xterm-256color' } as Record<string, string>,
+      options?.authPreparation?.envPatch ?? {},
+      { stripAuthEnv: options?.authPreparation?.stripAuthEnv ?? false }
+    )
+
     const term = pty.spawn(spawnFile, spawnArgs, {
       name: 'xterm-256color',
       cols: 120,
       rows: 40,
-      env: { ...process.env, TERM: 'xterm-256color' }
+      env: spawnEnv
     })
     const termDisposables: { dispose: () => void }[] = []
     const disposeTermListeners = (): void => {

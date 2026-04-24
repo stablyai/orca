@@ -74,6 +74,8 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     promptCacheTtlMs: 300_000,
     codexManagedAccounts: [],
     activeCodexManagedAccountId: null,
+    claudeManagedAccounts: [],
+    activeClaudeManagedAccountId: null,
     terminalScopeHistoryByWorktree: true,
     defaultTuiAgent: null,
     skipDeleteWorktreeConfirm: false,
@@ -315,9 +317,9 @@ describe('CodexRuntimeHomeService', () => {
     expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe('{"account":"system"}\n')
 
     // External tool changes auth — subsequent syncs must not overwrite
-    writeFileSync(runtimeAuthPath, '{"account":"cc-switch"}\n', 'utf-8')
+    writeFileSync(runtimeAuthPath, '{"account":"external-tool"}\n', 'utf-8')
     service.syncForCurrentSelection()
-    expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe('{"account":"cc-switch"}\n')
+    expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe('{"account":"external-tool"}\n')
   })
 
   it('restores system default on restart when persisted active account is invalid', async () => {

@@ -5,12 +5,15 @@
 // The Electron app (client) deploys this script via SCP and launches
 // it via an SSH exec channel.
 
+import { homedir } from 'os'
+import { resolve } from 'path'
 import { RELAY_SENTINEL } from './protocol'
 import { RelayDispatcher } from './dispatcher'
 import { RelayContext } from './context'
 import { PtyHandler } from './pty-handler'
 import { FsHandler } from './fs-handler'
 import { GitHandler } from './git-handler'
+import { PreflightHandler } from './preflight-handler'
 
 const DEFAULT_GRACE_MS = 5 * 60 * 1000
 
@@ -54,12 +57,30 @@ function main(): void {
     }
   })
 
+  // Why: the client stores repo paths as-is from user input, but `~` is a
+  // shell expansion — Node's fs APIs don't understand it. This handler lets
+  // the client resolve tilde paths to absolute paths on the remote host
+  // before persisting them, so all downstream fs operations work correctly.
+  dispatcher.onRequest('session.resolveHome', async (params) => {
+    const inputPath = params.path as string
+    if (inputPath === '~' || inputPath === '~/') {
+      return { resolvedPath: homedir() }
+    }
+    if (inputPath.startsWith('~/')) {
+      return { resolvedPath: resolve(homedir(), inputPath.slice(2)) }
+    }
+    return { resolvedPath: inputPath }
+  })
+
   const ptyHandler = new PtyHandler(dispatcher, graceTimeMs)
   const fsHandler = new FsHandler(dispatcher, context)
   // Why: GitHandler registers its own request handlers on construction,
   // so we hold the reference only for potential future disposal.
   const _gitHandler = new GitHandler(dispatcher, context)
   void _gitHandler
+
+  const _preflightHandler = new PreflightHandler(dispatcher)
+  void _preflightHandler
 
   // Read framed binary data from stdin
   process.stdin.on('data', (chunk: Buffer) => {

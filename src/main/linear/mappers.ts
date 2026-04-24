@@ -14,13 +14,17 @@ export async function mapLinearIssue(issue: Issue | IssueSearchResult): Promise<
   // for search results we fall back to empty (label names are a nice-to-have
   // in the UI, not critical for identification).
   let labelNames: string[] = []
+  let labelIds: string[] = []
   if ('labels' in issue && typeof issue.labels === 'function') {
     try {
       const labelsConnection = await (issue as Issue).labels()
       labelNames = labelsConnection.nodes.map((l) => l.name)
+      labelIds = labelsConnection.nodes.map((l) => l.id)
     } catch {
       // Swallow — labels are non-critical display data.
     }
+  } else if ('labelIds' in issue && Array.isArray(issue.labelIds)) {
+    labelIds = issue.labelIds as string[]
   }
 
   return {
@@ -35,12 +39,18 @@ export async function mapLinearIssue(issue: Issue | IssueSearchResult): Promise<
       color: state?.color ?? ''
     },
     team: {
+      id: team?.id ?? '',
       name: team?.name ?? '',
       key: team?.key ?? ''
     },
     labels: labelNames,
+    labelIds,
     assignee: assignee
-      ? { displayName: assignee.displayName, avatarUrl: assignee.avatarUrl ?? undefined }
+      ? {
+          id: assignee.id,
+          displayName: assignee.displayName,
+          avatarUrl: assignee.avatarUrl ?? undefined
+        }
       : undefined,
     priority: issue.priority,
     updatedAt: issue.updatedAt.toISOString()

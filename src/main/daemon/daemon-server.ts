@@ -260,6 +260,9 @@ export class DaemonServer {
       case 'listSessions':
         return { sessions: this.host.listSessions() }
 
+      case 'ping':
+        return { pong: true }
+
       case 'shutdown':
         if (request.payload.killSessions) {
           this.host.dispose()

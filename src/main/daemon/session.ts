@@ -1,4 +1,5 @@
 import { HeadlessEmulator } from './headless-emulator'
+import { isValidPtySize, normalizePtySize } from './daemon-pty-size'
 import type { SessionState, ShellReadyState, TerminalSnapshot } from './types'
 
 const SHELL_READY_TIMEOUT_MS = 15_000
@@ -49,19 +50,15 @@ export class Session {
   constructor(opts: SessionOptions) {
     this.sessionId = opts.sessionId
     this.subprocess = opts.subprocess
+    const size = normalizePtySize(opts.cols, opts.rows)
     this.emulator = new HeadlessEmulator({
-      cols: opts.cols,
-      rows: opts.rows,
-      scrollback: opts.scrollback,
-      // Why: xterm.js generates query responses (DA1, DSR) asynchronously.
-      // If the subprocess has already exited, writing to it would hit a dead
-      // NAPI handle. Check session state before forwarding.
-      onData: (data) => {
-        if (this._state === 'exited' || this._disposed) {
-          return
-        }
-        opts.subprocess.write(data)
-      }
+      cols: size.cols,
+      rows: size.rows,
+      scrollback: opts.scrollback
+      // No onData wiring: the daemon-side emulator must never reply to
+      // terminal query sequences. The renderer's xterm is the authoritative
+      // responder; any daemon reply races ahead via in-process parsing and
+      // clobbers the renderer's answer. See the comment in HeadlessEmulator.
     })
 
     if (opts.shellReadySupported) {
@@ -116,6 +113,9 @@ export class Session {
 
   resize(cols: number, rows: number): void {
     if (this._state === 'exited' || this._disposed) {
+      return
+    }
+    if (!isValidPtySize(cols, rows)) {
       return
     }
     this.emulator.resize(cols, rows)

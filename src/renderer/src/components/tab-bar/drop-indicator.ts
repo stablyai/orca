@@ -13,3 +13,12 @@ export function getDropIndicatorClasses(dropIndicator: DropIndicator): string {
   }
   return ''
 }
+
+// Why: the bg-accent vs. bg-card contrast alone is too subtle to tell which
+// tab is active at a glance, especially in light mode. VS Code solves this
+// with a 1–2px colored bar across the top of the active tab
+// (tab.activeBorderTop). We mirror that here with an absolutely-positioned
+// child span so it sits above the tab content without shifting layout and
+// without conflicting with drop-indicator pseudo-elements during a drag.
+export const ACTIVE_TAB_INDICATOR_CLASSES =
+  'pointer-events-none absolute inset-x-0 top-0 h-0.5 bg-[#1e3d9c] z-10'

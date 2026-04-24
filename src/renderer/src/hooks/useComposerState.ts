@@ -236,8 +236,21 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const [tuiAgent, setTuiAgent] = useState<TuiAgent>(
     persistDraft ? (newWorkspaceDraft?.agent ?? fallbackDefaultAgent) : fallbackDefaultAgent
   )
-  const detectedAgentList = useAppStore((s) => s.detectedAgentIds)
+  // Why: when the selected repo is remote (has a connectionId), read the
+  // per-connection agent list instead of the local one. This ensures the
+  // Create Workspace dialog shows agents installed on the SSH host, not the
+  // local machine. Derived from eligibleRepos directly because selectedRepo
+  // is declared later in this function.
+  const connectionId = eligibleRepos.find((r) => r.id === repoId)?.connectionId ?? null
+  const isRemote = typeof connectionId === 'string'
+  const detectedAgentList = useAppStore((s) => {
+    if (isRemote) {
+      return s.remoteDetectedAgentIds[connectionId] ?? null
+    }
+    return s.detectedAgentIds
+  })
   const ensureDetectedAgents = useAppStore((s) => s.ensureDetectedAgents)
+  const ensureRemoteDetectedAgents = useAppStore((s) => s.ensureRemoteDetectedAgents)
   const detectedAgentIds = useMemo<Set<TuiAgent> | null>(
     () => (detectedAgentList ? new Set(detectedAgentList) : null),
     [detectedAgentList]
@@ -419,12 +432,13 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     }
   }, [eligibleRepos, repoId, setRepoId])
 
-  // Detect installed agents once on mount via the shared store slice so the
-  // page composer, quick-composer modal, settings pane, and tab-bar quick-launch
-  // share a single IPC round-trip and stay in sync on refresh.
+  // Why: detect agents for the selected repo. For local repos this runs once
+  // on mount (deduped by the store). For remote repos it re-runs when the
+  // selected repo changes so the agent list matches the SSH host.
   useEffect(() => {
     let cancelled = false
-    void ensureDetectedAgents().then((ids) => {
+    const detect = isRemote ? ensureRemoteDetectedAgents(connectionId) : ensureDetectedAgents()
+    void detect.then((ids) => {
       if (cancelled) {
         return
       }
@@ -438,10 +452,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     return () => {
       cancelled = true
     }
-    // Why: intentionally run only once on mount — detection is a best-effort
-    // PATH snapshot and does not need to re-run when the draft or settings change.
+    // Why: re-run when connectionId changes (user picks a different repo) so
+    // detection targets the correct host. Draft/settings deps are intentionally
+    // excluded — detection is a best-effort PATH snapshot.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [connectionId, isRemote])
 
   // Per-repo: load yaml hooks + issue command template.
   useEffect(() => {

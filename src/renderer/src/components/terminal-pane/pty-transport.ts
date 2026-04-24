@@ -160,7 +160,12 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   let connected = false
   let destroyed = false
   let ptyId: string | null = null
-  const chunkContainsBell = createBellDetector()
+  const bellDetector = createBellDetector()
+  // Why: eager PTY buffers contain output produced before the pane attached —
+  // often from the previous app session. We still replay that data so titles
+  // and scrollback restore correctly, but it must not produce fresh bells,
+  // unread marks, or notifications for unrelated worktrees just because Orca
+  // is reconnecting background terminals on launch.
   let suppressAttentionEvents = false
   const processAgentStatusChunk = createAgentStatusOscProcessor()
   let lastEmittedTitle: string | null = null
@@ -203,7 +208,8 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   // query sequences leak into the shell as stray input.
   let replayingBufferedData = false
 
-  // Why: shared by connect() and attach() to avoid duplicating title/bell/exit logic.
+  // Why: shared by connect() and attach() to avoid duplicating title/bell/exit
+  // logic across the two code paths that register a PTY.
   function registerPtyDataHandler(id: string): void {
     ptyDataHandlers.set(id, (data) => {
       // Why: OSC 9999 is a renderer-only control protocol. Parse it before
@@ -248,7 +254,14 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           }, STALE_TITLE_TIMEOUT)
         }
       }
-      if (onBell && chunkContainsBell(data) && !suppressAttentionEvents) {
+      // Why: BEL is the attention signal. The detector is
+      // stateful across chunks so a BEL sitting inside an OSC sequence
+      // (e.g. Claude's `\e]0;title\a`) is correctly ignored — only true
+      // terminal bells raise attention. suppressAttentionEvents gates this
+      // during the synchronous eager-buffer replay so a historical BEL
+      // captured from the prior session does not produce a fresh alert on
+      // cold reattach.
+      if (onBell && bellDetector.chunkContainsBell(data) && !suppressAttentionEvents) {
         onBell()
       }
     })
@@ -260,6 +273,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       staleTitleTimer = null
     }
     agentTracker?.reset()
+    bellDetector.reset()
   }
 
   function registerPtyExitHandler(id: string): void {
@@ -372,15 +386,17 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       if (bufferHandle) {
         const buffered = bufferHandle.flush()
         if (buffered) {
-          // Why: eager PTY buffers contain output produced before the pane
-          // attached, often from a previous app session. We still replay that
-          // data so titles and scrollback restore correctly, but it must not
-          // generate fresh unread badges or notifications for unrelated
-          // worktrees just because Orca is reconnecting background terminals.
-          // Why replayingBufferedData: those buffered bytes are raw PTY output
-          // that may contain query sequences from the previous session; route
-          // them through onReplayData so the renderer engages the replay guard
-          // and xterm's auto-replies do not leak into the shell.
+          // Why: eager-buffered bytes are raw PTY output captured before the
+          // pane mounted — often from the previous app session. We replay
+          // them so titles/scrollback restore correctly, but must silence
+          // attention side effects during that replay: a historical BEL
+          // or completion captured from the prior session must not produce
+          // a fresh bell on the freshly mounted pane.
+          //
+          // replayingBufferedData additionally routes the bytes through
+          // onReplayData so the renderer engages the replay guard — xterm's
+          // auto-replies to embedded query sequences would otherwise leak
+          // into the shell's stdin.
           suppressAttentionEvents = true
           replayingBufferedData = true
           try {
@@ -388,6 +404,23 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           } finally {
             replayingBufferedData = false
             suppressAttentionEvents = false
+            // Why: replaying eager-buffered bytes may have observed a "working" title
+            // without a follow-up title, starting a stale-title timer. That timer would
+            // fire 3s later — outside the suppression window — and trigger a spurious
+            // working→idle transition (and phantom cache-timer write) for a session
+            // that was never live in this app instance. Cancel it so the replay has
+            // no lingering side effects.
+            if (staleTitleTimer) {
+              clearTimeout(staleTitleTimer)
+              staleTitleTimer = null
+            }
+            // Why: eager-buffered bytes may end mid-OSC (truncated/partial session
+            // data), leaving bellDetector with inOsc = true. Without resetting, the
+            // next real BEL in live data would be silently classified as an OSC
+            // terminator and dropped. BEL is the sole attention signal per the PR
+            // design, so this reset guards the attention pipeline against a silent
+            // regression driven by replay state leaking into the live stream.
+            bellDetector.reset()
           }
         }
         bufferHandle.dispose()
@@ -417,10 +450,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     },
 
     disconnect() {
-      if (staleTitleTimer) {
-        clearTimeout(staleTitleTimer)
-        staleTitleTimer = null
-      }
+      clearAccumulatedState()
       if (ptyId) {
         const id = ptyId
         window.api.pty.kill(id)
@@ -432,10 +462,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     },
 
     detach() {
-      if (staleTitleTimer) {
-        clearTimeout(staleTitleTimer)
-        staleTitleTimer = null
-      }
+      clearAccumulatedState()
       if (ptyId) {
         // Why: detach() is used for in-session remounts such as moving a tab
         // between split groups. Stop delivering data/title events into the

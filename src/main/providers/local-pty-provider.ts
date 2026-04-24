@@ -190,6 +190,9 @@ export class LocalPtyProvider implements IPtyProvider {
       // fallback keeps tests and non-Electron runs working.
       TERM_PROGRAM_VERSION: process.env.ORCA_APP_VERSION ?? '0.0.0-dev'
     } as Record<string, string>
+    for (const key of args.envToDelete ?? []) {
+      delete spawnEnv[key]
+    }
 
     // Why: FORCE_HYPERLINK=1 is read by oh-my-zsh's supports_hyperlinks(), the
     // Rust supports-hyperlinks crate, GNU coreutils, and other tooling.

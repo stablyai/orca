@@ -22,16 +22,24 @@ import {
 } from '../updater'
 import { scheduleHistoryGc } from '../terminal-history'
 import { listRepoWorktrees } from '../repo-worktrees'
+import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
 
 export function attachMainWindowServices(
   mainWindow: BrowserWindow,
   store: Store,
   runtime: OrcaRuntimeService,
-  getSelectedCodexHomePath?: () => string | null
+  getSelectedCodexHomePath?: () => string | null,
+  prepareClaudeAuth?: () => Promise<ClaudeRuntimeAuthPreparation>
 ): void {
   registerRepoHandlers(mainWindow, store)
   registerWorktreeHandlers(mainWindow, store)
-  registerPtyHandlers(mainWindow, runtime, getSelectedCodexHomePath, () => store.getSettings())
+  registerPtyHandlers(
+    mainWindow,
+    runtime,
+    getSelectedCodexHomePath,
+    () => store.getSettings(),
+    prepareClaudeAuth
+  )
   // Why: GC runs on a 10s delay so live worktree enumeration completes first.
   // Uses git worktree list (not store.getWorktreeMeta) because untouched
   // worktrees have no metadata entries — see design doc §7.6.

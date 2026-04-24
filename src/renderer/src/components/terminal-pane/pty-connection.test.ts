@@ -1,9 +1,11 @@
 /* oxlint-disable max-lines */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { POST_REPLAY_FOCUS_REPORTING_RESET, POST_REPLAY_MODE_RESET } from './layout-serialization'
 
 type StoreState = {
-  tabsByWorktree: Record<string, { id: string; ptyId: string | null }[]>
+  tabsByWorktree: Record<string, { id: string; ptyId: string | null; title?: string }[]>
   ptyIdsByTabId?: Record<string, string[]>
+  unreadTerminalTabs?: Record<string, true>
   worktreesByRepo: Record<string, { id: string; repoId: string; path: string }[]>
   repos: { id: string; connectionId?: string | null }[]
   cacheTimerByKey: Record<string, number | null>
@@ -52,10 +54,17 @@ vi.mock('@/store', () => ({
   }
 }))
 
-vi.mock('@/lib/agent-status', () => ({
-  isGeminiTerminalTitle: vi.fn(() => false),
-  isClaudeAgent: vi.fn(() => false)
-}))
+vi.mock('@/lib/agent-status', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>()
+  return {
+    ...actual,
+    isGeminiTerminalTitle: vi.fn(() => false),
+    isClaudeAgent: vi.fn(() => false),
+    detectAgentStatusFromTitle: vi.fn((title: string) =>
+      /Claude (working|done)/.test(title) ? (/working/.test(title) ? 'working' : 'idle') : null
+    )
+  }
+})
 
 vi.mock('./cache-timer-seeding', () => ({
   shouldSeedCacheTimerOnInitialTitle
@@ -111,7 +120,8 @@ function createManager(paneCount = 1) {
   return {
     setPaneGpuRendering: vi.fn(),
     getPanes: vi.fn(() => Array.from({ length: paneCount }, (_, index) => ({ id: index + 1 }))),
-    closePane: vi.fn()
+    closePane: vi.fn(),
+    getActivePane: vi.fn<() => { id: number } | null>(() => null)
   }
 }
 
@@ -137,6 +147,7 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     clearRuntimePaneTitle: vi.fn(),
     updateTabPtyId: vi.fn(),
     markWorktreeUnread: vi.fn(),
+    markTerminalTabUnread: vi.fn(),
     dispatchNotification: vi.fn(),
     setCacheTimerStartedAt: vi.fn(),
     syncPanePtyLayoutBinding: vi.fn(),
@@ -160,6 +171,7 @@ describe('connectPanePty', () => {
       ptyIdsByTabId: {
         'tab-1': ['tab-pty']
       },
+      unreadTerminalTabs: {},
       worktreesByRepo: {
         repo1: [{ id: 'wt-1', repoId: 'repo1', path: '/tmp/wt-1' }]
       },
@@ -429,6 +441,52 @@ describe('connectPanePty', () => {
     expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'leaf-pty-2')
   })
 
+  it('resets focus reporting after daemon snapshot replay without applying the full mode reset', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+      if (sessionId) {
+        return { id: sessionId, snapshot: '\x1b[?1004hrestored snapshot' }
+      }
+      return null
+    })
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty' }]
+      },
+      settings: {
+        ...mockStoreState.settings,
+        experimentalTerminalDaemon: true
+      }
+    } as StoreState
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      restoredLeafId: 'pane:1',
+      restoredPtyIdByLeafId: { 'pane:1': 'tab-pty' }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await Promise.resolve()
+
+    expect(pane.terminal.write).toHaveBeenCalledWith('\x1b[2J\x1b[3J\x1b[H', expect.any(Function))
+    expect(pane.terminal.write).toHaveBeenCalledWith(
+      '\x1b[?1004hrestored snapshot',
+      expect.any(Function)
+    )
+    expect(pane.terminal.write).toHaveBeenCalledWith(
+      POST_REPLAY_FOCUS_REPORTING_RESET,
+      expect.any(Function)
+    )
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(
+      POST_REPLAY_MODE_RESET,
+      expect.any(Function)
+    )
+  })
+
   it('reuses the existing local PTY on split remount when the daemon is disabled', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
@@ -551,5 +609,89 @@ describe('connectPanePty', () => {
     expect(remountTransport.attach).not.toHaveBeenCalled()
     await Promise.resolve()
     expect(remountDeps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(1, 'pty-restarted')
+  })
+
+  // Why: BEL (0x07) is the attention signal. connectPanePty wires an
+  // onBell handler that raises the worktree unread dot, the tab-level
+  // bell indicator, and an OS notification. The unread flags clear when
+  // the user activates the tab (bell auto-clears on focus). This test
+  // locks in the wiring: if onBell is ever accidentally dropped, unread
+  // marks stop working entirely.
+  it('wires onBell to raise worktree unread, tab unread, and OS notification', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    const bellHandler = createdTransportOptions[0]?.onBell as (() => void) | undefined
+    if (!bellHandler) {
+      throw new Error('Expected onBell to be registered')
+    }
+
+    bellHandler()
+
+    expect(deps.markWorktreeUnread).toHaveBeenCalledTimes(1)
+    expect(deps.markTerminalTabUnread).toHaveBeenCalledWith('tab-1')
+    expect(deps.dispatchNotification).toHaveBeenCalledWith({ source: 'terminal-bell' })
+  })
+
+  // Why: the working→idle transition is kept solely to drive Claude's
+  // prompt-cache timer. It MUST NOT raise attention — doing so would
+  // double-fire with the BEL path above (since Claude's "done" state is
+  // accompanied by a BEL), plus it would mean agents silently fire alerts
+  // that non-agent programs cannot. Attention is BEL-only; this is just
+  // the cache timer hook.
+  it('does not raise attention on agent working→idle (BEL is the sole attention signal)', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
+      | ((title: string) => void)
+      | undefined
+    if (!idleHandler) {
+      throw new Error('Expected onAgentBecameIdle to be registered')
+    }
+
+    idleHandler('* Claude done')
+
+    expect(deps.markWorktreeUnread).not.toHaveBeenCalled()
+    expect(deps.markTerminalTabUnread).not.toHaveBeenCalled()
+    expect(deps.dispatchNotification).not.toHaveBeenCalled()
+  })
+
+  // Why: onAgentExited must clear any running prompt-cache countdown so the
+  // sidebar does not show a stale timer for a tab that no longer has an
+  // active Claude session.
+  it('clears the cache timer when the agent exits', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    const agentExitedHandler = createdTransportOptions[0]?.onAgentExited as (() => void) | undefined
+    if (!agentExitedHandler) {
+      throw new Error('Expected onAgentExited to be registered')
+    }
+
+    agentExitedHandler()
+
+    expect(deps.setCacheTimerStartedAt).toHaveBeenCalledWith('tab-1:1', null)
   })
 })

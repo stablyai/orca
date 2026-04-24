@@ -11,17 +11,23 @@ import {
   GitPullRequest,
   LoaderCircle,
   MessageSquare,
+  Send,
   X
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { VisuallyHidden } from 'radix-ui'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { detectLanguage } from '@/lib/language-detect'
 import { cn } from '@/lib/utils'
 import { CHECK_COLOR, CHECK_ICON } from '@/components/right-sidebar/checks-helpers'
+import { useAppStore } from '@/store'
+import { useRepoLabels, useRepoAssignees, useImmediateMutation } from '@/hooks/useIssueMetadata'
+
 import type {
   GitHubPRFile,
   GitHubPRFileContents,
@@ -433,6 +439,449 @@ function ChecksTab({
   )
 }
 
+function GHEditSection({
+  item,
+  repoPath,
+  localState,
+  localLabels,
+  onStateChange,
+  onLabelsChange,
+  assignees
+}: {
+  item: GitHubWorkItem
+  repoPath: string
+  localState: GitHubWorkItem['state']
+  localLabels: string[]
+  onStateChange: (state: GitHubWorkItem['state']) => void
+  onLabelsChange: (labels: string[]) => void
+  assignees: string[]
+}): React.JSX.Element | null {
+  const [labelPopoverOpen, setLabelPopoverOpen] = useState(false)
+  const [assigneePopoverOpen, setAssigneePopoverOpen] = useState(false)
+  const [localAssignees, setLocalAssignees] = useState<string[]>(assignees)
+  const hasEditedAssigneesRef = useRef(false)
+  const patchWorkItem = useAppStore((s) => s.patchWorkItem)
+  const { isPending, run } = useImmediateMutation()
+
+  const repoLabels = useRepoLabels(repoPath)
+  const repoAssignees = useRepoAssignees(repoPath)
+
+  // Why: sync local assignees when item changes or when the detail fetch
+  // resolves with real data — but skip if the user already made an
+  // optimistic edit so we don't clobber in-flight changes.
+  useEffect(() => {
+    if (hasEditedAssigneesRef.current) {
+      return
+    }
+    setLocalAssignees(assignees)
+  }, [item.id, assignees])
+
+  // Reset the dirty flag when we switch to a different item.
+  useEffect(() => {
+    hasEditedAssigneesRef.current = false
+  }, [item.id])
+
+  const handleStateChange = useCallback(
+    (newState: 'open' | 'closed') => {
+      if (newState === localState) {
+        return
+      }
+      const prevState = localState
+      run('state', {
+        mutate: () =>
+          window.api.gh.updateIssue({
+            repoPath,
+            number: item.number,
+            updates: { state: newState }
+          }),
+        onOptimistic: () => {
+          onStateChange(newState)
+          patchWorkItem(item.id, { state: newState })
+        },
+        onRevert: () => {
+          onStateChange(prevState)
+          patchWorkItem(item.id, { state: prevState })
+        },
+        onSuccess: () => {
+          patchWorkItem(item.id, { state: newState })
+        },
+        onError: (err) => toast.error(err)
+      })
+    },
+    [item.id, item.number, localState, repoPath, patchWorkItem, run, onStateChange]
+  )
+
+  const handleLabelToggle = useCallback(
+    (label: string) => {
+      const isAdding = !localLabels.includes(label)
+      const prevLabels = localLabels
+      const newLabels = isAdding ? [...prevLabels, label] : prevLabels.filter((l) => l !== label)
+
+      if (isAdding) {
+        run('labels', {
+          mutate: () =>
+            window.api.gh.updateIssue({
+              repoPath,
+              number: item.number,
+              updates: { addLabels: [label] }
+            }),
+          onOptimistic: () => {
+            onLabelsChange(newLabels)
+            patchWorkItem(item.id, { labels: newLabels })
+          },
+          onSuccess: () => {},
+          onRevert: () => {
+            onLabelsChange(prevLabels)
+            patchWorkItem(item.id, { labels: prevLabels })
+          },
+          onError: (err) => toast.error(err)
+        })
+      } else {
+        run('labels', {
+          mutate: () =>
+            window.api.gh.updateIssue({
+              repoPath,
+              number: item.number,
+              updates: { removeLabels: [label] }
+            }),
+          onOptimistic: () => {
+            onLabelsChange(newLabels)
+            patchWorkItem(item.id, { labels: newLabels })
+          },
+          onRevert: () => {
+            onLabelsChange(prevLabels)
+            patchWorkItem(item.id, { labels: prevLabels })
+          },
+          onSuccess: () => {},
+          onError: (err) => toast.error(err)
+        })
+      }
+    },
+    [item.id, item.number, localLabels, repoPath, patchWorkItem, run, onLabelsChange]
+  )
+
+  const handleAssigneeToggle = useCallback(
+    (login: string) => {
+      const isAssigned = localAssignees.includes(login)
+      const prevAssignees = localAssignees
+      const newAssignees = isAssigned
+        ? prevAssignees.filter((l) => l !== login)
+        : [...prevAssignees, login]
+
+      hasEditedAssigneesRef.current = true
+      if (isAssigned) {
+        run('assignees', {
+          mutate: () =>
+            window.api.gh.updateIssue({
+              repoPath,
+              number: item.number,
+              updates: { removeAssignees: [login] }
+            }),
+          onOptimistic: () => {
+            setLocalAssignees(newAssignees)
+          },
+          onRevert: () => {
+            setLocalAssignees(prevAssignees)
+          },
+          onSuccess: () => {},
+          onError: (err) => toast.error(err)
+        })
+      } else {
+        run('assignees', {
+          mutate: () =>
+            window.api.gh.updateIssue({
+              repoPath,
+              number: item.number,
+              updates: { addAssignees: [login] }
+            }),
+          onOptimistic: () => {
+            setLocalAssignees(newAssignees)
+          },
+          onSuccess: () => {},
+          onRevert: () => {
+            setLocalAssignees(prevAssignees)
+          },
+          onError: (err) => toast.error(err)
+        })
+      }
+    },
+    [item.number, repoPath, localAssignees, run]
+  )
+
+  if (item.type === 'pr') {
+    return null
+  }
+
+  const checkIcon = (
+    <svg className="size-2.5" viewBox="0 0 12 12" fill="none">
+      <path
+        d="M2 6l3 3 5-5"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border/60 px-4 py-2.5">
+      {/* State */}
+      <Popover>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className={cn(
+              'rounded-full border px-2 py-0.5 text-[11px] font-medium transition hover:opacity-80',
+              getStateTone({ ...item, state: localState })
+            )}
+          >
+            {getStateLabel({ ...item, state: localState })}
+          </button>
+        </PopoverTrigger>
+        <PopoverContent className="w-36 p-1" align="start">
+          <button
+            type="button"
+            onClick={() => handleStateChange('open')}
+            className={cn(
+              'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent',
+              localState === 'open' && 'bg-accent/50'
+            )}
+          >
+            <CircleDot className="size-3 text-emerald-500" />
+            Open
+          </button>
+          <button
+            type="button"
+            onClick={() => handleStateChange('closed')}
+            className={cn(
+              'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent',
+              localState === 'closed' && 'bg-accent/50'
+            )}
+          >
+            <CircleDashed className="size-3 text-rose-500" />
+            Closed
+          </button>
+        </PopoverContent>
+      </Popover>
+
+      {/* Labels */}
+      <Popover open={labelPopoverOpen} onOpenChange={setLabelPopoverOpen}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            disabled={isPending('labels') || repoLabels.loading}
+            className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] transition hover:bg-muted/40 disabled:opacity-50"
+          >
+            {localLabels.length === 0 ? (
+              <span className="text-muted-foreground">+ Label</span>
+            ) : (
+              localLabels.map((name) => (
+                <span
+                  key={name}
+                  className="rounded-full border border-border/50 bg-background/60 px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                >
+                  {name}
+                </span>
+              ))
+            )}
+            {isPending('labels') && (
+              <LoaderCircle className="size-3 animate-spin text-muted-foreground" />
+            )}
+          </button>
+        </PopoverTrigger>
+        <PopoverContent className="popover-scroll-content scrollbar-sleek w-52 p-1" align="start">
+          {repoLabels.error ? (
+            <div className="px-2 py-3 text-center text-[12px] text-destructive">
+              {repoLabels.error}
+            </div>
+          ) : (
+            <div>
+              {repoLabels.data.map((label) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => handleLabelToggle(label)}
+                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent"
+                >
+                  <span
+                    className={cn(
+                      'flex size-3.5 items-center justify-center rounded-sm border',
+                      localLabels.includes(label)
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-input'
+                    )}
+                  >
+                    {localLabels.includes(label) && checkIcon}
+                  </span>
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+        </PopoverContent>
+      </Popover>
+
+      {/* Assignees */}
+      <Popover open={assigneePopoverOpen} onOpenChange={setAssigneePopoverOpen}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            disabled={isPending('assignees') || repoAssignees.loading}
+            className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] transition hover:bg-muted/40 disabled:opacity-50"
+          >
+            {localAssignees.length === 0 ? (
+              <span className="text-muted-foreground">+ Assignee</span>
+            ) : (
+              localAssignees.map((login) => (
+                <span
+                  key={login}
+                  className="rounded-full border border-border/50 bg-background/60 px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                >
+                  {login}
+                </span>
+              ))
+            )}
+            {isPending('assignees') && (
+              <LoaderCircle className="size-3 animate-spin text-muted-foreground" />
+            )}
+          </button>
+        </PopoverTrigger>
+        <PopoverContent className="popover-scroll-content scrollbar-sleek w-52 p-1" align="start">
+          {repoAssignees.error ? (
+            <div className="px-2 py-3 text-center text-[12px] text-destructive">
+              {repoAssignees.error}
+            </div>
+          ) : (
+            <div>
+              {repoAssignees.data.map((login) => (
+                <button
+                  key={login}
+                  type="button"
+                  onClick={() => handleAssigneeToggle(login)}
+                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent"
+                >
+                  <span
+                    className={cn(
+                      'flex size-3.5 items-center justify-center rounded-sm border',
+                      localAssignees.includes(login)
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-input'
+                    )}
+                  >
+                    {localAssignees.includes(login) && checkIcon}
+                  </span>
+                  {login}
+                </button>
+              ))}
+            </div>
+          )}
+        </PopoverContent>
+      </Popover>
+    </div>
+  )
+}
+
+function GHCommentFooter({
+  repoPath,
+  issueNumber,
+  onCommentAdded
+}: {
+  repoPath: string
+  issueNumber: number
+  onCommentAdded: (comment: PRComment) => void
+}): React.JSX.Element {
+  const [body, setBody] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  const autoGrow = useCallback(() => {
+    const el = textareaRef.current
+    if (!el) {
+      return
+    }
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, 96)}px`
+  }, [])
+
+  const handleSubmit = useCallback(async () => {
+    const trimmed = body.trim()
+    if (!trimmed) {
+      return
+    }
+    setSubmitting(true)
+    try {
+      const result = await window.api.gh.addIssueComment({
+        repoPath,
+        number: issueNumber,
+        body: trimmed
+      })
+      const typed = result as { ok: boolean; id?: number; comment?: PRComment; error?: string }
+      if (typed.ok) {
+        setBody('')
+        // Why: use the comment returned by GitHub so the optimistic row shows
+        // the real login/avatar immediately instead of waiting for a reopen.
+        onCommentAdded(
+          typed.comment ?? {
+            id: typeof typed.id === 'number' ? typed.id : Date.now(),
+            author: 'You',
+            authorAvatarUrl: '',
+            body: trimmed,
+            createdAt: new Date().toISOString(),
+            url: ''
+          }
+        )
+      } else {
+        toast.error(typed.error ?? 'Failed to add comment')
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to add comment')
+    } finally {
+      setSubmitting(false)
+    }
+  }, [body, repoPath, issueNumber, onCommentAdded])
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault()
+        handleSubmit()
+      }
+    },
+    [handleSubmit]
+  )
+
+  return (
+    <div className="flex items-end gap-2 border-t border-border/60 bg-background/40 px-4 py-2">
+      <textarea
+        ref={textareaRef}
+        value={body}
+        onChange={(e) => {
+          setBody(e.target.value)
+          autoGrow()
+        }}
+        onKeyDown={handleKeyDown}
+        placeholder="Add a comment…"
+        rows={1}
+        className="scrollbar-sleek min-h-[32px] max-h-[96px] flex-1 resize-none overflow-y-auto rounded-md border border-input bg-transparent px-3 py-2 text-[13px] placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      />
+      <Button
+        size="icon"
+        onClick={handleSubmit}
+        disabled={!body.trim() || submitting}
+        className="size-8 shrink-0"
+        aria-label="Send comment"
+      >
+        {submitting ? (
+          <LoaderCircle className="size-3.5 animate-spin" />
+        ) : (
+          <Send className="size-3.5" />
+        )}
+      </Button>
+    </div>
+  )
+}
+
 export default function GitHubItemDrawer({
   workItem,
   repoPath,
@@ -443,8 +892,30 @@ export default function GitHubItemDrawer({
   const [details, setDetails] = useState<GitHubWorkItemDetails | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [localState, setLocalState] = useState<GitHubWorkItem['state']>(workItem?.state ?? 'open')
+  const [localLabels, setLocalLabels] = useState<string[]>(workItem?.labels ?? [])
+  const workItemId = workItem?.id
+  const workItemState = workItem?.state
+  const workItemLabels = workItem?.labels
+
+  // Why: reset lifted edit state when the drawer switches items or when the
+  // same item receives an optimistic cache patch from the surrounding table.
+  useEffect(() => {
+    if (workItemState && workItemLabels) {
+      setLocalState(workItemState)
+      setLocalLabels(workItemLabels)
+    }
+  }, [workItemId, workItemState, workItemLabels])
 
   const requestIdRef = useRef(0)
+  // Why: track comments added optimistically before the detail fetch resolves
+  // so they can be merged into the fetch result instead of being overwritten.
+  const optimisticCommentsRef = useRef<PRComment[]>([])
+  // Why: track the last item we fetched so we can distinguish "reopen same
+  // item" from "switch to a different item". Reopening the same item must
+  // preserve optimistic comments because gh's 60s response cache will return
+  // stale data that doesn't include the just-posted comment.
+  const prevItemIdRef = useRef<string | null>(null)
 
   // Why: when this drawer opens immediately after another Radix overlay
   // (e.g. the New Issue dialog) closed, Radix may leave `pointer-events: none`
@@ -485,6 +956,15 @@ export default function GitHubItemDrawer({
     // results whose id matches the latest one.
     requestIdRef.current += 1
     const requestId = requestIdRef.current
+    // Why: only clear optimistic comments when switching to a genuinely
+    // different item. When reopening the same item (close → reopen), the
+    // gh API's 60s response cache will return stale data that omits the
+    // just-posted comment — preserving the optimistic ref lets the merge
+    // logic below re-attach it to the stale response.
+    if (workItem.id !== prevItemIdRef.current) {
+      optimisticCommentsRef.current = []
+    }
+    prevItemIdRef.current = workItem.id
     setLoading(true)
     setError(null)
     setDetails(null)
@@ -495,6 +975,16 @@ export default function GitHubItemDrawer({
       .then((result) => {
         if (requestId !== requestIdRef.current) {
           return
+        }
+        // Why: merge any comments the user posted optimistically while the
+        // detail fetch was in-flight, using id to avoid duplicates.
+        const opt = optimisticCommentsRef.current
+        if (opt.length > 0 && result) {
+          const fetchedIds = new Set(result.comments.map((c: PRComment) => c.id))
+          const missing = opt.filter((c) => !fetchedIds.has(c.id))
+          if (missing.length > 0) {
+            result = { ...result, comments: [...result.comments, ...missing] }
+          }
         }
         setDetails(result)
       })
@@ -557,19 +1047,9 @@ export default function GitHubItemDrawer({
               <div className="flex items-start gap-2">
                 <Icon className="mt-1 size-4 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={cn(
-                        'rounded-full border px-2 py-0.5 text-[11px] font-medium',
-                        getStateTone(workItem)
-                      )}
-                    >
-                      {getStateLabel(workItem)}
-                    </span>
-                    <span className="font-mono text-[12px] text-muted-foreground">
-                      #{workItem.number}
-                    </span>
-                  </div>
+                  <span className="font-mono text-[12px] text-muted-foreground">
+                    #{workItem.number}
+                  </span>
                   <h2 className="mt-1 text-[15px] font-semibold leading-tight text-foreground">
                     {workItem.title}
                   </h2>
@@ -582,18 +1062,6 @@ export default function GitHubItemDrawer({
                       </span>
                     )}
                   </div>
-                  {workItem.labels.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {workItem.labels.map((label) => (
-                        <span
-                          key={label}
-                          className="rounded-full border border-border/50 bg-background/60 px-2 py-0.5 text-[10px] text-muted-foreground"
-                        >
-                          {label}
-                        </span>
-                      ))}
-                    </div>
-                  )}
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
                   <Tooltip>
@@ -631,6 +1099,19 @@ export default function GitHubItemDrawer({
                 </div>
               </div>
             </div>
+
+            {/* Edit section (issues only) */}
+            {repoPath && (
+              <GHEditSection
+                item={workItem}
+                repoPath={repoPath}
+                localState={localState}
+                localLabels={localLabels}
+                onStateChange={setLocalState}
+                onLabelsChange={setLocalLabels}
+                assignees={details?.assignees ?? []}
+              />
+            )}
 
             {/* Tabs + body */}
             <div className="min-h-0 flex-1">
@@ -719,6 +1200,32 @@ export default function GitHubItemDrawer({
                 </Tabs>
               )}
             </div>
+
+            {/* Comment footer */}
+            {repoPath && (
+              <GHCommentFooter
+                repoPath={repoPath}
+                issueNumber={workItem.number}
+                onCommentAdded={(comment) => {
+                  // Why: skip refreshDetails() — gh api --cache 60s returns stale data
+                  // that overwrites the optimistic comment. The next drawer open (after
+                  // cache expiry) will pick up the server-confirmed version.
+                  optimisticCommentsRef.current.push(comment)
+                  setDetails((prev) => {
+                    if (prev) {
+                      return { ...prev, comments: [...prev.comments, comment] }
+                    }
+                    // Why: details may still be loading — create a minimal shell
+                    // so the optimistic comment isn't silently dropped.
+                    return {
+                      item: workItem,
+                      body: '',
+                      comments: [comment]
+                    }
+                  })
+                }}
+              />
+            )}
 
             {/* Footer */}
             <div className="flex-none border-t border-border/60 bg-background/40 px-4 py-3">

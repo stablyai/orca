@@ -1,6 +1,7 @@
 import * as pty from 'node-pty'
 import type { SubprocessHandle } from './session'
 import { getShellReadyLaunchConfig, resolvePtyShellPath } from './shell-ready'
+import { isValidPtySize, normalizePtySize } from './daemon-pty-size'
 import { ensureNodePtySpawnHelperExecutable } from '../providers/local-pty-utils'
 
 export type PtySubprocessOptions = {
@@ -30,6 +31,7 @@ function getDefaultCwd(): string {
 }
 
 export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandle {
+  const size = normalizePtySize(opts.cols, opts.rows)
   const env: Record<string, string> = {
     ...process.env,
     ...opts.env,
@@ -64,8 +66,8 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
 
   const proc = pty.spawn(shellPath, shellArgs, {
     name: 'xterm-256color',
-    cols: opts.cols,
-    rows: opts.rows,
+    cols: size.cols,
+    rows: size.rows,
     cwd: opts.cwd || getDefaultCwd(),
     env
   })
@@ -100,6 +102,9 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     },
     resize: (cols, rows) => {
       if (dead) {
+        return
+      }
+      if (!isValidPtySize(cols, rows)) {
         return
       }
       try {
