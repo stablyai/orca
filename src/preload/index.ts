@@ -497,7 +497,9 @@ const api = {
       agents: string[]
       addedPathSegments: string[]
       shellHydrationOk: boolean
-    }> => ipcRenderer.invoke('preflight:refreshAgents')
+    }> => ipcRenderer.invoke('preflight:refreshAgents'),
+    detectRemoteAgents: (args: { connectionId: string }): Promise<string[]> =>
+      ipcRenderer.invoke('preflight:detectRemoteAgents', args)
   },
 
   notifications: {

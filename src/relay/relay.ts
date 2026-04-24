@@ -11,6 +11,7 @@ import { RelayContext } from './context'
 import { PtyHandler } from './pty-handler'
 import { FsHandler } from './fs-handler'
 import { GitHandler } from './git-handler'
+import { PreflightHandler } from './preflight-handler'
 
 const DEFAULT_GRACE_MS = 5 * 60 * 1000
 
@@ -60,6 +61,9 @@ function main(): void {
   // so we hold the reference only for potential future disposal.
   const _gitHandler = new GitHandler(dispatcher, context)
   void _gitHandler
+
+  const _preflightHandler = new PreflightHandler(dispatcher)
+  void _preflightHandler
 
   // Read framed binary data from stdin
   process.stdin.on('data', (chunk: Buffer) => {

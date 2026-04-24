@@ -559,6 +559,12 @@ export function useIpcEvents(): void {
         if (
           ['disconnected', 'auth-failed', 'reconnection-failed', 'error'].includes(state.status)
         ) {
+          // Why: the remote agent list is tied to a live SSH connection. On
+          // disconnect the relay is gone, so clear the cached list and dedup
+          // promise. When the user reconnects and opens the quick-launch menu,
+          // ensureRemoteDetectedAgents will re-detect against the new relay.
+          store.clearRemoteDetectedAgents(data.targetId)
+
           // Why: an explicit disconnect or terminal failure tears down the SSH
           // PTY provider without emitting per-PTY exit events. Clear the stale
           // PTY ids in renderer state so a later reconnect remounts TerminalPane

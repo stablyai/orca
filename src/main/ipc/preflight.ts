@@ -5,6 +5,7 @@ import path from 'path'
 import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import { hydrateShellPath, mergePathSegments } from '../startup/hydrate-shell-path'
 import { loadToken } from '../linear/client'
+import { getActiveMultiplexer } from './ssh'
 
 const execFileAsync = promisify(execFile)
 
@@ -150,4 +151,22 @@ export function registerPreflightHandlers(): void {
   ipcMain.handle('preflight:refreshAgents', async (): Promise<RefreshAgentsResult> => {
     return refreshShellPathAndDetectAgents()
   })
+
+  // Why: remote worktrees need agent detection on the SSH host, not the local
+  // machine. This handler forwards the same KNOWN_AGENT_COMMANDS list to the
+  // relay's preflight.detectAgents RPC, which runs `which` inside a login shell
+  // on the remote host to match the PATH users see in PTY sessions.
+  ipcMain.handle(
+    'preflight:detectRemoteAgents',
+    async (_event, args: { connectionId: string }): Promise<string[]> => {
+      const mux = getActiveMultiplexer(args.connectionId)
+      if (!mux || mux.isDisposed()) {
+        throw new Error(`No active SSH connection for "${args.connectionId}"`)
+      }
+      const result = (await mux.request('preflight.detectAgents', {
+        commands: KNOWN_AGENT_COMMANDS
+      })) as { agents: string[] }
+      return result.agents
+    }
+  )
 }

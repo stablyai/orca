@@ -179,6 +179,7 @@ export type PreflightApi = {
   check: (args?: { force?: boolean }) => Promise<PreflightStatus>
   detectAgents: () => Promise<string[]>
   refreshAgents: () => Promise<RefreshAgentsResult>
+  detectRemoteAgents: (args: { connectionId: string }) => Promise<string[]>
 }
 
 export type ExportApi = {
