@@ -288,6 +288,23 @@ const WorktreeCard = React.memo(function WorktreeCard({
             {/* Header row: Title and Checks */}
             <div className="flex items-center justify-between min-w-0 gap-2">
               <div className="flex items-center gap-1.5 min-w-0">
+                {repo?.connectionId && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="shrink-0 inline-flex items-center">
+                        {isSshDisconnected ? (
+                          <WifiOff className="size-3 text-red-400" />
+                        ) : (
+                          <Globe className="size-3 text-muted-foreground" />
+                        )}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" sideOffset={8}>
+                      {isSshDisconnected ? 'SSH disconnected' : 'Remote repository via SSH'}
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+
                 <div className="text-[12px] font-semibold text-foreground truncate leading-tight">
                   {worktree.displayName}
                 </div>
@@ -350,23 +367,6 @@ const WorktreeCard = React.memo(function WorktreeCard({
                     {repo.displayName}
                   </span>
                 </div>
-              )}
-
-              {repo?.connectionId && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="shrink-0 inline-flex items-center gap-0.5">
-                      {isSshDisconnected ? (
-                        <WifiOff className="size-3 text-red-400" />
-                      ) : (
-                        <Globe className="size-3 text-muted-foreground" />
-                      )}
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent side="right" sideOffset={8}>
-                    {isSshDisconnected ? 'SSH disconnected' : 'Remote repository via SSH'}
-                  </TooltipContent>
-                </Tooltip>
               )}
 
               {isFolder ? (

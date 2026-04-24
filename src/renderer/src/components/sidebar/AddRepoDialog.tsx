@@ -316,6 +316,11 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
               setRemoteError(null)
             }}
             onAdd={handleAddRemoteRepo}
+            onOpenSshSettings={() => {
+              closeModal()
+              openSettingsTarget({ pane: 'ssh', repoId: null, sectionId: 'ssh' })
+              openSettingsPage()
+            }}
           />
         ) : step === 'clone' ? (
           <CloneStep

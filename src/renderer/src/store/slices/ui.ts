@@ -93,6 +93,7 @@ export type UISlice = {
       | 'repo'
       | 'agents'
       | 'experimental'
+      | 'ssh'
     repoId: string | null
     sectionId?: string
   } | null

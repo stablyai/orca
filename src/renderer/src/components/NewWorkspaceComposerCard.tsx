@@ -19,7 +19,6 @@ import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import type { TuiAgent } from '../../../shared/types'
-import { isGitRepoKind } from '../../../shared/repo-kind'
 
 const isMac = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
 
@@ -190,11 +189,9 @@ export default function NewWorkspaceComposerCard({
   createError
 }: NewWorkspaceComposerCardProps): React.JSX.Element {
   const { isFileDragOver, dragHandlers } = useComposerFileDragOver()
-  const addRepo = useAppStore((s) => s.addRepo)
-  const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
+  const openModal = useAppStore((s) => s.openModal)
   const defaultTuiAgent = useAppStore((s) => s.settings?.defaultTuiAgent ?? null)
   const updateSettings = useAppStore((s) => s.updateSettings)
-  const [isAddingRepo, setIsAddingRepo] = React.useState(false)
 
   const handleSetDefaultAgent = React.useCallback(
     (next: TuiAgent | 'blank' | null) => {
@@ -218,25 +215,9 @@ export default function NewWorkspaceComposerCard({
     [detectedAgentIds]
   )
 
-  const handleAddRepo = React.useCallback(async (): Promise<void> => {
-    if (isAddingRepo) {
-      return
-    }
-    setIsAddingRepo(true)
-    try {
-      const repo = await addRepo()
-      if (!repo) {
-        return
-      }
-      if (isGitRepoKind(repo)) {
-        await fetchWorktrees(repo.id)
-      }
-      onRepoChange(repo.id)
-      focusNameInput()
-    } finally {
-      setIsAddingRepo(false)
-    }
-  }, [addRepo, fetchWorktrees, focusNameInput, isAddingRepo, onRepoChange])
+  const handleAddRepo = React.useCallback((): void => {
+    openModal('add-repo')
+  }, [openModal])
 
   return (
     <div
@@ -265,12 +246,9 @@ export default function NewWorkspaceComposerCard({
                   type="button"
                   variant="ghost"
                   size="icon-xs"
-                  disabled={isAddingRepo}
-                  onClick={() => void handleAddRepo()}
+                  onClick={handleAddRepo}
                   className="size-5 shrink-0 rounded-sm text-muted-foreground hover:text-foreground"
-                  aria-label={
-                    isAddingRepo ? 'Adding folder or repository' : 'Add folder or repository'
-                  }
+                  aria-label="Add folder or repository"
                 >
                   <FolderPlus className="size-3" />
                 </Button>

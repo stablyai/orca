@@ -1,7 +1,7 @@
 /* oxlint-disable max-lines */
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { Globe, Plus } from 'lucide-react'
+import { Globe, Plus, WifiOff } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { getRepoMapFromState, useAllWorktrees } from '@/store/selectors'
 import {
@@ -145,6 +145,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const activeBrowserTabId = useAppStore((s) => s.activeBrowserTabId)
   const browserTabsByWorktree = useAppStore((s) => s.browserTabsByWorktree)
   const browserPagesByWorkspace = useAppStore((s) => s.browserPagesByWorkspace)
+  const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
 
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
@@ -705,6 +706,11 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                 )
                 const statusLabel = getWorktreeStatusLabel(status)
                 const isCurrentWorktree = activeWorktreeId === worktree.id
+                const sshConnectionId = repo?.connectionId ?? null
+                const sshStatus = sshConnectionId
+                  ? (sshConnectionStates.get(sshConnectionId)?.status ?? 'disconnected')
+                  : null
+                const isSshDisconnected = sshStatus != null && sshStatus !== 'connected'
 
                 return (
                   <CommandItem
@@ -725,6 +731,21 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                       <div className="flex items-center justify-between gap-2.5">
                         <div className="min-w-0 flex-1">
                           <div className="flex min-w-0 items-center gap-2">
+                            {sshConnectionId && (
+                              <span
+                                aria-label={isSshDisconnected ? 'SSH disconnected' : 'SSH remote'}
+                                className="shrink-0 inline-flex items-center"
+                              >
+                                {isSshDisconnected ? (
+                                  <WifiOff className="size-3.5 text-red-400" aria-hidden="true" />
+                                ) : (
+                                  <Globe
+                                    className="size-3.5 text-muted-foreground"
+                                    aria-hidden="true"
+                                  />
+                                )}
+                              </span>
+                            )}
                             <span className="truncate text-[14px] font-semibold tracking-[-0.01em] text-foreground">
                               {entry.match.displayNameRange ? (
                                 <HighlightedText
