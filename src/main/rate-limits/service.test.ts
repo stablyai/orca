@@ -291,4 +291,39 @@ describe('RateLimitService', () => {
     expect(state.gemini?.error).toBe('gemini down')
     expect(state.opencodeGo?.status).toBe('ok')
   })
+
+  it('discards stale data when a provider becomes unavailable', async () => {
+    const service = new RateLimitService()
+    let cookie = 'session=valid'
+    service.setSettingsResolver(() => ({ opencodeSessionCookie: cookie, opencodeWorkspaceId: '' }))
+
+    // 1. Success fetch
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 10, Date.now()))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 20, Date.now()))
+    vi.mocked(fetchGeminiRateLimits).mockResolvedValue(okProvider('gemini', 30, Date.now()))
+    vi.mocked(fetchOpenCodeGoRateLimits).mockResolvedValue(
+      okProvider('opencode-go', 40, Date.now())
+    )
+
+    await service.refresh()
+    expect(service.getState().opencodeGo?.session?.usedPercent).toBe(40)
+
+    // 2. Clear cookie -> should become unavailable and LOSE the 40% data
+    cookie = ''
+    vi.mocked(fetchOpenCodeGoRateLimits).mockResolvedValue({
+      provider: 'opencode-go',
+      session: null,
+      weekly: null,
+      monthly: null,
+      updatedAt: Date.now(),
+      error: 'Session cookie not configured',
+      status: 'unavailable'
+    })
+
+    await service.refresh()
+    const state = service.getState()
+    expect(state.opencodeGo?.status).toBe('unavailable')
+    expect(state.opencodeGo?.session).toBeNull()
+    expect(state.opencodeGo?.error).toBe('Session cookie not configured')
+  })
 })

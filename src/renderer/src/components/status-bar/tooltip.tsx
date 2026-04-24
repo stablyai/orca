@@ -180,7 +180,7 @@ export function ProviderTooltip({ p }: { p: ProviderRateLimits | null }): React.
     )
   }
 
-  if (p.status === 'error' && !p.session && !p.weekly) {
+  if (p.status === 'error' && !p.session && !p.weekly && !p.monthly) {
     return (
       <div className="text-xs w-[200px]">
         <div className="flex items-center gap-1.5 font-medium text-background">
@@ -214,7 +214,7 @@ export function ProviderTooltip({ p }: { p: ProviderRateLimits | null }): React.
 
       {/* Stale data warning — softer label when prior data is still shown */}
       {p.error ? (
-        <ErrorMessage message={p.error} stale={!!(p.session || p.weekly)} inverted />
+        <ErrorMessage message={p.error} stale={!!(p.session || p.weekly || p.monthly)} inverted />
       ) : null}
     </div>
   )
@@ -262,7 +262,7 @@ export function ProviderPanel({
     )
   }
 
-  if (p.status === 'error' && !p.session && !p.weekly) {
+  if (p.status === 'error' && !p.session && !p.weekly && !p.monthly) {
     return (
       <div className={`text-xs ${className ?? 'w-full'}`}>
         <div className={`flex items-center gap-1.5 font-medium ${textClass}`}>
@@ -325,7 +325,11 @@ export function ProviderPanel({
       ))}
 
       {p.error ? (
-        <ErrorMessage message={p.error} stale={!!(p.session || p.weekly)} inverted={inverted} />
+        <ErrorMessage
+          message={p.error}
+          stale={!!(p.session || p.weekly || p.monthly)}
+          inverted={inverted}
+        />
       ) : null}
     </div>
   )

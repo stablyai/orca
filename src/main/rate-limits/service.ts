@@ -524,6 +524,12 @@ export class RateLimitService {
       return fresh
     }
 
+    // Explicitly unavailable — user likely cleared a setting. Discard any stale
+    // data so the UI reflects that the provider is now disabled/unconfigured.
+    if (fresh.status === 'unavailable') {
+      return fresh
+    }
+
     const previousHasData = Boolean(previous?.session || previous?.weekly)
 
     // No previous data to fall back on
