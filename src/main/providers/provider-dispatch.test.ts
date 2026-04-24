@@ -12,6 +12,10 @@ vi.mock('electron', () => ({
     on: vi.fn(),
     removeHandler: removeHandlerMock,
     removeAllListeners: removeAllListenersMock
+  },
+  app: {
+    isPackaged: true,
+    getPath: vi.fn().mockReturnValue('/tmp/orca-test-userdata')
   }
 }))
 
