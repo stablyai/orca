@@ -645,140 +645,144 @@ function App(): React.JSX.Element {
   // the sidebar-width left header (workspace view) can share the same
   // controls without duplicating the agent badge popover.
   const titlebarLeftControls = (
-    <div ref={titlebarLeftControlsRef} className="flex h-full shrink-0 items-center">
-      <div className={isMac && !isFullScreen ? 'titlebar-traffic-light-pad' : 'pl-2'} />
-      {showSidebar && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              className="sidebar-toggle"
-              onClick={actions.toggleSidebar}
-              aria-label="Toggle sidebar"
-            >
-              <PanelLeft size={16} />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" sideOffset={6}>
-            {`Toggle sidebar (${isMac ? '⌘B' : 'Ctrl+B'})`}
-          </TooltipContent>
-        </Tooltip>
-      )}
-      {settings?.showTitlebarAgentActivity !== false ? (
-        <Popover>
-          <PopoverTrigger asChild>
-            <button
-              className={`titlebar-agent-badge${activeAgentCount === 0 ? ' titlebar-agent-badge-idle' : ''}`}
-              aria-label={`${activeAgentCount} ${activeAgentCount === 1 ? 'agent' : 'agents'} active`}
-            >
-              <span
-                className={`titlebar-agent-badge-dot${activeAgentCount === 0 ? ' titlebar-agent-badge-dot-idle' : ''}`}
-                aria-hidden
-              />
-              <span className="titlebar-agent-badge-count">{activeAgentCount}</span>
-            </button>
-          </PopoverTrigger>
-          <PopoverContent side="bottom" sideOffset={6} className="titlebar-agent-hovercard">
-            <div
-              className={`titlebar-agent-hovercard-header${activeAgentCount > 0 ? ' titlebar-agent-hovercard-header-with-list' : ''}`}
-            >
-              {activeAgentCount === 0
-                ? 'No agents active'
-                : `${activeAgentCount} ${activeAgentCount === 1 ? 'agent' : 'agents'} active`}
-            </div>
-            {activeAgentCount > 0 && (
-              <div className="titlebar-agent-hovercard-list">
-                {Object.entries(workingAgentsPerWorktree).map(([worktreeId, { agents }]) => {
-                  const wt = findWorktreeById(worktreesByRepo, worktreeId)
-                  // Why: when a transient git error causes worktreesByRepo to
-                  // lose a worktree, the raw worktreeId (uuid::path) is not
-                  // useful. Extract a cross-platform path basename as a
-                  // readable fallback.
-                  const sepIdx = worktreeId.indexOf('::')
-                  const pathPart = sepIdx !== -1 ? worktreeId.slice(sepIdx + 2) : worktreeId
-                  const fallbackName = pathPart.split(/[\\/]/).pop() || pathPart
-                  return (
-                    <div key={worktreeId}>
-                      <button
-                        className="titlebar-agent-hovercard-worktree"
-                        onClick={() => {
-                          // Why: if the worktree is missing from worktreesByRepo
-                          // (transient git error cleared the list), refresh the
-                          // repo's worktrees before navigating so the activation
-                          // lookup succeeds instead of silently failing.
-                          if (!wt) {
-                            const repoId = getRepoIdFromWorktreeId(worktreeId)
-                            void useAppStore
-                              .getState()
-                              .fetchWorktrees(repoId)
-                              .then(() => {
-                                activateAndRevealWorktree(worktreeId)
-                              })
-                            return
-                          }
-                          activateAndRevealWorktree(worktreeId)
-                        }}
-                      >
-                        <span className="titlebar-agent-hovercard-name">
-                          {wt?.displayName ?? fallbackName}
-                        </span>
-                      </button>
-                      {agents.map((agent) => (
+    <div className="flex h-full w-full shrink-0 items-center">
+      <div ref={titlebarLeftControlsRef} className="flex h-full items-center">
+        <div className={isMac && !isFullScreen ? 'titlebar-traffic-light-pad' : 'pl-2'} />
+        {showSidebar && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                className="sidebar-toggle"
+                onClick={actions.toggleSidebar}
+                aria-label="Toggle sidebar"
+              >
+                <PanelLeft size={16} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={6}>
+              {`Toggle sidebar (${isMac ? '⌘B' : 'Ctrl+B'})`}
+            </TooltipContent>
+          </Tooltip>
+        )}
+        {settings?.showTitlebarAgentActivity !== false ? (
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                className={`titlebar-agent-badge${activeAgentCount === 0 ? ' titlebar-agent-badge-idle' : ''}`}
+                aria-label={`${activeAgentCount} ${activeAgentCount === 1 ? 'agent' : 'agents'} active`}
+              >
+                <span
+                  className={`titlebar-agent-badge-dot${activeAgentCount === 0 ? ' titlebar-agent-badge-dot-idle' : ''}`}
+                  aria-hidden
+                />
+                <span className="titlebar-agent-badge-count">{activeAgentCount}</span>
+              </button>
+            </PopoverTrigger>
+            <PopoverContent side="bottom" sideOffset={6} className="titlebar-agent-hovercard">
+              <div
+                className={`titlebar-agent-hovercard-header${activeAgentCount > 0 ? ' titlebar-agent-hovercard-header-with-list' : ''}`}
+              >
+                {activeAgentCount === 0
+                  ? 'No agents active'
+                  : `${activeAgentCount} ${activeAgentCount === 1 ? 'agent' : 'agents'} active`}
+              </div>
+              {activeAgentCount > 0 && (
+                <div className="titlebar-agent-hovercard-list">
+                  {Object.entries(workingAgentsPerWorktree).map(([worktreeId, { agents }]) => {
+                    const wt = findWorktreeById(worktreesByRepo, worktreeId)
+                    // Why: when a transient git error causes worktreesByRepo to
+                    // lose a worktree, the raw worktreeId (uuid::path) is not
+                    // useful. Extract a cross-platform path basename as a
+                    // readable fallback.
+                    const sepIdx = worktreeId.indexOf('::')
+                    const pathPart = sepIdx !== -1 ? worktreeId.slice(sepIdx + 2) : worktreeId
+                    const fallbackName = pathPart.split(/[\\/]/).pop() || pathPart
+                    return (
+                      <div key={worktreeId}>
                         <button
-                          key={`${agent.tabId}:${agent.paneId ?? 'none'}:${agent.label}`}
-                          className="titlebar-agent-hovercard-agent"
+                          className="titlebar-agent-hovercard-worktree"
                           onClick={() => {
-                            activateAndRevealWorktree(worktreeId)
-                            useAppStore.getState().setActiveTab(agent.tabId)
-                            if (agent.paneId !== null) {
-                              // Why: a split-terminal tab can host multiple
-                              // agents. After selecting the tab, wait one
-                              // frame so the active TerminalPane can mount
-                              // and then focus the specific pane the user
-                              // clicked instead of leaving whichever pane
-                              // was previously active highlighted.
-                              requestAnimationFrame(() => {
-                                window.dispatchEvent(
-                                  new CustomEvent(FOCUS_TERMINAL_PANE_EVENT, {
-                                    detail: { tabId: agent.tabId, paneId: agent.paneId }
-                                  })
-                                )
-                              })
+                            // Why: if the worktree is missing from worktreesByRepo
+                            // (transient git error cleared the list), refresh the
+                            // repo's worktrees before navigating so the activation
+                            // lookup succeeds instead of silently failing.
+                            if (!wt) {
+                              const repoId = getRepoIdFromWorktreeId(worktreeId)
+                              void useAppStore
+                                .getState()
+                                .fetchWorktrees(repoId)
+                                .then(() => {
+                                  activateAndRevealWorktree(worktreeId)
+                                })
+                              return
                             }
+                            activateAndRevealWorktree(worktreeId)
                           }}
                         >
-                          <span className="titlebar-agent-hovercard-agent-label">
-                            {agent.label}
+                          <span className="titlebar-agent-hovercard-name">
+                            {wt?.displayName ?? fallbackName}
                           </span>
-                          <span className="titlebar-agent-hovercard-agent-dot" />
                         </button>
-                      ))}
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-            <button
-              className="titlebar-agent-hovercard-hide"
-              onClick={() => {
-                void actions.updateSettings({ showTitlebarAgentActivity: false })
-                toast('Agent activity badge hidden', {
-                  description: 'You can turn it back on in Settings → Appearance.',
-                  duration: Infinity,
-                  dismissible: true
-                })
-              }}
-            >
-              Hide from titlebar
-            </button>
-          </PopoverContent>
-        </Popover>
-      ) : null}
+                        {agents.map((agent) => (
+                          <button
+                            key={`${agent.tabId}:${agent.paneId ?? 'none'}:${agent.label}`}
+                            className="titlebar-agent-hovercard-agent"
+                            onClick={() => {
+                              activateAndRevealWorktree(worktreeId)
+                              useAppStore.getState().setActiveTab(agent.tabId)
+                              if (agent.paneId !== null) {
+                                // Why: a split-terminal tab can host multiple
+                                // agents. After selecting the tab, wait one
+                                // frame so the active TerminalPane can mount
+                                // and then focus the specific pane the user
+                                // clicked instead of leaving whichever pane
+                                // was previously active highlighted.
+                                requestAnimationFrame(() => {
+                                  window.dispatchEvent(
+                                    new CustomEvent(FOCUS_TERMINAL_PANE_EVENT, {
+                                      detail: { tabId: agent.tabId, paneId: agent.paneId }
+                                    })
+                                  )
+                                })
+                              }
+                            }}
+                          >
+                            <span className="titlebar-agent-hovercard-agent-label">
+                              {agent.label}
+                            </span>
+                            <span className="titlebar-agent-hovercard-agent-dot" />
+                          </button>
+                        ))}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+              <button
+                className="titlebar-agent-hovercard-hide"
+                onClick={() => {
+                  void actions.updateSettings({ showTitlebarAgentActivity: false })
+                  toast('Agent activity badge hidden', {
+                    description: 'You can turn it back on in Settings → Appearance.',
+                    duration: Infinity,
+                    dismissible: true
+                  })
+                }}
+              >
+                Hide from titlebar
+              </button>
+            </PopoverContent>
+          </Popover>
+        ) : null}
+      </div>
       {/* Why: Back/Forward navigate worktree-activation history. Only
           meaningful while viewing a worktree (terminal view); hidden in
           Settings/Tasks/Landing to keep the titlebar compact and the
-          semantics unambiguous. */}
+          semantics unambiguous. The group sits outside the measured inner
+          container so the sidebar-collapse spacer stays sized to the left
+          controls only. */}
       {activeView === 'terminal' && (
-        <>
+        <div className="ml-auto flex items-center">
           <Tooltip>
             <TooltipTrigger asChild>
               <button
@@ -787,7 +791,7 @@ function App(): React.JSX.Element {
                 disabled={!canGoBackWorktree}
                 aria-label="Go back"
               >
-                <ArrowLeft size={16} />
+                <ArrowLeft size={14} />
               </button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
@@ -802,14 +806,14 @@ function App(): React.JSX.Element {
                 disabled={!canGoForwardWorktree}
                 aria-label="Go forward"
               >
-                <ArrowRight size={16} />
+                <ArrowRight size={14} />
               </button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
               {`Go forward (${isMac ? '⌘⌥→' : 'Ctrl+Alt+→'})`}
             </TooltipContent>
           </Tooltip>
-        </>
+        </div>
       )}
     </div>
   )
