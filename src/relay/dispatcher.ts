@@ -31,6 +31,14 @@ export class RelayDispatcher {
     this.startKeepalive()
   }
 
+  // Why: when a client reconnects via Unix socket, the relay must redirect
+  // all outgoing frames (pty.data, keepalives, responses) to the new socket
+  // instead of the original stdout. Swapping the write callback avoids
+  // tearing down and reconstructing the entire dispatcher + handler tree.
+  setWrite(write: (data: Buffer) => void): void {
+    this.write = write
+  }
+
   onRequest(method: string, handler: MethodHandler): void {
     this.requestHandlers.set(method, handler)
   }

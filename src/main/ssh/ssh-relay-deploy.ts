@@ -282,10 +282,46 @@ async function launchRelay(
   // user's profile to pick up nvm/fnm/brew PATH entries.
   const nodePath = await resolveRemoteNodePath(conn)
   const graceTime = graceTimeSeconds ?? 300
+  const escapedDir = shellEscape(remoteDir)
+  const escapedNode = shellEscape(nodePath)
+  const sockFile = `${remoteDir}/relay.sock`
+
+  // Why: after an app restart a relay may still be running in its grace
+  // period with live PTY sessions.  We check for its Unix socket and
+  // launch in --connect mode to bridge the new SSH channel to the
+  // existing relay process — preserving PTY state and scrollback.
+  try {
+    const probeOutput = await execCommand(
+      conn,
+      `test -S ${shellEscape(sockFile)} && echo ALIVE || echo DEAD`
+    )
+    if (probeOutput.trim() === 'ALIVE') {
+      console.log('[ssh-relay] Existing relay socket found, attempting reconnect...')
+      try {
+        const channel = await conn.exec(
+          `cd ${escapedDir} && ${escapedNode} relay.js --connect --sock-path ${shellEscape(sockFile)}`
+        )
+        const transport = await waitForSentinel(channel)
+        console.log('[ssh-relay] Reconnected to existing relay via socket')
+        return transport
+      } catch (err) {
+        console.warn(
+          '[ssh-relay] Socket reconnect failed, launching fresh relay:',
+          err instanceof Error ? err.message : String(err)
+        )
+        // Why: stale socket from a crashed relay — remove it so the
+        // fresh launch can bind a new socket at the same path.
+        await execCommand(conn, `rm -f ${shellEscape(sockFile)}`).catch(() => {})
+      }
+    }
+  } catch {
+    // Probe failed — fall through to fresh launch
+  }
+
   // Why: both remoteDir and nodePath come from the remote host and could
   // contain shell metacharacters. Single-quote escaping prevents injection.
   const channel = await conn.exec(
-    `cd ${shellEscape(remoteDir)} && ${shellEscape(nodePath)} relay.js --grace-time ${graceTime}`
+    `cd ${escapedDir} && ${escapedNode} relay.js --grace-time ${graceTime}`
   )
   return waitForSentinel(channel)
 }
