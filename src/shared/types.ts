@@ -725,6 +725,7 @@ export type GlobalSettings = {
   refreshLocalBaseRefOnWorktreeCreate: boolean
   branchPrefix: 'git-username' | 'custom' | 'none'
   branchPrefixCustom: string
+  enableGitHubAttribution: boolean
   theme: 'system' | 'dark' | 'light'
   editorAutoSave: boolean
   editorAutoSaveDelayMs: number

@@ -106,6 +106,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     refreshLocalBaseRefOnWorktreeCreate: false,
     branchPrefix: 'git-username',
     branchPrefixCustom: '',
+    enableGitHubAttribution: true,
     theme: 'system',
     editorAutoSave: false,
     editorAutoSaveDelayMs: DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS,

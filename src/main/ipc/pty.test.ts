@@ -196,7 +196,8 @@ describe('registerPtyHandlers', () => {
   async function spawnAndGetEnv(
     argsEnv?: Record<string, string>,
     processEnvOverrides?: Record<string, string | undefined>,
-    getSelectedCodexHomePath?: () => string | null
+    getSelectedCodexHomePath?: () => string | null,
+    getSettings?: () => { enableGitHubAttribution: boolean }
   ): Promise<Record<string, string>> {
     const savedEnv: Record<string, string | undefined> = {}
     if (processEnvOverrides) {
@@ -214,7 +215,12 @@ describe('registerPtyHandlers', () => {
       // Clear previously registered handlers so re-registration doesn't
       // accumulate stale state across calls within one test.
       handlers.clear()
-      registerPtyHandlers(mainWindow as never, undefined, getSelectedCodexHomePath)
+      registerPtyHandlers(
+        mainWindow as never,
+        undefined,
+        getSelectedCodexHomePath,
+        getSettings as never
+      )
       await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
@@ -318,6 +324,30 @@ describe('registerPtyHandlers', () => {
       expect(buildAgentHookEnvMock).toHaveBeenCalledTimes(2)
       expect(env.ORCA_AGENT_HOOK_PORT).toBe('5678')
       expect(env.ORCA_AGENT_HOOK_TOKEN).toBe('agent-token')
+    })
+
+    it('prepends local git/gh attribution shims when attribution is enabled', async () => {
+      const env = await spawnAndGetEnv(undefined, undefined, undefined, () => ({
+        enableGitHubAttribution: true
+      }))
+
+      expect(env.ORCA_ENABLE_GIT_ATTRIBUTION).toBe('1')
+      expect(env.ORCA_GIT_COMMIT_TRAILER).toBe('Co-authored-by: Orca <help@stably.ai>')
+      expect(env.ORCA_GH_PR_FOOTER).toBe('Made with [Orca](https://github.com/orca-ide) 🐋')
+      expect(env.ORCA_GH_ISSUE_FOOTER).toBe('Made with [Orca](https://github.com/orca-ide) 🐋')
+      expect(env.PATH).toContain('/tmp/orca-user-data/orca-terminal-attribution/posix')
+    })
+
+    it('skips git/gh attribution shims when attribution is disabled', async () => {
+      const env = await spawnAndGetEnv(undefined, undefined, undefined, () => ({
+        enableGitHubAttribution: false
+      }))
+
+      expect(env.ORCA_ENABLE_GIT_ATTRIBUTION).toBeUndefined()
+      expect(env.ORCA_GIT_COMMIT_TRAILER).toBeUndefined()
+      expect(env.ORCA_GH_PR_FOOTER).toBeUndefined()
+      expect(env.ORCA_GH_ISSUE_FOOTER).toBeUndefined()
+      expect(env.PATH ?? '').not.toContain('/tmp/orca-user-data/orca-terminal-attribution/posix')
     })
 
     it('leaves ambient CODEX_HOME untouched when system default is selected', async () => {

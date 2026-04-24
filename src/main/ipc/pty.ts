@@ -20,6 +20,7 @@ import {
   markClaudePtyExited,
   markClaudePtySpawned
 } from '../claude-accounts/live-pty-gate'
+import { applyTerminalAttributionEnv } from '../attribution/terminal-attribution'
 
 // ─── Provider Registry ──────────────────────────────────────────────
 // Routes PTY operations by connectionId. null = local provider.
@@ -239,6 +240,15 @@ export function registerPtyHandlers(
           // create for dev terminals).
           baseEnv.PATH = baseEnv.PATH ? `${devCliBin}${delimiter}${baseEnv.PATH}` : devCliBin
         }
+
+        // Why: GitHub attribution should only affect commands launched from
+        // Orca's own PTYs. Injecting lightweight PATH shims at spawn-time keeps
+        // the behavior local to Orca instead of rewriting user git config or
+        // touching external shells.
+        applyTerminalAttributionEnv(baseEnv, {
+          enabled: getSettings?.()?.enableGitHubAttribution ?? true,
+          userDataPath: app.getPath('userData')
+        })
 
         return baseEnv
       },

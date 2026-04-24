@@ -109,6 +109,44 @@ export function GitPane({
           />
         </button>
       </SearchableSetting>
+    ) : null,
+    matchesSettingsSearch(searchQuery, {
+      title: 'Orca Attribution',
+      description: 'Add Orca attribution to commits, PRs, and issues.',
+      keywords: ['github', 'gh', 'pr', 'issue', 'co-author', 'coauthored', 'attribution', 'orca']
+    }) ? (
+      <SearchableSetting
+        key="github-attribution"
+        title="Orca Attribution"
+        description="Add Orca attribution."
+        keywords={['github', 'gh', 'pr', 'issue', 'co-author', 'coauthored', 'attribution', 'orca']}
+        className="flex items-center justify-between gap-4 px-1 py-2"
+      >
+        <div className="space-y-0.5">
+          <Label>Orca Attribution</Label>
+          <p className="text-xs text-muted-foreground">
+            Add Orca attribution to commits, PRs, and issues.
+          </p>
+        </div>
+        <button
+          role="switch"
+          aria-checked={settings.enableGitHubAttribution}
+          onClick={() =>
+            updateSettings({
+              enableGitHubAttribution: !settings.enableGitHubAttribution
+            })
+          }
+          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
+            settings.enableGitHubAttribution ? 'bg-foreground' : 'bg-muted-foreground/30'
+          }`}
+        >
+          <span
+            className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
+              settings.enableGitHubAttribution ? 'translate-x-4' : 'translate-x-0.5'
+            }`}
+          />
+        </button>
+      </SearchableSetting>
     ) : null
   ].filter(Boolean)
 
