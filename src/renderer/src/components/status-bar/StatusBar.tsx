@@ -28,7 +28,8 @@ import type {
 } from '../../../../shared/types'
 import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
 import { ProviderIcon, ProviderPanel } from './tooltip'
-import { ClaudeIcon, OpenAIIcon } from './icons'
+import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
+import { formatWindowLabel } from '@/lib/window-label-formatter'
 import { markLiveCodexSessionsForRestart } from '@/lib/codex-session-restart'
 import { SshStatusSegment } from './SshStatusSegment'
 import { SessionsStatusSegment } from './SessionsStatusSegment'
@@ -277,9 +278,11 @@ function ProviderSegment({
     <span className="inline-flex items-center gap-1.5">
       <ProviderIcon provider={provider} />
       {p.session && !compact && <MiniBar leftPct={Math.max(0, 100 - p.session.usedPercent)} />}
-      {p.session && <WindowLabel w={p.session} label="5h" />}
+      {p.session && (
+        <WindowLabel w={p.session} label={formatWindowLabel(p.session.windowMinutes)} />
+      )}
       {p.session && p.weekly && <span className="text-muted-foreground">&middot;</span>}
-      {p.weekly && <WindowLabel w={p.weekly} label="wk" />}
+      {p.weekly && <WindowLabel w={p.weekly} label={formatWindowLabel(p.weekly.windowMinutes)} />}
       {isStale && <AlertTriangle size={11} className="text-muted-foreground/80" />}
     </span>
   )
@@ -525,7 +528,13 @@ function ProviderDetailsMenu({
                 className={`inline-block h-2 w-2 rounded-full ${provider.session || provider.weekly ? 'bg-muted-foreground/60' : 'bg-muted-foreground/30'}`}
               />
               <span className="text-muted-foreground">
-                {provider.provider === 'claude' ? 'C' : 'X'}
+                {provider.provider === 'claude'
+                  ? 'C'
+                  : provider.provider === 'gemini'
+                    ? 'G'
+                    : provider.provider === 'opencode-go'
+                      ? 'O'
+                      : 'X'}
               </span>
             </span>
           ) : (
@@ -608,7 +617,7 @@ function StatusBarInner(): React.JSX.Element | null {
     return null
   }
 
-  const { claude, codex } = rateLimits
+  const { claude, codex, gemini, opencodeGo } = rateLimits
 
   // Why: hiding `unavailable` providers makes the status bar appear to lose a
   // provider at random after refreshes or wake/resume. Keeping the slot visible
@@ -616,11 +625,18 @@ function StatusBarInner(): React.JSX.Element | null {
   // configured but currently unavailable.
   const showClaude = claude && statusBarItems.includes('claude')
   const showCodex = codex && statusBarItems.includes('codex')
+  const showGemini = gemini && gemini.status !== 'unavailable' && statusBarItems.includes('gemini')
+  const showOpencodeGo =
+    opencodeGo && opencodeGo.status !== 'unavailable' && statusBarItems.includes('opencode-go')
   const showSsh = statusBarItems.includes('ssh')
   const showSessions = statusBarItems.includes('sessions')
   const showMemory = statusBarItems.includes('memory')
-  const anyVisible = showClaude || showCodex
-  const anyFetching = claude?.status === 'fetching' || codex?.status === 'fetching'
+  const anyVisible = showClaude || showCodex || showGemini || showOpencodeGo || showMemory
+  const anyFetching =
+    claude?.status === 'fetching' ||
+    codex?.status === 'fetching' ||
+    gemini?.status === 'fetching' ||
+    opencodeGo?.status === 'fetching'
 
   const compact = containerWidth < 900
   const iconOnly = containerWidth < 500
@@ -646,6 +662,22 @@ function StatusBarInner(): React.JSX.Element | null {
       <div className="flex items-center gap-3">
         {showClaude && <ClaudeSwitcherMenu claude={claude} compact={compact} iconOnly={iconOnly} />}
         {showCodex && <CodexSwitcherMenu codex={codex} compact={compact} iconOnly={iconOnly} />}
+        {showGemini && (
+          <ProviderDetailsMenu
+            provider={gemini}
+            compact={compact}
+            iconOnly={iconOnly}
+            ariaLabel="Open Gemini usage details"
+          />
+        )}
+        {showOpencodeGo && (
+          <ProviderDetailsMenu
+            provider={opencodeGo}
+            compact={compact}
+            iconOnly={iconOnly}
+            ariaLabel="Open OpenCode Go usage details"
+          />
+        )}
         {anyVisible && (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -700,6 +732,20 @@ function StatusBarInner(): React.JSX.Element | null {
           >
             <OpenAIIcon size={14} />
             Codex Usage
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuCheckboxItem
+            checked={statusBarItems.includes('gemini')}
+            onCheckedChange={() => toggleStatusBarItem('gemini')}
+          >
+            <GeminiIcon size={14} />
+            Gemini Usage
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuCheckboxItem
+            checked={statusBarItems.includes('opencode-go')}
+            onCheckedChange={() => toggleStatusBarItem('opencode-go')}
+          >
+            <OpenCodeGoIcon size={14} />
+            OpenCode Go Usage
           </DropdownMenuCheckboxItem>
           <DropdownMenuCheckboxItem
             checked={statusBarItems.includes('ssh')}

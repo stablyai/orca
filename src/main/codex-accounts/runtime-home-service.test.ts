@@ -85,6 +85,8 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     defaultTaskSource: 'github',
     defaultRepoSelection: null,
     defaultLinearTeamSelection: null,
+    opencodeSessionCookie: '',
+    opencodeWorkspaceId: '',
     agentCmdOverrides: {},
     terminalMacOptionAsAlt: 'false',
     terminalMacOptionAsAltMigrated: true,

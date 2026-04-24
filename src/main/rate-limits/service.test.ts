@@ -3,6 +3,8 @@ import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 import { RateLimitService } from './service'
 import { fetchClaudeRateLimits } from './claude-fetcher'
 import { fetchCodexRateLimits } from './codex-fetcher'
+import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
+import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
 
 vi.mock('./claude-fetcher', () => ({
   fetchClaudeRateLimits: vi.fn()
@@ -10,6 +12,14 @@ vi.mock('./claude-fetcher', () => ({
 
 vi.mock('./codex-fetcher', () => ({
   fetchCodexRateLimits: vi.fn()
+}))
+
+vi.mock('./gemini-usage-fetcher', () => ({
+  fetchGeminiRateLimits: vi.fn()
+}))
+
+vi.mock('./opencode-go-usage-fetcher', () => ({
+  fetchOpenCodeGoRateLimits: vi.fn()
 }))
 
 type Deferred<T> = {
@@ -26,7 +36,7 @@ function deferred<T>(): Deferred<T> {
 }
 
 function okProvider(
-  provider: 'claude' | 'codex',
+  provider: 'claude' | 'codex' | 'gemini' | 'opencode-go',
   usedPercent: number,
   updatedAt = Date.now()
 ): ProviderRateLimits {
@@ -45,7 +55,10 @@ function okProvider(
   }
 }
 
-function errorProvider(provider: 'claude' | 'codex', message: string): ProviderRateLimits {
+function errorProvider(
+  provider: 'claude' | 'codex' | 'gemini' | 'opencode-go',
+  message: string
+): ProviderRateLimits {
   return {
     provider,
     session: null,
@@ -63,6 +76,8 @@ function serviceInternals(service: RateLimitService): { fetchAll: () => Promise<
 describe('RateLimitService', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(fetchGeminiRateLimits).mockResolvedValue(okProvider('gemini', 0, Date.now()))
+    vi.mocked(fetchOpenCodeGoRateLimits).mockResolvedValue(okProvider('opencode-go', 0, Date.now()))
   })
 
   it('does not refetch Claude when a Codex account switch is queued during fetchAll', async () => {
@@ -175,5 +190,57 @@ describe('RateLimitService', () => {
     expect(refreshResolved).toBe(true)
     expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
     expect(fetchCodexRateLimits).toHaveBeenCalledTimes(2)
+  })
+
+  it('fetches Gemini and OpenCode Go alongside Claude and Codex', async () => {
+    const service = new RateLimitService()
+    service.setSettingsResolver(() => ({ opencodeSessionCookie: 'session=abc123' }))
+
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
+    vi.mocked(fetchGeminiRateLimits).mockResolvedValueOnce(okProvider('gemini', 30, Date.now()))
+    vi.mocked(fetchOpenCodeGoRateLimits).mockResolvedValueOnce(
+      okProvider('opencode-go', 40, Date.now())
+    )
+
+    await service.refresh()
+
+    expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+    expect(fetchCodexRateLimits).toHaveBeenCalledTimes(1)
+    expect(fetchGeminiRateLimits).toHaveBeenCalledTimes(1)
+    expect(fetchOpenCodeGoRateLimits).toHaveBeenCalledTimes(1)
+    expect(fetchOpenCodeGoRateLimits).toHaveBeenCalledWith('session=abc123')
+
+    const state = service.getState()
+    expect(state.claude?.status).toBe('ok')
+    expect(state.claude?.session?.usedPercent).toBe(10)
+    expect(state.codex?.status).toBe('ok')
+    expect(state.codex?.session?.usedPercent).toBe(20)
+    expect(state.gemini?.status).toBe('ok')
+    expect(state.gemini?.session?.usedPercent).toBe(30)
+    expect(state.opencodeGo?.status).toBe('ok')
+    expect(state.opencodeGo?.session?.usedPercent).toBe(40)
+  })
+
+  it('isolates provider failures so one error does not block others', async () => {
+    const service = new RateLimitService()
+    service.setSettingsResolver(() => ({ opencodeSessionCookie: '' }))
+
+    vi.mocked(fetchClaudeRateLimits).mockRejectedValueOnce(new Error('claude down'))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
+    vi.mocked(fetchGeminiRateLimits).mockRejectedValueOnce(new Error('gemini down'))
+    vi.mocked(fetchOpenCodeGoRateLimits).mockResolvedValueOnce(
+      okProvider('opencode-go', 40, Date.now())
+    )
+
+    await service.refresh()
+
+    const state = service.getState()
+    expect(state.claude?.status).toBe('error')
+    expect(state.claude?.error).toBe('claude down')
+    expect(state.codex?.status).toBe('ok')
+    expect(state.gemini?.status).toBe('error')
+    expect(state.gemini?.error).toBe('gemini down')
+    expect(state.opencodeGo?.status).toBe('ok')
   })
 })

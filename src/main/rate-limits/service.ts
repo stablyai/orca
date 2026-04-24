@@ -6,6 +6,9 @@ import type { RateLimitState, ProviderRateLimits } from '../../shared/rate-limit
 import { fetchClaudeRateLimits } from './claude-fetcher'
 import { fetchCodexRateLimits } from './codex-fetcher'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
+import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
+import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
+
 
 // Why: quota state does not need near-real-time polling, and a less aggressive
 // default reduces avoidable Claude /usage pressure. We intentionally use a
@@ -15,7 +18,7 @@ const MIN_REFETCH_MS = 30 * 1000 // 30 seconds — debounce rapid refresh reques
 const STALE_THRESHOLD_MS = 10 * 60 * 1000 // 10 minutes — after this, stale data is dropped
 
 export class RateLimitService {
-  private state: RateLimitState = { claude: null, codex: null }
+  private state: RateLimitState = { claude: null, codex: null, gemini: null, opencodeGo: null }
   private pollInterval: number = DEFAULT_POLL_MS
   private timer: ReturnType<typeof setInterval> | null = null
   private lastFetchAt = 0
@@ -30,6 +33,7 @@ export class RateLimitService {
   private claudeFetchGeneration = 0
   private codexHomePathResolver: (() => string | null) | null = null
   private claudeAuthPreparationResolver: (() => Promise<ClaudeRuntimeAuthPreparation>) | null = null
+  private settingsResolver: (() => { opencodeSessionCookie: string }) | null = null
 
   constructor() {}
 
@@ -41,6 +45,9 @@ export class RateLimitService {
     this.claudeAuthPreparationResolver = resolver
   }
 
+  setSettingsResolver(resolver: () => { opencodeSessionCookie: string }): void {
+    this.settingsResolver = resolver
+  }
   attach(mainWindow: BrowserWindow): void {
     this.detachWindowListeners?.()
     this.mainWindow = mainWindow
@@ -305,7 +312,7 @@ export class RateLimitService {
 
   private withFetchingStatus(
     current: ProviderRateLimits | null,
-    provider: 'claude' | 'codex'
+    provider: 'claude' | 'codex' | 'gemini' | 'opencode-go'
   ): ProviderRateLimits {
     if (!current) {
       return {
@@ -329,36 +336,79 @@ export class RateLimitService {
     const codexGeneration = this.codexFetchGeneration
     const previousState = this.state
 
-    // Mark both providers as fetching while keeping previous data visible.
+    // Mark all providers as fetching while keeping previous data visible.
     // Codex account changes clear Codex separately before this method is
     // called, so ordinary refreshes still preserve the current values.
     this.updateState({
+      ...previousState,
       claude: this.withFetchingStatus(previousState.claude, 'claude'),
-      codex: this.withFetchingStatus(previousState.codex, 'codex')
+      codex: this.withFetchingStatus(previousState.codex, 'codex'),
+      gemini: this.withFetchingStatus(previousState.gemini, 'gemini'),
+      opencodeGo: this.withFetchingStatus(previousState.opencodeGo, 'opencode-go')
     })
 
-    const [claude, codex] = await Promise.all([
-      fetchClaudeRateLimits({ authPreparation: claudeAuthPreparation }).catch(
-        (err): ProviderRateLimits => ({
-          provider: 'claude',
-          session: null,
-          weekly: null,
-          updatedAt: Date.now(),
-          error: err instanceof Error ? err.message : 'Unknown error',
-          status: 'error'
-        })
-      ),
-      fetchCodexRateLimits({ codexHomePath }).catch(
-        (err): ProviderRateLimits => ({
-          provider: 'codex',
-          session: null,
-          weekly: null,
-          updatedAt: Date.now(),
-          error: err instanceof Error ? err.message : 'Unknown error',
-          status: 'error'
-        })
-      )
+    const opencodeSessionCookie = this.settingsResolver?.().opencodeSessionCookie ?? ''
+
+    const [claudeResult, codexResult, geminiResult, opencodeGoResult] = await Promise.allSettled([
+      fetchClaudeRateLimits({ authPreparation: claudeAuthPreparation }),
+      fetchCodexRateLimits({ codexHomePath }),
+      fetchGeminiRateLimits(),
+      fetchOpenCodeGoRateLimits(opencodeSessionCookie)
     ])
+
+    const claude =
+      claudeResult.status === 'fulfilled'
+        ? claudeResult.value
+        : ({
+            provider: 'claude',
+            session: null,
+            weekly: null,
+            updatedAt: Date.now(),
+            error:
+              claudeResult.reason instanceof Error ? claudeResult.reason.message : 'Unknown error',
+            status: 'error'
+          } satisfies ProviderRateLimits)
+
+    const codex =
+      codexResult.status === 'fulfilled'
+        ? codexResult.value
+        : ({
+            provider: 'codex',
+            session: null,
+            weekly: null,
+            updatedAt: Date.now(),
+            error:
+              codexResult.reason instanceof Error ? codexResult.reason.message : 'Unknown error',
+            status: 'error'
+          } satisfies ProviderRateLimits)
+
+    const gemini =
+      geminiResult.status === 'fulfilled'
+        ? geminiResult.value
+        : ({
+            provider: 'gemini',
+            session: null,
+            weekly: null,
+            updatedAt: Date.now(),
+            error:
+              geminiResult.reason instanceof Error ? geminiResult.reason.message : 'Unknown error',
+            status: 'error'
+          } satisfies ProviderRateLimits)
+
+    const opencodeGo =
+      opencodeGoResult.status === 'fulfilled'
+        ? opencodeGoResult.value
+        : ({
+            provider: 'opencode-go',
+            session: null,
+            weekly: null,
+            updatedAt: Date.now(),
+            error:
+              opencodeGoResult.reason instanceof Error
+                ? opencodeGoResult.reason.message
+                : 'Unknown error',
+            status: 'error'
+          } satisfies ProviderRateLimits)
 
     const latestCodexHomePath = this.codexHomePathResolver?.() ?? null
     const latestClaudeAuthPreparation = await this.claudeAuthPreparationResolver?.()
@@ -374,10 +424,15 @@ export class RateLimitService {
     // generation still match, otherwise an old account could overwrite the
     // newly selected account's quota state.
     this.updateState({
+      ...previousState,
       claude: shouldApplyClaude
         ? this.applyStalePolicy(claude, previousState.claude)
         : this.state.claude,
-      codex: shouldApplyCodex ? this.applyStalePolicy(codex, previousState.codex) : this.state.codex
+      codex: shouldApplyCodex
+        ? this.applyStalePolicy(codex, previousState.codex)
+        : this.state.codex,
+      gemini: this.applyStalePolicy(gemini, previousState.gemini),
+      opencodeGo: this.applyStalePolicy(opencodeGo, previousState.opencodeGo)
     })
 
     this.lastFetchAt = Date.now()

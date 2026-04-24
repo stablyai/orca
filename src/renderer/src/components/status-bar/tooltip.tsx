@@ -1,5 +1,5 @@
 import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
-import { ClaudeIcon, OpenAIIcon } from './icons'
+import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 
 // ---------------------------------------------------------------------------
 // Formatting helpers
@@ -43,6 +43,12 @@ function formatDuration(ms: number): string {
 export function ProviderIcon({ provider }: { provider: string }): React.JSX.Element {
   if (provider === 'codex') {
     return <OpenAIIcon size={13} />
+  }
+  if (provider === 'gemini') {
+    return <GeminiIcon size={13} />
+  }
+  if (provider === 'opencode-go') {
+    return <OpenCodeGoIcon size={13} />
   }
   return <ClaudeIcon size={13} />
 }
@@ -125,7 +131,16 @@ export function ProviderTooltip({ p }: { p: ProviderRateLimits | null }): React.
     return <span className="text-xs text-background/60">No data available</span>
   }
 
-  const name = p.provider === 'claude' ? 'Claude' : 'Codex'
+  const name =
+    p.provider === 'claude'
+      ? 'Claude'
+      : p.provider === 'codex'
+        ? 'Codex'
+        : p.provider === 'gemini'
+          ? 'Gemini'
+          : p.provider === 'opencode-go'
+            ? 'OpenCode Go'
+            : p.provider
 
   if (p.status === 'unavailable') {
     return (
@@ -198,7 +213,16 @@ export function ProviderPanel({
     return <span className={`text-xs ${mutedClass}`}>No data available</span>
   }
 
-  const name = p.provider === 'claude' ? 'Claude' : 'Codex'
+  const name =
+    p.provider === 'claude'
+      ? 'Claude'
+      : p.provider === 'codex'
+        ? 'Codex'
+        : p.provider === 'gemini'
+          ? 'Gemini'
+          : p.provider === 'opencode-go'
+            ? 'OpenCode Go'
+            : p.provider
 
   if (p.status === 'unavailable') {
     return (

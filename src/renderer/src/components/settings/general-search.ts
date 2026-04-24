@@ -86,6 +86,14 @@ export const GENERAL_CODEX_ACCOUNTS_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   }
 ]
 
+export const GENERAL_OPENCODE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
+  {
+    title: 'OpenCode Go Session Cookie',
+    description: 'Paste your opencode.ai session cookie for rate limit fetching.',
+    keywords: ['opencode', 'cookie', 'session', 'rate limit', 'status bar']
+  }
+]
+
 export const GENERAL_AGENT_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Default Agent',
@@ -119,6 +127,7 @@ export const GENERAL_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   ...GENERAL_CACHE_TIMER_SEARCH_ENTRIES,
   ...GENERAL_CLAUDE_ACCOUNTS_SEARCH_ENTRIES,
   ...GENERAL_CODEX_ACCOUNTS_SEARCH_ENTRIES,
+  ...GENERAL_OPENCODE_SEARCH_ENTRIES,
   ...GENERAL_UPDATE_SEARCH_ENTRIES,
   ...GENERAL_SUPPORT_SEARCH_ENTRIES
 ]

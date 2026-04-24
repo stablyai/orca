@@ -908,6 +908,11 @@ export type GlobalSettings = {
    *  Same nullable-array pattern as `defaultRepoSelection`: `null` = sticky-all,
    *  `string[]` = frozen subset of team IDs. */
   defaultLinearTeamSelection: string[] | null
+  /** Session cookie for OpenCode Go rate-limit fetching. Stored encrypted. */
+  opencodeSessionCookie: string
+  /** Optional workspace ID override for OpenCode Go. When set, skips the
+   *  workspaces lookup and fetches usage directly for this workspace. */
+  opencodeWorkspaceId: string
   /** Per-agent CLI command overrides. A missing key means use the catalog default binary name. */
   agentCmdOverrides: Partial<Record<TuiAgent, string>>
   /** Why: macOS terminals must choose between letting Option compose layout
@@ -969,8 +974,7 @@ export type NotificationDispatchResult = {
 
 export type WorktreeCardProperty = 'status' | 'unread' | 'ci' | 'issue' | 'pr' | 'comment'
 
-export type StatusBarItem = 'claude' | 'codex' | 'ssh' | 'sessions' | 'memory'
-
+export type StatusBarItem = 'claude' | 'codex' | 'gemini' | 'opencode-go' | 'ssh' | 'sessions' | 'memory'
 export type PersistedUIState = {
   lastActiveRepoId: string | null
   lastActiveWorktreeId: string | null

@@ -12,7 +12,7 @@ export type RateLimitWindow = {
 export type ProviderRateLimitStatus = 'idle' | 'fetching' | 'ok' | 'error' | 'unavailable'
 
 export type ProviderRateLimits = {
-  provider: 'claude' | 'codex'
+  provider: 'claude' | 'codex' | 'gemini' | 'opencode-go'
   /** 5-hour session window, null if not available. */
   session: RateLimitWindow | null
   /** 7-day weekly window, null if not available. */
@@ -27,4 +27,6 @@ export type ProviderRateLimits = {
 export type RateLimitState = {
   claude: ProviderRateLimits | null
   codex: ProviderRateLimits | null
+  gemini: ProviderRateLimits | null
+  opencodeGo: ProviderRateLimits | null
 }

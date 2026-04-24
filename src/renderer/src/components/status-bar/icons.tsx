@@ -13,6 +13,42 @@ export function OpenAIIcon({ size = 14 }: { size?: number }): React.JSX.Element 
   )
 }
 
+export function GeminiIcon({ size = 14 }: { size?: number }): React.JSX.Element {
+  return (
+    <svg height={size} width={size} viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <text
+        x="12"
+        y="17"
+        textAnchor="middle"
+        fontSize="15"
+        fontWeight="bold"
+        fill="currentColor"
+        fontFamily="system-ui, sans-serif"
+      >
+        G
+      </text>
+    </svg>
+  )
+}
+
+export function OpenCodeGoIcon({ size = 14 }: { size?: number }): React.JSX.Element {
+  return (
+    <svg height={size} width={size} viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <text
+        x="12"
+        y="16"
+        textAnchor="middle"
+        fontSize="11"
+        fontWeight="bold"
+        fill="currentColor"
+        fontFamily="system-ui, sans-serif"
+      >
+        OC
+      </text>
+    </svg>
+  )
+}
+
 export function ClaudeIcon({ size = 14 }: { size?: number }): React.JSX.Element {
   return (
     <svg height={size} width={size} viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">

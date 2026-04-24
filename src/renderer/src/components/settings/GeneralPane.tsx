@@ -28,6 +28,7 @@ import {
   GENERAL_CACHE_TIMER_SEARCH_ENTRIES,
   GENERAL_CLI_SEARCH_ENTRIES,
   GENERAL_EDITOR_SEARCH_ENTRIES,
+  GENERAL_OPENCODE_SEARCH_ENTRIES,
   GENERAL_PANE_SEARCH_ENTRIES,
   GENERAL_SUPPORT_SEARCH_ENTRIES,
   GENERAL_UPDATE_SEARCH_ENTRIES,
@@ -987,6 +988,46 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
               })}
             </div>
           )}
+        </SearchableSetting>
+      </section>
+    ) : null,
+    matchesSettingsSearch(searchQuery, GENERAL_OPENCODE_SEARCH_ENTRIES) ? (
+      <section key="opencode-go" id="general-opencode-go" className="space-y-4 scroll-mt-6">
+        <div className="space-y-1">
+          <h3 className="text-sm font-semibold">OpenCode Go</h3>
+          <p className="text-xs text-muted-foreground">Configure OpenCode Go provider settings.</p>
+        </div>
+
+        <SearchableSetting
+          title="OpenCode Go Session Cookie"
+          description="Paste your opencode.ai session cookie for rate limit fetching."
+          keywords={['opencode', 'cookie', 'session', 'rate limit', 'status bar']}
+          className="space-y-2"
+        >
+          <Label>OpenCode Go session cookie</Label>
+          <div className="flex gap-2">
+            <Input
+              type="password"
+              value={settings.opencodeSessionCookie}
+              onChange={(e) => updateSettings({ opencodeSessionCookie: e.target.value })}
+              placeholder="Paste your opencode.ai cookie here"
+              spellCheck={false}
+              className="flex-1 text-xs"
+            />
+            {settings.opencodeSessionCookie && (
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={() => updateSettings({ opencodeSessionCookie: '' })}
+                className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
+              >
+                Clear
+              </Button>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Copy the Cookie header from a request to opencode.ai in your browser&apos;s DevTools.
+          </p>
         </SearchableSetting>
       </section>
     ) : null,
