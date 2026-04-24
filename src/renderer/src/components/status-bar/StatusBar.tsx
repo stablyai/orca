@@ -275,26 +275,35 @@ function ProviderSegment({
   // Has data (ok, fetching with stale data, or error with stale data)
   const isStale = p.status === 'error'
 
-  // Why: when buckets are present the session summary is derived from the most
-  // constrained bucket. Show that bucket's name so the user knows which model
-  // is the binding constraint (e.g. "93% Pro 1h" instead of a bare "93% 1h").
-  const mostConstrainedBucketName =
-    p.buckets && p.buckets.length > 0 && p.session
-      ? (p.buckets.reduce((worst, b) => (b.usedPercent > worst.usedPercent ? b : worst)).name ??
-        null)
-      : null
+  // Why: when buckets are present show each one individually so the user sees
+  // per-model usage at a glance (e.g. "Flash 93% · 3.1 Pro Preview 7%")
+  // instead of only the most-constrained summary.
+  if (p.buckets && p.buckets.length > 0) {
+    return (
+      <span className="inline-flex items-center gap-1.5">
+        <ProviderIcon provider={provider} />
+        {p.buckets.map((bucket, i) => {
+          const left = Math.max(0, Math.round(100 - bucket.usedPercent))
+          return (
+            <React.Fragment key={bucket.name}>
+              {i > 0 && <span className="text-muted-foreground">&middot;</span>}
+              <span className="tabular-nums">
+                {bucket.name} {left}%
+              </span>
+            </React.Fragment>
+          )
+        })}
+        {isStale && <AlertTriangle size={11} className="text-muted-foreground/80" />}
+      </span>
+    )
+  }
 
   return (
     <span className="inline-flex items-center gap-1.5">
       <ProviderIcon provider={provider} />
       {p.session && !compact && <MiniBar leftPct={Math.max(0, 100 - p.session.usedPercent)} />}
       {p.session && (
-        <WindowLabel
-          w={p.session}
-          label={[mostConstrainedBucketName, formatWindowLabel(p.session.windowMinutes)]
-            .filter(Boolean)
-            .join(' ')}
-        />
+        <WindowLabel w={p.session} label={formatWindowLabel(p.session.windowMinutes)} />
       )}
       {p.session && p.weekly && <span className="text-muted-foreground">&middot;</span>}
       {p.weekly && <WindowLabel w={p.weekly} label={formatWindowLabel(p.weekly.windowMinutes)} />}
