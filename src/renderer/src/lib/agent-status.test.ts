@@ -9,7 +9,11 @@ import {
   createAgentStatusTracker,
   getAgentLabel,
   isGeminiTerminalTitle,
-  normalizeTerminalTitle
+  normalizeTerminalTitle,
+  isExplicitAgentStatusFresh,
+  mapAgentStatusStateToVisualStatus,
+  formatAgentTypeLabel,
+  agentTypeToIconAgent
 } from './agent-status'
 import { extractLastOscTitle } from '../components/terminal-pane/pty-transport'
 
@@ -426,5 +430,112 @@ describe('createAgentStatusTracker', () => {
     }
 
     expect(onBecameIdle).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('isExplicitAgentStatusFresh', () => {
+  it('treats the boundary (now - updatedAt == staleAfterMs) as fresh', () => {
+    // Why: the function uses `<=`, so equality at the boundary must remain
+    // fresh. Protecting this invariant keeps entries from flipping to stale
+    // one tick earlier than the configured TTL implies.
+    const staleAfterMs = 60_000
+    const now = 1_000_000
+    const entry = { updatedAt: now - staleAfterMs }
+    expect(isExplicitAgentStatusFresh(entry, now, staleAfterMs)).toBe(true)
+  })
+
+  it('treats one millisecond past the boundary as stale', () => {
+    const staleAfterMs = 60_000
+    const now = 1_000_000
+    const entry = { updatedAt: now - staleAfterMs - 1 }
+    expect(isExplicitAgentStatusFresh(entry, now, staleAfterMs)).toBe(false)
+  })
+
+  it('treats a just-updated entry (now - updatedAt == 0) as fresh', () => {
+    const staleAfterMs = 60_000
+    const now = 1_000_000
+    const entry = { updatedAt: now }
+    expect(isExplicitAgentStatusFresh(entry, now, staleAfterMs)).toBe(true)
+  })
+})
+
+describe('mapAgentStatusStateToVisualStatus', () => {
+  it("maps 'working' to 'working'", () => {
+    expect(mapAgentStatusStateToVisualStatus('working')).toBe('working')
+  })
+
+  it("maps 'blocked' to 'permission'", () => {
+    expect(mapAgentStatusStateToVisualStatus('blocked')).toBe('permission')
+  })
+
+  it("maps 'waiting' to 'permission'", () => {
+    expect(mapAgentStatusStateToVisualStatus('waiting')).toBe('permission')
+  })
+
+  it("maps 'done' to 'active'", () => {
+    expect(mapAgentStatusStateToVisualStatus('done')).toBe('active')
+  })
+
+  it('returns a non-empty string for every valid state', () => {
+    for (const state of ['working', 'blocked', 'waiting', 'done'] as const) {
+      const visual = mapAgentStatusStateToVisualStatus(state)
+      expect(typeof visual).toBe('string')
+      expect(visual.length).toBeGreaterThan(0)
+    }
+  })
+})
+
+describe('formatAgentTypeLabel', () => {
+  it("returns 'Agent' for null", () => {
+    expect(formatAgentTypeLabel(null)).toBe('Agent')
+  })
+
+  it("returns 'Agent' for undefined", () => {
+    expect(formatAgentTypeLabel(undefined)).toBe('Agent')
+  })
+
+  it("returns 'Agent' for 'unknown'", () => {
+    expect(formatAgentTypeLabel('unknown')).toBe('Agent')
+  })
+
+  it("maps 'claude' to 'Claude'", () => {
+    expect(formatAgentTypeLabel('claude')).toBe('Claude')
+  })
+
+  it("maps 'codex' to 'Codex'", () => {
+    expect(formatAgentTypeLabel('codex')).toBe('Codex')
+  })
+
+  it("maps 'gemini' to 'Gemini'", () => {
+    expect(formatAgentTypeLabel('gemini')).toBe('Gemini')
+  })
+
+  it("passes through unknown-but-nonsentinel strings as-is (e.g. 'cursor')", () => {
+    expect(formatAgentTypeLabel('cursor')).toBe('cursor')
+  })
+})
+
+describe('agentTypeToIconAgent', () => {
+  it('returns null for null', () => {
+    expect(agentTypeToIconAgent(null)).toBeNull()
+  })
+
+  it('returns null for undefined', () => {
+    expect(agentTypeToIconAgent(undefined)).toBeNull()
+  })
+
+  it("returns null for 'unknown'", () => {
+    expect(agentTypeToIconAgent('unknown')).toBeNull()
+  })
+
+  it("round-trips iconable agent types like 'claude'", () => {
+    expect(agentTypeToIconAgent('claude')).toBe('claude')
+  })
+
+  it('returns null for arbitrary non-iconable strings', () => {
+    // Why: guards against hook payloads reporting agentTypes that AgentIcon
+    // cannot render (e.g. "totally-fake-agent"); returning null lets the
+    // caller fall back to a neutral glyph instead of a broken icon.
+    expect(agentTypeToIconAgent('totally-fake-agent')).toBeNull()
   })
 })

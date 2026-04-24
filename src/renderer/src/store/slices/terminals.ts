@@ -394,6 +394,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         pendingColdRestoreByPtyId: nextColdRestores
       }
     })
+    // Why: delegate agent-status cleanup to its own slice so the epoch and
+    // stale-freshness timer bookkeeping stay consistent with other agent-status
+    // mutations.
+    get().removeAgentStatusByTabPrefix(tabId)
     for (const tabs of Object.values(get().unifiedTabsByWorktree)) {
       const workspaceItem = tabs.find(
         (entry) => entry.contentType === 'terminal' && entry.entityId === tabId
