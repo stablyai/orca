@@ -1,0 +1,172 @@
+name: Track Community PRs
+
+on:
+  pull_request_target:
+    types: [opened, reopened, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to backfill or retry'
+        required: true
+        type: number
+
+permissions:
+  contents: read
+
+jobs:
+  track-community-pr:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Generate bufo-bot token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: 2590194
+          private-key: ${{ secrets.BUFO_BOT_PRIVATE_KEY }}
+          owner: stablyai
+
+      - name: Create tracking issue
+        uses: actions/github-script@v7
+        env:
+          PROJECT_OWNER: stablyai
+          PROJECT_NUMBER: '13'
+          INTERNAL_TEAM_SLUG: stably-eng
+          TRACKING_LABEL: community-pr
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            const projectOwner = process.env.PROJECT_OWNER;
+            const projectNumber = Number(process.env.PROJECT_NUMBER);
+            const internalTeamSlug = process.env.INTERNAL_TEAM_SLUG;
+            const trackingLabel = process.env.TRACKING_LABEL;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            const prNumber = context.eventName === 'workflow_dispatch'
+              ? Number(context.payload.inputs.pr_number)
+              : context.payload.pull_request.number;
+
+            const { data: pr } = await github.rest.pulls.get({
+              owner,
+              repo,
+              pull_number: prNumber,
+            });
+
+            const author = pr.user.login;
+            const markerText = `community-pr-tracker-${owner}-${repo}-${pr.number}`;
+            const marker = `<!-- ${markerText} -->`;
+
+            const skippedAuthors = new Set([
+              'github-actions[bot]',
+              'dependabot[bot]',
+            ]);
+
+            if (skippedAuthors.has(author)) {
+              core.info(`Skipping bot PR author ${author}.`);
+              return;
+            }
+
+            let isInternalAuthor = false;
+            try {
+              const membership = await github.rest.teams.getMembershipForUserInOrg({
+                org: projectOwner,
+                team_slug: internalTeamSlug,
+                username: author,
+              });
+              isInternalAuthor = membership.data.state === 'active';
+            } catch (error) {
+              if (error.status !== 404) {
+                throw error;
+              }
+            }
+
+            if (isInternalAuthor) {
+              core.info(`Skipping internal PR author ${author}.`);
+              return;
+            }
+
+            const existingTrackingIssues = await github.paginate(
+              github.rest.search.issuesAndPullRequests,
+              {
+                q: `repo:${owner}/${repo} is:issue in:body ${markerText}`,
+                per_page: 100,
+              },
+            );
+
+            if (existingTrackingIssues.length > 0) {
+              core.info(`Tracking issue already exists for PR #${pr.number}: ${existingTrackingIssues[0].html_url}`);
+              return;
+            }
+
+            try {
+              await github.rest.issues.getLabel({
+                owner,
+                repo,
+                name: trackingLabel,
+              });
+            } catch (error) {
+              if (error.status !== 404) {
+                throw error;
+              }
+
+              await github.rest.issues.createLabel({
+                owner,
+                repo,
+                name: trackingLabel,
+                color: '0E8A16',
+                description: 'Tracks external community pull requests.',
+              });
+            }
+
+            const issue = await github.rest.issues.create({
+              owner,
+              repo,
+              title: `Review community PR #${pr.number}: ${pr.title}`,
+              body: [
+                marker,
+                '',
+                `Community PR opened by @${author}:`,
+                '',
+                pr.html_url,
+                '',
+                'Use this issue for triage, ownership, priority, and review tracking.',
+              ].join('\n'),
+              labels: [trackingLabel],
+            });
+
+            const projectResult = await github.graphql(
+              `
+                query($owner: String!, $number: Int!) {
+                  organization(login: $owner) {
+                    projectV2(number: $number) {
+                      id
+                    }
+                  }
+                }
+              `,
+              { owner: projectOwner, number: projectNumber },
+            );
+
+            const projectId = projectResult.organization.projectV2.id;
+
+            await github.graphql(
+              `
+                mutation($projectId: ID!, $contentId: ID!) {
+                  addProjectV2ItemById(input: {
+                    projectId: $projectId,
+                    contentId: $contentId
+                  }) {
+                    item {
+                      id
+                    }
+                  }
+                }
+              `,
+              {
+                projectId,
+                contentId: issue.data.node_id,
+              },
+            );
+
+            core.info(`Created ${issue.data.html_url} and added it to project ${projectOwner}/${projectNumber}.`);
