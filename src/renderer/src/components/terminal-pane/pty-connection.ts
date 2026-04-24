@@ -68,6 +68,9 @@ export function connectPanePty(
     // first emitting a non-agent title, the cache timer would persist as stale
     // state. Clear it unconditionally on PTY exit.
     deps.setCacheTimerStartedAt(cacheKey, null)
+    // Why: a dead terminal has no running agent — remove its explicit status
+    // entry so the hover UI only shows what is running *now*.
+    useAppStore.getState().removeAgentStatus(cacheKey)
     // The runtime graph is the CLI's source for live terminal bindings, so
     // we must republish when a pane loses its PTY instead of waiting for a
     // broader layout change that may never happen.
@@ -163,6 +166,20 @@ export function connectPanePty(
     // the agent has exited. Clear any running cache timer so the sidebar doesn't
     // show a stale countdown for a tab that no longer has an active Claude session.
     deps.setCacheTimerStartedAt(cacheKey, null)
+    // Why: the agent process is gone, so its explicit status is no longer meaningful.
+    // Remove the entry so the hover UI does not show stale "working" for a dead agent.
+    useAppStore.getState().removeAgentStatus(cacheKey)
+  }
+  // Why: inject ORCA_PANE_KEY so global Claude/Codex hooks can attribute their
+  // callbacks to the correct Orca pane without resolving worktrees from cwd.
+  // The key matches the `${tabId}:${paneId}` composite used for cacheTimerByKey.
+  // ORCA_TAB_ID / ORCA_WORKTREE_ID are exposed separately so the receiver has
+  // routing context without having to split paneKey back into its parts.
+  const paneEnv = {
+    ...paneStartup?.env,
+    ORCA_PANE_KEY: cacheKey,
+    ORCA_TAB_ID: deps.tabId,
+    ORCA_WORKTREE_ID: deps.worktreeId
   }
 
   // Why: remote repos route PTY spawn through the SSH provider. Resolve the
@@ -175,7 +192,7 @@ export function connectPanePty(
 
   const transport = createIpcPtyTransport({
     cwd: deps.cwd,
-    env: paneStartup?.env,
+    env: paneEnv,
     command: paneStartup?.command,
     connectionId,
     worktreeId: deps.worktreeId,
@@ -185,7 +202,14 @@ export function connectPanePty(
     onBell,
     onAgentBecameIdle,
     onAgentBecameWorking,
-    onAgentExited
+    onAgentExited,
+    // Why: forward OSC 9999 payloads from the PTY stream to the agent-status slice.
+    // Without this, the OSC parser in pty-transport strips sequences from xterm
+    // output but the status never reaches the store or dashboard/hover UI.
+    onAgentStatus: (payload) => {
+      const title = useAppStore.getState().runtimePaneTitlesByTabId?.[deps.tabId]?.[pane.id]
+      useAppStore.getState().setAgentStatus(cacheKey, payload, title)
+    }
   })
   const hasExistingPaneTransport = deps.paneTransportsRef.current.size > 0
   deps.paneTransportsRef.current.set(pane.id, transport)

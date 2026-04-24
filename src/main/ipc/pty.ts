@@ -3,11 +3,13 @@ main-process module so spawn-time environment scoping, lifecycle cleanup,
 foreground-process inspection, and renderer IPC stay behind a single audited
 boundary. Splitting it by line count would scatter tightly coupled terminal
 process behavior across files without a cleaner ownership seam. */
-import { type BrowserWindow, ipcMain } from 'electron'
+import { join, delimiter } from 'path'
+import { type BrowserWindow, ipcMain, app } from 'electron'
 export { getBashShellReadyRcfileContent } from '../providers/local-pty-shell-ready'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { GlobalSettings } from '../../shared/types'
 import { openCodeHookService } from '../opencode/hook-service'
+import { agentHookServer } from '../agent-hooks/server'
 import { piTitlebarExtensionService } from '../pi/titlebar-extension-service'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
 import type { IPtyProvider } from '../providers/types'
@@ -155,10 +157,17 @@ export function registerPtyHandlers(
         if (baseEnv.OPENCODE_CONFIG_DIR) {
           // Why: OPENCODE_CONFIG_DIR is a singular extra config root. Replacing a
           // user-provided directory would silently hide their custom OpenCode
-          // config, so preserve it and fall back to title-only detection there.
+          // config, so preserve it. The Orca status plugin will not load, so
+          // the dashboard falls back to a blank status for that pane until the
+          // user unsets their override.
           delete openCodeHookEnv.OPENCODE_CONFIG_DIR
         }
         Object.assign(baseEnv, openCodeHookEnv)
+        // Why: Claude/Codex native hooks run inside the shell process, so Orca
+        // must inject the loopback receiver coordinates before the agent starts.
+        // Without these env vars the global hook config cannot map callbacks back
+        // to the correct Orca pane.
+        Object.assign(baseEnv, agentHookServer.buildPtyEnv())
         // Why: PI_CODING_AGENT_DIR owns Pi's full config/session root. Build a
         // PTY-scoped overlay from the caller's chosen root so Pi sessions keep
         // their user state without sharing a mutable overlay across terminals.
@@ -174,6 +183,20 @@ export function registerPtyHandlers(
         // process environment or the user's unrelated external shells.
         if (selectedCodexHomePath) {
           baseEnv.CODEX_HOME = selectedCodexHomePath
+        }
+
+        // Why: in dev mode the `orca` CLI defaults to the production userData
+        // path, which routes status updates to the packaged Orca instead of
+        // this dev instance. Injecting ORCA_USER_DATA_PATH ensures CLI calls
+        // from agents running inside dev terminals reach the correct runtime.
+        // We also prepend the dev CLI launcher directory to PATH so `orca`
+        // resolves to the dev build (which supports ORCA_USER_DATA_PATH)
+        // instead of the production binary at /usr/local/bin/orca.
+        if (!app.isPackaged) {
+          const devUserData = app.getPath('userData')
+          baseEnv.ORCA_USER_DATA_PATH ??= devUserData
+          const devCliBin = join(devUserData, 'cli', 'bin')
+          baseEnv.PATH = `${devCliBin}${delimiter}${baseEnv.PATH ?? ''}`
         }
 
         return baseEnv
@@ -306,11 +329,23 @@ export function registerPtyHandlers(
       }
     ) => {
       const provider = getProvider(args.connectionId)
+      // Why: agent hook env (ORCA_AGENT_HOOK_PORT/TOKEN) is normally injected by
+      // the LocalPtyProvider's buildSpawnEnv. When the daemon is active, the
+      // local provider is replaced by DaemonPtyAdapter and buildSpawnEnv never
+      // runs — so hook receivers can't find the loopback server. Inject here
+      // as well so both provider paths get the env.
+      //
+      // Safety: skip the injection entirely when a remote (SSH) connection is
+      // in play. The hook server is bound to the Orca host's 127.0.0.1, so the
+      // remote shell cannot reach it; shipping the token across SSH would leak
+      // a loopback secret to an untrusted machine for no functional benefit.
+      const hookEnv = args.connectionId ? {} : agentHookServer.buildPtyEnv()
+      const effectiveEnv = Object.keys(hookEnv).length > 0 ? { ...args.env, ...hookEnv } : args.env
       const result = await provider.spawn({
         cols: args.cols,
         rows: args.rows,
         cwd: args.cwd,
-        env: args.env,
+        env: effectiveEnv,
         command: args.command,
         worktreeId: args.worktreeId,
         sessionId: args.sessionId

@@ -16,6 +16,7 @@ const {
   registerFilesystemHandlersMock,
   registerRuntimeHandlersMock,
   registerCodexAccountHandlersMock,
+  registerAgentHookHandlersMock,
   registerClipboardHandlersMock,
   registerUpdaterHandlersMock,
   registerRateLimitHandlersMock,
@@ -42,6 +43,7 @@ const {
   registerFilesystemHandlersMock: vi.fn(),
   registerRuntimeHandlersMock: vi.fn(),
   registerCodexAccountHandlersMock: vi.fn(),
+  registerAgentHookHandlersMock: vi.fn(),
   registerClipboardHandlersMock: vi.fn(),
   registerUpdaterHandlersMock: vi.fn(),
   registerRateLimitHandlersMock: vi.fn(),
@@ -126,6 +128,10 @@ vi.mock('./codex-accounts', () => ({
   registerCodexAccountHandlers: registerCodexAccountHandlersMock
 }))
 
+vi.mock('./agent-hooks', () => ({
+  registerAgentHookHandlers: registerAgentHookHandlersMock
+}))
+
 vi.mock('../window/attach-main-window-services', () => ({
   registerClipboardHandlers: registerClipboardHandlersMock,
   registerUpdaterHandlers: registerUpdaterHandlersMock
@@ -164,6 +170,7 @@ describe('registerCoreHandlers', () => {
     registerFilesystemHandlersMock.mockReset()
     registerRuntimeHandlersMock.mockReset()
     registerCodexAccountHandlersMock.mockReset()
+    registerAgentHookHandlersMock.mockReset()
     registerClipboardHandlersMock.mockReset()
     registerUpdaterHandlersMock.mockReset()
     registerRateLimitHandlersMock.mockReset()
@@ -198,6 +205,7 @@ describe('registerCoreHandlers', () => {
     expect(registerClaudeUsageHandlersMock).toHaveBeenCalledWith(claudeUsage)
     expect(registerCodexUsageHandlersMock).toHaveBeenCalledWith(codexUsage)
     expect(registerCodexAccountHandlersMock).toHaveBeenCalledWith(codexAccounts)
+    expect(registerAgentHookHandlersMock).toHaveBeenCalled()
     expect(registerRateLimitHandlersMock).toHaveBeenCalledWith(rateLimits)
     expect(registerGitHubHandlersMock).toHaveBeenCalledWith(store, stats)
     expect(registerLinearHandlersMock).toHaveBeenCalled()

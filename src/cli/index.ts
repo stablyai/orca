@@ -1837,6 +1837,7 @@ function isCommandGroup(commandPath: string[]): boolean {
         'repo',
         'worktree',
         'terminal',
+        'status',
         'tab',
         'cookie',
         'intercept',

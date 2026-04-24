@@ -5,14 +5,12 @@ import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
 import type { CliInstallStatus } from '../shared/cli-install-types'
-import type {
-  FsChangedPayload,
-  NotificationDispatchResult,
-  OpenCodeStatusEvent
-} from '../shared/types'
+import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
+import type { FsChangedPayload, NotificationDispatchResult } from '../shared/types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../shared/runtime-types'
 import type { RateLimitState } from '../shared/rate-limit-types'
 import type { SshConnectionState, SshTarget } from '../shared/ssh-types'
+import type { AgentStatusState } from '../shared/agent-status-types'
 import {
   ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT,
   type EditorSaveDirtyFilesDetail
@@ -317,13 +315,6 @@ const api = {
         callback(data)
       ipcRenderer.on('pty:exit', listener)
       return () => ipcRenderer.removeListener('pty:exit', listener)
-    },
-
-    onOpenCodeStatus: (callback: (event: OpenCodeStatusEvent) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, data: OpenCodeStatusEvent) =>
-        callback(data)
-      ipcRenderer.on('pty:opencode-status', listener)
-      return () => ipcRenderer.removeListener('pty:opencode-status', listener)
     }
   },
 
@@ -482,6 +473,15 @@ const api = {
     getInstallStatus: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:getInstallStatus'),
     install: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:install'),
     remove: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:remove')
+  },
+
+  agentHooks: {
+    claudeStatus: (): Promise<AgentHookInstallStatus> =>
+      ipcRenderer.invoke('agentHooks:claudeStatus'),
+    codexStatus: (): Promise<AgentHookInstallStatus> =>
+      ipcRenderer.invoke('agentHooks:codexStatus'),
+    geminiStatus: (): Promise<AgentHookInstallStatus> =>
+      ipcRenderer.invoke('agentHooks:geminiStatus')
   },
 
   preflight: {
@@ -1519,6 +1519,42 @@ const api = {
   },
   e2e: {
     getConfig: () => preloadE2EConfig
+  },
+
+  agentStatus: {
+    /** Listen for agent status updates forwarded from native hook receivers. */
+    onSet: (
+      callback: (data: {
+        paneKey: string
+        tabId?: string
+        worktreeId?: string
+        state: AgentStatusState
+        prompt?: string
+        agentType?: string
+        toolName?: string
+        toolInput?: string
+        lastAssistantMessage?: string
+        interrupted?: boolean
+      }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: {
+          paneKey: string
+          tabId?: string
+          worktreeId?: string
+          state: AgentStatusState
+          prompt?: string
+          agentType?: string
+          toolName?: string
+          toolInput?: string
+          lastAssistantMessage?: string
+          interrupted?: boolean
+        }
+      ) => callback(data)
+      ipcRenderer.on('agentStatus:set', listener)
+      return () => ipcRenderer.removeListener('agentStatus:set', listener)
+    }
   }
 }
 

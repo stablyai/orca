@@ -292,6 +292,9 @@ export default function TerminalPane({
         // a single split pane doesn't go through closeTab.
         useAppStore.getState().setCacheTimerStartedAt(`${tabId}:${paneId}`, null)
         syncPanePtyLayoutBinding(paneId, null)
+        // Why: pane teardown can bypass the PTY exit callback ordering, so
+        // explicit agent status must be cleared on the direct UI close path too.
+        useAppStore.getState().removeAgentStatus(`${tabId}:${paneId}`)
         manager.closePane(paneId)
       }
     },

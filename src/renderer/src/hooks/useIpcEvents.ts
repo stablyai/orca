@@ -1,4 +1,4 @@
-/* oxlint-disable max-lines */
+/* oxlint-disable max-lines -- Why: this App-level IPC bridge intentionally keeps the renderer's main-process event contract in one place so shortcut, runtime, updater, and agent-status wiring do not drift across files. */
 import { useEffect } from 'react'
 import { useAppStore } from '../store'
 import { applyUIZoom } from '@/lib/ui-zoom'
@@ -18,6 +18,7 @@ import { dispatchZoomLevelChanged } from '@/lib/zoom-events'
 import { resolveZoomTarget } from './resolve-zoom-target'
 import { handleSwitchTab } from './ipc-tab-switch'
 import { dispatchClearModifierHints } from './useModifierHint'
+import { parseAgentStatusPayload } from '../../../shared/agent-status-types'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 
 export { resolveZoomTarget } from './resolve-zoom-target'
@@ -655,6 +656,75 @@ export function useIpcEvents(): void {
       })
     )
 
+    // Why: agent status arrives from native hook receivers in the main process.
+    // Re-parse it here so the renderer enforces the same normalization rules
+    // (state enum, field truncation) regardless of whether the source was a
+    // hook callback or an OSC fallback path.
+    unsubs.push(
+      window.api.agentStatus.onSet((data) => {
+        const payload = parseAgentStatusPayload(
+          JSON.stringify({
+            state: data.state,
+            prompt: data.prompt,
+            agentType: data.agentType,
+            toolName: data.toolName,
+            toolInput: data.toolInput,
+            lastAssistantMessage: data.lastAssistantMessage,
+            interrupted: data.interrupted
+          })
+        )
+        if (!payload) {
+          return
+        }
+        const store = useAppStore.getState()
+        // Why: look up the terminal title for agent type inference — hook
+        // payloads do not include the current title, but the store may already
+        // know it from OSC title tracking.
+        const currentTitle = findTerminalTitleForPaneKey(store, data.paneKey)
+        // Why: a paneKey that no longer resolves to a live tab belongs to a pane
+        // that has already been torn down. Dropping here prevents orphan entries
+        // from accumulating in agentStatusByPaneKey.
+        const [tabId] = data.paneKey.split(':')
+        if (!tabId) {
+          return
+        }
+        const tabExists = Object.values(store.tabsByWorktree).some((tabs) =>
+          tabs.some((t) => t.id === tabId)
+        )
+        if (!tabExists) {
+          return
+        }
+        store.setAgentStatus(data.paneKey, payload, currentTitle)
+      })
+    )
+
     return () => unsubs.forEach((fn) => fn())
   }, [])
+}
+
+/** Resolve a paneKey (tabId:paneId) to the current terminal title, if any.
+ *  Used for agent type inference when the CLI payload omits agentType. */
+function findTerminalTitleForPaneKey(
+  store: ReturnType<typeof useAppStore.getState>,
+  paneKey: string
+): string | undefined {
+  const [tabId, paneIdRaw] = paneKey.split(':')
+  if (!tabId) {
+    return undefined
+  }
+  // Why: split panes track per-pane titles in runtimePaneTitlesByTabId; prefer
+  // the pane's own title over the tab-level (last-winning) title so agent type
+  // inference attributes status to the correct pane.
+  const paneTitles = store.runtimePaneTitlesByTabId?.[tabId]
+  const paneIdNum = paneIdRaw !== undefined ? Number(paneIdRaw) : NaN
+  if (paneTitles && !Number.isNaN(paneIdNum) && paneTitles[paneIdNum]) {
+    return paneTitles[paneIdNum]
+  }
+  for (const tabs of Object.values(store.tabsByWorktree)) {
+    const tab = tabs.find((t) => t.id === tabId)
+    if (tab?.title) {
+      return tab.title
+    }
+  }
+  return undefined
 }

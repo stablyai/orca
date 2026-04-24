@@ -1,95 +1,148 @@
-import { app, BrowserWindow } from 'electron'
-import { randomUUID } from 'crypto'
-import { createServer, type IncomingMessage, type ServerResponse } from 'http'
+import { app } from 'electron'
 import { join } from 'path'
 import { mkdirSync, writeFileSync, rmSync } from 'fs'
-import type { OpenCodeStatusEvent } from '../../shared/types'
 
 const ORCA_OPENCODE_PLUGIN_FILE = 'orca-opencode-status.js'
 
-type OpenCodeHookStatus = OpenCodeStatusEvent['status']
-
-function readJsonBody(req: IncomingMessage): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    let body = ''
-    req.on('data', (chunk: Buffer) => {
-      body += chunk.toString()
-      if (body.length > 1_000_000) {
-        reject(new Error('payload too large'))
-        req.destroy()
-      }
-    })
-    req.on('end', () => {
-      try {
-        resolve(body ? JSON.parse(body) : {})
-      } catch (error) {
-        reject(error)
-      }
-    })
-    req.on('error', reject)
-  })
-}
-
-function normalizeStatus(value: unknown): OpenCodeHookStatus | null {
-  return value === 'working' || value === 'idle' || value === 'permission' ? value : null
-}
-
 function getOpenCodePluginSource(): string {
+  // Why: the plugin runs inside the OpenCode Node process and POSTs to the
+  // unified agent-hooks server shared with Claude/Codex/Gemini. It reads the
+  // same ORCA_PANE_KEY / ORCA_TAB_ID / ORCA_WORKTREE_ID / ORCA_AGENT_HOOK_*
+  // env vars that Orca injects into every PTY, so OpenCode panes flow into
+  // agentStatusByPaneKey via the same IPC path as every other agent. Event
+  // mapping is done plugin-side (SessionBusy / SessionIdle / PermissionRequest)
+  // so the server-side normalizer can keep its one-event-per-case switch shape.
   return [
-    'const HOOK_PATH = "/hook";',
-    '',
     'function getHookUrl() {',
-    '  const port = process.env.ORCA_OPENCODE_HOOK_PORT;',
-    '  return port ? `http://127.0.0.1:${port}${HOOK_PATH}` : null;',
+    '  const port = process.env.ORCA_AGENT_HOOK_PORT;',
+    '  return port ? `http://127.0.0.1:${port}/hook/opencode` : null;',
     '}',
     '',
     'function getStatusType(event) {',
     '  return event?.properties?.status?.type ?? event?.status?.type ?? null;',
     '}',
     '',
-    'async function postStatus(status) {',
+    'let lastStatus = "idle";',
+    '',
+    '// Why: message.part.updated fires for every Part (text, tool, reasoning)',
+    '// but does not include the message role — that lives on the parent',
+    '// message.updated event. Cache the role per messageID so the plugin can',
+    '// tag a TextPart as user vs assistant when POSTing. Capped at 128 entries',
+    '// so long-running sessions do not grow this map unboundedly.',
+    'const messageRoleById = new Map();',
+    'function rememberMessageRole(messageID, role) {',
+    '  if (!messageID || !role) return;',
+    '  if (messageRoleById.size >= 128) {',
+    '    const first = messageRoleById.keys().next().value;',
+    '    if (first !== undefined) messageRoleById.delete(first);',
+    '  }',
+    '  messageRoleById.set(messageID, role);',
+    '}',
+    '',
+    'async function post(hookEventName, extraProperties) {',
     '  const url = getHookUrl();',
-    '  const token = process.env.ORCA_OPENCODE_HOOK_TOKEN;',
-    '  const ptyId = process.env.ORCA_OPENCODE_PTY_ID;',
-    '  if (!url || !token || !ptyId) return;',
+    '  const token = process.env.ORCA_AGENT_HOOK_TOKEN;',
+    '  const paneKey = process.env.ORCA_PANE_KEY;',
+    '  if (!url || !token || !paneKey) return;',
+    '  const body = JSON.stringify({',
+    '    paneKey,',
+    '    tabId: process.env.ORCA_TAB_ID || "",',
+    '    worktreeId: process.env.ORCA_WORKTREE_ID || "",',
+    '    env: process.env.ORCA_AGENT_HOOK_ENV || "",',
+    '    version: process.env.ORCA_AGENT_HOOK_VERSION || "",',
+    '    payload: { hook_event_name: hookEventName, ...(extraProperties || {}) },',
+    '  });',
     '  try {',
     '    await fetch(url, {',
     '      method: "POST",',
     '      headers: {',
     '        "Content-Type": "application/json",',
-    '        "X-Orca-Token": token,',
-    '        "X-Orca-OpenCode-Pty-Id": ptyId,',
+    '        "X-Orca-Agent-Hook-Token": token,',
     '      },',
-    '      body: JSON.stringify({ status }),',
+    '      body,',
     '    });',
     '  } catch {',
-    '    // Why: OpenCode session hooks must never fail the agent run just',
+    '    // Why: OpenCode session events must never fail the agent run just',
     '    // because Orca is unavailable or the local loopback request failed.',
     '  }',
     '}',
     '',
-    'export const OrcaOpenCodeStatusPlugin = async () => ({',
+    'async function setStatus(next, extraProperties) {',
+    '  // Why: dedupe so a flurry of session.status idle events after a turn',
+    '  // does not spam the dashboard with redundant done transitions.',
+    '  if (lastStatus === next) return;',
+    '  lastStatus = next;',
+    '  const hookEventName = next === "busy" ? "SessionBusy" : "SessionIdle";',
+    '  await post(hookEventName, extraProperties);',
+    '}',
+    '',
+    '// Why: accept the factory argument as an optional opaque parameter instead',
+    '// of destructuring (`async ({ client }) => …`). OpenCode can invoke the',
+    '// plugin factory with undefined during startup, which makes the',
+    '// destructuring form throw synchronously and crash OpenCode with an opaque',
+    '// UnknownError before any event is ever dispatched.',
+    'export const OrcaOpenCodeStatusPlugin = async (_ctx) => ({',
     '  event: async ({ event }) => {',
     '    if (!event?.type) return;',
     '',
+    '    // TODO(opencode-subagents): filter out child-session events before',
+    '    // emitting state transitions. When tools like oh-my-opencode spawn',
+    '    // background subagents (explore, librarian, oracle), each subagent',
+    '    // runs in its own OpenCode session and emits its own session.idle,',
+    '    // which this plugin will currently treat as "agent done" and flip the',
+    '    // dashboard to done before the root turn actually finishes. Superset',
+    '    // fixes this by calling `client.session.list()` and skipping any',
+    '    // session whose `parentID` is set — with a cache so the lookup',
+    '    // cost is paid once per sessionID, and with the safe default of',
+    '    // treating lookup errors as "assume child" to avoid false positives.',
+    '    // See apps/desktop/src/main/lib/agent-setup/templates/opencode-',
+    '    // plugin.template.js in superset-sh/superset for the v8 reference.',
+    '',
     '    if (event.type === "permission.asked") {',
-    '      await postStatus("permission");',
+    '      // Why: permission asks are not a session state transition — emit',
+    '      // without mutating lastStatus so the next SessionBusy/SessionIdle',
+    '      // still fires. The server maps PermissionRequest to `waiting`.',
+    '      await post("PermissionRequest", event.properties || {});',
     '      return;',
     '    }',
     '',
-    '    if (event.type === "session.idle") {',
-    '      await postStatus("idle");',
+    '    if (event.type === "message.updated") {',
+    '      // Why: message.updated carries the full Message object with role',
+    '      // (user | assistant). We only use it to remember the role for later',
+    '      // message.part.updated events; the text content itself arrives via',
+    '      // TextPart. See @opencode-ai/sdk EventMessageUpdated.properties.info.',
+    '      const info = event.properties && event.properties.info;',
+    '      rememberMessageRole(info && info.id, info && info.role);',
+    '      return;',
+    '    }',
+    '',
+    '    if (event.type === "message.part.updated") {',
+    '      // Why: a TextPart carries the actual user prompt or assistant reply',
+    '      // text. Skip non-text parts (tool, reasoning, file, …) so we only',
+    '      // forward what the dashboard renders. Role came from the earlier',
+    '      // message.updated event; if we never saw one (e.g. plugin loaded',
+    '      // mid-turn), default to assistant — that is the more useful side',
+    '      // to surface on done, and a missing user prompt is a cheaper miss.',
+    '      const part = event.properties && event.properties.part;',
+    '      if (!part || part.type !== "text" || !part.text) return;',
+    '      const role = messageRoleById.get(part.messageID) || "assistant";',
+    '      await post("MessagePart", { role, text: part.text });',
+    '      return;',
+    '    }',
+    '',
+    '    if (event.type === "session.idle" || event.type === "session.error") {',
+    '      await setStatus("idle");',
     '      return;',
     '    }',
     '',
     '    if (event.type === "session.status") {',
     '      const statusType = getStatusType(event);',
     '      if (statusType === "busy" || statusType === "retry") {',
-    '        await postStatus("working");',
+    '        await setStatus("busy");',
     '        return;',
     '      }',
     '      if (statusType === "idle") {',
-    '        await postStatus("idle");',
+    '        await setStatus("idle");',
     '      }',
     '    }',
     '  },',
@@ -98,98 +151,18 @@ function getOpenCodePluginSource(): string {
   ].join('\n')
 }
 
+// Why: OpenCode hooks used to run their own loopback HTTP server + IPC
+// channel (pty:opencode-status). That pathway produced a synthetic terminal
+// title but never entered agentStatusByPaneKey, so the unified dashboard
+// never saw OpenCode sessions. The service now only installs the plugin
+// file into OPENCODE_CONFIG_DIR — the plugin POSTs directly to the shared
+// agent-hooks server (/hook/opencode), so OpenCode rides the same status
+// pipeline as Claude/Codex/Gemini.
 export class OpenCodeHookService {
-  private server: ReturnType<typeof createServer> | null = null
-  private port = 0
-  private token = ''
-  private lastStatusByPtyId = new Map<string, OpenCodeHookStatus>()
-
-  async start(): Promise<void> {
-    if (this.server) {
-      return
-    }
-
-    this.token = randomUUID()
-    this.server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
-      if (req.method !== 'POST' || req.url !== '/hook') {
-        res.writeHead(404)
-        res.end()
-        return
-      }
-
-      if (req.headers['x-orca-token'] !== this.token) {
-        res.writeHead(403)
-        res.end()
-        return
-      }
-
-      const ptyIdHeader = req.headers['x-orca-opencode-pty-id']
-      const ptyId = Array.isArray(ptyIdHeader) ? ptyIdHeader[0] : ptyIdHeader
-      if (!ptyId) {
-        res.writeHead(400)
-        res.end()
-        return
-      }
-
-      try {
-        const body = await readJsonBody(req)
-        const status = normalizeStatus((body as { status?: unknown }).status)
-        if (!status) {
-          res.writeHead(400)
-          res.end()
-          return
-        }
-
-        if (this.lastStatusByPtyId.get(ptyId) !== status) {
-          this.lastStatusByPtyId.set(ptyId, status)
-          const payload: OpenCodeStatusEvent = { ptyId, status }
-          for (const window of BrowserWindow.getAllWindows()) {
-            if (!window.isDestroyed()) {
-              window.webContents.send('pty:opencode-status', payload)
-            }
-          }
-        }
-
-        res.writeHead(204)
-        res.end()
-      } catch {
-        res.writeHead(400)
-        res.end()
-      }
-    })
-
-    await new Promise<void>((resolve, reject) => {
-      this.server!.once('error', reject)
-      this.server!.listen(0, '127.0.0.1', () => {
-        const address = this.server!.address()
-        if (address && typeof address === 'object') {
-          this.port = address.port
-        }
-        resolve()
-      })
-    })
-  }
-
-  stop(): void {
-    this.server?.close()
-    this.server = null
-    this.port = 0
-    // Why: clean up all remaining PTY config directories before clearing the
-    // in-memory tracking. Without this, directories from the current session's
-    // PTYs survive on disk after shutdown.
-    for (const ptyId of this.lastStatusByPtyId.keys()) {
-      const configDir = join(app.getPath('userData'), 'opencode-hooks', ptyId)
-      try {
-        rmSync(configDir, { recursive: true, force: true })
-      } catch {
-        // best-effort
-      }
-    }
-    this.lastStatusByPtyId.clear()
-  }
+  private registeredPtyIds = new Set<string>()
 
   clearPty(ptyId: string): void {
-    this.lastStatusByPtyId.delete(ptyId)
+    this.registeredPtyIds.delete(ptyId)
     // Why: writePluginConfig creates a directory per PTY under userData. Without
     // cleanup these accumulate across sessions since ptyId is a monotonically
     // increasing counter. Remove the directory when the PTY is torn down.
@@ -203,32 +176,20 @@ export class OpenCodeHookService {
   }
 
   buildPtyEnv(ptyId: string): Record<string, string> {
-    if (this.port <= 0 || !this.token) {
+    const configDir = this.writePluginConfig(ptyId)
+    if (!configDir) {
+      // Why: plugin config is best-effort. Returning an empty object lets the
+      // PTY spawn without the OpenCode plugin when the filesystem is locked;
+      // the agent-hooks env (ORCA_AGENT_HOOK_PORT/TOKEN/ORCA_PANE_KEY) is
+      // still injected separately by ipc/pty.ts so other agents keep working.
       return {}
     }
 
-    const configDir = this.writePluginConfig(ptyId)
-    if (!configDir) {
-      // Why: plugin config is best-effort — return hook vars without
-      // OPENCODE_CONFIG_DIR so the PTY still spawns and manually launched
-      // opencode sessions can still report status via the hook server.
-      return {
-        ORCA_OPENCODE_HOOK_PORT: String(this.port),
-        ORCA_OPENCODE_HOOK_TOKEN: this.token,
-        ORCA_OPENCODE_PTY_ID: ptyId
-      }
-    }
-
-    // Why: OpenCode only reads the extra plugin directory at process startup.
-    // Inject these vars into every Orca PTY so manually launched `opencode`
-    // sessions inherit the hook path too, not just sessions started from a
-    // hardcoded Orca command template.
-    return {
-      ORCA_OPENCODE_HOOK_PORT: String(this.port),
-      ORCA_OPENCODE_HOOK_TOKEN: this.token,
-      ORCA_OPENCODE_PTY_ID: ptyId,
-      OPENCODE_CONFIG_DIR: configDir
-    }
+    // Why: OPENCODE_CONFIG_DIR points OpenCode at a plugin directory we own.
+    // Injecting it into every Orca PTY means manually launched `opencode`
+    // sessions automatically pick up the status plugin too, not just sessions
+    // started from a hardcoded command template.
+    return { OPENCODE_CONFIG_DIR: configDir }
   }
 
   private writePluginConfig(ptyId: string): string | null {
@@ -243,6 +204,7 @@ export class OpenCodeHookService {
       // still spawn without the OpenCode status plugin.
       return null
     }
+    this.registeredPtyIds.add(ptyId)
     return configDir
   }
 }

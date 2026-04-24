@@ -26,7 +26,6 @@ import type {
   LinearIssue,
   NotificationDispatchRequest,
   NotificationDispatchResult,
-  OpenCodeStatusEvent,
   OrcaHooks,
   PersistedUIState,
   PRCheckDetail,
@@ -64,6 +63,7 @@ import type {
 } from '../../shared/browser-guest-events'
 import type { CliInstallStatus } from '../../shared/cli-install-types'
 import type { E2EConfig } from '../../shared/e2e-config'
+import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../../shared/runtime-types'
 import type {
   ClaudeUsageBreakdownKind,
@@ -345,7 +345,6 @@ export type PreloadApi = {
     listSessions: () => Promise<{ id: string; cwd: string; title: string }[]>
     onData: (callback: (data: { id: string; data: string }) => void) => () => void
     onExit: (callback: (data: { id: string; code: number }) => void) => () => void
-    onOpenCodeStatus: (callback: (event: OpenCodeStatusEvent) => void) => () => void
   }
   feedback: {
     submit: (args: {
@@ -448,6 +447,11 @@ export type PreloadApi = {
     getInstallStatus: () => Promise<CliInstallStatus>
     install: () => Promise<CliInstallStatus>
     remove: () => Promise<CliInstallStatus>
+  }
+  agentHooks: {
+    claudeStatus: () => Promise<AgentHookInstallStatus>
+    codexStatus: () => Promise<AgentHookInstallStatus>
+    geminiStatus: () => Promise<AgentHookInstallStatus>
   }
   preflight: PreflightApi
   notifications: {

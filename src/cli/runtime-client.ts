@@ -386,9 +386,10 @@ export function getDefaultUserDataPath(
   platform: NodeJS.Platform = process.platform,
   homeDir = homedir()
 ): string {
-  // Why: in dev mode, the Electron app writes runtime metadata to `orca-dev`
-  // instead of `orca` to avoid clobbering the production app's metadata. The
-  // CLI needs to find the same metadata file, so respect this env var override.
+  // Why: in dev mode (and for parallel Orca instances), the Electron app writes
+  // runtime metadata to a separate userData directory (e.g. `orca-dev`) to avoid
+  // clobbering the production app's metadata. The CLI needs to find the same
+  // metadata file, so this env var lets the CLI target a specific instance.
   if (process.env.ORCA_USER_DATA_PATH) {
     return process.env.ORCA_USER_DATA_PATH
   }

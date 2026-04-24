@@ -476,6 +476,10 @@ export function useTerminalPaneLifecycle({
             syncPanePtyLayoutBinding(paneId, null)
             clearTabPtyId(tabId, ptyId)
           }
+          // Why: closing a pane can destroy the transport before its PTY-exit
+          // callback runs, so clear pane-scoped agent status during teardown
+          // instead of relying on PTY lifecycle ordering.
+          useAppStore.getState().removeAgentStatus(`${tabId}:${paneId}`)
           transport.destroy?.()
           paneTransportsRef.current.delete(paneId)
         }

@@ -1,4 +1,5 @@
 import type { ElectronAPI } from '@electron-toolkit/preload'
+import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import type {
   CreateWorktreeResult,
   GitHubPRFile,
@@ -6,10 +7,10 @@ import type {
   GitHubWorkItem,
   GitHubWorkItemDetails,
   GitHubViewer,
-  CreateWorktreeArgs,
-  OpenCodeStatusEvent
+  CreateWorktreeArgs
 } from '../../shared/types'
 import type { SshTarget, SshConnectionState } from '../../shared/ssh-types'
+import type { AgentStatusState } from '../../shared/agent-status-types'
 import type { PreloadApi } from './api-types'
 
 type ReposApi = {
@@ -81,7 +82,6 @@ type PtyApi = {
   listSessions: () => Promise<{ id: string; cwd: string; title: string }[]>
   onData: (callback: (data: { id: string; data: string }) => void) => () => void
   onExit: (callback: (data: { id: string; code: number }) => void) => () => void
-  onOpenCodeStatus: (callback: (event: OpenCodeStatusEvent) => void) => () => void
 }
 
 type GhApi = {
@@ -153,6 +153,12 @@ type CliApi = {
   remove: () => Promise<CliInstallStatus>
 }
 
+type AgentHooksApi = {
+  claudeStatus: () => Promise<AgentHookInstallStatus>
+  codexStatus: () => Promise<AgentHookInstallStatus>
+  geminiStatus: () => Promise<AgentHookInstallStatus>
+}
+
 type NotificationsApi = {
   dispatch: (args: NotificationDispatchRequest) => Promise<NotificationDispatchResult>
   openSystemSettings: () => Promise<void>
@@ -192,11 +198,40 @@ type SshApi = {
   }>
 }
 
+type AgentStatusApi = {
+  /** Listen for agent status updates forwarded from native hook receivers. */
+  onSet: (
+    callback: (data: {
+      paneKey: string
+      tabId?: string
+      worktreeId?: string
+      state: AgentStatusState
+      prompt?: string
+      agentType?: string
+      toolName?: string
+      toolInput?: string
+      lastAssistantMessage?: string
+      interrupted?: boolean
+    }) => void
+  ) => () => void
+}
+
+// Why: Only locally-defined *Api types are listed here. Keys like preflight,
+// hooks, cache, session, updater, fs, git, ui, and runtime are inherited via
+// the PreloadApi intersection (see ./api-types), so re-declaring them would
+// reference undefined type names and risk drifting from the canonical surface.
 type Api = PreloadApi & {
   repos: ReposApi
   worktrees: WorktreesApi
   pty: PtyApi
   ssh: SshApi
+  gh: GhApi
+  settings: SettingsApi
+  cli: CliApi
+  agentHooks: AgentHooksApi
+  notifications: NotificationsApi
+  shell: ShellApi
+  agentStatus: AgentStatusApi
 }
 
 declare global {
