@@ -11,9 +11,9 @@ import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
  */
 export function useNotificationDispatch(
   worktreeId: string
-): (event: { source: 'agent-task-complete' | 'terminal-bell'; terminalTitle?: string }) => void {
+): (event: { source: 'terminal-bell' }) => void {
   return useCallback(
-    (event: { source: 'agent-task-complete' | 'terminal-bell'; terminalTitle?: string }) => {
+    (event: { source: 'terminal-bell' }) => {
       const state = useAppStore.getState()
 
       // Why: shutdownWorktreeTerminals clears ptyIdsByTabId synchronously
@@ -29,16 +29,19 @@ export function useNotificationDispatch(
         return
       }
 
-      const repoId = worktreeId.includes('::') ? worktreeId.slice(0, worktreeId.indexOf('::')) : ''
-      const repo = getRepoMapFromState(state).get(repoId)
+      // Why: prefer worktree.repoId over string-parsing the worktreeId. The
+      // `${repoId}::${path}` format is an implementation detail of id
+      // construction; coupling the notification dispatcher to it would silently
+      // drop the repo label if that format ever changes. The worktree object
+      // itself is the source of truth for its owning repo.
       const worktree = getWorktreeMapFromState(state).get(worktreeId)
+      const repo = worktree ? getRepoMapFromState(state).get(worktree.repoId) : null
 
       void window.api.notifications.dispatch({
         source: event.source,
         worktreeId,
         repoLabel: repo?.displayName,
         worktreeLabel: worktree?.displayName || worktree?.branch || worktreeId,
-        terminalTitle: event.terminalTitle,
         isActiveWorktree: state.activeWorktreeId === worktreeId
       })
     },

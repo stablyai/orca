@@ -461,9 +461,15 @@ describe('registerPtyHandlers', () => {
       // setting the terminal would ignore the user's shell preference.
       process.env.COMSPEC = 'C:\\Windows\\system32\\cmd.exe'
 
-      registerPtyHandlers(mainWindow as never, undefined, undefined, () => ({
-        terminalWindowsShell: 'powershell.exe'
-      } as never))
+      registerPtyHandlers(
+        mainWindow as never,
+        undefined,
+        undefined,
+        () =>
+          ({
+            terminalWindowsShell: 'powershell.exe'
+          }) as never
+      )
       handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
       expect(spawnMock).toHaveBeenCalledWith(

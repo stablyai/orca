@@ -12,6 +12,24 @@ export const EMPTY_LAYOUT: TerminalLayoutSnapshot = {
   expandedLeafId: null
 }
 
+// Why: xterm's SerializeAddon captures display state by emitting mode-setting
+// bytes (e.g. `\e[?1004h` for focus reporting) so a re-fed emulator lands in
+// the same mode as the snapshot source. That's correct for tmux-style
+// "attach to a still-running TUI" — but Orca restores scrollback against a
+// *fresh* shell, with no TUI to consume those modes. A stale focus-reporting
+// bit causes xterm to emit `\e[I`/`\e[O` on every pane click, which the
+// fresh zsh treats as unbound key input and rings the bell for.
+//
+// Reset the interactive modes most commonly left set by crashed/ended TUIs
+// so replayed mode bits do not leak into the fresh shell. ghostty achieves
+// the same end by not restoring state at all.
+//
+//   1000/1002/1003/1006 — mouse reporting variants
+//   1004                — focus event reporting (the actual bug source)
+//   2004                — bracketed paste
+export const POST_REPLAY_MODE_RESET =
+  '\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1004l\x1b[?1006l\x1b[?2004l'
+
 export function paneLeafId(paneId: number): string {
   return `pane:${paneId}`
 }
@@ -235,6 +253,10 @@ export function restoreScrollbackBuffers(
         // Ensure cursor is on a new line so the new shell prompt
         // doesn't trigger zsh's PROMPT_EOL_MARK (%) indicator.
         replayIntoTerminal(pane, replayingPanesRef, '\r\n')
+        // Clear any mode bits the serialized buffer replayed into xterm.
+        // The shell underneath is fresh and has no TUI consuming these modes.
+        // See POST_REPLAY_MODE_RESET comment.
+        replayIntoTerminal(pane, replayingPanesRef, POST_REPLAY_MODE_RESET)
       }
     } catch {
       // If restore fails, continue with blank terminal.

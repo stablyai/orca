@@ -78,6 +78,16 @@ export default function TerminalPane({
   isVisibleRef.current = isVisible
 
   const [expandedPaneId, setExpandedPaneId] = useState<number | null>(null)
+  // Why: tracked in React state (not derived from managerRef.getPanes().length)
+  // so the render containing the portal map (which reads the imperative pane
+  // list via managerRef.current?.getPanes()) re-runs when a pane is split or
+  // closed. managerRef is imperative and doesn't trigger React's dependency
+  // tracking. The lifecycle hook updates this via setPaneCount on
+  // onPaneCreated / onPaneClosed / onLayoutChanged. The value is never
+  // read — the portal map at line ~914 calls `managerRef.current?.getPanes()`
+  // imperatively, so `setPaneCount` is used only as a render-trigger side
+  // effect to force that map to re-run when a pane is split or closed.
+  const [, setPaneCount] = useState<number>(0)
   const [searchOpen, setSearchOpen] = useState(false)
   const searchOpenRef = useRef(false)
   searchOpenRef.current = searchOpen
@@ -119,6 +129,7 @@ export default function TerminalPane({
   const updateTabPtyId = useAppStore((store) => store.updateTabPtyId)
   const clearTabPtyId = useAppStore((store) => store.clearTabPtyId)
   const markWorktreeUnread = useAppStore((store) => store.markWorktreeUnread)
+  const markTerminalTabUnread = useAppStore((store) => store.markTerminalTabUnread)
   const settings = useAppStore((store) => store.settings)
   // Why: Windows is the only platform where bare right-click is repurposed as
   // a paste gesture; on macOS/Linux the terminal still owns right-click for the
@@ -298,10 +309,10 @@ export default function TerminalPane({
     [onCloseTab, syncPanePtyLayoutBinding, tabId]
   )
 
-  // Cmd+W handler — shows a Ghostty-style confirmation dialog when the
-  // pane's shell has a running child process (e.g. npm run dev), so the
-  // user doesn't accidentally kill it. An idle shell prompt closes
-  // immediately. Ctrl+D (explicit EOF) bypasses this by design.
+  // Cmd+W handler — shows a confirmation dialog when the pane's shell has
+  // a running child process (e.g. npm run dev), so the user doesn't
+  // accidentally kill it. An idle shell prompt closes immediately. Ctrl+D
+  // (explicit EOF) bypasses this by design.
   const handleRequestClosePane = useCallback(
     (paneId: number) => {
       const transport = paneTransportsRef.current.get(paneId)
@@ -310,13 +321,20 @@ export default function TerminalPane({
         executeClosePane(paneId)
         return
       }
-      void window.api.pty.hasChildProcesses(ptyId).then((hasChildren) => {
-        if (hasChildren) {
-          setCloseConfirmPaneId(paneId)
-        } else {
-          executeClosePane(paneId)
-        }
-      })
+      void window.api.pty
+        .hasChildProcesses(ptyId)
+        .then((hasChildren) => {
+          if (hasChildren) {
+            setCloseConfirmPaneId(paneId)
+          } else {
+            executeClosePane(paneId)
+          }
+        })
+        // Why: if the child-process probe rejects (IPC wedged, handler
+        // missing on legacy providers), fall back to closing the pane — Cmd+W
+        // silently doing nothing is worse than closing a pane that might have
+        // had a child process. Matches the semantics of the !ptyId branch above.
+        .catch(() => executeClosePane(paneId))
     },
     [executeClosePane]
   )
@@ -364,6 +382,7 @@ export default function TerminalPane({
     clearRuntimePaneTitle,
     updateTabPtyId,
     markWorktreeUnread,
+    markTerminalTabUnread,
     dispatchNotification,
     setCacheTimerStartedAt,
     syncPanePtyLayoutBinding,
@@ -374,7 +393,8 @@ export default function TerminalPane({
     persistLayoutSnapshot,
     setPaneTitles,
     paneTitlesRef,
-    setRenamingPaneId
+    setRenamingPaneId,
+    setPaneCount
   })
 
   const handleRestartCodexPane = useCallback(
@@ -426,6 +446,7 @@ export default function TerminalPane({
         clearRuntimePaneTitle,
         updateTabPtyId,
         markWorktreeUnread,
+        markTerminalTabUnread,
         dispatchNotification,
         setCacheTimerStartedAt,
         syncPanePtyLayoutBinding
@@ -440,6 +461,7 @@ export default function TerminalPane({
       cwd,
       dispatchNotification,
       markWorktreeUnread,
+      markTerminalTabUnread,
       onPtyExitRef,
       setCacheTimerStartedAt,
       setRuntimePaneTitle,
@@ -624,6 +646,10 @@ export default function TerminalPane({
     for (const pane of manager.getPanes()) {
       // Show the title bar space when the pane has a title OR is being
       // inline-edited (so the input appears even for untitled panes).
+      // Unread activity does NOT reserve title-bar space — the bell is
+      // rendered as an absolutely-positioned overlay in the pane's top-right
+      // corner so it can appear and disappear without shifting terminal
+      // content, avoiding the jarring reflow on bell toggles.
       const shouldShow = !!paneTitles[pane.id] || renamingPaneId === pane.id
       const hadTitle = pane.container.hasAttribute('data-has-title')
       if (shouldShow && !hadTitle) {
@@ -904,7 +930,7 @@ export default function TerminalPane({
           and structural changes (split, close) update those same signals via
           onPaneClosed / onPaneCreated callbacks — so React always re-renders
           this block when .getPanes() would return a different result. */}
-      {managerRef.current?.getPanes().map((pane) => {
+      {(managerRef.current?.getPanes() ?? []).map((pane) => {
         const title = paneTitles[pane.id]
         const isEditing = renamingPaneId === pane.id
         if (!title && !isEditing) {

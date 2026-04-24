@@ -77,7 +77,7 @@ describe('createIpcPtyTransport', () => {
     expect(onOpenCodeStatus).not.toBeNull()
 
     onOpenCodeStatus?.({ ptyId: 'pty-1', status: 'working' })
-    onData?.({ id: 'pty-1', data: '\u001b]0;OpenCode\u0007' })
+    onData?.({ id: 'pty-1', data: ']0;OpenCode' })
     onOpenCodeStatus?.({ ptyId: 'pty-1', status: 'idle' })
 
     expect(onAgentBecameWorking).toHaveBeenCalledTimes(1)
@@ -89,22 +89,27 @@ describe('createIpcPtyTransport', () => {
     expect(onExit).not.toBeNull()
   })
 
-  it('does not fire unread-side effects when replaying buffered data during attach', async () => {
+  it('suppresses attention side effects when replaying eager-buffered data during attach', async () => {
+    // Why: eager PTY buffers capture output produced before the pane mounted —
+    // typically catch-up bytes from a previous app session. A BEL or
+    // completion-style title arriving in that replay must NOT produce a fresh
+    // alert. onTitleChange still fires so the tab label restores correctly,
+    // but onBell and onAgentBecameIdle are gated by suppressAttentionEvents.
     const { createIpcPtyTransport, registerEagerPtyBuffer } = await import('./pty-transport')
     const onTitleChange = vi.fn()
-    const onAgentBecameIdle = vi.fn()
     const onBell = vi.fn()
+    const onAgentBecameIdle = vi.fn()
 
     const handle = registerEagerPtyBuffer('pty-restored', vi.fn())
     onData?.({
       id: 'pty-restored',
-      data: '\u001b]0;. Claude working\u0007\u001b]0;* Claude done\u0007\u0007'
+      data: ']0;. Claude working]0;* Claude done'
     })
 
     const transport = createIpcPtyTransport({
       onTitleChange,
-      onAgentBecameIdle,
-      onBell
+      onBell,
+      onAgentBecameIdle
     })
 
     transport.attach({
@@ -114,8 +119,31 @@ describe('createIpcPtyTransport', () => {
 
     expect(handle.flush()).toBe('')
     expect(onTitleChange).toHaveBeenCalledWith('* Claude done', '* Claude done')
-    expect(onAgentBecameIdle).not.toHaveBeenCalled()
     expect(onBell).not.toHaveBeenCalled()
+    expect(onAgentBecameIdle).not.toHaveBeenCalled()
+  })
+
+  it('fires onBell for bare BELs but ignores BELs inside OSC sequences', async () => {
+    // Why: Claude's OSC titles end with a BEL terminator (`\e]0;…\a`). The
+    // stateful bell detector must know it is inside an OSC when that BEL
+    // arrives and ignore it — otherwise every agent title change would
+    // produce a spurious bell. A bare BEL outside an OSC is what actually
+    // raises attention.
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const onBell = vi.fn()
+
+    const transport = createIpcPtyTransport({ onBell })
+    await transport.connect({ url: '', callbacks: {} })
+
+    // OSC-terminating BELs: three titles, zero attention bells.
+    onData?.({ id: 'pty-1', data: ']0;title-one' })
+    onData?.({ id: 'pty-1', data: ']0;title-two' })
+    onData?.({ id: 'pty-1', data: ']0;title-three' })
+    expect(onBell).not.toHaveBeenCalled()
+
+    // Bare BEL outside any OSC: fires once.
+    onData?.({ id: 'pty-1', data: '' })
+    expect(onBell).toHaveBeenCalledTimes(1)
   })
 
   it('routes eager-buffered bytes through onReplayData so the renderer can engage the replay guard', async () => {
@@ -125,7 +153,7 @@ describe('createIpcPtyTransport', () => {
     // left over from a previous session. Routing them through onData instead of
     // onReplayData would bypass pty-connection's replay guard and xterm would
     // auto-reply to those queries, leaking stray input into the shell.
-    const bufferedPayload = 'hello[cworld'
+    const bufferedPayload = 'hello\x1b[cworld'
 
     const handle = registerEagerPtyBuffer('pty-restored', vi.fn())
     onData?.({
@@ -377,15 +405,15 @@ describe('createIpcPtyTransport', () => {
 
   it('unregisterPtyDataHandlers prevents final data burst from triggering notifications', async () => {
     const { createIpcPtyTransport, unregisterPtyDataHandlers } = await import('./pty-transport')
-    const onBell = vi.fn()
     const onTitleChange = vi.fn()
+    const onBell = vi.fn()
     const onAgentBecameIdle = vi.fn()
     const onAgentBecameWorking = vi.fn()
     const onPtyExit = vi.fn()
 
     const transport = createIpcPtyTransport({
-      onBell,
       onTitleChange,
+      onBell,
       onAgentBecameIdle,
       onAgentBecameWorking,
       onPtyExit
@@ -394,16 +422,16 @@ describe('createIpcPtyTransport', () => {
     await transport.connect({ url: '', callbacks: {} })
 
     // Agent starts working
-    onData?.({ id: 'pty-1', data: '\u001b]0;. Claude working\u0007' })
+    onData?.({ id: 'pty-1', data: ']0;. Claude working' })
     expect(onAgentBecameWorking).toHaveBeenCalledTimes(1)
 
-    // Simulate shutdownWorktreeTerminals: unregister data handlers before kill
+    // Simulate shutdownWorktreeTerminals: unregister data handlers before kill.
     unregisterPtyDataHandlers(['pty-1'])
 
     // Final data burst from main process (flushed before exit) — contains a
-    // title change from working to idle AND a BEL. Neither should trigger a
-    // notification because the data handler was removed.
-    onData?.({ id: 'pty-1', data: '\u001b]0;Claude done\u0007\u0007' })
+    // title change and a BEL. Neither should produce a notification because
+    // the data handler was removed.
+    onData?.({ id: 'pty-1', data: ']0;Claude done' })
     expect(onAgentBecameIdle).not.toHaveBeenCalled()
     expect(onBell).not.toHaveBeenCalled()
 
@@ -429,7 +457,7 @@ describe('createIpcPtyTransport', () => {
       await transport.connect({ url: '', callbacks: {} })
 
       // Agent starts working — sets the title to a working indicator
-      onData?.({ id: 'pty-1', data: '\u001b]0;. Claude working\u0007' })
+      onData?.({ id: 'pty-1', data: ']0;. Claude working' })
       expect(onAgentBecameWorking).toHaveBeenCalledTimes(1)
 
       // Data arrives without a title change — starts the 3 s staleTitleTimer
@@ -453,12 +481,10 @@ describe('createIpcPtyTransport', () => {
   it('keeps the exit observer alive after detach so remounts do not reuse dead PTYs', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const onPtyExit = vi.fn()
-    const onBell = vi.fn()
     const onTitleChange = vi.fn()
 
     const transport = createIpcPtyTransport({
       onPtyExit,
-      onBell,
       onTitleChange
     })
 
@@ -472,9 +498,8 @@ describe('createIpcPtyTransport', () => {
 
     transport.detach?.()
 
-    onData?.({ id: 'pty-detached', data: '\u001b]0;Detached title\u0007\u0007' })
+    onData?.({ id: 'pty-detached', data: ']0;Detached title' })
     expect(onTitleChange).not.toHaveBeenCalled()
-    expect(onBell).not.toHaveBeenCalled()
 
     onExit?.({ id: 'pty-detached', code: 0 })
 
