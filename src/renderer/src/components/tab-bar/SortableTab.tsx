@@ -173,12 +173,12 @@ export default function SortableTab({
           {...attributes}
           {...dragListeners}
           // Why: on unread activity, tint the whole tab with a subtle amber
-          // wash + bottom accent strip so the signal is visible at a glance
-          // even when the small bell icon is easy to miss in a long tab bar.
-          // Active tabs keep their existing highlight — the amber wash layers
-          // on top so the tab still reads as "selected + has activity". The
-          // wash is rendered as an absolutely-positioned child below so the
-          // ::after pseudo-element stays free for the drop indicator.
+          // wash so the signal is visible at a glance even when the small
+          // bell icon is easy to miss in a long tab bar. Active tabs keep
+          // their existing highlight — the amber wash layers on top so the
+          // tab still reads as "selected + has activity". The wash is
+          // rendered as an absolutely-positioned child below so the ::after
+          // pseudo-element stays free for the drop indicator.
           className={`group relative flex items-center h-full px-3 text-sm cursor-pointer select-none shrink-0 border-r border-border ${getDropIndicatorClasses(dropIndicator ?? null)} ${
             isActive
               ? 'bg-accent text-foreground border-b-transparent'
@@ -220,19 +220,13 @@ export default function SortableTab({
         >
           {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
           {showActivityAffordance && (
-            // Why: amber wash + bottom accent strip for unread tabs. Rendered as
-            // real DOM children so both drop indicators (::before left / ::after
-            // right in drop-indicator.ts) stay free for drag-and-drop feedback —
-            // a prior ::after-based implementation collided with the right-edge
-            // drop indicator and hid it on unread tabs. pointer-events-none keeps
+            // Why: amber wash for unread tabs. Rendered as a real DOM child so
+            // both drop indicators (::before left / ::after right in
+            // drop-indicator.ts) stay free for drag-and-drop feedback — a prior
+            // ::after-based implementation collided with the right-edge drop
+            // indicator and hid it on unread tabs. pointer-events-none keeps
             // clicks reaching the underlying tab handlers.
-            <>
-              <span aria-hidden className="pointer-events-none absolute inset-0 bg-amber-500/10" />
-              <span
-                aria-hidden
-                className="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 bg-amber-500/90"
-              />
-            </>
+            <span aria-hidden className="pointer-events-none absolute inset-0 bg-amber-500/10" />
           )}
           {showActivityAffordance ? (
             // Why: the activity marker sits to the LEFT of the tab title using

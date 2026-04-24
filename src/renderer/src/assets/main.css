@@ -278,10 +278,10 @@
   height: 0;
 }
 
-/* Tab activity affordance (amber wash + bottom accent strip) is rendered as
-   React DOM children in SortableTab.tsx rather than via ::after here, so the
-   drop-indicator ::before/::after pseudo-elements stay free for drag-and-drop
-   feedback. See drop-indicator.ts and SortableTab.tsx for the implementation. */
+/* Tab activity affordance (amber wash) is rendered as a React DOM child in
+   SortableTab.tsx rather than via ::after here, so the drop-indicator
+   ::before/::after pseudo-elements stay free for drag-and-drop feedback. See
+   drop-indicator.ts and SortableTab.tsx for the implementation. */
 
 /* ── Layout ──────────────────────────────────────────── */
 
