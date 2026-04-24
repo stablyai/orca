@@ -180,7 +180,8 @@ describe('connectPanePty', () => {
       settings: { promptCacheTimerEnabled: true },
       codexRestartNoticeByPtyId: {},
       consumePendingColdRestore: vi.fn(() => null),
-      consumePendingSnapshot: vi.fn(() => null)
+      consumePendingSnapshot: vi.fn(() => null),
+      removeAgentStatus: vi.fn()
     } as StoreState
     globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
       callback(0)
