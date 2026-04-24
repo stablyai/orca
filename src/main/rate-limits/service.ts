@@ -33,7 +33,9 @@ export class RateLimitService {
   private claudeFetchGeneration = 0
   private codexHomePathResolver: (() => string | null) | null = null
   private claudeAuthPreparationResolver: (() => Promise<ClaudeRuntimeAuthPreparation>) | null = null
-  private settingsResolver: (() => { opencodeSessionCookie: string }) | null = null
+  private settingsResolver:
+    | (() => { opencodeSessionCookie: string; opencodeWorkspaceId: string })
+    | null = null
 
   constructor() {}
 
@@ -45,7 +47,9 @@ export class RateLimitService {
     this.claudeAuthPreparationResolver = resolver
   }
 
-  setSettingsResolver(resolver: () => { opencodeSessionCookie: string }): void {
+  setSettingsResolver(
+    resolver: () => { opencodeSessionCookie: string; opencodeWorkspaceId: string }
+  ): void {
     this.settingsResolver = resolver
   }
   attach(mainWindow: BrowserWindow): void {
@@ -335,7 +339,9 @@ export class RateLimitService {
     const codexProvenance = codexHomePath ? `managed:${codexHomePath}` : 'system'
     const codexGeneration = this.codexFetchGeneration
     const previousState = this.state
-    const cookie = this.settingsResolver?.().opencodeSessionCookie ?? ''
+    const settings = this.settingsResolver?.()
+    const cookie = settings?.opencodeSessionCookie ?? ''
+    const workspaceIdOverride = settings?.opencodeWorkspaceId ?? ''
 
     // Mark all providers as fetching while keeping previous data visible.
     // Codex account changes clear Codex separately before this method is
@@ -352,7 +358,7 @@ export class RateLimitService {
       fetchClaudeRateLimits({ authPreparation: claudeAuthPreparation }),
       fetchCodexRateLimits({ codexHomePath }),
       fetchGeminiRateLimits(),
-      fetchOpenCodeGoRateLimits(cookie)
+      fetchOpenCodeGoRateLimits(cookie, workspaceIdOverride || undefined)
     ])
 
     const claude =

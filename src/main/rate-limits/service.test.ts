@@ -194,7 +194,10 @@ describe('RateLimitService', () => {
 
   it('fetches Gemini and OpenCode Go alongside Claude and Codex', async () => {
     const service = new RateLimitService()
-    service.setSettingsResolver(() => ({ opencodeSessionCookie: 'session=abc123' }))
+    service.setSettingsResolver(() => ({
+      opencodeSessionCookie: 'session=abc123',
+      opencodeWorkspaceId: ''
+    }))
 
     vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
     vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
@@ -209,7 +212,7 @@ describe('RateLimitService', () => {
     expect(fetchCodexRateLimits).toHaveBeenCalledTimes(1)
     expect(fetchGeminiRateLimits).toHaveBeenCalledTimes(1)
     expect(fetchOpenCodeGoRateLimits).toHaveBeenCalledTimes(1)
-    expect(fetchOpenCodeGoRateLimits).toHaveBeenCalledWith('session=abc123')
+    expect(fetchOpenCodeGoRateLimits).toHaveBeenCalledWith('session=abc123', undefined)
 
     const state = service.getState()
     expect(state.claude?.status).toBe('ok')
@@ -269,7 +272,7 @@ describe('RateLimitService', () => {
 
   it('isolates provider failures so one error does not block others', async () => {
     const service = new RateLimitService()
-    service.setSettingsResolver(() => ({ opencodeSessionCookie: '' }))
+    service.setSettingsResolver(() => ({ opencodeSessionCookie: '', opencodeWorkspaceId: '' }))
 
     vi.mocked(fetchClaudeRateLimits).mockRejectedValueOnce(new Error('claude down'))
     vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))

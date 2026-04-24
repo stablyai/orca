@@ -55,9 +55,12 @@ export function ProviderIcon({ provider }: { provider: string }): React.JSX.Elem
 
 function ErrorMessage({
   message,
+  stale = false,
   inverted = false
 }: {
   message: string
+  /** When true, prior data is still visible — show a softer "refresh failed" label. */
+  stale?: boolean
   inverted?: boolean
 }): React.JSX.Element {
   const labelClass = inverted ? 'text-background/80' : 'text-foreground/85'
@@ -65,7 +68,9 @@ function ErrorMessage({
 
   return (
     <div className="space-y-0.5">
-      <div className={`text-[11px] font-medium ${labelClass}`}>Usage unavailable</div>
+      <div className={`text-[11px] font-medium ${labelClass}`}>
+        {stale ? 'Refresh failed — showing cached data' : 'Usage unavailable'}
+      </div>
       <div className={detailClass}>{message}</div>
     </div>
   )
@@ -82,10 +87,14 @@ export function getWindowSections(
     const bucketSections = p.buckets.map((b) => ({ label: b.name, window: b as RateLimitWindow }))
     return [...bucketSections, { label: 'Weekly', window: p.weekly }]
   }
-  return [
+  const sections: { label: string; window: RateLimitWindow | null }[] = [
     { label: 'Session', window: p.session },
     { label: 'Weekly', window: p.weekly }
   ]
+  if (p.monthly !== undefined && p.monthly !== null) {
+    sections.push({ label: 'Monthly', window: p.monthly })
+  }
+  return sections
 }
 
 // ---------------------------------------------------------------------------
@@ -203,8 +212,10 @@ export function ProviderTooltip({ p }: { p: ProviderRateLimits | null }): React.
         <TooltipWindowSection key={s.label} w={s.window} label={s.label} />
       ))}
 
-      {/* Stale data warning */}
-      {p.error ? <ErrorMessage message={p.error} inverted /> : null}
+      {/* Stale data warning — softer label when prior data is still shown */}
+      {p.error ? (
+        <ErrorMessage message={p.error} stale={!!(p.session || p.weekly)} inverted />
+      ) : null}
     </div>
   )
 }
@@ -313,7 +324,9 @@ export function ProviderPanel({
         <PanelWindowSection key={s.label} w={s.window} label={s.label} />
       ))}
 
-      {p.error ? <ErrorMessage message={p.error} inverted={inverted} /> : null}
+      {p.error ? (
+        <ErrorMessage message={p.error} stale={!!(p.session || p.weekly)} inverted={inverted} />
+      ) : null}
     </div>
   )
 }

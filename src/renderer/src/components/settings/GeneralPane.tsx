@@ -1010,7 +1010,7 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
               type="password"
               value={settings.opencodeSessionCookie}
               onChange={(e) => updateSettings({ opencodeSessionCookie: e.target.value })}
-              placeholder="Paste your opencode.ai cookie here"
+              placeholder="Fe26.2**… token or auth=Fe26.2**… header"
               spellCheck={false}
               className="flex-1 text-xs"
             />
@@ -1026,7 +1026,42 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
             )}
           </div>
           <p className="text-xs text-muted-foreground">
-            Copy the Cookie header from a request to opencode.ai in your browser&apos;s DevTools.
+            Paste either the raw token value (e.g. <code className="text-xs">Fe26.2**…</code>) or
+            the full cookie header (e.g. <code className="text-xs">auth=Fe26.2**…</code>). Find it
+            in your browser&apos;s DevTools → Network → any opencode.ai request → Cookie header.
+          </p>
+        </SearchableSetting>
+
+        <SearchableSetting
+          title="OpenCode Go Workspace ID"
+          description="Optional workspace ID override if the automatic lookup fails."
+          keywords={['opencode', 'workspace', 'id', 'wrk', 'rate limit', 'status bar']}
+          className="space-y-2"
+        >
+          <Label>Workspace ID override</Label>
+          <div className="flex gap-2">
+            <Input
+              type="text"
+              value={settings.opencodeWorkspaceId}
+              onChange={(e) => updateSettings({ opencodeWorkspaceId: e.target.value })}
+              placeholder="wrk_…  (leave blank for automatic lookup)"
+              spellCheck={false}
+              className="flex-1 text-xs"
+            />
+            {settings.opencodeWorkspaceId && (
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={() => updateSettings({ opencodeWorkspaceId: '' })}
+                className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
+              >
+                Clear
+              </Button>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Find this in the URL after logging into opencode.ai (e.g.{' '}
+            <code className="text-xs">opencode.ai/workspace/wrk_…/go</code>).
           </p>
         </SearchableSetting>
       </section>

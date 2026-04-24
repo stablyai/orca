@@ -91,6 +91,11 @@ export const GENERAL_OPENCODE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     title: 'OpenCode Go Session Cookie',
     description: 'Paste your opencode.ai session cookie for rate limit fetching.',
     keywords: ['opencode', 'cookie', 'session', 'rate limit', 'status bar']
+  },
+  {
+    title: 'OpenCode Go Workspace ID',
+    description: 'Optional workspace ID override if the automatic lookup fails.',
+    keywords: ['opencode', 'workspace', 'id', 'wrk', 'rate limit', 'status bar']
   }
 ]
 
