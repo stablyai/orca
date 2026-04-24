@@ -4,7 +4,7 @@ import type {
   AgentStatusState,
   AgentType
 } from '../../../shared/agent-status-types'
-import type { Status } from '../components/sidebar/StatusIndicator'
+import type { WorktreeStatus } from './worktree-status'
 
 // Re-export from shared module so existing renderer imports continue to work.
 // Why: the main process now needs the same agent detection logic for stat
@@ -178,7 +178,7 @@ export function isExplicitAgentStatusFresh(
  * | waiting        | permission    | agent needs user attention     |
  * | done           | active        | task complete but pane live    |
  */
-export function mapAgentStatusStateToVisualStatus(state: AgentStatusState): Status {
+export function mapAgentStatusStateToVisualStatus(state: AgentStatusState): WorktreeStatus {
   switch (state) {
     case 'working':
       return 'working'

@@ -268,6 +268,12 @@ describe('parseAgentStatusPayload', () => {
     const prompt = `x${'😀'.repeat(AGENT_STATUS_MAX_FIELD_LENGTH)}`
     const result = parseAgentStatusPayload(JSON.stringify({ state: 'working', prompt }))
     expect(result!.prompt.length).toBeLessThanOrEqual(AGENT_STATUS_MAX_FIELD_LENGTH)
+    // Why: pins the guard as load-bearing — a future change that over-trims
+    // (e.g., drops more than one trailing code unit by accident) would leave
+    // the non-malformed assertions happy but silently shrink the output.
+    // The surrogate-pair guard may drop at most ONE trailing high surrogate,
+    // so the result must still reach `max - 1`.
+    expect(result!.prompt.length).toBeGreaterThanOrEqual(AGENT_STATUS_MAX_FIELD_LENGTH - 1)
     const len = result!.prompt.length
     const last = result!.prompt.charCodeAt(len - 1)
     const secondLast = len >= 2 ? result!.prompt.charCodeAt(len - 2) : 0
@@ -296,6 +302,14 @@ describe('parseAgentStatusPayload', () => {
     )
     expect(result!.lastAssistantMessage!.length).toBeLessThanOrEqual(
       AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH
+    )
+    // Why: pins the guard as load-bearing — a future change that over-trims
+    // (e.g., drops more than one trailing code unit by accident) would leave
+    // the non-malformed assertions happy but silently shrink the output.
+    // The surrogate-pair guard may drop at most ONE trailing high surrogate,
+    // so the result must still reach `max - 1`.
+    expect(result!.lastAssistantMessage!.length).toBeGreaterThanOrEqual(
+      AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH - 1
     )
     const len = result!.lastAssistantMessage!.length
     const last = result!.lastAssistantMessage!.charCodeAt(len - 1)

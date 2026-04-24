@@ -394,9 +394,16 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         pendingColdRestoreByPtyId: nextColdRestores
       }
     })
-    // Why: delegate agent-status cleanup to its own slice so the epoch and
-    // stale-freshness timer bookkeeping stay consistent with other agent-status
-    // mutations.
+    // Why: sweep live agent-status entries for this tab — the pane/tab state is
+    // gone, so any remaining status would be stale. Delegate to the agent-status
+    // slice so the epoch and stale-freshness timer bookkeeping stay consistent
+    // with other agent-status mutations.
+    //
+    // Retained agent entries (retainedAgentsByPaneKey) are INTENTIONALLY NOT
+    // swept here: they are worktree-scoped so a completed agent card survives
+    // tab close, and are pruned separately by pruneRetainedAgents when the
+    // worktree list refreshes, or by dismissRetainedAgentsByWorktree when the
+    // worktree itself is deleted.
     get().removeAgentStatusByTabPrefix(tabId)
     for (const tabs of Object.values(get().unifiedTabsByWorktree)) {
       const workspaceItem = tabs.find(
