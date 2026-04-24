@@ -117,9 +117,18 @@ export class Store {
           ui: (() => {
             const sort = normalizeSortBy(parsed.ui?.sortBy)
             const migrate = !parsed.ui?._sortBySmartMigrated && sort === 'recent'
+            // Why: statusBarItems is an additive set — new providers added in later
+            // releases must appear automatically even if the persisted array predates
+            // them. Union saved items with current defaults, preserving user order.
+            const savedItems = parsed.ui?.statusBarItems ?? defaults.ui.statusBarItems
+            const mergedStatusBarItems = [
+              ...savedItems,
+              ...defaults.ui.statusBarItems.filter((item) => !savedItems.includes(item))
+            ]
             return {
               ...defaults.ui,
               ...parsed.ui,
+              statusBarItems: mergedStatusBarItems,
               sortBy: migrate ? ('smart' as const) : sort,
               _sortBySmartMigrated: true
             }
