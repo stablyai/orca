@@ -202,6 +202,18 @@ async function findGeminiPackageRoot(realGeminiPath: string): Promise<string | n
       return path.join(current, 'lib', 'node_modules', '@google', 'gemini-cli')
     }
 
+    // Windows global install layout: <current>/node_modules/@google/gemini-cli
+    const windowsGlobalPkg = path.join(
+      current,
+      'node_modules',
+      '@google',
+      'gemini-cli',
+      'package.json'
+    )
+    if (await fileExists(windowsGlobalPkg)) {
+      return path.join(current, 'node_modules', '@google', 'gemini-cli')
+    }
+
     const parent = path.dirname(current)
     if (parent === current) {
       break
