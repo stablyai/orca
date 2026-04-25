@@ -634,25 +634,44 @@ export default function TerminalPane({
       pasteFromClipboard(pane)
     }
 
-    // Why: a click inside the terminal container is a deliberate interaction
-    // with the pane — dismiss the bell indicator for this tab and worktree
-    // (ghostty "show until interact" semantics). onData already covers
-    // keystrokes; pointerdown covers the mouse path, including right-click
-    // and middle-click paste, which also count as engagement with the pane.
+    container.addEventListener('keydown', onKeyPaste, { capture: true })
+    container.addEventListener('paste', onPaste, { capture: true })
+    return () => {
+      container.removeEventListener('keydown', onKeyPaste, { capture: true })
+      container.removeEventListener('paste', onPaste, { capture: true })
+    }
+  }, [isActive])
+
+  // Why: a click inside the terminal container is a deliberate interaction
+  // with the pane — dismiss the bell indicator for this tab and worktree
+  // (ghostty "show until interact" semantics). onData already covers
+  // keystrokes; pointerdown covers the mouse path, including right-click
+  // and middle-click paste, which also count as engagement with the pane.
+  //
+  // This listener is intentionally NOT gated on `isActive`. In multi-group
+  // split layouts (TabGroupPanel), several TerminalPane instances are
+  // simultaneously visible but only ONE has `isActive=true` (the focused
+  // group's active pane). When the user clicks into a visible-but-inactive
+  // split pane, TabGroupPanel's wrapper `onPointerDown={commands.focusGroup}`
+  // fires first; focusGroup clears tab-level unread but does NOT call
+  // clearWorktreeUnread — so the worktree-level sidebar dot would linger
+  // until another interaction. Attaching this listener unconditionally lets
+  // the first click dismiss both dots BEFORE focusGroup re-renders the pane
+  // as active and the effect deps change.
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) {
+      return
+    }
     const onPointerDown = (): void => {
       clearTerminalTabUnread(tabId)
       clearWorktreeUnread(worktreeId)
     }
-
-    container.addEventListener('keydown', onKeyPaste, { capture: true })
-    container.addEventListener('paste', onPaste, { capture: true })
     container.addEventListener('pointerdown', onPointerDown, { capture: true })
     return () => {
-      container.removeEventListener('keydown', onKeyPaste, { capture: true })
-      container.removeEventListener('paste', onPaste, { capture: true })
       container.removeEventListener('pointerdown', onPointerDown, { capture: true })
     }
-  }, [isActive, tabId, worktreeId, clearTerminalTabUnread, clearWorktreeUnread])
+  }, [tabId, worktreeId, clearTerminalTabUnread, clearWorktreeUnread])
 
   // Sync the data-has-title attribute on pane containers when titles change,
   // and reflow terminals so safeFit() sees the correct available height.

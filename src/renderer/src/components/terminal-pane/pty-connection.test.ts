@@ -703,6 +703,53 @@ describe('connectPanePty', () => {
     expect(deps.clearWorktreeUnread).not.toHaveBeenCalled()
   })
 
+  // Why: symmetric to the replay guard — if the pane is stale-codex (pending
+  // account-switch restart), xterm onData bytes are either blocked synthetic
+  // input or keystrokes that would execute under the wrong account. Either
+  // way they must not count as user interaction and dismiss the bell. The
+  // production code also blocks the transport.sendInput call in this branch
+  // (see pty-connection.ts lines 275-277), so we assert that too.
+  it('does not clear unread when onData fires on a stale codex pane', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-codex-stale')
+    transportFactoryQueue.push(transport)
+    // isCodexPaneStale reads codexRestartNoticeByPtyId from the store, so
+    // trigger the stale branch by seeding a restart notice for the pane's PTY.
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'pty-codex-stale' }]
+      },
+      ptyIdsByTabId: {
+        'tab-1': ['pty-codex-stale']
+      },
+      codexRestartNoticeByPtyId: {
+        'pty-codex-stale': { previousAccountLabel: 'A', nextAccountLabel: 'B' }
+      }
+    }
+
+    const pane = createPane(1)
+    let onDataHandler: ((data: string) => void) | null = null
+    pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
+      onDataHandler = handler
+      return { dispose: vi.fn() }
+    }) as typeof pane.terminal.onData)
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    if (!onDataHandler) {
+      throw new Error('expected onData handler to be registered')
+    }
+    ;(onDataHandler as (data: string) => void)('a')
+
+    expect(deps.clearTerminalTabUnread).not.toHaveBeenCalled()
+    expect(deps.clearWorktreeUnread).not.toHaveBeenCalled()
+    // Stale-codex input is also blocked from reaching the transport.
+    expect(transport.sendInput).not.toHaveBeenCalled()
+  })
+
   // Why: the working→idle transition is kept solely to drive Claude's
   // prompt-cache timer. It MUST NOT raise attention — doing so would
   // double-fire with the BEL path above (since Claude's "done" state is

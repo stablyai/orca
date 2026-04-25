@@ -659,8 +659,11 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       return
     }
     // Why: BEL must fire regardless of focus (ghostty semantics — "show
-    // until interact"). A BEL on the focused tab sets the indicator; the
-    // renderer clears it on keystroke/click/focus via clearTerminalTabUnread.
+    // until interact"). A BEL on the focused tab sets the indicator; real
+    // user interaction with the pane dismisses it. Keystroke/pointerdown
+    // routes through clearTerminalTabUnread (see pty-connection.ts and
+    // TerminalPane.tsx); tab/group activation clears unreadTerminalTabs
+    // directly in activateTab/focusGroup as a pre-existing side-effect.
     set((s) => {
       if (s.unreadTerminalTabs[tabId]) {
         return s

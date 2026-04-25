@@ -248,68 +248,110 @@ test.describe('Terminal attention', () => {
         if (!pane) {
           throw new Error('No active pane on restored tab')
         }
-        // Enable focus reporting and apply the same reset the real
-        // scrollback-restore path applies. After this, mode 1004 should be OFF.
-        // Writes happen first so any focus escapes xterm emits synchronously
-        // while mode 1004 is briefly ON don't pollute the post-reset spy below.
+        // Enable focus reporting then apply the post-replay reset. Any focus
+        // escapes xterm emits synchronously while mode 1004 is briefly ON land
+        // before the spy is installed — that's the whole point: we ONLY want
+        // to observe what xterm emits AFTER the reset landed.
         pane.terminal.write('\x1b[?1004h')
         pane.terminal.write(modeReset)
+        // Install the onData spy in the same evaluate so no timer gap exists
+        // between reset and spy install. Anything captured below is post-reset.
+        const recorded: string[] = []
+        ;(window as unknown as { __XTERM_ONDATA_SPY__: string[] }).__XTERM_ONDATA_SPY__ = recorded
+        const disposer = pane.terminal.onData((data) => {
+          recorded.push(data)
+        })
+        ;(window as unknown as { __XTERM_ONDATA_DISPOSE__?: () => void }).__XTERM_ONDATA_DISPOSE__ =
+          () => disposer.dispose()
       },
       { tabId: secondTabId, modeReset: POST_REPLAY_MODE_RESET }
     )
 
-    // Install the spy AFTER the mode writes have been queued, and give xterm
-    // a tick to actually parse them. Any focus escape captured after this
-    // point is a regression — mode 1004 is supposed to be OFF now, so blur /
-    // focus-change events must not produce `\e[I` or `\e[O`.
-    await orcaPage.waitForTimeout(50)
-    await orcaPage.evaluate((tabId) => {
-      const managers = window.__paneManagers
-      const manager = managers?.get(tabId)
-      const pane = manager?.getActivePane()
-      if (!pane) {
-        throw new Error('No active pane on restored tab')
-      }
-      const recorded: string[] = []
-      ;(window as unknown as { __XTERM_ONDATA_SPY__: string[] }).__XTERM_ONDATA_SPY__ = recorded
-      pane.terminal.onData((data) => {
-        recorded.push(data)
+    // Why (try/finally): the onData spy + disposer live on window globals on
+    // the shared renderer. If any assertion below throws, we still MUST tear
+    // down the spy so it doesn't leak into subsequent tests (which would see
+    // stale captured data and/or a dangling xterm onData subscription).
+    try {
+      // Trigger focus change away from secondTabId. If mode 1004 is still
+      // enabled, xterm will emit `\e[O` via onData — captured by the spy above.
+      // Also explicitly blur the xterm instance so the DOM focus actually moves
+      // (setActiveTab alone doesn't blur focus).
+      await activateTerminalTab(orcaPage, firstTabId)
+      await orcaPage.evaluate((tabId) => {
+        const managers = window.__paneManagers
+        const manager = managers?.get(tabId)
+        const pane = manager?.getActivePane()
+        if (!pane) {
+          return
+        }
+        pane.terminal.blur()
+      }, secondTabId)
+
+      // Why: flush xterm's output queue with a DA1 query — xterm replies via
+      // onData with `\e[?...c`. By the time the reply lands in the spy, any
+      // focus escape the blur handler would have emitted has also landed.
+      // This gives us a deterministic "all-prior-output-processed" signal
+      // without a fixed sleep (which expect.poll + .not.toMatch does NOT
+      // provide — expect.poll exits as soon as the assertion passes once,
+      // so .not.toMatch on an empty buffer would pass instantly at 0ms).
+      await orcaPage.evaluate((tabId) => {
+        const managers = window.__paneManagers
+        const manager = managers?.get(tabId)
+        const pane = manager?.getActivePane()
+        if (!pane) {
+          throw new Error('No active pane on restored tab')
+        }
+        pane.terminal.write('\x1b[c')
+      }, secondTabId)
+
+      await expect
+        .poll(
+          async () => {
+            const emitted = await orcaPage.evaluate(
+              () =>
+                (window as unknown as { __XTERM_ONDATA_SPY__: string[] | undefined })
+                  .__XTERM_ONDATA_SPY__ ?? []
+            )
+            return emitted.join('')
+          },
+          {
+            timeout: 5_000,
+            message: 'DA1 reply never arrived — xterm onData spy did not receive data'
+          }
+        )
+        // eslint-disable-next-line no-control-regex -- intentional terminal escape sequence matching
+        .toMatch(/\x1b\[\?.*c/)
+
+      // By this point all prior xterm output has been observed. Read the
+      // final buffer once and assert no focus escape is present. Mode 1004
+      // reset succeeded iff no focus escapes are emitted — we assert on the
+      // precise byte-level mechanism the fix guards against (`\e[I` focus-in
+      // / `\e[O` focus-out), not the tab unread state, because under the
+      // show-until-interact model that state can be flipped by unrelated
+      // shell-startup BELs.
+      const emittedFromXterm = await orcaPage.evaluate(
+        () =>
+          (window as unknown as { __XTERM_ONDATA_SPY__: string[] | undefined })
+            .__XTERM_ONDATA_SPY__ ?? []
+      )
+      // Join before matching: individual chunks could split an escape
+      // across onData calls (unlikely but possible — e.g. if xterm
+      // flushes mid-escape).
+      // eslint-disable-next-line no-control-regex -- intentional terminal escape sequence matching
+      expect(emittedFromXterm.join('')).not.toMatch(/\x1b\[[IO]/)
+    } finally {
+      // Dispose the onData subscription and clear the globals so nothing leaks
+      // across tests on the shared renderer. Runs even if an assertion above
+      // failed.
+      await orcaPage.evaluate(() => {
+        const w = window as unknown as {
+          __XTERM_ONDATA_DISPOSE__?: () => void
+          __XTERM_ONDATA_SPY__?: string[]
+        }
+        w.__XTERM_ONDATA_DISPOSE__?.()
+        delete w.__XTERM_ONDATA_DISPOSE__
+        delete w.__XTERM_ONDATA_SPY__
       })
-    }, secondTabId)
-
-    // Trigger focus change away from secondTabId. If mode 1004 is still
-    // enabled, xterm will emit `\e[O` via onData — captured by the spy above.
-    // Also explicitly blur the xterm instance so the DOM focus actually moves
-    // (setActiveTab alone doesn't blur focus).
-    await activateTerminalTab(orcaPage, firstTabId)
-    await orcaPage.evaluate((tabId) => {
-      const managers = window.__paneManagers
-      const manager = managers?.get(tabId)
-      const pane = manager?.getActivePane()
-      if (!pane) {
-        return
-      }
-      pane.terminal.blur()
-    }, secondTabId)
-
-    // Give xterm's focus-change handler a tick to run.
-    await orcaPage.waitForTimeout(50)
-
-    const emittedFromXterm = await orcaPage.evaluate(
-      () =>
-        (window as unknown as { __XTERM_ONDATA_SPY__: string[] | undefined })
-          .__XTERM_ONDATA_SPY__ ?? []
-    )
-
-    // Mode 1004 reset succeeded iff no focus escapes were emitted. Filter
-    // for `\e[I` (focus-in) and `\e[O` (focus-out) specifically — xterm
-    // may still emit other query replies we don't care about here, and under
-    // the show-until-interact model the tab's unread indicator can be flipped
-    // by unrelated shell-startup BELs, so we assert on the precise byte-level
-    // mechanism the fix guards against.
-    const focusEscapes = emittedFromXterm.filter(
-      (chunk) => chunk.includes('\x1b[I') || chunk.includes('\x1b[O')
-    )
-    expect(focusEscapes).toEqual([])
+    }
   })
 })

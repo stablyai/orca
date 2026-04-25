@@ -334,8 +334,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
 
   markWorktreeUnread: (worktreeId) => {
     // Why: BEL must fire regardless of focus (ghostty semantics — "show
-    // until interact"). The dot clears on user interaction with the
-    // worktree's terminal via clearWorktreeUnread, not on activation alone.
+    // until interact"). Interaction with a pane inside the worktree
+    // dismisses the dot via clearWorktreeUnread. Worktree activation via
+    // setActiveWorktree also clears isUnread as a side-effect; that path
+    // predates this PR and is unaffected here.
     let shouldPersist = false
     const now = Date.now()
     set((s) => {
@@ -370,7 +372,11 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     set((s) => {
       const worktree = findWorktreeById(s.worktreesByRepo, worktreeId)
       if (!worktree || !worktree.isUnread) {
-        return {}
+        // Why: return `s` (not `{}`) to preserve the exact object reference
+        // on no-op. This matches the sibling `clearTerminalTabUnread` in
+        // terminals.ts and avoids downstream selector churn on the hot path
+        // (called on every keystroke and pointerdown).
+        return s
       }
       shouldPersist = true
       return {
