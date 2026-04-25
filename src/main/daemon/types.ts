@@ -1,8 +1,8 @@
 // ─── Protocol Version ────────────────────────────────────────────────
-// Why: v1 daemons can survive app updates and keep using tmp-backed
-// shell-ready rcfiles. v2 forces a fresh daemon with durable wrapper paths.
-export const PROTOCOL_VERSION = 2
-export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [1] as const
+// Why: daemons can survive app updates with long-lived shell env. Bump when
+// spawn-time env semantics change so stale sessions cannot bypass new behavior.
+export const PROTOCOL_VERSION = 3
+export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [1, 2] as const
 
 // ─── Session State Machine ──────────────────────────────────────────
 export type SessionState = 'created' | 'spawning' | 'running' | 'exiting' | 'exited'

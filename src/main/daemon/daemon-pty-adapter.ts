@@ -14,6 +14,7 @@ import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers
 export type DaemonPtyAdapterOptions = {
   socketPath: string
   tokenPath: string
+  protocolVersion?: number
   /** Directory for disk-based terminal history. When set, the adapter writes
    *  raw PTY output to disk for cold restore on daemon crash. */
   historyPath?: string
@@ -59,7 +60,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
   constructor(opts: DaemonPtyAdapterOptions) {
     this.client = new DaemonClient({
       socketPath: opts.socketPath,
-      tokenPath: opts.tokenPath
+      tokenPath: opts.tokenPath,
+      protocolVersion: opts.protocolVersion
     })
     this.historyManager = opts.historyPath ? new HistoryManager(opts.historyPath) : null
     this.historyReader = opts.historyPath ? new HistoryReader(opts.historyPath) : null

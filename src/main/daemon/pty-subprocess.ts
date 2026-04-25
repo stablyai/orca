@@ -1,6 +1,10 @@
 import * as pty from 'node-pty'
 import type { SubprocessHandle } from './session'
-import { getShellReadyLaunchConfig, resolvePtyShellPath } from './shell-ready'
+import {
+  getAttributionShellLaunchConfig,
+  getShellReadyLaunchConfig,
+  resolvePtyShellPath
+} from './shell-ready'
 import { isValidPtySize, normalizePtySize } from './daemon-pty-size'
 import { ensureNodePtySpawnHelperExecutable } from '../providers/local-pty-utils'
 
@@ -52,11 +56,15 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   if (process.platform === 'win32') {
     shellArgs = []
   } else {
-    const shellReadyLaunch = opts.command ? getShellReadyLaunchConfig(shellPath) : null
-    if (shellReadyLaunch) {
-      Object.assign(env, shellReadyLaunch.env)
+    const shellLaunch = opts.command
+      ? getShellReadyLaunchConfig(shellPath)
+      : env.ORCA_ATTRIBUTION_SHIM_DIR
+        ? getAttributionShellLaunchConfig(shellPath)
+        : null
+    if (shellLaunch) {
+      Object.assign(env, shellLaunch.env)
     }
-    shellArgs = shellReadyLaunch?.args ?? ['-l']
+    shellArgs = shellLaunch?.args ?? ['-l']
   }
 
   // Why: asar packaging can strip the +x bit from node-pty's spawn-helper

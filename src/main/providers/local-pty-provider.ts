@@ -18,6 +18,7 @@ import {
   spawnShellWithFallback
 } from './local-pty-utils'
 import {
+  getAttributionShellLaunchConfig,
   getShellReadyLaunchConfig,
   createShellReadyScanState,
   scanForShellReady,
@@ -162,8 +163,7 @@ export class LocalPtyProvider implements IPtyProvider {
       validationCwd = cwd
     } else {
       shellPath = args.env?.SHELL || process.env.SHELL || '/bin/zsh'
-      shellReadyLaunch = args.command ? getShellReadyLaunchConfig(shellPath) : null
-      shellArgs = shellReadyLaunch?.args ?? ['-l']
+      shellArgs = ['-l']
       effectiveCwd = cwd
       validationCwd = cwd
     }
@@ -174,7 +174,6 @@ export class LocalPtyProvider implements IPtyProvider {
     const spawnEnv: Record<string, string> = {
       ...process.env,
       ...args.env,
-      ...shellReadyLaunch?.env,
       TERM: 'xterm-256color',
       COLORTERM: 'truecolor',
       TERM_PROGRAM: 'Orca',
@@ -200,6 +199,18 @@ export class LocalPtyProvider implements IPtyProvider {
     }
 
     const finalEnv = this.opts.buildSpawnEnv ? this.opts.buildSpawnEnv(id, spawnEnv) : spawnEnv
+    if (!wslInfo && process.platform !== 'win32') {
+      const shellLaunch = args.command
+        ? getShellReadyLaunchConfig(shellPath)
+        : finalEnv.ORCA_ATTRIBUTION_SHIM_DIR
+          ? getAttributionShellLaunchConfig(shellPath)
+          : null
+      if (shellLaunch) {
+        Object.assign(finalEnv, shellLaunch.env)
+        shellArgs = shellLaunch.args ?? shellArgs
+        shellReadyLaunch = args.command ? shellLaunch : null
+      }
+    }
 
     // ── Worktree-scoped shell history (§7–§10 of terminal-history-scope-design) ──
     // Why: without this, all worktree terminals share a single global HISTFILE

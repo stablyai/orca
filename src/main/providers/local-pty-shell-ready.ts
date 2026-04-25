@@ -87,19 +87,29 @@ fi
 # Why: preserve bash's normal login-shell contract. Many users already source
 # ~/.bashrc from ~/.bash_profile; forcing ~/.bashrc again here would duplicate
 # PATH edits, hooks, and prompt init in Orca startup-command shells.
+__orca_restore_attribution_path() {
+  [[ -n "\${ORCA_ATTRIBUTION_SHIM_DIR:-}" ]] || return 0
+  case "$PATH" in
+    "\${ORCA_ATTRIBUTION_SHIM_DIR}"|"\${ORCA_ATTRIBUTION_SHIM_DIR}:"*) return 0 ;;
+  esac
+  export PATH="\${ORCA_ATTRIBUTION_SHIM_DIR}:$PATH"
+}
+__orca_restore_attribution_path
 # Why: append the marker through PROMPT_COMMAND so it fires after the login
 # startup files have rebuilt the prompt, without re-running user rc files.
-__orca_prompt_mark() {
-  printf "\\033]133;A\\007"
-}
-if [[ "$(declare -p PROMPT_COMMAND 2>/dev/null)" == "declare -a"* ]]; then
-  PROMPT_COMMAND=("\${PROMPT_COMMAND[@]}" "__orca_prompt_mark")
-else
-  _orca_prev_prompt_command="\${PROMPT_COMMAND}"
-  if [[ -n "\${_orca_prev_prompt_command}" ]]; then
-    PROMPT_COMMAND="\${_orca_prev_prompt_command};__orca_prompt_mark"
+if [[ "\${ORCA_SHELL_READY_MARKER:-0}" == "1" ]]; then
+  __orca_prompt_mark() {
+    printf "\\033]133;A\\007"
+  }
+  if [[ "$(declare -p PROMPT_COMMAND 2>/dev/null)" == "declare -a"* ]]; then
+    PROMPT_COMMAND=("\${PROMPT_COMMAND[@]}" "__orca_prompt_mark")
   else
-    PROMPT_COMMAND="__orca_prompt_mark"
+    _orca_prev_prompt_command="\${PROMPT_COMMAND}"
+    if [[ -n "\${_orca_prev_prompt_command}" ]]; then
+      PROMPT_COMMAND="\${_orca_prev_prompt_command};__orca_prompt_mark"
+    else
+      PROMPT_COMMAND="__orca_prompt_mark"
+    fi
   fi
 fi
 `
@@ -129,18 +139,36 @@ _orca_home="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
 if [[ -o interactive && -f "$_orca_home/.zshrc" ]]; then
   source "$_orca_home/.zshrc"
 fi
+__orca_restore_attribution_path() {
+  [[ -n "\${ORCA_ATTRIBUTION_SHIM_DIR:-}" ]] || return 0
+  case "$PATH" in
+    "\${ORCA_ATTRIBUTION_SHIM_DIR}"|"\${ORCA_ATTRIBUTION_SHIM_DIR}:"*) return 0 ;;
+  esac
+  export PATH="\${ORCA_ATTRIBUTION_SHIM_DIR}:$PATH"
+}
+[[ ! -o login ]] && __orca_restore_attribution_path
 `
   const zshLogin = `# Orca zsh shell-ready wrapper
 _orca_home="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
 if [[ -o interactive && -f "$_orca_home/.zlogin" ]]; then
   source "$_orca_home/.zlogin"
 fi
+__orca_restore_attribution_path() {
+  [[ -n "\${ORCA_ATTRIBUTION_SHIM_DIR:-}" ]] || return 0
+  case "$PATH" in
+    "\${ORCA_ATTRIBUTION_SHIM_DIR}"|"\${ORCA_ATTRIBUTION_SHIM_DIR}:"*) return 0 ;;
+  esac
+  export PATH="\${ORCA_ATTRIBUTION_SHIM_DIR}:$PATH"
+}
+__orca_restore_attribution_path
 # Why: emit OSC 133;A only after the user's startup hooks finish so Orca knows
 # the prompt is actually ready for a long startup command paste.
-__orca_prompt_mark() {
-  printf "\\033]133;A\\007"
-}
-precmd_functions=(\${precmd_functions[@]} __orca_prompt_mark)
+if [[ "\${ORCA_SHELL_READY_MARKER:-0}" == "1" ]]; then
+  __orca_prompt_mark() {
+    printf "\\033]133;A\\007"
+  }
+  precmd_functions=(\${precmd_functions[@]} __orca_prompt_mark)
+fi
 `
   const bashRc = getBashShellReadyRcfileContent()
 
@@ -168,7 +196,10 @@ export type ShellReadyLaunchConfig = {
   supportsReadyMarker: boolean
 }
 
-export function getShellReadyLaunchConfig(shellPath: string): ShellReadyLaunchConfig {
+function getWrappedShellLaunchConfig(
+  shellPath: string,
+  options: { emitReadyMarker: boolean }
+): ShellReadyLaunchConfig {
   const shellName = basename(shellPath).toLowerCase()
 
   if (shellName === 'zsh') {
@@ -177,9 +208,10 @@ export function getShellReadyLaunchConfig(shellPath: string): ShellReadyLaunchCo
       args: ['-l'],
       env: {
         ORCA_ORIG_ZDOTDIR: process.env.ZDOTDIR || process.env.HOME || '',
-        ZDOTDIR: `${getShellReadyWrapperRoot()}/zsh`
+        ZDOTDIR: `${getShellReadyWrapperRoot()}/zsh`,
+        ORCA_SHELL_READY_MARKER: options.emitReadyMarker ? '1' : '0'
       },
-      supportsReadyMarker: true
+      supportsReadyMarker: options.emitReadyMarker
     }
   }
 
@@ -187,8 +219,10 @@ export function getShellReadyLaunchConfig(shellPath: string): ShellReadyLaunchCo
     ensureShellReadyWrappers()
     return {
       args: ['--rcfile', `${getShellReadyWrapperRoot()}/bash/rcfile`],
-      env: {},
-      supportsReadyMarker: true
+      env: {
+        ORCA_SHELL_READY_MARKER: options.emitReadyMarker ? '1' : '0'
+      },
+      supportsReadyMarker: options.emitReadyMarker
     }
   }
 
@@ -197,6 +231,14 @@ export function getShellReadyLaunchConfig(shellPath: string): ShellReadyLaunchCo
     env: {},
     supportsReadyMarker: false
   }
+}
+
+export function getShellReadyLaunchConfig(shellPath: string): ShellReadyLaunchConfig {
+  return getWrappedShellLaunchConfig(shellPath, { emitReadyMarker: true })
+}
+
+export function getAttributionShellLaunchConfig(shellPath: string): ShellReadyLaunchConfig {
+  return getWrappedShellLaunchConfig(shellPath, { emitReadyMarker: false })
 }
 
 // ── Startup command writer ──────────────────────────────────────────
