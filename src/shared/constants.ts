@@ -156,6 +156,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     defaultTuiAgent: null,
     skipDeleteWorktreeConfirm: false,
     defaultTaskViewPreset: 'all',
+    defaultTaskSource: 'github',
     defaultRepoSelection: null,
     agentCmdOverrides: {},
     // Why: 'auto' runs a layout-aware probe at boot (see

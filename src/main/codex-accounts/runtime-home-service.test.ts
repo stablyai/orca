@@ -80,6 +80,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     defaultTuiAgent: null,
     skipDeleteWorktreeConfirm: false,
     defaultTaskViewPreset: 'all',
+    defaultTaskSource: 'github',
     defaultRepoSelection: null,
     agentCmdOverrides: {},
     terminalMacOptionAsAlt: 'false',
