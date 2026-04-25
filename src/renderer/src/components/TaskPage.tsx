@@ -507,7 +507,7 @@ export default function TaskPage(): React.JSX.Element {
   // keep the top band continuous with the sidebar header and tab rows. When
   // the sidebar is also collapsed, App.tsx floats its titlebar-left controls
   // (traffic lights, sidebar toggle, agent badge) over our strip — reserve
-  // the measured width of those controls on the left so our "Tasks" label
+  // the measured width of those controls on the left so the titlebar strip
   // never sits behind them. In non-workspace mode App.tsx already owns the
   // top titlebar, so skip our strip to avoid a duplicate band.
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
@@ -1223,11 +1223,9 @@ export default function TaskPage(): React.JSX.Element {
               />
             ) : null}
             <div
-              className="flex h-full flex-1 items-center border-b border-border bg-card px-4 text-sm font-medium text-muted-foreground"
+              className="flex h-full flex-1 items-center border-b border-border bg-card"
               style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-            >
-              <span>Tasks</span>
-            </div>
+            />
           </div>
         ) : null}
 
