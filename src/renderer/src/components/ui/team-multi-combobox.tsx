@@ -10,21 +10,17 @@ import {
 } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
-
-export type LinearTeamOption = { id: string; name: string; key: string }
+import type { LinearTeam } from '../../../../shared/types'
 
 type TeamMultiComboboxProps = {
-  teams: LinearTeamOption[]
+  teams: LinearTeam[]
   selected: ReadonlySet<string>
   onChange: (next: ReadonlySet<string>) => void
   onSelectAll: () => void
   triggerClassName?: string
 }
 
-function renderTriggerLabel(
-  teams: LinearTeamOption[],
-  selected: ReadonlySet<string>
-): React.JSX.Element {
+function renderTriggerLabel(teams: LinearTeam[], selected: ReadonlySet<string>): React.JSX.Element {
   if (teams.length === 0) {
     return <span className="text-muted-foreground">No teams</span>
   }

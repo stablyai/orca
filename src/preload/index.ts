@@ -472,6 +472,8 @@ const api = {
     issueComments: (args: { issueId: string }): Promise<unknown[]> =>
       ipcRenderer.invoke('linear:issueComments', args),
 
+    listTeams: (): Promise<unknown[]> => ipcRenderer.invoke('linear:listTeams'),
+
     teamStates: (args: { teamId: string }): Promise<unknown[]> =>
       ipcRenderer.invoke('linear:teamStates', args),
 

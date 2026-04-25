@@ -12,6 +12,7 @@ import {
   getTeamLabels,
   getTeamMembers
 } from '../linear/issues'
+import { listTeams } from '../linear/teams'
 import type { LinearListFilter } from '../linear/issues'
 import type { LinearIssueUpdate } from '../../shared/types'
 
@@ -114,6 +115,10 @@ export function registerLinearHandlers(): void {
       return []
     }
     return getIssueComments(args.issueId.trim())
+  })
+
+  ipcMain.handle('linear:listTeams', async () => {
+    return listTeams()
   })
 
   ipcMain.handle('linear:teamStates', async (_event, args: { teamId: string }) => {

@@ -30,6 +30,7 @@ import type {
   LinearWorkflowState,
   LinearLabel,
   LinearMember,
+  LinearTeam,
   GitHubIssueUpdate,
   NotificationDispatchRequest,
   NotificationDispatchResult,
@@ -452,6 +453,7 @@ export type PreloadApi = {
       body: string
     }) => Promise<{ ok: true; id: string } | { ok: false; error: string }>
     issueComments: (args: { issueId: string }) => Promise<LinearComment[]>
+    listTeams: () => Promise<LinearTeam[]>
     teamStates: (args: { teamId: string }) => Promise<LinearWorkflowState[]>
     teamLabels: (args: { teamId: string }) => Promise<LinearLabel[]>
     teamMembers: (args: { teamId: string }) => Promise<LinearMember[]>

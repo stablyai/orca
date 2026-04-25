@@ -737,19 +737,25 @@ export default function TaskPage(): React.JSX.Element {
   const [activeLinearPreset, setActiveLinearPreset] = useState<LinearPresetId>('all')
   const [linearRefreshNonce, setLinearRefreshNonce] = useState(0)
 
-  // Why: derive the team list from fetched issues rather than adding a new
-  // IPC channel — every LinearIssue already carries team metadata. Teams that
-  // appear in the current fetch window are the ones with recent activity, which
-  // are the ones users care about filtering.
-  const availableTeams = useMemo(() => {
-    const map = new Map<string, { id: string; name: string; key: string }>()
-    for (const issue of linearIssues) {
-      if (!map.has(issue.team.id)) {
-        map.set(issue.team.id, issue.team)
-      }
+  // Why: fetch the full team list from the Linear API so the selector shows
+  // all teams the user belongs to, not just teams with issues in the current
+  // fetch window. Fetched once when the Linear tab is active and connected.
+  const [availableTeams, setAvailableTeams] = useState<{ id: string; name: string; key: string }[]>(
+    []
+  )
+
+  useEffect(() => {
+    if (taskSource !== 'linear' || !linearStatus.connected) {
+      return
     }
-    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name))
-  }, [linearIssues])
+    void window.api.linear
+      .listTeams()
+      .then(setAvailableTeams)
+      .catch(() => {
+        console.warn('[TaskPage] Failed to fetch Linear teams')
+      })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskSource, linearStatus.connected])
 
   const defaultLinearTeamSelection = settings?.defaultLinearTeamSelection
   const [linearTeamSelection, setLinearTeamSelection] = useState<ReadonlySet<string>>(() => {
@@ -759,31 +765,15 @@ export default function TaskPage(): React.JSX.Element {
     return new Set(defaultLinearTeamSelection)
   })
 
-  // Why: two cases when availableTeams changes (preset switch, search, initial load):
-  // 1. Sticky-all (null): auto-include all discovered teams.
-  // 2. Explicit selection: prune to intersection with available teams. If intersection
-  //    is empty, recover to all-teams — same pattern as repo selector (lines 552-577).
+  // Why: in sticky-all mode, auto-include all teams once the list arrives.
+  // In explicit-selection mode, the set is already correct from the initializer.
   useEffect(() => {
     if (availableTeams.length === 0) {
       return
     }
-    const availableIds = new Set(availableTeams.map((t) => t.id))
-
     if (!defaultLinearTeamSelection) {
-      setLinearTeamSelection(availableIds)
-      return
+      setLinearTeamSelection(new Set(availableTeams.map((t) => t.id)))
     }
-
-    const pruned = new Set([...linearTeamSelection].filter((id) => availableIds.has(id)))
-    if (pruned.size === 0) {
-      setLinearTeamSelection(availableIds)
-      void updateSettings({ defaultLinearTeamSelection: null }).catch(() => {
-        toast.error('Failed to save team selection.')
-      })
-    } else if (pruned.size !== linearTeamSelection.size) {
-      setLinearTeamSelection(pruned)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [availableTeams, defaultLinearTeamSelection])
 
   const filteredLinearIssues = useMemo(
@@ -1364,7 +1354,7 @@ export default function TaskPage(): React.JSX.Element {
                         }}
                         triggerClassName="h-8 w-full rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
                       />
-                    ) : availableTeams.length > 1 ? (
+                    ) : availableTeams.length > 0 ? (
                       <TeamMultiCombobox
                         teams={availableTeams}
                         selected={linearTeamSelection}

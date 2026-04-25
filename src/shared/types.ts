@@ -539,6 +539,12 @@ export type LinearMember = {
   avatarUrl?: string
 }
 
+export type LinearTeam = {
+  id: string
+  name: string
+  key: string
+}
+
 // ─── Hooks (orca.yaml) ──────────────────────────────────────────────
 export type OrcaHooks = {
   scripts: {
