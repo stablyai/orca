@@ -87,7 +87,10 @@ export class SshRelaySession {
   // relay's grace window. Guarded by an AbortController so overlapping
   // reconnect attempts (fast connection flaps) cancel the stale one.
   async reconnect(conn: SshConnection, graceTimeSeconds?: number): Promise<void> {
-    if (this._state === 'disposed') {
+    // Why: only allow reconnect from 'ready' or 'reconnecting'. Calling
+    // reconnect from 'deploying' would tear down a mux that establish() is
+    // concurrently using. 'idle' means no session was established yet.
+    if (this._state !== 'ready' && this._state !== 'reconnecting') {
       return
     }
 

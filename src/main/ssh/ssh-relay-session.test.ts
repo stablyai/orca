@@ -298,6 +298,16 @@ describe('SshRelaySession', () => {
     expect(unregisterSshGitProvider).toHaveBeenCalledWith('target-1')
   })
 
+  it('reconnect on idle session is a no-op', async () => {
+    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
+
+    await session.reconnect(mockConn)
+
+    expect(session.getState()).toBe('idle')
+    expect(deployAndLaunchRelay).not.toHaveBeenCalled()
+  })
+
   it('reconnect failure still allows retry from onStateChange', async () => {
     const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
