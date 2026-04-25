@@ -74,7 +74,7 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.hrl': 'erlang',
   '.hs': 'haskell',
   '.clj': 'clojure',
-  '.vue': 'html',
+  '.vue': 'vue',
   '.svelte': 'html',
   '.astro': 'html',
   '.tf': 'hcl',

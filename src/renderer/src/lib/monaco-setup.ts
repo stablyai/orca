@@ -7,6 +7,7 @@ import jsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker'
 import cssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker'
 import htmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker'
 import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
+import { registerVueLanguage } from './monaco-languages/register-vue'
 
 globalThis.MonacoEnvironment = {
   getWorker(_workerId, label) {
@@ -73,6 +74,8 @@ monacoTS.javascriptDefaults.setCompilerOptions({
   ...monacoTS.javascriptDefaults.getCompilerOptions(),
   jsx: monacoTS.JsxEmit.Preserve
 })
+
+registerVueLanguage(monaco)
 
 // Configure Monaco to use the locally bundled editor instead of CDN
 loader.config({ monaco })
