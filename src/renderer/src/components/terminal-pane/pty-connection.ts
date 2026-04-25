@@ -416,30 +416,40 @@ export function connectPanePty(
     // until after connect succeeds — without the connection, pty.spawn would fail
     // with "No PTY provider for connection".
     if (connectionId) {
-      const deferredTargets = useAppStore.getState().deferredSshReconnectTargets
+      const storeState = useAppStore.getState()
+      const deferredTargets = storeState.deferredSshReconnectTargets
       if (deferredTargets.includes(connectionId)) {
+        // Why: read the session ID from the deferred map — not tab.ptyId —
+        // because reconnectPersistedTerminals skips deferred targets and
+        // clears pendingReconnectPtyIdByTabId. The deferred map preserves
+        // the session IDs until the deferred reconnect consumes them.
+        const pendingSessionId = storeState.deferredSshSessionIdsByTabId[deps.tabId]
+
+        // Why: remove from deferred list BEFORE awaiting to prevent split
+        // panes from each triggering a parallel ssh.connect() call, which
+        // would race and one would fail with "already in progress".
+        useAppStore.getState().removeDeferredSshReconnectTarget(connectionId)
+
         void (async () => {
-          try {
-            await window.api.ssh.connect({ targetId: connectionId })
-            useAppStore.getState().removeDeferredSshReconnectTarget(connectionId)
-          } catch (err) {
-            console.warn(`Deferred SSH reconnect failed for ${connectionId}:`, err)
-            reportError(
-              `SSH connection failed: ${err instanceof Error ? err.message : String(err)}`
-            )
-            return
+          // Why: another pane for the same target may have already
+          // triggered the connect. Check if it succeeded before calling
+          // again to avoid a duplicate-connect error.
+          const alreadyConnected =
+            useAppStore.getState().sshConnectionStates.get(connectionId)?.status === 'connected'
+          if (!alreadyConnected) {
+            try {
+              await window.api.ssh.connect({ targetId: connectionId })
+            } catch (err) {
+              console.warn(`Deferred SSH reconnect failed for ${connectionId}:`, err)
+              reportError(
+                `SSH connection failed: ${err instanceof Error ? err.message : String(err)}`
+              )
+              return
+            }
           }
           if (disposed) {
             return
           }
-          // Why: the persisted session ID was stored before shutdown so we
-          // can reattach to the relay's surviving PTY.  Reading it here
-          // (after SSH connect succeeds) ensures the store still has the
-          // mapping.  If no session ID exists, fall back to a fresh shell.
-          const snap = useAppStore.getState()
-          const pendingSessionId = snap.tabsByWorktree[deps.worktreeId]?.find(
-            (t) => t.id === deps.tabId
-          )?.ptyId
           if (pendingSessionId) {
             const reattachPromise = transport.connect({
               url: '',

@@ -173,6 +173,11 @@ export type TerminalSlice = {
   /** SSH target IDs that require a passphrase — deferred to on-demand
    *  reconnect when the user focuses an affected terminal tab. */
   deferredSshReconnectTargets: string[]
+  /** Maps tabId → remote PTY session ID for tabs whose SSH target was
+   *  deferred (passphrase-protected). Persisted across the startup clear
+   *  of pendingReconnectPtyIdByTabId because the deferred reconnect runs
+   *  later, on tab focus. */
+  deferredSshSessionIdsByTabId: Record<string, string>
   setDeferredSshReconnectTargets: (targetIds: string[]) => void
   removeDeferredSshReconnectTarget: (targetId: string) => void
   hydrateWorkspaceSession: (session: WorkspaceSessionState) => void
@@ -203,6 +208,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   pendingSnapshotByPtyId: {},
   pendingColdRestoreByPtyId: {},
   deferredSshReconnectTargets: [],
+  deferredSshSessionIdsByTabId: {},
   cacheTimerByKey: {},
 
   setCacheTimerStartedAt: (key, ts) => {
@@ -1436,11 +1442,38 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       }
     }
 
+    // Why: deferred SSH targets (passphrase-protected) haven't connected
+    // yet, so their tabs' ptyIds were never restored above. Stash the
+    // session IDs in a separate map that survives this cleanup so the
+    // deferred reconnect code in pty-connection.ts can find them.
+    const deferredSshSessionIdsByTabId: Record<string, string> = {}
+    for (const worktreeId of ids) {
+      const worktree = Object.values(get().worktreesByRepo)
+        .flat()
+        .find((entry) => entry.id === worktreeId)
+      const repo = worktree ? get().repos.find((entry) => entry.id === worktree.repoId) : null
+      if (!repo?.connectionId) {
+        continue
+      }
+      const sshConnected = get().sshConnectionStates.get(repo.connectionId)?.status === 'connected'
+      if (sshConnected) {
+        continue
+      }
+      const tabs = tabsByWorktree[worktreeId] ?? []
+      for (const tab of tabs) {
+        const sessionId = pendingReconnectPtyIdByTabId[tab.id]
+        if (sessionId) {
+          deferredSshSessionIdsByTabId[tab.id] = sessionId
+        }
+      }
+    }
+
     set({
       workspaceSessionReady: true,
       pendingReconnectWorktreeIds: [],
       pendingReconnectTabByWorktree: {},
-      pendingReconnectPtyIdByTabId: {}
+      pendingReconnectPtyIdByTabId: {},
+      deferredSshSessionIdsByTabId
     })
   }
 })
