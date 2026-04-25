@@ -37,6 +37,10 @@ export const vueMonarchLanguage: Monaco.languages.IMonarchLanguage = {
         { token: 'delimiter.curly', next: '@templateExpressionEnter', nextEmbedded: '@pop' }
       ],
       [/<\/template\s*>/, { token: 'tag', next: '@pop', nextEmbedded: '@pop' }],
+      // After a `{{ ... }}` interpolation returns here, the html embed
+      // has been popped alongside the typescript expression embed. Re-enter
+      // html so the remaining template markup is tokenized by Monaco's html
+      // tokenizer instead of falling back to the empty default token.
       [/(?=.)/, { token: '', nextEmbedded: 'html' }]
     ],
     templateExpressionEnter: [
