@@ -97,13 +97,18 @@ export function registerSshHandlers(
         initializedConnections.has(targetId) &&
         !explicitRelaySetupTargets.has(targetId)
       ) {
+        // Why: look up the target's configured grace period so the reconnected
+        // relay inherits the same setting. Without this, network-blip reconnects
+        // would always launch with the default 300s grace period.
+        const target = sshStore?.getTarget(targetId)
         void reestablishRelayStack(
           targetId,
           getMainWindow,
           connectionManager,
           activeMultiplexers,
           portForwardManager,
-          store
+          store,
+          target?.relayGracePeriodSeconds
         )
       }
     }

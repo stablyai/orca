@@ -142,6 +142,7 @@ export type PtyConnectResult = {
   isAlternateScreen?: boolean
   sessionExpired?: boolean
   coldRestore?: { scrollback: string; cwd: string }
+  sessionExpired?: boolean
 }
 
 export type PtyTransport = {

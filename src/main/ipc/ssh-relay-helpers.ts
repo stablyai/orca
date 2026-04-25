@@ -153,7 +153,8 @@ export async function reestablishRelayStack(
   connectionManager: SshConnectionManager | null,
   activeMultiplexers: Map<string, SshChannelMultiplexer>,
   portForwardManager?: SshPortForwardManager | null,
-  store?: Store | null
+  store?: Store | null,
+  graceTimeSeconds?: number
 ): Promise<void> {
   const conn = connectionManager?.getConnection(targetId)
   if (!conn) {
@@ -194,7 +195,7 @@ export async function reestablishRelayStack(
   unregisterSshGitProvider(targetId)
 
   try {
-    const { transport } = await deployAndLaunchRelay(conn)
+    const { transport } = await deployAndLaunchRelay(conn, undefined, graceTimeSeconds)
 
     if (abortController.signal.aborted) {
       // Why: the relay is already running on the remote. Creating a temporary

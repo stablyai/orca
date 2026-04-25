@@ -35,8 +35,18 @@ export class RelayDispatcher {
   // all outgoing frames (pty.data, keepalives, responses) to the new socket
   // instead of the original stdout. Swapping the write callback avoids
   // tearing down and reconstructing the entire dispatcher + handler tree.
+  //
+  // Why: sequence counters and decoder state must also reset because the new
+  // client's SshChannelMultiplexer starts at seq=1. Without resetting, the
+  // relay's highestReceivedSeq stays at the old client's last value, so it
+  // never acks the new client's frames until the new client's seq catches
+  // up — causing the client's unacked-timeout checker to accumulate stale
+  // timestamps that could eventually fire a false connection-dead signal.
   setWrite(write: (data: Buffer) => void): void {
     this.write = write
+    this.nextOutgoingSeq = 1
+    this.highestReceivedSeq = 0
+    this.decoder.reset()
   }
 
   onRequest(method: string, handler: MethodHandler): void {

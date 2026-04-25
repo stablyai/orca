@@ -347,6 +347,7 @@ export type PreloadApi = {
       snapshotRows?: number
       isReattach?: boolean
       isAlternateScreen?: boolean
+      sessionExpired?: boolean
       coldRestore?: { scrollback: string; cwd: string }
     }>
     write: (id: string, data: string) => void
