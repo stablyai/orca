@@ -15,7 +15,12 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import type { Worktree, Repo } from '../../../../shared/types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
-import { buildWorktreeComparator } from './smart-sort'
+import { AGENT_DASHBOARD_ENABLED } from '../../../../shared/constants'
+import {
+  buildExplicitEntriesByTabId,
+  buildWorktreeComparator,
+  computeSmartScore
+} from './smart-sort'
 import {
   type GroupHeaderRow,
   type Row,
@@ -521,8 +526,51 @@ const WorktreeList = React.memo(function WorktreeList() {
     }
 
     const currentTabs = state.tabsByWorktree
+    const now = Date.now()
+    // Why precompute: this is the hot sidebar sort. Array.sort invokes the
+    // comparator O(N log N) times, and the smart-score computation would
+    // otherwise scan `agentStatusByPaneKey` (O(E)) or do per-worktree O(T)
+    // index lookups on every call. Two layered optimizations:
+    //   1. Build the tabId → explicit-entries index ONCE (O(E)) so the
+    //      per-worktree scoring does cheap lookups instead of rescanning.
+    //   2. Precompute scores once per worktree (decorate-sort-undecorate) so
+    //      the comparator does O(1) map lookups instead of re-scoring per
+    //      comparison.
+    // Combined: O(E) index + O(N×T) scoring + O(N log N) sort, instead of
+    // O(N × E × T) per sortEpoch bump. Only smart mode uses the score map;
+    // other modes ignore it.
+    const agentStatusForSort = AGENT_DASHBOARD_ENABLED ? state.agentStatusByPaneKey : undefined
+    const explicitByTabId =
+      sortBy === 'smart' ? buildExplicitEntriesByTabId(agentStatusForSort) : undefined
+    const precomputedScores =
+      sortBy === 'smart'
+        ? new Map<string, number>(
+            nonArchivedWorktrees.map((w) => [
+              w.id,
+              computeSmartScore(
+                w,
+                currentTabs,
+                repoMap,
+                state.prCache,
+                now,
+                agentStatusForSort,
+                explicitByTabId
+              )
+            ])
+          )
+        : undefined
     nonArchivedWorktrees.sort(
-      buildWorktreeComparator(sortBy, currentTabs, repoMap, state.prCache, Date.now())
+      buildWorktreeComparator(
+        sortBy,
+        currentTabs,
+        repoMap,
+        state.prCache,
+        now,
+        null,
+        agentStatusForSort,
+        precomputedScores,
+        explicitByTabId
+      )
     )
     return nonArchivedWorktrees.map((w) => w.id)
     // debouncedSortEpoch is an intentional trigger: it's not read inside the

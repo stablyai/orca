@@ -36,7 +36,8 @@ import {
   TERMINAL_PANE_STYLE_SEARCH_ENTRIES,
   TERMINAL_RIGHT_CLICK_TO_PASTE_SEARCH_ENTRY,
   TERMINAL_SETUP_SCRIPT_SEARCH_ENTRIES,
-  TERMINAL_TYPOGRAPHY_SEARCH_ENTRIES
+  TERMINAL_TYPOGRAPHY_SEARCH_ENTRIES,
+  TERMINAL_WINDOWS_SHELL_SEARCH_ENTRY
 } from './terminal-search'
 import { useDetectedOptionAsAlt } from '@/lib/keyboard-layout/use-effective-mac-option-as-alt'
 import { detectedCategoryToDefault } from '@/lib/keyboard-layout/detect-option-as-alt'
@@ -90,6 +91,49 @@ export function TerminalPane({
     scrollbackMode === 'custom' ? 'custom' : isPreset ? `${scrollbackMb}` : 'custom'
 
   const visibleSections = [
+    isWindows && matchesSettingsSearch(searchQuery, TERMINAL_WINDOWS_SHELL_SEARCH_ENTRY) ? (
+      <section key="windows-shell" className="space-y-4">
+        <SearchableSetting
+          title="Default Shell"
+          description="Choose the default shell for new terminal panes on Windows."
+          keywords={[
+            'terminal',
+            'windows',
+            'shell',
+            'powershell',
+            'cmd',
+            'command prompt',
+            'default'
+          ]}
+          className="space-y-2"
+        >
+          <Label>Default Shell</Label>
+          <div className="flex w-fit gap-1 rounded-md border border-border/50 p-1">
+            {(
+              [
+                { label: 'PowerShell', value: 'powershell.exe' },
+                { label: 'Command Prompt', value: 'cmd.exe' }
+              ] as const
+            ).map(({ label, value }) => (
+              <button
+                key={value}
+                onClick={() => updateSettings({ terminalWindowsShell: value })}
+                className={`rounded-sm px-3 py-1 text-sm transition-colors ${
+                  (settings.terminalWindowsShell ?? 'powershell.exe') === value
+                    ? 'bg-accent font-medium text-accent-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Shell used when opening a new terminal pane. Takes effect for new terminals.
+          </p>
+        </SearchableSetting>
+      </section>
+    ) : null,
     matchesSettingsSearch(searchQuery, TERMINAL_TYPOGRAPHY_SEARCH_ENTRIES) ? (
       <section key="typography" className="space-y-4">
         <div className="space-y-1">
@@ -655,58 +699,6 @@ export function TerminalPane({
               }
             />
           ) : null}
-        </SearchableSetting>
-
-        <SearchableSetting
-          title="Force Hyperlink Escapes"
-          description="Set FORCE_HYPERLINK=1 in every terminal so tools emit OSC-8 clickable links. Turn off if your shell startup is slow."
-          keywords={[
-            'terminal',
-            'hyperlink',
-            'link',
-            'osc',
-            'osc8',
-            'osc-8',
-            'force_hyperlink',
-            'slow',
-            'startup',
-            'zsh',
-            'zshrc',
-            'oh-my-zsh',
-            'p10k',
-            'powerlevel10k'
-          ]}
-          className="flex items-center justify-between gap-4 px-1 py-2"
-        >
-          <div className="space-y-0.5">
-            <Label>Force Hyperlink Escapes</Label>
-            <p className="text-xs text-muted-foreground">
-              Sets{' '}
-              <code className="rounded bg-muted px-1 py-0.5 text-[11px]">FORCE_HYPERLINK=1</code> in
-              every spawned terminal so tools like <code>ls</code>, <code>git</code>, and{' '}
-              <code>eza</code> emit OSC-8 clickable links. Disable if your shell startup feels slow
-              — heavy setups (oh-my-zsh, powerlevel10k, nvm, pyenv, conda) can take measurably
-              longer with this on. Only affects newly spawned terminals.
-            </p>
-          </div>
-          <button
-            role="switch"
-            aria-checked={settings.terminalForceHyperlink}
-            onClick={() =>
-              updateSettings({
-                terminalForceHyperlink: !settings.terminalForceHyperlink
-              })
-            }
-            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-              settings.terminalForceHyperlink ? 'bg-foreground' : 'bg-muted-foreground/30'
-            }`}
-          >
-            <span
-              className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-                settings.terminalForceHyperlink ? 'translate-x-4' : 'translate-x-0.5'
-              }`}
-            />
-          </button>
         </SearchableSetting>
 
         {isMac ? (

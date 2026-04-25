@@ -81,9 +81,9 @@ describe('issue source operations', () => {
         '-X',
         'POST',
         'repos/stablyai/orca/issues',
-        '-f',
+        '--raw-field',
         'title=New issue',
-        '-f',
+        '--raw-field',
         'body=Body'
       ],
       { cwd: '/repo-root' }

@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
 import {
   X,
   FileCode,
@@ -27,6 +26,11 @@ import type { GitFileStatus } from '../../../../shared/types'
 import type { OpenFile } from '../../store/slices/editor'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from './SortableTab'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
+import {
+  ACTIVE_TAB_INDICATOR_CLASSES,
+  getDropIndicatorClasses,
+  type DropIndicator
+} from './drop-indicator'
 
 const isMac = navigator.userAgent.includes('Mac')
 const isLinux = navigator.userAgent.includes('Linux')
@@ -49,7 +53,8 @@ export default function EditorFileTab({
   onCloseAll,
   onPin,
   onSplitGroup,
-  dragData
+  dragData,
+  dropIndicator
 }: {
   file: OpenFile & { tabId?: string }
   isActive: boolean
@@ -62,22 +67,18 @@ export default function EditorFileTab({
   onPin?: () => void
   onSplitGroup: (direction: 'left' | 'right' | 'up' | 'down', sourceVisibleTabId: string) => void
   dragData: TabDragItemData
+  dropIndicator?: DropIndicator
 }): React.JSX.Element {
   const worktree = useWorktreeById(file.worktreeId)
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  // Why: no transform/transition/isDragging styling — the drag design is
+  // that tabs stay visually anchored; only the blue insertion bar moves.
+  const { attributes, listeners, setNodeRef } = useSortable({
     // Why: split groups can duplicate the same open file into multiple visible
     // tabs. Using the unified tab ID keeps each rendered tab draggable as a
     // distinct item instead of collapsing every copy onto the file entity ID.
     id: file.tabId ?? file.id,
     data: dragData
   })
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    zIndex: isDragging ? 10 : undefined,
-    opacity: isDragging ? 0.8 : 1
-  }
 
   const isDiff = file.mode === 'diff'
   const isConflictReview = file.mode === 'conflict-review'
@@ -172,10 +173,9 @@ export default function EditorFileTab({
       >
         <div
           ref={setNodeRef}
-          style={style}
           {...attributes}
           {...listeners}
-          className={`group relative flex items-center h-full px-3 text-sm cursor-pointer select-none shrink-0 border-r border-border ${
+          className={`group relative flex items-center h-full px-3 text-sm cursor-pointer select-none shrink-0 border-r border-border ${getDropIndicatorClasses(dropIndicator ?? null)} ${
             isActive
               ? 'bg-accent text-foreground border-b-transparent'
               : 'bg-card text-muted-foreground hover:text-foreground hover:bg-accent/50'
@@ -205,6 +205,7 @@ export default function EditorFileTab({
             }
           }}
         >
+          {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
           {isConflictReview ? (
             <ShieldAlert
               className={`w-3.5 h-3.5 mr-1.5 shrink-0 ${isActive ? 'text-orange-400' : 'text-orange-400/70'}`}

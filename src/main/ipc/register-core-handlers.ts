@@ -9,6 +9,7 @@ import { registerFilesystemWatcherHandlers } from './filesystem-watcher'
 import { registerClaudeUsageHandlers } from './claude-usage'
 import { registerCodexUsageHandlers } from './codex-usage'
 import { registerGitHubHandlers } from './github'
+import { registerLinearHandlers } from './linear'
 import { registerFeedbackHandlers } from './feedback'
 import { registerExportHandlers } from './export'
 import { registerStatsHandlers } from './stats'
@@ -23,6 +24,8 @@ import { browserSessionRegistry } from '../browser/browser-session-registry'
 import { registerShellHandlers } from './shell'
 import { registerUIHandlers } from './ui'
 import { registerCodexAccountHandlers } from './codex-accounts'
+import { registerAgentHookHandlers } from './agent-hooks'
+import { registerClaudeAccountHandlers } from './claude-accounts'
 import { warmSystemFontFamilies } from '../system-fonts'
 import {
   registerClipboardHandlers,
@@ -32,6 +35,7 @@ import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
 import type { RateLimitService } from '../rate-limits/service'
 import type { CodexAccountService } from '../codex-accounts/service'
+import type { ClaudeAccountService } from '../claude-accounts/service'
 
 let registered = false
 
@@ -42,6 +46,7 @@ export function registerCoreHandlers(
   claudeUsage: ClaudeUsageStore,
   codexUsage: CodexUsageStore,
   codexAccounts: CodexAccountService,
+  claudeAccounts: ClaudeAccountService,
   rateLimits: RateLimitService,
   mainWindowWebContentsId: number | null = null
 ): void {
@@ -62,8 +67,11 @@ export function registerCoreHandlers(
   registerClaudeUsageHandlers(claudeUsage)
   registerCodexUsageHandlers(codexUsage)
   registerCodexAccountHandlers(codexAccounts)
+  registerAgentHookHandlers()
+  registerClaudeAccountHandlers(claudeAccounts)
   registerRateLimitHandlers(rateLimits)
   registerGitHubHandlers(store, stats)
+  registerLinearHandlers()
   registerFeedbackHandlers()
   registerExportHandlers()
   registerStatsHandlers(stats)

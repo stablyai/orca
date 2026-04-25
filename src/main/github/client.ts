@@ -21,7 +21,15 @@ import {
   type OwnerRepo
 } from './gh-utils'
 export { _resetOwnerRepoCache } from './gh-utils'
-export { getIssue, listIssues, createIssue } from './issues'
+export {
+  getIssue,
+  listIssues,
+  createIssue,
+  updateIssue,
+  addIssueComment,
+  listLabels,
+  listAssignableUsers
+} from './issues'
 import {
   mapCheckRunRESTStatus,
   mapCheckRunRESTConclusion,

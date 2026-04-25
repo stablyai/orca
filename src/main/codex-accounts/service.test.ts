@@ -68,17 +68,22 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     promptCacheTtlMs: 300_000,
     codexManagedAccounts: [],
     activeCodexManagedAccountId: null,
+    claudeManagedAccounts: [],
+    activeClaudeManagedAccountId: null,
     terminalScopeHistoryByWorktree: true,
     defaultTuiAgent: null,
     skipDeleteWorktreeConfirm: false,
     defaultTaskViewPreset: 'all',
+    defaultTaskSource: 'github',
     defaultRepoSelection: null,
+    defaultLinearTeamSelection: null,
     agentCmdOverrides: {},
     terminalMacOptionAsAlt: 'false',
     terminalMacOptionAsAltMigrated: true,
     experimentalTerminalDaemon: false,
     experimentalTerminalDaemonNoticeShown: false,
-    terminalForceHyperlink: true,
+    terminalWindowsShell: 'powershell.exe',
+    enableGitHubAttribution: true,
     ...overrides
   }
 }

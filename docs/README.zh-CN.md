@@ -105,7 +105,7 @@ Orca 在你的工作树中内置了浏览器。随时预览你的应用，然后
 
 **在终端中进行代理编排。**
 
-让 AI Agent控制你的Orca IDE。使用 AI 将代码库添加到 IDE、启动工作树，并在终端让AI Agent直接更新当前工作树的备注。随 Orca IDE 附带 (在设置中安装)。
+让 AI Agent控制你的Orca IDE。使用 AI 将项目添加到 IDE、启动工作树，并在终端让AI Agent直接更新当前工作树的备注。随 Orca IDE 附带 (在设置中安装)。
 
 ```bash
 npx skills add https://github.com/stablyai/orca --skill orca-cli

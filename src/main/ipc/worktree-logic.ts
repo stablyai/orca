@@ -165,6 +165,7 @@ export function mergeWorktree(
     comment: meta?.comment || '',
     linkedIssue: meta?.linkedIssue ?? null,
     linkedPR: meta?.linkedPR ?? null,
+    linkedLinearIssue: meta?.linkedLinearIssue ?? null,
     isArchived: meta?.isArchived ?? false,
     isUnread: meta?.isUnread ?? false,
     isPinned: meta?.isPinned ?? false,

@@ -1,3 +1,7 @@
+/* eslint-disable max-lines -- Why: this is Orca's main-process entry point;
+   it owns app lifecycle, service wiring, window creation, and hook/daemon
+   startup. Splitting by line count would fragment tightly coupled startup
+   logic across files without a cleaner ownership seam. */
 import { app, BrowserWindow, nativeImage, nativeTheme } from 'electron'
 import { electronApp, is } from '@electron-toolkit/utils'
 import devIcon from '../../resources/icon-dev.png?asset'
@@ -33,8 +37,14 @@ import { attachMainWindowServices } from './window/attach-main-window-services'
 import { createMainWindow } from './window/createMainWindow'
 import { CodexAccountService } from './codex-accounts/service'
 import { CodexRuntimeHomeService } from './codex-accounts/runtime-home-service'
-import { openCodeHookService } from './opencode/hook-service'
+import { ClaudeAccountService } from './claude-accounts/service'
+import { ClaudeRuntimeAuthService } from './claude-accounts/runtime-auth-service'
 import { StarNagService } from './star-nag/service'
+import { agentHookServer } from './agent-hooks/server'
+import { claudeHookService } from './claude/hook-service'
+import { codexHookService } from './codex/hook-service'
+import { geminiHookService } from './gemini/hook-service'
+import { AGENT_DASHBOARD_ENABLED } from '../shared/constants'
 import { AgentBrowserBridge } from './browser/agent-browser-bridge'
 import { browserManager } from './browser/browser-manager'
 
@@ -49,6 +59,8 @@ let claudeUsage: ClaudeUsageStore | null = null
 let codexUsage: CodexUsageStore | null = null
 let codexAccounts: CodexAccountService | null = null
 let codexRuntimeHome: CodexRuntimeHomeService | null = null
+let claudeAccounts: ClaudeAccountService | null = null
+let claudeRuntimeAuth: ClaudeRuntimeAuthService | null = null
 let runtime: OrcaRuntimeService | null = null
 let rateLimits: RateLimitService | null = null
 let runtimeRpc: OrcaRuntimeRpcServer | null = null
@@ -115,6 +127,14 @@ function openMainWindow(): BrowserWindow {
   if (!codexRuntimeHome) {
     throw new Error('Codex runtime home service must be initialized before opening the main window')
   }
+  if (!claudeAccounts) {
+    throw new Error('Claude account service must be initialized before opening the main window')
+  }
+  if (!claudeRuntimeAuth) {
+    throw new Error(
+      'Claude runtime auth service must be initialized before opening the main window'
+    )
+  }
 
   const window = createMainWindow(store, {
     getIsQuitting: () => isQuitting,
@@ -129,18 +149,46 @@ function openMainWindow(): BrowserWindow {
     claudeUsage,
     codexUsage,
     codexAccounts,
+    claudeAccounts,
     rateLimits,
     window.webContents.id
   )
-  attachMainWindowServices(window, store, runtime, () => codexRuntimeHome!.prepareForCodexLaunch())
+  attachMainWindowServices(
+    window,
+    store,
+    runtime,
+    () => codexRuntimeHome!.prepareForCodexLaunch(),
+    () => claudeRuntimeAuth!.prepareForClaudeLaunch()
+  )
   rateLimits.attach(window)
   rateLimits.start()
   window.on('closed', () => {
     if (mainWindow === window) {
       mainWindow = null
     }
+    if (AGENT_DASHBOARD_ENABLED) {
+      // Why: detach the agent hook listener on window close so the server
+      // never fires into a destroyed webContents during the gap before
+      // reopen (e.g. macOS dock re-activation). This also ensures the
+      // replay-loop through lastStatusByPaneKey runs only on deliberate
+      // window recreations instead of stacking on top of stale listeners.
+      agentHookServer.setListener(null)
+    }
   })
   mainWindow = window
+  if (AGENT_DASHBOARD_ENABLED) {
+    agentHookServer.setListener(({ paneKey, tabId, worktreeId, payload }) => {
+      if (mainWindow?.isDestroyed()) {
+        return
+      }
+      mainWindow?.webContents.send('agentStatus:set', {
+        paneKey,
+        tabId,
+        worktreeId,
+        ...payload
+      })
+    })
+  }
   return window
 }
 
@@ -160,13 +208,32 @@ app.whenReady().then(async () => {
   rateLimits = new RateLimitService()
   codexRuntimeHome = new CodexRuntimeHomeService(store)
   codexAccounts = new CodexAccountService(store, rateLimits, codexRuntimeHome)
+  claudeRuntimeAuth = new ClaudeRuntimeAuthService(store)
+  claudeAccounts = new ClaudeAccountService(store, rateLimits, claudeRuntimeAuth)
   rateLimits.setCodexHomePathResolver(() => codexRuntimeHome!.prepareForRateLimitFetch())
+  rateLimits.setClaudeAuthPreparationResolver(() => claudeRuntimeAuth!.prepareForRateLimitFetch())
   runtime = new OrcaRuntimeService(store, stats)
   starNag = new StarNagService(store, stats)
   starNag.start()
   starNag.registerIpcHandlers()
   runtime.setAgentBrowserBridge(new AgentBrowserBridge(browserManager))
   nativeTheme.themeSource = store.getSettings().theme ?? 'system'
+  // Why: managed hook installation mutates user-global agent config.
+  // Startup must fail open so a malformed local config never bricks Orca.
+  if (AGENT_DASHBOARD_ENABLED) {
+    for (const installManagedHooks of [
+      () => claudeHookService.install(),
+      () => codexHookService.install(),
+      () => geminiHookService.install()
+    ]) {
+      try {
+        installManagedHooks()
+      } catch (error) {
+        console.error('[agent-hooks] Failed to install managed hooks:', error)
+      }
+    }
+  }
+
   registerAppMenu({
     onCheckForUpdates: (options) => checkForUpdatesFromMenu(options),
     onOpenSettings: () => {
@@ -224,13 +291,24 @@ app.whenReady().then(async () => {
   }
   setAppRuntimeFlags({ daemonEnabledAtStartup: daemonStarted })
 
-  // Why: both server binds are independent and neither blocks window creation.
-  // Parallelizing them with the window open shaves ~100-200ms off cold start.
+  if (AGENT_DASHBOARD_ENABLED) {
+    try {
+      // Why: PTY spawn env reads ORCA_AGENT_HOOK_* from the live server state.
+      // Start the hook server before opening the window so restored/spawned
+      // terminals never race ahead without hook env on first launch.
+      await agentHookServer.start({ env: app.isPackaged ? 'production' : 'development' })
+    } catch (error) {
+      // Why: Claude/Codex/Gemini/OpenCode hook callbacks are sidebar
+      // enrichment only. Orca must still boot even if the local loopback
+      // receiver cannot bind on this launch.
+      console.error('[agent-hooks] Failed to start local hook server:', error)
+    }
+  }
+
+  // Why: once the hook server is ready (or has already failed open), window
+  // creation and runtime RPC startup are independent.
   const [win] = await Promise.all([
     Promise.resolve(openMainWindow()),
-    openCodeHookService.start().catch((error) => {
-      console.error('[opencode] Failed to start local hook server:', error)
-    }),
     runtimeRpc.start().catch((error) => {
       console.error('[runtime] Failed to start local RPC transport:', error)
     })
@@ -270,8 +348,10 @@ app.on('will-quit', () => {
   // are still running. killAllPty() does not call runtime.onPtyExit(),
   // so without this ordering, running agents would produce orphaned
   // agent_start events with no matching stops.
-  openCodeHookService.stop()
   starNag?.stop()
+  if (AGENT_DASHBOARD_ENABLED) {
+    agentHookServer.stop()
+  }
   stats?.flush()
   // Why: agent-browser daemon processes would otherwise linger after Orca quits,
   // holding ports and leaving stale session state on disk.

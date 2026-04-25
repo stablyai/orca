@@ -147,7 +147,15 @@ describe('TerminalHost', () => {
 
       expect(lastSubprocess.write).not.toHaveBeenCalled()
 
+      // Why: the marker alone no longer flushes — the kernel can still have
+      // ECHO enabled when it arrives. The flush waits for the prompt draw
+      // plus a short delay so readline has switched the PTY into raw mode
+      // first. Otherwise the command would be visibly double-echoed.
       lastSubprocess._onDataCb?.('\x1b]777;orca-shell-ready\x07')
+      expect(lastSubprocess.write).not.toHaveBeenCalled()
+
+      lastSubprocess._onDataCb?.('\r\nuser@host $ ')
+      await new Promise((r) => setTimeout(r, 40))
       expect(lastSubprocess.write).toHaveBeenCalledWith('echo hello\n')
     })
   })
@@ -171,6 +179,18 @@ describe('TerminalHost', () => {
   })
 
   describe('resize', () => {
+    it('normalizes invalid initial dimensions before spawning a session', async () => {
+      await host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 0,
+        rows: -1,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+
+      expect(spawnFn).toHaveBeenCalledWith(expect.objectContaining({ cols: 80, rows: 24 }))
+      expect(host.listSessions()[0]).toMatchObject({ cols: 80, rows: 24 })
+    })
+
     it('forwards resize to the session', async () => {
       await host.createOrAttach({
         sessionId: 'session-1',
@@ -181,6 +201,20 @@ describe('TerminalHost', () => {
 
       host.resize('session-1', 120, 40)
       expect(lastSubprocess.resize).toHaveBeenCalledWith(120, 40)
+    })
+
+    it('ignores transient zero-size resize events', async () => {
+      await host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 80,
+        rows: 24,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+
+      host.resize('session-1', 0, 0)
+
+      expect(lastSubprocess.resize).not.toHaveBeenCalled()
+      expect(host.listSessions()[0]).toMatchObject({ cols: 80, rows: 24 })
     })
   })
 

@@ -103,8 +103,14 @@ export function registerFilesystemMutationHandlers(store: Store): void {
         }
         return provider.rename(args.oldPath, args.newPath)
       }
-      const oldPath = await resolveAuthorizedPath(args.oldPath, store)
-      const newPath = await resolveAuthorizedPath(args.newPath, store)
+      // Why: rename() operates on directory entries, not file contents. If
+      // oldPath is a symlink, we must rename the link itself rather than
+      // resolving it to its target — following the link would rename the
+      // target file (potentially elsewhere in the worktree) and leave the
+      // symlink dangling. newPath must also preserve its leaf so we don't
+      // accidentally write into a symlinked destination name.
+      const oldPath = await resolveAuthorizedPath(args.oldPath, store, { preserveSymlink: true })
+      const newPath = await resolveAuthorizedPath(args.newPath, store, { preserveSymlink: true })
       await assertNotExists(newPath)
       await rename(oldPath, newPath)
     }

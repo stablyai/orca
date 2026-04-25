@@ -1,5 +1,7 @@
 import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
 import { resolveClaudeCommand } from '../codex-cli/command'
+import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
+import { applyClaudeEnvPatch } from '../claude-accounts/environment'
 
 const PTY_TIMEOUT_MS = 25_000
 
@@ -125,7 +127,9 @@ function describeClaudeUsageFailure(output: string): string {
   return 'Claude usage is unavailable right now.'
 }
 
-export async function fetchViaPty(): Promise<ProviderRateLimits> {
+export async function fetchViaPty(options?: {
+  authPreparation?: ClaudeRuntimeAuthPreparation
+}): Promise<ProviderRateLimits> {
   const pty = await import('node-pty')
 
   return new Promise<ProviderRateLimits>((resolve) => {
@@ -144,16 +148,32 @@ export async function fetchViaPty(): Promise<ProviderRateLimits> {
     const spawnFile = isWin32 ? 'cmd.exe' : claudeCommand
     const spawnArgs = isWin32 ? ['/c', claudeCommand] : []
 
+    const spawnEnv = applyClaudeEnvPatch(
+      { ...process.env, TERM: 'xterm-256color' } as Record<string, string>,
+      options?.authPreparation?.envPatch ?? {},
+      { stripAuthEnv: options?.authPreparation?.stripAuthEnv ?? false }
+    )
+
     const term = pty.spawn(spawnFile, spawnArgs, {
       name: 'xterm-256color',
       cols: 120,
       rows: 40,
-      env: { ...process.env, TERM: 'xterm-256color' }
+      env: spawnEnv
     })
+    const termDisposables: { dispose: () => void }[] = []
+    const disposeTermListeners = (): void => {
+      for (const disposable of termDisposables.splice(0)) {
+        disposable.dispose()
+      }
+    }
 
     const timeout = setTimeout(() => {
       if (!resolved) {
         resolved = true
+        // Why: node-pty's NAPI callbacks can outlive the Electron JS
+        // environment if we kill the hidden PTY without disposing them first,
+        // which matches Orca's documented SIGABRT failure mode on shutdown.
+        disposeTermListeners()
         term.kill()
         // Even on timeout, try to parse whatever we collected
         // eslint-disable-next-line no-control-regex
@@ -205,6 +225,7 @@ export async function fetchViaPty(): Promise<ProviderRateLimits> {
       if (enterInterval) {
         clearInterval(enterInterval)
       }
+      disposeTermListeners()
       term.kill()
 
       // eslint-disable-next-line no-control-regex
@@ -243,7 +264,7 @@ export async function fetchViaPty(): Promise<ProviderRateLimits> {
       startEnterPresses()
     }, STARTUP_DELAY_MS)
 
-    term.onData((data) => {
+    const onDataDisposable = term.onData((data) => {
       output += data
 
       // eslint-disable-next-line no-control-regex
@@ -278,8 +299,12 @@ export async function fetchViaPty(): Promise<ProviderRateLimits> {
         }
       }
     })
+    if (onDataDisposable) {
+      termDisposables.push(onDataDisposable)
+    }
 
-    term.onExit(() => {
+    const onExitDisposable = term.onExit(() => {
+      disposeTermListeners()
       if (enterInterval) {
         clearInterval(enterInterval)
       }
@@ -299,5 +324,8 @@ export async function fetchViaPty(): Promise<ProviderRateLimits> {
         })
       }
     })
+    if (onExitDisposable) {
+      termDisposables.push(onExitDisposable)
+    }
   })
 }

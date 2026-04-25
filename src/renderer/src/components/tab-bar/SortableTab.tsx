@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
 import { X, Terminal as TerminalIcon, Minimize2, Columns2, Rows2 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -12,6 +11,13 @@ import {
 import { Input } from '@/components/ui/input'
 import type { TerminalTab } from '../../../../shared/types'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
+import { FilledBellIcon } from '../sidebar/WorktreeCardHelpers'
+import { useAppStore } from '../../store'
+import {
+  ACTIVE_TAB_INDICATOR_CLASSES,
+  getDropIndicatorClasses,
+  type DropIndicator
+} from './drop-indicator'
 
 type SortableTabProps = {
   tab: TerminalTab
@@ -28,6 +34,7 @@ type SortableTabProps = {
   onToggleExpand: (tabId: string) => void
   onSplitGroup: (direction: 'left' | 'right' | 'up' | 'down', sourceVisibleTabId: string) => void
   dragData: TabDragItemData
+  dropIndicator?: DropIndicator
 }
 
 export const TAB_COLORS = [
@@ -59,22 +66,32 @@ export default function SortableTab({
   onSetTabColor,
   onToggleExpand,
   onSplitGroup,
-  dragData
+  dragData,
+  dropIndicator
 }: SortableTabProps): React.JSX.Element {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const { attributes, listeners, setNodeRef } = useSortable({
     id: tab.id,
     data: dragData
   })
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    zIndex: isDragging ? 10 : undefined,
-    opacity: isDragging ? 0.8 : 1
-  }
+  // Why: subscribe to the per-tab boolean directly so only the tab whose unread
+  // status actually flipped re-renders. Reading the whole `unreadTerminalTabs`
+  // map in TabBar would invalidate every SortableTab on every bell event
+  // because the slice returns a fresh object reference on each mark/clear.
+  const hasUnreadActivity = useAppStore((s) => s.unreadTerminalTabs[tab.id] === true)
+
+  // Why: intentionally no transform/transition/opacity here. The PR's
+  // design is that tabs stay visually anchored during a drag — only the
+  // blue insertion bar moves. Siblings also don't shift (see
+  // SortableContext in TabBar.tsx, which omits a strategy for that reason).
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
   const [isEditing, setIsEditing] = useState(false)
+  // Why: single source of truth for the unread-activity visual treatment —
+  // drives BOTH the amber wash overlay and the bell icon swap below. Kept as
+  // one derived boolean so the two visual cues can never drift out of sync
+  // (e.g. showing the bell without the wash, or vice versa).
+  const showActivityAffordance = hasUnreadActivity && !isEditing
   const [renameValue, setRenameValue] = useState('')
   const renameInputRef = useRef<HTMLInputElement>(null)
   // Why: React's synthetic onBlur fires during the Input's unmount when isEditing flips
@@ -150,12 +167,19 @@ export default function SortableTab({
       >
         <div
           ref={setNodeRef}
-          style={style}
           data-testid="sortable-tab"
+          data-tab-id={tab.id}
           data-tab-title={tab.customTitle ?? tab.title}
           {...attributes}
           {...dragListeners}
-          className={`group relative flex items-center h-full px-3 text-sm cursor-pointer select-none shrink-0 border-r border-border ${
+          // Why: on unread activity, tint the whole tab with a subtle amber
+          // wash so the signal is visible at a glance even when the small
+          // bell icon is easy to miss in a long tab bar. Active tabs keep
+          // their existing highlight — the amber wash layers on top so the
+          // tab still reads as "selected + has activity". The wash is
+          // rendered as an absolutely-positioned child below so the ::after
+          // pseudo-element stays free for the drop indicator.
+          className={`group relative flex items-center h-full px-3 text-sm cursor-pointer select-none shrink-0 border-r border-border ${getDropIndicatorClasses(dropIndicator ?? null)} ${
             isActive
               ? 'bg-accent text-foreground border-b-transparent'
               : 'bg-card text-muted-foreground hover:text-foreground hover:bg-accent/50'
@@ -194,9 +218,29 @@ export default function SortableTab({
             }
           }}
         >
-          <TerminalIcon
-            className={`w-3.5 h-3.5 mr-1.5 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
-          />
+          {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
+          {showActivityAffordance && (
+            // Why: amber wash for unread tabs. Rendered as a real DOM child so
+            // both drop indicators (::before left / ::after right in
+            // drop-indicator.ts) stay free for drag-and-drop feedback — a prior
+            // ::after-based implementation collided with the right-edge drop
+            // indicator and hid it on unread tabs. pointer-events-none keeps
+            // clicks reaching the underlying tab handlers.
+            <span aria-hidden className="pointer-events-none absolute inset-0 bg-amber-500/10" />
+          )}
+          {showActivityAffordance ? (
+            // Why: the activity marker sits to the LEFT of the tab title using
+            // Orca's filled bell glyph (amber-500 with a subtle drop shadow)
+            // so it matches the worktree-level bell in the sidebar — keeping
+            // every "needs your attention" surface in Orca consistent.
+            <span data-testid="tab-activity-bell" className="inline-flex shrink-0">
+              <FilledBellIcon className="w-3.5 h-3.5 mr-1.5 text-amber-500 drop-shadow-sm" />
+            </span>
+          ) : (
+            <TerminalIcon
+              className={`w-3.5 h-3.5 mr-1.5 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
+            />
+          )}
           {isEditing ? (
             <Input
               ref={renameInputRef}

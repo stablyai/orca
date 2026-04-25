@@ -7,7 +7,7 @@
  */
 import React, { useCallback, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { Folder, FolderOpen } from 'lucide-react'
+import { Folder, FolderOpen, Settings } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -16,7 +16,7 @@ import { RemoteFileBrowser } from './RemoteFileBrowser'
 import type { Repo } from '../../../../shared/types'
 import type { SshTarget, SshConnectionState } from '../../../../shared/ssh-types'
 
-// ── Remote repo hook ────────────────────────────────────────────────
+// ── Remote project hook ─────────────────────────────────────────────
 
 export function useRemoteRepo(
   fetchWorktrees: (repoId: string) => Promise<void>,
@@ -99,14 +99,14 @@ export function useRemoteRepo(
         useAppStore.setState({ repos: updated })
       }
 
-      toast.success('Remote repository added', { description: repo.displayName })
+      toast.success('Remote project added', { description: repo.displayName })
       setAddedRepo(repo)
       await fetchWorktrees(repo.id)
       setStep('setup')
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       if (message.includes('Not a valid git repository')) {
-        // Why: match the local add-repo flow — show confirmation dialog so
+        // Why: match the local add-project flow — show confirmation dialog so
         // users understand git features will be unavailable, rather than
         // silently adding as a folder.
         closeModal()
@@ -148,6 +148,7 @@ type RemoteStepProps = {
   onSelectTarget: (id: string) => void
   onRemotePathChange: (value: string) => void
   onAdd: () => void
+  onOpenSshSettings: () => void
 }
 
 export function RemoteStep({
@@ -158,7 +159,8 @@ export function RemoteStep({
   isAddingRemote,
   onSelectTarget,
   onRemotePathChange,
-  onAdd
+  onAdd,
+  onOpenSshSettings
 }: RemoteStepProps): React.JSX.Element {
   const [browsing, setBrowsing] = useState(false)
 
@@ -187,7 +189,7 @@ export function RemoteStep({
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Open remote repo</DialogTitle>
+        <DialogTitle>Open remote project</DialogTitle>
         <DialogDescription>
           Choose a connected SSH target and enter the path to a Git repository.
         </DialogDescription>
@@ -197,9 +199,18 @@ export function RemoteStep({
         <div className="space-y-1">
           <label className="text-[11px] font-medium text-muted-foreground">SSH target</label>
           {sshTargets.length === 0 ? (
-            <p className="text-xs text-muted-foreground py-2">
-              No SSH targets configured. Add one in Settings first.
-            </p>
+            <div className="space-y-1.5 py-1">
+              <p className="text-xs text-muted-foreground">No SSH targets configured.</p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={onOpenSshSettings}
+              >
+                <Settings className="size-3.5" />
+                Add in Settings
+              </Button>
+            </div>
           ) : (
             <div className="space-y-1.5">
               {sshTargets.map((target) => {
@@ -252,7 +263,7 @@ export function RemoteStep({
               }}
               placeholder="/home/user/project"
               className="h-8 text-xs flex-1"
-              disabled={isAddingRemote}
+              disabled={isAddingRemote || !selectedTargetId}
             />
             <Button
               variant="outline"
@@ -273,7 +284,7 @@ export function RemoteStep({
           disabled={!selectedTargetId || !remotePath.trim() || isAddingRemote}
           className="w-full"
         >
-          {isAddingRemote ? 'Adding...' : 'Add remote repo'}
+          {isAddingRemote ? 'Adding...' : 'Add remote project'}
         </Button>
       </div>
     </>

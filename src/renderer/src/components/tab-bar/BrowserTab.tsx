@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
 import { Globe, X, ExternalLink, Columns2, Rows2, Copy } from 'lucide-react'
 import {
   DropdownMenu,
@@ -14,6 +13,11 @@ import type { BrowserTab as BrowserTabState } from '../../../../shared/types'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from './SortableTab'
 import { getLiveBrowserUrl } from '../browser-pane/browser-runtime'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
+import {
+  ACTIVE_TAB_INDICATOR_CLASSES,
+  getDropIndicatorClasses,
+  type DropIndicator
+} from './drop-indicator'
 
 function formatBrowserTabUrlLabel(url: string): string {
   if (url === ORCA_BROWSER_BLANK_URL || url === 'about:blank') {
@@ -27,7 +31,7 @@ function formatBrowserTabUrlLabel(url: string): string {
   }
 }
 
-function getBrowserTabLabel(tab: BrowserTabState): string {
+export function getBrowserTabLabel(tab: BrowserTabState): string {
   if (
     !tab.title ||
     tab.title === tab.url ||
@@ -52,7 +56,8 @@ export default function BrowserTab({
   onCloseToRight,
   onSplitGroup,
   onDuplicate,
-  dragData
+  dragData,
+  dropIndicator
 }: {
   tab: BrowserTabState
   isActive: boolean
@@ -63,8 +68,11 @@ export default function BrowserTab({
   onSplitGroup: (direction: 'left' | 'right' | 'up' | 'down', sourceVisibleTabId: string) => void
   onDuplicate: () => void
   dragData: TabDragItemData
+  dropIndicator?: DropIndicator
 }): React.JSX.Element {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  // Why: no transform/transition/isDragging styling — the drag design is
+  // that tabs stay visually anchored; only the blue insertion bar moves.
+  const { attributes, listeners, setNodeRef } = useSortable({
     id: tab.id,
     data: dragData
   })
@@ -101,15 +109,9 @@ export default function BrowserTab({
       >
         <div
           ref={setNodeRef}
-          style={{
-            transform: CSS.Transform.toString(transform),
-            transition,
-            zIndex: isDragging ? 10 : undefined,
-            opacity: isDragging ? 0.8 : 1
-          }}
           {...attributes}
           {...listeners}
-          className={`group relative flex items-center h-full px-3 text-sm cursor-pointer select-none shrink-0 border-r border-border ${
+          className={`group relative flex items-center h-full px-3 text-sm cursor-pointer select-none shrink-0 border-r border-border ${getDropIndicatorClasses(dropIndicator ?? null)} ${
             isActive
               ? 'bg-accent text-foreground border-b-transparent'
               : 'bg-card text-muted-foreground hover:text-foreground hover:bg-accent/50'
@@ -134,6 +136,7 @@ export default function BrowserTab({
             }
           }}
         >
+          {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
           <Globe
             className={`w-3.5 h-3.5 mr-1.5 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
           />

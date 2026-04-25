@@ -59,6 +59,7 @@ export type UISlice = {
   taskPageData: {
     preselectedRepoId?: string
     prefilledName?: string
+    taskSource?: 'github' | 'linear'
   }
   newWorkspaceDraft: {
     repoId: string | null
@@ -92,6 +93,7 @@ export type UISlice = {
       | 'repo'
       | 'agents'
       | 'experimental'
+      | 'ssh'
     repoId: string | null
     sectionId?: string
   } | null
@@ -147,6 +149,10 @@ export type UISlice = {
   dismissedUpdateVersion: string | null
   dismissUpdate: (versionOverride?: string) => void
   clearDismissedUpdateVersion: () => void
+  // Why: ephemeral and renderer-only — never persisted and never crosses IPC.
+  // Resets every session and on every phase transition (see setUpdateStatus).
+  updateCardCollapsed: boolean
+  setUpdateCardCollapsed: (collapsed: boolean) => void
   updateReassuranceSeen: boolean
   markUpdateReassuranceSeen: () => void
   isFullScreen: boolean
@@ -344,7 +350,10 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
 
   updateStatus: { state: 'idle' },
   setUpdateStatus: (status) => {
-    const update: Partial<Pick<UISlice, 'updateStatus' | 'updateChangelog'>> = {
+    const prevState = get().updateStatus.state
+    const update: Partial<
+      Pick<UISlice, 'updateStatus' | 'updateChangelog' | 'updateCardCollapsed'>
+    > = {
       updateStatus: status
     }
     if (status.state === 'available') {
@@ -364,6 +373,11 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     }
     // For 'downloading', 'downloaded', 'error': leave updateChangelog untouched
     // so the card can keep showing rich content from the original 'available'.
+    if (status.state !== prevState) {
+      // Why: re-surface the card on every phase transition so a prior collapse
+      // of `downloading` doesn't bury the `downloaded`/`error` that follows.
+      update.updateCardCollapsed = false
+    }
     set(update)
   },
   updateChangelog: null,
@@ -391,6 +405,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       }
       return { dismissedUpdateVersion }
     }),
+  updateCardCollapsed: false,
+  setUpdateCardCollapsed: (collapsed) => set({ updateCardCollapsed: collapsed }),
   updateReassuranceSeen: false,
   markUpdateReassuranceSeen: () => {
     void window.api.ui.set({ updateReassuranceSeen: true }).catch(console.error)

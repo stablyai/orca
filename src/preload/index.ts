@@ -5,14 +5,12 @@ import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
 import type { CliInstallStatus } from '../shared/cli-install-types'
-import type {
-  FsChangedPayload,
-  NotificationDispatchResult,
-  OpenCodeStatusEvent
-} from '../shared/types'
+import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
+import type { FsChangedPayload, NotificationDispatchResult } from '../shared/types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../shared/runtime-types'
 import type { RateLimitState } from '../shared/rate-limit-types'
 import type { SshConnectionState, SshTarget } from '../shared/ssh-types'
+import type { AgentStatusState } from '../shared/agent-status-types'
 import {
   ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT,
   type EditorSaveDirtyFilesDetail
@@ -317,13 +315,6 @@ const api = {
         callback(data)
       ipcRenderer.on('pty:exit', listener)
       return () => ipcRenderer.removeListener('pty:exit', listener)
-    },
-
-    onOpenCodeStatus: (callback: (event: OpenCodeStatusEvent) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, data: OpenCodeStatusEvent) =>
-        callback(data)
-      ipcRenderer.on('pty:opencode-status', listener)
-      return () => ipcRenderer.removeListener('pty:opencode-status', listener)
     }
   },
 
@@ -427,8 +418,76 @@ const api = {
     }): Promise<{ ok: true } | { ok: false; error: string }> =>
       ipcRenderer.invoke('gh:mergePR', args),
 
+    updateIssue: (args: {
+      repoPath: string
+      number: number
+      updates: unknown
+    }): Promise<{ ok: true } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('gh:updateIssue', args),
+
+    addIssueComment: (args: {
+      repoPath: string
+      number: number
+      body: string
+    }): Promise<{ ok: true; id: number } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('gh:addIssueComment', args),
+
+    listLabels: (args: { repoPath: string }): Promise<string[]> =>
+      ipcRenderer.invoke('gh:listLabels', args),
+
+    listAssignableUsers: (args: { repoPath: string }): Promise<string[]> =>
+      ipcRenderer.invoke('gh:listAssignableUsers', args),
+
     checkOrcaStarred: (): Promise<boolean | null> => ipcRenderer.invoke('gh:checkOrcaStarred'),
     starOrca: (): Promise<boolean> => ipcRenderer.invoke('gh:starOrca')
+  },
+
+  linear: {
+    connect: (args: {
+      apiKey: string
+    }): Promise<{ ok: true; viewer: unknown } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('linear:connect', args),
+
+    disconnect: (): Promise<void> => ipcRenderer.invoke('linear:disconnect'),
+
+    status: (): Promise<unknown> => ipcRenderer.invoke('linear:status'),
+
+    searchIssues: (args: { query: string; limit?: number }): Promise<unknown[]> =>
+      ipcRenderer.invoke('linear:searchIssues', args),
+
+    listIssues: (args?: {
+      filter?: 'assigned' | 'created' | 'all' | 'completed'
+      limit?: number
+    }): Promise<unknown[]> => ipcRenderer.invoke('linear:listIssues', args),
+
+    getIssue: (args: { id: string }): Promise<unknown> =>
+      ipcRenderer.invoke('linear:getIssue', args),
+
+    updateIssue: (args: {
+      id: string
+      updates: unknown
+    }): Promise<{ ok: true } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('linear:updateIssue', args),
+
+    addIssueComment: (args: {
+      issueId: string
+      body: string
+    }): Promise<{ ok: true; id: string } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('linear:addIssueComment', args),
+
+    issueComments: (args: { issueId: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('linear:issueComments', args),
+
+    listTeams: (): Promise<unknown[]> => ipcRenderer.invoke('linear:listTeams'),
+
+    teamStates: (args: { teamId: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('linear:teamStates', args),
+
+    teamLabels: (args: { teamId: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('linear:teamLabels', args),
+
+    teamMembers: (args: { teamId: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('linear:teamMembers', args)
   },
 
   starNag: {
@@ -462,10 +521,30 @@ const api = {
       ipcRenderer.invoke('codexAccounts:select', args)
   },
 
+  claudeAccounts: {
+    list: (): Promise<unknown> => ipcRenderer.invoke('claudeAccounts:list'),
+    add: (): Promise<unknown> => ipcRenderer.invoke('claudeAccounts:add'),
+    reauthenticate: (args: { accountId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('claudeAccounts:reauthenticate', args),
+    remove: (args: { accountId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('claudeAccounts:remove', args),
+    select: (args: { accountId: string | null }): Promise<unknown> =>
+      ipcRenderer.invoke('claudeAccounts:select', args)
+  },
+
   cli: {
     getInstallStatus: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:getInstallStatus'),
     install: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:install'),
     remove: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:remove')
+  },
+
+  agentHooks: {
+    claudeStatus: (): Promise<AgentHookInstallStatus> =>
+      ipcRenderer.invoke('agentHooks:claudeStatus'),
+    codexStatus: (): Promise<AgentHookInstallStatus> =>
+      ipcRenderer.invoke('agentHooks:codexStatus'),
+    geminiStatus: (): Promise<AgentHookInstallStatus> =>
+      ipcRenderer.invoke('agentHooks:geminiStatus')
   },
 
   preflight: {
@@ -474,13 +553,16 @@ const api = {
     }): Promise<{
       git: { installed: boolean }
       gh: { installed: boolean; authenticated: boolean }
+      linear: { connected: boolean }
     }> => ipcRenderer.invoke('preflight:check', args),
     detectAgents: (): Promise<string[]> => ipcRenderer.invoke('preflight:detectAgents'),
     refreshAgents: (): Promise<{
       agents: string[]
       addedPathSegments: string[]
       shellHydrationOk: boolean
-    }> => ipcRenderer.invoke('preflight:refreshAgents')
+    }> => ipcRenderer.invoke('preflight:refreshAgents'),
+    detectRemoteAgents: (args: { connectionId: string }): Promise<string[]> =>
+      ipcRenderer.invoke('preflight:detectRemoteAgents', args)
   },
 
   notifications: {
@@ -925,8 +1007,11 @@ const api = {
       ipcRenderer.invoke('fs:createDir', args),
     rename: (args: { oldPath: string; newPath: string; connectionId?: string }): Promise<void> =>
       ipcRenderer.invoke('fs:rename', args),
-    deletePath: (args: { targetPath: string; connectionId?: string }): Promise<void> =>
-      ipcRenderer.invoke('fs:deletePath', args),
+    deletePath: (args: {
+      targetPath: string
+      connectionId?: string
+      recursive?: boolean
+    }): Promise<void> => ipcRenderer.invoke('fs:deletePath', args),
     authorizeExternalPath: (args: { targetPath: string }): Promise<void> =>
       ipcRenderer.invoke('fs:authorizeExternalPath', args),
     stat: (args: {
@@ -1499,6 +1584,42 @@ const api = {
   },
   e2e: {
     getConfig: () => preloadE2EConfig
+  },
+
+  agentStatus: {
+    /** Listen for agent status updates forwarded from native hook receivers. */
+    onSet: (
+      callback: (data: {
+        paneKey: string
+        tabId?: string
+        worktreeId?: string
+        state: AgentStatusState
+        prompt?: string
+        agentType?: string
+        toolName?: string
+        toolInput?: string
+        lastAssistantMessage?: string
+        interrupted?: boolean
+      }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: {
+          paneKey: string
+          tabId?: string
+          worktreeId?: string
+          state: AgentStatusState
+          prompt?: string
+          agentType?: string
+          toolName?: string
+          toolInput?: string
+          lastAssistantMessage?: string
+          interrupted?: boolean
+        }
+      ) => callback(data)
+      ipcRenderer.on('agentStatus:set', listener)
+      return () => ipcRenderer.removeListener('agentStatus:set', listener)
+    }
   }
 }
 

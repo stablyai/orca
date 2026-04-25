@@ -73,6 +73,7 @@ function makeWorktree(overrides: Partial<Worktree> & { id: string; repoId: strin
     comment: '',
     linkedIssue: null,
     linkedPR: null,
+    linkedLinearIssue: null,
     isArchived: false,
     isUnread: false,
     isPinned: false,

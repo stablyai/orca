@@ -15,6 +15,7 @@ import { createTabsSlice } from './tabs'
 import { createUISlice } from './ui'
 import { createSettingsSlice } from './settings'
 import { createGitHubSlice } from './github'
+import { createLinearSlice } from './linear'
 import { createEditorSlice } from './editor'
 import { createStatsSlice } from './stats'
 import { createClaudeUsageSlice } from './claude-usage'
@@ -22,6 +23,7 @@ import { createCodexUsageSlice } from './codex-usage'
 import { createBrowserSlice } from './browser'
 import { createRateLimitSlice } from './rate-limits'
 import { createSshSlice } from './ssh'
+import { createAgentStatusSlice } from './agent-status'
 import { createDiffCommentsSlice } from './diffComments'
 import { createDetectedAgentsSlice } from './detected-agents'
 import { createWorktreeNavHistorySlice } from './worktree-nav-history'
@@ -43,6 +45,7 @@ export function createTestStore() {
     ...createUISlice(...a),
     ...createSettingsSlice(...a),
     ...createGitHubSlice(...a),
+    ...createLinearSlice(...a),
     ...createEditorSlice(...a),
     ...createStatsSlice(...a),
     ...createClaudeUsageSlice(...a),
@@ -50,6 +53,7 @@ export function createTestStore() {
     ...createBrowserSlice(...a),
     ...createRateLimitSlice(...a),
     ...createSshSlice(...a),
+    ...createAgentStatusSlice(...a),
     ...createDiffCommentsSlice(...a),
     ...createDetectedAgentsSlice(...a),
     ...createWorktreeNavHistorySlice(...a)
@@ -82,6 +86,7 @@ export function makeWorktree(
     comment: '',
     linkedIssue: null,
     linkedPR: null,
+    linkedLinearIssue: null,
     isArchived: false,
     isUnread: false,
     isPinned: false,

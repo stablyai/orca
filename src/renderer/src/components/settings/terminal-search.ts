@@ -108,27 +108,6 @@ export const TERMINAL_ADVANCED_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     title: 'Scrollback Size',
     description: 'Maximum terminal scrollback buffer size.',
     keywords: ['terminal', 'scrollback', 'buffer', 'memory']
-  },
-  {
-    title: 'Force Hyperlink Escapes',
-    description:
-      'Set FORCE_HYPERLINK=1 in every terminal so tools emit OSC-8 clickable links. Turn off if your shell startup is slow.',
-    keywords: [
-      'terminal',
-      'hyperlink',
-      'link',
-      'osc',
-      'osc8',
-      'osc-8',
-      'force_hyperlink',
-      'slow',
-      'startup',
-      'zsh',
-      'zshrc',
-      'oh-my-zsh',
-      'p10k',
-      'powerlevel10k'
-    ]
   }
 ]
 
@@ -175,7 +154,16 @@ export const TERMINAL_SETUP_SCRIPT_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   }
 ]
 
+export const TERMINAL_WINDOWS_SHELL_SEARCH_ENTRY: SettingsSearchEntry[] = [
+  {
+    title: 'Default Shell',
+    description: 'Choose the default shell for new terminal panes on Windows.',
+    keywords: ['terminal', 'windows', 'shell', 'powershell', 'cmd', 'command prompt', 'default']
+  }
+]
+
 export const TERMINAL_WINDOWS_SEARCH_ENTRIES: SettingsSearchEntry[] = [
+  ...TERMINAL_WINDOWS_SHELL_SEARCH_ENTRY,
   {
     title: 'Right-click to paste',
     description:
@@ -184,7 +172,14 @@ export const TERMINAL_WINDOWS_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   }
 ]
 
-export const TERMINAL_RIGHT_CLICK_TO_PASTE_SEARCH_ENTRY = TERMINAL_WINDOWS_SEARCH_ENTRIES
+export const TERMINAL_RIGHT_CLICK_TO_PASTE_SEARCH_ENTRY: SettingsSearchEntry[] = [
+  {
+    title: 'Right-click to paste',
+    description:
+      'On Windows, right-click pastes the clipboard into the terminal. Use Ctrl+right-click to open the context menu.',
+    keywords: ['terminal', 'windows', 'right click', 'paste', 'context menu']
+  }
+]
 
 export function getTerminalPaneSearchEntries(platform: {
   isWindows: boolean

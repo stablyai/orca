@@ -30,7 +30,7 @@ import EditorAutosaveController from './editor/EditorAutosaveController'
 import type { TabGroupLayoutNode } from '../../../shared/types'
 import BrowserPane, { destroyPersistentWebview } from './browser-pane/BrowserPane'
 import BrowserPaneOverlayLayer from './browser-pane/BrowserPaneOverlayLayer'
-import { reconcileTabOrder } from './tab-bar/reconcile-order'
+import { handleSwitchTab } from '../hooks/ipc-tab-switch'
 import TabGroupSplitLayout from './tab-group/TabGroupSplitLayout'
 import { shouldAutoCreateInitialTerminal } from './terminal/initial-terminal'
 import {
@@ -745,58 +745,13 @@ function Terminal(): React.JSX.Element | null {
         (e.code === 'BracketRight' || e.code === 'BracketLeft') &&
         !e.repeat
       ) {
-        const state = useAppStore.getState()
-        const currentTerminalTabs = state.tabsByWorktree[activeWorktreeId] ?? []
-        const currentEditorFiles = state.openFiles.filter((f) => f.worktreeId === activeWorktreeId)
-        const currentBrowserTabs = state.browserTabsByWorktree[activeWorktreeId] ?? []
-        const terminalIds = currentTerminalTabs.map((t) => t.id)
-        const editorIds = currentEditorFiles.map((f) => f.id)
-        const browserIds = currentBrowserTabs.map((t) => t.id)
-        // Why: use reconcileTabOrder instead of raw tabBarOrderByWorktree so
-        // tab switching works even when the stored order is unset (e.g. for
-        // worktrees restored from session whose initial tabs were created
-        // without populating tabBarOrderByWorktree).
-        const reconciledOrder = reconcileTabOrder(
-          state.tabBarOrderByWorktree[activeWorktreeId],
-          terminalIds,
-          editorIds,
-          browserIds
-        )
-        const terminalIdSet = new Set(terminalIds)
-        const editorIdSet = new Set(editorIds)
-        const browserIdSet = new Set(browserIds)
-        const allTabIds = reconciledOrder.map((id) => ({
-          type: terminalIdSet.has(id)
-            ? ('terminal' as const)
-            : editorIdSet.has(id)
-              ? ('editor' as const)
-              : browserIdSet.has(id)
-                ? ('browser' as const)
-                : (null as never),
-          id
-        }))
-
-        if (allTabIds.length > 1) {
+        // Why: delegate to the shared handleSwitchTab used by the IPC shortcut
+        // so both code paths share one implementation. See getActiveTabNavOrder
+        // for the stale legacy-order bug this replaces. handleSwitchTab returns
+        // true when it switched so we preventDefault only when we actually
+        // consumed the key.
+        if (handleSwitchTab(e.code === 'BracketRight' ? 1 : -1)) {
           e.preventDefault()
-          const currentId =
-            state.activeTabType === 'editor'
-              ? state.activeFileId
-              : state.activeTabType === 'browser'
-                ? state.activeBrowserTabId
-                : state.activeTabId
-          const idx = allTabIds.findIndex((t) => t.id === currentId)
-          const dir = e.code === 'BracketRight' ? 1 : -1
-          const next = allTabIds[(idx + dir + allTabIds.length) % allTabIds.length]
-          if (next.type === 'terminal') {
-            setActiveTab(next.id)
-            state.setActiveTabType('terminal')
-          } else if (next.type === 'browser') {
-            state.setActiveBrowserTab(next.id)
-            state.setActiveTabType('browser')
-          } else {
-            state.setActiveFile(next.id)
-            state.setActiveTabType('editor')
-          }
         }
       }
     }
@@ -810,8 +765,7 @@ function Terminal(): React.JSX.Element | null {
     handleCloseTab,
     handleCloseBrowserTab,
     closeBrowserTab,
-    handleCloseFile,
-    setActiveTab
+    handleCloseFile
   ])
 
   // Warn on window close if there are unsaved editor files

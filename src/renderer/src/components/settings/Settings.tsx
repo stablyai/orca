@@ -11,6 +11,7 @@ import {
   Palette,
   Server,
   SlidersHorizontal,
+  Blocks,
   SquareTerminal
 } from 'lucide-react'
 import type { OrcaHooks } from '../../../../shared/types'
@@ -32,12 +33,14 @@ import { SshPane, SSH_PANE_SEARCH_ENTRIES } from './SshPane'
 import { ExperimentalPane, EXPERIMENTAL_PANE_SEARCH_ENTRIES } from './ExperimentalPane'
 import { AgentsPane, AGENTS_PANE_SEARCH_ENTRIES } from './AgentsPane'
 import { StatsPane, STATS_PANE_SEARCH_ENTRIES } from '../stats/StatsPane'
+import { IntegrationsPane, INTEGRATIONS_PANE_SEARCH_ENTRIES } from './IntegrationsPane'
 import { SettingsSidebar } from './SettingsSidebar'
 import { SettingsSection } from './SettingsSection'
 import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
 
 type SettingsNavTarget =
   | 'general'
+  | 'integrations'
   | 'browser'
   | 'git'
   | 'appearance'
@@ -331,6 +334,13 @@ function Settings(): React.JSX.Element {
         searchEntries: SHORTCUTS_PANE_SEARCH_ENTRIES
       },
       {
+        id: 'integrations',
+        title: 'Integrations',
+        description: 'GitHub, Linear, and other service connections.',
+        icon: Blocks,
+        searchEntries: INTEGRATIONS_PANE_SEARCH_ENTRIES
+      },
+      {
         id: 'stats',
         title: 'Stats & Usage',
         description: 'Orca stats and Claude usage analytics.',
@@ -534,6 +544,15 @@ function Settings(): React.JSX.Element {
                   searchEntries={GENERAL_PANE_SEARCH_ENTRIES}
                 >
                   <GeneralPane settings={settings} updateSettings={updateSettings} />
+                </SettingsSection>
+
+                <SettingsSection
+                  id="integrations"
+                  title="Integrations"
+                  description="GitHub, Linear, and other service connections."
+                  searchEntries={INTEGRATIONS_PANE_SEARCH_ENTRIES}
+                >
+                  <IntegrationsPane />
                 </SettingsSection>
 
                 <SettingsSection

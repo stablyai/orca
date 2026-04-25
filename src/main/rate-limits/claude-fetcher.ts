@@ -5,6 +5,7 @@ import path from 'node:path'
 import { net, session } from 'electron'
 import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
 import { fetchViaPty } from './claude-pty'
+import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
 
 const OAUTH_USAGE_URL = 'https://api.anthropic.com/api/oauth/usage'
 const OAUTH_BETA_HEADER = 'oauth-2025-04-20'
@@ -130,8 +131,8 @@ async function readFromKeychain(): Promise<string | null> {
  * Why: older Claude CLI versions store credentials in this plain JSON
  * file. We keep it as a fallback for compatibility.
  */
-async function readFromCredentialsFile(): Promise<string | null> {
-  const credPath = path.join(homedir(), '.claude', '.credentials.json')
+async function readFromCredentialsFile(configDir?: string): Promise<string | null> {
+  const credPath = path.join(configDir ?? path.join(homedir(), '.claude'), '.credentials.json')
   try {
     const raw = await readFile(credPath, 'utf-8')
     const parsed = JSON.parse(raw) as ClaudeCredentials
@@ -157,7 +158,7 @@ async function readFromCredentialsFile(): Promise<string | null> {
  * here — those are API keys which return 401 on the OAuth usage endpoint.
  * API-key users are served by the PTY fallback instead.
  */
-async function readOAuthCredentials(): Promise<string | null> {
+async function readOAuthCredentials(configDir?: string): Promise<string | null> {
   // 1. macOS Keychain (Claude Max/Pro OAuth)
   const fromKeychain = await readFromKeychain()
   if (fromKeychain) {
@@ -165,7 +166,7 @@ async function readOAuthCredentials(): Promise<string | null> {
   }
 
   // 2. Legacy credentials file
-  const fromFile = await readFromCredentialsFile()
+  const fromFile = await readFromCredentialsFile(configDir)
   if (fromFile) {
     return fromFile
   }
@@ -266,9 +267,13 @@ async function fetchViaOAuth(token: string): Promise<ProviderRateLimits> {
 // Public API
 // ---------------------------------------------------------------------------
 
-export async function fetchClaudeRateLimits(): Promise<ProviderRateLimits> {
+export async function fetchClaudeRateLimits(options?: {
+  authPreparation?: ClaudeRuntimeAuthPreparation
+}): Promise<ProviderRateLimits> {
   // Path A: try OAuth API if we have a genuine OAuth token
-  const oauthToken = await readOAuthCredentials()
+  const oauthToken = await readOAuthCredentials(
+    options?.authPreparation?.envPatch.CLAUDE_CONFIG_DIR
+  )
   if (oauthToken) {
     try {
       return await fetchViaOAuth(oauthToken)
@@ -282,7 +287,7 @@ export async function fetchClaudeRateLimits(): Promise<ProviderRateLimits> {
     // `/usage` command is subscription-only, so there's no point
     // attempting PTY for API key users.
     try {
-      return await fetchViaPty()
+      return await fetchViaPty({ authPreparation: options?.authPreparation })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
       return {

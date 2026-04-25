@@ -92,12 +92,11 @@ export type LocalPtyProviderOptions = {
   /** Whether worktree-scoped shell history is enabled. When true (or absent)
    *  and a worktreeId is provided, HISTFILE is scoped per-worktree. */
   isHistoryEnabled?: () => boolean
-  /** Whether to set FORCE_HYPERLINK=1 in spawned PTYs. Historically always on;
-   *  now user-togglable because the extra OSC-8 emission branches in oh-my-zsh,
-   *  coreutils, and the Rust supports-hyperlinks crate can compound to a
-   *  significant shell-startup slowdown with heavy rc files. When absent,
-   *  defaults to the prior behavior (on). */
-  isForceHyperlinkEnabled?: () => boolean
+  /** Why: COMSPEC is always cmd.exe on a stock Windows machine, so reading it
+   *  directly would ignore the user's shell preference. This callback lets the
+   *  IPC layer inject the persisted setting without coupling the provider to the
+   *  settings store. Returns undefined when no preference is set. */
+  getWindowsShell?: () => string | undefined
   onSpawned?: (id: string) => void
   onExit?: (id: string, code: number) => void
   onData?: (id: string, data: string, timestamp: number) => void
@@ -134,7 +133,7 @@ export class LocalPtyProvider implements IPtyProvider {
       effectiveCwd = getDefaultCwd()
       validationCwd = cwd
     } else if (process.platform === 'win32') {
-      shellPath = process.env.COMSPEC || 'powershell.exe'
+      shellPath = this.opts.getWindowsShell?.() || process.env.COMSPEC || 'powershell.exe'
       // Why: use path.win32.basename so backslash-separated Windows paths
       // are parsed correctly even when tests mock process.platform on Linux CI.
       const shellBasename = pathWin32.basename(shellPath).toLowerCase()
@@ -185,20 +184,8 @@ export class LocalPtyProvider implements IPtyProvider {
       // fallback keeps tests and non-Electron runs working.
       TERM_PROGRAM_VERSION: process.env.ORCA_APP_VERSION ?? '0.0.0-dev'
     } as Record<string, string>
-
-    // Why: FORCE_HYPERLINK=1 is read by oh-my-zsh's supports_hyperlinks(), the
-    // Rust supports-hyperlinks crate, GNU coreutils, and other tooling.
-    // Forcing it on makes every subprocess invoked during shell init take
-    // extra branches and emit OSC-8 escapes, which compounded with a heavy
-    // zshrc (oh-my-zsh + p10k + nvm + pyenv + conda) can 3×+ the startup time
-    // — reported by users as a multi-minute-to-hour "terminal hang."
-    // We keep the historical default (on) so existing users don't lose link
-    // emission silently, but expose it as a toggle so users with heavy rc
-    // files can opt out. Orca's xterm still renders OSC-8 hyperlinks when
-    // tools emit them on their own detection, so link support is preserved
-    // for the typical modern CLI even when this toggle is off.
-    if (this.opts.isForceHyperlinkEnabled?.() ?? true) {
-      spawnEnv.FORCE_HYPERLINK = '1'
+    for (const key of args.envToDelete ?? []) {
+      delete spawnEnv[key]
     }
 
     spawnEnv.LANG ??= 'en_US.UTF-8'
@@ -447,7 +434,7 @@ export class LocalPtyProvider implements IPtyProvider {
 
   async getDefaultShell(): Promise<string> {
     if (process.platform === 'win32') {
-      return process.env.COMSPEC || 'powershell.exe'
+      return this.opts.getWindowsShell?.() || process.env.COMSPEC || 'powershell.exe'
     }
     return process.env.SHELL || '/bin/zsh'
   }

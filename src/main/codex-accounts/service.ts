@@ -321,16 +321,6 @@ export class CodexAccountService {
     const resolvedCandidate = resolve(candidatePath)
     const resolvedRoot = resolve(rootPath)
 
-    // Why: in dev mode, userData points to orca-dev/ while production uses
-    // orca/. Accounts created by the packaged app store production paths in
-    // settings. A quick prefix check before realpathSync avoids noisy errors
-    // when dev instances encounter production-rooted managed home paths.
-    if (!resolvedCandidate.startsWith(resolvedRoot + sep)) {
-      throw new Error(
-        `Managed Codex home is outside current storage root (expected under ${resolvedRoot}).`
-      )
-    }
-
     if (!existsSync(resolvedCandidate)) {
       throw new Error('Managed Codex home directory does not exist on disk.')
     }
@@ -340,6 +330,21 @@ export class CodexAccountService {
     // canonical on-disk target rather than trusting persisted text blindly.
     const canonicalCandidate = realpathSync(resolvedCandidate)
     const canonicalRoot = realpathSync(resolvedRoot)
+
+    // Why: the prefix check must compare canonical paths on both sides. On
+    // macOS, userData sits under /var/folders/... which realpath resolves to
+    // /private/var/folders/...; comparing a canonical candidate against a
+    // non-canonical root would spuriously reject every managed home. In dev
+    // mode (orca-dev/ vs orca/) this check also filters out production-rooted
+    // paths before downstream sync runs.
+    if (
+      canonicalCandidate !== canonicalRoot &&
+      !canonicalCandidate.startsWith(canonicalRoot + sep)
+    ) {
+      throw new Error(
+        `Managed Codex home is outside current storage root (expected under ${canonicalRoot}).`
+      )
+    }
     const relativePath = relative(canonicalRoot, canonicalCandidate)
     const escaped =
       relativePath === '' || relativePath.startsWith('..') || relativePath.includes(`..${sep}`)
@@ -370,8 +375,11 @@ export class CodexAccountService {
     // just the home/ leaf leaves an empty <uuid>/ directory behind.
     try {
       const parentDir = resolve(managedHomePath, '..')
-      const root = this.getManagedAccountsRoot()
-      if (parentDir.startsWith(root) && parentDir !== root) {
+      // Why: managedHomePath is already canonicalized by assertManagedHomePath,
+      // so the root must be canonicalized too for the prefix check to work on
+      // macOS where userData resolves through /private/var.
+      const root = realpathSync(this.getManagedAccountsRoot())
+      if (parentDir.startsWith(root + sep) && parentDir !== root) {
         rmSync(parentDir, { recursive: true, force: true })
       }
     } catch {

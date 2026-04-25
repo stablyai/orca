@@ -99,7 +99,7 @@ export const AGENT_CATALOG: AgentCatalogEntry[] = [
   {
     id: 'aug',
     label: 'Auggie',
-    cmd: 'aug',
+    cmd: 'auggie',
     faviconDomain: 'augmentcode.com',
     homepageUrl: 'https://docs.augmentcode.com/cli/overview'
   },
@@ -255,9 +255,16 @@ export function AgentIcon({
   agent,
   size = 14
 }: {
-  agent: TuiAgent
+  agent: TuiAgent | null | undefined
   size?: number
 }): React.JSX.Element {
+  // Why: render a neutral question-mark glyph when the agent identity is not
+  // yet known. Before, the caller coerced null → 'claude', which caused Codex
+  // panes to briefly show the Claude icon until the first hook callback
+  // arrived.
+  if (!agent) {
+    return <AgentLetterIcon letter="?" size={size} />
+  }
   if (agent === 'claude') {
     return <ClaudeIcon size={size} />
   }

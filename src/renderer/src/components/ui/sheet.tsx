@@ -25,6 +25,7 @@ function SheetPortal({ ...props }: React.ComponentProps<typeof SheetPrimitive.Po
 
 function SheetOverlay({
   className,
+  style,
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Overlay>) {
   return (
@@ -34,6 +35,10 @@ function SheetOverlay({
         'fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0',
         className
       )}
+      // Why: Electron's OS-level drag hit-test ignores z-index. Without
+      // no-drag, the overlay is transparent to clicks in the titlebar's
+      // drag strip, so clicking the sheet header buttons drags the window.
+      style={{ ...style, WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       {...props}
     />
   )
@@ -63,6 +68,7 @@ function SheetContent({
   children,
   side = 'right',
   showCloseButton = true,
+  style,
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Content> &
   VariantProps<typeof sheetContentVariants> & {
@@ -74,6 +80,9 @@ function SheetContent({
       <SheetPrimitive.Content
         data-slot="sheet-content"
         className={cn(sheetContentVariants({ side }), className)}
+        // Why: same as SheetOverlay — the sheet content portals to the
+        // document root and its header overlaps the titlebar drag strip.
+        style={{ ...style, WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         {...props}
       >
         {children}

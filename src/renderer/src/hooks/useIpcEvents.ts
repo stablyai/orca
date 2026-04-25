@@ -1,4 +1,4 @@
-/* oxlint-disable max-lines */
+/* oxlint-disable max-lines -- Why: this App-level IPC bridge intentionally keeps the renderer's main-process event contract in one place so shortcut, runtime, updater, and agent-status wiring do not drift across files. */
 import { useEffect } from 'react'
 import { useAppStore } from '../store'
 import { applyUIZoom } from '@/lib/ui-zoom'
@@ -18,6 +18,8 @@ import { dispatchZoomLevelChanged } from '@/lib/zoom-events'
 import { resolveZoomTarget } from './resolve-zoom-target'
 import { handleSwitchTab } from './ipc-tab-switch'
 import { dispatchClearModifierHints } from './useModifierHint'
+import { normalizeAgentStatusPayload } from '../../../shared/agent-status-types'
+import { AGENT_DASHBOARD_ENABLED } from '../../../shared/constants'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 
 export { resolveZoomTarget } from './resolve-zoom-target'
@@ -559,6 +561,12 @@ export function useIpcEvents(): void {
         if (
           ['disconnected', 'auth-failed', 'reconnection-failed', 'error'].includes(state.status)
         ) {
+          // Why: the remote agent list is tied to a live SSH connection. On
+          // disconnect the relay is gone, so clear the cached list and dedup
+          // promise. When the user reconnects and opens the quick-launch menu,
+          // ensureRemoteDetectedAgents will re-detect against the new relay.
+          store.clearRemoteDetectedAgents(data.targetId)
+
           // Why: an explicit disconnect or terminal failure tears down the SSH
           // PTY provider without emitting per-PTY exit events. Clear the stale
           // PTY ids in renderer state so a later reconnect remounts TerminalPane
@@ -655,6 +663,90 @@ export function useIpcEvents(): void {
       })
     )
 
+    // Why: agent status arrives from native hook receivers in the main process.
+    // Re-parse it here so the renderer enforces the same normalization rules
+    // (state enum, field truncation) regardless of whether the source was a
+    // hook callback or an OSC fallback path.
+    if (AGENT_DASHBOARD_ENABLED) {
+      unsubs.push(
+        window.api.agentStatus.onSet((data) => {
+          // Why: the IPC payload is already a structured object — pass it
+          // straight to the object-input normalizer instead of round-tripping
+          // through JSON.stringify/JSON.parse. Hook events can fire many times
+          // per second during a tool-use run, so this avoids the per-event
+          // serialization cost.
+          const payload = normalizeAgentStatusPayload({
+            state: data.state,
+            prompt: data.prompt,
+            agentType: data.agentType,
+            toolName: data.toolName,
+            toolInput: data.toolInput,
+            lastAssistantMessage: data.lastAssistantMessage,
+            interrupted: data.interrupted
+          })
+          if (!payload) {
+            return
+          }
+          const store = useAppStore.getState()
+          // Why: resolve tab existence and terminal title in a single pass.
+          // Previously the code walked store.tabsByWorktree twice — once to
+          // look up the tab-level title (when the pane-level title was
+          // missing) and again for the explicit tabExists check. A paneKey
+          // that no longer resolves to a live tab belongs to a pane that has
+          // already been torn down; dropping here prevents orphan entries
+          // from accumulating in agentStatusByPaneKey.
+          const { exists, title } = resolvePaneKey(store, data.paneKey)
+          if (!exists) {
+            return
+          }
+          store.setAgentStatus(data.paneKey, payload, title)
+        })
+      )
+    }
+
     return () => unsubs.forEach((fn) => fn())
   }, [])
+}
+
+/** Resolve a paneKey (tabId:paneId) to both a liveness check and the current
+ *  terminal title, in a single walk of tabsByWorktree. Used for agent type
+ *  inference when the CLI payload omits agentType, plus to drop status updates
+ *  targeted at panes whose tabs have already been torn down.
+ *  Why combined: callers need both pieces per hook event, and hook events can
+ *  fire many times per second during a tool-use run. Two separate O(N) scans
+ *  over the same map is wasteful; one pass returns both. */
+function resolvePaneKey(
+  store: ReturnType<typeof useAppStore.getState>,
+  paneKey: string
+): { exists: boolean; title: string | undefined } {
+  const [tabId, paneIdRaw] = paneKey.split(':')
+  if (!tabId) {
+    return { exists: false, title: undefined }
+  }
+  // Why: split panes track per-pane titles in runtimePaneTitlesByTabId; prefer
+  // the pane's own title over the tab-level (last-winning) title so agent type
+  // inference attributes status to the correct pane.
+  const paneTitles = store.runtimePaneTitlesByTabId?.[tabId]
+  const paneIdNum = paneIdRaw !== undefined ? Number(paneIdRaw) : NaN
+  const rawPaneTitle = paneTitles && !Number.isNaN(paneIdNum) ? paneTitles[paneIdNum] : undefined
+  // Why: treat an empty-string paneTitle as "no title" so the tab-level
+  // fallback still fires. `paneTitle ?? tabTitle` alone would short-circuit on
+  // '' and also erase any previously-cached terminalTitle in the store
+  // (`terminalTitle ?? existing?.terminalTitle` resolves to '').
+  const paneTitle = rawPaneTitle && rawPaneTitle.length > 0 ? rawPaneTitle : undefined
+  let exists = false
+  let tabTitle: string | undefined
+  for (const tabs of Object.values(store.tabsByWorktree)) {
+    for (const tab of tabs) {
+      if (tab.id === tabId) {
+        exists = true
+        tabTitle = tab.title
+        break
+      }
+    }
+    if (exists) {
+      break
+    }
+  }
+  return { exists, title: paneTitle ?? tabTitle }
 }

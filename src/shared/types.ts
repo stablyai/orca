@@ -40,6 +40,7 @@ export type Worktree = {
   comment: string
   linkedIssue: number | null
   linkedPR: number | null
+  linkedLinearIssue: string | null
   isArchived: boolean
   isUnread: boolean
   isPinned: boolean
@@ -54,6 +55,7 @@ export type WorktreeMeta = {
   comment: string
   linkedIssue: number | null
   linkedPR: number | null
+  linkedLinearIssue: string | null
   isArchived: boolean
   isUnread: boolean
   isPinned: boolean
@@ -434,6 +436,113 @@ export type GitHubWorkItemDetails = {
   baseSha?: string
   checks?: PRCheckDetail[]
   files?: GitHubPRFile[]
+  /** Logins of current assignees. Only set for issues. */
+  assignees?: string[]
+}
+
+// ─── Linear ─────────────────────────────────────────────────────────
+export type LinearViewer = {
+  displayName: string
+  email: string | null
+  organizationName: string
+}
+
+export type LinearConnectionStatus = {
+  connected: boolean
+  viewer: LinearViewer | null
+}
+
+export type LinearIssue = {
+  id: string
+  identifier: string
+  title: string
+  description?: string
+  url: string
+  state: {
+    name: string
+    type: string
+    color: string
+  }
+  team: {
+    id: string
+    name: string
+    key: string
+  }
+  labels: string[]
+  labelIds: string[]
+  assignee?: {
+    id: string
+    displayName: string
+    avatarUrl?: string
+  }
+  priority: number
+  updatedAt: string
+}
+
+export type LinearComment = {
+  id: string
+  body: string
+  createdAt: string
+  user?: {
+    displayName: string
+    avatarUrl?: string
+  }
+}
+
+// ─── Issue Mutations ────────────────────────────────────────────────
+
+export type GitHubIssueUpdate = {
+  state?: 'open' | 'closed'
+  title?: string
+  addLabels?: string[]
+  removeLabels?: string[]
+  addAssignees?: string[]
+  removeAssignees?: string[]
+}
+
+export type LinearIssueUpdate = {
+  stateId?: string
+  title?: string
+  assigneeId?: string | null
+  priority?: number
+  labelIds?: string[]
+}
+
+export type ClassifiedError = {
+  type:
+    | 'permission_denied'
+    | 'not_found'
+    | 'validation_error'
+    | 'rate_limited'
+    | 'network_error'
+    | 'unknown'
+  message: string
+}
+
+export type LinearWorkflowState = {
+  id: string
+  name: string
+  type: string
+  color: string
+  position: number
+}
+
+export type LinearLabel = {
+  id: string
+  name: string
+  color: string
+}
+
+export type LinearMember = {
+  id: string
+  displayName: string
+  avatarUrl?: string
+}
+
+export type LinearTeam = {
+  id: string
+  name: string
+  key: string
 }
 
 // ─── Hooks (orca.yaml) ──────────────────────────────────────────────
@@ -550,6 +659,34 @@ export type CodexRateLimitAccountsState = {
   activeAccountId: string | null
 }
 
+export type ClaudeManagedAccount = {
+  id: string
+  email: string
+  managedAuthPath: string
+  authMethod: 'subscription-oauth' | 'unknown'
+  organizationUuid?: string | null
+  organizationName?: string | null
+  createdAt: number
+  updatedAt: number
+  lastAuthenticatedAt: number
+}
+
+export type ClaudeManagedAccountSummary = {
+  id: string
+  email: string
+  authMethod: 'subscription-oauth' | 'unknown'
+  organizationUuid?: string | null
+  organizationName?: string | null
+  createdAt: number
+  updatedAt: number
+  lastAuthenticatedAt: number
+}
+
+export type ClaudeRateLimitAccountsState = {
+  accounts: ClaudeManagedAccountSummary[]
+  activeAccountId: string | null
+}
+
 /** All AI coding agents Orca knows how to launch. Used for the agent picker in the new-workspace
  *  flow and for the default-agent setting. Extend this union as new agents are added. */
 export type TuiAgent =
@@ -594,6 +731,7 @@ export type GlobalSettings = {
   refreshLocalBaseRefOnWorktreeCreate: boolean
   branchPrefix: 'git-username' | 'custom' | 'none'
   branchPrefixCustom: string
+  enableGitHubAttribution: boolean
   theme: 'system' | 'dark' | 'light'
   editorAutoSave: boolean
   editorAutoSaveDelayMs: number
@@ -616,6 +754,11 @@ export type GlobalSettings = {
    *  The setting stays Windows-only so macOS/Linux keep their existing context
    *  menu behavior and users can still reach the menu with Ctrl+right-click. */
   terminalRightClickToPaste: boolean
+  /** Why: COMSPEC always points to cmd.exe on stock Windows, so without an
+   *  explicit setting the terminal would always open CMD instead of the
+   *  user's preferred shell. Defaults to 'powershell.exe' which is the
+   *  modern choice for an IDE context. Only consulted on Windows. */
+  terminalWindowsShell: string
   terminalFocusFollowsMouse: boolean
   /** Why: mirrors X11 / gnome-terminal "copy on select" UX — making a terminal
    *  selection copies it to the system clipboard automatically, so users can
@@ -658,6 +801,11 @@ export type GlobalSettings = {
    *  analytics and external terminal sessions. */
   codexManagedAccounts: CodexManagedAccount[]
   activeCodexManagedAccountId: string | null
+  /** Why: Claude Code keeps conversations under one shared config root. Orca
+   *  persists only per-account auth material here so switching accounts does
+   *  not fork prior chat/session context the way CLAUDE_CONFIG_DIR swapping would. */
+  claudeManagedAccounts: ClaudeManagedAccount[]
+  activeClaudeManagedAccountId: string | null
   /** When true, each worktree gets its own shell history file so ArrowUp
    *  does not surface commands from other worktrees. Defaults to true.
    *  Disable to revert to shared global shell history. */
@@ -675,6 +823,9 @@ export type GlobalSettings = {
   skipDeleteWorktreeConfirm: boolean
   /** Default preset in the new-workspace GitHub task view. */
   defaultTaskViewPreset: TaskViewPresetId
+  /** Why: persists the user's last-used task source so the Tasks page
+   *  reopens to the same provider instead of always defaulting to GitHub. */
+  defaultTaskSource: 'github' | 'linear'
   /** Why: persists the user's repo selection in the cross-repo tasks view.
    *  `null` means sticky-all — every eligible repo is selected, including
    *  repos added in future sessions, so the "All repos" label stays
@@ -682,6 +833,10 @@ export type GlobalSettings = {
    *  eligible are silently dropped on load. An empty array after that drop
    *  is treated as `null`. */
   defaultRepoSelection: string[] | null
+  /** Why: persists the user's Linear team selection in the tasks view.
+   *  Same nullable-array pattern as `defaultRepoSelection`: `null` = sticky-all,
+   *  `string[]` = frozen subset of team IDs. */
+  defaultLinearTeamSelection: string[] | null
   /** Per-agent CLI command overrides. A missing key means use the catalog default binary name. */
   agentCmdOverrides: Partial<Record<TuiAgent, string>>
   /** Why: macOS terminals must choose between letting Option compose layout
@@ -714,15 +869,6 @@ export type GlobalSettings = {
    *  toast shown to users upgrading from v1.3.0 (where the daemon was on by
    *  default). Set to true the first time the toast fires so it never repeats. */
   experimentalTerminalDaemonNoticeShown: boolean
-  /** When true, Orca sets FORCE_HYPERLINK=1 in every spawned PTY's env. That
-   *  makes modern CLIs (oh-my-zsh's supports_hyperlinks(), coreutils, the Rust
-   *  supports-hyperlinks crate, etc.) emit OSC-8 hyperlink escapes even when
-   *  they would otherwise skip them. Defaults to true to preserve prior
-   *  behavior, but users with heavy shell init (large oh-my-zsh / p10k / nvm /
-   *  pyenv / conda setups) can measurably speed up terminal start by turning
-   *  this off — the extra branching and escape emission across the many
-   *  subshells fired during rc init can multiply startup time. */
-  terminalForceHyperlink: boolean
 }
 
 export type NotificationEventSource = 'agent-task-complete' | 'terminal-bell' | 'test'
@@ -740,14 +886,6 @@ export type NotificationDispatchResult = {
   delivered: boolean
   /** Present when delivered is false. Tells the caller why delivery was skipped. */
   reason?: 'disabled' | 'source-disabled' | 'suppressed-focus' | 'cooldown' | 'not-supported'
-}
-
-export type OpenCodeStatusEvent = {
-  ptyId: string
-  /** Compatibility shim for OpenCode: Orca's activity surfaces already depend
-   *  on this normalized state machine, so hook payloads collapse into the same
-   *  working/idle/permission categories instead of inventing a parallel model. */
-  status: 'working' | 'idle' | 'permission'
 }
 
 export type WorktreeCardProperty = 'status' | 'unread' | 'ci' | 'issue' | 'pr' | 'comment'

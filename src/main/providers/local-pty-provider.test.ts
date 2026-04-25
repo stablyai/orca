@@ -120,22 +120,6 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.CUSTOM_VAR).toBe('custom-value')
     })
 
-    it('sets FORCE_HYPERLINK=1 by default to preserve legacy behavior', async () => {
-      await provider.spawn({ cols: 80, rows: 24 })
-      const spawnCall = spawnMock.mock.calls.at(-1)!
-      expect(spawnCall[2].env.FORCE_HYPERLINK).toBe('1')
-    })
-
-    it('omits FORCE_HYPERLINK when isForceHyperlinkEnabled returns false', async () => {
-      // Why: users with heavy shell init (oh-my-zsh + p10k + nvm + pyenv) can
-      // disable FORCE_HYPERLINK from Settings. Verify the opt-out reaches the
-      // spawn env so OSC-8-reading tools stop emitting the extra escapes.
-      provider.configure({ isForceHyperlinkEnabled: () => false })
-      await provider.spawn({ cols: 80, rows: 24 })
-      const spawnCall = spawnMock.mock.calls.at(-1)!
-      expect(spawnCall[2].env.FORCE_HYPERLINK).toBeUndefined()
-    })
-
     it('combines HOMEDRIVE and HOMEPATH for Windows default cwd', async () => {
       const platform = Object.getOwnPropertyDescriptor(process, 'platform')
       const originalUserProfile = process.env.USERPROFILE

@@ -1,17 +1,22 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 
-const { handleMock, mockStore, mockGitProvider } = vi.hoisted(() => ({
+const { handleMock, mockStore, mockGitProvider, mockMultiplexer } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   mockStore: {
     getRepos: vi.fn().mockReturnValue([]),
     addRepo: vi.fn(),
     removeRepo: vi.fn(),
     getRepo: vi.fn(),
-    updateRepo: vi.fn()
+    updateRepo: vi.fn(),
+    getSshTarget: vi.fn()
   },
   mockGitProvider: {
     isGitRepo: vi.fn().mockReturnValue(true),
     isGitRepoAsync: vi.fn().mockResolvedValue({ isRepo: true, rootPath: null })
+  },
+  mockMultiplexer: {
+    request: vi.fn(),
+    notify: vi.fn()
   }
 }))
 
@@ -44,6 +49,15 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
   })
 }))
 
+vi.mock('./ssh', () => ({
+  getActiveMultiplexer: vi.fn().mockImplementation((id: string) => {
+    if (id === 'conn-1') {
+      return mockMultiplexer
+    }
+    return undefined
+  })
+}))
+
 import { registerRepoHandlers } from './repos'
 
 describe('repos:addRemote', () => {
@@ -61,6 +75,9 @@ describe('repos:addRemote', () => {
     })
     mockStore.getRepos.mockReset().mockReturnValue([])
     mockStore.addRepo.mockReset()
+    mockStore.getSshTarget.mockReset()
+    mockMultiplexer.request.mockReset()
+    mockMultiplexer.notify.mockReset()
     mockWindow.webContents.send.mockReset()
 
     registerRepoHandlers(mockWindow as never, mockStore as never)
@@ -88,7 +105,7 @@ describe('repos:addRemote', () => {
     expect(result).toHaveProperty('repo.connectionId', 'conn-1')
   })
 
-    it('uses custom displayName when provided', async () => {
+  it('uses custom displayName when provided', async () => {
     const result = await handlers.get('repos:addRemote')!(null, {
       connectionId: 'conn-1',
       remotePath: '/home/user/project',
@@ -187,5 +204,73 @@ describe('repos:addRemote', () => {
     })
 
     expect(mockWindow.webContents.send).toHaveBeenCalledWith('repos:changed')
+  })
+
+  it('resolves ~ to absolute path via relay and uses SSH target label', async () => {
+    mockMultiplexer.request.mockResolvedValueOnce({ resolvedPath: '/home/ubuntu' })
+    mockStore.getSshTarget.mockReturnValueOnce({
+      id: 'conn-1',
+      label: 'ubuntu-box',
+      host: '192.168.1.100',
+      port: 22,
+      username: 'user'
+    })
+
+    const result = await handlers.get('repos:addRemote')!(null, {
+      connectionId: 'conn-1',
+      remotePath: '~'
+    })
+
+    expect(mockMultiplexer.request).toHaveBeenCalledWith('session.resolveHome', { path: '~' })
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        displayName: 'ubuntu-box',
+        path: '/home/ubuntu'
+      })
+    )
+    expect(result).toHaveProperty('repo.displayName', 'ubuntu-box')
+    expect(result).toHaveProperty('repo.path', '/home/ubuntu')
+  })
+
+  it('resolves ~/subdir to absolute path via relay', async () => {
+    mockMultiplexer.request.mockResolvedValueOnce({ resolvedPath: '/home/ubuntu/subdir' })
+
+    const result = await handlers.get('repos:addRemote')!(null, {
+      connectionId: 'conn-1',
+      remotePath: '~/subdir'
+    })
+
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: '/home/ubuntu/subdir',
+        displayName: 'subdir'
+      })
+    )
+    expect(result).toHaveProperty('repo.path', '/home/ubuntu/subdir')
+  })
+
+  it('ignores SSH target label when custom displayName is provided', async () => {
+    mockMultiplexer.request.mockResolvedValueOnce({ resolvedPath: '/home/ubuntu' })
+    mockStore.getSshTarget.mockReturnValueOnce({
+      id: 'conn-1',
+      label: 'ubuntu-box',
+      host: '192.168.1.100',
+      port: 22,
+      username: 'user'
+    })
+
+    const result = await handlers.get('repos:addRemote')!(null, {
+      connectionId: 'conn-1',
+      remotePath: '~',
+      displayName: 'My Home'
+    })
+
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        displayName: 'My Home',
+        path: '/home/ubuntu'
+      })
+    )
+    expect(result).toHaveProperty('repo.displayName', 'My Home')
   })
 })

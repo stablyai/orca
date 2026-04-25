@@ -1,9 +1,10 @@
 import { useCallback, useState } from 'react'
-import { DndContext } from '@dnd-kit/core'
+import { DndContext, DragOverlay } from '@dnd-kit/core'
 import type { TabGroupLayoutNode } from '../../../../shared/types'
 import { useAppStore } from '../../store'
 import TabGroupPanel from './TabGroupPanel'
-import { type TabDropZone, useTabDragSplit } from './useTabDragSplit'
+import TabDragPreview from '../tab-bar/TabDragPreview'
+import { type HoveredTabInsertion, type TabDropZone, useTabDragSplit } from './useTabDragSplit'
 
 const MIN_RATIO = 0.15
 const MAX_RATIO = 0.85
@@ -93,7 +94,8 @@ function SplitNode({
   touchesLeftEdge,
   isTabDragActive,
   activeDropGroupId,
-  activeDropZone
+  activeDropZone,
+  hoveredTabInsertion
 }: {
   node: TabGroupLayoutNode
   nodePath: string
@@ -107,6 +109,7 @@ function SplitNode({
   isTabDragActive: boolean
   activeDropGroupId: string | null
   activeDropZone: TabDropZone | null
+  hoveredTabInsertion: HoveredTabInsertion | null
 }): React.JSX.Element {
   const setTabGroupSplitRatio = useAppStore((state) => state.setTabGroupSplitRatio)
 
@@ -126,6 +129,9 @@ function SplitNode({
         reserveCollapsedSidebarHeaderSpace={touchesTopEdge && touchesLeftEdge}
         isTabDragActive={isTabDragActive}
         activeDropZone={activeDropGroupId === node.groupId ? activeDropZone : null}
+        hoveredTabInsertion={
+          hoveredTabInsertion?.groupId === node.groupId ? hoveredTabInsertion : null
+        }
       />
     )
   }
@@ -152,6 +158,7 @@ function SplitNode({
           isTabDragActive={isTabDragActive}
           activeDropGroupId={activeDropGroupId}
           activeDropZone={activeDropZone}
+          hoveredTabInsertion={hoveredTabInsertion}
         />
       </div>
       <ResizeHandle
@@ -172,6 +179,7 @@ function SplitNode({
           isTabDragActive={isTabDragActive}
           activeDropGroupId={activeDropGroupId}
           activeDropZone={activeDropZone}
+          hoveredTabInsertion={hoveredTabInsertion}
         />
       </div>
     </div>
@@ -200,6 +208,12 @@ export default function TabGroupSplitLayout({
       onDragOver={dragSplit.onDragOver}
       onDragEnd={dragSplit.onDragEnd}
       onDragCancel={dragSplit.onDragCancel}
+      // Why: dnd-kit auto-scrolls the tab strip when the cursor approaches its
+      // edge, which in a multi-group layout creates a feedback loop — scroll
+      // shifts tabs under the cursor, `over` re-resolves, scroll runs again.
+      // We don't need autoscroll for tab-bar drags (strip fits the viewport),
+      // so disabling it is the simplest fix.
+      autoScroll={false}
     >
       <div className="flex flex-1 min-w-0 min-h-0 overflow-hidden">
         <SplitNode
@@ -215,8 +229,18 @@ export default function TabGroupSplitLayout({
           isTabDragActive={dragSplit.activeDrag !== null}
           activeDropGroupId={dragSplit.hoveredDropTarget?.groupId ?? null}
           activeDropZone={dragSplit.hoveredDropTarget?.zone ?? null}
+          hoveredTabInsertion={dragSplit.hoveredTabInsertion}
         />
       </div>
+      {/* Why: the sortable tab is anchored inside its source tab strip (no
+          transform while dragging), and that strip uses overflow-hidden so
+          the tab is invisible once the cursor leaves it. DragOverlay
+          renders a ghost in a document-level portal that tracks the cursor
+          across the whole window — the source tab keeps its spot, the
+          ghost follows the cursor. */}
+      <DragOverlay dropAnimation={null}>
+        {dragSplit.activeDrag ? <TabDragPreview drag={dragSplit.activeDrag} /> : null}
+      </DragOverlay>
     </DndContext>
   )
 }

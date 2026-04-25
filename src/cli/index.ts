@@ -108,7 +108,7 @@ export const COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['repo', 'add'],
-    summary: 'Add a repo to Orca by filesystem path',
+    summary: 'Add a project to Orca by filesystem path',
     usage: 'orca repo add --path <path> [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'path']
   },
@@ -2315,7 +2315,7 @@ Startup:
 
 Repos:
   repo list                 List repos registered in Orca
-  repo add                  Add a repo to Orca by filesystem path
+  repo add                  Add a project to Orca by filesystem path
   repo show                 Show one registered repo
   repo set-base-ref         Set the repo's default base ref for future worktrees
   repo search-refs          Search branch/tag refs within a repo

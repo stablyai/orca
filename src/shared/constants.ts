@@ -11,6 +11,14 @@ import type {
 import { DEFAULT_TERMINAL_FONT_WEIGHT } from './terminal-fonts'
 
 export const SCHEMA_VERSION = 1
+
+// Why: temporary compile-time gate for the agent status dashboard feature.
+// Flip to `true` only when every dashboard PR has landed; the follow-up cleanup
+// PR will delete this constant and every `if (!AGENT_DASHBOARD_ENABLED)` branch
+// entirely, making the feature permanent. Not user-facing — do not read from
+// settings, env, or IPC.
+export const AGENT_DASHBOARD_ENABLED = false
+
 export const ORCA_BROWSER_PARTITION = 'persist:orca-browser'
 // Why: blank browser tabs must start from an inert guest URL that does not
 // navigate the privileged main window to about:blank. Renderer and main both
@@ -98,6 +106,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     refreshLocalBaseRefOnWorktreeCreate: false,
     branchPrefix: 'git-username',
     branchPrefixCustom: '',
+    enableGitHubAttribution: true,
     theme: 'system',
     editorAutoSave: false,
     editorAutoSaveDelayMs: DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS,
@@ -120,6 +129,10 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     // box. Other platforms ignore this field because the UI never exposes it,
     // and Ctrl+right-click still opens the context menu when paste is enabled.
     terminalRightClickToPaste: true,
+    // Why: COMSPEC on a stock Windows machine always resolves to cmd.exe, so
+    // falling back to COMSPEC would silently open CMD instead of PowerShell.
+    // Defaulting to powershell.exe matches what users expect from a modern IDE.
+    terminalWindowsShell: 'powershell.exe',
     // Default false: opt-in only (matches Ghostty's default). Existing users
     // on upgrade inherit this default via persistence.ts's
     // { ...defaults.settings, ...parsed.settings } merge, so enabling
@@ -138,11 +151,15 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     promptCacheTtlMs: 300_000,
     codexManagedAccounts: [],
     activeCodexManagedAccountId: null,
+    claudeManagedAccounts: [],
+    activeClaudeManagedAccountId: null,
     terminalScopeHistoryByWorktree: true,
     defaultTuiAgent: null,
     skipDeleteWorktreeConfirm: false,
     defaultTaskViewPreset: 'all',
+    defaultTaskSource: 'github',
     defaultRepoSelection: null,
+    defaultLinearTeamSelection: null,
     agentCmdOverrides: {},
     // Why: 'auto' runs a layout-aware probe at boot (see
     // src/renderer/src/lib/keyboard-layout/*) that picks 'true' for US and
@@ -153,12 +170,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalMacOptionAsAlt: 'auto',
     terminalMacOptionAsAltMigrated: false,
     experimentalTerminalDaemon: false,
-    experimentalTerminalDaemonNoticeShown: false,
-    // Why: keep the historical default (on) so no existing user's terminal
-    // loses clickable-link emission on upgrade. Users with heavy zshrc setups
-    // can disable it from Settings → Terminal → Advanced to reclaim startup
-    // time.
-    terminalForceHyperlink: true
+    experimentalTerminalDaemonNoticeShown: false
   }
 }
 

@@ -4,11 +4,13 @@ import type { IDisposable } from '@xterm/xterm'
 import { isGeminiTerminalTitle, isClaudeAgent } from '@/lib/agent-status'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
+import { AGENT_DASHBOARD_ENABLED } from '../../../../shared/constants'
 import type { PtyConnectResult } from './pty-transport'
 import { createIpcPtyTransport } from './pty-transport'
 import { shouldSeedCacheTimerOnInitialTitle } from './cache-timer-seeding'
 import type { PtyConnectionDeps } from './pty-connection-types'
 import { isPaneReplaying, replayIntoTerminal } from './replay-guard'
+import { POST_REPLAY_MODE_RESET, POST_REPLAY_FOCUS_REPORTING_RESET } from './layout-serialization'
 
 const pendingSpawnByTabId = new Map<string, Promise<string | null>>()
 
@@ -68,6 +70,9 @@ export function connectPanePty(
     // first emitting a non-agent title, the cache timer would persist as stale
     // state. Clear it unconditionally on PTY exit.
     deps.setCacheTimerStartedAt(cacheKey, null)
+    // Why: a dead terminal has no running agent — remove its explicit status
+    // entry so the hover UI only shows what is running *now*.
+    useAppStore.getState().removeAgentStatus(cacheKey)
     // The runtime graph is the CLI's source for live terminal bindings, so
     // we must republish when a pane loses its PTY instead of waiting for a
     // broader layout change that may never happen.
@@ -102,9 +107,9 @@ export function connectPanePty(
     deps.setRuntimePaneTitle(deps.tabId, pane.id, title)
     // Why: only the focused pane should drive the tab title — otherwise two
     // agents in split panes cause rapid title flickering as each emits OSC
-    // sequences. Mirrors Ghostty's approach: only the active split's title
-    // propagates to the tab. When focus changes, onActivePaneChange syncs
-    // the newly active pane's stored title to the tab.
+    // sequences. Only the active split's title propagates to the tab. When
+    // focus changes, onActivePaneChange syncs the newly active pane's stored
+    // title to the tab.
     if (manager.getActivePane()?.id === pane.id) {
       deps.updateTabTitle(deps.tabId, title)
     }
@@ -132,22 +137,51 @@ export function connectPanePty(
     // frame-level sync often runs before that async result arrives.
     scheduleRuntimeGraphSync()
   }
+  // ─── Attention signal: BEL ────────────────────────────────────────────
+  //
+  // BEL (0x07) is the attention signal. A BEL raises both the tab-level
+  // bell indicator and the worktree-level dot, and fires an OS
+  // notification. The unread flag clears when the user activates the tab
+  // (see activateTab / focusGroup in the terminals slice) — the bell
+  // auto-clears on focus/keystroke.
+  //
+  // The one case where BEL falsely fires is when a crashed TUI left DEC
+  // private mode 1004 (focus event reporting) enabled — pane clicks then
+  // emit `\e[I`/`\e[O` into the shell, zsh treats them as unbound keys and
+  // rings the bell. This is specific to terminals with cross-restart
+  // persistence (as we have); our fix is to reset 1004 and friends after
+  // scrollback replay so the mode state matches the fresh shell
+  // underneath. See POST_REPLAY_MODE_RESET in layout-serialization.ts.
   const onBell = (): void => {
+    // Why: restored Claude Code sessions have been observed to emit a real
+    // standalone BEL some time after daemon snapshot reattach, even when Orca
+    // did not just forward focus/control input. Treat the BEL as authoritative
+    // PTY output here; any product-side suppression should be an explicit UX
+    // decision higher up, not a transport-layer guess.
     deps.markWorktreeUnread(deps.worktreeId)
+    deps.markTerminalTabUnread(deps.tabId)
     deps.dispatchNotification({ source: 'terminal-bell' })
   }
+
+  // ─── Prompt-cache timer: driven by agent lifecycle, not attention ─────
+  //
+  // The working→idle title transition is kept purely to drive Claude's
+  // prompt-cache countdown in the sidebar. It intentionally does NOT raise
+  // attention — that would double-fire with the BEL above, and OSC title
+  // transitions are too narrow a signal to be the sole attention source
+  // (only agent TUIs emit them; non-agent long-running tasks would never
+  // get surfaced).
   const onAgentBecameIdle = (title: string): void => {
-    deps.markWorktreeUnread(deps.worktreeId)
-    deps.dispatchNotification({ source: 'agent-task-complete', terminalTitle: title })
-    // Why: only start the prompt-cache countdown for Claude agents — other agents
-    // have different (or no) prompt-caching semantics and showing a timer for them
-    // would be misleading.
-    // Why we check `settings !== null` separately: during startup, settings hydrate
-    // asynchronously after terminals reconnect. If we treat null as disabled, the
-    // first working→idle transition on a restored Claude tab silently drops the
-    // timer. Writing a timestamp is cheap and the CacheTimer component already
-    // gates rendering on the enabled flag, so a spurious write when the feature
-    // turns out to be disabled is harmless.
+    // Why: only start the prompt-cache countdown for Claude agents — other
+    // agents have different (or no) prompt-caching semantics and showing a
+    // timer for them would be misleading.
+    //
+    // Why we check `settings !== null` separately: during startup, settings
+    // hydrate asynchronously after terminals reconnect. If we treat null
+    // as disabled, the first working→idle transition on a restored Claude
+    // tab silently drops the timer. Writing a timestamp is cheap and the
+    // CacheTimer component gates rendering on the enabled flag, so a
+    // spurious write when the feature turns out to be disabled is harmless.
     const settings = useAppStore.getState().settings
     if (isClaudeAgent(title) && (settings === null || settings.promptCacheTimerEnabled)) {
       deps.setCacheTimerStartedAt(cacheKey, Date.now())
@@ -163,6 +197,20 @@ export function connectPanePty(
     // the agent has exited. Clear any running cache timer so the sidebar doesn't
     // show a stale countdown for a tab that no longer has an active Claude session.
     deps.setCacheTimerStartedAt(cacheKey, null)
+    // Why: the agent process is gone, so its explicit status is no longer meaningful.
+    // Remove the entry so the hover UI does not show stale "working" for a dead agent.
+    useAppStore.getState().removeAgentStatus(cacheKey)
+  }
+  // Why: inject ORCA_PANE_KEY so global Claude/Codex hooks can attribute their
+  // callbacks to the correct Orca pane without resolving worktrees from cwd.
+  // The key matches the `${tabId}:${paneId}` composite used for cacheTimerByKey.
+  // ORCA_TAB_ID / ORCA_WORKTREE_ID are exposed separately so the receiver has
+  // routing context without having to split paneKey back into its parts.
+  const paneEnv = {
+    ...paneStartup?.env,
+    ORCA_PANE_KEY: cacheKey,
+    ORCA_TAB_ID: deps.tabId,
+    ORCA_WORKTREE_ID: deps.worktreeId
   }
 
   // Why: remote repos route PTY spawn through the SSH provider. Resolve the
@@ -175,7 +223,7 @@ export function connectPanePty(
 
   const transport = createIpcPtyTransport({
     cwd: deps.cwd,
-    env: paneStartup?.env,
+    env: paneEnv,
     command: paneStartup?.command,
     connectionId,
     worktreeId: deps.worktreeId,
@@ -185,7 +233,23 @@ export function connectPanePty(
     onBell,
     onAgentBecameIdle,
     onAgentBecameWorking,
-    onAgentExited
+    onAgentExited,
+    // Why: forward OSC 9999 payloads from the PTY stream to the agent-status slice.
+    // Without this, the OSC parser in pty-transport strips sequences from xterm
+    // output but the status never reaches the store or dashboard/hover UI.
+    onAgentStatus: (payload) => {
+      if (!AGENT_DASHBOARD_ENABLED) {
+        return
+      }
+      // Why: capture the store snapshot once so the title lookup and the
+      // setAgentStatus call observe the same state. Re-reading getState()
+      // between the two lines opens a brief window where the title could
+      // shift (OSC title update landing in between) and the status would be
+      // stored against a title that was never paired with it.
+      const state = useAppStore.getState()
+      const title = state.runtimePaneTitlesByTabId?.[deps.tabId]?.[pane.id]
+      state.setAgentStatus(cacheKey, payload, title)
+    }
   })
   const hasExistingPaneTransport = deps.paneTransportsRef.current.size > 0
   deps.paneTransportsRef.current.set(pane.id, transport)
@@ -436,7 +500,22 @@ export function connectPanePty(
               deps.replayingPanesRef,
               '\r\n\x1b[2m--- session restored ---\x1b[0m\r\n\r\n'
             )
-            window.api.pty.ackColdRestore(ptyId!)
+            // Why: the cold-restore scrollback is raw PTY output from the prior
+            // session, so mode-setting bytes emitted by a crashed TUI (e.g.
+            // Claude's \e[?1004h) come through verbatim and re-enable those modes
+            // in xterm. Cold-restore means the daemon lost the session and spawned
+            // a fresh shell — there is no TUI consuming these modes anymore, so
+            // reset them to match the fresh shell's expectations. Not applied to
+            // the snapshot branch below: that branch reattaches to a live daemon
+            // session where a running TUI may still depend on these modes.
+            replayIntoTerminal(pane, deps.replayingPanesRef, POST_REPLAY_MODE_RESET)
+            // Why: ptyId can be null if the transport was torn down during the
+            // reattach flight. Only IPC the ack when we have a real ptyId;
+            // the replay-into-xterm calls above remain unconditional because
+            // they write into the terminal buffer regardless.
+            if (ptyId) {
+              window.api.pty.ackColdRestore(ptyId)
+            }
           } else if (connectResult?.snapshot) {
             // Why: always clear before writing the daemon snapshot to prevent
             // duplication with the scrollback that restoreScrollbackBuffers()
@@ -446,6 +525,13 @@ export function connectPanePty(
             // Why replayIntoTerminal: same rationale as the cold-restore path.
             replayIntoTerminal(pane, deps.replayingPanesRef, '\x1b[2J\x1b[3J\x1b[H')
             replayIntoTerminal(pane, deps.replayingPanesRef, connectResult.snapshot)
+            // Why: snapshot restore keeps a live daemon session, so we avoid
+            // the broader POST_REPLAY_MODE_RESET bundle here. Focus reporting
+            // is the unsafe exception: preserving `?1004h` causes xterm to send
+            // `\e[I` / `\e[O` on pane focus/blur, and restored shells can ring
+            // BEL when no TUI is actively consuming them. Reset only 1004 so
+            // live-session mouse/paste modes stay intact while phantom bells stop.
+            replayIntoTerminal(pane, deps.replayingPanesRef, POST_REPLAY_FOCUS_REPORTING_RESET)
           }
 
           if (ptyId) {

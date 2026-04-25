@@ -90,6 +90,31 @@ describe('createPtySubprocess', () => {
     expect(proc.resize).toHaveBeenCalledWith(120, 40)
   })
 
+  it('normalizes invalid initial spawn dimensions', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+
+    createPtySubprocess({ sessionId: 'test', cols: 0, rows: -1 })
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Array),
+      expect.objectContaining({ cols: 80, rows: 24 })
+    )
+  })
+
+  it('ignores transient zero-size resize calls', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+
+    const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+    handle.resize(0, 0)
+    handle.write('still alive\n')
+
+    expect(proc.resize).not.toHaveBeenCalled()
+    expect(proc.write).toHaveBeenCalledWith('still alive\n')
+  })
+
   it('forwards kill calls', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)

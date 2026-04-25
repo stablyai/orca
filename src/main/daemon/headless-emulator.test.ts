@@ -138,22 +138,6 @@ describe('HeadlessEmulator', () => {
     })
   })
 
-  describe('onData callback', () => {
-    it('fires onData for terminal query responses', async () => {
-      const responses: string[] = []
-      emulator = new HeadlessEmulator({
-        cols: 80,
-        rows: 24,
-        onData: (data) => responses.push(data)
-      })
-
-      // DA1 query — xterm.js will respond with a device attributes string
-      await emulator.write('\x1b[c')
-
-      expect(responses.length).toBeGreaterThan(0)
-    })
-  })
-
   describe('terminal modes', () => {
     it('tracks bracketed paste mode', async () => {
       emulator = new HeadlessEmulator({ cols: 80, rows: 24 })

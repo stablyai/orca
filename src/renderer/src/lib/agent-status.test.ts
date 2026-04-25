@@ -2,14 +2,18 @@
  * Why: agent title detection is intentionally table-driven in one place so the
  * supported title variants stay readable and regressions are easy to compare.
  */
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, test, vi } from 'vitest'
 import {
   detectAgentStatusFromTitle,
   clearWorkingIndicators,
   createAgentStatusTracker,
   getAgentLabel,
   isGeminiTerminalTitle,
-  normalizeTerminalTitle
+  normalizeTerminalTitle,
+  isExplicitAgentStatusFresh,
+  mapAgentStatusStateToVisualStatus,
+  formatAgentTypeLabel,
+  agentTypeToIconAgent
 } from './agent-status'
 import { extractLastOscTitle } from '../components/terminal-pane/pty-transport'
 
@@ -168,6 +172,62 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('CLAUDE')).toBe('idle')
     expect(detectAgentStatusFromTitle('Codex Working')).toBe('working')
   })
+
+  // Why: `detectAgentStatusFromTitle` uses a substring-based `containsAgentName`
+  // fallback, so a cwd-path containing an agent-name fragment without a strong
+  // keyword or ". "/"* " prefix still falls through to the 'idle' branch. Pin
+  // the behavior so a future tightening (or deliberate relaxation) of
+  // `containsAgentName` is an explicit decision.
+  it('still returns idle for cwd-path containing agent name (known containsAgentName gap)', () => {
+    expect(detectAgentStatusFromTitle('~/codex-scratch')).toBe('idle')
+    expect(detectAgentStatusFromTitle('~/codex already built')).toBe('idle')
+  })
+})
+
+// Why: regression guard for the STRONG_WORKING_KEYWORDS_RE path-separator
+// false positive. Before the lookarounds were widened to `[\w./\\-]`, a title
+// like `~/codex/working` matched STRONG_WORKING_KEYWORDS_RE (because `/` is
+// not in `[\w\-]`) and the function classified a plain path as 'working',
+// driving spinners and agent counts off a shell cwd. The idle-side fallback
+// at the bottom of `detectAgentStatusFromTitle` still returns 'idle' for
+// agent-name-containing titles — that's the known `containsAgentName`
+// substring gap documented in the test above — so the behavior this block
+// pins is specifically "no path fragment is ever classified as 'working'."
+describe('detectAgentStatusFromTitle path-separator rejection', () => {
+  test('rejects working keywords adjacent to POSIX path separators', () => {
+    expect(detectAgentStatusFromTitle('~/codex/working')).not.toBe('working')
+    expect(detectAgentStatusFromTitle('~/codex/thinking')).not.toBe('working')
+    expect(detectAgentStatusFromTitle('~/codex/running')).not.toBe('working')
+  })
+
+  test('rejects working keywords adjacent to Windows path separators', () => {
+    expect(detectAgentStatusFromTitle('C:\\codex\\working')).not.toBe('working')
+    expect(detectAgentStatusFromTitle('C:\\aider\\thinking')).not.toBe('working')
+  })
+
+  test('rejects working keywords adjacent to `.` separators', () => {
+    expect(detectAgentStatusFromTitle('codex.working')).not.toBe('working')
+    expect(detectAgentStatusFromTitle('aider.thinking')).not.toBe('working')
+  })
+
+  test('still accepts legitimate idle/working titles separated by whitespace', () => {
+    expect(detectAgentStatusFromTitle('Codex done')).toBe('idle')
+    expect(detectAgentStatusFromTitle('OpenCode ready')).toBe('idle')
+    expect(detectAgentStatusFromTitle('Aider idle')).toBe('idle')
+    expect(detectAgentStatusFromTitle('Codex working')).toBe('working')
+    expect(detectAgentStatusFromTitle('Aider thinking')).toBe('working')
+  })
+
+  // Why: path separators only need to be blocked on the LEFT of the keyword
+  // (where path fragments sit). Blocking them on the right would regress
+  // legitimate sentence-style titles where a keyword is followed by `.`/`!`/`?`.
+  test('still accepts keywords followed by trailing punctuation', () => {
+    expect(detectAgentStatusFromTitle('Codex done.')).toBe('idle')
+    expect(detectAgentStatusFromTitle('Aider idle!')).toBe('idle')
+    expect(detectAgentStatusFromTitle('OpenCode ready?')).toBe('idle')
+    expect(detectAgentStatusFromTitle('Codex working.')).toBe('working')
+    expect(detectAgentStatusFromTitle('Aider thinking...')).toBe('working')
+  })
 })
 
 describe('clearWorkingIndicators', () => {
@@ -197,6 +257,24 @@ describe('clearWorkingIndicators', () => {
   it('returns original title if no working indicators found', () => {
     expect(clearWorkingIndicators('* claude')).toBe('* claude')
     expect(clearWorkingIndicators('Terminal 1')).toBe('Terminal 1')
+  })
+
+  // Why: clearWorkingIndicators must use the same hyphen/word-char-aware
+  // boundary as STRONG_WORKING_KEYWORDS_RE (agent-detection.ts). A prior
+  // implementation used plain `\b${keyword}\b` which — since `-` is a
+  // non-word char — would strip "working" out of "codex is-working-cap"
+  // even though detectAgentStatusFromTitle correctly refuses to classify
+  // that title as 'working'. The clearer and detector must stay symmetric.
+  it('does not strip working keywords inside hyphenated compounds', () => {
+    expect(clearWorkingIndicators('codex is-working-cap')).toBe('codex is-working-cap')
+    expect(clearWorkingIndicators('claude reworking diff')).toBe('claude reworking diff')
+    expect(clearWorkingIndicators('codex overthinking it')).toBe('codex overthinking it')
+  })
+
+  it('still strips working keywords at whitespace boundaries', () => {
+    const cleared = clearWorkingIndicators('Codex working on tests')
+    expect(cleared).not.toMatch(/\bworking\b/)
+    expect(detectAgentStatusFromTitle(cleared)).not.toBe('working')
   })
 })
 
@@ -380,6 +458,20 @@ describe('createAgentStatusTracker', () => {
     expect(onBecameIdle).not.toHaveBeenCalled()
   })
 
+  // Why: reset() clears the tracker's working latch so stale working→idle
+  // transitions cannot fire after the owning transport is torn down. Without
+  // this guarantee, a reattach or late title delivery could surface a
+  // phantom idle notification for work the user already dismissed.
+  it('reset() clears working state so a subsequent idle does not fire onBecameIdle', () => {
+    const onBecameIdle = vi.fn()
+    const tracker = createAgentStatusTracker(onBecameIdle)
+
+    tracker.handleTitle('⠂ Claude Code') // working
+    tracker.reset()
+    tracker.handleTitle('✳ Claude Code') // idle — must NOT fire after reset
+    expect(onBecameIdle).not.toHaveBeenCalled()
+  })
+
   // --- End-to-end: raw OSC bytes → extractLastOscTitle → tracker ---
   it('end-to-end: extracts OSC title and detects Claude Code transition', () => {
     const onBecameIdle = vi.fn()
@@ -426,5 +518,112 @@ describe('createAgentStatusTracker', () => {
     }
 
     expect(onBecameIdle).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('isExplicitAgentStatusFresh', () => {
+  it('treats the boundary (now - updatedAt == staleAfterMs) as fresh', () => {
+    // Why: the function uses `<=`, so equality at the boundary must remain
+    // fresh. Protecting this invariant keeps entries from flipping to stale
+    // one tick earlier than the configured TTL implies.
+    const staleAfterMs = 60_000
+    const now = 1_000_000
+    const entry = { updatedAt: now - staleAfterMs }
+    expect(isExplicitAgentStatusFresh(entry, now, staleAfterMs)).toBe(true)
+  })
+
+  it('treats one millisecond past the boundary as stale', () => {
+    const staleAfterMs = 60_000
+    const now = 1_000_000
+    const entry = { updatedAt: now - staleAfterMs - 1 }
+    expect(isExplicitAgentStatusFresh(entry, now, staleAfterMs)).toBe(false)
+  })
+
+  it('treats a just-updated entry (now - updatedAt == 0) as fresh', () => {
+    const staleAfterMs = 60_000
+    const now = 1_000_000
+    const entry = { updatedAt: now }
+    expect(isExplicitAgentStatusFresh(entry, now, staleAfterMs)).toBe(true)
+  })
+})
+
+describe('mapAgentStatusStateToVisualStatus', () => {
+  it("maps 'working' to 'working'", () => {
+    expect(mapAgentStatusStateToVisualStatus('working')).toBe('working')
+  })
+
+  it("maps 'blocked' to 'permission'", () => {
+    expect(mapAgentStatusStateToVisualStatus('blocked')).toBe('permission')
+  })
+
+  it("maps 'waiting' to 'permission'", () => {
+    expect(mapAgentStatusStateToVisualStatus('waiting')).toBe('permission')
+  })
+
+  it("maps 'done' to 'done'", () => {
+    expect(mapAgentStatusStateToVisualStatus('done')).toBe('done')
+  })
+
+  it('returns a non-empty string for every valid state', () => {
+    for (const state of ['working', 'blocked', 'waiting', 'done'] as const) {
+      const visual = mapAgentStatusStateToVisualStatus(state)
+      expect(typeof visual).toBe('string')
+      expect(visual.length).toBeGreaterThan(0)
+    }
+  })
+})
+
+describe('formatAgentTypeLabel', () => {
+  it("returns 'Agent' for null", () => {
+    expect(formatAgentTypeLabel(null)).toBe('Agent')
+  })
+
+  it("returns 'Agent' for undefined", () => {
+    expect(formatAgentTypeLabel(undefined)).toBe('Agent')
+  })
+
+  it("returns 'Agent' for 'unknown'", () => {
+    expect(formatAgentTypeLabel('unknown')).toBe('Agent')
+  })
+
+  it("maps 'claude' to 'Claude'", () => {
+    expect(formatAgentTypeLabel('claude')).toBe('Claude')
+  })
+
+  it("maps 'codex' to 'Codex'", () => {
+    expect(formatAgentTypeLabel('codex')).toBe('Codex')
+  })
+
+  it("maps 'gemini' to 'Gemini'", () => {
+    expect(formatAgentTypeLabel('gemini')).toBe('Gemini')
+  })
+
+  it("passes through unknown-but-nonsentinel strings as-is (e.g. 'cursor')", () => {
+    expect(formatAgentTypeLabel('cursor')).toBe('cursor')
+  })
+})
+
+describe('agentTypeToIconAgent', () => {
+  it('returns null for null', () => {
+    expect(agentTypeToIconAgent(null)).toBeNull()
+  })
+
+  it('returns null for undefined', () => {
+    expect(agentTypeToIconAgent(undefined)).toBeNull()
+  })
+
+  it("returns null for 'unknown'", () => {
+    expect(agentTypeToIconAgent('unknown')).toBeNull()
+  })
+
+  it("round-trips iconable agent types like 'claude'", () => {
+    expect(agentTypeToIconAgent('claude')).toBe('claude')
+  })
+
+  it('returns null for arbitrary non-iconable strings', () => {
+    // Why: guards against hook payloads reporting agentTypes that AgentIcon
+    // cannot render (e.g. "totally-fake-agent"); returning null lets the
+    // caller fall back to a neutral glyph instead of a broken icon.
+    expect(agentTypeToIconAgent('totally-fake-agent')).toBeNull()
   })
 })

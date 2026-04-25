@@ -1,7 +1,7 @@
 /* oxlint-disable max-lines */
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { Globe, Plus } from 'lucide-react'
+import { Globe, Plus, WifiOff } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { getRepoMapFromState, useAllWorktrees } from '@/store/selectors'
 import {
@@ -138,6 +138,11 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const allWorktrees = useAllWorktrees()
   const repos = useAppStore((s) => s.repos)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
+  // Why: getWorktreeStatus needs per-pane titles so split-pane tabs with a
+  // working agent in a non-focused pane still surface as 'working' in the
+  // jump palette. Without this, clicking between panes would desync the
+  // palette's spinner from the sidebar's spinner.
+  const runtimePaneTitlesByTabId = useAppStore((s) => s.runtimePaneTitlesByTabId)
   const prCache = useAppStore((s) => s.prCache)
   const issueCache = useAppStore((s) => s.issueCache)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
@@ -145,6 +150,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const activeBrowserTabId = useAppStore((s) => s.activeBrowserTabId)
   const browserTabsByWorktree = useAppStore((s) => s.browserTabsByWorktree)
   const browserPagesByWorkspace = useAppStore((s) => s.browserPagesByWorkspace)
+  const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
 
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
@@ -701,10 +707,16 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                 const branch = branchName(worktree.branch)
                 const status = getWorktreeStatus(
                   tabsByWorktree[worktree.id] ?? [],
-                  browserTabsByWorktree[worktree.id] ?? []
+                  browserTabsByWorktree[worktree.id] ?? [],
+                  runtimePaneTitlesByTabId
                 )
                 const statusLabel = getWorktreeStatusLabel(status)
                 const isCurrentWorktree = activeWorktreeId === worktree.id
+                const sshConnectionId = repo?.connectionId ?? null
+                const sshStatus = sshConnectionId
+                  ? (sshConnectionStates.get(sshConnectionId)?.status ?? 'disconnected')
+                  : null
+                const isSshDisconnected = sshStatus != null && sshStatus !== 'connected'
 
                 return (
                   <CommandItem
@@ -725,6 +737,21 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                       <div className="flex items-center justify-between gap-2.5">
                         <div className="min-w-0 flex-1">
                           <div className="flex min-w-0 items-center gap-2">
+                            {sshConnectionId && (
+                              <span
+                                aria-label={isSshDisconnected ? 'SSH disconnected' : 'SSH remote'}
+                                className="shrink-0 inline-flex items-center"
+                              >
+                                {isSshDisconnected ? (
+                                  <WifiOff className="size-3.5 text-red-400" aria-hidden="true" />
+                                ) : (
+                                  <Globe
+                                    className="size-3.5 text-muted-foreground"
+                                    aria-hidden="true"
+                                  />
+                                )}
+                              </span>
+                            )}
                             <span className="truncate text-[14px] font-semibold tracking-[-0.01em] text-foreground">
                               {entry.match.displayNameRange ? (
                                 <HighlightedText

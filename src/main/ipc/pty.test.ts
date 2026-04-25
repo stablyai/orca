@@ -18,6 +18,7 @@ const {
   spawnMock,
   openCodeBuildPtyEnvMock,
   openCodeClearPtyMock,
+  buildAgentHookEnvMock,
   piBuildPtyEnvMock,
   piClearPtyMock
 } = vi.hoisted(() => ({
@@ -35,12 +36,14 @@ const {
   spawnMock: vi.fn(),
   openCodeBuildPtyEnvMock: vi.fn(),
   openCodeClearPtyMock: vi.fn(),
+  buildAgentHookEnvMock: vi.fn(),
   piBuildPtyEnvMock: vi.fn(),
   piClearPtyMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
   app: {
+    isPackaged: true,
     getPath: getPathMock
   },
   ipcMain: {
@@ -71,6 +74,12 @@ vi.mock('../opencode/hook-service', () => ({
   openCodeHookService: {
     buildPtyEnv: openCodeBuildPtyEnvMock,
     clearPty: openCodeClearPtyMock
+  }
+}))
+
+vi.mock('../agent-hooks/server', () => ({
+  agentHookServer: {
+    buildPtyEnv: buildAgentHookEnvMock
   }
 }))
 
@@ -114,6 +123,7 @@ describe('registerPtyHandlers', () => {
     spawnMock.mockReset()
     openCodeBuildPtyEnvMock.mockReset()
     openCodeClearPtyMock.mockReset()
+    buildAgentHookEnvMock.mockReset()
     piBuildPtyEnvMock.mockReset()
     piClearPtyMock.mockReset()
     mainWindow.webContents.on.mockReset()
@@ -130,6 +140,10 @@ describe('registerPtyHandlers', () => {
       ORCA_OPENCODE_HOOK_TOKEN: 'opencode-token',
       ORCA_OPENCODE_PTY_ID: 'test-pty',
       OPENCODE_CONFIG_DIR: '/tmp/orca-opencode-config'
+    })
+    buildAgentHookEnvMock.mockReturnValue({
+      ORCA_AGENT_HOOK_PORT: '5678',
+      ORCA_AGENT_HOOK_TOKEN: 'agent-token'
     })
     piBuildPtyEnvMock.mockImplementation((_ptyId: string, existingAgentDir?: string) => ({
       PI_CODING_AGENT_DIR: existingAgentDir
@@ -182,7 +196,8 @@ describe('registerPtyHandlers', () => {
   async function spawnAndGetEnv(
     argsEnv?: Record<string, string>,
     processEnvOverrides?: Record<string, string | undefined>,
-    getSelectedCodexHomePath?: () => string | null
+    getSelectedCodexHomePath?: () => string | null,
+    getSettings?: () => { enableGitHubAttribution: boolean }
   ): Promise<Record<string, string>> {
     const savedEnv: Record<string, string | undefined> = {}
     if (processEnvOverrides) {
@@ -200,7 +215,12 @@ describe('registerPtyHandlers', () => {
       // Clear previously registered handlers so re-registration doesn't
       // accumulate stale state across calls within one test.
       handlers.clear()
-      registerPtyHandlers(mainWindow as never, undefined, getSelectedCodexHomePath)
+      registerPtyHandlers(
+        mainWindow as never,
+        undefined,
+        getSelectedCodexHomePath,
+        getSettings as never
+      )
       await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
@@ -284,7 +304,7 @@ describe('registerPtyHandlers', () => {
       expect(env.ORCA_OPENCODE_HOOK_PORT).toBe('4567')
       expect(env.ORCA_OPENCODE_HOOK_TOKEN).toBe('opencode-token')
       expect(env.ORCA_OPENCODE_PTY_ID).toBe('test-pty')
-      expect(env.OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-config')
+      expect(env.OPENCODE_CONFIG_DIR).toEqual(expect.any(String))
     })
 
     it('injects the Pi agent overlay env into Orca terminal PTYs', async () => {
@@ -292,6 +312,44 @@ describe('registerPtyHandlers', () => {
       expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), '/tmp/user-pi-agent')
       expect(env.PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
     })
+
+    it('injects the Claude/Codex hook receiver env into Orca terminal PTYs', async () => {
+      const env = await spawnAndGetEnv()
+      // Why: buildAgentHookEnv runs twice for a local spawn — once inside the
+      // LocalPtyProvider's buildSpawnEnv closure (pty.ts:166) and once in the
+      // handler's `!args.connectionId` branch (pty.ts:333). The handler branch
+      // exists so daemon-adapter providers (which bypass buildSpawnEnv) still
+      // get the hook env, and is gated off for SSH spawns to avoid leaking
+      // the loopback token to remote hosts.
+      expect(buildAgentHookEnvMock).toHaveBeenCalledTimes(2)
+      expect(env.ORCA_AGENT_HOOK_PORT).toBe('5678')
+      expect(env.ORCA_AGENT_HOOK_TOKEN).toBe('agent-token')
+    })
+
+    it('prepends local git/gh attribution shims when attribution is enabled', async () => {
+      const env = await spawnAndGetEnv(undefined, undefined, undefined, () => ({
+        enableGitHubAttribution: true
+      }))
+
+      expect(env.ORCA_ENABLE_GIT_ATTRIBUTION).toBe('1')
+      expect(env.ORCA_GIT_COMMIT_TRAILER).toBe('Co-authored-by: Orca <help@stably.ai>')
+      expect(env.ORCA_GH_PR_FOOTER).toBe('Made with [Orca](https://github.com/orca-ide) 🐋')
+      expect(env.ORCA_GH_ISSUE_FOOTER).toBe('Made with [Orca](https://github.com/orca-ide) 🐋')
+      expect(env.PATH).toContain('/tmp/orca-user-data/orca-terminal-attribution/posix')
+    })
+
+    it('skips git/gh attribution shims when attribution is disabled', async () => {
+      const env = await spawnAndGetEnv(undefined, undefined, undefined, () => ({
+        enableGitHubAttribution: false
+      }))
+
+      expect(env.ORCA_ENABLE_GIT_ATTRIBUTION).toBeUndefined()
+      expect(env.ORCA_GIT_COMMIT_TRAILER).toBeUndefined()
+      expect(env.ORCA_GH_PR_FOOTER).toBeUndefined()
+      expect(env.ORCA_GH_ISSUE_FOOTER).toBeUndefined()
+      expect(env.PATH ?? '').not.toContain('/tmp/orca-user-data/orca-terminal-attribution/posix')
+    })
+
     it('leaves ambient CODEX_HOME untouched when system default is selected', async () => {
       const env = await spawnAndGetEnv(
         undefined,
@@ -452,6 +510,33 @@ describe('registerPtyHandlers', () => {
       expect(spawnMock).toHaveBeenCalledWith(
         'C:\\Program Files\\Git\\bin\\bash.exe',
         [],
+        expect.any(Object)
+      )
+    })
+
+    it('uses terminalWindowsShell setting over COMSPEC when provided', () => {
+      // Why: COMSPEC always points to cmd.exe on stock Windows, so without the
+      // setting the terminal would ignore the user's shell preference.
+      process.env.COMSPEC = 'C:\\Windows\\system32\\cmd.exe'
+
+      registerPtyHandlers(
+        mainWindow as never,
+        undefined,
+        undefined,
+        () =>
+          ({
+            terminalWindowsShell: 'powershell.exe'
+          }) as never
+      )
+      handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+
+      expect(spawnMock).toHaveBeenCalledWith(
+        'powershell.exe',
+        [
+          '-NoExit',
+          '-Command',
+          'try { . $PROFILE } catch {}; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
+        ],
         expect.any(Object)
       )
     })

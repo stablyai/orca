@@ -2,7 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { mkdtempSync, rmSync } from 'fs'
-import { DaemonSpawner, getDaemonSocketPath, getDaemonTokenPath } from './daemon-spawner'
+import {
+  DaemonSpawner,
+  getDaemonPidPath,
+  getDaemonSocketPath,
+  getDaemonTokenPath
+} from './daemon-spawner'
 import { startDaemon, type DaemonHandle } from './daemon-main'
 import { DaemonClient } from './client'
 import type { SubprocessHandle } from './session'
@@ -66,6 +71,7 @@ describe('DaemonSpawner', () => {
     it('uses protocol-scoped socket and token paths', () => {
       const socketPath = getDaemonSocketPath(dir)
       const tokenPath = getDaemonTokenPath(dir)
+      const pidPath = getDaemonPidPath(dir)
 
       if (process.platform === 'win32') {
         expect(socketPath).toContain(`orca-terminal-host-v${PROTOCOL_VERSION}`)
@@ -73,6 +79,7 @@ describe('DaemonSpawner', () => {
         expect(socketPath).toBe(join(dir, `daemon-v${PROTOCOL_VERSION}.sock`))
       }
       expect(tokenPath).toBe(join(dir, `daemon-v${PROTOCOL_VERSION}.token`))
+      expect(pidPath).toBe(join(dir, `daemon-v${PROTOCOL_VERSION}.pid`))
     })
 
     it('starts daemon and returns connection info', async () => {

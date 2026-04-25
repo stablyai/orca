@@ -97,6 +97,17 @@ export function isValidVersion(value: string): boolean {
   return parseVersion(value) !== null
 }
 
+// Why: a user running a prerelease build (e.g. 1.3.17-rc.1) must stay on the
+// RC channel for "Check for Updates" to resolve the next RC (1.3.17-rc.2).
+// The default generic feed only advertises non-prerelease releases, so without
+// this detection a prerelease user would be stuck unless they knew to
+// Shift-click the menu item — effectively trapping them on the RC they
+// installed.
+export function isPrereleaseVersion(value: string): boolean {
+  const parsed = parseVersion(value)
+  return parsed !== null && parsed.prerelease.length > 0
+}
+
 function compareIdentifiers(left: string, right: string): number {
   const leftNumeric = /^\d+$/.test(left)
   const rightNumeric = /^\d+$/.test(right)

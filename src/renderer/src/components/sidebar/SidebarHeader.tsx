@@ -56,7 +56,7 @@ const SidebarHeader = React.memo(function SidebarHeader() {
 
   return (
     <div className="flex h-8 items-center justify-between px-4 mt-1">
-      <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground select-none">
+      <span className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/80 select-none">
         Workspaces
       </span>
       <div className="flex items-center gap-1.5 shrink-0">
@@ -70,7 +70,7 @@ const SidebarHeader = React.memo(function SidebarHeader() {
                   className="text-muted-foreground"
                   aria-label="View options"
                 >
-                  <SlidersHorizontal className="size-3.5" />
+                  <SlidersHorizontal className="size-3.5" strokeWidth={2.25} />
                 </Button>
               </DropdownMenuTrigger>
             </TooltipTrigger>
@@ -153,13 +153,13 @@ const SidebarHeader = React.memo(function SidebarHeader() {
               aria-label="New workspace"
               disabled={!canCreateWorktree}
             >
-              <Plus className="size-3.5" />
+              <Plus className="size-3.5" strokeWidth={2.25} />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="right" sideOffset={6}>
             {canCreateWorktree
               ? `New workspace (${newWorktreeShortcutLabel})`
-              : 'Add a Git repo to create worktrees'}
+              : 'Add a Git project to create worktrees'}
           </TooltipContent>
         </Tooltip>
       </div>

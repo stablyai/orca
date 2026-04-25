@@ -199,4 +199,27 @@ describe('Subprocess: Relay entry point', () => {
     await relay.waitForExit(3000)
     expect(relay.proc.exitCode).toBe(0)
   }, 10_000)
+
+  it('resolves ~ to home directory via session.resolveHome', async () => {
+    relay = spawn()
+    await relay.sentinelReceived
+
+    const homeDir = require('os').homedir()
+
+    const id1 = relay.send('session.resolveHome', { path: '~' })
+    const id2 = relay.send('session.resolveHome', { path: '~/projects' })
+    const id3 = relay.send('session.resolveHome', { path: '/absolute/path' })
+
+    const [r1, r2, r3] = await Promise.all([
+      relay.waitForResponse(id1),
+      relay.waitForResponse(id2),
+      relay.waitForResponse(id3)
+    ])
+
+    expect((r1.result as { resolvedPath: string }).resolvedPath).toBe(homeDir)
+    expect((r2.result as { resolvedPath: string }).resolvedPath).toBe(
+      path.join(homeDir, 'projects')
+    )
+    expect((r3.result as { resolvedPath: string }).resolvedPath).toBe('/absolute/path')
+  }, 10_000)
 })

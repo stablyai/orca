@@ -7,6 +7,10 @@ const { handleMock, removeHandlerMock, removeAllListenersMock } = vi.hoisted(() 
 }))
 
 vi.mock('electron', () => ({
+  app: {
+    isPackaged: true,
+    getPath: vi.fn().mockReturnValue('/tmp/orca-test-userdata')
+  },
   ipcMain: {
     handle: handleMock,
     on: vi.fn(),
@@ -19,6 +23,9 @@ vi.mock('fs', () => ({
   existsSync: () => true,
   statSync: () => ({ isDirectory: () => true, mode: 0o755 }),
   accessSync: () => undefined,
+  mkdirSync: vi.fn(),
+  readFileSync: vi.fn(() => ''),
+  writeFileSync: vi.fn(),
   chmodSync: vi.fn(),
   constants: { X_OK: 1 }
 }))

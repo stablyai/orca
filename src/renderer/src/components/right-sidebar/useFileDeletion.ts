@@ -6,7 +6,10 @@ import { dirname } from '@/lib/path'
 import { getConnectionId } from '@/lib/connection-context'
 import { isPathEqualOrDescendant } from './file-explorer-paths'
 import type { TreeNode } from './file-explorer-types'
-import { requestEditorSaveQuiesce } from '@/components/editor/editor-autosave'
+import {
+  requestEditorFileSave,
+  requestEditorSaveQuiesce
+} from '@/components/editor/editor-autosave'
 import { commitFileExplorerOp } from './fileExplorerUndoRedo'
 
 type UseFileDeletionParams = {
@@ -14,6 +17,7 @@ type UseFileDeletionParams = {
   openFiles: {
     id: string
     filePath: string
+    isDirty?: boolean
   }[]
   closeFile: (fileId: string) => void
   refreshDir: (dirPath: string) => Promise<void>
@@ -49,16 +53,39 @@ export function useFileDeletion({
       }
       inFlightRef.current.add(node.path)
 
+      const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
+      const isRemote = connectionId !== undefined
+
+      // Why: remote deletes go through `rm` on the relay — there is no OS-level
+      // Trash/Recycle Bin, so the operation is permanent. Require an explicit
+      // confirmation in that case because the UI's usual undo cannot restore
+      // directories or binary files.
+      if (isRemote) {
+        const message = node.isDirectory
+          ? `Permanently delete '${node.name}' and all its contents? This cannot be undone.`
+          : `Permanently delete '${node.name}'? This cannot be undone.`
+        if (!window.confirm(message)) {
+          inFlightRef.current.delete(node.path)
+          return
+        }
+      }
+
       try {
         const filesToClose = openFiles.filter((file) =>
           isPathEqualOrDescendant(file.filePath, node.path)
         )
-        // Why: moving a file to Trash/Recycle Bin is another external mutation of
-        // the file path. Let any in-flight autosave finish first so the delete
-        // action cannot be undone by a trailing write that recreates the file.
+        // Why: force-save any dirty buffers before trashing so the undo snapshot
+        // reads the user's latest edits from disk — not an older version that
+        // predates debounced autosave or a buffer with autosave disabled.
+        // Quiesce-only would cancel pending timers and discard those edits.
+        // If a save fails, surface the error and abort the delete instead of
+        // silently trashing the stale on-disk content.
+        const dirtyFiles = filesToClose.filter((file) => file.isDirty)
+        await Promise.all(dirtyFiles.map((file) => requestEditorFileSave({ fileId: file.id })))
+        // After saving, quiesce any remaining scheduled autosaves so trailing
+        // writes cannot recreate the file after it's been trashed.
         await Promise.all(filesToClose.map((file) => requestEditorSaveQuiesce({ fileId: file.id })))
 
-        const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
         const parentDir = dirname(node.path)
         // Why: read file content before deleting so undo can restore it.
         // We capture content first but only commit the undo entry after the
@@ -76,7 +103,11 @@ export function useFileDeletion({
           }
         }
 
-        await window.api.fs.deletePath({ targetPath: node.path, connectionId })
+        await window.api.fs.deletePath({
+          targetPath: node.path,
+          connectionId,
+          recursive: node.isDirectory
+        })
 
         if (undoContent !== undefined) {
           commitFileExplorerOp({
@@ -89,7 +120,11 @@ export function useFileDeletion({
               await refreshDir(parentDir)
             },
             redo: async () => {
-              await window.api.fs.deletePath({ targetPath: node.path, connectionId })
+              await window.api.fs.deletePath({
+                targetPath: node.path,
+                connectionId,
+                recursive: node.isDirectory
+              })
               await refreshDir(parentDir)
             }
           })
@@ -129,10 +164,18 @@ export function useFileDeletion({
         // full-tree reloads (the watcher will also trigger a targeted refresh).
         await refreshDir(dirname(node.path))
 
-        const destination = isWindows ? 'Recycle Bin' : 'Trash'
-        toast.success(`'${node.name}' moved to ${destination}`)
+        // Why: local deletes go to the OS trash and are recoverable; remote
+        // deletes call `rm` on the relay and are permanent. The toast needs
+        // to reflect that so users aren't misled into thinking they can
+        // recover a remote file from a Trash/Recycle Bin that doesn't exist.
+        if (isRemote) {
+          toast.success(`'${node.name}' deleted`)
+        } else {
+          const destination = isWindows ? 'Recycle Bin' : 'Trash'
+          toast.success(`'${node.name}' moved to ${destination}`)
+        }
       } catch (error) {
-        const action = isWindows ? 'move to Recycle Bin' : 'move to Trash'
+        const action = isRemote ? 'delete' : isWindows ? 'move to Recycle Bin' : 'move to Trash'
         toast.error(error instanceof Error ? error.message : `Failed to ${action} '${node.name}'.`)
       } finally {
         inFlightRef.current.delete(node.path)
@@ -144,8 +187,9 @@ export function useFileDeletion({
   const requestDelete = useCallback(
     (node: TreeNode) => {
       setSelectedPath(node.path)
-      // Why: per product decision, skip the confirmation dialog — trashing is
-      // reversible (OS-level trash + in-app undo), so the extra prompt is noise.
+      // Why: local deletes skip confirmation because they're reversible
+      // (OS-level Trash + in-app undo). Remote deletes are permanent, so
+      // runDelete prompts for confirmation internally before calling `rm`.
       void runDelete(node)
     },
     [runDelete, setSelectedPath]

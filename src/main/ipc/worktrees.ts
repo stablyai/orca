@@ -99,11 +99,14 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
       gitWorktrees = [createFolderWorktree(repo)]
     } else if (repo.connectionId) {
       const provider = getSshGitProvider(repo.connectionId)
-      // Why: when SSH is disconnected the provider is null. Throwing here
-      // makes the renderer's fetchWorktrees catch block preserve its cached
-      // worktree list instead of replacing it with an empty array.
+      // Why: when SSH is disconnected the provider is null. Return [] so the
+      // renderer's fetchWorktrees guard (`worktrees.length === 0 && current.length > 0`)
+      // preserves its cached worktree list. This avoids a console error on every
+      // fetchAllWorktrees cycle while the connection is being (re-)established —
+      // worktrees will be properly populated when the SSH `connected` event fires
+      // and triggers a re-fetch.
       if (!provider) {
-        throw new Error(`SSH connection "${repo.connectionId}" is not active`)
+        return []
       }
       gitWorktrees = await provider.listWorktrees(repo.path)
     } else {

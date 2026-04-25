@@ -1,4 +1,7 @@
-/* oxlint-disable max-lines */
+/* oxlint-disable max-lines -- Why: the PTY transport manages lifecycle, data flow,
+agent status extraction, and title tracking for terminal panes. Splitting would
+scatter the tightly coupled IPC ↔ xterm data pipeline across files with no clear
+module boundary, making the data flow harder to trace during debugging. */
 import {
   detectAgentStatusFromTitle,
   clearWorkingIndicators,
@@ -6,17 +9,17 @@ import {
   normalizeTerminalTitle,
   extractLastOscTitle
 } from '../../../../shared/agent-detection'
-import type { OpenCodeStatusEvent } from '../../../../shared/types'
 import {
   ptyDataHandlers,
   ptyExitHandlers,
-  openCodeStatusHandlers,
   ptyTeardownHandlers,
   ensurePtyDispatcher,
   getEagerPtyBufferHandle
 } from './pty-dispatcher'
 import type { PtyTransport, IpcPtyTransportOptions, PtyConnectResult } from './pty-dispatcher'
 import { createBellDetector } from './bell-detector'
+import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
+import { parseAgentStatusPayload } from '../../../../shared/agent-status-types'
 
 // Re-export public API so existing consumers keep working.
 export {
@@ -33,6 +36,111 @@ export type {
 } from './pty-dispatcher'
 export { extractLastOscTitle } from '../../../../shared/agent-detection'
 
+// ─── OSC 9999: agent status reporting ──────────────────────────────────────
+// Why OSC 9999: avoids known-used codes (7=cwd, 133=VS Code, 777=Superset,
+// 1337=iTerm2, 9001=Warp). Agents report structured status by printing
+// printf '\x1b]9999;{"state":"working","prompt":"..."}\x07'
+const OSC_AGENT_STATUS_PREFIX = '\x1b]9999;'
+
+export type ProcessedAgentStatusChunk = {
+  cleanData: string
+  payloads: ParsedAgentStatusPayload[]
+}
+
+function findAgentStatusTerminator(
+  data: string,
+  searchFrom: number
+): { index: number; length: 1 | 2 } | null {
+  const belIndex = data.indexOf('\x07', searchFrom)
+  const stIndex = data.indexOf('\x1b\\', searchFrom)
+  if (belIndex === -1 && stIndex === -1) {
+    return null
+  }
+  if (belIndex === -1) {
+    return { index: stIndex, length: 2 }
+  }
+  if (stIndex === -1 || belIndex < stIndex) {
+    return { index: belIndex, length: 1 }
+  }
+  return { index: stIndex, length: 2 }
+}
+
+/**
+ * Stateful OSC 9999 parser for PTY streams.
+ * Why: the design doc explicitly calls out partial reads across chunks. Regexing
+ * each chunk independently drops valid status updates when the PTY splits the
+ * escape sequence mid-payload and can leak raw control bytes into xterm.
+ */
+export function createAgentStatusOscProcessor(): (data: string) => ProcessedAgentStatusChunk {
+  // Why: cap the pending buffer so a malformed or binary stream containing our
+  // OSC 9999 prefix without a valid terminator cannot grow memory unbounded.
+  const MAX_PENDING = 64 * 1024
+  let pending = ''
+
+  return (data: string): ProcessedAgentStatusChunk => {
+    const combined = pending + data
+    pending = ''
+
+    const payloads: ParsedAgentStatusPayload[] = []
+    let cleanData = ''
+    let cursor = 0
+
+    while (cursor < combined.length) {
+      const start = combined.indexOf(OSC_AGENT_STATUS_PREFIX, cursor)
+      if (start === -1) {
+        // Why: if the stream ends on a partial copy of the prefix (e.g. "\x1b]9999"
+        // without the trailing ";"), carrying that tail into `pending` lets the
+        // next chunk complete the prefix. Without this, the tail would be
+        // emitted as plain output and the next chunk's valid status update
+        // would be dropped because its prefix is incomplete on its own.
+        const tail = combined.slice(cursor)
+        const prefixLen = OSC_AGENT_STATUS_PREFIX.length
+        let partialPrefixLen = 0
+        for (let k = Math.min(prefixLen - 1, tail.length); k > 0; k--) {
+          if (tail.endsWith(OSC_AGENT_STATUS_PREFIX.slice(0, k))) {
+            partialPrefixLen = k
+            break
+          }
+        }
+        if (partialPrefixLen > 0) {
+          cleanData += tail.slice(0, tail.length - partialPrefixLen)
+          pending = tail.slice(tail.length - partialPrefixLen)
+        } else {
+          cleanData += tail
+        }
+        break
+      }
+
+      cleanData += combined.slice(cursor, start)
+      const payloadStart = start + OSC_AGENT_STATUS_PREFIX.length
+      const terminator = findAgentStatusTerminator(combined, payloadStart)
+
+      if (terminator === null) {
+        const candidate = combined.slice(start)
+        // Why: drop the unterminated OSC entirely when it overflows MAX_PENDING,
+        // instead of flushing it to xterm. xterm.js would treat a lone
+        // "\x1b]9999;..." as an open string state and could swallow later
+        // output until it sees a BEL/ST terminator. Bounding the buffer is the
+        // goal; leaking corrupt escape sequences would be worse than the
+        // dropped payload.
+        pending = candidate.length > MAX_PENDING ? '' : candidate
+        break
+      }
+
+      const parsed = parseAgentStatusPayload(combined.slice(payloadStart, terminator.index))
+      if (parsed) {
+        payloads.push(parsed)
+      }
+      cursor = terminator.index + terminator.length
+    }
+
+    return { cleanData, payloads }
+  }
+}
+
+// Why: onAgentStatus callback added to IpcPtyTransportOptions in pty-dispatcher
+// so the OSC 9999 status payloads can be forwarded to the store.
+
 export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTransport {
   const {
     cwd,
@@ -46,16 +154,21 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     onBell,
     onAgentBecameIdle,
     onAgentBecameWorking,
-    onAgentExited
+    onAgentExited,
+    onAgentStatus
   } = opts
   let connected = false
   let destroyed = false
   let ptyId: string | null = null
-  const chunkContainsBell = createBellDetector()
+  const bellDetector = createBellDetector()
+  // Why: eager PTY buffers contain output produced before the pane attached —
+  // often from the previous app session. We still replay that data so titles
+  // and scrollback restore correctly, but it must not produce fresh bells,
+  // unread marks, or notifications for unrelated worktrees just because Orca
+  // is reconnecting background terminals on launch.
   let suppressAttentionEvents = false
+  const processAgentStatusChunk = createAgentStatusOscProcessor()
   let lastEmittedTitle: string | null = null
-  let lastObservedTerminalTitle: string | null = null
-  let openCodeStatus: OpenCodeStatusEvent['status'] | null = null
   let staleTitleTimer: ReturnType<typeof setTimeout> | null = null
   const agentTracker =
     onAgentBecameIdle || onAgentBecameWorking || onAgentExited
@@ -76,53 +189,14 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   function unregisterPtyHandlers(id: string): void {
     ptyDataHandlers.delete(id)
     ptyExitHandlers.delete(id)
-    openCodeStatusHandlers.delete(id)
     ptyTeardownHandlers.delete(id)
   }
 
   function unregisterPtyDataAndStatusHandlers(id: string): void {
     ptyDataHandlers.delete(id)
-    openCodeStatusHandlers.delete(id)
-  }
-
-  function getSyntheticOpenCodeTitle(status: OpenCodeStatusEvent['status']): string {
-    const baseTitle =
-      lastObservedTerminalTitle && lastObservedTerminalTitle !== 'OpenCode'
-        ? `OpenCode · ${lastObservedTerminalTitle}`
-        : 'OpenCode'
-
-    if (status === 'working') {
-      return `⠋ ${baseTitle}`
-    }
-    if (status === 'permission') {
-      return `${baseTitle} permission needed`
-    }
-    return baseTitle
-  }
-
-  function applyOpenCodeStatus(event: OpenCodeStatusEvent): void {
-    openCodeStatus = event.status
-    if (staleTitleTimer) {
-      clearTimeout(staleTitleTimer)
-      staleTitleTimer = null
-    }
-
-    const rawTitle = getSyntheticOpenCodeTitle(event.status)
-    const title = normalizeTerminalTitle(rawTitle)
-    lastEmittedTitle = title
-    onTitleChange?.(title, rawTitle)
-    agentTracker?.handleTitle(rawTitle)
   }
 
   function applyObservedTerminalTitle(title: string): void {
-    lastObservedTerminalTitle = title
-    // Why: while OpenCode has an explicit non-idle status, that status is the
-    // source of truth — the observed title is only used as context text.
-    if (openCodeStatus && openCodeStatus !== 'idle') {
-      applyOpenCodeStatus({ ptyId: ptyId ?? '', status: openCodeStatus })
-      return
-    }
-
     lastEmittedTitle = normalizeTerminalTitle(title)
     onTitleChange?.(lastEmittedTitle, title)
     agentTracker?.handleTitle(title)
@@ -134,9 +208,24 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   // query sequences leak into the shell as stray input.
   let replayingBufferedData = false
 
-  // Why: shared by connect() and attach() to avoid duplicating title/bell/exit logic.
+  // Why: shared by connect() and attach() to avoid duplicating title/bell/exit
+  // logic across the two code paths that register a PTY.
   function registerPtyDataHandler(id: string): void {
     ptyDataHandlers.set(id, (data) => {
+      // Why: OSC 9999 is a renderer-only control protocol. Parse it before
+      // xterm sees the bytes, and keep parser state across chunks so partial
+      // PTY reads do not drop valid status updates or print escape garbage.
+      const processed = processAgentStatusChunk(data)
+      data = processed.cleanData
+      // Why: mirror the onBell / onAgentBecameIdle guard below — during eager-buffer
+      // replay we must not surface stale agent-status payloads from a prior app
+      // session into the live store. The parser still consumes the bytes so they
+      // do not leak into xterm, we just suppress the callback.
+      if (onAgentStatus && !suppressAttentionEvents) {
+        for (const payload of processed.payloads) {
+          onAgentStatus(payload)
+        }
+      }
       if (replayingBufferedData && storedCallbacks.onReplayData) {
         storedCallbacks.onReplayData(data)
       } else {
@@ -165,7 +254,14 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           }, STALE_TITLE_TIMEOUT)
         }
       }
-      if (onBell && chunkContainsBell(data) && !suppressAttentionEvents) {
+      // Why: BEL is the attention signal. The detector is
+      // stateful across chunks so a BEL sitting inside an OSC sequence
+      // (e.g. Claude's `\e]0;title\a`) is correctly ignored — only true
+      // terminal bells raise attention. suppressAttentionEvents gates this
+      // during the synchronous eager-buffer replay so a historical BEL
+      // captured from the prior session does not produce a fresh alert on
+      // cold reattach.
+      if (onBell && bellDetector.chunkContainsBell(data) && !suppressAttentionEvents) {
         onBell()
       }
     })
@@ -177,7 +273,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       staleTitleTimer = null
     }
     agentTracker?.reset()
-    openCodeStatus = null
+    bellDetector.reset()
   }
 
   function registerPtyExitHandler(id: string): void {
@@ -190,7 +286,6 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       storedCallbacks.onDisconnect?.()
       onPtyExit?.(id)
     })
-    openCodeStatusHandlers.set(id, applyOpenCodeStatus)
     // Why: shutdownWorktreeTerminals bypasses the transport layer — it
     // kills PTYs directly via IPC without calling disconnect()/destroy().
     // This teardown callback lets unregisterPtyDataHandlers cancel
@@ -284,19 +379,24 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       registerPtyDataHandler(id)
       registerPtyExitHandler(id)
 
+      // Why: replay buffered data through the real handler so title/bell/agent
+      // tracking (including OSC 9999 agent status) processes the output —
+      // otherwise restored tabs keep a default title.
       const bufferHandle = getEagerPtyBufferHandle(id)
       if (bufferHandle) {
         const buffered = bufferHandle.flush()
         if (buffered) {
-          // Why: eager PTY buffers contain output produced before the pane
-          // attached, often from a previous app session. We still replay that
-          // data so titles and scrollback restore correctly, but it must not
-          // generate fresh unread badges or notifications for unrelated
-          // worktrees just because Orca is reconnecting background terminals.
-          // Why replayingBufferedData: those buffered bytes are raw PTY output
-          // that may contain query sequences from the previous session; route
-          // them through onReplayData so the renderer engages the replay guard
-          // and xterm's auto-replies do not leak into the shell.
+          // Why: eager-buffered bytes are raw PTY output captured before the
+          // pane mounted — often from the previous app session. We replay
+          // them so titles/scrollback restore correctly, but must silence
+          // attention side effects during that replay: a historical BEL
+          // or completion captured from the prior session must not produce
+          // a fresh bell on the freshly mounted pane.
+          //
+          // replayingBufferedData additionally routes the bytes through
+          // onReplayData so the renderer engages the replay guard — xterm's
+          // auto-replies to embedded query sequences would otherwise leak
+          // into the shell's stdin.
           suppressAttentionEvents = true
           replayingBufferedData = true
           try {
@@ -304,6 +404,23 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           } finally {
             replayingBufferedData = false
             suppressAttentionEvents = false
+            // Why: replaying eager-buffered bytes may have observed a "working" title
+            // without a follow-up title, starting a stale-title timer. That timer would
+            // fire 3s later — outside the suppression window — and trigger a spurious
+            // working→idle transition (and phantom cache-timer write) for a session
+            // that was never live in this app instance. Cancel it so the replay has
+            // no lingering side effects.
+            if (staleTitleTimer) {
+              clearTimeout(staleTitleTimer)
+              staleTitleTimer = null
+            }
+            // Why: eager-buffered bytes may end mid-OSC (truncated/partial session
+            // data), leaving bellDetector with inOsc = true. Without resetting, the
+            // next real BEL in live data would be silently classified as an OSC
+            // terminator and dropped. BEL is the sole attention signal per the PR
+            // design, so this reset guards the attention pipeline against a silent
+            // regression driven by replay state leaking into the live stream.
+            bellDetector.reset()
           }
         }
         bufferHandle.dispose()
@@ -333,11 +450,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     },
 
     disconnect() {
-      if (staleTitleTimer) {
-        clearTimeout(staleTitleTimer)
-        staleTitleTimer = null
-      }
-      openCodeStatus = null
+      clearAccumulatedState()
       if (ptyId) {
         const id = ptyId
         window.api.pty.kill(id)
@@ -349,11 +462,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     },
 
     detach() {
-      if (staleTitleTimer) {
-        clearTimeout(staleTitleTimer)
-        staleTitleTimer = null
-      }
-      openCodeStatus = null
+      clearAccumulatedState()
       if (ptyId) {
         // Why: detach() is used for in-session remounts such as moving a tab
         // between split groups. Stop delivering data/title events into the

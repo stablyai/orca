@@ -1,9 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
-vi.mock('@/lib/agent-status', () => ({
-  detectAgentStatusFromTitle: vi.fn().mockReturnValue(null)
-}))
 vi.mock('@/runtime/sync-runtime-graph', () => ({
   scheduleRuntimeGraphSync: vi.fn()
 }))
@@ -122,6 +119,36 @@ describe('hydrateWorkspaceSession', () => {
       ptyIdsByLeafId: { 'pane:1': 'daemon-session-1' },
       buffersByLeafId: { 'pane:1': 'buffer' }
     })
+  })
+
+  it('resets persisted agent titles to the fallback label on hydration', () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/wt-1'
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1', path: '/wt-1' })]
+      }
+    })
+
+    const session: WorkspaceSessionState = {
+      activeRepoId: 'repo1',
+      activeWorktreeId: worktreeId,
+      activeTabId: 'tab-1',
+      terminalLayoutsByTabId: {},
+      tabsByWorktree: {
+        [worktreeId]: [makeTab({ id: 'tab-1', worktreeId, title: '* Claude done', ptyId: '207' })]
+      }
+    }
+
+    store.getState().hydrateWorkspaceSession(session)
+
+    expect(store.getState().tabsByWorktree[worktreeId]).toEqual([
+      expect.objectContaining({
+        id: 'tab-1',
+        title: 'Terminal 1',
+        ptyId: null
+      })
+    ])
   })
 
   it('seeds worktree nav history with the restored active worktree', () => {
