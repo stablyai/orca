@@ -921,6 +921,17 @@
   pointer-events: none;
 }
 
+/* Why: compact hovers for simple label strings (e.g. "Find in Selection (⌥⌘L)")
+   get `white-space: pre-wrap` inline-set by Monaco, so when the tooltip lands
+   near the viewport edge its max-width clamps and the label wraps to 2–3 lines,
+   pushing the tooltip down over the find-widget buttons. These labels are
+   single-line by design; forcing nowrap keeps the tooltip on one line and lets
+   the positioning logic flip/shift as needed to fit. Only applies to compact
+   hovers — markdown hovers still wrap normally. */
+.workbench-hover.compact .hover-contents {
+  white-space: nowrap !important;
+}
+
 /* ── Update card animations ───────────────────────────────────────── */
 
 @keyframes update-card-enter {
