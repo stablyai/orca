@@ -153,8 +153,13 @@ export function getWorkspaceSeedName(args: {
   prompt: string
   linkedIssueNumber: number | null
   linkedPR: number | null
+  /** Why: when none of the other seed sources produce a name, the composer
+   *  supplies a repo-scoped unique marine-creature name so blank submissions
+   *  still get a distinct, readable workspace rather than a collision-prone
+   *  "workspace" literal that git would append numeric suffixes to. */
+  fallbackName?: string
 }): string {
-  const { explicitName, prompt, linkedIssueNumber, linkedPR } = args
+  const { explicitName, prompt, linkedIssueNumber, linkedPR, fallbackName } = args
   if (explicitName.trim()) {
     return explicitName.trim()
   }
@@ -174,6 +179,9 @@ export function getWorkspaceSeedName(args: {
     if (slug) {
       return slug
     }
+  }
+  if (fallbackName && fallbackName.trim()) {
+    return fallbackName.trim()
   }
   // Why: the prompt is optional in this flow. Fall back to a stable default
   // branch/workspace seed so users can launch an empty draft without first

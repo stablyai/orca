@@ -33,6 +33,7 @@ import {
   renderIssueCommandTemplate,
   type LinkedWorkItemSummary
 } from '@/lib/new-workspace'
+import { getSuggestedCreatureName } from '@/components/sidebar/worktree-name-suggestions'
 
 export type UseComposerStateOptions = {
   initialRepoId?: string
@@ -169,6 +170,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const activeRepoId = useAppStore((s) => s.activeRepoId)
   const settings = useAppStore((s) => s.settings)
   const newWorkspaceDraft = useAppStore((s) => s.newWorkspaceDraft)
+  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
 
   const eligibleRepos = useMemo(() => repos.filter((repo) => isGitRepoKind(repo)), [repos])
   const draftRepoId = persistDraft ? (newWorkspaceDraft?.repoId ?? null) : null
@@ -320,15 +322,24 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const isSetupCheckPending = Boolean(repoId) && checkedHooksRepoId !== repoId
   const shouldWaitForSetupCheck = Boolean(selectedRepo) && isSetupCheckPending
 
+  // Why: when the user leaves the workspace name blank and provides no other
+  // seed source (prompt, linked issue/PR), pick a repo-scoped unique marine
+  // creature name so the workspace gets a distinct, readable identifier
+  // instead of colliding on a literal "workspace" default.
+  const fallbackCreatureName = useMemo(
+    () => getSuggestedCreatureName(repoId, worktreesByRepo, settings?.nestWorkspaces ?? true),
+    [repoId, worktreesByRepo, settings?.nestWorkspaces]
+  )
   const workspaceSeedName = useMemo(
     () =>
       getWorkspaceSeedName({
         explicitName: name,
         prompt: agentPrompt,
         linkedIssueNumber: parsedLinkedIssueNumber,
-        linkedPR
+        linkedPR,
+        fallbackName: fallbackCreatureName
       }),
-    [agentPrompt, linkedPR, name, parsedLinkedIssueNumber]
+    [agentPrompt, fallbackCreatureName, linkedPR, name, parsedLinkedIssueNumber]
   )
   // Why: when the user links an issue/PR but has not typed any prompt text
   // (attachments don't count), swap the generic "Linked work items:" context
@@ -989,7 +1000,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         explicitName: name,
         prompt: '',
         linkedIssueNumber: null,
-        linkedPR: null
+        linkedPR: null,
+        fallbackName: fallbackCreatureName
       })
       if (
         !repoId ||
@@ -1057,6 +1069,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       applyWorktreeMeta,
       clearNewWorkspaceDraft,
       createWorktree,
+      fallbackCreatureName,
       name,
       note,
       onCreated,
