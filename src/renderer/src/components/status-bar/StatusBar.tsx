@@ -222,9 +222,9 @@ function WindowLabel({ w, label }: { w: RateLimitWindow; label: string }): React
 // Provider segment
 // ---------------------------------------------------------------------------
 
-// Why: only Flash and the latest Pro Preview are shown in the status bar —
-// the rest (Flash Lite, older previews) are secondary and would clutter the bar.
-const STATUS_BAR_BUCKET_NAMES = new Set(['Flash', '3.1 Pro Preview'])
+// Why: only Flash and the latest Pro are shown in the status bar —
+// the rest (Flash Lite, experimental) are secondary and would clutter the bar.
+const STATUS_BAR_BUCKET_NAMES = new Set(['Flash', 'Pro', '1.5 Pro'])
 
 function ProviderSegment({
   p,

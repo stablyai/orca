@@ -75,18 +75,20 @@ function extractNumber(pattern: RegExp, text: string): number | null {
   return Number.isFinite(n) ? n : null
 }
 
-// Patterns use (?:-?\s*)? to optionally capture a minus sign before digits.
-// Why: usage data is embedded as JS object literals (not JSON) in the page text.
-// Use word boundaries and explicit object-start braces to make patterns less
-// prone to false positives if the property names appear in unrelated strings.
+// Patterns use a non-greedy match with a reasonable lookahead limit to stay within
+// the same object context and avoid jumping between unrelated usage blocks.
 const ROLLING_PERCENT_PATTERN =
-  /\brollingUsage\b[^}]*?\busagePercent\b\s*:\s*(-?[0-9]+(?:\.[0-9]+)?)/
-const ROLLING_RESET_PATTERN = /\brollingUsage\b[^}]*?\bresetInSec\b\s*:\s*([0-9]+)/
-const WEEKLY_PERCENT_PATTERN = /\bweeklyUsage\b[^}]*?\busagePercent\b\s*:\s*(-?[0-9]+(?:\.[0-9]+)?)/
-const WEEKLY_RESET_PATTERN = /\bweeklyUsage\b[^}]*?\bresetInSec\b\s*:\s*([0-9]+)/
+  /\brollingUsage\b(?:(?!rollingUsage)[\s\S]){0,1000}?\busagePercent\b\s*:\s*(-?[0-9]+(?:\.[0-9]+)?)\b/
+const ROLLING_RESET_PATTERN =
+  /\brollingUsage\b(?:(?!rollingUsage)[\s\S]){0,1000}?\bresetInSec\b\s*:\s*([0-9]+)\b/
+const WEEKLY_PERCENT_PATTERN =
+  /\bweeklyUsage\b(?:(?!weeklyUsage)[\s\S]){0,1000}?\busagePercent\b\s*:\s*(-?[0-9]+(?:\.[0-9]+)?)\b/
+const WEEKLY_RESET_PATTERN =
+  /\bweeklyUsage\b(?:(?!weeklyUsage)[\s\S]){0,1000}?\bresetInSec\b\s*:\s*([0-9]+)\b/
 const MONTHLY_PERCENT_PATTERN =
-  /\bmonthlyUsage\b[^}]*?\busagePercent\b\s*:\s*(-?[0-9]+(?:\.[0-9]+)?)/
-const MONTHLY_RESET_PATTERN = /\bmonthlyUsage\b[^}]*?\bresetInSec\b\s*:\s*([0-9]+)/
+  /\bmonthlyUsage\b(?:(?!monthlyUsage)[\s\S]){0,1000}?\busagePercent\b\s*:\s*(-?[0-9]+(?:\.[0-9]+)?)\b/
+const MONTHLY_RESET_PATTERN =
+  /\bmonthlyUsage\b(?:(?!monthlyUsage)[\s\S]){0,1000}?\bresetInSec\b\s*:\s*([0-9]+)\b/
 
 type ParsedSubscription = {
   rollingUsagePercent: number
@@ -182,10 +184,13 @@ export async function fetchOpenCodeGoRateLimits(
   const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS)
 
   try {
-    // Step 1: resolve workspace ID (skip if override provided by the user).
-    let workspaceId = workspaceIdOverride?.trim() ?? ''
+    // Step 1: resolve workspace IDs to try.
+    let ids: string[] = []
+    const override = workspaceIdOverride?.trim()
 
-    if (!workspaceId) {
+    if (override) {
+      ids = [override]
+    } else {
       // The /_server endpoint uses SST server-function protocol: GET with ?id=<hash>
       // and X-Server-Id / X-Server-Instance headers for routing.
       const instanceId = `server-fn:${randomUUID()}`
@@ -216,74 +221,71 @@ export async function fetchOpenCodeGoRateLimits(
       }
 
       const workspacesText = await workspacesRes.text()
-      const ids = parseWorkspaceIds(workspacesText)
-      if (ids.length === 0) {
+      ids = parseWorkspaceIds(workspacesText)
+    }
+
+    if (ids.length === 0) {
+      return {
+        provider: 'opencode-go',
+        session: null,
+        weekly: null,
+        monthly: null,
+        updatedAt: Date.now(),
+        error: 'No workspace ID found — set a Workspace ID override in settings',
+        status: 'error'
+      }
+    }
+
+    // Step 2: Robust workspace resolution. Try each candidate ID until one returns 200 OK
+    // and valid usage data.
+    let lastError = ''
+    for (const candidateId of ids) {
+      const usagePageUrl = `${OPENCODE_BASE_URL}/workspace/${candidateId}/go`
+      const pageRes = await net.fetch(usagePageUrl, {
+        method: 'GET',
+        headers: {
+          Cookie: cookieHeader,
+          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          Origin: OPENCODE_BASE_URL,
+          Referer: OPENCODE_BASE_URL
+        },
+        signal: controller.signal
+      })
+
+      if (!pageRes.ok) {
+        lastError = `Usage page fetch failed (${pageRes.status})`
+        continue
+      }
+
+      const pageText = await pageRes.text()
+      const parsed = parseSubscriptionFromPageText(pageText)
+      if (parsed) {
+        const monthly =
+          parsed.monthlyUsagePercent !== null && parsed.monthlyResetInSec !== null
+            ? makeWindow(parsed.monthlyUsagePercent, parsed.monthlyResetInSec, 43200) // 30d
+            : null
+
         return {
           provider: 'opencode-go',
-          session: null,
-          weekly: null,
-          monthly: null,
+          session: makeWindow(parsed.rollingUsagePercent, parsed.rollingResetInSec, 300),
+          weekly: makeWindow(parsed.weeklyUsagePercent, parsed.weeklyResetInSec, 10080),
+          monthly,
           updatedAt: Date.now(),
-          error: 'No workspace ID found — set a Workspace ID override in settings',
-          status: 'error'
+          error: null,
+          status: 'ok'
         }
       }
-      workspaceId = ids[0]
+      lastError = 'Could not parse usage data from page'
     }
-
-    // Step 2: fetch the Go usage page for the resolved workspace.
-    const usagePageUrl = `${OPENCODE_BASE_URL}/workspace/${workspaceId}/go`
-    const pageRes = await net.fetch(usagePageUrl, {
-      method: 'GET',
-      headers: {
-        Cookie: cookieHeader,
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        Origin: OPENCODE_BASE_URL,
-        Referer: OPENCODE_BASE_URL
-      },
-      signal: controller.signal
-    })
-
-    if (!pageRes.ok) {
-      return {
-        provider: 'opencode-go',
-        session: null,
-        weekly: null,
-        monthly: null,
-        updatedAt: Date.now(),
-        error: `Usage page fetch failed (${pageRes.status})`,
-        status: 'error'
-      }
-    }
-
-    const pageText = await pageRes.text()
-    const parsed = parseSubscriptionFromPageText(pageText)
-
-    if (!parsed) {
-      return {
-        provider: 'opencode-go',
-        session: null,
-        weekly: null,
-        monthly: null,
-        updatedAt: Date.now(),
-        error: 'Could not parse usage data from page',
-        status: 'error'
-      }
-    }
-
-    const monthly =
-      parsed.monthlyUsagePercent !== null && parsed.monthlyResetInSec !== null
-        ? makeWindow(parsed.monthlyUsagePercent, parsed.monthlyResetInSec, 43200) // 30d
-        : null
 
     return {
       provider: 'opencode-go',
-      session: makeWindow(parsed.rollingUsagePercent, parsed.rollingResetInSec, 300),
-      weekly: makeWindow(parsed.weeklyUsagePercent, parsed.weeklyResetInSec, 10080),
-      monthly,
+      session: null,
+      weekly: null,
+      monthly: null,
       updatedAt: Date.now(),
-      error: null,
-      status: 'ok'
+      error: lastError || 'Could not parse usage data from any available workspace',
+      status: 'error'
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'

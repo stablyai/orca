@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { renameSync, rmSync, writeFileSync } from 'node:fs'
+import { promises as fs } from 'node:fs'
 import { dirname } from 'node:path'
 import { grantDirAcl, isPermissionError } from '../win32-utils'
 
@@ -10,10 +10,10 @@ export async function writeFileAtomically(
 ): Promise<void> {
   const tmpPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`
   try {
-    writeFileSync(tmpPath, contents, { encoding: 'utf-8', mode: options?.mode })
+    await fs.writeFile(tmpPath, contents, { encoding: 'utf-8', mode: options?.mode })
     await renameWithRetry(tmpPath, targetPath)
   } catch (error) {
-    rmSync(tmpPath, { force: true })
+    await fs.rm(tmpPath, { force: true }).catch(() => {})
     // Why: on Windows, Chromium's renderer initialization calls
     // SetNamedSecurityInfo on the userData folder with a Protected DACL
     // that propagates empty inherited ACEs to child directories, causing
@@ -25,11 +25,11 @@ export async function writeFileAtomically(
         grantDirAcl(dirname(targetPath))
         const retryTmpPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`
         try {
-          writeFileSync(retryTmpPath, contents, { encoding: 'utf-8', mode: options?.mode })
-          renameWithRetry(retryTmpPath, targetPath)
+          await fs.writeFile(retryTmpPath, contents, { encoding: 'utf-8', mode: options?.mode })
+          await renameWithRetry(retryTmpPath, targetPath)
           return
         } catch {
-          rmSync(retryTmpPath, { force: true })
+          await fs.rm(retryTmpPath, { force: true }).catch(() => {})
         }
       } catch {
         // icacls failure is not actionable; re-throw the original EPERM
@@ -46,7 +46,7 @@ async function renameWithRetry(source: string, target: string): Promise<void> {
   const maxAttempts = process.platform === 'win32' ? 3 : 1
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      renameSync(source, target)
+      await fs.rename(source, target)
       return
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code

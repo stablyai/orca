@@ -281,19 +281,27 @@ async function preScanForSymlinks(dirPath: string): Promise<boolean> {
  * individual files to leverage native OS copy primitives instead of
  * buffering entire files into memory.
  *
- * Why: process entries in parallel within each directory level to avoid
- * blocking the IPC thread on large directory structures.
+ * Why: process entries in batches to balance performance with system resource
+ * limits, preventing EMFILE (too many open files) on large directory structures.
  */
 async function recursiveCopyDir(srcDir: string, destDir: string): Promise<void> {
   await mkdir(destDir, { recursive: true })
   const entries = await readdir(srcDir, { withFileTypes: true })
-  await Promise.all(
-    entries.map(async (entry) => {
-      const srcPath = join(srcDir, entry.name)
-      const dstPath = join(destDir, entry.name)
-      return entry.isDirectory() ? recursiveCopyDir(srcPath, dstPath) : copyFile(srcPath, dstPath)
-    })
-  )
+
+  // Why: processing 20 items at a time provides a good balance between speed
+  // and resource safety. Unbounded Promise.all can easily exceed the default
+  // ulimit on macOS/Linux for deeply nested or very wide trees.
+  const BATCH_SIZE = 20
+  for (let i = 0; i < entries.length; i += BATCH_SIZE) {
+    const batch = entries.slice(i, i + BATCH_SIZE)
+    await Promise.all(
+      batch.map(async (entry) => {
+        const srcPath = join(srcDir, entry.name)
+        const dstPath = join(destDir, entry.name)
+        return entry.isDirectory() ? recursiveCopyDir(srcPath, dstPath) : copyFile(srcPath, dstPath)
+      })
+    )
+  }
 }
 
 /**

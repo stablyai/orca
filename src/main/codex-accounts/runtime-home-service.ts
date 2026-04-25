@@ -2,15 +2,8 @@
 contract for Codex inside Orca. Keeping path resolution, system-default
 snapshots, auth materialization, and recovery together prevents account-switch
 semantics from drifting across PTY launch, login, and quota fetch paths. */
-import {
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  statSync
-} from 'node:fs'
+import { existsSync, mkdirSync } from 'node:fs'
+import { promises as fs } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, extname, join, parse, relative } from 'node:path'
 import { app } from 'electron'
@@ -26,9 +19,11 @@ export class CodexRuntimeHomeService {
   private lastSyncedAccountId: string | null = null
 
   constructor(private readonly store: Store) {
-    this.safeMigrateLegacyManagedState()
     this.initializeLastSyncedState()
-    this.safeSyncForCurrentSelection()
+    // Why: floating promises in constructor are handled via safe wrappers
+    // with internal try/catch to avoid unhandled rejections.
+    void this.safeMigrateLegacyManagedState()
+    void this.safeSyncForCurrentSelection()
   }
 
   private initializeLastSyncedState(): void {
@@ -37,17 +32,19 @@ export class CodexRuntimeHomeService {
   }
 
   prepareForCodexLaunch(): string {
-    this.safeSyncForCurrentSelection()
+    // Why: sync wrapper for PTY launch path. Trigger async sync in background;
+    // PTY will read whatever is there.
+    void this.safeSyncForCurrentSelection()
     return this.getRuntimeHomePath()
   }
 
   prepareForRateLimitFetch(): string {
-    this.safeSyncForCurrentSelection()
+    void this.safeSyncForCurrentSelection()
     return this.getRuntimeHomePath()
   }
 
   async syncForCurrentSelection(): Promise<void> {
-    this.captureSystemDefaultSnapshotIfNeeded()
+    await this.captureSystemDefaultSnapshotIfNeeded()
 
     const settings = this.store.getSettings()
     const activeAccount = this.getActiveAccount(
@@ -61,7 +58,7 @@ export class CodexRuntimeHomeService {
       // This prevents overwriting external auth changes (codex login or other
       // tools) on every PTY launch / rate-limit fetch.
       if (this.lastSyncedAccountId !== null) {
-        this.restoreSystemDefaultSnapshot()
+        await this.restoreSystemDefaultSnapshot()
         this.lastSyncedAccountId = null
       }
       return
@@ -74,14 +71,15 @@ export class CodexRuntimeHomeService {
       )
       this.store.updateSettings({ activeCodexManagedAccountId: null })
       if (this.lastSyncedAccountId !== null) {
-        this.restoreSystemDefaultSnapshot()
+        await this.restoreSystemDefaultSnapshot()
         this.lastSyncedAccountId = null
       }
       return
     }
 
     this.lastSyncedAccountId = activeAccount.id
-    await this.writeRuntimeAuth(readFileSync(activeAuthPath, 'utf-8'))
+    const contents = await fs.readFile(activeAuthPath, 'utf-8')
+    await this.writeRuntimeAuth(contents)
   }
 
   private async safeSyncForCurrentSelection(): Promise<void> {
@@ -102,9 +100,9 @@ export class CodexRuntimeHomeService {
     return accounts.find((account) => account.id === activeAccountId) ?? null
   }
 
-  private safeMigrateLegacyManagedState(): void {
+  private async safeMigrateLegacyManagedState(): Promise<void> {
     try {
-      this.migrateLegacyManagedStateIfNeeded()
+      await this.migrateLegacyManagedStateIfNeeded()
     } catch (error) {
       console.warn('[codex-runtime-home] Failed to migrate legacy managed Codex state:', error)
     }
@@ -112,7 +110,9 @@ export class CodexRuntimeHomeService {
 
   private getRuntimeHomePath(): string {
     const runtimeHomePath = join(homedir(), '.codex')
-    mkdirSync(runtimeHomePath, { recursive: true })
+    if (!existsSync(runtimeHomePath)) {
+      mkdirSync(runtimeHomePath, { recursive: true })
+    }
     return runtimeHomePath
   }
 
@@ -126,7 +126,9 @@ export class CodexRuntimeHomeService {
 
   private getRuntimeMetadataDir(): string {
     const metadataDir = join(app.getPath('userData'), 'codex-runtime-home')
-    mkdirSync(metadataDir, { recursive: true })
+    if (!existsSync(metadataDir)) {
+      mkdirSync(metadataDir, { recursive: true })
+    }
     return metadataDir
   }
 
@@ -147,7 +149,7 @@ export class CodexRuntimeHomeService {
       return
     }
 
-    const managedHomes = this.getLegacyManagedHomes()
+    const managedHomes = await this.getLegacyManagedHomes()
     for (const managedHomePath of managedHomes) {
       const accountId = parse(relative(this.getManagedAccountsRoot(), managedHomePath)).dir.split(
         /[\\/]/
@@ -156,7 +158,7 @@ export class CodexRuntimeHomeService {
         continue
       }
       await this.migrateLegacyHistory(managedHomePath)
-      this.migrateLegacySessions(managedHomePath, accountId)
+      await this.migrateLegacySessions(managedHomePath, accountId)
     }
 
     // Why: migration is intentionally one-shot. Re-importing every startup
@@ -168,13 +170,13 @@ export class CodexRuntimeHomeService {
     )
   }
 
-  private getLegacyManagedHomes(): string[] {
+  private async getLegacyManagedHomes(): Promise<string[]> {
     const managedAccountsRoot = this.getManagedAccountsRoot()
     if (!existsSync(managedAccountsRoot)) {
       return []
     }
 
-    const accountEntries = readdirSync(managedAccountsRoot, { withFileTypes: true })
+    const accountEntries = await fs.readdir(managedAccountsRoot, { withFileTypes: true })
     const managedHomes: string[] = []
     for (const entry of accountEntries) {
       if (!entry.isDirectory()) {
@@ -188,7 +190,7 @@ export class CodexRuntimeHomeService {
     return managedHomes.sort()
   }
 
-  private migrateLegacyHistory(managedHomePath: string): void {
+  private async migrateLegacyHistory(managedHomePath: string): Promise<void> {
     const legacyHistoryPath = join(managedHomePath, 'history.jsonl')
     if (!existsSync(legacyHistoryPath)) {
       return
@@ -196,11 +198,12 @@ export class CodexRuntimeHomeService {
 
     const runtimeHistoryPath = join(this.getRuntimeHomePath(), 'history.jsonl')
     const existingLines = existsSync(runtimeHistoryPath)
-      ? readFileSync(runtimeHistoryPath, 'utf-8').split('\n').filter(Boolean)
+      ? (await fs.readFile(runtimeHistoryPath, 'utf-8')).split('\n').filter(Boolean)
       : []
     const mergedLines = [...existingLines]
     const seenLines = new Set(existingLines)
-    for (const line of readFileSync(legacyHistoryPath, 'utf-8').split('\n')) {
+    const legacyLines = (await fs.readFile(legacyHistoryPath, 'utf-8')).split('\n')
+    for (const line of legacyLines) {
       if (!line || seenLines.has(line)) {
         continue
       }
@@ -211,35 +214,37 @@ export class CodexRuntimeHomeService {
     if (mergedLines.length === 0) {
       return
     }
-    writeFileAtomically(runtimeHistoryPath, `${mergedLines.join('\n')}\n`)
+    await writeFileAtomically(runtimeHistoryPath, `${mergedLines.join('\n')}\n`)
   }
 
-  private migrateLegacySessions(managedHomePath: string, accountId: string): void {
+  private async migrateLegacySessions(managedHomePath: string, accountId: string): Promise<void> {
     const legacySessionsRoot = join(managedHomePath, 'sessions')
     if (!existsSync(legacySessionsRoot)) {
       return
     }
 
     const runtimeSessionsRoot = join(this.getRuntimeHomePath(), 'sessions')
-    mkdirSync(runtimeSessionsRoot, { recursive: true })
-    for (const legacyFilePath of this.listFilesRecursively(legacySessionsRoot)) {
+    await fs.mkdir(runtimeSessionsRoot, { recursive: true })
+    const legacyFiles = await this.listFilesRecursively(legacySessionsRoot)
+    for (const legacyFilePath of legacyFiles) {
       const relativePath = relative(legacySessionsRoot, legacyFilePath)
       const runtimeFilePath = join(runtimeSessionsRoot, relativePath)
-      mkdirSync(dirname(runtimeFilePath), { recursive: true })
+      await fs.mkdir(dirname(runtimeFilePath), { recursive: true })
+
       if (!existsSync(runtimeFilePath)) {
-        copyFileSync(legacyFilePath, runtimeFilePath)
+        await fs.copyFile(legacyFilePath, runtimeFilePath)
         continue
       }
 
-      const legacyContents = readFileSync(legacyFilePath)
-      const runtimeContents = readFileSync(runtimeFilePath)
+      const legacyContents = await fs.readFile(legacyFilePath)
+      const runtimeContents = await fs.readFile(runtimeFilePath)
       if (runtimeContents.equals(legacyContents)) {
         continue
       }
 
       const preservedPath = this.getPreservedLegacySessionPath(runtimeFilePath, accountId)
-      copyFileSync(legacyFilePath, preservedPath)
-      this.appendMigrationDiagnostic({
+      await fs.copyFile(legacyFilePath, preservedPath)
+      await this.appendMigrationDiagnostic({
         type: 'session-conflict',
         accountId,
         runtimeFilePath,
@@ -248,17 +253,18 @@ export class CodexRuntimeHomeService {
     }
   }
 
-  private listFilesRecursively(rootPath: string): string[] {
-    const stat = statSync(rootPath)
+  private async listFilesRecursively(rootPath: string): Promise<string[]> {
+    const stat = await fs.stat(rootPath)
     if (!stat.isDirectory()) {
       return [rootPath]
     }
 
     const files: string[] = []
-    for (const entry of readdirSync(rootPath, { withFileTypes: true })) {
+    const entries = await fs.readdir(rootPath, { withFileTypes: true })
+    for (const entry of entries) {
       const childPath = join(rootPath, entry.name)
       if (entry.isDirectory()) {
-        files.push(...this.listFilesRecursively(childPath))
+        files.push(...(await this.listFilesRecursively(childPath)))
         continue
       }
       if (entry.isFile()) {
@@ -274,15 +280,15 @@ export class CodexRuntimeHomeService {
     return `${basename}.orca-legacy-${accountId}${extension}`
   }
 
-  private appendMigrationDiagnostic(record: Record<string, string>): void {
+  private async appendMigrationDiagnostic(record: Record<string, string>): Promise<void> {
     const diagnosticsPath = this.getMigrationDiagnosticsPath()
     const existingContents = existsSync(diagnosticsPath)
-      ? readFileSync(diagnosticsPath, 'utf-8')
+      ? await fs.readFile(diagnosticsPath, 'utf-8')
       : ''
-    writeFileAtomically(diagnosticsPath, `${existingContents}${JSON.stringify(record)}\n`)
+    await writeFileAtomically(diagnosticsPath, `${existingContents}${JSON.stringify(record)}\n`)
   }
 
-  private captureSystemDefaultSnapshotIfNeeded(): void {
+  private async captureSystemDefaultSnapshotIfNeeded(): Promise<void> {
     const snapshotPath = this.getSystemDefaultSnapshotPath()
     if (existsSync(snapshotPath)) {
       return
@@ -293,25 +299,27 @@ export class CodexRuntimeHomeService {
       return
     }
 
-    writeFileAtomically(snapshotPath, readFileSync(runtimeAuthPath, 'utf-8'))
+    const contents = await fs.readFile(runtimeAuthPath, 'utf-8')
+    await writeFileAtomically(snapshotPath, contents)
   }
 
-  private restoreSystemDefaultSnapshot(): void {
+  private async restoreSystemDefaultSnapshot(): Promise<void> {
     const snapshotPath = this.getSystemDefaultSnapshotPath()
     if (!existsSync(snapshotPath)) {
       return
     }
 
-    this.writeRuntimeAuth(readFileSync(snapshotPath, 'utf-8'))
+    const contents = await fs.readFile(snapshotPath, 'utf-8')
+    await this.writeRuntimeAuth(contents)
   }
 
-  private writeRuntimeAuth(contents: string): void {
+  private async writeRuntimeAuth(contents: string): Promise<void> {
     // Why: auth.json contains sensitive credentials. Restrict to owner-only
     // so other users on a shared Linux/macOS machine cannot read it.
-    writeFileAtomically(this.getRuntimeAuthPath(), contents, { mode: 0o600 })
+    await writeFileAtomically(this.getRuntimeAuthPath(), contents, { mode: 0o600 })
   }
 
-  clearSystemDefaultSnapshot(): void {
-    rmSync(this.getSystemDefaultSnapshotPath(), { force: true })
+  async clearSystemDefaultSnapshot(): Promise<void> {
+    await fs.rm(this.getSystemDefaultSnapshotPath(), { force: true }).catch(() => {})
   }
 }

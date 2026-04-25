@@ -8,6 +8,7 @@ import {
   loadProjectId,
   readAuthJson,
   readGeminiCredentials,
+  saveGeminiCredentials,
   tryRefreshTokenFromBundle,
   type GeminiCredentials,
   type GoogleAuthEntry
@@ -51,6 +52,7 @@ const MODEL_ID_TO_BUCKET_NAME: Record<string, string> = {
   'gemini-2.5-pro': 'Pro',
   'gemini-2.5-flash': 'Flash',
   'gemini-2.5-flash-lite': 'Flash Lite',
+  'gemini-2.0-pro': '2.0 Pro',
   'gemini-2.0-flash': '2.0 Flash',
   'gemini-2.0-flash-lite': '2.0 Flash Lite',
   'gemini-1.5-pro': '1.5 Pro',
@@ -141,8 +143,6 @@ async function fetchQuota(accessToken: string, projectId: string): Promise<Provi
 async function fetchViaAuthJson(auth: GoogleAuthEntry): Promise<ProviderRateLimits> {
   let accessToken = auth.access
   const refreshToken = (auth.refresh || '').split('|')[0] ?? ''
-  const effectiveProjectId =
-    (auth.refresh || '').split('|')[1] || (auth.refresh || '').split('|')[2]
 
   if (auth.expires < Date.now() || !accessToken) {
     const refreshResult = await tryRefreshTokenFromBundle(refreshToken)
@@ -157,6 +157,16 @@ async function fetchViaAuthJson(auth: GoogleAuthEntry): Promise<ProviderRateLimi
       }
     }
     accessToken = refreshResult.accessToken
+  }
+
+  // Why: auth.json might have stale project IDs. loadProjectId provides a
+  // more robust way to resolve the active project for the current token.
+  let effectiveProjectId = ''
+  try {
+    effectiveProjectId = await loadProjectId(accessToken)
+  } catch {
+    // Fallback to split-pipe ID if loadProjectId fails
+    effectiveProjectId = (auth.refresh || '').split('|')[1] || (auth.refresh || '').split('|')[2]
   }
 
   if (!effectiveProjectId) {
@@ -174,7 +184,10 @@ async function fetchViaAuthJson(auth: GoogleAuthEntry): Promise<ProviderRateLimi
   if (result.status === 'error' && result.error?.includes('401')) {
     const refreshResult = await tryRefreshTokenFromBundle(refreshToken)
     if (refreshResult?.accessToken) {
-      return fetchQuota(refreshResult.accessToken, effectiveProjectId)
+      const newProjectId = await loadProjectId(refreshResult.accessToken).catch(
+        () => effectiveProjectId
+      )
+      return fetchQuota(refreshResult.accessToken, newProjectId)
     }
   }
 
@@ -183,6 +196,7 @@ async function fetchViaAuthJson(auth: GoogleAuthEntry): Promise<ProviderRateLimi
 
 async function fetchViaOauthCreds(creds: GeminiCredentials): Promise<ProviderRateLimits> {
   let accessToken = creds.access_token
+  let currentCreds = creds
 
   if (creds.expiry_date < Date.now()) {
     const refreshResult = await tryRefreshTokenFromBundle(creds.refresh_token)
@@ -197,6 +211,14 @@ async function fetchViaOauthCreds(creds: GeminiCredentials): Promise<ProviderRat
       }
     }
     accessToken = refreshResult.accessToken
+    currentCreds = {
+      ...creds,
+      access_token: accessToken,
+      expiry_date: refreshResult.expiresIn
+        ? Date.now() + refreshResult.expiresIn * 1000
+        : creds.expiry_date
+    }
+    await saveGeminiCredentials(currentCreds)
   }
 
   let projectId = ''
@@ -219,10 +241,17 @@ async function fetchViaOauthCreds(creds: GeminiCredentials): Promise<ProviderRat
 
   const result = await fetchQuota(accessToken, projectId)
   if (result.status === 'error' && result.error?.includes('401')) {
-    const refreshResult = await tryRefreshTokenFromBundle(creds.refresh_token)
+    const refreshResult = await tryRefreshTokenFromBundle(currentCreds.refresh_token)
     if (refreshResult?.accessToken) {
       projectId = await loadProjectId(refreshResult.accessToken).catch(() => '')
       if (projectId) {
+        await saveGeminiCredentials({
+          ...currentCreds,
+          access_token: refreshResult.accessToken,
+          expiry_date: refreshResult.expiresIn
+            ? Date.now() + refreshResult.expiresIn * 1000
+            : currentCreds.expiry_date
+        })
         return fetchQuota(refreshResult.accessToken, projectId)
       }
     }
@@ -231,8 +260,8 @@ async function fetchViaOauthCreds(creds: GeminiCredentials): Promise<ProviderRat
   return result
 }
 
-export async function fetchGeminiRateLimits(): Promise<ProviderRateLimits> {
-  if (cachedCreds && Date.now() - cachedCreds.timestamp < CACHE_TTL_MS) {
+export async function fetchGeminiRateLimits(force = false): Promise<ProviderRateLimits> {
+  if (!force && cachedCreds && Date.now() - cachedCreds.timestamp < CACHE_TTL_MS) {
     return cachedCreds.data
   }
 

@@ -212,6 +212,31 @@ describe('fetchOpenCodeGoRateLimits', () => {
     expect(result.weekly?.usedPercent).toBe(0)
   })
 
+  it('handles nested objects between key and fields (robustness fix)', async () => {
+    const page = `
+      rollingUsage: {
+        meta: { lastUpdate: "2023-01-01", status: "active" },
+        usagePercent: 42,
+        resetInSec: 1337
+      }
+      weeklyUsage: {
+        details: { tier: "pro" },
+        usagePercent: 68,
+        resetInSec: 86400
+      }
+    `
+    netFetchMock
+      .mockResolvedValueOnce(makeResponse(WORKSPACES_RESPONSE))
+      .mockResolvedValueOnce(makeResponse(page))
+
+    const result = await fetchOpenCodeGoRateLimits('auth=token')
+
+    expect(result.status).toBe('ok')
+    expect(result.session?.usedPercent).toBe(42)
+    expect(result.session?.windowMinutes).toBe(300)
+    expect(result.weekly?.usedPercent).toBe(68)
+  })
+
   it('skips workspace lookup when workspaceIdOverride is provided', async () => {
     netFetchMock.mockResolvedValueOnce(makeResponse(USAGE_PAGE_WITH_MONTHLY))
 

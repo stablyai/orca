@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import { net } from 'electron'
@@ -77,9 +77,14 @@ export async function readGeminiCredentials(): Promise<GeminiCredentials | null>
   }
 }
 
+export async function saveGeminiCredentials(creds: GeminiCredentials): Promise<void> {
+  await writeFile(OAUTH_CREDS_PATH, JSON.stringify(creds, null, 2), 'utf-8')
+}
+
 export type RefreshTokenResult = {
   accessToken: string | null
   newRefreshToken: string | null
+  expiresIn?: number
 }
 
 export async function refreshAccessToken(
@@ -107,10 +112,15 @@ export async function refreshAccessToken(
       return { accessToken: null, newRefreshToken: null }
     }
 
-    const data = (await res.json()) as { access_token?: string; refresh_token?: string }
+    const data = (await res.json()) as {
+      access_token?: string
+      refresh_token?: string
+      expires_in?: number
+    }
     return {
       accessToken: typeof data.access_token === 'string' ? data.access_token : null,
-      newRefreshToken: typeof data.refresh_token === 'string' ? data.refresh_token : null
+      newRefreshToken: typeof data.refresh_token === 'string' ? data.refresh_token : null,
+      expiresIn: typeof data.expires_in === 'number' ? data.expires_in : undefined
     }
   } finally {
     clearTimeout(timeout)
