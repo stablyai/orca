@@ -11,6 +11,20 @@ import { execFile, type ChildProcess } from 'child_process'
 // ─── Constants ───────────────────────────────────────────────────────
 
 export const MAX_FILE_SIZE = 5 * 1024 * 1024
+// Why: previewable binaries (PDFs, images) are rendered by the viewer as
+// base64 blobs, not parsed as text — 5MB is tight for real-world PDFs, and
+// raising this cap only affects binary preview, not text/search paths.
+// Why 10MB (not 50MB like the local main-process cap): the SSH relay ships
+// every JSON-RPC response in a single framed message capped at
+// MAX_MESSAGE_SIZE = 16MB (see src/relay/protocol.ts and
+// src/main/ssh/relay-protocol.ts). A file here is sent as base64 inside JSON,
+// so 10MB on disk → ~13.3MB base64 → ~13.4MB framed payload, leaving headroom
+// under the 16MB frame cap. Raising this cap without first landing streaming
+// reads would cause the encoder to throw "Message too large" and the decoder
+// to discard oversized frames for borderline files. The proper path to a
+// higher remote cap is streaming fs.readFile over the relay, not bumping
+// MAX_MESSAGE_SIZE (which would introduce head-of-line blocking on the mux).
+export const MAX_PREVIEWABLE_BINARY_SIZE = 10 * 1024 * 1024
 export const SEARCH_TIMEOUT_MS = 15_000
 export const MAX_MATCHES_PER_FILE = 100
 export const DEFAULT_MAX_RESULTS = 2000

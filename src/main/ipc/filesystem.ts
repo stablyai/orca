@@ -45,6 +45,14 @@ import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
+// Why: previewable binaries (PDFs, images) are rendered by the viewer as
+// base64 blobs, not parsed as text — 5MB is tight for real-world PDFs, and
+// raising this cap only affects binary preview, not text/search paths.
+// The relay (SSH) uses a smaller 10MB cap because its JSON-RPC frames are
+// bounded by MAX_MESSAGE_SIZE = 16MB; the local IPC path has no such limit,
+// so 50MB covers real-world PDFs (specs, datasheets, image-heavy contracts).
+// See src/relay/fs-handler-utils.ts for the remote-side reasoning.
+const MAX_PREVIEWABLE_BINARY_SIZE = 50 * 1024 * 1024 // 50MB
 const DEFAULT_SEARCH_MAX_RESULTS = 2000
 const MAX_MATCHES_PER_FILE = 100
 const SEARCH_TIMEOUT_MS = 15000
@@ -124,14 +132,15 @@ export function registerFilesystemHandlers(store: Store): void {
       }
       const filePath = await resolveAuthorizedPath(args.filePath, store)
       const stats = await stat(filePath)
-      if (stats.size > MAX_FILE_SIZE) {
+      const mimeType = PREVIEWABLE_BINARY_MIME_TYPES[extname(filePath).toLowerCase()]
+      const sizeLimit = mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_FILE_SIZE
+      if (stats.size > sizeLimit) {
         throw new Error(
-          `File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit`
+          `File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB exceeds ${sizeLimit / 1024 / 1024}MB limit`
         )
       }
 
       const buffer = await readFile(filePath)
-      const mimeType = PREVIEWABLE_BINARY_MIME_TYPES[extname(filePath).toLowerCase()]
       if (mimeType) {
         return {
           content: buffer.toString('base64'),

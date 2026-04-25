@@ -17,6 +17,7 @@ import type { RelayContext } from './context'
 import { expandTilde } from './context'
 import {
   MAX_FILE_SIZE,
+  MAX_PREVIEWABLE_BINARY_SIZE,
   DEFAULT_MAX_RESULTS,
   IMAGE_MIME_TYPES,
   isBinaryBuffer,
@@ -82,14 +83,15 @@ export class FsHandler {
     const filePath = expandTilde(params.filePath as string)
     await this.context.validatePathResolved(filePath)
     const stats = await stat(filePath)
-    if (stats.size > MAX_FILE_SIZE) {
+    const mimeType = IMAGE_MIME_TYPES[extname(filePath).toLowerCase()]
+    const sizeLimit = mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_FILE_SIZE
+    if (stats.size > sizeLimit) {
       throw new Error(
-        `File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit`
+        `File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB exceeds ${sizeLimit / 1024 / 1024}MB limit`
       )
     }
 
     const buffer = await readFile(filePath)
-    const mimeType = IMAGE_MIME_TYPES[extname(filePath).toLowerCase()]
     if (mimeType) {
       return { content: buffer.toString('base64'), isBinary: true, isImage: true, mimeType }
     }
