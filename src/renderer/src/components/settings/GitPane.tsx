@@ -118,7 +118,7 @@ export function GitPane({
       <SearchableSetting
         key="github-attribution"
         title="Orca Attribution"
-        description="Add Orca attribution."
+        description="Add Orca attribution to commits, PRs, and issues."
         keywords={['github', 'gh', 'pr', 'issue', 'co-author', 'coauthored', 'attribution', 'orca']}
         className="flex items-center justify-between gap-4 px-1 py-2"
       >

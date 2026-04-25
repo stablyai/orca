@@ -6,7 +6,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'f
 import { join } from 'path'
 
 const ATTRIBUTION_ROOT_DIR = 'orca-terminal-attribution'
-const ATTRIBUTION_SHIM_VERSION = '5'
+const ATTRIBUTION_SHIM_VERSION = '6'
 const ORCA_PRODUCT_URL = 'https://github.com/orca-ide'
 const ORCA_GIT_COMMIT_TRAILER = 'Co-authored-by: Orca <help@stably.ai>'
 const ORCA_GH_FOOTER = `Made with [Orca](${ORCA_PRODUCT_URL}) 🐋`
@@ -23,16 +23,16 @@ type AttributionShimPaths = {
 export function applyTerminalAttributionEnv(
   baseEnv: Record<string, string>,
   options: { enabled: boolean; userDataPath: string }
-): Record<string, string> {
+): void {
   if (!options.enabled) {
-    return baseEnv
+    return
   }
 
   let shimPaths: AttributionShimPaths
   try {
     shimPaths = ensureAttributionShims(options.userDataPath)
   } catch {
-    return baseEnv
+    return
   }
 
   const pathDelimiter = process.platform === 'win32' ? ';' : ':'
@@ -46,12 +46,25 @@ export function applyTerminalAttributionEnv(
   // Why: Windows terminals may be cmd/PowerShell or Git Bash. Include both shim
   // families; native shells ignore extensionless POSIX files, Git Bash can use them.
   const prependDirs = process.platform === 'win32' ? [posixDir, win32Dir] : [posixDir]
+  const prependDirKeys = new Set(
+    prependDirs.map((dir) => (process.platform === 'win32' ? dir.toLowerCase() : dir))
+  )
+  const cleanedBasePath = basePath
+    .split(pathDelimiter)
+    .filter((entry) => {
+      if (!entry) {
+        return false
+      }
+      const key = process.platform === 'win32' ? entry.toLowerCase() : entry
+      return !prependDirKeys.has(key)
+    })
+    .join(pathDelimiter)
 
   // Why: these wrappers should affect only Orca-managed PTYs. Prepending the
   // shim directory here keeps the attribution behavior scoped to Orca's live
   // terminal environment instead of mutating global git/gh config or the
   // user's external shell PATH.
-  baseEnv.PATH = [...prependDirs, basePath].filter(Boolean).join(pathDelimiter)
+  baseEnv.PATH = [...prependDirs, cleanedBasePath].filter(Boolean).join(pathDelimiter)
   baseEnv.ORCA_ENABLE_GIT_ATTRIBUTION = '1'
   baseEnv.ORCA_GIT_COMMIT_TRAILER = ORCA_GIT_COMMIT_TRAILER
   baseEnv.ORCA_GH_PR_FOOTER = ORCA_GH_FOOTER
@@ -65,8 +78,6 @@ export function applyTerminalAttributionEnv(
       baseEnv.ORCA_REAL_GH = resolvedGh
     }
   }
-
-  return baseEnv
 }
 
 function ensureAttributionShims(userDataPath: string): AttributionShimPaths {
@@ -167,7 +178,30 @@ if [[ -z "$real_git" ]]; then
   exit 127
 fi
 
-if [[ "\${ORCA_ENABLE_GIT_ATTRIBUTION:-0}" != "1" || "\${ORCA_ATTRIBUTION_BYPASS:-0}" == "1" || "\${1:-}" != "commit" ]]; then
+is_commit_command() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -c|--config|-C|--git-dir|--work-tree|--namespace)
+        shift 2
+        ;;
+      --config=*|--git-dir=*|--work-tree=*|--namespace=*)
+        shift
+        ;;
+      commit)
+        return 0
+        ;;
+      -*)
+        shift
+        ;;
+      *)
+        return 1
+        ;;
+    esac
+  done
+  return 1
+}
+
+if [[ "\${ORCA_ENABLE_GIT_ATTRIBUTION:-0}" != "1" || "\${ORCA_ATTRIBUTION_BYPASS:-0}" == "1" ]] || ! is_commit_command "$@"; then
   PATH="$real_path" exec "$real_git" "$@"
 fi
 
@@ -179,72 +213,188 @@ for arg in "$@"; do
   esac
 done
 
-should_skip_signed_commit_attribution() {
-  local saw_no_gpg_sign=0
+trailer="\${ORCA_GIT_COMMIT_TRAILER:-Co-authored-by: Orca <help@stably.ai>}"
+
+has_explicit_commit_message() {
   local arg
-  for arg in "$@"; do
+  while [[ $# -gt 0 ]]; do
+    arg="$1"
     case "$arg" in
-      --no-gpg-sign)
-        saw_no_gpg_sign=1
+      -m|--message|-F|--file)
+        return 0
         ;;
-      --gpg-sign|--gpg-sign=*|-S|-S*)
+      --message=*|--file=*|-[!-]*m|-m?*|-F?*)
         return 0
         ;;
     esac
+    shift
   done
-  if [[ $saw_no_gpg_sign -eq 1 ]]; then
-    return 1
-  fi
-  [[ "$(PATH="$real_path" "$real_git" config --bool commit.gpgsign 2>/dev/null || true)" == "true" ]]
+  return 1
 }
 
-if should_skip_signed_commit_attribution "$@"; then
+has_unsupported_commit_message_source() {
+  local arg next_arg
+  local saw_commit=0
+  while [[ $# -gt 0 ]]; do
+    arg="$1"
+    if [[ $saw_commit -eq 0 ]]; then
+      case "$arg" in
+        -c|--config|-C|--git-dir|--work-tree|--namespace)
+          shift 2
+          continue
+          ;;
+        --config=*|--git-dir=*|--work-tree=*|--namespace=*)
+          shift
+          continue
+          ;;
+        commit)
+          saw_commit=1
+          shift
+          continue
+          ;;
+      esac
+    fi
+    case "$arg" in
+      -C|--reuse-message|-c|--reedit-message|--fixup|--squash)
+        return 0
+        ;;
+      -F|--file)
+        shift
+        next_arg="${SHELL_DOLLAR}{1:-}"
+        [[ -z "$next_arg" || ! -f "$next_arg" ]] && return 0
+        ;;
+      --file=*)
+        next_arg="${SHELL_DOLLAR}{arg#--file=}"
+        [[ ! -f "$next_arg" ]] && return 0
+        ;;
+      -F?*)
+        next_arg="${SHELL_DOLLAR}{arg:2}"
+        [[ ! -f "$next_arg" ]] && return 0
+        ;;
+    esac
+    shift
+  done
+  return 1
+}
+
+message_already_has_trailer() {
+  local arg next_arg
+  while [[ $# -gt 0 ]]; do
+    arg="$1"
+    case "$arg" in
+      -m|--message)
+        shift
+        next_arg="${SHELL_DOLLAR}{1:-}"
+        grep -Fqi "$trailer" <<<"$next_arg" && return 0
+        ;;
+      --message=*)
+        grep -Fqi "$trailer" <<<"${SHELL_DOLLAR}{arg#--message=}" && return 0
+        ;;
+      -m?*)
+        grep -Fqi "$trailer" <<<"${SHELL_DOLLAR}{arg:2}" && return 0
+        ;;
+      -[!-]*m)
+        shift
+        next_arg="${SHELL_DOLLAR}{1:-}"
+        grep -Fqi "$trailer" <<<"$next_arg" && return 0
+        ;;
+      -F|--file)
+        shift
+        next_arg="${SHELL_DOLLAR}{1:-}"
+        [[ -n "$next_arg" && -f "$next_arg" ]] && grep -Fqi "$trailer" "$next_arg" && return 0
+        ;;
+      --file=*)
+        next_arg="${SHELL_DOLLAR}{arg#--file=}"
+        [[ -f "$next_arg" ]] && grep -Fqi "$trailer" "$next_arg" && return 0
+        ;;
+      -F?*)
+        next_arg="${SHELL_DOLLAR}{arg:2}"
+        [[ -f "$next_arg" ]] && grep -Fqi "$trailer" "$next_arg" && return 0
+        ;;
+    esac
+    shift
+  done
+  return 1
+}
+
+if ! has_explicit_commit_message "$@" || has_unsupported_commit_message_source "$@" || message_already_has_trailer "$@"; then
   PATH="$real_path" exec "$real_git" "$@"
 fi
 
-before_head="$(
-  PATH="$real_path" "$real_git" rev-parse --verify HEAD 2>/dev/null || true
-)"
-
-PATH="$real_path" "$real_git" "$@"
-status=$?
-if [[ $status -ne 0 ]]; then
-  exit $status
-fi
-
-after_head="$(
-  PATH="$real_path" "$real_git" rev-parse --verify HEAD 2>/dev/null || true
-)"
-if [[ -z "$after_head" || "$before_head" == "$after_head" ]]; then
-  exit 0
-fi
-
-message="$(
-  PATH="$real_path" "$real_git" log -1 --format=%B 2>/dev/null || true
-)"
-trailer="\${ORCA_GIT_COMMIT_TRAILER:-Co-authored-by: Orca <help@stably.ai>}"
-if grep -Fqi "$trailer" <<<"$message"; then
-  exit 0
-fi
-
-tmp_file="$(mktemp)"
-cleanup() {
-  rm -f "$tmp_file"
+tmp_file=""
+cleanup_commit_message() {
+  if [[ -n "$tmp_file" ]]; then
+    rm -f "$tmp_file"
+  fi
 }
-trap cleanup EXIT
+trap cleanup_commit_message EXIT
 
-if [[ -n "$message" ]]; then
-  printf '%s\n\n%s\n' "$message" "$trailer" >"$tmp_file"
-else
-  printf '%s\n' "$trailer" >"$tmp_file"
+attributed_args=()
+replaced_file_message=0
+while [[ $# -gt 0 ]]; do
+  arg="$1"
+  case "$arg" in
+    -F|--file)
+      if [[ $replaced_file_message -eq 0 ]]; then
+        shift
+        source_file="${SHELL_DOLLAR}{1:-}"
+        tmp_file="$(mktemp)"
+        if [[ -n "$source_file" && -f "$source_file" ]]; then
+          printf '%s\n\n%s\n' "$(cat "$source_file")" "$trailer" >"$tmp_file"
+          attributed_args+=("$arg" "$tmp_file")
+          replaced_file_message=1
+        else
+          attributed_args+=("$arg" "$source_file")
+        fi
+      else
+        attributed_args+=("$arg")
+      fi
+      ;;
+    --file=*)
+      if [[ $replaced_file_message -eq 0 ]]; then
+        source_file="${SHELL_DOLLAR}{arg#--file=}"
+        tmp_file="$(mktemp)"
+        if [[ -f "$source_file" ]]; then
+          printf '%s\n\n%s\n' "$(cat "$source_file")" "$trailer" >"$tmp_file"
+          attributed_args+=("--file=$tmp_file")
+          replaced_file_message=1
+        else
+          attributed_args+=("$arg")
+        fi
+      else
+        attributed_args+=("$arg")
+      fi
+      ;;
+    -F?*)
+      if [[ $replaced_file_message -eq 0 ]]; then
+        source_file="${SHELL_DOLLAR}{arg:2}"
+        tmp_file="$(mktemp)"
+        if [[ -f "$source_file" ]]; then
+          printf '%s\n\n%s\n' "$(cat "$source_file")" "$trailer" >"$tmp_file"
+          attributed_args+=("-F$tmp_file")
+          replaced_file_message=1
+        else
+          attributed_args+=("$arg")
+        fi
+      else
+        attributed_args+=("$arg")
+      fi
+      ;;
+    *)
+      attributed_args+=("$arg")
+      ;;
+  esac
+  shift
+done
+
+if [[ $replaced_file_message -eq 0 ]]; then
+  attributed_args+=("-m" "$trailer")
 fi
 
-# Why: git commit has no generic "post-success message transformer" hook. The
-# wrapper amends only the just-created commit so Orca can add attribution
-# without mutating repo config or installing hooks into the user's checkout. The
-# amend is best-effort so attribution cannot turn a successful user commit into
-# a failed terminal command.
-ORCA_ATTRIBUTION_BYPASS=1 PATH="$real_path" "$real_git" commit --amend --no-verify -F "$tmp_file" >/dev/null 2>/dev/null || true
+# Why: commit-msg hooks and commit signing must see the final message. Only
+# commands that already provide a noninteractive message get attribution; editor
+# based commits pass through unchanged instead of being amended after success.
+ORCA_ATTRIBUTION_BYPASS=1 PATH="$real_path" exec "$real_git" "${SHELL_DOLLAR}{attributed_args[@]}"
 `
 
 const POSIX_GH_WRAPPER = `${POSIX_COMMON}
@@ -300,7 +450,7 @@ append_footer_url() {
   # Why: gh exposes create output as a URL, but does not provide a transactional
   # body append. Use REST instead of gh pr/issue edit because those commands can
   # hit unrelated GraphQL fields, while the URL maps directly to one REST item.
-  PATH="$real_path" "$real_gh" api -X PATCH "$api_path" -f "body=$(cat "$tmp_file")" >/dev/null || true
+  PATH="$real_path" "$real_gh" api -X PATCH "$api_path" -F "body=@$tmp_file" >/dev/null || true
   rm -f "$tmp_file"
 }
 
@@ -421,7 +571,8 @@ const WIN32_GIT_CMD_WRAPPER = String.raw`@echo off
 setlocal
 if not "%ORCA_ENABLE_GIT_ATTRIBUTION%"=="1" goto run
 if "%ORCA_ATTRIBUTION_BYPASS%"=="1" goto run
-if /I not "%~1"=="commit" goto run
+call :orca_is_git_commit %*
+if errorlevel 1 goto run
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0git-wrapper.ps1" %*
 exit /b %ERRORLEVEL%
 :run
@@ -432,6 +583,30 @@ if defined ORCA_REAL_GIT (
   exit /b 127
 )
 exit /b %ERRORLEVEL%
+
+:orca_is_git_commit
+if "%~1"=="" exit /b 1
+if /I "%~1"=="commit" exit /b 0
+set "orca_git_arg=%~1"
+if /I "%orca_git_arg%"=="-c" goto skip_two
+if /I "%orca_git_arg%"=="--config" goto skip_two
+if /I "%orca_git_arg%"=="-C" goto skip_two
+if /I "%orca_git_arg%"=="--git-dir" goto skip_two
+if /I "%orca_git_arg%"=="--work-tree" goto skip_two
+if /I "%orca_git_arg%"=="--namespace" goto skip_two
+if /I "%orca_git_arg:~0,9%"=="--config=" goto skip_one
+if /I "%orca_git_arg:~0,10%"=="--git-dir=" goto skip_one
+if /I "%orca_git_arg:~0,12%"=="--work-tree=" goto skip_one
+if /I "%orca_git_arg:~0,12%"=="--namespace=" goto skip_one
+if "%orca_git_arg:~0,1%"=="-" goto skip_one
+exit /b 1
+:skip_two
+shift
+shift
+goto orca_is_git_commit
+:skip_one
+shift
+goto orca_is_git_commit
 `
 
 const WIN32_GH_CMD_WRAPPER = String.raw`@echo off
@@ -463,57 +638,188 @@ if ($args -contains '--dry-run') {
   exit $LASTEXITCODE
 }
 
-function Test-SignedCommitAttributionSkip {
-  $sawNoGpgSign = $false
-  foreach ($arg in $args) {
-    if ($arg -eq '--no-gpg-sign') {
-      $sawNoGpgSign = $true
-    } elseif ($arg -eq '--gpg-sign' -or $arg.StartsWith('--gpg-sign=') -or $arg -eq '-S' -or $arg.StartsWith('-S')) {
+function Test-GitCommitCommand {
+  param([string[]]$CommandArgs)
+  for ($i = 0; $i -lt $CommandArgs.Count; $i++) {
+    $arg = $CommandArgs[$i]
+    if ($arg -eq '-c' -or $arg -eq '--config' -or $arg -eq '-C' -or $arg -eq '--git-dir' -or $arg -eq '--work-tree' -or $arg -eq '--namespace') {
+      $i++
+      continue
+    }
+    if ($arg.StartsWith('--config=') -or $arg.StartsWith('--git-dir=') -or $arg.StartsWith('--work-tree=') -or $arg.StartsWith('--namespace=')) {
+      continue
+    }
+    if ($arg -eq 'commit') {
+      return $true
+    }
+    if ($arg.StartsWith('-')) {
+      continue
+    }
+    return $false
+  }
+  return $false
+}
+
+function Test-ExplicitCommitMessage {
+  param([string[]]$CommandArgs)
+  foreach ($arg in $CommandArgs) {
+    if ($arg -eq '-m' -or $arg -eq '--message' -or $arg -eq '-F' -or $arg -eq '--file' -or $arg.StartsWith('--message=') -or $arg.StartsWith('--file=') -or ($arg.StartsWith('-m') -and $arg.Length -gt 2) -or ($arg.StartsWith('-F') -and $arg.Length -gt 2) -or ($arg.StartsWith('-') -and -not $arg.StartsWith('--') -and $arg.EndsWith('m'))) {
       return $true
     }
   }
-  if ($sawNoGpgSign) {
-    return $false
-  }
-  $gpgSign = (& $realGit config --bool commit.gpgsign 2>$null)
-  return $LASTEXITCODE -eq 0 -and $gpgSign -eq 'true'
+  return $false
 }
 
-if (Test-SignedCommitAttributionSkip) {
+function Test-UnsupportedCommitMessageSource {
+  param([string[]]$CommandArgs)
+  $sawCommit = $false
+  for ($i = 0; $i -lt $CommandArgs.Count; $i++) {
+    $arg = $CommandArgs[$i]
+    if (-not $sawCommit) {
+      if ($arg -eq '-c' -or $arg -eq '--config' -or $arg -eq '-C' -or $arg -eq '--git-dir' -or $arg -eq '--work-tree' -or $arg -eq '--namespace') {
+        $i++
+        continue
+      }
+      if ($arg.StartsWith('--config=') -or $arg.StartsWith('--git-dir=') -or $arg.StartsWith('--work-tree=') -or $arg.StartsWith('--namespace=')) {
+        continue
+      }
+      if ($arg -eq 'commit') {
+        $sawCommit = $true
+        continue
+      }
+    }
+    if ($arg -eq '-C' -or $arg -eq '--reuse-message' -or $arg -eq '-c' -or $arg -eq '--reedit-message' -or $arg -eq '--fixup' -or $arg -eq '--squash') {
+      return $true
+    }
+    if ($arg -eq '-F' -or $arg -eq '--file') {
+      $i++
+      if ($i -ge $CommandArgs.Count -or -not (Test-Path -LiteralPath $CommandArgs[$i])) {
+        return $true
+      }
+      continue
+    }
+    if ($arg.StartsWith('--file=')) {
+      if (-not (Test-Path -LiteralPath $arg.Substring('--file='.Length))) {
+        return $true
+      }
+      continue
+    }
+    if ($arg.StartsWith('-F') -and $arg.Length -gt 2) {
+      if (-not (Test-Path -LiteralPath $arg.Substring(2))) {
+        return $true
+      }
+      continue
+    }
+  }
+  return $false
+}
+
+function Test-CommitMessageHasTrailer {
+  param([string[]]$CommandArgs)
+  for ($i = 0; $i -lt $CommandArgs.Count; $i++) {
+    $arg = $CommandArgs[$i]
+    if ($arg -eq '-m' -or $arg -eq '--message') {
+      $i++
+      if ($i -lt $CommandArgs.Count -and $CommandArgs[$i] -match [Regex]::Escape($trailer)) {
+        return $true
+      }
+    } elseif ($arg.StartsWith('--message=')) {
+      if ($arg.Substring('--message='.Length) -match [Regex]::Escape($trailer)) {
+        return $true
+      }
+    } elseif ($arg.StartsWith('-m') -and $arg.Length -gt 2) {
+      if ($arg.Substring(2) -match [Regex]::Escape($trailer)) {
+        return $true
+      }
+    } elseif ($arg.StartsWith('-') -and -not $arg.StartsWith('--') -and $arg.EndsWith('m')) {
+      $i++
+      if ($i -lt $CommandArgs.Count -and $CommandArgs[$i] -match [Regex]::Escape($trailer)) {
+        return $true
+      }
+    } elseif ($arg -eq '-F' -or $arg -eq '--file') {
+      $i++
+      if ($i -lt $CommandArgs.Count -and (Test-Path -LiteralPath $CommandArgs[$i]) -and (Get-Content -LiteralPath $CommandArgs[$i] -Raw) -match [Regex]::Escape($trailer)) {
+        return $true
+      }
+    } elseif ($arg.StartsWith('--file=')) {
+      $path = $arg.Substring('--file='.Length)
+      if ((Test-Path -LiteralPath $path) -and (Get-Content -LiteralPath $path -Raw) -match [Regex]::Escape($trailer)) {
+        return $true
+      }
+    } elseif ($arg.StartsWith('-F') -and $arg.Length -gt 2) {
+      $path = $arg.Substring(2)
+      if ((Test-Path -LiteralPath $path) -and (Get-Content -LiteralPath $path -Raw) -match [Regex]::Escape($trailer)) {
+        return $true
+      }
+    }
+  }
+  return $false
+}
+
+if (-not (Test-GitCommitCommand $args) -or -not (Test-ExplicitCommitMessage $args) -or (Test-UnsupportedCommitMessageSource $args) -or (Test-CommitMessageHasTrailer $args)) {
   & $realGit @args
   exit $LASTEXITCODE
 }
 
-$beforeHead = (& $realGit rev-parse --verify HEAD 2>$null)
-& $realGit @args
-$status = $LASTEXITCODE
-if ($status -ne 0) {
-  exit $status
-}
-
-$afterHead = (& $realGit rev-parse --verify HEAD 2>$null)
-if ([string]::IsNullOrWhiteSpace($afterHead) -or $beforeHead -eq $afterHead) {
-  exit 0
-}
-
-$message = (& $realGit log -1 --format=%B 2>$null) | Out-String
-if ($message -match [Regex]::Escape($trailer)) {
-  exit 0
-}
-
-$tmpFile = [System.IO.Path]::GetTempFileName()
-try {
-  $trimmed = $message.TrimEnd("${POWERSHELL_TICK}r", "${POWERSHELL_TICK}n")
-  if ([string]::IsNullOrWhiteSpace($trimmed)) {
-    Set-Content -LiteralPath $tmpFile -Value $trailer -NoNewline
+$tmpFile = $null
+$attributedArgs = New-Object System.Collections.Generic.List[string]
+$replacedFileMessage = $false
+for ($i = 0; $i -lt $args.Count; $i++) {
+  $arg = $args[$i]
+  if (($arg -eq '-F' -or $arg -eq '--file') -and -not $replacedFileMessage) {
+    $i++
+    $sourceFile = if ($i -lt $args.Count) { $args[$i] } else { '' }
+    if ($sourceFile -and (Test-Path -LiteralPath $sourceFile)) {
+      $tmpFile = [System.IO.Path]::GetTempFileName()
+      Set-Content -LiteralPath $tmpFile -Value ((Get-Content -LiteralPath $sourceFile -Raw).TrimEnd("${POWERSHELL_TICK}r", "${POWERSHELL_TICK}n") + "${POWERSHELL_TICK}r${POWERSHELL_TICK}n${POWERSHELL_TICK}r${POWERSHELL_TICK}n" + $trailer) -NoNewline
+      $attributedArgs.Add($arg)
+      $attributedArgs.Add($tmpFile)
+      $replacedFileMessage = $true
+    } else {
+      $attributedArgs.Add($arg)
+      $attributedArgs.Add($sourceFile)
+    }
+  } elseif ($arg.StartsWith('--file=') -and -not $replacedFileMessage) {
+    $sourceFile = $arg.Substring('--file='.Length)
+    if (Test-Path -LiteralPath $sourceFile) {
+      $tmpFile = [System.IO.Path]::GetTempFileName()
+      Set-Content -LiteralPath $tmpFile -Value ((Get-Content -LiteralPath $sourceFile -Raw).TrimEnd("${POWERSHELL_TICK}r", "${POWERSHELL_TICK}n") + "${POWERSHELL_TICK}r${POWERSHELL_TICK}n${POWERSHELL_TICK}r${POWERSHELL_TICK}n" + $trailer) -NoNewline
+      $attributedArgs.Add("--file=$tmpFile")
+      $replacedFileMessage = $true
+    } else {
+      $attributedArgs.Add($arg)
+    }
+  } elseif ($arg.StartsWith('-F') -and $arg.Length -gt 2 -and -not $replacedFileMessage) {
+    $sourceFile = $arg.Substring(2)
+    if (Test-Path -LiteralPath $sourceFile) {
+      $tmpFile = [System.IO.Path]::GetTempFileName()
+      Set-Content -LiteralPath $tmpFile -Value ((Get-Content -LiteralPath $sourceFile -Raw).TrimEnd("${POWERSHELL_TICK}r", "${POWERSHELL_TICK}n") + "${POWERSHELL_TICK}r${POWERSHELL_TICK}n${POWERSHELL_TICK}r${POWERSHELL_TICK}n" + $trailer) -NoNewline
+      $attributedArgs.Add("-F$tmpFile")
+      $replacedFileMessage = $true
+    } else {
+      $attributedArgs.Add($arg)
+    }
   } else {
-    Set-Content -LiteralPath $tmpFile -Value ($trimmed + "${POWERSHELL_TICK}r${POWERSHELL_TICK}n${POWERSHELL_TICK}r${POWERSHELL_TICK}n" + $trailer) -NoNewline
+    $attributedArgs.Add($arg)
   }
-  $env:ORCA_ATTRIBUTION_BYPASS = '1'
-  & $realGit commit --amend --no-verify -F $tmpFile 2>$null | Out-Null
-  exit 0
+}
+
+if (-not $replacedFileMessage) {
+  $attributedArgs.Add('-m')
+  $attributedArgs.Add($trailer)
+}
+
+# Why: commit-msg hooks and signing should validate the final message. Editor
+# commits pass through unchanged rather than being amended after success.
+$env:ORCA_ATTRIBUTION_BYPASS = '1'
+try {
+  $attributedArgArray = $attributedArgs.ToArray()
+  & $realGit @attributedArgArray
+  exit $LASTEXITCODE
 } finally {
-  Remove-Item -LiteralPath $tmpFile -Force -ErrorAction SilentlyContinue
+  if ($tmpFile) {
+    Remove-Item -LiteralPath $tmpFile -Force -ErrorAction SilentlyContinue
+  }
 }
 `
 
@@ -540,36 +846,6 @@ function Test-PassthroughCreateArgs {
   return $false
 }
 
-function Add-Footer {
-  param([string]$Kind, [string]$CreatedUrl, [string]$Footer)
-  if (-not $CreatedUrl) {
-    return
-  }
-  $apiPath = Get-GitHubApiPath $Kind $CreatedUrl
-  if (-not $apiPath) {
-    return
-  }
-  $body = (& $realGh api $apiPath --jq '.body // ""' 2>$null) | Out-String
-  if ($LASTEXITCODE -ne 0 -or $body -match [Regex]::Escape($Footer)) {
-    return
-  }
-  $tmpFile = [System.IO.Path]::GetTempFileName()
-  try {
-    $trimmed = $body.TrimEnd("${POWERSHELL_TICK}r", "${POWERSHELL_TICK}n")
-    if ([string]::IsNullOrWhiteSpace($trimmed)) {
-      Set-Content -LiteralPath $tmpFile -Value $Footer -NoNewline
-    } else {
-      Set-Content -LiteralPath $tmpFile -Value ($trimmed + "${POWERSHELL_TICK}r${POWERSHELL_TICK}n${POWERSHELL_TICK}r${POWERSHELL_TICK}n" + $Footer) -NoNewline
-    }
-    try {
-      & $realGh api -X PATCH $apiPath -f "body=$(Get-Content -LiteralPath $tmpFile -Raw)" | Out-Null
-    } catch {
-    }
-  } finally {
-    Remove-Item -LiteralPath $tmpFile -Force -ErrorAction SilentlyContinue
-  }
-}
-
 function Get-GitHubApiPath {
   param([string]$Kind, [string]$CreatedUrl)
   if ($Kind -eq 'pr' -and $CreatedUrl -match '^https://github\.com/([^/]+)/([^/]+)/pull/([0-9]+)') {
@@ -581,22 +857,23 @@ function Get-GitHubApiPath {
   return $null
 }
 
-$commandText = ($args -join ' ').ToLowerInvariant()
-if (($commandText.StartsWith('pr create') -or $commandText.StartsWith('issue create')) -and (Test-PassthroughCreateArgs $args)) {
+function Test-CreateCommand {
+  param([string[]]$CommandArgs, [string]$Kind)
+  return $CommandArgs.Count -ge 2 -and $CommandArgs[0].ToLowerInvariant() -eq $Kind -and $CommandArgs[1].ToLowerInvariant() -eq 'create'
+}
+
+$isPrCreate = Test-CreateCommand $args 'pr'
+$isIssueCreate = Test-CreateCommand $args 'issue'
+if (($isPrCreate -or $isIssueCreate) -and (Test-PassthroughCreateArgs $args)) {
   & $realGh @args
   exit $LASTEXITCODE
 }
 
-if (($commandText.StartsWith('pr create') -or $commandText.StartsWith('issue create')) -and -not (Test-NonInteractiveCreateArgs $args)) {
+if (($isPrCreate -or $isIssueCreate) -and -not (Test-NonInteractiveCreateArgs $args)) {
   & $realGh @args
   $status = $LASTEXITCODE
   if ($status -ne 0) {
     exit $status
-  }
-  if ($commandText.StartsWith('pr create')) {
-    exit 0
-  } else {
-    exit 0
   }
   exit 0
 }
@@ -621,7 +898,7 @@ if ($stdoutCapture) {
   [Console]::Out.Write($stdoutCapture)
 }
 
-if ($commandText.StartsWith('pr create')) {
+if ($isPrCreate) {
   $createdUrl = ([regex]::Matches(($stdoutCapture + [Environment]::NewLine + $stderrCapture), 'https://github.com/\S+/pull/\d+') | Select-Object -Last 1).Value
   if ($createdUrl) {
     $apiPath = Get-GitHubApiPath 'pr' $createdUrl
@@ -642,7 +919,7 @@ if ($commandText.StartsWith('pr create')) {
         # Why: gh has no transactional body append for newly-created PRs. This
         # immediate REST patch keeps attribution scoped to the URL gh returned.
         try {
-          & $realGh api -X PATCH $apiPath -f "body=$(Get-Content -LiteralPath $tmpFile -Raw)" | Out-Null
+          & $realGh api -X PATCH $apiPath -F "body=@$tmpFile" | Out-Null
         } catch {
         }
       } finally {
@@ -652,7 +929,7 @@ if ($commandText.StartsWith('pr create')) {
   }
 }
 
-if ($commandText.StartsWith('issue create')) {
+if ($isIssueCreate) {
   $createdUrl = ([regex]::Matches(($stdoutCapture + [Environment]::NewLine + $stderrCapture), 'https://github.com/\S+/issues/\d+') | Select-Object -Last 1).Value
   if ($createdUrl) {
     $apiPath = Get-GitHubApiPath 'issue' $createdUrl
@@ -673,7 +950,7 @@ if ($commandText.StartsWith('issue create')) {
         # Why: gh has no transactional body append for newly-created issues.
         # This immediate REST patch keeps attribution scoped to the URL gh returned.
         try {
-          & $realGh api -X PATCH $apiPath -f "body=$(Get-Content -LiteralPath $tmpFile -Raw)" | Out-Null
+          & $realGh api -X PATCH $apiPath -F "body=@$tmpFile" | Out-Null
         } catch {
         }
       } finally {
