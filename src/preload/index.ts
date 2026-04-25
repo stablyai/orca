@@ -357,11 +357,17 @@ const api = {
     issue: (args: { repoPath: string; number: number }): Promise<unknown> =>
       ipcRenderer.invoke('gh:issue', args),
 
-    workItem: (args: { repoPath: string; number: number }): Promise<unknown> =>
-      ipcRenderer.invoke('gh:workItem', args),
+    workItem: (args: {
+      repoPath: string
+      number: number
+      type?: 'issue' | 'pr'
+    }): Promise<unknown> => ipcRenderer.invoke('gh:workItem', args),
 
-    workItemDetails: (args: { repoPath: string; number: number }): Promise<unknown> =>
-      ipcRenderer.invoke('gh:workItemDetails', args),
+    workItemDetails: (args: {
+      repoPath: string
+      number: number
+      type?: 'issue' | 'pr'
+    }): Promise<unknown> => ipcRenderer.invoke('gh:workItemDetails', args),
 
     prFileContents: (args: {
       repoPath: string

@@ -491,7 +491,7 @@ export default function GitHubItemDrawer({
     setTab('conversation')
 
     window.api.gh
-      .workItemDetails({ repoPath, number: workItem.number })
+      .workItemDetails({ repoPath, number: workItem.number, type: workItem.type })
       .then((result) => {
         if (requestId !== requestIdRef.current) {
           return

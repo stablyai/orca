@@ -359,10 +359,12 @@ export type PreloadApi = {
     workItem: (args: {
       repoPath: string
       number: number
+      type?: 'issue' | 'pr'
     }) => Promise<Omit<GitHubWorkItem, 'repoId'> | null>
     workItemDetails: (args: {
       repoPath: string
       number: number
+      type?: 'issue' | 'pr'
     }) => Promise<GitHubWorkItemDetails | null>
     prFileContents: (args: {
       repoPath: string

@@ -35,32 +35,55 @@ export function release(): void {
 }
 
 // ── Owner/repo resolution for gh api --cache ──────────────────────────
-const ownerRepoCache = new Map<string, { owner: string; repo: string } | null>()
+export type OwnerRepo = { owner: string; repo: string }
+
+const ownerRepoCache = new Map<string, OwnerRepo | null>()
 
 /** @internal — exposed for tests only */
 export function _resetOwnerRepoCache(): void {
   ownerRepoCache.clear()
 }
 
-export async function getOwnerRepo(
-  repoPath: string
-): Promise<{ owner: string; repo: string } | null> {
-  if (ownerRepoCache.has(repoPath)) {
-    return ownerRepoCache.get(repoPath)!
+export function parseGitHubOwnerRepo(remoteUrl: string): OwnerRepo | null {
+  const match = remoteUrl.trim().match(/github\.com[:/]([^/]+)\/(.+?)(?:\.git)?$/)
+  if (!match) {
+    return null
+  }
+  return { owner: match[1], repo: match[2] }
+}
+
+async function getOwnerRepoForRemote(
+  repoPath: string,
+  remoteName: string
+): Promise<OwnerRepo | null> {
+  const cacheKey = `${repoPath}\0${remoteName}`
+  if (ownerRepoCache.has(cacheKey)) {
+    return ownerRepoCache.get(cacheKey)!
   }
   try {
-    const { stdout } = await gitExecFileAsync(['remote', 'get-url', 'origin'], {
+    const { stdout } = await gitExecFileAsync(['remote', 'get-url', remoteName], {
       cwd: repoPath
     })
-    const match = stdout.trim().match(/github\.com[:/]([^/]+)\/([^/.]+?)(?:\.git)?$/)
-    if (match) {
-      const result = { owner: match[1], repo: match[2] }
-      ownerRepoCache.set(repoPath, result)
+    const result = parseGitHubOwnerRepo(stdout)
+    if (result) {
+      ownerRepoCache.set(cacheKey, result)
       return result
     }
   } catch {
     // ignore — non-GitHub remote or no remote
   }
-  ownerRepoCache.set(repoPath, null)
+  ownerRepoCache.set(cacheKey, null)
   return null
+}
+
+export async function getOwnerRepo(repoPath: string): Promise<OwnerRepo | null> {
+  return getOwnerRepoForRemote(repoPath, 'origin')
+}
+
+export async function getIssueOwnerRepo(repoPath: string): Promise<OwnerRepo | null> {
+  const upstream = await getOwnerRepoForRemote(repoPath, 'upstream')
+  if (upstream) {
+    return upstream
+  }
+  return getOwnerRepoForRemote(repoPath, 'origin')
 }

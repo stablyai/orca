@@ -78,15 +78,21 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
     }
   )
 
-  ipcMain.handle('gh:workItem', (_event, args: { repoPath: string; number: number }) => {
-    const repo = assertRegisteredRepo(args.repoPath, store)
-    return getWorkItem(repo.path, args.number)
-  })
+  ipcMain.handle(
+    'gh:workItem',
+    (_event, args: { repoPath: string; number: number; type?: 'issue' | 'pr' }) => {
+      const repo = assertRegisteredRepo(args.repoPath, store)
+      return getWorkItem(repo.path, args.number, args.type)
+    }
+  )
 
-  ipcMain.handle('gh:workItemDetails', (_event, args: { repoPath: string; number: number }) => {
-    const repo = assertRegisteredRepo(args.repoPath, store)
-    return getWorkItemDetails(repo.path, args.number)
-  })
+  ipcMain.handle(
+    'gh:workItemDetails',
+    (_event, args: { repoPath: string; number: number; type?: 'issue' | 'pr' }) => {
+      const repo = assertRegisteredRepo(args.repoPath, store)
+      return getWorkItemDetails(repo.path, args.number, args.type)
+    }
+  )
 
   ipcMain.handle(
     'gh:prFileContents',

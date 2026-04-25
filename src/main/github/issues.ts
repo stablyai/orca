@@ -1,13 +1,13 @@
 import type { IssueInfo } from '../../shared/types'
 import { mapIssueInfo } from './mappers'
-import { ghExecFileAsync, acquire, release, getOwnerRepo } from './gh-utils'
+import { ghExecFileAsync, acquire, release, getIssueOwnerRepo } from './gh-utils'
 
 /**
  * Get a single issue by number.
  * Uses gh api --cache so 304 Not Modified responses don't count against the rate limit.
  */
 export async function getIssue(repoPath: string, issueNumber: number): Promise<IssueInfo | null> {
-  const ownerRepo = await getOwnerRepo(repoPath)
+  const ownerRepo = await getIssueOwnerRepo(repoPath)
   await acquire()
   try {
     if (ownerRepo) {
@@ -42,7 +42,7 @@ export async function getIssue(repoPath: string, issueNumber: number): Promise<I
  * Uses gh api --cache so 304 Not Modified responses don't count against the rate limit.
  */
 export async function listIssues(repoPath: string, limit = 20): Promise<IssueInfo[]> {
-  const ownerRepo = await getOwnerRepo(repoPath)
+  const ownerRepo = await getIssueOwnerRepo(repoPath)
   await acquire()
   try {
     if (ownerRepo) {
@@ -86,7 +86,7 @@ export async function createIssue(
   if (!trimmedTitle) {
     return { ok: false, error: 'Title is required' }
   }
-  const ownerRepo = await getOwnerRepo(repoPath)
+  const ownerRepo = await getIssueOwnerRepo(repoPath)
   if (!ownerRepo) {
     return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
   }

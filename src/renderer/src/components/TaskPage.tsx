@@ -534,7 +534,7 @@ export default function TaskPage(): React.JSX.Element {
       setDrawerWorkItem(stub)
       const stubRepoId = primaryRepo.id
       void window.api.gh
-        .workItem({ repoPath: primaryRepo.path, number: result.number })
+        .workItem({ repoPath: primaryRepo.path, number: result.number, type: 'issue' })
         .then((full) => {
           if (full) {
             // Why: `full` is `Omit<GitHubWorkItem, 'repoId'>` (IPC shape).

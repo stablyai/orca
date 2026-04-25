@@ -83,10 +83,9 @@ export function parseGitHubIssueOrPRLink(input: string): {
 
 /**
  * Normalizes link-picker input so both raw issue/PR numbers and full GitHub
- * URLs resolve to a usable query + direct-number lookup. Returns a repo
- * mismatch when a URL targets a different repo than the selected one.
+ * URLs resolve to a usable query + direct-number lookup.
  */
-export function normalizeGitHubLinkQuery(raw: string, repoSlug: RepoSlug | null): GitHubLinkQuery {
+export function normalizeGitHubLinkQuery(raw: string, _repoSlug: RepoSlug | null): GitHubLinkQuery {
   const trimmed = raw.trim()
   if (!trimmed) {
     return { query: '', repoMismatch: null, directNumber: null }
@@ -102,18 +101,8 @@ export function normalizeGitHubLinkQuery(raw: string, repoSlug: RepoSlug | null)
     return { query: trimmed, repoMismatch: null, directNumber: null }
   }
 
-  if (
-    repoSlug &&
-    (link.slug.owner.toLowerCase() !== repoSlug.owner.toLowerCase() ||
-      link.slug.repo.toLowerCase() !== repoSlug.repo.toLowerCase())
-  ) {
-    return {
-      query: '',
-      repoMismatch: `${repoSlug.owner}/${repoSlug.repo}`,
-      directNumber: null
-    }
-  }
-
+  // Why: full GitHub URLs are explicit user input. Fork checkouts can have an
+  // origin slug that differs from the upstream issue tracker the URL targets.
   return {
     query: trimmed,
     repoMismatch: null,
