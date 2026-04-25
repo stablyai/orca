@@ -65,6 +65,7 @@ export default function DiffViewer({
     (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
 
   const diffEditorRef = useRef<editor.IStandaloneDiffEditor | null>(null)
+  const lineNumberOptionsSubRef = useRef<{ dispose: () => void } | null>(null)
   const [modifiedEditor, setModifiedEditor] = useState<editor.ICodeEditor | null>(null)
   const [popover, setPopover] = useState<{ lineNumber: number; top: number } | null>(null)
 
@@ -140,7 +141,8 @@ export default function DiffViewer({
   const handleMount: DiffOnMount = useCallback(
     (diffEditor, monaco) => {
       diffEditorRef.current = diffEditor
-      applyDiffEditorLineNumberOptions(diffEditor, sideBySide)
+      lineNumberOptionsSubRef.current?.dispose()
+      lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(diffEditor, sideBySide)
 
       const originalEditor = diffEditor.getOriginalEditor()
       const modifiedEditor = diffEditor.getModifiedEditor()
@@ -172,6 +174,11 @@ export default function DiffViewer({
       } else {
         diffEditor.focus()
       }
+
+      diffEditor.onDidDispose(() => {
+        lineNumberOptionsSubRef.current?.dispose()
+        lineNumberOptionsSubRef.current = null
+      })
     },
     [editable, setupCopy, modelKey, filePath, sideBySide]
   )
@@ -192,10 +199,16 @@ export default function DiffViewer({
   }, [modelKey])
 
   useEffect(() => {
-    if (!diffEditorRef.current) {
+    const diffEditor = diffEditorRef.current
+    if (!diffEditor) {
       return
     }
-    applyDiffEditorLineNumberOptions(diffEditorRef.current, sideBySide)
+    lineNumberOptionsSubRef.current?.dispose()
+    lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(diffEditor, sideBySide)
+    return () => {
+      lineNumberOptionsSubRef.current?.dispose()
+      lineNumberOptionsSubRef.current = null
+    }
   }, [sideBySide])
 
   return (

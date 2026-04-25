@@ -133,6 +133,7 @@ export function DiffSectionItem({
 
   const [modifiedEditor, setModifiedEditor] = useState<monacoEditor.ICodeEditor | null>(null)
   const diffEditorRef = useRef<monacoEditor.IStandaloneDiffEditor | null>(null)
+  const lineNumberOptionsSubRef = useRef<{ dispose: () => void } | null>(null)
   const [popover, setPopover] = useState<{ lineNumber: number; top: number } | null>(null)
 
   useDiffCommentDecorator({
@@ -166,10 +167,16 @@ export function DiffSectionItem({
   }, [modifiedEditor, popover?.lineNumber])
 
   useEffect(() => {
-    if (!diffEditorRef.current) {
+    const diffEditor = diffEditorRef.current
+    if (!diffEditor) {
       return
     }
-    applyDiffEditorLineNumberOptions(diffEditorRef.current, sideBySide)
+    lineNumberOptionsSubRef.current?.dispose()
+    lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(diffEditor, sideBySide)
+    return () => {
+      lineNumberOptionsSubRef.current?.dispose()
+      lineNumberOptionsSubRef.current = null
+    }
   }, [sideBySide])
 
   const handleSubmitComment = async (body: string): Promise<void> => {
@@ -216,7 +223,8 @@ export function DiffSectionItem({
 
   const handleMount: DiffOnMount = (editor, monaco) => {
     diffEditorRef.current = editor
-    applyDiffEditorLineNumberOptions(editor, sideBySide)
+    lineNumberOptionsSubRef.current?.dispose()
+    lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(editor, sideBySide)
     const modified = editor.getModifiedEditor()
 
     const updateHeight = (): void => {
@@ -238,6 +246,8 @@ export function DiffSectionItem({
     // methods on a disposed editor instance, and avoids `popover` pointing
     // at a line in an editor that no longer exists.
     modified.onDidDispose(() => {
+      lineNumberOptionsSubRef.current?.dispose()
+      lineNumberOptionsSubRef.current = null
       diffEditorRef.current = null
       setModifiedEditor(null)
       setPopover(null)

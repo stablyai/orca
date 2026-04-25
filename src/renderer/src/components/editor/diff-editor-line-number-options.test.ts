@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { buildDiffEditorLineNumberOptions } from './diff-editor-line-number-options'
+import {
+  applyDiffEditorLineNumberOptions,
+  buildDiffEditorLineNumberOptions
+} from './diff-editor-line-number-options'
+import type { editor } from 'monaco-editor'
 
 describe('buildDiffEditorLineNumberOptions', () => {
   it('hides original line numbers in inline mode', () => {
@@ -14,5 +18,64 @@ describe('buildDiffEditorLineNumberOptions', () => {
       original: 'on',
       modified: 'on'
     })
+  })
+})
+
+function createMockCodeEditor(initialLineNumbers: editor.LineNumbersType = 'on'): {
+  editor: editor.ICodeEditor
+  emitDidChangeOptions: () => void
+  getLineNumbers: () => editor.LineNumbersType
+} {
+  let lineNumbers: editor.LineNumbersType = initialLineNumbers
+  const listeners = new Set<() => void>()
+
+  const mockEditor = {
+    getRawOptions: () => ({ lineNumbers }),
+    updateOptions: ({ lineNumbers: nextLineNumbers }: { lineNumbers?: editor.LineNumbersType }) => {
+      if (nextLineNumbers) {
+        lineNumbers = nextLineNumbers
+      }
+    },
+    onDidChangeOptions: (listener: () => void) => {
+      listeners.add(listener)
+      return {
+        dispose: () => {
+          listeners.delete(listener)
+        }
+      }
+    }
+  } as unknown as editor.ICodeEditor
+
+  return {
+    editor: mockEditor,
+    emitDidChangeOptions: () => {
+      listeners.forEach((listener) => listener())
+    },
+    getLineNumbers: () => lineNumbers
+  }
+}
+
+describe('applyDiffEditorLineNumberOptions', () => {
+  it('reapplies desired line number options after parent option updates and stops after dispose', () => {
+    const original = createMockCodeEditor('on')
+    const modified = createMockCodeEditor('on')
+    const diffEditor = {
+      getOriginalEditor: () => original.editor,
+      getModifiedEditor: () => modified.editor
+    } as unknown as editor.IStandaloneDiffEditor
+
+    const disposable = applyDiffEditorLineNumberOptions(diffEditor, false)
+
+    expect(original.getLineNumbers()).toBe('off')
+    expect(modified.getLineNumbers()).toBe('on')
+
+    original.editor.updateOptions({ lineNumbers: 'on' })
+    original.emitDidChangeOptions()
+    expect(original.getLineNumbers()).toBe('off')
+
+    disposable.dispose()
+    original.editor.updateOptions({ lineNumbers: 'on' })
+    original.emitDidChangeOptions()
+    expect(original.getLineNumbers()).toBe('on')
   })
 })
