@@ -240,30 +240,46 @@ test.describe('Terminal attention', () => {
     // leak when mode 1004 is still enabled. The POST_REPLAY_MODE_RESET
     // bundle should turn mode 1004 OFF; if it does, no focus escape is
     // emitted on the next blur and the spy's buffer stays empty.
+    // Why: xterm's parser is async — bytes passed to `write()` are queued and
+    // consumed on a later tick. During the brief window when mode 1004 is
+    // enabled, xterm emits a synchronous focus-IN (`\e[I`) because the
+    // terminal is focused; that emission MUST NOT land in the spy or the
+    // assertion below will false-positive even when the post-replay reset
+    // worked correctly.
+    //
+    // We use xterm's `write(data, callback)` overload: the callback fires
+    // AFTER the parser has consumed that write. By installing the spy inside
+    // the callback for the POST_REPLAY_MODE_RESET write, we guarantee any
+    // transient focus escapes emitted while mode 1004 was briefly on have
+    // already fired before the spy exists. No fixed sleep needed.
     await orcaPage.evaluate(
-      ({ tabId, modeReset }) => {
-        const managers = window.__paneManagers
-        const manager = managers?.get(tabId)
-        const pane = manager?.getActivePane()
-        if (!pane) {
-          throw new Error('No active pane on restored tab')
-        }
-        // Enable focus reporting then apply the post-replay reset. Any focus
-        // escapes xterm emits synchronously while mode 1004 is briefly ON land
-        // before the spy is installed — that's the whole point: we ONLY want
-        // to observe what xterm emits AFTER the reset landed.
-        pane.terminal.write('\x1b[?1004h')
-        pane.terminal.write(modeReset)
-        // Install the onData spy in the same evaluate so no timer gap exists
-        // between reset and spy install. Anything captured below is post-reset.
-        const recorded: string[] = []
-        ;(window as unknown as { __XTERM_ONDATA_SPY__: string[] }).__XTERM_ONDATA_SPY__ = recorded
-        const disposer = pane.terminal.onData((data) => {
-          recorded.push(data)
-        })
-        ;(window as unknown as { __XTERM_ONDATA_DISPOSE__?: () => void }).__XTERM_ONDATA_DISPOSE__ =
-          () => disposer.dispose()
-      },
+      ({ tabId, modeReset }) =>
+        new Promise<void>((resolve, reject) => {
+          const managers = window.__paneManagers
+          const manager = managers?.get(tabId)
+          const pane = manager?.getActivePane()
+          if (!pane) {
+            reject(new Error('No active pane on restored tab'))
+            return
+          }
+          pane.terminal.write('\x1b[?1004h')
+          pane.terminal.write(modeReset, () => {
+            // Parser has consumed both the DECSET and the reset. Any focus
+            // escapes from the brief 1004-ON window have already been emitted
+            // (and dropped on the floor, since nothing was listening). Install
+            // the spy now to observe only post-reset output.
+            const recorded: string[] = []
+            ;(window as unknown as { __XTERM_ONDATA_SPY__: string[] }).__XTERM_ONDATA_SPY__ =
+              recorded
+            const disposer = pane.terminal.onData((data) => {
+              recorded.push(data)
+            })
+            ;(
+              window as unknown as { __XTERM_ONDATA_DISPOSE__?: () => void }
+            ).__XTERM_ONDATA_DISPOSE__ = () => disposer.dispose()
+            resolve()
+          })
+        }),
       { tabId: secondTabId, modeReset: POST_REPLAY_MODE_RESET }
     )
 
