@@ -15,8 +15,8 @@ export const vueMonarchLanguage: Monaco.languages.IMonarchLanguage = {
   tokenizer: {
     root: [
       [/<template(?=\s|>)/, 'tag', '@templateOpen'],
-      [/<script(?=\s|>)/, 'tag', '@scriptOpen'],
-      [/<style(?=\s|>)/, 'tag', '@styleOpen'],
+      [/<script(?=\s|>)/, 'tag', '@scriptOpen.typescript'],
+      [/<style(?=\s|>)/, 'tag', '@styleOpen.css'],
       [/<!--/, 'comment', '@comment'],
       [/<\/?[A-Za-z][^>]*>/, 'tag'],
       [/[^<]+/, '']
@@ -28,42 +28,91 @@ export const vueMonarchLanguage: Monaco.languages.IMonarchLanguage = {
     ],
     templateOpen: [
       [/\/>/, 'tag', '@pop'],
-      [/>/, { token: 'tag', next: '@templateBody', nextEmbedded: 'html' }],
-      [/[^\s/>=]+/, 'attribute.name'],
-      [/=/, 'delimiter'],
-      [/"[^"]*"/, 'attribute.value'],
-      [/'[^']*'/, 'attribute.value'],
-      [/\s+/, 'white']
+      [/>/, { token: 'tag', switchTo: '@templateBody', nextEmbedded: 'html' }],
+      { include: '@tagAttributes' }
     ],
     templateBody: [
-      [/\{\{/, { token: 'delimiter.curly', next: '@templateExpression', nextEmbedded: '@pop' }],
-      [/<\/template\s*>/, { token: 'tag', next: '@pop', nextEmbedded: '@pop' }]
+      [
+        /\{\{/,
+        { token: 'delimiter.curly', next: '@templateExpressionEnter', nextEmbedded: '@pop' }
+      ],
+      [/<\/template\s*>/, { token: 'tag', next: '@pop', nextEmbedded: '@pop' }],
+      [/(?=.)/, { token: '', nextEmbedded: 'html' }]
+    ],
+    templateExpressionEnter: [
+      [/\}\}/, { token: 'delimiter.curly', next: '@pop' }],
+      [/(?=.)/, { token: '', switchTo: '@templateExpression', nextEmbedded: 'typescript' }]
     ],
     templateExpression: [
-      [/\}\}/, { token: 'delimiter.curly', next: '@pop', nextEmbedded: 'html' }],
-      [/[^}]+/, 'metatag'],
-      [/./, 'metatag']
+      [/\}\}/, { token: 'delimiter.curly', next: '@pop', nextEmbedded: '@pop' }]
     ],
     scriptOpen: [
       [/\/>/, 'tag', '@pop'],
-      [/>/, { token: 'tag', next: '@scriptBody', nextEmbedded: 'typescript' }],
-      [/[^\s/>=]+/, 'attribute.name'],
-      [/=/, 'delimiter'],
-      [/"[^"]*"/, 'attribute.value'],
-      [/'[^']*'/, 'attribute.value'],
+      [/>/, { token: 'tag', switchTo: '@scriptBody.$S2', nextEmbedded: '$S2' }],
+      [/lang(?=\s*=)/, { token: 'attribute.name', switchTo: '@scriptLangBeforeEquals.$S2' }],
+      { include: '@tagAttributes' }
+    ],
+    scriptLangBeforeEquals: [
+      [/=/, { token: 'delimiter', switchTo: '@scriptLangValue.$S2' }],
+      [/\s+/, 'white'],
+      [/(?=.)/, { token: '', switchTo: '@scriptOpen.$S2' }]
+    ],
+    scriptLangValue: [
+      [/"(?:js|javascript)"/, { token: 'attribute.value', switchTo: '@scriptOpen.javascript' }],
+      [/'(?:js|javascript)'/, { token: 'attribute.value', switchTo: '@scriptOpen.javascript' }],
+      [
+        /(?:js|javascript)(?=\s|\/|>|$)/,
+        { token: 'attribute.value', switchTo: '@scriptOpen.javascript' }
+      ],
+      [/"(?:ts|typescript)"/, { token: 'attribute.value', switchTo: '@scriptOpen.typescript' }],
+      [/'(?:ts|typescript)'/, { token: 'attribute.value', switchTo: '@scriptOpen.typescript' }],
+      [
+        /(?:ts|typescript)(?=\s|\/|>|$)/,
+        { token: 'attribute.value', switchTo: '@scriptOpen.typescript' }
+      ],
+      [/[^\s/>]+/, { token: 'attribute.value', switchTo: '@scriptOpen.$S2' }],
+      [/"[^"]*"/, { token: 'attribute.value', switchTo: '@scriptOpen.$S2' }],
+      [/'[^']*'/, { token: 'attribute.value', switchTo: '@scriptOpen.$S2' }],
       [/\s+/, 'white']
     ],
     scriptBody: [[/<\/script\s*>/, { token: 'tag', next: '@pop', nextEmbedded: '@pop' }]],
     styleOpen: [
       [/\/>/, 'tag', '@pop'],
-      [/>/, { token: 'tag', next: '@styleBody', nextEmbedded: 'css' }],
+      [/>/, { token: 'tag', switchTo: '@styleBody.$S2', nextEmbedded: '$S2' }],
+      [/lang(?=\s*=)/, { token: 'attribute.name', switchTo: '@styleLangBeforeEquals.$S2' }],
+      { include: '@tagAttributes' }
+    ],
+    styleLangBeforeEquals: [
+      [/=/, { token: 'delimiter', switchTo: '@styleLangValue.$S2' }],
+      [/\s+/, 'white'],
+      [/(?=.)/, { token: '', switchTo: '@styleOpen.$S2' }]
+    ],
+    styleLangValue: [
+      [/"scss"/, { token: 'attribute.value', switchTo: '@styleOpen.scss' }],
+      [/'scss'/, { token: 'attribute.value', switchTo: '@styleOpen.scss' }],
+      [/scss(?=\s|\/|>|$)/, { token: 'attribute.value', switchTo: '@styleOpen.scss' }],
+      [/"sass"/, { token: 'attribute.value', switchTo: '@styleOpen.scss' }],
+      [/'sass'/, { token: 'attribute.value', switchTo: '@styleOpen.scss' }],
+      [/sass(?=\s|\/|>|$)/, { token: 'attribute.value', switchTo: '@styleOpen.scss' }],
+      [/"less"/, { token: 'attribute.value', switchTo: '@styleOpen.less' }],
+      [/'less'/, { token: 'attribute.value', switchTo: '@styleOpen.less' }],
+      [/less(?=\s|\/|>|$)/, { token: 'attribute.value', switchTo: '@styleOpen.less' }],
+      [/"css"/, { token: 'attribute.value', switchTo: '@styleOpen.css' }],
+      [/'css'/, { token: 'attribute.value', switchTo: '@styleOpen.css' }],
+      [/css(?=\s|\/|>|$)/, { token: 'attribute.value', switchTo: '@styleOpen.css' }],
+      [/[^\s/>]+/, { token: 'attribute.value', switchTo: '@styleOpen.$S2' }],
+      [/"[^"]*"/, { token: 'attribute.value', switchTo: '@styleOpen.$S2' }],
+      [/'[^']*'/, { token: 'attribute.value', switchTo: '@styleOpen.$S2' }],
+      [/\s+/, 'white']
+    ],
+    styleBody: [[/<\/style\s*>/, { token: 'tag', next: '@pop', nextEmbedded: '@pop' }]],
+    tagAttributes: [
       [/[^\s/>=]+/, 'attribute.name'],
       [/=/, 'delimiter'],
       [/"[^"]*"/, 'attribute.value'],
       [/'[^']*'/, 'attribute.value'],
       [/\s+/, 'white']
-    ],
-    styleBody: [[/<\/style\s*>/, { token: 'tag', next: '@pop', nextEmbedded: '@pop' }]]
+    ]
   }
 }
 

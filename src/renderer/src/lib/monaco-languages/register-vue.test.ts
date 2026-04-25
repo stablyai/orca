@@ -1,10 +1,44 @@
 import { describe, expect, it, vi } from 'vitest'
 import { registerVueLanguage, vueLanguageConfiguration, vueMonarchLanguage } from './register-vue'
 
-type MonarchRule = [RegExp, unknown, string?]
+type MonarchAction = {
+  next?: string
+  nextEmbedded?: string
+  switchTo?: string
+}
+type MonarchRule = [RegExp, string | MonarchAction, string?] | { include: string }
 
 function normalizeState(nextState: string): string {
   return nextState.startsWith('@') ? nextState.slice(1) : nextState
+}
+
+function isRuleEntry(rule: MonarchRule): rule is [RegExp, string | MonarchAction, string?] {
+  return Array.isArray(rule)
+}
+
+function getRuleAction(rule: [RegExp, string | MonarchAction, string?]): MonarchAction | undefined {
+  const [, action, nextStateShortcut] = rule
+  return typeof action === 'object'
+    ? action
+    : nextStateShortcut
+      ? { next: nextStateShortcut }
+      : undefined
+}
+
+function findRuleAction(state: string, source: string): MonarchAction | undefined {
+  const tokenizer = vueMonarchLanguage.tokenizer as Record<string, MonarchRule[]>
+  const stateRules = tokenizer[state] ?? tokenizer[state.split('.')[0]]
+  const matchedRule = stateRules.find((rule) => {
+    if (!isRuleEntry(rule)) {
+      return false
+    }
+    const [regexp] = rule
+    regexp.lastIndex = 0
+    const match = regexp.exec(source)
+    return match !== null && match.index === 0
+  })
+
+  return matchedRule && isRuleEntry(matchedRule) ? getRuleAction(matchedRule) : undefined
 }
 
 function collectFixtureRuleActions(source: string): {
@@ -13,6 +47,7 @@ function collectFixtureRuleActions(source: string): {
   matched: string
   nextState?: string
   nextEmbedded?: string
+  switchTo?: string
 }[] {
   const ruleActions: {
     line: number
@@ -20,6 +55,7 @@ function collectFixtureRuleActions(source: string): {
     matched: string
     nextState?: string
     nextEmbedded?: string
+    switchTo?: string
   }[] = []
   const tokenizer = vueMonarchLanguage.tokenizer as Record<string, MonarchRule[]>
   const lines = source.split('\n')
@@ -30,39 +66,38 @@ function collectFixtureRuleActions(source: string): {
     { line: 2, state: 'templateExpression', pattern: '}}' },
     { line: 3, state: 'templateBody', pattern: '</template>' },
     { line: 5, state: 'root', pattern: '<script' },
-    { line: 5, state: 'scriptOpen', pattern: '>' },
-    { line: 7, state: 'scriptBody', pattern: '</script>' },
+    { line: 5, state: 'scriptOpen.typescript', pattern: '>' },
+    { line: 7, state: 'scriptBody.typescript', pattern: '</script>' },
     { line: 9, state: 'root', pattern: '<style' },
-    { line: 9, state: 'styleOpen', pattern: '>' },
-    { line: 11, state: 'styleBody', pattern: '</style>' }
+    { line: 9, state: 'styleOpen.css', pattern: '>' },
+    { line: 11, state: 'styleBody.css', pattern: '</style>' }
   ]
 
   checks.forEach((check) => {
     const line = lines.at(check.line - 1) ?? ''
-    const stateRules = tokenizer[check.state]
-    const matchedRule = stateRules.find(([regexp]) => {
+    const stateRules = tokenizer[check.state] ?? tokenizer[check.state.split('.')[0]]
+    const matchedRule = stateRules.find((rule) => {
+      if (!isRuleEntry(rule)) {
+        return false
+      }
+      const [regexp] = rule
       regexp.lastIndex = 0
       const match = regexp.exec(line)
       return match !== null && match[0] === check.pattern
     })
-    if (!matchedRule) {
+    if (!matchedRule || !isRuleEntry(matchedRule)) {
       return
     }
 
-    const [, action, nextStateShortcut] = matchedRule
-    const actionObject =
-      typeof action === 'object'
-        ? (action as { next?: string; nextEmbedded?: string })
-        : nextStateShortcut
-          ? { next: nextStateShortcut }
-          : undefined
+    const actionObject = getRuleAction(matchedRule)
 
     ruleActions.push({
       line: check.line,
       state: check.state,
       matched: check.pattern,
       nextState: actionObject?.next ? normalizeState(actionObject.next) : undefined,
-      nextEmbedded: actionObject?.nextEmbedded
+      nextEmbedded: actionObject?.nextEmbedded,
+      switchTo: actionObject?.switchTo ? normalizeState(actionObject.switchTo) : undefined
     })
   })
 
@@ -125,27 +160,31 @@ p { color: rebeccapurple; }
           "nextEmbedded": undefined,
           "nextState": "templateOpen",
           "state": "root",
+          "switchTo": undefined,
         },
         {
           "line": 1,
           "matched": ">",
           "nextEmbedded": "html",
-          "nextState": "templateBody",
+          "nextState": undefined,
           "state": "templateOpen",
+          "switchTo": "templateBody",
         },
         {
           "line": 2,
           "matched": "{{",
           "nextEmbedded": "@pop",
-          "nextState": "templateExpression",
+          "nextState": "templateExpressionEnter",
           "state": "templateBody",
+          "switchTo": undefined,
         },
         {
           "line": 2,
           "matched": "}}",
-          "nextEmbedded": "html",
+          "nextEmbedded": "@pop",
           "nextState": "pop",
           "state": "templateExpression",
+          "switchTo": undefined,
         },
         {
           "line": 3,
@@ -153,50 +192,79 @@ p { color: rebeccapurple; }
           "nextEmbedded": "@pop",
           "nextState": "pop",
           "state": "templateBody",
+          "switchTo": undefined,
         },
         {
           "line": 5,
           "matched": "<script",
           "nextEmbedded": undefined,
-          "nextState": "scriptOpen",
+          "nextState": "scriptOpen.typescript",
           "state": "root",
+          "switchTo": undefined,
         },
         {
           "line": 5,
           "matched": ">",
-          "nextEmbedded": "typescript",
-          "nextState": "scriptBody",
-          "state": "scriptOpen",
+          "nextEmbedded": "$S2",
+          "nextState": undefined,
+          "state": "scriptOpen.typescript",
+          "switchTo": "scriptBody.$S2",
         },
         {
           "line": 7,
           "matched": "</script>",
           "nextEmbedded": "@pop",
           "nextState": "pop",
-          "state": "scriptBody",
+          "state": "scriptBody.typescript",
+          "switchTo": undefined,
         },
         {
           "line": 9,
           "matched": "<style",
           "nextEmbedded": undefined,
-          "nextState": "styleOpen",
+          "nextState": "styleOpen.css",
           "state": "root",
+          "switchTo": undefined,
         },
         {
           "line": 9,
           "matched": ">",
-          "nextEmbedded": "css",
-          "nextState": "styleBody",
-          "state": "styleOpen",
+          "nextEmbedded": "$S2",
+          "nextState": undefined,
+          "state": "styleOpen.css",
+          "switchTo": "styleBody.$S2",
         },
         {
           "line": 11,
           "matched": "</style>",
           "nextEmbedded": "@pop",
           "nextState": "pop",
-          "state": "styleBody",
+          "state": "styleBody.css",
+          "switchTo": undefined,
         },
       ]
     `)
+  })
+
+  it('tracks embedded languages from Vue block attributes', () => {
+    expect(findRuleAction('templateExpressionEnter', 'message }}')).toMatchObject({
+      nextEmbedded: 'typescript',
+      switchTo: '@templateExpression'
+    })
+    expect(findRuleAction('scriptLangValue.typescript', '"js"')).toMatchObject({
+      switchTo: '@scriptOpen.javascript'
+    })
+    expect(findRuleAction('scriptLangValue.javascript', '"ts"')).toMatchObject({
+      switchTo: '@scriptOpen.typescript'
+    })
+    expect(findRuleAction('scriptLangValue.typescript', 'js')).toMatchObject({
+      switchTo: '@scriptOpen.javascript'
+    })
+    expect(findRuleAction('styleLangValue.css', '"scss"')).toMatchObject({
+      switchTo: '@styleOpen.scss'
+    })
+    expect(findRuleAction('styleLangValue.css', 'less')).toMatchObject({
+      switchTo: '@styleOpen.less'
+    })
   })
 })
