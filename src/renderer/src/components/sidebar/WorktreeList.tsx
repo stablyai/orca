@@ -24,6 +24,7 @@ import {
 import {
   type GroupHeaderRow,
   type Row,
+  PINNED_GROUP_KEY,
   buildRows,
   getGroupKeyForWorktree
 } from './worktree-list-groups'
@@ -118,9 +119,17 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       return
     }
 
-    if (groupBy !== 'none') {
+    {
       const targetWorktree = worktrees.find((w) => w.id === pendingRevealWorktreeId)
-      if (targetWorktree) {
+      if (targetWorktree?.isPinned) {
+        // Why: pinned worktrees live in the dedicated "Pinned" section regardless
+        // of their PR-status / repo group. Only uncollapse the Pinned header
+        // itself — expanding the underlying status group would be surprising since
+        // the user intentionally collapsed it.
+        if (collapsedGroups.has(PINNED_GROUP_KEY)) {
+          toggleGroup(PINNED_GROUP_KEY)
+        }
+      } else if (targetWorktree && groupBy !== 'none') {
         const groupKey = getGroupKeyForWorktree(groupBy, targetWorktree, repoMap, prCache)
         if (groupKey && collapsedGroups.has(groupKey)) {
           toggleGroup(groupKey)
