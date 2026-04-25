@@ -23,7 +23,7 @@ describe('buildDiffEditorLineNumberOptions', () => {
 
 function createMockCodeEditor(initialLineNumbers: editor.LineNumbersType = 'on'): {
   editor: editor.ICodeEditor
-  emitDidChangeOptions: () => void
+  emitDidChangeConfiguration: () => void
   getLineNumbers: () => editor.LineNumbersType
 } {
   let lineNumbers: editor.LineNumbersType = initialLineNumbers
@@ -36,7 +36,7 @@ function createMockCodeEditor(initialLineNumbers: editor.LineNumbersType = 'on')
         lineNumbers = nextLineNumbers
       }
     },
-    onDidChangeOptions: (listener: () => void) => {
+    onDidChangeConfiguration: (listener: () => void) => {
       listeners.add(listener)
       return {
         dispose: () => {
@@ -48,7 +48,7 @@ function createMockCodeEditor(initialLineNumbers: editor.LineNumbersType = 'on')
 
   return {
     editor: mockEditor,
-    emitDidChangeOptions: () => {
+    emitDidChangeConfiguration: () => {
       listeners.forEach((listener) => listener())
     },
     getLineNumbers: () => lineNumbers
@@ -70,12 +70,12 @@ describe('applyDiffEditorLineNumberOptions', () => {
     expect(modified.getLineNumbers()).toBe('on')
 
     original.editor.updateOptions({ lineNumbers: 'on' })
-    original.emitDidChangeOptions()
+    original.emitDidChangeConfiguration()
     expect(original.getLineNumbers()).toBe('off')
 
     disposable.dispose()
     original.editor.updateOptions({ lineNumbers: 'on' })
-    original.emitDidChangeOptions()
+    original.emitDidChangeConfiguration()
     expect(original.getLineNumbers()).toBe('on')
   })
 })
