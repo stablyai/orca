@@ -72,6 +72,11 @@ export class SshRelaySession {
       await this.registerProviders(mux)
       this._state = 'ready'
     } catch (err) {
+      // Why: if deployAndLaunchRelay succeeded but registerProviders threw
+      // partway through, the mux is live and some providers may be partially
+      // registered. teardownProviders cleans up everything so a subsequent
+      // establish() call starts from a clean slate.
+      this.teardownProviders('shutdown')
       this._state = 'idle'
       throw err
     }

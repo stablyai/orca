@@ -78,10 +78,18 @@ export function registerSshHandlers(
       // ensures this only triggers when appropriate — 'deploying' state from
       // an explicit ssh:connect is not 'ready', so this branch won't fire.
       const session = activeSessions.get(targetId)
+      if (!session) {
+        return
+      }
+      // Why: allow reconnect from both 'ready' (normal network blip) and
+      // 'reconnecting' (previous reconnect attempt failed, e.g. relay deploy
+      // error on a working SSH connection). Without the 'reconnecting' check,
+      // a failed relay deploy would permanently brick the session.
+      const sessionState = session.getState()
       if (
         state.status === 'connected' &&
         state.reconnectAttempt === 0 &&
-        session?.getState() === 'ready'
+        (sessionState === 'ready' || sessionState === 'reconnecting')
       ) {
         const target = sshStore?.getTarget(targetId)
         const conn = connectionManager?.getConnection(targetId)
@@ -130,6 +138,15 @@ export function registerSshHandlers(
     }
 
     let conn
+    // Why: dispose any existing session to avoid leaking the old multiplexer,
+    // providers, and timers. This handles double-connect (user clicks connect
+    // while already connected) and reconnect-after-error.
+    const existingSession = activeSessions.get(args.targetId)
+    if (existingSession) {
+      existingSession.dispose()
+      activeSessions.delete(args.targetId)
+    }
+
     // Why: create the session early so onStateChange sees it in 'deploying'
     // state and knows not to trigger reconnect logic.
     const session = new SshRelaySession(args.targetId, getMainWindow, store, portForwardManager!)

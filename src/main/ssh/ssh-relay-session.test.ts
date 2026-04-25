@@ -279,4 +279,38 @@ describe('SshRelaySession', () => {
 
     expect(mockPortForward.removeAllForwards).toHaveBeenCalledWith('target-1')
   })
+
+  it('establish cleans up mux and providers on partial registration failure', async () => {
+    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    // Why: simulate registerRelayRoots failing after mux is created but
+    // before providers are fully registered.
+    mockStore.getRepos = vi.fn().mockImplementation(() => {
+      throw new Error('store error during root registration')
+    })
+
+    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
+
+    await expect(session.establish(mockConn)).rejects.toThrow('store error')
+    expect(session.getState()).toBe('idle')
+    expect(session.getMux()).toBeNull()
+    expect(unregisterSshPtyProvider).toHaveBeenCalledWith('target-1')
+    expect(unregisterSshFilesystemProvider).toHaveBeenCalledWith('target-1')
+    expect(unregisterSshGitProvider).toHaveBeenCalledWith('target-1')
+  })
+
+  it('reconnect failure still allows retry from onStateChange', async () => {
+    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
+    await session.establish(mockConn)
+
+    // Fail the first reconnect
+    vi.mocked(deployAndLaunchRelay).mockRejectedValueOnce(new Error('deploy failed'))
+    await session.reconnect(mockConn)
+    expect(session.getState()).toBe('reconnecting')
+
+    // Retry should work — reconnect accepts 'reconnecting' state
+    mockDeploySuccess()
+    await session.reconnect(mockConn)
+    expect(session.getState()).toBe('ready')
+  })
 })
