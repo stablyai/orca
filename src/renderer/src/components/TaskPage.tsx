@@ -47,6 +47,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import RepoMultiCombobox from '@/components/ui/repo-multi-combobox'
+import TeamMultiCombobox from '@/components/ui/team-multi-combobox'
 import RepoDotLabel from '@/components/repo/RepoDotLabel'
 import { stripRepoQualifiers } from '../../../shared/task-query'
 import GitHubItemDrawer from '@/components/GitHubItemDrawer'
@@ -735,6 +736,60 @@ export default function TaskPage(): React.JSX.Element {
   const [linearSearchInput, setLinearSearchInput] = useState('')
   const [activeLinearPreset, setActiveLinearPreset] = useState<LinearPresetId>('all')
   const [linearRefreshNonce, setLinearRefreshNonce] = useState(0)
+
+  // Why: derive the team list from fetched issues rather than adding a new
+  // IPC channel — every LinearIssue already carries team metadata. Teams that
+  // appear in the current fetch window are the ones with recent activity, which
+  // are the ones users care about filtering.
+  const availableTeams = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; key: string }>()
+    for (const issue of linearIssues) {
+      if (!map.has(issue.team.id)) {
+        map.set(issue.team.id, issue.team)
+      }
+    }
+    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name))
+  }, [linearIssues])
+
+  const defaultLinearTeamSelection = settings?.defaultLinearTeamSelection
+  const [linearTeamSelection, setLinearTeamSelection] = useState<ReadonlySet<string>>(() => {
+    if (!defaultLinearTeamSelection) {
+      return new Set<string>()
+    }
+    return new Set(defaultLinearTeamSelection)
+  })
+
+  // Why: two cases when availableTeams changes (preset switch, search, initial load):
+  // 1. Sticky-all (null): auto-include all discovered teams.
+  // 2. Explicit selection: prune to intersection with available teams. If intersection
+  //    is empty, recover to all-teams — same pattern as repo selector (lines 552-577).
+  useEffect(() => {
+    if (availableTeams.length === 0) {
+      return
+    }
+    const availableIds = new Set(availableTeams.map((t) => t.id))
+
+    if (!defaultLinearTeamSelection) {
+      setLinearTeamSelection(availableIds)
+      return
+    }
+
+    const pruned = new Set([...linearTeamSelection].filter((id) => availableIds.has(id)))
+    if (pruned.size === 0) {
+      setLinearTeamSelection(availableIds)
+      void updateSettings({ defaultLinearTeamSelection: null }).catch(() => {
+        toast.error('Failed to save team selection.')
+      })
+    } else if (pruned.size !== linearTeamSelection.size) {
+      setLinearTeamSelection(pruned)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availableTeams, defaultLinearTeamSelection])
+
+  const filteredLinearIssues = useMemo(
+    () => linearIssues.filter((issue) => linearTeamSelection.has(issue.team.id)),
+    [linearIssues, linearTeamSelection]
+  )
   const [linearConnectOpen, setLinearConnectOpen] = useState(false)
   const [linearApiKeyDraft, setLinearApiKeyDraft] = useState('')
   const [linearConnectState, setLinearConnectState] = useState<'idle' | 'connecting' | 'error'>(
@@ -1289,31 +1344,47 @@ export default function TaskPage(): React.JSX.Element {
                       )
                     })}
                   </div>
-                  {/* Why: Linear issues are not repo-scoped, so the repo
-                      selector is only relevant for the GitHub tab. */}
-                  <div className={cn('w-[200px]', taskSource !== 'github' && 'invisible')}>
-                    <RepoMultiCombobox
-                      repos={eligibleRepos}
-                      selected={repoSelection}
-                      onChange={(next) => {
-                        setRepoSelection(next)
-                        // Why: persist the curated subset so the same set reopens
-                        // next launch. Sticky-all uses onSelectAll instead.
-                        void updateSettings({ defaultRepoSelection: [...next] }).catch(() => {
-                          toast.error('Failed to save repo selection.')
-                        })
-                      }}
-                      onSelectAll={() => {
-                        const allIds = new Set(eligibleRepos.map((r) => r.id))
-                        setRepoSelection(allIds)
-                        // Why: persist `null` so new repos added later are
-                        // automatically included — a frozen array would exclude them.
-                        void updateSettings({ defaultRepoSelection: null }).catch(() => {
-                          toast.error('Failed to save repo selection.')
-                        })
-                      }}
-                      triggerClassName="h-8 w-full rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
-                    />
+                  <div className="w-[200px]">
+                    {taskSource === 'github' ? (
+                      <RepoMultiCombobox
+                        repos={eligibleRepos}
+                        selected={repoSelection}
+                        onChange={(next) => {
+                          setRepoSelection(next)
+                          void updateSettings({ defaultRepoSelection: [...next] }).catch(() => {
+                            toast.error('Failed to save repo selection.')
+                          })
+                        }}
+                        onSelectAll={() => {
+                          const allIds = new Set(eligibleRepos.map((r) => r.id))
+                          setRepoSelection(allIds)
+                          void updateSettings({ defaultRepoSelection: null }).catch(() => {
+                            toast.error('Failed to save repo selection.')
+                          })
+                        }}
+                        triggerClassName="h-8 w-full rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
+                      />
+                    ) : availableTeams.length > 1 ? (
+                      <TeamMultiCombobox
+                        teams={availableTeams}
+                        selected={linearTeamSelection}
+                        onChange={(next) => {
+                          setLinearTeamSelection(next)
+                          void updateSettings({ defaultLinearTeamSelection: [...next] }).catch(
+                            () => {
+                              toast.error('Failed to save team selection.')
+                            }
+                          )
+                        }}
+                        onSelectAll={() => {
+                          setLinearTeamSelection(new Set(availableTeams.map((t) => t.id)))
+                          void updateSettings({ defaultLinearTeamSelection: null }).catch(() => {
+                            toast.error('Failed to save team selection.')
+                          })
+                        }}
+                        triggerClassName="h-8 w-full rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
+                      />
+                    ) : null}
                   </div>
                 </div>
 
@@ -1819,8 +1890,19 @@ export default function TaskPage(): React.JSX.Element {
                   </div>
                 ) : null}
 
+                {!linearLoading && linearIssues.length > 0 && filteredLinearIssues.length === 0 ? (
+                  <div className="px-4 py-10 text-center">
+                    <p className="text-base font-medium text-foreground">
+                      No issues match the selected teams
+                    </p>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      Try selecting more teams or click &ldquo;All teams&rdquo;.
+                    </p>
+                  </div>
+                ) : null}
+
                 <div className="divide-y divide-border/50">
-                  {linearIssues.map((issue) => (
+                  {filteredLinearIssues.map((issue) => (
                     <div
                       key={issue.id}
                       role="button"

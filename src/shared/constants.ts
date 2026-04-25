@@ -158,6 +158,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     defaultTaskViewPreset: 'all',
     defaultTaskSource: 'github',
     defaultRepoSelection: null,
+    defaultLinearTeamSelection: null,
     agentCmdOverrides: {},
     // Why: 'auto' runs a layout-aware probe at boot (see
     // src/renderer/src/lib/keyboard-layout/*) that picks 'true' for US and

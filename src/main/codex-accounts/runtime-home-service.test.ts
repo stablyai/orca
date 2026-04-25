@@ -82,6 +82,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     defaultTaskViewPreset: 'all',
     defaultTaskSource: 'github',
     defaultRepoSelection: null,
+    defaultLinearTeamSelection: null,
     agentCmdOverrides: {},
     terminalMacOptionAsAlt: 'false',
     terminalMacOptionAsAltMigrated: true,

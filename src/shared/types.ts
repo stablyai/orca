@@ -826,6 +826,10 @@ export type GlobalSettings = {
    *  eligible are silently dropped on load. An empty array after that drop
    *  is treated as `null`. */
   defaultRepoSelection: string[] | null
+  /** Why: persists the user's Linear team selection in the tasks view.
+   *  Same nullable-array pattern as `defaultRepoSelection`: `null` = sticky-all,
+   *  `string[]` = frozen subset of team IDs. */
+  defaultLinearTeamSelection: string[] | null
   /** Per-agent CLI command overrides. A missing key means use the catalog default binary name. */
   agentCmdOverrides: Partial<Record<TuiAgent, string>>
   /** Why: macOS terminals must choose between letting Option compose layout
