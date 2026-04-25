@@ -37,6 +37,10 @@ export type WorktreeSlice = {
   clearWorktreeDeleteState: (worktreeId: string) => void
   updateWorktreeMeta: (worktreeId: string, updates: Partial<WorktreeMeta>) => Promise<void>
   markWorktreeUnread: (worktreeId: string) => void
+  /** Clear the worktree's unread dot. Called on user interaction with any
+   *  terminal pane inside the worktree (keystroke, click) — matches
+   *  ghostty's "show until interact" model. Persists isUnread=false. */
+  clearWorktreeUnread: (worktreeId: string) => void
   bumpWorktreeActivity: (worktreeId: string) => void
   setActiveWorktree: (worktreeId: string | null) => void
   allWorktrees: () => Worktree[]

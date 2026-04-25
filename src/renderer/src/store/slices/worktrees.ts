@@ -333,11 +333,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   },
 
   markWorktreeUnread: (worktreeId) => {
-    const activeWorktreeId = get().activeWorktreeId
-    if (activeWorktreeId === worktreeId) {
-      return
-    }
-
+    // Why: BEL must fire regardless of focus (ghostty semantics — "show
+    // until interact"). The dot clears on user interaction with the
+    // worktree's terminal via clearWorktreeUnread, not on activation alone.
     let shouldPersist = false
     const now = Date.now()
     set((s) => {
@@ -363,6 +361,33 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       .updateMeta({ worktreeId, updates: { isUnread: true, lastActivityAt: now } })
       .catch((err) => {
         console.error('Failed to persist unread worktree state:', err)
+        void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+      })
+  },
+
+  clearWorktreeUnread: (worktreeId) => {
+    let shouldPersist = false
+    set((s) => {
+      const worktree = findWorktreeById(s.worktreesByRepo, worktreeId)
+      if (!worktree || !worktree.isUnread) {
+        return {}
+      }
+      shouldPersist = true
+      return {
+        worktreesByRepo: applyWorktreeUpdates(s.worktreesByRepo, worktreeId, {
+          isUnread: false
+        })
+      }
+    })
+
+    if (!shouldPersist) {
+      return
+    }
+
+    void window.api.worktrees
+      .updateMeta({ worktreeId, updates: { isUnread: false } })
+      .catch((err) => {
+        console.error('Failed to persist cleared unread worktree state:', err)
         void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
       })
   },

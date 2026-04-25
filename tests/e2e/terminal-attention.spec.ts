@@ -58,7 +58,11 @@ async function activateTerminalTab(page: Page, tabId: string): Promise<void> {
 }
 
 async function emitBell(page: Page, ptyId: string): Promise<void> {
-  await execInTerminal(page, ptyId, `node -e "process.stdout.write('\\u0007')"`)
+  // Why: `tput bel` is the canonical way to emit BEL from the shell — this is
+  // the exact command the user will run to reproduce the attention path. Prefer
+  // it over `node -e` so the test exercises the same PTY byte stream a real
+  // user sees.
+  await execInTerminal(page, ptyId, `tput bel`)
 }
 
 async function getUnreadTerminalTabIds(page: Page): Promise<string[]> {
@@ -121,10 +125,11 @@ test.describe('Terminal attention', () => {
     await expect(secondTabBell).toBeHidden()
   })
 
-  // Why (visibility guard): markTerminalTabUnread skips the currently-active
-  // tab. A BEL arriving on the tab the user is already looking at must not
-  // leave a persistent indicator — there is nothing to "notify" about.
-  test('a BEL on the focused tab does not raise its own bell', async ({ orcaPage }) => {
+  // Why (show-until-interact): ghostty's model fires the bell even on the
+  // currently-focused tab — the user only dismisses it by actually engaging
+  // with the pane. This test proves the BEL on a focused tab is visible
+  // until a pointerdown on the terminal container clears it.
+  test('a BEL on the focused tab raises, then clears on click', async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
@@ -138,8 +143,8 @@ test.describe('Terminal attention', () => {
 
     // Emit the BEL, then a deterministic OSC title marker. When the marker
     // title lands, all prior PTY bytes (including the BEL) have been
-    // processed — we can then safely assert that the focused tab is not
-    // unread. This avoids the flaky fixed-timeout pattern.
+    // processed — we can then safely assert unread state without racing the
+    // async PTY pipeline.
     await emitBell(orcaPage, activePtyId)
     const MARKER_TITLE = 'focused-tab-bell-marker'
     await execInTerminal(
@@ -167,7 +172,31 @@ test.describe('Terminal attention', () => {
       )
       .toBe(true)
 
-    expect((await getUnreadTerminalTabIds(orcaPage)).includes(activeTabId)).toBe(false)
+    // The focused tab is now unread — the bell persists until the user
+    // actually interacts with the pane.
+    expect((await getUnreadTerminalTabIds(orcaPage)).includes(activeTabId)).toBe(true)
+
+    // A pointerdown inside the terminal container counts as interaction
+    // (matches the pointerdown handler added in TerminalPane.tsx). Drive it
+    // via the DOM so we exercise the real listener path rather than bypassing
+    // to the store action.
+    await orcaPage.evaluate((tabId) => {
+      const managers = window.__paneManagers
+      const manager = managers?.get(tabId)
+      const pane = manager?.getActivePane()
+      const container = pane?.container
+      if (!container) {
+        throw new Error('No active pane container to click')
+      }
+      container.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }))
+    }, activeTabId)
+
+    await expect
+      .poll(async () => (await getUnreadTerminalTabIds(orcaPage)).includes(activeTabId), {
+        timeout: 5_000,
+        message: 'Unread state did not clear after interacting with the pane'
+      })
+      .toBe(false)
   })
 
   // Why (restart regression guard): the original user-reported bug was that
@@ -205,13 +234,12 @@ test.describe('Terminal attention', () => {
     await waitForActiveTerminalManager(orcaPage, 30_000)
 
     // secondTabId is already active after createTerminalTab. Simulate what
-    // scrollback replay does: a DECSET 1004 byte landing in xterm. This is
-    // the exact byte Claude Code emits at startup, and the exact byte
-    // SerializeAddon captures in a post-restart scrollback dump. The
-    // post-replay reset in layout-serialization.ts should cancel it out —
-    // so this write, immediately followed by the reset, produces a terminal
-    // with mode 1004 off. We write while secondTabId has focus so the
-    // DECSET lands on the tab whose xterm we want to verify.
+    // scrollback replay does: a DECSET 1004 byte landing in xterm. Then
+    // install an onData spy so we can observe everything xterm emits from
+    // this point on — crucially, the focus escapes `\e[I` / `\e[O` that
+    // leak when mode 1004 is still enabled. The POST_REPLAY_MODE_RESET
+    // bundle should turn mode 1004 OFF; if it does, no focus escape is
+    // emitted on the next blur and the spy's buffer stays empty.
     await orcaPage.evaluate(
       ({ tabId, modeReset }) => {
         const managers = window.__paneManagers
@@ -220,93 +248,68 @@ test.describe('Terminal attention', () => {
         if (!pane) {
           throw new Error('No active pane on restored tab')
         }
-        // Enable focus reporting and then immediately apply the same reset
-        // the real scrollback-restore path applies. After this, mode 1004
-        // should be OFF.
+        // Enable focus reporting and apply the same reset the real
+        // scrollback-restore path applies. After this, mode 1004 should be OFF.
+        // Writes happen first so any focus escapes xterm emits synchronously
+        // while mode 1004 is briefly ON don't pollute the post-reset spy below.
         pane.terminal.write('\x1b[?1004h')
         pane.terminal.write(modeReset)
       },
       { tabId: secondTabId, modeReset: POST_REPLAY_MODE_RESET }
     )
 
-    // Now trigger a focus change. The DECSET happened while secondTabId was
-    // active; the subsequent focus change to firstTabId causes a focus-out
-    // on secondTabId's xterm. If POST_REPLAY_MODE_RESET failed to disable
-    // mode 1004, xterm would emit `\e[O` down secondTabId's PTY and zsh
-    // would ring the bell. Flush pending output with a marker OSC title
-    // and assert that no unread indicator appeared.
-    await activateTerminalTab(orcaPage, firstTabId)
-
-    // Resolve secondTabId's PTY directly from the store. We can't use
-    // discoverActivePtyId here — firstTabId is the active tab now, so that
-    // helper would return the wrong PTY and the marker flush would not
-    // guarantee secondTabId's pending output has been drained.
-    // Why: waitForActiveTerminalManager only waits for the pane manager to
-    // have panes — it does NOT wait for updateTabPtyId to fire, which
-    // happens asynchronously after pty.spawn resolves in pty-connection.ts.
-    // Poll so we don't race the spawn callback on slow CI.
-    await expect
-      .poll(
-        async () =>
-          orcaPage.evaluate((targetTabId) => {
-            const store = window.__store
-            if (!store) {
-              return null
-            }
-            return store.getState().ptyIdsByTabId[targetTabId]?.[0] ?? null
-          }, secondTabId),
-        {
-          timeout: 10_000,
-          message: `No PTY registered for tab ${secondTabId}`
-        }
-      )
-      .not.toBeNull()
-
-    const secondTabPtyId = await orcaPage.evaluate((targetTabId) => {
-      const store = window.__store
-      if (!store) {
-        throw new Error('window.__store is unavailable')
+    // Install the spy AFTER the mode writes have been queued, and give xterm
+    // a tick to actually parse them. Any focus escape captured after this
+    // point is a regression — mode 1004 is supposed to be OFF now, so blur /
+    // focus-change events must not produce `\e[I` or `\e[O`.
+    await orcaPage.waitForTimeout(50)
+    await orcaPage.evaluate((tabId) => {
+      const managers = window.__paneManagers
+      const manager = managers?.get(tabId)
+      const pane = manager?.getActivePane()
+      if (!pane) {
+        throw new Error('No active pane on restored tab')
       }
-      const pty = store.getState().ptyIdsByTabId[targetTabId]?.[0]
-      if (!pty) {
-        throw new Error(`No PTY found for tab ${targetTabId}`)
-      }
-      return pty
+      const recorded: string[] = []
+      ;(window as unknown as { __XTERM_ONDATA_SPY__: string[] }).__XTERM_ONDATA_SPY__ = recorded
+      pane.terminal.onData((data) => {
+        recorded.push(data)
+      })
     }, secondTabId)
-    const MARKER_TITLE = 'mode-reset-marker'
-    await execInTerminal(
-      orcaPage,
-      secondTabPtyId,
-      `node -e "process.stdout.write('\\u001b]0;${MARKER_TITLE}\\u0007')"`
+
+    // Trigger focus change away from secondTabId. If mode 1004 is still
+    // enabled, xterm will emit `\e[O` via onData — captured by the spy above.
+    // Also explicitly blur the xterm instance so the DOM focus actually moves
+    // (setActiveTab alone doesn't blur focus).
+    await activateTerminalTab(orcaPage, firstTabId)
+    await orcaPage.evaluate((tabId) => {
+      const managers = window.__paneManagers
+      const manager = managers?.get(tabId)
+      const pane = manager?.getActivePane()
+      if (!pane) {
+        return
+      }
+      pane.terminal.blur()
+    }, secondTabId)
+
+    // Give xterm's focus-change handler a tick to run.
+    await orcaPage.waitForTimeout(50)
+
+    const emittedFromXterm = await orcaPage.evaluate(
+      () =>
+        (window as unknown as { __XTERM_ONDATA_SPY__: string[] | undefined })
+          .__XTERM_ONDATA_SPY__ ?? []
     )
 
-    await expect
-      .poll(
-        async () =>
-          orcaPage.evaluate((want) => {
-            const store = window.__store
-            if (!store) {
-              return false
-            }
-            return Object.values(store.getState().tabsByWorktree ?? {})
-              .flat()
-              .some((tab) => tab.title === want)
-          }, MARKER_TITLE),
-        {
-          timeout: 10_000,
-          message: 'Marker title did not land — byte stream may not have been flushed'
-        }
-      )
-      .toBe(true)
-
-    // By the time the marker arrives, any BEL that mode 1004 would have
-    // produced has also been processed. The tab should not be unread.
-    expect((await getUnreadTerminalTabIds(orcaPage)).includes(secondTabId)).toBe(false)
-    const secondTabBell = orcaPage
-      .locator(
-        `[data-testid="sortable-tab"][data-tab-id="${secondTabId}"] [data-testid="tab-activity-bell"]`
-      )
-      .first()
-    await expect(secondTabBell).toBeHidden()
+    // Mode 1004 reset succeeded iff no focus escapes were emitted. Filter
+    // for `\e[I` (focus-in) and `\e[O` (focus-out) specifically — xterm
+    // may still emit other query replies we don't care about here, and under
+    // the show-until-interact model the tab's unread indicator can be flipped
+    // by unrelated shell-startup BELs, so we assert on the precise byte-level
+    // mechanism the fix guards against.
+    const focusEscapes = emittedFromXterm.filter(
+      (chunk) => chunk.includes('\x1b[I') || chunk.includes('\x1b[O')
+    )
+    expect(focusEscapes).toEqual([])
   })
 })

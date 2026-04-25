@@ -275,6 +275,12 @@ export function connectPanePty(
     if (isCodexPaneStale({ tabId: deps.tabId, panePtyId: currentPtyId })) {
       return
     }
+    // Why: a real keystroke into the terminal is the unambiguous "user is
+    // here" signal that dismisses the bell (ghostty "show until interact").
+    // Guarded by the replay and codex-stale checks above so synthetic xterm
+    // auto-replies never count as interaction.
+    deps.clearTerminalTabUnread(deps.tabId)
+    deps.clearWorktreeUnread(deps.worktreeId)
     transport.sendInput(data)
   })
 

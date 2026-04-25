@@ -148,6 +148,8 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     updateTabPtyId: vi.fn(),
     markWorktreeUnread: vi.fn(),
     markTerminalTabUnread: vi.fn(),
+    clearWorktreeUnread: vi.fn(),
+    clearTerminalTabUnread: vi.fn(),
     dispatchNotification: vi.fn(),
     setCacheTimerStartedAt: vi.fn(),
     syncPanePtyLayoutBinding: vi.fn(),
@@ -614,10 +616,11 @@ describe('connectPanePty', () => {
 
   // Why: BEL (0x07) is the attention signal. connectPanePty wires an
   // onBell handler that raises the worktree unread dot, the tab-level
-  // bell indicator, and an OS notification. The unread flags clear when
-  // the user activates the tab (bell auto-clears on focus). This test
-  // locks in the wiring: if onBell is ever accidentally dropped, unread
-  // marks stop working entirely.
+  // bell indicator, and an OS notification. Under the ghostty
+  // show-until-interact model, the unread flags clear when the user
+  // actually interacts with the pane — keystroke via xterm onData or
+  // pointerdown on the container (see TerminalPane.tsx). This test
+  // locks in the mark wiring; separate tests below cover the clear path.
   it('wires onBell to raise worktree unread, tab unread, and OS notification', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
@@ -639,6 +642,65 @@ describe('connectPanePty', () => {
     expect(deps.markWorktreeUnread).toHaveBeenCalledTimes(1)
     expect(deps.markTerminalTabUnread).toHaveBeenCalledWith('tab-1')
     expect(deps.dispatchNotification).toHaveBeenCalledWith({ source: 'terminal-bell' })
+  })
+
+  // Why: show-until-interact — a real keystroke through xterm onData is the
+  // canonical "user is here" signal that dismisses the bell. Guarded by the
+  // replay and codex-stale checks (see separate tests) so synthetic xterm
+  // auto-replies and blocked stale input never count as interaction.
+  it('clears tab and worktree unread on real keystroke via onData', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    let onDataHandler: ((data: string) => void) | null = null
+    pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
+      onDataHandler = handler
+      return { dispose: vi.fn() }
+    }) as typeof pane.terminal.onData)
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    if (!onDataHandler) {
+      throw new Error('expected onData handler to be registered')
+    }
+    ;(onDataHandler as (data: string) => void)('a')
+
+    expect(deps.clearTerminalTabUnread).toHaveBeenCalledWith('tab-1')
+    expect(deps.clearWorktreeUnread).toHaveBeenCalledWith('wt-1')
+    expect(transport.sendInput).toHaveBeenCalledWith('a')
+  })
+
+  // Why: xterm auto-replies during replay must not masquerade as user
+  // interaction. If they did, a pane that BELed during its scrollback
+  // replay would instantly self-dismiss without the user ever seeing it.
+  it('does not clear unread when onData fires during replay', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    let onDataHandler: ((data: string) => void) | null = null
+    pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
+      onDataHandler = handler
+      return { dispose: vi.fn() }
+    }) as typeof pane.terminal.onData)
+    const manager = createManager(1)
+    const replayingPanesRef = { current: new Map<number, number>([[1, 1]]) }
+    const deps = createDeps({ replayingPanesRef })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    if (!onDataHandler) {
+      throw new Error('expected onData handler to be registered')
+    }
+    ;(onDataHandler as (data: string) => void)('\x1b[?1;2c')
+
+    expect(deps.clearTerminalTabUnread).not.toHaveBeenCalled()
+    expect(deps.clearWorktreeUnread).not.toHaveBeenCalled()
   })
 
   // Why: the working→idle transition is kept solely to drive Claude's

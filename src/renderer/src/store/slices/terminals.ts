@@ -120,6 +120,11 @@ export type TerminalSlice = {
    *  group within the active worktree. A visible tab is already "seen",
    *  so a flag would never clear naturally. */
   markTerminalTabUnread: (tabId: string) => void
+  /** Clear a tab's unread indicator. Called on user interaction with the
+   *  pane (keystroke, click) — matches ghostty's "show until interact"
+   *  model where the bell stays visible until the user engages with the
+   *  surface that raised it. */
+  clearTerminalTabUnread: (tabId: string) => void
   setTabCustomTitle: (tabId: string, title: string | null) => void
   setTabColor: (tabId: string, color: string | null) => void
   updateTabPtyId: (tabId: string, ptyId: string) => void
@@ -653,39 +658,25 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     if (!ownerTab) {
       return
     }
-    if (state.activeTabType === 'terminal' && state.activeTabId === tabId) {
-      return
-    }
-    // Why: in split-group layouts multiple groups are visible simultaneously,
-    // each with its own active terminal tab. The global activeTabId only
-    // reflects the focused group's tab. If an attention signal fires on a tab
-    // that is the active tab of a non-focused but still-visible group,
-    // marking it unread would show a spurious bell on a pane the user can
-    // already see.
-    //
-    // Why (activeTabType guard): this suppression only applies while the
-    // terminal surface is actually being rendered. When the user is viewing
-    // the editor or browser surface (activeTabType !== 'terminal'), terminal
-    // panes are not on-screen at all, so the "active tab in a visible group"
-    // premise breaks — the user cannot see the tab, and the completion
-    // signal is legitimate unread that must not be swallowed.
-    if (state.activeTabType === 'terminal' && state.activeWorktreeId) {
-      const groups = state.groupsByWorktree[state.activeWorktreeId] ?? []
-      const unifiedTabs = state.unifiedTabsByWorktree[state.activeWorktreeId] ?? []
-      for (const group of groups) {
-        if (group.activeTabId) {
-          const groupActiveTab = unifiedTabs.find((t) => t.id === group.activeTabId)
-          if (groupActiveTab?.contentType === 'terminal' && groupActiveTab.entityId === tabId) {
-            return
-          }
-        }
-      }
-    }
+    // Why: BEL must fire regardless of focus (ghostty semantics — "show
+    // until interact"). A BEL on the focused tab sets the indicator; the
+    // renderer clears it on keystroke/click/focus via clearTerminalTabUnread.
     set((s) => {
       if (s.unreadTerminalTabs[tabId]) {
         return s
       }
       return { unreadTerminalTabs: { ...s.unreadTerminalTabs, [tabId]: true as const } }
+    })
+  },
+
+  clearTerminalTabUnread: (tabId) => {
+    set((s) => {
+      if (!s.unreadTerminalTabs[tabId]) {
+        return s
+      }
+      const copy = { ...s.unreadTerminalTabs }
+      delete copy[tabId]
+      return { unreadTerminalTabs: copy }
     })
   },
 

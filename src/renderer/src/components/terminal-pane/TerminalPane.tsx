@@ -130,6 +130,8 @@ export default function TerminalPane({
   const clearTabPtyId = useAppStore((store) => store.clearTabPtyId)
   const markWorktreeUnread = useAppStore((store) => store.markWorktreeUnread)
   const markTerminalTabUnread = useAppStore((store) => store.markTerminalTabUnread)
+  const clearWorktreeUnread = useAppStore((store) => store.clearWorktreeUnread)
+  const clearTerminalTabUnread = useAppStore((store) => store.clearTerminalTabUnread)
   const settings = useAppStore((store) => store.settings)
   // Why: Windows is the only platform where bare right-click is repurposed as
   // a paste gesture; on macOS/Linux the terminal still owns right-click for the
@@ -386,6 +388,8 @@ export default function TerminalPane({
     updateTabPtyId,
     markWorktreeUnread,
     markTerminalTabUnread,
+    clearWorktreeUnread,
+    clearTerminalTabUnread,
     dispatchNotification,
     setCacheTimerStartedAt,
     syncPanePtyLayoutBinding,
@@ -450,6 +454,8 @@ export default function TerminalPane({
         updateTabPtyId,
         markWorktreeUnread,
         markTerminalTabUnread,
+        clearWorktreeUnread,
+        clearTerminalTabUnread,
         dispatchNotification,
         setCacheTimerStartedAt,
         syncPanePtyLayoutBinding
@@ -465,6 +471,8 @@ export default function TerminalPane({
       dispatchNotification,
       markWorktreeUnread,
       markTerminalTabUnread,
+      clearWorktreeUnread,
+      clearTerminalTabUnread,
       onPtyExitRef,
       setCacheTimerStartedAt,
       setRuntimePaneTitle,
@@ -626,13 +634,25 @@ export default function TerminalPane({
       pasteFromClipboard(pane)
     }
 
+    // Why: a click inside the terminal container is a deliberate interaction
+    // with the pane — dismiss the bell indicator for this tab and worktree
+    // (ghostty "show until interact" semantics). onData already covers
+    // keystrokes; pointerdown covers the mouse path, including right-click
+    // and middle-click paste, which also count as engagement with the pane.
+    const onPointerDown = (): void => {
+      clearTerminalTabUnread(tabId)
+      clearWorktreeUnread(worktreeId)
+    }
+
     container.addEventListener('keydown', onKeyPaste, { capture: true })
     container.addEventListener('paste', onPaste, { capture: true })
+    container.addEventListener('pointerdown', onPointerDown, { capture: true })
     return () => {
       container.removeEventListener('keydown', onKeyPaste, { capture: true })
       container.removeEventListener('paste', onPaste, { capture: true })
+      container.removeEventListener('pointerdown', onPointerDown, { capture: true })
     }
-  }, [isActive])
+  }, [isActive, tabId, worktreeId, clearTerminalTabUnread, clearWorktreeUnread])
 
   // Sync the data-has-title attribute on pane containers when titles change,
   // and reflow terminals so safeFit() sees the correct available height.
