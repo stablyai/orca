@@ -139,7 +139,44 @@ function mapIssueWorkItem(item: Record<string, unknown>): MainWorkItem {
   }
 }
 
-function mapPullRequestWorkItem(item: Record<string, unknown>): MainWorkItem {
+function extractHeadOwnerLogin(item: Record<string, unknown>): string | null {
+  // gh CLI `pr list --json headRepositoryOwner` shape: { login }
+  if (typeof item.headRepositoryOwner === 'object' && item.headRepositoryOwner !== null) {
+    const login = (item.headRepositoryOwner as { login?: unknown }).login
+    if (typeof login === 'string' && login.trim()) {
+      return login
+    }
+  }
+  // REST API `pull_request` shape: head.repo.owner.login
+  if (typeof item.head === 'object' && item.head !== null) {
+    const repo = (item.head as { repo?: unknown }).repo
+    if (typeof repo === 'object' && repo !== null) {
+      const owner = (repo as { owner?: unknown }).owner
+      if (typeof owner === 'object' && owner !== null) {
+        const login = (owner as { login?: unknown }).login
+        if (typeof login === 'string' && login.trim()) {
+          return login
+        }
+      }
+    }
+  }
+  return null
+}
+
+function mapPullRequestWorkItem(
+  item: Record<string, unknown>,
+  baseOwnerLogin: string | null = null
+): MainWorkItem {
+  // Why: fork PRs are disabled in the Start-from picker. We compare the PR head's
+  // owner to the selected repo's owner; when baseOwnerLogin is unknown we default
+  // to false so non-picker call sites see the same shape as before.
+  const headOwnerLogin = extractHeadOwnerLogin(item)
+  // Why: only emit isCrossRepository when we actually know the head owner. If
+  // the gh response lacks `headRepositoryOwner` (older callers, tests without
+  // that fixture, or gh not returning it), leave the field undefined instead
+  // of falsely claiming "not a fork".
+  const isCrossRepository =
+    headOwnerLogin !== null && baseOwnerLogin !== null ? headOwnerLogin !== baseOwnerLogin : null
   return {
     id: `pr:${String(item.number)}`,
     type: 'pr',
@@ -177,7 +214,8 @@ function mapPullRequestWorkItem(item: Record<string, unknown>): MainWorkItem {
     baseRefName:
       typeof item.base === 'object' && item.base !== null && 'ref' in item.base
         ? String((item.base as { ref?: unknown }).ref ?? '')
-        : String(item.baseRefName ?? '')
+        : String(item.baseRefName ?? ''),
+    ...(isCrossRepository !== null ? { isCrossRepository } : {})
   }
 }
 
@@ -215,7 +253,7 @@ async function fetchPullRequestWorkItem(
       ['api', `repos/${ownerRepo.owner}/${ownerRepo.repo}/pulls/${number}`],
       { cwd: repoPath }
     )
-    return mapPullRequestWorkItem(JSON.parse(stdout) as Record<string, unknown>)
+    return mapPullRequestWorkItem(JSON.parse(stdout) as Record<string, unknown>, ownerRepo.owner)
   }
 
   const { stdout } = await ghExecFileAsync(
@@ -224,7 +262,7 @@ async function fetchPullRequestWorkItem(
       'view',
       String(number),
       '--json',
-      'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName'
+      'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName,headRepositoryOwner'
     ],
     { cwd: repoPath }
   )
@@ -241,7 +279,7 @@ function buildWorkItemListArgs(args: {
   const fields =
     kind === 'issue'
       ? 'number,title,state,url,labels,updatedAt,author'
-      : 'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName'
+      : 'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName,headRepositoryOwner'
   const command = kind === 'issue' ? ['issue', 'list'] : ['pr', 'list']
   const out = [...command, '--limit', String(limit), '--json', fields]
 
@@ -348,7 +386,7 @@ async function listRecentWorkItems(
               '--state',
               'open',
               '--json',
-              'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName'
+              'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName,headRepositoryOwner'
             ],
             { cwd: repoPath }
           )
@@ -361,8 +399,8 @@ async function listRecentWorkItems(
       .filter((item) => !('pull_request' in item))
       .map(mapIssueWorkItem)
 
-    const prs = (JSON.parse(prsResult.stdout) as Record<string, unknown>[]).map(
-      mapPullRequestWorkItem
+    const prs = (JSON.parse(prsResult.stdout) as Record<string, unknown>[]).map((item) =>
+      mapPullRequestWorkItem(item, prOwnerRepo?.owner ?? null)
     )
 
     return sortWorkItemsByUpdatedAt([...issues, ...prs]).slice(0, limit)
@@ -391,7 +429,7 @@ async function listRecentWorkItems(
         '--state',
         'open',
         '--json',
-        'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName'
+        'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName,headRepositoryOwner'
       ],
       { cwd: repoPath }
     )
@@ -400,8 +438,8 @@ async function listRecentWorkItems(
   const issues = (JSON.parse(issuesResult.stdout) as Record<string, unknown>[]).map(
     mapIssueWorkItem
   )
-  const prs = (JSON.parse(prsResult.stdout) as Record<string, unknown>[]).map(
-    mapPullRequestWorkItem
+  const prs = (JSON.parse(prsResult.stdout) as Record<string, unknown>[]).map((item) =>
+    mapPullRequestWorkItem(item, null)
   )
 
   return sortWorkItemsByUpdatedAt([...issues, ...prs]).slice(0, limit)
@@ -448,7 +486,9 @@ async function listQueriedWorkItems(
         })
         try {
           const { stdout } = await ghExecFileAsync(args, { cwd: repoPath })
-          return (JSON.parse(stdout) as Record<string, unknown>[]).map(mapPullRequestWorkItem)
+          return (JSON.parse(stdout) as Record<string, unknown>[]).map((item) =>
+            mapPullRequestWorkItem(item, prOwnerRepo?.owner ?? null)
+          )
         } catch {
           return []
         }

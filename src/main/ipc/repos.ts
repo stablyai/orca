@@ -18,7 +18,9 @@ import {
   getGitUsername,
   getRepoName,
   getBaseRefDefault,
-  searchBaseRefs
+  searchBaseRefs,
+  BASE_REF_SEARCH_ARGS,
+  filterBaseRefSearchOutput
 } from '../git/repo'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 import { getActiveMultiplexer } from './ssh'
@@ -428,21 +430,8 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           return []
         }
         try {
-          const result = await provider.exec(
-            [
-              'for-each-ref',
-              '--format=%(refname:short)',
-              '--sort=-committerdate',
-              `refs/remotes/origin/*${args.query}*`,
-              `refs/heads/*${args.query}*`
-            ],
-            repo.path
-          )
-          return result.stdout
-            .split('\n')
-            .map((s) => s.trim())
-            .filter(Boolean)
-            .slice(0, limit)
+          const result = await provider.exec(BASE_REF_SEARCH_ARGS, repo.path)
+          return filterBaseRefSearchOutput(result.stdout, args.query, limit)
         } catch {
           return []
         }

@@ -50,10 +50,11 @@ describe('applyTerminalAttributionEnv', () => {
     runGit(repo, ['add', 'README.md'])
     runGit(repo, ['commit', '-m', 'initial'])
 
-    const attributionEnv = applyTerminalAttributionEnv(
-      { PATH: process.env.PATH ?? '' },
-      { enabled: true, userDataPath: join(root, 'user-data') }
-    )
+    const attributionEnv = { PATH: process.env.PATH ?? '' }
+    applyTerminalAttributionEnv(attributionEnv, {
+      enabled: true,
+      userDataPath: join(root, 'user-data')
+    })
     const beforeHead = runGit(repo, ['rev-parse', 'HEAD']).trim()
     writeFileSync(join(repo, 'second.txt'), 'second\n')
     runGit(repo, ['add', 'second.txt'])
@@ -82,10 +83,11 @@ describe('applyTerminalAttributionEnv', () => {
     writeFileSync(join(repo, 'README.md'), 'initial\n')
     runGit(repo, ['add', 'README.md'])
 
-    const attributionEnv = applyTerminalAttributionEnv(
-      { PATH: process.env.PATH ?? '' },
-      { enabled: true, userDataPath: join(root, 'user-data') }
-    )
+    const attributionEnv = { PATH: process.env.PATH ?? '' }
+    applyTerminalAttributionEnv(attributionEnv, {
+      enabled: true,
+      userDataPath: join(root, 'user-data')
+    })
 
     runGit(repo, ['commit', '-n', '-m', 'initial'], attributionEnv)
 
@@ -94,7 +96,159 @@ describe('applyTerminalAttributionEnv', () => {
     )
   })
 
-  it('does not rerun git hooks for the attribution-only amend', () => {
+  it('adds the trailer when git commit uses combined -am shorthand', () => {
+    const root = makeTmpRoot()
+    const repo = join(root, 'repo')
+    mkdirSync(repo)
+    runGit(repo, ['init'])
+    runGit(repo, ['config', 'user.name', 'Orca Test'])
+    runGit(repo, ['config', 'user.email', 'orca-test@example.com'])
+    writeFileSync(join(repo, 'README.md'), 'initial\n')
+    runGit(repo, ['add', 'README.md'])
+    runGit(repo, ['commit', '-m', 'initial'])
+    writeFileSync(join(repo, 'README.md'), 'changed\n')
+
+    const attributionEnv = { PATH: process.env.PATH ?? '' }
+    applyTerminalAttributionEnv(attributionEnv, {
+      enabled: true,
+      userDataPath: join(root, 'user-data')
+    })
+
+    runGit(repo, ['commit', '-am', 'combined message'], attributionEnv)
+
+    expect(runGit(repo, ['log', '-1', '--format=%B'])).toContain(
+      'Co-authored-by: Orca <help@stably.ai>'
+    )
+  })
+
+  it('adds the trailer when git commit follows global git config args', () => {
+    const root = makeTmpRoot()
+    const repo = join(root, 'repo')
+    mkdirSync(repo)
+    runGit(repo, ['init'])
+    runGit(repo, ['config', 'user.name', 'Orca Test'])
+    runGit(repo, ['config', 'user.email', 'orca-test@example.com'])
+    writeFileSync(join(repo, 'README.md'), 'initial\n')
+    runGit(repo, ['add', 'README.md'])
+
+    const attributionEnv = { PATH: process.env.PATH ?? '' }
+    applyTerminalAttributionEnv(attributionEnv, {
+      enabled: true,
+      userDataPath: join(root, 'user-data')
+    })
+
+    runGit(repo, ['-c', 'core.quotePath=false', 'commit', '-m', 'initial'], attributionEnv)
+
+    expect(runGit(repo, ['log', '-1', '--format=%B'])).toContain(
+      'Co-authored-by: Orca <help@stably.ai>'
+    )
+  })
+
+  it('adds the trailer to commit message files before git runs', () => {
+    const root = makeTmpRoot()
+    const repo = join(root, 'repo')
+    const messagePath = join(root, 'message.txt')
+    mkdirSync(repo)
+    runGit(repo, ['init'])
+    runGit(repo, ['config', 'user.name', 'Orca Test'])
+    runGit(repo, ['config', 'user.email', 'orca-test@example.com'])
+    writeFileSync(join(repo, 'README.md'), 'initial\n')
+    writeFileSync(messagePath, 'initial from file\n')
+    runGit(repo, ['add', 'README.md'])
+
+    const attributionEnv = { PATH: process.env.PATH ?? '' }
+    applyTerminalAttributionEnv(attributionEnv, {
+      enabled: true,
+      userDataPath: join(root, 'user-data')
+    })
+
+    runGit(repo, ['commit', '-F', messagePath], attributionEnv)
+
+    expect(runGit(repo, ['log', '-1', '--format=%B'])).toContain(
+      'Co-authored-by: Orca <help@stably.ai>'
+    )
+    expect(readFileSync(messagePath, 'utf8')).toBe('initial from file\n')
+  })
+
+  it('passes missing commit message files through without adding fallback message args', () => {
+    const root = makeTmpRoot()
+    const binDir = join(root, 'bin')
+    const argsPath = join(root, 'commit-args')
+    mkdirSync(binDir)
+    writeFileSync(
+      join(binDir, 'git'),
+      `#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$1" == "commit" ]]; then
+  printf '%s\\n' "$@" >"${argsPath}"
+  exit 9
+fi
+exit 1
+`,
+      'utf8'
+    )
+    chmodSync(join(binDir, 'git'), 0o755)
+
+    const attributionEnv = { PATH: `${binDir}:${process.env.PATH ?? ''}` }
+    applyTerminalAttributionEnv(attributionEnv, {
+      enabled: true,
+      userDataPath: join(root, 'user-data')
+    })
+
+    expect(() =>
+      execFileSync('git', ['commit', '-F', join(root, 'missing-message.txt')], {
+        encoding: 'utf8',
+        env: { ...process.env, ...attributionEnv }
+      })
+    ).toThrow()
+
+    expect(readFileSync(argsPath, 'utf8')).not.toContain('Co-authored-by: Orca')
+  })
+
+  it('passes reuse and fixup commit message modes through without attribution', () => {
+    const root = makeTmpRoot()
+    const binDir = join(root, 'bin')
+    const argsPath = join(root, 'commit-args')
+    const messagePath = join(root, 'message.txt')
+    mkdirSync(binDir)
+    writeFileSync(messagePath, 'from file\n')
+    writeFileSync(
+      join(binDir, 'git'),
+      `#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$1" == "commit" ]]; then
+  printf '%s\\n' "$@" >>"${argsPath}"
+  exit 0
+fi
+exit 1
+`,
+      'utf8'
+    )
+    chmodSync(join(binDir, 'git'), 0o755)
+
+    const attributionEnv = { PATH: `${binDir}:${process.env.PATH ?? ''}` }
+    applyTerminalAttributionEnv(attributionEnv, {
+      enabled: true,
+      userDataPath: join(root, 'user-data')
+    })
+
+    execFileSync('git', ['commit', '-C', 'HEAD'], {
+      encoding: 'utf8',
+      env: { ...process.env, ...attributionEnv }
+    })
+    execFileSync('git', ['commit', '--fixup', 'HEAD'], {
+      encoding: 'utf8',
+      env: { ...process.env, ...attributionEnv }
+    })
+    execFileSync('git', ['commit', '-F', messagePath, '--fixup', 'HEAD'], {
+      encoding: 'utf8',
+      env: { ...process.env, ...attributionEnv }
+    })
+
+    expect(readFileSync(argsPath, 'utf8')).not.toContain('Co-authored-by: Orca')
+  })
+
+  it('adds the trailer before commit-msg hooks validate the commit', () => {
     const root = makeTmpRoot()
     const repo = join(root, 'repo')
     mkdirSync(repo)
@@ -112,6 +266,7 @@ if [[ -f "${hookCounterPath}" ]]; then
   count="$(cat "${hookCounterPath}")"
 fi
 printf '%s\\n' "$((count + 1))" >"${hookCounterPath}"
+grep -Fq 'Co-authored-by: Orca <help@stably.ai>' "$1"
 `,
       'utf8'
     )
@@ -119,10 +274,11 @@ printf '%s\\n' "$((count + 1))" >"${hookCounterPath}"
     writeFileSync(join(repo, 'README.md'), 'initial\n')
     runGit(repo, ['add', 'README.md'])
 
-    const attributionEnv = applyTerminalAttributionEnv(
-      { PATH: process.env.PATH ?? '' },
-      { enabled: true, userDataPath: join(root, 'user-data') }
-    )
+    const attributionEnv = { PATH: process.env.PATH ?? '' }
+    applyTerminalAttributionEnv(attributionEnv, {
+      enabled: true,
+      userDataPath: join(root, 'user-data')
+    })
 
     runGit(repo, ['commit', '-m', 'initial'], attributionEnv)
 
@@ -132,11 +288,12 @@ printf '%s\\n' "$((count + 1))" >"${hookCounterPath}"
     )
   })
 
-  it('skips git attribution when commit signing is enabled', () => {
+  it('adds git attribution to the original commit command without amending', () => {
     const root = makeTmpRoot()
     const binDir = join(root, 'bin')
     const commitPath = join(root, 'commit-called')
     const amendPath = join(root, 'amend-called')
+    const argsPath = join(root, 'commit-args')
     mkdirSync(binDir)
     writeFileSync(
       join(binDir, 'git'),
@@ -150,6 +307,7 @@ if [[ "$1" == "commit" ]]; then
   if [[ "\${2:-}" == "--amend" ]]; then
     touch "${amendPath}"
   else
+    printf '%s\\n' "$@" >"${argsPath}"
     touch "${commitPath}"
   fi
   exit 0
@@ -160,13 +318,12 @@ exit 1
     )
     chmodSync(join(binDir, 'git'), 0o755)
 
-    const attributionEnv = applyTerminalAttributionEnv(
-      { PATH: `${binDir}:${process.env.PATH ?? ''}` },
-      { enabled: true, userDataPath: join(root, 'user-data') }
-    )
+    const attributionEnv = { PATH: `${binDir}:${process.env.PATH ?? ''}` }
+    applyTerminalAttributionEnv(attributionEnv, {
+      enabled: true,
+      userDataPath: join(root, 'user-data')
+    })
 
-    // Why: attribution uses an amend; signed commits can prompt or fail during
-    // that second commit, so the wrapper skips attribution instead.
     execFileSync('git', ['commit', '-m', 'signed commit'], {
       encoding: 'utf8',
       env: { ...process.env, ...attributionEnv }
@@ -174,6 +331,40 @@ exit 1
 
     expect(existsSync(commitPath)).toBe(true)
     expect(existsSync(amendPath)).toBe(false)
+    expect(readFileSync(argsPath, 'utf8')).toContain('Co-authored-by: Orca <help@stably.ai>')
+  })
+
+  it('passes editor-based commits through without attribution', () => {
+    const root = makeTmpRoot()
+    const binDir = join(root, 'bin')
+    const argsPath = join(root, 'commit-args')
+    mkdirSync(binDir)
+    writeFileSync(
+      join(binDir, 'git'),
+      `#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$1" == "commit" ]]; then
+  printf '%s\\n' "$@" >"${argsPath}"
+  exit 0
+fi
+exit 1
+`,
+      'utf8'
+    )
+    chmodSync(join(binDir, 'git'), 0o755)
+
+    const attributionEnv = { PATH: `${binDir}:${process.env.PATH ?? ''}` }
+    applyTerminalAttributionEnv(attributionEnv, {
+      enabled: true,
+      userDataPath: join(root, 'user-data')
+    })
+
+    execFileSync('git', ['commit'], {
+      encoding: 'utf8',
+      env: { ...process.env, ...attributionEnv }
+    })
+
+    expect(readFileSync(argsPath, 'utf8')).toBe('commit\n')
   })
 
   it('preserves interactive gh pr create without guessing which PR to edit', () => {
@@ -206,10 +397,11 @@ exit 1
       'utf8'
     )
     chmodSync(join(binDir, 'gh'), 0o755)
-    const attributionEnv = applyTerminalAttributionEnv(
-      { PATH: `${binDir}:${process.env.PATH ?? ''}` },
-      { enabled: true, userDataPath: join(root, 'user-data') }
-    )
+    const attributionEnv = { PATH: `${binDir}:${process.env.PATH ?? ''}` }
+    applyTerminalAttributionEnv(attributionEnv, {
+      enabled: true,
+      userDataPath: join(root, 'user-data')
+    })
 
     const output = execFileSync('gh', ['pr', 'create'], {
       encoding: 'utf8',
@@ -225,6 +417,7 @@ exit 1
     const binDir = join(root, 'bin')
     const prMarkerPath = join(root, 'pr-edit-called')
     const issueMarkerPath = join(root, 'issue-edit-called')
+    const patchArgsPath = join(root, 'patch-args')
     mkdirSync(binDir)
     writeFileSync(
       join(binDir, 'gh'),
@@ -247,6 +440,7 @@ if [[ "$1 $2" == "api repos/stablyai/orca/issues/456" && "\${3:-}" == "--jq" ]];
   exit 0
 fi
 if [[ "$1 $2 $3 $4" == "api -X PATCH repos/stablyai/orca/pulls/123" ]]; then
+  printf '%s\\n' "$@" >"${patchArgsPath}"
   touch "${prMarkerPath}"
   exit 0
 fi
@@ -259,10 +453,11 @@ exit 1
       'utf8'
     )
     chmodSync(join(binDir, 'gh'), 0o755)
-    const attributionEnv = applyTerminalAttributionEnv(
-      { PATH: `${binDir}:${process.env.PATH ?? ''}` },
-      { enabled: true, userDataPath: join(root, 'user-data') }
-    )
+    const attributionEnv = { PATH: `${binDir}:${process.env.PATH ?? ''}` }
+    applyTerminalAttributionEnv(attributionEnv, {
+      enabled: true,
+      userDataPath: join(root, 'user-data')
+    })
 
     expect(
       execFileSync('gh', ['pr', 'create', '--fill'], {
@@ -279,6 +474,8 @@ exit 1
 
     expect(existsSync(prMarkerPath)).toBe(true)
     expect(existsSync(issueMarkerPath)).toBe(true)
+    expect(readFileSync(patchArgsPath, 'utf8')).toContain('body=@')
+    expect(readFileSync(patchArgsPath, 'utf8')).not.toContain('PR body')
   })
 
   it('passes gh create help through without editing existing PRs or issues', () => {
@@ -319,10 +516,11 @@ exit 1
       'utf8'
     )
     chmodSync(join(binDir, 'gh'), 0o755)
-    const attributionEnv = applyTerminalAttributionEnv(
-      { PATH: `${binDir}:${process.env.PATH ?? ''}` },
-      { enabled: true, userDataPath: join(root, 'user-data') }
-    )
+    const attributionEnv = { PATH: `${binDir}:${process.env.PATH ?? ''}` }
+    applyTerminalAttributionEnv(attributionEnv, {
+      enabled: true,
+      userDataPath: join(root, 'user-data')
+    })
 
     const output = execFileSync('gh', ['pr', 'create', '--help'], {
       encoding: 'utf8',
@@ -365,10 +563,11 @@ exit 1
       'utf8'
     )
     chmodSync(join(binDir, 'gh'), 0o755)
-    const attributionEnv = applyTerminalAttributionEnv(
-      { PATH: `${binDir}:${process.env.PATH ?? ''}` },
-      { enabled: true, userDataPath: join(root, 'user-data') }
-    )
+    const attributionEnv = { PATH: `${binDir}:${process.env.PATH ?? ''}` }
+    applyTerminalAttributionEnv(attributionEnv, {
+      enabled: true,
+      userDataPath: join(root, 'user-data')
+    })
 
     const output = execFileSync('gh', ['issue', 'create'], {
       encoding: 'utf8',
@@ -404,10 +603,11 @@ exit 1
       'utf8'
     )
     chmodSync(join(binDir, 'gh'), 0o755)
-    const attributionEnv = applyTerminalAttributionEnv(
-      { PATH: `${binDir}:${process.env.PATH ?? ''}` },
-      { enabled: true, userDataPath: join(root, 'user-data') }
-    )
+    const attributionEnv = { PATH: `${binDir}:${process.env.PATH ?? ''}` }
+    applyTerminalAttributionEnv(attributionEnv, {
+      enabled: true,
+      userDataPath: join(root, 'user-data')
+    })
 
     const output = execFileSync('gh', ['pr', 'create', '--fill'], {
       encoding: 'utf8',
@@ -442,10 +642,11 @@ exit 1
       'utf8'
     )
     chmodSync(join(binDir, 'gh'), 0o755)
-    const attributionEnv = applyTerminalAttributionEnv(
-      { PATH: `${binDir}:${process.env.PATH ?? ''}` },
-      { enabled: true, userDataPath: join(root, 'user-data') }
-    )
+    const attributionEnv = { PATH: `${binDir}:${process.env.PATH ?? ''}` }
+    applyTerminalAttributionEnv(attributionEnv, {
+      enabled: true,
+      userDataPath: join(root, 'user-data')
+    })
 
     const output = execFileSync('gh', ['pr', 'create', '--fill'], {
       encoding: 'utf8',
@@ -459,16 +660,30 @@ exit 1
     const root = makeTmpRoot()
     const blockedUserDataPath = join(root, 'not-a-directory')
     writeFileSync(blockedUserDataPath, 'blocked\n')
-    const baseEnv = { PATH: '/usr/bin' }
+    const baseEnv: Record<string, string> = { PATH: '/usr/bin' }
 
-    const env = applyTerminalAttributionEnv(baseEnv, {
+    applyTerminalAttributionEnv(baseEnv, {
       enabled: true,
       userDataPath: blockedUserDataPath
     })
 
-    expect(env).toBe(baseEnv)
-    expect(env.ORCA_ENABLE_GIT_ATTRIBUTION).toBeUndefined()
-    expect(env.PATH).toBe('/usr/bin')
+    expect(baseEnv.ORCA_ENABLE_GIT_ATTRIBUTION).toBeUndefined()
+    expect(baseEnv.PATH).toBe('/usr/bin')
+  })
+
+  it('does not duplicate shim directories when applied to an already-injected env', () => {
+    const root = makeTmpRoot()
+    const baseEnv: Record<string, string> = { PATH: process.env.PATH ?? '' }
+    const options = { enabled: true, userDataPath: join(root, 'user-data') }
+    const pathDelimiter = process.platform === 'win32' ? ';' : ':'
+
+    applyTerminalAttributionEnv(baseEnv, options)
+    applyTerminalAttributionEnv(baseEnv, options)
+
+    const shimEntries = baseEnv.PATH.split(pathDelimiter).filter((entry) =>
+      entry.includes('orca-terminal-attribution')
+    )
+    expect(new Set(shimEntries).size).toBe(shimEntries.length)
   })
 
   it('writes PowerShell wrappers without raw-template backslash escapes', () => {
@@ -482,7 +697,7 @@ exit 1
     const gitWrapper = readFileSync(join(shimDir, 'git-wrapper.ps1'), 'utf8')
     const ghWrapper = readFileSync(join(shimDir, 'gh-wrapper.ps1'), 'utf8')
 
-    expect(gitWrapper).toContain('$message.TrimEnd("`r", "`n")')
+    expect(gitWrapper).toContain('Test-ExplicitCommitMessage')
     expect(gitWrapper).toContain('"`r`n`r`n"')
     expect(ghWrapper).toContain('$body.TrimEnd("`r", "`n")')
     expect(ghWrapper).toContain('"`r`n`r`n"')

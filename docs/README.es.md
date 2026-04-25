@@ -11,26 +11,26 @@
 </p>
 
 <p align="center">
-  <a href="README.md">English</a> · <a href="docs/README.zh-CN.md">中文</a> · <a href="docs/README.ja.md">日本語</a> · <a href="docs/README.es.md">Español</a>
+  <a href="../README.md">English</a> · <a href="README.zh-CN.md">中文</a> · <a href="README.ja.md">日本語</a> · <a href="README.es.md">Español</a>
 </p>
 
 <p align="center">
-  <strong>The AI Orchestrator for 100x builders.</strong><br/>
-  Run Claude Code, Codex, or OpenCode side-by-side across repos — each in its own worktree, tracked in one place.<br/>
-  Available for <strong>macOS, Windows, and Linux</strong>.
+  <strong>El orquestador de IA para desarrolladores 100x.</strong><br/>
+  Corre Claude Code, Codex u OpenCode en paralelo a lo largo de varios repos — cada uno en su propio worktree, todos administrados desde un solo lugar.<br/>
+  Disponible para <strong>macOS, Windows y Linux</strong>.
 </p>
 
 <p align="center">
-  <a href="https://onOrca.dev"><strong>Download at onOrca.dev</strong></a>
+  <a href="https://onOrca.dev"><strong>Descarga en onOrca.dev</strong></a>
 </p>
 
 <p align="center">
-  <img src="docs/assets/file-drag.gif" alt="Orca Screenshot" width="800" />
+  <img src="docs/assets/file-drag.gif" alt="Captura de Orca" width="800" />
 </p>
 
-## Supported Agents
+## Agentes compatibles
 
-Orca supports any CLI agent (_not just this list_).
+Orca es compatible con cualquier agente CLI (_no solo los de esta lista_).
 
 <p>
   <a href="https://docs.anthropic.com/claude/docs/claude-code"><kbd><img src="https://www.google.com/s2/favicons?domain=anthropic.com&sz=64" width="16" valign="middle" /> Claude Code</kbd></a> &nbsp;
@@ -59,66 +59,66 @@ Orca supports any CLI agent (_not just this list_).
 
 ---
 
-## Features
+## Características
 
-- **No login required** — Bring your own Claude Code or Codex subscription.
-- **Worktree-native** — Every feature gets its own worktree. No stashing, no branch juggling. Spin up and switch instantly.
-- **Multi-agent terminals** — Run multiple AI agents side-by-side in tabs and panes. See which ones are active at a glance.
-- **Built-in source control** — Review AI-generated diffs, make quick edits, and commit without leaving Orca.
-- **GitHub integration** — PRs, issues, and Actions checks linked to each worktree automatically.
-- **SSH support** — Connect to remote machines and run agents on them directly from Orca.
-- **Notifications** — Know when an agent finishes or needs attention. Mark threads unread to come back later.
-
----
-
-## Install
-
-- **[Download from onOrca.dev](https://onOrca.dev)**
-- Or download the latest binaries via the **[GitHub Releases page](https://github.com/stablyai/orca/releases)**.
+- **Sin login** — Usa tu propia suscripción de Claude Code o Codex.
+- **Nativo con worktrees** — Cada feature vive en su propio worktree. Nada de stash ni malabares entre ramas. Crea y cambia al instante.
+- **Terminales multi-agente** — Corre varios agentes de IA en paralelo en pestañas y paneles. Mira de un vistazo cuáles están activos.
+- **Control de versiones integrado** — Revisa los diffs generados por IA, haz ediciones rápidas y haz commit sin salir de Orca.
+- **Integración con GitHub** — PRs, issues y checks de Actions vinculados automáticamente a cada worktree.
+- **Notificaciones** — Entérate cuando un agente termine o necesite tu atención. Marca hilos como no leídos para retomarlos después.
+- **Soporte SSH** — Conéctate a máquinas remotas y corre agentes en ellas directamente desde Orca.
 
 ---
 
-## [New] Annotate AI Diff
+## Instalación
 
-**Comment directly on AI-generated diffs.**
+- **[Descarga desde onOrca.dev](https://onOrca.dev)**
+- O descarga los binarios más recientes desde la **[página de GitHub Releases](https://github.com/stablyai/orca/releases)**.
 
-Annotate any line in an AI-generated diff with your feedback, then send it back to the agent to revise. Keep the review loop tight — no copying line numbers, no context switching.
+---
+
+## [Nuevo] Anotar diff de IA
+
+**Comenta directamente sobre los diffs generados por IA.**
+
+Anota cualquier línea de un diff generado por IA con tus comentarios y mándalo de vuelta al agente para que lo corrija. Mantén el ciclo de revisión bien ajustado — sin copiar números de línea, sin cambiar de contexto.
 
 <p align="center">
-  <img src="docs/assets/annotate-ai-diff.gif" alt="Orca Annotate AI Diff — comment on AI-generated diffs and send feedback to the agent" width="800" />
+  <img src="docs/assets/annotate-ai-diff.gif" alt="Orca Anotar diff de IA — comenta en diffs generados por IA y envía feedback al agente" width="800" />
 </p>
 
 ---
 
-## [New] Hot Swap Codex Accounts
+## [Nuevo] Cambio rápido entre cuentas de Codex
 
-**Multiple Codex accounts? Switch in one click.**
+**¿Varias cuentas de Codex? Cambia con un clic.**
 
-If you run multiple Codex accounts to get the best token deal, Orca lets you hot-swap between them instantly — no re-login, no config files. Just pick an account and keep building.
+Si usas varias cuentas de Codex para aprovechar el mejor precio en tokens, Orca te permite cambiar entre ellas al instante — sin volver a hacer login, sin tocar archivos de configuración. Elige una cuenta y sigue construyendo.
 
 <p align="center">
-  <img src="docs/assets/codex-account-switcher.gif" alt="Orca Codex Account Switcher — hot swap between multiple Codex accounts" width="800" />
+  <img src="docs/assets/codex-account-switcher.gif" alt="Cambio de cuentas de Codex en Orca — alterna entre múltiples cuentas de Codex" width="800" />
 </p>
 
 ---
 
-## [New] Per Worktree Browser &amp; Design Mode
+## [Nuevo] Navegador y modo diseño por worktree
 
-**See your app. Click any element. Drop it into the chat.**
+**Mira tu app. Haz clic en cualquier elemento. Arrástralo al chat.**
 
-Orca ships with a built-in browser right inside your worktree. Preview your app as you build, then switch to Design Mode — click any UI element and it lands directly in your AI chat as context. No screenshots, no copy-pasting selectors. Just point at what you want to change and tell the agent what to do.
+Orca trae un navegador integrado dentro de tu worktree. Previsualiza tu app mientras la construyes, y cuando quieras cambia al modo diseño — haz clic en cualquier elemento de UI y cae directo en tu chat con la IA como contexto. Sin capturas, sin copiar selectores. Solo apunta a lo que quieres cambiar y dile al agente qué hacer.
 
 <p align="center">
-  <img src="docs/assets/orca-design-mode.gif" alt="Orca Design Mode — click any UI element and drop it into the chat" width="800" />
+  <img src="docs/assets/orca-design-mode.gif" alt="Modo diseño de Orca — haz clic en cualquier elemento de UI y suéltalo en el chat" width="800" />
 </p>
 
 ---
 
-## [New] Introducing the Orca CLI
+## [Nuevo] Presentamos el Orca CLI
 
-**Agent orchestration from your terminal.**
+**Orquestación de agentes desde tu terminal.**
 
-Let your AI agent control your IDE. Use AI to add projects to your IDE, spin up worktrees, and update the current worktree's comment with meaningful progress checkpoints directly from the terminal. Ships with the Orca IDE (install under Settings).
+Deja que tu agente de IA controle tu IDE. Usa IA para agregar proyectos al IDE, crear worktrees y actualizar el comentario del worktree actual con checkpoints de progreso directamente desde la terminal. Viene incluido con el Orca IDE (instálalo en Ajustes).
 
 ```bash
 npx skills add https://github.com/stablyai/orca --skill orca-cli
@@ -126,15 +126,15 @@ npx skills add https://github.com/stablyai/orca --skill orca-cli
 
 ---
 
-## Community &amp; Support
+## Comunidad y soporte
 
-- **Discord:** Join the community on **[Discord](https://discord.gg/fzjDKHxv8Q)**.
-- **Twitter / X:** Follow **[@orca_build](https://x.com/orca_build)** for updates and announcements.
-- **Feedback &amp; Ideas:** We ship fast. Missing something? [Request a new feature](https://github.com/stablyai/orca/issues).
-- **Show Support:** Star this repo to follow along with our daily ships.
+- **Discord:** Únete a la comunidad en **[Discord](https://discord.gg/fzjDKHxv8Q)**.
+- **Twitter / X:** Sigue a **[@orca_build](https://x.com/orca_build)** para novedades y anuncios.
+- **Feedback e ideas:** Lanzamos rápido. ¿Te falta algo? [Pide una nueva feature](https://github.com/stablyai/orca/issues).
+- **Muéstranos tu apoyo:** Dale una estrella al repo para seguir nuestros lanzamientos diarios.
 
 ---
 
-## Developing
+## Desarrollo
 
-Want to contribute or run locally? See our [CONTRIBUTING.md](CONTRIBUTING.md) guide.
+¿Quieres contribuir o ejecutar Orca localmente? Consulta nuestra guía [CONTRIBUTING.md](CONTRIBUTING.md).

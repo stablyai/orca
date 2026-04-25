@@ -76,6 +76,9 @@ export type UISlice = {
     agent: TuiAgent
     linkedIssue: string
     linkedPR: number | null
+    // Why: repo-scoped start ref selected via the "Start from" picker.
+    // Absent means "use the repo's effective base ref".
+    baseBranch?: string
   } | null
   openTaskPage: (data?: UISlice['taskPageData']) => void
   closeTaskPage: () => void

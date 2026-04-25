@@ -89,7 +89,13 @@ vi.mock('../pi/titlebar-extension-service', () => ({
     clearPty: piClearPtyMock
   }
 }))
-import { registerPtyHandlers, registerSshPtyProvider, unregisterSshPtyProvider } from './pty'
+import { LocalPtyProvider } from '../providers/local-pty-provider'
+import {
+  registerPtyHandlers,
+  registerSshPtyProvider,
+  setLocalPtyProvider,
+  unregisterSshPtyProvider
+} from './pty'
 
 function makeDisposable() {
   return { dispose: vi.fn() }
@@ -163,6 +169,7 @@ describe('registerPtyHandlers', () => {
 
   afterEach(() => {
     unregisterSshPtyProvider('ssh-1')
+    setLocalPtyProvider(new LocalPtyProvider())
   })
 
   function createMockProc() {
@@ -348,6 +355,35 @@ describe('registerPtyHandlers', () => {
       expect(env.ORCA_GH_PR_FOOTER).toBeUndefined()
       expect(env.ORCA_GH_ISSUE_FOOTER).toBeUndefined()
       expect(env.PATH ?? '').not.toContain('/tmp/orca-user-data/orca-terminal-attribution/posix')
+    })
+
+    it('prepends git/gh attribution shims for daemon-backed local PTYs', async () => {
+      const daemonSpawn = vi.fn(async (options) => ({ id: 'daemon-pty', pid: 123, ...options }))
+      setLocalPtyProvider({
+        spawn: daemonSpawn,
+        write: vi.fn(),
+        resize: vi.fn(),
+        kill: vi.fn(),
+        shutdown: vi.fn(),
+        onData: vi.fn(() => vi.fn()),
+        onExit: vi.fn(() => vi.fn()),
+        listProcesses: vi.fn(async () => []),
+        getForegroundProcess: vi.fn(async () => null)
+      } as never)
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, undefined, undefined, (() => ({
+        enableGitHubAttribution: true
+      })) as never)
+
+      await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        env: {}
+      })
+
+      const env = daemonSpawn.mock.calls.at(-1)![0].env
+      expect(env.ORCA_ENABLE_GIT_ATTRIBUTION).toBe('1')
+      expect(env.PATH).toContain('/tmp/orca-user-data/orca-terminal-attribution/posix')
     })
 
     it('leaves ambient CODEX_HOME untouched when system default is selected', async () => {

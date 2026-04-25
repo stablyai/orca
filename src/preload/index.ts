@@ -234,6 +234,14 @@ const api = {
       setupDecision?: 'inherit' | 'run' | 'skip'
     }): Promise<unknown> => ipcRenderer.invoke('worktrees:create', args),
 
+    resolvePrBase: (args: {
+      repoId: string
+      prNumber: number
+      headRefName?: string
+      isCrossRepository?: boolean
+    }): Promise<{ baseBranch: string } | { error: string }> =>
+      ipcRenderer.invoke('worktrees:resolvePrBase', args),
+
     remove: (args: { worktreeId: string; force?: boolean }): Promise<void> =>
       ipcRenderer.invoke('worktrees:remove', args),
 

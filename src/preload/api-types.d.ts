@@ -319,6 +319,12 @@ export type PreloadApi = {
       baseBranch?: string
       setupDecision?: 'inherit' | 'run' | 'skip'
     }) => Promise<CreateWorktreeResult>
+    resolvePrBase: (args: {
+      repoId: string
+      prNumber: number
+      headRefName?: string
+      isCrossRepository?: boolean
+    }) => Promise<{ baseBranch: string } | { error: string }>
     remove: (args: { worktreeId: string; force?: boolean }) => Promise<void>
     updateMeta: (args: { worktreeId: string; updates: Partial<WorktreeMeta> }) => Promise<Worktree>
     persistSortOrder: (args: { orderedIds: string[] }) => Promise<void>

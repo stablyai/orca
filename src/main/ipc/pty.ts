@@ -87,8 +87,8 @@ export function getSshPtyProvider(connectionId: string): IPtyProvider | undefine
 export function getLocalPtyProvider(): LocalPtyProvider {
   // Why: callers that need LocalPtyProvider-specific methods (killOrphanedPtys,
   // advanceGeneration, getPtyProcess) can only work with the local provider.
-  // When daemon mode is active, this returns the underlying LocalPtyProvider
-  // would not be available — callers should check for null or use getProvider().
+  // Daemon mode replaces it with an adapter, so callers must use this only when
+  // they know the concrete local provider is installed.
   return localProvider as LocalPtyProvider
 }
 
@@ -395,11 +395,10 @@ export function registerPtyHandlers(
           'This Claude launch defines explicit Anthropic auth environment variables. Remove those overrides before using a managed Claude account.'
         )
       }
-      // Why: agent hook env (ORCA_AGENT_HOOK_PORT/TOKEN) is normally injected by
-      // the LocalPtyProvider's buildSpawnEnv. When the daemon is active, the
-      // local provider is replaced by DaemonPtyAdapter and buildSpawnEnv never
-      // runs — so hook receivers can't find the loopback server. Inject here
-      // as well so both provider paths get the env.
+      // Why: agent hook env and attribution shims are normally injected by the
+      // LocalPtyProvider's buildSpawnEnv. When the daemon is active, the local
+      // provider is replaced by DaemonPtyAdapter and buildSpawnEnv never runs.
+      // Inject host-local env here as well so both provider paths behave the same.
       //
       // Safety: skip the injection entirely when a remote (SSH) connection is
       // in play. The hook server is bound to the Orca host's 127.0.0.1, so the
@@ -407,7 +406,14 @@ export function registerPtyHandlers(
       // a loopback secret to an untrusted machine for no functional benefit.
       const hookEnv = args.connectionId ? {} : agentHookServer.buildPtyEnv()
       const baseEnv = claudeAuth ? { ...args.env, ...claudeAuth.envPatch } : args.env
-      const env = Object.keys(hookEnv).length > 0 ? { ...baseEnv, ...hookEnv } : baseEnv
+      let env = Object.keys(hookEnv).length > 0 ? { ...baseEnv, ...hookEnv } : baseEnv
+      if (!args.connectionId && !(provider instanceof LocalPtyProvider)) {
+        env = { ...env }
+        applyTerminalAttributionEnv(env, {
+          enabled: getSettings?.()?.enableGitHubAttribution ?? true,
+          userDataPath: app.getPath('userData')
+        })
+      }
       const envToDelete = claudeAuth?.stripAuthEnv
         ? [...CLAUDE_AUTH_ENV_VARS, 'ANTHROPIC_CUSTOM_HEADERS']
         : undefined

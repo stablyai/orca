@@ -92,6 +92,21 @@ export type ComposerCardProps = {
   onCreate: () => void
   note: string
   onNoteChange: (value: string) => void
+  baseBranch: string | undefined
+  onBaseBranchChange: (next: string | undefined) => void
+  /** Called when a PR is selected in the Start-from picker. Updates both
+   *  baseBranch and linkedWorkItem/linkedPR in one pass. */
+  onBaseBranchPrSelect: (baseBranch: string, item: GitHubWorkItem) => void
+  /** PR number selected via the Start-from picker (when applicable). Used so the
+   *  field can render "PR #N" copy. */
+  baseBranchLinkedPrNumber: number | null
+  /** Absolute path of the selected repo, used by Start-from picker for SWR. */
+  selectedRepoPath: string | null
+  /** True when the selected repo is a remote SSH repo; disables the PR tab in v1. */
+  selectedRepoIsRemote: boolean
+  /** Transient inline hint shown next to the Start-from trigger after a repo
+   *  switch resets a prior selection (e.g. "was PR #8778"). Null when none. */
+  startFromResetHint: string | null
   setupConfig: { source: 'yaml' | 'legacy'; command: string } | null
   requiresExplicitSetupChoice: boolean
   setupDecision: 'run' | 'skip' | null
@@ -150,7 +165,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       setRightSidebarTab: s.setRightSidebarTab,
       closeModal: s.closeModal,
       openSettingsPage: s.openSettingsPage,
-      openSettingsTarget: s.openSettingsTarget
+      openSettingsTarget: s.openSettingsTarget,
+      prefetchWorkItems: s.prefetchWorkItems
     }))
   )
   const {
@@ -163,7 +179,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     setRightSidebarTab,
     closeModal,
     openSettingsPage,
-    openSettingsTarget
+    openSettingsTarget,
+    prefetchWorkItems
   } = actions
 
   const repos = useAppStore((s) => s.repos)
@@ -227,6 +244,13 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     }
     return initialLinkedWorkItem?.type === 'pr' ? initialLinkedWorkItem.number : null
   })
+  const [baseBranch, setBaseBranch] = useState<string | undefined>(
+    persistDraft ? newWorkspaceDraft?.baseBranch : undefined
+  )
+  // Why: when a repo switch wipes a prior Start-from selection, surface the
+  // reset inline (e.g. "was PR #8778") so the change is recoverable visually
+  // instead of slipping past the user. Cleared on any subsequent selection.
+  const [startFromResetHint, setStartFromResetHint] = useState<string | null>(null)
   // Why: the long-form composer's agent selection is a required TuiAgent (not
   // null/blank), so 'blank' preferences from global settings must collapse to
   // the Claude default here — the blank-terminal affordance only lives in the
@@ -420,12 +444,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       linkedWorkItem,
       agent: tuiAgent,
       linkedIssue,
-      linkedPR
+      linkedPR,
+      ...(baseBranch !== undefined ? { baseBranch } : {})
     })
   }, [
     persistDraft,
     agentPrompt,
     attachmentPaths,
+    baseBranch,
     linkedIssue,
     linkedPR,
     linkedWorkItem,
@@ -515,6 +541,16 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       cancelled = true
     }
   }, [repoId])
+
+  // Why: warm the Start-from picker's PR cache on composer mount and whenever
+  // the selected repo changes so opening the picker paints instantly from
+  // cache. Local repos only — remote SSH repos disable the PR tab in v1.
+  useEffect(() => {
+    if (!selectedRepo?.path || selectedRepo.connectionId) {
+      return
+    }
+    prefetchWorkItems(selectedRepo.id, selectedRepo.path, 36, 'is:pr is:open')
+  }, [prefetchWorkItems, selectedRepo?.connectionId, selectedRepo?.id, selectedRepo?.path])
 
   // Per-repo: resolve repo slug for GH URL mismatch detection.
   useEffect(() => {
@@ -858,12 +894,47 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
 
   const handleRepoChange = useCallback(
     (value: string): void => {
+      if (value === repoId) {
+        setRepoId(value)
+        return
+      }
+      // Why: capture a short descriptor of the prior Start-from selection so
+      // the field can render an inline reset (e.g. "was PR #8778") after the
+      // repo changes and the selection is wiped.
+      let hint: string | null = null
+      if (linkedWorkItem?.type === 'pr' && baseBranch) {
+        hint = `was PR #${linkedWorkItem.number}`
+      } else if (baseBranch) {
+        hint = `was ${baseBranch}`
+      }
       setRepoId(value)
       setLinkedIssue('')
       setLinkedPR(null)
       setLinkedWorkItem(null)
+      // Why: the Start-from picker is repo-scoped, so any prior branch/PR
+      // selection is meaningless in the new repo. Resetting to undefined
+      // makes the field fall back to the new repo's effective base ref.
+      setBaseBranch(undefined)
+      setStartFromResetHint(hint)
     },
-    [setRepoId]
+    [baseBranch, linkedWorkItem, repoId, setRepoId]
+  )
+
+  const handleBaseBranchChange = useCallback((next: string | undefined): void => {
+    setBaseBranch(next)
+    setStartFromResetHint(null)
+  }, [])
+
+  const handleBaseBranchPrSelect = useCallback(
+    (nextBaseBranch: string, item: GitHubWorkItem): void => {
+      setBaseBranch(nextBaseBranch)
+      setStartFromResetHint(null)
+      // Why: per spec, a PR selection in the Start-from picker is also a
+      // linkedWorkItem assignment. Reuse applyLinkedWorkItem so auto-name and
+      // linkedPR state stay in a single code path.
+      applyLinkedWorkItem(item)
+    },
+    [applyLinkedWorkItem]
   )
 
   const handleOpenAgentSettings = useCallback((): void => {
@@ -912,7 +983,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       const result = await createWorktree(
         repoId,
         workspaceName,
-        undefined,
+        baseBranch,
         (resolvedSetupDecision ?? 'inherit') as SetupDecision
       )
       const worktree = result.worktree
@@ -966,6 +1037,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       setCreating(false)
     }
   }, [
+    baseBranch,
     clearNewWorkspaceDraft,
     createWorktree,
     applyWorktreeMeta,
@@ -1019,7 +1091,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         const result = await createWorktree(
           repoId,
           workspaceName,
-          undefined,
+          baseBranch,
           (resolvedSetupDecision ?? 'inherit') as SetupDecision
         )
         const worktree = result.worktree
@@ -1067,6 +1139,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     },
     [
       applyWorktreeMeta,
+      baseBranch,
       clearNewWorkspaceDraft,
       createWorktree,
       fallbackCreatureName,
@@ -1132,6 +1205,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     createDisabled,
     creating,
     onCreate: () => void submit(),
+    baseBranch,
+    onBaseBranchChange: handleBaseBranchChange,
+    onBaseBranchPrSelect: handleBaseBranchPrSelect,
+    baseBranchLinkedPrNumber:
+      linkedWorkItem?.type === 'pr' && baseBranch ? linkedWorkItem.number : null,
+    selectedRepoPath: selectedRepo?.path ?? null,
+    selectedRepoIsRemote: Boolean(selectedRepo?.connectionId),
+    startFromResetHint,
     note,
     onNoteChange: setNote,
     setupConfig,
