@@ -9,7 +9,6 @@ import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-au
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
 import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
 
-
 // Why: quota state does not need near-real-time polling, and a less aggressive
 // default reduces avoidable Claude /usage pressure. We intentionally use a
 // slower cadence here rather than polling every 2 minutes.
@@ -542,7 +541,12 @@ export class RateLimitService {
       return fresh
     }
 
-    const previousHasData = Boolean(previous?.session || previous?.weekly)
+    const previousHasData = Boolean(
+      previous?.session ||
+      previous?.weekly ||
+      previous?.monthly ||
+      (previous?.buckets && previous.buckets.length > 0)
+    )
 
     // No previous data to fall back on
     if (!previous || !previousHasData) {
