@@ -88,9 +88,12 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     promptInjectionMode: 'stdin-after-start'
   },
   aug: {
-    detectCmd: 'aug',
-    launchCmd: 'aug',
-    expectedProcess: 'aug',
+    // Why: the published @augmentcode/auggie npm package installs a binary
+    // named `auggie` (not `aug`). Keep the TuiAgent id as 'aug' for stored
+    // preferences, but detect/launch/identify the real binary name.
+    detectCmd: 'auggie',
+    launchCmd: 'auggie',
+    expectedProcess: 'auggie',
     promptInjectionMode: 'stdin-after-start'
   },
   cline: {

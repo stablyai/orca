@@ -99,7 +99,7 @@ export const AGENT_CATALOG: AgentCatalogEntry[] = [
   {
     id: 'aug',
     label: 'Auggie',
-    cmd: 'aug',
+    cmd: 'auggie',
     faviconDomain: 'augmentcode.com',
     homepageUrl: 'https://docs.augmentcode.com/cli/overview'
   },
