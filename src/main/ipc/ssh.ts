@@ -2,23 +2,11 @@ import { ipcMain, type BrowserWindow } from 'electron'
 import type { Store } from '../persistence'
 import { SshConnectionStore } from '../ssh/ssh-connection-store'
 import { SshConnectionManager, type SshConnectionCallbacks } from '../ssh/ssh-connection'
-import { deployAndLaunchRelay } from '../ssh/ssh-relay-deploy'
-import { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
-import { SshPtyProvider } from '../providers/ssh-pty-provider'
-import { SshFilesystemProvider } from '../providers/ssh-filesystem-provider'
-import { SshGitProvider } from '../providers/ssh-git-provider'
-import { registerSshPtyProvider } from './pty'
-import { registerSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
-import { registerSshGitProvider } from '../providers/ssh-git-dispatch'
+import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
+import { SshRelaySession } from '../ssh/ssh-relay-session'
 import { SshPortForwardManager } from '../ssh/ssh-port-forward'
 import type { SshTarget, SshConnectionState, SshConnectionStatus } from '../../shared/ssh-types'
 import { isAuthError } from '../ssh/ssh-connection-utils'
-import {
-  cleanupConnection,
-  wireUpSshPtyEvents,
-  reestablishRelayStack,
-  registerRelayRoots
-} from './ssh-relay-helpers'
 import { registerSshBrowseHandler } from './ssh-browse'
 import { requestCredential, registerCredentialHandler } from './ssh-passphrase'
 
@@ -26,19 +14,16 @@ let sshStore: SshConnectionStore | null = null
 let connectionManager: SshConnectionManager | null = null
 let portForwardManager: SshPortForwardManager | null = null
 
-// Track multiplexers and providers per connection for cleanup
-const activeMultiplexers = new Map<string, SshChannelMultiplexer>()
-
-// Why: tracks which connections have completed initial relay setup, so
-// onStateChange can distinguish "reconnected after drop" from "first connect".
-const initializedConnections = new Set<string>()
+// Why: one session per SSH target encapsulates the entire relay lifecycle
+// (multiplexer, providers, abort controller, state machine). Eliminates the
+// scattered Maps/Sets that previously tracked this state independently.
+const activeSessions = new Map<string, SshRelaySession>()
 
 // Why: ssh:testConnection calls connect() then disconnect(), which fires
 // state-change events to the renderer. This causes worktree cards to briefly
 // flash "connected" then "disconnected". Suppressing broadcasts during tests
 // avoids that visual glitch.
 const testingTargets = new Set<string>()
-const explicitRelaySetupTargets = new Set<string>()
 
 export function registerSshHandlers(
   store: Store,
@@ -89,27 +74,20 @@ export function registerSshHandlers(
       }
 
       // Why: when SSH reconnects after a network blip, we must re-deploy the
-      // relay and rebuild the full provider stack. The old multiplexer's pending
-      // requests are already rejected with CONNECTION_LOST by dispose().
+      // relay and rebuild the full provider stack. The session's state machine
+      // ensures this only triggers when appropriate — 'deploying' state from
+      // an explicit ssh:connect is not 'ready', so this branch won't fire.
+      const session = activeSessions.get(targetId)
       if (
         state.status === 'connected' &&
         state.reconnectAttempt === 0 &&
-        initializedConnections.has(targetId) &&
-        !explicitRelaySetupTargets.has(targetId)
+        session?.getState() === 'ready'
       ) {
-        // Why: look up the target's configured grace period so the reconnected
-        // relay inherits the same setting. Without this, network-blip reconnects
-        // would always launch with the default 300s grace period.
         const target = sshStore?.getTarget(targetId)
-        void reestablishRelayStack(
-          targetId,
-          getMainWindow,
-          connectionManager,
-          activeMultiplexers,
-          portForwardManager,
-          store,
-          target?.relayGracePeriodSeconds
-        )
+        const conn = connectionManager?.getConnection(targetId)
+        if (conn) {
+          void session.reconnect(conn, target?.relayGracePeriodSeconds)
+        }
       }
     }
   }
@@ -152,7 +130,11 @@ export function registerSshHandlers(
     }
 
     let conn
-    explicitRelaySetupTargets.add(args.targetId)
+    // Why: create the session early so onStateChange sees it in 'deploying'
+    // state and knows not to trigger reconnect logic.
+    const session = new SshRelaySession(args.targetId, getMainWindow, store, portForwardManager!)
+    activeSessions.set(args.targetId, session)
+
     try {
       conn = await connectionManager!.connect(target)
     } catch (err) {
@@ -167,6 +149,7 @@ export function registerSshHandlers(
       // = true, causing startup to defer this target even though it no longer
       // needs a passphrase.
       credentialRequestedForTarget.delete(args.targetId)
+      activeSessions.delete(args.targetId)
       const win = getMainWindow()
       if (win && !win.isDestroyed()) {
         win.webContents.send('ssh:state-changed', {
@@ -191,33 +174,12 @@ export function registerSshHandlers(
         reconnectAttempt: 0
       })
 
-      const { transport } = await deployAndLaunchRelay(
-        conn,
-        undefined,
-        target.relayGracePeriodSeconds
-      )
-
-      const mux = new SshChannelMultiplexer(transport)
-      activeMultiplexers.set(args.targetId, mux)
-
-      await registerRelayRoots(mux, args.targetId, store)
-
-      const ptyProvider = new SshPtyProvider(args.targetId, mux)
-      registerSshPtyProvider(args.targetId, ptyProvider)
-
-      const fsProvider = new SshFilesystemProvider(args.targetId, mux)
-      registerSshFilesystemProvider(args.targetId, fsProvider)
-
-      const gitProvider = new SshGitProvider(args.targetId, mux)
-      registerSshGitProvider(args.targetId, gitProvider)
-
-      wireUpSshPtyEvents(ptyProvider, getMainWindow)
-      initializedConnections.add(args.targetId)
+      await session.establish(conn, target.relayGracePeriodSeconds)
 
       // Why: we manually pushed `deploying-relay` above, so the renderer's
       // state is stuck there. Send `connected` directly to the renderer
       // instead of going through callbacks.onStateChange, which would
-      // trigger the reconnection logic (reestablishRelayStack).
+      // trigger the reconnection logic.
       const win = getMainWindow()
       if (win && !win.isDestroyed()) {
         win.webContents.send('ssh:state-changed', {
@@ -232,10 +194,9 @@ export function registerSshHandlers(
       }
     } catch (err) {
       // Relay deployment failed — disconnect SSH
+      activeSessions.delete(args.targetId)
       await connectionManager!.disconnect(args.targetId)
       throw err
-    } finally {
-      explicitRelaySetupTargets.delete(args.targetId)
     }
 
     // Why: persist whether this connection required a credential prompt so
@@ -250,7 +211,11 @@ export function registerSshHandlers(
   })
 
   ipcMain.handle('ssh:disconnect', async (_event, args: { targetId: string }) => {
-    cleanupConnection(args.targetId, activeMultiplexers, initializedConnections, portForwardManager)
+    const session = activeSessions.get(args.targetId)
+    if (session) {
+      session.dispose()
+      activeSessions.delete(args.targetId)
+    }
     await connectionManager!.disconnect(args.targetId)
   })
 
@@ -268,7 +233,8 @@ export function registerSshHandlers(
     // already has an active relay session, connect() would reuse the connection
     // but disconnect() would tear down the entire relay stack — killing all
     // active PTYs and file watchers for a "test" that was supposed to be safe.
-    if (initializedConnections.has(args.targetId)) {
+    const existingSession = activeSessions.get(args.targetId)
+    if (existingSession?.getState() === 'ready') {
       return { success: true, state: connectionManager!.getState(args.targetId) }
     }
 
@@ -337,5 +303,5 @@ export function getSshConnectionStore(): SshConnectionStore | null {
 }
 
 export function getActiveMultiplexer(connectionId: string): SshChannelMultiplexer | undefined {
-  return activeMultiplexers.get(connectionId)
+  return activeSessions.get(connectionId)?.getMux() ?? undefined
 }

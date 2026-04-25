@@ -1,0 +1,252 @@
+// Why: consolidates all relay lifecycle state (multiplexer, providers, abort
+// controller, initialization flag) into a single class per SSH target.
+// Previously this state was scattered across 5 module-level Maps/Sets in
+// ssh.ts and ssh-relay-helpers.ts, with 3 separate code paths for initial
+// connect, network-blip reconnect, and cleanup — each partially duplicating
+// provider registration/teardown logic. This class is the single authority
+// for relay session state, eliminating the class of bugs where one path
+// forgets a step that another path handles.
+
+import type { BrowserWindow } from 'electron'
+import { deployAndLaunchRelay } from './ssh-relay-deploy'
+import { SshChannelMultiplexer } from './ssh-channel-multiplexer'
+import { SshPtyProvider } from '../providers/ssh-pty-provider'
+import { SshFilesystemProvider } from '../providers/ssh-filesystem-provider'
+import { SshGitProvider } from '../providers/ssh-git-provider'
+import {
+  registerSshPtyProvider,
+  unregisterSshPtyProvider,
+  getSshPtyProvider,
+  getPtyIdsForConnection,
+  clearPtyOwnershipForConnection,
+  clearProviderPtyState,
+  deletePtyOwnership
+} from '../ipc/pty'
+import {
+  registerSshFilesystemProvider,
+  unregisterSshFilesystemProvider,
+  getSshFilesystemProvider
+} from '../providers/ssh-filesystem-dispatch'
+import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
+import type { SshPortForwardManager } from './ssh-port-forward'
+import type { SshConnection } from './ssh-connection'
+import type { Store } from '../persistence'
+
+export type RelaySessionState = 'idle' | 'deploying' | 'ready' | 'reconnecting' | 'disposed'
+
+export class SshRelaySession {
+  private _state: RelaySessionState = 'idle'
+  private mux: SshChannelMultiplexer | null = null
+  private abortController: AbortController | null = null
+
+  constructor(
+    readonly targetId: string,
+    private getMainWindow: () => BrowserWindow | null,
+    private store: Store,
+    private portForwardManager: SshPortForwardManager
+  ) {}
+
+  getState(): RelaySessionState {
+    return this._state
+  }
+
+  getMux(): SshChannelMultiplexer | null {
+    return this.mux
+  }
+
+  // Why: single entry point for relay setup — used by both initial connect
+  // and app-restart reconnect. Having one path eliminates the risk of
+  // forgetting a registration step.
+  async establish(conn: SshConnection, graceTimeSeconds?: number): Promise<void> {
+    if (this._state !== 'idle') {
+      throw new Error(`Cannot establish relay session in state: ${this._state}`)
+    }
+    this._state = 'deploying'
+
+    try {
+      const { transport } = await deployAndLaunchRelay(conn, undefined, graceTimeSeconds)
+
+      const mux = new SshChannelMultiplexer(transport)
+      this.mux = mux
+
+      await this.registerProviders(mux)
+      this._state = 'ready'
+    } catch (err) {
+      this._state = 'idle'
+      throw err
+    }
+  }
+
+  // Why: network-blip reconnect path. Tears down the old provider stack,
+  // deploys a fresh relay, and re-attaches any PTYs that survived the
+  // relay's grace window. Guarded by an AbortController so overlapping
+  // reconnect attempts (fast connection flaps) cancel the stale one.
+  async reconnect(conn: SshConnection, graceTimeSeconds?: number): Promise<void> {
+    if (this._state === 'disposed') {
+      return
+    }
+
+    // Cancel any in-flight reconnect
+    this.abortController?.abort()
+    const abortController = new AbortController()
+    this.abortController = abortController
+
+    this._state = 'reconnecting'
+
+    this.portForwardManager.removeAllForwards(this.targetId)
+    this.teardownProviders('connection_lost')
+
+    try {
+      const { transport } = await deployAndLaunchRelay(conn, undefined, graceTimeSeconds)
+
+      if (abortController.signal.aborted) {
+        // Why: the relay is already running on the remote. Creating a temporary
+        // multiplexer and immediately disposing it sends a clean shutdown to the
+        // relay process so it doesn't linger until its grace timer expires.
+        const orphanMux = new SshChannelMultiplexer(transport)
+        orphanMux.dispose()
+        return
+      }
+
+      const mux = new SshChannelMultiplexer(transport)
+      this.mux = mux
+
+      await this.registerProviders(mux)
+
+      // Re-attach to any PTYs that were alive before the disconnect.
+      const ptyIds = getPtyIdsForConnection(this.targetId)
+      const ptyProvider = getSshPtyProvider(this.targetId) as SshPtyProvider | undefined
+      if (ptyProvider) {
+        for (const ptyId of ptyIds) {
+          try {
+            await ptyProvider.attach(ptyId)
+          } catch {
+            // PTY may have exited during the disconnect — ignore
+          }
+        }
+      }
+
+      this._state = 'ready'
+    } catch (err) {
+      // Why: stay in 'reconnecting' rather than reverting to 'ready', because
+      // the provider stack is already torn down. The SSH connection manager
+      // will fire another onStateChange when it reconnects again.
+      console.warn(
+        `[ssh-relay-session] Failed to re-establish relay for ${this.targetId}: ${err instanceof Error ? err.message : String(err)}`
+      )
+    } finally {
+      if (this.abortController === abortController) {
+        this.abortController = null
+      }
+    }
+  }
+
+  dispose(): void {
+    if (this._state === 'disposed') {
+      return
+    }
+    this.abortController?.abort()
+    this.portForwardManager.removeAllForwards(this.targetId)
+    this.teardownProviders('shutdown')
+    this._state = 'disposed'
+  }
+
+  // ── Private ───────────────────────────────────────────────────────
+
+  // Why: shared by establish() and reconnect() — the exact same provider
+  // registration sequence, eliminating the duplication that caused bugs.
+  private async registerProviders(mux: SshChannelMultiplexer): Promise<void> {
+    await this.registerRelayRoots(mux)
+
+    const ptyProvider = new SshPtyProvider(this.targetId, mux)
+    registerSshPtyProvider(this.targetId, ptyProvider)
+
+    const fsProvider = new SshFilesystemProvider(this.targetId, mux)
+    registerSshFilesystemProvider(this.targetId, fsProvider)
+
+    const gitProvider = new SshGitProvider(this.targetId, mux)
+    registerSshGitProvider(this.targetId, gitProvider)
+
+    this.wireUpPtyEvents(ptyProvider)
+  }
+
+  private teardownProviders(reason: 'shutdown' | 'connection_lost'): void {
+    if (this.mux && !this.mux.isDisposed()) {
+      this.mux.dispose(reason)
+    }
+    this.mux = null
+
+    if (reason === 'shutdown') {
+      clearPtyOwnershipForConnection(this.targetId)
+    }
+
+    const ptyProvider = getSshPtyProvider(this.targetId)
+    if (ptyProvider && 'dispose' in ptyProvider) {
+      ;(ptyProvider as { dispose: () => void }).dispose()
+    }
+    const fsProvider = getSshFilesystemProvider(this.targetId)
+    if (fsProvider && 'dispose' in fsProvider) {
+      ;(fsProvider as { dispose: () => void }).dispose()
+    }
+
+    unregisterSshPtyProvider(this.targetId)
+    unregisterSshFilesystemProvider(this.targetId)
+    unregisterSshGitProvider(this.targetId)
+  }
+
+  // Why: the relay's RelayContext starts with rootsRegistered=false and rejects
+  // all FS operations until at least one root is registered. This must run
+  // after every relay deploy because each deploy creates a fresh RelayContext.
+  private async registerRelayRoots(mux: SshChannelMultiplexer): Promise<void> {
+    const remoteRepos = this.store.getRepos().filter((r) => r.connectionId === this.targetId)
+
+    for (const repo of remoteRepos) {
+      mux.notify('session.registerRoot', { rootPath: repo.path })
+    }
+
+    // Why: git.listWorktrees requires the repo root to be registered first.
+    await Promise.all(
+      remoteRepos.map(async (repo) => {
+        try {
+          const worktrees = (await mux.request('git.listWorktrees', {
+            repoPath: repo.path
+          })) as { path: string }[]
+          for (const wt of worktrees) {
+            if (wt.path !== repo.path) {
+              mux.notify('session.registerRoot', { rootPath: wt.path })
+            }
+          }
+        } catch {
+          // git worktree list may fail for folder-mode repos — not fatal
+        }
+      })
+    )
+  }
+
+  // Why: extracted so establish() and reconnect() share exactly the same
+  // event wiring. Previously forgetting to wire onReplay on one path
+  // caused silent terminal blanking after reconnect.
+  private wireUpPtyEvents(ptyProvider: SshPtyProvider): void {
+    const getWin = this.getMainWindow
+    ptyProvider.onData((payload) => {
+      const win = getWin()
+      if (win && !win.isDestroyed()) {
+        win.webContents.send('pty:data', payload)
+      }
+    })
+    ptyProvider.onReplay((payload) => {
+      const win = getWin()
+      if (win && !win.isDestroyed()) {
+        win.webContents.send('pty:replay', payload)
+      }
+    })
+    ptyProvider.onExit((payload) => {
+      clearProviderPtyState(payload.id)
+      deletePtyOwnership(payload.id)
+      const win = getWin()
+      if (win && !win.isDestroyed()) {
+        win.webContents.send('pty:exit', payload)
+      }
+    })
+  }
+}
