@@ -1,3 +1,4 @@
+/* oxlint-disable max-lines */
 import { execSync } from 'child_process'
 import { existsSync, statSync } from 'fs'
 import { join, basename } from 'path'
@@ -222,46 +223,104 @@ async function getDefaultBaseRefAsync(path: string): Promise<string | null> {
   return null
 }
 
-export async function searchBaseRefs(path: string, query: string, limit = 25): Promise<string[]> {
-  const normalizedQuery = normalizeRefSearchQuery(query)
-  if (!normalizedQuery) {
-    return []
+/**
+ * Resolve the default push remote for a repo.
+ * Order: remote configured on the current default branch → origin → the single
+ * remote when the repo has exactly one → error.
+ */
+export async function getDefaultRemote(path: string): Promise<string> {
+  const defaultRef = await getDefaultBaseRefAsync(path)
+  // Why: getDefaultBaseRefAsync returns null when no default branch can be
+  // detected (e.g. a brand-new repo with no commits on origin). Guard so we
+  // don't crash on .includes(); fall through to the remote-list heuristics.
+  const defaultBranch = defaultRef
+    ? defaultRef.includes('/')
+      ? defaultRef.split('/').slice(1).join('/')
+      : defaultRef
+    : null
+
+  if (defaultBranch) {
+    try {
+      const { stdout } = await gitExecFileAsync(
+        ['config', '--get', `branch.${defaultBranch}.remote`],
+        { cwd: path }
+      )
+      const value = stdout.trim()
+      if (value) {
+        return value
+      }
+    } catch {
+      // Fall through: branch has no explicit remote configured.
+    }
   }
 
   try {
-    const { stdout } = await gitExecFileAsync(
-      [
-        'for-each-ref',
-        '--format=%(refname:short)',
-        '--sort=-committerdate',
-        `refs/remotes/origin/*${normalizedQuery}*`,
-        `refs/heads/*${normalizedQuery}*`
-      ],
-      { cwd: path }
-    )
-
-    const seen = new Set<string>()
-    const refs = stdout
+    const { stdout } = await gitExecFileAsync(['remote'], { cwd: path })
+    const remotes = stdout
       .split('\n')
       .map((line) => line.trim())
-      .filter((line) => line && line !== 'origin/HEAD')
-      .filter((line) => {
-        if (seen.has(line)) {
-          return false
-        }
-        seen.add(line)
-        return true
-      })
-      .slice(0, Math.max(1, limit))
-
-    return refs
-  } catch {
-    return []
+      .filter(Boolean)
+    if (remotes.includes('origin')) {
+      return 'origin'
+    }
+    if (remotes.length === 1) {
+      return remotes[0]
+    }
+    if (remotes.length === 0) {
+      throw new Error('Repo has no configured git remotes.')
+    }
+    throw new Error(
+      `Repo has multiple remotes (${remotes.join(', ')}) and no default is configured. Set branch.<default>.remote.`
+    )
+  } catch (error) {
+    if (error instanceof Error) {
+      throw error
+    }
+    throw new Error('Failed to resolve default remote for repo.')
   }
 }
 
-function normalizeRefSearchQuery(query: string): string {
-  return query.trim().replace(/[*?[\]\\]/g, '')
+export const BASE_REF_SEARCH_ARGS = [
+  'for-each-ref',
+  '--format=%(refname:short)',
+  '--sort=-committerdate',
+  'refs/remotes/origin/',
+  'refs/heads/'
+]
+
+/**
+ * Filter the raw `for-each-ref` stdout produced by BASE_REF_SEARCH_ARGS
+ * down to a deduped, limited list of refs that substring-match `query`.
+ *
+ * Why: `for-each-ref` pattern globs are prefix-matched per path segment,
+ * not free-form substring globs — `refs/heads/*foo*` does not match
+ * `refs/heads/FooBar`. So we list all branch refs and filter in JS.
+ */
+export function filterBaseRefSearchOutput(stdout: string, query: string, limit: number): string[] {
+  const needle = query.trim().toLowerCase()
+  const seen = new Set<string>()
+  return stdout
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line && line !== 'origin/HEAD')
+    .filter((line) => (needle ? line.toLowerCase().includes(needle) : true))
+    .filter((line) => {
+      if (seen.has(line)) {
+        return false
+      }
+      seen.add(line)
+      return true
+    })
+    .slice(0, Math.max(1, limit))
+}
+
+export async function searchBaseRefs(path: string, query: string, limit = 25): Promise<string[]> {
+  try {
+    const { stdout } = await gitExecFileAsync(BASE_REF_SEARCH_ARGS, { cwd: path })
+    return filterBaseRefSearchOutput(stdout, query, limit)
+  } catch {
+    return []
+  }
 }
 
 async function hasGitRefAsync(path: string, ref: string): Promise<boolean> {

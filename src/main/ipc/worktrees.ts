@@ -1,3 +1,4 @@
+/* oxlint-disable max-lines */
 import type { BrowserWindow } from 'electron'
 import { ipcMain } from 'electron'
 import { rm } from 'fs/promises'
@@ -7,6 +8,8 @@ import { deleteWorktreeHistoryDir } from '../terminal-history'
 import type { CreateWorktreeArgs, CreateWorktreeResult, WorktreeMeta } from '../../shared/types'
 import { removeWorktree } from '../git/worktree'
 import { gitExecFileAsync } from '../git/runner'
+import { getDefaultRemote } from '../git/repo'
+import { getWorkItem } from '../github/client'
 import { listRepoWorktrees, createFolderWorktree } from '../repo-worktrees'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 import {
@@ -38,6 +41,7 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
   ipcMain.removeHandler('worktrees:listAll')
   ipcMain.removeHandler('worktrees:list')
   ipcMain.removeHandler('worktrees:create')
+  ipcMain.removeHandler('worktrees:resolvePrBase')
   ipcMain.removeHandler('worktrees:remove')
   ipcMain.removeHandler('worktrees:updateMeta')
   ipcMain.removeHandler('worktrees:persistSortOrder')
@@ -136,6 +140,107 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
       }
 
       return createLocalWorktree(args, repo, store, mainWindow)
+    }
+  )
+
+  ipcMain.handle(
+    'worktrees:resolvePrBase',
+    async (
+      _event,
+      args: {
+        repoId: string
+        prNumber: number
+        headRefName?: string
+        isCrossRepository?: boolean
+      }
+    ): Promise<{ baseBranch: string } | { error: string }> => {
+      const repo = store.getRepo(args.repoId)
+      if (!repo) {
+        return { error: 'Repo not found' }
+      }
+      // Why: remote SSH repos are out of scope in v1. The picker already
+      // disables its PR tab for them — this guard belt-and-suspenders it.
+      if (repo.connectionId) {
+        return { error: 'PR start points are not supported for remote repos yet.' }
+      }
+      if (isFolderRepo(repo)) {
+        return { error: 'Folder mode does not support creating worktrees.' }
+      }
+
+      let headRefName = args.headRefName?.trim() ?? ''
+      let isCrossRepository = args.isCrossRepository === true
+
+      // Skip the gh lookup when both hints are present (picker already has them).
+      if (!headRefName) {
+        const item = await getWorkItem(repo.path, args.prNumber)
+        if (!item || item.type !== 'pr') {
+          return { error: `PR #${args.prNumber} not found.` }
+        }
+        headRefName = (item.branchName ?? '').trim()
+        if (!headRefName) {
+          return { error: `PR #${args.prNumber} has no head branch.` }
+        }
+        if (item.isCrossRepository === true) {
+          isCrossRepository = true
+        }
+      }
+
+      let remote: string
+      try {
+        remote = await getDefaultRemote(repo.path)
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : 'Could not resolve git remote.' }
+      }
+
+      // Why: fork PR heads live on a remote we don't have configured, so
+      // `git fetch <remote> <headRefName>` would fail. GitHub exposes every
+      // PR head (fork or same-repo) as refs/pull/<N>/head on the upstream
+      // repo. Fetch that and snapshot the SHA — the new worktree branch is
+      // derived from the workspace name, so there's no tracking ref to set
+      // up, which makes SHA semantics ("branch from this commit") cleaner
+      // than returning a ref that would go stale on force-push.
+      if (isCrossRepository) {
+        const pullRef = `refs/pull/${args.prNumber}/head`
+        try {
+          await gitExecFileAsync(['fetch', remote, pullRef], { cwd: repo.path })
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          return {
+            error: `Failed to fetch ${pullRef}: ${message.split('\n')[0]}`
+          }
+        }
+        let sha: string
+        try {
+          const { stdout } = await gitExecFileAsync(['rev-parse', '--verify', 'FETCH_HEAD'], {
+            cwd: repo.path
+          })
+          sha = stdout.trim()
+        } catch {
+          return { error: `Could not resolve fork PR #${args.prNumber} head after fetch.` }
+        }
+        if (!sha) {
+          return { error: `Empty SHA resolving fork PR #${args.prNumber} head.` }
+        }
+        return { baseBranch: sha }
+      }
+
+      try {
+        await gitExecFileAsync(['fetch', remote, headRefName], { cwd: repo.path })
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        return {
+          error: `Failed to fetch ${remote}/${headRefName}: ${message.split('\n')[0]}`
+        }
+      }
+
+      const remoteRef = `${remote}/${headRefName}`
+      try {
+        await gitExecFileAsync(['rev-parse', '--verify', remoteRef], { cwd: repo.path })
+      } catch {
+        return { error: `Remote ref ${remoteRef} does not exist after fetch.` }
+      }
+
+      return { baseBranch: remoteRef }
     }
   )
 

@@ -4,7 +4,7 @@
 
 As Orca scales to support multiple parallel agents and tasks, users frequently need to switch between dozens of active worktrees. Navigating via the sidebar becomes inefficient at scale.
 
-This document outlines the design for a "Quick Jump to Worktree" feature: a globally accessible Command Palette-style dialog that allows users to search across all their active worktrees by name, repository, comment, PR metadata, and issue metadata, and jump to them instantly. This feature is intended to be the central, beating heart of navigation within Orca.
+This document describes the shipped "Quick Jump" palette in Orca: a globally accessible Command Palette-style dialog that lets users jump across active worktrees, open browser tabs that live inside worktrees, and create a new worktree from typed input. Search covers worktree metadata (name, branch, repo, comment, PR metadata, issue metadata) and browser metadata (page title, URL, worktree, repo).
 
 ## 2. User Experience (UX)
 
@@ -26,12 +26,13 @@ To establish this palette as the central "Switch Worktree" action in Orca, `**Cm
 When the shortcut is pressed, a modal dialog appears at the center top of the screen (similar to VS Code's palette or Spotlight).
 
 - **Input:** A text input focused automatically.
-- **List:** A scrollable list of worktrees, constrained to `max-h-[min(400px,60vh)]` to prevent the palette from overflowing the viewport when many worktrees are present.
-- **Default state (empty query):** When the palette opens with no query, the full list of non-archived worktrees is shown in recent-sort order. The data source is `worktreesByRepo`, filtered by `!w.isArchived` (same filter applied by `computeVisibleWorktreeIds` in `visible-worktrees.ts`). The palette intentionally ignores the sidebar's `showActiveOnly` and `filterRepoIds` filters — it is a global jump tool, not a filtered view. No truncation — the list is scrollable and the expected count (&lt;200) does not require pagination.
-- **Sorting (Recent Semantics):** The palette **always** uses `recent` sort order regardless of the sidebar's current `sortBy` setting. Alphabetical or repo-grouped sort would be a poor default for a "jump to" palette — recency is what the user almost always wants. Internally, this means calling `buildWorktreeComparator` from `smart-sort.ts` with `sortBy: 'recent'`. This gives the same smart-sort signals as the sidebar in recent mode: active agent work, permission-needed state, unread state, live terminals, PR signal, linked issue, and recency (`lastActivityAt`), with the same cold-start fallback to persisted `sortOrder` until live PTY state is available (see the `!hasAnyLivePty` branch in `getVisibleWorktreeIds()`).
+- **List:** A scrollable list constrained to `max-h-[min(460px,62vh)]` to prevent the palette from overflowing the viewport when many results are present.
+- **Default state (empty query):** When the palette opens with no query, the full list of non-archived worktrees is shown first, ordered by Orca's smart sort. If browser tabs also exist, they appear as a secondary section preview below the worktree list. The palette intentionally ignores the sidebar's `showActiveOnly` and `filterRepoIds` filters — it is a global jump tool, not a filtered view.
+- **Sorting (Smart Semantics):** The palette uses Orca's smart worktree ordering via `sortWorktreesSmart(...)`, not plain recency. In practice this prioritizes active agent work, permission-needed state, unread state, live terminals, PR signal, linked issue, and recent activity, with a cold-start fallback to persisted `sortOrder` until any PTY is live.
 - **Visual Hierarchy &amp; Highlights:** Because search covers multiple fields simultaneously, the list items must visually clarify *why* a result matched. If the match is inside a comment, display a truncated snippet of that comment centered around the matched range, with the matching text highlighted.
 - **Multi-repo disambiguation:** Each list item always displays the repository name (e.g., `stablyai/orca`) alongside the worktree name. This is required because the palette spans all repos — without it, two worktrees named "main" from different repos would be indistinguishable.
-- **Empty State:** Two cases: (1) If the user has 0 non-archived worktrees, display "No active worktrees. Create one to get started." (2) If worktrees exist but none match the search query, display "No worktrees match your search." Both use `<Command.Empty>`.
+- **Cross-surface scope:** The palette is not limited to worktrees. It also surfaces browser tabs, and when the user types a string that matches no worktree results it offers a "Create worktree" action using the current query.
+- **Empty State:** Two cases: (1) If the user has no active worktrees and no browser tabs, display "No active worktrees or browser tabs". (2) If items exist but none match the search query, display "No results match your search." Both use `<Command.Empty>`.
 - **Search fields:** The search input will match against:
   - Worktree `displayName`
   - Worktree `branch`, normalized via `branchName()` to strip the `refs/heads/` prefix (e.g., `refs/heads/feature/auth-fix` → `feature/auth-fix`)
@@ -41,21 +42,22 @@ When the shortcut is pressed, a modal dialog appears at the center top of the sc
   - Linked issue number/title. The issue number comes from `w.linkedIssue`; the title comes from `issueCache` (cache key: `${repo.path}::${w.linkedIssue}`). Number matching works even without a cache hit; title matching requires the cache entry to be populated.
   - **Cache freshness caveat:** PR and issue data is populated by `refreshGitHubForWorktree`, which runs on worktree activation, and by `refreshAllGitHub`, which runs on window re-focus (`visibilitychange`). On startup, `initGitHubCache` loads previously persisted PR/issue data from disk, so worktrees fetched in prior sessions start with warm caches. Worktrees that have never been activated, were not covered by a `refreshAllGitHub` pass, and have no persisted cache entry will have empty caches — PR/issue title search will silently miss them. This is acceptable: the gap is limited to brand-new worktrees between creation and the next activation or window re-focus cycle. Number-based matching (e.g., `#304`) always works because it checks `w.linkedPR` / `w.linkedIssue` directly, without the cache.
   - `**#`-prefix handling:** A leading `#` in the query is stripped before matching PR/issue numbers (e.g., `#304` matches number `304`), with a guard against bare `#` which would produce an empty string and match everything. This mirrors the existing `matchesSearch()` behavior.
+- **Browser search fields:** Browser page title, URL/secondary text, worktree name, and repo name.
 - **Navigation:** `Up` / `Down` arrows to navigate the list, `Enter` to select. `Escape` closes the modal.
 
 ## 3. Technical Architecture
 
 ### 3.1 UI Components
 
-Orca uses `shadcn/ui`. We will add the **Command** component, which wraps the `cmdk` library.
+Orca uses `shadcn/ui` and ships the **Command** component, which wraps the `cmdk` library.
 
-**New dependency:** `cmdk` (~4KB gzipped) will be added as a direct dependency in `package.json`. It is already present in `node_modules` as a transitive dependency, but not directly importable.
+**Dependency:** `cmdk` is a direct dependency in `package.json`.
 
 ```bash
 pnpm dlx shadcn@latest add command
 ```
 
-Note: `dialog.tsx` already exists in `src/renderer/src/components/ui/`. The shadcn `CommandDialog` uses Radix Dialog internally; verify it shares the same Radix instance to avoid duplicate bundles. If the installed `cmdk` version pins a different `@radix-ui/react-dialog` than the existing `dialog.tsx`, align `dialog.tsx` to the shadcn-installed version to prevent a double-bundled Radix.
+Note: `CommandDialog` uses Radix Dialog internally. Orca keeps this inside the shared `components/ui/command.tsx` wrapper so both palettes use the same dialog primitives and styling hooks.
 
 **z-index:** The `CommandDialog` must use `z-50` or higher to reliably overlay the terminal and sidebar, consistent with `QuickOpen.tsx` which uses `z-50` on its fixed overlay container.
 
@@ -64,49 +66,26 @@ Note: `dialog.tsx` already exists in `src/renderer/src/components/ui/`. The shad
 
 ### 3.2 Keyboard Shortcut
 
-The shortcut follows the **same renderer-side `keydown` pattern** already used by `Cmd+P` (QuickOpen) and `Cmd+1–9` (worktree jump) in `App.tsx`.
+The shipped shortcut uses a **hybrid main-process + renderer architecture**:
 
-The existing `onKeyDown` handler in `App.tsx` (inside a `useEffect`) has two zones: shortcuts registered **before** the `isEditableTarget` guard fire from any focus context including xterm.js and contentEditable elements; shortcuts **after** the guard only fire from non-editable targets. `Cmd+P` and `Cmd+1–9` are in the pre-guard zone. `Cmd+J` must also be placed there so it works when a terminal has focus — no main-process `before-input-event` interception is needed.
+1. The main window listens in `before-input-event` and resolves the chord through the shared window shortcut policy.
+2. On `toggleWorktreePalette`, the main process sends `ui:toggleWorktreePalette` to the renderer.
+3. The renderer toggles `activeModal === 'worktree-palette'` in `useIpcEvents.ts`.
 
-**Implementation:** Add a new branch to the existing `onKeyDown` handler in `App.tsx`, before the `isEditableTarget` guard:
+This extra main-process hop is required because browser guests and other embedded Chromium surfaces can keep keyboard focus inside a guest `webContents`, bypassing the renderer's `window`-level `keydown` listener. A renderer-only implementation would fail from browser-tab focus.
 
-```tsx
-// Cmd/Ctrl+J — toggle worktree jump palette
-if (mod && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'j') {
-  e.preventDefault()
-  if (worktreePaletteVisible) {
-    setWorktreePaletteVisible(false)
-  } else {
-    closeModal()
-    setQuickOpenVisible(false)
-    setWorktreePaletteVisible(true)
-  }
-  return
-}
-```
+**Toggle semantics:** If the palette is already open, the shortcut closes it; otherwise it opens it. There is no `activeWorktreeId` or `activeView` guard, so the palette is available from settings, from landing states with no active worktree, and from browser focus.
 
-**Toggle semantics:** If the palette is already open, `Cmd+J` closes it (matching the toggle behavior users expect from palette shortcuts). The overlay mutual-exclusion clearing (`closeModal`, `setQuickOpenVisible(false)`) only runs on open, not on close.
-
-**No `activeWorktreeId` or `activeView` guard:** Unlike `Cmd+P` (which requires both `activeView !== 'settings'` and `activeWorktreeId !== null`), the palette has neither guard. Users should be able to open the palette even when no worktree is active (e.g., fresh session with repos but no worktree selected yet) or from the settings view. The escape/cancel path must handle `previousWorktreeId === null` gracefully — focus falls to the document body.
-
-**Overlay mutual exclusion:** The codebase has three independent overlay state systems: `activeModal` (union type in `ui.ts`), `quickOpenVisible` (boolean in `editor.ts`), and the new `worktreePaletteVisible` (boolean in `ui.ts`). All three must be mutually exclusive — only one overlay can be open at a time. The mechanism:
-
-1. `**Cmd+J` handler** (palette open): Before setting `worktreePaletteVisible(true)`, call `closeModal()` (dismisses any active modal) and `setQuickOpenVisible(false)` (dismisses QuickOpen).
-2. `**Cmd+P` handler** (QuickOpen open): Before setting `quickOpenVisible(true)`, call `setWorktreePaletteVisible(false)`. (It already calls `closeModal()` implicitly by not conflicting with the modal system.)
-3. `**openModal()` wrapper**: Extend `openModal` in `ui.ts` to also call `setWorktreePaletteVisible(false)` when opening a modal. This covers all modal-open paths (Cmd+N, delete confirmation, etc.) without requiring each callsite to know about the palette. `quickOpenVisible` lives in the editor slice, so `openModal` cannot directly clear it from within the UI slice. This is safe because of how QuickOpen's focus model works: QuickOpen auto-focuses its `<input>` on mount (via `requestAnimationFrame` in a `useEffect`), and `isEditableTarget` returns `true` for `<input>` elements. Therefore, all keyboard-triggered `openModal` paths (`Cmd+N`, etc.) that are gated behind `isEditableTarget` will not fire while QuickOpen has focus. Mouse-triggered `openModal` paths (e.g., `WorktreeCard` double-click calling `openModal('edit-meta')`) fire on the sidebar, which is visually behind the QuickOpen overlay — the click would first dismiss QuickOpen via its backdrop `onClick` handler, closing it before the modal opens.
-
-This prevents z-index stacking and confusing multi-overlay states.
-
-**Tech debt note:** Three independent overlay state systems (`activeModal`, `quickOpenVisible`, `worktreePaletteVisible`) is O(n²) in the number of overlay types — every new overlay must know about all others. A follow-up issue should be filed to unify them into a single `activeOverlay` union type, but this is out of scope for the current feature.
+**Overlay mutual exclusion:** The current app models both Quick Open and the worktree palette inside the existing `activeModal` union in `ui.ts` (`'quick-open'` and `'worktree-palette'`). This keeps the two command palettes mutually exclusive without needing separate booleans.
 
 **Menu registration:** Register a `View -> Open Worktree Palette` entry in `register-app-menu.ts` for discoverability, consistent with Section 2.1. The entry must use a **display-only shortcut hint** — do **not** set `accelerator: 'CmdOrCtrl+J'`. In Electron, menu accelerators intercept key events at the main-process level *before* the renderer's `keydown` handler fires (this is how `CmdOrCtrl+,` for Settings works — its `click` handler runs in the main process via `onOpenSettings`). If `CmdOrCtrl+J` were registered as a real accelerator, the renderer `keydown` handler would never see the event, and the overlay mutual-exclusion logic (which runs in the renderer) would be bypassed. Instead, show the shortcut text in the menu label (e.g., `label: 'Open Worktree Palette\tCmdOrCtrl+J'`) without binding `accelerator`, matching the pattern used by `Cmd+P` (QuickOpen), which has no menu entry at all and relies solely on the renderer handler.
 
 ### 3.3 State Management
 
-- **Visibility state:** Add `worktreePaletteVisible: boolean` and `setWorktreePaletteVisible: (v: boolean) => void` to the UI slice (`store/slices/ui.ts`). Note: the existing `quickOpenVisible` lives in the editor slice, not UI. The palette visibility belongs in UI because it is a global navigation concern, not editor-specific state.
+- **Visibility state:** The palette is represented by `activeModal === 'worktree-palette'` in the UI slice. Quick Open similarly uses `activeModal === 'quick-open'`.
 - **Palette session state:** `query` and `selectedIndex` are ephemeral to the palette component and should live in React component state (not Zustand). They reset on every open.
-- **Render optimization:** When `worktreePaletteVisible === false`, the `<CommandDialog>` should not render its children. The shadcn `CommandDialog` unmounts content when `open={false}` by default, which is sufficient.
-- **Recent-sort ordering:** Always use `recent` sort regardless of the sidebar's `sortBy` setting. The cold/warm branching logic currently lives in the fallback path of `getVisibleWorktreeIds()` in `visible-worktrees.ts`: it checks `hasAnyLivePty` from `tabsByWorktree`, and if cold-start (no live PTYs yet), falls back to persisted `sortOrder` descending with alphabetical `displayName` fallback; otherwise it calls `buildWorktreeComparator('recent', ...)`. Note: `getVisibleWorktreeIds()` is only the Cmd+1–9 fallback — the primary sidebar sort happens inside `WorktreeList`'s render pipeline via `sortEpoch`. To avoid duplicating the cold/warm branching in the palette, extract a `sortWorktreesRecent(worktrees, tabsByWorktree, repoMap, prCache)` helper in `smart-sort.ts` that encapsulates the cold/warm detection and returns the sorted array. Both the `getVisibleWorktreeIds()` fallback path and the palette import this shared helper.
+- **Render optimization:** When the modal is closed, `CommandDialog` unmounts its content, which is sufficient.
+- **Ordering:** Worktree results are fed through `sortWorktreesSmart(...)`, and browser results are ordered relative to that same worktree ordering so both sections feel consistent.
 
 ### 3.4 Data Layer &amp; Search
 
@@ -118,7 +97,7 @@ The palette needs access to all worktrees known to Orca.
 
 The sidebar already has a `matchesSearch()` function in `worktree-list-groups.ts` that does **substring matching** (`includes(q)`) against displayName, branch, repo, comment, PR, and issue fields. The palette search builds on this foundation but extends it. Note: `branchName()` (used to strip `refs/heads/` prefixes) is currently exported from `worktree-list-groups.ts` — a sidebar-specific module that imports Lucide icons (`CircleCheckBig`, `CircleDot`, etc.) at the top level. Importing `branchName` from it would pull the entire module (including unused icon components) into the palette's bundle. `smart-sort.ts` has its own duplicate: `branchDisplayName()` doing the identical `branch.replace(/^refs\/heads\//, '')`. Extract `branchName()` to a shared utility (`lib/git-utils.ts`) in Phase 1, and update `worktree-list-groups.ts` and `smart-sort.ts` to import from there. This is a 3-line function — the extraction is trivial and avoids the bundle bloat.
 
-1. **Matching strategy: substring, not fuzzy.** Use the same case-insensitive substring matching as `matchesSearch()`. True fuzzy matching (ordered-character, like `QuickOpen.tsx`'s `fuzzyMatch`) is not appropriate here — worktree names and comments are short enough that substring search provides good recall without false positives.
+1. **Matching strategy: substring, not fuzzy.** Use case-insensitive substring matching for worktrees and browser entries. True fuzzy matching (ordered-character, like `QuickOpen.tsx`'s `fuzzyMatch`) is not used here.
 2. **Structured match metadata:** Unlike `matchesSearch()` (which returns `boolean`), the palette search helper returns a result object:
 
 ```ts
@@ -162,7 +141,7 @@ type PaletteMatch = PaletteMatchAll | PaletteMatchComment | PaletteMatchField
 </Command.Item>
 ```
 
-6. **Performance:** Keep `value` compact (`worktree.id`) and do not stuff full comments into `keywords`. For the expected worktree count (&lt;200), synchronous filtering on every keystroke is fast enough — no debounce is needed. If worktree counts exceed 500 or filter times exceed 16ms (one frame), add list virtualization via `@tanstack/react-virtual` (already a project dependency). The search contract (`PaletteMatch[]` in, `<Command.Item>` out) does not change either way.
+6. **Performance:** Keep `value` compact and do not stuff full comments into `keywords`. The current implementation debounces the query by 150ms before recomputing result sets. That keeps mixed worktree + browser searching cheap without materially hurting responsiveness at Orca's current scale.
 
 ### 3.5 Action (Worktree Activation)
 
@@ -189,7 +168,7 @@ The palette should match what `Cmd+1–9` does today (the closest analog: jumpin
 1. **Set `activeRepoId`:** If the target worktree's `repoId` differs from the current `activeRepoId`, call `setActiveRepo(repoId)`. This keeps session persistence and the "Create Worktree" repo pre-selection accurate. Sidebar clicks skip this because they operate within a single repo group; the palette does not have that constraint.
 2. **Switch `activeView`:** If `activeView` is `'settings'`, set it to `'terminal'` so the main content area renders the worktree surface. `Cmd+1–9` does not handle this because it refuses to fire at all from the settings view (gated on `activeView !== 'settings'` in the `onKeyDown` handler); the palette intentionally has no such guard so users can jump to a worktree directly from settings.
 3. **Call `setActiveWorktree(worktreeId)`:** This runs Orca's existing activation sequence: sets `activeWorktreeId`, restores per-worktree editor state (`activeFileId`, `activeTabType`, `activeBrowserTabId`), restores the last-active terminal tab, clears unread state, bumps dead PTY generations, and triggers `refreshGitHubForWorktree` to ensure PR/issue/checks data is current for the newly active worktree.
-4. **Ensure a focusable surface:** If the worktree has no terminal tabs (i.e., `tabsByWorktree[worktreeId]` is empty), call `ensureWorktreeHasInitialTerminal` (`worktree-activation.ts`). This handles worktrees that were created externally (e.g., via CLI or IPC push) and never opened in the UI. The function already no-ops when tabs exist, so the guard is `existingTabs.length > 0` inside the function itself.
+4. **Ensure a focusable surface:** If the worktree has no renderable tabs, call `ensureWorktreeHasInitialTerminal` (`worktree-activation.ts`). The helper now decides this via the reconciled tab model, not by checking whether the legacy terminal-tab array is empty.
 5. **Reveal in sidebar:** Call `revealWorktreeInSidebar(worktreeId)` to ensure the selected worktree is visible (handles collapsed groups and scroll position).
 6. **Close the palette.**
 
@@ -210,12 +189,11 @@ Callsite-specific extras that remain inline after calling the shared helper:
 
 The helper derives `repoId` internally via `findWorktreeById(worktreesByRepo, worktreeId)` (`worktree-helpers.ts:45`) — the caller only passes `worktreeId`. If the worktree is not found (e.g., deleted between palette open and select), the helper returns early without side effects.
 
-#### Focus management (v1 — simple strategy)
+#### Focus management
 
-- **On select:** After closing the palette, use a double `requestAnimationFrame` (nested rAF) to focus the active surface (terminal xterm instance or Monaco editor) for the target worktree. The first rAF waits for React to commit the state change (palette closes); the second waits for the target worktree's surface layout to settle after Radix Dialog unmounts. Use `onCloseAutoFocus` on the `CommandDialog` with `e.preventDefault()` to prevent Radix from stealing focus to the trigger element. **Fragility note:** the double-rAF is a pragmatic v1 choice — it assumes Radix unmounts within two frames, which depends on the CSS transition duration and reduced-motion settings. If this proves unreliable, replace with a short `setTimeout` matching the actual animation duration or listen for the dialog's `onAnimationEnd`.
-- **On escape:** Same double-rAF approach, but focus the active surface for the *current* worktree (the one that was active before the palette opened). Track `previousWorktreeId` as a ref inside the component. If `previousWorktreeId` is `null` (no worktree was active when the palette opened), skip the focus call — focus falls to the document body.
-- **Degradation:** If the target surface is not mounted in time (e.g., cold worktree that was created externally and has never been opened — its terminal is still spawning after `ensureWorktreeHasInitialTerminal`), the focus call silently no-ops and focus falls to the document body. The user can click to focus. This is the **common case for externally-created worktrees**, not just a rare edge case — but it is acceptable for v1 because the worktree content still renders correctly; only auto-focus is lost.
-- **Future improvement:** A full `focusReturnTarget` system that records the exact xterm/editor/UI element and a `pendingFocus` state for async mount scenarios. This is deferred because the codebase has no existing focus-tracking infrastructure and the simple strategy covers the common case.
+- **On worktree select:** After closing the palette, use a double `requestAnimationFrame` (nested rAF) to focus the active terminal/editor surface for the target worktree. `onCloseAutoFocus` calls `preventDefault()` so Radix does not steal focus.
+- **On browser-tab select:** Restore focus to the selected browser page, preferring the address bar for blank/new pages and the webview for loaded pages.
+- **On escape/cancel:** Restore focus to the previously active browser page when the palette was opened from browser context; otherwise fall back to the terminal/editor surface for the previously active worktree. If no worktree was active, focus falls to the document body.
 
 ### 3.6 Accessibility
 
@@ -231,42 +209,29 @@ The `cmdk` library provides built-in ARIA support:
 - Announce filtered result count changes to screen readers via an `aria-live="polite"` region (e.g., "3 worktrees found").
 - Match-field badges (e.g., `Branch`, `Comment`) should include `aria-label` text so screen readers convey why the result matched.
 
-## 4. Implementation Phases
+## 4. Implementation Status
 
-**Phase 1: Component, Shortcut &amp; Data**
+The core design is implemented:
 
-- Add `cmdk` via `pnpm dlx shadcn@latest add command`.
-- Extract `branchName()` to `lib/git-utils.ts`; update imports in `worktree-list-groups.ts` and `smart-sort.ts` (consolidating the duplicate `branchDisplayName()`).
-- Extract `sortWorktreesRecent()` helper in `smart-sort.ts` (encapsulates cold/warm branching from `getVisibleWorktreeIds()`); update `getVisibleWorktreeIds()` to use it.
-- Create `WorktreeJumpPalette.tsx`, mount in `App.tsx`.
-- Add `worktreePaletteVisible` to the UI slice.
-- Add `Cmd/Ctrl+J` toggle handler to the existing `onKeyDown` in `App.tsx`.
-- Wire real worktree data from `worktreesByRepo` (filtered by `!isArchived`) with sidebar-consistent recent ordering and both empty states (no worktrees / no search results).
-- Handle startup race: if `worktreesByRepo` is empty but repos exist (data still loading), show a "Loading worktrees..." state instead of the misleading "No active worktrees" empty state. Guard: `Object.keys(worktreesByRepo).length === 0 && repos.length > 0`. Note: `worktreesByRepo` is populated per-repo as individual `fetchWorktrees` calls complete, so once any repo's worktrees arrive, the guard flips to showing partial results — this is intentional (partial results are more useful than a spinner) but means the list may grow incrementally during the first few seconds after launch.
-- Define and implement the search result model: `PaletteMatch` with matched field, character ranges, and comment snippet extraction.
-- Render with `shouldFilter={false}` and the manual search helper.
-- Visual baseline: follow shadcn `CommandDialog` defaults. Use the same palette width as `QuickOpen.tsx` (`w-[660px] max-w-[90vw]`). Item rows show worktree name, repo label, and a muted match-field badge. Active/highlighted item uses `bg-accent`. Detailed visual polish (match highlighting, snippet rendering) is deferred to Phase 3.
+- `cmdk` is a direct dependency and Orca ships a shared `CommandDialog`.
+- `WorktreeJumpPalette.tsx` is mounted at the app root.
+- The palette opens through main-process shortcut forwarding plus renderer IPC toggle handling.
+- Worktree activation is routed through `activateAndRevealWorktree(...)`.
+- Search supports comment snippets, PR/issue metadata, browser pages, and a create-worktree action.
+- Menu discoverability is implemented with a display-only `View -> Open Worktree Palette` hint and no accelerator binding.
 
-**Phase 2: Activation &amp; Focus**
+## 5. Remaining Gaps / Future Work
 
-- Extract `activateAndRevealWorktree` shared helper in `worktree-activation.ts` per Section 3.5.
-- Wire the palette to use the shared helper. Refactor `AddRepoDialog` and `AddWorktreeDialog` to use it as well.
-- Defensive select handler: before activating, verify the target worktree still exists in `worktreesByRepo`. If deleted between palette open and selection, show a toast and no-op instead of setting `activeWorktreeId` to a stale ID.
-- Implement v1 focus management (`requestAnimationFrame` + `onCloseAutoFocus` prevention).
-- Handle escape/cancel with `previousWorktreeId` ref.
-- Register display-only `View -> Open Worktree Palette` menu entry (shortcut hint in label, no `accelerator` binding) per Section 3.2.
-
-**Phase 3: Polish**
-
-- Accessibility: `aria-live` result count announcements, badge `aria-label` text.
-- Visual polish: match highlighting, comment snippet rendering, field badges.
+- Add broader integration coverage for the mixed worktree/browser palette behavior; current tests focus on search helper behavior and shortcut/menu plumbing.
+- Evaluate whether the 150ms debounce should become adaptive if the palette eventually indexes substantially more browser pages.
+- Consider unifying the worktree and browser result models further if future result types are added.
 
 **Future work (out of scope)**
 
 - Evaluate migrating `QuickOpen.tsx` (currently a custom overlay with manual keyboard handling) to `cmdk`/`CommandDialog` for visual and behavioral consistency with the palette. This is a separate project — `QuickOpen` has its own fuzzy matching, file-loading, and keyboard handling that would need reworking.
-- Unify the three overlay state systems (`activeModal`, `quickOpenVisible`, `worktreePaletteVisible`) into a single `activeOverlay` union type (see tech debt note in Section 3.2).
+- Add richer end-to-end coverage for palette interactions launched from browser focus, including focus restoration after browser-tab selection and dismissal.
 
-## 5. Alternatives Considered
+## 6. Alternatives Considered
 
 - `**Cmd+O` (Open):** Standard app semantic, but less honest for this feature because the palette switches between existing worktrees rather than opening a new file or workspace. Rejected in favor of `Cmd+J`, which better matches the action users are taking.
 - `**Ctrl+E` (Explore):** Initially considered for Windows/Linux. Rejected because `Ctrl+E` is "end of line" in bash/zsh readline — stealing it in a terminal-heavy app breaks shell navigation muscle memory.
@@ -274,5 +239,4 @@ The `cmdk` library provides built-in ARIA support:
 - `**Cmd+1...9` (Direct jumping):** Doesn't scale past 9 worktrees and requires the user to memorize sidebar positions. Already implemented as a complementary feature.
 - `**Cmd+K`:** Rejected due to conflict with "Clear Terminal".
 - `**Cmd+P`:** Rejected because it is already used for file searching (`QuickOpen.tsx`).
-- **Main-process `before-input-event` interception:** Initially proposed for the keyboard shortcut to bypass xterm focus. Rejected because the existing renderer-side `keydown` handler (used by `Cmd+P`, `Cmd+1–9`, etc.) already fires before the `isEditableTarget` guard and works from terminal focus. Adding main-process interception would require a new IPC channel and multi-window targeting logic for no benefit.
-
+- **Renderer-only shortcut handling:** Initially attractive because it mirrors simpler shortcuts, but rejected for the shipped palette. Browser guests can keep keyboard focus inside a separate `webContents`, so a renderer-only `window` listener would miss `Cmd+J` / `Ctrl+Shift+J` from browser-tab focus.

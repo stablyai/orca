@@ -401,6 +401,10 @@ export type GitHubWorkItem = {
   author: string | null
   branchName?: string
   baseRefName?: string
+  // Why: true when a PR's head lives on a fork (headRepositoryOwner !== selected repo owner).
+  // The Start-from picker disables fork PRs in v1 because the create flow cannot
+  // safely resolve a fork head from headRefName alone.
+  isCrossRepository?: boolean
   /** Why: required because the cross-repo view merges items from every selected
    *  repo — the table row's repo pill and the "open in browser" fallback need
    *  to know which repo an item came from. Stamped by the renderer fetcher
