@@ -1,4 +1,4 @@
-import React, { lazy, useEffect, useMemo, useState, type MutableRefObject } from 'react'
+import React, { lazy, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
 import { LazySection } from './LazySection'
 import { ChevronDown, ChevronRight, ExternalLink } from 'lucide-react'
 import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
@@ -10,6 +10,7 @@ import { computeEditorFontSize } from '@/lib/editor-font-zoom'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorator'
 import { DiffCommentPopover } from '../diff-comments/DiffCommentPopover'
+import { applyDiffEditorLineNumberOptions } from './diff-editor-line-number-options'
 import type { DiffComment, GitDiffResult } from '../../../../shared/types'
 
 const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
@@ -131,6 +132,7 @@ export function DiffSectionItem({
   )
 
   const [modifiedEditor, setModifiedEditor] = useState<monacoEditor.ICodeEditor | null>(null)
+  const diffEditorRef = useRef<monacoEditor.IStandaloneDiffEditor | null>(null)
   const [popover, setPopover] = useState<{ lineNumber: number; top: number } | null>(null)
 
   useDiffCommentDecorator({
@@ -162,6 +164,13 @@ export function DiffSectionItem({
     // on `popover` above handles the popover-closed case.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modifiedEditor, popover?.lineNumber])
+
+  useEffect(() => {
+    if (!diffEditorRef.current) {
+      return
+    }
+    applyDiffEditorLineNumberOptions(diffEditorRef.current, sideBySide)
+  }, [sideBySide])
 
   const handleSubmitComment = async (body: string): Promise<void> => {
     if (!popover) {
@@ -206,6 +215,8 @@ export function DiffSectionItem({
   }
 
   const handleMount: DiffOnMount = (editor, monaco) => {
+    diffEditorRef.current = editor
+    applyDiffEditorLineNumberOptions(editor, sideBySide)
     const modified = editor.getModifiedEditor()
 
     const updateHeight = (): void => {
@@ -227,6 +238,7 @@ export function DiffSectionItem({
     // methods on a disposed editor instance, and avoids `popover` pointing
     // at a line in an editor that no longer exists.
     modified.onDidDispose(() => {
+      diffEditorRef.current = null
       setModifiedEditor(null)
       setPopover(null)
     })

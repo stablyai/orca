@@ -9,6 +9,7 @@ import { useContextualCopySetup } from './useContextualCopySetup'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorator'
 import { DiffCommentPopover } from '../diff-comments/DiffCommentPopover'
+import { applyDiffEditorLineNumberOptions } from './diff-editor-line-number-options'
 import type { DiffComment } from '../../../../shared/types'
 
 type DiffViewerProps = {
@@ -139,6 +140,7 @@ export default function DiffViewer({
   const handleMount: DiffOnMount = useCallback(
     (diffEditor, monaco) => {
       diffEditorRef.current = diffEditor
+      applyDiffEditorLineNumberOptions(diffEditor, sideBySide)
 
       const originalEditor = diffEditor.getOriginalEditor()
       const modifiedEditor = diffEditor.getModifiedEditor()
@@ -171,7 +173,7 @@ export default function DiffViewer({
         diffEditor.focus()
       }
     },
-    [editable, setupCopy, modelKey, filePath]
+    [editable, setupCopy, modelKey, filePath, sideBySide]
   )
 
   // Why: VS Code snapshots diff view state on deactivation, not on scroll events.
@@ -188,6 +190,13 @@ export default function DiffViewer({
       }
     }
   }, [modelKey])
+
+  useEffect(() => {
+    if (!diffEditorRef.current) {
+      return
+    }
+    applyDiffEditorLineNumberOptions(diffEditorRef.current, sideBySide)
+  }, [sideBySide])
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
