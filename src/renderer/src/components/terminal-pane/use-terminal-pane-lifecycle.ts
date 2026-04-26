@@ -686,12 +686,13 @@ export function useTerminalPaneLifecycle({
     // is a per-user prompt/template rather than repo bootstrap, so Orca should
     // not guess at ordering requirements that vary by user workflow.
     if (issueCommandSplit) {
-      const targetPane =
-        (issueAutomationAnchorPaneId !== null
-          ? (manager.getPanes().find((pane) => pane.id === issueAutomationAnchorPaneId) ?? null)
-          : null) ??
-        manager.getActivePane() ??
-        manager.getPanes()[0]
+      let targetPane = manager.getActivePane() ?? manager.getPanes()[0] ?? null
+      if (issueAutomationAnchorPaneId !== null) {
+        // Why: keep the same anchor-first fallback order without the ternary +
+        // nullish chain that `tsgo` currently misreads as always-nullish.
+        targetPane =
+          manager.getPanes().find((pane) => pane.id === issueAutomationAnchorPaneId) ?? targetPane
+      }
       if (targetPane) {
         splitPaneWithOneShotStartup(
           ptyDeps,
