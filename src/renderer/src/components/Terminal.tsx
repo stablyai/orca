@@ -746,13 +746,14 @@ function Terminal(): React.JSX.Element | null {
         !e.repeat
       ) {
         // Why: delegate to the shared handleSwitchTab used by the IPC shortcut
-        // so both code paths share one implementation. See getActiveTabNavOrder
-        // for the stale legacy-order bug this replaces. handleSwitchTab returns
-        // true when it switched so we preventDefault only when we actually
-        // consumed the key.
-        if (handleSwitchTab(e.code === 'BracketRight' ? 1 : -1)) {
-          e.preventDefault()
-        }
+        // so both code paths share one implementation. Always consume the
+        // chord — even when the switch is a no-op (e.g. single tab), we own
+        // this key combo and shouldn't let it reach xterm or the browser
+        // guest's default handling.
+        e.preventDefault()
+        e.stopPropagation()
+        e.stopImmediatePropagation()
+        handleSwitchTab(e.code === 'BracketRight' ? 1 : -1)
       }
 
       // Ctrl+PageDown/PageUp - switch terminal tabs only
@@ -770,18 +771,21 @@ function Terminal(): React.JSX.Element | null {
         (e.code === 'PageDown' || e.code === 'PageUp') &&
         !e.repeat
       ) {
-        if (handleSwitchTerminalTab(e.code === 'PageDown' ? 1 : -1)) {
-          // Why: stop propagation in addition to preventDefault. Unlike
-          // Cmd+Shift+]/[ (xterm ignores Meta-modified keys by default),
-          // xterm actively translates plain Ctrl+PageUp/PageDown into the
-          // \e[5~ / \e[6~ escape sequences and writes them to the shell.
-          // preventDefault on the window-capture listener does not stop
-          // xterm's own keydown listener on its textarea, so we must stop
-          // the event before it reaches the focused terminal.
-          e.preventDefault()
-          e.stopPropagation()
-          e.stopImmediatePropagation()
-        }
+        // Why: always consume the chord before xterm's textarea listener
+        // sees it, regardless of whether we actually switched tabs. xterm
+        // translates plain Ctrl+PageUp/PageDown into \e[5~ / \e[6~ escape
+        // sequences and writes them to the shell; that stray output then
+        // also flips the tab's unread/bell indicator. In the single-terminal
+        // case handleSwitchTerminalTab is a no-op, but we still need to
+        // swallow the event — otherwise pressing the chord on the only
+        // terminal leaves "5~" in the shell and lights up a phantom
+        // notification on the tab that already has focus. preventDefault
+        // alone does not stop xterm's own keydown listener, so we also
+        // stop propagation.
+        e.preventDefault()
+        e.stopPropagation()
+        e.stopImmediatePropagation()
+        handleSwitchTerminalTab(e.code === 'PageDown' ? 1 : -1)
       }
     }
     window.addEventListener('keydown', onKeyDown, { capture: true })

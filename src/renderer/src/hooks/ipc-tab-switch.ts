@@ -76,6 +76,13 @@ export function handleSwitchTerminalTab(direction: number): boolean {
   }
   const currentIndex = idx === -1 && direction > 0 ? -1 : idx === -1 ? 0 : idx
   const next = terminalTabs[(currentIndex + direction + terminalTabs.length) % terminalTabs.length]
+  // Why: skip the store writes when the target terminal is already the active
+  // tab (e.g. single-terminal with that terminal focused but via a different
+  // code path). Redundant setActiveTab calls trigger unnecessary subscriber
+  // work in components that react to active-tab changes.
+  if (next.id === store.activeTabId && store.activeTabType === 'terminal') {
+    return false
+  }
   store.setActiveTab(next.id)
   store.setActiveTabType('terminal')
   return true
