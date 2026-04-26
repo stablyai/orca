@@ -1,4 +1,5 @@
 import { net } from 'electron'
+import { randomUUID } from 'crypto'
 import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
 
 const OPENCODE_BASE_URL = 'https://opencode.ai'
@@ -45,8 +46,12 @@ function filterAuthCookie(raw: string): string {
 
 function parseWorkspaceIds(text: string): string[] {
   // Match id:"wrk_..." or id: "wrk_..." patterns in JS-serialized output.
+  // Why: Workspace IDs follow a 'wrk_xxx' or 'wk_xxx' pattern. Using a
+  // more specific regex with word boundaries avoids picking up unrelated
+  // object properties that might match a generic ID pattern.
   const ids: string[] = []
-  for (const match of text.matchAll(/id\s*:\s*"?(wrk_[A-Za-z0-9]+)"?/g)) {
+  const workspaceIdRegex = /\bid\s*:\s*["']((?:wrk|wk)_[a-zA-Z0-9]+)["']/g
+  for (const match of text.matchAll(workspaceIdRegex)) {
     const id = match[1]
     if (id && !ids.includes(id)) {
       ids.push(id)
@@ -66,12 +71,17 @@ function extractNumber(pattern: RegExp, text: string): number | null {
 }
 
 // Patterns use (?:-?\s*)? to optionally capture a minus sign before digits.
-const ROLLING_PERCENT_PATTERN = /rollingUsage[^}]*?usagePercent\s*:\s*(-?[0-9]+(?:\.[0-9]+)?)/
-const ROLLING_RESET_PATTERN = /rollingUsage[^}]*?resetInSec\s*:\s*([0-9]+)/
-const WEEKLY_PERCENT_PATTERN = /weeklyUsage[^}]*?usagePercent\s*:\s*(-?[0-9]+(?:\.[0-9]+)?)/
-const WEEKLY_RESET_PATTERN = /weeklyUsage[^}]*?resetInSec\s*:\s*([0-9]+)/
-const MONTHLY_PERCENT_PATTERN = /monthlyUsage[^}]*?usagePercent\s*:\s*(-?[0-9]+(?:\.[0-9]+)?)/
-const MONTHLY_RESET_PATTERN = /monthlyUsage[^}]*?resetInSec\s*:\s*([0-9]+)/
+// Why: usage data is embedded as JS object literals (not JSON) in the page text.
+// Use word boundaries and explicit object-start braces to make patterns less
+// prone to false positives if the property names appear in unrelated strings.
+const ROLLING_PERCENT_PATTERN =
+  /\brollingUsage\b[^}]*?\busagePercent\b\s*:\s*(-?[0-9]+(?:\.[0-9]+)?)/
+const ROLLING_RESET_PATTERN = /\brollingUsage\b[^}]*?\bresetInSec\b\s*:\s*([0-9]+)/
+const WEEKLY_PERCENT_PATTERN = /\bweeklyUsage\b[^}]*?\busagePercent\b\s*:\s*(-?[0-9]+(?:\.[0-9]+)?)/
+const WEEKLY_RESET_PATTERN = /\bweeklyUsage\b[^}]*?\bresetInSec\b\s*:\s*([0-9]+)/
+const MONTHLY_PERCENT_PATTERN =
+  /\bmonthlyUsage\b[^}]*?\busagePercent\b\s*:\s*(-?[0-9]+(?:\.[0-9]+)?)/
+const MONTHLY_RESET_PATTERN = /\bmonthlyUsage\b[^}]*?\bresetInSec\b\s*:\s*([0-9]+)/
 
 type ParsedSubscription = {
   rollingUsagePercent: number
@@ -83,8 +93,12 @@ type ParsedSubscription = {
 }
 
 function parseSubscriptionFromPageText(text: string): ParsedSubscription | null {
-  // The /workspace/<id>/go page embeds usage as serialized JS objects.
-  // Fields: rollingUsage/weeklyUsage/monthlyUsage with usagePercent + resetInSec.
+  // Why: OpenCode usage is scraped from HTML-embedded JS. Add defensive checks
+  // for payload size and missing fields to prevent brittle regex failures.
+  if (!text || text.length > 1_000_000) {
+    return null
+  }
+
   const rollingPercent = extractNumber(ROLLING_PERCENT_PATTERN, text)
   const rollingReset = extractNumber(ROLLING_RESET_PATTERN, text)
   const weeklyPercent = extractNumber(WEEKLY_PERCENT_PATTERN, text)
@@ -169,7 +183,7 @@ export async function fetchOpenCodeGoRateLimits(
     if (!workspaceId) {
       // The /_server endpoint uses SST server-function protocol: GET with ?id=<hash>
       // and X-Server-Id / X-Server-Instance headers for routing.
-      const instanceId = `server-fn:${Math.random().toString(36).slice(2)}`
+      const instanceId = `server-fn:${randomUUID()}`
       const workspacesUrl = `${OPENCODE_SERVER_URL}?id=${WORKSPACES_SERVER_ID}`
       const workspacesRes = await net.fetch(workspacesUrl, {
         method: 'GET',

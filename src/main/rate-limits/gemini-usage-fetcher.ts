@@ -22,14 +22,33 @@ type QuotaBucket = {
   modelId: string
 }
 
+function isQuotaBucket(o: unknown): o is QuotaBucket {
+  return (
+    typeof o === 'object' &&
+    o !== null &&
+    typeof (o as QuotaBucket).remainingFraction === 'number' &&
+    Number.isFinite((o as QuotaBucket).remainingFraction) &&
+    typeof (o as QuotaBucket).resetTime === 'string' &&
+    typeof (o as QuotaBucket).modelId === 'string'
+  )
+}
+
 function parseQuotaResponse(data: unknown): QuotaBucket[] {
+  let rawBuckets: unknown[] = []
   if (Array.isArray(data)) {
-    return data as QuotaBucket[]
+    rawBuckets = data
+  } else if (data && typeof data === 'object' && 'buckets' in data && Array.isArray(data.buckets)) {
+    rawBuckets = data.buckets
   }
-  if (data && typeof data === 'object' && 'buckets' in data && Array.isArray(data.buckets)) {
-    return data.buckets as QuotaBucket[]
-  }
-  return []
+  // Why: API response casting is blind — use a type guard to ensure the
+  // objects match the expected QuotaBucket structure before processing.
+  return rawBuckets.filter((b) => {
+    if (isQuotaBucket(b)) {
+      return true
+    }
+    console.warn('[gemini-usage-fetcher] skipping invalid quota bucket:', b)
+    return false
+  })
 }
 
 // Model ID mapping — keep short names for known stable IDs.
@@ -142,6 +161,17 @@ async function fetchViaAuthJson(auth: GoogleAuthEntry): Promise<ProviderRateLimi
   // "<refresh_token>|<projectId>|<managedProjectId>". The first segment is the
   // actual OAuth refresh token; the rest carry project metadata.
   const refreshParts = auth.refresh.split('|')
+  if (refreshParts.length < 3) {
+    return {
+      provider: 'gemini',
+      session: null,
+      weekly: null,
+      updatedAt: Date.now(),
+      error: `Malformed auth.json refresh token (expected 3 parts, got ${refreshParts.length})`,
+      status: 'error'
+    }
+  }
+
   const refreshToken = refreshParts[0] ?? ''
   const projectId = refreshParts[1] ?? ''
   const managedProjectId = refreshParts[2] ?? ''

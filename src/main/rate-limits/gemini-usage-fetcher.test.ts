@@ -223,6 +223,31 @@ describe('fetchGeminiRateLimits', () => {
     expect(result.session?.usedPercent).toBe(25)
   })
 
+  it('filters out buckets with NaN remainingFraction', async () => {
+    setupAuthJsonGoogleValid()
+    netFetchMock.mockResolvedValueOnce(
+      makeResponse([
+        {
+          remainingFraction: NaN,
+          resetTime: '2026-04-24T13:00:00.000Z',
+          modelId: 'gemini-1.5-pro'
+        },
+        {
+          remainingFraction: 0.9,
+          resetTime: '2026-04-24T13:00:00.000Z',
+          modelId: 'gemini-1.5-flash'
+        }
+      ])
+    )
+
+    const result = await fetchGeminiRateLimits()
+
+    expect(result.status).toBe('ok')
+    expect(result.buckets).toHaveLength(1)
+    expect(result.buckets![0].name).toBe('1.5 Flash')
+    expect(result.buckets![0].usedPercent).toBe(10)
+  })
+
   it('uses managedProjectId when projectId is empty in pipe-delimited refresh', async () => {
     const authWithEmptyProject = {
       google: {
