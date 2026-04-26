@@ -278,6 +278,7 @@ const api = {
       snapshotRows?: number
       isReattach?: boolean
       isAlternateScreen?: boolean
+      replay?: string
       sessionExpired?: boolean
       coldRestore?: { scrollback: string; cwd: string }
     }> => ipcRenderer.invoke('pty:spawn', opts),

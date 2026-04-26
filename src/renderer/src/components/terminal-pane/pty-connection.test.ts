@@ -2,18 +2,25 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { POST_REPLAY_FOCUS_REPORTING_RESET, POST_REPLAY_MODE_RESET } from './layout-serialization'
 
+const toastInfo = vi.fn()
+
 type StoreState = {
   tabsByWorktree: Record<string, { id: string; ptyId: string | null; title?: string }[]>
   ptyIdsByTabId?: Record<string, string[]>
   unreadTerminalTabs?: Record<string, true>
   worktreesByRepo: Record<string, { id: string; repoId: string; path: string }[]>
   repos: { id: string; connectionId?: string | null }[]
+  sshConnectionStates: Map<string, { status: string }>
   cacheTimerByKey: Record<string, number | null>
   settings: { promptCacheTimerEnabled?: boolean; experimentalTerminalDaemon?: boolean } | null
   codexRestartNoticeByPtyId: Record<
     string,
     { previousAccountLabel: string; nextAccountLabel: string }
   >
+  deferredSshReconnectTargets: string[]
+  deferredSshSessionIdsByTabId: Record<string, string>
+  removeDeferredSshReconnectTarget: ReturnType<typeof vi.fn>
+  removeDeferredSshSessionId: ReturnType<typeof vi.fn>
   consumePendingColdRestore: ReturnType<typeof vi.fn>
   consumePendingSnapshot: ReturnType<typeof vi.fn>
 }
@@ -27,9 +34,7 @@ type MockTransport = {
   attach: ReturnType<typeof vi.fn>
   connect: ReturnType<typeof vi.fn> & {
     mockImplementation: (
-      impl: (
-        opts: { callbacks?: ConnectCallbacks } & Record<string, unknown>
-      ) => Promise<string | null>
+      impl: (opts: { callbacks?: ConnectCallbacks } & Record<string, unknown>) => Promise<unknown>
     ) => unknown
   }
   sendInput: ReturnType<typeof vi.fn>
@@ -68,6 +73,12 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 
 vi.mock('./cache-timer-seeding', () => ({
   shouldSeedCacheTimerOnInitialTitle
+}))
+
+vi.mock('sonner', () => ({
+  toast: {
+    info: toastInfo
+  }
 }))
 
 vi.mock('./pty-transport', () => ({
@@ -178,14 +189,29 @@ describe('connectPanePty', () => {
         repo1: [{ id: 'wt-1', repoId: 'repo1', path: '/tmp/wt-1' }]
       },
       repos: [{ id: 'repo1', connectionId: null }],
+      sshConnectionStates: new Map(),
       cacheTimerByKey: {},
       settings: { promptCacheTimerEnabled: true },
       codexRestartNoticeByPtyId: {},
       deferredSshReconnectTargets: [],
+      deferredSshSessionIdsByTabId: {},
+      removeDeferredSshReconnectTarget: vi.fn(),
+      removeDeferredSshSessionId: vi.fn(),
       consumePendingColdRestore: vi.fn(() => null),
       consumePendingSnapshot: vi.fn(() => null),
       removeAgentStatus: vi.fn()
     } as StoreState
+    ;(globalThis as unknown as { window: unknown }).window = {
+      api: {
+        ssh: {
+          connect: vi.fn().mockResolvedValue({ status: 'connected' })
+        },
+        pty: {
+          signal: vi.fn(),
+          ackColdRestore: vi.fn()
+        }
+      }
+    }
     globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
       callback(0)
       return 1
@@ -206,6 +232,7 @@ describe('connectPanePty', () => {
       delete (globalThis as { cancelAnimationFrame?: typeof cancelAnimationFrame })
         .cancelAnimationFrame
     }
+    delete (globalThis as unknown as { window?: unknown }).window
   })
 
   it('does not send startup command via sendInput for local connections', async () => {
@@ -735,6 +762,7 @@ describe('connectPanePty', () => {
       onDataHandler = handler
       return { dispose: vi.fn() }
     }) as typeof pane.terminal.onData)
+
     const manager = createManager(1)
     const deps = createDeps()
 
@@ -749,6 +777,101 @@ describe('connectPanePty', () => {
     expect(deps.clearWorktreeUnread).not.toHaveBeenCalled()
     // Stale-codex input is also blocked from reaching the transport.
     expect(transport.sendInput).not.toHaveBeenCalled()
+  })
+
+  it('replays attach buffer for deferred SSH reattach and clears stale tab session metadata', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async (opts: { sessionId?: string }) => {
+      return { id: opts.sessionId ?? 'pty-new', replay: 'restored-ssh-output' }
+    })
+    transportFactoryQueue.push(transport)
+
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      repos: [{ id: 'repo1', connectionId: 'conn-1' }],
+      deferredSshReconnectTargets: ['conn-1'],
+      deferredSshSessionIdsByTabId: { 'tab-1': 'tab-level-stale-session' }
+    }
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      restoredLeafId: 'leaf-1',
+      restoredPtyIdByLeafId: { 'leaf-1': 'leaf-session' }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    for (let i = 0; i < 5; i++) {
+      await Promise.resolve()
+    }
+
+    const api = (
+      globalThis as unknown as {
+        window: {
+          api: {
+            ssh: { connect: ReturnType<typeof vi.fn> }
+            pty: { signal: ReturnType<typeof vi.fn> }
+          }
+        }
+      }
+    ).window.api
+    expect(api.ssh.connect).toHaveBeenCalledWith({ targetId: 'conn-1' })
+    expect(transport.connect).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: 'leaf-session' })
+    )
+    expect(mockStoreState.removeDeferredSshSessionId).toHaveBeenCalledWith('tab-1')
+    expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(1, 'leaf-session')
+    expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'leaf-session')
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(
+      '\x1b[2J\x1b[3J\x1b[H',
+      expect.any(Function)
+    )
+    expect(pane.terminal.write).toHaveBeenCalledWith('restored-ssh-output', expect.any(Function))
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(
+      POST_REPLAY_FOCUS_REPORTING_RESET,
+      expect.any(Function)
+    )
+    expect(api.pty.signal).toHaveBeenCalledWith('leaf-session', 'SIGWINCH')
+  })
+
+  it('shows an informational toast instead of a terminal error when an SSH session expired', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async (opts: { sessionId?: string }) => {
+      return { id: opts.sessionId ?? 'pty-new', sessionExpired: true }
+    })
+    transportFactoryQueue.push(transport)
+
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      repos: [{ id: 'repo1', connectionId: 'conn-1' }],
+      deferredSshReconnectTargets: ['conn-1'],
+      deferredSshSessionIdsByTabId: { 'tab-1': 'expired-session' }
+    }
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      restoredLeafId: 'leaf-1',
+      restoredPtyIdByLeafId: { 'leaf-1': 'leaf-session' }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    for (let i = 0; i < 5; i++) {
+      await Promise.resolve()
+    }
+
+    expect(deps.onPtyErrorRef.current).not.toHaveBeenCalledWith(
+      expect.any(Number),
+      expect.stringContaining('Previous session expired')
+    )
+    expect(toastInfo).toHaveBeenCalledWith('Previous SSH session expired.', {
+      id: 'ssh-session-expired-tab-1',
+      description: 'Started a new shell.'
+    })
   })
 
   // Why: the working→idle transition is kept solely to drive Claude's

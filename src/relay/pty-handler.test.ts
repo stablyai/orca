@@ -21,13 +21,22 @@ import { PtyHandler } from './pty-handler'
 import type { RelayDispatcher } from './dispatcher'
 
 function createMockDispatcher() {
-  const requestHandlers = new Map<string, (params: Record<string, unknown>) => Promise<unknown>>()
+  const requestHandlers = new Map<
+    string,
+    (params: Record<string, unknown>, context?: { isStale: () => boolean }) => Promise<unknown>
+  >()
   const notificationHandlers = new Map<string, (params: Record<string, unknown>) => void>()
   const notifications: { method: string; params?: Record<string, unknown> }[] = []
 
   const dispatcher = {
     onRequest: vi.fn(
-      (method: string, handler: (params: Record<string, unknown>) => Promise<unknown>) => {
+      (
+        method: string,
+        handler: (
+          params: Record<string, unknown>,
+          context?: { isStale: () => boolean }
+        ) => Promise<unknown>
+      ) => {
         requestHandlers.set(method, handler)
       }
     ),
@@ -41,12 +50,16 @@ function createMockDispatcher() {
     _requestHandlers: requestHandlers,
     _notificationHandlers: notificationHandlers,
     _notifications: notifications,
-    async callRequest(method: string, params: Record<string, unknown> = {}) {
+    async callRequest(
+      method: string,
+      params: Record<string, unknown> = {},
+      context?: { isStale: () => boolean }
+    ) {
       const handler = requestHandlers.get(method)
       if (!handler) {
         throw new Error(`No handler for ${method}`)
       }
-      return handler(params)
+      return handler(params, context)
     },
     callNotification(method: string, params: Record<string, unknown> = {}) {
       const handler = notificationHandlers.get(method)
@@ -112,11 +125,31 @@ describe('PtyHandler', () => {
     expect(handler.activePtyCount).toBe(1)
   })
 
+  it('terminates spawned PTY when request becomes stale before response', async () => {
+    const term = { ...mockPtyInstance, kill: vi.fn(), onData: vi.fn(), onExit: vi.fn() }
+    mockPtySpawn.mockReturnValue(term)
+
+    await dispatcher.callRequest('pty.spawn', {}, { isStale: () => true })
+
+    expect(term.kill).toHaveBeenCalledWith('SIGTERM')
+    vi.advanceTimersByTime(5000)
+    expect(term.kill).toHaveBeenCalledWith('SIGKILL')
+  })
+
   it('increments PTY ids on each spawn', async () => {
     const r1 = await dispatcher.callRequest('pty.spawn', {})
     const r2 = await dispatcher.callRequest('pty.spawn', {})
     expect((r1 as { id: string }).id).toBe('pty-1')
     expect((r2 as { id: string }).id).toBe('pty-2')
+  })
+
+  it('accepts SIGWINCH for restored TUI repaint', async () => {
+    await dispatcher.callRequest('pty.spawn', {})
+
+    await dispatcher.callRequest('pty.sendSignal', { id: 'pty-1', signal: 'SIGWINCH' })
+
+    const term = mockPtySpawn.mock.results[0].value
+    expect(term.kill).toHaveBeenCalledWith('SIGWINCH')
   })
 
   it('forwards data from PTY to dispatcher notifications', async () => {
@@ -134,6 +167,51 @@ describe('PtyHandler', () => {
 
     dataCallback!('hello world')
     expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', { id: 'pty-1', data: 'hello world' })
+  })
+
+  it('returns attach replay instead of notifying when replay notification is suppressed', async () => {
+    let dataCallback: ((data: string) => void) | undefined
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      onData: vi.fn((cb: (data: string) => void) => {
+        dataCallback = cb
+      }),
+      onExit: vi.fn()
+    })
+
+    await dispatcher.callRequest('pty.spawn', {})
+    dataCallback!('buffered output')
+
+    const result = await dispatcher.callRequest('pty.attach', {
+      id: 'pty-1',
+      suppressReplayNotification: true
+    })
+
+    expect(result).toEqual({ replay: 'buffered output' })
+    expect(dispatcher.notify).not.toHaveBeenCalledWith('pty.replay', expect.anything())
+  })
+
+  it('notifies replay on normal attach', async () => {
+    let dataCallback: ((data: string) => void) | undefined
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      onData: vi.fn((cb: (data: string) => void) => {
+        dataCallback = cb
+      }),
+      onExit: vi.fn()
+    })
+
+    await dispatcher.callRequest('pty.spawn', {})
+    dataCallback!('buffered output')
+    dispatcher.notify.mockClear()
+
+    const result = await dispatcher.callRequest('pty.attach', { id: 'pty-1' })
+
+    expect(result).toEqual({})
+    expect(dispatcher.notify).toHaveBeenCalledWith('pty.replay', {
+      id: 'pty-1',
+      data: 'buffered output'
+    })
   })
 
   it('notifies on PTY exit and removes from map', async () => {

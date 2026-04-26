@@ -255,7 +255,7 @@ describe('SshRelaySession', () => {
 
     await session.establish(mockConn, 600)
 
-    expect(deployAndLaunchRelay).toHaveBeenCalledWith(mockConn, undefined, 600)
+    expect(deployAndLaunchRelay).toHaveBeenCalledWith(mockConn, undefined, 600, 'target-1')
   })
 
   it('cleans up port forwards on dispose', async () => {

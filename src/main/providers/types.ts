@@ -41,6 +41,9 @@ export type PtySpawnResult = {
   /** True when the reattached session uses the alternate screen buffer
    *  (e.g., Codex CLI, vim). Normal-screen TUIs like Claude Code are false. */
   isAlternateScreen?: boolean
+  /** Buffered output returned by relay pty.attach. Unlike snapshot, this is
+   *  incremental scrollback and must not clear the terminal before replay. */
+  replay?: string
   /** True when the caller requested reattach (sessionId was provided) but the
    *  relay PTY was gone (grace window elapsed). The renderer uses this to show
    *  a brief "Session expired — new shell started" message. */

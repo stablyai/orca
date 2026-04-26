@@ -35,6 +35,7 @@ describe('pty-transport — coalesced OSC titles from Pi', () => {
             onData = cb
             return () => {}
           }),
+          onReplay: vi.fn(() => () => {}),
           onExit: vi.fn(() => () => {})
         }
       }

@@ -50,6 +50,15 @@ export class SshRelaySession {
     return this._state
   }
 
+  // Why: TypeScript narrows _state after control-flow checks and then
+  // rejects comparisons like `this._state === 'disposed'` inside async
+  // methods where it "knows" the state was e.g. 'deploying'. But dispose()
+  // can mutate _state from another call stack between await points. This
+  // helper defeats narrowing so the disposed checks compile correctly.
+  private isDisposed(): boolean {
+    return (this._state as RelaySessionState) === 'disposed'
+  }
+
   getMux(): SshChannelMultiplexer | null {
     return this.mux
   }
@@ -64,20 +73,43 @@ export class SshRelaySession {
     this._state = 'deploying'
 
     try {
-      const { transport } = await deployAndLaunchRelay(conn, undefined, graceTimeSeconds)
+      const { transport } = await deployAndLaunchRelay(
+        conn,
+        undefined,
+        graceTimeSeconds,
+        this.targetId
+      )
+
+      // Why: dispose() can fire during the await above (e.g. user clicks
+      // disconnect while relay is deploying). If so, the session is already
+      // cleaned up — creating a mux and registering providers would leak
+      // resources with no owner to dispose them.
+      if (this.isDisposed()) {
+        const orphanMux = new SshChannelMultiplexer(transport)
+        orphanMux.dispose()
+        throw new Error('Session disposed during establish')
+      }
 
       const mux = new SshChannelMultiplexer(transport)
       this.mux = mux
 
       await this.registerProviders(mux)
+
+      if (this.isDisposed()) {
+        this.teardownProviders('shutdown')
+        throw new Error('Session disposed during establish')
+      }
+
       this._state = 'ready'
     } catch (err) {
       // Why: if deployAndLaunchRelay succeeded but registerProviders threw
       // partway through, the mux is live and some providers may be partially
       // registered. teardownProviders cleans up everything so a subsequent
       // establish() call starts from a clean slate.
-      this.teardownProviders('shutdown')
-      this._state = 'idle'
+      if (!this.isDisposed()) {
+        this.teardownProviders('shutdown')
+        this._state = 'idle'
+      }
       throw err
     }
   }
@@ -105,9 +137,14 @@ export class SshRelaySession {
     this.teardownProviders('connection_lost')
 
     try {
-      const { transport } = await deployAndLaunchRelay(conn, undefined, graceTimeSeconds)
+      const { transport } = await deployAndLaunchRelay(
+        conn,
+        undefined,
+        graceTimeSeconds,
+        this.targetId
+      )
 
-      if (abortController.signal.aborted) {
+      if (abortController.signal.aborted || this.isDisposed()) {
         // Why: the relay is already running on the remote. Creating a temporary
         // multiplexer and immediately disposing it sends a clean shutdown to the
         // relay process so it doesn't linger until its grace timer expires.
@@ -119,13 +156,40 @@ export class SshRelaySession {
       const mux = new SshChannelMultiplexer(transport)
       this.mux = mux
 
-      await this.registerProviders(mux)
+      const ownsAttempt = (): boolean =>
+        this.abortController === abortController &&
+        !abortController.signal.aborted &&
+        !this.isDisposed()
+
+      const registered = await this.registerProviders(mux, ownsAttempt)
+      if (!registered) {
+        if (!mux.isDisposed()) {
+          mux.dispose()
+        }
+        return
+      }
+
+      // Why: dispose() can fire during registerProviders or the attach loop
+      // below. If it did, providers and mux were already cleaned up by
+      // dispose() — but this.mux was reassigned above, so the new mux
+      // would leak. Clean it up and bail.
+      if (!ownsAttempt()) {
+        if (this.mux === mux) {
+          this.teardownProviders('shutdown')
+        } else if (!mux.isDisposed()) {
+          mux.dispose()
+        }
+        return
+      }
 
       // Re-attach to any PTYs that were alive before the disconnect.
       const ptyIds = getPtyIdsForConnection(this.targetId)
       const ptyProvider = getSshPtyProvider(this.targetId) as SshPtyProvider | undefined
       if (ptyProvider) {
         for (const ptyId of ptyIds) {
+          if (!ownsAttempt()) {
+            return
+          }
           try {
             await ptyProvider.attach(ptyId)
           } catch {
@@ -134,8 +198,18 @@ export class SshRelaySession {
         }
       }
 
+      if (!ownsAttempt()) {
+        return
+      }
+
       this._state = 'ready'
     } catch (err) {
+      // Why: clean up the mux if it was created but registration failed
+      // partway through. Without this, the mux's keepalive/timeout timers
+      // continue running on a half-initialized session.
+      if (this.abortController === abortController && !this.isDisposed()) {
+        this.teardownProviders('connection_lost')
+      }
       // Why: stay in 'reconnecting' rather than reverting to 'ready', because
       // the provider stack is already torn down. The SSH connection manager
       // will fire another onStateChange when it reconnects again.
@@ -163,8 +237,14 @@ export class SshRelaySession {
 
   // Why: shared by establish() and reconnect() — the exact same provider
   // registration sequence, eliminating the duplication that caused bugs.
-  private async registerProviders(mux: SshChannelMultiplexer): Promise<void> {
+  private async registerProviders(
+    mux: SshChannelMultiplexer,
+    shouldContinue?: () => boolean
+  ): Promise<boolean> {
     await this.registerRelayRoots(mux)
+    if (shouldContinue && !shouldContinue()) {
+      return false
+    }
 
     const ptyProvider = new SshPtyProvider(this.targetId, mux)
     registerSshPtyProvider(this.targetId, ptyProvider)
@@ -176,6 +256,7 @@ export class SshRelaySession {
     registerSshGitProvider(this.targetId, gitProvider)
 
     this.wireUpPtyEvents(ptyProvider)
+    return true
   }
 
   private teardownProviders(reason: 'shutdown' | 'connection_lost'): void {

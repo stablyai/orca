@@ -43,6 +43,7 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
             }
             return () => {}
           }),
+          onReplay: vi.fn(() => () => {}),
           onExit: vi.fn(() => () => {})
         }
       }

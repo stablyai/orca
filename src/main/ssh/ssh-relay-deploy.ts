@@ -1,6 +1,7 @@
 import { join } from 'path'
 import { existsSync } from 'fs'
 import { app } from 'electron'
+import { createHash } from 'crypto'
 import type { SshConnection } from './ssh-connection'
 import {
   RELAY_VERSION,
@@ -42,7 +43,8 @@ const RELAY_DEPLOY_TIMEOUT_MS = 120_000
 export async function deployAndLaunchRelay(
   conn: SshConnection,
   onProgress?: (status: string) => void,
-  graceTimeSeconds?: number
+  graceTimeSeconds?: number,
+  relayInstanceId?: string
 ): Promise<RelayDeployResult> {
   let timeoutHandle: ReturnType<typeof setTimeout>
   const timeoutPromise = new Promise<never>((_resolve, reject) => {
@@ -53,7 +55,7 @@ export async function deployAndLaunchRelay(
 
   try {
     return await Promise.race([
-      deployAndLaunchRelayInner(conn, onProgress, graceTimeSeconds),
+      deployAndLaunchRelayInner(conn, onProgress, graceTimeSeconds, relayInstanceId),
       timeoutPromise
     ])
   } finally {
@@ -64,7 +66,8 @@ export async function deployAndLaunchRelay(
 async function deployAndLaunchRelayInner(
   conn: SshConnection,
   onProgress?: (status: string) => void,
-  graceTimeSeconds?: number
+  graceTimeSeconds?: number,
+  relayInstanceId?: string
 ): Promise<RelayDeployResult> {
   onProgress?.('Detecting remote platform...')
   console.log('[ssh-relay] Detecting remote platform...')
@@ -108,7 +111,7 @@ async function deployAndLaunchRelayInner(
 
   onProgress?.('Starting relay...')
   console.log('[ssh-relay] Launching relay...')
-  const transport = await launchRelay(conn, remoteRelayDir, graceTimeSeconds)
+  const transport = await launchRelay(conn, remoteRelayDir, graceTimeSeconds, relayInstanceId)
   console.log('[ssh-relay] Relay started successfully')
 
   return { transport, platform }
@@ -273,7 +276,8 @@ function getLocalRelayPath(platform: RelayPlatform): string | null {
 async function launchRelay(
   conn: SshConnection,
   remoteDir: string,
-  graceTimeSeconds?: number
+  graceTimeSeconds?: number,
+  relayInstanceId?: string
 ): Promise<MultiplexerTransport> {
   // Why: Phase 1 of the plan requires Node.js on the remote. We use the
   // system `node` rather than bundling a node binary, keeping the relay
@@ -286,7 +290,13 @@ async function launchRelay(
   const graceTime = Math.max(60, Math.min(3600, Math.floor(graceTimeSeconds ?? 300)))
   const escapedDir = shellEscape(remoteDir)
   const escapedNode = shellEscape(nodePath)
-  const sockFile = `${remoteDir}/relay.sock`
+  // Why: remoteRelayDir is shared by every Orca target for the same remote
+  // account. Hashing the target ID into the socket name prevents one target
+  // from attaching to another target's live relay.
+  const sockName = relayInstanceId
+    ? `relay-${hashRelayInstanceId(relayInstanceId)}.sock`
+    : 'relay.sock'
+  const sockFile = `${remoteDir}/${sockName}`
 
   // Why: after an app restart a relay may still be running in its grace
   // period with live PTY sessions.  We check for its Unix socket and
@@ -323,7 +333,11 @@ async function launchRelay(
   // Why: both remoteDir and nodePath come from the remote host and could
   // contain shell metacharacters. Single-quote escaping prevents injection.
   const channel = await conn.exec(
-    `cd ${escapedDir} && ${escapedNode} relay.js --grace-time ${graceTime}`
+    `cd ${escapedDir} && ${escapedNode} relay.js --grace-time ${graceTime} --sock-path ${shellEscape(sockFile)}`
   )
   return waitForSentinel(channel)
+}
+
+function hashRelayInstanceId(relayInstanceId: string): string {
+  return createHash('sha256').update(relayInstanceId).digest('hex').slice(0, 16)
 }

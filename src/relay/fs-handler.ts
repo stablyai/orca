@@ -12,7 +12,7 @@ import {
 } from 'fs/promises'
 import { extname } from 'path'
 import { execFile } from 'child_process'
-import type { RelayDispatcher } from './dispatcher'
+import type { RelayDispatcher, RequestContext } from './dispatcher'
 import type { RelayContext } from './context'
 import { expandTilde } from './context'
 import {
@@ -31,6 +31,8 @@ import { listFilesWithReaddir } from './fs-handler-readdir-fallback'
 type WatchState = {
   rootPath: string
   unwatchFn: (() => void) | null
+  setupPromise: Promise<void> | null
+  isStale: () => boolean
 }
 
 export class FsHandler {
@@ -57,7 +59,7 @@ export class FsHandler {
     this.dispatcher.onRequest('fs.realpath', (p) => this.realpath(p))
     this.dispatcher.onRequest('fs.search', (p) => this.search(p))
     this.dispatcher.onRequest('fs.listFiles', (p) => this.listFiles(p))
-    this.dispatcher.onRequest('fs.watch', (p) => this.watch(p))
+    this.dispatcher.onRequest('fs.watch', (p, context) => this.watch(p, context))
     this.dispatcher.onNotification('fs.unwatch', (p) => this.unwatch(p))
   }
 
@@ -251,7 +253,7 @@ export class FsHandler {
     return listFilesWithReaddir(rootPath)
   }
 
-  private async watch(params: Record<string, unknown>) {
+  private async watch(params: Record<string, unknown>, context?: RequestContext) {
     const rootPath = expandTilde(params.rootPath as string)
     this.context.validatePath(rootPath)
 
@@ -259,14 +261,23 @@ export class FsHandler {
       throw new Error('Maximum number of file watchers reached')
     }
 
-    if (this.watches.has(rootPath)) {
+    const existing = this.watches.get(rootPath)
+    if (existing && !existing.isStale()) {
+      if (existing.setupPromise) {
+        await existing.setupPromise
+      }
       return
     }
 
-    const watchState: WatchState = { rootPath, unwatchFn: null }
+    const watchState: WatchState = {
+      rootPath,
+      unwatchFn: null,
+      setupPromise: null,
+      isStale: () => context?.isStale() ?? false
+    }
     this.watches.set(rootPath, watchState)
 
-    try {
+    const setupPromise = (async () => {
       const watcher = await import('@parcel/watcher')
       const subscription = await watcher.subscribe(
         rootPath,
@@ -288,7 +299,25 @@ export class FsHandler {
       watchState.unwatchFn = () => {
         void subscription.unsubscribe()
       }
+      if (watchState.isStale() || this.watches.get(rootPath) !== watchState) {
+        // Why: if the client reconnects while watcher setup is in flight, the
+        // response is discarded and no client can later balance it with
+        // fs.unwatch. Tear down only this request's subscription so a newer
+        // replacement watch for the same root is not removed.
+        void subscription.unsubscribe()
+        if (this.watches.get(rootPath) === watchState) {
+          this.watches.delete(rootPath)
+        }
+      }
+    })()
+    watchState.setupPromise = setupPromise
+
+    try {
+      await setupPromise
     } catch {
+      if (this.watches.get(rootPath) === watchState) {
+        this.watches.delete(rootPath)
+      }
       // @parcel/watcher not available -- polling fallback would go here
       process.stderr.write('[relay] File watcher not available, fs.changed events disabled\n')
     }

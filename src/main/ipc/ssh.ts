@@ -19,6 +19,13 @@ let portForwardManager: SshPortForwardManager | null = null
 // scattered Maps/Sets that previously tracked this state independently.
 const activeSessions = new Map<string, SshRelaySession>()
 
+// Why: multiple renderer tabs for the same SSH target can fire ssh:connect
+// concurrently. Without serialization, the second call interleaves with the
+// first — both see no existing session, both create one, and the first one
+// leaks. This map holds the in-flight connect promise so the second call
+// awaits the first rather than racing.
+const connectInFlight = new Map<string, Promise<SshConnectionState>>()
+
 // Why: ssh:testConnection calls connect() then disconnect(), which fires
 // state-change events to the renderer. This causes worktree cards to briefly
 // flash "connected" then "disconnected". Suppressing broadcasts during tests
@@ -132,25 +139,43 @@ export function registerSshHandlers(
   // ── Connection lifecycle ───────────────────────────────────────────
 
   ipcMain.handle('ssh:connect', async (_event, args: { targetId: string }) => {
-    const target = sshStore!.getTarget(args.targetId)
+    // Why: serialize concurrent ssh:connect calls for the same target.
+    // Multiple tabs can fire connect simultaneously; without this, they
+    // interleave and the first session leaks.
+    const existing = connectInFlight.get(args.targetId)
+    if (existing) {
+      return existing
+    }
+
+    const promise = doConnect(args.targetId)
+    connectInFlight.set(args.targetId, promise)
+    try {
+      return await promise
+    } finally {
+      connectInFlight.delete(args.targetId)
+    }
+  })
+
+  async function doConnect(targetId: string): Promise<SshConnectionState> {
+    const target = sshStore!.getTarget(targetId)
     if (!target) {
-      throw new Error(`SSH target "${args.targetId}" not found`)
+      throw new Error(`SSH target "${targetId}" not found`)
     }
 
     let conn
     // Why: dispose any existing session to avoid leaking the old multiplexer,
     // providers, and timers. This handles double-connect (user clicks connect
     // while already connected) and reconnect-after-error.
-    const existingSession = activeSessions.get(args.targetId)
+    const existingSession = activeSessions.get(targetId)
     if (existingSession) {
       existingSession.dispose()
-      activeSessions.delete(args.targetId)
+      activeSessions.delete(targetId)
     }
 
     // Why: create the session early so onStateChange sees it in 'deploying'
     // state and knows not to trigger reconnect logic.
-    const session = new SshRelaySession(args.targetId, getMainWindow, store, portForwardManager!)
-    activeSessions.set(args.targetId, session)
+    const session = new SshRelaySession(targetId, getMainWindow, store, portForwardManager!)
+    activeSessions.set(targetId, session)
 
     try {
       conn = await connectionManager!.connect(target)
@@ -165,14 +190,14 @@ export function registerSshHandlers(
       // that doesn't prompt would then incorrectly persist lastRequiredPassphrase
       // = true, causing startup to defer this target even though it no longer
       // needs a passphrase.
-      credentialRequestedForTarget.delete(args.targetId)
-      activeSessions.delete(args.targetId)
+      credentialRequestedForTarget.delete(targetId)
+      activeSessions.delete(targetId)
       const win = getMainWindow()
       if (win && !win.isDestroyed()) {
         win.webContents.send('ssh:state-changed', {
-          targetId: args.targetId,
+          targetId,
           state: {
-            targetId: args.targetId,
+            targetId,
             status,
             error: errObj.message,
             reconnectAttempt: 0
@@ -184,8 +209,8 @@ export function registerSshHandlers(
 
     try {
       // Deploy relay and establish multiplexer
-      callbacks.onStateChange(args.targetId, {
-        targetId: args.targetId,
+      callbacks.onStateChange(targetId, {
+        targetId,
         status: 'deploying-relay',
         error: null,
         reconnectAttempt: 0
@@ -200,9 +225,9 @@ export function registerSshHandlers(
       const win = getMainWindow()
       if (win && !win.isDestroyed()) {
         win.webContents.send('ssh:state-changed', {
-          targetId: args.targetId,
+          targetId,
           state: {
-            targetId: args.targetId,
+            targetId,
             status: 'connected',
             error: null,
             reconnectAttempt: 0
@@ -211,8 +236,8 @@ export function registerSshHandlers(
       }
     } catch (err) {
       // Relay deployment failed — disconnect SSH
-      activeSessions.delete(args.targetId)
-      await connectionManager!.disconnect(args.targetId)
+      activeSessions.delete(targetId)
+      await connectionManager!.disconnect(targetId)
       throw err
     }
 
@@ -220,12 +245,12 @@ export function registerSshHandlers(
     // startup reconnect can partition targets into eager vs deferred without
     // re-probing keys. Updated on every successful connect so the flag stays
     // current as users add/remove passphrases from their keys.
-    const requiredPassphrase = credentialRequestedForTarget.has(args.targetId)
-    credentialRequestedForTarget.delete(args.targetId)
-    sshStore!.updateTarget(args.targetId, { lastRequiredPassphrase: requiredPassphrase })
+    const requiredPassphrase = credentialRequestedForTarget.has(targetId)
+    credentialRequestedForTarget.delete(targetId)
+    sshStore!.updateTarget(targetId, { lastRequiredPassphrase: requiredPassphrase })
 
-    return connectionManager!.getState(args.targetId)
-  })
+    return connectionManager!.getState(targetId)!
+  }
 
   ipcMain.handle('ssh:disconnect', async (_event, args: { targetId: string }) => {
     const session = activeSessions.get(args.targetId)
@@ -250,9 +275,32 @@ export function registerSshHandlers(
     // already has an active relay session, connect() would reuse the connection
     // but disconnect() would tear down the entire relay stack — killing all
     // active PTYs and file watchers for a "test" that was supposed to be safe.
+    // Also guard 'reconnecting' — disconnect() would kill the SSH connection
+    // that the in-flight reconnect is using for relay deployment.
     const existingSession = activeSessions.get(args.targetId)
-    if (existingSession?.getState() === 'ready') {
+    const sessionState = existingSession?.getState()
+    if (
+      sessionState === 'ready' ||
+      sessionState === 'deploying' ||
+      sessionState === 'reconnecting'
+    ) {
       return { success: true, state: connectionManager!.getState(args.targetId) }
+    }
+
+    // Why: if a real ssh:connect is in flight for this target, testConnection's
+    // disconnect() call would tear down the connection that doConnect is using
+    // for relay deployment. Wait for the in-flight connect to finish instead.
+    const inFlight = connectInFlight.get(args.targetId)
+    if (inFlight) {
+      try {
+        const state = await inFlight
+        return { success: true, state }
+      } catch (err) {
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : String(err)
+        }
+      }
     }
 
     testingTargets.add(args.targetId)
@@ -268,6 +316,11 @@ export function registerSshHandlers(
       }
     } finally {
       testingTargets.delete(args.targetId)
+      // Why: the shared onCredentialRequest callback adds to this set for
+      // any connect() call, including testConnection. Without clearing it,
+      // a later real connect that doesn't prompt would persist
+      // lastRequiredPassphrase=true, causing startup to defer this target.
+      credentialRequestedForTarget.delete(args.targetId)
     }
   })
 

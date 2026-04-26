@@ -362,10 +362,6 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         storedCallbacks.onConnect?.()
         storedCallbacks.onStatus?.('shell')
 
-        if (spawnResult.sessionExpired) {
-          storedCallbacks.onError?.('Previous session expired - started a new shell.')
-        }
-
         if (spawnResult.isReattach || spawnResult.coldRestore || spawnResult.sessionExpired) {
           return {
             id: spawnResult.id,
@@ -374,7 +370,8 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
             snapshotRows: spawnResult.snapshotRows,
             isAlternateScreen: spawnResult.isAlternateScreen,
             sessionExpired: spawnResult.sessionExpired,
-            coldRestore: spawnResult.coldRestore
+            coldRestore: spawnResult.coldRestore,
+            replay: spawnResult.replay
           } satisfies PtyConnectResult
         }
         return spawnResult.id

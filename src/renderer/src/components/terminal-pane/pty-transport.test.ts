@@ -286,8 +286,12 @@ describe('createIpcPtyTransport', () => {
     expect(result).toEqual({
       id: 'pty-reattach',
       snapshot: 'snapshot data',
+      snapshotCols: 132,
+      snapshotRows: 43,
       isAlternateScreen: undefined,
-      coldRestore: undefined
+      coldRestore: undefined,
+      replay: undefined,
+      sessionExpired: undefined
     })
   })
 

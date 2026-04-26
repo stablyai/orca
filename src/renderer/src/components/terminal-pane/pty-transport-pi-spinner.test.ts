@@ -34,6 +34,7 @@ describe('createIpcPtyTransport — Pi titlebar spinner signal', () => {
             onData = cb
             return () => {}
           }),
+          onReplay: vi.fn(() => () => {}),
           onExit: vi.fn(() => () => {})
         }
       }

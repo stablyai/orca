@@ -90,6 +90,7 @@ function App(): React.JSX.Element {
       fetchDetectedBrowsers: s.fetchDetectedBrowsers,
       reconnectPersistedTerminals: s.reconnectPersistedTerminals,
       setDeferredSshReconnectTargets: s.setDeferredSshReconnectTargets,
+      setSshConnectionState: s.setSshConnectionState,
       hydratePersistedUI: s.hydratePersistedUI,
       openModal: s.openModal,
       closeModal: s.closeModal,
@@ -190,36 +191,77 @@ function App(): React.JSX.Element {
           // startup before the user has context.
           const connectionIds = session.activeConnectionIdsAtShutdown ?? []
           if (connectionIds.length > 0) {
-            const SSH_RECONNECT_TIMEOUT_MS = 15_000
-            const allTargets = await window.api.ssh.listTargets()
-            const targetMap = new Map(allTargets.map((t) => [t.id, t]))
-            const targets = connectionIds.map((targetId) => ({
-              targetId,
-              needsPassphrase: targetMap.get(targetId)?.lastRequiredPassphrase ?? false
-            }))
+            try {
+              const SSH_RECONNECT_TIMEOUT_MS = 15_000
+              const allTargets = await window.api.ssh.listTargets()
+              const targetMap = new Map(allTargets.map((t) => [t.id, t]))
+              const targets = connectionIds.map((targetId) => ({
+                targetId,
+                needsPassphrase: targetMap.get(targetId)?.lastRequiredPassphrase ?? false
+              }))
 
-            const eagerTargets = targets.filter((t) => !t.needsPassphrase)
-            const deferredTargets = targets.filter((t) => t.needsPassphrase)
+              const eagerTargets = targets.filter((t) => !t.needsPassphrase)
+              const deferredTargets = targets.filter((t) => t.needsPassphrase)
 
-            if (deferredTargets.length > 0) {
-              actions.setDeferredSshReconnectTargets(deferredTargets.map((t) => t.targetId))
-            }
+              if (deferredTargets.length > 0) {
+                actions.setDeferredSshReconnectTargets(deferredTargets.map((t) => t.targetId))
+              }
 
-            await Promise.allSettled(
-              eagerTargets.map(({ targetId }) =>
-                Promise.race([
-                  window.api.ssh.connect({ targetId }),
-                  new Promise((_, reject) =>
-                    setTimeout(
-                      () => reject(new Error('SSH reconnect timeout')),
-                      SSH_RECONNECT_TIMEOUT_MS
+              // Why: track which eager targets timed out so we can treat them
+              // as deferred — the underlying ssh.connect() keeps running in the
+              // main process, but reconnectPersistedTerminals won't see them as
+              // connected. Adding them to the deferred list ensures PTYs get
+              // reattached when the user focuses the tab (by which time the
+              // slow connect will likely have succeeded).
+              const timedOutTargets: string[] = []
+              await Promise.allSettled(
+                eagerTargets.map(({ targetId }) =>
+                  Promise.race([
+                    window.api.ssh.connect({ targetId }),
+                    new Promise((_, reject) =>
+                      setTimeout(
+                        () => reject(new Error('SSH reconnect timeout')),
+                        SSH_RECONNECT_TIMEOUT_MS
+                      )
                     )
-                  )
-                ]).catch((err) => {
-                  console.warn(`SSH auto-reconnect failed for ${targetId}:`, err)
-                })
+                  ]).catch((err) => {
+                    const isTimeout =
+                      err instanceof Error && err.message === 'SSH reconnect timeout'
+                    if (isTimeout) {
+                      timedOutTargets.push(targetId)
+                    }
+                    console.warn(`SSH auto-reconnect failed for ${targetId}:`, err)
+                  })
+                )
               )
-            )
+              if (timedOutTargets.length > 0) {
+                actions.setDeferredSshReconnectTargets([
+                  ...deferredTargets.map((t) => t.targetId),
+                  ...timedOutTargets
+                ])
+              }
+
+              // Why: ssh.connect() resolves before the ssh:state-changed IPC
+              // event updates sshConnectionStates in the store. Without this,
+              // reconnectPersistedTerminals reads stale state and misclassifies
+              // successfully connected targets as disconnected, stranding their
+              // persisted PTYs. Polling getState ensures the store is current.
+              for (const { targetId } of eagerTargets) {
+                if (timedOutTargets.includes(targetId)) {
+                  continue
+                }
+                try {
+                  const state = await window.api.ssh.getState({ targetId })
+                  if (state?.status === 'connected') {
+                    actions.setSshConnectionState(targetId, state)
+                  }
+                } catch {
+                  /* best-effort */
+                }
+              }
+            } catch (err) {
+              console.warn('SSH startup reconnect failed:', err)
+            }
           }
 
           await actions.reconnectPersistedTerminals(abortController.signal)

@@ -69,12 +69,17 @@ export class SshPtyProvider implements IPtyProvider {
     // the buffered output the relay kept alive during the grace window.
     if (opts.sessionId) {
       try {
-        await this.mux.request('pty.attach', {
+        const attachResult = (await this.mux.request('pty.attach', {
           id: opts.sessionId,
           cols: opts.cols,
-          rows: opts.rows
-        })
-        return { id: opts.sessionId }
+          rows: opts.rows,
+          suppressReplayNotification: true
+        })) as { replay?: string }
+        return {
+          id: opts.sessionId,
+          isReattach: true,
+          ...(attachResult.replay ? { replay: attachResult.replay } : {})
+        }
       } catch (err) {
         // Why: pty.attach fails when the relay grace window has elapsed. Fall
         // through to pty.spawn so the user gets a fresh shell; sessionExpired

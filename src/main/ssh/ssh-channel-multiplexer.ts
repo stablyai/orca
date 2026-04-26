@@ -17,6 +17,7 @@ export type MultiplexerTransport = {
   write: (data: Buffer) => void
   onData: (cb: (data: Buffer) => void) => void
   onClose: (cb: () => void) => void
+  close?: () => void
 }
 
 type PendingRequest = {
@@ -66,6 +67,9 @@ export class SshChannelMultiplexer {
       this.dispose('connection_lost')
     })
 
+    if (this.disposed) {
+      return
+    }
     this.startKeepalive()
     this.startTimeoutCheck()
   }
@@ -153,7 +157,9 @@ export class SshChannelMultiplexer {
       this.pendingRequests.delete(id)
     }
 
+    this.unackedTimestamps.clear()
     this.decoder.reset()
+    this.transport.close?.()
   }
 
   isDisposed(): boolean {

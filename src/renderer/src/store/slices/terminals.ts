@@ -180,6 +180,7 @@ export type TerminalSlice = {
   deferredSshSessionIdsByTabId: Record<string, string>
   setDeferredSshReconnectTargets: (targetIds: string[]) => void
   removeDeferredSshReconnectTarget: (targetId: string) => void
+  removeDeferredSshSessionId: (tabId: string) => void
   hydrateWorkspaceSession: (session: WorkspaceSessionState) => void
   reconnectPersistedTerminals: (signal?: AbortSignal) => Promise<void>
 }
@@ -269,6 +270,15 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     set((s) => ({
       deferredSshReconnectTargets: s.deferredSshReconnectTargets.filter((id) => id !== targetId)
     })),
+  removeDeferredSshSessionId: (tabId) =>
+    set((s) => {
+      if (!s.deferredSshSessionIdsByTabId[tabId]) {
+        return {}
+      }
+      const next = { ...s.deferredSshSessionIdsByTabId }
+      delete next[tabId]
+      return { deferredSshSessionIdsByTabId: next }
+    }),
 
   createTab: (worktreeId, targetGroupId) => {
     const id = globalThis.crypto.randomUUID()

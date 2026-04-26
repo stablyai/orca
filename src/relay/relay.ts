@@ -13,7 +13,7 @@
 import { createServer, createConnection, type Socket, type Server } from 'net'
 import { homedir } from 'os'
 import { resolve, join } from 'path'
-import { unlinkSync, existsSync, chmodSync } from 'fs'
+import { unlinkSync, existsSync } from 'fs'
 import { RELAY_SENTINEL } from './protocol'
 import { RelayDispatcher } from './dispatcher'
 import { RelayContext } from './context'
@@ -183,6 +183,13 @@ function main(): void {
       }
       activeSocket = sock
 
+      // Why: stdin's data listener is still registered from the initial
+      // connection. If the old SSH channel hasn't fully closed yet (TCP
+      // FIN delayed), buffered stdin data would interleave with the new
+      // socket client's frames, corrupting the frame decoder.
+      process.stdin.pause()
+      process.stdin.removeAllListeners('data')
+
       ptyHandler.cancelGraceTimer()
 
       dispatcher.setWrite((data) => {
@@ -192,6 +199,9 @@ function main(): void {
       })
 
       sock.on('data', (chunk: Buffer) => {
+        if (activeSocket !== sock) {
+          return
+        }
         ptyHandler.cancelGraceTimer()
         dispatcher.feed(chunk)
       })
@@ -204,33 +214,32 @@ function main(): void {
         // live client is connected.
         if (activeSocket === sock) {
           activeSocket = null
+          dispatcher.invalidateClient()
           startGrace()
         }
       })
 
       sock.on('error', () => {
-        if (activeSocket === sock) {
-          activeSocket = null
-        }
-        // Why: Node emits 'error' then 'close' — grace timer starts in
-        // the close handler. Duplicating it here would reset the window.
+        // Why: Node emits 'error' then 'close'. The close handler owns
+        // activeSocket cleanup and grace startup; clearing activeSocket here
+        // would make close skip the grace timer and leave the relay alive
+        // indefinitely with no client.
       })
     })
 
+    // Why: setting umask to 0o177 BEFORE listen ensures the socket is
+    // created with 0o600 permissions atomically. The previous approach
+    // (chmod after listen) had a TOCTOU window where another local user
+    // could connect to the socket before chmod ran.
+    const prevUmask = process.umask(0o177)
+
     server.on('error', (err) => {
+      process.umask(prevUmask)
       process.stderr.write(`[relay] Socket server error: ${err.message}\n`)
     })
 
     server.listen(sockPath, () => {
-      // Why: the socket inherits the process umask (often 0o022), which
-      // leaves it world-readable on shared hosts. chmod 0o600 restricts
-      // access to the owning user, preventing other local users from
-      // connecting and hijacking PTY sessions.
-      try {
-        chmodSync(sockPath, 0o600)
-      } catch {
-        process.stderr.write('[relay] Warning: could not chmod socket to 0600\n')
-      }
+      process.umask(prevUmask)
     })
     return server
   }
@@ -251,6 +260,7 @@ function main(): void {
     // socket client reconnects and calls setWrite with a live target.
     stdoutAlive = false
     if (!activeSocket) {
+      dispatcher.invalidateClient()
       startGrace()
     }
   })
@@ -258,6 +268,7 @@ function main(): void {
   process.stdin.on('error', () => {
     stdoutAlive = false
     if (!activeSocket) {
+      dispatcher.invalidateClient()
       startGrace()
     }
   })
