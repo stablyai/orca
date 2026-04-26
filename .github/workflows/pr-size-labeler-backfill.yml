@@ -1,0 +1,47 @@
+# One-off workflow to backfill size labels on all open PRs.
+# Runs cbrgm/pr-size-labeler-action against each open PR number via matrix.
+# Delete this file after the backfill completes.
+
+name: PR Size Labeler (backfill)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  enumerate:
+    runs-on: ubuntu-latest
+    outputs:
+      prs: ${{ steps.list.outputs.prs }}
+    steps:
+      - name: List open PR numbers
+        id: list
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          prs=$(gh pr list --repo "${{ github.repository }}" --state open --limit 500 --json number --jq '[.[].number]')
+          echo "Found PRs: $prs"
+          echo "prs=$prs" >> "$GITHUB_OUTPUT"
+
+  label:
+    needs: enumerate
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        pr: ${{ fromJSON(needs.enumerate.outputs.prs) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Label PR ${{ matrix.pr }} based on size
+        uses: cbrgm/pr-size-labeler-action@v1.3.7
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_repository: ${{ github.repository }}
+          github_pr_number: ${{ matrix.pr }}
+          config_file_path: .github/pull-request-size.yml
