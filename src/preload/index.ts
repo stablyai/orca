@@ -210,7 +210,9 @@ const api = {
     getGitUsername: (args: { repoId: string }): Promise<string> =>
       ipcRenderer.invoke('repos:getGitUsername', args),
 
-    getBaseRefDefault: (args: { repoId: string }): Promise<string | null> =>
+    getBaseRefDefault: (args: {
+      repoId: string
+    }): Promise<{ defaultBaseRef: string | null; remoteCount: number }> =>
       ipcRenderer.invoke('repos:getBaseRefDefault', args),
 
     searchBaseRefs: (args: { repoId: string; query: string; limit?: number }): Promise<string[]> =>

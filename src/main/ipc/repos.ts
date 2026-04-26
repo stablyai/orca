@@ -18,7 +18,9 @@ import {
   getGitUsername,
   getRepoName,
   getBaseRefDefault,
-  searchBaseRefs
+  getRemoteCount,
+  searchBaseRefs,
+  type BaseRefDefaultResult
 } from '../git/repo'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 import { getActiveMultiplexer } from './ssh'
@@ -350,39 +352,58 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     return getGitUsername(repo.path)
   })
 
-  ipcMain.handle('repos:getBaseRefDefault', async (_event, args: { repoId: string }) => {
-    const repo = store.getRepo(args.repoId)
-    if (!repo || isFolderRepo(repo)) {
-      // Why: folder-mode repos have no git state to resolve a base ref from.
-      // Return null so the renderer can decline to use a fabricated default
-      // (e.g. avoid running a branch compare against a ref that doesn't exist).
-      return null
-    }
-    // Why: remote repos need the relay to resolve symbolic-ref on the
-    // remote host where the git data lives.
-    if (repo.connectionId) {
-      const provider = getSshGitProvider(repo.connectionId)
-      if (!provider) {
-        return null
+  ipcMain.handle(
+    'repos:getBaseRefDefault',
+    async (_event, args: { repoId: string }): Promise<BaseRefDefaultResult> => {
+      const repo = store.getRepo(args.repoId)
+      if (!repo || isFolderRepo(repo)) {
+        // Why: folder-mode repos have no git state to resolve a base ref from.
+        // Return null + 0 so the renderer can decline to use a fabricated default
+        // and suppress the multi-remote hint.
+        return { defaultBaseRef: null, remoteCount: 0 }
       }
-      try {
-        const result = await provider.exec(
-          ['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'],
-          repo.path
-        )
-        const ref = result.stdout.trim()
-        if (ref) {
-          return ref.replace(/^refs\/remotes\//, '')
+      // Why: remote repos need the relay to resolve symbolic-ref on the
+      // remote host where the git data lives.
+      if (repo.connectionId) {
+        const provider = getSshGitProvider(repo.connectionId)
+        if (!provider) {
+          return { defaultBaseRef: null, remoteCount: 0 }
         }
-      } catch {
-        // Fall through — no symbolic-ref on the remote.
+        let defaultBaseRef: string | null = null
+        try {
+          const result = await provider.exec(
+            ['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'],
+            repo.path
+          )
+          const ref = result.stdout.trim()
+          if (ref) {
+            defaultBaseRef = ref.replace(/^refs\/remotes\//, '')
+          }
+        } catch {
+          // Fall through — no symbolic-ref on the remote.
+          // Why: don't fabricate 'origin/main'. Let the renderer surface "no
+          // default" and prompt the user to pick a base branch.
+        }
+        // Why: remote-count lookup is independent of default detection —
+        // a failure here must not prevent the default ref from being returned.
+        let remoteCount = 0
+        try {
+          const remotesResult = await provider.exec(['remote'], repo.path)
+          remoteCount = remotesResult.stdout
+            .split('\n')
+            .filter((line) => line.trim().length > 0).length
+        } catch {
+          remoteCount = 0
+        }
+        return { defaultBaseRef, remoteCount }
       }
-      // Why: don't fabricate 'origin/main'. Let the renderer surface "no
-      // default" and prompt the user to pick a base branch.
-      return null
+      // Why: compute default and remote count independently. A failure
+      // counting remotes must not break default detection.
+      const defaultBaseRef = await getBaseRefDefault(repo.path)
+      const remoteCount = await getRemoteCount(repo.path)
+      return { defaultBaseRef, remoteCount }
     }
-    return getBaseRefDefault(repo.path)
-  })
+  )
 
   ipcMain.handle(
     'repos:searchBaseRefs',
@@ -399,12 +420,18 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           return []
         }
         try {
+          // Why: glob `refs/remotes/*/*` (not just `origin/*`) so fork
+          // workflows can discover `upstream/main` etc. via the relay too.
+          // The extra `refs/remotes/*<q>*/*` glob matches when the query
+          // appears in the remote-name segment — see the local searchBaseRefs
+          // implementation in ../git/repo.ts for the full rationale.
           const result = await provider.exec(
             [
               'for-each-ref',
               '--format=%(refname:short)',
               '--sort=-committerdate',
-              `refs/remotes/origin/*${args.query}*`,
+              `refs/remotes/*${args.query}*/*`,
+              `refs/remotes/*/*${args.query}*`,
               `refs/heads/*${args.query}*`
             ],
             repo.path
@@ -412,7 +439,8 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           return result.stdout
             .split('\n')
             .map((s) => s.trim())
-            .filter(Boolean)
+            // Why: drop `<remote>/HEAD` pseudo-refs across all remotes.
+            .filter((s) => s.length > 0 && !s.endsWith('/HEAD'))
             .slice(0, limit)
         } catch {
           return []

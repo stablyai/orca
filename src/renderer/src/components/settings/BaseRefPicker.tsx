@@ -20,6 +20,11 @@ export function BaseRefPicker({
   // available). We avoid seeding with 'origin/main' because that would display
   // a fabricated default in repos that don't actually have origin/main.
   const [defaultBaseRef, setDefaultBaseRef] = useState<string | null>(null)
+  // Why: starts at 0 so the multi-remote hint stays suppressed until the IPC
+  // resolves. `0` is also the failure sentinel: if the main-process remote
+  // count throws, we prefer no hint over a wrong hint (fail-closed per
+  // docs/upstream-base-ref-design.md §4).
+  const [remoteCount, setRemoteCount] = useState<number>(0)
   const [baseRefQuery, setBaseRefQuery] = useState('')
   const [baseRefResults, setBaseRefResults] = useState<string[]>([])
   const [isSearchingBaseRefs, setIsSearchingBaseRefs] = useState(false)
@@ -31,17 +36,20 @@ export function BaseRefPicker({
       try {
         const result = await window.api.repos.getBaseRefDefault({ repoId })
         if (!stale) {
-          setDefaultBaseRef(result)
+          setDefaultBaseRef(result.defaultBaseRef)
+          setRemoteCount(result.remoteCount)
         }
       } catch {
         if (!stale) {
           setDefaultBaseRef(null)
+          setRemoteCount(0)
         }
       }
     }
 
     setBaseRefQuery('')
     setBaseRefResults([])
+    setRemoteCount(0)
     void loadDefaultBaseRef()
 
     return () => {
@@ -106,6 +114,19 @@ export function BaseRefPicker({
                 ? `Following primary branch (${defaultBaseRef})`
                 : 'Pick a base branch below'}
           </p>
+          {/* Why: passive hint that fork workflows have other remotes worth
+              searching (e.g. `upstream`). Host-agnostic and remote-name-agnostic
+              by design — we don't hardcode `upstream` because a repo's source
+              remote could be named anything (`source`, `canonical`, etc.).
+              Suppressed when remoteCount <= 1 or when the IPC failed
+              (remoteCount === 0), preserving today's no-hint behavior.
+              See docs/upstream-base-ref-design.md §4. */}
+          {remoteCount > 1 ? (
+            <p className="text-xs text-muted-foreground">
+              This repo has multiple remotes. Type a remote name to filter branches (e.g. the remote
+              that tracks the source project).
+            </p>
+          ) : null}
         </div>
         {onUsePrimary && (
           <Button variant="outline" size="sm" onClick={onUsePrimary} disabled={!currentBaseRef}>

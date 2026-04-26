@@ -192,6 +192,34 @@ export async function getBaseRefDefault(path: string): Promise<string | null> {
   return getDefaultBaseRefAsync(path)
 }
 
+/**
+ * Envelope returned by the `repos:getBaseRefDefault` IPC handler.
+ *
+ * Why: the renderer's BaseRefPicker needs to know how many remotes the repo
+ * has configured so it can render the multi-remote hint without a second IPC
+ * round trip. `remoteCount` piggybacks on the existing handler. `defaultBaseRef`
+ * is named rather than `default` because the latter is a reserved word and
+ * awkward to destructure.
+ */
+export type BaseRefDefaultResult = {
+  defaultBaseRef: string | null
+  remoteCount: number
+}
+
+/**
+ * Count the repo's configured remotes by shelling out `git remote`.
+ * Returns 0 on error — callers use 0 as "unknown / do not render the
+ * multi-remote hint", preserving today's no-hint behavior on failure.
+ */
+export async function getRemoteCount(path: string): Promise<number> {
+  try {
+    const { stdout } = await gitExecFileAsync(['remote'], { cwd: path })
+    return stdout.split('\n').filter((line) => line.trim().length > 0).length
+  } catch {
+    return 0
+  }
+}
+
 async function getDefaultBaseRefAsync(path: string): Promise<string | null> {
   try {
     const { stdout } = await gitExecFileAsync(
@@ -229,12 +257,24 @@ export async function searchBaseRefs(path: string, query: string, limit = 25): P
   }
 
   try {
+    // Why: glob `refs/remotes/*/*` (not `refs/remotes/origin/*`) so fork
+    // workflows can discover branches from any configured remote (e.g.
+    // `upstream/main`). The picker would otherwise structurally deny the
+    // correct answer for fork contributors — see docs/upstream-base-ref-design.md.
+    //
+    // Why two remote globs: `git for-each-ref` uses fnmatch-style globs where
+    // `*` does NOT cross `/`. A single `refs/remotes/*/*<q>*` pattern only
+    // matches when `<q>` appears in the branch-name segment, so typing
+    // `upstream` (a remote name) would return nothing. The extra
+    // `refs/remotes/*<q>*/*` glob matches when the query appears in the
+    // remote-name segment, making remote-name filtering work.
     const { stdout } = await gitExecFileAsync(
       [
         'for-each-ref',
         '--format=%(refname:short)',
         '--sort=-committerdate',
-        `refs/remotes/origin/*${normalizedQuery}*`,
+        `refs/remotes/*${normalizedQuery}*/*`,
+        `refs/remotes/*/*${normalizedQuery}*`,
         `refs/heads/*${normalizedQuery}*`
       ],
       { cwd: path }
@@ -244,7 +284,9 @@ export async function searchBaseRefs(path: string, query: string, limit = 25): P
     const refs = stdout
       .split('\n')
       .map((line) => line.trim())
-      .filter((line) => line && line !== 'origin/HEAD')
+      // Why: drop `<remote>/HEAD` pseudo-refs across all remotes. They always
+      // point to another ref, so pinning one is never what the user wants.
+      .filter((line) => line && !line.endsWith('/HEAD'))
       .filter((line) => {
         if (seen.has(line)) {
           return false

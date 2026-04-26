@@ -221,7 +221,10 @@ function SourceControlInner(): React.JSX.Element {
       .getBaseRefDefault({ repoId: activeRepo.id })
       .then((result) => {
         if (!stale) {
-          setDefaultBaseRef(result)
+          // Why: IPC now returns a `{ defaultBaseRef, remoteCount }` envelope;
+          // this component only needs `defaultBaseRef`. `remoteCount` is used
+          // by BaseRefPicker for the multi-remote hint.
+          setDefaultBaseRef(result.defaultBaseRef)
         }
       })
       .catch(() => {

@@ -11,7 +11,8 @@ const { handleMock, mockStore, mockGitProvider } = vi.hoisted(() => ({
   },
   mockGitProvider: {
     isGitRepo: vi.fn().mockReturnValue(true),
-    isGitRepoAsync: vi.fn().mockResolvedValue({ isRepo: true, rootPath: null })
+    isGitRepoAsync: vi.fn().mockResolvedValue({ isRepo: true, rootPath: null }),
+    exec: vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
   }
 }))
 
@@ -27,7 +28,11 @@ vi.mock('../git/repo', () => ({
   isGitRepo: vi.fn().mockReturnValue(true),
   getGitUsername: vi.fn().mockReturnValue(''),
   getRepoName: vi.fn().mockImplementation((path: string) => path.split('/').pop()),
+  // Why: getBaseRefDefault's signature is unchanged — it still returns
+  // `string | null`. The IPC handler is what wraps the result into the
+  // `BaseRefDefaultResult` envelope, so this mock stays as a string.
   getBaseRefDefault: vi.fn().mockResolvedValue('origin/main'),
+  getRemoteCount: vi.fn().mockResolvedValue(1),
   searchBaseRefs: vi.fn().mockResolvedValue([])
 }))
 
@@ -187,5 +192,112 @@ describe('repos:addRemote', () => {
     })
 
     expect(mockWindow.webContents.send).toHaveBeenCalledWith('repos:changed')
+  })
+})
+
+describe('repos:getBaseRefDefault envelope', () => {
+  const handlers = new Map<string, (_event: unknown, args: unknown) => unknown>()
+  const mockWindow = {
+    isDestroyed: () => false,
+    webContents: { send: vi.fn() }
+  }
+
+  beforeEach(() => {
+    handlers.clear()
+    handleMock.mockReset()
+    handleMock.mockImplementation((channel: string, handler: (...a: unknown[]) => unknown) => {
+      handlers.set(channel, handler)
+    })
+    mockStore.getRepos.mockReset().mockReturnValue([])
+    mockStore.getRepo.mockReset()
+    registerRepoHandlers(mockWindow as never, mockStore as never)
+  })
+
+  it('returns { defaultBaseRef, remoteCount: 0 } for folder-mode repos', async () => {
+    mockStore.getRepo.mockReturnValue({
+      id: 'r1',
+      path: '/some/folder',
+      kind: 'folder'
+    })
+
+    const result = await handlers.get('repos:getBaseRefDefault')!(null, { repoId: 'r1' })
+
+    expect(result).toEqual({ defaultBaseRef: null, remoteCount: 0 })
+  })
+
+  it('returns { defaultBaseRef: null, remoteCount: 0 } for an unknown repoId', async () => {
+    mockStore.getRepo.mockReturnValue(undefined)
+
+    const result = await handlers.get('repos:getBaseRefDefault')!(null, { repoId: 'missing' })
+
+    expect(result).toEqual({ defaultBaseRef: null, remoteCount: 0 })
+  })
+
+  it('wraps the local getBaseRefDefault result in the envelope', async () => {
+    mockStore.getRepo.mockReturnValue({
+      id: 'r1',
+      path: '/repo',
+      kind: 'git'
+    })
+
+    const result = (await handlers.get('repos:getBaseRefDefault')!(null, { repoId: 'r1' })) as {
+      defaultBaseRef: string | null
+      remoteCount: number
+    }
+
+    // getBaseRefDefault is mocked to 'origin/main', getRemoteCount to 1
+    expect(result.defaultBaseRef).toBe('origin/main')
+    expect(result.remoteCount).toBe(1)
+  })
+
+  it('returns envelope over SSH relay for remote repos', async () => {
+    const execMock = vi
+      .fn()
+      // symbolic-ref call
+      .mockResolvedValueOnce({ stdout: 'refs/remotes/origin/main\n', stderr: '' })
+      // remote count call
+      .mockResolvedValueOnce({ stdout: 'origin\nupstream\n', stderr: '' })
+
+    mockStore.getRepo.mockReturnValue({
+      id: 'r1',
+      path: '/remote/repo',
+      connectionId: 'conn-1',
+      kind: 'git'
+    })
+    // Replace provider with one that exposes exec()
+    mockGitProvider.exec = execMock
+
+    const result = (await handlers.get('repos:getBaseRefDefault')!(null, { repoId: 'r1' })) as {
+      defaultBaseRef: string | null
+      remoteCount: number
+    }
+
+    expect(result.defaultBaseRef).toBe('origin/main')
+    expect(result.remoteCount).toBe(2)
+  })
+
+  it('returns defaultBaseRef even when remote-count lookup fails', async () => {
+    const execMock = vi
+      .fn()
+      .mockResolvedValueOnce({ stdout: 'refs/remotes/origin/main\n', stderr: '' })
+      .mockRejectedValueOnce(new Error('relay exec failed'))
+
+    mockStore.getRepo.mockReturnValue({
+      id: 'r1',
+      path: '/remote/repo',
+      connectionId: 'conn-1',
+      kind: 'git'
+    })
+    mockGitProvider.exec = execMock
+
+    const result = (await handlers.get('repos:getBaseRefDefault')!(null, { repoId: 'r1' })) as {
+      defaultBaseRef: string | null
+      remoteCount: number
+    }
+
+    // Why: default detection must be independent of remote-count lookup.
+    // A failing count falls back to 0, but the default still resolves.
+    expect(result.defaultBaseRef).toBe('origin/main')
+    expect(result.remoteCount).toBe(0)
   })
 })
