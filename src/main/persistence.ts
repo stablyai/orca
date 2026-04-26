@@ -2,7 +2,7 @@
 load/save, and flush logic in one file so the full storage contract is reviewable
 as a unit instead of being scattered across modules. */
 import { app } from 'electron'
-import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync } from 'fs'
+import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync, unlinkSync } from 'fs'
 import { writeFile, rename, mkdir, rm } from 'fs/promises'
 import { join, dirname } from 'path'
 import { homedir } from 'os'
@@ -185,15 +185,25 @@ export class Store {
     const dir = dirname(dataFile)
     await mkdir(dir, { recursive: true }).catch(() => {})
     const tmpFile = `${dataFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
-    await writeFile(tmpFile, JSON.stringify(this.state, null, 2), 'utf-8')
-    // Why: if flush() ran while this async write was in-flight, it bumped
-    // writeGeneration and already wrote the latest state synchronously.
-    // Renaming this stale tmp file would overwrite the fresh data.
-    if (this.writeGeneration !== gen) {
-      await rm(tmpFile).catch(() => {})
-      return
+    // Why: wrap write+rename in try/finally-on-error so any failure (ENOSPC,
+    // ENFILE, EIO, permission) removes the tmp file rather than leaving a
+    // multi-megabyte orphan behind. Successful rename consumes the tmp file.
+    let renamed = false
+    try {
+      await writeFile(tmpFile, JSON.stringify(this.state, null, 2), 'utf-8')
+      // Why: if flush() ran while this async write was in-flight, it bumped
+      // writeGeneration and already wrote the latest state synchronously.
+      // Renaming this stale tmp file would overwrite the fresh data.
+      if (this.writeGeneration !== gen) {
+        return
+      }
+      await rename(tmpFile, dataFile)
+      renamed = true
+    } finally {
+      if (!renamed) {
+        await rm(tmpFile).catch(() => {})
+      }
     }
-    await rename(tmpFile, dataFile)
   }
 
   // Why: synchronous variant kept only for flush() at shutdown, where the
@@ -205,8 +215,23 @@ export class Store {
       mkdirSync(dir, { recursive: true })
     }
     const tmpFile = `${dataFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
-    writeFileSync(tmpFile, JSON.stringify(this.state, null, 2), 'utf-8')
-    renameSync(tmpFile, dataFile)
+    // Why: mirror the async path — on any failure between writeFileSync and
+    // renameSync, remove the tmp file so crashes during shutdown don't leak
+    // orphans into userData.
+    let renamed = false
+    try {
+      writeFileSync(tmpFile, JSON.stringify(this.state, null, 2), 'utf-8')
+      renameSync(tmpFile, dataFile)
+      renamed = true
+    } finally {
+      if (!renamed) {
+        try {
+          unlinkSync(tmpFile)
+        } catch {
+          // Best-effort cleanup; the write already failed, swallow secondary error.
+        }
+      }
+    }
   }
 
   // ── Repos ──────────────────────────────────────────────────────────
