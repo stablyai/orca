@@ -32,6 +32,11 @@ export const APPEARANCE_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     title: 'Titlebar Agent Activity',
     description: 'Show the number of active agents in the titlebar.',
     keywords: ['titlebar', 'agent', 'badge', 'active', 'count', 'status']
+  },
+  {
+    title: 'Task Provider Icons',
+    description: 'Show GitHub and Linear icons in the Tasks sidebar button.',
+    keywords: ['tasks', 'sidebar', 'github', 'linear', 'icons', 'badges']
   }
 ]
 
@@ -47,7 +52,8 @@ export function AppearancePane({
   const themeEntries = APPEARANCE_PANE_SEARCH_ENTRIES.slice(0, 1)
   const zoomEntries = APPEARANCE_PANE_SEARCH_ENTRIES.slice(1, 2)
   const layoutEntries = APPEARANCE_PANE_SEARCH_ENTRIES.slice(2, 3)
-  const titlebarEntries = APPEARANCE_PANE_SEARCH_ENTRIES.slice(3)
+  const titlebarEntries = APPEARANCE_PANE_SEARCH_ENTRIES.slice(3, 4)
+  const sidebarEntries = APPEARANCE_PANE_SEARCH_ENTRIES.slice(4)
 
   const visibleSections = [
     matchesSettingsSearch(searchQuery, themeEntries) ? (
@@ -182,6 +188,46 @@ export function AppearancePane({
             <span
               className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
                 settings.showTitlebarAgentActivity ? 'translate-x-4' : 'translate-x-0.5'
+              }`}
+            />
+          </button>
+        </SearchableSetting>
+      </section>
+    ) : null,
+    matchesSettingsSearch(searchQuery, sidebarEntries) ? (
+      <section key="sidebar" className="space-y-4">
+        <div className="space-y-1">
+          <h3 className="text-sm font-semibold">Sidebar</h3>
+          <p className="text-xs text-muted-foreground">Tune the left sidebar chrome.</p>
+        </div>
+
+        <SearchableSetting
+          title="Task Provider Icons"
+          description="Show GitHub and Linear icons in the Tasks sidebar button."
+          keywords={['tasks', 'sidebar', 'github', 'linear', 'icons', 'badges']}
+          className="flex items-center justify-between gap-4 px-1 py-2"
+        >
+          <div className="space-y-0.5">
+            <Label>Task Provider Icons</Label>
+            <p className="text-xs text-muted-foreground">
+              Show GitHub and Linear icons next to the Tasks button.
+            </p>
+          </div>
+          <button
+            role="switch"
+            aria-checked={settings.showTaskProviderIcons}
+            onClick={() =>
+              updateSettings({
+                showTaskProviderIcons: !settings.showTaskProviderIcons
+              })
+            }
+            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
+              settings.showTaskProviderIcons ? 'bg-foreground' : 'bg-muted-foreground/30'
+            }`}
+          >
+            <span
+              className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
+                settings.showTaskProviderIcons ? 'translate-x-4' : 'translate-x-0.5'
               }`}
             />
           </button>
