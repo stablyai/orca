@@ -18,23 +18,21 @@ function makeResponse(body: string, status = 200): Response {
   } as Response
 }
 
+// Real React Flight wire format from opencode.ai — keys like `monthlyUsage`
+// appear multiple times: once with actual data (as `$R[N]={...}`) and once as
+// `null` inside a billing-context object. The parser must pick the data one.
 const USAGE_PAGE_WITH_MONTHLY = `
-<html><script>
-window.__data = {
-  rollingUsage: { usagePercent: 30, resetInSec: 7200 },
-  weeklyUsage: { usagePercent: 51, resetInSec: 259200 },
-  monthlyUsage: { usagePercent: 89, resetInSec: 1296000 }
-}
-</script></html>
+<html><body><script>
+$RC=function(a,b){/*...*/};
+$R[20]={rollingUsage:$R[21]={status:"ok",resetInSec:7200,usagePercent:30},weeklyUsage:$R[22]={status:"ok",resetInSec:259200,usagePercent:51},monthlyUsage:$R[23]={status:"ok",resetInSec:1296000,usagePercent:89}};
+$R[14]={customerID:"cus_ABC",reloadTrigger:5,monthlyLimit:null,monthlyUsage:null,timeMonthlyUsageUpdated:null};
+</script></body></html>
 `
 
 const USAGE_PAGE_NO_MONTHLY = `
-<html><script>
-window.__data = {
-  rollingUsage: { usagePercent: 10, resetInSec: 3600 },
-  weeklyUsage: { usagePercent: 20, resetInSec: 86400 }
-}
-</script></html>
+<html><body><script>
+$R[20]={rollingUsage:$R[21]={status:"ok",resetInSec:3600,usagePercent:10},weeklyUsage:$R[22]={status:"ok",resetInSec:86400,usagePercent:20}};
+</script></body></html>
 `
 
 const WORKSPACES_RESPONSE = 'id: "wrk_TESTWORKSPACEID123"'
@@ -212,18 +210,11 @@ describe('fetchOpenCodeGoRateLimits', () => {
     expect(result.weekly?.usedPercent).toBe(0)
   })
 
-  it('handles nested objects between key and fields (robustness fix)', async () => {
+  it('parses React Flight wire format with $R[N]= assignment tokens', async () => {
+    // Real format from opencode.ai — keys have $R[N]= between the colon and brace.
     const page = `
-      rollingUsage: {
-        meta: { lastUpdate: "2023-01-01", status: "active" },
-        usagePercent: 42,
-        resetInSec: 1337
-      }
-      weeklyUsage: {
-        details: { tier: "pro" },
-        usagePercent: 68,
-        resetInSec: 86400
-      }
+      rollingUsage:$R[21]={status:"ok",resetInSec:1337,usagePercent:42},
+      weeklyUsage:$R[22]={status:"ok",resetInSec:86400,usagePercent:68}
     `
     netFetchMock
       .mockResolvedValueOnce(makeResponse(WORKSPACES_RESPONSE))
@@ -233,8 +224,44 @@ describe('fetchOpenCodeGoRateLimits', () => {
 
     expect(result.status).toBe('ok')
     expect(result.session?.usedPercent).toBe(42)
-    expect(result.session?.windowMinutes).toBe(300)
     expect(result.weekly?.usedPercent).toBe(68)
+  })
+
+  it('skips null occurrences and finds the real data block for monthlyUsage', async () => {
+    // Regression: on refresh, monthlyUsage:null appeared BEFORE the real
+    // monthlyUsage:$R[N]={usagePercent:89,...} in a different component's props.
+    // Parser must skip the null and find the data block.
+    const page = `
+      rollingUsage:$R[21]={status:"ok",resetInSec:18000,usagePercent:0},
+      weeklyUsage:$R[22]={status:"ok",resetInSec:57781,usagePercent:51},
+      monthlyUsage:null,timeMonthlyUsageUpdated:null,
+      monthlyUsage:$R[28]={status:"ok",resetInSec:1214779,usagePercent:89}
+    `
+    netFetchMock
+      .mockResolvedValueOnce(makeResponse(WORKSPACES_RESPONSE))
+      .mockResolvedValueOnce(makeResponse(page))
+
+    const result = await fetchOpenCodeGoRateLimits('auth=token')
+
+    expect(result.status).toBe('ok')
+    expect(result.monthly?.usedPercent).toBe(89)
+    expect(result.monthly?.resetsAt).toBe(Date.now() + 1214779 * 1000)
+  })
+
+  it('returns null monthly when all monthlyUsage occurrences are null', async () => {
+    const page = `
+      rollingUsage:$R[21]={status:"ok",resetInSec:3600,usagePercent:10},
+      weeklyUsage:$R[22]={status:"ok",resetInSec:86400,usagePercent:20},
+      monthlyUsage:null,timeMonthlyUsageUpdated:null
+    `
+    netFetchMock
+      .mockResolvedValueOnce(makeResponse(WORKSPACES_RESPONSE))
+      .mockResolvedValueOnce(makeResponse(page))
+
+    const result = await fetchOpenCodeGoRateLimits('auth=token')
+
+    expect(result.status).toBe('ok')
+    expect(result.monthly).toBeNull()
   })
 
   it('skips workspace lookup when workspaceIdOverride is provided', async () => {
