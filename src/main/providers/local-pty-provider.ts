@@ -181,7 +181,15 @@ export class LocalPtyProvider implements IPtyProvider {
       // autodetection, bat/delta paging hints). Sourced from ORCA_APP_VERSION
       // which main/index.ts seeds from app.getVersion() at startup; the
       // fallback keeps tests and non-Electron runs working.
-      TERM_PROGRAM_VERSION: process.env.ORCA_APP_VERSION ?? '0.0.0-dev'
+      TERM_PROGRAM_VERSION: process.env.ORCA_APP_VERSION ?? '0.0.0-dev',
+      // Why: opt tools (Claude Code, ls --hyperlink, etc.) into emitting OSC 8
+      // hyperlinks. The `supports-hyperlinks` npm package gates on a hard-coded
+      // TERM_PROGRAM allowlist (iTerm.app / WezTerm / vscode) and returns false
+      // for TERM_PROGRAM=Orca, so callers drop OSC 8 output entirely and emit
+      // bare text instead. xterm.js in Orca parses OSC 8 and the pane's
+      // linkHandler routes clicks, so forcing the advertisement is safe and
+      // restores clickable refs like `owner/repo#123` / `PR#123`.
+      FORCE_HYPERLINK: '1'
     } as Record<string, string>
     for (const key of args.envToDelete ?? []) {
       delete spawnEnv[key]
