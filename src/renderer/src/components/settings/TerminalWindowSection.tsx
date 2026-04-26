@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { RotateCw } from 'lucide-react'
 import type { GlobalSettings, TerminalColorOverrides } from '../../../../shared/types'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
@@ -76,6 +77,36 @@ export function TerminalWindowSection({
   updateSettings
 }: TerminalWindowSectionProps): React.JSX.Element {
   const [colorOverridesExpanded, setColorOverridesExpanded] = useState(false)
+  // Why: windowBackgroundBlur is only read by createMainWindow() at startup
+  // (macOS vibrancy / Windows acrylic both require window creation options),
+  // so the UI has to ask the user to restart for the change to take effect.
+  // Snapshot the value on first render and compare to the live setting to
+  // show a "Restart required" banner only when they differ.
+  const blurAtMountRef = useRef<boolean>(settings.windowBackgroundBlur ?? false)
+  const blurPendingRestart = (settings.windowBackgroundBlur ?? false) !== blurAtMountRef.current
+  const [relaunchingBlur, setRelaunchingBlur] = useState(false)
+
+  // Why: the mount-time snapshot captures local state, not main-process state.
+  // If the setting is persisted and read correctly on next boot we never need
+  // to re-snapshot, but tests mount the component with arbitrary initial
+  // values — keep `blurAtMountRef` honest if the settings load asynchronously
+  // and the value arrives after mount.
+  useEffect(() => {
+    blurAtMountRef.current = settings.windowBackgroundBlur ?? false
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const handleRelaunch = async (): Promise<void> => {
+    if (relaunchingBlur) {
+      return
+    }
+    setRelaunchingBlur(true)
+    try {
+      await window.api.app.relaunch()
+    } catch {
+      setRelaunchingBlur(false)
+    }
+  }
 
   return (
     <section className="space-y-4">
@@ -108,92 +139,53 @@ export function TerminalWindowSection({
         title="Window Blur"
         description="Apply background blur to the terminal window. Requires restart."
         keywords={['window', 'blur', 'background', 'transparency', 'vibrancy']}
-        className="flex items-center justify-between gap-4 px-1 py-2"
+        className="space-y-3 px-1 py-2"
       >
-        <div className="space-y-0.5">
-          <Label>Window Blur</Label>
-          <p className="text-xs text-muted-foreground">
-            Apply background blur to the terminal window. Requires restart.
-          </p>
-        </div>
-        <button
-          role="switch"
-          aria-checked={settings.windowBackgroundBlur ?? false}
-          onClick={() => updateSettings({ windowBackgroundBlur: !settings.windowBackgroundBlur })}
-          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-            (settings.windowBackgroundBlur ?? false) ? 'bg-foreground' : 'bg-muted-foreground/30'
-          }`}
-        >
-          <span
-            className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-              (settings.windowBackgroundBlur ?? false) ? 'translate-x-4' : 'translate-x-0.5'
+        <div className="flex items-center justify-between gap-4">
+          <div className="space-y-0.5">
+            <Label>Window Blur</Label>
+            <p className="text-xs text-muted-foreground">
+              Apply background blur to the terminal window. Requires restart.
+            </p>
+          </div>
+          <button
+            role="switch"
+            aria-checked={settings.windowBackgroundBlur ?? false}
+            onClick={() => updateSettings({ windowBackgroundBlur: !settings.windowBackgroundBlur })}
+            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
+              (settings.windowBackgroundBlur ?? false) ? 'bg-foreground' : 'bg-muted-foreground/30'
             }`}
-          />
-        </button>
-      </SearchableSetting>
-
-      <SearchableSetting
-        title="Padding Balance"
-        description="Balance terminal padding evenly on all sides."
-        keywords={['padding', 'balance', 'spacing', 'margin']}
-        className="flex items-center justify-between gap-4 px-1 py-2"
-      >
-        <div className="space-y-0.5">
-          <Label>Padding Balance</Label>
-          <p className="text-xs text-muted-foreground">
-            Balance terminal padding evenly on all sides.
-          </p>
+          >
+            <span
+              className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
+                (settings.windowBackgroundBlur ?? false) ? 'translate-x-4' : 'translate-x-0.5'
+              }`}
+            />
+          </button>
         </div>
-        <button
-          role="switch"
-          aria-checked={settings.terminalPaddingBalance ?? false}
-          onClick={() =>
-            updateSettings({
-              terminalPaddingBalance: !settings.terminalPaddingBalance
-            })
-          }
-          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-            (settings.terminalPaddingBalance ?? false) ? 'bg-foreground' : 'bg-muted-foreground/30'
-          }`}
-        >
-          <span
-            className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-              (settings.terminalPaddingBalance ?? false) ? 'translate-x-4' : 'translate-x-0.5'
-            }`}
-          />
-        </button>
-      </SearchableSetting>
 
-      <SearchableSetting
-        title="Padding Color"
-        description="Color of the padding area around the terminal content."
-        keywords={['padding', 'color', 'background', 'border']}
-      >
-        <ColorField
-          label="Padding Color"
-          description="Color of the padding area around the terminal content."
-          value={settings.terminalPanePaddingColor ?? ''}
-          fallback=""
-          onChange={(value) => updateSettings({ terminalPanePaddingColor: value || undefined })}
-        />
-      </SearchableSetting>
-
-      <SearchableSetting
-        title="Scrollback Lines"
-        description="Number of lines kept in scrollback buffer. 0 means unlimited."
-        keywords={['scrollback', 'lines', 'buffer', 'history']}
-      >
-        <NumberField
-          label="Scrollback Lines"
-          description="Number of lines kept in scrollback buffer. 0 means unlimited."
-          value={settings.terminalScrollbackLimit ?? 10000}
-          defaultValue={10000}
-          min={0}
-          max={999999}
-          step={1000}
-          suffix="lines (0 = unlimited)"
-          onChange={(value) => updateSettings({ terminalScrollbackLimit: Math.max(0, value) })}
-        />
+        {blurPendingRestart ? (
+          <div className="flex items-center justify-between gap-3 rounded-md border border-yellow-500/50 bg-yellow-500/10 px-3 py-2.5">
+            <div className="min-w-0 flex-1 space-y-0.5">
+              <p className="text-sm font-medium text-yellow-700 dark:text-yellow-300">
+                Restart required
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Restart Orca to apply the window blur change.
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="default"
+              className="shrink-0 gap-1.5"
+              disabled={relaunchingBlur}
+              onClick={() => void handleRelaunch()}
+            >
+              <RotateCw className={`size-3 ${relaunchingBlur ? 'animate-spin' : ''}`} />
+              {relaunchingBlur ? 'Restarting…' : 'Restart now'}
+            </Button>
+          </div>
+        ) : null}
       </SearchableSetting>
 
       <SearchableSetting

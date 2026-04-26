@@ -164,21 +164,6 @@ export const TERMINAL_WINDOW_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     keywords: ['window', 'blur', 'background', 'transparency', 'vibrancy']
   },
   {
-    title: 'Padding Balance',
-    description: 'Balance terminal padding evenly on all sides.',
-    keywords: ['padding', 'balance', 'spacing', 'margin']
-  },
-  {
-    title: 'Padding Color',
-    description: 'Color of the padding area around the terminal content.',
-    keywords: ['padding', 'color', 'background', 'border']
-  },
-  {
-    title: 'Scrollback Lines',
-    description: 'Number of lines kept in scrollback buffer. 0 means unlimited.',
-    keywords: ['scrollback', 'lines', 'buffer', 'history']
-  },
-  {
     title: 'Horizontal Padding',
     description: 'Horizontal padding around the terminal grid in pixels.',
     keywords: ['padding', 'horizontal', 'spacing', 'margin']

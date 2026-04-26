@@ -217,12 +217,6 @@ export function applyRootBackground(root: HTMLElement, styleOptions: PaneStyleOp
   if (styleOptions.splitBackground) {
     root.style.background = styleOptions.splitBackground
   }
-  if (styleOptions.panePaddingColor) {
-    root.style.setProperty('--pane-padding-color', styleOptions.panePaddingColor)
-  }
-  if (styleOptions.paddingBalance !== undefined) {
-    root.style.setProperty('--pane-padding-balance', styleOptions.paddingBalance ? '1' : '0')
-  }
   if (styleOptions.paddingX !== undefined) {
     root.style.setProperty('--pane-padding-x', `${styleOptions.paddingX}px`)
   }

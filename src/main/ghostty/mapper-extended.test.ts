@@ -48,26 +48,12 @@ describe('mapGhosttyToOrca — unfocused-split-opacity', () => {
 })
 
 describe('mapGhosttyToOrca — scrollback-limit', () => {
-  it('maps valid integer to terminalScrollbackLimit', () => {
+  // Why: Ghostty's scrollback-limit is a byte budget (where 0 means unlimited),
+  // while xterm's scrollback is a row count (where 0 means disabled). The
+  // units and sentinel values don't line up, so we treat the key as
+  // unsupported rather than silently mis-applying it by orders of magnitude.
+  it('marks scrollback-limit as unsupported', () => {
     const result = mapGhosttyToOrca({ 'scrollback-limit': '50000' })
-    expect(result.diff).toEqual({ terminalScrollbackLimit: 50000 })
-    expect(result.unsupportedKeys).toEqual([])
-  })
-
-  it('maps zero to terminalScrollbackLimit (unlimited)', () => {
-    const result = mapGhosttyToOrca({ 'scrollback-limit': '0' })
-    expect(result.diff).toEqual({ terminalScrollbackLimit: 0 })
-    expect(result.unsupportedKeys).toEqual([])
-  })
-
-  it('rejects negative scrollback-limit', () => {
-    const result = mapGhosttyToOrca({ 'scrollback-limit': '-100' })
-    expect(result.diff).toEqual({})
-    expect(result.unsupportedKeys).toEqual(['scrollback-limit'])
-  })
-
-  it('rejects non-numeric scrollback-limit', () => {
-    const result = mapGhosttyToOrca({ 'scrollback-limit': 'unlimited' })
     expect(result.diff).toEqual({})
     expect(result.unsupportedKeys).toEqual(['scrollback-limit'])
   })

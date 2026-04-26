@@ -6,7 +6,11 @@ import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
 import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
-import type { FsChangedPayload, NotificationDispatchResult } from '../shared/types'
+import type {
+  FsChangedPayload,
+  GhosttyImportPreview,
+  NotificationDispatchResult
+} from '../shared/types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../shared/runtime-types'
 import type { RateLimitState } from '../shared/rate-limit-types'
 import type { SshConnectionState, SshTarget } from '../shared/ssh-types'
@@ -511,7 +515,7 @@ const api = {
 
     listFonts: (): Promise<string[]> => ipcRenderer.invoke('settings:listFonts'),
 
-    previewGhosttyImport: (): Promise<unknown> =>
+    previewGhosttyImport: (): Promise<GhosttyImportPreview> =>
       ipcRenderer.invoke('settings:previewGhosttyImport')
   },
 

@@ -785,9 +785,6 @@ export type GlobalSettings = {
   terminalDividerThicknessPx: number
   terminalBackgroundOpacity?: number
   terminalColorOverrides?: TerminalColorOverrides
-  terminalPanePaddingColor?: string
-  terminalPaddingBalance?: boolean
-  terminalScrollbackLimit?: number
   terminalPaddingX?: number
   terminalPaddingY?: number
   terminalMouseHideWhileTyping?: boolean

@@ -34,6 +34,18 @@ type FieldResult =
 
 const normalizeHex = (v: string): string => (v.startsWith('#') ? v : `#${v}`)
 
+// Why: `Number("1e10")` succeeds and passes `Number.isInteger`, so a Ghostty
+// config with `window-padding-x = 1e9` would sail through the mapper and land
+// an absurd value in the store. Restrict to plain decimal integers.
+const STRICT_INT_RE = /^-?\d+$/
+const parseStrictInt = (v: string): number | null => {
+  if (!STRICT_INT_RE.test(v)) {
+    return null
+  }
+  const num = Number(v)
+  return Number.isFinite(num) ? num : null
+}
+
 type FieldParser = (value: string, rawValue: string | string[]) => FieldResult
 
 export function mapGhosttyToOrca(
@@ -133,31 +145,11 @@ export function mapGhosttyToOrca(
     },
 
     'background-blur-radius': (v) => {
-      const num = Number(v)
-      if (!Number.isFinite(num)) {
+      const num = parseStrictInt(v)
+      if (num === null || num < 0) {
         return null
       }
       return { key: 'windowBackgroundBlur', value: num > 0 }
-    },
-
-    'window-padding-color': (v) => {
-      if (HEX_COLOR_RE.test(v)) {
-        return { key: 'terminalPanePaddingColor', value: normalizeHex(v) }
-      }
-      if (v.toLowerCase() === 'extend' || v.toLowerCase() === 'background') {
-        // Why: Ghostty's 'extend' and 'background' mean "inherit the terminal
-        // background color for padding", which is already Orca's default when
-        // terminalPanePaddingColor is undefined. No diff needed.
-        return []
-      }
-      return null
-    },
-
-    'window-padding-balance': (v) => {
-      if (v !== 'true' && v !== 'false') {
-        return null
-      }
-      return { key: 'terminalPaddingBalance', value: v === 'true' }
     },
 
     'split-divider-color': (v) => {
@@ -178,25 +170,17 @@ export function mapGhosttyToOrca(
       return { key: 'terminalInactivePaneOpacity', value: num }
     },
 
-    'scrollback-limit': (v) => {
-      const num = Number(v)
-      if (!Number.isFinite(num) || !Number.isInteger(num) || num < 0) {
-        return null
-      }
-      return { key: 'terminalScrollbackLimit', value: num }
-    },
-
     'window-padding-x': (v) => {
-      const num = Number(v)
-      if (!Number.isFinite(num) || !Number.isInteger(num) || num < 0) {
+      const num = parseStrictInt(v)
+      if (num === null || num < 0 || num > 512) {
         return null
       }
       return { key: 'terminalPaddingX', value: num }
     },
 
     'window-padding-y': (v) => {
-      const num = Number(v)
-      if (!Number.isFinite(num) || !Number.isInteger(num) || num < 0) {
+      const num = parseStrictInt(v)
+      if (num === null || num < 0 || num > 512) {
         return null
       }
       return { key: 'terminalPaddingY', value: num }
@@ -310,7 +294,14 @@ export function mapGhosttyToOrca(
     }
 
     // Why: Orca's windowBackgroundBlur is a boolean; the numeric radius is lost.
-    if (key === 'background-blur-radius') {
+    // Only note the drop when blur is actually being turned on — a `0` cleanly
+    // maps to `false` and there is no radius to lose.
+    if (
+      key === 'background-blur-radius' &&
+      !Array.isArray(result) &&
+      'key' in result &&
+      result.value === true
+    ) {
       unsupportedKeys.push('background-blur-radius (radius value not preserved)')
     }
 

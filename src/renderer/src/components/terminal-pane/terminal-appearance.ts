@@ -188,12 +188,11 @@ export function applyTerminalAppearance(
     if (theme) {
       pane.terminal.options.theme = theme
     }
-    if (
-      settings.terminalBackgroundOpacity !== undefined &&
-      settings.terminalBackgroundOpacity < 1
-    ) {
-      pane.terminal.options.allowTransparency = true
-    }
+    // Why: xterm's allowTransparency has measurable rendering cost, so clear
+    // it explicitly when opacity is at (or above) 1 to avoid a stale `true`
+    // bleeding in from a prior opacity setting that has since been reset.
+    pane.terminal.options.allowTransparency =
+      settings.terminalBackgroundOpacity !== undefined && settings.terminalBackgroundOpacity < 1
     pane.terminal.options.cursorStyle = settings.terminalCursorStyle
     pane.terminal.options.cursorBlink = settings.terminalCursorBlink
     const paneSize = paneFontSizes.get(pane.id)
@@ -231,8 +230,6 @@ export function applyTerminalAppearance(
     opacityTransitionMs: paneStyles.opacityTransitionMs,
     dividerThicknessPx: paneStyles.dividerThicknessPx,
     focusFollowsMouse: paneStyles.focusFollowsMouse,
-    panePaddingColor: settings.terminalPanePaddingColor,
-    paddingBalance: settings.terminalPaddingBalance,
     paddingX: settings.terminalPaddingX,
     paddingY: settings.terminalPaddingY
   })

@@ -15,8 +15,9 @@ type GhosttyImportModalProps = {
   onOpenChange: (open: boolean) => void
   preview: GhosttyImportPreview | null
   loading: boolean
-  onApply: () => void
+  onApply: () => void | Promise<void>
   applied?: boolean
+  applyError?: string | null
 }
 
 function formatDiffValue(value: unknown): string {
@@ -34,7 +35,8 @@ export function GhosttyImportModal({
   preview,
   loading,
   onApply,
-  applied = false
+  applied = false,
+  applyError = null
 }: GhosttyImportModalProps): React.JSX.Element {
   const hasChanges = preview?.found === true && Object.keys(preview.diff).length > 0
 
@@ -87,6 +89,8 @@ export function GhosttyImportModal({
               </p>
             )}
 
+            {!applied && applyError && <p className="text-xs text-red-500">{applyError}</p>}
+
             {!applied && preview.unsupportedKeys.length > 0 && (
               <div>
                 <p className="text-xs font-medium mb-1">Unsupported keys</p>
@@ -114,7 +118,7 @@ export function GhosttyImportModal({
               <Button variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
-              {hasChanges && <Button onClick={onApply}>Apply Changes</Button>}
+              {hasChanges && <Button onClick={() => void onApply()}>Apply Changes</Button>}
             </>
           )}
         </DialogFooter>

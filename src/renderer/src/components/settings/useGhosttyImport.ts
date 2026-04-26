@@ -6,19 +6,21 @@ export type UseGhosttyImportReturn = {
   preview: GhosttyImportPreview | null
   loading: boolean
   applied: boolean
+  applyError: string | null
   handleClick: () => Promise<void>
-  handleApply: () => void
+  handleApply: () => Promise<void>
   handleOpenChange: (open: boolean) => void
 }
 
 export function useGhosttyImport(
-  updateSettings: (updates: Partial<GlobalSettings>) => void,
+  updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>,
   settings: GlobalSettings
 ): UseGhosttyImportReturn {
   const [open, setOpen] = useState(false)
   const [preview, setPreview] = useState<GhosttyImportPreview | null>(null)
   const [loading, setLoading] = useState(false)
   const [applied, setApplied] = useState(false)
+  const [applyError, setApplyError] = useState<string | null>(null)
 
   async function handleClick(): Promise<void> {
     setOpen(true)
@@ -34,7 +36,7 @@ export function useGhosttyImport(
     }
   }
 
-  function handleApply(): void {
+  async function handleApply(): Promise<void> {
     if (applied || !preview?.found || Object.keys(preview.diff).length === 0) {
       return
     }
@@ -49,8 +51,17 @@ export function useGhosttyImport(
           }
         : {})
     }
-    updateSettings(merged)
-    setApplied(true)
+    setApplyError(null)
+    try {
+      // Why: updateSettings may be async (settings:set IPC). If it rejects we
+      // must keep the modal in its "unapplied" state and surface the error so
+      // the user doesn't see a false success.
+      await updateSettings(merged)
+      setApplied(true)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to apply settings'
+      setApplyError(message)
+    }
   }
 
   function handleOpenChange(newOpen: boolean): void {
@@ -59,8 +70,18 @@ export function useGhosttyImport(
       setPreview(null)
       setLoading(false)
       setApplied(false)
+      setApplyError(null)
     }
   }
 
-  return { open, preview, loading, applied, handleClick, handleApply, handleOpenChange }
+  return {
+    open,
+    preview,
+    loading,
+    applied,
+    applyError,
+    handleClick,
+    handleApply,
+    handleOpenChange
+  }
 }

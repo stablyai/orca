@@ -844,6 +844,7 @@ export function TerminalPane({
         loading={ghostty.loading}
         onApply={ghostty.handleApply}
         applied={ghostty.applied}
+        applyError={ghostty.applyError}
       />
     </div>
   )

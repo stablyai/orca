@@ -101,7 +101,7 @@ describe('useGhosttyImport', () => {
     expect(previewMock).toHaveBeenCalledTimes(1)
 
     // User applies the previewed changes
-    ghostty.handleApply()
+    await ghostty.handleApply()
     expect(updateSettings).toHaveBeenCalledTimes(1)
     expect(updateSettings).toHaveBeenCalledWith(previewResponse.diff)
 
@@ -142,7 +142,7 @@ describe('useGhosttyImport', () => {
 
     resetMockState()
     ghostty = useGhosttyImport(updateSettings, baseSettings)
-    ghostty.handleApply()
+    await ghostty.handleApply()
 
     expect(updateSettings).not.toHaveBeenCalled()
     expect(ghostty.applied).toBe(false)
@@ -190,7 +190,7 @@ describe('useGhosttyImport', () => {
 
     resetMockState()
     ghostty = useGhosttyImport(updateSettings, baseSettings)
-    ghostty.handleApply()
+    await ghostty.handleApply()
 
     expect(updateSettings).not.toHaveBeenCalled()
   })
@@ -219,7 +219,7 @@ describe('useGhosttyImport', () => {
 
     resetMockState()
     ghostty = useGhosttyImport(updateSettings, existingSettings)
-    ghostty.handleApply()
+    await ghostty.handleApply()
 
     expect(updateSettings).toHaveBeenCalledTimes(1)
     expect(updateSettings).toHaveBeenCalledWith({

@@ -146,10 +146,12 @@ describe('mapGhosttyToOrca — background & colors', () => {
     expect(result.unsupportedKeys).toEqual(['background-blur-radius (radius value not preserved)'])
   })
 
-  it('maps background-blur-radius = 0 to windowBackgroundBlur false', () => {
+  it('maps background-blur-radius = 0 to windowBackgroundBlur false without a drop note', () => {
+    // Why: 0 means blur is off — there is no radius value being lost, so the
+    // "radius not preserved" note would be misleading here.
     const result = mapGhosttyToOrca({ 'background-blur-radius': '0' })
     expect(result.diff).toEqual({ windowBackgroundBlur: false })
-    expect(result.unsupportedKeys).toEqual(['background-blur-radius (radius value not preserved)'])
+    expect(result.unsupportedKeys).toEqual([])
   })
 
   it('rejects invalid background-blur-radius', () => {
@@ -255,40 +257,19 @@ describe('mapGhosttyToOrca — palette', () => {
 })
 
 describe('mapGhosttyToOrca — window & padding', () => {
-  it('maps window-padding-color hex to terminalPanePaddingColor', () => {
+  // Why: window-padding-color and window-padding-balance are not imported —
+  // the CSS vars Orca sets for them have no consuming rules today, so the
+  // mapper must treat the keys as unsupported rather than silently dropping.
+  it('marks window-padding-color as unsupported', () => {
     const result = mapGhosttyToOrca({ 'window-padding-color': '#202020' })
-    expect(result.diff).toEqual({ terminalPanePaddingColor: '#202020' })
-    expect(result.unsupportedKeys).toEqual([])
-  })
-
-  it('rejects invalid window-padding-color', () => {
-    const result = mapGhosttyToOrca({ 'window-padding-color': 'blue' })
     expect(result.diff).toEqual({})
     expect(result.unsupportedKeys).toEqual(['window-padding-color'])
   })
 
-  it('treats window-padding-color extend as default behavior (not unsupported)', () => {
-    const result = mapGhosttyToOrca({ 'window-padding-color': 'extend' })
-    expect(result.diff).toEqual({})
-    expect(result.unsupportedKeys).toEqual([])
-  })
-
-  it('treats window-padding-color background as default behavior (not unsupported)', () => {
-    const result = mapGhosttyToOrca({ 'window-padding-color': 'background' })
-    expect(result.diff).toEqual({})
-    expect(result.unsupportedKeys).toEqual([])
-  })
-
-  it('treats window-padding-color EXTEND case-insensitively', () => {
-    const result = mapGhosttyToOrca({ 'window-padding-color': 'EXTEND' })
-    expect(result.diff).toEqual({})
-    expect(result.unsupportedKeys).toEqual([])
-  })
-
-  it('maps window-padding-balance to terminalPaddingBalance', () => {
+  it('marks window-padding-balance as unsupported', () => {
     const result = mapGhosttyToOrca({ 'window-padding-balance': 'true' })
-    expect(result.diff).toEqual({ terminalPaddingBalance: true })
-    expect(result.unsupportedKeys).toEqual([])
+    expect(result.diff).toEqual({})
+    expect(result.unsupportedKeys).toEqual(['window-padding-balance'])
   })
 })
 
