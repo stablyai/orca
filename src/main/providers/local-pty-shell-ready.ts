@@ -18,6 +18,19 @@ function quotePosixSingle(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`
 }
 
+export function getZshShellReadyRcfileContent(): string {
+  return `# Orca zsh shell-ready wrapper
+_orca_home="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
+if [[ -o interactive && -f "$_orca_home/.zshrc" ]]; then
+  source "$_orca_home/.zshrc"
+fi
+# Why: match the right-arrow accept path used by zsh-autosuggestions so Tab
+# accepts the inline command suggestion in Orca's shells instead of falling
+# back to completion or focus traversal.
+bindkey '^I' forward-char
+`
+}
+
 const STARTUP_COMMAND_READY_MAX_WAIT_MS = 1500
 const OSC_133_A = '\x1b]133;A'
 
@@ -124,12 +137,6 @@ export ZDOTDIR=${quotePosixSingle(zshDir)}
 _orca_home="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
 [[ -f "$_orca_home/.zprofile" ]] && source "$_orca_home/.zprofile"
 `
-  const zshRc = `# Orca zsh shell-ready wrapper
-_orca_home="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
-if [[ -o interactive && -f "$_orca_home/.zshrc" ]]; then
-  source "$_orca_home/.zshrc"
-fi
-`
   const zshLogin = `# Orca zsh shell-ready wrapper
 _orca_home="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
 if [[ -o interactive && -f "$_orca_home/.zlogin" ]]; then
@@ -147,7 +154,7 @@ precmd_functions=(\${precmd_functions[@]} __orca_prompt_mark)
   const files = [
     [`${zshDir}/.zshenv`, zshEnv],
     [`${zshDir}/.zprofile`, zshProfile],
-    [`${zshDir}/.zshrc`, zshRc],
+    [`${zshDir}/.zshrc`, getZshShellReadyRcfileContent()],
     [`${zshDir}/.zlogin`, zshLogin],
     [`${bashDir}/rcfile`, bashRc]
   ] as const

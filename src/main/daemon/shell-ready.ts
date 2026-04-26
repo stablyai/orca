@@ -1,6 +1,7 @@
 import { tmpdir } from 'os'
 import { basename, join } from 'path'
 import { chmodSync, mkdirSync, writeFileSync } from 'fs'
+import { getZshShellReadyRcfileContent } from '../providers/local-pty-shell-ready'
 
 const SHELL_READY_WRAPPER_ROOT = join(tmpdir(), 'orca-shell-ready')
 const SHELL_READY_MARKER = '\\033]777;orca-shell-ready\\007'
@@ -28,12 +29,6 @@ export ZDOTDIR=${quotePosixSingle(zshDir)}
   const zshProfile = `# Orca daemon zsh shell-ready wrapper
 _orca_home="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
 [[ -f "$_orca_home/.zprofile" ]] && source "$_orca_home/.zprofile"
-`
-  const zshRc = `# Orca daemon zsh shell-ready wrapper
-_orca_home="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
-if [[ -o interactive && -f "$_orca_home/.zshrc" ]]; then
-  source "$_orca_home/.zshrc"
-fi
 `
   const zshLogin = `# Orca daemon zsh shell-ready wrapper
 _orca_home="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
@@ -72,7 +67,7 @@ fi
   const files = [
     [join(zshDir, '.zshenv'), zshEnv],
     [join(zshDir, '.zprofile'), zshProfile],
-    [join(zshDir, '.zshrc'), zshRc],
+    [join(zshDir, '.zshrc'), getZshShellReadyRcfileContent()],
     [join(zshDir, '.zlogin'), zshLogin],
     [join(bashDir, 'rcfile'), bashRc]
   ] as const

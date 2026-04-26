@@ -556,6 +556,12 @@ describe('registerPtyHandlers', () => {
     }
   })
 
+  it('binds Tab to the same zsh forward-char path as the right arrow', async () => {
+    const { getZshShellReadyRcfileContent } = await import('./pty')
+    const zshRcContent = getZshShellReadyRcfileContent()
+    expect(zshRcContent).toContain("bindkey '^I' forward-char")
+  })
+
   it('does not write the startup command before the shell-ready marker arrives', async () => {
     vi.useFakeTimers()
     const mockProc = createMockProc()
