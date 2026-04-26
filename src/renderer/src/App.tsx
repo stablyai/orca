@@ -728,8 +728,14 @@ function App(): React.JSX.Element {
   // the sidebar-width left header (workspace view) can share the same
   // controls without duplicating the agent badge popover.
   const titlebarLeftControls = (
-    <div className="flex h-full w-full shrink-0 items-center">
-      <div ref={titlebarLeftControlsRef} className="flex h-full items-center">
+    // Why: measure the ENTIRE row (traffic-light pad + sidebar toggle + agent
+    // badge + back/forward group) so the sidebar-collapse spacer in
+    // TabGroupPanel reserves enough width to clear the full floating
+    // `titlebar-left`. Measuring only the inner control cluster left the
+    // back/forward arrows hanging over the first tab when the sidebar was
+    // collapsed (Cmd+B), producing a half-occluded, non-scrollable tab strip.
+    <div ref={titlebarLeftControlsRef} className="flex h-full w-full shrink-0 items-center">
+      <div className="flex h-full items-center">
         <div className={isMac && !isFullScreen ? 'titlebar-traffic-light-pad' : 'pl-2'} />
         {showSidebar && (
           <Tooltip>
@@ -861,9 +867,7 @@ function App(): React.JSX.Element {
       {/* Why: Back/Forward navigate worktree-activation history. Only
           meaningful while viewing a worktree (terminal view); hidden in
           Settings/Tasks/Landing to keep the titlebar compact and the
-          semantics unambiguous. The group sits outside the measured inner
-          container so the sidebar-collapse spacer stays sized to the left
-          controls only. */}
+          semantics unambiguous. */}
       {activeView === 'terminal' && (
         <div className="ml-auto mr-3 flex items-center">
           <Tooltip>
@@ -987,7 +991,13 @@ function App(): React.JSX.Element {
                 className={`flex min-h-0 flex-col shrink-0${sidebarOpen ? '' : ' relative w-0 overflow-visible'}`}
               >
                 <div
-                  className={`titlebar-left${sidebarOpen ? '' : ' absolute top-0 left-0 z-10'}`}
+                  // Why: when the sidebar is collapsed, titlebar-left floats
+                  // absolutely on top of the center column's own `border-l`
+                  // (see TabGroupSplitLayout), occluding that seam. Add a
+                  // `border-r` in the floating state so the vertical line
+                  // between the traffic-light/nav cluster and the tab strip
+                  // stays visible in both states.
+                  className={`titlebar-left${sidebarOpen ? '' : ' absolute top-0 left-0 z-10 border-r border-border'}`}
                   style={{
                     // Why: the Sidebar resize hook updates the sidebar DOM width
                     // directly during drag and only persists to Zustand on
