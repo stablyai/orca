@@ -19,13 +19,19 @@ export function handleSwitchTab(direction: number): boolean {
   if (allTabIds.length <= 1) {
     return false
   }
+  const activeGroupId = store.activeGroupIdByWorktree[worktreeId]
+  const group = activeGroupId
+    ? (store.groupsByWorktree[worktreeId] ?? []).find((candidate) => candidate.id === activeGroupId)
+    : undefined
   const currentId =
-    store.activeTabType === 'editor'
-      ? store.activeFileId
-      : store.activeTabType === 'browser'
-        ? store.activeBrowserTabId
-        : store.activeTabId
-  const idx = allTabIds.findIndex((t) => t.id === currentId)
+    group?.activeTabId && allTabIds.some((entry) => entry.tabId === group.activeTabId)
+      ? group.activeTabId
+      : store.activeTabType === 'editor'
+        ? store.activeFileId
+        : store.activeTabType === 'browser'
+          ? store.activeBrowserTabId
+          : store.activeTabId
+  const idx = allTabIds.findIndex((t) => t.tabId === currentId || t.id === currentId)
   const next = allTabIds[(idx + direction + allTabIds.length) % allTabIds.length]
   if (next.type === 'terminal') {
     store.setActiveTab(next.id)
@@ -34,7 +40,12 @@ export function handleSwitchTab(direction: number): boolean {
     store.setActiveBrowserTab(next.id)
     store.setActiveTabType('browser')
   } else {
+    // Why: backing ids must drive file activation, while unified tab ids only
+    // participate when the active-group ref actually carries one.
     store.setActiveFile(next.id)
+    if (next.tabId) {
+      store.activateTab?.(next.tabId)
+    }
     store.setActiveTabType('editor')
   }
   return true
