@@ -12,19 +12,44 @@ const AUTOMATION_LOGIN_PATTERNS = [
   /renovate/i,
   /dependabot/i
 ]
+// Why: several AI code-review services register as regular GitHub *user*
+// accounts rather than GitHub Apps, so REST `user.type` returns "User" and
+// their logins don't contain "bot"/"automation" either (qodo-ai-reviewer,
+// coderabbitai, codium-ai, etc.). Maintain an explicit allowlist so these
+// still land in the Bots tab. Matched as a substring to cover variants
+// like `coderabbitai[bot]`, `qodo-ai-reviewer`, `qodo-merge-pro`.
+const KNOWN_AUTOMATION_LOGIN_SUBSTRINGS = [
+  'qodo',
+  'coderabbit',
+  'codium',
+  'sonarcloud',
+  'sonarqube',
+  'sourcery-ai',
+  'deepsource',
+  'snyk',
+  'codecov',
+  'greptile',
+  'ellipsis',
+  'graphite-app',
+  'reviewer-gpt',
+  '-reviewer'
+]
 
 export function isAutomatedPRComment(comment: PRComment): boolean {
   // Why: GitHub's REST `user.type === 'Bot'` and GraphQL `author.__typename === 'Bot'`
-  // are authoritative and correctly flag third-party review bots (qodo-ai-reviewer,
-  // coderabbitai, sonarcloud) whose logins don't contain "bot"/"automation".
-  // Prefer that; fall back to the login heuristic only when the data source
-  // can't report it (e.g. `gh pr view` non-GitHub fallback path).
-  if (comment.isBot !== undefined) {
-    return comment.isBot
+  // only flag accounts registered as GitHub Apps. Several popular AI reviewers
+  // (qodo-ai-reviewer, coderabbitai) sign in as regular *user* accounts, so
+  // `isBot` returns false for them. Treat isBot=true as authoritative, but when
+  // absent or false, fall through to login heuristics + a known-bot allowlist.
+  if (comment.isBot === true) {
+    return true
   }
   const author = comment.author.trim()
   const normalized = author.toLowerCase()
   if (normalized.endsWith(BOT_LOGIN_SUFFIX)) {
+    return true
+  }
+  if (KNOWN_AUTOMATION_LOGIN_SUBSTRINGS.some((needle) => normalized.includes(needle))) {
     return true
   }
   return AUTOMATION_LOGIN_PATTERNS.some((pattern) => pattern.test(author))

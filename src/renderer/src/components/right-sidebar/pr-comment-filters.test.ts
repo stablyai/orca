@@ -26,14 +26,18 @@ describe('pr-comment-filters', () => {
     expect(isAutomatedPRComment(comment('robotics-dev'))).toBe(false)
   })
 
-  it('trusts the GitHub-provided isBot flag over the login heuristic', () => {
-    // Third-party review bots like qodo-ai-reviewer don't contain "bot" in
-    // their login, so the heuristic alone misclassifies them. GitHub's
-    // user.type / __typename signal is authoritative.
-    expect(isAutomatedPRComment({ ...comment('qodo-ai-reviewer'), isBot: true })).toBe(true)
-    expect(isAutomatedPRComment({ ...comment('coderabbitai'), isBot: true })).toBe(true)
-    // Explicit isBot=false wins over a suspicious-looking login.
-    expect(isAutomatedPRComment({ ...comment('robotics-dev'), isBot: false })).toBe(false)
+  it('trusts the GitHub-provided isBot flag when true', () => {
+    expect(isAutomatedPRComment({ ...comment('github-actions[bot]'), isBot: true })).toBe(true)
+  })
+
+  it('classifies known AI review services that register as User accounts', () => {
+    // These sign in as regular GitHub users, so GitHub's user.type is 'User'
+    // and their logins have no "bot" / "automation" tokens. Allowlist picks
+    // them up regardless.
+    expect(isAutomatedPRComment({ ...comment('qodo-ai-reviewer'), isBot: false })).toBe(true)
+    expect(isAutomatedPRComment({ ...comment('coderabbitai'), isBot: false })).toBe(true)
+    expect(isAutomatedPRComment(comment('sonarcloud'))).toBe(true)
+    expect(isAutomatedPRComment(comment('codium-ai-reviewer'))).toBe(true)
   })
 
   it('filters comments by audience', () => {
