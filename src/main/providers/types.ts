@@ -107,7 +107,7 @@ export type IFilesystemProvider = {
   copy(source: string, destination: string): Promise<void>
   realpath(filePath: string): Promise<string>
   search(opts: SearchOptions): Promise<SearchResult>
-  listFiles(rootPath: string): Promise<string[]>
+  listFiles(rootPath: string, options?: { excludePaths?: string[] }): Promise<string[]>
   watch(rootPath: string, callback: (events: FsChangeEvent[]) => void): Promise<() => void>
 }
 

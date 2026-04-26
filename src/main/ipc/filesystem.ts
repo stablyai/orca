@@ -456,7 +456,10 @@ export function registerFilesystemHandlers(store: Store): void {
         if (!provider) {
           return []
         }
-        return provider.listFiles(args.rootPath)
+        // Why: forward excludePaths through to the remote provider.
+        // Dropping it here would silently double-scan nested linked worktrees
+        // over SSH and contribute to timeout-induced partial results.
+        return provider.listFiles(args.rootPath, { excludePaths: args.excludePaths })
       }
       return listQuickOpenFiles(args.rootPath, store, args.excludePaths)
     }

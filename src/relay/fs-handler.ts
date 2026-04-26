@@ -27,6 +27,8 @@ import {
 } from './fs-handler-utils'
 import { listFilesWithGit, searchWithGitGrep } from './fs-handler-git-fallback'
 import { listFilesWithReaddir } from './fs-handler-readdir-fallback'
+import { buildExcludePathPrefixes } from '../shared/quick-open-filter'
+import { buildInstallRgMessage } from './fs-handler-install-rg'
 
 type WatchState = {
   rootPath: string
@@ -233,9 +235,14 @@ export class FsHandler {
   private async listFiles(params: Record<string, unknown>): Promise<string[]> {
     const rootPath = expandTilde(params.rootPath as string)
     await this.context.validatePathResolved(rootPath)
+    // Why: the main-to-relay RPC adds excludePaths so nested linked worktrees
+    // don't get double-scanned. The shared helper validates the shape and
+    // normalizes into root-relative prefixes; malformed input yields [] so
+    // the request still succeeds (older apps omit the field entirely).
+    const excludePathPrefixes = buildExcludePathPrefixes(rootPath, params.excludePaths)
     const rgAvailable = await checkRgAvailable()
     if (rgAvailable) {
-      return listFilesWithRg(rootPath)
+      return listFilesWithRg(rootPath, excludePathPrefixes)
     }
     // Why: git ls-files only works inside git repos. Use rev-parse to detect
     // git ancestry — unlike checking for a local .git entry, this works from
@@ -248,9 +255,18 @@ export class FsHandler {
       )
     })
     if (isGitRepo) {
-      return listFilesWithGit(rootPath)
+      return listFilesWithGit(rootPath, excludePathPrefixes)
     }
-    return listFilesWithReaddir(rootPath)
+    // Why: the readdir walker rejects on cap/deadline instead of returning a
+    // partial list (design doc: silent truncation is worse than an explicit
+    // error). On a home-root without rg that's almost always an install-rg
+    // problem, so translate the opaque cap error into actionable guidance
+    // the user can act on directly from the error toast.
+    try {
+      return await listFilesWithReaddir(rootPath, excludePathPrefixes)
+    } catch (err) {
+      throw new Error(await buildInstallRgMessage(err))
+    }
   }
 
   private async watch(params: Record<string, unknown>, context?: RequestContext) {
