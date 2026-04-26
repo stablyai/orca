@@ -30,6 +30,7 @@ import {
   getLinkedWorkItemSuggestedName,
   getSetupConfig,
   getWorkspaceSeedName,
+  PER_REPO_FETCH_LIMIT,
   renderIssueCommandTemplate,
   type LinkedWorkItemSummary
 } from '@/lib/new-workspace'
@@ -549,7 +550,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     if (!selectedRepo?.path || selectedRepo.connectionId) {
       return
     }
-    prefetchWorkItems(selectedRepo.id, selectedRepo.path, 36, 'is:pr is:open')
+    prefetchWorkItems(selectedRepo.id, selectedRepo.path, PER_REPO_FETCH_LIMIT, 'is:pr is:open')
   }, [prefetchWorkItems, selectedRepo?.connectionId, selectedRepo?.id, selectedRepo?.path])
 
   // Per-repo: resolve repo slug for GH URL mismatch detection.

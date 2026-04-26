@@ -10,7 +10,7 @@ import type {
   Worktree,
   GitHubWorkItem
 } from '../../../../shared/types'
-import { sortWorkItemsByUpdatedAt } from '../../../../shared/work-items'
+import { sortWorkItemsByUpdatedAt, PER_REPO_FETCH_LIMIT } from '../../../../shared/work-items'
 import { syncPRChecksStatus } from './github-checks'
 
 export type CacheEntry<T> = {
@@ -185,10 +185,27 @@ export type GitHubSlice = {
    */
   fetchWorkItemsAcrossRepos: (
     repos: { repoId: string; path: string }[],
-    limit: number,
+    perRepoLimit: number,
+    displayLimit: number,
     query: string,
     options?: FetchOptions
   ) => Promise<{ items: GitHubWorkItem[]; failedCount: number }>
+  /**
+   * Fetch the next page of work items using a date cursor. Does not cache —
+   * pagination pages are ephemeral and managed by TaskPage state.
+   */
+  fetchWorkItemsNextPage: (
+    repos: { repoId: string; path: string }[],
+    perRepoLimit: number,
+    displayLimit: number,
+    query: string,
+    before: string
+  ) => Promise<{ items: GitHubWorkItem[]; failedCount: number }>
+  /**
+   * Count total work items across repos using GitHub's search API.
+   * Returns the sum of per-repo counts for the given query.
+   */
+  countWorkItemsAcrossRepos: (repos: { path: string }[], query: string) => Promise<number>
   /**
    * Fire-and-forget prefetch used by UI entry points (hover/focus of the
    * "new workspace" buttons) to warm the cache before the page mounts.
@@ -268,19 +285,21 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     return request
   },
 
-  fetchWorkItemsAcrossRepos: async (repos, limit, query, options) => {
+  fetchWorkItemsAcrossRepos: async (repos, perRepoLimit, displayLimit, query, options) => {
     const state = get()
     let failedCount = 0
     const perRepoResults = await Promise.all(
       repos.map(async (r) => {
         try {
-          return await state.fetchWorkItems(r.repoId, r.path, limit, query, options)
+          return await state.fetchWorkItems(r.repoId, r.path, perRepoLimit, query, options)
         } catch (err) {
           // Why: fall back to any cache entry (stale or not) before declaring
           // this repo failed. Matches single-repo behavior of silently serving
           // stale data on error. A repo is only counted as failed when it has
           // nothing at all to contribute.
-          const key = workItemsCacheKey(r.path, limit, query)
+          // Why: must use perRepoLimit (not displayLimit) so the cache key
+          // matches what fetchWorkItems wrote.
+          const key = workItemsCacheKey(r.path, perRepoLimit, query)
           const cached = get().workItemsCache[key]?.data
           if (cached) {
             console.warn(`[workItems] ${r.repoId} failed, serving cached:`, err)
@@ -292,11 +311,53 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         }
       })
     )
-    const merged = sortWorkItemsByUpdatedAt(perRepoResults.flat()).slice(0, limit)
+    const merged = sortWorkItemsByUpdatedAt(perRepoResults.flat()).slice(0, displayLimit)
     return { items: merged, failedCount }
   },
 
-  prefetchWorkItems: (repoId, repoPath, limit = 36, query = '') => {
+  fetchWorkItemsNextPage: async (repos, perRepoLimit, displayLimit, query, before) => {
+    let failedCount = 0
+    const perRepoResults = await Promise.all(
+      repos.map(async (r) => {
+        await acquireWorkItemSlot()
+        try {
+          const raw = (await window.api.gh.listWorkItems({
+            repoPath: r.path,
+            limit: perRepoLimit,
+            query: query || undefined,
+            before
+          })) as Omit<GitHubWorkItem, 'repoId'>[]
+          return raw.map((item): GitHubWorkItem => ({ ...item, repoId: r.repoId }))
+        } catch (err) {
+          console.warn(`[workItems] next page ${r.repoId} failed:`, err)
+          failedCount += 1
+          return [] as GitHubWorkItem[]
+        } finally {
+          releaseWorkItemSlot()
+        }
+      })
+    )
+    const merged = sortWorkItemsByUpdatedAt(perRepoResults.flat()).slice(0, displayLimit)
+    return { items: merged, failedCount }
+  },
+
+  countWorkItemsAcrossRepos: async (repos, query) => {
+    const counts = await Promise.all(
+      repos.map(async (r) => {
+        try {
+          return await window.api.gh.countWorkItems({
+            repoPath: r.path,
+            query: query || undefined
+          })
+        } catch {
+          return 0
+        }
+      })
+    )
+    return counts.reduce((sum, c) => sum + c, 0)
+  },
+
+  prefetchWorkItems: (repoId, repoPath, limit = PER_REPO_FETCH_LIMIT, query = '') => {
     const key = workItemsCacheKey(repoPath, limit, query)
     const cached = get().workItemsCache[key]
     // Skip when the cache is fresh or a request is already in flight.

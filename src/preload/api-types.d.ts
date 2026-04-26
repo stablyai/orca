@@ -399,10 +399,12 @@ export type PreloadApi = {
       title: string
       body: string
     }) => Promise<{ ok: true; number: number; url: string } | { ok: false; error: string }>
+    countWorkItems: (args: { repoPath: string; query?: string }) => Promise<number>
     listWorkItems: (args: {
       repoPath: string
       limit?: number
       query?: string
+      before?: string
     }) => Promise<Omit<GitHubWorkItem, 'repoId'>[]>
     prChecks: (args: {
       repoPath: string

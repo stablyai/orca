@@ -47,6 +47,14 @@ describe('parseTaskQuery', () => {
     const parsed = parseTaskQuery('is:draft')
     expect(parsed.scope).toBe('pr')
     expect(parsed.state).toBe('open')
+    expect(parsed.draft).toBe(true)
+  })
+
+  it('is:pr is:open does not set draft', () => {
+    const parsed = parseTaskQuery('is:pr is:open')
+    expect(parsed.scope).toBe('pr')
+    expect(parsed.state).toBe('open')
+    expect(parsed.draft).toBe(false)
   })
 
   it('extracts assignee, author, label, and review qualifiers', () => {

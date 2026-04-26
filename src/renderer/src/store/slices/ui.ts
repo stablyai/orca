@@ -10,18 +10,24 @@ import type {
   UpdateStatus,
   WorktreeCardProperty
 } from '../../../../shared/types'
+import { PER_REPO_FETCH_LIMIT } from '../../../../shared/work-items'
 
-// Why: mirrors the preset→query mapping used by TaskPage's preset buttons.
+// Why: mirrors the preset→query mapping in getTaskPresetQuery (new-workspace.ts).
 // Keeping a local copy here avoids a store ↔ lib circular import while letting
 // openTaskPage warm exactly the cache key the page will read on mount.
+// Must stay in sync with getTaskPresetQuery — see DESIGN-gh-issues-improve.md.
 function presetToQuery(presetId: TaskViewPresetId | null): string {
   switch (presetId) {
+    case 'issues':
+      return 'is:issue is:open'
     case 'my-issues':
-      return 'assignee:@me is:open'
-    case 'review':
-      return 'review-requested:@me is:open'
+      return 'assignee:@me is:issue is:open'
+    case 'prs':
+      return 'is:pr is:open'
     case 'my-prs':
-      return 'author:@me is:open'
+      return 'author:@me is:pr is:open'
+    case 'review':
+      return 'review-requested:@me is:pr is:open'
     default:
       return 'is:open'
   }
@@ -198,7 +204,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     const repo = targetRepoId ? state.repos.find((r) => r.id === targetRepoId) : null
     if (repo?.path) {
       const preset = state.settings?.defaultTaskViewPreset ?? 'all'
-      state.prefetchWorkItems(repo.id, repo.path, 36, presetToQuery(preset))
+      state.prefetchWorkItems(repo.id, repo.path, PER_REPO_FETCH_LIMIT, presetToQuery(preset))
     }
   },
   closeTaskPage: () =>

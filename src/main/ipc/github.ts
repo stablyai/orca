@@ -9,6 +9,7 @@ import {
   getRepoSlug,
   listIssues,
   listWorkItems,
+  countWorkItems,
   getWorkItem,
   createIssue,
   updateIssue,
@@ -76,11 +77,16 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
 
   ipcMain.handle(
     'gh:listWorkItems',
-    (_event, args: { repoPath: string; limit?: number; query?: string }) => {
+    (_event, args: { repoPath: string; limit?: number; query?: string; before?: string }) => {
       const repo = assertRegisteredRepo(args.repoPath, store)
-      return listWorkItems(repo.path, args.limit, args.query)
+      return listWorkItems(repo.path, args.limit, args.query, args.before)
     }
   )
+
+  ipcMain.handle('gh:countWorkItems', (_event, args: { repoPath: string; query?: string }) => {
+    const repo = assertRegisteredRepo(args.repoPath, store)
+    return countWorkItems(repo.path, args.query)
+  })
 
   ipcMain.handle('gh:workItem', (_event, args: { repoPath: string; number: number }) => {
     const repo = assertRegisteredRepo(args.repoPath, store)

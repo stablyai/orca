@@ -4,7 +4,7 @@ import { useAppStore } from '@/store'
 import { useRepoMap } from '@/store/selectors'
 import { cn } from '@/lib/utils'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
-import { getTaskPresetQuery } from '@/lib/new-workspace'
+import { getTaskPresetQuery, PER_REPO_FETCH_LIMIT } from '@/lib/new-workspace'
 
 function LinearIcon({ className }: { className?: string }): React.JSX.Element {
   return (
@@ -42,7 +42,7 @@ const SidebarNav = React.memo(function SidebarNav() {
       prefetchWorkItems(
         firstGitRepo.id,
         firstGitRepo.path,
-        36,
+        PER_REPO_FETCH_LIMIT,
         getTaskPresetQuery(defaultTaskViewPreset)
       )
     }

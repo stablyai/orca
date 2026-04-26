@@ -391,10 +391,14 @@ const api = {
     }): Promise<{ ok: true; number: number; url: string } | { ok: false; error: string }> =>
       ipcRenderer.invoke('gh:createIssue', args),
 
+    countWorkItems: (args: { repoPath: string; query?: string }): Promise<number> =>
+      ipcRenderer.invoke('gh:countWorkItems', args),
+
     listWorkItems: (args: {
       repoPath: string
       limit?: number
       query?: string
+      before?: string
     }): Promise<unknown[]> => ipcRenderer.invoke('gh:listWorkItems', args),
 
     prChecks: (args: {

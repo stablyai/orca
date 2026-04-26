@@ -216,8 +216,9 @@ function buildWorkItemListArgs(args: {
   ownerRepo: { owner: string; repo: string } | null
   limit: number
   query: ParsedTaskQuery
+  before?: string
 }): string[] {
-  const { kind, ownerRepo, limit, query } = args
+  const { kind, ownerRepo, limit, query, before } = args
   const fields =
     kind === 'issue'
       ? 'number,title,state,url,labels,updatedAt,author'
@@ -249,20 +250,20 @@ function buildWorkItemListArgs(args: {
       out.push('--label', label)
     }
   }
-  if (
-    kind === 'pr' &&
-    query.scope === 'pr' &&
-    query.state === 'open' &&
-    query.freeText === '' &&
-    !query.reviewRequested &&
-    !query.reviewedBy
-  ) {
+  // Why: only add --draft when the user explicitly typed `is:draft`. Previously
+  // this fired for any PR-scoped open query, which made `is:pr is:open` (the
+  // "PRs" preset) silently filter to drafts-only.
+  if (kind === 'pr' && query.draft) {
     out.push('--draft')
   }
 
-  // review-requested and reviewed-by are not supported as standalone gh CLI flags,
-  // so they must be passed as GitHub search qualifiers via --search.
   const searchParts: string[] = []
+  // Why: cursor-based pagination. GitHub search supports updated:<DATE to
+  // fetch items older than the cursor. We use the oldest item's updatedAt
+  // from the previous page as the cursor.
+  if (before) {
+    searchParts.push(`updated:<${before}`)
+  }
   if (kind === 'pr' && query.reviewRequested) {
     searchParts.push(`review-requested:${query.reviewRequested}`)
   }
@@ -362,7 +363,8 @@ async function listQueriedWorkItems(
   repoPath: string,
   ownerRepo: { owner: string; repo: string } | null,
   query: ParsedTaskQuery,
-  limit: number
+  limit: number,
+  before?: string
 ): Promise<MainWorkItem[]> {
   const fetchers: Promise<MainWorkItem[]>[] = []
   const issueScope = query.scope !== 'pr'
@@ -371,7 +373,7 @@ async function listQueriedWorkItems(
   if (issueScope) {
     fetchers.push(
       (async () => {
-        const args = buildWorkItemListArgs({ kind: 'issue', ownerRepo, limit, query })
+        const args = buildWorkItemListArgs({ kind: 'issue', ownerRepo, limit, query, before })
         try {
           const { stdout } = await ghExecFileAsync(args, { cwd: repoPath })
           return (JSON.parse(stdout) as Record<string, unknown>[]).map(mapIssueWorkItem)
@@ -385,7 +387,7 @@ async function listQueriedWorkItems(
   if (prScope) {
     fetchers.push(
       (async () => {
-        const args = buildWorkItemListArgs({ kind: 'pr', ownerRepo, limit, query })
+        const args = buildWorkItemListArgs({ kind: 'pr', ownerRepo, limit, query, before })
         try {
           const { stdout } = await ghExecFileAsync(args, { cwd: repoPath })
           return (JSON.parse(stdout) as Record<string, unknown>[]).map((item) =>
@@ -405,7 +407,8 @@ async function listQueriedWorkItems(
 export async function listWorkItems(
   repoPath: string,
   limit = 24,
-  query?: string
+  query?: string,
+  before?: string
 ): Promise<MainWorkItem[]> {
   const ownerRepo = await getOwnerRepo(repoPath)
   const trimmedQuery = query?.trim() ?? ''
@@ -420,7 +423,86 @@ export async function listWorkItems(
     }
 
     const parsedQuery = parseTaskQuery(trimmedQuery)
-    return await listQueriedWorkItems(repoPath, ownerRepo, parsedQuery, limit)
+    return await listQueriedWorkItems(repoPath, ownerRepo, parsedQuery, limit, before)
+  } finally {
+    release()
+  }
+}
+
+function buildSearchQueryString(
+  ownerRepo: { owner: string; repo: string },
+  query: ParsedTaskQuery
+): string {
+  const parts: string[] = [`repo:${ownerRepo.owner}/${ownerRepo.repo}`]
+  if (query.scope === 'pr') {
+    parts.push('is:pull-request')
+  } else if (query.scope === 'issue') {
+    parts.push('is:issue')
+  }
+  if (query.state === 'open') {
+    parts.push('is:open')
+  } else if (query.state === 'closed') {
+    parts.push('is:closed')
+  } else if (query.state === 'merged') {
+    parts.push('is:merged')
+  }
+  if (query.draft) {
+    parts.push('draft:true')
+  }
+  if (query.assignee) {
+    parts.push(`assignee:${query.assignee}`)
+  }
+  if (query.author) {
+    parts.push(`author:${query.author}`)
+  }
+  if (query.reviewRequested) {
+    parts.push(`review-requested:${query.reviewRequested}`)
+  }
+  if (query.reviewedBy) {
+    parts.push(`reviewed-by:${query.reviewedBy}`)
+  }
+  for (const label of query.labels) {
+    parts.push(`label:${label}`)
+  }
+  if (query.freeText) {
+    parts.push(query.freeText)
+  }
+  return parts.join(' ')
+}
+
+// Why: uses GitHub's search API to get total_count without fetching items.
+// This powers the pagination bar so the user sees total pages upfront.
+// Cached for 120s to avoid burning the search rate limit (30 req/min).
+export async function countWorkItems(repoPath: string, query?: string): Promise<number> {
+  const ownerRepo = await getOwnerRepo(repoPath)
+  if (!ownerRepo) {
+    return 0
+  }
+
+  const trimmedQuery = query?.trim() ?? ''
+  const parsedQuery = trimmedQuery ? parseTaskQuery(trimmedQuery) : null
+
+  const searchQ = parsedQuery
+    ? buildSearchQueryString(ownerRepo, parsedQuery)
+    : `repo:${ownerRepo.owner}/${ownerRepo.repo} is:open`
+
+  await acquire()
+  try {
+    const { stdout } = await ghExecFileAsync(
+      [
+        'api',
+        '--cache',
+        '120s',
+        `search/issues?q=${encodeURIComponent(searchQ)}&per_page=1`,
+        '--jq',
+        '.total_count'
+      ],
+      { cwd: repoPath }
+    )
+    return parseInt(stdout.trim(), 10) || 0
+  } catch (err) {
+    console.warn('countWorkItems failed:', err)
+    return 0
   } finally {
     release()
   }
