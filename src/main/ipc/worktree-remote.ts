@@ -14,7 +14,7 @@ import type {
 } from '../../shared/types'
 import { getPRForBranch } from '../github/client'
 import { listWorktrees, addWorktree } from '../git/worktree'
-import { getGitUsername, getDefaultBaseRef, getBranchConflictKind } from '../git/repo'
+import { getGitUsername, getDefaultBaseRef, getBranchConflictKind, isBareRepo } from '../git/repo'
 import { gitExecFileAsync } from '../git/runner'
 import { isWslPath, parseWslPath, getWslHome } from '../wsl'
 import { createSetupRunnerScript, getEffectiveHooks, shouldRunSetupForCreate } from '../hooks'
@@ -157,16 +157,40 @@ export async function createLocalWorktree(
 ): Promise<CreateWorktreeResult> {
   const settings = store.getSettings()
 
+  // In-repo mode is meaningful only for repos that have a working tree
+  // (the whole point is to keep that working tree's `git status` clean).
+  // Bare repos have no working tree, so fall through to a clear error
+  // instead of silently creating `<bare-repo>/.worktrees/<name>` inside
+  // the bare object directory — which would succeed mechanically but
+  // violate convention and surprise the user.
+  if (settings.worktreeLocation === 'in-repo' && isBareRepo(repo.path)) {
+    throw new Error(
+      'In-repo worktree mode is not supported for bare repositories. ' +
+        'Switch Worktree Location to External in Settings → General.'
+    )
+  }
+
   const username = getGitUsername(repo.path)
   const requestedName = args.name
   const sanitizedName = sanitizeWorktreeName(args.name)
-  // Why: WSL worktrees live under ~/orca/workspaces inside the WSL
-  // filesystem. Validate against that root, not the Windows workspace dir.
-  // If WSL home lookup fails, keep using the configured workspace root so
-  // the path traversal guard still runs on the fallback path.
+  // Why workspaceRoot is mode-dependent:
+  // - in-repo: the root is `<repo>/.worktrees`. The path-traversal guard
+  //   at `ensurePathWithinWorkspace` below validates that the computed
+  //   path stays under that directory. sanitizeWorktreeName already
+  //   strips separators and `..`, so this is defense-in-depth.
+  // - WSL: worktrees live under ~/orca/workspaces on the WSL filesystem.
+  //   Validate against that root, not the Windows workspace dir. If WSL
+  //   home lookup fails, fall back to the configured workspace root so
+  //   the guard still runs.
+  // - external (default): the configured workspace dir.
   const wslInfo = isWslPath(repo.path) ? parseWslPath(repo.path) : null
   const wslHome = wslInfo ? getWslHome(wslInfo.distro) : null
-  const workspaceRoot = wslHome ? join(wslHome, 'orca', 'workspaces') : settings.workspaceDir
+  const workspaceRoot =
+    settings.worktreeLocation === 'in-repo'
+      ? join(repo.path, '.worktrees')
+      : wslHome
+        ? join(wslHome, 'orca', 'workspaces')
+        : settings.workspaceDir
   let effectiveRequestedName = requestedName
   let effectiveSanitizedName = sanitizedName
   let branchName = ''

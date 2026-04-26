@@ -736,10 +736,19 @@ export type SetupScriptLaunchMode = 'split-vertical' | 'split-horizontal' | 'new
 /** Direction used when the setup script launch mode is a split. */
 export type SetupSplitDirection = 'vertical' | 'horizontal'
 
+/** Where worktrees are physically created.
+ *  - 'external': sibling-of-repo directory (default). Uses workspaceDir or
+ *    the repo's parent depending on nestWorkspaces.
+ *  - 'in-repo': inside the repo at <repo>/.worktrees/<name>. Requires a
+ *    .gitignore confirmation prompt before the first create so the entries
+ *    don't pollute git status. */
+export type WorktreeLocation = 'external' | 'in-repo'
+
 export type GlobalSettings = {
   workspaceDir: string
   nestWorkspaces: boolean
   refreshLocalBaseRefOnWorktreeCreate: boolean
+  worktreeLocation: WorktreeLocation
   branchPrefix: 'git-username' | 'custom' | 'none'
   branchPrefixCustom: string
   enableGitHubAttribution: boolean

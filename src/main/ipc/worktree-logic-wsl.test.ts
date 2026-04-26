@@ -29,7 +29,8 @@ describe('computeWorktreePath WSL layout', () => {
     expect(
       computeWorktreePath('feature', '\\\\wsl.localhost\\Ubuntu\\home\\jin\\src\\repo', {
         nestWorkspaces: true,
-        workspaceDir: 'C:\\workspaces'
+        workspaceDir: 'C:\\workspaces',
+        worktreeLocation: 'external'
       })
     ).toBe('\\\\wsl.localhost\\Ubuntu\\home\\jin\\orca\\workspaces\\repo\\feature')
   })
@@ -44,7 +45,8 @@ describe('computeWorktreePath WSL layout', () => {
     expect(
       computeWorktreePath('feature', '\\\\wsl.localhost\\Ubuntu\\home\\jin\\src\\repo', {
         nestWorkspaces: false,
-        workspaceDir: 'C:\\workspaces'
+        workspaceDir: 'C:\\workspaces',
+        worktreeLocation: 'external'
       })
     ).toBe(win32.join('C:\\workspaces', 'feature'))
   })

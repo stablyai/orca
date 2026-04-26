@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { WorktreeMeta } from '../../shared/types'
 import { addWorktree, listWorktrees } from '../git/worktree'
+import { isBareRepo } from '../git/repo'
 import { createSetupRunnerScript, getEffectiveHooks, runHook } from '../hooks'
 import { OrcaRuntimeService } from './orca-runtime'
 
@@ -62,7 +63,10 @@ vi.mock('../git/repo', async (importOriginal) => {
     ...actual,
     getDefaultBaseRef: vi.fn().mockReturnValue('origin/main'),
     getBranchConflictKind: vi.fn().mockResolvedValue(null),
-    getGitUsername: vi.fn().mockReturnValue('')
+    getGitUsername: vi.fn().mockReturnValue(''),
+    // Default to non-bare so the existing tests are unaffected. Tests
+    // exercising the in-repo bare-repo guard override this per-call.
+    isBareRepo: vi.fn().mockReturnValue(false)
   }
 })
 
@@ -130,6 +134,7 @@ const store = {
     workspaceDir: '/tmp/workspaces',
     nestWorkspaces: false,
     refreshLocalBaseRefOnWorktreeCreate: false,
+    worktreeLocation: 'external' as const,
     branchPrefix: 'none',
     branchPrefixCustom: ''
   })
@@ -889,6 +894,7 @@ describe('OrcaRuntimeService', () => {
         workspaceDir: 'C:\\workspaces',
         nestWorkspaces: false,
         refreshLocalBaseRefOnWorktreeCreate: false,
+        worktreeLocation: 'external' as const,
         branchPrefix: 'none',
         branchPrefixCustom: ''
       })
@@ -928,6 +934,38 @@ describe('OrcaRuntimeService', () => {
         displayName: 'Improve Dashboard'
       }
     ])
+  })
+
+  it('rejects in-repo CLI worktree creation on bare repos with a clear error', async () => {
+    // The CLI create path mirrors the renderer's createLocalWorktree —
+    // both must refuse in-repo mode for bare repos so a `.worktrees/`
+    // directory doesn't land inside the bare object directory. Pinning
+    // the gate here so a future refactor can't regress one path while
+    // leaving the other.
+    const bareStore = {
+      ...store,
+      getSettings: () => ({
+        workspaceDir: '/tmp/workspaces',
+        nestWorkspaces: false,
+        refreshLocalBaseRefOnWorktreeCreate: false,
+        worktreeLocation: 'in-repo' as const,
+        branchPrefix: 'none',
+        branchPrefixCustom: ''
+      })
+    }
+    vi.mocked(isBareRepo).mockReturnValueOnce(true)
+
+    const runtime = new OrcaRuntimeService(bareStore)
+
+    await expect(
+      runtime.createManagedWorktree({
+        repoSelector: 'id:repo-1',
+        name: 'feature'
+      })
+    ).rejects.toThrow(/bare repositories/i)
+
+    // No git mutation should happen — the gate is pre-flight.
+    expect(addWorktreeMock).not.toHaveBeenCalled()
   })
 
   describe('browser page targeting', () => {

@@ -980,6 +980,26 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     setCreateError(null)
     setCreating(true)
     try {
+      // In-repo mode: keep the repo's working tree clean by ensuring
+      // `.worktrees/` is in .gitignore before the create. The IPC helper
+      // is idempotent (re-checks before writing), so a racing or repeated
+      // call won't duplicate the entry. Failure is non-fatal — the
+      // worktree create still proceeds and the user is told via toast.
+      if (settings?.worktreeLocation === 'in-repo') {
+        try {
+          const { ignored } = await window.api.gitignore.checkWorktreesIgnored({ repoId })
+          if (!ignored) {
+            await window.api.gitignore.addWorktreesEntry({ repoId })
+            toast.success('Added .worktrees/ to .gitignore')
+          }
+        } catch (error) {
+          console.warn('[gitignore] auto-add failed:', error)
+          toast.warning('Could not update .gitignore — creating worktree anyway.', {
+            description: error instanceof Error ? error.message : undefined
+          })
+        }
+      }
+
       const result = await createWorktree(
         repoId,
         workspaceName,
@@ -1063,6 +1083,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     shouldWaitForIssueAutomationCheck,
     shouldWaitForSetupCheck,
     startupPrompt,
+    settings?.worktreeLocation,
     workspaceSeedName
   ])
 
@@ -1088,6 +1109,26 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       setCreateError(null)
       setCreating(true)
       try {
+        // See `submit` for the rationale — same in-repo gitignore guard
+        // applies to the quick-create path. Repeating instead of extracting
+        // because both call sites depend on the same dependency closure
+        // (`settings`, `repoId`, etc.) and the alternative would be a
+        // useCallback that adds an extra hook + dep array to maintain.
+        if (settings?.worktreeLocation === 'in-repo') {
+          try {
+            const { ignored } = await window.api.gitignore.checkWorktreesIgnored({ repoId })
+            if (!ignored) {
+              await window.api.gitignore.addWorktreesEntry({ repoId })
+              toast.success('Added .worktrees/ to .gitignore')
+            }
+          } catch (error) {
+            console.warn('[gitignore] auto-add failed:', error)
+            toast.warning('Could not update .gitignore — creating worktree anyway.', {
+              description: error instanceof Error ? error.message : undefined
+            })
+          }
+        }
+
         const result = await createWorktree(
           repoId,
           workspaceName,
@@ -1153,6 +1194,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       selectedRepo,
       settings?.agentCmdOverrides,
       settings?.rightSidebarOpenByDefault,
+      settings?.worktreeLocation,
       setRightSidebarOpen,
       setRightSidebarTab,
       setSidebarOpen,

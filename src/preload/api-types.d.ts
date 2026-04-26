@@ -537,6 +537,18 @@ export type PreloadApi = {
     }>
     writeIssueCommand: (args: { repoId: string; content: string }) => Promise<void>
   }
+  gitignore: {
+    /** Returns whether the repo's root .gitignore already excludes the
+     *  `.worktrees/` directory used by in-repo worktree mode. Folder repos
+     *  and bare repos return ignored: true so the renderer skips the
+     *  prompt. Read errors fail-open (ignored: false) so misconfiguration
+     *  doesn't silently suppress the prompt — see worktrees.ts handler
+     *  for the full rationale. */
+    checkWorktreesIgnored: (args: { repoId: string }) => Promise<{ ignored: boolean }>
+    /** Idempotently appends `.worktrees/` to the repo's root .gitignore.
+     *  Re-checks before writing so racing/successive calls don't duplicate. */
+    addWorktreesEntry: (args: { repoId: string }) => Promise<void>
+  }
   cache: {
     getGitHub: () => Promise<{
       pr: Record<string, { data: PRInfo | null; fetchedAt: number }>

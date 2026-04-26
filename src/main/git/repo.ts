@@ -397,3 +397,22 @@ export function getRemoteFileUrl(
   // uses uppercase L for line links (e.g. #L42). Append manually.
   return `${browseUrl}#L${line}`
 }
+
+/**
+ * Check whether the repo at `repoPath` is a bare repository.
+ * Sync because it matches the rest of repo.ts and git rev-parse is fast.
+ */
+export function isBareRepo(repoPath: string): boolean {
+  try {
+    const result = gitExecFileSync(['rev-parse', '--is-bare-repository'], {
+      cwd: repoPath
+    }).trim()
+    return result === 'true'
+  } catch {
+    // Why fall through to false on error: non-git directories and permission
+    // failures both throw here. Callers use this as a gate for bare-specific
+    // behavior, and the safest default when unsure is "not bare" so the
+    // caller takes the regular path.
+    return false
+  }
+}

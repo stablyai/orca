@@ -20,7 +20,10 @@ const {
   loadHooksMock,
   computeWorktreePathMock,
   ensurePathWithinWorkspaceMock,
-  gitExecFileAsyncMock
+  gitExecFileAsyncMock,
+  isBareRepoMock,
+  isWorktreesDirIgnoredMock,
+  addWorktreesDirToGitignoreMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   removeHandlerMock: vi.fn(),
@@ -40,7 +43,10 @@ const {
   loadHooksMock: vi.fn(),
   computeWorktreePathMock: vi.fn(),
   ensurePathWithinWorkspaceMock: vi.fn(),
-  gitExecFileAsyncMock: vi.fn()
+  gitExecFileAsyncMock: vi.fn(),
+  isBareRepoMock: vi.fn(),
+  isWorktreesDirIgnoredMock: vi.fn(),
+  addWorktreesDirToGitignoreMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -64,7 +70,13 @@ vi.mock('../git/runner', () => ({
 vi.mock('../git/repo', () => ({
   getGitUsername: getGitUsernameMock,
   getDefaultBaseRef: getDefaultBaseRefMock,
-  getBranchConflictKind: getBranchConflictKindMock
+  getBranchConflictKind: getBranchConflictKindMock,
+  isBareRepo: isBareRepoMock
+}))
+
+vi.mock('../git/gitignore', () => ({
+  isWorktreesDirIgnored: isWorktreesDirIgnoredMock,
+  addWorktreesDirToGitignore: addWorktreesDirToGitignoreMock
 }))
 
 vi.mock('../github/client', () => ({
@@ -140,6 +152,9 @@ describe('registerWorktreeHandlers', () => {
       computeWorktreePathMock,
       ensurePathWithinWorkspaceMock,
       gitExecFileAsyncMock,
+      isBareRepoMock,
+      isWorktreesDirIgnoredMock,
+      addWorktreesDirToGitignoreMock,
       mainWindow.webContents.send,
       store.getRepos,
       store.getRepo,
@@ -172,8 +187,12 @@ describe('registerWorktreeHandlers', () => {
       branchPrefix: 'none',
       nestWorkspaces: false,
       refreshLocalBaseRefOnWorktreeCreate: false,
-      workspaceDir: '/workspace'
+      workspaceDir: '/workspace',
+      worktreeLocation: 'external'
     })
+    isBareRepoMock.mockReturnValue(false)
+    isWorktreesDirIgnoredMock.mockResolvedValue(false)
+    addWorktreesDirToGitignoreMock.mockResolvedValue(undefined)
     store.getWorktreeMeta.mockReturnValue(undefined)
     store.setWorktreeMeta.mockReturnValue({})
     getGitUsernameMock.mockReturnValue('')
@@ -204,8 +223,11 @@ describe('registerWorktreeHandlers', () => {
       (
         sanitizedName: string,
         repoPath: string,
-        settings: { nestWorkspaces: boolean; workspaceDir: string }
+        settings: { nestWorkspaces: boolean; workspaceDir: string; worktreeLocation?: string }
       ) => {
+        if (settings.worktreeLocation === 'in-repo') {
+          return `${repoPath}/.worktrees/${sanitizedName}`
+        }
         if (settings.nestWorkspaces) {
           const repoName =
             repoPath
@@ -544,5 +566,108 @@ describe('registerWorktreeHandlers', () => {
     expect(addWorktreeMock).not.toHaveBeenCalled()
     expect(store.setWorktreeMeta).not.toHaveBeenCalled()
     expect(createSetupRunnerScriptMock).not.toHaveBeenCalled()
+  })
+
+  // Why this test exists: an earlier rewrite of computeWorktreePath returned
+  // <repo>/.worktrees/<name> for in-repo mode but createLocalWorktree still
+  // wrapped it with ensurePathWithinWorkspace against settings.workspaceDir,
+  // which throws "Invalid worktree path" because the in-repo path is not a
+  // descendant of workspaceDir. That broke in-repo creation end-to-end. This
+  // test pins the right behavior: when worktreeLocation is in-repo, the
+  // create succeeds and the path-traversal guard is run against the
+  // <repo>/.worktrees root, not workspaceDir.
+  it('creates worktree at <repo>/.worktrees/<name> when worktreeLocation is in-repo', async () => {
+    store.getSettings.mockReturnValue({
+      branchPrefix: 'none',
+      nestWorkspaces: false,
+      refreshLocalBaseRefOnWorktreeCreate: false,
+      workspaceDir: '/workspace',
+      worktreeLocation: 'in-repo'
+    })
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/repo/.worktrees/improve-dashboard',
+        head: 'abc123',
+        branch: 'refs/heads/improve-dashboard',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const result = await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'improve-dashboard'
+    })
+
+    expect(addWorktreeMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      '/workspace/repo/.worktrees/improve-dashboard',
+      'improve-dashboard',
+      'origin/main',
+      false
+    )
+    // Pin the workspaceRoot argument: ensurePathWithinWorkspace must be
+    // called against <repo>/.worktrees, not settings.workspaceDir.
+    expect(ensurePathWithinWorkspaceMock).toHaveBeenCalledWith(
+      '/workspace/repo/.worktrees/improve-dashboard',
+      '/workspace/repo/.worktrees'
+    )
+    expect(result).toMatchObject({
+      worktree: expect.objectContaining({
+        path: '/workspace/repo/.worktrees/improve-dashboard',
+        branch: 'refs/heads/improve-dashboard'
+      })
+    })
+  })
+
+  it('rejects in-repo worktree creation on bare repos with a clear error', async () => {
+    store.getSettings.mockReturnValue({
+      branchPrefix: 'none',
+      nestWorkspaces: false,
+      refreshLocalBaseRefOnWorktreeCreate: false,
+      workspaceDir: '/workspace',
+      worktreeLocation: 'in-repo'
+    })
+    isBareRepoMock.mockReturnValue(true)
+
+    await expect(
+      handlers['worktrees:create'](null, {
+        repoId: 'repo-1',
+        name: 'improve-dashboard'
+      })
+    ).rejects.toThrow(/bare repositories/i)
+
+    // No git mutation should have happened — the gate is pre-flight.
+    expect(addWorktreeMock).not.toHaveBeenCalled()
+    expect(computeWorktreePathMock).not.toHaveBeenCalled()
+  })
+
+  it('does not gate on bare repo when worktreeLocation is external', async () => {
+    // Why this test exists: the bare-repo guard must only fire when the
+    // user has opted into in-repo mode. External-mode worktrees on bare
+    // repos are a normal, supported case (peer worktrees alongside the
+    // bare object directory).
+    isBareRepoMock.mockReturnValue(true)
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/improve-dashboard',
+        head: 'abc123',
+        branch: 'refs/heads/improve-dashboard',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const result = await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'improve-dashboard'
+    })
+
+    expect(addWorktreeMock).toHaveBeenCalled()
+    expect(result).toMatchObject({
+      worktree: expect.objectContaining({
+        path: '/workspace/improve-dashboard'
+      })
+    })
   })
 })

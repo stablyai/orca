@@ -8,7 +8,7 @@ import { isWslPath, parseWslPath, getWslHome } from '../wsl'
 import { randomUUID } from 'crypto'
 import { join } from 'path'
 import { rm } from 'fs/promises'
-import type { CreateWorktreeResult, Repo } from '../../shared/types'
+import type { CreateWorktreeResult, Repo, WorktreeLocation } from '../../shared/types'
 import { isFolderRepo } from '../../shared/repo-kind'
 import type {
   RuntimeGraphStatus,
@@ -77,6 +77,7 @@ import {
   getDefaultBaseRef,
   getBranchConflictKind,
   isGitRepo,
+  isBareRepo,
   getRepoName,
   searchBaseRefs
 } from '../git/repo'
@@ -113,6 +114,7 @@ type RuntimeStore = {
     workspaceDir: string
     nestWorkspaces: boolean
     refreshLocalBaseRefOnWorktreeCreate: boolean
+    worktreeLocation: WorktreeLocation
     branchPrefix: string
     branchPrefixCustom: string
   }
@@ -782,6 +784,16 @@ export class OrcaRuntimeService {
       throw new Error('Folder mode does not support creating worktrees.')
     }
     const settings = this.store.getSettings()
+    // See createLocalWorktree in worktree-remote.ts for the rationale —
+    // in-repo mode is meaningless for bare repos. Throw a clear error
+    // rather than silently dropping `.worktrees/` inside the bare object
+    // directory.
+    if (settings.worktreeLocation === 'in-repo' && isBareRepo(repo.path)) {
+      throw new Error(
+        'In-repo worktree mode is not supported for bare repositories. ' +
+          'Switch Worktree Location to External in Settings → General.'
+      )
+    }
     const requestedName = args.name
     const sanitizedName = sanitizeWorktreeName(args.name)
     const username = getGitUsername(repo.path)
@@ -807,12 +819,21 @@ export class OrcaRuntimeService {
     }
 
     let worktreePath = computeWorktreePath(sanitizedName, repo.path, settings)
-    // Why: CLI-managed WSL worktrees live under ~/orca/workspaces inside the
-    // distro filesystem. If home lookup fails, still validate against the
-    // configured workspace dir so the traversal guard is never bypassed.
+    // Why workspaceRoot is mode-dependent (mirror of worktree-remote.ts):
+    // - in-repo: validate against `<repo>/.worktrees`. sanitizeWorktreeName
+    //   already strips separators and `..`, so this is defense-in-depth.
+    // - WSL: CLI-managed WSL worktrees live under ~/orca/workspaces inside
+    //   the distro filesystem. Validate against that root, not the Windows
+    //   workspace dir.
+    // - external (default): the configured workspace dir.
     const wslInfo = isWslPath(repo.path) ? parseWslPath(repo.path) : null
     const wslHome = wslInfo ? getWslHome(wslInfo.distro) : null
-    const workspaceRoot = wslHome ? join(wslHome, 'orca', 'workspaces') : settings.workspaceDir
+    const workspaceRoot =
+      settings.worktreeLocation === 'in-repo'
+        ? join(repo.path, '.worktrees')
+        : wslHome
+          ? join(wslHome, 'orca', 'workspaces')
+          : settings.workspaceDir
     worktreePath = ensurePathWithinWorkspace(worktreePath, workspaceRoot)
     const baseBranch = args.baseBranch || repo.worktreeBaseRef || getDefaultBaseRef(repo.path)
     if (!baseBranch) {

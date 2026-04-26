@@ -8,7 +8,8 @@ import { deleteWorktreeHistoryDir } from '../terminal-history'
 import type { CreateWorktreeArgs, CreateWorktreeResult, WorktreeMeta } from '../../shared/types'
 import { removeWorktree } from '../git/worktree'
 import { gitExecFileAsync } from '../git/runner'
-import { getDefaultRemote } from '../git/repo'
+import { getDefaultRemote, isBareRepo } from '../git/repo'
+import { isWorktreesDirIgnored, addWorktreesDirToGitignore } from '../git/gitignore'
 import { getWorkItem } from '../github/client'
 import { listRepoWorktrees, createFolderWorktree } from '../repo-worktrees'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
@@ -49,6 +50,8 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
   ipcMain.removeHandler('hooks:createIssueCommandRunner')
   ipcMain.removeHandler('hooks:readIssueCommand')
   ipcMain.removeHandler('hooks:writeIssueCommand')
+  ipcMain.removeHandler('gitignore:checkWorktreesIgnored')
+  ipcMain.removeHandler('gitignore:addWorktreesEntry')
 
   ipcMain.handle('worktrees:listAll', async () => {
     // Why: use ensureAuthorizedRootsCache (not rebuild) to avoid redundantly
@@ -390,5 +393,35 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
       return
     }
     writeIssueCommand(repo.path, args.content)
+  })
+
+  ipcMain.handle('gitignore:checkWorktreesIgnored', async (_event, args: { repoId: string }) => {
+    const repo = store.getRepo(args.repoId)
+    // Folder repos can't have worktrees, and bare repos have no working tree
+    // to dirty. In both cases, treat as already-handled so the renderer
+    // skips the prompt. Missing repo also returns ignored: true so the
+    // handler can't leak error detail.
+    if (!repo || isFolderRepo(repo) || isBareRepo(repo.path)) {
+      return { ignored: true }
+    }
+    try {
+      return { ignored: await isWorktreesDirIgnored(repo.path) }
+    } catch (error) {
+      console.warn('[gitignore] read failed for', repo.path, error)
+      // Why fail-open (return ignored: false) instead of fail-closed: a
+      // closed failure would silently suppress the prompt and the user
+      // could end up with thousands of untracked worktree files in
+      // `git status` without ever knowing why. Open failure shows the
+      // prompt; user decides.
+      return { ignored: false }
+    }
+  })
+
+  ipcMain.handle('gitignore:addWorktreesEntry', async (_event, args: { repoId: string }) => {
+    const repo = store.getRepo(args.repoId)
+    if (!repo || isFolderRepo(repo)) {
+      throw new Error('Cannot modify .gitignore for this repo type.')
+    }
+    await addWorktreesDirToGitignore(repo.path)
   })
 }

@@ -1,5 +1,5 @@
 import { basename, join, resolve, relative, isAbsolute, posix, win32 } from 'path'
-import type { GitWorktreeInfo, Worktree, WorktreeMeta } from '../../shared/types'
+import type { GitWorktreeInfo, Worktree, WorktreeLocation, WorktreeMeta } from '../../shared/types'
 import { getWslHome, parseWslPath } from '../wsl'
 
 /**
@@ -74,12 +74,21 @@ export function computeBranchName(
 export function computeWorktreePath(
   sanitizedName: string,
   repoPath: string,
-  settings: { nestWorkspaces: boolean; workspaceDir: string }
+  settings: { nestWorkspaces: boolean; workspaceDir: string; worktreeLocation: WorktreeLocation }
 ): string {
   const pathOps =
     looksLikeWindowsPath(repoPath) || looksLikeWindowsPath(settings.workspaceDir)
       ? win32
       : { basename, join }
+
+  // In-repo mode runs first. Why: it bypasses both the WSL special case
+  // (worktrees inherit the repo's filesystem automatically because they
+  // live inside it) and the user-configured workspaceDir (which is
+  // irrelevant when worktrees live inside the repo). Skipping straight to
+  // this branch means the WSL override never fires for in-repo mode.
+  if (settings.worktreeLocation === 'in-repo') {
+    return pathOps.join(repoPath, '.worktrees', sanitizedName)
+  }
 
   const wsl = parseWslPath(repoPath)
   if (wsl) {

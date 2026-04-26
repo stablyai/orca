@@ -106,7 +106,8 @@ describe('computeWorktreePath', () => {
     expect(
       computeWorktreePath('feature', '/repos/my-project', {
         nestWorkspaces: true,
-        workspaceDir: '/workspaces'
+        workspaceDir: '/workspaces',
+        worktreeLocation: 'external'
       })
     ).toBe(join('/workspaces', 'my-project', 'feature'))
   })
@@ -115,7 +116,8 @@ describe('computeWorktreePath', () => {
     expect(
       computeWorktreePath('feature', '/repos/my-project', {
         nestWorkspaces: false,
-        workspaceDir: '/workspaces'
+        workspaceDir: '/workspaces',
+        worktreeLocation: 'external'
       })
     ).toBe(join('/workspaces', 'feature'))
   })
@@ -124,9 +126,32 @@ describe('computeWorktreePath', () => {
     expect(
       computeWorktreePath('feature', '/repos/my-project.git', {
         nestWorkspaces: true,
-        workspaceDir: '/workspaces'
+        workspaceDir: '/workspaces',
+        worktreeLocation: 'external'
       })
     ).toBe(join('/workspaces', 'my-project', 'feature'))
+  })
+
+  it('uses <repo>/.worktrees/<name> when worktreeLocation is in-repo, ignoring nestWorkspaces and workspaceDir', () => {
+    // Why both expectations: the in-repo branch must override BOTH the
+    // workspaceDir setting AND the nestWorkspaces flag — neither is
+    // meaningful when worktrees live inside the repo. A regression that
+    // accidentally fell through to the external branch would still produce
+    // a path; checking that we ignore unrelated settings catches that.
+    expect(
+      computeWorktreePath('feature', '/repos/my-project', {
+        nestWorkspaces: true,
+        workspaceDir: '/somewhere/else',
+        worktreeLocation: 'in-repo'
+      })
+    ).toBe(join('/repos/my-project', '.worktrees', 'feature'))
+    expect(
+      computeWorktreePath('feature', '/repos/my-project', {
+        nestWorkspaces: false,
+        workspaceDir: '/another/place',
+        worktreeLocation: 'in-repo'
+      })
+    ).toBe(join('/repos/my-project', '.worktrees', 'feature'))
   })
 })
 

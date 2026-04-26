@@ -2,6 +2,19 @@ import type { SettingsSearchEntry } from './settings-search'
 
 export const GENERAL_WORKSPACE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
+    title: 'Worktree Location',
+    description: 'Where Orca creates new worktree directories.',
+    keywords: [
+      'worktree',
+      'location',
+      'in-repo',
+      '.worktrees',
+      'external',
+      'workspace',
+      'gitignore'
+    ]
+  },
+  {
     title: 'Workspace Directory',
     description: 'Root directory where worktree folders are created.',
     keywords: ['workspace', 'folder', 'path', 'worktree']
