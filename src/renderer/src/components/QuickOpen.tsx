@@ -66,7 +66,7 @@ function fuzzyMatch(query: string, target: string): number {
  */
 function parseInstallRgGuidance(
   message: string
-): { reason: string; command: string | null } | null {
+): { reason: string; command: string | null; guidance: string | null } | null {
   const match = message.match(
     /^Quick Open scan too large \(([^)]+)\)\. Install ripgrep on the remote to enable fast, gitignore-aware listing: (.+)$/
   )
@@ -79,7 +79,23 @@ function parseInstallRgGuidance(
   // your package manager (e.g. apt/dnf/pacman)" — there's no single command
   // to copy, so surface it as plain guidance without the code block.
   const looksLikeCommand = /^(sudo\s+)?(brew|apt|dnf|pacman|apk)\s/.test(tail)
-  return { reason, command: looksLikeCommand ? tail : null }
+  return {
+    reason,
+    command: looksLikeCommand ? tail : null,
+    guidance: looksLikeCommand ? null : tail
+  }
+}
+
+function isNestedPath(parentPath: string, childPath: string): boolean {
+  const windowsPath = /^[a-zA-Z]:[\\/]/.test(parentPath) || parentPath.startsWith('\\\\')
+  const parent = parentPath.replace(/[\\/]+$/, '').replace(/\\/g, '/')
+  const child = childPath.replace(/\\/g, '/')
+  // Why: Windows paths are case-insensitive and can arrive with mixed slash
+  // styles from git/Electron. Normalize before deciding whether to exclude a
+  // nested linked worktree from Quick Open scans.
+  const comparableParent = windowsPath ? parent.toLowerCase() : parent
+  const comparableChild = windowsPath ? child.toLowerCase() : child
+  return comparableChild.startsWith(`${comparableParent}/`)
 }
 
 function FooterKey({ children }: { children: React.ReactNode }): React.JSX.Element {
@@ -92,10 +108,12 @@ function FooterKey({ children }: { children: React.ReactNode }): React.JSX.Eleme
 
 function InstallRgGuidance({
   reason,
-  command
+  command,
+  guidance
 }: {
   reason: string
   command: string | null
+  guidance?: string | null
 }): React.JSX.Element {
   const [copied, setCopied] = useState(false)
   const handleCopy = useCallback(() => {
@@ -144,6 +162,8 @@ function InstallRgGuidance({
             {copied ? 'Copied' : 'Copy'}
           </button>
         </div>
+      ) : guidance ? (
+        <p className="text-[13px] leading-5 text-foreground">{guidance}</p>
       ) : null}
     </div>
   )
@@ -175,8 +195,7 @@ export default function QuickOpen(): React.JSX.Element | null {
     // sibling worktrees in the same repo avoids rescanning the entire store.
     return repoWorktrees
       .filter(
-        (worktree) =>
-          worktree.id !== activeWorktreeId && worktree.path.startsWith(`${worktreePath}/`)
+        (worktree) => worktree.id !== activeWorktreeId && isNestedPath(worktreePath, worktree.path)
       )
       .map((worktree) => worktree.path)
       .sort()
@@ -338,7 +357,11 @@ export default function QuickOpen(): React.JSX.Element | null {
           (() => {
             const guidance = parseInstallRgGuidance(loadError)
             return guidance ? (
-              <InstallRgGuidance reason={guidance.reason} command={guidance.command} />
+              <InstallRgGuidance
+                reason={guidance.reason}
+                command={guidance.command}
+                guidance={guidance.guidance}
+              />
             ) : (
               <div className="py-6 px-4 text-center text-sm text-muted-foreground whitespace-pre-wrap">
                 {loadError}

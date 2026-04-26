@@ -157,6 +157,24 @@ describe('normalizeQuickOpenRgLine', () => {
     ).toBe('src/a.ts')
   })
 
+  it('strips Windows drive absolute root prefixes', () => {
+    expect(
+      normalizeQuickOpenRgLine('C:\\repo\\src\\a.ts', {
+        kind: 'absolute',
+        rootPath: 'C:\\repo'
+      })
+    ).toBe('src/a.ts')
+  })
+
+  it('preserves Windows UNC roots while stripping absolute root prefixes', () => {
+    expect(
+      normalizeQuickOpenRgLine('\\\\server\\share\\repo\\src\\a.ts', {
+        kind: 'absolute',
+        rootPath: '\\\\server\\share\\repo'
+      })
+    ).toBe('src/a.ts')
+  })
+
   it('strips ./ prefix in cwd-relative mode', () => {
     expect(normalizeQuickOpenRgLine('./src/a.ts', { kind: 'cwd-relative' })).toBe('src/a.ts')
   })
@@ -189,7 +207,7 @@ describe('buildGitLsFilesArgsForQuickOpen', () => {
     const { envPass } = buildGitLsFilesArgsForQuickOpen()
     expect(envPass).toContain('--others')
     expect(envPass).toContain('.env*')
-    expect(envPass).toContain('**/.env*')
+    expect(envPass).toContain(':(glob)**/.env*')
     expect(envPass).not.toContain('--exclude-standard')
   })
 

@@ -317,7 +317,10 @@ export function normalizeQuickOpenRgLine(rawLine: string, outputMode: RgOutputMo
     return rel
   }
   // Absolute mode: strip the root prefix.
-  const normalizedRoot = `${outputMode.rootPath.replace(/[\\/]+/g, '/').replace(/\/$/, '')}/`
+  // Why: replace only backslashes here. Collapsing repeated slashes breaks
+  // Windows UNC roots (`\\server\share` -> `//server/share`) by turning them
+  // into single-slash POSIX-looking paths that no rg output can match.
+  const normalizedRoot = `${outputMode.rootPath.replace(/\\/g, '/').replace(/\/+$/, '')}/`
   if (normalized.startsWith(normalizedRoot)) {
     return normalized.substring(normalizedRoot.length)
   }
@@ -355,10 +358,14 @@ export function buildGitLsFilesArgsForQuickOpen(
   // Second pass: untracked AND ignored .env* files. Do not pass
   // --exclude-standard — that would re-hide gitignored .env files, which is
   // the whole reason this pass exists.
+  // Why :(glob): default git pathspec uses fnmatch, where `*` crossing `/` is
+  // implementation-dependent. `:(glob)` pins the semantics explicitly so
+  // `**/.env*` reliably surfaces nested `.env` files across git versions.
+  const nestedEnvSpec = ':(glob)**/.env*'
   const envPassPathspecs =
     excludeSpecs.length > 0
-      ? ['--', '.env*', '**/.env*', ...excludeSpecs]
-      : ['--', '.env*', '**/.env*']
+      ? ['--', '.env*', nestedEnvSpec, ...excludeSpecs]
+      : ['--', '.env*', nestedEnvSpec]
   const envPass = ['--others', ...envPassPathspecs]
   return { primary, envPass }
 }

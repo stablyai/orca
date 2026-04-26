@@ -232,24 +232,29 @@ export function searchWithRg(
 
 // ─── rg availability check ──────────────────────────────────────────
 
-let rgAvailableCache: boolean | null = null
-
+// Why no cache: `rg --version` is a sub-10ms local spawn, and caching the
+// result caused a footgun — a negative cache persisted across rg installs
+// (forcing a relay restart), while a positive cache could mask an rg that
+// was uninstalled or broken mid-session. The `settled` flag below closes
+// the original race between 'error' and 'close' that the cache was added
+// to paper over, so re-checking per call is both simpler and safer.
 export function checkRgAvailable(): Promise<boolean> {
-  if (rgAvailableCache !== null) {
-    return Promise.resolve(rgAvailableCache)
-  }
   return new Promise((resolve) => {
+    let settled = false
     const child = execFile('rg', ['--version'])
     child.once('error', () => {
-      rgAvailableCache = false
+      if (settled) {
+        return
+      }
+      settled = true
       resolve(false)
     })
     child.once('close', (code) => {
-      if (rgAvailableCache !== null) {
+      if (settled) {
         return
       }
-      rgAvailableCache = code === 0
-      resolve(rgAvailableCache)
+      settled = true
+      resolve(code === 0)
     })
   })
 }

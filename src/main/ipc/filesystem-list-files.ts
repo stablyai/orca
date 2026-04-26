@@ -1,4 +1,5 @@
 import { sep } from 'path'
+import type { ChildProcess } from 'child_process'
 import type { Store } from '../persistence'
 import { resolveAuthorizedPath } from './filesystem-auth'
 import { checkRgAvailable } from './rg-availability'
@@ -29,20 +30,24 @@ export async function listQuickOpenFiles(
   // Why: checking rg availability upfront avoids a race condition where
   // spawn('rg') emits 'close' before 'error' on some platforms, causing
   // the handler to resolve with empty results before the git fallback
-  // can run. The result is cached after the first check.
+  // can run.
   const rgAvailable = await checkRgAvailable(authorizedRootPath)
   if (!rgAvailable) {
     return listFilesWithGit(authorizedRootPath, excludePathPrefixes)
   }
 
   const files = new Set<string>()
+  const children: ChildProcess[] = []
   // Why: when rg runs inside WSL, output paths are Linux-native
   // (e.g. /home/user/repo/src/file.ts). Translate them back to Windows
   // UNC paths up-front before the shared line normalizer runs.
   const wslInfo = parseWslPath(authorizedRootPath)
 
   const { primary, envPass } = buildRgArgsForQuickOpen({
-    searchRoot: authorizedRootPath,
+    // Why: rg evaluates root-relative exclude globs against cwd only when the
+    // search target is cwd-relative. With an absolute target, `!packages/app`
+    // filters output after traversal but does not prune the nested worktree.
+    searchRoot: '.',
     excludePathPrefixes,
     // On Windows, rg outputs '\\'-separated paths; force '/'. Also force on
     // macOS/Linux for idempotence — it's a no-op there.
@@ -50,27 +55,31 @@ export async function listQuickOpenFiles(
   })
 
   const runRg = (args: string[]): Promise<void> => {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       let buf = ''
       let done = false
-      const finish = (): void => {
+      let parseablePathCount = 0
+      const finish = (err?: Error): void => {
         if (done) {
           return
         }
         done = true
         clearTimeout(timer)
-        resolve()
+        if (err) {
+          reject(err)
+        } else {
+          resolve()
+        }
       }
 
       const processLine = (rawLine: string): void => {
-        const translated = wslInfo ? toWindowsWslPath(rawLine, wslInfo.distro) : rawLine
-        const relPath = normalizeQuickOpenRgLine(translated, {
-          kind: 'absolute',
-          rootPath: authorizedRootPath
-        })
+        const translated =
+          wslInfo && rawLine.startsWith('/') ? toWindowsWslPath(rawLine, wslInfo.distro) : rawLine
+        const relPath = normalizeQuickOpenRgLine(translated, { kind: 'cwd-relative' })
         if (relPath === null) {
           return
         }
+        parseablePathCount++
         if (!shouldIncludeQuickOpenPath(relPath)) {
           return
         }
@@ -84,6 +93,7 @@ export async function listQuickOpenFiles(
         cwd: authorizedRootPath,
         stdio: ['ignore', 'pipe', 'pipe']
       })
+      children.push(child)
       child.stdout!.setEncoding('utf-8')
       child.stdout!.on('data', (chunk: string) => {
         buf += chunk
@@ -103,24 +113,57 @@ export async function listQuickOpenFiles(
         // Why: treat spawn errors like an abnormal exit — discard residual
         // buffer so a truncated final byte sequence cannot leak as a path.
         buf = ''
-        finish()
+        finish(new Error('rg failed to start'))
       })
-      child.once('close', () => {
+      child.once('close', (code, signal) => {
+        if (signal) {
+          // Why: a signal exit means timeout/OOM/external kill. Returning the
+          // already-streamed prefix would recreate the false-empty bug this
+          // path is meant to avoid.
+          buf = ''
+          finish(new Error(`rg killed by ${signal}`))
+          return
+        }
         if (buf) {
           processLine(buf)
         }
-        finish()
+        if (code === 0 || code === 1) {
+          finish()
+        } else if (code === 2 && parseablePathCount > 0) {
+          // rg can return 2 for unreadable subdirectories while still listing
+          // usable files from the rest of the root.
+          finish()
+        } else {
+          finish(new Error(`rg exited with code ${code}`))
+        }
       })
       const timer = setTimeout(() => {
         // Why: on timeout, the buffer is likely truncated mid-path. Discard
         // it so Quick Open never displays a malformed entry.
         buf = ''
         child.kill()
+        finish(new Error('rg list timed out'))
       }, 10000)
     })
   }
 
-  await Promise.all([runRg(primary), runRg(envPass)])
+  const killSurvivors = (): void => {
+    // Why: if one rg pass fails, Promise.all rejects immediately while the
+    // sibling scan can keep walking a huge tree until timeout. Stop it so
+    // repeated Quick Open attempts do not accumulate local rg processes.
+    for (const child of children) {
+      if (child.exitCode === null && child.signalCode === null) {
+        child.kill()
+      }
+    }
+  }
+
+  try {
+    await Promise.all([runRg(primary), runRg(envPass)])
+  } catch (err) {
+    killSurvivors()
+    throw err
+  }
   return Array.from(files)
 }
 
