@@ -14,7 +14,11 @@ export type UseGhosttyImportReturn = {
 
 export function useGhosttyImport(
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>,
-  settings: GlobalSettings
+  // Why: caller may not yet have the settings loaded (the settings page shows
+  // a loading spinner before the store resolves). We still need to hold the
+  // hook state at the parent level so React hook order stays stable, so accept
+  // null and no-op the apply path until settings exist.
+  settings: GlobalSettings | null
 ): UseGhosttyImportReturn {
   const [open, setOpen] = useState(false)
   const [preview, setPreview] = useState<GhosttyImportPreview | null>(null)
@@ -37,7 +41,7 @@ export function useGhosttyImport(
   }
 
   async function handleApply(): Promise<void> {
-    if (applied || !preview?.found || Object.keys(preview.diff).length === 0) {
+    if (applied || !preview?.found || Object.keys(preview.diff).length === 0 || !settings) {
       return
     }
     const merged = {

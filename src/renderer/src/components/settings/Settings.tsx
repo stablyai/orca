@@ -25,6 +25,9 @@ import { BrowserPane, BROWSER_PANE_SEARCH_ENTRIES } from './BrowserPane'
 import { AppearancePane, APPEARANCE_PANE_SEARCH_ENTRIES } from './AppearancePane'
 import { ShortcutsPane, SHORTCUTS_PANE_SEARCH_ENTRIES } from './ShortcutsPane'
 import { TerminalPane } from './TerminalPane'
+import { useGhosttyImport } from './useGhosttyImport'
+import { Button } from '../ui/button'
+import ghosttyIcon from '../../../../../resources/ghostty.svg'
 import { RepositoryPane, getRepositoryPaneSearchEntries } from './RepositoryPane'
 import { getTerminalPaneSearchEntries } from './terminal-search'
 import { GitPane, GIT_PANE_SEARCH_ENTRIES } from './GitPane'
@@ -136,6 +139,10 @@ function Settings(): React.JSX.Element {
   )
   const [scrollbackMode, setScrollbackMode] = useState<'preset' | 'custom'>('preset')
   const [prevScrollbackBytes, setPrevScrollbackBytes] = useState(settings?.terminalScrollbackBytes)
+  // Why: lifted out of TerminalPane so the Terminal section header can render
+  // the import trigger as a headerAction. The modal itself still lives inside
+  // TerminalPane, driven by this shared state.
+  const ghostty = useGhosttyImport(updateSettings, settings)
   const [terminalFontSuggestions, setTerminalFontSuggestions] = useState<string[]>(
     getFallbackTerminalFonts()
   )
@@ -595,6 +602,17 @@ function Settings(): React.JSX.Element {
                   title="Terminal"
                   description="Terminal appearance, previews, and defaults for new panes."
                   searchEntries={terminalPaneSearchEntries}
+                  headerAction={
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5"
+                      onClick={() => void ghostty.handleClick()}
+                    >
+                      <img src={ghosttyIcon} alt="" aria-hidden="true" className="size-4" />
+                      Import from Ghostty
+                    </Button>
+                  }
                 >
                   <TerminalPane
                     settings={settings}
@@ -603,6 +621,7 @@ function Settings(): React.JSX.Element {
                     terminalFontSuggestions={terminalFontSuggestions}
                     scrollbackMode={scrollbackMode}
                     setScrollbackMode={setScrollbackMode}
+                    ghostty={ghostty}
                   />
                 </SettingsSection>
 

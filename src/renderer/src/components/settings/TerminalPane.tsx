@@ -31,7 +31,6 @@ import {
   TERMINAL_ADVANCED_SEARCH_ENTRIES,
   TERMINAL_CURSOR_SEARCH_ENTRIES,
   TERMINAL_DARK_THEME_SEARCH_ENTRIES,
-  TERMINAL_GHOSTTY_IMPORT_SEARCH_ENTRIES,
   TERMINAL_LIGHT_THEME_SEARCH_ENTRIES,
   TERMINAL_MAC_OPTION_SEARCH_ENTRIES,
   TERMINAL_PANE_STYLE_SEARCH_ENTRIES,
@@ -46,7 +45,7 @@ import { detectedCategoryToDefault } from '@/lib/keyboard-layout/detect-option-a
 import { DarkTerminalThemeSection, LightTerminalThemeSection } from './TerminalThemeSections'
 import { TerminalWindowSection } from './TerminalWindowSection'
 import { GhosttyImportModal } from './GhosttyImportModal'
-import { useGhosttyImport } from './useGhosttyImport'
+import type { UseGhosttyImportReturn } from './useGhosttyImport'
 
 type TerminalPaneProps = {
   settings: GlobalSettings
@@ -55,6 +54,10 @@ type TerminalPaneProps = {
   terminalFontSuggestions: string[]
   scrollbackMode: 'preset' | 'custom'
   setScrollbackMode: (mode: 'preset' | 'custom') => void
+  /** Ghostty import modal state + handlers. Lifted to the Settings shell so
+   *  the section header can render the trigger button as a headerAction
+   *  instead of taking its own row inside the settings list. */
+  ghostty: UseGhosttyImportReturn
 }
 
 export function TerminalPane({
@@ -63,14 +66,14 @@ export function TerminalPane({
   systemPrefersDark,
   terminalFontSuggestions,
   scrollbackMode,
-  setScrollbackMode
+  setScrollbackMode,
+  ghostty
 }: TerminalPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const isWindows = isWindowsUserAgent()
   const isMac = isMacUserAgent()
   const [themeSearchDark, setThemeSearchDark] = useState('')
   const [themeSearchLight, setThemeSearchLight] = useState('')
-  const ghostty = useGhosttyImport(updateSettings, settings)
 
   const darkPreviewAppearance = resolveEffectiveTerminalAppearance(
     { ...settings, theme: 'dark' },
@@ -138,19 +141,6 @@ export function TerminalPane({
             Shell used when opening a new terminal pane. Takes effect for new terminals.
           </p>
         </SearchableSetting>
-      </section>
-    ) : null,
-    matchesSettingsSearch(searchQuery, TERMINAL_GHOSTTY_IMPORT_SEARCH_ENTRIES) ? (
-      <section key="ghostty-import" className="space-y-4">
-        <div className="space-y-1">
-          <h3 className="text-sm font-semibold">Import</h3>
-          <p className="text-xs text-muted-foreground">
-            Import supported settings from your Ghostty terminal config.
-          </p>
-        </div>
-        <Button variant="outline" size="sm" onClick={() => void ghostty.handleClick()}>
-          Import from Ghostty
-        </Button>
       </section>
     ) : null,
     matchesSettingsSearch(searchQuery, TERMINAL_TYPOGRAPHY_SEARCH_ENTRIES) ? (
