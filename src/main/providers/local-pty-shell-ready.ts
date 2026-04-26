@@ -278,7 +278,15 @@ export function writeStartupCommandWhenShellReady(
     // open for the pane. Spawning `shell -c <command>; exec shell -l` would
     // avoid the race, but it would also replace the session after the agent
     // exits and break "stay in this terminal" workflows.
-    const payload = startupCommand.endsWith('\n') ? startupCommand : `${startupCommand}\n`
+    // Why CR on Windows: PowerShell's PSReadLine and cmd.exe submit the line
+    // on CR (`\r`) — a bare LF leaves the command typed at the prompt but
+    // unsubmitted, forcing the user to press Enter after Orca launches the
+    // agent or setup script. POSIX shells (bash/zsh) treat either CR or LF as
+    // Enter under ICRNL, so CR works there too, but this code path is reached
+    // on Windows as well as POSIX via writeStartupCommandWhenShellReady.
+    const submit = process.platform === 'win32' ? '\r' : '\n'
+    const endsWithSubmit = startupCommand.endsWith('\r') || startupCommand.endsWith('\n')
+    const payload = endsWithSubmit ? startupCommand : `${startupCommand}${submit}`
     // Why: startup commands are usually long, quoted agent launches. Writing
     // them in one PTY call after the shell-ready barrier avoids the incremental
     // paste behavior that still dropped characters in practice.
