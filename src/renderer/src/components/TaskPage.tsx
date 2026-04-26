@@ -547,11 +547,15 @@ function PaginationBar({
     )
 
   return (
-    <div className="flex items-center justify-center gap-1 border-t border-border/50 px-4 py-3">
+    <nav
+      aria-label="Pagination"
+      className="flex items-center justify-center gap-1 border-t border-border/50 px-4 py-3"
+    >
       <button
         type="button"
         disabled={currentPage === 0 || loadingTarget !== null}
         onClick={() => onPageChange(currentPage - 1)}
+        aria-label="Previous page"
         className={btnClass}
       >
         <ChevronLeft className="size-4" />
@@ -561,7 +565,8 @@ function PaginationBar({
       {pageNumbers.map((entry, idx) =>
         entry === 'ellipsis' ? (
           <span
-            key={`e${idx}`}
+            key={`ellipsis-${idx}`}
+            aria-hidden
             className="inline-flex size-8 items-center justify-center text-sm text-muted-foreground"
           >
             &hellip;
@@ -570,8 +575,10 @@ function PaginationBar({
           <button
             key={entry}
             type="button"
-            disabled={loadingTarget !== null}
+            disabled={loadingTarget !== null && loadingTarget !== entry}
             onClick={() => onPageChange(entry)}
+            aria-label={`Page ${entry + 1}`}
+            aria-current={entry === currentPage ? 'page' : undefined}
             className={numClass(entry)}
           >
             {loadingTarget === entry ? (
@@ -587,12 +594,13 @@ function PaginationBar({
         type="button"
         disabled={currentPage >= totalPages - 1 || loadingTarget !== null}
         onClick={() => onPageChange(currentPage + 1)}
+        aria-label="Next page"
         className={btnClass}
       >
         Next
         <ChevronRight className="size-4" />
       </button>
-    </div>
+    </nav>
   )
 }
 
