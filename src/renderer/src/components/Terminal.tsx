@@ -393,7 +393,10 @@ function Terminal(): React.JSX.Element | null {
       return
     }
     const defaultUrl = useAppStore.getState().browserDefaultUrl ?? 'about:blank'
-    createBrowserTab(activeWorktreeId, defaultUrl, { title: 'New Browser Tab' })
+    createBrowserTab(activeWorktreeId, defaultUrl, {
+      title: 'New Browser Tab',
+      focusAddressBar: true
+    })
   }, [activeWorktreeId, createBrowserTab])
 
   const handleDuplicateBrowserTab = useCallback(

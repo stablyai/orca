@@ -337,7 +337,8 @@ export function useIpcEvents(): void {
         const worktreeId = store.activeWorktreeId
         if (worktreeId) {
           store.createBrowserTab(worktreeId, store.browserDefaultUrl ?? 'about:blank', {
-            title: 'New Browser Tab'
+            title: 'New Browser Tab',
+            focusAddressBar: true
           })
         }
       })

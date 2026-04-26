@@ -399,7 +399,10 @@ export function useTabGroupWorkspaceModel({
       createSplitGroup,
       newBrowserTab: () => {
         const defaultUrl = useAppStore.getState().browserDefaultUrl ?? 'about:blank'
-        createBrowserTab(worktreeId, defaultUrl, { title: 'New Browser Tab' })
+        createBrowserTab(worktreeId, defaultUrl, {
+          title: 'New Browser Tab',
+          focusAddressBar: true
+        })
       },
       duplicateBrowserTab: (browserTabId: string) => {
         const state = useAppStore.getState()
