@@ -11,6 +11,7 @@ import { buildFontFamily } from './layout-serialization'
 import { captureScrollState, restoreScrollState } from '@/lib/pane-manager/pane-tree-ops'
 import type { PtyTransport } from './pty-transport'
 import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-option-as-alt'
+import { HEX_COLOR_RE } from '../../../../shared/color-validation'
 
 // Contour/Kitty "color-scheme update" protocol (DEC mode 2031 + CSI 997):
 // the terminal pushes `CSI ?997;1n` for dark and `CSI ?997;2n` for light to
@@ -140,8 +141,6 @@ export function hexToRgba(hex: string, alpha: number): string {
   const b = parseInt(clean.slice(4, 6), 16)
   return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
-
-const HEX_COLOR_RE = /^#?([0-9a-fA-F]{3}){1,2}$/
 
 function isHexColor(value: string): boolean {
   return HEX_COLOR_RE.test(value)

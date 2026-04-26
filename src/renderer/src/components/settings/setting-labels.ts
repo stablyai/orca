@@ -1,0 +1,27 @@
+import type { GlobalSettings } from '../../../../shared/types'
+
+export const SETTING_LABELS: Partial<Record<keyof GlobalSettings, string>> = {
+  terminalFontSize: 'Font Size',
+  terminalFontFamily: 'Font Family',
+  terminalFontWeight: 'Font Weight',
+  terminalBackgroundOpacity: 'Background Opacity',
+  terminalBackgroundColor: 'Background Color',
+  terminalForegroundColor: 'Foreground Color',
+  terminalCursorStyle: 'Cursor Style',
+  terminalCursorBlink: 'Cursor Blink',
+  terminalCursorOpacity: 'Cursor Opacity',
+  terminalScrollbackLimit: 'Scrollback Limit',
+  terminalMouseHideWhileTyping: 'Mouse Hide While Typing',
+  terminalWordSeparator: 'Word Separator',
+  terminalFocusFollowsMouse: 'Focus Follows Mouse',
+  terminalColorOverrides: 'Color Overrides',
+  terminalMacOptionAsAlt: 'Option as Alt',
+  terminalPanePaddingColor: 'Pane Padding Color',
+  terminalPaddingBalance: 'Padding Balance',
+  terminalPaddingX: 'Padding X',
+  terminalPaddingY: 'Padding Y',
+  terminalDividerColorDark: 'Divider Color (Dark)',
+  terminalDividerColorLight: 'Divider Color (Light)',
+  terminalInactivePaneOpacity: 'Inactive Pane Opacity',
+  windowBackgroundBlur: 'Window Background Blur'
+}

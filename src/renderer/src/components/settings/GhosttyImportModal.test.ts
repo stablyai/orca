@@ -113,7 +113,7 @@ describe('GhosttyImportModal', () => {
     })
 
     expect(containsText(element, 'Import complete')).toBe(true)
-    expect(containsText(element, 'terminalFontSize')).toBe(true)
+    expect(containsText(element, 'Font Size')).toBe(true)
     expect(containsText(element, 'JetBrains Mono')).toBe(true)
 
     const buttons = findButtons(element)

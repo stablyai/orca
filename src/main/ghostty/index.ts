@@ -1,10 +1,10 @@
 import { readFile } from 'fs/promises'
 import { platform } from 'os'
-import type { GlobalSettings } from '../../shared/types'
+import type { GlobalSettings, GhosttyImportPreview } from '../../shared/types'
 import type { Store } from '../persistence'
 import { findGhosttyConfigPath } from './discovery'
 import { parseGhosttyConfig } from './parser'
-import { mapGhosttyToOrca, type GhosttyImportPreview } from './mapper'
+import { mapGhosttyToOrca } from './mapper'
 
 // Why: mapGhosttyToOrca creates new object instances for nested values like
 // terminalColorOverrides. A reference comparison (!==) would always report
@@ -14,6 +14,7 @@ function valuesEqual(a: unknown, b: unknown): boolean {
     return true
   }
   if (typeof a === 'object' && a !== null && typeof b === 'object' && b !== null) {
+    // JSON.stringify omits undefined, but mapper never assigns undefined — safe assumption
     return JSON.stringify(a) === JSON.stringify(b)
   }
   return false

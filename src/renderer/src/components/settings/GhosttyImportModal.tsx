@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '../ui/dialog'
+import { SETTING_LABELS } from './setting-labels'
 
 type GhosttyImportModalProps = {
   open: boolean
@@ -62,7 +63,7 @@ export function GhosttyImportModal({
                 <ul className="text-xs space-y-1">
                   {Object.entries(preview.diff).map(([key, value]) => (
                     <li key={key} className="flex justify-between gap-2">
-                      <span className="text-muted-foreground">{key}</span>
+                      <span className="text-muted-foreground">{SETTING_LABELS[key] ?? key}</span>
                       <span className="font-mono">{formatDiffValue(value)}</span>
                     </li>
                   ))}
@@ -74,7 +75,7 @@ export function GhosttyImportModal({
                 <ul className="text-xs space-y-1">
                   {Object.entries(preview.diff).map(([key, value]) => (
                     <li key={key} className="flex justify-between gap-2">
-                      <span className="text-muted-foreground">{key}</span>
+                      <span className="text-muted-foreground">{SETTING_LABELS[key] ?? key}</span>
                       <span className="font-mono">{formatDiffValue(value)}</span>
                     </li>
                   ))}
