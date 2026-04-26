@@ -1,6 +1,11 @@
 import { Terminal } from '@xterm/xterm'
 import type { ITerminalOptions } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
+// Upstream packaging bug: @xterm/addon-ligatures declares `"main":
+// "lib/addon-ligatures.js"` but ships only the `.mjs` entry, so Vite fails to
+// resolve the bare import. Fixed locally via patches/@xterm__addon-ligatures*.
+// Tracking upstream: https://github.com/xtermjs/xterm.js/issues/5822 — drop
+// the patch once that lands.
 import { LigaturesAddon } from '@xterm/addon-ligatures'
 import { SearchAddon } from '@xterm/addon-search'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
