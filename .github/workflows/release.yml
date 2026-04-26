@@ -104,15 +104,17 @@ jobs:
         with:
           ref: ${{ needs.resolve-release.outputs.ref }}
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-
+      # pnpm must be on PATH before setup-node so setup-node can locate the store for caching.
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
 
       # Why: pnpm install triggers electron's postinstall, which downloads the
       # Electron binary from GitHub release assets. GitHub's download CDN
