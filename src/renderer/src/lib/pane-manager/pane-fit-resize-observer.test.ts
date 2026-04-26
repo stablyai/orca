@@ -54,6 +54,7 @@ function createPane(): ManagedPaneInternal {
     unicode11Addon: {} as never,
     webLinksAddon: {} as never,
     webglAddon: null,
+    ligaturesAddon: null,
     compositionHandler: null,
     pendingSplitScrollState: {
       wasAtBottom: true,

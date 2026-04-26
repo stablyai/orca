@@ -22,6 +22,7 @@ import {
   openTerminal,
   attachWebgl,
   disposeWebgl,
+  setLigaturesEnabled,
   disposePane
 } from './pane-lifecycle'
 import { shouldFollowMouseFocus } from './focus-follows-mouse'
@@ -217,6 +218,18 @@ export class PaneManager {
     applyPaneOpacity(this.panes.values(), this.activePaneId, this.styleOptions)
     this.applyDividerStylesWrapped()
     applyRootBackground(this.root, this.styleOptions)
+  }
+
+  /** Enable or disable programming-ligatures rendering on a single pane.
+   *  Called by applyTerminalAppearance whenever the resolved ligatures state
+   *  changes, so toggling the setting or switching fonts takes effect on
+   *  live panes without restarting. */
+  setPaneLigaturesEnabled(paneId: number, enabled: boolean): void {
+    const pane = this.panes.get(paneId)
+    if (!pane) {
+      return
+    }
+    setLigaturesEnabled(pane, enabled)
   }
 
   setPaneGpuRendering(paneId: number, enabled: boolean): void {

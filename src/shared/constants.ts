@@ -114,6 +114,11 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalFontFamily: defaultTerminalFontFamily(),
     terminalFontWeight: DEFAULT_TERMINAL_FONT_WEIGHT,
     terminalLineHeight: 1,
+    // Why 'auto': when the user has picked a known ligature font we want the
+    // feature enabled by default, but we never force it if they pick a font
+    // that lacks ligatures or if they've explicitly opted out. The resolver
+    // is in shared/terminal-ligatures.ts.
+    terminalLigatures: 'auto',
     terminalCursorStyle: 'bar',
     terminalCursorBlink: true,
     terminalThemeDark: 'Ghostty Default Style Dark',

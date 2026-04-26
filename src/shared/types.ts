@@ -750,6 +750,15 @@ export type GlobalSettings = {
   terminalFontFamily: string
   terminalFontWeight: number
   terminalLineHeight: number
+  /** Whether to enable programming-ligatures rendering via
+   *  `@xterm/addon-ligatures`.
+   *  - `'auto'` (default): enabled only when the configured font is known to
+   *    ship ligatures (Fira Code, JetBrains Mono, Cascadia Code, etc.). This
+   *    keeps the out-of-the-box experience right for users who install a
+   *    ligature font without touching settings.
+   *  - `'on'` / `'off'`: explicit override. Never changes when the user
+   *    switches fonts, so "off" always stays off. */
+  terminalLigatures: 'auto' | 'on' | 'off'
   terminalCursorStyle: 'bar' | 'block' | 'underline'
   terminalCursorBlink: boolean
   terminalThemeDark: string

@@ -63,6 +63,7 @@
     "@tiptap/react": "^3.22.4",
     "@tiptap/starter-kit": "^3.22.4",
     "@xterm/addon-fit": "0.12.0-beta.198",
+    "@xterm/addon-ligatures": "0.11.0-beta.198",
     "@xterm/addon-search": "0.17.0-beta.198",
     "@xterm/addon-serialize": "0.15.0-beta.198",
     "@xterm/addon-unicode11": "0.10.0-beta.198",
@@ -153,7 +154,8 @@
       "node-pty"
     ],
     "patchedDependencies": {
-      "node-pty@1.1.0": "patches/node-pty@1.1.0.patch"
+      "node-pty@1.1.0": "patches/node-pty@1.1.0.patch",
+      "@xterm/addon-ligatures@0.11.0-beta.198": "patches/@xterm__addon-ligatures@0.11.0-beta.198.patch"
     }
   }
 }

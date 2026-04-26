@@ -1,6 +1,7 @@
 import { Terminal } from '@xterm/xterm'
 import type { ITerminalOptions } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
+import { LigaturesAddon } from '@xterm/addon-ligatures'
 import { SearchAddon } from '@xterm/addon-search'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebLinksAddon } from '@xterm/addon-web-links'
@@ -139,6 +140,7 @@ export function createPaneDOM(
     unicode11Addon,
     webLinksAddon,
     webglAddon: null,
+    ligaturesAddon: null,
     compositionHandler: null,
     pendingSplitScrollState: null,
     pendingDragScrollState: null
@@ -237,6 +239,57 @@ export function openTerminal(pane: ManagedPaneInternal): void {
   })
 }
 
+export function disposeLigatures(pane: ManagedPaneInternal): void {
+  if (pane.ligaturesAddon) {
+    try {
+      pane.ligaturesAddon.dispose()
+    } catch {
+      /* ignore */
+    }
+    pane.ligaturesAddon = null
+  }
+}
+
+export function attachLigatures(pane: ManagedPaneInternal): void {
+  if (pane.ligaturesAddon) {
+    return
+  }
+  try {
+    const ligaturesAddon = new LigaturesAddon()
+    pane.terminal.loadAddon(ligaturesAddon)
+    pane.ligaturesAddon = ligaturesAddon
+    // Why: the WebGL renderer builds its glyph texture atlas at activation
+    // time, so `font-feature-settings` applied after WebGL loaded won't
+    // reach the GPU-rendered cells until the atlas is rebuilt. The upstream
+    // docs call this out explicitly — reactivating WebGL after ligatures
+    // forces a fresh atlas that includes the ligated glyphs.
+    if (pane.webglAddon) {
+      disposeWebgl(pane)
+      attachWebgl(pane)
+    }
+  } catch (err) {
+    console.warn('[terminal] ligatures addon failed to attach for pane', pane.id, err)
+    pane.ligaturesAddon = null
+  }
+}
+
+/** Enable or disable ligatures in-place, reusing the running terminal so the
+ *  setting can be toggled without dropping scrollback or the PTY binding. */
+export function setLigaturesEnabled(pane: ManagedPaneInternal, enabled: boolean): void {
+  if (enabled) {
+    attachLigatures(pane)
+  } else if (pane.ligaturesAddon) {
+    disposeLigatures(pane)
+    // Why: ligatures lived inside the WebGL atlas, so after disposing the
+    // addon the atlas still holds the ligated glyphs. Rebuild it so text
+    // renders as the non-ligated fallback immediately.
+    if (pane.webglAddon) {
+      disposeWebgl(pane)
+      attachWebgl(pane)
+    }
+  }
+}
+
 export function disposeWebgl(pane: ManagedPaneInternal): void {
   if (pane.webglAddon) {
     try {
@@ -313,6 +366,11 @@ export function disposePane(
   if (pane.compositionHandler) {
     pane.terminal.element?.removeEventListener('compositionstart', pane.compositionHandler, true)
     pane.compositionHandler = null
+  }
+  try {
+    pane.ligaturesAddon?.dispose()
+  } catch {
+    /* ignore */
   }
   try {
     pane.webglAddon?.dispose()
