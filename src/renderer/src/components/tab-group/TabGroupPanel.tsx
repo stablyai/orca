@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, type CSSProperties } from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import { Columns2, Ellipsis, Rows2, X } from 'lucide-react'
 import { useAppStore } from '../../store'
@@ -174,30 +174,37 @@ export default function TabGroupPanel({
           className={`flex h-full items-stretch pr-1.5${
             reserveClosedExplorerToggleSpace && !rightSidebarOpen ? ' pr-10' : ''
           }`}
-          style={{
-            paddingLeft:
-              reserveCollapsedSidebarHeaderSpace && !sidebarOpen
-                ? 'var(--collapsed-sidebar-header-width)'
-                : undefined
-          }}
         >
+          {reserveCollapsedSidebarHeaderSpace && !sidebarOpen ? (
+            // Why: the collapsed sidebar still occupies the left titlebar
+            // chrome, so the top-left tab row needs a real spacer rather than
+            // just padding. That keeps the first tab from sitting underneath
+            // the floating controls when the sidebar is closed.
+            <div
+              aria-hidden
+              className="h-full shrink-0 pointer-events-none"
+              style={
+                {
+                  width: 'var(--collapsed-sidebar-header-width)',
+                  WebkitAppRegion: 'no-drag'
+                } as CSSProperties
+              }
+            />
+          ) : null}
           {/* Why: when the right sidebar is closed, App.tsx renders a floating
-              explorer toggle in the top-right corner of the workspace. Only the
-              top-right tab group can sit underneath that button, so reserve
-              space in just that one header instead of pushing every group in. */}
-          {/* Why: collapsing the left worktree sidebar should let the terminal
-              reclaim the full left edge, but the top-left tab row should still
-              stop where the remaining titlebar controls end. Use the measured
-              width of that controls cluster instead of the old full sidebar
-              width so tabs cap at the agent badge, not at the old divider. */}
+              explorer toggle in the top-right corner of the workspace. Only
+              the top-right tab group can sit underneath that button, so
+              reserve space in just that one header instead of pushing every
+              group in. */}
           <div className="min-w-0 flex-1 h-full">{tabBar}</div>
-          {/* Why: pane-scoped layout actions belong with the active pane instead
-              of the global tab-bar `+`, which should keep opening tabs exactly
-              as before. The local overflow menu holds split directions and
-              close-group without changing the existing tab-creation affordance. */}
+          {/* Why: pane-scoped layout actions belong with the active pane
+              instead of the global tab-bar `+`, which should keep opening tabs
+              exactly as before. The local overflow menu holds split directions
+              and close-group without changing the existing tab-creation
+              affordance. */}
           <div
             className={actionChromeClassName}
-            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+            style={{ WebkitAppRegion: 'no-drag' } as CSSProperties}
           >
             {isFocused ? (
               <DropdownMenu modal={false}>
