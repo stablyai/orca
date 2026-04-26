@@ -175,6 +175,12 @@ test.describe('Terminal attention', () => {
     // The focused tab is now unread — the bell persists until the user
     // actually interacts with the pane.
     expect((await getUnreadTerminalTabIds(orcaPage)).includes(activeTabId)).toBe(true)
+    const activeTabBell = orcaPage
+      .locator(
+        `[data-testid="sortable-tab"][data-tab-id="${activeTabId}"] [data-testid="tab-activity-bell"]`
+      )
+      .first()
+    await expect(activeTabBell).toBeVisible()
 
     // A pointerdown inside the terminal container counts as interaction
     // (matches the pointerdown handler added in TerminalPane.tsx). Drive it
@@ -197,6 +203,7 @@ test.describe('Terminal attention', () => {
         message: 'Unread state did not clear after interacting with the pane'
       })
       .toBe(false)
+    await expect(activeTabBell).toBeHidden()
   })
 
   // Why (restart regression guard): the original user-reported bug was that
