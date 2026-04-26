@@ -107,6 +107,26 @@ background = #1a1a1a
     expect(result.unsupportedKeys).toEqual([])
   })
 
+  it('omits object values that are equal regardless of key order', async () => {
+    statMock.mockImplementation(async (p: string) => {
+      if (p === '/Users/alice/Library/Application Support/com.mitchellh.ghostty/config') {
+        return { isFile: () => true }
+      }
+      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+    })
+    readFileMock.mockResolvedValue('background = #1a1a1a\nforeground = #e0e0e0\n')
+
+    const result = await previewGhosttyImport(
+      createStore({
+        terminalColorOverrides: { foreground: '#e0e0e0', background: '#1a1a1a' }
+      })
+    )
+
+    expect(result.found).toBe(true)
+    expect(result.diff).toEqual({})
+    expect(result.unsupportedKeys).toEqual([])
+  })
+
   it('does not set up file watchers or timers (no live sync)', async () => {
     const watchMock = vi.fn()
     const watchFileMock = vi.fn()

@@ -14,8 +14,17 @@ function valuesEqual(a: unknown, b: unknown): boolean {
     return true
   }
   if (typeof a === 'object' && a !== null && typeof b === 'object' && b !== null) {
-    // JSON.stringify omits undefined, but mapper never assigns undefined — safe assumption
-    return JSON.stringify(a) === JSON.stringify(b)
+    const stableStringify = (v: unknown): string =>
+      typeof v === 'object' && v !== null && !Array.isArray(v)
+        ? JSON.stringify(
+            Object.fromEntries(
+              Object.entries(v as object).sort(([ka], [kb]) =>
+                (ka as string).localeCompare(kb as string)
+              )
+            )
+          )
+        : JSON.stringify(v)
+    return stableStringify(a) === stableStringify(b)
   }
   return false
 }
@@ -26,7 +35,19 @@ export async function previewGhosttyImport(store: Store): Promise<GhosttyImportP
     return { found: false, diff: {}, unsupportedKeys: [] }
   }
 
-  const content = await readFile(configPath, 'utf-8')
+  let content: string
+  try {
+    content = await readFile(configPath, 'utf-8')
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Could not read config file'
+    return {
+      found: false,
+      diff: {},
+      unsupportedKeys: [],
+      error: `Could not read config: ${message}`
+    }
+  }
+
   const parsed = parseGhosttyConfig(content)
   const { diff: rawDiff, unsupportedKeys } = mapGhosttyToOrca(parsed, platform() === 'darwin')
 

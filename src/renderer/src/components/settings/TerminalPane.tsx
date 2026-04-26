@@ -70,7 +70,7 @@ export function TerminalPane({
   const isMac = isMacUserAgent()
   const [themeSearchDark, setThemeSearchDark] = useState('')
   const [themeSearchLight, setThemeSearchLight] = useState('')
-  const ghostty = useGhosttyImport(updateSettings)
+  const ghostty = useGhosttyImport(updateSettings, settings)
 
   const darkPreviewAppearance = resolveEffectiveTerminalAppearance(
     { ...settings, theme: 'dark' },

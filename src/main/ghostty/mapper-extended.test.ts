@@ -14,8 +14,8 @@ describe('mapGhosttyToOrca — split-divider-color', () => {
   it('maps hex without hash to both divider colors', () => {
     const result = mapGhosttyToOrca({ 'split-divider-color': 'ff5500' })
     expect(result.diff).toEqual({
-      terminalDividerColorDark: 'ff5500',
-      terminalDividerColorLight: 'ff5500'
+      terminalDividerColorDark: '#ff5500',
+      terminalDividerColorLight: '#ff5500'
     })
     expect(result.unsupportedKeys).toEqual([])
   })
@@ -146,10 +146,10 @@ describe('mapGhosttyToOrca — mouse-hide-while-typing', () => {
 })
 
 describe('mapGhosttyToOrca — selection-word-chars', () => {
-  it('maps string to terminalWordSeparator', () => {
+  it('treats selection-word-chars as unsupported due to semantic inversion', () => {
     const result = mapGhosttyToOrca({ 'selection-word-chars': ':/?#@' })
-    expect(result.diff).toEqual({ terminalWordSeparator: ':/?#@' })
-    expect(result.unsupportedKeys).toEqual([])
+    expect(result.diff).toEqual({})
+    expect(result.unsupportedKeys).toEqual(['selection-word-chars'])
   })
 })
 
@@ -170,5 +170,39 @@ describe('mapGhosttyToOrca — cursor-opacity', () => {
     const result = mapGhosttyToOrca({ 'cursor-opacity': '-0.1' })
     expect(result.diff).toEqual({})
     expect(result.unsupportedKeys).toEqual(['cursor-opacity'])
+  })
+})
+
+describe('mapGhosttyToOrca — empty values', () => {
+  it('rejects empty background-opacity', () => {
+    const result = mapGhosttyToOrca({ 'background-opacity': '' })
+    expect(result.diff).toEqual({})
+    expect(result.unsupportedKeys).toEqual(['background-opacity'])
+  })
+
+  it('rejects empty cursor-opacity', () => {
+    const result = mapGhosttyToOrca({ 'cursor-opacity': '' })
+    expect(result.diff).toEqual({})
+    expect(result.unsupportedKeys).toEqual(['cursor-opacity'])
+  })
+
+  it('rejects empty unfocused-split-opacity', () => {
+    const result = mapGhosttyToOrca({ 'unfocused-split-opacity': '' })
+    expect(result.diff).toEqual({})
+    expect(result.unsupportedKeys).toEqual(['unfocused-split-opacity'])
+  })
+})
+
+describe('mapGhosttyToOrca — negative padding', () => {
+  it('rejects negative window-padding-x', () => {
+    const result = mapGhosttyToOrca({ 'window-padding-x': '-4' })
+    expect(result.diff).toEqual({})
+    expect(result.unsupportedKeys).toEqual(['window-padding-x'])
+  })
+
+  it('rejects negative window-padding-y', () => {
+    const result = mapGhosttyToOrca({ 'window-padding-y': '-2' })
+    expect(result.diff).toEqual({})
+    expect(result.unsupportedKeys).toEqual(['window-padding-y'])
   })
 })

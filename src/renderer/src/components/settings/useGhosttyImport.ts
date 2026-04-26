@@ -12,7 +12,8 @@ export type UseGhosttyImportReturn = {
 }
 
 export function useGhosttyImport(
-  updateSettings: (updates: Partial<GlobalSettings>) => void
+  updateSettings: (updates: Partial<GlobalSettings>) => void,
+  settings: GlobalSettings
 ): UseGhosttyImportReturn {
   const [open, setOpen] = useState(false)
   const [preview, setPreview] = useState<GhosttyImportPreview | null>(null)
@@ -25,18 +26,31 @@ export function useGhosttyImport(
     try {
       const result = await window.api.settings.previewGhosttyImport()
       setPreview(result)
-    } catch {
-      setPreview({ found: false, diff: {}, unsupportedKeys: [] })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error'
+      setPreview({ found: false, diff: {}, unsupportedKeys: [], error: message })
     } finally {
       setLoading(false)
     }
   }
 
   function handleApply(): void {
-    if (preview?.found && Object.keys(preview.diff).length > 0) {
-      updateSettings(preview.diff)
-      setApplied(true)
+    if (applied || !preview?.found || Object.keys(preview.diff).length === 0) {
+      return
     }
+    const merged = {
+      ...preview.diff,
+      ...(preview.diff.terminalColorOverrides
+        ? {
+            terminalColorOverrides: {
+              ...settings.terminalColorOverrides,
+              ...preview.diff.terminalColorOverrides
+            }
+          }
+        : {})
+    }
+    updateSettings(merged)
+    setApplied(true)
   }
 
   function handleOpenChange(newOpen: boolean): void {

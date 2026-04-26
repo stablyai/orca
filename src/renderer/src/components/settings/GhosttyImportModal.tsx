@@ -100,6 +100,8 @@ export function GhosttyImportModal({
               </div>
             )}
           </div>
+        ) : preview.error ? (
+          <p className="text-xs text-red-500">{preview.error}</p>
         ) : (
           <p className="text-xs text-muted-foreground">No Ghostty config found on this system.</p>
         )}

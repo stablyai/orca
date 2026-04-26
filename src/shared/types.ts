@@ -920,6 +920,7 @@ export type GhosttyImportPreview = {
   configPath?: string
   diff: Partial<GlobalSettings>
   unsupportedKeys: string[]
+  error?: string
 }
 
 export type NotificationEventSource = 'agent-task-complete' | 'terminal-bell' | 'test'

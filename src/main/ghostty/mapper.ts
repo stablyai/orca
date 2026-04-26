@@ -32,6 +32,8 @@ type FieldResult =
   | { colorOverrides: Partial<TerminalColorOverrides> }
   | null
 
+const normalizeHex = (v: string): string => (v.startsWith('#') ? v : `#${v}`)
+
 type FieldParser = (value: string, rawValue: string | string[]) => FieldResult
 
 export function mapGhosttyToOrca(
@@ -74,35 +76,35 @@ export function mapGhosttyToOrca(
       if (!HEX_COLOR_RE.test(v)) {
         return null
       }
-      return { colorOverrides: { background: v } }
+      return { colorOverrides: { background: normalizeHex(v) } }
     },
 
     foreground: (v) => {
       if (!HEX_COLOR_RE.test(v)) {
         return null
       }
-      return { colorOverrides: { foreground: v } }
+      return { colorOverrides: { foreground: normalizeHex(v) } }
     },
 
     'cursor-color': (v) => {
       if (!HEX_COLOR_RE.test(v)) {
         return null
       }
-      return { colorOverrides: { cursor: v } }
+      return { colorOverrides: { cursor: normalizeHex(v) } }
     },
 
     'selection-background': (v) => {
       if (!HEX_COLOR_RE.test(v)) {
         return null
       }
-      return { colorOverrides: { selectionBackground: v } }
+      return { colorOverrides: { selectionBackground: normalizeHex(v) } }
     },
 
     'selection-foreground': (v) => {
       if (!HEX_COLOR_RE.test(v)) {
         return null
       }
-      return { colorOverrides: { selectionForeground: v } }
+      return { colorOverrides: { selectionForeground: normalizeHex(v) } }
     },
 
     palette: (_v, rawValue) => {
@@ -121,8 +123,11 @@ export function mapGhosttyToOrca(
         }
         const mapped = PALETTE_INDEX_MAP[index]
         if (mapped) {
-          overrides[mapped] = color
+          overrides[mapped] = normalizeHex(color)
         }
+      }
+      if (Object.keys(overrides).length === 0 && entries.length > 0) {
+        return null
       }
       return { colorOverrides: overrides }
     },
@@ -137,7 +142,7 @@ export function mapGhosttyToOrca(
 
     'window-padding-color': (v) => {
       if (HEX_COLOR_RE.test(v)) {
-        return { key: 'terminalPanePaddingColor', value: v }
+        return { key: 'terminalPanePaddingColor', value: normalizeHex(v) }
       }
       if (v.toLowerCase() === 'extend' || v.toLowerCase() === 'background') {
         // Why: Ghostty's 'extend' and 'background' mean "inherit the terminal
@@ -160,8 +165,8 @@ export function mapGhosttyToOrca(
         return null
       }
       return [
-        { key: 'terminalDividerColorDark', value: v },
-        { key: 'terminalDividerColorLight', value: v }
+        { key: 'terminalDividerColorDark', value: normalizeHex(v) },
+        { key: 'terminalDividerColorLight', value: normalizeHex(v) }
       ]
     },
 
@@ -183,7 +188,7 @@ export function mapGhosttyToOrca(
 
     'window-padding-x': (v) => {
       const num = Number(v)
-      if (!Number.isFinite(num) || !Number.isInteger(num)) {
+      if (!Number.isFinite(num) || !Number.isInteger(num) || num < 0) {
         return null
       }
       return { key: 'terminalPaddingX', value: num }
@@ -191,7 +196,7 @@ export function mapGhosttyToOrca(
 
     'window-padding-y': (v) => {
       const num = Number(v)
-      if (!Number.isFinite(num) || !Number.isInteger(num)) {
+      if (!Number.isFinite(num) || !Number.isInteger(num) || num < 0) {
         return null
       }
       return { key: 'terminalPaddingY', value: num }
@@ -201,14 +206,14 @@ export function mapGhosttyToOrca(
       if (!HEX_COLOR_RE.test(v)) {
         return null
       }
-      return { colorOverrides: { cursorAccent: v } }
+      return { colorOverrides: { cursorAccent: normalizeHex(v) } }
     },
 
     'bold-color': (v) => {
       if (!HEX_COLOR_RE.test(v)) {
         return null
       }
-      return { colorOverrides: { bold: v } }
+      return { colorOverrides: { bold: normalizeHex(v) } }
     },
 
     'mouse-hide-while-typing': (v) => {
@@ -216,10 +221,6 @@ export function mapGhosttyToOrca(
         return null
       }
       return { key: 'terminalMouseHideWhileTyping', value: v === 'true' }
-    },
-
-    'selection-word-chars': (v) => {
-      return { key: 'terminalWordSeparator', value: v }
     },
 
     'cursor-opacity': (v) => {
@@ -282,6 +283,20 @@ export function mapGhosttyToOrca(
   for (const [key, rawValue] of Object.entries(parsed)) {
     const value = Array.isArray(rawValue) ? rawValue[0] : rawValue
 
+    // Why: Ghostty's selection-word-chars defines characters that ARE part of a
+    // word, while xterm.js wordSeparator defines characters that BREAK words.
+    // Passing the same string inverts the semantics, and correctly inverting a
+    // character set is non-trivial. Treat as unsupported to avoid silent misbehavior.
+    if (key === 'selection-word-chars') {
+      unsupportedKeys.push(key)
+      continue
+    }
+
+    if (!value.trim()) {
+      unsupportedKeys.push(key)
+      continue
+    }
+
     const parser = FIELD_PARSERS[key]
     if (!parser) {
       unsupportedKeys.push(key)
@@ -292,6 +307,11 @@ export function mapGhosttyToOrca(
     if (result === null) {
       unsupportedKeys.push(key)
       continue
+    }
+
+    // Why: Orca's windowBackgroundBlur is a boolean; the numeric radius is lost.
+    if (key === 'background-blur-radius') {
+      unsupportedKeys.push('background-blur-radius (radius value not preserved)')
     }
 
     if (Array.isArray(result)) {

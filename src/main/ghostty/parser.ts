@@ -37,6 +37,14 @@ export function parseGhosttyConfig(content: string): Record<string, string | str
     // like #1a1a1a at the start of the value are preserved.
     value = stripInlineComment(value)
 
+    // Ghostty allows quoted string values; strip surrounding quotes like Ghostty's own parser does.
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1)
+    }
+
     if (!key) {
       continue
     }

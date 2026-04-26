@@ -845,4 +845,23 @@ export function useTerminalPaneLifecycle({
     // immediately.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings, systemPrefersDark, effectiveMacOptionAsAlt])
+
+  useEffect(() => {
+    const manager = managerRef.current
+    if (!manager) {
+      return
+    }
+    const hide = settings?.terminalMouseHideWhileTyping ?? false
+    for (const pane of manager.getPanes()) {
+      const existing = mouseHideDisposablesRef.current.get(pane.id)
+      if (hide && !existing) {
+        const disposable = installMouseHideWhileTyping(pane.terminal, pane.container)
+        mouseHideDisposablesRef.current.set(pane.id, disposable)
+      } else if (!hide && existing) {
+        existing.dispose()
+        mouseHideDisposablesRef.current.delete(pane.id)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings?.terminalMouseHideWhileTyping])
 }

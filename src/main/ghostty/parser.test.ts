@@ -95,4 +95,14 @@ palette = 0='#000000' # black
     const result = parseGhosttyConfig(input)
     expect(result.palette).toBe("0='#000000'")
   })
+
+  it('strips surrounding double quotes from string values', () => {
+    const result = parseGhosttyConfig('font-family = "JetBrains Mono"')
+    expect(result['font-family']).toBe('JetBrains Mono')
+  })
+
+  it('strips surrounding single quotes from string values', () => {
+    const result = parseGhosttyConfig("font-family = 'JetBrains Mono'")
+    expect(result['font-family']).toBe('JetBrains Mono')
+  })
 })

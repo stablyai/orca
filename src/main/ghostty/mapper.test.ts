@@ -143,13 +143,13 @@ describe('mapGhosttyToOrca — background & colors', () => {
   it('maps background-blur-radius > 0 to windowBackgroundBlur true', () => {
     const result = mapGhosttyToOrca({ 'background-blur-radius': '20' })
     expect(result.diff).toEqual({ windowBackgroundBlur: true })
-    expect(result.unsupportedKeys).toEqual([])
+    expect(result.unsupportedKeys).toEqual(['background-blur-radius (radius value not preserved)'])
   })
 
   it('maps background-blur-radius = 0 to windowBackgroundBlur false', () => {
     const result = mapGhosttyToOrca({ 'background-blur-radius': '0' })
     expect(result.diff).toEqual({ windowBackgroundBlur: false })
-    expect(result.unsupportedKeys).toEqual([])
+    expect(result.unsupportedKeys).toEqual(['background-blur-radius (radius value not preserved)'])
   })
 
   it('rejects invalid background-blur-radius', () => {
@@ -166,7 +166,7 @@ describe('mapGhosttyToOrca — background & colors', () => {
 
   it('maps background without hash to terminalColorOverrides.background', () => {
     const result = mapGhosttyToOrca({ background: '111111' })
-    expect(result.diff).toEqual({ terminalColorOverrides: { background: '111111' } })
+    expect(result.diff).toEqual({ terminalColorOverrides: { background: '#111111' } })
     expect(result.unsupportedKeys).toEqual([])
   })
 
@@ -178,7 +178,7 @@ describe('mapGhosttyToOrca — background & colors', () => {
 
   it('maps foreground without hash to terminalColorOverrides.foreground', () => {
     const result = mapGhosttyToOrca({ foreground: 'eeeeee' })
-    expect(result.diff).toEqual({ terminalColorOverrides: { foreground: 'eeeeee' } })
+    expect(result.diff).toEqual({ terminalColorOverrides: { foreground: '#eeeeee' } })
     expect(result.unsupportedKeys).toEqual([])
   })
 
@@ -190,7 +190,7 @@ describe('mapGhosttyToOrca — background & colors', () => {
 
   it('maps cursor-color without hash to terminalColorOverrides.cursor', () => {
     const result = mapGhosttyToOrca({ 'cursor-color': 'ff00ff' })
-    expect(result.diff).toEqual({ terminalColorOverrides: { cursor: 'ff00ff' } })
+    expect(result.diff).toEqual({ terminalColorOverrides: { cursor: '#ff00ff' } })
     expect(result.unsupportedKeys).toEqual([])
   })
 
@@ -202,7 +202,7 @@ describe('mapGhosttyToOrca — background & colors', () => {
 
   it('maps selection-background without hash', () => {
     const result = mapGhosttyToOrca({ 'selection-background': '333333' })
-    expect(result.diff).toEqual({ terminalColorOverrides: { selectionBackground: '333333' } })
+    expect(result.diff).toEqual({ terminalColorOverrides: { selectionBackground: '#333333' } })
     expect(result.unsupportedKeys).toEqual([])
   })
 
@@ -214,7 +214,7 @@ describe('mapGhosttyToOrca — background & colors', () => {
 
   it('maps selection-foreground without hash', () => {
     const result = mapGhosttyToOrca({ 'selection-foreground': 'cccccc' })
-    expect(result.diff).toEqual({ terminalColorOverrides: { selectionForeground: 'cccccc' } })
+    expect(result.diff).toEqual({ terminalColorOverrides: { selectionForeground: '#cccccc' } })
     expect(result.unsupportedKeys).toEqual([])
   })
 
@@ -241,10 +241,10 @@ describe('mapGhosttyToOrca — palette', () => {
     expect(result.unsupportedKeys).toEqual([])
   })
 
-  it('ignores unknown palette indices', () => {
+  it('treats palette with only unknown indices as unsupported', () => {
     const result = mapGhosttyToOrca({ palette: ['27=#abcdef'] })
     expect(result.diff).toEqual({})
-    expect(result.unsupportedKeys).toEqual([])
+    expect(result.unsupportedKeys).toEqual(['palette'])
   })
 
   it('ignores palette entries with invalid hex', () => {
@@ -310,7 +310,7 @@ describe('mapGhosttyToOrca — unsupported keys', () => {
       terminalFontSize: 13,
       windowBackgroundBlur: true
     })
-    expect(result.unsupportedKeys).toEqual([])
+    expect(result.unsupportedKeys).toEqual(['background-blur-radius (radius value not preserved)'])
   })
 
   it('marks all intentionally unsupported keys', () => {
