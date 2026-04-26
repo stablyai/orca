@@ -93,7 +93,7 @@ describe('repos:addRemote', () => {
     expect(result).toHaveProperty('repo.connectionId', 'conn-1')
   })
 
-    it('uses custom displayName when provided', async () => {
+  it('uses custom displayName when provided', async () => {
     const result = await handlers.get('repos:addRemote')!(null, {
       connectionId: 'conn-1',
       remotePath: '/home/user/project',
@@ -210,6 +210,10 @@ describe('repos:getBaseRefDefault envelope', () => {
     })
     mockStore.getRepos.mockReset().mockReturnValue([])
     mockStore.getRepo.mockReset()
+    // Reset exec to default: later SSH tests replace this with custom mocks, and
+    // without this reset any future test added to this block would inherit the
+    // last test's exec mock — latent fragility we guard against here.
+    mockGitProvider.exec = vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
     registerRepoHandlers(mockWindow as never, mockStore as never)
   })
 

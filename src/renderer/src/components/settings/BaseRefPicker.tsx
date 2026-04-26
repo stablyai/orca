@@ -49,6 +49,10 @@ export function BaseRefPicker({
 
     setBaseRefQuery('')
     setBaseRefResults([])
+    // Why: reset the previous repo's default ref before the new IPC resolves so
+    // we never attribute a stale "Following primary branch (<ref>)" label to
+    // the newly selected repo during the brief resolution window.
+    setDefaultBaseRef(null)
     setRemoteCount(0)
     void loadDefaultBaseRef()
 
@@ -122,7 +126,7 @@ export function BaseRefPicker({
               (remoteCount === 0), preserving today's no-hint behavior.
               See docs/upstream-base-ref-design.md §4. */}
           {remoteCount > 1 ? (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground" aria-live="polite">
               This repo has multiple remotes. Type a remote name to filter branches (e.g. the remote
               that tracks the source project).
             </p>

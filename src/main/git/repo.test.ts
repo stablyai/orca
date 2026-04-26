@@ -15,7 +15,12 @@ function git(cwd: string, args: string[]): string {
 }
 
 function initRepo(dir: string): void {
-  git(dir, ['init', '--initial-branch=main', '--quiet'])
+  git(dir, ['init', '--quiet'])
+  // Why: explicit symbolic-ref rather than `git init --initial-branch=main`
+  // (which requires git >= 2.28). Setting HEAD before the first commit
+  // makes the initial branch `main` regardless of host git version or
+  // `init.defaultBranch` config.
+  git(dir, ['symbolic-ref', 'HEAD', 'refs/heads/main'])
   git(dir, ['config', 'user.email', 'test@test.com'])
   git(dir, ['config', 'user.name', 'Test'])
   git(dir, ['commit', '--allow-empty', '-m', 'initial', '--quiet'])

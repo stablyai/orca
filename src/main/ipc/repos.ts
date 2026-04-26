@@ -381,8 +381,28 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           }
         } catch {
           // Fall through — no symbolic-ref on the remote.
-          // Why: don't fabricate 'origin/main'. Let the renderer surface "no
-          // default" and prompt the user to pick a base branch.
+          // Why: don't fabricate 'origin/main'. Let the fallback probes
+          // below try explicit refs before giving up.
+        }
+        // Why: mirror the local fallback chain from getDefaultBaseRefAsync
+        // in ../git/repo.ts so SSH and local repos return identical defaults
+        // for equivalent states (e.g. repos without origin/HEAD set).
+        if (defaultBaseRef === null) {
+          const probes: { ref: string; returnAs: string }[] = [
+            { ref: 'refs/remotes/origin/main', returnAs: 'origin/main' },
+            { ref: 'refs/remotes/origin/master', returnAs: 'origin/master' },
+            { ref: 'refs/heads/main', returnAs: 'main' },
+            { ref: 'refs/heads/master', returnAs: 'master' }
+          ]
+          for (const { ref, returnAs } of probes) {
+            try {
+              await provider.exec(['rev-parse', '--verify', '--quiet', ref], repo.path)
+              defaultBaseRef = returnAs
+              break
+            } catch {
+              // ref doesn't exist, continue
+            }
+          }
         }
         // Why: remote-count lookup is independent of default detection —
         // a failure here must not prevent the default ref from being returned.
@@ -398,9 +418,12 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         return { defaultBaseRef, remoteCount }
       }
       // Why: compute default and remote count independently. A failure
-      // counting remotes must not break default detection.
-      const defaultBaseRef = await getBaseRefDefault(repo.path)
-      const remoteCount = await getRemoteCount(repo.path)
+      // counting remotes must not break default detection. Run in parallel
+      // since the two lookups don't depend on each other.
+      const [defaultBaseRef, remoteCount] = await Promise.all([
+        getBaseRefDefault(repo.path),
+        getRemoteCount(repo.path)
+      ])
       return { defaultBaseRef, remoteCount }
     }
   )
@@ -419,6 +442,15 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         if (!provider) {
           return []
         }
+        // Why: mirror the local path's sanitization (normalizeRefSearchQuery
+        // in ../git/repo.ts) — strip glob metacharacters to prevent glob
+        // injection via the SSH branch, and short-circuit empty queries so
+        // we don't leak every ref. Without this the SSH path diverges from
+        // the local path's behavior.
+        const normalizedQuery = args.query.trim().replace(/[*?[\]\\]/g, '')
+        if (!normalizedQuery) {
+          return []
+        }
         try {
           // Why: glob `refs/remotes/*/*` (not just `origin/*`) so fork
           // workflows can discover `upstream/main` etc. via the relay too.
@@ -430,18 +462,31 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
               'for-each-ref',
               '--format=%(refname:short)',
               '--sort=-committerdate',
-              `refs/remotes/*${args.query}*/*`,
-              `refs/remotes/*/*${args.query}*`,
-              `refs/heads/*${args.query}*`
+              `refs/remotes/*${normalizedQuery}*/*`,
+              `refs/remotes/*/*${normalizedQuery}*`,
+              `refs/heads/*${normalizedQuery}*`
             ],
             repo.path
           )
-          return result.stdout
-            .split('\n')
-            .map((s) => s.trim())
-            // Why: drop `<remote>/HEAD` pseudo-refs across all remotes.
-            .filter((s) => s.length > 0 && !s.endsWith('/HEAD'))
-            .slice(0, limit)
+          // Why: two overlapping remote globs can surface the same ref twice;
+          // dedupe with a Set before slicing so the limit reflects unique
+          // results, matching the local searchBaseRefs dedup in ../git/repo.ts.
+          const seen = new Set<string>()
+          return (
+            result.stdout
+              .split('\n')
+              .map((s) => s.trim())
+              // Why: drop `<remote>/HEAD` pseudo-refs across all remotes.
+              .filter((s) => s.length > 0 && !s.endsWith('/HEAD'))
+              .filter((s) => {
+                if (seen.has(s)) {
+                  return false
+                }
+                seen.add(s)
+                return true
+              })
+              .slice(0, limit)
+          )
         } catch {
           return []
         }
