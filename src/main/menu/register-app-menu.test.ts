@@ -21,6 +21,8 @@ vi.mock('electron', () => ({
 
 import { registerAppMenu } from './register-app-menu'
 
+const isMac = process.platform === 'darwin'
+
 function buildMenuOptions() {
   return {
     onCheckForUpdates: vi.fn(),
@@ -30,6 +32,18 @@ function buildMenuOptions() {
     onZoomReset: vi.fn(),
     onToggleStatusBar: vi.fn()
   }
+}
+
+function getTemplate(): Electron.MenuItemConstructorOptions[] {
+  return buildFromTemplateMock.mock.calls[0][0] as Electron.MenuItemConstructorOptions[]
+}
+
+function getSubmenu(
+  template: Electron.MenuItemConstructorOptions[],
+  label: string
+): Electron.MenuItemConstructorOptions[] {
+  const item = template.find((entry) => entry.label === label)
+  return (item?.submenu ?? []) as Electron.MenuItemConstructorOptions[]
 }
 
 describe('registerAppMenu', () => {
@@ -44,23 +58,16 @@ describe('registerAppMenu', () => {
     registerAppMenu(buildMenuOptions())
 
     expect(buildFromTemplateMock).toHaveBeenCalledTimes(1)
-    const template = buildFromTemplateMock.mock.calls[0][0] as Electron.MenuItemConstructorOptions[]
-    const viewMenu = template.find((item) => item.label === 'View')
+    const viewSubmenu = getSubmenu(getTemplate(), 'View')
 
-    expect(viewMenu?.submenu).toEqual(
+    expect(viewSubmenu).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({
-          label: 'Reload'
-        }),
-        expect.objectContaining({
-          label: 'Force Reload',
-          accelerator: 'Shift+CmdOrCtrl+R'
-        })
+        expect.objectContaining({ label: 'Reload' }),
+        expect.objectContaining({ label: 'Force Reload', accelerator: 'Shift+CmdOrCtrl+R' })
       ])
     )
 
-    const submenu = viewMenu?.submenu as Electron.MenuItemConstructorOptions[]
-    const reloadItem = submenu.find((item) => item.label === 'Reload')
+    const reloadItem = viewSubmenu.find((item) => item.label === 'Reload')
     expect(reloadItem?.accelerator).toBeUndefined()
   })
 
@@ -76,11 +83,7 @@ describe('registerAppMenu', () => {
 
     registerAppMenu(buildMenuOptions())
 
-    const template = buildFromTemplateMock.mock.calls[0][0] as Electron.MenuItemConstructorOptions[]
-    const viewMenu = template.find((item) => item.label === 'View')
-    const submenu = viewMenu?.submenu as Electron.MenuItemConstructorOptions[]
-    const reloadItem = submenu.find((item) => item.label === 'Reload')
-
+    const reloadItem = getSubmenu(getTemplate(), 'View').find((item) => item.label === 'Reload')
     reloadItem?.click?.({} as never, {} as never, {} as never)
 
     expect(reloadMock).toHaveBeenCalledTimes(1)
@@ -99,11 +102,9 @@ describe('registerAppMenu', () => {
 
     registerAppMenu(buildMenuOptions())
 
-    const template = buildFromTemplateMock.mock.calls[0][0] as Electron.MenuItemConstructorOptions[]
-    const viewMenu = template.find((item) => item.label === 'View')
-    const submenu = viewMenu?.submenu as Electron.MenuItemConstructorOptions[]
-    const forceReloadItem = submenu.find((item) => item.label === 'Force Reload')
-
+    const forceReloadItem = getSubmenu(getTemplate(), 'View').find(
+      (item) => item.label === 'Force Reload'
+    )
     forceReloadItem?.click?.({} as never, {} as never, {} as never)
 
     expect(reloadIgnoringCacheMock).toHaveBeenCalledTimes(1)
@@ -114,10 +115,13 @@ describe('registerAppMenu', () => {
     const options = buildMenuOptions()
     registerAppMenu(options)
 
-    const template = buildFromTemplateMock.mock.calls[0][0] as Electron.MenuItemConstructorOptions[]
-    const appMenu = template.find((item) => item.label === 'Orca')
-    const submenu = appMenu?.submenu as Electron.MenuItemConstructorOptions[]
-    const item = submenu.find((entry) => entry.label === 'Check for Updates...')
+    // Why: Check for Updates lives under the app-name menu on macOS and
+    // under Help on Windows/Linux. The click behavior must be identical
+    // either way.
+    const parentLabel = isMac ? 'Orca' : 'Help'
+    const item = getSubmenu(getTemplate(), parentLabel).find(
+      (entry) => entry.label === 'Check for Updates...'
+    )
 
     item?.click?.({} as never, undefined as never, { shiftKey: true } as Electron.KeyboardEvent)
     item?.click?.(
@@ -139,13 +143,43 @@ describe('registerAppMenu', () => {
   it('shows the worktree palette shortcut as a display-only menu hint', () => {
     registerAppMenu(buildMenuOptions())
 
-    const template = buildFromTemplateMock.mock.calls[0][0] as Electron.MenuItemConstructorOptions[]
-    const viewMenu = template.find((item) => item.label === 'View')
-    const submenu = viewMenu?.submenu as Electron.MenuItemConstructorOptions[]
-    const expectedLabel = `Open Worktree Palette\t${process.platform === 'darwin' ? 'Cmd+J' : 'Ctrl+Shift+J'}`
-    const paletteItem = submenu.find((item) => item.label === expectedLabel)
+    const viewSubmenu = getSubmenu(getTemplate(), 'View')
+    const expectedLabel = `Open Worktree Palette\t${isMac ? 'Cmd+J' : 'Ctrl+Shift+J'}`
+    const paletteItem = viewSubmenu.find((item) => item.label === expectedLabel)
 
     expect(paletteItem).toBeDefined()
     expect(paletteItem?.accelerator).toBeUndefined()
+  })
+
+  it.runIf(!isMac)('puts Settings and Exit under File on Windows/Linux', () => {
+    registerAppMenu(buildMenuOptions())
+
+    const template = getTemplate()
+    // Why: no redundant app-named "Orca" menu should exist on non-mac — the
+    // app-menu contents (Settings, Exit, Check for Updates, About) have been
+    // redistributed so users see them in File / Help instead.
+    expect(template.find((item) => item.label === 'Orca')).toBeUndefined()
+
+    const fileLabels = getSubmenu(template, 'File').map((item) => item.label)
+    expect(fileLabels).toEqual(expect.arrayContaining(['Export as PDF...', 'Settings', 'Exit']))
+
+    const helpLabels = getSubmenu(template, 'Help').map((item) => item.label)
+    expect(helpLabels).toEqual(expect.arrayContaining(['Check for Updates...']))
+  })
+
+  it.runIf(isMac)('keeps the macOS app-named menu with Settings and quit roles', () => {
+    registerAppMenu(buildMenuOptions())
+
+    const template = getTemplate()
+    const appSubmenu = getSubmenu(template, 'Orca')
+    const appLabels = appSubmenu.map((item) => item.label)
+    expect(appLabels).toEqual(expect.arrayContaining(['Check for Updates...', 'Settings']))
+    // Why: on macOS File should NOT duplicate Settings/Exit — those live in
+    // the system app menu, so only Export belongs under File.
+    const fileLabels = getSubmenu(template, 'File').map((item) => item.label)
+    expect(fileLabels).not.toContain('Settings')
+    expect(fileLabels).not.toContain('Exit')
+    // No Help menu on macOS — About/Check for Updates live in the app menu.
+    expect(template.find((item) => item.label === 'Help')).toBeUndefined()
   })
 })

@@ -84,7 +84,12 @@ export function createMainWindow(
     minWidth: 600,
     minHeight: 400,
     show: false,
-    autoHideMenuBar: true,
+    // Why: on macOS the menu lives in the system menu bar, so the in-window
+    // menu bar is irrelevant and stays hidden. On Windows/Linux the menu bar
+    // *is* the only surface for File/Edit/View/Window, so keep it always
+    // visible — otherwise users never see the menu items at all (they'd have
+    // to press Alt to toggle it).
+    autoHideMenuBar: process.platform === 'darwin',
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : undefined,
     // Why: initial position for 1x zoom; syncTrafficLightPosition() adjusts
