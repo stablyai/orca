@@ -609,6 +609,10 @@ export type GlobalSettings = {
    *  The setting stays Windows-only so macOS/Linux keep their existing context
    *  menu behavior and users can still reach the menu with Ctrl+right-click. */
   terminalRightClickToPaste: boolean
+  /** When true, Orca's shell-ready zsh wrapper binds Tab to the same accept
+   *  behavior as the right arrow for zsh-autosuggestions. Users who prefer
+   *  conventional completion on Tab can turn this off. */
+  terminalTabAcceptSuggestion: boolean
   terminalFocusFollowsMouse: boolean
   /** Why: mirrors X11 / gnome-terminal "copy on select" UX — making a terminal
    *  selection copies it to the system clipboard automatically, so users can

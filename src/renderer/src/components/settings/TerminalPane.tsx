@@ -444,6 +444,39 @@ export function TerminalPane({
             />
           </button>
         </SearchableSetting>
+
+        <SearchableSetting
+          title="Tab Accepts Suggestions"
+          description="In shell-ready zsh sessions, Tab accepts the inline suggestion the same way the right arrow does."
+          keywords={['terminal', 'tab', 'suggestion', 'autocomplete', 'zsh', 'shell']}
+          className="flex items-center justify-between gap-4 px-1 py-2"
+        >
+          <div className="space-y-0.5">
+            <Label>Tab Accepts Suggestions</Label>
+            <p className="text-xs text-muted-foreground">
+              In shell-ready zsh sessions, Tab accepts the inline suggestion the same way the
+              right arrow does. Turn this off if you want stock zsh completion on Tab.
+            </p>
+          </div>
+          <button
+            role="switch"
+            aria-checked={settings.terminalTabAcceptSuggestion}
+            onClick={() =>
+              updateSettings({
+                terminalTabAcceptSuggestion: !settings.terminalTabAcceptSuggestion
+              })
+            }
+            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
+              settings.terminalTabAcceptSuggestion ? 'bg-foreground' : 'bg-muted-foreground/30'
+            }`}
+          >
+            <span
+              className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
+                settings.terminalTabAcceptSuggestion ? 'translate-x-4' : 'translate-x-0.5'
+              }`}
+            />
+          </button>
+        </SearchableSetting>
       </section>
     ) : null,
     matchesSettingsSearch(searchQuery, TERMINAL_DARK_THEME_SEARCH_ENTRIES) ? (

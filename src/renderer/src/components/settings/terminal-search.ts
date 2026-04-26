@@ -69,6 +69,12 @@ export const TERMINAL_PANE_STYLE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
       'gnome',
       'paste'
     ]
+  },
+  {
+    title: 'Tab Accepts Suggestions',
+    description:
+      'In shell-ready zsh sessions, Tab accepts the inline suggestion the same way the right arrow does.',
+    keywords: ['terminal', 'tab', 'suggestion', 'autocomplete', 'zsh', 'shell']
   }
 ]
 

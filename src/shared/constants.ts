@@ -120,6 +120,10 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     // box. Other platforms ignore this field because the UI never exposes it,
     // and Ctrl+right-click still opens the context menu when paste is enabled.
     terminalRightClickToPaste: true,
+    // Default true so zsh shells accept inline suggestions with Tab the same
+    // way they do with the right arrow. Users can disable this if they prefer
+    // the stock completion path on Tab.
+    terminalTabAcceptSuggestion: true,
     // Default false: opt-in only (matches Ghostty's default). Existing users
     // on upgrade inherit this default via persistence.ts's
     // { ...defaults.settings, ...parsed.settings } merge, so enabling

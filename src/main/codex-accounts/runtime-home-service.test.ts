@@ -55,6 +55,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     terminalPaneOpacityTransitionMs: 150,
     terminalDividerThicknessPx: 1,
     terminalRightClickToPaste: false,
+    terminalTabAcceptSuggestion: true,
     terminalFocusFollowsMouse: false,
     terminalClipboardOnSelect: false,
     setupScriptLaunchMode: 'split-vertical',

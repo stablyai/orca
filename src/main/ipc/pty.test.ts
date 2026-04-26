@@ -556,9 +556,10 @@ describe('registerPtyHandlers', () => {
     }
   })
 
-  it('binds Tab to the same zsh forward-char path as the right arrow', async () => {
+  it('makes the zsh Tab binding configurable and disabled by env flag', async () => {
     const { getZshShellReadyRcfileContent } = await import('./pty')
     const zshRcContent = getZshShellReadyRcfileContent()
+    expect(zshRcContent).toContain('ORCA_ZSH_TAB_ACCEPTS_SUGGESTION')
     expect(zshRcContent).toContain("bindkey '^I' forward-char")
   })
 

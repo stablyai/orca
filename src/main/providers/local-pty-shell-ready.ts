@@ -24,10 +24,14 @@ _orca_home="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
 if [[ -o interactive && -f "$_orca_home/.zshrc" ]]; then
   source "$_orca_home/.zshrc"
 fi
-# Why: match the right-arrow accept path used by zsh-autosuggestions so Tab
-# accepts the inline command suggestion in Orca's shells instead of falling
-# back to completion or focus traversal.
-bindkey '^I' forward-char
+# Why: allow users to opt out of the Tab binding if they want stock completion
+# semantics instead of suggestion acceptance.
+if [[ "\${ORCA_ZSH_TAB_ACCEPTS_SUGGESTION:-1}" != '0' ]]; then
+  # Why: match the right-arrow accept path used by zsh-autosuggestions so Tab
+  # accepts the inline command suggestion in Orca's shells instead of falling
+  # back to completion or focus traversal.
+  bindkey '^I' forward-char
+fi
 `
 }
 
