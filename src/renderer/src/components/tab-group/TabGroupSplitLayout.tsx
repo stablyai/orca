@@ -217,7 +217,7 @@ export default function TabGroupSplitLayout({
       // so disabling it is the simplest fix.
       autoScroll={false}
     >
-      {/* Why: the 8px drag strip sits ABOVE the split layout — lifted out of
+      {/* Why: the 6px drag strip sits ABOVE the split layout — lifted out of
           each pane — so vertical split resize handles don't extend into the
           window-drag region at the top. Only the split layout's own panes
           own the resize handles, while this strip keeps the whole top of the
@@ -229,7 +229,7 @@ export default function TabGroupSplitLayout({
           overlapping 1px lines read as one clean seam. */}
       <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden border-l border-border">
         <div
-          className="h-2 shrink-0 bg-card"
+          className="h-[6px] shrink-0 bg-card"
           style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
         />
         <div className="flex flex-1 min-w-0 min-h-0 overflow-hidden">
