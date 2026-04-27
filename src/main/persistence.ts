@@ -41,6 +41,9 @@ function decrypt(ciphertext: string): string {
     // Why: if decryption fails, it likely means the value was stored as
     // plaintext (pre-encryption build) or the OS keychain changed. Fall
     // back to the raw string so users don't lose their cookie after upgrade.
+    console.warn(
+      '[persistence] safeStorage decryption failed — returning ciphertext as-is. Possible keychain reset.'
+    )
     return ciphertext
   }
 }
@@ -150,18 +153,9 @@ export class Store {
           ui: (() => {
             const sort = normalizeSortBy(parsed.ui?.sortBy)
             const migrate = !parsed.ui?._sortBySmartMigrated && sort === 'recent'
-            // Why: statusBarItems is an additive set — new providers added in later
-            // releases must appear automatically even if the persisted array predates
-            // them. Union saved items with current defaults, preserving user order.
-            const savedItems = parsed.ui?.statusBarItems ?? defaults.ui.statusBarItems
-            const mergedStatusBarItems = [
-              ...savedItems,
-              ...defaults.ui.statusBarItems.filter((item) => !savedItems.includes(item))
-            ]
             return {
               ...defaults.ui,
               ...parsed.ui,
-              statusBarItems: mergedStatusBarItems,
               sortBy: migrate ? ('smart' as const) : sort,
               _sortBySmartMigrated: true
             }

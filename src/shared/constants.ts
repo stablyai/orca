@@ -180,6 +180,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     defaultLinearTeamSelection: null,
     opencodeSessionCookie: '',
     opencodeWorkspaceId: '',
+    geminiCliOAuthEnabled: false,
     agentCmdOverrides: {},
     // Why: 'auto' runs a layout-aware probe at boot (see
     // src/renderer/src/lib/keyboard-layout/*) that picks 'true' for US and

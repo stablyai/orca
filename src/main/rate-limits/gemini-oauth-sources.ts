@@ -1,4 +1,4 @@
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile, writeFile, rename } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import { net } from 'electron'
@@ -78,7 +78,9 @@ export async function readGeminiCredentials(): Promise<GeminiCredentials | null>
 }
 
 export async function saveGeminiCredentials(creds: GeminiCredentials): Promise<void> {
-  await writeFile(OAUTH_CREDS_PATH, JSON.stringify(creds, null, 2), 'utf-8')
+  const tmpPath = `${OAUTH_CREDS_PATH}.${process.pid}.tmp`
+  await writeFile(tmpPath, JSON.stringify(creds, null, 2), 'utf-8')
+  await rename(tmpPath, OAUTH_CREDS_PATH)
 }
 
 export type RefreshTokenResult = {
@@ -160,8 +162,12 @@ export async function loadProjectId(accessToken: string): Promise<string> {
 // (GeminiCredentials) and the auth.json path (pipe-split string) can share
 // the same bundle credential extraction without coupling to either struct.
 export async function tryRefreshTokenFromBundle(
-  refreshToken: string
+  refreshToken: string,
+  allowCliOAuth = true
 ): Promise<RefreshTokenResult | null> {
+  if (!allowCliOAuth) {
+    return null
+  }
   const clientCreds = await extractOAuthClientCredentials()
   if (!clientCreds) {
     return null

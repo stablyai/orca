@@ -253,15 +253,15 @@ export class CodexAccountService {
     }
   }
 
-  private async safeSyncCanonicalConfigIntoManagedHome(managedHomePath: string): Promise<void> {
+  private safeSyncCanonicalConfigIntoManagedHome(managedHomePath: string): void {
     try {
-      await this.syncCanonicalConfigIntoManagedHome(managedHomePath)
+      this.syncCanonicalConfigIntoManagedHome(managedHomePath)
     } catch (error) {
       console.warn('[codex-accounts] Failed to seed managed config:', error)
     }
   }
 
-  private async syncCanonicalConfigToManagedHomes(): Promise<void> {
+  private syncCanonicalConfigToManagedHomes(): void {
     const canonicalConfig = this.readCanonicalConfig()
     if (canonicalConfig === null) {
       return
@@ -270,17 +270,17 @@ export class CodexAccountService {
     const settings = this.store.getSettings()
     for (const account of settings.codexManagedAccounts) {
       try {
-        await this.syncCanonicalConfigIntoManagedHome(account.managedHomePath, canonicalConfig)
+        this.syncCanonicalConfigIntoManagedHome(account.managedHomePath, canonicalConfig)
       } catch (error) {
         console.warn('[codex-accounts] Failed to sync managed config:', error)
       }
     }
   }
 
-  private async syncCanonicalConfigIntoManagedHome(
+  private syncCanonicalConfigIntoManagedHome(
     managedHomePath: string,
     canonicalConfig = this.readCanonicalConfig()
-  ): Promise<void> {
+  ): void {
     if (canonicalConfig === null) {
       return
     }
@@ -290,7 +290,7 @@ export class CodexAccountService {
     // identity, not silently fork the user's sandbox/config defaults. Syncing
     // one canonical config into every managed home keeps auth isolated per
     // account while preserving consistent Codex behavior.
-    await this.writeManagedConfig(trustedManagedHomePath, canonicalConfig)
+    this.writeManagedConfig(trustedManagedHomePath, canonicalConfig)
   }
 
   private readCanonicalConfig(): string | null {
@@ -307,8 +307,8 @@ export class CodexAccountService {
     }
   }
 
-  private async writeManagedConfig(managedHomePath: string, contents: string): Promise<void> {
-    await writeFileAtomically(join(managedHomePath, 'config.toml'), contents)
+  private writeManagedConfig(managedHomePath: string, contents: string): void {
+    writeFileAtomically(join(managedHomePath, 'config.toml'), contents)
   }
 
   private getManagedAccountsRoot(): string {

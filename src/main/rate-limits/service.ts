@@ -30,11 +30,16 @@ export class RateLimitService {
   private fetchIdleResolvers: (() => void)[] = []
   private codexFetchGeneration = 0
   private claudeFetchGeneration = 0
+  private opencodeFetchGeneration = 0
   private lastOpencodeConfigHash = ''
   private codexHomePathResolver: (() => string | null) | null = null
   private claudeAuthPreparationResolver: (() => Promise<ClaudeRuntimeAuthPreparation>) | null = null
   private settingsResolver:
-    | (() => { opencodeSessionCookie: string; opencodeWorkspaceId: string })
+    | (() => {
+        opencodeSessionCookie: string
+        opencodeWorkspaceId: string
+        geminiCliOAuthEnabled?: boolean
+      })
     | null = null
 
   constructor() {}
@@ -48,7 +53,11 @@ export class RateLimitService {
   }
 
   setSettingsResolver(
-    resolver: () => { opencodeSessionCookie: string; opencodeWorkspaceId: string }
+    resolver: () => {
+      opencodeSessionCookie: string
+      opencodeWorkspaceId: string
+      geminiCliOAuthEnabled?: boolean
+    }
   ): void {
     this.settingsResolver = resolver
   }
@@ -342,12 +351,17 @@ export class RateLimitService {
     const settings = this.settingsResolver?.()
     const cookie = settings?.opencodeSessionCookie ?? ''
     const workspaceIdOverride = settings?.opencodeWorkspaceId ?? ''
+    const geminiCliOAuthEnabled = settings?.geminiCliOAuthEnabled ?? false
 
     // Detect if configuration changed — if it did, we must discard any stale
     // data because it belongs to a different session/workspace.
     const currentConfigHash = `${cookie}|${workspaceIdOverride}`
     const opencodeConfigChanged = currentConfigHash !== this.lastOpencodeConfigHash
-    this.lastOpencodeConfigHash = currentConfigHash
+    if (opencodeConfigChanged) {
+      this.lastOpencodeConfigHash = currentConfigHash
+      this.opencodeFetchGeneration += 1
+    }
+    const opencodeGeneration = this.opencodeFetchGeneration
 
     // Mark all providers as fetching while keeping previous data visible.
     // Codex account changes clear Codex separately before this method is
@@ -365,7 +379,7 @@ export class RateLimitService {
     const [claudeResult, codexResult, geminiResult, opencodeGoResult] = await Promise.allSettled([
       fetchClaudeRateLimits({ authPreparation: claudeAuthPreparation }),
       fetchCodexRateLimits({ codexHomePath }),
-      fetchGeminiRateLimits(),
+      fetchGeminiRateLimits(false, geminiCliOAuthEnabled),
       fetchOpenCodeGoRateLimits(cookie, workspaceIdOverride || undefined)
     ])
 
@@ -432,6 +446,7 @@ export class RateLimitService {
       codexGeneration === this.codexFetchGeneration && codexProvenance === latestCodexProvenance
     const shouldApplyClaude =
       claudeGeneration === this.claudeFetchGeneration && claudeProvenance === latestClaudeProvenance
+    const shouldApplyOpencode = opencodeGeneration === this.opencodeFetchGeneration
 
     // Why: account switches can race in-flight Codex fetches. Only apply a
     // Codex result if both the selected-account provenance and the request
@@ -446,9 +461,11 @@ export class RateLimitService {
         ? this.applyStalePolicy(codex, previousState.codex)
         : this.state.codex,
       gemini: this.applyStalePolicy(gemini, previousState.gemini),
-      opencodeGo: opencodeConfigChanged
-        ? opencodeGo
-        : this.applyStalePolicy(opencodeGo, previousState.opencodeGo)
+      opencodeGo: shouldApplyOpencode
+        ? opencodeConfigChanged
+          ? opencodeGo
+          : this.applyStalePolicy(opencodeGo, previousState.opencodeGo)
+        : this.state.opencodeGo
     })
 
     this.lastFetchAt = Date.now()

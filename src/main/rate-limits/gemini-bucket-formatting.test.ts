@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { RateLimitBucket } from '../../shared/rate-limit-types'
-import { getBucketName, deriveSessionSummary } from './gemini-usage-fetcher'
+import { getBucketName, deriveSessionSummary } from './gemini-bucket-formatting'
 
 describe('getBucketName', () => {
   it('maps known model IDs to stable names', () => {

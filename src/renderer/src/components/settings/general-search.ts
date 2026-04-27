@@ -86,6 +86,15 @@ export const GENERAL_CODEX_ACCOUNTS_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   }
 ]
 
+export const GENERAL_GEMINI_SEARCH_ENTRIES: SettingsSearchEntry[] = [
+  {
+    title: 'Use Gemini CLI credentials',
+    description:
+      'Extracts OAuth credentials from your local Gemini CLI installation to authenticate with Google.',
+    keywords: ['gemini', 'cli', 'oauth', 'credentials', 'experimental', 'rate limit', 'status bar']
+  }
+]
+
 export const GENERAL_OPENCODE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'OpenCode Go Session Cookie',
@@ -132,6 +141,7 @@ export const GENERAL_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   ...GENERAL_CACHE_TIMER_SEARCH_ENTRIES,
   ...GENERAL_CLAUDE_ACCOUNTS_SEARCH_ENTRIES,
   ...GENERAL_CODEX_ACCOUNTS_SEARCH_ENTRIES,
+  ...GENERAL_GEMINI_SEARCH_ENTRIES,
   ...GENERAL_OPENCODE_SEARCH_ENTRIES,
   ...GENERAL_UPDATE_SEARCH_ENTRIES,
   ...GENERAL_SUPPORT_SEARCH_ENTRIES

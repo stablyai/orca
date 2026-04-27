@@ -913,6 +913,9 @@ export type GlobalSettings = {
   /** Optional workspace ID override for OpenCode Go. When set, skips the
    *  workspaces lookup and fetches usage directly for this workspace. */
   opencodeWorkspaceId: string
+  /** Whether to extract OAuth credentials from the local Gemini CLI installation
+   *  for rate-limit fetching. Disabled by default for explicit opt-in. */
+  geminiCliOAuthEnabled: boolean
   /** Per-agent CLI command overrides. A missing key means use the catalog default binary name. */
   agentCmdOverrides: Partial<Record<TuiAgent, string>>
   /** Why: macOS terminals must choose between letting Option compose layout
@@ -974,7 +977,14 @@ export type NotificationDispatchResult = {
 
 export type WorktreeCardProperty = 'status' | 'unread' | 'ci' | 'issue' | 'pr' | 'comment'
 
-export type StatusBarItem = 'claude' | 'codex' | 'gemini' | 'opencode-go' | 'ssh' | 'sessions' | 'memory'
+export type StatusBarItem =
+  | 'claude'
+  | 'codex'
+  | 'gemini'
+  | 'opencode-go'
+  | 'ssh'
+  | 'sessions'
+  | 'memory'
 export type PersistedUIState = {
   lastActiveRepoId: string | null
   lastActiveWorktreeId: string | null
