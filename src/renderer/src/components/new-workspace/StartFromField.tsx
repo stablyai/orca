@@ -42,9 +42,11 @@ export default function StartFromField({
     setDefaultBaseRef(null)
     void window.api.repos
       .getBaseRefDefault({ repoId })
-      .then((ref) => {
+      .then((result) => {
         if (!stale) {
-          setDefaultBaseRef(ref)
+          // Why: IPC returns a `{ defaultBaseRef, remoteCount }` envelope;
+          // this component only needs `defaultBaseRef` for the trigger label.
+          setDefaultBaseRef(result.defaultBaseRef)
         }
       })
       .catch(() => {
