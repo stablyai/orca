@@ -88,14 +88,19 @@ function getShellReadyWrapperRoot(): string {
 // falls back to HOME for the user's real config root.
 function resolveOriginalZdotdir(): string {
   const inherited = process.env.ZDOTDIR
+  if (!inherited) {
+    return process.env.HOME || ''
+  }
   // Why: tolerate trailing slashes — some shell startup scripts export
   // `ZDOTDIR="$dir/"`, and without normalization the suffix check would
-  // miss the self-loop path and restore the recursion bug.
-  const normalized = inherited ? inherited.replace(/\/+$/, '') : ''
-  if (normalized && !normalized.endsWith('/shell-ready/zsh')) {
-    return inherited as string
+  // miss the self-loop path and restore the recursion bug. Also collapses
+  // a pathological `ZDOTDIR=/` to empty so we fall back to HOME rather than
+  // sourcing `/.zshenv` (which is never the user's real config).
+  const normalized = inherited.replace(/\/+$/, '')
+  if (!normalized || normalized.endsWith('/shell-ready/zsh')) {
+    return process.env.HOME || ''
   }
-  return process.env.HOME || ''
+  return inherited
 }
 
 export function getBashShellReadyRcfileContent(): string {

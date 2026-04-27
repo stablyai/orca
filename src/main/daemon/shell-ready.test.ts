@@ -135,6 +135,33 @@ describePosix('daemon shell-ready launch config', () => {
     }
   })
 
+  it('falls back to HOME when ZDOTDIR is only slashes (e.g. "/")', async () => {
+    // Why: a bare `/` (or `////`) normalizes to empty and is never a user's
+    // real zsh config root; sourcing `/.zshenv` would silently no-op. Falling
+    // back to HOME matches what the wrapper already assumes when ZDOTDIR is
+    // unset.
+    const previousZdotdir = process.env.ZDOTDIR
+    const previousHome = process.env.HOME
+    process.env.ZDOTDIR = '/'
+    process.env.HOME = '/Users/alice'
+    try {
+      const { getShellReadyLaunchConfig } = await importFreshShellReady()
+      const config = getShellReadyLaunchConfig('/bin/zsh')
+      expect(config.env.ORCA_ORIG_ZDOTDIR).toBe('/Users/alice')
+    } finally {
+      if (previousZdotdir === undefined) {
+        delete process.env.ZDOTDIR
+      } else {
+        process.env.ZDOTDIR = previousZdotdir
+      }
+      if (previousHome === undefined) {
+        delete process.env.HOME
+      } else {
+        process.env.HOME = previousHome
+      }
+    }
+  })
+
   it('preserves ZDOTDIR that contains /shell-ready/zsh as a substring but does not end with it', async () => {
     // Why: the guard must match the suffix, not a substring — a user directory
     // like `/Users/alice/shell-ready/zsh-custom` should round-trip unchanged.
