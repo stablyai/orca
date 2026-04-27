@@ -144,15 +144,12 @@ export function BaseRefPicker({
         )}
       </div>
 
-      <div className="space-y-2">
-        <Input
-          value={baseRefQuery}
-          onChange={(e) => setBaseRefQuery(e.target.value)}
-          placeholder="Search branches by name..."
-          className="max-w-md"
-        />
-        <p className="text-xs text-muted-foreground">Type at least 2 characters.</p>
-      </div>
+      <Input
+        value={baseRefQuery}
+        onChange={(e) => setBaseRefQuery(e.target.value)}
+        placeholder="Search branches by name..."
+        className="max-w-md"
+      />
 
       {isSearchingBaseRefs ? (
         <p className="text-xs text-muted-foreground">Searching branches...</p>
@@ -160,7 +157,7 @@ export function BaseRefPicker({
 
       {!isSearchingBaseRefs && baseRefQuery.trim().length >= 2 ? (
         baseRefResults.length > 0 ? (
-          <ScrollArea className="h-48 rounded-md border border-border/50">
+          <ScrollArea className="max-h-48 rounded-md border border-border/50">
             <div className="p-1">
               {baseRefResults.map((ref) => (
                 <button
