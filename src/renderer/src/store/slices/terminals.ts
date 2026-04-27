@@ -886,6 +886,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
 
   clearTabPtyId: (tabId, ptyId) => {
     let worktreeId: string | null = null
+    let wasActivationSpawn = false
     set((s) => {
       const next = { ...s.tabsByWorktree }
       for (const wId of Object.keys(next)) {
@@ -896,10 +897,20 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           if (t.id !== tabId) {
             return t
           }
+          if (t.pendingActivationSpawn) {
+            wasActivationSpawn = true
+          }
           const remainingPtyIds = ptyId
             ? (s.ptyIdsByTabId[tabId] ?? []).filter((id) => id !== ptyId)
             : []
-          return { ...t, ptyId: remainingPtyIds.at(-1) ?? null }
+          // Why: consume pendingActivationSpawn here too. Panes tearing down
+          // during a worktree switch (e.g. the previously-active worktree
+          // unmounting its panes) fire onExit → clearTabPtyId, which must
+          // not count as activity. Strip the flag on consumption so later
+          // legitimate exits still bump.
+          const { pendingActivationSpawn: _unused, ...rest } = t
+          void _unused
+          return { ...rest, ptyId: remainingPtyIds.at(-1) ?? null }
         })
       }
       const nextPtyIdsByTabId = { ...s.ptyIdsByTabId }
@@ -937,8 +948,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     })
 
     // Bump meaningful activity when a PTY exits, but skip if this exit
-    // was triggered by an intentional shutdown (suppressed exits).
-    if (worktreeId && !(ptyId && get().suppressedPtyExitIds[ptyId])) {
+    // was triggered by an intentional shutdown (suppressed exits) OR by a
+    // click-driven pane unmount (pendingActivationSpawn).
+    if (worktreeId && !wasActivationSpawn && !(ptyId && get().suppressedPtyExitIds[ptyId])) {
       get().bumpWorktreeActivity(worktreeId)
     }
   },

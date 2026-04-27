@@ -47,6 +47,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   activeWorktreeId: null,
   deleteStateByWorktreeId: {},
   sortEpoch: 0,
+  everActivatedWorktreeIds: new Set<string>(),
 
   fetchWorktrees: async (repoId) => {
     try {
@@ -236,6 +237,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           ? s.openFiles.some((f) => f.id === s.activeFileId && f.worktreeId === worktreeId)
           : false
         const removedActiveWorktree = s.activeWorktreeId === worktreeId
+        const nextEverActivatedWorktreeIds = s.everActivatedWorktreeIds.has(worktreeId)
+          ? new Set([...s.everActivatedWorktreeIds].filter((id) => id !== worktreeId))
+          : s.everActivatedWorktreeIds
         return {
           worktreesByRepo: next,
           tabsByWorktree: nextTabs,
@@ -277,6 +281,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           activeFileId: activeFileCleared ? null : s.activeFileId,
           activeBrowserTabId: removedActiveWorktree ? null : s.activeBrowserTabId,
           activeTabType: removedActiveWorktree || activeFileCleared ? 'terminal' : s.activeTabType,
+          everActivatedWorktreeIds: nextEverActivatedWorktreeIds,
           sortEpoch: s.sortEpoch + 1
         }
       })
@@ -568,27 +573,42 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       // resumes the pane with a transport stuck at connected=false/ptyId=null,
       // and user input is silently dropped.
       //
-      // Why pendingActivationSpawn: the fresh PTY that results from this
-      // generation bump was caused by the user clicking on a worktree, not by
-      // work happening in it. Tag the tabs so the resulting updateTabPtyId
-      // (which fires ~1 frame later when the remounted pane's transport
-      // spawns) can suppress bumpWorktreeActivity and the live-tab sortEpoch
-      // bump. Without the tag, every click on a dormant worktree would stamp
-      // lastActivityAt = now and reshuffle Recent / Smart on every click.
+      // Why pendingActivationSpawn + first-activation check: the first time a
+      // worktree is activated in this session, its TerminalPane mounts and
+      // each tab's PTY either reattaches (restored session) or fresh-spawns
+      // (never visited). Both paths call updateTabPtyId; neither is real
+      // activity — they are side-effects of the click. Tag every tab on the
+      // FIRST activation so the resulting updateTabPtyId suppresses both the
+      // activity bump and the sortEpoch bump.
+      //
+      // We can't use tab.ptyId==null as the guard (what the old `allDead`
+      // check did): reconnectPersistedTerminals re-populates tab.ptyId with
+      // restored daemon session IDs *before* the pane mounts, so tabs look
+      // live to allDead even though the next updateTabPtyId is a reattach.
+      // Tracking first-activation per worktree is the reliable signal.
+      //
+      // Generation is still only bumped when tabs are allDead — a live tab
+      // remount would kill the user's running shell.
       const tabs = s.tabsByWorktree[worktreeId ?? ''] ?? []
       const allDead = worktreeId && tabs.length > 0 && tabs.every((tab) => !tab.ptyId)
-      const tabsByWorktreeUpdate = allDead
-        ? {
-            tabsByWorktree: {
-              ...s.tabsByWorktree,
-              [worktreeId!]: tabs.map((tab) => ({
-                ...tab,
-                generation: (tab.generation ?? 0) + 1,
-                pendingActivationSpawn: true
-              }))
+      const isFirstActivation = worktreeId != null && !s.everActivatedWorktreeIds.has(worktreeId)
+      const shouldTagTabs = worktreeId != null && tabs.length > 0 && isFirstActivation
+      const nextEverActivated = isFirstActivation
+        ? new Set([...s.everActivatedWorktreeIds, worktreeId!])
+        : s.everActivatedWorktreeIds
+      const tabsByWorktreeUpdate =
+        allDead || shouldTagTabs
+          ? {
+              tabsByWorktree: {
+                ...s.tabsByWorktree,
+                [worktreeId!]: tabs.map((tab) => ({
+                  ...tab,
+                  ...(allDead ? { generation: (tab.generation ?? 0) + 1 } : {}),
+                  ...(shouldTagTabs ? { pendingActivationSpawn: true } : {})
+                }))
+              }
             }
-          }
-        : {}
+          : {}
 
       return {
         activeWorktreeId: worktreeId,
@@ -597,6 +617,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         activeTabType,
         activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: activeTabType },
         activeTabId,
+        everActivatedWorktreeIds: nextEverActivated,
         ...(shouldClearUnread
           ? { worktreesByRepo: applyWorktreeUpdates(s.worktreesByRepo, worktreeId, metaUpdates) }
           : {}),

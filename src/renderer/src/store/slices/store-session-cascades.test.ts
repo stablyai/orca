@@ -733,10 +733,14 @@ describe('terminal slice behaviors', () => {
     expect(store.getState().tabsByWorktree[worktreeId][0].pendingActivationSpawn).toBeUndefined()
   })
 
-  // Why: activating a worktree whose tabs are already live must NOT tag
-  // pendingActivationSpawn — only the allDead branch does. Otherwise a split
-  // pane spawning later in an already-active worktree would be suppressed.
-  it('does not tag pendingActivationSpawn when activated tabs already have live PTYs', () => {
+  // Why: the FIRST activation of a worktree tags every tab — even if tab.ptyId
+  // already looks live, because reconnectPersistedTerminals can re-populate
+  // tab.ptyId with a restored daemon session ID before the pane mounts, making
+  // the upcoming updateTabPtyId look like new activity when it is really just
+  // the click-driven reattach. Subsequent activations of the SAME worktree
+  // must NOT re-tag — otherwise a later split-pane spawn or codex restart
+  // would be silently suppressed.
+  it('tags on first activation but not on re-activation', () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/path/wt1'
 
@@ -748,9 +752,9 @@ describe('terminal slice behaviors', () => {
         repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1', path: '/path/wt1' })]
       },
       tabsByWorktree: {
-        [worktreeId]: [makeTab({ id: 'tab-1', worktreeId, ptyId: 'pty-live' })]
+        [worktreeId]: [makeTab({ id: 'tab-1', worktreeId, ptyId: 'pty-restored' })]
       },
-      ptyIdsByTabId: { 'tab-1': ['pty-live'] },
+      ptyIdsByTabId: { 'tab-1': ['pty-restored'] },
       unifiedTabsByWorktree: {
         [worktreeId]: [
           {
@@ -773,8 +777,18 @@ describe('terminal slice behaviors', () => {
       activeGroupIdByWorktree: { [worktreeId]: 'group-1' }
     })
 
+    // First activation: tabs get tagged even though tab.ptyId is non-null.
     store.getState().setActiveWorktree(worktreeId)
+    expect(store.getState().tabsByWorktree[worktreeId][0].pendingActivationSpawn).toBe(true)
 
+    // updateTabPtyId from the pane mount consumes the tag.
+    store.getState().updateTabPtyId('tab-1', 'pty-live')
+    expect(store.getState().tabsByWorktree[worktreeId][0].pendingActivationSpawn).toBeUndefined()
+
+    // Switch away, then re-activate. The re-activation must NOT tag again,
+    // or a later legitimate spawn (codex restart, new pane) would be dropped.
+    store.getState().setActiveWorktree(null)
+    store.getState().setActiveWorktree(worktreeId)
     expect(store.getState().tabsByWorktree[worktreeId][0].pendingActivationSpawn).toBeUndefined()
   })
 
