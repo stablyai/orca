@@ -437,6 +437,11 @@ export function useTabGroupWorkspaceModel({
         setActiveTab(terminal.id)
         setActiveTabType('terminal')
       },
+      newTerminalWithShell: (shellOverride: string) => {
+        const terminal = createTab(worktreeId, groupId, shellOverride)
+        setActiveTab(terminal.id)
+        setActiveTabType('terminal')
+      },
       pinFile,
       setTabColor,
       setTabCustomTitle

@@ -62,6 +62,8 @@ type TerminalPaneProps = {
    *  the section header can render the trigger button as a headerAction
    *  instead of taking its own row inside the settings list. */
   ghostty: UseGhosttyImportReturn
+  /** Whether WSL is installed on this Windows machine. */
+  wslAvailable?: boolean
 }
 
 export function TerminalPane({
@@ -71,7 +73,8 @@ export function TerminalPane({
   terminalFontSuggestions,
   scrollbackMode,
   setScrollbackMode,
-  ghostty
+  ghostty,
+  wslAvailable
 }: TerminalPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const isWindows = isWindowsUserAgent()
@@ -122,12 +125,11 @@ export function TerminalPane({
         >
           <Label>Default Shell</Label>
           <div className="flex w-fit gap-1 rounded-md border border-border/50 p-1">
-            {(
-              [
-                { label: 'PowerShell', value: 'powershell.exe' },
-                { label: 'Command Prompt', value: 'cmd.exe' }
-              ] as const
-            ).map(({ label, value }) => (
+            {[
+              { label: 'PowerShell', value: 'powershell.exe' },
+              { label: 'Command Prompt', value: 'cmd.exe' },
+              ...(wslAvailable ? [{ label: 'WSL', value: 'wsl.exe' }] : [])
+            ].map(({ label, value }) => (
               <button
                 key={value}
                 onClick={() => updateSettings({ terminalWindowsShell: value })}

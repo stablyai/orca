@@ -121,7 +121,7 @@ export type TerminalSlice = {
    *  fresh shell prompt. */
   pendingColdRestoreByPtyId: Record<string, { scrollback: string; cwd: string }>
   consumePendingColdRestore: (ptyId: string) => { scrollback: string; cwd: string } | null
-  createTab: (worktreeId: string, targetGroupId?: string) => TerminalTab
+  createTab: (worktreeId: string, targetGroupId?: string, shellOverride?: string) => TerminalTab
   closeTab: (tabId: string) => void
   reorderTabs: (worktreeId: string, tabIds: string[]) => void
   setTabBarOrder: (worktreeId: string, order: string[]) => void
@@ -296,7 +296,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       return { deferredSshSessionIdsByTabId: next }
     }),
 
-  createTab: (worktreeId, targetGroupId) => {
+  createTab: (worktreeId, targetGroupId, shellOverride) => {
     const id = globalThis.crypto.randomUUID()
     let tab!: TerminalTab
     set((s) => {
@@ -319,7 +319,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         customTitle: null,
         color: null,
         sortOrder: existing.length,
-        createdAt: Date.now()
+        createdAt: Date.now(),
+        ...(shellOverride !== undefined ? { shellOverride } : {})
       }
       const validTargetGroupId =
         targetGroupId && s.groupsByWorktree[worktreeId]?.some((group) => group.id === targetGroupId)

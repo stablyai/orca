@@ -53,6 +53,10 @@ type WorktreesApi = {
   onChanged: (callback: (data: { repoId: string }) => void) => () => void
 }
 
+type WslApi = {
+  isAvailable: () => Promise<boolean>
+}
+
 type PtyApi = {
   spawn: (opts: {
     cols: number
@@ -63,6 +67,7 @@ type PtyApi = {
     connectionId?: string | null
     worktreeId?: string
     sessionId?: string
+    shellOverride?: string
   }) => Promise<{
     id: string
     snapshot?: string
@@ -228,6 +233,7 @@ type Api = PreloadApi & {
   notifications: NotificationsApi
   shell: ShellApi
   agentStatus: AgentStatusApi
+  wsl: WslApi
 }
 
 declare global {

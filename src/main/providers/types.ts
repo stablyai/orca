@@ -25,6 +25,11 @@ export type PtySpawnOptions = {
   /** Daemon session ID for reattach. When provided, the daemon reconnects
    *  to an existing session instead of creating a new one. */
   sessionId?: string
+  /** Why: allows the renderer to request a specific shell for a single new
+   *  terminal tab (e.g. "open this tab in WSL" from the "+" submenu) without
+   *  changing the user's persistent default shell setting. Only consulted on
+   *  Windows; ignored on macOS/Linux where shell selection is not exposed. */
+  shellOverride?: string
 }
 
 export type PtySpawnResult = {

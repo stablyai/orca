@@ -211,6 +211,8 @@ export type IpcPtyTransportOptions = {
   connectionId?: string | null
   /** Orca worktree identity for scoped shell history. */
   worktreeId?: string
+  /** Why: mirrors PtySpawnOptions.shellOverride — see types.ts for rationale. */
+  shellOverride?: string
   onPtyExit?: (ptyId: string) => void
   onTitleChange?: (title: string, rawTitle: string) => void
   onPtySpawn?: (ptyId: string) => void

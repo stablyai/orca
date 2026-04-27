@@ -177,6 +177,10 @@ const api = {
     relaunch: (): Promise<void> => ipcRenderer.invoke('app:relaunch')
   },
 
+  wsl: {
+    isAvailable: (): Promise<boolean> => ipcRenderer.invoke('wsl:isAvailable')
+  },
+
   repos: {
     list: (): Promise<unknown[]> => ipcRenderer.invoke('repos:list'),
 
@@ -281,6 +285,7 @@ const api = {
       connectionId?: string | null
       worktreeId?: string
       sessionId?: string
+      shellOverride?: string
     }): Promise<{
       id: string
       snapshot?: string
