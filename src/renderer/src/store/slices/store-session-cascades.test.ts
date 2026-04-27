@@ -663,19 +663,17 @@ describe('terminal slice behaviors', () => {
   // Why: clicking a worktree in the sidebar triggers a generation bump on
   // dead-PTY tabs which remounts TerminalPane and fresh-spawns a PTY. That
   // fresh spawn calls updateTabPtyId → bumpWorktreeActivity. Without the
-  // activation-window guard, the just-clicked worktree would be stamped with
-  // Date.now() and float to the top of Recent on every click. isReattach is
-  // not set on fresh spawns, so this bug slips past PR 310e9daf.
+  // pendingActivationSpawn tag, the just-clicked worktree would be stamped
+  // with Date.now() and float to the top of Recent on every click. isReattach
+  // is not set on fresh spawns, so this bug slips past PR 310e9daf.
   it('does not bump lastActivityAt when a click-driven fresh spawn follows setActiveWorktree', () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/path/wt1'
     const originalLastActivityAt = 1000
 
-    // Why: a tab with a live ptyId and a matching unified tab keeps
-    // reconcileWorktreeTabModel from garbage-collecting it as an orphan when
-    // setActiveWorktree runs. The test's contract is about what happens AFTER
-    // activation stamps recentActivationByWorktreeId, not about the orphan
-    // cleanup path.
+    // Why: a tab with a null ptyId triggers the allDead branch in
+    // setActiveWorktree, which bumps generation and sets
+    // pendingActivationSpawn so the subsequent fresh spawn is suppressed.
     store.setState({
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
@@ -691,9 +689,9 @@ describe('terminal slice behaviors', () => {
         ]
       },
       tabsByWorktree: {
-        [worktreeId]: [makeTab({ id: 'tab-1', worktreeId, ptyId: 'pty-old' })]
+        [worktreeId]: [makeTab({ id: 'tab-1', worktreeId, ptyId: null })]
       },
-      ptyIdsByTabId: { 'tab-1': ['pty-old'] },
+      ptyIdsByTabId: { 'tab-1': [] },
       unifiedTabsByWorktree: {
         [worktreeId]: [
           {
@@ -717,8 +715,10 @@ describe('terminal slice behaviors', () => {
     })
 
     store.getState().setActiveWorktree(worktreeId)
-    // Simulate a fresh-spawn callback (no isReattach flag) — e.g. a split
-    // pane coming up in a newly-focused worktree.
+    // The allDead generation bump tagged the tab with pendingActivationSpawn.
+    expect(store.getState().tabsByWorktree[worktreeId][0].pendingActivationSpawn).toBe(true)
+
+    // Simulate the fresh spawn coming back from TerminalPane's remount.
     store.getState().updateTabPtyId('tab-1', 'pty-fresh')
 
     const worktree = store.getState().worktreesByRepo.repo1[0]
@@ -728,48 +728,36 @@ describe('terminal slice behaviors', () => {
         updates: expect.objectContaining({ lastActivityAt: expect.any(Number) })
       })
     )
+    // The flag is consumed so a later legitimate respawn (codex restart etc.)
+    // is not silently suppressed as well.
+    expect(store.getState().tabsByWorktree[worktreeId][0].pendingActivationSpawn).toBeUndefined()
   })
 
-  // Why: PTYs in the worktree being switched AWAY from can exit as their
-  // panes unmount during the same cascade. Those exits must not count as
-  // activity either, or the prior worktree bounces up in Recent the instant
-  // the user clicks off of it.
-  it('does not bump lastActivityAt when a PTY exits during switch-away', () => {
+  // Why: activating a worktree whose tabs are already live must NOT tag
+  // pendingActivationSpawn — only the allDead branch does. Otherwise a split
+  // pane spawning later in an already-active worktree would be suppressed.
+  it('does not tag pendingActivationSpawn when activated tabs already have live PTYs', () => {
     const store = createTestStore()
-    const wt1 = 'repo1::/path/wt1'
-    const wt2 = 'repo1::/path/wt2'
-    const originalLastActivityAt = 1000
+    const worktreeId = 'repo1::/path/wt1'
 
     store.setState({
       repos: [
         { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
       ],
       worktreesByRepo: {
-        repo1: [
-          makeWorktree({
-            id: wt1,
-            repoId: 'repo1',
-            path: '/path/wt1',
-            lastActivityAt: originalLastActivityAt
-          }),
-          makeWorktree({ id: wt2, repoId: 'repo1', path: '/path/wt2' })
-        ]
+        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1', path: '/path/wt1' })]
       },
       tabsByWorktree: {
-        [wt1]: [makeTab({ id: 'tab-wt1', worktreeId: wt1, ptyId: 'pty-wt1' })],
-        [wt2]: [makeTab({ id: 'tab-wt2', worktreeId: wt2, ptyId: 'pty-wt2' })]
+        [worktreeId]: [makeTab({ id: 'tab-1', worktreeId, ptyId: 'pty-live' })]
       },
-      ptyIdsByTabId: {
-        'tab-wt1': ['pty-wt1'],
-        'tab-wt2': ['pty-wt2']
-      },
+      ptyIdsByTabId: { 'tab-1': ['pty-live'] },
       unifiedTabsByWorktree: {
-        [wt2]: [
+        [worktreeId]: [
           {
-            id: 'tab-wt2',
-            entityId: 'tab-wt2',
-            groupId: 'group-wt2',
-            worktreeId: wt2,
+            id: 'tab-1',
+            entityId: 'tab-1',
+            groupId: 'group-1',
+            worktreeId,
             contentType: 'terminal',
             label: 'Terminal 1',
             customLabel: null,
@@ -780,27 +768,19 @@ describe('terminal slice behaviors', () => {
         ]
       },
       groupsByWorktree: {
-        [wt2]: [{ id: 'group-wt2', worktreeId: wt2, activeTabId: 'tab-wt2', tabOrder: ['tab-wt2'] }]
+        [worktreeId]: [{ id: 'group-1', worktreeId, activeTabId: 'tab-1', tabOrder: ['tab-1'] }]
       },
-      activeGroupIdByWorktree: { [wt2]: 'group-wt2' },
-      activeWorktreeId: wt1
+      activeGroupIdByWorktree: { [worktreeId]: 'group-1' }
     })
 
-    store.getState().setActiveWorktree(wt2)
-    store.getState().clearTabPtyId('tab-wt1', 'pty-wt1')
+    store.getState().setActiveWorktree(worktreeId)
 
-    const prevWorktree = store.getState().worktreesByRepo.repo1.find((w) => w.id === wt1)!
-    expect(prevWorktree.lastActivityAt).toBe(originalLastActivityAt)
-    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalledWith(
-      expect.objectContaining({
-        updates: expect.objectContaining({ lastActivityAt: expect.any(Number) })
-      })
-    )
+    expect(store.getState().tabsByWorktree[worktreeId][0].pendingActivationSpawn).toBeUndefined()
   })
 
-  // Why: the activation window is narrow on purpose — real background events
-  // that happen outside the click cascade must still bump activity as normal.
-  it('bumps lastActivityAt for a fresh spawn when no activation is in flight', () => {
+  // Why: real background events (agent output, OSC titles) must still bump
+  // activity. Only the specific activation-driven spawn is suppressed.
+  it('bumps lastActivityAt for a fresh spawn with no activation tag', () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/path/wt1'
 

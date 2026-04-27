@@ -800,6 +800,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
 
   updateTabPtyId: (tabId, ptyId) => {
     let worktreeId: string | null = null
+    let wasActivationSpawn = false
     set((s) => {
       const next = { ...s.tabsByWorktree }
       for (const wId of Object.keys(next)) {
@@ -815,8 +816,19 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           const nextPtyIds = existingPtyIds.includes(ptyId)
             ? existingPtyIds
             : [...existingPtyIds, ptyId]
+          if (t.pendingActivationSpawn) {
+            wasActivationSpawn = true
+          }
+          // Why: consume pendingActivationSpawn here. The flag is set by
+          // setActiveWorktree when it bumps generation on all-dead tabs, and
+          // must be cleared on the first PTY that comes back or a later
+          // legitimate respawn (e.g. the user restarting a codex tab) would
+          // also be classified as activation and silently dropped from the
+          // recency sort.
+          const { pendingActivationSpawn: _unused, ...rest } = t
+          void _unused
           return {
-            ...t,
+            ...rest,
             // Why: tab.ptyId is the single-pane fallback used by legacy attach
             // paths. In split panes, later pane spawns must not steal that
             // primary binding from the original pane or remount/close flows can
@@ -827,14 +839,14 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       }
       const existingPtyIds = s.ptyIdsByTabId[tabId] ?? []
       // Why: when a brand-new tab in the active worktree receives its first
-      // PTY, the live-tab signal (+12) flips on. bumpWorktreeActivity (below)
-      // intentionally skips sortEpoch for the active worktree to prevent the
-      // reorder-on-click bug (PR #209), but that means the sort never sees
-      // the new signal. Bump sortEpoch here so a just-created worktree
-      // immediately reflects its live-tab score instead of waiting for an
-      // unrelated event to trigger a re-sort.
+      // PTY, the live-tab signal (+12) flips on. Normally we bump sortEpoch
+      // here so the sort reflects the new signal immediately. Suppress the
+      // bump on activation-driven spawns because they are side-effects of the
+      // user clicking on a worktree, not real activity — otherwise clicking a
+      // dormant worktree would always trigger a re-sort.
       const isFirstPty = existingPtyIds.length === 0
       const isActiveWorktree = worktreeId != null && s.activeWorktreeId === worktreeId
+      const shouldBumpSortEpoch = isFirstPty && isActiveWorktree && !wasActivationSpawn
       return {
         tabsByWorktree: next,
         ptyIdsByTabId: {
@@ -845,12 +857,16 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           ...s.lastKnownRelayPtyIdByTabId,
           [tabId]: ptyId
         },
-        ...(isFirstPty && isActiveWorktree ? { sortEpoch: s.sortEpoch + 1 } : {})
+        ...(shouldBumpSortEpoch ? { sortEpoch: s.sortEpoch + 1 } : {})
       }
     })
 
-    // Bump meaningful activity when a PTY spawns
-    if (worktreeId) {
+    // Why: activation-driven spawns are caused by the user clicking a
+    // worktree, not by work happening in it. Skip both the lastActivityAt
+    // stamp and the sortEpoch bump so the sidebar does not reorder on click.
+    // Other spawn reasons (new tab, codex restart, reconnect) still flow
+    // through bumpWorktreeActivity as a normal activity signal.
+    if (worktreeId && !wasActivationSpawn) {
       get().bumpWorktreeActivity(worktreeId)
     }
   },
