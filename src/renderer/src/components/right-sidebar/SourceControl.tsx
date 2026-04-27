@@ -227,7 +227,8 @@ function SourceControlInner(): React.JSX.Element {
           setDefaultBaseRef(result.defaultBaseRef)
         }
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error('[SourceControl] getBaseRefDefault failed', err)
         // Why: leave defaultBaseRef null on failure instead of fabricating
         // 'origin/main'. effectiveBaseRef stays falsy, so branch compare and
         // PR fetch skip running against a ref that may not exist.

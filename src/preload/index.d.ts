@@ -1,5 +1,6 @@
 import type { ElectronAPI } from '@electron-toolkit/preload'
 import type {
+  BaseRefDefaultResult,
   CreateWorktreeResult,
   GitHubPRFile,
   GitHubPRFileContents,
@@ -37,9 +38,7 @@ type ReposApi = {
   cloneAbort: () => Promise<void>
   onCloneProgress: (callback: (data: { phase: string; percent: number }) => void) => () => void
   getGitUsername: (args: { repoId: string }) => Promise<string>
-  getBaseRefDefault: (args: {
-    repoId: string
-  }) => Promise<{ defaultBaseRef: string | null; remoteCount: number }>
+  getBaseRefDefault: (args: { repoId: string }) => Promise<BaseRefDefaultResult>
   searchBaseRefs: (args: { repoId: string; query: string; limit?: number }) => Promise<string[]>
   onChanged: (callback: () => void) => () => void
 }

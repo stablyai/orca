@@ -228,19 +228,11 @@ export async function getBaseRefDefault(path: string): Promise<string | null> {
   return getDefaultBaseRefAsync(path)
 }
 
-/**
- * Envelope returned by the `repos:getBaseRefDefault` IPC handler.
- *
- * Why: the renderer's BaseRefPicker needs to know how many remotes the repo
- * has configured so it can render the multi-remote hint without a second IPC
- * round trip. `remoteCount` piggybacks on the existing handler. `defaultBaseRef`
- * is named rather than `default` because the latter is a reserved word and
- * awkward to destructure.
- */
-export type BaseRefDefaultResult = {
-  defaultBaseRef: string | null
-  remoteCount: number
-}
+// Why: the canonical definition lives in `src/shared/types.ts` so the preload
+// bridge and renderer can import it (they cannot import from `src/main/`).
+// Re-exported here so existing importers that reference it via this module
+// keep compiling.
+export type { BaseRefDefaultResult } from '../../shared/types'
 
 /**
  * Count the repo's configured remotes by shelling out `git remote`.
@@ -251,7 +243,11 @@ export async function getRemoteCount(path: string): Promise<number> {
   try {
     const { stdout } = await gitExecFileAsync(['remote'], { cwd: path })
     return stdout.split('\n').filter((line) => line.trim().length > 0).length
-  } catch {
+  } catch (err) {
+    // Why: surface the failure for diagnostics; callers treat 0 as "unknown /
+    // do not render the multi-remote hint", but silently swallowing the error
+    // makes a missing hint impossible to debug.
+    console.warn('[getRemoteCount] git remote failed', { path, err })
     return 0
   }
 }
@@ -303,57 +299,59 @@ export async function searchBaseRefs(path: string, query: string, limit = 25): P
       { cwd: path }
     )
 
-    const seen = new Set<string>()
-    const refs = stdout
-      .split('\n')
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0)
-      .map((line) => {
-        const nul = line.indexOf('\0')
-        // Why: defensive — if %(refname) format changes or an upstream
-        // git version quirks out, fall back to treating the whole line
-        // as both the full ref and short ref.
-        if (nul < 0) {
-          return { full: line, short: line }
-        }
-        return { full: line.slice(0, nul), short: line.slice(nul + 1) }
-      })
-      // Why: drop only `refs/remotes/<remote>/HEAD` pseudo-refs. A local
-      // branch named `foo/HEAD` (rare but valid per git check-ref-format)
-      // would otherwise be silently dropped from search results.
-      // Why: use `.+` (not `[^/]+`) because git allows slashes in remote
-      // names (e.g. `git remote add foo/bar`), so a nested remote name
-      // like `refs/remotes/foo/bar/HEAD` must also be treated as a
-      // pseudo-ref.
-      // Why: when `full === short` (defensive fallback for missing NUL
-      // separator), we can't distinguish `<remote>/HEAD` from a local
-      // `foo/HEAD`; prefer safety and drop the ref — the fallback is
-      // itself a defensive path for an unlikely `%(refname)` format
-      // change, and a leaked pseudo-ref is worse than dropping a rare
-      // local branch.
-      .filter(({ full, short }) => {
-        if (/^refs\/remotes\/.+\/HEAD$/.test(full)) {
-          return false
-        }
-        if (full === short && short.endsWith('/HEAD')) {
-          return false
-        }
-        return true
-      })
-      .filter(({ short }) => {
-        if (seen.has(short)) {
-          return false
-        }
-        seen.add(short)
-        return true
-      })
-      .map(({ short }) => short)
-      .slice(0, Math.max(1, limit))
-
-    return refs
+    return parseAndFilterSearchRefs(stdout, limit)
   } catch {
     return []
   }
+}
+
+/**
+ * Parse `git for-each-ref --format=%(refname)%00%(refname:short)` stdout
+ * into a deduped list of short refs, filtering out `<remote>/HEAD`
+ * pseudo-refs, honoring a limit.
+ *
+ * Why: shared between the local `searchBaseRefs` and the SSH branch in
+ * `src/main/ipc/repos.ts` so both return identical, correctly-filtered
+ * results. The same bug class (wrong filter ordering, HEAD leaking into
+ * results, duplicate short refs) that motivated this helper originally
+ * lived in a single location; two copies double the regression surface.
+ */
+export function parseAndFilterSearchRefs(stdout: string, limit: number): string[] {
+  const seen = new Set<string>()
+  return stdout
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .map((line) => {
+      const nul = line.indexOf('\0')
+      if (nul < 0) {
+        // Why: defensive fallback for an unlikely %(refname) format change.
+        // Drop the entry — emitting a full refname as a "short" ref would
+        // hand callers a ref they can't use (and would bypass the HEAD
+        // filter below, since we could no longer tell a `<remote>/HEAD`
+        // pseudo-ref from a local branch named `foo/HEAD`).
+        return null
+      }
+      return { full: line.slice(0, nul), short: line.slice(nul + 1) }
+    })
+    .filter((entry): entry is { full: string; short: string } => entry !== null)
+    // Why: drop `refs/remotes/<remote>/HEAD` pseudo-refs. Uses `.+` (not
+    // `[^/]+`) because git allows slashes in remote names, so nested
+    // remotes like `refs/remotes/foo/bar/HEAD` also match. A local branch
+    // named `foo/HEAD` (rare but valid per git check-ref-format) is
+    // preserved because its `full` is `refs/heads/foo/HEAD`, which does
+    // not match this pattern.
+    .filter(({ full }) => !/^refs\/remotes\/.+\/HEAD$/.test(full))
+    .filter(({ short }) => {
+      if (seen.has(short)) return false
+      seen.add(short)
+      return true
+    })
+    .map(({ short }) => short)
+    // Why: `Math.max(0, limit)` — treat pathological `limit <= 0` as
+    // "zero results" rather than "at least 1". More honest than silently
+    // returning a single ref when the caller explicitly asked for none.
+    .slice(0, Math.max(0, limit))
 }
 
 export function normalizeRefSearchQuery(query: string): string {

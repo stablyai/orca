@@ -39,7 +39,8 @@ export function BaseRefPicker({
           setDefaultBaseRef(result.defaultBaseRef)
           setRemoteCount(result.remoteCount)
         }
-      } catch {
+      } catch (err) {
+        console.error('[BaseRefPicker] getBaseRefDefault failed', err)
         if (!stale) {
           setDefaultBaseRef(null)
           setRemoteCount(0)
@@ -84,7 +85,8 @@ export function BaseRefPicker({
             setBaseRefResults(results)
           }
         })
-        .catch(() => {
+        .catch((err) => {
+          console.error('[BaseRefPicker] searchBaseRefs failed', err)
           if (!stale) {
             setBaseRefResults([])
           }

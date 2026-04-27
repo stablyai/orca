@@ -24,43 +24,24 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../git/repo', () => ({
-  isGitRepo: vi.fn().mockReturnValue(true),
-  getGitUsername: vi.fn().mockReturnValue(''),
-  getRepoName: vi.fn().mockImplementation((path: string) => path.split('/').pop()),
-  // Why: getBaseRefDefault's signature is unchanged — it still returns
-  // `string | null`. The IPC handler is what wraps the result into the
-  // `BaseRefDefaultResult` envelope, so this mock stays as a string.
-  getBaseRefDefault: vi.fn().mockResolvedValue('origin/main'),
-  getRemoteCount: vi.fn().mockResolvedValue(1),
-  // Why: strip glob metacharacters and trim, mirroring the real
-  // normalizeRefSearchQuery so the SSH search path's short-circuit on
-  // empty queries exercises realistic behavior under test.
-  normalizeRefSearchQuery: vi
-    .fn()
-    .mockImplementation((query: string) => query.trim().replace(/[*?[\]\\]/g, '')),
-  // Why: the real helper walks DEFAULT_BASE_REF_PROBES in order, calling
-  // the passed `hasRef` predicate until one returns true. Mirroring that
-  // behavior here lets the SSH fallback test drive the probe chain via
-  // its execMock sequence without importing the real module.
-  resolveDefaultBaseRefFromProbes: vi
-    .fn()
-    .mockImplementation(async (hasRef: (ref: string) => Promise<boolean>) => {
-      const probes = [
-        { ref: 'refs/remotes/origin/main', returnAs: 'origin/main' },
-        { ref: 'refs/remotes/origin/master', returnAs: 'origin/master' },
-        { ref: 'refs/heads/main', returnAs: 'main' },
-        { ref: 'refs/heads/master', returnAs: 'master' }
-      ]
-      for (const { ref, returnAs } of probes) {
-        if (await hasRef(ref)) {
-          return returnAs
-        }
-      }
-      return null
-    }),
-  searchBaseRefs: vi.fn().mockResolvedValue([])
-}))
+vi.mock('../git/repo', async () => {
+  // Why: pull real implementations of pure helpers so SSH parity tests
+  // exercise the actual probe list and query sanitizer, not frozen copies.
+  // Drift in DEFAULT_BASE_REF_PROBES or normalizeRefSearchQuery now surfaces
+  // as test failure, not silent test-passes against stale behavior.
+  const actual =
+    await vi.importActual<typeof import('../git/repo')>('../git/repo')
+  return {
+    ...actual,
+    // Stub only the functions that spawn git / touch the filesystem.
+    isGitRepo: vi.fn().mockReturnValue(true),
+    getGitUsername: vi.fn().mockReturnValue(''),
+    getRepoName: vi.fn().mockImplementation((path: string) => path.split('/').pop()),
+    getBaseRefDefault: vi.fn().mockResolvedValue('origin/main'),
+    getRemoteCount: vi.fn().mockResolvedValue(1),
+    searchBaseRefs: vi.fn().mockResolvedValue([])
+  }
+})
 
 vi.mock('./filesystem-auth', () => ({
   rebuildAuthorizedRootsCache: vi.fn().mockResolvedValue(undefined)
@@ -280,13 +261,46 @@ describe('repos:getBaseRefDefault envelope', () => {
     expect(result.remoteCount).toBe(1)
   })
 
+  // Why: the SSH handler resolves default-ref and remote-count in parallel
+  // (Promise.all) so the order of calls into provider.exec is not stable.
+  // Dispatch on argv instead of `mockResolvedValueOnce` chains so tests remain
+  // independent of which Promise in the Promise.all resolves first.
+  type ExecResponse = { stdout: string; stderr: string }
+  type ExecRule = {
+    match: (argv: string[]) => boolean
+    respond: () => Promise<ExecResponse>
+  }
+  const dispatchExec = (rules: ExecRule[]): ((argv: string[]) => Promise<ExecResponse>) => {
+    return (argv: string[]) => {
+      for (const rule of rules) {
+        if (rule.match(argv)) {
+          return rule.respond()
+        }
+      }
+      return Promise.reject(new Error(`unexpected exec call: ${argv.join(' ')}`))
+    }
+  }
+  const isSymbolicRef = (argv: string[]): boolean =>
+    argv[0] === 'symbolic-ref' && argv.includes('refs/remotes/origin/HEAD')
+  const isRevParseFor =
+    (ref: string) =>
+    (argv: string[]): boolean =>
+      argv[0] === 'rev-parse' && argv.includes(ref)
+  const isRemoteList = (argv: string[]): boolean => argv.length === 1 && argv[0] === 'remote'
+
   it('returns envelope over SSH relay for remote repos', async () => {
-    const execMock = vi
-      .fn()
-      // symbolic-ref call
-      .mockResolvedValueOnce({ stdout: 'refs/remotes/origin/main\n', stderr: '' })
-      // remote count call
-      .mockResolvedValueOnce({ stdout: 'origin\nupstream\n', stderr: '' })
+    mockGitProvider.exec = vi.fn().mockImplementation(
+      dispatchExec([
+        {
+          match: isSymbolicRef,
+          respond: () => Promise.resolve({ stdout: 'refs/remotes/origin/main\n', stderr: '' })
+        },
+        {
+          match: isRemoteList,
+          respond: () => Promise.resolve({ stdout: 'origin\nupstream\n', stderr: '' })
+        }
+      ])
+    )
 
     mockStore.getRepo.mockReturnValue({
       id: 'r1',
@@ -294,8 +308,6 @@ describe('repos:getBaseRefDefault envelope', () => {
       connectionId: 'conn-1',
       kind: 'git'
     })
-    // Replace provider with one that exposes exec()
-    mockGitProvider.exec = execMock
 
     const result = (await handlers.get('repos:getBaseRefDefault')!(null, { repoId: 'r1' })) as {
       defaultBaseRef: string | null
@@ -307,10 +319,18 @@ describe('repos:getBaseRefDefault envelope', () => {
   })
 
   it('returns defaultBaseRef even when remote-count lookup fails', async () => {
-    const execMock = vi
-      .fn()
-      .mockResolvedValueOnce({ stdout: 'refs/remotes/origin/main\n', stderr: '' })
-      .mockRejectedValueOnce(new Error('relay exec failed'))
+    mockGitProvider.exec = vi.fn().mockImplementation(
+      dispatchExec([
+        {
+          match: isSymbolicRef,
+          respond: () => Promise.resolve({ stdout: 'refs/remotes/origin/main\n', stderr: '' })
+        },
+        {
+          match: isRemoteList,
+          respond: () => Promise.reject(new Error('relay exec failed'))
+        }
+      ])
+    )
 
     mockStore.getRepo.mockReturnValue({
       id: 'r1',
@@ -318,7 +338,6 @@ describe('repos:getBaseRefDefault envelope', () => {
       connectionId: 'conn-1',
       kind: 'git'
     })
-    mockGitProvider.exec = execMock
 
     const result = (await handlers.get('repos:getBaseRefDefault')!(null, { repoId: 'r1' })) as {
       defaultBaseRef: string | null
@@ -332,16 +351,23 @@ describe('repos:getBaseRefDefault envelope', () => {
   })
 
   it('falls back through probes over SSH when symbolic-ref fails', async () => {
-    const execMock = vi
-      .fn()
-      // symbolic-ref rejects (no origin/HEAD on the remote)
-      .mockRejectedValueOnce(new Error('no symbolic-ref'))
-      // probe 1: refs/remotes/origin/main — rejects
-      .mockRejectedValueOnce(new Error('missing'))
-      // probe 2: refs/remotes/origin/master — succeeds
-      .mockResolvedValueOnce({ stdout: 'abc123\n', stderr: '' })
-      // remote count lookup
-      .mockResolvedValueOnce({ stdout: 'origin\n', stderr: '' })
+    mockGitProvider.exec = vi.fn().mockImplementation(
+      dispatchExec([
+        // symbolic-ref rejects (no origin/HEAD on the remote)
+        { match: isSymbolicRef, respond: () => Promise.reject(new Error('no symbolic-ref')) },
+        // probe 1: refs/remotes/origin/main — rejects
+        {
+          match: isRevParseFor('refs/remotes/origin/main'),
+          respond: () => Promise.reject(new Error('missing'))
+        },
+        // probe 2: refs/remotes/origin/master — succeeds
+        {
+          match: isRevParseFor('refs/remotes/origin/master'),
+          respond: () => Promise.resolve({ stdout: 'abc123\n', stderr: '' })
+        },
+        { match: isRemoteList, respond: () => Promise.resolve({ stdout: 'origin\n', stderr: '' }) }
+      ])
+    )
 
     mockStore.getRepo.mockReturnValue({
       id: 'r1',
@@ -349,7 +375,6 @@ describe('repos:getBaseRefDefault envelope', () => {
       connectionId: 'conn-1',
       kind: 'git'
     })
-    mockGitProvider.exec = execMock
 
     const result = (await handlers.get('repos:getBaseRefDefault')!(null, { repoId: 'r1' })) as {
       defaultBaseRef: string | null
