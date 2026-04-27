@@ -5,7 +5,7 @@ files without a cleaner ownership seam. */
 import { basename, win32 as pathWin32 } from 'path'
 import { existsSync } from 'fs'
 import * as pty from 'node-pty'
-import { parseWslPath } from '../wsl'
+import { parseWslPath, isWslAvailable } from '../wsl'
 import {
   injectHistoryEnv,
   updateHistFileForFallback,
@@ -134,7 +134,10 @@ export class LocalPtyProvider implements IPtyProvider {
       effectiveCwd = getDefaultCwd()
       validationCwd = cwd
     } else if (process.platform === 'win32') {
-      shellPath = this.opts.getWindowsShell?.() || process.env.COMSPEC || 'powershell.exe'
+      // Why: shellOverride lets a single tab open in a different shell than the
+      // persisted default (e.g. "New WSL terminal" from the "+" submenu) without
+      // changing the user's setting. It takes priority over the setting.
+      shellPath = args.shellOverride || this.opts.getWindowsShell?.() || process.env.COMSPEC || 'powershell.exe'
       // Why: use path.win32.basename so backslash-separated Windows paths
       // are parsed correctly even when tests mock process.platform on Linux CI.
       const shellBasename = pathWin32.basename(shellPath).toLowerCase()
@@ -146,6 +149,8 @@ export class LocalPtyProvider implements IPtyProvider {
       // byte sequences are misinterpreted as UTF-8.
       if (shellBasename === 'cmd.exe') {
         shellArgs = ['/K', 'chcp 65001 > nul']
+        effectiveCwd = cwd
+        validationCwd = cwd
       } else if (shellBasename === 'powershell.exe' || shellBasename === 'pwsh.exe') {
         // Why: `-NoExit -Command` alone skips the user's $PROFILE, breaking
         // custom prompts (oh-my-posh, starship), aliases, and PSReadLine
@@ -156,11 +161,27 @@ export class LocalPtyProvider implements IPtyProvider {
           '-Command',
           'try { . $PROFILE } catch {}; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
         ]
+        effectiveCwd = cwd
+        validationCwd = cwd
+      } else if (shellBasename === 'wsl.exe') {
+        // Why: this branch handles the "user chose WSL as their shell" case,
+        // distinct from the wslInfo branch above which is for repos whose cwd
+        // lives on a WSL filesystem. Here the cwd is a normal Windows path, so
+        // we translate it to a Linux /mnt/<drive>/... path and open a login
+        // bash in the user's default distro (no -d flag = default distro).
+        const driveMatch = cwd.replace(/\\/g, '/').match(/^([A-Za-z]):\/?(.*)$/)
+        const linuxCwd = driveMatch
+          ? `/mnt/${driveMatch[1].toLowerCase()}/${driveMatch[2]}`
+          : '/mnt/c'
+        const escapedLinuxCwd = linuxCwd.replace(/'/g, "'\\''")
+        shellArgs = ['--', 'bash', '-c', `cd '${escapedLinuxCwd}' && exec bash -l`]
+        effectiveCwd = getDefaultCwd()
+        validationCwd = cwd
       } else {
         shellArgs = []
+        effectiveCwd = cwd
+        validationCwd = cwd
       }
-      effectiveCwd = cwd
-      validationCwd = cwd
     } else {
       shellPath = args.env?.SHELL || process.env.SHELL || '/bin/zsh'
       shellArgs = ['-l']
@@ -465,10 +486,14 @@ export class LocalPtyProvider implements IPtyProvider {
 
   async getProfiles(): Promise<{ name: string; path: string }[]> {
     if (process.platform === 'win32') {
-      return [
+      const profiles: { name: string; path: string }[] = [
         { name: 'PowerShell', path: 'powershell.exe' },
         { name: 'Command Prompt', path: 'cmd.exe' }
       ]
+      if (isWslAvailable()) {
+        profiles.push({ name: 'WSL', path: 'wsl.exe' })
+      }
+      return profiles
     }
     const shells = ['/bin/zsh', '/bin/bash', '/bin/sh']
     return shells.filter((s) => existsSync(s)).map((s) => ({ name: basename(s), path: s }))

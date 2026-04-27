@@ -1,4 +1,5 @@
 import { app, ipcMain } from 'electron'
+import { isWslAvailable } from '../wsl'
 
 export type AppRuntimeFlags = {
   /** Whether the persistent terminal daemon was actually started this session.
@@ -38,6 +39,8 @@ export function registerAppHandlers(): void {
     pendingDaemonTransitionNotice = null
     return notice
   })
+
+  ipcMain.handle('wsl:isAvailable', (): boolean => isWslAvailable())
 
   ipcMain.handle('app:relaunch', () => {
     // Why: small delay lets the renderer finish painting any "Restarting…"

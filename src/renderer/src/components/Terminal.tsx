@@ -123,6 +123,14 @@ function Terminal(): React.JSX.Element | null {
     ? (browserTabsByWorktree[activeWorktreeId] ?? []).map((tab) => tab.id).join(',')
     : ''
 
+  const [wslAvailable, setWslAvailable] = useState(false)
+  useEffect(() => {
+    // Why: wsl:isAvailable is synchronous on the main-process side but we
+    // call it asynchronously so the renderer doesn't block on startup. The
+    // result only gates UI options, so a brief false→true transition is fine.
+    void window.api.wsl.isAvailable().then(setWslAvailable)
+  }, [])
+
   // Save confirmation dialog state
   const [saveDialogFileId, setSaveDialogFileId] = useState<string | null>(null)
   const saveDialogFile = saveDialogFileId ? openFiles.find((f) => f.id === saveDialogFileId) : null
@@ -355,38 +363,41 @@ function Terminal(): React.JSX.Element | null {
     createTab(activeWorktreeId)
   }, [workspaceSessionReady, activeWorktreeId, createTab, reconcileWorktreeTabModel])
 
-  const handleNewTab = useCallback(() => {
-    if (!activeWorktreeId) {
-      return
-    }
-    const newTab = createTab(activeWorktreeId)
-    setActiveTabType('terminal')
-    // Why: persist the tab bar order with the new terminal at the end of the
-    // current visual order. Without this, reconcileOrder falls back to
-    // terminals-first when tabBarOrderByWorktree is unset, causing a new
-    // terminal to jump to index 0 instead of appending after editor tabs.
-    const state = useAppStore.getState()
-    const currentTerminals = state.tabsByWorktree[activeWorktreeId] ?? []
-    const currentEditors = state.openFiles.filter((f) => f.worktreeId === activeWorktreeId)
-    const currentBrowsers = state.browserTabsByWorktree[activeWorktreeId] ?? []
-    const stored = state.tabBarOrderByWorktree[activeWorktreeId]
-    const termIds = currentTerminals.map((t) => t.id)
-    const editorIds = currentEditors.map((f) => f.id)
-    const browserIds = currentBrowsers.map((tab) => tab.id)
-    const validIds = new Set([...termIds, ...editorIds, ...browserIds])
-    const base = (stored ?? []).filter((id) => validIds.has(id))
-    const inBase = new Set(base)
-    for (const id of [...termIds, ...editorIds, ...browserIds]) {
-      if (!inBase.has(id)) {
-        base.push(id)
-        inBase.add(id)
+  const handleNewTab = useCallback(
+    (shellOverride?: string) => {
+      if (!activeWorktreeId) {
+        return
       }
-    }
-    // The new tab is already in base via termIds; move it to the end
-    const order = base.filter((id) => id !== newTab.id)
-    order.push(newTab.id)
-    setTabBarOrder(activeWorktreeId, order)
-  }, [activeWorktreeId, createTab, setActiveTabType, setTabBarOrder])
+      const newTab = createTab(activeWorktreeId, undefined, shellOverride)
+      setActiveTabType('terminal')
+      // Why: persist the tab bar order with the new terminal at the end of the
+      // current visual order. Without this, reconcileOrder falls back to
+      // terminals-first when tabBarOrderByWorktree is unset, causing a new
+      // terminal to jump to index 0 instead of appending after editor tabs.
+      const state = useAppStore.getState()
+      const currentTerminals = state.tabsByWorktree[activeWorktreeId] ?? []
+      const currentEditors = state.openFiles.filter((f) => f.worktreeId === activeWorktreeId)
+      const currentBrowsers = state.browserTabsByWorktree[activeWorktreeId] ?? []
+      const stored = state.tabBarOrderByWorktree[activeWorktreeId]
+      const termIds = currentTerminals.map((t) => t.id)
+      const editorIds = currentEditors.map((f) => f.id)
+      const browserIds = currentBrowsers.map((tab) => tab.id)
+      const validIds = new Set([...termIds, ...editorIds, ...browserIds])
+      const base = (stored ?? []).filter((id) => validIds.has(id))
+      const inBase = new Set(base)
+      for (const id of [...termIds, ...editorIds, ...browserIds]) {
+        if (!inBase.has(id)) {
+          base.push(id)
+          inBase.add(id)
+        }
+      }
+      // The new tab is already in base via termIds; move it to the end
+      const order = base.filter((id) => id !== newTab.id)
+      order.push(newTab.id)
+      setTabBarOrder(activeWorktreeId, order)
+    },
+    [activeWorktreeId, createTab, setActiveTabType, setTabBarOrder]
+  )
 
   const handleNewBrowserTab = useCallback(() => {
     if (!activeWorktreeId) {
@@ -955,9 +966,11 @@ function Terminal(): React.JSX.Element | null {
             onClose={handleCloseTab}
             onCloseOthers={handleCloseOthers}
             onCloseToRight={handleCloseTabsToRight}
-            onNewTerminalTab={handleNewTab}
+            onNewTerminalTab={() => handleNewTab()}
+            onNewTerminalWithShell={handleNewTab}
             onNewBrowserTab={handleNewBrowserTab}
             onNewFileTab={handleNewFile}
+            wslAvailable={wslAvailable}
             onSetCustomTitle={setTabCustomTitle}
             onSetTabColor={setTabColor}
             expandedPaneByTabId={expandedPaneByTabId}

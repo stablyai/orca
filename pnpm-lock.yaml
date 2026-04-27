@@ -224,6 +224,9 @@ importers:
       '@electron-toolkit/tsconfig':
         specifier: ^2.0.0
         version: 2.0.0(@types/node@25.5.0)
+      '@electron/rebuild':
+        specifier: ^4.0.3
+        version: 4.0.3
       '@playwright/test':
         specifier: ^1.59.1
         version: 1.59.1

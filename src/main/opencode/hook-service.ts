@@ -1,21 +1,38 @@
 import { app } from 'electron'
 import { join } from 'path'
 import { mkdirSync, writeFileSync, rmSync } from 'fs'
+import { createHash } from 'crypto'
 
 const ORCA_OPENCODE_PLUGIN_FILE = 'orca-opencode-status.js'
 
-// Why: ptyId today is allocated by Orca (safe UUID-shape), but both entry
-// points construct a filesystem path with it and one of them calls
-// rmSync(..., recursive) on the result. Reject obviously unsafe IDs as a
-// belt-and-braces guard so a future caller (or a bug that forwards an
-// external ID) cannot escape userData/opencode-hooks/.
-function isSafePtyId(ptyId: string): boolean {
-  if (!ptyId || ptyId.length === 0 || ptyId.length > 128) {
-    return false
-  }
-  // Allow alphanumeric, dash, underscore, period (but not leading period or
-  // any slashes/backslashes).
-  return /^[A-Za-z0-9_-][A-Za-z0-9_.-]*$/.test(ptyId) && !ptyId.includes('..')
+// Why: the id passed in by pty.ts's daemon path is a sessionId shaped like
+// "<worktreeId>@@<uuid>" where worktreeId itself contains "::" and a
+// filesystem path (slashes, colons). Earlier the id was a simple numeric
+// counter, so rejecting anything with "/" or ":" was a safe guard against
+// path traversal. After the daemon-parity refactor (#1148) the sessionId
+// shape changed, and the old regex silently rejected every legitimate id,
+// leaving OPENCODE_CONFIG_DIR unset and the plugin never loading.
+//
+// Keep an input-bounds guard (non-empty, bounded length) for defense in
+// depth, and derive the on-disk directory name via hash so any caller's id —
+// including ones containing path separators — produces a short, stable,
+// filesystem-safe name. Hashing also eliminates path-traversal risk at the
+// source: the directory name is always 32 hex chars, never a prefix/suffix
+// of the caller's input.
+// Why: 1024 is a generous sanity cap — daemon-shaped ids embed a worktree
+// filesystem path plus "@@<uuid>", and this bound prevents pathological inputs
+// from burning CPU in the SHA-256 step. Since the id is hashed anyway, 1024
+// is decoupled from PATH_MAX.
+function isUsableId(id: string): boolean {
+  return typeof id === 'string' && id.length > 0 && id.length <= 1024
+}
+
+function toSafeDirName(id: string): string {
+  // Why: SHA-256 truncated to 32 hex chars (128 bits) is ample for a
+  // per-session directory name — collisions require ~2^64 concurrent sessions
+  // to become likely, far beyond any real workload. Hex keeps the name
+  // portable across all filesystems (no base64 padding, no `/`).
+  return createHash('sha256').update(id).digest('hex').slice(0, 32)
 }
 
 function getOpenCodePluginSource(): string {
@@ -260,13 +277,13 @@ function getOpenCodePluginSource(): string {
 // pipeline as Claude/Codex/Gemini.
 export class OpenCodeHookService {
   clearPty(ptyId: string): void {
-    if (!isSafePtyId(ptyId)) {
+    if (!isUsableId(ptyId)) {
       return
     }
-    // Why: writePluginConfig creates a directory per PTY under userData. Without
-    // cleanup these accumulate across sessions since ptyId is a monotonically
-    // increasing counter. Remove the directory when the PTY is torn down.
-    const configDir = join(app.getPath('userData'), 'opencode-hooks', ptyId)
+    // Why: writePluginConfig creates a directory per PTY under userData.
+    // Without cleanup these accumulate across sessions. Using getConfigDir
+    // keeps cleanup aligned with the path writePluginConfig created.
+    const configDir = this.getConfigDir(ptyId)
     try {
       rmSync(configDir, { recursive: true, force: true })
     } catch {
@@ -292,11 +309,15 @@ export class OpenCodeHookService {
     return { OPENCODE_CONFIG_DIR: configDir }
   }
 
+  private getConfigDir(ptyId: string): string {
+    return join(app.getPath('userData'), 'opencode-hooks', toSafeDirName(ptyId))
+  }
+
   private writePluginConfig(ptyId: string): string | null {
-    if (!isSafePtyId(ptyId)) {
+    if (!isUsableId(ptyId)) {
       return null
     }
-    const configDir = join(app.getPath('userData'), 'opencode-hooks', ptyId)
+    const configDir = this.getConfigDir(ptyId)
     const pluginsDir = join(configDir, 'plugins')
     try {
       mkdirSync(pluginsDir, { recursive: true })
@@ -314,5 +335,6 @@ export class OpenCodeHookService {
 export const openCodeHookService = new OpenCodeHookService()
 export const _internals = {
   getOpenCodePluginSource,
-  isSafePtyId
+  isUsableId,
+  toSafeDirName
 }

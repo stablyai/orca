@@ -264,6 +264,8 @@ export function connectPanePty(
   const worktree = allWorktrees.find((w) => w.id === deps.worktreeId)
   const repo = worktree ? state.repos?.find((r) => r.id === worktree.repoId) : null
   const connectionId = repo?.connectionId ?? null
+  const tab = (state.tabsByWorktree[deps.worktreeId] ?? []).find((t) => t.id === deps.tabId)
+  const shellOverride = tab?.shellOverride
 
   const transport = createIpcPtyTransport({
     cwd: deps.cwd,
@@ -271,6 +273,7 @@ export function connectPanePty(
     command: paneStartup?.command,
     connectionId,
     worktreeId: deps.worktreeId,
+    ...(shellOverride ? { shellOverride } : {}),
     onPtyExit: onExit,
     onTitleChange,
     onPtySpawn,

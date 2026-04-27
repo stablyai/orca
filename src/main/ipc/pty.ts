@@ -474,6 +474,7 @@ export function registerPtyHandlers(
         connectionId?: string | null
         worktreeId?: string
         sessionId?: string
+        shellOverride?: string
       }
     ) => {
       const provider = getProvider(args.connectionId)
@@ -558,6 +559,9 @@ export function registerPtyHandlers(
       }
       if (effectiveSessionId !== undefined) {
         spawnOptions.sessionId = effectiveSessionId
+      }
+      if (args.shellOverride !== undefined) {
+        spawnOptions.shellOverride = args.shellOverride
       }
       const result = await provider.spawn(spawnOptions)
       ptyOwnership.set(result.id, args.connectionId ?? null)

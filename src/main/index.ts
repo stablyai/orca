@@ -2,6 +2,7 @@
    it owns app lifecycle, service wiring, window creation, and hook/daemon
    startup. Splitting by line count would fragment tightly coupled startup
    logic across files without a cleaner ownership seam. */
+import { grantDirAcl } from './win32-utils'
 import { app, BrowserWindow, nativeImage, nativeTheme } from 'electron'
 import { electronApp, is } from '@electron-toolkit/utils'
 import devIcon from '../../resources/icon-dev.png?asset'
@@ -138,12 +139,26 @@ function openMainWindow(): BrowserWindow {
     )
   }
 
+  // Why: Chromium's BrowserWindow constructor resets the userData DACL to a
+  // Protected DACL. Grant explicit Full Control ACEs on all existing children
+  // before the constructor runs so they survive the upcoming DACL reset.
+  // Per-write EPERM retries in fs-utils/installer-utils serve as the backstop
+  // for any directories created after startup.
+  if (process.platform === 'win32') {
+    try {
+      grantDirAcl(app.getPath('userData'), { recursive: true })
+    } catch {
+      // Non-fatal; per-call retries are the backstop.
+    }
+  }
+
   const window = createMainWindow(store, {
     getIsQuitting: () => isQuitting,
     onQuitAborted: () => {
       isQuitting = false
     }
   })
+
   registerCoreHandlers(
     store,
     runtime,

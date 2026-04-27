@@ -28,10 +28,14 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuShortcut,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 
 const isMac = navigator.userAgent.includes('Mac')
+const isWindows = navigator.userAgent.includes('Windows')
 const NEW_TERMINAL_SHORTCUT = isMac ? '⌘T' : 'Ctrl+T'
 const NEW_BROWSER_SHORTCUT = isMac ? '⌘⇧B' : 'Ctrl+Shift+B'
 const NEW_FILE_SHORTCUT = isMac ? '⌘⇧M' : 'Ctrl+Shift+M'
@@ -47,8 +51,13 @@ type TabBarProps = {
   onCloseOthers: (tabId: string) => void
   onCloseToRight: (tabId: string) => void
   onNewTerminalTab: () => void
+  /** On Windows, opens a new terminal with a specific shell instead of the default. */
+  onNewTerminalWithShell?: (shell: string) => void
   onNewBrowserTab: () => void
   onNewFileTab?: () => void
+  /** Whether WSL is installed on this Windows machine. When true, the "+"
+   *  dropdown shows a WSL option under the terminal submenu. */
+  wslAvailable?: boolean
   onSetCustomTitle: (tabId: string, title: string | null) => void
   onSetTabColor: (tabId: string, color: string | null) => void
   onTogglePaneExpand: (tabId: string) => void
@@ -108,6 +117,7 @@ function TabBarInner({
   onCloseOthers,
   onCloseToRight,
   onNewTerminalTab,
+  onNewTerminalWithShell,
   onNewBrowserTab,
   onNewFileTab,
   onSetCustomTitle,
@@ -127,7 +137,8 @@ function TabBarInner({
   onPinFile,
   tabBarOrder,
   onCreateSplitGroup,
-  hoveredTabInsertion
+  hoveredTabInsertion,
+  wslAvailable
 }: TabBarProps): React.JSX.Element {
   const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
   const resolvedGroupId = groupId ?? worktreeId
@@ -445,20 +456,55 @@ function TabBarInner({
             e.preventDefault()
           }}
         >
-          <DropdownMenuItem
-            onSelect={() => {
-              onNewTerminalTab()
-              const newActiveTabId = useAppStore.getState().activeTabId
-              if (newActiveTabId) {
-                focusTerminalTabSurface(newActiveTabId)
-              }
-            }}
-            className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-          >
-            <TerminalSquare className="size-4 text-muted-foreground" />
-            New Terminal
-            <DropdownMenuShortcut>{NEW_TERMINAL_SHORTCUT}</DropdownMenuShortcut>
-          </DropdownMenuItem>
+          {isWindows && onNewTerminalWithShell ? (
+            // Why: on Windows there are multiple shell choices (PowerShell, CMD,
+            // WSL). A submenu mirrors Windows Terminal and VS Code's UX where
+            // the "+" arrow expands to show all available profiles.
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium">
+                <TerminalSquare className="size-4 text-muted-foreground" />
+                New Terminal
+                <DropdownMenuShortcut>{NEW_TERMINAL_SHORTCUT}</DropdownMenuShortcut>
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="min-w-[10rem] rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]">
+                {[
+                  { label: 'PowerShell', shell: 'powershell.exe' },
+                  { label: 'Command Prompt', shell: 'cmd.exe' },
+                  ...(wslAvailable ? [{ label: 'WSL', shell: 'wsl.exe' }] : [])
+                ].map(({ label, shell }) => (
+                  <DropdownMenuItem
+                    key={shell}
+                    onSelect={() => {
+                      onNewTerminalWithShell(shell)
+                      const newActiveTabId = useAppStore.getState().activeTabId
+                      if (newActiveTabId) {
+                        focusTerminalTabSurface(newActiveTabId)
+                      }
+                    }}
+                    className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+                  >
+                    <TerminalSquare className="size-4 text-muted-foreground" />
+                    {label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          ) : (
+            <DropdownMenuItem
+              onSelect={() => {
+                onNewTerminalTab()
+                const newActiveTabId = useAppStore.getState().activeTabId
+                if (newActiveTabId) {
+                  focusTerminalTabSurface(newActiveTabId)
+                }
+              }}
+              className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+            >
+              <TerminalSquare className="size-4 text-muted-foreground" />
+              New Terminal
+              <DropdownMenuShortcut>{NEW_TERMINAL_SHORTCUT}</DropdownMenuShortcut>
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem
             onSelect={onNewBrowserTab}
             className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"

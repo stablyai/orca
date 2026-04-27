@@ -62,4 +62,122 @@ describePosix('daemon shell-ready launch config', () => {
     expect(config.env.ZDOTDIR).toBe(join(userDataPath, 'shell-ready', 'zsh'))
     expect(existsSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'))).toBe(true)
   })
+
+  it('falls back to HOME for ORCA_ORIG_ZDOTDIR when inherited ZDOTDIR points at a wrapper dir', async () => {
+    // Why: guards against the zsh recursion loop that happens when the daemon
+    // was forked from a shell which was itself an Orca PTY. Such a shell has
+    // ZDOTDIR=<some>/shell-ready/zsh; propagating that unchanged would make
+    // the wrapper `source "$ORCA_ORIG_ZDOTDIR/.zshenv"` source itself.
+    const previousZdotdir = process.env.ZDOTDIR
+    const previousHome = process.env.HOME
+    process.env.ZDOTDIR = '/some/other/orca/shell-ready/zsh'
+    process.env.HOME = '/Users/alice'
+    try {
+      const { getShellReadyLaunchConfig } = await importFreshShellReady()
+      const config = getShellReadyLaunchConfig('/bin/zsh')
+      expect(config.env.ORCA_ORIG_ZDOTDIR).toBe('/Users/alice')
+    } finally {
+      if (previousZdotdir === undefined) {
+        delete process.env.ZDOTDIR
+      } else {
+        process.env.ZDOTDIR = previousZdotdir
+      }
+      if (previousHome === undefined) {
+        delete process.env.HOME
+      } else {
+        process.env.HOME = previousHome
+      }
+    }
+  })
+
+  it('preserves a real inherited ZDOTDIR as ORCA_ORIG_ZDOTDIR', async () => {
+    // Why: users who run a custom zsh dotfiles directory legitimately set
+    // ZDOTDIR before launching Orca. We only want to reject the self-loop
+    // case — any real user ZDOTDIR must round-trip so their configs load.
+    const previousZdotdir = process.env.ZDOTDIR
+    process.env.ZDOTDIR = '/Users/alice/.config/zsh'
+    try {
+      const { getShellReadyLaunchConfig } = await importFreshShellReady()
+      const config = getShellReadyLaunchConfig('/bin/zsh')
+      expect(config.env.ORCA_ORIG_ZDOTDIR).toBe('/Users/alice/.config/zsh')
+    } finally {
+      if (previousZdotdir === undefined) {
+        delete process.env.ZDOTDIR
+      } else {
+        process.env.ZDOTDIR = previousZdotdir
+      }
+    }
+  })
+
+  it('rejects inherited ZDOTDIR ending in /shell-ready/zsh even with a trailing slash', async () => {
+    // Why: `endsWith('/shell-ready/zsh')` without normalization is bypassed by
+    // a trailing slash, which some shell startup scripts add. Pinning this case
+    // guards against a regression that would reintroduce the recursion loop.
+    const previousZdotdir = process.env.ZDOTDIR
+    const previousHome = process.env.HOME
+    process.env.ZDOTDIR = '/some/other/orca/shell-ready/zsh/'
+    process.env.HOME = '/Users/alice'
+    try {
+      const { getShellReadyLaunchConfig } = await importFreshShellReady()
+      const config = getShellReadyLaunchConfig('/bin/zsh')
+      expect(config.env.ORCA_ORIG_ZDOTDIR).toBe('/Users/alice')
+    } finally {
+      if (previousZdotdir === undefined) {
+        delete process.env.ZDOTDIR
+      } else {
+        process.env.ZDOTDIR = previousZdotdir
+      }
+      if (previousHome === undefined) {
+        delete process.env.HOME
+      } else {
+        process.env.HOME = previousHome
+      }
+    }
+  })
+
+  it('falls back to HOME when ZDOTDIR is only slashes (e.g. "/")', async () => {
+    // Why: a bare `/` (or `////`) normalizes to empty and is never a user's
+    // real zsh config root; sourcing `/.zshenv` would silently no-op. Falling
+    // back to HOME matches what the wrapper already assumes when ZDOTDIR is
+    // unset.
+    const previousZdotdir = process.env.ZDOTDIR
+    const previousHome = process.env.HOME
+    process.env.ZDOTDIR = '/'
+    process.env.HOME = '/Users/alice'
+    try {
+      const { getShellReadyLaunchConfig } = await importFreshShellReady()
+      const config = getShellReadyLaunchConfig('/bin/zsh')
+      expect(config.env.ORCA_ORIG_ZDOTDIR).toBe('/Users/alice')
+    } finally {
+      if (previousZdotdir === undefined) {
+        delete process.env.ZDOTDIR
+      } else {
+        process.env.ZDOTDIR = previousZdotdir
+      }
+      if (previousHome === undefined) {
+        delete process.env.HOME
+      } else {
+        process.env.HOME = previousHome
+      }
+    }
+  })
+
+  it('preserves ZDOTDIR that contains /shell-ready/zsh as a substring but does not end with it', async () => {
+    // Why: the guard must match the suffix, not a substring — a user directory
+    // like `/Users/alice/shell-ready/zsh-custom` should round-trip unchanged.
+    // Pinning this case prevents an over-eager `includes` swap in the future.
+    const previousZdotdir = process.env.ZDOTDIR
+    process.env.ZDOTDIR = '/Users/alice/shell-ready/zsh-custom'
+    try {
+      const { getShellReadyLaunchConfig } = await importFreshShellReady()
+      const config = getShellReadyLaunchConfig('/bin/zsh')
+      expect(config.env.ORCA_ORIG_ZDOTDIR).toBe('/Users/alice/shell-ready/zsh-custom')
+    } finally {
+      if (previousZdotdir === undefined) {
+        delete process.env.ZDOTDIR
+      } else {
+        process.env.ZDOTDIR = previousZdotdir
+      }
+    }
+  })
 })

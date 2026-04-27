@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import { Columns2, Ellipsis, Rows2, X } from 'lucide-react'
 import { useAppStore } from '../../store'
@@ -49,6 +49,11 @@ export default function TabGroupPanel({
 }): React.JSX.Element {
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
+
+  const [wslAvailable, setWslAvailable] = useState(false)
+  useEffect(() => {
+    void window.api.wsl.isAvailable().then(setWslAvailable)
+  }, [])
 
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
   const {
@@ -119,6 +124,8 @@ export default function TabGroupPanel({
         }
       }}
       onNewTerminalTab={commands.newTerminalTab}
+      onNewTerminalWithShell={commands.newTerminalWithShell}
+      wslAvailable={wslAvailable}
       onNewBrowserTab={commands.newBrowserTab}
       onNewFileTab={commands.newFileTab}
       onSetCustomTitle={commands.setTabCustomTitle}

@@ -36,11 +36,13 @@ package-lock.json
 # IDE
 .vscode/
 .idea/
+.serena/
 *.swp
 *.swo
 *~
 
 # OS
+*.stackdump
 .DS_Store
 Thumbs.db
 

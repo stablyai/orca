@@ -74,6 +74,35 @@ function getShellReadyWrapperRoot(): string {
   return `${app.getPath('userData')}/shell-ready`
 }
 
+// Why: if our own process inherited ZDOTDIR from a parent shell that was
+// itself an Orca PTY (e.g. the user launched `pn dev` from a terminal inside
+// a running Orca), that ZDOTDIR points at an Orca shell-ready wrapper dir.
+// Propagating it as the new PTY's ORCA_ORIG_ZDOTDIR makes the wrapper's
+// `source "$ORCA_ORIG_ZDOTDIR/.zshenv"` line source itself recursively —
+// zsh gives "job table full or recursion limit exceeded" and the shell
+// never reaches a usable prompt.
+//
+// Any path component ending in `/shell-ready/zsh` is an Orca wrapper dir
+// (regardless of whether it came from this app's userData, a packaged Orca,
+// or a different dev build). Treat it as if ZDOTDIR were unset so the caller
+// falls back to HOME for the user's real config root.
+function resolveOriginalZdotdir(): string {
+  const inherited = process.env.ZDOTDIR
+  if (!inherited) {
+    return process.env.HOME || ''
+  }
+  // Why: tolerate trailing slashes — some shell startup scripts export
+  // `ZDOTDIR="$dir/"`, and without normalization the suffix check would
+  // miss the self-loop path and restore the recursion bug. Also collapses
+  // a pathological `ZDOTDIR=/` to empty so we fall back to HOME rather than
+  // sourcing `/.zshenv` (which is never the user's real config).
+  const normalized = inherited.replace(/\/+$/, '')
+  if (!normalized || normalized.endsWith('/shell-ready/zsh')) {
+    return process.env.HOME || ''
+  }
+  return inherited
+}
+
 export function getBashShellReadyRcfileContent(): string {
   return `# Orca bash shell-ready wrapper
 [[ -f /etc/profile ]] && source /etc/profile
@@ -207,7 +236,7 @@ function getWrappedShellLaunchConfig(
     return {
       args: ['-l'],
       env: {
-        ORCA_ORIG_ZDOTDIR: process.env.ZDOTDIR || process.env.HOME || '',
+        ORCA_ORIG_ZDOTDIR: resolveOriginalZdotdir(),
         ZDOTDIR: `${getShellReadyWrapperRoot()}/zsh`,
         ORCA_SHELL_READY_MARKER: options.emitReadyMarker ? '1' : '0'
       },

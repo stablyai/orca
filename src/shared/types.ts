@@ -144,6 +144,11 @@ export type TerminalTab = {
   createdAt: number
   /** Bumped on shutdown so TerminalPane remounts with a fresh PTY. */
   generation?: number
+  /** Why: records the shell this tab was explicitly opened with (e.g. 'wsl.exe'
+   *  from the "+" submenu) so the PTY can re-use the same shell on reconnect
+   *  without needing the user to interact with the tab again. Undefined means
+   *  "use the default shell setting". */
+  shellOverride?: string
 }
 
 export type BrowserHistoryEntry = {

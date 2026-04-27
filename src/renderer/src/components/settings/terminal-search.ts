@@ -226,7 +226,19 @@ export const TERMINAL_WINDOWS_SHELL_SEARCH_ENTRY: SettingsSearchEntry[] = [
   {
     title: 'Default Shell',
     description: 'Choose the default shell for new terminal panes on Windows.',
-    keywords: ['terminal', 'windows', 'shell', 'powershell', 'cmd', 'command prompt', 'default']
+    keywords: [
+      'terminal',
+      'windows',
+      'shell',
+      'powershell',
+      'cmd',
+      'command prompt',
+      'default',
+      'wsl',
+      'linux',
+      'bash',
+      'ubuntu'
+    ]
   }
 ]
 

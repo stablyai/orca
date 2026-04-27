@@ -143,6 +143,10 @@ function Settings(): React.JSX.Element {
   // the import trigger as a headerAction. The modal itself still lives inside
   // TerminalPane, driven by this shared state.
   const ghostty = useGhosttyImport(updateSettings, settings)
+  const [wslAvailable, setWslAvailable] = useState(false)
+  useEffect(() => {
+    void window.api.wsl.isAvailable().then(setWslAvailable)
+  }, [])
   const [terminalFontSuggestions, setTerminalFontSuggestions] = useState<string[]>(
     getFallbackTerminalFonts()
   )
@@ -622,6 +626,7 @@ function Settings(): React.JSX.Element {
                     scrollbackMode={scrollbackMode}
                     setScrollbackMode={setScrollbackMode}
                     ghostty={ghostty}
+                    wslAvailable={wslAvailable}
                   />
                 </SettingsSection>
 
