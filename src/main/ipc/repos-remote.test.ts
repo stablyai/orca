@@ -33,6 +33,32 @@ vi.mock('../git/repo', () => ({
   // `BaseRefDefaultResult` envelope, so this mock stays as a string.
   getBaseRefDefault: vi.fn().mockResolvedValue('origin/main'),
   getRemoteCount: vi.fn().mockResolvedValue(1),
+  // Why: strip glob metacharacters and trim, mirroring the real
+  // normalizeRefSearchQuery so the SSH search path's short-circuit on
+  // empty queries exercises realistic behavior under test.
+  normalizeRefSearchQuery: vi
+    .fn()
+    .mockImplementation((query: string) => query.trim().replace(/[*?[\]\\]/g, '')),
+  // Why: the real helper walks DEFAULT_BASE_REF_PROBES in order, calling
+  // the passed `hasRef` predicate until one returns true. Mirroring that
+  // behavior here lets the SSH fallback test drive the probe chain via
+  // its execMock sequence without importing the real module.
+  resolveDefaultBaseRefFromProbes: vi
+    .fn()
+    .mockImplementation(async (hasRef: (ref: string) => Promise<boolean>) => {
+      const probes = [
+        { ref: 'refs/remotes/origin/main', returnAs: 'origin/main' },
+        { ref: 'refs/remotes/origin/master', returnAs: 'origin/master' },
+        { ref: 'refs/heads/main', returnAs: 'main' },
+        { ref: 'refs/heads/master', returnAs: 'master' }
+      ]
+      for (const { ref, returnAs } of probes) {
+        if (await hasRef(ref)) {
+          return returnAs
+        }
+      }
+      return null
+    }),
   searchBaseRefs: vi.fn().mockResolvedValue([])
 }))
 
@@ -303,5 +329,37 @@ describe('repos:getBaseRefDefault envelope', () => {
     // A failing count falls back to 0, but the default still resolves.
     expect(result.defaultBaseRef).toBe('origin/main')
     expect(result.remoteCount).toBe(0)
+  })
+
+  it('falls back through probes over SSH when symbolic-ref fails', async () => {
+    const execMock = vi
+      .fn()
+      // symbolic-ref rejects (no origin/HEAD on the remote)
+      .mockRejectedValueOnce(new Error('no symbolic-ref'))
+      // probe 1: refs/remotes/origin/main — rejects
+      .mockRejectedValueOnce(new Error('missing'))
+      // probe 2: refs/remotes/origin/master — succeeds
+      .mockResolvedValueOnce({ stdout: 'abc123\n', stderr: '' })
+      // remote count lookup
+      .mockResolvedValueOnce({ stdout: 'origin\n', stderr: '' })
+
+    mockStore.getRepo.mockReturnValue({
+      id: 'r1',
+      path: '/remote/repo',
+      connectionId: 'conn-1',
+      kind: 'git'
+    })
+    mockGitProvider.exec = execMock
+
+    const result = (await handlers.get('repos:getBaseRefDefault')!(null, { repoId: 'r1' })) as {
+      defaultBaseRef: string | null
+      remoteCount: number
+    }
+
+    // Why: when symbolic-ref fails, the probe chain should find
+    // refs/remotes/origin/master and return 'origin/master', matching
+    // the local path's getDefaultBaseRefAsync behavior.
+    expect(result.defaultBaseRef).toBe('origin/master')
+    expect(result.remoteCount).toBe(1)
   })
 })

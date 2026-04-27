@@ -5,6 +5,42 @@ import hostedGitInfo from 'hosted-git-info'
 import { gitExecFileSync, gitExecFileAsync } from './runner'
 
 /**
+ * Ordered probe list used to resolve a repo's default base ref when no
+ * explicit origin/HEAD symbolic-ref is set. `returnAs` is the short-name
+ * format the UI expects (matches how `git for-each-ref --format=%(refname:short)`
+ * would render the ref).
+ *
+ * Why: shared between the local path (getDefaultBaseRefAsync) and the SSH
+ * relay path in src/main/ipc/repos.ts so both resolve identical defaults
+ * for equivalent repo states.
+ */
+export const DEFAULT_BASE_REF_PROBES: readonly { ref: string; returnAs: string }[] = [
+  { ref: 'refs/remotes/origin/main', returnAs: 'origin/main' },
+  { ref: 'refs/remotes/origin/master', returnAs: 'origin/master' },
+  { ref: 'refs/heads/main', returnAs: 'main' },
+  { ref: 'refs/heads/master', returnAs: 'master' }
+]
+
+/**
+ * Walk DEFAULT_BASE_REF_PROBES in order, returning the first ref whose
+ * existence is confirmed by `hasRef`. Returns null if none exist.
+ *
+ * Why: abstracts the "how do we test a ref exists" detail so the local
+ * path (hasGitRefAsync) and the SSH path (provider.exec rev-parse) can
+ * share a single authoritative probe ordering.
+ */
+export async function resolveDefaultBaseRefFromProbes(
+  hasRef: (ref: string) => Promise<boolean>
+): Promise<string | null> {
+  for (const { ref, returnAs } of DEFAULT_BASE_REF_PROBES) {
+    if (await hasRef(ref)) {
+      return returnAs
+    }
+  }
+  return null
+}
+
+/**
  * Check if a path is a valid git repository (regular or bare).
  */
 export function isGitRepo(path: string): boolean {
@@ -234,20 +270,7 @@ async function getDefaultBaseRefAsync(path: string): Promise<string | null> {
     // Fall through to explicit remote branch probes.
   }
 
-  if (await hasGitRefAsync(path, 'refs/remotes/origin/main')) {
-    return 'origin/main'
-  }
-  if (await hasGitRefAsync(path, 'refs/remotes/origin/master')) {
-    return 'origin/master'
-  }
-  if (await hasGitRefAsync(path, 'refs/heads/main')) {
-    return 'main'
-  }
-  if (await hasGitRefAsync(path, 'refs/heads/master')) {
-    return 'master'
-  }
-
-  return null
+  return resolveDefaultBaseRefFromProbes((ref) => hasGitRefAsync(path, ref))
 }
 
 export async function searchBaseRefs(path: string, query: string, limit = 25): Promise<string[]> {
@@ -271,7 +294,7 @@ export async function searchBaseRefs(path: string, query: string, limit = 25): P
     const { stdout } = await gitExecFileAsync(
       [
         'for-each-ref',
-        '--format=%(refname:short)',
+        '--format=%(refname)%00%(refname:short)',
         '--sort=-committerdate',
         `refs/remotes/*${normalizedQuery}*/*`,
         `refs/remotes/*/*${normalizedQuery}*`,
@@ -284,16 +307,47 @@ export async function searchBaseRefs(path: string, query: string, limit = 25): P
     const refs = stdout
       .split('\n')
       .map((line) => line.trim())
-      // Why: drop `<remote>/HEAD` pseudo-refs across all remotes. They always
-      // point to another ref, so pinning one is never what the user wants.
-      .filter((line) => line && !line.endsWith('/HEAD'))
-      .filter((line) => {
-        if (seen.has(line)) {
+      .filter((line) => line.length > 0)
+      .map((line) => {
+        const nul = line.indexOf('\0')
+        // Why: defensive — if %(refname) format changes or an upstream
+        // git version quirks out, fall back to treating the whole line
+        // as both the full ref and short ref.
+        if (nul < 0) {
+          return { full: line, short: line }
+        }
+        return { full: line.slice(0, nul), short: line.slice(nul + 1) }
+      })
+      // Why: drop only `refs/remotes/<remote>/HEAD` pseudo-refs. A local
+      // branch named `foo/HEAD` (rare but valid per git check-ref-format)
+      // would otherwise be silently dropped from search results.
+      // Why: use `.+` (not `[^/]+`) because git allows slashes in remote
+      // names (e.g. `git remote add foo/bar`), so a nested remote name
+      // like `refs/remotes/foo/bar/HEAD` must also be treated as a
+      // pseudo-ref.
+      // Why: when `full === short` (defensive fallback for missing NUL
+      // separator), we can't distinguish `<remote>/HEAD` from a local
+      // `foo/HEAD`; prefer safety and drop the ref — the fallback is
+      // itself a defensive path for an unlikely `%(refname)` format
+      // change, and a leaked pseudo-ref is worse than dropping a rare
+      // local branch.
+      .filter(({ full, short }) => {
+        if (/^refs\/remotes\/.+\/HEAD$/.test(full)) {
           return false
         }
-        seen.add(line)
+        if (full === short && short.endsWith('/HEAD')) {
+          return false
+        }
         return true
       })
+      .filter(({ short }) => {
+        if (seen.has(short)) {
+          return false
+        }
+        seen.add(short)
+        return true
+      })
+      .map(({ short }) => short)
       .slice(0, Math.max(1, limit))
 
     return refs
@@ -302,7 +356,7 @@ export async function searchBaseRefs(path: string, query: string, limit = 25): P
   }
 }
 
-function normalizeRefSearchQuery(query: string): string {
+export function normalizeRefSearchQuery(query: string): string {
   return query.trim().replace(/[*?[\]\\]/g, '')
 }
 

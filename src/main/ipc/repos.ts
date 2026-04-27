@@ -19,6 +19,8 @@ import {
   getRepoName,
   getBaseRefDefault,
   getRemoteCount,
+  normalizeRefSearchQuery,
+  resolveDefaultBaseRefFromProbes,
   searchBaseRefs,
   type BaseRefDefaultResult
 } from '../git/repo'
@@ -385,24 +387,17 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           // below try explicit refs before giving up.
         }
         // Why: mirror the local fallback chain from getDefaultBaseRefAsync
-        // in ../git/repo.ts so SSH and local repos return identical defaults
-        // for equivalent states (e.g. repos without origin/HEAD set).
+        // in ../git/repo.ts via a shared helper, so SSH and local repos
+        // return identical defaults for equivalent states.
         if (defaultBaseRef === null) {
-          const probes: { ref: string; returnAs: string }[] = [
-            { ref: 'refs/remotes/origin/main', returnAs: 'origin/main' },
-            { ref: 'refs/remotes/origin/master', returnAs: 'origin/master' },
-            { ref: 'refs/heads/main', returnAs: 'main' },
-            { ref: 'refs/heads/master', returnAs: 'master' }
-          ]
-          for (const { ref, returnAs } of probes) {
+          defaultBaseRef = await resolveDefaultBaseRefFromProbes(async (ref) => {
             try {
               await provider.exec(['rev-parse', '--verify', '--quiet', ref], repo.path)
-              defaultBaseRef = returnAs
-              break
+              return true
             } catch {
-              // ref doesn't exist, continue
+              return false
             }
-          }
+          })
         }
         // Why: remote-count lookup is independent of default detection —
         // a failure here must not prevent the default ref from being returned.
@@ -447,7 +442,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         // injection via the SSH branch, and short-circuit empty queries so
         // we don't leak every ref. Without this the SSH path diverges from
         // the local path's behavior.
-        const normalizedQuery = args.query.trim().replace(/[*?[\]\\]/g, '')
+        const normalizedQuery = normalizeRefSearchQuery(args.query)
         if (!normalizedQuery) {
           return []
         }
@@ -460,7 +455,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           const result = await provider.exec(
             [
               'for-each-ref',
-              '--format=%(refname:short)',
+              '--format=%(refname)%00%(refname:short)',
               '--sort=-committerdate',
               `refs/remotes/*${normalizedQuery}*/*`,
               `refs/remotes/*/*${normalizedQuery}*`,
@@ -475,16 +470,40 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           return (
             result.stdout
               .split('\n')
-              .map((s) => s.trim())
-              // Why: drop `<remote>/HEAD` pseudo-refs across all remotes.
-              .filter((s) => s.length > 0 && !s.endsWith('/HEAD'))
-              .filter((s) => {
-                if (seen.has(s)) {
+              .map((line) => line.trim())
+              .filter((line) => line.length > 0)
+              .map((line) => {
+                const nul = line.indexOf('\0')
+                // Why: defensive — if %(refname) format changes or an upstream
+                // git version quirks out, fall back to treating the whole line
+                // as both the full ref and short ref.
+                if (nul < 0) {
+                  return { full: line, short: line }
+                }
+                return { full: line.slice(0, nul), short: line.slice(nul + 1) }
+              })
+              // Why: drop only `refs/remotes/<remote>/HEAD` pseudo-refs. A local
+              // branch named `foo/HEAD` (rare but valid per git check-ref-format)
+              // would otherwise be silently dropped from search results. See
+              // repo.ts searchBaseRefs for the rationale behind `.+` vs `[^/]+`
+              // and the fallback-path handling.
+              .filter(({ full, short }) => {
+                if (/^refs\/remotes\/.+\/HEAD$/.test(full)) {
                   return false
                 }
-                seen.add(s)
+                if (full === short && short.endsWith('/HEAD')) {
+                  return false
+                }
                 return true
               })
+              .filter(({ short }) => {
+                if (seen.has(short)) {
+                  return false
+                }
+                seen.add(short)
+                return true
+              })
+              .map(({ short }) => short)
               .slice(0, limit)
           )
         } catch {
