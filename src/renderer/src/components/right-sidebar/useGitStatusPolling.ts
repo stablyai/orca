@@ -13,6 +13,7 @@ export function useGitStatusPolling(): void {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
   const setGitStatus = useAppStore((s) => s.setGitStatus)
+  const fetchUpstreamStatus = useAppStore((s) => s.fetchUpstreamStatus)
   const setConflictOperation = useAppStore((s) => s.setConflictOperation)
   const conflictOperationByWorktree = useAppStore((s) => s.gitConflictOperationByWorktree)
   const repoMap = useRepoMap()
@@ -55,10 +56,11 @@ export function useGitStatusPolling(): void {
         connectionId
       })) as GitStatusResult
       setGitStatus(activeWorktreeId, status)
+      await fetchUpstreamStatus(activeWorktreeId, worktreePath, connectionId)
     } catch {
       // ignore
     }
-  }, [activeRepoSupportsGit, activeWorktreeId, worktreePath, setGitStatus])
+  }, [activeRepoSupportsGit, activeWorktreeId, fetchUpstreamStatus, worktreePath, setGitStatus])
 
   useEffect(() => {
     void fetchStatus()

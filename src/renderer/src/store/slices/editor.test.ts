@@ -582,6 +582,140 @@ describe('createEditorSlice combined diff exclusions', () => {
   })
 })
 
+describe('createEditorSlice remote branch actions', () => {
+  const gitStatusMock = vi.fn()
+  const gitUpstreamStatusMock = vi.fn()
+  const gitPushMock = vi.fn()
+  const gitPullMock = vi.fn()
+  const gitFetchMock = vi.fn()
+
+  beforeEach(() => {
+    toastErrorMock.mockReset()
+    gitStatusMock.mockReset()
+    gitUpstreamStatusMock.mockReset()
+    gitPushMock.mockReset()
+    gitPullMock.mockReset()
+    gitFetchMock.mockReset()
+
+    gitStatusMock.mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
+    gitUpstreamStatusMock.mockResolvedValue({
+      hasUpstream: true,
+      upstreamName: 'origin/main',
+      ahead: 1,
+      behind: 0
+    })
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(globalThis as any).window = (globalThis as any).window ?? {}
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(globalThis as any).window.api = {
+      git: {
+        status: gitStatusMock,
+        upstreamStatus: gitUpstreamStatusMock,
+        push: gitPushMock,
+        pull: gitPullMock,
+        fetch: gitFetchMock
+      }
+    }
+  })
+
+  it('stores upstream status per worktree', () => {
+    const store = createEditorStore()
+
+    store.getState().setUpstreamStatus('wt-1', {
+      hasUpstream: true,
+      upstreamName: 'origin/main',
+      ahead: 2,
+      behind: 1
+    })
+
+    expect(store.getState().remoteStatusesByWorktree['wt-1']).toEqual({
+      hasUpstream: true,
+      upstreamName: 'origin/main',
+      ahead: 2,
+      behind: 1
+    })
+  })
+
+  it('blocks pull when uncommitted changes are present', async () => {
+    const store = createEditorStore()
+    store.getState().setGitStatus('wt-1', {
+      conflictOperation: 'unknown',
+      entries: [{ path: 'src/app.ts', status: 'modified', area: 'unstaged' }]
+    })
+
+    await store.getState().pullBranch('wt-1', '/repo')
+
+    expect(gitPullMock).not.toHaveBeenCalled()
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Cannot pull/sync with uncommitted changes or active conflicts.'
+    )
+  })
+
+  it('blocks pull when a conflict operation is active', async () => {
+    const store = createEditorStore()
+    store.getState().setGitStatus('wt-1', {
+      conflictOperation: 'merge',
+      entries: []
+    })
+
+    await store.getState().pullBranch('wt-1', '/repo')
+
+    expect(gitPullMock).not.toHaveBeenCalled()
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Cannot pull/sync with uncommitted changes or active conflicts.'
+    )
+  })
+
+  it('blocks sync when a conflict operation is active', async () => {
+    const store = createEditorStore()
+    store.getState().setGitStatus('wt-1', {
+      conflictOperation: 'rebase',
+      entries: []
+    })
+
+    await store.getState().syncBranch('wt-1', '/repo')
+
+    expect(gitFetchMock).not.toHaveBeenCalled()
+    expect(gitPullMock).not.toHaveBeenCalled()
+    expect(gitPushMock).not.toHaveBeenCalled()
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Cannot pull/sync with uncommitted changes or active conflicts.'
+    )
+  })
+
+  it('runs publish branch through push with publish=true and refreshes state', async () => {
+    const store = createEditorStore()
+
+    await store.getState().pushBranch('wt-1', '/repo', true)
+
+    expect(gitPushMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      publish: true,
+      connectionId: undefined
+    })
+    expect(gitStatusMock).toHaveBeenCalled()
+    expect(gitUpstreamStatusMock).toHaveBeenCalled()
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+
+  it('preserves actionable publish errors and avoids refresh on failure', async () => {
+    const store = createEditorStore()
+    const publishError = new Error(
+      'Push rejected: remote has newer commits (non-fast-forward). Please pull or sync first.'
+    )
+    gitPushMock.mockRejectedValueOnce(publishError)
+
+    await expect(store.getState().pushBranch('wt-1', '/repo', true)).rejects.toThrow(
+      publishError.message
+    )
+
+    expect(gitStatusMock).not.toHaveBeenCalled()
+    expect(gitUpstreamStatusMock).not.toHaveBeenCalled()
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+})
+
 describe('createEditorSlice activateMarkdownLink', () => {
   const openUrlMock = vi.fn()
   const openFileUriMock = vi.fn()

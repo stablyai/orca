@@ -40,6 +40,10 @@ export class GitHandler {
     this.dispatcher.onRequest('git.discard', (p) => this.discard(p))
     this.dispatcher.onRequest('git.conflictOperation', (p) => this.conflictOperation(p))
     this.dispatcher.onRequest('git.branchCompare', (p) => this.branchCompare(p))
+    this.dispatcher.onRequest('git.upstreamStatus', (p) => this.upstreamStatus(p))
+    this.dispatcher.onRequest('git.fetch', (p) => this.fetch(p))
+    this.dispatcher.onRequest('git.push', (p) => this.push(p))
+    this.dispatcher.onRequest('git.pull', (p) => this.pull(p))
     this.dispatcher.onRequest('git.branchDiff', (p) => this.branchDiff(p))
     this.dispatcher.onRequest('git.listWorktrees', (p) => this.listWorktrees(p))
     this.dispatcher.onRequest('git.addWorktree', (p) => this.addWorktree(p))
@@ -191,6 +195,57 @@ export class GitHandler {
       )
       return parseBranchDiff(stdout)
     })
+  }
+
+  private async upstreamStatus(params: Record<string, unknown>) {
+    const worktreePath = params.worktreePath as string
+    this.context.validatePath(worktreePath)
+
+    try {
+      const { stdout: upstreamStdout } = await this.git(
+        ['rev-parse', '--abbrev-ref', 'HEAD@{u}'],
+        worktreePath
+      )
+      const upstreamName = upstreamStdout.trim()
+      if (!upstreamName) {
+        return { hasUpstream: false, ahead: 0, behind: 0 }
+      }
+      const { stdout: countsStdout } = await this.git(
+        ['rev-list', '--left-right', '--count', 'HEAD...@{u}'],
+        worktreePath
+      )
+      const [aheadText = '0', behindText = '0'] = countsStdout.trim().split(/\s+/)
+      const ahead = Number.parseInt(aheadText, 10)
+      const behind = Number.parseInt(behindText, 10)
+      return {
+        hasUpstream: true,
+        upstreamName,
+        ahead: Number.isFinite(ahead) ? ahead : 0,
+        behind: Number.isFinite(behind) ? behind : 0
+      }
+    } catch {
+      return { hasUpstream: false, ahead: 0, behind: 0 }
+    }
+  }
+
+  private async fetch(params: Record<string, unknown>) {
+    const worktreePath = params.worktreePath as string
+    this.context.validatePath(worktreePath)
+    await this.git(['fetch', '--prune'], worktreePath)
+  }
+
+  private async push(params: Record<string, unknown>) {
+    const worktreePath = params.worktreePath as string
+    this.context.validatePath(worktreePath)
+    const publish = params.publish === true
+    const args = publish ? ['push', '--set-upstream', 'origin', 'HEAD'] : ['push']
+    await this.git(args, worktreePath)
+  }
+
+  private async pull(params: Record<string, unknown>) {
+    const worktreePath = params.worktreePath as string
+    this.context.validatePath(worktreePath)
+    await this.git(['pull', '--ff-only'], worktreePath)
   }
 
   private async branchDiff(params: Record<string, unknown>) {

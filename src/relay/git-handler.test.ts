@@ -43,6 +43,10 @@ describe('GitHandler', () => {
     expect(methods).toContain('git.discard')
     expect(methods).toContain('git.conflictOperation')
     expect(methods).toContain('git.branchCompare')
+    expect(methods).toContain('git.upstreamStatus')
+    expect(methods).toContain('git.fetch')
+    expect(methods).toContain('git.push')
+    expect(methods).toContain('git.pull')
     expect(methods).toContain('git.branchDiff')
     expect(methods).toContain('git.listWorktrees')
     expect(methods).toContain('git.addWorktree')
@@ -242,6 +246,22 @@ describe('GitHandler', () => {
         expect(result.entries.length).toBeGreaterThan(0)
         expect(result.summary.commitsAhead).toBe(1)
       }
+    })
+  })
+
+  describe('remote operations', () => {
+    it('returns upstream divergence for tracked branches', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'base.txt'), 'base')
+      gitCommit(tmpDir, 'initial')
+
+      const result = (await dispatcher.callRequest('git.upstreamStatus', {
+        worktreePath: tmpDir
+      })) as { hasUpstream: boolean; upstreamName?: string; ahead: number; behind: number }
+
+      expect(result.hasUpstream).toBe(false)
+      expect(result.ahead).toBe(0)
+      expect(result.behind).toBe(0)
     })
   })
 

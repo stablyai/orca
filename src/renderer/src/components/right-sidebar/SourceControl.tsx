@@ -62,6 +62,7 @@ import type {
   GitConflictKind,
   GitConflictOperation,
   GitStatusEntry,
+  GitUpstreamStatus,
   PRInfo
 } from '../../../../shared/types'
 import { STATUS_COLORS, STATUS_LABELS } from './status-display'
@@ -92,6 +93,103 @@ const SECTION_LABELS: Record<(typeof SECTION_ORDER)[number], string> = {
 }
 
 const BRANCH_REFRESH_INTERVAL_MS = 5000
+const REMOTE_STATUS_NO_UPSTREAM: GitUpstreamStatus = { hasUpstream: false, ahead: 0, behind: 0 }
+
+export type RemoteActionKind = 'publish' | 'push' | 'pull' | 'sync'
+
+export type RemoteActionState = {
+  kind: RemoteActionKind
+  label: string
+  disabled: boolean
+}
+
+export type RemoteStatusCounts = {
+  incoming: number
+  outgoing: number
+}
+
+export type RemoteHeaderActionViewModel = {
+  action: RemoteActionState
+  counts: RemoteStatusCounts
+  showDivergence: boolean
+}
+
+export function resolveRemoteStatusCounts(status: GitUpstreamStatus): RemoteStatusCounts {
+  if (!status.hasUpstream) {
+    return { incoming: 0, outgoing: 0 }
+  }
+  return {
+    incoming: Math.max(0, status.behind),
+    outgoing: Math.max(0, status.ahead)
+  }
+}
+
+export function resolveRemoteActionState(
+  status: GitUpstreamStatus,
+  options?: {
+    hasUncommittedChanges: boolean
+    hasConflictOperation: boolean
+    isRemoteOperationActive: boolean
+  }
+): RemoteActionState {
+  const hasUncommittedChanges = options?.hasUncommittedChanges ?? false
+  const hasConflictOperation = options?.hasConflictOperation ?? false
+  const isRemoteOperationActive = options?.isRemoteOperationActive ?? false
+
+  if (!status.hasUpstream) {
+    return {
+      kind: 'publish',
+      label: 'Publish Branch',
+      disabled: isRemoteOperationActive
+    }
+  }
+
+  const pullOrSyncBlocked = hasUncommittedChanges || hasConflictOperation
+  if (status.ahead > 0 && status.behind > 0) {
+    return {
+      kind: 'sync',
+      label: 'Sync Changes',
+      disabled: isRemoteOperationActive || pullOrSyncBlocked
+    }
+  }
+  if (status.behind > 0) {
+    return {
+      kind: 'pull',
+      label: 'Pull',
+      disabled: isRemoteOperationActive || pullOrSyncBlocked
+    }
+  }
+  if (status.ahead > 0) {
+    return {
+      kind: 'push',
+      label: 'Push',
+      disabled: isRemoteOperationActive
+    }
+  }
+
+  return {
+    kind: 'push',
+    label: 'Push',
+    disabled: isRemoteOperationActive
+  }
+}
+
+export function resolveRemoteHeaderActionViewModel(
+  status: GitUpstreamStatus,
+  options?: {
+    hasUncommittedChanges: boolean
+    hasConflictOperation: boolean
+    isRemoteOperationActive: boolean
+  }
+): RemoteHeaderActionViewModel {
+  const action = resolveRemoteActionState(status, options)
+  const counts = resolveRemoteStatusCounts(status)
+  return {
+    action,
+    counts,
+    showDivergence: status.hasUpstream && (counts.incoming > 0 || counts.outgoing > 0)
+  }
+}
 
 type CommitDraftsByWorktree = Record<string, string>
 
@@ -136,12 +234,18 @@ function SourceControlInner(): React.JSX.Element {
   const gitConflictOperationByWorktree = useAppStore((s) => s.gitConflictOperationByWorktree)
   const gitBranchChangesByWorktree = useAppStore((s) => s.gitBranchChangesByWorktree)
   const gitBranchCompareSummaryByWorktree = useAppStore((s) => s.gitBranchCompareSummaryByWorktree)
+  const remoteStatusesByWorktree = useAppStore((s) => s.remoteStatusesByWorktree)
+  const isRemoteOperationActive = useAppStore((s) => s.isRemoteOperationActive)
   const prCache = useAppStore((s) => s.prCache)
   const fetchPRForBranch = useAppStore((s) => s.fetchPRForBranch)
   const updateRepo = useAppStore((s) => s.updateRepo)
   const beginGitBranchCompareRequest = useAppStore((s) => s.beginGitBranchCompareRequest)
   const setGitBranchCompareResult = useAppStore((s) => s.setGitBranchCompareResult)
   const setGitStatus = useAppStore((s) => s.setGitStatus)
+  const fetchUpstreamStatus = useAppStore((s) => s.fetchUpstreamStatus)
+  const pushBranch = useAppStore((s) => s.pushBranch)
+  const pullBranch = useAppStore((s) => s.pullBranch)
+  const syncBranch = useAppStore((s) => s.syncBranch)
   const revealInExplorer = useAppStore((s) => s.revealInExplorer)
   const trackConflictPath = useAppStore((s) => s.trackConflictPath)
   const openDiff = useAppStore((s) => s.openDiff)
@@ -237,6 +341,11 @@ function SourceControlInner(): React.JSX.Element {
   const conflictOperation = activeWorktreeId
     ? (gitConflictOperationByWorktree[activeWorktreeId] ?? 'unknown')
     : 'unknown'
+  // Why: keep fallback upstream status referentially stable so memo deps
+  // don't churn when no worktree-specific remote status has been fetched yet.
+  const remoteStatus: GitUpstreamStatus = activeWorktreeId
+    ? (remoteStatusesByWorktree[activeWorktreeId] ?? REMOTE_STATUS_NO_UPSTREAM)
+    : REMOTE_STATUS_NO_UPSTREAM
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   // Why: gate polling on both the active tab AND the sidebar being open.
   // The sidebar now stays mounted when closed (for performance), so without
@@ -284,6 +393,15 @@ function SourceControlInner(): React.JSX.Element {
 
   const effectiveBaseRef = activeRepo?.worktreeBaseRef ?? defaultBaseRef
   const hasUncommittedEntries = entries.length > 0
+  const remoteHeaderAction = useMemo(
+    () =>
+      resolveRemoteHeaderActionViewModel(remoteStatus, {
+        hasUncommittedChanges: hasUncommittedEntries,
+        hasConflictOperation: conflictOperation !== 'unknown',
+        isRemoteOperationActive
+      }),
+    [conflictOperation, hasUncommittedEntries, isRemoteOperationActive, remoteStatus]
+  )
 
   const branchName = activeWorktree?.branch.replace(/^refs\/heads\//, '') ?? 'HEAD'
   const prCacheKey = activeRepo && branchName ? `${activeRepo.path}::${branchName}` : null
@@ -472,6 +590,7 @@ function SourceControlInner(): React.JSX.Element {
           connectionId
         })
         setGitStatus(activeWorktreeId, status)
+        await fetchUpstreamStatus(activeWorktreeId, worktreePath, connectionId)
       } catch (refreshError) {
         console.error('[SourceControl] post-commit status refresh failed', refreshError)
       }
@@ -489,7 +608,40 @@ function SourceControlInner(): React.JSX.Element {
     commitMessage,
     grouped.staged.length,
     unresolvedConflicts.length,
+    fetchUpstreamStatus,
     setGitStatus,
+    worktreePath
+  ])
+
+  const handleRemoteAction = useCallback(async (): Promise<void> => {
+    if (!activeWorktreeId || !worktreePath) {
+      return
+    }
+
+    const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+    try {
+      if (remoteHeaderAction.action.kind === 'publish') {
+        await pushBranch(activeWorktreeId, worktreePath, true, connectionId)
+        return
+      }
+      if (remoteHeaderAction.action.kind === 'push') {
+        await pushBranch(activeWorktreeId, worktreePath, false, connectionId)
+        return
+      }
+      if (remoteHeaderAction.action.kind === 'pull') {
+        await pullBranch(activeWorktreeId, worktreePath, connectionId)
+        return
+      }
+      await syncBranch(activeWorktreeId, worktreePath, connectionId)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Remote operation failed')
+    }
+  }, [
+    activeWorktreeId,
+    pullBranch,
+    pushBranch,
+    remoteHeaderAction.action.kind,
+    syncBranch,
     worktreePath
   ])
 
@@ -695,6 +847,14 @@ function SourceControlInner(): React.JSX.Element {
     return () => window.clearInterval(intervalId)
   }, [activeWorktreeId, effectiveBaseRef, isBranchVisible, isFolder, worktreePath])
 
+  useEffect(() => {
+    if (!activeWorktreeId || !worktreePath || isFolder) {
+      return
+    }
+    const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+    void fetchUpstreamStatus(activeWorktreeId, worktreePath, connectionId)
+  }, [activeWorktreeId, fetchUpstreamStatus, isFolder, worktreePath])
+
   const toggleSection = useCallback((section: string) => {
     setCollapsedSections((prev) => {
       const next = new Set(prev)
@@ -829,28 +989,59 @@ function SourceControlInner(): React.JSX.Element {
               {value === 'all' ? 'All' : 'Uncommitted'}
             </button>
           ))}
-          {prInfo && (
-            <div className="ml-auto mb-1.5 flex items-center gap-1.5 min-w-0 text-[11.5px] leading-none">
-              <PullRequestIcon
-                className={cn(
-                  'size-3 shrink-0',
-                  prInfo.state === 'merged' && 'text-purple-500/80',
-                  prInfo.state === 'open' && 'text-emerald-500/80',
-                  prInfo.state === 'closed' && 'text-muted-foreground/60',
-                  prInfo.state === 'draft' && 'text-muted-foreground/50'
+          <div className="ml-auto mb-1.5 flex items-center gap-2 min-w-0">
+            {/* Why: remote actions belong to the Source Control header action bar
+                so the commit composer stays focused only on commit authoring. */}
+            {(scope === 'all' || scope === 'uncommitted') && (
+              <>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 px-1.5 text-[11px]"
+                  disabled={remoteHeaderAction.action.disabled}
+                  onClick={() => {
+                    void handleRemoteAction()
+                  }}
+                >
+                  {isRemoteOperationActive && <RefreshCw className="size-3 animate-spin" />}
+                  {remoteHeaderAction.action.label}
+                </Button>
+                {remoteHeaderAction.showDivergence && (
+                  <div className="flex items-center gap-2 text-[11px] tabular-nums text-muted-foreground">
+                    {remoteHeaderAction.counts.incoming > 0 && (
+                      <span title="Incoming commits">↓{remoteHeaderAction.counts.incoming}</span>
+                    )}
+                    {remoteHeaderAction.counts.outgoing > 0 && (
+                      <span title="Outgoing commits">↑{remoteHeaderAction.counts.outgoing}</span>
+                    )}
+                  </div>
                 )}
-              />
-              <a
-                href={prInfo.url}
-                target="_blank"
-                rel="noreferrer"
-                className="text-foreground opacity-80 font-medium shrink-0 hover:text-foreground hover:underline"
-                onClick={(e) => e.stopPropagation()}
-              >
-                PR #{prInfo.number}
-              </a>
-            </div>
-          )}
+              </>
+            )}
+            {prInfo && (
+              <div className="flex items-center gap-1.5 min-w-0 text-[11.5px] leading-none">
+                <PullRequestIcon
+                  className={cn(
+                    'size-3 shrink-0',
+                    prInfo.state === 'merged' && 'text-purple-500/80',
+                    prInfo.state === 'open' && 'text-emerald-500/80',
+                    prInfo.state === 'closed' && 'text-muted-foreground/60',
+                    prInfo.state === 'draft' && 'text-muted-foreground/50'
+                  )}
+                />
+                <a
+                  href={prInfo.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-foreground opacity-80 font-medium shrink-0 hover:text-foreground hover:underline"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  PR #{prInfo.number}
+                </a>
+              </div>
+            )}
+          </div>
         </div>
 
         {scope === 'all' && (

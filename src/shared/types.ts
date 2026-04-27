@@ -1432,6 +1432,13 @@ export type GitStatusResult = {
   conflictOperation: GitConflictOperation
 }
 
+export type GitUpstreamStatus = {
+  hasUpstream: boolean
+  upstreamName?: string
+  ahead: number
+  behind: number
+}
+
 export type GitBranchChangeStatus = 'modified' | 'added' | 'deleted' | 'renamed' | 'copied'
 
 export type GitBranchChangeEntry = {

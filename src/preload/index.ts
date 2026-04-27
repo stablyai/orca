@@ -1265,6 +1265,17 @@ const api = {
       baseRef: string
       connectionId?: string
     }): Promise<unknown> => ipcRenderer.invoke('git:branchCompare', args),
+    upstreamStatus: (args: { worktreePath: string; connectionId?: string }): Promise<unknown> =>
+      ipcRenderer.invoke('git:upstreamStatus', args),
+    fetch: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
+      ipcRenderer.invoke('git:fetch', args),
+    push: (args: {
+      worktreePath: string
+      publish?: boolean
+      connectionId?: string
+    }): Promise<void> => ipcRenderer.invoke('git:push', args),
+    pull: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
+      ipcRenderer.invoke('git:pull', args),
     branchDiff: (args: {
       worktreePath: string
       compare: { baseRef: string; baseOid: string; headOid: string; mergeBase: string }

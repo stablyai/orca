@@ -14,6 +14,7 @@ import type {
   GitConflictStatusSource,
   GitStatusEntry,
   GitStatusResult,
+  GitUpstreamStatus,
   SearchResult,
   WorkspaceSessionState,
   WorkspaceVisibleTabType
@@ -265,6 +266,23 @@ export type EditorSlice = {
   // Why: lightweight updater for conflict operation only, used to clear stale
   // "Rebasing"/"Merging" badges on non-active worktrees without a full git status poll.
   setConflictOperation: (worktreeId: string, operation: GitConflictOperation) => void
+  remoteStatusesByWorktree: Record<string, GitUpstreamStatus>
+  setUpstreamStatus: (worktreeId: string, status: GitUpstreamStatus) => void
+  isRemoteOperationActive: boolean
+  setRemoteOperationActive: (active: boolean) => void
+  fetchUpstreamStatus: (
+    worktreeId: string,
+    worktreePath: string,
+    connectionId?: string
+  ) => Promise<void>
+  pushBranch: (
+    worktreeId: string,
+    worktreePath: string,
+    publish?: boolean,
+    connectionId?: string
+  ) => Promise<void>
+  pullBranch: (worktreeId: string, worktreePath: string, connectionId?: string) => Promise<void>
+  syncBranch: (worktreeId: string, worktreePath: string, connectionId?: string) => Promise<void>
   gitBranchChangesByWorktree: Record<string, GitBranchChangeEntry[]>
   gitBranchCompareSummaryByWorktree: Record<string, GitBranchCompareSummary | null>
   gitBranchCompareRequestKeyByWorktree: Record<string, string>
@@ -340,6 +358,15 @@ function openWorkspaceEditorItem(
     targetGroupId: resolvedGroupId
   })
   return created?.id ?? fileId
+}
+
+const REMOTE_PULL_SYNC_GUARD_MESSAGE =
+  'Cannot pull/sync with uncommitted changes or active conflicts.'
+
+function hasBlockedPullOrSync(state: EditorSlice, worktreeId: string): boolean {
+  const hasUncommittedEntries = (state.gitStatusByWorktree[worktreeId] ?? []).length > 0
+  const conflictOperation = state.gitConflictOperationByWorktree[worktreeId] ?? 'unknown'
+  return hasUncommittedEntries || conflictOperation !== 'unknown'
 }
 
 export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (set, get) => ({
@@ -1711,6 +1738,79 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             })
       }
     }),
+  remoteStatusesByWorktree: {},
+  setUpstreamStatus: (worktreeId, status) =>
+    set((s) => ({
+      remoteStatusesByWorktree: {
+        ...s.remoteStatusesByWorktree,
+        [worktreeId]: status
+      }
+    })),
+  isRemoteOperationActive: false,
+  setRemoteOperationActive: (active) => set({ isRemoteOperationActive: active }),
+  fetchUpstreamStatus: async (worktreeId, worktreePath, connectionId) => {
+    try {
+      const status = (await window.api.git.upstreamStatus({
+        worktreePath,
+        connectionId
+      })) as GitUpstreamStatus
+      get().setUpstreamStatus(worktreeId, status)
+    } catch {
+      get().setUpstreamStatus(worktreeId, { hasUpstream: false, ahead: 0, behind: 0 })
+    }
+  },
+  pushBranch: async (worktreeId, worktreePath, publish = false, connectionId) => {
+    get().setRemoteOperationActive(true)
+    try {
+      await window.api.git.push({ worktreePath, publish, connectionId })
+      const status = (await window.api.git.status({
+        worktreePath,
+        connectionId
+      })) as GitStatusResult
+      get().setGitStatus(worktreeId, status)
+      await get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId)
+    } finally {
+      get().setRemoteOperationActive(false)
+    }
+  },
+  pullBranch: async (worktreeId, worktreePath, connectionId) => {
+    if (hasBlockedPullOrSync(get(), worktreeId)) {
+      toast.error(REMOTE_PULL_SYNC_GUARD_MESSAGE)
+      return
+    }
+    get().setRemoteOperationActive(true)
+    try {
+      await window.api.git.pull({ worktreePath, connectionId })
+      const status = (await window.api.git.status({
+        worktreePath,
+        connectionId
+      })) as GitStatusResult
+      get().setGitStatus(worktreeId, status)
+      await get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId)
+    } finally {
+      get().setRemoteOperationActive(false)
+    }
+  },
+  syncBranch: async (worktreeId, worktreePath, connectionId) => {
+    if (hasBlockedPullOrSync(get(), worktreeId)) {
+      toast.error(REMOTE_PULL_SYNC_GUARD_MESSAGE)
+      return
+    }
+    get().setRemoteOperationActive(true)
+    try {
+      await window.api.git.fetch({ worktreePath, connectionId })
+      await window.api.git.pull({ worktreePath, connectionId })
+      await window.api.git.push({ worktreePath, connectionId })
+      const status = (await window.api.git.status({
+        worktreePath,
+        connectionId
+      })) as GitStatusResult
+      get().setGitStatus(worktreeId, status)
+      await get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId)
+    } finally {
+      get().setRemoteOperationActive(false)
+    }
+  },
   gitBranchChangesByWorktree: {},
   gitBranchCompareSummaryByWorktree: {},
   gitBranchCompareRequestKeyByWorktree: {},
