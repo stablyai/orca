@@ -4,7 +4,7 @@
 // Keeping the types shared up-front avoids a churn PR that renames or splits
 // them once the hook server imports them.
 
-export type AgentHookTarget = 'claude' | 'codex' | 'gemini'
+export type AgentHookTarget = 'claude' | 'codex' | 'gemini' | 'cursor'
 
 export type AgentHookInstallState = 'installed' | 'not_installed' | 'partial' | 'error'
 

@@ -25,7 +25,20 @@ module.exports = {
   // when the CLI runs outside the asar archive.
   // Why: daemon-entry.js is forked as a separate Node.js process and must be
   // accessible on disk (not inside the asar archive) for child_process.fork().
-  asarUnpack: ['out/cli/**', 'out/shared/**', 'out/main/daemon-entry.js', 'out/main/chunks/**', 'resources/**'],
+  // Why: the CLI is compiled by tsc (not bundled), so its runtime imports
+  // resolve at runtime via Node's normal module lookup. The shim launches
+  // the CLI with ELECTRON_RUN_AS_NODE, which bypasses Electron's asar
+  // integration — dependencies inside the asar archive are invisible to
+  // require(). Unpack CLI runtime deps so they resolve from
+  // app.asar.unpacked/node_modules/.
+  asarUnpack: [
+    'out/cli/**',
+    'out/shared/**',
+    'out/main/daemon-entry.js',
+    'out/main/chunks/**',
+    'resources/**',
+    'node_modules/zod/**'
+  ],
   afterPack: async (context) => {
     const resourcesDir =
       context.electronPlatformName === 'darwin'

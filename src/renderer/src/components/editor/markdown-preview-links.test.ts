@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  fileUrlToAbsolutePath,
   getMarkdownPreviewImageSrc,
   getMarkdownPreviewLinkTarget,
+  resolveMarkdownPreviewHref,
   resolveImageAbsolutePath
 } from './markdown-preview-links'
 
@@ -20,6 +22,14 @@ describe('getMarkdownPreviewLinkTarget', () => {
 
   it('does not hijack hash-only anchors', () => {
     expect(getMarkdownPreviewLinkTarget('#overview', '/repo/docs/README.md')).toBeNull()
+  })
+})
+
+describe('resolveMarkdownPreviewHref', () => {
+  it('resolves markdown fragments against the current file path', () => {
+    expect(
+      resolveMarkdownPreviewHref('./guide/setup.md#install', '/repo/docs/README.md')?.toString()
+    ).toBe('file:///repo/docs/guide/setup.md#install')
   })
 })
 
@@ -72,5 +82,23 @@ describe('resolveImageAbsolutePath', () => {
 
   it('returns null for undefined src', () => {
     expect(resolveImageAbsolutePath(undefined, '/repo/README.md')).toBeNull()
+  })
+})
+
+describe('fileUrlToAbsolutePath', () => {
+  it('converts unix file URLs to absolute paths', () => {
+    expect(fileUrlToAbsolutePath(new URL('file:///repo/docs/README.md'))).toBe(
+      '/repo/docs/README.md'
+    )
+  })
+
+  it('converts windows file URLs to absolute paths', () => {
+    expect(fileUrlToAbsolutePath(new URL('file:///C:/repo/docs/README.md'))).toBe(
+      'C:/repo/docs/README.md'
+    )
+  })
+
+  it('returns null for non-file URLs', () => {
+    expect(fileUrlToAbsolutePath(new URL('https://example.com/readme.md'))).toBeNull()
   })
 })

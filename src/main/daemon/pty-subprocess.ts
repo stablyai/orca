@@ -1,6 +1,10 @@
 import * as pty from 'node-pty'
 import type { SubprocessHandle } from './session'
-import { getShellReadyLaunchConfig, resolvePtyShellPath } from './shell-ready'
+import {
+  getAttributionShellLaunchConfig,
+  getShellReadyLaunchConfig,
+  resolvePtyShellPath
+} from './shell-ready'
 import { isValidPtySize, normalizePtySize } from './daemon-pty-size'
 import { ensureNodePtySpawnHelperExecutable } from '../providers/local-pty-utils'
 
@@ -41,7 +45,15 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     // Why: TUIs feature-gate on TERM_PROGRAM_VERSION. The daemon is forked
     // by main (daemon-init.ts:93) with the parent's env, so ORCA_APP_VERSION
     // — set in src/main/index.ts from app.getVersion() — is inherited here.
-    TERM_PROGRAM_VERSION: process.env.ORCA_APP_VERSION ?? '0.0.0-dev'
+    TERM_PROGRAM_VERSION: process.env.ORCA_APP_VERSION ?? '0.0.0-dev',
+    // Why: opt tools (Claude Code, ls --hyperlink, etc.) into emitting OSC 8
+    // hyperlinks. The `supports-hyperlinks` npm package gates on a hard-coded
+    // TERM_PROGRAM allowlist (iTerm.app / WezTerm / vscode) and returns false
+    // for TERM_PROGRAM=Orca, so callers drop OSC 8 output entirely and emit
+    // bare text instead. xterm.js in Orca parses OSC 8 and the pane's
+    // linkHandler routes clicks, so forcing the advertisement is safe and
+    // restores clickable refs like `owner/repo#123` / `PR#123`.
+    FORCE_HYPERLINK: '1'
   } as Record<string, string>
 
   env.LANG ??= 'en_US.UTF-8'
@@ -52,11 +64,15 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   if (process.platform === 'win32') {
     shellArgs = []
   } else {
-    const shellReadyLaunch = opts.command ? getShellReadyLaunchConfig(shellPath) : null
-    if (shellReadyLaunch) {
-      Object.assign(env, shellReadyLaunch.env)
+    const shellLaunch = opts.command
+      ? getShellReadyLaunchConfig(shellPath)
+      : env.ORCA_ATTRIBUTION_SHIM_DIR
+        ? getAttributionShellLaunchConfig(shellPath)
+        : null
+    if (shellLaunch) {
+      Object.assign(env, shellLaunch.env)
     }
-    shellArgs = shellReadyLaunch?.args ?? ['-l']
+    shellArgs = shellLaunch?.args ?? ['-l']
   }
 
   // Why: asar packaging can strip the +x bit from node-pty's spawn-helper

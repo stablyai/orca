@@ -111,20 +111,62 @@ export async function createRemoteWorktree(
     /* best-effort */
   }
 
-  // Why: the relay validates that targetDir is within a registered root.
-  // The new worktree lives as a sibling of the repo (repo.path/../name),
-  // outside the repo root. Register it before addWorktree so the relay
-  // accepts the path.
+  // Why: the relay's git.addWorktree validates targetDir against registered
+  // roots. The worktree sibling path (repo/../name) is outside the repo root
+  // and must be registered first. Using request (not notify) makes the
+  // ordering guarantee explicit rather than relying on FIFO frame processing,
+  // and closes failure windows during relay reconnect or fresh-host scenarios
+  // where roots may not yet be registered at all. See issue #911.
   const mux = getActiveMultiplexer(repo.connectionId!)
-  if (mux) {
-    mux.notify('session.registerRoot', { rootPath: remotePath })
+  if (!mux) {
+    throw new Error('SSH connection is not available. Please reconnect and try again.')
+  }
+  // Why: git.addWorktree validates both repoPath and targetDir against
+  // registered roots. In a fresh-host or reconnect scenario, registerRelayRoots
+  // may not have finished yet, so neither path may be registered. Register both
+  // synchronously here to close that window.
+  //
+  // Why (fallback): when Orca reconnects via --connect to a relay still in its
+  // grace period, the old relay binary may not have the request handler yet.
+  // Fall back to notify so worktree creation still works against pre-upgrade
+  // relays.
+  try {
+    await Promise.all([
+      mux.request('session.registerRoot', { rootPath: repo.path }),
+      mux.request('session.registerRoot', { rootPath: remotePath })
+    ])
+  } catch (err) {
+    if (err instanceof Error && err.message.includes('Method not found')) {
+      mux.notify('session.registerRoot', { rootPath: repo.path })
+      mux.notify('session.registerRoot', { rootPath: remotePath })
+    } else {
+      throw err
+    }
   }
 
   // Create worktree via relay
-  await provider.addWorktree(repo.path, branchName, remotePath, {
-    base: baseBranch,
-    track: baseBranch.includes('/')
-  })
+  try {
+    await provider.addWorktree(repo.path, branchName, remotePath, {
+      base: baseBranch,
+      track: baseBranch.includes('/')
+    })
+  } catch (err) {
+    if (
+      err instanceof Error &&
+      (err.message.includes('No workspace roots registered yet') ||
+        err.message.includes('Path outside authorized workspace'))
+    ) {
+      // Why: validatePath throws two distinct errors — "No workspace roots
+      // registered yet" (relay has no roots at all, e.g., reconnect before
+      // registerRelayRoots completes) and "Path outside authorized workspace"
+      // (roots exist but the sibling worktree path isn't among them). Both are
+      // implementation details that mean nothing to the user.
+      throw new Error(
+        'The SSH relay has not registered the worktree path yet. Please wait a moment and try again, or disconnect and reconnect the SSH session.'
+      )
+    }
+    throw err
+  }
 
   // Re-list to get the created worktree info
   const gitWorktrees = await provider.listWorktrees(repo.path)

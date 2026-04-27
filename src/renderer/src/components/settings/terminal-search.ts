@@ -20,6 +20,23 @@ export const TERMINAL_TYPOGRAPHY_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     title: 'Line Height',
     description: 'Controls the terminal line height multiplier.',
     keywords: ['terminal', 'typography', 'line height', 'spacing']
+  },
+  {
+    title: 'Font Ligatures',
+    description:
+      'Render programming ligatures (e.g. => → ≠ ≥) for fonts that ship them. "Auto" enables ligatures only for known ligature fonts (Fira Code, JetBrains Mono, Cascadia Code, Iosevka, etc.).',
+    keywords: [
+      'terminal',
+      'typography',
+      'ligatures',
+      'ligature',
+      'fira code',
+      'jetbrains mono',
+      'cascadia code',
+      'iosevka',
+      'calt',
+      'font features'
+    ]
   }
 ]
 

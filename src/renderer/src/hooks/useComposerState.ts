@@ -30,6 +30,7 @@ import {
   getLinkedWorkItemSuggestedName,
   getSetupConfig,
   getWorkspaceSeedName,
+  PER_REPO_FETCH_LIMIT,
   renderIssueCommandTemplate,
   type LinkedWorkItemSummary
 } from '@/lib/new-workspace'
@@ -305,6 +306,15 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const lastAutoNameRef = useRef<string>(
     persistDraft ? (newWorkspaceDraft?.name ?? initialName) : initialName
   )
+  // Why: tracks the note value we auto-prefilled from a Start-from PR pick, so
+  // a subsequent PR change can replace it without clobbering user-typed text.
+  const lastAutoNoteRef = useRef<string>('')
+  // Why: read the latest note inside handleBaseBranchPrSelect without adding
+  // `note` to its deps (which would rebuild the callback on every keystroke).
+  const noteRef = useRef<string>(note)
+  useEffect(() => {
+    noteRef.current = note
+  }, [note])
   const composerRef = useRef<HTMLDivElement | null>(null)
   const promptTextareaRef = useRef<HTMLTextAreaElement | null>(null)
   const nameInputRef = useRef<HTMLInputElement | null>(null)
@@ -549,7 +559,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     if (!selectedRepo?.path || selectedRepo.connectionId) {
       return
     }
-    prefetchWorkItems(selectedRepo.id, selectedRepo.path, 36, 'is:pr is:open')
+    prefetchWorkItems(selectedRepo.id, selectedRepo.path, PER_REPO_FETCH_LIMIT, 'is:pr is:open')
   }, [prefetchWorkItems, selectedRepo?.connectionId, selectedRepo?.id, selectedRepo?.path])
 
   // Per-repo: resolve repo slug for GH URL mismatch detection.
@@ -933,6 +943,18 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       // linkedWorkItem assignment. Reuse applyLinkedWorkItem so auto-name and
       // linkedPR state stay in a single code path.
       applyLinkedWorkItem(item)
+      // Why: starting a worktree from a PR is a strong hint for what the
+      // worktree's comment should surface (`orca worktree current`, sidebar).
+      // Prefill the note if it's empty or still equal to a prior auto-fill, so
+      // we don't overwrite anything the user has typed.
+      if (item.type === 'pr') {
+        const suggestedNote = `PR #${item.number} — ${item.title}`
+        const currentNote = noteRef.current
+        if (!currentNote.trim() || currentNote === lastAutoNoteRef.current) {
+          setNote(suggestedNote)
+          lastAutoNoteRef.current = suggestedNote
+        }
+      }
     },
     [applyLinkedWorkItem]
   )

@@ -2,6 +2,8 @@ import React from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
+import rehypeRaw from 'rehype-raw'
+import rehypeSanitize from 'rehype-sanitize'
 import type { Components } from 'react-markdown'
 import { cn } from '@/lib/utils'
 
@@ -99,6 +101,9 @@ const components: Components = {
 // remark-breaks converts single newlines to <br>, keeping backward compat
 // with existing plain-text comments that rely on newline formatting.
 const remarkPlugins = [remarkGfm, remarkBreaks]
+// Why: GitHub comments commonly contain trusted-looking raw HTML from bots
+// (`<table>`, `<h2>`). Parse it for readability, then sanitize before render.
+const rehypePlugins = [rehypeRaw, rehypeSanitize]
 
 type CommentMarkdownProps = React.ComponentPropsWithoutRef<'div'> & {
   content: string
@@ -124,7 +129,11 @@ const CommentMarkdown = React.memo(
         )}
         {...rest}
       >
-        <Markdown remarkPlugins={remarkPlugins} components={components}>
+        <Markdown
+          remarkPlugins={remarkPlugins}
+          rehypePlugins={rehypePlugins}
+          components={components}
+        >
           {content}
         </Markdown>
       </div>

@@ -440,42 +440,32 @@ describe('TabsSlice', () => {
     })
   })
 
-  // ─── markTerminalTabUnread (split-group guard) ───────────────────
+  // ─── markTerminalTabUnread ───────────────────────────────────────
   //
-  // Regression guard for the split-group bell bug: when two groups are visible
-  // side-by-side, a bell in the active tab of a non-focused group must NOT
-  // mark that tab unread — the user can already see it. Before the fix,
-  // markTerminalTabUnread only checked the global activeTabId (the focused
-  // group's tab), so the non-focused but still-visible group's tab got a
-  // spurious bell.
+  // Ghostty "show until interact" model: BEL always marks the tab unread,
+  // including the currently-focused tab and the active tab of every visible
+  // split group. The indicator is cleared by user interaction (keystroke,
+  // click, focus-gain) via clearTerminalTabUnread — NOT by the mark path
+  // trying to guess whether the user already "sees" the tab.
   describe('markTerminalTabUnread', () => {
-    it('suppresses marking when the tab is active in any visible group of the active worktree', () => {
+    it('marks the tab even when it is active in a visible split group of the active worktree', () => {
       // Group A: the current worktree's root group, created implicitly by
       // createUnifiedTab. Populate it with a terminal tab (tabA).
       const tabA = store.getState().createUnifiedTab(WT, 'terminal')
       const groupAId = store.getState().groupsByWorktree[WT][0].id
 
       // Group B: split to the right of Group A, then populate with its own
-      // terminal tab and focus Group B so it becomes the globally-focused
-      // group — this is the condition under which the bug reproduces.
+      // terminal tab and focus Group B so tabA is visible-but-not-focused.
       const groupBId = store.getState().createEmptySplitGroup(WT, groupAId, 'right')
       if (!groupBId) {
         throw new Error('createEmptySplitGroup returned null')
       }
       store.getState().createUnifiedTab(WT, 'terminal', { targetGroupId: groupBId })
       store.getState().focusGroup(WT, groupBId)
-
-      // Mark the active worktree so markTerminalTabUnread's guard reaches the
-      // split-group branch (it early-returns otherwise).
       store.setState({ activeWorktreeId: WT })
 
-      // Why: markTerminalTabUnread early-returns when no TerminalTab owns
-      // tabA.entityId in tabsByWorktree (owner-missing guard). Without this
-      // seed, the test would pass via that early-return rather than exercising
-      // the split-group visibility branch we are trying to cover. In
-      // production, every terminal unified tab has a backing legacy terminal
-      // tab (createTab calls createUnifiedTab with matching ids); mirror that
-      // invariant here so the guard under test is actually reached.
+      // Seed the backing legacy terminal tab so markTerminalTabUnread's
+      // owner-missing guard doesn't short-circuit.
       store.setState({
         tabsByWorktree: {
           [WT]: [
@@ -493,18 +483,12 @@ describe('TabsSlice', () => {
         }
       })
 
-      // Sanity: Group A still has tabA as its active tab, and tabA is NOT the
-      // global activeTabId (Group B's tab is). Without the fix, the global
-      // check alone would let the mark through.
-      const groupA = store.getState().groupsByWorktree[WT].find((g) => g.id === groupAId)
-      expect(groupA?.activeTabId).toBe(tabA.id)
-      expect(store.getState().activeTabId).not.toBe(tabA.entityId)
-
-      // Fire a bell on Group A's terminal tab. It must be suppressed because
-      // Group A is still visible alongside Group B.
+      // Fire a bell on Group A's terminal tab. Under ghostty semantics the
+      // indicator must appear even though that tab is visible — only
+      // clearTerminalTabUnread (called from onData / pointerdown) dismisses it.
       store.getState().markTerminalTabUnread(tabA.entityId)
 
-      expect(store.getState().unreadTerminalTabs[tabA.entityId]).toBeUndefined()
+      expect(store.getState().unreadTerminalTabs[tabA.entityId]).toBe(true)
     })
 
     it('does mark a tab that is not the active tab of any visible group', () => {
@@ -550,15 +534,10 @@ describe('TabsSlice', () => {
       expect(store.getState().unreadTerminalTabs[tabA2.entityId]).toBe(true)
     })
 
-    // Why: the active-surface guard must only suppress when the user is
-    // actually looking at the terminal. activeTabId remains pinned to the
-    // last terminal tab even when the user has switched to the editor or
-    // browser — in that case the terminal is offscreen and bells are
-    // legitimate unread signals.
-    //
-    // We scope this test to a worktree that is NOT the activeWorktreeId so
-    // the split-group visibility check short-circuits; the test subject is
-    // the activeTabType branch of the guard.
+    // Why: under the show-until-interact model, BEL fires unconditionally
+    // even when the user is looking at a non-terminal surface or the tab
+    // is globally active. This test pins that behavior for the "editor is
+    // on screen, terminal is offscreen" case — clearly a legitimate unread.
     it('still marks the tab when the active surface is not terminal', () => {
       const tab = store.getState().createUnifiedTab(WT, 'terminal')
       // Point global active* at this tab (matches post-activate state) but
@@ -655,6 +634,34 @@ describe('TabsSlice', () => {
       store.getState().markTerminalTabUnread(agentTabId)
 
       expect(store.getState().unreadTerminalTabs[agentTabId]).toBe(true)
+    })
+  })
+
+  // ─── clearTerminalTabUnread ──────────────────────────────────────────
+  //
+  // Called on actual user interaction with a terminal pane (keystroke via
+  // xterm onData, or pointerdown on the container). Pins the dismissal half
+  // of the show-until-interact contract.
+  describe('clearTerminalTabUnread', () => {
+    it('removes the tab from unreadTerminalTabs', () => {
+      const tabId = 'bell-tab-1'
+      store.setState({
+        unreadTerminalTabs: { [tabId]: true as const, 'other-tab': true as const }
+      })
+
+      store.getState().clearTerminalTabUnread(tabId)
+
+      expect(store.getState().unreadTerminalTabs).toEqual({ 'other-tab': true })
+    })
+
+    it('is a reference-preserving no-op when the tab is not flagged', () => {
+      const initial = { 'other-tab': true as const }
+      store.setState({ unreadTerminalTabs: initial })
+
+      store.getState().clearTerminalTabUnread('bell-tab-1')
+
+      // Same reference => no-op. Downstream selectors must not re-render.
+      expect(store.getState().unreadTerminalTabs).toBe(initial)
     })
   })
 

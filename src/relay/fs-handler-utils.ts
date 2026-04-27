@@ -11,6 +11,8 @@ import { execFile, type ChildProcess } from 'child_process'
 // ─── Constants ───────────────────────────────────────────────────────
 
 export const MAX_FILE_SIZE = 5 * 1024 * 1024
+// 10MB for relayed binaries (base64 → ~13.3MB frame payload at 16MB relay cap)
+export const MAX_PREVIEWABLE_BINARY_SIZE = 10 * 1024 * 1024
 export const SEARCH_TIMEOUT_MS = 15_000
 export const MAX_MATCHES_PER_FILE = 100
 export const DEFAULT_MAX_RESULTS = 2000
@@ -230,83 +232,32 @@ export function searchWithRg(
 
 // ─── rg availability check ──────────────────────────────────────────
 
-let rgAvailableCache: boolean | null = null
-
+// Why no cache: `rg --version` is a sub-10ms local spawn, and caching the
+// result caused a footgun — a negative cache persisted across rg installs
+// (forcing a relay restart), while a positive cache could mask an rg that
+// was uninstalled or broken mid-session. The `settled` flag below closes
+// the original race between 'error' and 'close' that the cache was added
+// to paper over, so re-checking per call is both simpler and safer.
 export function checkRgAvailable(): Promise<boolean> {
-  if (rgAvailableCache !== null) {
-    return Promise.resolve(rgAvailableCache)
-  }
   return new Promise((resolve) => {
+    let settled = false
     const child = execFile('rg', ['--version'])
     child.once('error', () => {
-      rgAvailableCache = false
+      if (settled) {
+        return
+      }
+      settled = true
       resolve(false)
     })
     child.once('close', (code) => {
-      if (rgAvailableCache !== null) {
+      if (settled) {
         return
       }
-      rgAvailableCache = code === 0
-      resolve(rgAvailableCache)
+      settled = true
+      resolve(code === 0)
     })
   })
 }
 
-// ─── rg-based file listing ───────────────────────────────────────────
-
-/**
- * List all non-ignored files under `rootPath` using ripgrep's `--files` mode.
- * Returns relative POSIX paths.
- */
-export function listFilesWithRg(rootPath: string): Promise<string[]> {
-  return new Promise((resolve) => {
-    const files: string[] = []
-    let buffer = ''
-    let done = false
-
-    const finish = () => {
-      if (done) {
-        return
-      }
-      done = true
-      clearTimeout(timer)
-      resolve(files)
-    }
-
-    const child = execFile(
-      'rg',
-      ['--files', '--hidden', '--glob', '!**/node_modules', '--glob', '!**/.git', rootPath],
-      { maxBuffer: 50 * 1024 * 1024 }
-    )
-
-    child.stdout!.setEncoding('utf-8')
-    child.stdout!.on('data', (chunk: string) => {
-      buffer += chunk
-      const lines = buffer.split('\n')
-      buffer = lines.pop() ?? ''
-      for (const line of lines) {
-        if (!line) {
-          continue
-        }
-        const relPath = relative(rootPath, line).replace(/\\/g, '/')
-        if (!relPath.startsWith('..')) {
-          files.push(relPath)
-        }
-      }
-    })
-    child.stderr!.on('data', () => {
-      /* drain */
-    })
-    child.once('error', () => finish())
-    child.once('close', () => {
-      if (buffer) {
-        const relPath = relative(rootPath, buffer.trim()).replace(/\\/g, '/')
-        if (relPath && !relPath.startsWith('..')) {
-          files.push(relPath)
-        }
-      }
-      finish()
-    })
-    const timer = setTimeout(() => child.kill(), 10_000)
-  })
-}
+// Moved to fs-handler-list-files.ts to keep this file under 300 lines (oxlint)
+export { listFilesWithRg, LIST_FILES_TIMEOUT_MS } from './fs-handler-list-files'

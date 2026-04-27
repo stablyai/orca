@@ -1,6 +1,12 @@
 import { Terminal } from '@xterm/xterm'
 import type { ITerminalOptions } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
+// Upstream packaging bug: @xterm/addon-ligatures declares `"main":
+// "lib/addon-ligatures.js"` but ships only the `.mjs` entry, so Vite fails to
+// resolve the bare import. Fixed locally via patches/@xterm__addon-ligatures*.
+// Tracking upstream: https://github.com/xtermjs/xterm.js/issues/5822 — drop
+// the patch once that lands.
+import { LigaturesAddon } from '@xterm/addon-ligatures'
 import { SearchAddon } from '@xterm/addon-search'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebLinksAddon } from '@xterm/addon-web-links'
@@ -16,41 +22,13 @@ import {
   attachPaneFitResizeObserver,
   detachPaneFitResizeObserver
 } from './pane-fit-resize-observer'
+import { buildDefaultTerminalOptions } from './pane-terminal-options'
 
 // ---------------------------------------------------------------------------
 // Pane creation, terminal open/close, addon management
 // ---------------------------------------------------------------------------
 
 const ENABLE_WEBGL_RENDERER = true
-
-export function buildDefaultTerminalOptions(): ITerminalOptions {
-  return {
-    allowProposedApi: true,
-    cursorBlink: true,
-    cursorStyle: 'bar',
-    fontSize: 14,
-    // Cross-platform fallback chain — ensures the terminal can always find a
-    // usable monospace font regardless of OS, even if user settings haven't
-    // loaded yet. macOS-only fonts are harmlessly skipped on other platforms.
-    // Must stay in sync with FALLBACK_FONTS in layout-serialization.ts; the
-    // trailing Nerd Fonts let Powerline/PUA glyphs render even at first paint
-    // before the user's configured terminalFontFamily is applied.
-    fontFamily:
-      '"SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font", monospace',
-    fontWeight: '300',
-    fontWeightBold: '500',
-    scrollback: 10000,
-    allowTransparency: false,
-    // Why: on macOS, non-US layouts rely on Option to compose real characters
-    // like @ (German Option+L) and € (German Option+E). Enabling xterm's
-    // Meta mode here makes Option behave like Esc+key instead, which steals
-    // those composed characters before they reach the shell.
-    // Readline shortcuts (Option+B/F/D) are compensated in terminal-shortcut-policy.ts.
-    macOptionIsMeta: false,
-    macOptionClickForcesSelection: true,
-    drawBoldTextInBrightColors: true
-  }
-}
 
 function getTerminalUrlOpenHint(): string {
   return navigator.userAgent.includes('Mac')
@@ -131,6 +109,8 @@ export function createPaneDOM(
     xtermContainer,
     linkTooltip,
     gpuRenderingEnabled: ENABLE_WEBGL_RENDERER,
+    webglAttachmentDeferred: false,
+    webglDisabledAfterContextLoss: false,
     fitAddon,
     fitResizeObserver: null,
     pendingObservedFitRafId: null,
@@ -139,6 +119,7 @@ export function createPaneDOM(
     unicode11Addon,
     webLinksAddon,
     webglAddon: null,
+    ligaturesAddon: null,
     compositionHandler: null,
     pendingSplitScrollState: null,
     pendingDragScrollState: null
@@ -237,6 +218,57 @@ export function openTerminal(pane: ManagedPaneInternal): void {
   })
 }
 
+export function disposeLigatures(pane: ManagedPaneInternal): void {
+  if (pane.ligaturesAddon) {
+    try {
+      pane.ligaturesAddon.dispose()
+    } catch {
+      /* ignore */
+    }
+    pane.ligaturesAddon = null
+  }
+}
+
+export function attachLigatures(pane: ManagedPaneInternal): void {
+  if (pane.ligaturesAddon) {
+    return
+  }
+  try {
+    const ligaturesAddon = new LigaturesAddon()
+    pane.terminal.loadAddon(ligaturesAddon)
+    pane.ligaturesAddon = ligaturesAddon
+    // Why: the WebGL renderer builds its glyph texture atlas at activation
+    // time, so `font-feature-settings` applied after WebGL loaded won't
+    // reach the GPU-rendered cells until the atlas is rebuilt. The upstream
+    // docs call this out explicitly — reactivating WebGL after ligatures
+    // forces a fresh atlas that includes the ligated glyphs.
+    if (pane.webglAddon) {
+      disposeWebgl(pane)
+      attachWebgl(pane)
+    }
+  } catch (err) {
+    console.warn('[terminal] ligatures addon failed to attach for pane', pane.id, err)
+    pane.ligaturesAddon = null
+  }
+}
+
+/** Enable or disable ligatures in-place, reusing the running terminal so the
+ *  setting can be toggled without dropping scrollback or the PTY binding. */
+export function setLigaturesEnabled(pane: ManagedPaneInternal, enabled: boolean): void {
+  if (enabled) {
+    attachLigatures(pane)
+  } else if (pane.ligaturesAddon) {
+    disposeLigatures(pane)
+    // Why: ligatures lived inside the WebGL atlas, so after disposing the
+    // addon the atlas still holds the ligated glyphs. Rebuild it so text
+    // renders as the non-ligated fallback immediately.
+    if (pane.webglAddon) {
+      disposeWebgl(pane)
+      attachWebgl(pane)
+    }
+  }
+}
+
 export function disposeWebgl(pane: ManagedPaneInternal): void {
   if (pane.webglAddon) {
     try {
@@ -249,7 +281,12 @@ export function disposeWebgl(pane: ManagedPaneInternal): void {
 }
 
 export function attachWebgl(pane: ManagedPaneInternal): void {
-  if (!ENABLE_WEBGL_RENDERER || !pane.gpuRenderingEnabled) {
+  if (
+    !ENABLE_WEBGL_RENDERER ||
+    !pane.gpuRenderingEnabled ||
+    pane.webglAttachmentDeferred ||
+    pane.webglDisabledAfterContextLoss
+  ) {
     pane.webglAddon = null
     return
   }
@@ -261,6 +298,10 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
         pane.id,
         '— falling back to DOM renderer'
       )
+      // Why: Chromium starts reclaiming terminal contexts under pressure.
+      // Recreating WebGL for this pane can loop context loss and leave xterm
+      // visually blank, so keep the pane on the DOM renderer until remount.
+      pane.webglDisabledAfterContextLoss = true
       webglAddon.dispose()
       pane.webglAddon = null
       // Why: when the WebGL context is lost (GPU memory pressure, Chromium
@@ -313,6 +354,11 @@ export function disposePane(
   if (pane.compositionHandler) {
     pane.terminal.element?.removeEventListener('compositionstart', pane.compositionHandler, true)
     pane.compositionHandler = null
+  }
+  try {
+    pane.ligaturesAddon?.dispose()
+  } catch {
+    /* ignore */
   }
   try {
     pane.webglAddon?.dispose()

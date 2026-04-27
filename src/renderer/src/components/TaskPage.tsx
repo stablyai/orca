@@ -5,6 +5,9 @@ place while this surface is still evolving. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowRight,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   CircleDot,
   EllipsisVertical,
   ExternalLink,
@@ -53,7 +56,12 @@ import { stripRepoQualifiers } from '../../../shared/task-query'
 import GitHubItemDrawer from '@/components/GitHubItemDrawer'
 import LinearItemDrawer from '@/components/LinearItemDrawer'
 import { cn } from '@/lib/utils'
-import { getLinkedWorkItemSuggestedName, getTaskPresetQuery } from '@/lib/new-workspace'
+import {
+  getLinkedWorkItemSuggestedName,
+  getTaskPresetQuery,
+  PER_REPO_FETCH_LIMIT,
+  CROSS_REPO_DISPLAY_LIMIT
+} from '@/lib/new-workspace'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
 import { isGitRepoKind } from '../../../shared/repo-kind'
@@ -116,7 +124,7 @@ const LINEAR_PRESETS: LinearPreset[] = [
 ]
 
 const TASK_SEARCH_DEBOUNCE_MS = 300
-const WORK_ITEM_LIMIT = 36
+const LINEAR_ITEM_LIMIT = 36
 
 // Why: Intl.RelativeTimeFormat allocation is non-trivial, and previously we
 // built a new formatter per work-item row render. Hoisting to module scope
@@ -229,7 +237,7 @@ function GHStatusCell({
     return (
       <span
         className={cn(
-          'rounded-full border px-2 py-0.5 text-[10px] font-medium',
+          'rounded-full border px-2 py-0.5 text-[10px] font-medium opacity-70',
           getTaskStatusTone(item)
         )}
       >
@@ -245,13 +253,14 @@ function GHStatusCell({
           type="button"
           onClick={(e) => e.stopPropagation()}
           className={cn(
-            'rounded-full border px-2 py-0.5 text-[10px] font-medium transition hover:opacity-80',
+            'group/status inline-flex items-center gap-0.5 rounded-full border px-2 py-0.5 text-[10px] font-medium transition hover:brightness-125 hover:ring-1 hover:ring-white/10',
             localState === 'closed'
               ? 'border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-300'
               : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
           )}
         >
           {localState === 'closed' ? 'Closed' : 'Open'}
+          <ChevronDown className="size-2.5 opacity-50" />
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-36 p-1" align="start" onClick={(e) => e.stopPropagation()}>
@@ -354,13 +363,14 @@ function LinearStatusCell({ issue }: { issue: LinearIssue }): React.JSX.Element 
           type="button"
           onClick={(e) => e.stopPropagation()}
           disabled={states.loading}
-          className="flex items-center gap-1.5 rounded-sm px-1 py-0.5 transition hover:bg-muted/60 disabled:opacity-50"
+          className="group/status flex items-center gap-1.5 rounded-sm px-1 py-0.5 transition hover:bg-muted/60 disabled:opacity-50"
         >
           <span
             className="inline-block size-2 shrink-0 rounded-full"
             style={{ backgroundColor: localState.color }}
           />
           <span className="truncate text-xs text-muted-foreground">{localState.name}</span>
+          <ChevronDown className="size-2.5 shrink-0 text-muted-foreground opacity-50" />
         </button>
       </PopoverTrigger>
       <PopoverContent
@@ -458,10 +468,14 @@ function LinearPriorityCell({ issue }: { issue: LinearIssue }): React.JSX.Elemen
           type="button"
           onClick={(e) => e.stopPropagation()}
           disabled={pending}
-          className="rounded-sm px-1 py-0.5 text-xs text-muted-foreground transition hover:bg-muted/60 disabled:opacity-50"
+          className="group/priority inline-flex items-center gap-0.5 rounded-sm px-1 py-0.5 text-xs text-muted-foreground transition hover:bg-muted/60 disabled:opacity-50"
         >
           {LINEAR_PRIORITY_LABELS[localPriority] ?? `P${localPriority}`}
-          {pending && <LoaderCircle className="ml-1 inline size-3 animate-spin" />}
+          {pending ? (
+            <LoaderCircle className="ml-1 inline size-3 animate-spin" />
+          ) : (
+            <ChevronDown className="size-2.5 shrink-0 opacity-50" />
+          )}
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-36 p-1" align="start" onClick={(e) => e.stopPropagation()}>
@@ -483,6 +497,110 @@ function LinearPriorityCell({ issue }: { issue: LinearIssue }): React.JSX.Elemen
         ))}
       </PopoverContent>
     </Popover>
+  )
+}
+
+// Why: builds the page number array with ellipsis gaps, matching GitHub's
+// pagination pattern: always show first page, last page, and a window of
+// pages around the current page with "..." gaps between distant ranges.
+function getPageNumbers(current: number, total: number): (number | 'ellipsis')[] {
+  if (total <= 9) {
+    return Array.from({ length: total }, (_, i) => i)
+  }
+  const pages = new Set<number>()
+  pages.add(0)
+  pages.add(total - 1)
+  for (let i = Math.max(0, current - 2); i <= Math.min(total - 1, current + 2); i++) {
+    pages.add(i)
+  }
+  const sorted = [...pages].sort((a, b) => a - b)
+  const result: (number | 'ellipsis')[] = []
+  for (let i = 0; i < sorted.length; i++) {
+    if (i > 0 && sorted[i] - sorted[i - 1] > 1) {
+      result.push('ellipsis')
+    }
+    result.push(sorted[i])
+  }
+  return result
+}
+
+function PaginationBar({
+  currentPage,
+  totalPages,
+  loadingTarget,
+  onPageChange
+}: {
+  currentPage: number
+  totalPages: number
+  loadingTarget: number | null
+  onPageChange: (page: number) => void
+}): React.JSX.Element {
+  const pageNumbers = getPageNumbers(currentPage, totalPages)
+  const btnClass =
+    'inline-flex items-center gap-0.5 rounded-md px-2 py-1 text-sm text-muted-foreground transition hover:bg-muted/60 hover:text-foreground disabled:pointer-events-none disabled:opacity-40'
+  const numClass = (page: number): string =>
+    cn(
+      'inline-flex size-8 items-center justify-center rounded-md text-sm transition',
+      page === currentPage
+        ? 'bg-primary text-primary-foreground font-medium'
+        : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+    )
+
+  return (
+    <nav
+      aria-label="Pagination"
+      className="flex items-center justify-center gap-1 border-t border-border/50 px-4 py-3"
+    >
+      <button
+        type="button"
+        disabled={currentPage === 0 || loadingTarget !== null}
+        onClick={() => onPageChange(currentPage - 1)}
+        aria-label="Previous page"
+        className={btnClass}
+      >
+        <ChevronLeft className="size-4" />
+        Previous
+      </button>
+
+      {pageNumbers.map((entry, idx) =>
+        entry === 'ellipsis' ? (
+          <span
+            key={`ellipsis-${idx}`}
+            aria-hidden
+            className="inline-flex size-8 items-center justify-center text-sm text-muted-foreground"
+          >
+            &hellip;
+          </span>
+        ) : (
+          <button
+            key={entry}
+            type="button"
+            disabled={loadingTarget !== null && loadingTarget !== entry}
+            onClick={() => onPageChange(entry)}
+            aria-label={`Page ${entry + 1}`}
+            aria-current={entry === currentPage ? 'page' : undefined}
+            className={numClass(entry)}
+          >
+            {loadingTarget === entry ? (
+              <LoaderCircle className="size-3.5 animate-spin" />
+            ) : (
+              entry + 1
+            )}
+          </button>
+        )
+      )}
+
+      <button
+        type="button"
+        disabled={currentPage >= totalPages - 1 || loadingTarget !== null}
+        onClick={() => onPageChange(currentPage + 1)}
+        aria-label="Next page"
+        className={btnClass}
+      >
+        Next
+        <ChevronRight className="size-4" />
+      </button>
+    </nav>
   )
 }
 
@@ -632,26 +750,32 @@ export default function TaskPage(): React.JSX.Element {
   // user clicking the refresh button (force=true) vs. re-running for any
   // other reason — e.g. a repo change while the nonce happens to be > 0.
   const lastFetchedNonceRef = useRef(-1)
-  // Why: seed from the SWR cache across every initially-selected repo so the
-  // first paint shows the merged-and-sorted view instantly when all repos are
-  // already cached. Any missing cache entry simply contributes nothing here
-  // and will be filled in by the effect's fetch.
-  const [workItems, setWorkItems] = useState<GitHubWorkItem[]>(() => {
+  // Why: pages holds all fetched pages of work items. Page 0 is seeded from
+  // cache for instant first paint; subsequent pages are loaded via date cursors.
+  const [pages, setPages] = useState<GitHubWorkItem[][]>(() => {
     const trimmed = initialTaskQuery.trim()
     const merged: GitHubWorkItem[] = []
     for (const r of selectedRepos) {
-      const cached = getCachedWorkItems(r.path, WORK_ITEM_LIMIT, trimmed)
+      const cached = getCachedWorkItems(r.path, PER_REPO_FETCH_LIMIT, trimmed)
       if (cached) {
         merged.push(...cached)
       }
     }
     if (merged.length === 0) {
-      return []
+      return [[]]
     }
-    return [...merged]
+    const page0 = [...merged]
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-      .slice(0, WORK_ITEM_LIMIT)
+      .slice(0, CROSS_REPO_DISPLAY_LIMIT)
+    return [page0]
   })
+  const [currentPage, setCurrentPage] = useState(0)
+  const [paginationLoading, setPaginationLoading] = useState(false)
+  const [loadingTargetPage, setLoadingTargetPage] = useState<number | null>(null)
+  const [totalItemCount, setTotalItemCount] = useState<number | null>(null)
+  const fetchWorkItemsNextPage = useAppStore((s) => s.fetchWorkItemsNextPage)
+  const countWorkItemsAcrossRepos = useAppStore((s) => s.countWorkItemsAcrossRepos)
+
   // Why: clicking a GitHub row opens this drawer for a read-only preview.
   // Drawer's "Use" button routes through the same direct-launch flow as the
   // row-level "Use" CTA so behavior is consistent regardless of entry point.
@@ -787,30 +911,103 @@ export default function TaskPage(): React.JSX.Element {
   )
   const [linearConnectError, setLinearConnectError] = useState<string | null>(null)
 
-  const filteredWorkItems = useMemo(() => {
-    if (!activeTaskPreset) {
-      return workItems
-    }
+  // Why: defense-in-depth safety net applied to the current page's items.
+  // The server-side query now includes is:issue / is:pr qualifiers so this
+  // filter is a no-op in the happy path. Kept as a guard against parser
+  // regressions or stale cache contamination.
+  const applyTypeFilter = useCallback(
+    (items: GitHubWorkItem[]) => {
+      if (!activeTaskPreset) {
+        return items
+      }
+      return items.filter((item) => {
+        if (activeTaskPreset === 'issues' || activeTaskPreset === 'my-issues') {
+          return item.type === 'issue'
+        }
+        if (
+          activeTaskPreset === 'prs' ||
+          activeTaskPreset === 'my-prs' ||
+          activeTaskPreset === 'review'
+        ) {
+          return item.type === 'pr'
+        }
+        return true
+      })
+    },
+    [activeTaskPreset]
+  )
 
-    return workItems.filter((item) => {
-      if (activeTaskPreset === 'issues') {
-        return item.type === 'issue'
+  const currentPageItems = useMemo(() => pages[currentPage] ?? [], [pages, currentPage])
+
+  const filteredWorkItems = useMemo(
+    () => applyTypeFilter(currentPageItems),
+    [applyTypeFilter, currentPageItems]
+  )
+
+  // Why: totalPages is derived from the search API count when available,
+  // so the pagination bar shows the full range (with ellipsis) upfront.
+  // Falls back to the loaded page count when the count hasn't returned yet.
+  const totalPages =
+    totalItemCount !== null
+      ? Math.max(pages.length, Math.ceil(totalItemCount / CROSS_REPO_DISPLAY_LIMIT))
+      : pages.length
+
+  // Why: loads the next page using the oldest item's updatedAt as a cursor.
+  // When targetPage is provided (from clicking a numbered page beyond loaded
+  // pages), it chains fetches until that page is loaded.
+  const handleLoadNextPage = useCallback(
+    async (targetPage?: number) => {
+      if (paginationLoading || selectedRepos.length === 0) {
+        return
       }
-      if (activeTaskPreset === 'review') {
-        return item.type === 'pr'
+      const lastPage = pages.at(-1)
+      if (!lastPage || lastPage.length === 0) {
+        return
       }
-      if (activeTaskPreset === 'my-issues') {
-        return item.type === 'issue'
+      const oldestItem = lastPage.at(-1)
+      if (!oldestItem?.updatedAt) {
+        return
       }
-      if (activeTaskPreset === 'prs') {
-        return item.type === 'pr'
+      const q = stripRepoQualifiers(appliedTaskSearch.trim())
+      const repoArgs = selectedRepos.map((r) => ({ repoId: r.id, path: r.path }))
+
+      const target = targetPage ?? pages.length
+      setPaginationLoading(true)
+      setLoadingTargetPage(target)
+      try {
+        let cursor = oldestItem.updatedAt
+        let loadedPages = pages.length
+        const newPages: GitHubWorkItem[][] = []
+
+        while (loadedPages <= target) {
+          const { items } = await fetchWorkItemsNextPage(
+            repoArgs,
+            PER_REPO_FETCH_LIMIT,
+            CROSS_REPO_DISPLAY_LIMIT,
+            q,
+            cursor
+          )
+          if (items.length === 0) {
+            break
+          }
+          newPages.push(items)
+          cursor = items.at(-1)!.updatedAt
+          loadedPages += 1
+        }
+
+        if (newPages.length > 0) {
+          setPages((prev) => [...prev, ...newPages])
+          setCurrentPage(target < loadedPages ? target : loadedPages - 1)
+        }
+      } catch (err) {
+        console.error('Failed to load next page:', err)
+      } finally {
+        setPaginationLoading(false)
+        setLoadingTargetPage(null)
       }
-      if (activeTaskPreset === 'my-prs') {
-        return item.type === 'pr'
-      }
-      return true
-    })
-  }, [activeTaskPreset, workItems])
+    },
+    [paginationLoading, selectedRepos, pages, appliedTaskSearch, fetchWorkItemsNextPage]
+  )
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -840,7 +1037,7 @@ export default function TaskPage(): React.JSX.Element {
     const preMerged: GitHubWorkItem[] = []
     let anyUncached = false
     for (const r of selectedRepos) {
-      const cached = getCachedWorkItems(r.path, WORK_ITEM_LIMIT, q)
+      const cached = getCachedWorkItems(r.path, PER_REPO_FETCH_LIMIT, q)
       if (cached === null) {
         anyUncached = true
       } else {
@@ -850,13 +1047,15 @@ export default function TaskPage(): React.JSX.Element {
     // Why: always replace — if preMerged is empty (e.g. query just changed and
     // no repo has a cache entry for it), we clear the previous query's rows
     // rather than leaving them on screen under the spinner.
-    setWorkItems(
+    const page0 =
       preMerged.length > 0
         ? [...preMerged]
             .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-            .slice(0, WORK_ITEM_LIMIT)
+            .slice(0, CROSS_REPO_DISPLAY_LIMIT)
         : []
-    )
+    setPages([page0])
+    setCurrentPage(0)
+    setTotalItemCount(null)
     setTasksError(null)
     setFailedCount(0) // reset so a prior failure banner doesn't linger
     setTasksLoading(anyUncached)
@@ -866,14 +1065,15 @@ export default function TaskPage(): React.JSX.Element {
     lastFetchedNonceRef.current = taskRefreshNonce
 
     const repoArgs = selectedRepos.map((r) => ({ repoId: r.id, path: r.path }))
-    void fetchWorkItemsAcrossRepos(repoArgs, WORK_ITEM_LIMIT, q, {
+    void fetchWorkItemsAcrossRepos(repoArgs, PER_REPO_FETCH_LIMIT, CROSS_REPO_DISPLAY_LIMIT, q, {
       force: forceRefresh && taskRefreshNonce > 0
     })
       .then(({ items, failedCount: failed }) => {
         if (cancelled) {
           return
         }
-        setWorkItems(items)
+        setPages([items])
+        setCurrentPage(0)
         setFailedCount(failed)
         setTasksLoading(false)
       })
@@ -887,6 +1087,18 @@ export default function TaskPage(): React.JSX.Element {
         setFailedCount(0) // the per-repo banner would be misleading next to tasksError
         setTasksLoading(false)
       })
+
+    // Why: fire-and-forget count query in parallel with the items fetch.
+    // The search API is cached 120s server-side so this doesn't add
+    // meaningful latency or rate-limit pressure.
+    void countWorkItemsAcrossRepos(
+      selectedRepos.map((r) => ({ path: r.path })),
+      q
+    ).then((count) => {
+      if (!cancelled) {
+        setTotalItemCount(count)
+      }
+    })
 
     return () => {
       cancelled = true
@@ -1117,8 +1329,8 @@ export default function TaskPage(): React.JSX.Element {
     const trimmed = appliedLinearSearch.trim()
     const request =
       trimmed.length > 0
-        ? searchLinearIssues(trimmed, WORK_ITEM_LIMIT)
-        : listLinearIssues(activeLinearPreset, WORK_ITEM_LIMIT)
+        ? searchLinearIssues(trimmed, LINEAR_ITEM_LIMIT)
+        : listLinearIssues(activeLinearPreset, LINEAR_ITEM_LIMIT)
 
     void request
       .then((issues) => {
@@ -1785,6 +1997,22 @@ export default function TaskPage(): React.JSX.Element {
                     )
                   })}
                 </div>
+
+                {/* Pagination controls — GitHub-style with ellipsis */}
+                {filteredWorkItems.length > 0 && !tasksLoading && totalPages > 1 ? (
+                  <PaginationBar
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    loadingTarget={loadingTargetPage}
+                    onPageChange={(page) => {
+                      if (page < pages.length) {
+                        setCurrentPage(page)
+                      } else {
+                        void handleLoadNextPage(page)
+                      }
+                    }}
+                  />
+                ) : null}
               </div>
             </div>
           ) : !linearStatusChecked ? (
@@ -2143,10 +2371,11 @@ export default function TaskPage(): React.JSX.Element {
             }
           }}
         >
-          <DialogHeader>
-            <DialogTitle>Connect Linear</DialogTitle>
+          <DialogHeader className="gap-3">
+            <DialogTitle className="leading-tight">Connect Linear</DialogTitle>
             <DialogDescription>
-              Paste a Personal API key to browse your assigned issues.
+              Paste a <strong className="font-semibold text-foreground">Personal API key</strong> to
+              browse your assigned issues.
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3">
@@ -2168,7 +2397,7 @@ export default function TaskPage(): React.JSX.Element {
               <p className="text-xs text-destructive">{linearConnectError}</p>
             )}
             <p className="text-xs text-muted-foreground">
-              Create a key at{' '}
+              Create one in{' '}
               <button
                 className="text-primary underline-offset-2 hover:underline"
                 onClick={() =>
@@ -2176,7 +2405,9 @@ export default function TaskPage(): React.JSX.Element {
                 }
               >
                 Linear Settings → Security
-              </button>
+              </button>{' '}
+              → <strong className="font-semibold text-foreground">New API key</strong> (not{' '}
+              <span className="text-foreground">New passkey</span>).
             </p>
             <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
               <Lock className="size-3 shrink-0" />

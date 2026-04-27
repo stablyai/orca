@@ -183,6 +183,24 @@ describe('DaemonServer', () => {
         'Session not found'
       )
     })
+
+    it('emits exit when a fire-and-forget write targets a missing session', async () => {
+      await startServer()
+      const c = await connectClient()
+
+      const exitEvent = new Promise<unknown>((resolve) => {
+        c.onEvent((event) => resolve(event))
+      })
+
+      c.notify('write', { sessionId: 'missing-session', data: 'hi' })
+
+      await expect(exitEvent).resolves.toMatchObject({
+        type: 'event',
+        event: 'exit',
+        sessionId: 'missing-session',
+        payload: { code: -1 }
+      })
+    })
   })
 
   describe('authentication', () => {

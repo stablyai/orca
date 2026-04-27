@@ -1,6 +1,7 @@
+/* oxlint-disable max-lines */
 import type { IPty } from 'node-pty'
 import type * as NodePty from 'node-pty'
-import type { RelayDispatcher } from './dispatcher'
+import type { RelayDispatcher, RequestContext } from './dispatcher'
 import {
   resolveDefaultShell,
   resolveProcessCwd,
@@ -43,6 +44,7 @@ const ALLOWED_SIGNALS = new Set([
   'SIGKILL',
   'SIGTSTP',
   'SIGCONT',
+  'SIGWINCH',
   'SIGUSR1',
   'SIGUSR2'
 ])
@@ -85,7 +87,7 @@ export class PtyHandler {
   }
 
   private registerHandlers(): void {
-    this.dispatcher.onRequest('pty.spawn', (p) => this.spawn(p))
+    this.dispatcher.onRequest('pty.spawn', (p, context) => this.spawn(p, context))
     this.dispatcher.onRequest('pty.attach', (p) => this.attach(p))
     this.dispatcher.onRequest('pty.shutdown', (p) => this.shutdown(p))
     this.dispatcher.onRequest('pty.sendSignal', (p) => this.sendSignal(p))
@@ -107,7 +109,10 @@ export class PtyHandler {
     })
   }
 
-  private async spawn(params: Record<string, unknown>): Promise<{ id: string }> {
+  private async spawn(
+    params: Record<string, unknown>,
+    context?: RequestContext
+  ): Promise<{ id: string }> {
     if (this.ptys.size >= 50) {
       throw new Error('Maximum number of PTY sessions reached (50)')
     }
@@ -134,21 +139,45 @@ export class PtyHandler {
       env: { ...process.env, ...env } as Record<string, string>
     })
 
-    this.wireAndStore({ id, pty: term, initialCwd: cwd, buffered: '' })
+    const managed: ManagedPty = { id, pty: term, initialCwd: cwd, buffered: '' }
+    this.wireAndStore(managed)
+    if (context?.isStale()) {
+      // Why: if the client reconnected while pty.spawn was in flight, the
+      // response is discarded and no renderer can own this PTY. Shut it down
+      // immediately so it does not linger as an unreachable remote shell.
+      term.kill('SIGTERM')
+      managed.killTimer = setTimeout(() => {
+        if (this.ptys.has(id)) {
+          term.kill('SIGKILL')
+        }
+      }, 5000)
+    }
     return { id }
   }
 
-  private async attach(params: Record<string, unknown>): Promise<void> {
+  private async attach(params: Record<string, unknown>): Promise<{ replay?: string }> {
     const id = params.id as string
     const managed = this.ptys.get(id)
     if (!managed) {
       throw new Error(`PTY "${id}" not found`)
     }
 
-    // Replay buffered output
+    // Replay buffered output. During pty.spawn({ sessionId }) the renderer has
+    // not registered replay handlers yet, so return the bytes to the caller
+    // instead of notifying them too early.
+    // Why: the buffer is NOT cleared after replay. It always holds the last
+    // 100 KB of raw output (capped in onData). The client clears xterm before
+    // writing the replay, so returning the full buffer on every attach does
+    // not cause duplication. Keeping the buffer intact means a second app
+    // restart still replays the full terminal history instead of only output
+    // generated since the previous attach.
     if (managed.buffered) {
+      if (params.suppressReplayNotification) {
+        return { replay: managed.buffered }
+      }
       this.dispatcher.notify('pty.replay', { id, data: managed.buffered })
     }
+    return {}
   }
 
   private writeData(params: Record<string, unknown>): void {
@@ -322,10 +351,9 @@ export class PtyHandler {
 
   startGraceTimer(onExpire: () => void): void {
     this.cancelGraceTimer()
-    if (this.ptys.size === 0) {
-      onExpire()
-      return
-    }
+    // Why: always wait the full grace period even with zero PTYs.  A detached
+    // relay may have no PTYs yet but a --connect client will arrive shortly.
+    // Firing immediately would kill the relay before anyone could connect.
     this.graceTimer = setTimeout(() => {
       onExpire()
     }, this.graceTimeMs)

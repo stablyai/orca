@@ -69,6 +69,8 @@ type PtyApi = {
     snapshotRows?: number
     isReattach?: boolean
     isAlternateScreen?: boolean
+    replay?: string
+    sessionExpired?: boolean
     coldRestore?: { scrollback: string; cwd: string }
   }>
   write: (id: string, data: string) => void

@@ -158,7 +158,7 @@ async function getIssueBodyAndComments(
       }
       type RESTComment = {
         id: number
-        user: { login: string; avatar_url: string } | null
+        user: { login: string; avatar_url: string; type?: string } | null
         body: string
         created_at: string
         html_url: string
@@ -170,7 +170,8 @@ async function getIssueBodyAndComments(
           authorAvatarUrl: c.user?.avatar_url ?? '',
           body: c.body ?? '',
           createdAt: c.created_at,
-          url: c.html_url
+          url: c.html_url,
+          isBot: c.user?.type === 'Bot'
         })
       )
       const assignees = (issue.assignees ?? []).map((a) => a.login)

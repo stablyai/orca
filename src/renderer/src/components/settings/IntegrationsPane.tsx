@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Github, ExternalLink, Link, LoaderCircle, Lock, Terminal } from 'lucide-react'
+import { Github, ExternalLink, LoaderCircle, Lock, Terminal, Unlink } from 'lucide-react'
 import { useAppStore } from '../../store'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
@@ -201,7 +201,7 @@ export function IntegrationsPane(): React.JSX.Element {
                 aria-label="Disconnect Linear"
                 className="rounded-md p-1 text-muted-foreground/50 transition-colors hover:text-destructive"
               >
-                <Link className="size-3.5" />
+                <Unlink className="size-3.5" />
               </button>
               <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
                 Connected
@@ -240,10 +240,11 @@ export function IntegrationsPane(): React.JSX.Element {
             }
           }}
         >
-          <DialogHeader>
-            <DialogTitle>Connect Linear</DialogTitle>
+          <DialogHeader className="gap-3">
+            <DialogTitle className="leading-tight">Connect Linear</DialogTitle>
             <DialogDescription>
-              Paste a Personal API key to browse your assigned issues.
+              Paste a <strong className="font-semibold text-foreground">Personal API key</strong> to
+              browse your assigned issues.
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3">
@@ -265,7 +266,7 @@ export function IntegrationsPane(): React.JSX.Element {
               <p className="text-xs text-destructive">{linearConnectError}</p>
             )}
             <p className="text-xs text-muted-foreground">
-              Create a key at{' '}
+              Create one in{' '}
               <button
                 className="text-primary underline-offset-2 hover:underline"
                 onClick={() =>
@@ -273,7 +274,9 @@ export function IntegrationsPane(): React.JSX.Element {
                 }
               >
                 Linear Settings → Security
-              </button>
+              </button>{' '}
+              → <strong className="font-semibold text-foreground">New API key</strong> (not{' '}
+              <span className="text-foreground">New passkey</span>).
             </p>
             <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
               <Lock className="size-3 shrink-0" />

@@ -1,6 +1,7 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import '@xterm/xterm/css/xterm.css';
+@import 'katex/dist/katex.min.css';
 @import './rich-markdown-editor.css';
 @import './markdown-preview.css';
 @import './terminal.css';

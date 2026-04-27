@@ -4,7 +4,13 @@ import { writeFileSync, chmodSync, unlinkSync } from 'fs'
 import { encodeNdjson, createNdjsonParser } from './ndjson'
 import { TerminalHost } from './terminal-host'
 import type { SubprocessHandle } from './session'
-import { PROTOCOL_VERSION, NOTIFY_PREFIX, type HelloMessage, type DaemonRequest } from './types'
+import {
+  PROTOCOL_VERSION,
+  NOTIFY_PREFIX,
+  SessionNotFoundError,
+  type HelloMessage,
+  type DaemonRequest
+} from './types'
 
 export type DaemonServerOptions = {
   socketPath: string
@@ -230,11 +236,25 @@ export class DaemonServer {
       }
 
       case 'write':
-        this.host.write(request.payload.sessionId, request.payload.data)
+        try {
+          this.host.write(request.payload.sessionId, request.payload.data)
+        } catch (err) {
+          if (err instanceof SessionNotFoundError) {
+            this.sendExitEvent(client, request.payload.sessionId, -1)
+          }
+          throw err
+        }
         return {}
 
       case 'resize':
-        this.host.resize(request.payload.sessionId, request.payload.cols, request.payload.rows)
+        try {
+          this.host.resize(request.payload.sessionId, request.payload.cols, request.payload.rows)
+        } catch (err) {
+          if (err instanceof SessionNotFoundError) {
+            this.sendExitEvent(client, request.payload.sessionId, -1)
+          }
+          throw err
+        }
         return {}
 
       case 'kill':
@@ -273,5 +293,26 @@ export class DaemonServer {
       default:
         throw new Error(`Unknown request type: ${(request as { type: string }).type}`)
     }
+  }
+
+  private sendExitEvent(
+    client: ConnectedClient | undefined,
+    sessionId: string,
+    code: number
+  ): void {
+    if (!client?.streamSocket) {
+      return
+    }
+    // Why: write/resize are notification-heavy and intentionally do not wait
+    // for replies. If their target session is gone, this synthetic exit is the
+    // only signal the renderer gets to clear stale terminal pane bindings.
+    client.streamSocket.write(
+      encodeNdjson({
+        type: 'event',
+        event: 'exit',
+        sessionId,
+        payload: { code }
+      })
+    )
   }
 }

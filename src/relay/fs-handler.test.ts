@@ -7,14 +7,31 @@ import * as path from 'path'
 import { mkdtempSync, writeFileSync, mkdirSync, symlinkSync } from 'fs'
 import { tmpdir } from 'os'
 
+const { mockSubscribe } = vi.hoisted(() => ({
+  mockSubscribe: vi.fn()
+}))
+
+vi.mock('@parcel/watcher', () => ({
+  subscribe: mockSubscribe
+}))
+
 function createMockDispatcher() {
-  const requestHandlers = new Map<string, (params: Record<string, unknown>) => Promise<unknown>>()
+  const requestHandlers = new Map<
+    string,
+    (params: Record<string, unknown>, context?: { isStale: () => boolean }) => Promise<unknown>
+  >()
   const notificationHandlers = new Map<string, (params: Record<string, unknown>) => void>()
   const notifications: { method: string; params?: Record<string, unknown> }[] = []
 
   return {
     onRequest: vi.fn(
-      (method: string, handler: (params: Record<string, unknown>) => Promise<unknown>) => {
+      (
+        method: string,
+        handler: (
+          params: Record<string, unknown>,
+          context?: { isStale: () => boolean }
+        ) => Promise<unknown>
+      ) => {
         requestHandlers.set(method, handler)
       }
     ),
@@ -27,12 +44,16 @@ function createMockDispatcher() {
     _requestHandlers: requestHandlers,
     _notificationHandlers: notificationHandlers,
     _notifications: notifications,
-    async callRequest(method: string, params: Record<string, unknown> = {}) {
+    async callRequest(
+      method: string,
+      params: Record<string, unknown> = {},
+      context?: { isStale: () => boolean }
+    ) {
       const handler = requestHandlers.get(method)
       if (!handler) {
         throw new Error(`No handler for ${method}`)
       }
-      return handler(params)
+      return handler(params, context)
     },
     callNotification(method: string, params: Record<string, unknown> = {}) {
       const handler = notificationHandlers.get(method)
@@ -50,6 +71,8 @@ describe('FsHandler', () => {
   let tmpDir: string
 
   beforeEach(() => {
+    mockSubscribe.mockReset()
+    mockSubscribe.mockResolvedValue({ unsubscribe: vi.fn() })
     tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-fs-'))
     dispatcher = createMockDispatcher()
     const ctx = new RelayContext()
@@ -221,5 +244,35 @@ describe('FsHandler', () => {
     // On macOS, /var is a symlink to /private/var, so resolve both to compare
     const { realpathSync } = await import('fs')
     expect(result).toBe(realpathSync(realFile))
+  })
+
+  it('does not let stale pending watch remove newer replacement watch', async () => {
+    const firstUnsubscribe = vi.fn()
+    const secondUnsubscribe = vi.fn()
+    let resolveFirst!: () => void
+    mockSubscribe
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveFirst = () => resolve({ unsubscribe: firstUnsubscribe })
+        })
+      )
+      .mockResolvedValueOnce({ unsubscribe: secondUnsubscribe })
+
+    const firstWatch = dispatcher.callRequest(
+      'fs.watch',
+      { rootPath: tmpDir },
+      { isStale: () => true }
+    )
+    while (mockSubscribe.mock.calls.length === 0) {
+      await Promise.resolve()
+    }
+    await dispatcher.callRequest('fs.watch', { rootPath: tmpDir }, { isStale: () => false })
+    resolveFirst()
+    await firstWatch
+
+    expect(firstUnsubscribe).toHaveBeenCalled()
+    expect(secondUnsubscribe).not.toHaveBeenCalled()
+    dispatcher.callNotification('fs.unwatch', { rootPath: tmpDir })
+    expect(secondUnsubscribe).toHaveBeenCalled()
   })
 })

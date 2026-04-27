@@ -628,6 +628,37 @@ describe('setActiveWorktree', () => {
     expect(groups[0].tabOrder).toEqual([terminal.id])
   })
 
+  it('publishes the first terminal and root tab group atomically', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      groupsByWorktree: {},
+      activeGroupIdByWorktree: {},
+      unifiedTabsByWorktree: {}
+    })
+
+    const snapshots: { terminalCount: number; unifiedCount: number; groupCount: number }[] = []
+    const unsubscribe = store.subscribe((state) => {
+      snapshots.push({
+        terminalCount: state.tabsByWorktree[wt]?.length ?? 0,
+        unifiedCount: state.unifiedTabsByWorktree[wt]?.length ?? 0,
+        groupCount: state.groupsByWorktree[wt]?.length ?? 0
+      })
+    })
+
+    store.getState().createTab(wt)
+    unsubscribe()
+
+    // Why: task-page launches queue startup/setup commands before React mounts.
+    // A terminal-only intermediate state can mount the legacy host and race
+    // the split-group host, duplicating setup panes and PTYs.
+    expect(snapshots).toEqual([{ terminalCount: 1, unifiedCount: 1, groupCount: 1 }])
+  })
+
   it('syncs the global active surface when focusing a different split group', () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'

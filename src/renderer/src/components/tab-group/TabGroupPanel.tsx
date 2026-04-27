@@ -28,6 +28,7 @@ export default function TabGroupPanel({
   isWorktreeActive,
   isFocused,
   hasSplitGroups,
+  touchesRightEdge,
   reserveClosedExplorerToggleSpace,
   reserveCollapsedSidebarHeaderSpace,
   isTabDragActive = false,
@@ -39,6 +40,7 @@ export default function TabGroupPanel({
   isWorktreeActive: boolean
   isFocused: boolean
   hasSplitGroups: boolean
+  touchesRightEdge: boolean
   reserveClosedExplorerToggleSpace: boolean
   reserveCollapsedSidebarHeaderSpace: boolean
   isTabDragActive?: boolean
@@ -176,8 +178,27 @@ export default function TabGroupPanel({
 
   return (
     <div
+      // Why: vertical borders are always `border-border` so the focus
+      // highlight doesn't introduce a near-white strip next to the split
+      // resize handle (--accent is ~#f5f5f5 in light mode, which reads as a
+      // visible gap between the dragger and the tab row). Only the bottom
+      // border changes color on focus, which is enough to cue the focused
+      // group without painting a bright line along the vertical edges.
+      // Why: unfocused split groups dim very subtly so the focused group
+      // reads as "selected" without making the unfocused content look
+      // washed out or hard to read. Only applied when `hasSplitGroups`
+      // because a lone group has nothing to contrast against.
       className={`group/tab-group flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden${
-        hasSplitGroups ? ` border-x border-b ${isFocused ? 'border-accent' : 'border-border'}` : ''
+        hasSplitGroups
+          ? // Why: drop only the RIGHT border on the rightmost group. The right
+            // sidebar paints its own `borderLeft` that already extends full
+            // height, so painting our own border-r in that spot stacks a
+            // second 1px line next to it — reading as a 2px-thick bar below
+            // the 8px drag strip (where the sidebar border continues alone
+            // above). The left edge has no such double-up, so the left
+            // border is always kept.
+            ` border-l ${touchesRightEdge ? '' : 'border-r'} border-border border-b ${isFocused ? 'border-b-accent' : 'opacity-95'}`
+          : ''
       }`}
       onPointerDown={commands.focusGroup}
       // Why: keyboard and assistive-tech users can move focus into an unfocused
@@ -195,7 +216,7 @@ export default function TabGroupPanel({
           this, the empty space after tabs in the center column is dead — the
           user can only drag from the tiny left-sidebar header strip. */}
       <div
-        className="h-[42px] shrink-0 border-b border-border bg-card"
+        className="h-[34px] shrink-0 border-b border-border bg-card"
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       >
         <div className="flex h-full items-stretch pr-1.5">

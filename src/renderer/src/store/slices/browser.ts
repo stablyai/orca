@@ -22,6 +22,12 @@ type CreateBrowserTabOptions = {
   // tab in a specific (sibling or newly-split) group rather than the ambient
   // active group. Defaults to the worktree's current active group.
   targetGroupId?: string
+  // Why: the explicit "New Tab" action (keyboard shortcut, + button) should
+  // land the user in the address bar even when their configured home page is a
+  // real URL, so they can type a destination immediately. Link-opened tabs
+  // (context menu, window.open, http link routing) leave this unset so focus
+  // stays on the webview. When omitted, we fall back to the blank-URL check.
+  focusAddressBar?: boolean
 }
 
 type CreateBrowserPageOptions = {
@@ -350,7 +356,8 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       const shouldUpdateGlobalActiveSurface = shouldActivate && s.activeWorktreeId === worktreeId
       const shouldFocusAddressBar =
         shouldUpdateGlobalActiveSurface &&
-        (page.url === 'about:blank' || page.url === ORCA_BROWSER_BLANK_URL)
+        (options?.focusAddressBar ??
+          (page.url === 'about:blank' || page.url === ORCA_BROWSER_BLANK_URL))
 
       return {
         browserTabsByWorktree: {

@@ -9,6 +9,7 @@ import { useContextualCopySetup } from './useContextualCopySetup'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorator'
 import { DiffCommentPopover } from '../diff-comments/DiffCommentPopover'
+import { applyDiffEditorLineNumberOptions } from './diff-editor-line-number-options'
 import type { DiffComment } from '../../../../shared/types'
 
 type DiffViewerProps = {
@@ -64,6 +65,7 @@ export default function DiffViewer({
     (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
 
   const diffEditorRef = useRef<editor.IStandaloneDiffEditor | null>(null)
+  const lineNumberOptionsSubRef = useRef<{ dispose: () => void } | null>(null)
   const [modifiedEditor, setModifiedEditor] = useState<editor.ICodeEditor | null>(null)
   const [popover, setPopover] = useState<{ lineNumber: number; top: number } | null>(null)
 
@@ -139,6 +141,8 @@ export default function DiffViewer({
   const handleMount: DiffOnMount = useCallback(
     (diffEditor, monaco) => {
       diffEditorRef.current = diffEditor
+      lineNumberOptionsSubRef.current?.dispose()
+      lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(diffEditor, sideBySide)
 
       const originalEditor = diffEditor.getOriginalEditor()
       const modifiedEditor = diffEditor.getModifiedEditor()
@@ -170,8 +174,13 @@ export default function DiffViewer({
       } else {
         diffEditor.focus()
       }
+
+      diffEditor.onDidDispose(() => {
+        lineNumberOptionsSubRef.current?.dispose()
+        lineNumberOptionsSubRef.current = null
+      })
     },
-    [editable, setupCopy, modelKey, filePath]
+    [editable, setupCopy, modelKey, filePath, sideBySide]
   )
 
   // Why: VS Code snapshots diff view state on deactivation, not on scroll events.
@@ -188,6 +197,19 @@ export default function DiffViewer({
       }
     }
   }, [modelKey])
+
+  useEffect(() => {
+    const diffEditor = diffEditorRef.current
+    if (!diffEditor) {
+      return
+    }
+    lineNumberOptionsSubRef.current?.dispose()
+    lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(diffEditor, sideBySide)
+    return () => {
+      lineNumberOptionsSubRef.current?.dispose()
+      lineNumberOptionsSubRef.current = null
+    }
+  }, [sideBySide])
 
   return (
     <div className="flex flex-col flex-1 min-h-0">

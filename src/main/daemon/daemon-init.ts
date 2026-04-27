@@ -11,6 +11,7 @@ import {
   type DaemonLauncher
 } from './daemon-spawner'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
+import { DaemonPtyRouter } from './daemon-pty-router'
 import { DaemonClient } from './client'
 import {
   PREVIOUS_DAEMON_PROTOCOL_VERSIONS,
@@ -21,7 +22,7 @@ import { healthCheckDaemon, killStaleDaemon } from './daemon-health'
 import { setLocalPtyProvider } from '../ipc/pty'
 
 let spawner: DaemonSpawner | null = null
-let adapter: DaemonPtyAdapter | null = null
+let adapter: DaemonPtyRouter | DaemonPtyAdapter | null = null
 
 function getRuntimeDir(): string {
   const dir = join(app.getPath('userData'), 'daemon')
@@ -164,7 +165,6 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
 
 export async function initDaemonPtyProvider(): Promise<void> {
   const runtimeDir = getRuntimeDir()
-  await cleanupPreviousProtocolDaemons(runtimeDir)
 
   const newSpawner = new DaemonSpawner({
     runtimeDir,
@@ -191,9 +191,21 @@ export async function initDaemonPtyProvider(): Promise<void> {
     }
   })
 
+  const legacyAdapters = await createLegacyDaemonAdapters(runtimeDir)
+  const routedAdapter =
+    legacyAdapters.length > 0
+      ? new DaemonPtyRouter({
+          current: newAdapter,
+          legacy: legacyAdapters
+        })
+      : newAdapter
+  if (routedAdapter instanceof DaemonPtyRouter) {
+    await routedAdapter.discoverLegacySessions()
+  }
+
   spawner = newSpawner
-  adapter = newAdapter
-  setLocalPtyProvider(adapter)
+  adapter = routedAdapter
+  setLocalPtyProvider(routedAdapter)
 }
 
 // Why: disconnect from the daemon without killing it. The daemon runs as a
@@ -301,12 +313,30 @@ async function cleanupDaemonForProtocol(
   return { cleaned: didRequestShutdown || didKillStaleDaemon, killedCount }
 }
 
-async function cleanupPreviousProtocolDaemons(runtimeDir: string): Promise<void> {
+async function createLegacyDaemonAdapters(runtimeDir: string): Promise<DaemonPtyAdapter[]> {
+  const adapters: DaemonPtyAdapter[] = []
   for (const protocolVersion of PREVIOUS_DAEMON_PROTOCOL_VERSIONS) {
-    await cleanupDaemonForProtocol(runtimeDir, protocolVersion).catch((error) => {
-      console.warn(`[daemon] Failed to clean up v${protocolVersion} daemon`, error)
-    })
+    const socketPath = getDaemonSocketPath(runtimeDir, protocolVersion)
+    const tokenPath = getDaemonTokenPath(runtimeDir, protocolVersion)
+    if (!(await probeSocket(socketPath))) {
+      continue
+    }
+    // Why: old daemon PTYs can be running long-lived agents during an app
+    // upgrade. Keep those sessions routed to their original daemon while new
+    // terminals use the current protocol, instead of killing background work.
+    // Legacy adapters intentionally do not respawn: respawning an old protocol
+    // daemon from new code would recreate stale env semantics and can be less
+    // predictable than letting the session fail if that old daemon dies.
+    adapters.push(
+      new DaemonPtyAdapter({
+        socketPath,
+        tokenPath,
+        protocolVersion,
+        historyPath: getHistoryDir()
+      })
+    )
   }
+  return adapters
 }
 
 /** Detect and tear down an orphaned daemon left behind by a previous app

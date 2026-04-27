@@ -179,10 +179,8 @@ export default function SortableTab({
           // tab still reads as "selected + has activity". The wash is
           // rendered as an absolutely-positioned child below so the ::after
           // pseudo-element stays free for the drop indicator.
-          className={`group relative flex items-center h-full px-3 text-sm cursor-pointer select-none shrink-0 border-r border-border ${getDropIndicatorClasses(dropIndicator ?? null)} ${
-            isActive
-              ? 'bg-accent text-foreground border-b-transparent'
-              : 'bg-card text-muted-foreground hover:text-foreground hover:bg-accent/50'
+          className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none shrink-0 outline-none focus:outline-none focus-visible:outline-none border-t ${hasTabsToRight ? 'border-r' : ''} border-border bg-card ${getDropIndicatorClasses(dropIndicator ?? null)} ${
+            isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
           }`}
           onDoubleClick={(e) => {
             if (isEditing) {
@@ -234,11 +232,11 @@ export default function SortableTab({
             // so it matches the worktree-level bell in the sidebar — keeping
             // every "needs your attention" surface in Orca consistent.
             <span data-testid="tab-activity-bell" className="inline-flex shrink-0">
-              <FilledBellIcon className="w-3.5 h-3.5 mr-1.5 text-amber-500 drop-shadow-sm" />
+              <FilledBellIcon className="w-3 h-3 mr-1 text-amber-500 drop-shadow-sm" />
             </span>
           ) : (
             <TerminalIcon
-              className={`w-3.5 h-3.5 mr-1.5 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
+              className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
             />
           )}
           {isEditing ? (
@@ -278,11 +276,11 @@ export default function SortableTab({
               // shrink it to ~0 when many tabs compete for horizontal space.
               // Force a minimum width that matches the normal title box so the
               // rename input stays usable even when the tab bar is saturated.
-              className="h-5 w-[130px] min-w-[130px] max-w-[130px] mr-1.5 px-1 py-0 text-xs"
+              className="h-5 w-[72px] min-w-[72px] max-w-[72px] mr-1 px-1 py-0 text-xs"
               spellCheck={false}
             />
           ) : (
-            <span className="truncate max-w-[130px] mr-1.5">{tab.customTitle ?? tab.title}</span>
+            <span className="truncate max-w-[72px] mr-1">{tab.customTitle ?? tab.title}</span>
           )}
           {tab.color && !isEditing && (
             <span

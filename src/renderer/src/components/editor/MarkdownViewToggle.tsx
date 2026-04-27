@@ -1,15 +1,32 @@
 import React from 'react'
-import { Code, Eye } from 'lucide-react'
+import { Code, Eye, Pencil } from 'lucide-react'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import type { MarkdownViewMode } from '@/store/slices/editor'
 
+const VIEW_MODE_METADATA = {
+  source: {
+    label: 'Source',
+    icon: Code
+  },
+  rich: {
+    label: 'Rich Editor',
+    icon: Pencil
+  },
+  preview: {
+    label: 'Preview',
+    icon: Eye
+  }
+} as const
+
 type MarkdownViewToggleProps = {
   mode: MarkdownViewMode
+  modes: readonly MarkdownViewMode[]
   onChange: (mode: MarkdownViewMode) => void
 }
 
 export default function MarkdownViewToggle({
   mode,
+  modes,
   onChange
 }: MarkdownViewToggleProps): React.JSX.Element {
   return (
@@ -25,12 +42,20 @@ export default function MarkdownViewToggle({
         }
       }}
     >
-      <ToggleGroupItem value="source" aria-label="Source" title="Source">
-        <Code className="h-2 w-2" />
-      </ToggleGroupItem>
-      <ToggleGroupItem value="rich" aria-label="Rich" title="Rich">
-        <Eye className="h-2 w-2" />
-      </ToggleGroupItem>
+      {modes.map((viewMode) => {
+        const metadata = VIEW_MODE_METADATA[viewMode]
+        const Icon = metadata.icon
+        return (
+          <ToggleGroupItem
+            key={viewMode}
+            value={viewMode}
+            aria-label={metadata.label}
+            title={metadata.label}
+          >
+            <Icon className="h-3 w-3" />
+          </ToggleGroupItem>
+        )
+      })}
     </ToggleGroup>
   )
 }

@@ -48,7 +48,7 @@ export default function StartFromPicker({
     }))
   )
 
-  const [tab, setTab] = useState<PickerTab>('branches')
+  const [tab, setTab] = useState<PickerTab>(isRemoteRepo ? 'branches' : 'prs')
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [repoSlug, setRepoSlug] = useState<RepoSlug | null>(null)
@@ -298,10 +298,6 @@ export default function StartFromPicker({
       <Tabs value={tab} onValueChange={(v) => setTab(v as PickerTab)} className="gap-0">
         <div className="flex items-center justify-between gap-2 border-b border-border/50 px-3 py-2">
           <TabsList className="h-8">
-            <TabsTrigger value="branches" className="gap-1.5 text-xs">
-              <GitBranch className="size-3.5" />
-              Branches
-            </TabsTrigger>
             <TabsTrigger
               value="prs"
               disabled={isRemoteRepo}
@@ -312,6 +308,10 @@ export default function StartFromPicker({
             >
               <GitPullRequest className="size-3.5" />
               Pull requests
+            </TabsTrigger>
+            <TabsTrigger value="branches" className="gap-1.5 text-xs">
+              <GitBranch className="size-3.5" />
+              Branches
             </TabsTrigger>
           </TabsList>
           {currentBaseBranch !== undefined ? (

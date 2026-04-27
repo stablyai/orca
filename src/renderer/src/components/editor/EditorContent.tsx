@@ -2,7 +2,7 @@ import React, { lazy } from 'react'
 import { detectLanguage } from '@/lib/language-detect'
 import { useAppStore } from '@/store'
 import { ConflictBanner, ConflictPlaceholderView, ConflictReviewPanel } from './ConflictComponents'
-import type { OpenFile } from '@/store/slices/editor'
+import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor'
 import type { GitStatusEntry, GitDiffResult } from '../../../../shared/types'
 import { RICH_MARKDOWN_MAX_SIZE_BYTES } from '../../../../shared/constants'
 import { getMarkdownRenderMode } from './markdown-render-mode'
@@ -30,8 +30,6 @@ type FileContent = {
   isImage?: boolean
   mimeType?: string
 }
-
-type MarkdownViewMode = 'source' | 'rich'
 
 export function EditorContent({
   activeFile,
@@ -77,6 +75,10 @@ export function EditorContent({
       : `${activeFile.filePath}::${viewStateScopeId}`
   const diffViewStateKey =
     viewStateScopeId === activeFile.id ? activeFile.id : `${activeFile.id}::${viewStateScopeId}`
+  const markdownPreviewViewStateKey =
+    viewStateScopeId === activeFile.id
+      ? `${activeFile.id}:preview`
+      : `${activeFile.id}::${viewStateScopeId}:preview`
 
   const openConflictFile = useAppStore((s) => s.openConflictFile)
   const openConflictReview = useAppStore((s) => s.openConflictReview)
@@ -140,10 +142,13 @@ export function EditorContent({
     // Keep the explanatory banner here so the user understands why "rich" view
     // currently shows Monaco instead.
     if (renderMode === 'source' && mdViewMode === 'rich') {
+      const richFallbackMessage =
+        richModeUnsupportedMessage ??
+        'File is too large for rich editing. Showing source mode instead.'
       return (
         <div className="flex h-full min-h-0 flex-col">
           <div className="border-b border-border/60 bg-blue-500/10 px-3 py-2 text-xs text-blue-950 dark:text-blue-100">
-            File is too large for rich editing. Showing source mode instead.
+            {richFallbackMessage}
           </div>
           <div className="min-h-0 flex-1 h-full">{renderMonacoEditor(fc)}</div>
         </div>
@@ -198,11 +203,14 @@ export function EditorContent({
     }
 
     if (renderMode === 'preview') {
+      const shouldExplainRichFallback = mdViewMode === 'rich' && richModeUnsupportedMessage
       return (
         <div className="flex h-full min-h-0 flex-col">
-          <div className="border-b border-border/60 bg-amber-500/10 px-3 py-2 text-xs text-amber-950 dark:text-amber-100">
-            {richModeUnsupportedMessage}
-          </div>
+          {shouldExplainRichFallback ? (
+            <div className="border-b border-border/60 bg-amber-500/10 px-3 py-2 text-xs text-amber-950 dark:text-amber-100">
+              {richModeUnsupportedMessage}
+            </div>
+          ) : null}
           {/* Why: before rich editing shipped, Orca already had a stable markdown
           preview surface. If Tiptap cannot safely own a document, falling back
           to that renderer preserves readable preview mode instead of forcing the
@@ -212,7 +220,6 @@ export function EditorContent({
               key={viewStateScopeId}
               content={currentContent}
               filePath={activeFile.filePath}
-              worktreeId={activeFile.worktreeId}
               scrollCacheKey={`${editorViewStateKey}:preview`}
             />
           </div>
@@ -266,6 +273,37 @@ export function EditorContent({
         file={activeFile}
         viewStateKey={diffViewStateKey}
       />
+    )
+  }
+
+  if (activeFile.mode === 'markdown-preview') {
+    const fc = fileContents[activeFile.id]
+    if (!fc) {
+      return (
+        <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+          Loading preview...
+        </div>
+      )
+    }
+    if (fc.isBinary) {
+      return (
+        <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
+          Markdown preview is unavailable for binary files.
+        </div>
+      )
+    }
+    const previewSourceFileId = activeFile.markdownPreviewSourceFileId ?? activeFile.filePath
+    const previewContent = editBuffers[previewSourceFileId] ?? fc.content
+    return (
+      <div className="min-h-0 flex-1">
+        <MarkdownPreview
+          key={viewStateScopeId}
+          content={previewContent}
+          filePath={activeFile.filePath}
+          scrollCacheKey={markdownPreviewViewStateKey}
+          initialAnchor={activeFile.markdownPreviewAnchor ?? null}
+        />
+      </div>
     )
   }
 
@@ -348,12 +386,34 @@ export function EditorContent({
       </div>
     )
   }
+  const modifiedDiffContent = editBuffers[activeFile.id] ?? dc.modifiedContent
+  if (isMarkdown && mdViewMode === 'preview') {
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="border-b border-border/60 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          {/* Why: a rendered markdown preview cannot express additions and
+          deletions simultaneously, so preview mode intentionally shows the
+          modified side of the diff. Source mode remains available for the
+          actual line-by-line comparison. */}
+          Previewing the modified version of this diff. Switch to source mode to inspect changes.
+        </div>
+        <div className="min-h-0 flex-1">
+          <MarkdownPreview
+            key={viewStateScopeId}
+            content={modifiedDiffContent}
+            filePath={activeFile.filePath}
+            scrollCacheKey={`${diffViewStateKey}:preview`}
+          />
+        </div>
+      </div>
+    )
+  }
   return (
     <DiffViewer
       key={viewStateScopeId}
       modelKey={diffViewStateKey}
       originalContent={dc.originalContent}
-      modifiedContent={editBuffers[activeFile.id] ?? dc.modifiedContent}
+      modifiedContent={modifiedDiffContent}
       language={resolvedLanguage}
       filePath={activeFile.filePath}
       relativePath={activeFile.relativePath}

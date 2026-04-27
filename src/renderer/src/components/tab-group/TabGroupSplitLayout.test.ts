@@ -39,10 +39,12 @@ describe('TabGroupSplitLayout', () => {
       isWorktreeActive
     })
 
-    // DndContext has multiple children (layout wrapper + DragOverlay), so
-    // index into the layout wrapper explicitly.
+    // DndContext has multiple children (layout wrapper + DragOverlay). The
+    // layout wrapper holds [drag-strip, split-body]; the split-body holds the
+    // SplitNode element.
     const layoutWrapper = element.props.children[0]
-    const splitNodeElement = layoutWrapper.props.children
+    const splitBody = layoutWrapper.props.children[1]
+    const splitNodeElement = splitBody.props.children
     const tabGroupPanelElement = splitNodeElement.type(splitNodeElement.props)
     return tabGroupPanelElement.props as {
       groupId: string
@@ -98,7 +100,8 @@ describe('TabGroupSplitLayout', () => {
     })
 
     const layoutWrapper = element.props.children[0]
-    const splitNodeElement = layoutWrapper.props.children
+    const splitBody = layoutWrapper.props.children[1]
+    const splitNodeElement = splitBody.props.children
     const rootElement = splitNodeElement.type(splitNodeElement.props)
     const leftChild = rootElement.props.children[0].props.children
     const rightChild = rootElement.props.children[2].props.children

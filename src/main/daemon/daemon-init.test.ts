@@ -48,7 +48,8 @@ function writeNdjson(socket: Socket, message: unknown): void {
 
 async function startLegacyDaemonStub(
   socketPath: string,
-  tokenPath: string
+  tokenPath: string,
+  protocolVersion = 1
 ): Promise<{ shutdown: () => Promise<void>; shutdownRequested: () => boolean }> {
   mkdirSync(join(tokenPath, '..'), { recursive: true })
   writeFileSync(tokenPath, 'legacy-token', { mode: 0o600 })
@@ -71,7 +72,7 @@ async function startLegacyDaemonStub(
           greeted = true
           expect(message).toMatchObject({
             type: 'hello',
-            version: 1,
+            version: protocolVersion,
             token: 'legacy-token'
           })
           writeNdjson(socket, { type: 'hello', ok: true })
@@ -236,6 +237,30 @@ describe('cleanupOrphanedDaemon', () => {
       expect(existsSync(legacyPidPath)).toBe(false)
     } finally {
       await legacyDaemon.shutdown()
+    }
+  })
+
+  it('cleans up v2 daemon sessions when daemon mode is disabled', async () => {
+    const { cleanupOrphanedDaemon } = await importFreshDaemonInit()
+    const { getDaemonPidPath, getDaemonSocketPath, getDaemonTokenPath } =
+      await import('./daemon-spawner')
+
+    const runtimeDir = join(userDataDir, 'daemon')
+    mkdirSync(runtimeDir, { recursive: true })
+    const v2SocketPath = getDaemonSocketPath(runtimeDir, 2)
+    const v2TokenPath = getDaemonTokenPath(runtimeDir, 2)
+    const v2PidPath = getDaemonPidPath(runtimeDir, 2)
+    writeFileSync(v2PidPath, String(process.pid), { mode: 0o600 })
+    const v2Daemon = await startLegacyDaemonStub(v2SocketPath, v2TokenPath, 2)
+
+    try {
+      const result = await cleanupOrphanedDaemon()
+
+      expect(result).toEqual({ cleaned: true, killedCount: 1 })
+      expect(v2Daemon.shutdownRequested()).toBe(true)
+      expect(existsSync(v2PidPath)).toBe(false)
+    } finally {
+      await v2Daemon.shutdown()
     }
   })
 

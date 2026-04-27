@@ -3,6 +3,7 @@ import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import { claudeHookService } from '../claude/hook-service'
 import { codexHookService } from '../codex/hook-service'
 import { geminiHookService } from '../gemini/hook-service'
+import { cursorHookService } from '../cursor/hook-service'
 
 // Why: install/remove are intentionally not exposed to the renderer. Orca
 // auto-installs managed hooks at app startup (see src/main/index.ts), so a
@@ -18,6 +19,7 @@ export function registerAgentHookHandlers(): void {
   ipcMain.removeHandler('agentHooks:claudeStatus')
   ipcMain.removeHandler('agentHooks:codexStatus')
   ipcMain.removeHandler('agentHooks:geminiStatus')
+  ipcMain.removeHandler('agentHooks:cursorStatus')
 
   // Why: errors from getStatus() (fs permission denied, homedir resolution
   // failure, etc.) must be reported inline via state:'error' so the sidebar can
@@ -56,6 +58,19 @@ export function registerAgentHookHandlers(): void {
     } catch (err) {
       return {
         agent: 'gemini',
+        state: 'error',
+        configPath: '',
+        managedHooksPresent: false,
+        detail: err instanceof Error ? err.message : String(err)
+      }
+    }
+  })
+  ipcMain.handle('agentHooks:cursorStatus', (): AgentHookInstallStatus => {
+    try {
+      return cursorHookService.getStatus()
+    } catch (err) {
+      return {
+        agent: 'cursor',
         state: 'error',
         configPath: '',
         managedHooksPresent: false,

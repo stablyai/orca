@@ -278,6 +278,8 @@ const api = {
       snapshotRows?: number
       isReattach?: boolean
       isAlternateScreen?: boolean
+      replay?: string
+      sessionExpired?: boolean
       coldRestore?: { scrollback: string; cwd: string }
     }> => ipcRenderer.invoke('pty:spawn', opts),
 
@@ -316,6 +318,13 @@ const api = {
         callback(data)
       ipcRenderer.on('pty:data', listener)
       return () => ipcRenderer.removeListener('pty:data', listener)
+    },
+
+    onReplay: (callback: (data: { id: string; data: string }) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: { id: string; data: string }) =>
+        callback(data)
+      ipcRenderer.on('pty:replay', listener)
+      return () => ipcRenderer.removeListener('pty:replay', listener)
     },
 
     onExit: (callback: (data: { id: string; code: number }) => void): (() => void) => {
@@ -388,10 +397,14 @@ const api = {
     }): Promise<{ ok: true; number: number; url: string } | { ok: false; error: string }> =>
       ipcRenderer.invoke('gh:createIssue', args),
 
+    countWorkItems: (args: { repoPath: string; query?: string }): Promise<number> =>
+      ipcRenderer.invoke('gh:countWorkItems', args),
+
     listWorkItems: (args: {
       repoPath: string
       limit?: number
       query?: string
+      before?: string
     }): Promise<unknown[]> => ipcRenderer.invoke('gh:listWorkItems', args),
 
     prChecks: (args: {
@@ -552,7 +565,9 @@ const api = {
     codexStatus: (): Promise<AgentHookInstallStatus> =>
       ipcRenderer.invoke('agentHooks:codexStatus'),
     geminiStatus: (): Promise<AgentHookInstallStatus> =>
-      ipcRenderer.invoke('agentHooks:geminiStatus')
+      ipcRenderer.invoke('agentHooks:geminiStatus'),
+    cursorStatus: (): Promise<AgentHookInstallStatus> =>
+      ipcRenderer.invoke('agentHooks:cursorStatus')
   },
 
   preflight: {
@@ -1258,6 +1273,11 @@ const api = {
       const listener = (_event: Electron.IpcRendererEvent, direction: 1 | -1) => callback(direction)
       ipcRenderer.on('ui:switchTab', listener)
       return () => ipcRenderer.removeListener('ui:switchTab', listener)
+    },
+    onSwitchTerminalTab: (callback: (direction: 1 | -1) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, direction: 1 | -1) => callback(direction)
+      ipcRenderer.on('ui:switchTerminalTab', listener)
+      return () => ipcRenderer.removeListener('ui:switchTerminalTab', listener)
     },
     onToggleStatusBar: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()

@@ -12,11 +12,12 @@ import {
 } from 'fs/promises'
 import { extname } from 'path'
 import { execFile } from 'child_process'
-import type { RelayDispatcher } from './dispatcher'
+import type { RelayDispatcher, RequestContext } from './dispatcher'
 import type { RelayContext } from './context'
 import { expandTilde } from './context'
 import {
   MAX_FILE_SIZE,
+  MAX_PREVIEWABLE_BINARY_SIZE,
   DEFAULT_MAX_RESULTS,
   IMAGE_MIME_TYPES,
   isBinaryBuffer,
@@ -26,10 +27,14 @@ import {
 } from './fs-handler-utils'
 import { listFilesWithGit, searchWithGitGrep } from './fs-handler-git-fallback'
 import { listFilesWithReaddir } from './fs-handler-readdir-fallback'
+import { buildExcludePathPrefixes } from '../shared/quick-open-filter'
+import { buildInstallRgMessage } from './fs-handler-install-rg'
 
 type WatchState = {
   rootPath: string
   unwatchFn: (() => void) | null
+  setupPromise: Promise<void> | null
+  isStale: () => boolean
 }
 
 export class FsHandler {
@@ -56,7 +61,7 @@ export class FsHandler {
     this.dispatcher.onRequest('fs.realpath', (p) => this.realpath(p))
     this.dispatcher.onRequest('fs.search', (p) => this.search(p))
     this.dispatcher.onRequest('fs.listFiles', (p) => this.listFiles(p))
-    this.dispatcher.onRequest('fs.watch', (p) => this.watch(p))
+    this.dispatcher.onRequest('fs.watch', (p, context) => this.watch(p, context))
     this.dispatcher.onNotification('fs.unwatch', (p) => this.unwatch(p))
   }
 
@@ -82,14 +87,15 @@ export class FsHandler {
     const filePath = expandTilde(params.filePath as string)
     await this.context.validatePathResolved(filePath)
     const stats = await stat(filePath)
-    if (stats.size > MAX_FILE_SIZE) {
+    const mimeType = IMAGE_MIME_TYPES[extname(filePath).toLowerCase()]
+    const sizeLimit = mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_FILE_SIZE
+    if (stats.size > sizeLimit) {
       throw new Error(
-        `File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit`
+        `File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB exceeds ${sizeLimit / 1024 / 1024}MB limit`
       )
     }
 
     const buffer = await readFile(filePath)
-    const mimeType = IMAGE_MIME_TYPES[extname(filePath).toLowerCase()]
     if (mimeType) {
       return { content: buffer.toString('base64'), isBinary: true, isImage: true, mimeType }
     }
@@ -229,9 +235,14 @@ export class FsHandler {
   private async listFiles(params: Record<string, unknown>): Promise<string[]> {
     const rootPath = expandTilde(params.rootPath as string)
     await this.context.validatePathResolved(rootPath)
+    // Why: the main-to-relay RPC adds excludePaths so nested linked worktrees
+    // don't get double-scanned. The shared helper validates the shape and
+    // normalizes into root-relative prefixes; malformed input yields [] so
+    // the request still succeeds (older apps omit the field entirely).
+    const excludePathPrefixes = buildExcludePathPrefixes(rootPath, params.excludePaths)
     const rgAvailable = await checkRgAvailable()
     if (rgAvailable) {
-      return listFilesWithRg(rootPath)
+      return listFilesWithRg(rootPath, excludePathPrefixes)
     }
     // Why: git ls-files only works inside git repos. Use rev-parse to detect
     // git ancestry — unlike checking for a local .git entry, this works from
@@ -244,12 +255,21 @@ export class FsHandler {
       )
     })
     if (isGitRepo) {
-      return listFilesWithGit(rootPath)
+      return listFilesWithGit(rootPath, excludePathPrefixes)
     }
-    return listFilesWithReaddir(rootPath)
+    // Why: the readdir walker rejects on cap/deadline instead of returning a
+    // partial list (design doc: silent truncation is worse than an explicit
+    // error). On a home-root without rg that's almost always an install-rg
+    // problem, so translate the opaque cap error into actionable guidance
+    // the user can act on directly from the error toast.
+    try {
+      return await listFilesWithReaddir(rootPath, excludePathPrefixes)
+    } catch (err) {
+      throw new Error(await buildInstallRgMessage(err))
+    }
   }
 
-  private async watch(params: Record<string, unknown>) {
+  private async watch(params: Record<string, unknown>, context?: RequestContext) {
     const rootPath = expandTilde(params.rootPath as string)
     this.context.validatePath(rootPath)
 
@@ -257,14 +277,23 @@ export class FsHandler {
       throw new Error('Maximum number of file watchers reached')
     }
 
-    if (this.watches.has(rootPath)) {
+    const existing = this.watches.get(rootPath)
+    if (existing && !existing.isStale()) {
+      if (existing.setupPromise) {
+        await existing.setupPromise
+      }
       return
     }
 
-    const watchState: WatchState = { rootPath, unwatchFn: null }
+    const watchState: WatchState = {
+      rootPath,
+      unwatchFn: null,
+      setupPromise: null,
+      isStale: () => context?.isStale() ?? false
+    }
     this.watches.set(rootPath, watchState)
 
-    try {
+    const setupPromise = (async () => {
       const watcher = await import('@parcel/watcher')
       const subscription = await watcher.subscribe(
         rootPath,
@@ -286,7 +315,25 @@ export class FsHandler {
       watchState.unwatchFn = () => {
         void subscription.unsubscribe()
       }
+      if (watchState.isStale() || this.watches.get(rootPath) !== watchState) {
+        // Why: if the client reconnects while watcher setup is in flight, the
+        // response is discarded and no client can later balance it with
+        // fs.unwatch. Tear down only this request's subscription so a newer
+        // replacement watch for the same root is not removed.
+        void subscription.unsubscribe()
+        if (this.watches.get(rootPath) === watchState) {
+          this.watches.delete(rootPath)
+        }
+      }
+    })()
+    watchState.setupPromise = setupPromise
+
+    try {
+      await setupPromise
     } catch {
+      if (this.watches.get(rootPath) === watchState) {
+        this.watches.delete(rootPath)
+      }
       // @parcel/watcher not available -- polling fallback would go here
       process.stderr.write('[relay] File watcher not available, fs.changed events disabled\n')
     }

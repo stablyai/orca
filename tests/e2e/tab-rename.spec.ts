@@ -258,9 +258,11 @@ test.describe('Tab Rename (Inline)', () => {
 
     // Why: create enough terminal tabs that flex space runs out. 15 is well
     // above the threshold at which the pre-fix input collapsed, and it keeps
-    // the test fast. The width fix pins the input to 130px, so even saturated,
-    // it should stay near that size — we assert ≥100px to allow a bit of slack
-    // for fonts/padding/containers differing between environments.
+    // the test fast. The width fix pins the input to 72px (matching the
+    // slimmer tab title box), so even saturated, it should stay near that
+    // size — we assert ≥60px to allow a bit of slack for fonts/padding/
+    // containers differing between environments. The meaningful guarantee is
+    // that the input does not collapse to ~0 when flex space is saturated.
     await orcaPage.evaluate((targetWorktreeId) => {
       const store = window.__store
       if (!store) {
@@ -289,7 +291,7 @@ test.describe('Tab Rename (Inline)', () => {
 
     const box = await renameInput.boundingBox()
     expect(box).not.toBeNull()
-    expect(box!.width).toBeGreaterThanOrEqual(100)
+    expect(box!.width).toBeGreaterThanOrEqual(60)
   })
 
   test('middle-clicking inside the rename input does not close the tab', async ({ orcaPage }) => {

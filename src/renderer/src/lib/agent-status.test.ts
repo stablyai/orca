@@ -167,6 +167,32 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('π - session-name - my-project')).toBe('idle')
   })
 
+  // --- Cursor (cursor-agent) synthesized titles ---
+  // Why: cursor-agent's native OSC title stays literally "Cursor Agent" for
+  // the entire turn, so Orca synthesizes decorated titles from hook events
+  // to drive the existing spinner/unread pipeline. These tests pin the
+  // contract the main-process hook listener relies on.
+  it('treats the bare "Cursor Agent" native title as a no-op (not idle)', () => {
+    // Why: if the native title classified as idle, cursor's own per-turn
+    // re-emissions would trigger working→idle transitions between our
+    // synthesized working frames, stomping the spinner off mid-turn.
+    expect(detectAgentStatusFromTitle('Cursor Agent')).toBeNull()
+    expect(detectAgentStatusFromTitle('cursor agent')).toBeNull()
+    expect(detectAgentStatusFromTitle('  Cursor Agent  ')).toBeNull()
+  })
+
+  it('classifies synthesized "⠋ Cursor Agent" working title as working', () => {
+    expect(detectAgentStatusFromTitle('⠋ Cursor Agent')).toBe('working')
+  })
+
+  it('classifies synthesized "Cursor ready" idle title as idle', () => {
+    expect(detectAgentStatusFromTitle('Cursor ready')).toBe('idle')
+  })
+
+  it('classifies synthesized "Cursor - action required" title as permission', () => {
+    expect(detectAgentStatusFromTitle('Cursor - action required')).toBe('permission')
+  })
+
   // --- Case insensitivity ---
   it('is case-insensitive for agent names', () => {
     expect(detectAgentStatusFromTitle('CLAUDE')).toBe('idle')
@@ -403,6 +429,26 @@ describe('createAgentStatusTracker', () => {
     expect(onBecameIdle).toHaveBeenCalledTimes(1)
   })
 
+  // Why: end-to-end tracker coverage for cursor — synthesized working frames
+  // interleaved with cursor's own "Cursor Agent" re-emissions must not fire
+  // onBecameIdle until the "Cursor ready" done frame arrives.
+  it('fires on Cursor working → idle across native "Cursor Agent" re-emissions', () => {
+    const onBecameIdle = vi.fn()
+    const tracker = createAgentStatusTracker(onBecameIdle)
+
+    tracker.handleTitle('⠋ Cursor Agent') // synthesized working
+    expect(onBecameIdle).not.toHaveBeenCalled()
+
+    tracker.handleTitle('Cursor Agent') // cursor's native re-emission — no-op
+    expect(onBecameIdle).not.toHaveBeenCalled()
+
+    tracker.handleTitle('Cursor Agent') // more native re-emissions
+    expect(onBecameIdle).not.toHaveBeenCalled()
+
+    tracker.handleTitle('Cursor ready') // synthesized done → idle
+    expect(onBecameIdle).toHaveBeenCalledTimes(1)
+  })
+
   it('fires on Pi working → idle', () => {
     const onBecameIdle = vi.fn()
     const tracker = createAgentStatusTracker(onBecameIdle)
@@ -598,8 +644,12 @@ describe('formatAgentTypeLabel', () => {
     expect(formatAgentTypeLabel('gemini')).toBe('Gemini')
   })
 
-  it("passes through unknown-but-nonsentinel strings as-is (e.g. 'cursor')", () => {
-    expect(formatAgentTypeLabel('cursor')).toBe('cursor')
+  it("maps 'cursor' to 'Cursor'", () => {
+    expect(formatAgentTypeLabel('cursor')).toBe('Cursor')
+  })
+
+  it('passes through arbitrary custom agent names as-is', () => {
+    expect(formatAgentTypeLabel('weirdo')).toBe('weirdo')
   })
 })
 

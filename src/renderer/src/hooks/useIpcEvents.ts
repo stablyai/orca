@@ -16,7 +16,7 @@ import type { SshConnectionState } from '../../../shared/ssh-types'
 import { zoomLevelToPercent, ZOOM_MIN, ZOOM_MAX } from '@/components/settings/SettingsConstants'
 import { dispatchZoomLevelChanged } from '@/lib/zoom-events'
 import { resolveZoomTarget } from './resolve-zoom-target'
-import { handleSwitchTab } from './ipc-tab-switch'
+import { handleSwitchTab, handleSwitchTerminalTab } from './ipc-tab-switch'
 import { dispatchClearModifierHints } from './useModifierHint'
 import { normalizeAgentStatusPayload } from '../../../shared/agent-status-types'
 import { AGENT_DASHBOARD_ENABLED } from '../../../shared/constants'
@@ -337,7 +337,8 @@ export function useIpcEvents(): void {
         const worktreeId = store.activeWorktreeId
         if (worktreeId) {
           store.createBrowserTab(worktreeId, store.browserDefaultUrl ?? 'about:blank', {
-            title: 'New Browser Tab'
+            title: 'New Browser Tab',
+            focusAddressBar: true
           })
         }
       })
@@ -486,6 +487,7 @@ export function useIpcEvents(): void {
     )
 
     unsubs.push(window.api.ui.onSwitchTab(handleSwitchTab))
+    unsubs.push(window.api.ui.onSwitchTerminalTab(handleSwitchTerminalTab))
 
     // Hydrate initial rate limit state then subscribe to push updates
     window.api.rateLimits.get().then((state) => {

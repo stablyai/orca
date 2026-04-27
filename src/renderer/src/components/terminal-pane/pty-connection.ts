@@ -4,15 +4,59 @@ import type { IDisposable } from '@xterm/xterm'
 import { isGeminiTerminalTitle, isClaudeAgent } from '@/lib/agent-status'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
+import { toast } from 'sonner'
 import { AGENT_DASHBOARD_ENABLED } from '../../../../shared/constants'
 import type { PtyConnectResult } from './pty-transport'
 import { createIpcPtyTransport } from './pty-transport'
 import { shouldSeedCacheTimerOnInitialTitle } from './cache-timer-seeding'
 import type { PtyConnectionDeps } from './pty-connection-types'
 import { isPaneReplaying, replayIntoTerminal } from './replay-guard'
-import { POST_REPLAY_MODE_RESET, POST_REPLAY_FOCUS_REPORTING_RESET } from './layout-serialization'
+import {
+  paneLeafId,
+  POST_REPLAY_MODE_RESET,
+  POST_REPLAY_FOCUS_REPORTING_RESET
+} from './layout-serialization'
+import { warnTerminalLifecycleAnomaly } from './terminal-lifecycle-diagnostics'
 
 const pendingSpawnByTabId = new Map<string, Promise<string | null>>()
+
+// Why: when multiple panes/tabs need the same deferred SSH connection,
+// the first one calls ssh.connect() and subsequent ones must wait for it
+// rather than returning early (which would leave them disconnected). This
+// helper either connects or waits for an in-flight connect to finish.
+type SshConnectResult = { connected: true } | { connected: false; error: string }
+
+const sshConnectPromises = new Map<string, Promise<SshConnectResult>>()
+
+async function waitForSshConnection(connectionId: string): Promise<SshConnectResult> {
+  const state = useAppStore.getState().sshConnectionStates.get(connectionId)
+  if (state?.status === 'connected') {
+    return { connected: true }
+  }
+
+  const existing = sshConnectPromises.get(connectionId)
+  if (existing) {
+    return existing
+  }
+
+  const promise: Promise<SshConnectResult> = (async (): Promise<SshConnectResult> => {
+    try {
+      await window.api.ssh.connect({ targetId: connectionId })
+      return { connected: true }
+    } catch (err) {
+      console.warn(`Deferred SSH reconnect failed for ${connectionId}:`, err)
+      return {
+        connected: false,
+        error: err instanceof Error ? err.message : String(err)
+      }
+    } finally {
+      sshConnectPromises.delete(connectionId)
+    }
+  })()
+
+  sshConnectPromises.set(connectionId, promise)
+  return promise
+}
 
 function isCodexPaneStale(args: { tabId: string; panePtyId: string | null }): boolean {
   const state = useAppStore.getState()
@@ -275,6 +319,12 @@ export function connectPanePty(
     if (isCodexPaneStale({ tabId: deps.tabId, panePtyId: currentPtyId })) {
       return
     }
+    // Why: a real keystroke into the terminal is the unambiguous "user is
+    // here" signal that dismisses the bell (ghostty "show until interact").
+    // Guarded by the replay and codex-stale checks above so synthetic xterm
+    // auto-replies never count as interaction.
+    deps.clearTerminalTabUnread(deps.tabId)
+    deps.clearWorktreeUnread(deps.worktreeId)
     transport.sendInput(data)
   })
 
@@ -363,6 +413,10 @@ export function connectPanePty(
     // stays engaged via the write-completion callback until xterm finishes
     // parsing — so writing directly here is both correct and safe.
     const replayDataCallback = (data: string): void => {
+      // Why: the relay's replay buffer holds the full last 100 KB of output,
+      // including data already rendered in xterm before the disconnect.
+      // Clearing before writing prevents duplication on SSH reconnect.
+      replayIntoTerminal(pane, deps.replayingPanesRef, '\x1b[2J\x1b[3J\x1b[H')
       replayIntoTerminal(pane, deps.replayingPanesRef, data)
     }
 
@@ -401,6 +455,185 @@ export function connectPanePty(
           transport.sendInput(`${pendingStartupCommand}\r`)
           pendingStartupCommand = null
         }, 50)
+      }
+    }
+
+    const handleReattachResult = (
+      result: PtyConnectResult | string | void,
+      staleSessionId?: string | null
+    ): void => {
+      if (disposed) {
+        return
+      }
+      const connectResult =
+        result && typeof result === 'object' && 'id' in result ? (result as PtyConnectResult) : null
+
+      const ptyId =
+        connectResult?.id ?? (typeof result === 'string' ? result : transport.getPtyId())
+      if (!ptyId) {
+        warnTerminalLifecycleAnomaly('restored PTY reattach returned no PTY id', {
+          tabId: deps.tabId,
+          worktreeId: deps.worktreeId,
+          leafId: deps.restoredLeafId ?? paneLeafId(pane.id),
+          paneId: pane.id,
+          ptyId: staleSessionId ?? null
+        })
+        // Why: a stale restored daemon/SSH session can fail reattach after the
+        // pane is mounted. Do not leave xterm alive without a backing PTY.
+        deps.syncPanePtyLayoutBinding(pane.id, null)
+        if (staleSessionId) {
+          deps.clearTabPtyId(deps.tabId, staleSessionId)
+        }
+        startFreshSpawn()
+        return
+      }
+      deps.syncPanePtyLayoutBinding(pane.id, ptyId)
+      deps.updateTabPtyId(deps.tabId, ptyId)
+
+      if (connectResult?.coldRestore) {
+        // Why: restoreScrollbackBuffers() already wrote the saved xterm
+        // buffer before this rAF ran. The cold-restore scrollback from
+        // disk history overlaps with that content. Without clearing first,
+        // the terminal shows duplicated output.
+        // Why replayIntoTerminal: the recorded scrollback is raw PTY output
+        // that may contain query sequences the previous agent CLI emitted;
+        // writing them through xterm.write would trigger auto-replies that
+        // land in the new shell's stdin. See replay-guard.ts.
+        replayIntoTerminal(pane, deps.replayingPanesRef, '\x1b[2J\x1b[3J\x1b[H')
+        replayIntoTerminal(pane, deps.replayingPanesRef, connectResult.coldRestore.scrollback)
+        replayIntoTerminal(
+          pane,
+          deps.replayingPanesRef,
+          '\r\n\x1b[2m--- session restored ---\x1b[0m\r\n\r\n'
+        )
+        // Why: the cold-restore scrollback is raw PTY output from the prior
+        // session, so mode-setting bytes emitted by a crashed TUI (e.g.
+        // Claude's \e[?1004h) come through verbatim and re-enable those modes
+        // in xterm. Cold-restore means the daemon lost the session and spawned
+        // a fresh shell — there is no TUI consuming these modes anymore, so
+        // reset them to match the fresh shell's expectations. Not applied to
+        // the snapshot branch below: that branch reattaches to a live daemon
+        // session where a running TUI may still depend on these modes.
+        replayIntoTerminal(pane, deps.replayingPanesRef, POST_REPLAY_MODE_RESET)
+        window.api.pty.ackColdRestore(ptyId)
+      } else if (connectResult?.snapshot) {
+        // Why: always clear before writing the daemon/SSH snapshot to prevent
+        // duplication with scrollback restored earlier. The replay guard also
+        // prevents terminal auto-replies from leaking into the live shell.
+        replayIntoTerminal(pane, deps.replayingPanesRef, '\x1b[2J\x1b[3J\x1b[H')
+        replayIntoTerminal(pane, deps.replayingPanesRef, connectResult.snapshot)
+        // Why: snapshot restore keeps a live session, so avoid the broader mode
+        // reset. Focus reporting is the unsafe exception: preserving `?1004h`
+        // can make restored shells ring BEL on pane focus/blur.
+        replayIntoTerminal(pane, deps.replayingPanesRef, POST_REPLAY_FOCUS_REPORTING_RESET)
+      }
+      if (connectResult?.replay) {
+        // Why: the relay's replay buffer is the authoritative terminal state
+        // (last 100 KB of raw output). On SSH reattach the local xterm may
+        // already hold pre-disconnect content that overlaps with the buffer.
+        // Clearing before writing prevents duplication — same approach the
+        // snapshot path uses above. Focus-reporting reset prevents BEL on
+        // pane focus/blur from stale mode bits in the replayed data.
+        if (!connectResult.snapshot && !connectResult.coldRestore) {
+          replayIntoTerminal(pane, deps.replayingPanesRef, '\x1b[2J\x1b[3J\x1b[H')
+        }
+        replayIntoTerminal(pane, deps.replayingPanesRef, connectResult.replay)
+        replayIntoTerminal(pane, deps.replayingPanesRef, POST_REPLAY_FOCUS_REPORTING_RESET)
+      }
+      if (connectResult?.sessionExpired) {
+        toast.info('Previous SSH session expired.', {
+          id: `ssh-session-expired-${deps.tabId}`,
+          description: 'Started a new shell.'
+        })
+      }
+
+      transport.resize(cols, rows)
+      // Why: POSIX only delivers SIGWINCH when terminal dimensions actually
+      // change. Sending it explicitly guarantees restored TUIs repaint at
+      // the correct cursor position after snapshot replay.
+      window.api.pty.signal(ptyId, 'SIGWINCH')
+
+      scheduleRuntimeGraphSync()
+    }
+
+    // Why: if this tab has a deferred SSH session ID, trigger the SSH
+    // connection now that the user has focused the tab. We check per-tab
+    // (not per-target) because multiple tabs for the same target each need
+    // to reattach independently. This must run before session ID resolution
+    // because the SSH provider isn't registered until after connect succeeds.
+    if (connectionId) {
+      const storeState = useAppStore.getState()
+      const restoredLeafSessionId =
+        deps.restoredLeafId && deps.restoredPtyIdByLeafId
+          ? (deps.restoredPtyIdByLeafId[deps.restoredLeafId] ?? null)
+          : null
+      const pendingSessionId =
+        restoredLeafSessionId ?? storeState.deferredSshSessionIdsByTabId[deps.tabId]
+      const isDeferredTarget = storeState.deferredSshReconnectTargets.includes(connectionId)
+      console.warn(
+        `[pty-connection] SSH tab=${deps.tabId} connectionId=${connectionId} pendingSessionId=${pendingSessionId} isDeferredTarget=${isDeferredTarget}`
+      )
+      if (pendingSessionId || isDeferredTarget) {
+        void (async () => {
+          // Why: ensure the SSH connection is established before attempting
+          // PTY reattach. Multiple panes/tabs may need the same connection,
+          // so we wait for it rather than returning early when in-flight.
+          const connectResult = await waitForSshConnection(connectionId)
+          if (!connectResult.connected) {
+            reportError(`SSH connection failed: ${connectResult.error}`)
+            return
+          }
+          if (disposed) {
+            return
+          }
+          useAppStore.getState().removeDeferredSshReconnectTarget(connectionId)
+          if (disposed) {
+            return
+          }
+          if (pendingSessionId) {
+            console.warn(
+              `[pty-connection] Attempting reattach for tab=${deps.tabId} sessionId=${pendingSessionId}`
+            )
+            // Why: the saved remote PTY ID is single-use restore metadata.
+            // Clear it before attach/fallback so remounts don't keep retrying
+            // an expired session after a fresh shell has been created.
+            useAppStore.getState().removeDeferredSshSessionId(deps.tabId)
+            const reattachPromise = transport.connect({
+              url: '',
+              cols,
+              rows,
+              sessionId: pendingSessionId,
+              callbacks: {
+                onData: dataCallback,
+                onReplayData: replayDataCallback,
+                onError: reportError
+              }
+            })
+            void Promise.resolve(reattachPromise)
+              .then((result) => {
+                console.warn(
+                  `[pty-connection] Reattach result for tab=${deps.tabId}:`,
+                  result
+                    ? {
+                        sessionExpired: (result as Record<string, unknown>).sessionExpired,
+                        replay: !!(result as Record<string, unknown>).replay
+                      }
+                    : 'undefined'
+                )
+                handleReattachResult(result, pendingSessionId)
+              })
+              .catch((err) => {
+                console.warn(`[pty-connection] Reattach FAILED for tab=${deps.tabId}:`, err)
+                if (disposed) {
+                  return
+                }
+                startFreshSpawn()
+              })
+          } else {
+            startFreshSpawn()
+          }
+        })()
+        return
       }
     }
 
@@ -469,87 +702,22 @@ export function connectPanePty(
 
       void Promise.resolve(reattachPromise)
         .then((result) => {
-          if (disposed) {
-            return
-          }
-          const connectResult =
-            result && typeof result === 'object' && 'id' in result
-              ? (result as PtyConnectResult)
-              : null
-
-          const ptyId =
-            connectResult?.id ?? (typeof result === 'string' ? result : transport.getPtyId())
-          if (ptyId) {
-            deps.syncPanePtyLayoutBinding(pane.id, ptyId)
-            deps.updateTabPtyId(deps.tabId, ptyId)
-          }
-
-          if (connectResult?.coldRestore) {
-            // Why: restoreScrollbackBuffers() already wrote the saved xterm
-            // buffer before this rAF ran. The cold-restore scrollback from
-            // disk history overlaps with that content. Without clearing first,
-            // the terminal shows duplicated output.
-            // Why replayIntoTerminal: the recorded scrollback is raw PTY output
-            // that may contain query sequences the previous agent CLI emitted;
-            // writing them through xterm.write would trigger auto-replies that
-            // land in the new shell's stdin. See replay-guard.ts.
-            replayIntoTerminal(pane, deps.replayingPanesRef, '\x1b[2J\x1b[3J\x1b[H')
-            replayIntoTerminal(pane, deps.replayingPanesRef, connectResult.coldRestore.scrollback)
-            replayIntoTerminal(
-              pane,
-              deps.replayingPanesRef,
-              '\r\n\x1b[2m--- session restored ---\x1b[0m\r\n\r\n'
-            )
-            // Why: the cold-restore scrollback is raw PTY output from the prior
-            // session, so mode-setting bytes emitted by a crashed TUI (e.g.
-            // Claude's \e[?1004h) come through verbatim and re-enable those modes
-            // in xterm. Cold-restore means the daemon lost the session and spawned
-            // a fresh shell — there is no TUI consuming these modes anymore, so
-            // reset them to match the fresh shell's expectations. Not applied to
-            // the snapshot branch below: that branch reattaches to a live daemon
-            // session where a running TUI may still depend on these modes.
-            replayIntoTerminal(pane, deps.replayingPanesRef, POST_REPLAY_MODE_RESET)
-            // Why: ptyId can be null if the transport was torn down during the
-            // reattach flight. Only IPC the ack when we have a real ptyId;
-            // the replay-into-xterm calls above remain unconditional because
-            // they write into the terminal buffer regardless.
-            if (ptyId) {
-              window.api.pty.ackColdRestore(ptyId)
-            }
-          } else if (connectResult?.snapshot) {
-            // Why: always clear before writing the daemon snapshot to prevent
-            // duplication with the scrollback that restoreScrollbackBuffers()
-            // wrote earlier. The alt-screen case previously skipped this,
-            // leaving stale scrollback in the normal buffer that reappeared
-            // when the user exited the TUI (e.g. Claude Code).
-            // Why replayIntoTerminal: same rationale as the cold-restore path.
-            replayIntoTerminal(pane, deps.replayingPanesRef, '\x1b[2J\x1b[3J\x1b[H')
-            replayIntoTerminal(pane, deps.replayingPanesRef, connectResult.snapshot)
-            // Why: snapshot restore keeps a live daemon session, so we avoid
-            // the broader POST_REPLAY_MODE_RESET bundle here. Focus reporting
-            // is the unsafe exception: preserving `?1004h` causes xterm to send
-            // `\e[I` / `\e[O` on pane focus/blur, and restored shells can ring
-            // BEL when no TUI is actively consuming them. Reset only 1004 so
-            // live-session mouse/paste modes stay intact while phantom bells stop.
-            replayIntoTerminal(pane, deps.replayingPanesRef, POST_REPLAY_FOCUS_REPORTING_RESET)
-          }
-
-          if (ptyId) {
-            transport.resize(cols, rows)
-            // Why: POSIX only delivers SIGWINCH when terminal dimensions
-            // actually change. If the pane dimensions match the daemon
-            // session's stored dimensions (common for split panes across
-            // restarts), the resize above is a no-op and inline-viewport
-            // TUIs (Claude Code/Ink) never redraw. Sending SIGWINCH
-            // explicitly guarantees the TUI repaints at the correct cursor
-            // position, correcting any snapshot-vs-PTY cursor divergence.
-            window.api.pty.signal(ptyId, 'SIGWINCH')
-          }
-
-          scheduleRuntimeGraphSync()
+          handleReattachResult(result, deferredReattachSessionId)
         })
         .catch((err) => {
-          reportError(err instanceof Error ? err.message : String(err))
+          const message = err instanceof Error ? err.message : String(err)
+          warnTerminalLifecycleAnomaly('restored PTY reattach threw', {
+            tabId: deps.tabId,
+            worktreeId: deps.worktreeId,
+            leafId: deps.restoredLeafId ?? paneLeafId(pane.id),
+            paneId: pane.id,
+            ptyId: deferredReattachSessionId,
+            reason: message
+          })
+          reportError(message)
+          deps.syncPanePtyLayoutBinding(pane.id, null)
+          deps.clearTabPtyId(deps.tabId, deferredReattachSessionId)
+          startFreshSpawn()
         })
     } else if (detachedLivePtyId) {
       allowInitialIdleCacheSeed = false

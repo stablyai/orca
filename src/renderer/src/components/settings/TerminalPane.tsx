@@ -10,6 +10,10 @@ import {
   TERMINAL_FONT_WEIGHT_STEP,
   normalizeTerminalFontWeight
 } from '../../../../shared/terminal-fonts'
+import {
+  fontFamilyHasKnownLigatures,
+  resolveTerminalLigaturesEnabled
+} from '../../../../shared/terminal-ligatures'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
@@ -246,6 +250,64 @@ export function TerminalPane({
               })
             }
           />
+        </SearchableSetting>
+
+        <SearchableSetting
+          title="Font Ligatures"
+          description='Render programming ligatures (e.g. =>, !=, ===) for fonts that ship them. "Auto" enables ligatures only for known ligature fonts (Fira Code, JetBrains Mono, Cascadia Code, Iosevka, etc.).'
+          keywords={[
+            'terminal',
+            'typography',
+            'ligatures',
+            'ligature',
+            'fira code',
+            'jetbrains mono',
+            'cascadia code',
+            'iosevka',
+            'calt',
+            'font features'
+          ]}
+          className="space-y-2"
+        >
+          <Label>Font Ligatures</Label>
+          <div className="flex w-fit gap-1 rounded-md border border-border/50 p-1">
+            {(['auto', 'on', 'off'] as const).map((option) => (
+              <button
+                key={option}
+                onClick={() => updateSettings({ terminalLigatures: option })}
+                className={`rounded-sm px-3 py-1 text-sm capitalize transition-colors ${
+                  (settings.terminalLigatures ?? 'auto') === option
+                    ? 'bg-accent font-medium text-accent-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {option === 'auto' ? 'Auto' : option === 'on' ? 'On' : 'Off'}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {settings.terminalLigatures === 'on'
+              ? 'Ligatures are always on. Fonts without ligatures simply render as-is.'
+              : settings.terminalLigatures === 'off'
+                ? 'Ligatures are always off, even for fonts that ship them.'
+                : fontFamilyHasKnownLigatures(settings.terminalFontFamily)
+                  ? `Auto — enabled because "${settings.terminalFontFamily}" is a known ligature font. Switch to "Off" to disable.`
+                  : `Auto — disabled because "${
+                      settings.terminalFontFamily || 'the current font'
+                    }" is not a known ligature font. Switch to "On" to enable anyway.`}
+          </p>
+          {/* Why: surface the resolved state explicitly so the "Auto" label
+              isn't ambiguous when a user is staring at it. */}
+          <p className="sr-only" aria-live="polite">
+            Ligatures are currently{' '}
+            {resolveTerminalLigaturesEnabled(
+              settings.terminalLigatures,
+              settings.terminalFontFamily
+            )
+              ? 'enabled'
+              : 'disabled'}
+            .
+          </p>
         </SearchableSetting>
       </section>
     ) : null,

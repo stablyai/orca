@@ -347,6 +347,8 @@ export type PreloadApi = {
       snapshotRows?: number
       isReattach?: boolean
       isAlternateScreen?: boolean
+      replay?: string
+      sessionExpired?: boolean
       coldRestore?: { scrollback: string; cwd: string }
     }>
     write: (id: string, data: string) => void
@@ -358,6 +360,7 @@ export type PreloadApi = {
     getForegroundProcess: (id: string) => Promise<string | null>
     listSessions: () => Promise<{ id: string; cwd: string; title: string }[]>
     onData: (callback: (data: { id: string; data: string }) => void) => () => void
+    onReplay: (callback: (data: { id: string; data: string }) => void) => () => void
     onExit: (callback: (data: { id: string; code: number }) => void) => () => void
   }
   feedback: {
@@ -398,10 +401,12 @@ export type PreloadApi = {
       title: string
       body: string
     }) => Promise<{ ok: true; number: number; url: string } | { ok: false; error: string }>
+    countWorkItems: (args: { repoPath: string; query?: string }) => Promise<number>
     listWorkItems: (args: {
       repoPath: string
       limit?: number
       query?: string
+      before?: string
     }) => Promise<Omit<GitHubWorkItem, 'repoId'>[]>
     prChecks: (args: {
       repoPath: string
@@ -708,6 +713,7 @@ export type PreloadApi = {
     onHardReloadBrowserPage: (callback: () => void) => () => void
     onCloseActiveTab: (callback: () => void) => () => void
     onSwitchTab: (callback: (direction: 1 | -1) => void) => () => void
+    onSwitchTerminalTab: (callback: (direction: 1 | -1) => void) => () => void
     onToggleStatusBar: (callback: () => void) => () => void
     onExportPdfRequested: (callback: () => void) => () => void
     onActivateWorktree: (

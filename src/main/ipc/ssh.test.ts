@@ -31,6 +31,8 @@ const {
     dispose: vi.fn(),
     isDisposed: vi.fn().mockReturnValue(false),
     onNotification: vi.fn(),
+    onDispose: vi.fn().mockReturnValue(() => {}),
+    request: vi.fn().mockResolvedValue({}),
     notify: vi.fn()
   },
   mockPtyProvider: {
@@ -175,6 +177,7 @@ describe('SSH IPC handlers', () => {
     mockMux.dispose.mockReset()
     mockMux.isDisposed.mockReset().mockReturnValue(false)
     mockMux.onNotification.mockReset()
+    mockMux.onDispose.mockReset().mockReturnValue(() => {})
     mockPtyProvider.onData.mockReset()
     mockPtyProvider.onExit.mockReset()
     mockPtyProvider.onReplay.mockReset()

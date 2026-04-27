@@ -1,6 +1,7 @@
 export type ParsedTaskQuery = {
   scope: 'all' | 'issue' | 'pr'
   state: 'open' | 'closed' | 'all' | 'merged' | null
+  draft: boolean
   assignee: string | null
   author: string | null
   reviewRequested: string | null
@@ -23,6 +24,7 @@ export function parseTaskQuery(rawQuery: string): ParsedTaskQuery {
   const query: ParsedTaskQuery = {
     scope: 'all',
     state: null,
+    draft: false,
     assignee: null,
     author: null,
     reviewRequested: null,
@@ -60,6 +62,7 @@ export function parseTaskQuery(rawQuery: string): ParsedTaskQuery {
     if (normalized === 'is:draft') {
       query.scope = 'pr'
       query.state = 'open'
+      query.draft = true
       continue
     }
 

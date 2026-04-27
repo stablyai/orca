@@ -28,6 +28,15 @@ import type { OpenFile } from '@/store/slices/editor'
 const EXTERNAL_RELOAD_DEBOUNCE_MS = 75
 const pendingExternalReloadTimers = new Map<string, number>()
 
+function warnExternalWatchFailure(target: WatchedTarget, err: unknown): void {
+  console.warn('[filesystem-watch] failed to watch worktree', {
+    worktreeId: target.worktreeId,
+    worktreePath: target.worktreePath,
+    connectionId: target.connectionId,
+    error: err instanceof Error ? err.message : String(err)
+  })
+}
+
 function scheduleDebouncedExternalReload(notification: {
   worktreeId: string
   worktreePath: string
@@ -147,10 +156,17 @@ export function useEditorExternalWatch(): void {
       })
     }
     for (const target of added) {
-      void window.api.fs.watchWorktree({
-        worktreePath: target.worktreePath,
-        connectionId: target.connectionId
-      })
+      void window.api.fs
+        .watchWorktree({
+          worktreePath: target.worktreePath,
+          connectionId: target.connectionId
+        })
+        .catch((err) => {
+          // Why: remote SSH providers can disappear while tabs still reference
+          // the worktree. Watching should degrade to a diagnostic, not an
+          // uncaught renderer promise that looks like the terminal froze.
+          warnExternalWatchFailure(target, err)
+        })
     }
     targetsRef.current = nextTargets
     // Why: this effect is intentionally differential — it does not unwatch on
@@ -319,7 +335,7 @@ export function createExternalWatchEventHandler(
       for (const file of state.openFiles) {
         if (
           file.worktreeId === target.worktreeId &&
-          file.mode === 'edit' &&
+          (file.mode === 'edit' || file.mode === 'markdown-preview') &&
           file.externalMutation &&
           createOrUpdatePaths.has(normalizeAbsolutePath(file.filePath))
         ) {
@@ -422,7 +438,11 @@ export function getOverflowExternalReloadTargets(
   const notifications: ExternalWatchNotification[] = []
 
   for (const file of state.openFiles) {
-    if (file.worktreeId !== target.worktreeId || file.mode !== 'edit' || file.isDirty) {
+    if (
+      file.worktreeId !== target.worktreeId ||
+      (file.mode !== 'edit' && file.mode !== 'markdown-preview') ||
+      file.isDirty
+    ) {
       continue
     }
     if (file.externalMutation) {
@@ -488,7 +508,10 @@ function collectDeletedOpenEditorIds(
   }
   const result: string[] = []
   for (const file of openFiles) {
-    if (file.worktreeId !== worktreeId || file.mode !== 'edit') {
+    if (
+      file.worktreeId !== worktreeId ||
+      (file.mode !== 'edit' && file.mode !== 'markdown-preview')
+    ) {
       continue
     }
     if (deletePaths.has(normalizeAbsolutePath(file.filePath))) {
@@ -523,7 +546,10 @@ function hasRenameCorrelatedCreate(
   const deletedIdSet = new Set(deletedOpenEditorIds)
   const deletedBasenames = new Set<string>()
   for (const file of openFiles) {
-    if (file.worktreeId !== worktreeId || file.mode !== 'edit') {
+    if (
+      file.worktreeId !== worktreeId ||
+      (file.mode !== 'edit' && file.mode !== 'markdown-preview')
+    ) {
       continue
     }
     if (!deletedIdSet.has(file.id)) {

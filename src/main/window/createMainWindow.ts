@@ -84,6 +84,12 @@ export function createMainWindow(
     minWidth: 600,
     minHeight: 400,
     show: false,
+    // Why: on macOS the menu lives in the system menu bar, so the in-window
+    // menu bar is irrelevant. On Windows/Linux we auto-hide so the menu bar
+    // doesn't consume a dedicated row of vertical space on every launch —
+    // users can still reveal the (properly restructured) File/Edit/View/
+    // Window/Help menus by pressing Alt, matching native Windows/Linux
+    // conventions (File Explorer, Firefox, etc.).
     autoHideMenuBar: true,
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : undefined,

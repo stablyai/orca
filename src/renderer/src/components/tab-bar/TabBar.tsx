@@ -337,7 +337,14 @@ function TabBarInner({
             "+" button remains window-draggable. */}
         <div
           ref={tabStripRef}
-          className="terminal-tab-strip flex items-stretch overflow-x-auto overflow-y-hidden"
+          // Why: only `border-r` on the strip — the trailing edge must stay
+          // visible even when tabs overflow-scroll past the last tab. The
+          // left edge is instead painted by the FIRST tab's own `border-l`
+          // (see per-tab components) so its rendering is identical to every
+          // between-tab separator. A strip-level `border-l` would render at
+          // a different box than the tab's own `border-t`, producing a
+          // heavier-looking L-corner at the leftmost tab when inactive.
+          className="terminal-tab-strip flex items-stretch overflow-x-auto overflow-y-hidden border-r border-border"
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
           {orderedItems.map((item, index) => {

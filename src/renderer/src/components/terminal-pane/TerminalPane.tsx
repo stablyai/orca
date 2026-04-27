@@ -130,6 +130,8 @@ export default function TerminalPane({
   const clearTabPtyId = useAppStore((store) => store.clearTabPtyId)
   const markWorktreeUnread = useAppStore((store) => store.markWorktreeUnread)
   const markTerminalTabUnread = useAppStore((store) => store.markTerminalTabUnread)
+  const clearWorktreeUnread = useAppStore((store) => store.clearWorktreeUnread)
+  const clearTerminalTabUnread = useAppStore((store) => store.clearTerminalTabUnread)
   const settings = useAppStore((store) => store.settings)
   // Why: Windows is the only platform where bare right-click is repurposed as
   // a paste gesture; on macOS/Linux the terminal still owns right-click for the
@@ -386,6 +388,8 @@ export default function TerminalPane({
     updateTabPtyId,
     markWorktreeUnread,
     markTerminalTabUnread,
+    clearWorktreeUnread,
+    clearTerminalTabUnread,
     dispatchNotification,
     setCacheTimerStartedAt,
     syncPanePtyLayoutBinding,
@@ -450,6 +454,8 @@ export default function TerminalPane({
         updateTabPtyId,
         markWorktreeUnread,
         markTerminalTabUnread,
+        clearWorktreeUnread,
+        clearTerminalTabUnread,
         dispatchNotification,
         setCacheTimerStartedAt,
         syncPanePtyLayoutBinding
@@ -465,6 +471,8 @@ export default function TerminalPane({
       dispatchNotification,
       markWorktreeUnread,
       markTerminalTabUnread,
+      clearWorktreeUnread,
+      clearTerminalTabUnread,
       onPtyExitRef,
       setCacheTimerStartedAt,
       setRuntimePaneTitle,
@@ -633,6 +641,37 @@ export default function TerminalPane({
       container.removeEventListener('paste', onPaste, { capture: true })
     }
   }, [isActive])
+
+  // Why: a click inside the terminal container is a deliberate interaction
+  // with the pane — dismiss the bell indicator for this tab and worktree
+  // (ghostty "show until interact" semantics). onData already covers
+  // keystrokes; pointerdown covers the mouse path, including right-click
+  // and middle-click paste, which also count as engagement with the pane.
+  //
+  // This listener is intentionally NOT gated on `isActive`. In multi-group
+  // split layouts (TabGroupPanel), several TerminalPane instances are
+  // simultaneously visible but only ONE has `isActive=true` (the focused
+  // group's active pane). When the user clicks into a visible-but-inactive
+  // split pane, TabGroupPanel's wrapper `onPointerDown={commands.focusGroup}`
+  // fires first; focusGroup clears tab-level unread but does NOT call
+  // clearWorktreeUnread — so the worktree-level sidebar dot would linger
+  // until another interaction. Attaching this listener unconditionally lets
+  // the first click dismiss both dots BEFORE focusGroup re-renders the pane
+  // as active and the effect deps change.
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) {
+      return
+    }
+    const onPointerDown = (): void => {
+      clearTerminalTabUnread(tabId)
+      clearWorktreeUnread(worktreeId)
+    }
+    container.addEventListener('pointerdown', onPointerDown, { capture: true })
+    return () => {
+      container.removeEventListener('pointerdown', onPointerDown, { capture: true })
+    }
+  }, [tabId, worktreeId, clearTerminalTabUnread, clearWorktreeUnread])
 
   // Sync the data-has-title attribute on pane containers when titles change,
   // and reflow terminals so safeFit() sees the correct available height.

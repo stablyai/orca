@@ -143,6 +143,12 @@ describe('requestEditorFileSave', () => {
 describe('getOpenFilesForExternalFileChange', () => {
   it('matches edit tabs and unstaged diff tabs for the same worktree file', () => {
     const matchingEdit = makeOpenFile()
+    const matchingPreview = makeOpenFile({
+      id: 'markdown-preview::/repo/file.ts',
+      mode: 'markdown-preview',
+      language: 'markdown',
+      markdownPreviewSourceFileId: '/repo/file.ts'
+    })
     const matchingUnstagedDiff = makeOpenFile({
       id: 'wt-1::diff::unstaged::file.ts',
       mode: 'diff',
@@ -161,13 +167,13 @@ describe('getOpenFilesForExternalFileChange', () => {
 
     expect(
       getOpenFilesForExternalFileChange(
-        [matchingEdit, matchingUnstagedDiff, stagedDiff, otherWorktree],
+        [matchingEdit, matchingPreview, matchingUnstagedDiff, stagedDiff, otherWorktree],
         {
           worktreeId: 'wt-1',
           worktreePath: '/repo',
           relativePath: 'file.ts'
         }
       ).map((file) => file.id)
-    ).toEqual(['/repo/file.ts', 'wt-1::diff::unstaged::file.ts'])
+    ).toEqual(['/repo/file.ts', 'markdown-preview::/repo/file.ts', 'wt-1::diff::unstaged::file.ts'])
   })
 })

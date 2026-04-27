@@ -2,6 +2,7 @@ import type { IDisposable, IParser, ITheme } from '@xterm/xterm'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { GlobalSettings } from '../../../../shared/types'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
+import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal-ligatures'
 import {
   getBuiltinTheme,
   resolvePaneStyleOptions,
@@ -142,6 +143,10 @@ export function applyTerminalAppearance(
   const theme: ITheme | null = appearance.theme ?? getBuiltinTheme(appearance.themeName)
   const paneBackground = theme?.background ?? '#000000'
   const terminalFontWeights = resolveTerminalFontWeights(settings.terminalFontWeight)
+  const ligaturesEnabled = resolveTerminalLigaturesEnabled(
+    settings.terminalLigatures,
+    settings.terminalFontFamily
+  )
 
   for (const pane of manager.getPanes()) {
     if (theme) {
@@ -162,6 +167,12 @@ export function applyTerminalAppearance(
     // `effectiveMacOptionAsAlt` carries.
     pane.terminal.options.macOptionIsMeta = effectiveMacOptionAsAlt === 'true'
     pane.terminal.options.lineHeight = settings.terminalLineHeight
+    // Why call unconditionally: the per-pane helper is a no-op when the
+    // current addon state already matches, so passing the resolved value on
+    // every appearance apply keeps newly-created panes in sync without a
+    // separate hook and lets live toggles (settings change, font swap)
+    // land immediately.
+    manager.setPaneLigaturesEnabled(pane.id, ligaturesEnabled)
     try {
       const state = captureScrollState(pane.terminal)
       pane.fitAddon.fit()

@@ -632,11 +632,12 @@ function GHEditSection({
           <button
             type="button"
             className={cn(
-              'rounded-full border px-2 py-0.5 text-[11px] font-medium transition hover:opacity-80',
+              'group/status inline-flex items-center gap-0.5 rounded-full border px-2 py-0.5 text-[11px] font-medium transition hover:brightness-125 hover:ring-1 hover:ring-white/10',
               getStateTone({ ...item, state: localState })
             )}
           >
             {getStateLabel({ ...item, state: localState })}
+            <ChevronDown className="size-2.5 opacity-50" />
           </button>
         </PopoverTrigger>
         <PopoverContent className="w-36 p-1" align="start">
@@ -671,22 +672,21 @@ function GHEditSection({
           <button
             type="button"
             disabled={isPending('labels') || repoLabels.loading}
-            className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] transition hover:bg-muted/40 disabled:opacity-50"
+            className="group/labels inline-flex items-center gap-1 rounded-full border border-border/30 bg-muted/20 px-2 py-0.5 text-[11px] transition hover:brightness-125 hover:ring-1 hover:ring-white/10 disabled:opacity-50"
           >
             {localLabels.length === 0 ? (
               <span className="text-muted-foreground">+ Label</span>
             ) : (
               localLabels.map((name) => (
-                <span
-                  key={name}
-                  className="rounded-full border border-border/50 bg-background/60 px-1.5 py-0.5 text-[10px] text-muted-foreground"
-                >
+                <span key={name} className="text-[10px] text-muted-foreground">
                   {name}
                 </span>
               ))
             )}
-            {isPending('labels') && (
+            {isPending('labels') ? (
               <LoaderCircle className="size-3 animate-spin text-muted-foreground" />
+            ) : (
+              <ChevronDown className="size-2.5 opacity-50" />
             )}
           </button>
         </PopoverTrigger>
@@ -728,22 +728,21 @@ function GHEditSection({
           <button
             type="button"
             disabled={isPending('assignees') || repoAssignees.loading}
-            className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] transition hover:bg-muted/40 disabled:opacity-50"
+            className="group/assignees inline-flex items-center gap-1 rounded-full border border-border/30 bg-muted/20 px-2 py-0.5 text-[11px] transition hover:brightness-125 hover:ring-1 hover:ring-white/10 disabled:opacity-50"
           >
             {localAssignees.length === 0 ? (
               <span className="text-muted-foreground">+ Assignee</span>
             ) : (
               localAssignees.map((login) => (
-                <span
-                  key={login}
-                  className="rounded-full border border-border/50 bg-background/60 px-1.5 py-0.5 text-[10px] text-muted-foreground"
-                >
+                <span key={login} className="text-[10px] text-muted-foreground">
                   {login}
                 </span>
               ))
             )}
-            {isPending('assignees') && (
+            {isPending('assignees') ? (
               <LoaderCircle className="size-3 animate-spin text-muted-foreground" />
+            ) : (
+              <ChevronDown className="size-2.5 opacity-50" />
             )}
           </button>
         </PopoverTrigger>

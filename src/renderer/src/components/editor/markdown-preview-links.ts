@@ -14,7 +14,7 @@ function toFileUrl(filePath: string): string {
   return `file:///${segments.join('/')}`
 }
 
-function resolveMarkdownUrl(rawUrl: string, filePath: string): URL | null {
+export function resolveMarkdownPreviewHref(rawUrl: string, filePath: string): URL | null {
   if (!rawUrl || rawUrl.startsWith('#')) {
     return null
   }
@@ -34,7 +34,7 @@ export function getMarkdownPreviewLinkTarget(
     return null
   }
 
-  const resolved = resolveMarkdownUrl(rawHref, filePath)
+  const resolved = resolveMarkdownPreviewHref(rawHref, filePath)
   if (!resolved) {
     return null
   }
@@ -58,7 +58,7 @@ export function getMarkdownPreviewImageSrc(
     return rawSrc
   }
 
-  const resolved = resolveMarkdownUrl(rawSrc, filePath)
+  const resolved = resolveMarkdownPreviewHref(rawSrc, filePath)
   if (!resolved) {
     return rawSrc
   }
@@ -87,7 +87,7 @@ export function resolveImageAbsolutePath(
     return null
   }
 
-  const resolved = resolveMarkdownUrl(rawSrc, filePath)
+  const resolved = resolveMarkdownPreviewHref(rawSrc, filePath)
   if (!resolved || resolved.protocol !== 'file:') {
     return null
   }
@@ -95,6 +95,19 @@ export function resolveImageAbsolutePath(
   // Convert file:///path/to/file → /path/to/file (Unix)
   // Convert file:///C:/path/to/file → C:/path/to/file (Windows)
   let absolutePath = decodeURIComponent(resolved.pathname)
+  if (/^\/[A-Za-z]:\//.test(absolutePath)) {
+    absolutePath = absolutePath.slice(1)
+  }
+
+  return absolutePath
+}
+
+export function fileUrlToAbsolutePath(fileUrl: URL): string | null {
+  if (fileUrl.protocol !== 'file:') {
+    return null
+  }
+
+  let absolutePath = decodeURIComponent(fileUrl.pathname)
   if (/^\/[A-Za-z]:\//.test(absolutePath)) {
     absolutePath = absolutePath.slice(1)
   }

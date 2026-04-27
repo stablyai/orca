@@ -111,10 +111,8 @@ export default function BrowserTab({
           ref={setNodeRef}
           {...attributes}
           {...listeners}
-          className={`group relative flex items-center h-full px-3 text-sm cursor-pointer select-none shrink-0 border-r border-border ${getDropIndicatorClasses(dropIndicator ?? null)} ${
-            isActive
-              ? 'bg-accent text-foreground border-b-transparent'
-              : 'bg-card text-muted-foreground hover:text-foreground hover:bg-accent/50'
+          className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none shrink-0 outline-none focus:outline-none focus-visible:outline-none border-t ${hasTabsToRight ? 'border-r' : ''} border-border bg-card ${getDropIndicatorClasses(dropIndicator ?? null)} ${
+            isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
           }`}
           onPointerDown={(e) => {
             if (e.button !== 0) {
@@ -138,11 +136,11 @@ export default function BrowserTab({
         >
           {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
           <Globe
-            className={`w-3.5 h-3.5 mr-1.5 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
+            className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
           />
-          <span className="truncate max-w-[180px] mr-1.5">{getBrowserTabLabel(tab)}</span>
+          <span className="truncate max-w-[100px] mr-1">{getBrowserTabLabel(tab)}</span>
           {tab.loading && !tab.loadError && !isBlankBrowserTab(tab) && (
-            <span className="mr-1.5 size-1.5 rounded-full bg-sky-500/80 shrink-0" />
+            <span className="mr-1 size-1.5 rounded-full bg-sky-500/80 shrink-0" />
           )}
           <button
             className={`flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${

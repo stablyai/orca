@@ -22,7 +22,12 @@ import { ORCA_HOOK_PROTOCOL_VERSION } from '../../shared/agent-hook-types'
 // (session.status, session.idle, permission.asked) rather than settings.json
 // hook names, so the plugin pre-maps them to our hook_event_name vocabulary
 // before POSTing. See normalizeOpenCodeEvent below for the mapping.
-type AgentHookSource = 'claude' | 'codex' | 'gemini' | 'opencode'
+//
+// Cursor (cursor-agent) exposes a declarative hooks.json surface that is
+// conceptually similar to Claude's settings.json hooks but uses camelCase
+// event names (beforeSubmitPrompt, preToolUse, postToolUse, stop, etc.) per
+// https://cursor.com/docs/hooks. See normalizeCursorEvent below.
+type AgentHookSource = 'claude' | 'codex' | 'gemini' | 'opencode' | 'cursor'
 
 type AgentHookEventPayload = {
   paneKey: string
@@ -585,6 +590,63 @@ function extractOpenCodeToolFields(
   return {}
 }
 
+// Why: Cursor's preToolUse / postToolUse / postToolUseFailure payloads carry
+// `tool_name` + `tool_input` (same shape as Claude). beforeShellExecution /
+// beforeMCPExecution carry a `command` field directly — surface that via a
+// synthetic "Shell" / "MCP" tool name so the dashboard row can show the
+// pending command while cursor-agent is blocked on approval.
+// afterAgentResponse carries a `text` field that is cursor's analogue of
+// Claude's last_assistant_message (the final composed reply for the turn).
+function extractCursorToolFields(
+  eventName: unknown,
+  hookPayload: Record<string, unknown>
+): ToolSnapshot {
+  if (
+    eventName === 'preToolUse' ||
+    eventName === 'postToolUse' ||
+    eventName === 'postToolUseFailure'
+  ) {
+    const toolName = readString(hookPayload, 'tool_name')
+    const toolInput = deriveToolInputPreview(toolName, hookPayload.tool_input)
+    const update: ToolSnapshot = { toolName, toolInput }
+    if (eventName === 'postToolUse') {
+      const responseText = extractToolResponseText(hookPayload.tool_output)
+      if (responseText) {
+        update.lastAssistantMessage = responseText
+      }
+    }
+    if (eventName === 'postToolUseFailure') {
+      const errorText =
+        extractToolResponseText(hookPayload.tool_output) ??
+        readString(hookPayload, 'error_message') ??
+        readString(hookPayload, 'error')
+      if (errorText) {
+        update.lastAssistantMessage = errorText
+      }
+    }
+    return update
+  }
+  if (eventName === 'beforeShellExecution') {
+    const command = readString(hookPayload, 'command')
+    return { toolName: 'Shell', toolInput: command }
+  }
+  if (eventName === 'beforeMCPExecution') {
+    const toolName = readString(hookPayload, 'tool_name') ?? 'MCP'
+    const toolInput =
+      deriveToolInputPreview(toolName, hookPayload.tool_input) ??
+      readString(hookPayload, 'command') ??
+      readString(hookPayload, 'url')
+    return { toolName, toolInput }
+  }
+  if (eventName === 'afterAgentResponse') {
+    const text = readString(hookPayload, 'text')
+    if (text) {
+      return { lastAssistantMessage: text }
+    }
+  }
+  return {}
+}
+
 function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
   if (source === 'claude') {
     return eventName === 'UserPromptSubmit'
@@ -597,6 +659,12 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
   }
   if (source === 'gemini') {
     return eventName === 'BeforeAgent'
+  }
+  if (source === 'cursor') {
+    // Why: Cursor's beforeSubmitPrompt is the new-turn boundary (it carries
+    // the fresh prompt). sessionStart also begins a fresh session and should
+    // not inherit any cached tool state from whatever was left on disk.
+    return eventName === 'beforeSubmitPrompt' || eventName === 'sessionStart'
   }
   // Why: OpenCode has no UserPromptSubmit analogue, AND the plugin emits the
   // user's MessagePart *before* SessionBusy (message.updated fires on prompt
@@ -620,6 +688,9 @@ function extractToolFields(
   }
   if (source === 'gemini') {
     return extractGeminiToolFields(eventName, hookPayload)
+  }
+  if (source === 'cursor') {
+    return extractCursorToolFields(eventName, hookPayload)
   }
   return extractOpenCodeToolFields(eventName, hookPayload)
 }
@@ -807,6 +878,67 @@ function normalizeOpenCodeEvent(
   )
 }
 
+// Why: Cursor (cursor-agent) installs hooks via ~/.cursor/hooks.json with
+// camelCase event names, per https://cursor.com/docs/hooks. The CLI fires
+// stdin-JSON payloads for each subscribed event; we subscribe to the subset
+// that marks turn boundaries and produces meaningful working/done/waiting
+// transitions for the Orca sidebar. afterAgentResponse carries the final
+// assistant reply text, which is cursor's analogue of Claude's Stop
+// last_assistant_message — we keep the row in `working` there because the
+// true turn-end signal is `stop`.
+function normalizeCursorEvent(
+  eventName: unknown,
+  promptText: string,
+  paneKey: string,
+  hookPayload: Record<string, unknown>
+): ParsedAgentStatusPayload | null {
+  const state =
+    eventName === 'beforeSubmitPrompt' ||
+    eventName === 'sessionStart' ||
+    eventName === 'preToolUse' ||
+    eventName === 'postToolUse' ||
+    eventName === 'postToolUseFailure' ||
+    eventName === 'afterAgentResponse'
+      ? 'working'
+      : eventName === 'stop' || eventName === 'sessionEnd'
+        ? 'done'
+        : eventName === 'beforeShellExecution' || eventName === 'beforeMCPExecution'
+          ? 'waiting'
+          : null
+
+  if (!state) {
+    return null
+  }
+
+  const snapshot = resolveToolState(paneKey, extractToolFields('cursor', eventName, hookPayload), {
+    resetOnNewTurn: isNewTurnEvent('cursor', eventName)
+  })
+
+  // Why: cursor-agent reports turn interrupts via `stop` with status !==
+  // "completed" (e.g. "cancelled", "stopped"). Forward the boolean so the
+  // sidebar can render the interrupted-turn treatment that Claude uses.
+  const interrupted =
+    eventName === 'stop' &&
+    typeof hookPayload.status === 'string' &&
+    hookPayload.status !== 'completed'
+      ? true
+      : undefined
+
+  return parseAgentStatusPayload(
+    JSON.stringify({
+      state,
+      prompt: resolvePrompt(paneKey, promptText, {
+        resetOnNewTurn: isNewTurnEvent('cursor', eventName)
+      }),
+      agentType: 'cursor',
+      toolName: snapshot.toolName,
+      toolInput: snapshot.toolInput,
+      lastAssistantMessage: snapshot.lastAssistantMessage,
+      interrupted
+    })
+  )
+}
+
 function readStringField(record: Record<string, unknown>, key: string): string | undefined {
   const value = record[key]
   if (typeof value !== 'string') {
@@ -899,7 +1031,9 @@ function normalizeHookPayload(
         ? normalizeCodexEvent(eventName, promptText, paneKey, hookPayloadRecord)
         : source === 'gemini'
           ? normalizeGeminiEvent(eventName, promptText, paneKey, hookPayloadRecord)
-          : normalizeOpenCodeEvent(eventName, promptText, paneKey, hookPayloadRecord)
+          : source === 'cursor'
+            ? normalizeCursorEvent(eventName, promptText, paneKey, hookPayloadRecord)
+            : normalizeOpenCodeEvent(eventName, promptText, paneKey, hookPayloadRecord)
 
   return payload ? { paneKey, tabId, worktreeId, payload } : null
 }
@@ -974,7 +1108,9 @@ export class AgentHookServer {
                 ? 'gemini'
                 : pathname === '/hook/opencode'
                   ? 'opencode'
-                  : null
+                  : pathname === '/hook/cursor'
+                    ? 'cursor'
+                    : null
         if (!source) {
           res.writeHead(404)
           res.end()

@@ -7,7 +7,7 @@ import { join } from 'path'
 
 const ATTRIBUTION_ROOT_DIR = 'orca-terminal-attribution'
 const ATTRIBUTION_SHIM_VERSION = '6'
-const ORCA_PRODUCT_URL = 'https://github.com/orca-ide'
+const ORCA_PRODUCT_URL = 'https://github.com/stablyai/orca'
 const ORCA_GIT_COMMIT_TRAILER = 'Co-authored-by: Orca <help@stably.ai>'
 const ORCA_GH_FOOTER = `Made with [Orca](${ORCA_PRODUCT_URL}) 🐋`
 const SHELL_DOLLAR = '$'
@@ -69,6 +69,7 @@ export function applyTerminalAttributionEnv(
   baseEnv.ORCA_GIT_COMMIT_TRAILER = ORCA_GIT_COMMIT_TRAILER
   baseEnv.ORCA_GH_PR_FOOTER = ORCA_GH_FOOTER
   baseEnv.ORCA_GH_ISSUE_FOOTER = ORCA_GH_FOOTER
+  baseEnv.ORCA_ATTRIBUTION_SHIM_DIR = posixDir
 
   if (process.platform === 'win32') {
     if (resolvedGit) {
@@ -497,7 +498,7 @@ if [[ "\${ORCA_ENABLE_GIT_ATTRIBUTION:-0}" != "1" || "\${ORCA_ATTRIBUTION_BYPASS
 fi
 
 if [[ "\${1:-}" == "pr" && "\${2:-}" == "create" ]]; then
-  footer="\${ORCA_GH_PR_FOOTER:-Made with [Orca](https://github.com/orca-ide) 🐋}"
+  footer="\${ORCA_GH_PR_FOOTER:-Made with [Orca](https://github.com/stablyai/orca) 🐋}"
   if has_passthrough_create_args "$@"; then
     PATH="$real_path" exec "$real_gh" "$@"
   fi
@@ -531,7 +532,7 @@ if [[ "\${1:-}" == "pr" && "\${2:-}" == "create" ]]; then
 fi
 
 if [[ "\${1:-}" == "issue" && "\${2:-}" == "create" ]]; then
-  footer="\${ORCA_GH_ISSUE_FOOTER:-Made with [Orca](https://github.com/orca-ide) 🐋}"
+  footer="\${ORCA_GH_ISSUE_FOOTER:-Made with [Orca](https://github.com/stablyai/orca) 🐋}"
   if has_passthrough_create_args "$@"; then
     PATH="$real_path" exec "$real_gh" "$@"
   fi
@@ -906,7 +907,7 @@ if ($isPrCreate) {
     if ($LASTEXITCODE -ne 0) {
       $body = $null
     }
-    $footer = if ($env:ORCA_GH_PR_FOOTER) { $env:ORCA_GH_PR_FOOTER } else { 'Made with [Orca](https://github.com/orca-ide) 🐋' }
+    $footer = if ($env:ORCA_GH_PR_FOOTER) { $env:ORCA_GH_PR_FOOTER } else { 'Made with [Orca](https://github.com/stablyai/orca) 🐋' }
     if ($null -ne $body -and $body -notmatch [Regex]::Escape($footer)) {
       $tmpFile = [System.IO.Path]::GetTempFileName()
       try {
@@ -937,7 +938,7 @@ if ($isIssueCreate) {
     if ($LASTEXITCODE -ne 0) {
       $body = $null
     }
-    $footer = if ($env:ORCA_GH_ISSUE_FOOTER) { $env:ORCA_GH_ISSUE_FOOTER } else { 'Made with [Orca](https://github.com/orca-ide) 🐋' }
+    $footer = if ($env:ORCA_GH_ISSUE_FOOTER) { $env:ORCA_GH_ISSUE_FOOTER } else { 'Made with [Orca](https://github.com/stablyai/orca) 🐋' }
     if ($null -ne $body -and $body -notmatch [Regex]::Escape($footer)) {
       $tmpFile = [System.IO.Path]::GetTempFileName()
       try {

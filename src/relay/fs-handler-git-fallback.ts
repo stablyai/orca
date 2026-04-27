@@ -9,40 +9,11 @@
 import { join } from 'path'
 import { spawn } from 'child_process'
 import { SEARCH_TIMEOUT_MS, type SearchOptions, type SearchResult } from './fs-handler-utils'
-
-// Why: mirrors the local HIDDEN_DIR_BLOCKLIST — tool-generated dirs that
-// clutter quick-open results but should never appear in file listings.
-const HIDDEN_DIR_BLOCKLIST = new Set([
-  '.git',
-  '.next',
-  '.nuxt',
-  '.cache',
-  '.stably',
-  '.vscode',
-  '.idea',
-  '.yarn',
-  '.pnpm-store',
-  '.terraform',
-  '.docker',
-  '.husky'
-])
-
-function shouldIncludePath(path: string): boolean {
-  let start = 0
-  const len = path.length
-  while (start < len) {
-    let end = path.indexOf('/', start)
-    if (end === -1) {
-      end = len
-    }
-    const segment = path.substring(start, end)
-    if (segment === 'node_modules' || HIDDEN_DIR_BLOCKLIST.has(segment)) {
-      return false
-    }
-    start = end + 1
-  }
-  return true
-}
+import {
+  buildGitLsFilesArgsForQuickOpen,
+  shouldExcludeQuickOpenRelPath,
+  shouldIncludeQuickOpenPath
+} from '../shared/quick-open-filter'
 
 const REGEX_SPECIAL = '.*+?^${}()|[]\\'
 function escapeRegexSource(str: string): string {
@@ -61,22 +32,24 @@ function toGitGlobPathspec(glob: string, exclude?: boolean): string {
 
 /**
  * List files using `git ls-files`. Fallback when rg is not installed.
+ *
+ * Why both passes: primary surfaces tracked + untracked-non-ignored;
+ * envPass surfaces gitignored .env* files that users frequently Quick Open.
+ * Exclude pathspecs are prepended by the shared builder so nested linked
+ * worktrees are pruned by git directly; post-filtering remains as a
+ * correctness backstop.
  */
-export function listFilesWithGit(rootPath: string): Promise<string[]> {
+export function listFilesWithGit(
+  rootPath: string,
+  excludePathPrefixes: readonly string[] = []
+): Promise<string[]> {
   const files = new Set<string>()
+  const { primary, envPass } = buildGitLsFilesArgsForQuickOpen(excludePathPrefixes)
 
   const runGitLsFiles = (args: string[]): Promise<void> => {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       let buf = ''
       let done = false
-      const finish = (): void => {
-        if (done) {
-          return
-        }
-        done = true
-        clearTimeout(timer)
-        resolve()
-      }
 
       const processLine = (line: string): void => {
         if (line.charCodeAt(line.length - 1) === 13) {
@@ -85,7 +58,10 @@ export function listFilesWithGit(rootPath: string): Promise<string[]> {
         if (!line) {
           return
         }
-        if (shouldIncludePath(line)) {
+        if (shouldExcludeQuickOpenRelPath(line, excludePathPrefixes)) {
+          return
+        }
+        if (shouldIncludeQuickOpenPath(line)) {
           files.add(line)
         }
       }
@@ -109,21 +85,42 @@ export function listFilesWithGit(rootPath: string): Promise<string[]> {
       child.stderr!.on('data', () => {
         /* drain */
       })
-      child.once('error', () => finish())
-      child.once('close', () => {
+      child.once('error', (err) => {
+        if (done) {
+          return
+        }
+        done = true
+        clearTimeout(timer)
+        buf = ''
+        reject(err)
+      })
+      child.once('close', (_code, signal) => {
+        if (done) {
+          return
+        }
+        done = true
+        clearTimeout(timer)
+        if (signal) {
+          // Why: a signal exit means the child was killed (timeout or
+          // external). Treat that as a load failure rather than silently
+          // resolving with whatever git had managed to print.
+          buf = ''
+          reject(new Error(`git ls-files killed by ${signal}`))
+          return
+        }
         if (buf) {
           processLine(buf)
         }
-        finish()
+        resolve()
       })
-      const timer = setTimeout(() => child.kill(), 10_000)
+      const timer = setTimeout(() => {
+        buf = ''
+        child.kill()
+      }, 10_000)
     })
   }
 
-  return Promise.all([
-    runGitLsFiles(['--cached', '--others', '--exclude-standard']),
-    runGitLsFiles(['--others', '--', '**/.env*'])
-  ]).then(() => Array.from(files))
+  return Promise.all([runGitLsFiles(primary), runGitLsFiles(envPass)]).then(() => Array.from(files))
 }
 
 type FileResult = {

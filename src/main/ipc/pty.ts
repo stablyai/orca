@@ -39,6 +39,29 @@ const ptyOwnership = new Map<string, string | null>()
 // teardown — the renderer knows the paneKey but the PTY lifecycle does not
 // without this mapping.
 const ptyPaneKey = new Map<string, string>()
+// Why: reverse of ptyPaneKey — callers that receive a paneKey from outside the
+// PTY lifecycle (e.g. the agent-hook server routing a cursor-agent status event
+// back into the pane's data stream) need to find the ptyId for that paneKey.
+// Kept in lock-step with ptyPaneKey via the same spawn and teardown sites.
+const paneKeyPtyId = new Map<string, string>()
+
+export function getPtyIdForPaneKey(paneKey: string): string | undefined {
+  return paneKeyPtyId.get(paneKey)
+}
+
+// Why: consumers (currently the cursor-agent synthesized-spinner loop in
+// main/index.ts) need to tear down paneKey-scoped state when a PTY exits so
+// intervals / timers cannot leak for the process lifetime. A callback
+// registry keeps the cross-module dependency narrow — clearProviderPtyState
+// only has to know about "things to notify", not about every consumer's
+// internals.
+type PaneKeyTeardownListener = (paneKey: string) => void
+const paneKeyTeardownListeners = new Set<PaneKeyTeardownListener>()
+
+export function registerPaneKeyTeardownListener(listener: PaneKeyTeardownListener): () => void {
+  paneKeyTeardownListeners.add(listener)
+  return () => paneKeyTeardownListeners.delete(listener)
+}
 
 function getProvider(connectionId: string | null | undefined): IPtyProvider {
   if (!connectionId) {
@@ -144,6 +167,17 @@ export function clearProviderPtyState(id: string): void {
   if (paneKey) {
     agentHookServer.clearPaneState(paneKey)
     ptyPaneKey.delete(id)
+    paneKeyPtyId.delete(paneKey)
+    // Why: notify registered consumers AFTER we've dropped the paneKey↔ptyId
+    // entries so a listener that re-reads the map sees the post-teardown
+    // state. Wrap each call so one throwing listener cannot block the rest.
+    for (const listener of paneKeyTeardownListeners) {
+      try {
+        listener(paneKey)
+      } catch (err) {
+        console.error('[pty] paneKey teardown listener threw', err)
+      }
+    }
   }
 }
 
@@ -451,6 +485,7 @@ export function registerPtyHandlers(
       const paneKey = args.env?.ORCA_PANE_KEY
       if (typeof paneKey === 'string' && paneKey.length > 0 && paneKey.length <= 256) {
         ptyPaneKey.set(result.id, paneKey)
+        paneKeyPtyId.set(paneKey, result.id)
       }
       return result
     }

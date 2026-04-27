@@ -16,7 +16,7 @@ const GEMINI_SILENT_WORKING = '\u23F2' // ⏲
 const GEMINI_IDLE = '\u25C7' // ◇
 const GEMINI_PERMISSION = '\u270B' // ✋
 
-export const AGENT_NAMES = ['claude', 'codex', 'copilot', 'gemini', 'opencode', 'aider']
+export const AGENT_NAMES = ['claude', 'codex', 'copilot', 'cursor', 'gemini', 'opencode', 'aider']
 
 // Why: idle keywords used inside `detectAgentStatusFromTitle` to map titles
 // like "Codex done", "OpenCode ready", "Aider idle" to AgentStatus 'idle'.
@@ -92,6 +92,24 @@ export function extractLastOscTitle(data: string): string | null {
     last = m[2]
   }
   return last
+}
+
+/**
+ * Extract ALL OSC title-set sequences from raw PTY data, in order of appearance.
+ * Why separate from extractLastOscTitle: node-pty and the main-process batch
+ * window (PTY_BATCH_INTERVAL_MS) often coalesce multiple title changes into
+ * one IPC payload. For fast agents (Pi's 80ms spinner + agent_end idle in the
+ * same batch), returning only the last title silently drops the working
+ * transition. Callers that care about driving UI state transitions
+ * (working/idle spinner) need every title in the chunk. See issue #1083's
+ * spinner-miss follow-up.
+ */
+export function extractAllOscTitles(data: string): string[] {
+  const titles: string[] = []
+  for (const m of data.matchAll(OSC_TITLE_RE)) {
+    titles.push(m[2])
+  }
+  return titles
 }
 
 export function isGeminiTerminalTitle(title: string): boolean {
@@ -275,6 +293,13 @@ export function isClaudeAgent(title: string): boolean {
     return true
   }
   if (containsBrailleSpinner(title)) {
+    // Why: Orca synthesizes `⠋ Cursor Agent` working titles for cursor-agent
+    // panes (see hook listener in main/index.ts). Those titles carry a braille
+    // spinner but are decidedly not Claude — the prompt-cache timer and other
+    // Claude-scoped paths must not fire for them.
+    if (title.toLowerCase().includes('cursor')) {
+      return false
+    }
     return true
   }
   // Why: permission/action-required Claude titles can omit the usual prefixes.
@@ -313,6 +338,15 @@ export function getAgentLabel(title: string): string | null {
   if (lower.includes('aider')) {
     return 'Aider'
   }
+  // Why: the cursor-agent native title is the literal string "Cursor Agent"
+  // (verified against the 2026.04.17 release) — Orca synthesizes the same
+  // label from hook events so the braille-spinner + agent-name path lights
+  // up working/permission/idle transitions in the renderer. Match before
+  // `isClaudeAgent` because Claude's generic braille heuristic would
+  // otherwise claim every "⠋ Cursor Agent" frame as Claude.
+  if (lower.includes('cursor')) {
+    return 'Cursor'
+  }
   if (isClaudeAgent(title)) {
     return 'Claude Code'
   }
@@ -320,8 +354,23 @@ export function getAgentLabel(title: string): string | null {
   return null
 }
 
+// Why: cursor-agent's native OSC title is the literal string "Cursor Agent"
+// across the entire turn — it carries zero working/idle information. Orca
+// synthesizes its own titles ("⠋ Cursor Agent" for working, "Cursor -
+// action required" for permission) from cursor's hook events; the bare
+// native title must be a no-op so cursor's per-turn re-emissions cannot
+// stomp the synthesized state back to idle.
+const CURSOR_NATIVE_TITLE_LOWER = 'cursor agent'
+
 export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
   if (!title) {
+    return null
+  }
+  // Why: "Cursor Agent" exactly (case-insensitive, no prefix/suffix) is cursor's
+  // native title. Anything with additional tokens ("⠋ Cursor Agent", "Cursor -
+  // action required") is either an Orca-synthesized working/permission title
+  // or a tighter match worth classifying.
+  if (title.trim().toLowerCase() === CURSOR_NATIVE_TITLE_LOWER) {
     return null
   }
 

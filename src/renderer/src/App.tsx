@@ -89,6 +89,8 @@ function App(): React.JSX.Element {
       fetchBrowserSessionProfiles: s.fetchBrowserSessionProfiles,
       fetchDetectedBrowsers: s.fetchDetectedBrowsers,
       reconnectPersistedTerminals: s.reconnectPersistedTerminals,
+      setDeferredSshReconnectTargets: s.setDeferredSshReconnectTargets,
+      setSshConnectionState: s.setSshConnectionState,
       hydratePersistedUI: s.hydratePersistedUI,
       openModal: s.openModal,
       closeModal: s.closeModal,
@@ -181,6 +183,90 @@ function App(): React.JSX.Element {
           actions.hydrateBrowserSession(session)
           await actions.fetchBrowserSessionProfiles()
           await actions.fetchDetectedBrowsers()
+
+          // Why: SSH connections must be re-established BEFORE terminal
+          // reconnect so that reconnectPersistedTerminals can route SSH-backed
+          // tabs through pty.attach on the relay. Passphrase-protected targets
+          // are deferred to tab focus to avoid stacking credential dialogs at
+          // startup before the user has context.
+          const connectionIds = session.activeConnectionIdsAtShutdown ?? []
+          if (connectionIds.length > 0) {
+            try {
+              const SSH_RECONNECT_TIMEOUT_MS = 15_000
+              const allTargets = await window.api.ssh.listTargets()
+              const targetMap = new Map(allTargets.map((t) => [t.id, t]))
+              const targets = connectionIds.map((targetId) => ({
+                targetId,
+                needsPassphrase: targetMap.get(targetId)?.lastRequiredPassphrase ?? false
+              }))
+
+              const eagerTargets = targets.filter((t) => !t.needsPassphrase)
+              const deferredTargets = targets.filter((t) => t.needsPassphrase)
+
+              if (deferredTargets.length > 0) {
+                actions.setDeferredSshReconnectTargets(deferredTargets.map((t) => t.targetId))
+              }
+
+              // Why: track which eager targets timed out so we can treat them
+              // as deferred — the underlying ssh.connect() keeps running in the
+              // main process, but reconnectPersistedTerminals won't see them as
+              // connected. Adding them to the deferred list ensures PTYs get
+              // reattached when the user focuses the tab (by which time the
+              // slow connect will likely have succeeded).
+              const timedOutTargets: string[] = []
+              await Promise.allSettled(
+                eagerTargets.map(({ targetId }) =>
+                  Promise.race([
+                    window.api.ssh.connect({ targetId }),
+                    new Promise((_, reject) =>
+                      setTimeout(
+                        () => reject(new Error('SSH reconnect timeout')),
+                        SSH_RECONNECT_TIMEOUT_MS
+                      )
+                    )
+                  ]).catch((err) => {
+                    const isTimeout =
+                      err instanceof Error && err.message === 'SSH reconnect timeout'
+                    if (isTimeout) {
+                      timedOutTargets.push(targetId)
+                    }
+                    console.warn(`SSH auto-reconnect failed for ${targetId}:`, err)
+                  })
+                )
+              )
+              if (timedOutTargets.length > 0) {
+                actions.setDeferredSshReconnectTargets([
+                  ...deferredTargets.map((t) => t.targetId),
+                  ...timedOutTargets
+                ])
+              }
+
+              // Why: ssh.connect() resolves before the ssh:state-changed IPC
+              // event updates sshConnectionStates in the store. Without this,
+              // reconnectPersistedTerminals reads stale state and misclassifies
+              // successfully connected targets as disconnected, stranding their
+              // persisted PTYs. Polling getState ensures the store is current.
+              for (const { targetId } of eagerTargets) {
+                if (timedOutTargets.includes(targetId)) {
+                  continue
+                }
+                try {
+                  const state = await window.api.ssh.getState({ targetId })
+                  console.warn(
+                    `[ssh-restore] Polled state for ${targetId}: status=${state?.status}`
+                  )
+                  if (state?.status === 'connected') {
+                    actions.setSshConnectionState(targetId, state)
+                  }
+                } catch {
+                  /* best-effort */
+                }
+              }
+            } catch (err) {
+              console.warn('SSH startup reconnect failed:', err)
+            }
+          }
+
           await actions.reconnectPersistedTerminals(abortController.signal)
           syncZoomCSSVar()
         }
@@ -645,8 +731,14 @@ function App(): React.JSX.Element {
   // the sidebar-width left header (workspace view) can share the same
   // controls without duplicating the agent badge popover.
   const titlebarLeftControls = (
-    <div className="flex h-full w-full shrink-0 items-center">
-      <div ref={titlebarLeftControlsRef} className="flex h-full items-center">
+    // Why: measure the ENTIRE row (traffic-light pad + sidebar toggle + agent
+    // badge + back/forward group) so the sidebar-collapse spacer in
+    // TabGroupPanel reserves enough width to clear the full floating
+    // `titlebar-left`. Measuring only the inner control cluster left the
+    // back/forward arrows hanging over the first tab when the sidebar was
+    // collapsed (Cmd+B), producing a half-occluded, non-scrollable tab strip.
+    <div ref={titlebarLeftControlsRef} className="flex h-full w-full shrink-0 items-center">
+      <div className="flex h-full items-center">
         <div className={isMac && !isFullScreen ? 'titlebar-traffic-light-pad' : 'pl-2'} />
         {showSidebar && (
           <Tooltip>
@@ -778,9 +870,7 @@ function App(): React.JSX.Element {
       {/* Why: Back/Forward navigate worktree-activation history. Only
           meaningful while viewing a worktree (terminal view); hidden in
           Settings/Tasks/Landing to keep the titlebar compact and the
-          semantics unambiguous. The group sits outside the measured inner
-          container so the sidebar-collapse spacer stays sized to the left
-          controls only. */}
+          semantics unambiguous. */}
       {activeView === 'terminal' && (
         <div className="ml-auto mr-3 flex items-center">
           <Tooltip>
@@ -904,7 +994,13 @@ function App(): React.JSX.Element {
                 className={`flex min-h-0 flex-col shrink-0${sidebarOpen ? '' : ' relative w-0 overflow-visible'}`}
               >
                 <div
-                  className={`titlebar-left${sidebarOpen ? '' : ' absolute top-0 left-0 z-10'}`}
+                  // Why: when the sidebar is collapsed, titlebar-left floats
+                  // absolutely on top of the center column's own `border-l`
+                  // (see TabGroupSplitLayout), occluding that seam. Add a
+                  // `border-r` in the floating state so the vertical line
+                  // between the traffic-light/nav cluster and the tab strip
+                  // stays visible in both states.
+                  className={`titlebar-left${sidebarOpen ? '' : ' absolute top-0 left-0 z-10 border-r border-border'}`}
                   style={{
                     // Why: the Sidebar resize hook updates the sidebar DOM width
                     // directly during drag and only persists to Zustand on
@@ -932,8 +1028,10 @@ function App(): React.JSX.Element {
           <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
             {/* Why: right sidebar toggle floats at the top-right of the center
                 column so it's always accessible whether the right sidebar is
-                open or closed. Its height matches the 42px workspace strip
-                used by the sidebar and tab rows. */}
+                open or closed. Match the RightSidebar header's 42px height and
+                top-0 anchor so the icon's vertical center is identical between
+                open and closed states — otherwise toggling makes the icon jump
+                a few pixels, which reads as layout jitter. */}
             {workspaceActive && !rightSidebarOpen && (
               <div
                 className="absolute top-0 right-0 z-10 flex items-center h-[42px]"

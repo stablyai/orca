@@ -101,7 +101,13 @@ export class TerminalHost {
       // the daemon keeps for the pane. Session.write() handles the shell-ready
       // barrier for supported shells and falls back to an immediate write for
       // unsupported ones.
-      session.write(opts.command.endsWith('\n') ? opts.command : `${opts.command}\n`)
+      // Why CR on Windows: PowerShell's PSReadLine and cmd.exe submit the line
+      // on CR (`\r`); a bare LF leaves the command typed but unsubmitted, so
+      // the user would need to press Enter after Orca launches the agent or
+      // setup script. POSIX shells accept CR as Enter under ICRNL.
+      const submit = process.platform === 'win32' ? '\r' : '\n'
+      const endsWithSubmit = opts.command.endsWith('\r') || opts.command.endsWith('\n')
+      session.write(endsWithSubmit ? opts.command : `${opts.command}${submit}`)
     }
 
     return {

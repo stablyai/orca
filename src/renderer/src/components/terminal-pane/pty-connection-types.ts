@@ -23,6 +23,8 @@ export type PtyConnectionDeps = {
   updateTabPtyId: (tabId: string, ptyId: string) => void
   markWorktreeUnread: (worktreeId: string) => void
   markTerminalTabUnread: (tabId: string) => void
+  clearWorktreeUnread: (worktreeId: string) => void
+  clearTerminalTabUnread: (tabId: string) => void
   // Why: the renderer-side dispatcher only handles BEL-sourced notifications
   // now. shared/types.ts keeps a wider NotificationEventSource union because
   // main-process callers can still emit others (e.g. `'test'` for the

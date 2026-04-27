@@ -704,3 +704,128 @@ describe('OpenCode hook normalization', () => {
     expect(done?.payload.lastAssistantMessage).toBe('hello back')
   })
 })
+
+describe('Cursor hook normalization', () => {
+  it('beforeSubmitPrompt maps to working and captures the prompt', () => {
+    const result = _internals.normalizeHookPayload(
+      'cursor',
+      buildBody({ hook_event_name: 'beforeSubmitPrompt', prompt: 'add a README' }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('working')
+    expect(result?.payload.agentType).toBe('cursor')
+    expect(result?.payload.prompt).toBe('add a README')
+  })
+
+  it('stop maps to done', () => {
+    const result = _internals.normalizeHookPayload(
+      'cursor',
+      buildBody({ hook_event_name: 'stop', status: 'completed' }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('done')
+    expect(result?.payload.agentType).toBe('cursor')
+    expect(result?.payload.interrupted).toBeUndefined()
+  })
+
+  it('stop with non-completed status marks the turn interrupted', () => {
+    const result = _internals.normalizeHookPayload(
+      'cursor',
+      buildBody({ hook_event_name: 'stop', status: 'cancelled' }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('done')
+    expect(result?.payload.interrupted).toBe(true)
+  })
+
+  it('beforeShellExecution maps to waiting with the pending command as toolInput', () => {
+    const result = _internals.normalizeHookPayload(
+      'cursor',
+      buildBody({ hook_event_name: 'beforeShellExecution', command: 'rm -rf /tmp/foo' }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('waiting')
+    expect(result?.payload.toolName).toBe('Shell')
+    expect(result?.payload.toolInput).toBe('rm -rf /tmp/foo')
+  })
+
+  it('beforeMCPExecution maps to waiting', () => {
+    const result = _internals.normalizeHookPayload(
+      'cursor',
+      buildBody({ hook_event_name: 'beforeMCPExecution', tool_name: 'fetch', url: 'https://x' }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('waiting')
+    expect(result?.payload.toolName).toBe('fetch')
+  })
+
+  it('preToolUse surfaces tool name + input preview and stays working', () => {
+    const result = _internals.normalizeHookPayload(
+      'cursor',
+      buildBody({
+        hook_event_name: 'preToolUse',
+        tool_name: 'Read',
+        tool_input: { file_path: '/repo/src/app.ts' }
+      }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('working')
+    expect(result?.payload.toolName).toBe('Read')
+    expect(result?.payload.toolInput).toBe('/repo/src/app.ts')
+  })
+
+  it('afterAgentResponse carries text into lastAssistantMessage', () => {
+    const result = _internals.normalizeHookPayload(
+      'cursor',
+      buildBody({ hook_event_name: 'afterAgentResponse', text: 'Done — wrote the README.' }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('working')
+    expect(result?.payload.lastAssistantMessage).toBe('Done — wrote the README.')
+  })
+
+  it('beforeSubmitPrompt clears the cached tool state from a prior turn', () => {
+    _internals.normalizeHookPayload(
+      'cursor',
+      buildBody({
+        hook_event_name: 'preToolUse',
+        tool_name: 'Edit',
+        tool_input: { file_path: '/stale.ts' }
+      }),
+      'production'
+    )
+    const result = _internals.normalizeHookPayload(
+      'cursor',
+      buildBody({ hook_event_name: 'beforeSubmitPrompt', prompt: 'new turn' }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('working')
+    expect(result?.payload.prompt).toBe('new turn')
+    expect(result?.payload.toolName).toBeUndefined()
+    expect(result?.payload.toolInput).toBeUndefined()
+  })
+
+  it('subsequent stop preserves the cached prompt from beforeSubmitPrompt', () => {
+    _internals.normalizeHookPayload(
+      'cursor',
+      buildBody({ hook_event_name: 'beforeSubmitPrompt', prompt: 'add tests' }),
+      'production'
+    )
+    const stop = _internals.normalizeHookPayload(
+      'cursor',
+      buildBody({ hook_event_name: 'stop', status: 'completed' }),
+      'production'
+    )
+    expect(stop?.payload.state).toBe('done')
+    expect(stop?.payload.prompt).toBe('add tests')
+  })
+
+  it('unknown event name returns null', () => {
+    const result = _internals.normalizeHookPayload(
+      'cursor',
+      buildBody({ hook_event_name: 'somethingElse' }),
+      'production'
+    )
+    expect(result).toBeNull()
+  })
+})

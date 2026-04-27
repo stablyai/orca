@@ -25,6 +25,7 @@ describe('createIpcPtyTransport', () => {
             onData = callback
             return () => {}
           }),
+          onReplay: vi.fn(() => () => {}),
           onExit: vi.fn((callback: (payload: { id: string; code: number }) => void) => {
             onExit = callback
             return () => {}
@@ -210,6 +211,7 @@ describe('createIpcPtyTransport', () => {
             onData = callback
             return () => {}
           }),
+          onReplay: vi.fn(() => () => {}),
           onExit: vi.fn((callback: (payload: { id: string; code: number }) => void) => {
             onExit = callback
             return () => {}
@@ -265,6 +267,7 @@ describe('createIpcPtyTransport', () => {
             onData = callback
             return () => {}
           }),
+          onReplay: vi.fn(() => () => {}),
           onExit: vi.fn((callback: (payload: { id: string; code: number }) => void) => {
             onExit = callback
             return () => {}
@@ -283,8 +286,12 @@ describe('createIpcPtyTransport', () => {
     expect(result).toEqual({
       id: 'pty-reattach',
       snapshot: 'snapshot data',
+      snapshotCols: 132,
+      snapshotRows: 43,
       isAlternateScreen: undefined,
-      coldRestore: undefined
+      coldRestore: undefined,
+      replay: undefined,
+      sessionExpired: undefined
     })
   })
 
@@ -312,6 +319,7 @@ describe('createIpcPtyTransport', () => {
             onData = callback
             return () => {}
           }),
+          onReplay: vi.fn(() => () => {}),
           onExit: vi.fn((callback: (payload: { id: string; code: number }) => void) => {
             onExit = callback
             return () => {}
