@@ -121,7 +121,12 @@ export type TerminalSlice = {
    *  fresh shell prompt. */
   pendingColdRestoreByPtyId: Record<string, { scrollback: string; cwd: string }>
   consumePendingColdRestore: (ptyId: string) => { scrollback: string; cwd: string } | null
-  createTab: (worktreeId: string, targetGroupId?: string, shellOverride?: string) => TerminalTab
+  createTab: (
+    worktreeId: string,
+    targetGroupId?: string,
+    shellOverride?: string,
+    options?: { pendingActivationSpawn?: boolean }
+  ) => TerminalTab
   closeTab: (tabId: string) => void
   reorderTabs: (worktreeId: string, tabIds: string[]) => void
   setTabBarOrder: (worktreeId: string, order: string[]) => void
@@ -296,7 +301,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       return { deferredSshSessionIdsByTabId: next }
     }),
 
-  createTab: (worktreeId, targetGroupId, shellOverride) => {
+  createTab: (worktreeId, targetGroupId, shellOverride, options) => {
     const id = globalThis.crypto.randomUUID()
     let tab!: TerminalTab
     set((s) => {
@@ -320,7 +325,15 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         color: null,
         sortOrder: existing.length,
         createdAt: Date.now(),
-        ...(shellOverride !== undefined ? { shellOverride } : {})
+        ...(shellOverride !== undefined ? { shellOverride } : {}),
+        // Why: when Terminal.tsx's activation fallback auto-creates a tab for a
+        // first-visit worktree, the resulting PTY spawn is caused by the user
+        // clicking the worktree, not by work happening in it. Tagging the tab
+        // lets updateTabPtyId suppress the activity bump and sortEpoch bump.
+        // Without this, clicking a never-visited worktree would stamp
+        // lastActivityAt and reorder Recent/Smart on click — same bug class as
+        // the generation-bump → remount path, different code path.
+        ...(options?.pendingActivationSpawn ? { pendingActivationSpawn: true } : {})
       }
       const validTargetGroupId =
         targetGroupId && s.groupsByWorktree[worktreeId]?.some((group) => group.id === targetGroupId)

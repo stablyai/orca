@@ -778,6 +778,58 @@ describe('terminal slice behaviors', () => {
     expect(store.getState().tabsByWorktree[worktreeId][0].pendingActivationSpawn).toBeUndefined()
   })
 
+  // Why: first-visit worktrees (no tabs yet) trigger Terminal.tsx's activation
+  // fallback which calls createTab(). That auto-created tab passes
+  // pendingActivationSpawn: true so its PTY spawn is suppressed — otherwise
+  // clicking a never-visited worktree in the sidebar would stamp lastActivityAt
+  // and reshuffle Recent/Smart (the user-reported bounce ~5s after click).
+  it('does not bump lastActivityAt when createTab auto-creates for a first-visit worktree', () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/path/wt1'
+    const originalLastActivityAt = 1000
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({
+            id: worktreeId,
+            repoId: 'repo1',
+            path: '/path/wt1',
+            lastActivityAt: originalLastActivityAt
+          })
+        ]
+      },
+      // No tabs yet — this is a fresh worktree the user is visiting for the
+      // first time in this session.
+      tabsByWorktree: {},
+      ptyIdsByTabId: {},
+      activeWorktreeId: worktreeId
+    })
+
+    // Simulate Terminal.tsx's auto-create effect: tag as activation-driven.
+    const newTab = store
+      .getState()
+      .createTab(worktreeId, undefined, undefined, { pendingActivationSpawn: true })
+
+    expect(store.getState().tabsByWorktree[worktreeId][0].pendingActivationSpawn).toBe(true)
+
+    // PTY comes back from the newly-mounted TerminalPane.
+    store.getState().updateTabPtyId(newTab.id, 'pty-fresh')
+
+    const worktree = store.getState().worktreesByRepo.repo1[0]
+    expect(worktree.lastActivityAt).toBe(originalLastActivityAt)
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        updates: expect.objectContaining({ lastActivityAt: expect.any(Number) })
+      })
+    )
+    // Flag is consumed — later legitimate respawns still bump.
+    expect(store.getState().tabsByWorktree[worktreeId][0].pendingActivationSpawn).toBeUndefined()
+  })
+
   // Why: real background events (agent output, OSC titles) must still bump
   // activity. Only the specific activation-driven spawn is suppressed.
   it('bumps lastActivityAt for a fresh spawn with no activation tag', () => {
