@@ -344,7 +344,7 @@ export function registerPtyHandlers(
           isPackaged: app.isPackaged,
           userDataPath: app.getPath('userData'),
           selectedCodexHomePath: getSelectedCodexHomePath?.() ?? null,
-          githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? true
+          githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false
         }),
       onSpawned: (id) => runtime?.onPtySpawned(id),
       onExit: (id, code) => {
@@ -536,7 +536,7 @@ export function registerPtyHandlers(
           isPackaged: app.isPackaged,
           userDataPath: app.getPath('userData'),
           selectedCodexHomePath: getSelectedCodexHomePath?.() ?? null,
-          githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? true
+          githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false
         })
       }
       const envToDelete = claudeAuth?.stripAuthEnv

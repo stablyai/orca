@@ -18,7 +18,7 @@ import {
 } from './layout-serialization'
 import { warnTerminalLifecycleAnomaly } from './terminal-lifecycle-diagnostics'
 
-const pendingSpawnByTabId = new Map<string, Promise<string | null>>()
+const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
 
 // Why: when multiple panes/tabs need the same deferred SSH connection,
 // the first one calls ssh.connect() and subsequent ones must wait for it
@@ -105,6 +105,7 @@ export function connectPanePty(
   // Why: cache timer state is keyed per-pane (not per-tab) so split-pane tabs
   // can track each Claude session independently without overwriting each other.
   const cacheKey = `${deps.tabId}:${pane.id}`
+  const pendingSpawnKey = `${deps.tabId}:${paneLeafId(pane.id)}`
 
   const onExit = (ptyId: string): void => {
     deps.syncPanePtyLayoutBinding(pane.id, null)
@@ -397,11 +398,13 @@ export function connectPanePty(
         )
         .catch(() => null)
         .finally(() => {
-          if (pendingSpawnByTabId.get(deps.tabId) === spawnPromise) {
-            pendingSpawnByTabId.delete(deps.tabId)
+          if (pendingSpawnByPaneKey.get(pendingSpawnKey) === spawnPromise) {
+            pendingSpawnByPaneKey.delete(pendingSpawnKey)
           }
         })
-      pendingSpawnByTabId.set(deps.tabId, spawnPromise)
+      // Why: split panes in the same tab can spawn concurrently. Key by pane
+      // as well as tab so a remount cannot attach to a sibling setup pane's PTY.
+      pendingSpawnByPaneKey.set(pendingSpawnKey, spawnPromise)
     }
 
     // Why: replay bytes (eager-buffer flush, attach-time screen clear) must
@@ -755,7 +758,7 @@ export function connectPanePty(
       allowInitialIdleCacheSeed = false
       const pendingSpawn = hasExistingPaneTransport
         ? undefined
-        : pendingSpawnByTabId.get(deps.tabId)
+        : pendingSpawnByPaneKey.get(pendingSpawnKey)
       if (pendingSpawn) {
         void pendingSpawn
           .then((spawnedPtyId) => {

@@ -7,6 +7,7 @@ import { preloadE2EConfig } from './e2e-config'
 import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type {
+  BaseRefDefaultResult,
   FsChangedPayload,
   GitHubAssignableUser,
   GhosttyImportPreview,
@@ -224,7 +225,7 @@ const api = {
     getGitUsername: (args: { repoId: string }): Promise<string> =>
       ipcRenderer.invoke('repos:getGitUsername', args),
 
-    getBaseRefDefault: (args: { repoId: string }): Promise<string | null> =>
+    getBaseRefDefault: (args: { repoId: string }): Promise<BaseRefDefaultResult> =>
       ipcRenderer.invoke('repos:getBaseRefDefault', args),
 
     searchBaseRefs: (args: { repoId: string; query: string; limit?: number }): Promise<string[]> =>
@@ -510,6 +511,14 @@ const api = {
       filter?: 'assigned' | 'created' | 'all' | 'completed'
       limit?: number
     }): Promise<unknown[]> => ipcRenderer.invoke('linear:listIssues', args),
+
+    createIssue: (args: {
+      teamId: string
+      title: string
+      description?: string
+    }): Promise<
+      { ok: true; id: string; identifier: string; url: string } | { ok: false; error: string }
+    > => ipcRenderer.invoke('linear:createIssue', args),
 
     getIssue: (args: { id: string }): Promise<unknown> =>
       ipcRenderer.invoke('linear:getIssue', args),

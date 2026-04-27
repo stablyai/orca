@@ -30,21 +30,29 @@ function getShellReadyWrapperRoot(): string {
 // (regardless of whether it came from this daemon's userData, a packaged
 // Orca, or a different dev build). Treat it as if ZDOTDIR were unset so the
 // caller falls back to HOME for the user's real config root.
-function resolveOriginalZdotdir(): string {
-  const inherited = process.env.ZDOTDIR
-  if (!inherited) {
-    return process.env.HOME || ''
+function normalizeOriginalZdotdirCandidate(value: string | undefined): string | null {
+  if (!value) {
+    return null
   }
   // Why: tolerate trailing slashes — some shell startup scripts export
   // `ZDOTDIR="$dir/"`, and without normalization the suffix check would
   // miss the self-loop path and restore the recursion bug. Also collapses
   // a pathological `ZDOTDIR=/` to empty so we fall back to HOME rather than
   // sourcing `/.zshenv` (which is never the user's real config).
-  const normalized = inherited.replace(/\/+$/, '')
+  const normalized = value.replace(/\/+$/, '')
   if (!normalized || normalized.endsWith('/shell-ready/zsh')) {
-    return process.env.HOME || ''
+    return null
   }
-  return inherited
+  return value
+}
+
+function resolveOriginalZdotdir(): string {
+  return (
+    normalizeOriginalZdotdirCandidate(process.env.ZDOTDIR) ||
+    normalizeOriginalZdotdirCandidate(process.env.ORCA_ORIG_ZDOTDIR) ||
+    process.env.HOME ||
+    ''
+  )
 }
 
 function getRequiredShellReadyWrapperPaths(root = getShellReadyWrapperRoot()): string[] {
@@ -76,15 +84,24 @@ function ensureShellReadyWrappers(): void {
 
   const zshEnv = `# Orca daemon zsh shell-ready wrapper
 export ORCA_ORIG_ZDOTDIR="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
+case "\${ORCA_ORIG_ZDOTDIR%/}" in
+  */shell-ready/zsh) export ORCA_ORIG_ZDOTDIR="$HOME" ;;
+esac
 [[ -f "$ORCA_ORIG_ZDOTDIR/.zshenv" ]] && source "$ORCA_ORIG_ZDOTDIR/.zshenv"
 export ZDOTDIR=${quotePosixSingle(zshDir)}
 `
   const zshProfile = `# Orca daemon zsh shell-ready wrapper
 _orca_home="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
+case "\${_orca_home%/}" in
+  */shell-ready/zsh) _orca_home="$HOME" ;;
+esac
 [[ -f "$_orca_home/.zprofile" ]] && source "$_orca_home/.zprofile"
 `
   const zshRc = `# Orca daemon zsh shell-ready wrapper
 _orca_home="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
+case "\${_orca_home%/}" in
+  */shell-ready/zsh) _orca_home="$HOME" ;;
+esac
 if [[ -o interactive && -f "$_orca_home/.zshrc" ]]; then
   source "$_orca_home/.zshrc"
 fi
@@ -99,6 +116,9 @@ __orca_restore_attribution_path() {
 `
   const zshLogin = `# Orca daemon zsh shell-ready wrapper
 _orca_home="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
+case "\${_orca_home%/}" in
+  */shell-ready/zsh) _orca_home="$HOME" ;;
+esac
 if [[ -o interactive && -f "$_orca_home/.zlogin" ]]; then
   source "$_orca_home/.zlogin"
 fi

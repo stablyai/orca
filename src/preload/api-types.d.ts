@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Why: the preload contract is intentionally centralized in one declaration file so renderer and preload stay in lockstep when IPC surfaces change. */
 import type {
+  BaseRefDefaultResult,
   BrowserCookieImportResult,
   BrowserCookieImportSummary,
   BrowserLoadError,
@@ -320,7 +321,7 @@ export type PreloadApi = {
     }) => Promise<{ repo: Repo } | { error: string }>
     onCloneProgress: (callback: (data: { phase: string; percent: number }) => void) => () => void
     getGitUsername: (args: { repoId: string }) => Promise<string>
-    getBaseRefDefault: (args: { repoId: string }) => Promise<string | null>
+    getBaseRefDefault: (args: { repoId: string }) => Promise<BaseRefDefaultResult>
     searchBaseRefs: (args: { repoId: string; query: string; limit?: number }) => Promise<string[]>
     onChanged: (callback: () => void) => () => void
   }
@@ -479,6 +480,13 @@ export type PreloadApi = {
       filter?: 'assigned' | 'created' | 'all' | 'completed'
       limit?: number
     }) => Promise<LinearIssue[]>
+    createIssue: (args: {
+      teamId: string
+      title: string
+      description?: string
+    }) => Promise<
+      { ok: true; id: string; identifier: string; url: string } | { ok: false; error: string }
+    >
     getIssue: (args: { id: string }) => Promise<LinearIssue | null>
     updateIssue: (args: {
       id: string

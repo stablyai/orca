@@ -21,6 +21,27 @@ export type Repo = {
 export type SetupRunPolicy = 'ask' | 'run-by-default' | 'skip-by-default'
 export type SetupDecision = 'inherit' | 'run' | 'skip'
 
+/**
+ * Envelope returned by the `repos:getBaseRefDefault` IPC handler.
+ *
+ * Why: declared in `shared/` rather than colocated with the handler so the
+ * preload bridge and renderer can import the same named type. Before this
+ * lived in `src/main/git/repo.ts` — the preload layer cannot import from
+ * `src/main/`, which forced three sites to inline the same structural shape
+ * and risk silent drift.
+ *
+ * Why `remoteCount`: BaseRefPicker renders a multi-remote hint when the repo
+ * has more than one configured remote; piggybacking the count on this IPC
+ * avoids a second round-trip.
+ *
+ * Why `defaultBaseRef` (not `default`): `default` is a reserved word and is
+ * awkward to destructure.
+ */
+export type BaseRefDefaultResult = {
+  defaultBaseRef: string | null
+  remoteCount: number
+}
+
 // ─── Worktree (git-level) ────────────────────────────────────────────
 export type GitWorktreeInfo = {
   path: string

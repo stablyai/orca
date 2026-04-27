@@ -54,6 +54,7 @@ import TeamMultiCombobox from '@/components/ui/team-multi-combobox'
 import RepoDotLabel from '@/components/repo/RepoDotLabel'
 import { stripRepoQualifiers } from '../../../shared/task-query'
 import GitHubItemDialog from '@/components/GitHubItemDialog'
+import GitHubItemDrawer from '@/components/GitHubItemDrawer'
 import LinearItemDrawer from '@/components/LinearItemDrawer'
 import { cn } from '@/lib/utils'
 import {
@@ -776,11 +777,15 @@ export default function TaskPage(): React.JSX.Element {
   const fetchWorkItemsNextPage = useAppStore((s) => s.fetchWorkItemsNextPage)
   const countWorkItemsAcrossRepos = useAppStore((s) => s.countWorkItemsAcrossRepos)
 
-  // Why: clicking a GitHub row opens this dialog for a read-only preview.
-  // Its "Use" button routes through the same direct-launch flow as the
-  // task-row menu item so behavior is consistent regardless of entry point.
+  // Why: the GitHub create flow opens this dialog with an optimistic stub
+  // before the freshly created item is fetched from the cache.
   const [dialogWorkItemId, setDialogWorkItemId] = useState<string | null>(null)
   const [dialogWorkItemFallback, setDialogWorkItemFallback] = useState<GitHubWorkItem | null>(null)
+  // Why: clicking a GitHub row opens this drawer for a read-only preview.
+  // Drawer's "Use" button routes through the same direct-launch flow as the
+  // row-level "Use" CTA so behavior is consistent regardless of entry point.
+  const [drawerWorkItemId, setDrawerWorkItemId] = useState<string | null>(null)
+  const [drawerWorkItemFallback, setDrawerWorkItemFallback] = useState<GitHubWorkItem | null>(null)
 
   const workItemsCache = useAppStore((s) => s.workItemsCache)
   const linearIssueCache = useAppStore((s) => s.linearIssueCache)
@@ -805,6 +810,27 @@ export default function TaskPage(): React.JSX.Element {
   const setDialogWorkItem = useCallback((item: GitHubWorkItem | null) => {
     setDialogWorkItemId(item?.id ?? null)
     setDialogWorkItemFallback(item)
+  }, [])
+
+  // Why: derive the drawer's work item from the store cache so it reflects
+  // optimistic patches (e.g. table-cell status toggle). Falls back to the
+  // snapshot stored at click time for newly-created stubs not yet in the cache.
+  const drawerWorkItem = useMemo(() => {
+    if (!drawerWorkItemId) {
+      return null
+    }
+    for (const entry of Object.values(workItemsCache)) {
+      const found = entry?.data?.find((wi) => wi.id === drawerWorkItemId)
+      if (found) {
+        return found
+      }
+    }
+    return drawerWorkItemFallback
+  }, [drawerWorkItemId, workItemsCache, drawerWorkItemFallback])
+
+  const setDrawerWorkItem = useCallback((item: GitHubWorkItem | null) => {
+    setDrawerWorkItemId(item?.id ?? null)
+    setDrawerWorkItemFallback(item)
   }, [])
   const [newIssueOpen, setNewIssueOpen] = useState(false)
   const [newIssueTitle, setNewIssueTitle] = useState('')
@@ -904,6 +930,18 @@ export default function TaskPage(): React.JSX.Element {
     () => linearIssues.filter((issue) => linearTeamSelection.has(issue.team.id)),
     [linearIssues, linearTeamSelection]
   )
+  // New Linear issue dialog state
+  const [newLinearIssueOpen, setNewLinearIssueOpen] = useState(false)
+  const [newLinearIssueTitle, setNewLinearIssueTitle] = useState('')
+  const [newLinearIssueBody, setNewLinearIssueBody] = useState('')
+  const [newLinearIssueTeamId, setNewLinearIssueTeamId] = useState<string | null>(null)
+  const [newLinearIssueSubmitting, setNewLinearIssueSubmitting] = useState(false)
+
+  const newLinearIssueTargetTeam = useMemo(
+    () => availableTeams.find((t) => t.id === newLinearIssueTeamId) ?? availableTeams[0] ?? null,
+    [availableTeams, newLinearIssueTeamId]
+  )
+
   const [linearConnectOpen, setLinearConnectOpen] = useState(false)
   const [linearApiKeyDraft, setLinearApiKeyDraft] = useState('')
   const [linearConnectState, setLinearConnectState] = useState<'idle' | 'connecting' | 'error'>(
@@ -1256,9 +1294,69 @@ export default function TaskPage(): React.JSX.Element {
     }
   }, [newIssueBody, newIssueSubmitting, newIssueTargetRepo, newIssueTitle, setDialogWorkItem])
 
+  const handleCreateNewLinearIssue = useCallback(async (): Promise<void> => {
+    if (!newLinearIssueTargetTeam) {
+      return
+    }
+    const title = newLinearIssueTitle.trim()
+    if (!title || newLinearIssueSubmitting) {
+      return
+    }
+    setNewLinearIssueSubmitting(true)
+    try {
+      const result = await window.api.linear.createIssue({
+        teamId: newLinearIssueTargetTeam.id,
+        title,
+        description: newLinearIssueBody || undefined
+      })
+      if (!result.ok) {
+        toast.error(result.error || 'Failed to create issue.')
+        return
+      }
+      toast.success(`Created ${result.identifier}`, {
+        action: result.url
+          ? {
+              label: 'View',
+              onClick: () => window.open(result.url, '_blank')
+            }
+          : undefined
+      })
+      setNewLinearIssueOpen(false)
+      setNewLinearIssueTitle('')
+      setNewLinearIssueBody('')
+      setLinearRefreshNonce((n) => n + 1)
+
+      // Why: auto-open the new issue in the side drawer so the user sees
+      // exactly what was filed, mirroring the GitHub create-issue flow.
+      void window.api.linear
+        .getIssue({ id: result.id })
+        .then((full) => {
+          if (full) {
+            setDrawerLinearIssue(full)
+          }
+        })
+        .catch(() => {})
+    } finally {
+      setNewLinearIssueSubmitting(false)
+    }
+  }, [
+    newLinearIssueBody,
+    newLinearIssueSubmitting,
+    newLinearIssueTargetTeam,
+    newLinearIssueTitle,
+    setDrawerLinearIssue
+  ])
+
   useEffect(() => {
     // Why: when a modal is open, let it own Esc dismissal.
-    if (dialogWorkItem || drawerLinearIssue || newIssueOpen || activeModal !== 'none') {
+    if (
+      dialogWorkItem ||
+      drawerWorkItem ||
+      drawerLinearIssue ||
+      newIssueOpen ||
+      newLinearIssueOpen ||
+      activeModal !== 'none'
+    ) {
       return
     }
 
@@ -1292,7 +1390,15 @@ export default function TaskPage(): React.JSX.Element {
 
     window.addEventListener('keydown', onKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
-  }, [activeModal, closeTaskPage, drawerLinearIssue, dialogWorkItem, newIssueOpen])
+  }, [
+    activeModal,
+    closeTaskPage,
+    dialogWorkItem,
+    drawerLinearIssue,
+    drawerWorkItem,
+    newIssueOpen,
+    newLinearIssueOpen
+  ])
 
   // Why: check Linear connection status on mount so the UI can show the
   // correct connected/disconnected state without requiring a settings visit.
@@ -1727,27 +1833,51 @@ export default function TaskPage(): React.JSX.Element {
                           )
                         })}
                       </div>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={() => setLinearRefreshNonce((n) => n + 1)}
-                            disabled={linearLoading}
-                            aria-label="Refresh Linear issues"
-                            className="border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
-                          >
-                            {linearLoading ? (
-                              <LoaderCircle className="size-4 animate-spin" />
-                            ) : (
-                              <RefreshCw className="size-4" />
-                            )}
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom" sideOffset={6}>
-                          Refresh Linear issues
-                        </TooltipContent>
-                      </Tooltip>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={() => {
+                                setNewLinearIssueTitle('')
+                                setNewLinearIssueBody('')
+                                setNewLinearIssueTeamId(availableTeams[0]?.id ?? null)
+                                setNewLinearIssueOpen(true)
+                              }}
+                              disabled={availableTeams.length === 0}
+                              aria-label="New Linear issue"
+                              className="border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
+                            >
+                              <Plus className="size-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" sideOffset={6}>
+                            New Linear issue
+                          </TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={() => setLinearRefreshNonce((n) => n + 1)}
+                              disabled={linearLoading}
+                              aria-label="Refresh Linear issues"
+                              className="border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
+                            >
+                              {linearLoading ? (
+                                <LoaderCircle className="size-4 animate-spin" />
+                              ) : (
+                                <RefreshCw className="size-4" />
+                              )}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" sideOffset={6}>
+                            Refresh Linear issues
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
                     </div>
                     <div className="mt-3 flex items-center gap-3">
                       <div className="relative min-w-[320px] flex-1">
@@ -1882,11 +2012,11 @@ export default function TaskPage(): React.JSX.Element {
                         key={item.id}
                         role="button"
                         tabIndex={0}
-                        onClick={() => setDialogWorkItem(item)}
+                        onClick={() => setDrawerWorkItem(item)}
                         onKeyDown={(event) => {
                           if (event.key === 'Enter' || event.key === ' ') {
                             event.preventDefault()
-                            setDialogWorkItem(item)
+                            setDrawerWorkItem(item)
                           }
                         }}
                         className="grid w-full cursor-pointer gap-2 px-3 py-2 text-left transition hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 grid-cols-[80px_minmax(0,3fr)_minmax(110px,0.8fr)_100px_110px_112px]"
@@ -2320,6 +2450,111 @@ export default function TaskPage(): React.JSX.Element {
         </DialogContent>
       </Dialog>
 
+      <Dialog
+        open={newLinearIssueOpen}
+        onOpenChange={(open) => {
+          if (!newLinearIssueSubmitting) {
+            setNewLinearIssueOpen(open)
+          }
+        }}
+      >
+        <DialogContent
+          className="sm:max-w-lg"
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+              event.preventDefault()
+              void handleCreateNewLinearIssue()
+            }
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>New Linear issue</DialogTitle>
+            <DialogDescription>
+              {availableTeams.length > 1
+                ? 'Creates a new issue in the selected team.'
+                : `Creates a new issue in ${newLinearIssueTargetTeam?.name ?? 'your team'}.`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3">
+            {availableTeams.length > 1 ? (
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] font-medium text-muted-foreground">Team</label>
+                <Select
+                  value={newLinearIssueTeamId ?? undefined}
+                  onValueChange={(v) => setNewLinearIssueTeamId(v)}
+                  disabled={newLinearIssueSubmitting}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableTeams.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.key} — {t.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-medium text-muted-foreground">Title</label>
+              <Input
+                autoFocus
+                value={newLinearIssueTitle}
+                onChange={(e) => setNewLinearIssueTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                    e.preventDefault()
+                    void handleCreateNewLinearIssue()
+                  }
+                }}
+                placeholder="Short summary"
+                disabled={newLinearIssueSubmitting}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-medium text-muted-foreground">
+                Description (optional, markdown)
+              </label>
+              <textarea
+                value={newLinearIssueBody}
+                onChange={(e) => setNewLinearIssueBody(e.target.value)}
+                placeholder="What's going on?"
+                rows={6}
+                disabled={newLinearIssueSubmitting}
+                className="w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 resize-none max-h-60 overflow-y-auto"
+              />
+            </div>
+            <p className="text-[10px] text-muted-foreground">Cmd/Ctrl+Enter to submit.</p>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setNewLinearIssueOpen(false)}
+              disabled={newLinearIssueSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void handleCreateNewLinearIssue()}
+              disabled={
+                !newLinearIssueTargetTeam || !newLinearIssueTitle.trim() || newLinearIssueSubmitting
+              }
+            >
+              {newLinearIssueSubmitting ? (
+                <>
+                  <LoaderCircle className="size-4 animate-spin" />
+                  Creating…
+                </>
+              ) : (
+                'Create issue'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <GitHubItemDialog
         workItem={dialogWorkItem}
         repoPath={
@@ -2334,6 +2569,22 @@ export default function TaskPage(): React.JSX.Element {
           handleUseWorkItem(item)
         }}
         onClose={() => setDialogWorkItem(null)}
+      />
+
+      <GitHubItemDrawer
+        workItem={drawerWorkItem}
+        repoPath={
+          // Why: the drawer is for a single item — resolve its repoPath from the
+          // item's own repoId (set when fan-out merged the list) so it works in
+          // cross-repo mode too. Reusing the memoized repo map avoids an O(n)
+          // scan on every render while the drawer is open.
+          drawerWorkItem ? (repoMap.get(drawerWorkItem.repoId)?.path ?? null) : null
+        }
+        onUse={(item) => {
+          setDrawerWorkItem(null)
+          handleUseWorkItem(item)
+        }}
+        onClose={() => setDrawerWorkItem(null)}
       />
 
       <LinearItemDrawer

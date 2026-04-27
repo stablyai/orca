@@ -47,7 +47,12 @@ describe('buildRgArgs', () => {
 })
 
 describe('ingestRgJsonLine', () => {
-  const makeMatch = (path: string, line: number, subs: { start: number; end: number }[], text = 'abc') =>
+  const makeMatch = (
+    path: string,
+    line: number,
+    subs: { start: number; end: number }[],
+    text = 'abc'
+  ) =>
     JSON.stringify({
       type: 'match',
       data: {

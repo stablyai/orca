@@ -282,18 +282,50 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     const bothSectionsPopulated = worktreeItems.length > 0 && browserItems.length > 0
     const hasQuery = deferredQuery.trim().length > 0
     const EMPTY_QUERY_BROWSER_PREVIEW = 3
+    const RECENT_COUNT = 3
+    const RECENT_MIN_WORKTREES = 4
 
-    const visibleWorktreeItems = worktreeItems
+    // Rule A: Recent section renders only when the user hasn't typed and there
+    // are enough worktrees that "the rest" is non-empty. With ≤3 worktrees, a
+    // RECENT label would sit atop the entire list with nothing below it —
+    // chrome with no decision value. In that case we fall through to the
+    // existing showHeaders logic below.
+    const showRecentSection = !hasQuery && worktreeItems.length >= RECENT_MIN_WORKTREES
+
     const visibleBrowserItems =
       !hasQuery && bothSectionsPopulated
         ? browserItems.slice(0, EMPTY_QUERY_BROWSER_PREVIEW)
         : browserItems
     const showHeaders = bothSectionsPopulated
-    if (visibleWorktreeItems.length > 0) {
+
+    if (showRecentSection) {
+      // Why: symmetric RECENT WORKTREES / WORKTREES headers make the two
+      // groups unambiguous. Users asked for an explicit "Worktrees" title on
+      // the lower group rather than a bare divider.
+      entries.push({
+        id: '__header_recent__',
+        type: 'section-header',
+        label: 'Recent Worktrees'
+      })
+      entries.push(...worktreeItems.slice(0, RECENT_COUNT))
+      entries.push({ id: '__header_all_worktrees__', type: 'section-header', label: 'Worktrees' })
+      entries.push(...worktreeItems.slice(RECENT_COUNT))
+      if (visibleBrowserItems.length > 0) {
+        entries.push({
+          id: '__header_browser__',
+          type: 'section-header',
+          label: 'Browser Tabs'
+        })
+        entries.push(...visibleBrowserItems)
+      }
+      return entries
+    }
+
+    if (worktreeItems.length > 0) {
       if (showHeaders) {
         entries.push({ id: '__header_worktrees__', type: 'section-header', label: 'Worktrees' })
       }
-      entries.push(...visibleWorktreeItems)
+      entries.push(...worktreeItems)
     }
     if (visibleBrowserItems.length > 0) {
       if (showHeaders) {
@@ -669,7 +701,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       }}
     >
       <CommandInput
-        placeholder="Jump to worktree or browser tab..."
+        placeholder={'Jump to worktree or browser tab\u2026  try "repo/branch"'}
         value={query}
         onValueChange={setQuery}
         wrapperClassName="mx-3 mt-3 rounded-lg border border-border/55 bg-muted/28 px-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
@@ -693,7 +725,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                 return (
                   <div
                     key={entry.id}
-                    className="mx-0.5 mt-2 mb-0.5 px-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70 first:mt-0"
+                    className="mx-0.5 mt-3 mb-1 px-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70"
                   >
                     {entry.label}
                   </div>
@@ -726,7 +758,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                     data-current={isCurrentWorktree ? 'true' : undefined}
                     className={cn(
                       'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
-                      'data-[selected=true]:border-border data-[selected=true]:bg-neutral-100 data-[selected=true]:text-foreground dark:data-[selected=true]:bg-neutral-800'
+                      'data-[selected=true]:border-border data-[selected=true]:bg-[#ededed] data-[selected=true]:text-foreground dark:data-[selected=true]:bg-[#333333]'
                     )}
                   >
                     <div className="flex w-4 shrink-0 items-center justify-center self-start pt-0.5">
@@ -841,7 +873,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                   onSelect={() => handleSelectItem(entry)}
                   className={cn(
                     'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
-                    'data-[selected=true]:border-border data-[selected=true]:bg-neutral-100 data-[selected=true]:text-foreground dark:data-[selected=true]:bg-neutral-800'
+                    'data-[selected=true]:border-border data-[selected=true]:bg-[#ededed] data-[selected=true]:text-foreground dark:data-[selected=true]:bg-[#333333]'
                   )}
                 >
                   <div className="flex w-4 shrink-0 items-center justify-center self-start pt-0.5 text-muted-foreground/85">

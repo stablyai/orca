@@ -3,7 +3,7 @@
  * to a file that was already ~398 code lines on main. The per-type render
  * branches share little beyond drag data, so consolidating them would cost
  * more clarity than the ~5 lines of bloat is worth. */
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { SortableContext } from '@dnd-kit/sortable'
 import { FilePlus, Globe, Plus, TerminalSquare } from 'lucide-react'
 import type {
@@ -147,6 +147,21 @@ function TabBarInner({
     () => buildStatusMap(gitStatusByWorktree[worktreeId] ?? []),
     [worktreeId, gitStatusByWorktree]
   )
+
+  // Why: Electron <webview> elements run in a separate process, so clicking
+  // inside one never dispatches a pointerdown on the renderer document.
+  // Radix DropdownMenu relies on document pointerdown to detect outside
+  // clicks, so it misses webview clicks entirely. Listening for window blur
+  // catches the moment focus leaves the renderer (including into a webview).
+  const [newTabMenuOpen, setNewTabMenuOpen] = useState(false)
+  useEffect(() => {
+    if (!newTabMenuOpen) {
+      return
+    }
+    const dismiss = (): void => setNewTabMenuOpen(false)
+    window.addEventListener('blur', dismiss)
+    return () => window.removeEventListener('blur', dismiss)
+  }, [newTabMenuOpen])
 
   const terminalMap = useMemo(() => new Map(tabs.map((t) => [t.id, t])), [tabs])
   const editorMap = useMemo(
@@ -435,7 +450,7 @@ function TabBarInner({
           })}
         </div>
       </SortableContext>
-      <DropdownMenu>
+      <DropdownMenu open={newTabMenuOpen} onOpenChange={setNewTabMenuOpen}>
         <DropdownMenuTrigger asChild>
           <button
             className="ml-2 my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground"

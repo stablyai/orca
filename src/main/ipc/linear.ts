@@ -5,14 +5,12 @@ import {
   getIssue,
   searchIssues,
   listIssues,
+  createIssue,
   updateIssue,
   addIssueComment,
-  getIssueComments,
-  getTeamStates,
-  getTeamLabels,
-  getTeamMembers
+  getIssueComments
 } from '../linear/issues'
-import { listTeams } from '../linear/teams'
+import { listTeams, getTeamStates, getTeamLabels, getTeamMembers } from '../linear/teams'
 import type { LinearListFilter } from '../linear/issues'
 import type { LinearIssueUpdate } from '../../shared/types'
 
@@ -59,6 +57,23 @@ export function registerLinearHandlers(): void {
         : undefined
       const limit = Math.min(Math.max(1, args?.limit ?? 20), 50)
       return listIssues(filter, limit)
+    }
+  )
+
+  ipcMain.handle(
+    'linear:createIssue',
+    async (_event, args: { teamId: string; title: string; description?: string }) => {
+      if (typeof args?.teamId !== 'string' || !args.teamId.trim()) {
+        return { ok: false, error: 'Team ID is required' }
+      }
+      if (typeof args?.title !== 'string' || !args.title.trim()) {
+        return { ok: false, error: 'Title is required' }
+      }
+      return createIssue(
+        args.teamId.trim(),
+        args.title.trim(),
+        args.description?.trim() || undefined
+      )
     }
   )
 

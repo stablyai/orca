@@ -5,7 +5,7 @@ import type { BrowserWindow } from 'electron'
 import { dialog, ipcMain } from 'electron'
 import { randomUUID } from 'crypto'
 import type { Store } from '../persistence'
-import type { Repo } from '../../shared/types'
+import type { Repo, BaseRefDefaultResult } from '../../shared/types'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { REPO_COLORS } from '../../shared/constants'
 import { rebuildAuthorizedRootsCache } from './filesystem-auth'
@@ -18,9 +18,13 @@ import {
   getGitUsername,
   getRepoName,
   getBaseRefDefault,
-  searchBaseRefs,
-  BASE_REF_SEARCH_ARGS,
-  filterBaseRefSearchOutput
+  getRemoteCount,
+  normalizeRefSearchQuery,
+  parseAndFilterSearchRefs,
+  parseRemoteCount,
+  resolveDefaultBaseRefViaExec,
+  buildSearchBaseRefsArgv,
+  searchBaseRefs
 } from '../git/repo'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 import { getActiveMultiplexer } from './ssh'
@@ -381,39 +385,82 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     return getGitUsername(repo.path)
   })
 
-  ipcMain.handle('repos:getBaseRefDefault', async (_event, args: { repoId: string }) => {
-    const repo = store.getRepo(args.repoId)
-    if (!repo || isFolderRepo(repo)) {
-      // Why: folder-mode repos have no git state to resolve a base ref from.
-      // Return null so the renderer can decline to use a fabricated default
-      // (e.g. avoid running a branch compare against a ref that doesn't exist).
-      return null
-    }
-    // Why: remote repos need the relay to resolve symbolic-ref on the
-    // remote host where the git data lives.
-    if (repo.connectionId) {
-      const provider = getSshGitProvider(repo.connectionId)
-      if (!provider) {
-        return null
+  ipcMain.handle(
+    'repos:getBaseRefDefault',
+    async (_event, args: { repoId: string }): Promise<BaseRefDefaultResult> => {
+      const repo = store.getRepo(args.repoId)
+      if (!repo || isFolderRepo(repo)) {
+        // Why: folder-mode repos have no git state to resolve a base ref from.
+        // Return null + 0 so the renderer can decline to use a fabricated default
+        // and suppress the multi-remote hint.
+        return { defaultBaseRef: null, remoteCount: 0 }
       }
-      try {
-        const result = await provider.exec(
-          ['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'],
-          repo.path
-        )
-        const ref = result.stdout.trim()
-        if (ref) {
-          return ref.replace(/^refs\/remotes\//, '')
+      // Why: remote repos need the relay to resolve symbolic-ref on the
+      // remote host where the git data lives.
+      if (repo.connectionId) {
+        const provider = getSshGitProvider(repo.connectionId)
+        if (!provider) {
+          return { defaultBaseRef: null, remoteCount: 0 }
         }
-      } catch {
-        // Fall through — no symbolic-ref on the remote.
+        // Why: run default-ref resolution and remote-count concurrently to
+        // match the local path's latency characteristics (see Promise.all
+        // below). The two lookups are independent — neither depends on the
+        // other's result — so serializing them only adds SSH round-trip
+        // latency on slow relays.
+        //
+        // Why: delegate to the shared resolveDefaultBaseRefViaExec so SSH and
+        // local repos return identical defaults for equivalent states. We
+        // log in the exec callback for the symbolic-ref call to preserve the
+        // SSH-specific transport-failure diagnostic (connection drops,
+        // permission issues) that the shared helper otherwise swallows
+        // together with the expected "origin/HEAD unset" non-zero exit.
+        const resolveDefault = async (): Promise<string | null> => {
+          return resolveDefaultBaseRefViaExec(async (argv) => {
+            try {
+              return await provider.exec(argv, repo.path)
+            } catch (err) {
+              if (argv[0] === 'symbolic-ref') {
+                console.warn('[repos:getBaseRefDefault] SSH symbolic-ref failed', {
+                  path: repo.path,
+                  err
+                })
+              }
+              throw err
+            }
+          })
+        }
+
+        const resolveRemoteCount = async (): Promise<number> => {
+          try {
+            const remotesResult = await provider.exec(['remote'], repo.path)
+            return parseRemoteCount(remotesResult.stdout)
+          } catch (err) {
+            // Why: fall back to 0 (the "unknown / do not render the multi-remote
+            // hint" sentinel). Log so diagnostic signal isn't lost.
+            console.warn('[repos:getBaseRefDefault] SSH git remote count failed', {
+              path: repo.path,
+              err
+            })
+            return 0
+          }
+        }
+
+        const [defaultBaseRef, remoteCount] = await Promise.all([
+          resolveDefault(),
+          resolveRemoteCount()
+        ])
+        return { defaultBaseRef, remoteCount }
       }
-      // Why: don't fabricate 'origin/main'. Let the renderer surface "no
-      // default" and prompt the user to pick a base branch.
-      return null
+      // Why: compute default and remote count independently. A failure
+      // counting remotes must not break default detection. Run in parallel
+      // since the two lookups don't depend on each other.
+      const [defaultBaseRef, remoteCount] = await Promise.all([
+        getBaseRefDefault(repo.path),
+        getRemoteCount(repo.path)
+      ])
+      return { defaultBaseRef, remoteCount }
     }
-    return getBaseRefDefault(repo.path)
-  })
+  )
 
   ipcMain.handle(
     'repos:searchBaseRefs',
@@ -429,10 +476,29 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         if (!provider) {
           return []
         }
+        // Why: mirror the local path's sanitization (normalizeRefSearchQuery
+        // in ../git/repo.ts) — strip glob metacharacters to prevent glob
+        // injection via the SSH branch, and short-circuit empty queries so
+        // we don't leak every ref. Without this the SSH path diverges from
+        // the local path's behavior.
+        const normalizedQuery = normalizeRefSearchQuery(args.query)
+        if (!normalizedQuery) {
+          return []
+        }
         try {
-          const result = await provider.exec(BASE_REF_SEARCH_ARGS, repo.path)
-          return filterBaseRefSearchOutput(result.stdout, args.query, limit)
-        } catch {
+          // Why: argv (including the two-remote-glob rationale) lives in
+          // buildSearchBaseRefsArgv so the SSH and local paths cannot drift.
+          const result = await provider.exec(buildSearchBaseRefsArgv(normalizedQuery), repo.path)
+          // Why: delegate the NUL-parse + HEAD filter + dedup + limit pipeline
+          // to the shared helper so the SSH and local paths cannot diverge.
+          // See parseAndFilterSearchRefs in ../git/repo.ts for the dedup +
+          // HEAD-filter rationale.
+          return parseAndFilterSearchRefs(result.stdout, limit)
+        } catch (err) {
+          console.warn('[repos:searchBaseRefs] SSH for-each-ref failed', {
+            path: repo.path,
+            err
+          })
           return []
         }
       }
