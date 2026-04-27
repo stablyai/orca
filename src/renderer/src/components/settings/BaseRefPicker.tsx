@@ -166,7 +166,12 @@ export function BaseRefPicker({
                 <button
                   key={ref}
                   onClick={() => {
-                    setBaseRefQuery(ref)
+                    // Why: clear the query so the picker returns to its
+                    // resting state after a selection. Leaving the query
+                    // populated would keep the results list rendered and
+                    // visually compete with the new "Pinned for this repo"
+                    // label, implying the selection is still pending.
+                    setBaseRefQuery('')
                     setBaseRefResults([])
                     onSelect(ref)
                   }}
