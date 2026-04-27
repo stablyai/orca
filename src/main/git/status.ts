@@ -656,6 +656,24 @@ export async function unstageFile(worktreePath: string, filePath: string): Promi
   await gitExecFileAsync(['restore', '--staged', '--', filePath], { cwd: worktreePath })
 }
 
+export async function commitChanges(
+  worktreePath: string,
+  message: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await gitExecFileAsync(['commit', '-m', message], { cwd: worktreePath })
+    return { success: true }
+  } catch (error) {
+    const stderr =
+      typeof error === 'object' && error && 'stderr' in error && typeof error.stderr === 'string'
+        ? error.stderr
+        : error instanceof Error
+          ? error.message
+          : 'Commit failed'
+    return { success: false, error: stderr }
+  }
+}
+
 /**
  * Discard working tree changes for a file.
  */

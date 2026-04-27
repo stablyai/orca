@@ -28,6 +28,7 @@ import {
   getStatus,
   detectConflictOperation,
   getDiff,
+  commitChanges,
   stageFile,
   unstageFile,
   bulkStageFiles,
@@ -491,6 +492,24 @@ export function registerFilesystemHandlers(store: Store): void {
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
       return getDiff(worktreePath, filePath, args.staged)
+    }
+  )
+
+  ipcMain.handle(
+    'git:commit',
+    async (
+      _event,
+      args: { worktreePath: string; message: string; connectionId?: string }
+    ): Promise<{ success: boolean; error?: string }> => {
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(`No git provider for connection "${args.connectionId}"`)
+        }
+        return provider.commit(args.worktreePath, args.message)
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      return commitChanges(worktreePath, args.message)
     }
   )
 

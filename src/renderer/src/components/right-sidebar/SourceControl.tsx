@@ -62,6 +62,7 @@ import type {
   GitConflictKind,
   GitConflictOperation,
   GitStatusEntry,
+  GitStatusResult,
   PRInfo
 } from '../../../../shared/types'
 import { STATUS_COLORS, STATUS_LABELS } from './status-display'
@@ -93,6 +94,23 @@ const SECTION_LABELS: Record<(typeof SECTION_ORDER)[number], string> = {
 
 const BRANCH_REFRESH_INTERVAL_MS = 5000
 
+type CommitDraftsByWorktree = Record<string, string>
+
+export function readCommitDraftForWorktree(
+  drafts: CommitDraftsByWorktree,
+  worktreeId: string | null | undefined
+): string {
+  return drafts[worktreeId ?? ''] ?? ''
+}
+
+export function writeCommitDraftForWorktree(
+  drafts: CommitDraftsByWorktree,
+  worktreeId: string,
+  value: string
+): CommitDraftsByWorktree {
+  return { ...drafts, [worktreeId]: value }
+}
+
 const CONFLICT_KIND_LABELS: Record<GitConflictKind, string> = {
   both_modified: 'Both modified',
   both_added: 'Both added',
@@ -118,6 +136,7 @@ function SourceControlInner(): React.JSX.Element {
   const updateRepo = useAppStore((s) => s.updateRepo)
   const beginGitBranchCompareRequest = useAppStore((s) => s.beginGitBranchCompareRequest)
   const setGitBranchCompareResult = useAppStore((s) => s.setGitBranchCompareResult)
+  const setGitStatus = useAppStore((s) => s.setGitStatus)
   const revealInExplorer = useAppStore((s) => s.revealInExplorer)
   const trackConflictPath = useAppStore((s) => s.trackConflictPath)
   const openDiff = useAppStore((s) => s.openDiff)
@@ -179,7 +198,14 @@ function SourceControlInner(): React.JSX.Element {
   // falsy until we have a real answer from the main process.
   const [defaultBaseRef, setDefaultBaseRef] = useState<string | null>(null)
   const [filterQuery, setFilterQuery] = useState('')
+  // Why: commit drafts/errors are worktree-scoped during the mounted session,
+  // so switching worktrees restores each draft instead of wiping it.
+  const [commitDrafts, setCommitDrafts] = useState<CommitDraftsByWorktree>({})
+  const [commitErrors, setCommitErrors] = useState<Record<string, string | null>>({})
+  const [isCommitting, setIsCommitting] = useState(false)
   const filterInputRef = useRef<HTMLInputElement>(null)
+  const commitMessage = readCommitDraftForWorktree(commitDrafts, activeWorktreeId)
+  const commitError = commitErrors[activeWorktreeId ?? ''] ?? null
 
   const isFolder = activeRepo ? isFolderRepo(activeRepo) : false
   const worktreePath = activeWorktree?.path ?? null
@@ -310,6 +336,19 @@ function SourceControlInner(): React.JSX.Element {
 
   const [isExecutingBulk, setIsExecutingBulk] = useState(false)
 
+  const unresolvedConflicts = useMemo(
+    () => entries.filter((entry) => entry.conflictStatus === 'unresolved' && entry.conflictKind),
+    [entries]
+  )
+  const unresolvedConflictReviewEntries = useMemo(
+    () =>
+      unresolvedConflicts.map((entry) => ({
+        path: entry.path,
+        conflictKind: entry.conflictKind!
+      })),
+    [unresolvedConflicts]
+  )
+
   // Why: the sidebar no longer uses key={activeWorktreeId} to force a full
   // remount on worktree switch (that caused an IPC storm on Windows).
   // Instead, reset worktree-specific local state here so the previous
@@ -327,7 +366,58 @@ function SourceControlInner(): React.JSX.Element {
     // repos and back to re-trigger the resolver.
     setFilterQuery('')
     setIsExecutingBulk(false)
+    setIsCommitting(false)
   }, [activeWorktreeId])
+
+  const handleCommit = useCallback(async (): Promise<void> => {
+    if (!activeWorktreeId || !worktreePath) {
+      return
+    }
+    const message = commitMessage.trim()
+    if (!message || grouped.staged.length === 0 || unresolvedConflicts.length > 0) {
+      return
+    }
+
+    const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+    setIsCommitting(true)
+    setCommitErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))
+    try {
+      const commitResult = await window.api.git.commit({
+        worktreePath,
+        message,
+        connectionId
+      })
+      if (!commitResult.success) {
+        setCommitErrors((prev) => ({
+          ...prev,
+          [activeWorktreeId]: commitResult.error ?? 'Commit failed'
+        }))
+        return
+      }
+
+      setCommitDrafts((prev) => writeCommitDraftForWorktree(prev, activeWorktreeId, ''))
+      setCommitErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))
+      const status = (await window.api.git.status({
+        worktreePath,
+        connectionId
+      })) as GitStatusResult
+      setGitStatus(activeWorktreeId, status)
+    } catch (error) {
+      setCommitErrors((prev) => ({
+        ...prev,
+        [activeWorktreeId]: error instanceof Error ? error.message : 'Commit failed'
+      }))
+    } finally {
+      setIsCommitting(false)
+    }
+  }, [
+    activeWorktreeId,
+    commitMessage,
+    grouped.staged.length,
+    unresolvedConflicts.length,
+    setGitStatus,
+    worktreePath
+  ])
 
   const handleOpenDiff = useCallback(
     (entry: GitStatusEntry) => {
@@ -429,19 +519,6 @@ function SourceControlInner(): React.JSX.Element {
       setIsExecutingBulk(false)
     }
   }, [worktreePath, bulkUnstagePaths, clearSelection, activeWorktreeId])
-
-  const unresolvedConflicts = useMemo(
-    () => entries.filter((entry) => entry.conflictStatus === 'unresolved' && entry.conflictKind),
-    [entries]
-  )
-  const unresolvedConflictReviewEntries = useMemo(
-    () =>
-      unresolvedConflicts.map((entry) => ({
-        path: entry.path,
-        conflictKind: entry.conflictKind!
-      })),
-    [unresolvedConflicts]
-  )
 
   const refreshBranchCompare = useCallback(async () => {
     if (!activeWorktreeId || !worktreePath || !effectiveBaseRef || isFolder) {
@@ -831,6 +908,30 @@ function SourceControlInner(): React.JSX.Element {
               />
             )}
 
+          {(scope === 'all' || scope === 'uncommitted') && (
+            <CommitArea
+              stagedCount={grouped.staged.length}
+              hasUnresolvedConflicts={unresolvedConflicts.length > 0}
+              worktreePath={worktreePath}
+              connectionId={getConnectionId(activeWorktreeId) ?? undefined}
+              commitMessage={commitMessage}
+              commitError={commitError}
+              isCommitting={isCommitting}
+              branchName={branchName}
+              onCommitMessageChange={(value) => {
+                if (!activeWorktreeId) {
+                  return
+                }
+                setCommitDrafts((prev) =>
+                  writeCommitDraftForWorktree(prev, activeWorktreeId, value)
+                )
+              }}
+              onCommitSuccess={() => {
+                void handleCommit()
+              }}
+            />
+          )}
+
           {(scope === 'all' || scope === 'uncommitted') && hasFilteredUncommittedEntries && (
             <>
               {SECTION_ORDER.map((area) => {
@@ -1005,6 +1106,74 @@ function SourceControlInner(): React.JSX.Element {
 
 const SourceControl = React.memo(SourceControlInner)
 export default SourceControl
+
+type CommitAreaProps = {
+  stagedCount: number
+  hasUnresolvedConflicts: boolean
+  worktreePath: string
+  connectionId?: string
+  commitMessage: string
+  commitError: string | null
+  isCommitting: boolean
+  branchName: string
+  onCommitMessageChange: (message: string) => void
+  onCommitSuccess: () => void
+}
+
+export function CommitArea({
+  stagedCount,
+  hasUnresolvedConflicts,
+  worktreePath: _worktreePath,
+  connectionId: _connectionId,
+  commitMessage,
+  commitError,
+  isCommitting,
+  branchName,
+  onCommitMessageChange,
+  onCommitSuccess
+}: CommitAreaProps): React.JSX.Element {
+  const rows = Math.max(2, commitMessage.split('\n').length)
+  const isMac = navigator.userAgent.includes('Mac')
+  const shortcut = isMac ? '⌘ Enter' : 'Ctrl+Enter'
+  const isCommitDisabled =
+    isCommitting || !commitMessage.trim() || stagedCount === 0 || hasUnresolvedConflicts
+
+  return (
+    <div className="px-3 pb-2">
+      <textarea
+        rows={rows}
+        value={commitMessage}
+        onChange={(e) => onCommitMessageChange(e.target.value)}
+        placeholder={`Message (${shortcut} to commit on "${branchName}")`}
+        className="w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
+        onKeyDown={(e) => {
+          // Why: shortcuts must map to Cmd on macOS and Ctrl elsewhere so users
+          // get native platform behavior instead of a mixed modifier policy.
+          const commitModifierPressed = isMac ? e.metaKey : e.ctrlKey
+          if (commitModifierPressed && e.key === 'Enter') {
+            e.preventDefault()
+            if (!isCommitDisabled) {
+              onCommitSuccess()
+            }
+          }
+        }}
+      />
+      <div className="mt-2 flex items-center justify-end gap-2">
+        <Button
+          type="button"
+          size="sm"
+          disabled={isCommitDisabled}
+          onClick={() => onCommitSuccess()}
+          className="h-7 text-xs"
+        >
+          {isCommitting && <RefreshCw className="size-3.5 animate-spin" />}
+          Commit
+        </Button>
+      </div>
+      {commitError && <p className="mt-1 text-[11px] text-destructive">{commitError}</p>}
+    </div>
+  )
+}
 
 function CompareSummary({
   summary,

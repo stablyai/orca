@@ -782,6 +782,11 @@ export type PreloadApi = {
       oldPath?: string
       connectionId?: string
     }) => Promise<GitDiffResult>
+    commit: (args: {
+      worktreePath: string
+      message: string
+      connectionId?: string
+    }) => Promise<{ success: boolean; error?: string }>
     stage: (args: {
       worktreePath: string
       filePath: string
