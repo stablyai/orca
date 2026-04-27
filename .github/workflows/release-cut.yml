@@ -103,15 +103,6 @@ jobs:
           latest_stable="${latest_stable#v}"
           echo "Latest stable: ${latest_stable:-<none>}"
 
-          # Latest tag of any kind on the repo (including RCs). Used only
-          # when kind=rc to figure out the current RC series base.
-          latest_tag="$(git tag --sort=-v:refname | head -n 1 || true)"
-          latest_tag="${latest_tag#v}"
-          echo "Latest tag:    ${latest_tag:-<none>}"
-
-          # Strip any existing -rc.N suffix for base-version math.
-          base_of() { echo "${1%%-rc.*}"; }
-
           semver_gt() {
             # returns 0 if $1 > $2 by semver rules (ignoring prerelease)
             node -e '
@@ -159,14 +150,15 @@ jobs:
 
           case "$KIND" in
             rc)
-              # Why: an RC continues the current series if there is one,
-              # otherwise starts a new series on the next patch version.
-              # This keeps the "I just want another RC" case one click.
-              if [[ -n "$latest_tag" && "$latest_tag" == *"-rc."* ]]; then
-                base="$(base_of "$latest_tag")"
-              else
-                base="$(bump "$latest_stable" patch)"
-              fi
+              # Why: RCs always stabilize the *next* patch after whatever
+              # is currently published as stable. Earlier logic tried to
+              # "continue the current series" by reading the highest git
+              # tag, which silently reopened a series that had already
+              # shipped (e.g. cutting v1.3.21-rc.7 after v1.3.21 stable
+              # was out). Anchoring to latest_stable + patch eliminates
+              # that class of bug; minor/major RCs are cut by running
+              # that stable kind first.
+              base="$(bump "$latest_stable" patch)"
               new="$(next_rc_in_series "$base")"
               ;;
             patch|minor|major)
