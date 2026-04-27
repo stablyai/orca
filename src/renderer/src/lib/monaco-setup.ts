@@ -34,29 +34,22 @@ globalThis.MonacoEnvironment = {
 
 // Why: Monaco's built-in TypeScript worker runs in isolation without filesystem
 // access, so it cannot resolve imports to project files that aren't open as
-// editor models. This produces false "Cannot find module" diagnostics for every
-// import statement (2307/2792) and false "unused import/local" diagnostics
-// (6133/6138/6192/6196/6198/6205) because cross-file references are invisible
-// to the worker. Those "unused" diagnostics carry the `reportsUnnecessary` tag,
-// which Monaco renders by fading the identifier to 0.667 opacity via
-// `.squiggly-inline-unnecessary` — in a diff view that looks like Orca's
-// diff renderer is muting lines. Disable suggestion diagnostics entirely
-// (where most of these originate) and ignore the specific error codes that
-// still fire as semantic diagnostics. Keep syntax + semantic validation on
-// so genuine parse errors and type mismatches in the open model still surface.
+// editor models. Every imported symbol collapses to `any`/unknown inside the
+// worker, which cascades into a long tail of false semantic diagnostics:
+// unresolved modules (2307/2792), unused-import fades rendered via
+// `.squiggly-inline-unnecessary` (6133/6138/6192/6196/6198/6205), missing
+// names (2304/2305), bogus type mismatches (2322/2339/2345/2571/2724),
+// and implicit-any noise (7006/7016/7026/7031/7053/18046/18048). Maintaining
+// a growing ignore list is whack-a-mole — the root cause is that semantic
+// validation is structurally meaningless without project context. Disable
+// semantic + suggestion diagnostics entirely and keep only syntax validation,
+// which is the only class of error that can be trusted from a sandboxed
+// worker viewing a single file. Users edit real code in their own IDE; Monaco
+// here is a viewer/diff surface, not a type checker.
 const diagnosticsOptions = {
+  noSemanticValidation: true,
   noSuggestionDiagnostics: true,
-  diagnosticCodesToIgnore: [
-    2307, // Cannot find module
-    2792, // Cannot find module (did you mean …)
-    6133, // 'x' is declared but its value is never read
-    6138, // Property 'x' is declared but its value is never read
-    6192, // All imports in import declaration are unused
-    6196, // 'x' is declared but never used
-    6198, // All destructured elements are unused
-    6205, // All type parameters are unused
-    6385 // 'x' is deprecated
-  ]
+  noSyntaxValidation: false
 }
 monacoTS.typescriptDefaults.setDiagnosticsOptions(diagnosticsOptions)
 monacoTS.javascriptDefaults.setDiagnosticsOptions(diagnosticsOptions)
