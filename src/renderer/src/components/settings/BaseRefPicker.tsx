@@ -131,15 +131,9 @@ export function BaseRefPicker({
             // Why: no aria-live — this is static instructional copy that renders
             // whenever remoteCount>1, not a dynamic status update. aria-live would
             // cause screen readers to re-announce it on every mount/repo switch.
-            //
-            // Why the advice to type a bare remote name (not `upstream/main`):
-            // searchBaseRefs uses fnmatch globs where `*` does not cross `/`, so
-            // a query containing `/` won't match anything useful. normalizeRefSearchQuery
-            // also doesn't strip `/`, so the literal slash reaches the glob verbatim.
-            // See src/main/git/repo.ts searchBaseRefs.
             <p className="text-xs text-muted-foreground">
-              Multiple remotes detected. Type a remote name (e.g. <code>upstream</code>) to scope
-              results to that remote, or type a branch name to search across all remotes.
+              Multiple remotes detected. Type a remote name (e.g. <code>upstream</code>) or a full
+              ref (e.g. <code>upstream/main</code>) to scope results.
             </p>
           ) : null}
         </div>

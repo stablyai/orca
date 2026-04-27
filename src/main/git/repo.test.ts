@@ -113,6 +113,74 @@ describe('searchBaseRefs (widened glob)', () => {
 
     expect(results).toEqual([])
   })
+
+  // Why: the picker displays results as `<remote>/<branch>` and labels
+  // `origin/main` as "Current", so users naturally retype the displayed
+  // format. Before segment-wise globbing this returned [] because the
+  // slash in the query made every fnmatch pattern unable to match.
+  it('finds the ref when the query is in display format `<remote>/<branch>`', async () => {
+    const sha = getHeadSha(tmpDir)
+    createRemoteRef(tmpDir, 'upstream/main', sha)
+
+    const results = await searchBaseRefs(tmpDir, 'upstream/main')
+
+    expect(results).toContain('upstream/main')
+  })
+
+  it('matches remote-and-branch prefixes with display-format queries', async () => {
+    const sha = getHeadSha(tmpDir)
+    createRemoteRef(tmpDir, 'upstream/feature-x', sha)
+    createRemoteRef(tmpDir, 'upstream/feature-y', sha)
+    createRemoteRef(tmpDir, 'origin/feature-x', sha)
+
+    const results = await searchBaseRefs(tmpDir, 'upstream/feat')
+
+    expect(results).toContain('upstream/feature-x')
+    expect(results).toContain('upstream/feature-y')
+    // Why: `upstream/feat` pins the remote segment to *upstream*, so
+    // origin/feature-x must not leak in.
+    expect(results).not.toContain('origin/feature-x')
+  })
+
+  it('does not match when tokens are in the wrong segments', async () => {
+    const sha = getHeadSha(tmpDir)
+    createRemoteRef(tmpDir, 'upstream/main', sha)
+
+    // Why: `main/upstream` means "remote matching *main*, branch matching
+    // *upstream*". upstream/main has remote=upstream (no `main`) and
+    // branch=main (no `upstream`), so it must NOT match — confirms each
+    // token is pinned to its own segment, not treated as a free substring.
+    const results = await searchBaseRefs(tmpDir, 'main/upstream')
+
+    expect(results).not.toContain('upstream/main')
+  })
+
+  it('still filters HEAD pseudo-refs for display-format queries', async () => {
+    const sha = getHeadSha(tmpDir)
+    createRemoteRef(tmpDir, 'upstream/main', sha)
+    git(tmpDir, ['symbolic-ref', 'refs/remotes/upstream/HEAD', 'refs/remotes/upstream/main'])
+
+    // Why: typing `upstream/HEAD` must not surface the pseudo-ref even
+    // though it's a valid display-format query — the HEAD filter runs
+    // after the glob match, so coverage of the filter must survive
+    // changes to the glob shape.
+    const results = await searchBaseRefs(tmpDir, 'upstream/HEAD')
+
+    expect(results).not.toContain('upstream/HEAD')
+  })
+
+  it('tolerates trailing, leading, and doubled slashes in the query', async () => {
+    const sha = getHeadSha(tmpDir)
+    createRemoteRef(tmpDir, 'upstream/main', sha)
+
+    // Why: empty tokens from trailing/leading/doubled slashes would
+    // degrade to `**` segments with fnmatch, matching nothing useful
+    // and silently breaking the feature. Filtering empty tokens keeps
+    // the query behavior identical to the intended non-empty tokens.
+    expect(await searchBaseRefs(tmpDir, 'upstream/')).toContain('upstream/main')
+    expect(await searchBaseRefs(tmpDir, '/upstream')).toContain('upstream/main')
+    expect(await searchBaseRefs(tmpDir, 'upstream//main')).toContain('upstream/main')
+  })
 })
 
 describe('getDefaultBaseRef (regression — unchanged behavior)', () => {

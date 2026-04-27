@@ -497,6 +497,34 @@ describe('repos:searchBaseRefs SSH relay', () => {
     expect(argv).not.toContain('refs/remotes/origin/*upstream*')
   })
 
+  it('sends segmented argv for display-format queries like `upstream/main`', async () => {
+    // Why: guards against the SSH path drifting from the local path for
+    // multi-segment queries. The picker shows results as `<remote>/<branch>`
+    // and users retype that format; if the SSH argv reverts to a single
+    // `*<q>*` glob containing the literal `/`, SSH users silently see no
+    // matches for valid refs — the same shape of bug as issue #624.
+    mockGitProvider.exec = vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
+
+    mockStore.getRepo.mockReturnValue({
+      id: 'r1',
+      path: '/remote/repo',
+      connectionId: 'conn-1',
+      kind: 'git'
+    })
+
+    await handlers.get('repos:searchBaseRefs')!(null, { repoId: 'r1', query: 'upstream/main' })
+
+    expect(mockGitProvider.exec).toHaveBeenCalledTimes(1)
+    const [argv] = mockGitProvider.exec.mock.calls[0]
+    expect(argv).toContain('refs/remotes/*upstream*/*main*')
+    expect(argv).toContain('refs/heads/*upstream*/*main*')
+    // Regression guard: the literal slash must never appear inside a
+    // single segmented glob (would be `refs/remotes/*upstream/main*`),
+    // which fnmatch cannot match because `*` doesn't cross `/`.
+    expect(argv).not.toContain('refs/remotes/*upstream/main*/*')
+    expect(argv).not.toContain('refs/remotes/*/*upstream/main*')
+  })
+
   it('parses NUL-delimited stdout and filters <remote>/HEAD pseudo-refs', async () => {
     // Why: exercises the shared parseAndFilterSearchRefs pipeline end-to-end
     // on the SSH path — confirms the HEAD filter works for any remote (not

@@ -300,25 +300,51 @@ async function getDefaultBaseRefAsync(path: string): Promise<string | null> {
  * `upstream/main`). The picker would otherwise structurally deny the
  * correct answer for fork contributors — see docs/upstream-base-ref-design.md.
  *
- * Why two remote globs: `git for-each-ref` uses fnmatch-style globs where
- * `*` does NOT cross `/`. A single `refs/remotes/*\/*<q>*` pattern only
- * matches when `<q>` appears in the branch-name segment, so typing
- * `upstream` (a remote name) would return nothing. The extra
- * `refs/remotes/*<q>*\/*` glob matches when the query appears in the
- * remote-name segment, making remote-name filtering work.
+ * Why two remote globs for a single-segment query: `git for-each-ref`
+ * uses fnmatch-style globs where `*` does NOT cross `/`. A single
+ * `refs/remotes/*\/*<q>*` pattern only matches when `<q>` appears in the
+ * branch-name segment, so typing `upstream` (a remote name) would return
+ * nothing. The extra `refs/remotes/*<q>*\/*` glob matches when the query
+ * appears in the remote-name segment, making remote-name filtering work.
+ *
+ * Why the multi-segment branch: the picker displays results as
+ * `upstream/main`, so users naturally retype that format. With a single
+ * glob, `upstream/main` becomes `refs/remotes/*upstream/main*\/*` — five
+ * path segments, zero matches. Splitting on `/` and emitting one
+ * `*<token>*` per ref segment maps directly to git's ref structure
+ * (`refs/remotes/<remote>/<branch>`, `refs/heads/<branch>`) and makes
+ * display-format queries actually find the ref on screen.
  *
  * Why shared: the local path and the SSH relay path must send the exact
  * same argv so results cannot diverge between transports.
  */
 export function buildSearchBaseRefsArgv(normalizedQuery: string): string[] {
-  return [
-    'for-each-ref',
-    '--format=%(refname)%00%(refname:short)',
-    '--sort=-committerdate',
-    `refs/remotes/*${normalizedQuery}*/*`,
-    `refs/remotes/*/*${normalizedQuery}*`,
-    `refs/heads/*${normalizedQuery}*`
-  ]
+  const base = ['for-each-ref', '--format=%(refname)%00%(refname:short)', '--sort=-committerdate']
+  // Why: split on `/` so display-format queries (`upstream/main`) route
+  // each token to one git ref segment. Filter empty tokens so trailing
+  // (`upstream/`), leading (`/main`), or doubled (`upstream//main`)
+  // slashes don't produce empty `**` segments that degrade to useless
+  // patterns. A single remaining token means the user hasn't committed
+  // to a remote-plus-branch query yet — route through the widened
+  // single-segment globs below instead of pinning to one segment.
+  const tokens = normalizedQuery.split('/').filter((t) => t.length > 0)
+  if (tokens.length <= 1) {
+    const q = tokens[0] ?? ''
+    // Why three globs for a single-segment query: `git for-each-ref`
+    // uses fnmatch-style globs where `*` does NOT cross `/`. A single
+    // `refs/remotes/*\/*<q>*` only matches when `<q>` is in the branch
+    // segment, so typing `upstream` (a remote name) returns nothing.
+    // The extra `refs/remotes/*<q>*\/*` matches when the query lives in
+    // the remote segment, making remote-name filtering work.
+    return [...base, `refs/remotes/*${q}*/*`, `refs/remotes/*/*${q}*`, `refs/heads/*${q}*`]
+  }
+  // Why: multi-token queries like `upstream/main` map one `*token*` per
+  // ref segment, so each token is matched within a single git ref
+  // segment (fnmatch `*` cannot cross `/`). The picker displays results
+  // as `<remote>/<branch>`, so users naturally retype that format; this
+  // branch is what makes re-typing a visible result actually find it.
+  const segmented = tokens.map((token) => `*${token}*`).join('/')
+  return [...base, `refs/remotes/${segmented}`, `refs/heads/${segmented}`]
 }
 
 export async function searchBaseRefs(path: string, query: string, limit = 25): Promise<string[]> {
