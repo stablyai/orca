@@ -92,16 +92,28 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Latest published stable release (excludes drafts + prereleases).
+          # Latest stable release tag, picked by *tag shape* (no `-rc.`)
+          # rather than the GitHub `isPrerelease` flag. electron-builder's
+          # publish step has flipped that flag back to `false` on RC
+          # releases in the past (issue surfaced 2026-04-27 when
+          # v1.3.22-rc.2 became "latest" on GitHub and poisoned the
+          # compute-next-version math here). Filtering by tag format is
+          # the authoritative signal — an `-rc.N` tag is never stable,
+          # regardless of what the release metadata says.
           latest_stable="$(gh release list \
               --repo "$GITHUB_REPOSITORY" \
               --exclude-drafts \
-              --exclude-pre-releases \
-              --limit 1 \
+              --limit 50 \
               --json tagName \
-              --jq '.[0].tagName // ""')"
+              --jq '[.[] | .tagName | select(test("-rc\\.") | not)] | .[0] // ""')"
           latest_stable="${latest_stable#v}"
           echo "Latest stable: ${latest_stable:-<none>}"
+
+          # Strip any prerelease suffix before numeric math. Without this,
+          # `Number("1-rc")` returns NaN and `(NaN||0)+1` silently collapses
+          # to 1 — exactly the path that produced v1.3.1-rc.4 on 2026-04-27
+          # when latest_stable was misread as a prerelease tag.
+          strip_pre() { echo "${1%%-*}"; }
 
           semver_gt() {
             # returns 0 if $1 > $2 by semver rules (ignoring prerelease)
@@ -113,7 +125,7 @@ jobs:
                 if ((a[i]||0) < (b[i]||0)) process.exit(1);
               }
               process.exit(1);
-            ' "$1" "$2"
+            ' "$(strip_pre "$1")" "$(strip_pre "$2")"
           }
 
           bump() {
@@ -124,7 +136,7 @@ jobs:
               if (level === "major") console.log(`${(v[0]||0)+1}.0.0`);
               else if (level === "minor") console.log(`${v[0]||0}.${(v[1]||0)+1}.0`);
               else console.log(`${v[0]||0}.${v[1]||0}.${(v[2]||0)+1}`);
-            ' "$1" "$2"
+            ' "$(strip_pre "$1")" "$2"
           }
 
           next_rc_in_series() {
