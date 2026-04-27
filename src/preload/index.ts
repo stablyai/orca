@@ -9,6 +9,7 @@ import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type {
   FsChangedPayload,
   GhosttyImportPreview,
+  MemorySnapshot,
   NotificationDispatchResult
 } from '../shared/types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../shared/runtime-types'
@@ -1465,6 +1466,10 @@ const api = {
       totalAgentTimeMs: number
       firstEventAt: number | null
     }> => ipcRenderer.invoke('stats:summary')
+  },
+
+  memory: {
+    getSnapshot: (): Promise<MemorySnapshot> => ipcRenderer.invoke('memory:getSnapshot')
   },
 
   claudeUsage: {

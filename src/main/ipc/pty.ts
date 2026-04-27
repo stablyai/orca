@@ -21,6 +21,7 @@ import {
   markClaudePtySpawned
 } from '../claude-accounts/live-pty-gate'
 import { applyTerminalAttributionEnv } from '../attribution/terminal-attribution'
+import { registerPty, unregisterPty } from '../memory/pty-registry'
 
 // ─── Provider Registry ──────────────────────────────────────────────
 // Routes PTY operations by connectionId. null = local provider.
@@ -159,6 +160,10 @@ export function clearProviderPtyState(id: string): void {
   // new teardown path forgets to remove one provider's overlay/hook state.
   openCodeHookService.clearPty(id)
   piTitlebarExtensionService.clearPty(id)
+  // Why: drop the memory-collector registration so a dead PTY does not keep
+  // trying to resolve its (now-dead) pid on every snapshot. Safe no-op for
+  // PTYs that were never registered (SSH-owned).
+  unregisterPty(id)
   // Why: the hook server's per-paneKey caches (lastPrompt / lastTool) would
   // otherwise accumulate entries for dead panes over the process lifetime.
   // Use the spawn-time paneKey mapping since the server has no other way to
@@ -486,6 +491,43 @@ export function registerPtyHandlers(
       if (typeof paneKey === 'string' && paneKey.length > 0 && paneKey.length <= 256) {
         ptyPaneKey.set(result.id, paneKey)
         paneKeyPtyId.set(paneKey, result.id)
+      }
+      // Why: register local PTYs (connectionId falsy) with the memory
+      // collector so it can walk each PTY's process subtree and attribute
+      // memory back to its worktree. SSH PTYs execute remotely and their
+      // process tree is not visible to our local `ps`, so we skip them.
+      if (!args.connectionId) {
+        // Why: providers publish the OS pid on the spawn result (both
+        // LocalPtyProvider and DaemonPtyAdapter). Recording it once here keeps
+        // the memory module from reaching back into ipc/pty on a hot path, and
+        // works uniformly whether the PTY is hosted in-process or by the
+        // daemon subprocess.
+        const spawnedPid = result.pid ?? null
+        // Why: args.worktreeId and args.sessionId arrive as untrusted IPC
+        // payload strings — the static type is not enforced at the boundary.
+        // Narrow them to bounded strings here to match the paneKey defense
+        // above so malformed or oversized values cannot pollute registerPty's
+        // maps or downstream memory-attribution lookups.
+        registerPty({
+          ptyId: result.id,
+          worktreeId:
+            typeof args.worktreeId === 'string' &&
+            args.worktreeId.length > 0 &&
+            args.worktreeId.length <= 512
+              ? args.worktreeId
+              : null,
+          sessionId:
+            typeof args.sessionId === 'string' &&
+            args.sessionId.length > 0 &&
+            args.sessionId.length <= 256
+              ? args.sessionId
+              : null,
+          paneKey: typeof paneKey === 'string' ? paneKey : null,
+          pid:
+            typeof spawnedPid === 'number' && Number.isFinite(spawnedPid) && spawnedPid > 0
+              ? spawnedPid
+              : null
+        })
       }
       return result
     }

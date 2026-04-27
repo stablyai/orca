@@ -77,7 +77,18 @@ export const DEFAULT_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = [
   'comment'
 ]
 
-export const DEFAULT_STATUS_BAR_ITEMS: StatusBarItem[] = ['claude', 'codex', 'ssh', 'sessions']
+export const DEFAULT_STATUS_BAR_ITEMS: StatusBarItem[] = [
+  'claude',
+  'codex',
+  'ssh',
+  'sessions',
+  'memory'
+]
+
+/** Synthetic worktree id used by the memory collector to bucket PTYs that
+ *  are not associated with any worktree. Shared across main and renderer so
+ *  the collector and the status-bar popover agree on the sentinel. */
+export const ORPHAN_WORKTREE_ID = '__orphan__'
 
 export const REPO_COLORS = [
   '#737373', // neutral

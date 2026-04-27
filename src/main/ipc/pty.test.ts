@@ -767,7 +767,7 @@ describe('registerPtyHandlers', () => {
         cwd: '/tmp'
       })
 
-      expect(result).toEqual({ id: expect.any(String) })
+      expect(result).toEqual({ id: expect.any(String), pid: 12345 })
       expect(spawnMock).toHaveBeenCalledTimes(1)
       expect(spawnMock).toHaveBeenCalledWith(
         '/bin/zsh',

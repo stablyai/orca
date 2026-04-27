@@ -1,7 +1,15 @@
 /* eslint-disable max-lines -- Why: the status bar keeps provider rendering,
 interaction menus, and compact-layout behavior together so the hover/click
 states stay consistent across Claude and Codex. */
-import { AlertTriangle, ChevronDown, ChevronRight, RefreshCw, Terminal, Wifi } from 'lucide-react'
+import {
+  AlertTriangle,
+  ChevronDown,
+  ChevronRight,
+  MemoryStick as MemoryStickIcon,
+  RefreshCw,
+  Terminal,
+  Wifi
+} from 'lucide-react'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -25,6 +33,7 @@ import { markLiveCodexSessionsForRestart } from '@/lib/codex-session-restart'
 import { SshStatusSegment } from './SshStatusSegment'
 import { SessionsStatusSegment } from './SessionsStatusSegment'
 import { UpdateStatusSegment } from './UpdateStatusSegment'
+import { MemoryStatusSegment } from './MemoryStatusSegment'
 
 function getCodexAccountLabel(
   state: CodexRateLimitAccountsState,
@@ -609,6 +618,7 @@ function StatusBarInner(): React.JSX.Element | null {
   const showCodex = codex && statusBarItems.includes('codex')
   const showSsh = statusBarItems.includes('ssh')
   const showSessions = statusBarItems.includes('sessions')
+  const showMemory = statusBarItems.includes('memory')
   const anyVisible = showClaude || showCodex
   const anyFetching = claude?.status === 'fetching' || codex?.status === 'fetching'
 
@@ -662,6 +672,7 @@ function StatusBarInner(): React.JSX.Element | null {
 
       <div className="flex items-center gap-3">
         <UpdateStatusSegment compact={compact} iconOnly={iconOnly} />
+        {showMemory && <MemoryStatusSegment compact={compact} iconOnly={iconOnly} />}
         {showSessions && <SessionsStatusSegment compact={compact} iconOnly={iconOnly} />}
         {showSsh && <SshStatusSegment compact={compact} iconOnly={iconOnly} />}
       </div>
@@ -703,6 +714,13 @@ function StatusBarInner(): React.JSX.Element | null {
           >
             <Terminal className="size-3.5" />
             Terminal Sessions
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuCheckboxItem
+            checked={statusBarItems.includes('memory')}
+            onCheckedChange={() => toggleStatusBarItem('memory')}
+          >
+            <MemoryStickIcon className="size-3.5" />
+            Memory
           </DropdownMenuCheckboxItem>
         </DropdownMenuContent>
       </DropdownMenu>
