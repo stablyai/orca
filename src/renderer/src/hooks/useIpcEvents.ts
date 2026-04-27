@@ -2,10 +2,7 @@
 import { useEffect } from 'react'
 import { useAppStore } from '../store'
 import { applyUIZoom } from '@/lib/ui-zoom'
-import {
-  activateAndRevealWorktree,
-  ensureWorktreeHasInitialTerminal
-} from '@/lib/worktree-activation'
+import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { SPLIT_TERMINAL_PANE_EVENT, CLOSE_TERMINAL_PANE_EVENT } from '@/constants/terminal'
 import type { SplitTerminalPaneDetail, CloseTerminalPaneDetail } from '@/constants/terminal'
 import { getVisibleWorktreeIds } from '@/components/sidebar/visible-worktrees'
@@ -141,18 +138,16 @@ export function useIpcEvents(): void {
     unsubs.push(
       window.api.ui.onActivateWorktree(({ repoId, worktreeId, setup }) => {
         void (async () => {
-          const store = useAppStore.getState()
-          await store.fetchWorktrees(repoId)
-          // Why: CLI-created worktrees should feel identical to UI-created
-          // worktrees. The renderer owns the "active worktree -> first tab"
-          // behavior today, so we explicitly replay that activation sequence
-          // after the runtime creates a worktree outside the renderer.
-          store.setActiveRepo(repoId)
-          store.setActiveView('terminal')
-          store.setActiveWorktree(worktreeId)
-          ensureWorktreeHasInitialTerminal(store, worktreeId, setup)
-
-          store.revealWorktreeInSidebar(worktreeId)
+          // Why: fetch worktrees first so the activation helper can resolve
+          // the CLI-created worktree via findWorktreeById — it arrived from
+          // the main process and is not yet in the renderer state.
+          await useAppStore.getState().fetchWorktrees(repoId)
+          // Why: route through activateAndRevealWorktree so CLI-created
+          // worktrees share the canonical activation path with UI-created
+          // ones. This records the visit in the back/forward history stack
+          // (recordWorktreeVisit), without which the nav buttons would
+          // ignore the CLI-driven workspace switch.
+          activateAndRevealWorktree(worktreeId, { setup })
         })().catch((error) => {
           console.error('Failed to activate CLI-created worktree:', error)
         })
