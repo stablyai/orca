@@ -1,9 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { existsSyncMock, statSyncMock, accessSyncMock, spawnMock } = vi.hoisted(() => ({
+const {
+  existsSyncMock,
+  statSyncMock,
+  accessSyncMock,
+  mkdirSyncMock,
+  writeFileSyncMock,
+  spawnMock
+} = vi.hoisted(() => ({
   existsSyncMock: vi.fn(),
   statSyncMock: vi.fn(),
   accessSyncMock: vi.fn(),
+  mkdirSyncMock: vi.fn(),
+  writeFileSyncMock: vi.fn(),
   spawnMock: vi.fn()
 }))
 
@@ -11,8 +20,16 @@ vi.mock('fs', () => ({
   existsSync: existsSyncMock,
   statSync: statSyncMock,
   accessSync: accessSyncMock,
+  mkdirSync: mkdirSyncMock,
+  writeFileSync: writeFileSyncMock,
   chmodSync: vi.fn(),
   constants: { X_OK: 1 }
+}))
+
+vi.mock('electron', () => ({
+  app: {
+    getPath: vi.fn(() => '/tmp/orca-user-data')
+  }
 }))
 
 vi.mock('node-pty', () => ({
@@ -46,6 +63,8 @@ describe('LocalPtyProvider', () => {
     existsSyncMock.mockReturnValue(true)
     statSyncMock.mockReturnValue({ isDirectory: () => true, mode: 0o755 })
     accessSyncMock.mockReturnValue(undefined)
+    mkdirSyncMock.mockReset()
+    writeFileSyncMock.mockReset()
 
     exitCb = undefined
     mockProc = {
