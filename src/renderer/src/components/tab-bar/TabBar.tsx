@@ -28,9 +28,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuShortcut,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 
@@ -141,6 +138,9 @@ function TabBarInner({
   wslAvailable
 }: TabBarProps): React.JSX.Element {
   const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
+  const defaultWindowsShell = useAppStore(
+    (s) => s.settings?.terminalWindowsShell ?? 'powershell.exe'
+  )
   const resolvedGroupId = groupId ?? worktreeId
   const statusByRelativePath = useMemo(
     () => buildStatusMap(gitStatusByWorktree[worktreeId] ?? []),
@@ -457,25 +457,34 @@ function TabBarInner({
           }}
         >
           {isWindows && onNewTerminalWithShell ? (
-            // Why: on Windows there are multiple shell choices (PowerShell, CMD,
-            // WSL). A submenu mirrors Windows Terminal and VS Code's UX where
-            // the "+" arrow expands to show all available profiles.
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium">
-                <TerminalSquare className="size-4 text-muted-foreground" />
-                New Terminal
-                <DropdownMenuShortcut>{NEW_TERMINAL_SHORTCUT}</DropdownMenuShortcut>
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent className="min-w-[10rem] rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]">
-                {[
-                  { label: 'PowerShell', shell: 'powershell.exe' },
-                  { label: 'Command Prompt', shell: 'cmd.exe' },
-                  ...(wslAvailable ? [{ label: 'WSL', shell: 'wsl.exe' }] : [])
-                ].map(({ label, shell }) => (
+            // Why: previously the Windows path nested shell choices under a
+            // Radix submenu. In practice the submenu frequently failed to open
+            // on hover/click (see "New Terminal Selection Windows" feedback),
+            // and even when it worked the two-step expansion hid the fact that
+            // multiple shells were available. Inlining all shells as flat
+            // items with the configured default pinned to the top — and
+            // carrying the Ctrl+T shortcut label since it opens the default —
+            // matches the user's rec: no popouts, show up to three shells at
+            // once, make the "selected" default obvious at a glance.
+            (() => {
+              const allShells = [
+                { label: 'PowerShell', shell: 'powershell.exe' },
+                { label: 'Command Prompt', shell: 'cmd.exe' },
+                ...(wslAvailable ? [{ label: 'WSL', shell: 'wsl.exe' }] : [])
+              ]
+              const defaultEntry =
+                allShells.find((s) => s.shell === defaultWindowsShell) ?? allShells[0]
+              const orderedShells = [
+                defaultEntry,
+                ...allShells.filter((s) => s.shell !== defaultEntry.shell)
+              ]
+              return orderedShells.map((entry, idx) => {
+                const isDefault = idx === 0
+                return (
                   <DropdownMenuItem
-                    key={shell}
+                    key={entry.shell}
                     onSelect={() => {
-                      onNewTerminalWithShell(shell)
+                      onNewTerminalWithShell(entry.shell)
                       const newActiveTabId = useAppStore.getState().activeTabId
                       if (newActiveTabId) {
                         focusTerminalTabSurface(newActiveTabId)
@@ -484,11 +493,21 @@ function TabBarInner({
                     className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
                   >
                     <TerminalSquare className="size-4 text-muted-foreground" />
-                    {label}
+                    <span className="flex-1">
+                      New Terminal: {entry.label}
+                      {isDefault ? (
+                        <span className="ml-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                          Default
+                        </span>
+                      ) : null}
+                    </span>
+                    {isDefault ? (
+                      <DropdownMenuShortcut>{NEW_TERMINAL_SHORTCUT}</DropdownMenuShortcut>
+                    ) : null}
                   </DropdownMenuItem>
-                ))}
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
+                )
+              })
+            })()
           ) : (
             <DropdownMenuItem
               onSelect={() => {
