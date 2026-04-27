@@ -18,6 +18,30 @@ function getShellReadyWrapperRoot(): string {
   return join(userDataPath || tmpdir(), userDataPath ? 'shell-ready' : 'orca-shell-ready')
 }
 
+// Why: if our own process inherited ZDOTDIR from a parent shell that was
+// itself an Orca PTY (e.g. the user launched Orca from a terminal inside a
+// running Orca), that ZDOTDIR points at an Orca shell-ready wrapper dir.
+// Propagating it as the new PTY's ORCA_ORIG_ZDOTDIR makes the wrapper's
+// `source "$ORCA_ORIG_ZDOTDIR/.zshenv"` line source itself recursively —
+// zsh gives "job table full or recursion limit exceeded" and the shell
+// never reaches a usable prompt.
+//
+// Any path component ending in `/shell-ready/zsh` is an Orca wrapper dir
+// (regardless of whether it came from this daemon's userData, a packaged
+// Orca, or a different dev build). Treat it as if ZDOTDIR were unset so the
+// caller falls back to HOME for the user's real config root.
+function resolveOriginalZdotdir(): string {
+  const inherited = process.env.ZDOTDIR
+  // Why: tolerate trailing slashes — some shell startup scripts export
+  // `ZDOTDIR="$dir/"`, and without normalization the suffix check would
+  // miss the self-loop path and restore the recursion bug.
+  const normalized = inherited ? inherited.replace(/\/+$/, '') : ''
+  if (normalized && !normalized.endsWith('/shell-ready/zsh')) {
+    return inherited as string
+  }
+  return process.env.HOME || ''
+}
+
 function getRequiredShellReadyWrapperPaths(root = getShellReadyWrapperRoot()): string[] {
   return [
     join(root, 'zsh', '.zshenv'),
@@ -170,7 +194,7 @@ function getWrappedShellLaunchConfig(
     return {
       args: ['-l'],
       env: {
-        ORCA_ORIG_ZDOTDIR: process.env.ZDOTDIR || process.env.HOME || '',
+        ORCA_ORIG_ZDOTDIR: resolveOriginalZdotdir(),
         ZDOTDIR: join(root, 'zsh'),
         ORCA_SHELL_READY_MARKER: options.emitReadyMarker ? '1' : '0'
       },
