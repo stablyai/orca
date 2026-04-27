@@ -83,12 +83,6 @@ export type ManagedPaneInternal = {
   // intermediate fit paths skip their own scroll restoration, deferring to
   // the splitPane's final authoritative restore.
   pendingSplitScrollState: ScrollState | null
-  // Why: during divider drag, each safeFit capture→fit→restore cycle uses
-  // approximate content-based matching that can drift by a line or two.
-  // Over dozens of rapid drag frames the error compounds, scrolling the
-  // terminal to a completely wrong position. Capturing once at drag start
-  // and reusing that state for every restore eliminates accumulation.
-  pendingDragScrollState: ScrollState | null
 } & ManagedPane
 
 export type DropZone = 'top' | 'bottom' | 'left' | 'right'

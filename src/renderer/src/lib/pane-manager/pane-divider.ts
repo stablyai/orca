@@ -11,15 +11,15 @@ export function getDividerHitSize(styleOptions: PaneStyleOptions): number {
   return thickness + HIT_PADDING * 2
 }
 
+type DividerCallbacks = {
+  refitPanesUnder: (el: HTMLElement) => void
+  onLayoutChanged?: () => void
+}
+
 export function createDivider(
   isVertical: boolean,
   styleOptions: PaneStyleOptions,
-  callbacks: {
-    refitPanesUnder: (el: HTMLElement) => void
-    lockDragScroll: (el: HTMLElement) => void
-    unlockDragScroll: (el: HTMLElement) => void
-    onLayoutChanged?: () => void
-  }
+  callbacks: DividerCallbacks
 ): HTMLElement {
   const divider = document.createElement('div')
   divider.className = `pane-divider ${isVertical ? 'is-vertical' : 'is-horizontal'}`
@@ -45,12 +45,7 @@ export function createDivider(
 function attachDividerDrag(
   divider: HTMLElement,
   isVertical: boolean,
-  callbacks: {
-    refitPanesUnder: (el: HTMLElement) => void
-    lockDragScroll: (el: HTMLElement) => void
-    unlockDragScroll: (el: HTMLElement) => void
-    onLayoutChanged?: () => void
-  }
+  callbacks: DividerCallbacks
 ): void {
   const MIN_PANE_SIZE = 50
 
@@ -89,9 +84,6 @@ function attachDividerDrag(
     // Store current proportions as flex-basis values
     prevFlex = prevSize
     nextFlex = nextSize
-
-    callbacks.lockDragScroll(prevEl)
-    callbacks.lockDragScroll(nextEl)
   }
 
   const onPointerMove = (e: PointerEvent): void => {
@@ -130,15 +122,12 @@ function attachDividerDrag(
     dragging = false
     divider.releasePointerCapture(e.pointerId)
     divider.classList.remove('is-dragging')
-    // Final refit at the exact drop position, then unlock drag scroll state
-    // so the authoritative restore uses the original pre-drag scroll position
+    // Final refit at the exact drop position.
     if (prevEl) {
       callbacks.refitPanesUnder(prevEl)
-      callbacks.unlockDragScroll(prevEl)
     }
     if (nextEl) {
       callbacks.refitPanesUnder(nextEl)
-      callbacks.unlockDragScroll(nextEl)
     }
     prevEl = null
     nextEl = null
@@ -157,16 +146,11 @@ function attachDividerDrag(
       return
     }
 
-    callbacks.lockDragScroll(prev)
-    callbacks.lockDragScroll(next)
-
     prev.style.flex = '1 1 0%'
     next.style.flex = '1 1 0%'
 
     callbacks.refitPanesUnder(prev)
-    callbacks.unlockDragScroll(prev)
     callbacks.refitPanesUnder(next)
-    callbacks.unlockDragScroll(next)
     callbacks.onLayoutChanged?.()
   }
 

@@ -341,7 +341,12 @@ export class LocalPtyProvider implements IPtyProvider {
       })
     }
 
-    return { id }
+    // Why: publish the OS pid so ipc/pty can register the PTY with the memory
+    // collector without reaching back into the provider. `proc.pid` may be
+    // briefly 0/undefined if node-pty hasn't observed the forked child yet.
+    const rawPid = proc.pid
+    const pid = typeof rawPid === 'number' && Number.isFinite(rawPid) && rawPid > 0 ? rawPid : null
+    return { id, pid }
   }
 
   // Local PTYs are always attached -- no-op. Remote providers use this to resubscribe.

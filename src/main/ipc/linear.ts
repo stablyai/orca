@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import { connect, disconnect, getStatus } from '../linear/client'
+import { connect, disconnect, getStatus, testConnection } from '../linear/client'
 import { _resetPreflightCache } from './preflight'
 import {
   getIssue,
@@ -37,6 +37,10 @@ export function registerLinearHandlers(): void {
 
   ipcMain.handle('linear:status', async () => {
     return getStatus()
+  })
+
+  ipcMain.handle('linear:testConnection', async () => {
+    return testConnection()
   })
 
   ipcMain.handle('linear:searchIssues', async (_event, args: { query: string; limit?: number }) => {

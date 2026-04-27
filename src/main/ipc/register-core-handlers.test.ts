@@ -8,6 +8,7 @@ const {
   registerGitHubHandlersMock,
   registerFeedbackHandlersMock,
   registerStatsHandlersMock,
+  registerMemoryHandlersMock,
   registerNotificationHandlersMock,
   registerSettingsHandlersMock,
   registerShellHandlersMock,
@@ -36,6 +37,7 @@ const {
   registerGitHubHandlersMock: vi.fn(),
   registerFeedbackHandlersMock: vi.fn(),
   registerStatsHandlersMock: vi.fn(),
+  registerMemoryHandlersMock: vi.fn(),
   registerNotificationHandlersMock: vi.fn(),
   registerSettingsHandlersMock: vi.fn(),
   registerShellHandlersMock: vi.fn(),
@@ -88,6 +90,10 @@ vi.mock('./export', () => ({
 
 vi.mock('./stats', () => ({
   registerStatsHandlers: registerStatsHandlersMock
+}))
+
+vi.mock('./memory', () => ({
+  registerMemoryHandlers: registerMemoryHandlersMock
 }))
 
 vi.mock('./notifications', () => ({
@@ -168,6 +174,7 @@ describe('registerCoreHandlers', () => {
     registerGitHubHandlersMock.mockReset()
     registerFeedbackHandlersMock.mockReset()
     registerStatsHandlersMock.mockReset()
+    registerMemoryHandlersMock.mockReset()
     registerNotificationHandlersMock.mockReset()
     registerSettingsHandlersMock.mockReset()
     registerShellHandlersMock.mockReset()
@@ -221,6 +228,7 @@ describe('registerCoreHandlers', () => {
     expect(registerLinearHandlersMock).toHaveBeenCalled()
     expect(registerFeedbackHandlersMock).toHaveBeenCalled()
     expect(registerStatsHandlersMock).toHaveBeenCalledWith(stats)
+    expect(registerMemoryHandlersMock).toHaveBeenCalledWith(store)
     expect(registerNotificationHandlersMock).toHaveBeenCalledWith(store)
     expect(registerSettingsHandlersMock).toHaveBeenCalledWith(store)
     expect(registerSessionHandlersMock).toHaveBeenCalledWith(store)
@@ -267,5 +275,8 @@ describe('registerCoreHandlers', () => {
     expect(registerCliHandlersMock).not.toHaveBeenCalled()
     expect(registerPreflightHandlersMock).not.toHaveBeenCalled()
     expect(registerBrowserHandlersMock).not.toHaveBeenCalled()
+    // Why: ipcMain.handle throws on duplicate channel registration, so the
+    // memory handler must not be wired up a second time on reactivation.
+    expect(registerMemoryHandlersMock).not.toHaveBeenCalled()
   })
 })

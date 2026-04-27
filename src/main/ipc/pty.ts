@@ -4,6 +4,7 @@ foreground-process inspection, and renderer IPC stay behind a single audited
 boundary. Splitting it by line count would scatter tightly coupled terminal
 process behavior across files without a cleaner ownership seam. */
 import { join, delimiter } from 'path'
+import { randomUUID } from 'crypto'
 import { type BrowserWindow, ipcMain, app } from 'electron'
 export { getBashShellReadyRcfileContent } from '../providers/local-pty-shell-ready'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
@@ -21,6 +22,7 @@ import {
   markClaudePtySpawned
 } from '../claude-accounts/live-pty-gate'
 import { applyTerminalAttributionEnv } from '../attribution/terminal-attribution'
+import { registerPty, unregisterPty } from '../memory/pty-registry'
 
 // ─── Provider Registry ──────────────────────────────────────────────
 // Routes PTY operations by connectionId. null = local provider.
@@ -80,6 +82,118 @@ function getProviderForPty(ptyId: string): IPtyProvider {
     return localProvider
   }
   return getProvider(connectionId)
+}
+
+// ─── Host PTY env assembly ──────────────────────────────────────────
+// Why: both the LocalPtyProvider.buildSpawnEnv closure and the daemon-active
+// fallback in pty:spawn need the same set of host-local env injections
+// (OpenCode plugin dir, agent-hook server coordinates, Pi overlay, Codex
+// account home, dev-mode CLI overrides, GitHub attribution shims). They used
+// to be implemented twice, which silently drifted — daemon-backed PTYs never
+// got the OpenCode plugin, Pi overlay, Codex home, or dev CLI PATH prepend,
+// so status dots, per-PTY Pi state, Codex account switching, and CLI→dev
+// routing were all broken for daemon users (the common case).
+//
+// Centralizing the injections here makes future additions fail-safe: a new
+// variable added to this function lands in BOTH spawn paths or NEITHER.
+
+export type BuildPtyHostEnvOptions = {
+  isPackaged: boolean
+  userDataPath: string
+  selectedCodexHomePath: string | null
+  githubAttributionEnabled: boolean
+}
+
+/**
+ * Mutates `baseEnv` in place with all host-local PTY env vars and returns it.
+ *
+ * This is the single source of truth for the env shape an Orca PTY needs
+ * BEFORE the provider-specific wrapper (LocalPtyProvider's TERM/LANG defaults,
+ * DaemonPtyAdapter's subprocess env). Callers are responsible for the SSH
+ * guard — if `args.connectionId` is set, do NOT call this function, because
+ * every injection here is either host-loopback (hook server, attribution
+ * shims) or references paths on the local filesystem that would be meaningless
+ * to a remote shell.
+ */
+export function buildPtyHostEnv(
+  id: string,
+  baseEnv: Record<string, string>,
+  opts: BuildPtyHostEnvOptions
+): Record<string, string> {
+  // Why: the Local path passes a baseEnv that already includes process.env
+  // (LocalPtyProvider.spawn merges it before calling buildSpawnEnv). The
+  // daemon path passes only args.env since process.env propagates to the
+  // daemon subprocess via fork inheritance, not the IPC wire. Checking both
+  // sources when reading a potentially-user-provided value keeps the guards
+  // in lock-step across spawn paths without pushing process.env onto the
+  // IPC wire unnecessarily.
+  const preexistingOpenCodeConfigDir =
+    baseEnv.OPENCODE_CONFIG_DIR ?? process.env.OPENCODE_CONFIG_DIR
+  const preexistingPiAgentDir = baseEnv.PI_CODING_AGENT_DIR ?? process.env.PI_CODING_AGENT_DIR
+
+  const openCodeHookEnv = openCodeHookService.buildPtyEnv(id)
+  if (preexistingOpenCodeConfigDir) {
+    // Why: OPENCODE_CONFIG_DIR is a singular extra config root. Replacing a
+    // user-provided directory would silently hide their custom OpenCode
+    // config, so preserve it. The Orca status plugin will not load, so the
+    // dashboard falls back to a blank status for that pane until the user
+    // unsets their override.
+    delete openCodeHookEnv.OPENCODE_CONFIG_DIR
+  }
+  Object.assign(baseEnv, openCodeHookEnv)
+
+  // Why: Claude/Codex native hooks run inside the shell process, so Orca
+  // must inject the loopback receiver coordinates before the agent starts.
+  // Without these env vars the global hook config cannot map callbacks back
+  // to the correct Orca pane.
+  Object.assign(baseEnv, agentHookServer.buildPtyEnv())
+
+  // Why: PI_CODING_AGENT_DIR owns Pi's full config/session root. Build a
+  // PTY-scoped overlay from the caller's chosen root so Pi sessions keep
+  // their user state without sharing a mutable overlay across terminals.
+  // Under the daemon path, `id` is the daemon sessionId — the overlay
+  // survives daemon cold restore because the sessionId is stable across
+  // restarts by design. A future reader should NOT "simplify" id allocation
+  // back to a fresh UUID per spawn; that would discard user Pi state on
+  // every daemon reconnect.
+  Object.assign(baseEnv, piTitlebarExtensionService.buildPtyEnv(id, preexistingPiAgentDir))
+
+  // Why: Codex account switching now materializes auth into one shared
+  // runtime home (~/.codex), and Codex launched inside Orca terminals must
+  // use that same prepared home as quota fetches and other entry points.
+  // Keep the override PTY-scoped so Orca does not mutate the app process
+  // environment or the user's unrelated external shells.
+  if (opts.selectedCodexHomePath) {
+    baseEnv.CODEX_HOME = opts.selectedCodexHomePath
+  }
+
+  // Why: in dev mode the `orca` CLI defaults to the production userData
+  // path, which routes status updates to the packaged Orca instead of this
+  // dev instance. Injecting ORCA_USER_DATA_PATH ensures CLI calls from
+  // agents running inside dev terminals reach the correct runtime. We also
+  // prepend the dev CLI launcher directory to PATH so `orca` resolves to
+  // the dev build (which supports ORCA_USER_DATA_PATH) instead of the
+  // production binary at /usr/local/bin/orca.
+  if (!opts.isPackaged) {
+    baseEnv.ORCA_USER_DATA_PATH ??= opts.userDataPath
+    const devCliBin = join(opts.userDataPath, 'cli', 'bin')
+    // Why: avoid a trailing delimiter when PATH is empty — some shells
+    // treat an empty segment as `.`, which would let commands resolve from
+    // the current working directory (a foot-gun we don't want to create
+    // for dev terminals).
+    baseEnv.PATH = baseEnv.PATH ? `${devCliBin}${delimiter}${baseEnv.PATH}` : devCliBin
+  }
+
+  // Why: GitHub attribution should only affect commands launched from
+  // Orca's own PTYs. Injecting lightweight PATH shims at spawn-time keeps
+  // the behavior local to Orca instead of rewriting user git config or
+  // touching external shells.
+  applyTerminalAttributionEnv(baseEnv, {
+    enabled: opts.githubAttributionEnabled,
+    userDataPath: opts.userDataPath
+  })
+
+  return baseEnv
 }
 
 function isClaudeLaunchCommand(command: string | undefined): boolean {
@@ -159,6 +273,10 @@ export function clearProviderPtyState(id: string): void {
   // new teardown path forgets to remove one provider's overlay/hook state.
   openCodeHookService.clearPty(id)
   piTitlebarExtensionService.clearPty(id)
+  // Why: drop the memory-collector registration so a dead PTY does not keep
+  // trying to resolve its (now-dead) pid on every snapshot. Safe no-op for
+  // PTYs that were never registered (SSH-owned).
+  unregisterPty(id)
   // Why: the hook server's per-paneKey caches (lastPrompt / lastTool) would
   // otherwise accumulate entries for dead panes over the process lifetime.
   // Use the spawn-time paneKey mapping since the server has no other way to
@@ -221,70 +339,13 @@ export function registerPtyHandlers(
     localProvider.configure({
       isHistoryEnabled: () => getSettings?.()?.terminalScopeHistoryByWorktree ?? true,
       getWindowsShell: () => getSettings?.()?.terminalWindowsShell,
-      buildSpawnEnv: (id, baseEnv) => {
-        const selectedCodexHomePath = getSelectedCodexHomePath?.() ?? null
-
-        const openCodeHookEnv = openCodeHookService.buildPtyEnv(id)
-        if (baseEnv.OPENCODE_CONFIG_DIR) {
-          // Why: OPENCODE_CONFIG_DIR is a singular extra config root. Replacing a
-          // user-provided directory would silently hide their custom OpenCode
-          // config, so preserve it. The Orca status plugin will not load, so
-          // the dashboard falls back to a blank status for that pane until the
-          // user unsets their override.
-          delete openCodeHookEnv.OPENCODE_CONFIG_DIR
-        }
-        Object.assign(baseEnv, openCodeHookEnv)
-        // Why: Claude/Codex native hooks run inside the shell process, so Orca
-        // must inject the loopback receiver coordinates before the agent starts.
-        // Without these env vars the global hook config cannot map callbacks back
-        // to the correct Orca pane.
-        Object.assign(baseEnv, agentHookServer.buildPtyEnv())
-        // Why: PI_CODING_AGENT_DIR owns Pi's full config/session root. Build a
-        // PTY-scoped overlay from the caller's chosen root so Pi sessions keep
-        // their user state without sharing a mutable overlay across terminals.
-        Object.assign(
-          baseEnv,
-          piTitlebarExtensionService.buildPtyEnv(id, baseEnv.PI_CODING_AGENT_DIR)
-        )
-
-        // Why: Codex account switching now materializes auth into one shared
-        // runtime home (~/.codex), and Codex launched inside Orca terminals
-        // must use that same prepared home as quota fetches and other entry
-        // points. Keep the override PTY-scoped so Orca does not mutate the app
-        // process environment or the user's unrelated external shells.
-        if (selectedCodexHomePath) {
-          baseEnv.CODEX_HOME = selectedCodexHomePath
-        }
-
-        // Why: in dev mode the `orca` CLI defaults to the production userData
-        // path, which routes status updates to the packaged Orca instead of
-        // this dev instance. Injecting ORCA_USER_DATA_PATH ensures CLI calls
-        // from agents running inside dev terminals reach the correct runtime.
-        // We also prepend the dev CLI launcher directory to PATH so `orca`
-        // resolves to the dev build (which supports ORCA_USER_DATA_PATH)
-        // instead of the production binary at /usr/local/bin/orca.
-        if (!app.isPackaged) {
-          const devUserData = app.getPath('userData')
-          baseEnv.ORCA_USER_DATA_PATH ??= devUserData
-          const devCliBin = join(devUserData, 'cli', 'bin')
-          // Why: avoid a trailing delimiter when PATH is empty — some shells
-          // treat an empty segment as `.`, which would let commands resolve
-          // from the current working directory (a foot-gun we don't want to
-          // create for dev terminals).
-          baseEnv.PATH = baseEnv.PATH ? `${devCliBin}${delimiter}${baseEnv.PATH}` : devCliBin
-        }
-
-        // Why: GitHub attribution should only affect commands launched from
-        // Orca's own PTYs. Injecting lightweight PATH shims at spawn-time keeps
-        // the behavior local to Orca instead of rewriting user git config or
-        // touching external shells.
-        applyTerminalAttributionEnv(baseEnv, {
-          enabled: getSettings?.()?.enableGitHubAttribution ?? true,
-          userDataPath: app.getPath('userData')
-        })
-
-        return baseEnv
-      },
+      buildSpawnEnv: (id, baseEnv) =>
+        buildPtyHostEnv(id, baseEnv, {
+          isPackaged: app.isPackaged,
+          userDataPath: app.getPath('userData'),
+          selectedCodexHomePath: getSelectedCodexHomePath?.() ?? null,
+          githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? true
+        }),
       onSpawned: (id) => runtime?.onPtySpawned(id),
       onExit: (id, code) => {
         clearProviderPtyState(id)
@@ -429,23 +490,52 @@ export function registerPtyHandlers(
           'This Claude launch defines explicit Anthropic auth environment variables. Remove those overrides before using a managed Claude account.'
         )
       }
-      // Why: agent hook env and attribution shims are normally injected by the
-      // LocalPtyProvider's buildSpawnEnv. When the daemon is active, the local
-      // provider is replaced by DaemonPtyAdapter and buildSpawnEnv never runs.
-      // Inject host-local env here as well so both provider paths behave the same.
+      // Why: the daemon-backed provider replaces LocalPtyProvider and therefore
+      // never runs its buildSpawnEnv closure. We must assemble the same
+      // host-local env (OpenCode plugin, agent-hook server, Pi overlay, Codex
+      // home, dev CLI overrides, GitHub attribution shims) here so both spawn
+      // paths behave identically. buildPtyHostEnv is the shared helper that
+      // encapsulates the full set of injections and their order/guards.
       //
-      // Safety: skip the injection entirely when a remote (SSH) connection is
-      // in play. The hook server is bound to the Orca host's 127.0.0.1, so the
-      // remote shell cannot reach it; shipping the token across SSH would leak
-      // a loopback secret to an untrusted machine for no functional benefit.
-      const hookEnv = args.connectionId ? {} : agentHookServer.buildPtyEnv()
+      // Safety: skip the entire injection when a remote (SSH) connection is in
+      // play. Every injection here is either host-loopback (the agent-hook
+      // server binds 127.0.0.1, so shipping its token to an SSH host would
+      // leak a loopback secret for no functional benefit) or a path on the
+      // local filesystem (OpenCode plugin dir, Pi overlay, Codex home, dev
+      // CLI bin, attribution shim dir) that would resolve to nothing — or
+      // something misleading — on the remote machine.
+      const isDaemonHostSpawn = !args.connectionId && !(provider instanceof LocalPtyProvider)
+      // Why: Pi's PTY overlay is keyed on the id we pass down, and the daemon
+      // path needs a stable id BEFORE provider.spawn so the overlay can be
+      // materialized in buildPtyHostEnv. DaemonPtyAdapter.doSpawn mints an id
+      // the same way when sessionId is absent — lifting the mint here gives
+      // pty.ts the id up-front without changing daemon semantics (the daemon
+      // still honors opts.sessionId ?? mint()).
+      //
+      // Note: the sessionId is STABLE across daemon restarts by design —
+      // DaemonPtyAdapter.reconcileOnStartup reuses it so that users' live
+      // shells survive crashes. Keying the Pi overlay on this same id means
+      // the user's Pi state (auth, sessions, skills) survives daemon cold
+      // restore too. Do NOT "simplify" id allocation back to a fresh UUID
+      // per spawn; that would discard Pi state on every reconnect.
+      const effectiveSessionId =
+        args.sessionId ??
+        (isDaemonHostSpawn
+          ? args.worktreeId
+            ? `${args.worktreeId}@@${randomUUID().slice(0, 8)}`
+            : randomUUID()
+          : undefined)
       const baseEnv = claudeAuth ? { ...args.env, ...claudeAuth.envPatch } : args.env
-      let env = Object.keys(hookEnv).length > 0 ? { ...baseEnv, ...hookEnv } : baseEnv
-      if (!args.connectionId && !(provider instanceof LocalPtyProvider)) {
-        env = { ...env }
-        applyTerminalAttributionEnv(env, {
-          enabled: getSettings?.()?.enableGitHubAttribution ?? true,
-          userDataPath: app.getPath('userData')
+      let env: Record<string, string> | undefined = baseEnv
+      if (isDaemonHostSpawn) {
+        // Why: clone before mutating so we don't leak injections back into
+        // args.env (which the renderer may reuse for other IPC calls).
+        env = { ...baseEnv }
+        buildPtyHostEnv(effectiveSessionId as string, env, {
+          isPackaged: app.isPackaged,
+          userDataPath: app.getPath('userData'),
+          selectedCodexHomePath: getSelectedCodexHomePath?.() ?? null,
+          githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? true
         })
       }
       const envToDelete = claudeAuth?.stripAuthEnv
@@ -466,8 +556,8 @@ export function registerPtyHandlers(
       if (args.worktreeId !== undefined) {
         spawnOptions.worktreeId = args.worktreeId
       }
-      if (args.sessionId !== undefined) {
-        spawnOptions.sessionId = args.sessionId
+      if (effectiveSessionId !== undefined) {
+        spawnOptions.sessionId = effectiveSessionId
       }
       const result = await provider.spawn(spawnOptions)
       ptyOwnership.set(result.id, args.connectionId ?? null)
@@ -486,6 +576,43 @@ export function registerPtyHandlers(
       if (typeof paneKey === 'string' && paneKey.length > 0 && paneKey.length <= 256) {
         ptyPaneKey.set(result.id, paneKey)
         paneKeyPtyId.set(paneKey, result.id)
+      }
+      // Why: register local PTYs (connectionId falsy) with the memory
+      // collector so it can walk each PTY's process subtree and attribute
+      // memory back to its worktree. SSH PTYs execute remotely and their
+      // process tree is not visible to our local `ps`, so we skip them.
+      if (!args.connectionId) {
+        // Why: providers publish the OS pid on the spawn result (both
+        // LocalPtyProvider and DaemonPtyAdapter). Recording it once here keeps
+        // the memory module from reaching back into ipc/pty on a hot path, and
+        // works uniformly whether the PTY is hosted in-process or by the
+        // daemon subprocess.
+        const spawnedPid = result.pid ?? null
+        // Why: args.worktreeId and args.sessionId arrive as untrusted IPC
+        // payload strings — the static type is not enforced at the boundary.
+        // Narrow them to bounded strings here to match the paneKey defense
+        // above so malformed or oversized values cannot pollute registerPty's
+        // maps or downstream memory-attribution lookups.
+        registerPty({
+          ptyId: result.id,
+          worktreeId:
+            typeof args.worktreeId === 'string' &&
+            args.worktreeId.length > 0 &&
+            args.worktreeId.length <= 512
+              ? args.worktreeId
+              : null,
+          sessionId:
+            typeof args.sessionId === 'string' &&
+            args.sessionId.length > 0 &&
+            args.sessionId.length <= 256
+              ? args.sessionId
+              : null,
+          paneKey: typeof paneKey === 'string' ? paneKey : null,
+          pid:
+            typeof spawnedPid === 'number' && Number.isFinite(spawnedPid) && spawnedPid > 0
+              ? spawnedPid
+              : null
+        })
       }
       return result
     }

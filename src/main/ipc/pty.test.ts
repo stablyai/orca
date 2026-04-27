@@ -332,13 +332,12 @@ describe('registerPtyHandlers', () => {
 
     it('injects the Claude/Codex hook receiver env into Orca terminal PTYs', async () => {
       const env = await spawnAndGetEnv()
-      // Why: buildAgentHookEnv runs twice for a local spawn — once inside the
-      // LocalPtyProvider's buildSpawnEnv closure (pty.ts:166) and once in the
-      // handler's `!args.connectionId` branch (pty.ts:333). The handler branch
-      // exists so daemon-adapter providers (which bypass buildSpawnEnv) still
-      // get the hook env, and is gated off for SSH spawns to avoid leaking
-      // the loopback token to remote hosts.
-      expect(buildAgentHookEnvMock).toHaveBeenCalledTimes(2)
+      // Why: after the daemon-parity refactor, buildAgentHookEnv runs exactly
+      // once for a local spawn — inside the shared buildPtyHostEnv helper,
+      // which LocalPtyProvider.buildSpawnEnv and the daemon-active fallback
+      // both route through. The handler's separate ad-hoc injection (which
+      // used to cause a double-call for local spawns) is gone.
+      expect(buildAgentHookEnvMock).toHaveBeenCalledTimes(1)
       expect(env.ORCA_AGENT_HOOK_PORT).toBe('5678')
       expect(env.ORCA_AGENT_HOOK_TOKEN).toBe('agent-token')
     })
@@ -403,6 +402,279 @@ describe('registerPtyHandlers', () => {
         () => null
       )
       expect(env.CODEX_HOME).toBe('/tmp/system-codex-home')
+    })
+
+    describe('daemon-active provider (parity with LocalPtyProvider)', () => {
+      // Why: these tests guard the regression the daemon-parity refactor was
+      // written to fix — under the daemon, LocalPtyProvider.buildSpawnEnv is
+      // never invoked, so every host-local env injection must happen inside
+      // the pty:spawn IPC handler instead. Before the refactor, only the
+      // hook server env and attribution shims were injected on this path;
+      // OpenCode plugin dir, Pi overlay, Codex home, and dev-mode CLI
+      // overrides were silently missing for daemon users (the common case).
+
+      function setupDaemonAdapter() {
+        const daemonSpawn = vi.fn(
+          async (options: { env: Record<string, string>; sessionId?: string }) => ({
+            id: options.sessionId ?? 'daemon-pty'
+          })
+        )
+        setLocalPtyProvider({
+          spawn: daemonSpawn,
+          write: vi.fn(),
+          resize: vi.fn(),
+          kill: vi.fn(),
+          shutdown: vi.fn(),
+          onData: vi.fn(() => vi.fn()),
+          onExit: vi.fn(() => vi.fn()),
+          listProcesses: vi.fn(async () => []),
+          getForegroundProcess: vi.fn(async () => null)
+        } as never)
+        return daemonSpawn
+      }
+
+      async function daemonSpawnAndGetEnv(
+        argsEnv?: Record<string, string>,
+        getSelectedCodexHomePath?: () => string | null,
+        getSettings?: () => { enableGitHubAttribution: boolean },
+        processEnvOverrides?: Record<string, string | undefined>
+      ): Promise<Record<string, string>> {
+        const daemonSpawn = setupDaemonAdapter()
+        const savedEnv: Record<string, string | undefined> = {}
+        if (processEnvOverrides) {
+          for (const [k, v] of Object.entries(processEnvOverrides)) {
+            savedEnv[k] = process.env[k]
+            if (v === undefined) {
+              delete process.env[k]
+            } else {
+              process.env[k] = v
+            }
+          }
+        }
+        try {
+          handlers.clear()
+          registerPtyHandlers(
+            mainWindow as never,
+            undefined,
+            getSelectedCodexHomePath,
+            getSettings as never
+          )
+          await handlers.get('pty:spawn')!(null, {
+            cols: 80,
+            rows: 24,
+            ...(argsEnv ? { env: argsEnv } : {})
+          })
+          return daemonSpawn.mock.calls.at(-1)![0].env
+        } finally {
+          for (const [k, v] of Object.entries(savedEnv)) {
+            if (v === undefined) {
+              delete process.env[k]
+            } else {
+              process.env[k] = v
+            }
+          }
+        }
+      }
+
+      it('injects OpenCode plugin env (OPENCODE_CONFIG_DIR) on the daemon path', async () => {
+        const env = await daemonSpawnAndGetEnv({}, undefined, undefined, {
+          OPENCODE_CONFIG_DIR: undefined
+        })
+        expect(openCodeBuildPtyEnvMock).toHaveBeenCalled()
+        expect(env.OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-config')
+        expect(env.ORCA_OPENCODE_HOOK_PORT).toBe('4567')
+      })
+
+      it('preserves a user-provided OPENCODE_CONFIG_DIR on the daemon path', async () => {
+        const env = await daemonSpawnAndGetEnv({ OPENCODE_CONFIG_DIR: '/user/custom/opencode' })
+        expect(env.OPENCODE_CONFIG_DIR).toBe('/user/custom/opencode')
+      })
+
+      it('injects Pi overlay env (PI_CODING_AGENT_DIR) on the daemon path', async () => {
+        const env = await daemonSpawnAndGetEnv({ PI_CODING_AGENT_DIR: '/user/.pi/agent' })
+        // Why: asserts the overlay key was passed through — the id is the
+        // daemon-assigned sessionId minted in pty.ts, and the mock returns
+        // the fixed overlay path from the shared setup.
+        expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), '/user/.pi/agent')
+        expect(env.PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
+      })
+
+      it('injects the selected Codex home on the daemon path', async () => {
+        const env = await daemonSpawnAndGetEnv({}, () => '/tmp/orca-codex-home')
+        expect(env.CODEX_HOME).toBe('/tmp/orca-codex-home')
+      })
+
+      it('injects the agent-hook receiver env on the daemon path', async () => {
+        const env = await daemonSpawnAndGetEnv({})
+        expect(env.ORCA_AGENT_HOOK_PORT).toBe('5678')
+        expect(env.ORCA_AGENT_HOOK_TOKEN).toBe('agent-token')
+      })
+
+      it('prepends attribution shims on the daemon path', async () => {
+        const env = await daemonSpawnAndGetEnv({}, undefined, () => ({
+          enableGitHubAttribution: true
+        }))
+        expect(env.ORCA_ENABLE_GIT_ATTRIBUTION).toBe('1')
+        expect(env.PATH).toContain('/tmp/orca-user-data/orca-terminal-attribution/posix')
+      })
+
+      it('injects dev-mode ORCA_USER_DATA_PATH + dev CLI PATH on the daemon path', async () => {
+        // Why: the mocked `app` (see vi.mock at the top of the file) is a
+        // plain object, so we can flip isPackaged for the scope of the test.
+        const { app } = await import('electron')
+        const mockedApp = app as unknown as { isPackaged: boolean }
+        const prev = mockedApp.isPackaged
+        mockedApp.isPackaged = false
+        try {
+          const env = await daemonSpawnAndGetEnv({ PATH: '/usr/bin' })
+          expect(env.ORCA_USER_DATA_PATH).toBe('/tmp/orca-user-data')
+          expect(env.PATH).toContain('/tmp/orca-user-data/cli/bin')
+        } finally {
+          mockedApp.isPackaged = prev
+        }
+      })
+
+      it('passes the minted sessionId through to provider.spawn so the Pi overlay is keyed on a stable id', async () => {
+        const daemonSpawn = setupDaemonAdapter()
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never)
+        await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          env: {}
+        })
+        const spawnOpts = daemonSpawn.mock.calls.at(-1)![0]
+        const sessionId = spawnOpts.sessionId
+        expect(sessionId).toEqual(expect.any(String))
+        expect((sessionId ?? '').length).toBeGreaterThan(0)
+        expect(piBuildPtyEnvMock).toHaveBeenCalledWith(sessionId, undefined)
+      })
+
+      it('respects a caller-provided sessionId instead of minting a new one', async () => {
+        const daemonSpawn = setupDaemonAdapter()
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never)
+        await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          env: {},
+          sessionId: 'user-session-42'
+        })
+        expect(daemonSpawn.mock.calls.at(-1)![0].sessionId).toBe('user-session-42')
+        expect(piBuildPtyEnvMock).toHaveBeenCalledWith('user-session-42', undefined)
+      })
+
+      it('prefixes a minted sessionId with the worktreeId when provided', async () => {
+        // Why: daemon reconnect keys Pi overlay and live-shell survival on the
+        // sessionId. Prefixing with worktreeId lets the daemon scope sessions
+        // by worktree while still minting a unique tail. The format contract
+        // is `${worktreeId}@@${8-char-hex}` and must not regress.
+        const daemonSpawn = setupDaemonAdapter()
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never)
+        await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          env: {},
+          worktreeId: 'wt-alpha'
+        })
+        const sessionId = daemonSpawn.mock.calls.at(-1)![0].sessionId ?? ''
+        expect(sessionId).toMatch(/^wt-alpha@@[0-9a-f]{8}$/)
+        expect(piBuildPtyEnvMock).toHaveBeenCalledWith(sessionId, undefined)
+      })
+
+      it('falls back to process.env.PI_CODING_AGENT_DIR when baseEnv lacks it on the daemon path', async () => {
+        // Why: buildPtyHostEnv reads `baseEnv.X ?? process.env.X` so the
+        // existing-agent-dir guard stays consistent whether Pi's env was
+        // carried on the IPC wire or inherited by the daemon via fork. The
+        // fallback must reach piTitlebarExtensionService.buildPtyEnv as the
+        // second arg so the overlay preserves the user's existing root.
+        const env = await daemonSpawnAndGetEnv({}, undefined, undefined, {
+          PI_CODING_AGENT_DIR: '/ambient/pi/agent'
+        })
+        expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), '/ambient/pi/agent')
+        expect(env.PI_CODING_AGENT_DIR).toBe('/tmp/orca-pi-agent-overlay')
+      })
+
+      it('skips attribution shims on the daemon path when the setting is disabled', async () => {
+        const env = await daemonSpawnAndGetEnv({ PATH: '/usr/bin' }, undefined, () => ({
+          enableGitHubAttribution: false
+        }))
+        expect(env.ORCA_ENABLE_GIT_ATTRIBUTION).toBeUndefined()
+        expect(env.PATH ?? '').not.toContain('/tmp/orca-user-data/orca-terminal-attribution/posix')
+      })
+
+      it('does not mutate the caller-provided args.env on the daemon path', async () => {
+        // Why: the handler clones baseEnv before calling buildPtyHostEnv so
+        // IPC-provided env stays pristine. A regression would silently leak
+        // Orca host env (hook tokens, overlay paths) back into the renderer's
+        // copy of the object, which it may reuse for unrelated IPC calls.
+        const daemonSpawn = setupDaemonAdapter()
+        const argsEnv: Record<string, string> = { FOO: 'bar' }
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never)
+        await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          env: argsEnv
+        })
+        expect(argsEnv).toEqual({ FOO: 'bar' })
+        // Sanity: the spawn did receive the injected env, proving the test
+        // isn't passing because buildPtyHostEnv never ran.
+        const spawnEnv = daemonSpawn.mock.calls.at(-1)![0].env
+        expect(spawnEnv.ORCA_AGENT_HOOK_PORT).toBe('5678')
+        expect(spawnEnv).not.toBe(argsEnv)
+      })
+
+      it('does NOT inject host-local env on SSH spawns (connectionId set)', async () => {
+        const sshSpawn = vi.fn(async (_opts: { env: Record<string, string> }) => ({
+          id: 'ssh-pty'
+        }))
+        registerSshPtyProvider('ssh-1', {
+          spawn: sshSpawn,
+          write: vi.fn(),
+          resize: vi.fn(),
+          shutdown: vi.fn(),
+          sendSignal: vi.fn(),
+          getCwd: vi.fn(),
+          getInitialCwd: vi.fn(),
+          clearBuffer: vi.fn(),
+          acknowledgeDataEvent: vi.fn(),
+          hasChildProcesses: vi.fn(),
+          getForegroundProcess: vi.fn(),
+          serialize: vi.fn(),
+          revive: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {}),
+          listProcesses: vi.fn(async () => []),
+          attach: vi.fn(),
+          getDefaultShell: vi.fn(),
+          getProfiles: vi.fn()
+        } as never)
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never)
+        await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          env: { FOO: 'bar' },
+          connectionId: 'ssh-1'
+        })
+        const env = sshSpawn.mock.calls.at(-1)![0].env
+        // Why: every host-local var must be absent over SSH — the hook
+        // server is on the Orca host's 127.0.0.1, dev CLI / attribution /
+        // overlay / plugin-dir paths only exist on the local disk, so
+        // shipping any of them to a remote shell is at best useless and at
+        // worst a credential leak.
+        expect(env.ORCA_AGENT_HOOK_PORT).toBeUndefined()
+        expect(env.ORCA_ENABLE_GIT_ATTRIBUTION).toBeUndefined()
+        expect(env.OPENCODE_CONFIG_DIR).toBeUndefined()
+        expect(env.PI_CODING_AGENT_DIR).toBeUndefined()
+        expect(env.CODEX_HOME).toBeUndefined()
+        expect(env.FOO).toBe('bar')
+        expect(openCodeBuildPtyEnvMock).not.toHaveBeenCalled()
+        expect(piBuildPtyEnvMock).not.toHaveBeenCalled()
+      })
     })
   })
 
@@ -767,7 +1039,7 @@ describe('registerPtyHandlers', () => {
         cwd: '/tmp'
       })
 
-      expect(result).toEqual({ id: expect.any(String) })
+      expect(result).toEqual({ id: expect.any(String), pid: 12345 })
       expect(spawnMock).toHaveBeenCalledTimes(1)
       expect(spawnMock).toHaveBeenCalledWith(
         '/bin/zsh',

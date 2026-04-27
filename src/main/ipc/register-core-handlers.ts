@@ -13,6 +13,7 @@ import { registerLinearHandlers } from './linear'
 import { registerFeedbackHandlers } from './feedback'
 import { registerExportHandlers } from './export'
 import { registerStatsHandlers } from './stats'
+import { registerMemoryHandlers } from './memory'
 import { registerRateLimitHandlers } from './rate-limits'
 import { registerRuntimeHandlers } from './runtime'
 import { registerNotificationHandlers } from './notifications'
@@ -75,6 +76,7 @@ export function registerCoreHandlers(
   registerFeedbackHandlers()
   registerExportHandlers()
   registerStatsHandlers(stats)
+  registerMemoryHandlers(store)
   registerNotificationHandlers(store)
   registerSettingsHandlers(store)
   registerBrowserHandlers()

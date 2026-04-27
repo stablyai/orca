@@ -29,6 +29,12 @@ export type PtySpawnOptions = {
 
 export type PtySpawnResult = {
   id: string
+  /** OS-level pid of the shell process, when available at spawn time.
+   *  Why: the memory collector needs this to walk each PTY's process
+   *  subtree. Daemon-backed providers return it from the RPC result;
+   *  local providers read it from node-pty. Null when the underlying
+   *  provider could not publish a pid (e.g., race during spawn). */
+  pid?: number | null
   /** ANSI snapshot of the terminal screen, present when reattaching to an
    *  existing daemon session. Write this to xterm.js to restore visual state. */
   snapshot?: string

@@ -1,3 +1,5 @@
+/* oxlint-disable max-lines -- Why: co-locates SSH IPC handlers, port-forward
+broadcasting, and session lifecycle in one file to keep the data flow obvious. */
 import { ipcMain, type BrowserWindow } from 'electron'
 import type { Store } from '../persistence'
 import { SshConnectionStore } from '../ssh/ssh-connection-store'
@@ -5,7 +7,13 @@ import { SshConnectionManager, type SshConnectionCallbacks } from '../ssh/ssh-co
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import { SshRelaySession } from '../ssh/ssh-relay-session'
 import { SshPortForwardManager } from '../ssh/ssh-port-forward'
-import type { SshTarget, SshConnectionState, SshConnectionStatus } from '../../shared/ssh-types'
+import type {
+  SshTarget,
+  SshConnectionState,
+  SshConnectionStatus,
+  DetectedPort,
+  SavedPortForward
+} from '../../shared/ssh-types'
 import { isAuthError } from '../ssh/ssh-connection-utils'
 import { registerSshBrowseHandler } from './ssh-browse'
 import { requestCredential, registerCredentialHandler } from './ssh-passphrase'
@@ -32,6 +40,110 @@ const connectInFlight = new Map<string, Promise<SshConnectionState>>()
 // avoids that visual glitch.
 const testingTargets = new Set<string>()
 
+function broadcastPortForwards(getMainWindow: () => BrowserWindow | null, targetId: string): void {
+  const win = getMainWindow()
+  if (!win || win.isDestroyed()) {
+    return
+  }
+  const forwards = portForwardManager!.listForwards(targetId)
+  win.webContents.send('ssh:port-forwards-changed', { targetId, forwards })
+}
+
+function broadcastDetectedPorts(
+  getMainWindow: () => BrowserWindow | null,
+  targetId: string,
+  ports: DetectedPort[]
+): void {
+  const win = getMainWindow()
+  if (!win || win.isDestroyed()) {
+    return
+  }
+  win.webContents.send('ssh:detected-ports-changed', { targetId, ports })
+}
+
+// Why: after user-initiated add/remove/update the runtime manager is the
+// single source of truth — write exactly its entries and nothing else.
+// A separate helper (persistPortForwardsWithUnrestored) preserves entries
+// that failed to restore so they retry on next reconnect.
+function persistPortForwards(targetId: string): void {
+  const active = portForwardManager!.listForwards(targetId)
+  const saved: SavedPortForward[] = active.map((f) => ({
+    localPort: f.localPort,
+    remoteHost: f.remoteHost,
+    remotePort: f.remotePort,
+    label: f.label
+  }))
+  sshStore!.updateTarget(targetId, { portForwards: saved.length > 0 ? saved : undefined })
+}
+
+// Why: called after restorePortForwards so that forwards which failed to
+// restore (e.g. port temporarily busy) are kept in the persisted list and
+// retried on next reconnect, rather than being silently dropped.
+function persistPortForwardsWithUnrestored(targetId: string): void {
+  const active = portForwardManager!.listForwards(targetId)
+  const activeKeys = new Set(active.map((f) => `${f.localPort}:${f.remoteHost}:${f.remotePort}`))
+
+  const existing = sshStore!.getTarget(targetId)?.portForwards ?? []
+  const unrestored = existing.filter(
+    (pf) => !activeKeys.has(`${pf.localPort}:${pf.remoteHost}:${pf.remotePort}`)
+  )
+
+  const saved: SavedPortForward[] = [
+    ...active.map((f) => ({
+      localPort: f.localPort,
+      remoteHost: f.remoteHost,
+      remotePort: f.remotePort,
+      label: f.label
+    })),
+    ...unrestored
+  ]
+  sshStore!.updateTarget(targetId, { portForwards: saved.length > 0 ? saved : undefined })
+}
+
+async function restorePortForwards(
+  targetId: string,
+  getMainWindow: () => BrowserWindow | null
+): Promise<void> {
+  const target = sshStore!.getTarget(targetId)
+  if (!target?.portForwards?.length) {
+    return
+  }
+  const conn = connectionManager!.getConnection(targetId)
+  if (!conn) {
+    return
+  }
+
+  // Why: don't prune failed restores from persisted state. A failure may
+  // be transient (e.g. port temporarily busy at startup) and the forward
+  // should be retried on the next reconnect rather than silently deleted.
+  for (const saved of target.portForwards) {
+    // Why: if the session disconnects/reconnects while this loop is running,
+    // a new connection object is created. Checking identity avoids adding
+    // forwards against a stale connection, which would leak local listeners
+    // that the next reconnect's removeAllForwards() doesn't know about.
+    if (connectionManager!.getConnection(targetId) !== conn) {
+      return
+    }
+    try {
+      await portForwardManager!.addForward(
+        targetId,
+        conn,
+        saved.localPort,
+        saved.remoteHost,
+        saved.remotePort,
+        saved.label
+      )
+    } catch (err) {
+      console.warn(
+        `[ssh] Failed to restore forward :${saved.localPort} → ${saved.remoteHost}:${saved.remotePort}: ${err instanceof Error ? err.message : String(err)}`
+      )
+    }
+  }
+
+  persistPortForwardsWithUnrestored(targetId)
+  broadcastPortForwards(getMainWindow, targetId)
+}
+
 export function registerSshHandlers(
   store: Store,
   getMainWindow: () => BrowserWindow | null
@@ -50,8 +162,10 @@ export function registerSshHandlers(
     'ssh:getState',
     'ssh:testConnection',
     'ssh:addPortForward',
+    'ssh:updatePortForward',
     'ssh:removePortForward',
-    'ssh:listPortForwards'
+    'ssh:listPortForwards',
+    'ssh:listDetectedPorts'
   ]) {
     ipcMain.removeHandler(ch)
   }
@@ -168,13 +282,25 @@ export function registerSshHandlers(
     // while already connected) and reconnect-after-error.
     const existingSession = activeSessions.get(targetId)
     if (existingSession) {
+      // Why: await port teardown before disposing so the OS fully releases
+      // local ports. Without this, restorePortForwards in the new session
+      // can hit EADDRINUSE on the same ports the old session was using.
+      await portForwardManager!.removeAllForwards(targetId)
       existingSession.dispose()
       activeSessions.delete(targetId)
     }
 
     // Why: create the session early so onStateChange sees it in 'deploying'
     // state and knows not to trigger reconnect logic.
-    const session = new SshRelaySession(targetId, getMainWindow, store, portForwardManager!)
+    const session = new SshRelaySession(
+      targetId,
+      getMainWindow,
+      store,
+      portForwardManager!,
+      (tid, ports, _platform) => {
+        broadcastDetectedPorts(getMainWindow, tid, ports)
+      }
+    )
     activeSessions.set(targetId, session)
 
     try {
@@ -235,6 +361,13 @@ export function registerSshHandlers(
         }
       })
 
+      // Why: fires after both establish() and reconnect() reach 'ready'.
+      // Re-creates persisted port forwards so they survive app restarts
+      // and network blips without manual re-configuration.
+      session.setOnReady((tid) => {
+        void restorePortForwards(tid, getMainWindow)
+      })
+
       await session.establish(conn, target.relayGracePeriodSeconds)
 
       // Why: we manually pushed `deploying-relay` above, so the renderer's
@@ -274,6 +407,10 @@ export function registerSshHandlers(
   ipcMain.handle('ssh:disconnect', async (_event, args: { targetId: string }) => {
     const session = activeSessions.get(args.targetId)
     if (session) {
+      // Why: await port teardown so local listeners are fully released
+      // before the disconnect completes. Without this, an immediate
+      // reconnect can hit EADDRINUSE on the same ports.
+      await portForwardManager!.removeAllForwards(args.targetId)
       session.dispose()
       activeSessions.delete(args.targetId)
     }
@@ -361,7 +498,7 @@ export function registerSshHandlers(
       if (!conn) {
         throw new Error(`SSH connection "${args.targetId}" not found`)
       }
-      return portForwardManager!.addForward(
+      const entry = await portForwardManager!.addForward(
         args.targetId,
         conn,
         args.localPort,
@@ -369,15 +506,68 @@ export function registerSshHandlers(
         args.remotePort,
         args.label
       )
+      persistPortForwards(args.targetId)
+      broadcastPortForwards(getMainWindow, args.targetId)
+      return entry
+    }
+  )
+
+  ipcMain.handle(
+    'ssh:updatePortForward',
+    async (
+      _event,
+      args: {
+        id: string
+        targetId: string
+        localPort: number
+        remoteHost: string
+        remotePort: number
+        label?: string
+      }
+    ) => {
+      const conn = connectionManager!.getConnection(args.targetId)
+      if (!conn) {
+        throw new Error(`SSH connection "${args.targetId}" not found`)
+      }
+      try {
+        const entry = await portForwardManager!.updateForward(
+          args.id,
+          conn,
+          args.localPort,
+          args.remoteHost,
+          args.remotePort,
+          args.label
+        )
+        persistPortForwards(entry.connectionId)
+        broadcastPortForwards(getMainWindow, entry.connectionId)
+        return entry
+      } catch (err) {
+        // Why: if the edit failed (and rollback may also have failed),
+        // sync the renderer with the actual runtime state so it doesn't
+        // show a forward that no longer exists.
+        persistPortForwards(args.targetId)
+        broadcastPortForwards(getMainWindow, args.targetId)
+        throw err
+      }
     }
   )
 
   ipcMain.handle('ssh:removePortForward', (_event, args: { id: string }) => {
-    return portForwardManager!.removeForward(args.id)
+    const removed = portForwardManager!.removeForward(args.id)
+    if (removed) {
+      persistPortForwards(removed.connectionId)
+      broadcastPortForwards(getMainWindow, removed.connectionId)
+    }
+    return removed
   })
 
   ipcMain.handle('ssh:listPortForwards', (_event, args?: { targetId?: string }) => {
     return portForwardManager!.listForwards(args?.targetId)
+  })
+
+  ipcMain.handle('ssh:listDetectedPorts', (_event, args: { targetId: string }) => {
+    const session = activeSessions.get(args.targetId)
+    return session?.getPortScanner()?.getDetectedPorts(args.targetId) ?? []
   })
 
   return { connectionManager, sshStore }

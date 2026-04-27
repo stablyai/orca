@@ -109,6 +109,9 @@ describe('useIpcEvents updater integration', () => {
           setRateLimitsFromPush: vi.fn(),
           setSshConnectionState: vi.fn(),
           setSshTargetLabels: vi.fn(),
+          setPortForwards: vi.fn(),
+          clearPortForwards: vi.fn(),
+          setDetectedPorts: vi.fn(),
           enqueueSshCredentialRequest: vi.fn(),
           removeSshCredentialRequest,
           settings: { terminalFontSize: 13 }
@@ -195,9 +198,13 @@ describe('useIpcEvents updater integration', () => {
         },
         ssh: {
           listTargets: () => Promise.resolve([]),
+          listPortForwards: () => Promise.resolve([]),
+          listDetectedPorts: () => Promise.resolve([]),
           getState: () => Promise.resolve(null),
           onStateChanged: () => () => {},
           onCredentialRequest: () => () => {},
+          onPortForwardsChanged: () => () => {},
+          onDetectedPortsChanged: () => () => {},
           onCredentialResolved: (listener: (data: { requestId: string }) => void) => {
             credentialResolvedListenerRef.current = listener
             return () => {}
@@ -258,6 +265,9 @@ describe('useIpcEvents updater integration', () => {
       setRateLimitsFromPush: vi.fn(),
       setSshConnectionState,
       setSshTargetLabels: vi.fn(),
+      setPortForwards: vi.fn(),
+      clearPortForwards: vi.fn(),
+      setDetectedPorts: vi.fn(),
       enqueueSshCredentialRequest: vi.fn(),
       removeSshCredentialRequest: vi.fn(),
       clearRemoteDetectedAgents: vi.fn(),
@@ -371,13 +381,17 @@ describe('useIpcEvents updater integration', () => {
         },
         ssh: {
           listTargets: () => Promise.resolve([]),
+          listPortForwards: () => Promise.resolve([]),
+          listDetectedPorts: () => Promise.resolve([]),
           getState: () => Promise.resolve(null),
           onStateChanged: (listener: (data: { targetId: string; state: unknown }) => void) => {
             sshStateListenerRef.current = listener
             return () => {}
           },
           onCredentialRequest: () => () => {},
-          onCredentialResolved: () => () => {}
+          onCredentialResolved: () => () => {},
+          onPortForwardsChanged: () => () => {},
+          onDetectedPortsChanged: () => () => {}
         }
       }
     })
@@ -459,6 +473,9 @@ describe('useIpcEvents updater integration', () => {
           setRateLimitsFromPush: vi.fn(),
           setSshConnectionState: vi.fn(),
           setSshTargetLabels: vi.fn(),
+          setPortForwards: vi.fn(),
+          clearPortForwards: vi.fn(),
+          setDetectedPorts: vi.fn(),
           enqueueSshCredentialRequest: vi.fn(),
           removeSshCredentialRequest: vi.fn(),
           clearTabPtyId: vi.fn(),
@@ -548,9 +565,13 @@ describe('useIpcEvents updater integration', () => {
         },
         ssh: {
           listTargets: () => Promise.resolve([]),
+          listPortForwards: () => Promise.resolve([]),
+          listDetectedPorts: () => Promise.resolve([]),
           getState: () => Promise.resolve(null),
           onStateChanged: () => () => {},
           onCredentialRequest: () => () => {},
+          onPortForwardsChanged: () => () => {},
+          onDetectedPortsChanged: () => () => {},
           onCredentialResolved: () => () => {}
         }
       }
@@ -632,6 +653,9 @@ describe('useIpcEvents browser tab close routing', () => {
           setRateLimitsFromPush: vi.fn(),
           setSshConnectionState: vi.fn(),
           setSshTargetLabels: vi.fn(),
+          setPortForwards: vi.fn(),
+          clearPortForwards: vi.fn(),
+          setDetectedPorts: vi.fn(),
           enqueueSshCredentialRequest: vi.fn(),
           removeSshCredentialRequest: vi.fn(),
           settings: { terminalFontSize: 13 },
@@ -737,9 +761,13 @@ describe('useIpcEvents browser tab close routing', () => {
         },
         ssh: {
           listTargets: () => Promise.resolve([]),
+          listPortForwards: () => Promise.resolve([]),
+          listDetectedPorts: () => Promise.resolve([]),
           getState: () => Promise.resolve(null),
           onStateChanged: () => () => {},
           onCredentialRequest: () => () => {},
+          onPortForwardsChanged: () => () => {},
+          onDetectedPortsChanged: () => () => {},
           onCredentialResolved: () => () => {}
         }
       }
@@ -805,6 +833,9 @@ describe('useIpcEvents browser tab close routing', () => {
           setRateLimitsFromPush: vi.fn(),
           setSshConnectionState: vi.fn(),
           setSshTargetLabels: vi.fn(),
+          setPortForwards: vi.fn(),
+          clearPortForwards: vi.fn(),
+          setDetectedPorts: vi.fn(),
           enqueueSshCredentialRequest: vi.fn(),
           removeSshCredentialRequest: vi.fn(),
           settings: { terminalFontSize: 13 },
@@ -911,9 +942,13 @@ describe('useIpcEvents browser tab close routing', () => {
         },
         ssh: {
           listTargets: () => Promise.resolve([]),
+          listPortForwards: () => Promise.resolve([]),
+          listDetectedPorts: () => Promise.resolve([]),
           getState: () => Promise.resolve(null),
           onStateChanged: () => () => {},
           onCredentialRequest: () => () => {},
+          onPortForwardsChanged: () => () => {},
+          onDetectedPortsChanged: () => () => {},
           onCredentialResolved: () => () => {}
         }
       }
@@ -977,6 +1012,9 @@ describe('useIpcEvents browser tab close routing', () => {
           setRateLimitsFromPush: vi.fn(),
           setSshConnectionState: vi.fn(),
           setSshTargetLabels: vi.fn(),
+          setPortForwards: vi.fn(),
+          clearPortForwards: vi.fn(),
+          setDetectedPorts: vi.fn(),
           enqueueSshCredentialRequest: vi.fn(),
           removeSshCredentialRequest: vi.fn(),
           settings: { terminalFontSize: 13 },
@@ -1080,9 +1118,13 @@ describe('useIpcEvents browser tab close routing', () => {
         },
         ssh: {
           listTargets: () => Promise.resolve([]),
+          listPortForwards: () => Promise.resolve([]),
+          listDetectedPorts: () => Promise.resolve([]),
           getState: () => Promise.resolve(null),
           onStateChanged: () => () => {},
           onCredentialRequest: () => () => {},
+          onPortForwardsChanged: () => () => {},
+          onDetectedPortsChanged: () => () => {},
           onCredentialResolved: () => () => {}
         }
       }
@@ -1166,6 +1208,9 @@ describe('useIpcEvents shortcut hint clearing', () => {
           setRateLimitsFromPush: vi.fn(),
           setSshConnectionState: vi.fn(),
           setSshTargetLabels: vi.fn(),
+          setPortForwards: vi.fn(),
+          clearPortForwards: vi.fn(),
+          setDetectedPorts: vi.fn(),
           enqueueSshCredentialRequest: vi.fn(),
           removeSshCredentialRequest: vi.fn(),
           clearTabPtyId: vi.fn(),
@@ -1258,9 +1303,13 @@ describe('useIpcEvents shortcut hint clearing', () => {
         },
         ssh: {
           listTargets: () => Promise.resolve([]),
+          listPortForwards: () => Promise.resolve([]),
+          listDetectedPorts: () => Promise.resolve([]),
           getState: () => Promise.resolve(null),
           onStateChanged: () => () => {},
           onCredentialRequest: () => () => {},
+          onPortForwardsChanged: () => () => {},
+          onDetectedPortsChanged: () => () => {},
           onCredentialResolved: () => () => {}
         }
       }

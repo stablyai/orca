@@ -1,3 +1,4 @@
+/* oxlint-disable max-lines */
 // Why: consolidates all relay lifecycle state (multiplexer, providers, abort
 // controller, initialization flag) into a single class per SSH target.
 // Previously this state was scattered across 5 module-level Maps/Sets in
@@ -28,8 +29,10 @@ import {
   getSshFilesystemProvider
 } from '../providers/ssh-filesystem-dispatch'
 import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
+import { PortScanner } from './ssh-port-scanner'
 import type { SshPortForwardManager } from './ssh-port-forward'
 import type { SshConnection } from './ssh-connection'
+import type { DetectedPort } from '../../shared/ssh-types'
 import type { Store } from '../persistence'
 
 export type RelaySessionState = 'idle' | 'deploying' | 'ready' | 'reconnecting' | 'disposed'
@@ -43,16 +46,27 @@ export class SshRelaySession {
   // up, the onStateChange reconnect path never fires. This callback lets
   // ssh.ts wire up relay-level reconnect from outside the session.
   private _onRelayLost: ((targetId: string) => void) | null = null
+  private _onReady: ((targetId: string) => void) | null = null
+  private portScanner: PortScanner | null = null
 
   constructor(
     readonly targetId: string,
     private getMainWindow: () => BrowserWindow | null,
     private store: Store,
-    private portForwardManager: SshPortForwardManager
+    private portForwardManager: SshPortForwardManager,
+    private onDetectedPortsChanged?: (
+      targetId: string,
+      ports: DetectedPort[],
+      platform: string
+    ) => void
   ) {}
 
   setOnRelayLost(cb: (targetId: string) => void): void {
     this._onRelayLost = cb
+  }
+
+  setOnReady(cb: (targetId: string) => void): void {
+    this._onReady = cb
   }
 
   getState(): RelaySessionState {
@@ -70,6 +84,10 @@ export class SshRelaySession {
 
   getMux(): SshChannelMultiplexer | null {
     return this.mux
+  }
+
+  getPortScanner(): PortScanner | null {
+    return this.portScanner
   }
 
   // Why: single entry point for relay setup — used by both initial connect
@@ -128,6 +146,8 @@ export class SshRelaySession {
 
       this.watchMuxForRelayLoss(mux)
       this._state = 'ready'
+      this.startPortScanning()
+      this._onReady?.(this.targetId)
     } catch (err) {
       // Why: if deployAndLaunchRelay succeeded but registerProviders threw
       // partway through, the mux is live and some providers may be partially
@@ -160,7 +180,11 @@ export class SshRelaySession {
 
     this._state = 'reconnecting'
 
-    this.portForwardManager.removeAllForwards(this.targetId)
+    // Why: stop scanning before teardownProviders so the polling timer doesn't
+    // fire against a disposed multiplexer.
+    this.stopPortScanning()
+    await this.portForwardManager.removeAllForwards(this.targetId)
+    this.broadcastEmptyLists()
     this.teardownProviders('connection_lost')
 
     try {
@@ -259,6 +283,8 @@ export class SshRelaySession {
 
       this.watchMuxForRelayLoss(mux)
       this._state = 'ready'
+      this.startPortScanning()
+      this._onReady?.(this.targetId)
     } catch (err) {
       // Why: clean up the mux if it was created but registration failed
       // partway through. Without this, the mux's keepalive/timeout timers
@@ -284,7 +310,11 @@ export class SshRelaySession {
       return
     }
     this.abortController?.abort()
-    this.portForwardManager.removeAllForwards(this.targetId)
+    this.stopPortScanning()
+    // Why: fire-and-forget — nothing rebinds after dispose, so we don't
+    // need to wait for the OS to release ports.
+    void this.portForwardManager.removeAllForwards(this.targetId)
+    this.broadcastEmptyLists()
     this.teardownProviders('shutdown')
     this._state = 'disposed'
   }
@@ -390,6 +420,45 @@ export class SshRelaySession {
   // Why: extracted so establish() and reconnect() share exactly the same
   // event wiring. Previously forgetting to wire onReplay on one path
   // caused silent terminal blanking after reconnect.
+  private broadcastEmptyLists(): void {
+    const win = this.getMainWindow()
+    if (!win || win.isDestroyed()) {
+      return
+    }
+    win.webContents.send('ssh:port-forwards-changed', {
+      targetId: this.targetId,
+      forwards: []
+    })
+    win.webContents.send('ssh:detected-ports-changed', {
+      targetId: this.targetId,
+      ports: []
+    })
+  }
+
+  private startPortScanning(): void {
+    if (!this.mux || this.isDisposed()) {
+      return
+    }
+    const scanner = new PortScanner()
+    this.portScanner = scanner
+    // Why: capture the scanner instance so that a late ports.detect callback
+    // from a previous relay session (before reconnect replaced it) is silently
+    // discarded instead of publishing stale results into the new session.
+    scanner.startScanning(this.targetId, this.mux, (targetId, ports, platform) => {
+      if (this.portScanner !== scanner) {
+        return
+      }
+      this.onDetectedPortsChanged?.(targetId, ports, platform)
+    })
+  }
+
+  private stopPortScanning(): void {
+    if (this.portScanner) {
+      this.portScanner.stopScanning(this.targetId)
+      this.portScanner = null
+    }
+  }
+
   private wireUpPtyEvents(ptyProvider: SshPtyProvider): void {
     const getWin = this.getMainWindow
     ptyProvider.onData((payload) => {

@@ -7,7 +7,11 @@ import {
 } from '../../shared/constants'
 
 import { ArrowLeft, ArrowRight, Minimize2, PanelLeft, PanelRight } from 'lucide-react'
-import { FOCUS_TERMINAL_PANE_EVENT, TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
+import {
+  FOCUS_TERMINAL_PANE_EVENT,
+  SYNC_FIT_PANES_EVENT,
+  TOGGLE_TERMINAL_PANE_EXPAND_EVENT
+} from '@/constants/terminal'
 import { syncZoomCSSVar } from '@/lib/ui-zoom'
 import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
@@ -174,6 +178,17 @@ function App(): React.JSX.Element {
   // of tying reloads to the Explorer UI lifecycle.
   useEditorExternalWatch()
   useGlobalFileDrop()
+
+  // Why: sidebar open/close flips width instantaneously. useLayoutEffect
+  // runs synchronously after React commits the DOM but before paint, so
+  // dispatching SYNC_FIT_PANES_EVENT here lets the terminal reflow in the
+  // same frame as the width change — no "wrongly-sized terminal" transient
+  // and no delayed snap. The later ResizeObserver rAF and 150ms debounced
+  // fit both become no-ops because proposeDimensions() will match the
+  // already-fitted cols/rows.
+  useLayoutEffect(() => {
+    window.dispatchEvent(new CustomEvent(SYNC_FIT_PANES_EVENT))
+  }, [sidebarOpen, rightSidebarOpen])
 
   // Fetch initial data + hydrate GitHub cache from disk
   useEffect(() => {
@@ -714,6 +729,17 @@ function App(): React.JSX.Element {
         }
         dispatchClearModifierHints()
         e.preventDefault()
+        actions.setRightSidebarOpen(true)
+        return
+      }
+
+      // Cmd+Shift+I — toggle right sidebar / ports tab (macOS only).
+      // Why: Ctrl+Shift+I is the built-in DevTools accelerator on Windows/Linux;
+      // intercepting it would break an essential developer tool.
+      if (isMac && e.shiftKey && !e.altKey && e.key.toLowerCase() === 'i') {
+        dispatchClearModifierHints()
+        e.preventDefault()
+        actions.setRightSidebarTab('ports')
         actions.setRightSidebarOpen(true)
       }
     }

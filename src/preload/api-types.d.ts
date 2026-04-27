@@ -44,6 +44,7 @@ import type {
   SearchOptions,
   SearchResult,
   StatsSummary,
+  MemorySnapshot,
   UpdateStatus,
   Worktree,
   WorktreeMeta,
@@ -85,7 +86,12 @@ import type {
   ClaudeUsageSummary
 } from '../../shared/claude-usage-types'
 import type { RateLimitState } from '../../shared/rate-limit-types'
-import type { SshConnectionState, SshTarget } from '../../shared/ssh-types'
+import type {
+  SshConnectionState,
+  SshTarget,
+  PortForwardEntry,
+  DetectedPort
+} from '../../shared/ssh-types'
 import type {
   CodexUsageBreakdownKind,
   CodexUsageBreakdownRow,
@@ -201,6 +207,10 @@ export type ExportApi = {
 
 export type StatsApi = {
   getSummary: () => Promise<StatsSummary>
+}
+
+export type MemoryApi = {
+  getSnapshot: () => Promise<MemorySnapshot>
 }
 
 export type ClaudeUsageApi = {
@@ -450,6 +460,7 @@ export type PreloadApi = {
     }) => Promise<{ ok: true; viewer: LinearViewer } | { ok: false; error: string }>
     disconnect: () => Promise<void>
     status: () => Promise<LinearConnectionStatus>
+    testConnection: () => Promise<{ ok: true; viewer: LinearViewer } | { ok: false; error: string }>
     searchIssues: (args: { query: string; limit?: number }) => Promise<LinearIssue[]>
     listIssues: (args?: {
       filter?: 'assigned' | 'created' | 'all' | 'completed'
@@ -569,6 +580,7 @@ export type PreloadApi = {
     onClearDismissal: (callback: () => void) => () => void
   }
   stats: StatsApi
+  memory: MemoryApi
   claudeUsage: ClaudeUsageApi
   codexUsage: CodexUsageApi
   fs: {
@@ -807,9 +819,24 @@ export type PreloadApi = {
       remoteHost: string
       remotePort: number
       label?: string
-    }) => Promise<unknown>
-    removePortForward: (args: { id: string }) => Promise<boolean>
-    listPortForwards: (args?: { targetId?: string }) => Promise<unknown[]>
+    }) => Promise<PortForwardEntry>
+    updatePortForward: (args: {
+      id: string
+      targetId: string
+      localPort: number
+      remoteHost: string
+      remotePort: number
+      label?: string
+    }) => Promise<PortForwardEntry>
+    removePortForward: (args: { id: string }) => Promise<PortForwardEntry | null>
+    listPortForwards: (args?: { targetId?: string }) => Promise<PortForwardEntry[]>
+    listDetectedPorts: (args: { targetId: string }) => Promise<DetectedPort[]>
+    onPortForwardsChanged: (
+      callback: (data: { targetId: string; forwards: PortForwardEntry[] }) => void
+    ) => () => void
+    onDetectedPortsChanged: (
+      callback: (data: { targetId: string; ports: DetectedPort[] }) => void
+    ) => () => void
     browseDir: (args: { targetId: string; dirPath: string }) => Promise<{
       entries: { name: string; isDirectory: boolean }[]
       resolvedPath: string

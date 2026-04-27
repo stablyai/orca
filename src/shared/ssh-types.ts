@@ -22,6 +22,16 @@ export type SshTarget = {
    *  partition targets into eager (no passphrase) vs deferred (passphrase)
    *  without attempting a connection first. */
   lastRequiredPassphrase?: boolean
+  /** Port forwards to auto-restore on connect/reconnect. Persisted so
+   *  forwards survive app restarts. */
+  portForwards?: SavedPortForward[]
+}
+
+export type SavedPortForward = {
+  localPort: number
+  remoteHost: string
+  remotePort: number
+  label?: string
 }
 
 export type SshConnectionStatus =
@@ -40,4 +50,25 @@ export type SshConnectionState = {
   error: string | null
   /** Number of reconnection attempts since last disconnect. */
   reconnectAttempt: number
+}
+
+// ─── Port Forwarding Types ─────────────────────────────────────────
+
+export type PortForwardEntry = {
+  id: string
+  connectionId: string
+  localPort: number
+  remoteHost: string
+  remotePort: number
+  label?: string
+}
+
+/** A listening port detected on the remote host via /proc/net/tcp scanning.
+ *  Keep in sync with src/relay/port-scan-handler.ts — DetectedPort.
+ *  The relay is deployed as a standalone bundle and cannot import from shared. */
+export type DetectedPort = {
+  port: number
+  host: string
+  pid?: number
+  processName?: string
 }

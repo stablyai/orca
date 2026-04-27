@@ -21,6 +21,7 @@ import { PtyHandler } from './pty-handler'
 import { FsHandler } from './fs-handler'
 import { GitHandler } from './git-handler'
 import { PreflightHandler } from './preflight-handler'
+import { PortScanHandler } from './port-scan-handler'
 
 const DEFAULT_GRACE_MS = 5 * 60 * 1000
 const SOCK_NAME = 'relay.sock'
@@ -196,6 +197,9 @@ function main(): void {
 
   const _preflightHandler = new PreflightHandler(dispatcher)
   void _preflightHandler
+
+  const _portScanHandler = new PortScanHandler(dispatcher)
+  void _portScanHandler
 
   // ── Socket server for reconnection ──────────────────────────────────
   // Why: the relay's original stdin/stdout is tied to the SSH exec channel.

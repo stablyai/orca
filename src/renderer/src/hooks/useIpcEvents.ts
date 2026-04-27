@@ -518,6 +518,24 @@ export function useIpcEvents(): void {
           const state = await window.api.ssh.getState({ targetId: target.id })
           if (state) {
             useAppStore.getState().setSshConnectionState(target.id, state as SshConnectionState)
+            // Why: if the renderer reattaches while an SSH session is alive
+            // (e.g. window re-creation or reload), forwarded and detected ports
+            // are only populated via push events. Fetch current snapshots so the
+            // Ports panel doesn't show empty for an active session.
+            if ((state as SshConnectionState).status === 'connected') {
+              const [forwards, detected] = await Promise.all([
+                window.api.ssh.listPortForwards({ targetId: target.id }),
+                window.api.ssh.listDetectedPorts({ targetId: target.id })
+              ])
+              // Why: if the session disconnected while we were awaiting the
+              // snapshot, the disconnect handler already cleared port state.
+              // Applying stale data here would resurrect a dead session's ports.
+              const currentState = useAppStore.getState().sshConnectionStates.get(target.id)
+              if (currentState?.status === 'connected') {
+                useAppStore.getState().setPortForwards(target.id, forwards)
+                useAppStore.getState().setDetectedPorts(target.id, detected)
+              }
+            }
           }
         }
         useAppStore.getState().setSshTargetLabels(labels)
@@ -535,6 +553,18 @@ export function useIpcEvents(): void {
     unsubs.push(
       window.api.ssh.onCredentialResolved(({ requestId }) => {
         useAppStore.getState().removeSshCredentialRequest(requestId)
+      })
+    )
+
+    unsubs.push(
+      window.api.ssh.onPortForwardsChanged(({ targetId, forwards }) => {
+        useAppStore.getState().setPortForwards(targetId, forwards)
+      })
+    )
+
+    unsubs.push(
+      window.api.ssh.onDetectedPortsChanged(({ targetId, ports }) => {
+        useAppStore.getState().setDetectedPorts(targetId, ports)
       })
     )
 
@@ -568,6 +598,11 @@ export function useIpcEvents(): void {
           // promise. When the user reconnects and opens the quick-launch menu,
           // ensureRemoteDetectedAgents will re-detect against the new relay.
           store.clearRemoteDetectedAgents(data.targetId)
+
+          // Why: defensive — clear port forward and detected port state in case
+          // the broadcast from removeAllForwards races with the state change.
+          store.clearPortForwards(data.targetId)
+          store.setDetectedPorts(data.targetId, [])
 
           // Why: an explicit disconnect or terminal failure tears down the SSH
           // PTY provider without emitting per-PTY exit events. Clear the stale

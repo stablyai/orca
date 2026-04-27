@@ -109,12 +109,17 @@ export class DaemonPtyAdapter implements IPtyProvider {
       this.initialCwds.set(sessionId, effectiveCwd)
     }
 
+    // Why: the daemon RPC returns the shell pid of the backing subprocess.
+    // Surfacing it through PtySpawnResult lets ipc/pty register with the
+    // memory collector without a provider-specific accessor.
+    const pid = typeof result.pid === 'number' && result.pid > 0 ? result.pid : null
+
     // Why: check sticky cache first — StrictMode double-mounts call spawn
     // twice. The second call finds an existing daemon session (isNew=false)
     // but should still return the cached cold restore data.
     const cachedRestore = this.coldRestoreCache.get(sessionId)
     if (cachedRestore) {
-      return { id: sessionId, coldRestore: cachedRestore }
+      return { id: sessionId, pid, coldRestore: cachedRestore }
     }
 
     // Cold restore: daemon created a new session but disk history shows
@@ -137,7 +142,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
           })
           .catch((err) => console.warn('[history] openSession failed:', sessionId, err))
       }
-      return { id: sessionId, coldRestore }
+      return { id: sessionId, pid, coldRestore }
     }
 
     if (this.historyManager && result.isNew) {
@@ -153,13 +158,14 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
     const isReattach = !result.isNew
     if (!isReattach || !result.snapshot) {
-      return { id: sessionId }
+      return { id: sessionId, pid }
     }
 
     const isAltScreen = result.snapshot.modes.alternateScreen
     const snapshotPayload = result.snapshot.rehydrateSequences + result.snapshot.snapshotAnsi
     return {
       id: sessionId,
+      pid,
       snapshot: snapshotPayload,
       snapshotCols: result.snapshot.cols,
       snapshotRows: result.snapshot.rows,

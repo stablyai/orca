@@ -36,7 +36,6 @@ import {
   captureScrollState,
   refitPanesUnder
 } from './pane-tree-ops'
-import { lockDragScroll, unlockDragScroll } from './pane-drag-scroll'
 import { scheduleSplitScrollRestore } from './pane-split-scroll'
 import { toPublicPane } from './pane-public-view'
 
@@ -358,8 +357,6 @@ export class PaneManager {
   private createDividerWrapped(isVertical: boolean): HTMLElement {
     return createDivider(isVertical, this.styleOptions, {
       refitPanesUnder: (el) => refitPanesUnder(el, this.panes),
-      lockDragScroll: (el) => lockDragScroll(el, this.panes),
-      unlockDragScroll: (el) => unlockDragScroll(el, this.panes),
       onLayoutChanged: this.options.onLayoutChanged
     })
   }
@@ -380,8 +377,6 @@ export class PaneManager {
         applyPaneOpacity(this.panes.values(), this.activePaneId, this.styleOptions),
       applyDividerStyles: () => this.applyDividerStylesWrapped(),
       refitPanesUnder: (el: HTMLElement) => refitPanesUnder(el, this.panes),
-      lockDragScroll: (el: HTMLElement) => lockDragScroll(el, this.panes),
-      unlockDragScroll: (el: HTMLElement) => unlockDragScroll(el, this.panes),
       onLayoutChanged: this.options.onLayoutChanged
     }
   }

@@ -85,12 +85,13 @@ describe('SshPortForwardManager', () => {
     const conn = createMockConn()
     const entry = await manager.addForward('conn-1', conn as never, 3000, 'localhost', 8080)
 
-    expect(manager.removeForward(entry.id)).toBe(true)
+    const removed = manager.removeForward(entry.id)
+    expect(removed).toMatchObject({ id: entry.id, localPort: 3000 })
     expect(manager.listForwards()).toHaveLength(0)
   })
 
-  it('returns false when removing nonexistent forward', () => {
-    expect(manager.removeForward('nonexistent')).toBe(false)
+  it('returns null when removing nonexistent forward', () => {
+    expect(manager.removeForward('nonexistent')).toBeNull()
   })
 
   it('removes all forwards for a connection', async () => {

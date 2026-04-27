@@ -17,7 +17,7 @@ import type { PaneManagerOptions, ManagedPaneInternal } from './pane-manager-typ
 import type { DragReorderState } from './pane-drag-reorder'
 import type { DragReorderCallbacks } from './pane-drag-reorder'
 import { attachPaneDrag } from './pane-drag-reorder'
-import { safeFit, captureScrollState, restoreScrollState } from './pane-tree-ops'
+import { safeFit } from './pane-tree-ops'
 import {
   attachPaneFitResizeObserver,
   detachPaneFitResizeObserver
@@ -121,8 +121,7 @@ export function createPaneDOM(
     webglAddon: null,
     ligaturesAddon: null,
     compositionHandler: null,
-    pendingSplitScrollState: null,
-    pendingDragScrollState: null
+    pendingSplitScrollState: null
   }
 
   // Focus handler: clicking a pane makes it active and explicitly focuses
@@ -304,33 +303,19 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
       pane.webglDisabledAfterContextLoss = true
       webglAddon.dispose()
       pane.webglAddon = null
-      // Why: when the WebGL context is lost (GPU memory pressure, Chromium
-      // context limit, driver hiccup), the GPU-rendered canvas goes blank
-      // instantly — this is standard browser behaviour. After disposing the
-      // addon, xterm.js falls back to the DOM renderer, but it may not
-      // redraw the viewport unprompted.  Without an explicit
-      // refresh + refit, the scrollback area appears as blank space at the
-      // top of the terminal while only the most recent output is visible at
-      // the bottom. Deferring to the next frame gives the DOM renderer time
-      // to initialise before we ask it to repaint.
-      //
-      // Why content-match instead of wasAtBottom: context loss often fires
-      // during splitPane when a new WebGL canvas is created and Chromium
-      // reclaims the old one. The fit() here triggers a reflow that changes
-      // line numbering; the simple wasAtBottom check can't track partially-
-      // scrolled positions and would undo scroll restoration from splitPane.
+      // Why: when the WebGL context is lost the GPU-rendered canvas goes
+      // blank instantly. After disposing the addon, xterm.js falls back to
+      // the DOM renderer but may not redraw the viewport unprompted —
+      // without a refresh + refit, the scrollback area renders as blank
+      // space above the most recent output. Deferring to the next frame
+      // gives the DOM renderer time to initialise before repainting. Scroll
+      // position is preserved by xterm's native viewportY handling across
+      // resize (see scroll-reflow.test.ts "reference: undisturbed"); if a
+      // splitPane was in flight, its scheduleSplitScrollRestore timer owns
+      // the authoritative restore.
       requestAnimationFrame(() => {
         try {
-          if (pane.pendingSplitScrollState) {
-            pane.fitAddon.fit()
-          } else if (pane.pendingDragScrollState) {
-            pane.fitAddon.fit()
-            restoreScrollState(pane.terminal, pane.pendingDragScrollState)
-          } else {
-            const scrollState = captureScrollState(pane.terminal)
-            pane.fitAddon.fit()
-            restoreScrollState(pane.terminal, scrollState)
-          }
+          pane.fitAddon.fit()
           pane.terminal.refresh(0, pane.terminal.rows - 1)
         } catch {
           /* ignore — pane may have been disposed in the meantime */
