@@ -379,6 +379,15 @@ describe('hydrateWorkspaceSession', () => {
     expect(s.activeWorktreeId).toBe(validWt)
     expect(s.activeTabId).toBe('tab1')
     expect(s.activeRepoId).toBe('repo1')
+
+    // Why: restored tabs receive pendingActivationSpawn so the pane mount's
+    // reattach (or fresh spawn if the daemon session died) does not count as
+    // activity and bounce the worktree to the top of Recent.
+    expect(s.tabsByWorktree[validWt][0].pendingActivationSpawn).toBe(true)
+
+    // The restored-active worktree is marked ever-activated so a later click
+    // doesn't retag (which would suppress a real codex-restart / new-pane bump).
+    expect(s.everActivatedWorktreeIds.has(validWt)).toBe(true)
   })
 })
 

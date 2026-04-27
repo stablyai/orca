@@ -1333,6 +1333,18 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           }
         }
       }
+      // Why pendingActivationSpawn on hydrated tabs: when a worktree restored
+      // from the previous session is mounted for the first time this session
+      // (either because it's the restored activeWorktreeId, or because the
+      // user clicks it), TerminalPane's connectPanePty fires — either
+      // reattaching to the daemon/relay session or spawning fresh. Both call
+      // updateTabPtyId, which would otherwise bump lastActivityAt and make
+      // the worktree bounce to the top of Recent ~5 seconds later when an
+      // unrelated event triggers a re-sort. Tagging at hydration covers the
+      // restored-active worktree (which never goes through setActiveWorktree
+      // again) and any other restored worktrees the user clicks later. The
+      // tag is consumed on the first updateTabPtyId/clearTabPtyId per tab,
+      // so subsequent legitimate events (codex restart, new pane) still bump.
       const tabsByWorktree: Record<string, TerminalTab[]> = Object.fromEntries(
         Object.entries(session.tabsByWorktree)
           .filter(([worktreeId]) => validWorktreeIds.has(worktreeId))
@@ -1342,7 +1354,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
               .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt)
               .map((tab, index) => ({
                 ...clearTransientTerminalState(tab, index),
-                sortOrder: index
+                sortOrder: index,
+                pendingActivationSpawn: true
               }))
           ])
           .filter(([, tabs]) => tabs.length > 0)
@@ -1507,6 +1520,16 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         worktreesByRepo[repoId] = [...(worktreesByRepo[repoId] ?? []), placeholder]
       }
 
+      // Why: the restored-active worktree is set as activeWorktreeId here
+      // without ever going through setActiveWorktree, so its first-activation
+      // tagging needs to happen at hydration. Record it in
+      // everActivatedWorktreeIds so a later re-click doesn't re-tag (which
+      // would suppress real activity).
+      const nextEverActivated = new Set(s.everActivatedWorktreeIds)
+      if (activeWorktreeId) {
+        nextEverActivated.add(activeWorktreeId)
+      }
+
       return {
         activeRepoId,
         activeWorktreeId,
@@ -1517,6 +1540,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         pendingReconnectWorktreeIds,
         pendingReconnectTabByWorktree,
         pendingReconnectPtyIdByTabId,
+        everActivatedWorktreeIds: nextEverActivated,
         // Why: seed worktree nav history with the hydrated active worktree so
         // the first user-driven activation (e.g. a sidebar click to a different
         // worktree) has a prior entry to go Back to. Without this the restored
