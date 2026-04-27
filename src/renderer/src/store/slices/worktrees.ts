@@ -42,11 +42,22 @@ function toVisibleTabType(contentType: string): WorkspaceVisibleTabType {
   return contentType === 'browser' ? 'browser' : contentType === 'terminal' ? 'terminal' : 'editor'
 }
 
+// Why: setActiveWorktree → generation bump (on all-dead tabs) → TerminalPane
+// remount → fresh PTY spawn → updateTabPtyId → bumpWorktreeActivity. The PTY-
+// exit path via clearTabPtyId fires in the same window as panes tear down.
+// 750ms is comfortably longer than that cascade of renders/async frames but
+// short enough that a genuine background event arriving right after a click
+// (e.g. an agent emitting output) still counts as real activity. Prefer a
+// narrow window: missing an unlikely "click + immediate agent output" bump
+// is cheaper than re-introducing the reorder-on-click regression.
+const ACTIVATION_WINDOW_MS = 750
+
 export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> = (set, get) => ({
   worktreesByRepo: {},
   activeWorktreeId: null,
   deleteStateByWorktreeId: {},
   sortEpoch: 0,
+  recentActivationByWorktreeId: {},
 
   fetchWorktrees: async (repoId) => {
     try {
@@ -231,6 +242,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         }
         const nextExpandedDirs = { ...s.expandedDirs }
         delete nextExpandedDirs[worktreeId]
+        const nextRecentActivationByWorktreeId = { ...s.recentActivationByWorktreeId }
+        delete nextRecentActivationByWorktreeId[worktreeId]
         // If the active file belonged to the removed worktree, clear it
         const activeFileCleared = s.activeFileId
           ? s.openFiles.some((f) => f.id === s.activeFileId && f.worktreeId === worktreeId)
@@ -277,6 +290,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           activeFileId: activeFileCleared ? null : s.activeFileId,
           activeBrowserTabId: removedActiveWorktree ? null : s.activeBrowserTabId,
           activeTabType: removedActiveWorktree || activeFileCleared ? 'terminal' : s.activeTabType,
+          recentActivationByWorktreeId: nextRecentActivationByWorktreeId,
           sortEpoch: s.sortEpoch + 1
         }
       })
@@ -400,6 +414,21 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
 
   bumpWorktreeActivity: (worktreeId) => {
     const now = Date.now()
+    // Why: PTY spawns/exits triggered by worktree activation (generation bump
+    // → TerminalPane remount → fresh spawn, or incidental exits during the
+    // switch) would otherwise stamp lastActivityAt = now and bounce the just-
+    // clicked worktree to the top of Recent on every click. PR #209 already
+    // skipped sortEpoch bump here for the active worktree, but the timestamp
+    // write still polluted sort scores: the NEXT unrelated sortEpoch bump
+    // would reorder using the clicked worktree's freshly-stamped time. Drop
+    // the bump entirely when it lands inside the activation window recorded
+    // by setActiveWorktree. isReattach (PR 310e9daf) covers the different
+    // case of pre-existing PTYs being rebound; this covers fresh activation-
+    // driven spawns/exits.
+    const activatedAt = get().recentActivationByWorktreeId[worktreeId]
+    if (activatedAt !== undefined && now - activatedAt < ACTIVATION_WINDOW_MS) {
+      return
+    }
     set((s) => {
       const worktree = findWorktreeById(s.worktreesByRepo, worktreeId)
       if (!worktree) {
@@ -435,11 +464,28 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     const reconciledActiveTabId = worktreeId
       ? get().reconcileWorktreeTabModel(worktreeId).activeRenderableTabId
       : null
+    // Why: record BOTH the newly-activated worktree and the one being switched
+    // away from so bumpWorktreeActivity can suppress the PTY-lifecycle stamps
+    // caused by the switch itself. Target worktree covers the generation-bump
+    // → TerminalPane remount → fresh spawn → updateTabPtyId chain. Previous
+    // worktree covers incidental PTY exits fired as its panes unmount while
+    // the user switches away. See ACTIVATION_WINDOW_MS.
+    const activationStampTime = Date.now()
+    const previousActiveWorktreeId = get().activeWorktreeId
     let shouldClearUnread = false
     set((s) => {
+      const nextRecentActivation: Record<string, number> = { ...s.recentActivationByWorktreeId }
+      if (worktreeId) {
+        nextRecentActivation[worktreeId] = activationStampTime
+      }
+      if (previousActiveWorktreeId && previousActiveWorktreeId !== worktreeId) {
+        nextRecentActivation[previousActiveWorktreeId] = activationStampTime
+      }
+
       if (!worktreeId) {
         return {
-          activeWorktreeId: null
+          activeWorktreeId: null,
+          recentActivationByWorktreeId: nextRecentActivation
         }
       }
 
@@ -588,6 +634,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         activeTabType,
         activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: activeTabType },
         activeTabId,
+        recentActivationByWorktreeId: nextRecentActivation,
         ...(shouldClearUnread
           ? { worktreesByRepo: applyWorktreeUpdates(s.worktreesByRepo, worktreeId, metaUpdates) }
           : {}),

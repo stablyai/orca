@@ -659,6 +659,181 @@ describe('terminal slice behaviors', () => {
     expect(tab.ptyId).toBe('pty-1')
     expect(store.getState().ptyIdsByTabId['tab-1']).toEqual(['pty-1', 'pty-2'])
   })
+
+  // Why: clicking a worktree in the sidebar triggers a generation bump on
+  // dead-PTY tabs which remounts TerminalPane and fresh-spawns a PTY. That
+  // fresh spawn calls updateTabPtyId → bumpWorktreeActivity. Without the
+  // activation-window guard, the just-clicked worktree would be stamped with
+  // Date.now() and float to the top of Recent on every click. isReattach is
+  // not set on fresh spawns, so this bug slips past PR 310e9daf.
+  it('does not bump lastActivityAt when a click-driven fresh spawn follows setActiveWorktree', () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/path/wt1'
+    const originalLastActivityAt = 1000
+
+    // Why: a tab with a live ptyId and a matching unified tab keeps
+    // reconcileWorktreeTabModel from garbage-collecting it as an orphan when
+    // setActiveWorktree runs. The test's contract is about what happens AFTER
+    // activation stamps recentActivationByWorktreeId, not about the orphan
+    // cleanup path.
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({
+            id: worktreeId,
+            repoId: 'repo1',
+            path: '/path/wt1',
+            lastActivityAt: originalLastActivityAt
+          })
+        ]
+      },
+      tabsByWorktree: {
+        [worktreeId]: [makeTab({ id: 'tab-1', worktreeId, ptyId: 'pty-old' })]
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-old'] },
+      unifiedTabsByWorktree: {
+        [worktreeId]: [
+          {
+            id: 'tab-1',
+            entityId: 'tab-1',
+            groupId: 'group-1',
+            worktreeId,
+            contentType: 'terminal',
+            label: 'Terminal 1',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      groupsByWorktree: {
+        [worktreeId]: [{ id: 'group-1', worktreeId, activeTabId: 'tab-1', tabOrder: ['tab-1'] }]
+      },
+      activeGroupIdByWorktree: { [worktreeId]: 'group-1' }
+    })
+
+    store.getState().setActiveWorktree(worktreeId)
+    // Simulate a fresh-spawn callback (no isReattach flag) — e.g. a split
+    // pane coming up in a newly-focused worktree.
+    store.getState().updateTabPtyId('tab-1', 'pty-fresh')
+
+    const worktree = store.getState().worktreesByRepo.repo1[0]
+    expect(worktree.lastActivityAt).toBe(originalLastActivityAt)
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        updates: expect.objectContaining({ lastActivityAt: expect.any(Number) })
+      })
+    )
+  })
+
+  // Why: PTYs in the worktree being switched AWAY from can exit as their
+  // panes unmount during the same cascade. Those exits must not count as
+  // activity either, or the prior worktree bounces up in Recent the instant
+  // the user clicks off of it.
+  it('does not bump lastActivityAt when a PTY exits during switch-away', () => {
+    const store = createTestStore()
+    const wt1 = 'repo1::/path/wt1'
+    const wt2 = 'repo1::/path/wt2'
+    const originalLastActivityAt = 1000
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({
+            id: wt1,
+            repoId: 'repo1',
+            path: '/path/wt1',
+            lastActivityAt: originalLastActivityAt
+          }),
+          makeWorktree({ id: wt2, repoId: 'repo1', path: '/path/wt2' })
+        ]
+      },
+      tabsByWorktree: {
+        [wt1]: [makeTab({ id: 'tab-wt1', worktreeId: wt1, ptyId: 'pty-wt1' })],
+        [wt2]: [makeTab({ id: 'tab-wt2', worktreeId: wt2, ptyId: 'pty-wt2' })]
+      },
+      ptyIdsByTabId: {
+        'tab-wt1': ['pty-wt1'],
+        'tab-wt2': ['pty-wt2']
+      },
+      unifiedTabsByWorktree: {
+        [wt2]: [
+          {
+            id: 'tab-wt2',
+            entityId: 'tab-wt2',
+            groupId: 'group-wt2',
+            worktreeId: wt2,
+            contentType: 'terminal',
+            label: 'Terminal 1',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      groupsByWorktree: {
+        [wt2]: [{ id: 'group-wt2', worktreeId: wt2, activeTabId: 'tab-wt2', tabOrder: ['tab-wt2'] }]
+      },
+      activeGroupIdByWorktree: { [wt2]: 'group-wt2' },
+      activeWorktreeId: wt1
+    })
+
+    store.getState().setActiveWorktree(wt2)
+    store.getState().clearTabPtyId('tab-wt1', 'pty-wt1')
+
+    const prevWorktree = store.getState().worktreesByRepo.repo1.find((w) => w.id === wt1)!
+    expect(prevWorktree.lastActivityAt).toBe(originalLastActivityAt)
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        updates: expect.objectContaining({ lastActivityAt: expect.any(Number) })
+      })
+    )
+  })
+
+  // Why: the activation window is narrow on purpose — real background events
+  // that happen outside the click cascade must still bump activity as normal.
+  it('bumps lastActivityAt for a fresh spawn when no activation is in flight', () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/path/wt1'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({
+            id: worktreeId,
+            repoId: 'repo1',
+            path: '/path/wt1',
+            lastActivityAt: 1000
+          })
+        ]
+      },
+      tabsByWorktree: {
+        [worktreeId]: [makeTab({ id: 'tab-1', worktreeId, ptyId: null })]
+      }
+    })
+
+    store.getState().updateTabPtyId('tab-1', 'pty-fresh')
+
+    const worktree = store.getState().worktreesByRepo.repo1[0]
+    expect(worktree.lastActivityAt).toBeGreaterThan(1000)
+    expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith(
+      expect.objectContaining({
+        worktreeId,
+        updates: expect.objectContaining({ lastActivityAt: expect.any(Number) })
+      })
+    )
+  })
 })
 
 // ─── Reconnect persisted terminals ──────────────────────────────────

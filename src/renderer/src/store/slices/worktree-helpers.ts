@@ -22,6 +22,16 @@ export type WorktreeSlice = {
    * — NOT by selection-triggered side-effects like clearing `isUnread`.
    */
   sortEpoch: number
+  /**
+   * Per-worktree timestamp (ms) of the last `setActiveWorktree` call that
+   * targeted or switched away from this worktree. `bumpWorktreeActivity` uses
+   * this to suppress lastActivityAt writes caused by generation-bump remount
+   * side-effects (fresh PTY spawn → updateTabPtyId, or incidental PTY exit →
+   * clearTabPtyId) within a short window after a click. Without this, merely
+   * clicking a worktree in the sidebar would stamp its activity and bounce it
+   * to the top of Recent — the "reorder on click" bug.
+   */
+  recentActivationByWorktreeId: Record<string, number>
   fetchWorktrees: (repoId: string) => Promise<void>
   fetchAllWorktrees: () => Promise<void>
   createWorktree: (
