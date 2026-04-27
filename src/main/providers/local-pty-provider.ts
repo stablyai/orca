@@ -149,6 +149,8 @@ export class LocalPtyProvider implements IPtyProvider {
       // byte sequences are misinterpreted as UTF-8.
       if (shellBasename === 'cmd.exe') {
         shellArgs = ['/K', 'chcp 65001 > nul']
+        effectiveCwd = cwd
+        validationCwd = cwd
       } else if (shellBasename === 'powershell.exe' || shellBasename === 'pwsh.exe') {
         // Why: `-NoExit -Command` alone skips the user's $PROFILE, breaking
         // custom prompts (oh-my-posh, starship), aliases, and PSReadLine
@@ -159,6 +161,8 @@ export class LocalPtyProvider implements IPtyProvider {
           '-Command',
           'try { . $PROFILE } catch {}; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
         ]
+        effectiveCwd = cwd
+        validationCwd = cwd
       } else if (shellBasename === 'wsl.exe') {
         // Why: this branch handles the "user chose WSL as their shell" case,
         // distinct from the wslInfo branch above which is for repos whose cwd
@@ -175,8 +179,6 @@ export class LocalPtyProvider implements IPtyProvider {
         validationCwd = cwd
       } else {
         shellArgs = []
-      }
-      if (shellBasename !== 'wsl.exe') {
         effectiveCwd = cwd
         validationCwd = cwd
       }
