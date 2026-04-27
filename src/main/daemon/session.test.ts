@@ -156,25 +156,47 @@ describe('Session', () => {
     })
   })
 
+  describe('emulator does not reply to terminal queries', () => {
+    // Why: daemon emulator parses in-process synchronously — before
+    // handleSubprocessData forwards bytes to the renderer over IPC — so any
+    // auto-reply it emits races ahead of the renderer's xterm and clobbers
+    // it with default-xterm values (no theme, stale cursor). The renderer is
+    // the authoritative responder; a daemon-side reply to any query is a bug.
+    it.each([
+      ['OSC 11 background-color', '\x1b]11;?\x07'],
+      ['DA1 device-attributes', '\x1b[c'],
+      ['DSR cursor-position', '\x1b[6n']
+    ])('does not reply to %s query', async (_label, query) => {
+      createSession({ shellReadySupported: false })
+      subprocess.simulateData(query)
+      // xterm.js fires terminal.write's completion callback via a microtask;
+      // two resolved-promise awaits flush any nested scheduling.
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(subprocess.written).toEqual([])
+    })
+  })
+
   describe('shell readiness gating', () => {
-    it('buffers writes during pending state', () => {
+    // Why: regression guard for "claude claude" double-echo. The marker fires
+    // from precmd before readline switches the PTY into raw mode; flushing
+    // then lets the kernel re-echo the command under the prompt. Detailed
+    // timing behavior is covered by post-ready-flush-gate.test.ts.
+    // Also checks writes that arrive during the gate window keep their order
+    // — the gate continues to queue even though shellState is already 'ready'.
+    it('defers flush past the shell-ready marker and preserves write order', () => {
       createSession({ shellReadySupported: true })
       expect(session.shellState).toBe('pending')
 
-      session.write('buffered input')
-      expect(subprocess.written).toEqual([])
-    })
-
-    it('flushes buffered writes when shell marker is detected', () => {
-      createSession({ shellReadySupported: true })
-
-      session.write('pre-ready input')
-      expect(subprocess.written).toEqual([])
-
-      // Simulate the shell marker arriving in PTY output
+      session.write('first\n')
       subprocess.simulateData('\x1b]777;orca-shell-ready\x07')
       expect(session.shellState).toBe('ready' satisfies ShellReadyState)
-      expect(subprocess.written).toEqual(['pre-ready input'])
+      session.write('second\n')
+      expect(subprocess.written).toEqual([])
+
+      subprocess.simulateData('\r\nuser@host $ ')
+      vi.advanceTimersByTime(30)
+      expect(subprocess.written).toEqual(['first\n', 'second\n'])
     })
 
     it('transitions to timed_out after 15 seconds', () => {

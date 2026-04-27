@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="README.md">English</a> · <a href="docs/README.zh-CN.md">中文</a> · <a href="docs/README.ja.md">日本語</a>
+  <a href="README.md">English</a> · <a href="docs/README.zh-CN.md">中文</a> · <a href="docs/README.ja.md">日本語</a> · <a href="docs/README.es.md">Español</a>
 </p>
 
 <p align="center">
@@ -66,6 +66,7 @@ Orca supports any CLI agent (_not just this list_).
 - **Multi-agent terminals** — Run multiple AI agents side-by-side in tabs and panes. See which ones are active at a glance.
 - **Built-in source control** — Review AI-generated diffs, make quick edits, and commit without leaving Orca.
 - **GitHub integration** — PRs, issues, and Actions checks linked to each worktree automatically.
+- **SSH support** — Connect to remote machines and run agents on them directly from Orca.
 - **Notifications** — Know when an agent finishes or needs attention. Mark threads unread to come back later.
 
 ---
@@ -74,6 +75,18 @@ Orca supports any CLI agent (_not just this list_).
 
 - **[Download from onOrca.dev](https://onOrca.dev)**
 - Or download the latest binaries via the **[GitHub Releases page](https://github.com/stablyai/orca/releases)**.
+
+---
+
+## [New] Annotate AI Diff
+
+**Comment directly on AI-generated diffs.**
+
+Annotate any line in an AI-generated diff with your feedback, then send it back to the agent to revise. Keep the review loop tight — no copying line numbers, no context switching.
+
+<p align="center">
+  <img src="docs/assets/annotate-ai-diff.gif" alt="Orca Annotate AI Diff — comment on AI-generated diffs and send feedback to the agent" width="800" />
+</p>
 
 ---
 

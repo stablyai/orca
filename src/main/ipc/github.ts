@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
 import { resolve } from 'path'
-import type { Repo } from '../../shared/types'
+import type { Repo, GitHubIssueUpdate } from '../../shared/types'
 import type { Store } from '../persistence'
 import type { StatsCollector } from '../stats/collector'
 import {
@@ -9,8 +9,13 @@ import {
   getRepoSlug,
   listIssues,
   listWorkItems,
+  countWorkItems,
   getWorkItem,
   createIssue,
+  updateIssue,
+  addIssueComment,
+  listLabels,
+  listAssignableUsers,
   getAuthenticatedViewer,
   getPRChecks,
   getPRComments,
@@ -72,11 +77,16 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
 
   ipcMain.handle(
     'gh:listWorkItems',
-    (_event, args: { repoPath: string; limit?: number; query?: string }) => {
+    (_event, args: { repoPath: string; limit?: number; query?: string; before?: string }) => {
       const repo = assertRegisteredRepo(args.repoPath, store)
-      return listWorkItems(repo.path, args.limit, args.query)
+      return listWorkItems(repo.path, args.limit, args.query, args.before)
     }
   )
+
+  ipcMain.handle('gh:countWorkItems', (_event, args: { repoPath: string; query?: string }) => {
+    const repo = assertRegisteredRepo(args.repoPath, store)
+    return countWorkItems(repo.path, args.query)
+  })
 
   ipcMain.handle('gh:workItem', (_event, args: { repoPath: string; number: number }) => {
     const repo = assertRegisteredRepo(args.repoPath, store)
@@ -172,6 +182,44 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       return mergePR(repo.path, args.prNumber, args.method)
     }
   )
+
+  ipcMain.handle(
+    'gh:updateIssue',
+    (_event, args: { repoPath: string; number: number; updates: GitHubIssueUpdate }) => {
+      const repo = assertRegisteredRepo(args.repoPath, store)
+      if (typeof args.number !== 'number' || !Number.isInteger(args.number) || args.number < 1) {
+        return { ok: false, error: 'Invalid issue number' }
+      }
+      if (!args.updates || typeof args.updates !== 'object') {
+        return { ok: false, error: 'Updates object is required' }
+      }
+      return updateIssue(repo.path, args.number, args.updates)
+    }
+  )
+
+  ipcMain.handle(
+    'gh:addIssueComment',
+    (_event, args: { repoPath: string; number: number; body: string }) => {
+      const repo = assertRegisteredRepo(args.repoPath, store)
+      if (typeof args.number !== 'number' || !Number.isInteger(args.number) || args.number < 1) {
+        return { ok: false, error: 'Invalid issue number' }
+      }
+      if (!args.body?.trim()) {
+        return { ok: false, error: 'Comment body required' }
+      }
+      return addIssueComment(repo.path, args.number, args.body.trim())
+    }
+  )
+
+  ipcMain.handle('gh:listLabels', (_event, args: { repoPath: string }) => {
+    const repo = assertRegisteredRepo(args.repoPath, store)
+    return listLabels(repo.path)
+  })
+
+  ipcMain.handle('gh:listAssignableUsers', (_event, args: { repoPath: string }) => {
+    const repo = assertRegisteredRepo(args.repoPath, store)
+    return listAssignableUsers(repo.path)
+  })
 
   // Star operations target the Orca repo itself — no repoPath validation needed
   ipcMain.handle('gh:viewer', () => getAuthenticatedViewer())

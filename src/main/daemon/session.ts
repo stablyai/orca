@@ -1,4 +1,6 @@
 import { HeadlessEmulator } from './headless-emulator'
+import { isValidPtySize, normalizePtySize } from './daemon-pty-size'
+import { PostReadyFlushGate } from './post-ready-flush-gate'
 import type { SessionState, ShellReadyState, TerminalSnapshot } from './types'
 
 const SHELL_READY_TIMEOUT_MS = 15_000
@@ -45,23 +47,20 @@ export class Session {
   private markerBuffer = ''
   private shellReadyTimer: ReturnType<typeof setTimeout> | null = null
   private killTimer: ReturnType<typeof setTimeout> | null = null
+  private postReadyFlushGate: PostReadyFlushGate
 
   constructor(opts: SessionOptions) {
     this.sessionId = opts.sessionId
     this.subprocess = opts.subprocess
+    const size = normalizePtySize(opts.cols, opts.rows)
     this.emulator = new HeadlessEmulator({
-      cols: opts.cols,
-      rows: opts.rows,
-      scrollback: opts.scrollback,
-      // Why: xterm.js generates query responses (DA1, DSR) asynchronously.
-      // If the subprocess has already exited, writing to it would hit a dead
-      // NAPI handle. Check session state before forwarding.
-      onData: (data) => {
-        if (this._state === 'exited' || this._disposed) {
-          return
-        }
-        opts.subprocess.write(data)
-      }
+      cols: size.cols,
+      rows: size.rows,
+      scrollback: opts.scrollback
+      // No onData wiring: the daemon-side emulator must never reply to
+      // terminal query sequences. The renderer's xterm is the authoritative
+      // responder; any daemon reply races ahead via in-process parsing and
+      // clobbers the renderer's answer. See the comment in HeadlessEmulator.
     })
 
     if (opts.shellReadySupported) {
@@ -73,6 +72,7 @@ export class Session {
       this._shellState = 'unsupported'
     }
 
+    this.postReadyFlushGate = new PostReadyFlushGate(() => this.flushPreReadyQueue())
     this.subprocess.onData((data) => this.handleSubprocessData(data))
     this.subprocess.onExit((code) => this.handleSubprocessExit(code))
   }
@@ -106,7 +106,11 @@ export class Session {
       return
     }
 
-    if (this._shellState === 'pending') {
+    // Why: during the post-ready flush gate window (shellState is already
+    // 'ready' but the queue hasn't flushed yet) we must keep queuing. Writing
+    // directly would let fresh input race ahead of the buffered startup
+    // command, changing execution order.
+    if (this._shellState === 'pending' || this.postReadyFlushGate.isPending) {
       this.preReadyStdinQueue.push(data)
       return
     }
@@ -116,6 +120,9 @@ export class Session {
 
   resize(cols: number, rows: number): void {
     if (this._state === 'exited' || this._disposed) {
+      return
+    }
+    if (!isValidPtySize(cols, rows)) {
       return
     }
     this.emulator.resize(cols, rows)
@@ -209,6 +216,7 @@ export class Session {
       clearTimeout(this.killTimer)
       this.killTimer = null
     }
+    this.postReadyFlushGate.clear()
 
     this.attachedClients = []
     this.preReadyStdinQueue = []
@@ -229,6 +237,8 @@ export class Session {
 
     if (this._shellState === 'pending') {
       this.scanForShellMarker(data)
+    } else {
+      this.postReadyFlushGate.notifyData()
     }
 
     // Broadcast to attached clients
@@ -253,6 +263,7 @@ export class Session {
       clearTimeout(this.shellReadyTimer)
       this.shellReadyTimer = null
     }
+    this.postReadyFlushGate.clear()
 
     for (const client of this.attachedClients) {
       client.onExit(code)
@@ -282,7 +293,10 @@ export class Session {
       clearTimeout(this.shellReadyTimer)
       this.shellReadyTimer = null
     }
-    this.flushPreReadyQueue()
+    if (this.preReadyStdinQueue.length === 0) {
+      return
+    }
+    this.postReadyFlushGate.arm()
   }
 
   private onShellReadyTimeout(): void {
@@ -320,6 +334,7 @@ export class Session {
       clearTimeout(this.killTimer)
       this.killTimer = null
     }
+    this.postReadyFlushGate.clear()
 
     const clients = this.attachedClients
     this.attachedClients = []

@@ -24,7 +24,9 @@ describe('agent status freshness expiry', () => {
     vi.setSystemTime(new Date('2026-04-09T12:00:00.000Z'))
 
     const store = createTestStore()
-    store.getState().setAgentStatus('tab-1:1', { state: 'working', prompt: 'Fix tests' }, 'codex')
+    store
+      .getState()
+      .setAgentStatus('tab-1:1', { state: 'working', prompt: 'Fix tests', agentType: 'codex' })
 
     // setAgentStatus bumps epoch once synchronously
     expect(store.getState().agentStatusEpoch).toBe(1)
@@ -43,7 +45,9 @@ describe('agent status freshness expiry', () => {
     vi.setSystemTime(new Date('2026-04-09T12:00:00.000Z'))
 
     const store = createTestStore()
-    store.getState().setAgentStatus('tab-1:1', { state: 'working', prompt: 'Fix tests' }, 'codex')
+    store
+      .getState()
+      .setAgentStatus('tab-1:1', { state: 'working', prompt: 'Fix tests', agentType: 'codex' })
     // set bumps to 1, remove bumps to 2
     store.getState().removeAgentStatus('tab-1:1')
     expect(store.getState().agentStatusEpoch).toBe(2)
@@ -68,17 +72,14 @@ describe('agent status tool + assistant fields', () => {
   it('writes toolName, toolInput, and lastAssistantMessage straight onto the entry', () => {
     vi.useFakeTimers()
     const store = createTestStore()
-    store.getState().setAgentStatus(
-      'tab-1:1',
-      {
-        state: 'working',
-        prompt: 'Edit the config',
-        toolName: 'Edit',
-        toolInput: '/src/config.ts',
-        lastAssistantMessage: 'Edited config.ts'
-      },
-      'claude'
-    )
+    store.getState().setAgentStatus('tab-1:1', {
+      state: 'working',
+      prompt: 'Edit the config',
+      agentType: 'claude',
+      toolName: 'Edit',
+      toolInput: '/src/config.ts',
+      lastAssistantMessage: 'Edited config.ts'
+    })
     const entry = store.getState().agentStatusByPaneKey['tab-1:1']
     expect(entry.toolName).toBe('Edit')
     expect(entry.toolInput).toBe('/src/config.ts')
@@ -88,21 +89,20 @@ describe('agent status tool + assistant fields', () => {
   it('clears fields to undefined when a later payload omits them', () => {
     vi.useFakeTimers()
     const store = createTestStore()
-    store.getState().setAgentStatus(
-      'tab-1:1',
-      {
-        state: 'working',
-        prompt: 'Edit the config',
-        toolName: 'Edit',
-        toolInput: '/src/config.ts',
-        lastAssistantMessage: 'Edited config.ts'
-      },
-      'claude'
-    )
+    store.getState().setAgentStatus('tab-1:1', {
+      state: 'working',
+      prompt: 'Edit the config',
+      agentType: 'claude',
+      toolName: 'Edit',
+      toolInput: '/src/config.ts',
+      lastAssistantMessage: 'Edited config.ts'
+    })
     // Why: the main-process cache is the source of truth for tool/assistant
     // fields — a fresh-turn reset surfaces as undefined on the payload, and
     // the store must not fall back to the prior entry's values.
-    store.getState().setAgentStatus('tab-1:1', { state: 'working', prompt: 'Next step' }, 'claude')
+    store
+      .getState()
+      .setAgentStatus('tab-1:1', { state: 'working', prompt: 'Next step', agentType: 'claude' })
     const entry = store.getState().agentStatusByPaneKey['tab-1:1']
     expect(entry.toolName).toBeUndefined()
     expect(entry.toolInput).toBeUndefined()

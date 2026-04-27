@@ -21,8 +21,6 @@ export type DragReorderCallbacks = {
   applyPaneOpacity: () => void
   applyDividerStyles: () => void
   refitPanesUnder: (el: HTMLElement) => void
-  lockDragScroll: (el: HTMLElement) => void
-  unlockDragScroll: (el: HTMLElement) => void
   onLayoutChanged?: () => void
 }
 

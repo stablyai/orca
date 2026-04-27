@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
+import type * as AgentStatusModule from '@/lib/agent-status'
 import type {
   BrowserTab,
   TerminalLayoutSnapshot,
@@ -13,9 +14,13 @@ import type {
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 
 // Mock agent-status (imported by terminal-helpers)
-vi.mock('@/lib/agent-status', () => ({
-  detectAgentStatusFromTitle: vi.fn().mockReturnValue(null)
-}))
+vi.mock('@/lib/agent-status', async (importOriginal) => {
+  const actual = await importOriginal<typeof AgentStatusModule>()
+  return {
+    ...actual,
+    detectAgentStatusFromTitle: vi.fn().mockReturnValue(null)
+  }
+})
 
 // Mock window.api before anything uses it
 const mockApi = {
@@ -94,6 +99,7 @@ import { createGitHubSlice } from './github'
 import { createLinearSlice } from './linear'
 import { createEditorSlice } from './editor'
 import { createStatsSlice } from './stats'
+import { createMemorySlice } from './memory'
 import { createClaudeUsageSlice } from './claude-usage'
 import { createCodexUsageSlice } from './codex-usage'
 import { createBrowserSlice } from './browser'
@@ -116,6 +122,7 @@ function createTestStore() {
     ...createLinearSlice(...a),
     ...createEditorSlice(...a),
     ...createStatsSlice(...a),
+    ...createMemorySlice(...a),
     ...createClaudeUsageSlice(...a),
     ...createCodexUsageSlice(...a),
     ...createBrowserSlice(...a),

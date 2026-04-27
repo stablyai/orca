@@ -30,7 +30,7 @@ import EditorAutosaveController from './editor/EditorAutosaveController'
 import type { TabGroupLayoutNode } from '../../../shared/types'
 import BrowserPane, { destroyPersistentWebview } from './browser-pane/BrowserPane'
 import BrowserPaneOverlayLayer from './browser-pane/BrowserPaneOverlayLayer'
-import { handleSwitchTab } from '../hooks/ipc-tab-switch'
+import { handleSwitchTab, handleSwitchTerminalTab } from '../hooks/ipc-tab-switch'
 import TabGroupSplitLayout from './tab-group/TabGroupSplitLayout'
 import { shouldAutoCreateInitialTerminal } from './terminal/initial-terminal'
 import {
@@ -122,6 +122,14 @@ function Terminal(): React.JSX.Element | null {
   const activeWorktreeBrowserTabIdsKey = activeWorktreeId
     ? (browserTabsByWorktree[activeWorktreeId] ?? []).map((tab) => tab.id).join(',')
     : ''
+
+  const [wslAvailable, setWslAvailable] = useState(false)
+  useEffect(() => {
+    // Why: wsl:isAvailable is synchronous on the main-process side but we
+    // call it asynchronously so the renderer doesn't block on startup. The
+    // result only gates UI options, so a brief false→true transition is fine.
+    void window.api.wsl.isAvailable().then(setWslAvailable)
+  }, [])
 
   // Save confirmation dialog state
   const [saveDialogFileId, setSaveDialogFileId] = useState<string | null>(null)
@@ -355,45 +363,51 @@ function Terminal(): React.JSX.Element | null {
     createTab(activeWorktreeId)
   }, [workspaceSessionReady, activeWorktreeId, createTab, reconcileWorktreeTabModel])
 
-  const handleNewTab = useCallback(() => {
-    if (!activeWorktreeId) {
-      return
-    }
-    const newTab = createTab(activeWorktreeId)
-    setActiveTabType('terminal')
-    // Why: persist the tab bar order with the new terminal at the end of the
-    // current visual order. Without this, reconcileOrder falls back to
-    // terminals-first when tabBarOrderByWorktree is unset, causing a new
-    // terminal to jump to index 0 instead of appending after editor tabs.
-    const state = useAppStore.getState()
-    const currentTerminals = state.tabsByWorktree[activeWorktreeId] ?? []
-    const currentEditors = state.openFiles.filter((f) => f.worktreeId === activeWorktreeId)
-    const currentBrowsers = state.browserTabsByWorktree[activeWorktreeId] ?? []
-    const stored = state.tabBarOrderByWorktree[activeWorktreeId]
-    const termIds = currentTerminals.map((t) => t.id)
-    const editorIds = currentEditors.map((f) => f.id)
-    const browserIds = currentBrowsers.map((tab) => tab.id)
-    const validIds = new Set([...termIds, ...editorIds, ...browserIds])
-    const base = (stored ?? []).filter((id) => validIds.has(id))
-    const inBase = new Set(base)
-    for (const id of [...termIds, ...editorIds, ...browserIds]) {
-      if (!inBase.has(id)) {
-        base.push(id)
-        inBase.add(id)
+  const handleNewTab = useCallback(
+    (shellOverride?: string) => {
+      if (!activeWorktreeId) {
+        return
       }
-    }
-    // The new tab is already in base via termIds; move it to the end
-    const order = base.filter((id) => id !== newTab.id)
-    order.push(newTab.id)
-    setTabBarOrder(activeWorktreeId, order)
-  }, [activeWorktreeId, createTab, setActiveTabType, setTabBarOrder])
+      const newTab = createTab(activeWorktreeId, undefined, shellOverride)
+      setActiveTabType('terminal')
+      // Why: persist the tab bar order with the new terminal at the end of the
+      // current visual order. Without this, reconcileOrder falls back to
+      // terminals-first when tabBarOrderByWorktree is unset, causing a new
+      // terminal to jump to index 0 instead of appending after editor tabs.
+      const state = useAppStore.getState()
+      const currentTerminals = state.tabsByWorktree[activeWorktreeId] ?? []
+      const currentEditors = state.openFiles.filter((f) => f.worktreeId === activeWorktreeId)
+      const currentBrowsers = state.browserTabsByWorktree[activeWorktreeId] ?? []
+      const stored = state.tabBarOrderByWorktree[activeWorktreeId]
+      const termIds = currentTerminals.map((t) => t.id)
+      const editorIds = currentEditors.map((f) => f.id)
+      const browserIds = currentBrowsers.map((tab) => tab.id)
+      const validIds = new Set([...termIds, ...editorIds, ...browserIds])
+      const base = (stored ?? []).filter((id) => validIds.has(id))
+      const inBase = new Set(base)
+      for (const id of [...termIds, ...editorIds, ...browserIds]) {
+        if (!inBase.has(id)) {
+          base.push(id)
+          inBase.add(id)
+        }
+      }
+      // The new tab is already in base via termIds; move it to the end
+      const order = base.filter((id) => id !== newTab.id)
+      order.push(newTab.id)
+      setTabBarOrder(activeWorktreeId, order)
+    },
+    [activeWorktreeId, createTab, setActiveTabType, setTabBarOrder]
+  )
 
   const handleNewBrowserTab = useCallback(() => {
     if (!activeWorktreeId) {
       return
     }
     const defaultUrl = useAppStore.getState().browserDefaultUrl ?? 'about:blank'
-    createBrowserTab(activeWorktreeId, defaultUrl, { title: 'New Browser Tab' })
+    createBrowserTab(activeWorktreeId, defaultUrl, {
+      title: 'New Browser Tab',
+      focusAddressBar: true
+    })
   }, [activeWorktreeId, createBrowserTab])
 
   const handleDuplicateBrowserTab = useCallback(
@@ -746,13 +760,46 @@ function Terminal(): React.JSX.Element | null {
         !e.repeat
       ) {
         // Why: delegate to the shared handleSwitchTab used by the IPC shortcut
-        // so both code paths share one implementation. See getActiveTabNavOrder
-        // for the stale legacy-order bug this replaces. handleSwitchTab returns
-        // true when it switched so we preventDefault only when we actually
-        // consumed the key.
-        if (handleSwitchTab(e.code === 'BracketRight' ? 1 : -1)) {
-          e.preventDefault()
-        }
+        // so both code paths share one implementation. Always consume the
+        // chord — even when the switch is a no-op (e.g. single tab), we own
+        // this key combo and shouldn't let it reach xterm or the browser
+        // guest's default handling.
+        e.preventDefault()
+        e.stopPropagation()
+        e.stopImmediatePropagation()
+        handleSwitchTab(e.code === 'BracketRight' ? 1 : -1)
+      }
+
+      // Ctrl+PageDown/PageUp - switch terminal tabs only
+      // Why: this chord intentionally uses Ctrl on every platform; on macOS,
+      // Cmd+PageUp/PageDown is an OS desktop-switch shortcut we should not steal.
+      // Why: also reject Shift so Ctrl+Shift+PageUp/PageDown stays available
+      // for focused terminal / editor consumers and matches the unshifted
+      // predicate in browser-guest-ui.ts and the chord advertised in
+      // ShortcutsPane.
+      if (
+        e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey &&
+        !e.shiftKey &&
+        (e.code === 'PageDown' || e.code === 'PageUp') &&
+        !e.repeat
+      ) {
+        // Why: always consume the chord before xterm's textarea listener
+        // sees it, regardless of whether we actually switched tabs. xterm
+        // translates plain Ctrl+PageUp/PageDown into \e[5~ / \e[6~ escape
+        // sequences and writes them to the shell; that stray output then
+        // also flips the tab's unread/bell indicator. In the single-terminal
+        // case handleSwitchTerminalTab is a no-op, but we still need to
+        // swallow the event — otherwise pressing the chord on the only
+        // terminal leaves "5~" in the shell and lights up a phantom
+        // notification on the tab that already has focus. preventDefault
+        // alone does not stop xterm's own keydown listener, so we also
+        // stop propagation.
+        e.preventDefault()
+        e.stopPropagation()
+        e.stopImmediatePropagation()
+        handleSwitchTerminalTab(e.code === 'PageDown' ? 1 : -1)
       }
     }
     window.addEventListener('keydown', onKeyDown, { capture: true })
@@ -919,9 +966,11 @@ function Terminal(): React.JSX.Element | null {
             onClose={handleCloseTab}
             onCloseOthers={handleCloseOthers}
             onCloseToRight={handleCloseTabsToRight}
-            onNewTerminalTab={handleNewTab}
+            onNewTerminalTab={() => handleNewTab()}
+            onNewTerminalWithShell={handleNewTab}
             onNewBrowserTab={handleNewBrowserTab}
             onNewFileTab={handleNewFile}
+            wslAvailable={wslAvailable}
             onSetCustomTitle={setTabCustomTitle}
             onSetTabColor={setTabColor}
             expandedPaneByTabId={expandedPaneByTabId}

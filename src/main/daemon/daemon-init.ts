@@ -1,21 +1,28 @@
 import { join } from 'path'
 import { app } from 'electron'
-import { mkdirSync, existsSync, unlinkSync } from 'fs'
+import { mkdirSync, existsSync, unlinkSync, writeFileSync } from 'fs'
 import { fork } from 'child_process'
 import { connect } from 'net'
 import {
   DaemonSpawner,
+  getDaemonPidPath,
   getDaemonSocketPath,
   getDaemonTokenPath,
   type DaemonLauncher
 } from './daemon-spawner'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
+import { DaemonPtyRouter } from './daemon-pty-router'
 import { DaemonClient } from './client'
-import type { ListSessionsResult } from './types'
+import {
+  PREVIOUS_DAEMON_PROTOCOL_VERSIONS,
+  PROTOCOL_VERSION,
+  type ListSessionsResult
+} from './types'
+import { healthCheckDaemon, killStaleDaemon } from './daemon-health'
 import { setLocalPtyProvider } from '../ipc/pty'
 
 let spawner: DaemonSpawner | null = null
-let adapter: DaemonPtyAdapter | null = null
+let adapter: DaemonPtyRouter | DaemonPtyAdapter | null = null
 
 function getRuntimeDir(): string {
   const dir = join(app.getPath('userData'), 'daemon')
@@ -64,22 +71,25 @@ function probeSocket(socketPath: string): Promise<boolean> {
   })
 }
 
-function createOutOfProcessLauncher(): DaemonLauncher {
+function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
   return async (socketPath, tokenPath) => {
-    const alive = await probeSocket(socketPath)
-    if (alive) {
-      // Why: daemon is already running from a previous app session.
-      // No new process to manage — return a no-op shutdown handle.
-      return { shutdown: async () => {} }
+    const healthy = await healthCheckDaemon(socketPath, tokenPath)
+    if (healthy) {
+      // Why: daemon is already running from a previous app session and
+      // responded to a protocol-level ping. Safe to reuse.
+      return {
+        shutdown: async () => {
+          await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
+        }
+      }
     }
 
-    // Why: stale socket file from a crashed daemon blocks the new server
-    // from binding. Remove it before spawning.
-    if (process.platform !== 'win32' && existsSync(socketPath)) {
-      unlinkSync(socketPath)
-    }
+    // Why: a raw socket can outlive a broken or wedged daemon. Kill by PID
+    // before respawn so the new daemon does not race the stale process.
+    await killStaleDaemon(runtimeDir, socketPath, tokenPath)
 
     const entryPath = getDaemonEntryPath()
+    const userDataPath = app.getPath('userData')
     const child = fork(entryPath, ['--socket', socketPath, '--token', tokenPath], {
       // Why: detached + unref lets the daemon outlive the Electron process.
       // stdio 'ignore' prevents the child from holding the parent's stdout
@@ -90,7 +100,13 @@ function createOutOfProcessLauncher(): DaemonLauncher {
       // Node.js process instead of an Electron renderer/main process. Without
       // it, Electron's GPU/display initialization can interfere with native
       // module operations like node-pty's posix_spawn of the spawn-helper.
-      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }
+      env: {
+        ...process.env,
+        ELECTRON_RUN_AS_NODE: '1',
+        // Why: the detached daemon is plain Node and cannot call Electron's
+        // app.getPath(), but shell-ready rcfiles must live outside swept tmp.
+        ORCA_USER_DATA_PATH: userDataPath
+      }
     })
 
     // Wait for the daemon to signal readiness via IPC
@@ -113,6 +129,9 @@ function createOutOfProcessLauncher(): DaemonLauncher {
       child.on('message', (msg: unknown) => {
         if (msg && typeof msg === 'object' && (msg as { type?: string }).type === 'ready') {
           clearTimeout(timer)
+          if (child.pid) {
+            writeFileSync(getDaemonPidPath(runtimeDir), String(child.pid), { mode: 0o600 })
+          }
           // Why: disconnect IPC channel and unref so Electron can exit
           // without waiting for the daemon. The daemon keeps running.
           child.disconnect()
@@ -149,7 +168,7 @@ export async function initDaemonPtyProvider(): Promise<void> {
 
   const newSpawner = new DaemonSpawner({
     runtimeDir,
-    launcher: createOutOfProcessLauncher()
+    launcher: createOutOfProcessLauncher(runtimeDir)
   })
 
   // Why: assign spawner/adapter only after both succeed. If ensureRunning()
@@ -172,17 +191,29 @@ export async function initDaemonPtyProvider(): Promise<void> {
     }
   })
 
+  const legacyAdapters = await createLegacyDaemonAdapters(runtimeDir)
+  const routedAdapter =
+    legacyAdapters.length > 0
+      ? new DaemonPtyRouter({
+          current: newAdapter,
+          legacy: legacyAdapters
+        })
+      : newAdapter
+  if (routedAdapter instanceof DaemonPtyRouter) {
+    await routedAdapter.discoverLegacySessions()
+  }
+
   spawner = newSpawner
-  adapter = newAdapter
-  setLocalPtyProvider(adapter)
+  adapter = routedAdapter
+  setLocalPtyProvider(routedAdapter)
 }
 
 // Why: disconnect from the daemon without killing it. The daemon runs as a
 // separate process and survives app quit — sessions stay alive for warm
 // reattach on next launch. Leave history sessions marked "unclean" here so a
 // later daemon crash while Orca is closed is still recoverable on next launch.
-export function disconnectDaemon(): void {
-  adapter?.disconnectOnly()
+export async function disconnectDaemon(): Promise<void> {
+  await adapter?.disconnectOnly()
   adapter = null
 }
 
@@ -192,6 +223,11 @@ export async function shutdownDaemon(): Promise<void> {
   adapter = null
   await spawner?.shutdown()
   spawner = null
+  try {
+    unlinkSync(getDaemonPidPath(getRuntimeDir()))
+  } catch {
+    // Best-effort
+  }
 }
 
 export type OrphanedDaemonCleanupResult = {
@@ -201,6 +237,111 @@ export type OrphanedDaemonCleanupResult = {
   /** Number of live PTY sessions killed during cleanup. The caller surfaces this
    *  to the user so they know what background work was stopped. */
   killedCount: number
+}
+
+async function cleanupDaemonForProtocol(
+  runtimeDir: string,
+  protocolVersion: number
+): Promise<OrphanedDaemonCleanupResult> {
+  const socketPath = getDaemonSocketPath(runtimeDir, protocolVersion)
+  const tokenPath = getDaemonTokenPath(runtimeDir, protocolVersion)
+  const pidPath = getDaemonPidPath(runtimeDir, protocolVersion)
+
+  const alive = await probeSocket(socketPath)
+  if (!alive) {
+    // Why: still best-effort remove a stale socket file so a future opt-in
+    // launch doesn't hit EADDRINUSE when the daemon tries to bind.
+    if (process.platform !== 'win32' && existsSync(socketPath)) {
+      try {
+        unlinkSync(socketPath)
+      } catch {
+        // Best-effort
+      }
+    }
+    try {
+      unlinkSync(pidPath)
+    } catch {
+      // Best-effort
+    }
+    return { cleaned: false, killedCount: 0 }
+  }
+
+  const client = new DaemonClient({ socketPath, tokenPath, protocolVersion })
+  let killedCount = 0
+  let didRequestShutdown = false
+  let didKillStaleDaemon = false
+  try {
+    await client.ensureConnected()
+    const sessions = await client
+      .request<ListSessionsResult>('listSessions', undefined)
+      .catch(() => ({ sessions: [] }))
+    killedCount = sessions.sessions.filter((s) => s.isAlive).length
+
+    // Why: the daemon exposes a single-shot `shutdown` RPC (daemon-server.ts)
+    // that kills every session and then terminates its own process. Using it
+    // avoids the race between per-session `kill` calls and the daemon exiting.
+    await client.request('shutdown', { killSessions: true }).catch(() => {
+      // Daemon exits immediately after handling the RPC — the socket may close
+      // before the reply round-trips. Treat that as success.
+    })
+    didRequestShutdown = true
+  } catch {
+    // Why: previous-protocol daemons may be wedged or too old to complete the
+    // RPC cleanup path. Fall back to PID cleanup, but daemon-health only
+    // unlinks a live socket after proving it killed the matching process.
+    didKillStaleDaemon = await killStaleDaemon(runtimeDir, socketPath, tokenPath, protocolVersion)
+  } finally {
+    client.disconnect()
+  }
+
+  // Why: after `shutdown`, the daemon unlinks its socket itself — but on some
+  // crash paths the file lingers. Clean up defensively so a later opt-in
+  // relaunch can bind cleanly.
+  if (didRequestShutdown && process.platform !== 'win32' && existsSync(socketPath)) {
+    try {
+      unlinkSync(socketPath)
+    } catch {
+      // Best-effort
+    }
+  }
+  try {
+    unlinkSync(pidPath)
+  } catch {
+    // Best-effort
+  }
+
+  return { cleaned: didRequestShutdown || didKillStaleDaemon, killedCount }
+}
+
+async function createLegacyDaemonAdapters(runtimeDir: string): Promise<DaemonPtyAdapter[]> {
+  const adapters: DaemonPtyAdapter[] = []
+  for (const protocolVersion of PREVIOUS_DAEMON_PROTOCOL_VERSIONS) {
+    const socketPath = getDaemonSocketPath(runtimeDir, protocolVersion)
+    const tokenPath = getDaemonTokenPath(runtimeDir, protocolVersion)
+    if (!(await probeSocket(socketPath))) {
+      continue
+    }
+    // Why: old daemon PTYs can be running long-lived agents during an app
+    // upgrade. Keep those sessions routed to their original daemon while new
+    // terminals use the current protocol, instead of killing background work.
+    // Legacy adapters intentionally do not respawn: respawning an old protocol
+    // daemon from new code would recreate stale env semantics and can be less
+    // predictable than letting the session fail if that old daemon dies.
+    // Why historyPath is still passed: checkpoint writes will fail silently
+    // (pre-v4 daemons don't support getSnapshot), but the HistoryManager is
+    // still needed for cleanup — close/exit events must remove history dirs
+    // and mark meta.json as ended. Without it, a later v4 session reusing
+    // the same ID could false-restore stale scrollback.bin.
+    adapters.push(
+      new DaemonPtyAdapter({
+        socketPath,
+        tokenPath,
+        protocolVersion,
+        historyPath: getHistoryDir()
+      })
+    )
+  }
+  return adapters
 }
 
 /** Detect and tear down an orphaned daemon left behind by a previous app
@@ -215,53 +356,14 @@ export type OrphanedDaemonCleanupResult = {
  *  the daemon to shut itself down (which terminates all PTYs). */
 export async function cleanupOrphanedDaemon(): Promise<OrphanedDaemonCleanupResult> {
   const runtimeDir = getRuntimeDir()
-  const socketPath = getDaemonSocketPath(runtimeDir)
-  const tokenPath = getDaemonTokenPath(runtimeDir)
-
-  const alive = await probeSocket(socketPath)
-  if (!alive) {
-    // Why: still best-effort remove a stale socket file so a future opt-in
-    // launch doesn't hit EADDRINUSE when the daemon tries to bind.
-    if (process.platform !== 'win32' && existsSync(socketPath)) {
-      try {
-        unlinkSync(socketPath)
-      } catch {
-        // Best-effort
-      }
-    }
-    return { cleaned: false, killedCount: 0 }
-  }
-
-  const client = new DaemonClient({ socketPath, tokenPath })
+  let cleaned = false
   let killedCount = 0
-  try {
-    await client.ensureConnected()
-    const sessions = await client
-      .request<ListSessionsResult>('listSessions', undefined)
-      .catch(() => ({ sessions: [] }))
-    killedCount = sessions.sessions.filter((s) => s.isAlive).length
 
-    // Why: the daemon exposes a single-shot `shutdown` RPC (daemon-server.ts:263)
-    // that kills every session and then terminates its own process. Using it
-    // avoids the race between per-session `kill` calls and the daemon exiting.
-    await client.request('shutdown', { killSessions: true }).catch(() => {
-      // Daemon exits immediately after handling the RPC — the socket may close
-      // before the reply round-trips. Treat that as success.
-    })
-  } finally {
-    client.disconnect()
+  for (const protocolVersion of [PROTOCOL_VERSION, ...PREVIOUS_DAEMON_PROTOCOL_VERSIONS]) {
+    const result = await cleanupDaemonForProtocol(runtimeDir, protocolVersion)
+    cleaned ||= result.cleaned
+    killedCount += result.killedCount
   }
 
-  // Why: after `shutdown`, the daemon unlinks its socket itself — but on some
-  // crash paths the file lingers. Clean up defensively so a later opt-in
-  // relaunch can bind cleanly.
-  if (process.platform !== 'win32' && existsSync(socketPath)) {
-    try {
-      unlinkSync(socketPath)
-    } catch {
-      // Best-effort
-    }
-  }
-
-  return { cleaned: true, killedCount }
+  return { cleaned, killedCount }
 }

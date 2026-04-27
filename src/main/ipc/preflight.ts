@@ -4,14 +4,13 @@ import { promisify } from 'util'
 import path from 'path'
 import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import { hydrateShellPath, mergePathSegments } from '../startup/hydrate-shell-path'
-import { loadToken } from '../linear/client'
+import { getActiveMultiplexer } from './ssh'
 
 const execFileAsync = promisify(execFile)
 
 export type PreflightStatus = {
   git: { installed: boolean }
   gh: { installed: boolean; authenticated: boolean }
-  linear: { connected: boolean }
 }
 
 // Why: cache the result so repeated Landing mounts don't re-spawn processes.
@@ -120,16 +119,9 @@ export async function runPreflightCheck(force = false): Promise<PreflightStatus>
 
   const ghAuthenticated = ghInstalled ? await isGhAuthenticated() : false
 
-  // Why: the Linear preflight check reads the encrypted token file rather
-  // than calling the Linear API. Actual API validation happens lazily on
-  // first use or on linear:connect — this avoids a network round-trip on
-  // every preflight check.
-  const linearConnected = loadToken() !== null
-
   cached = {
     git: { installed: gitInstalled },
-    gh: { installed: ghInstalled, authenticated: ghAuthenticated },
-    linear: { connected: linearConnected }
+    gh: { installed: ghInstalled, authenticated: ghAuthenticated }
   }
 
   return cached
@@ -150,4 +142,22 @@ export function registerPreflightHandlers(): void {
   ipcMain.handle('preflight:refreshAgents', async (): Promise<RefreshAgentsResult> => {
     return refreshShellPathAndDetectAgents()
   })
+
+  // Why: remote worktrees need agent detection on the SSH host, not the local
+  // machine. This handler forwards the same KNOWN_AGENT_COMMANDS list to the
+  // relay's preflight.detectAgents RPC, which runs `which` inside a login shell
+  // on the remote host to match the PATH users see in PTY sessions.
+  ipcMain.handle(
+    'preflight:detectRemoteAgents',
+    async (_event, args: { connectionId: string }): Promise<string[]> => {
+      const mux = getActiveMultiplexer(args.connectionId)
+      if (!mux || mux.isDisposed()) {
+        throw new Error(`No active SSH connection for "${args.connectionId}"`)
+      }
+      const result = (await mux.request('preflight.detectAgents', {
+        commands: KNOWN_AGENT_COMMANDS
+      })) as { agents: string[] }
+      return result.agents
+    }
+  )
 }

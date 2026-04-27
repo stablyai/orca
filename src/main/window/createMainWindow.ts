@@ -77,6 +77,20 @@ export function createMainWindow(
     }
   })()
 
+  const settings = store?.getSettings()
+  const blur = settings?.windowBackgroundBlur ?? false
+  // Why: native blur requires platform-specific Electron APIs. macOS uses
+  // vibrancy (needs transparent: true), Windows uses backgroundMaterial.
+  // Linux has no native equivalent. Blur only applies at window creation;
+  // changing the setting requires a restart.
+  const platformBlurOptions = blur
+    ? process.platform === 'darwin'
+      ? { vibrancy: 'under-window' as const, transparent: true }
+      : process.platform === 'win32'
+        ? { backgroundMaterial: 'acrylic' as const }
+        : {}
+    : {}
+
   const mainWindow = new BrowserWindow({
     width: savedBounds?.width ?? defaultBounds.width,
     height: savedBounds?.height ?? defaultBounds.height,
@@ -84,6 +98,12 @@ export function createMainWindow(
     minWidth: 600,
     minHeight: 400,
     show: false,
+    // Why: on macOS the menu lives in the system menu bar, so the in-window
+    // menu bar is irrelevant. On Windows/Linux we auto-hide so the menu bar
+    // doesn't consume a dedicated row of vertical space on every launch —
+    // users can still reveal the (properly restructured) File/Edit/View/
+    // Window/Help menus by pressing Alt, matching native Windows/Linux
+    // conventions (File Explorer, Firefox, etc.).
     autoHideMenuBar: true,
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : undefined,
@@ -98,6 +118,7 @@ export function createMainWindow(
         }
       : {}),
     icon: is.dev ? devIcon : icon,
+    ...platformBlurOptions,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: true,

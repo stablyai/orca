@@ -173,4 +173,58 @@ describe('browser slice', () => {
       'https://example.com/b'
     )
   })
+
+  it('sets pending address-bar focus when focusAddressBar is true even for non-blank URLs', () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/tmp/wt-1'
+    seedStore(store, {
+      activeRepoId: 'repo1',
+      activeWorktreeId: worktreeId,
+      activeTabType: 'terminal',
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1', path: '/tmp/wt-1' })]
+      },
+      groupsByWorktree: {
+        [worktreeId]: [makeTabGroup({ id: 'group-1', worktreeId, activeTabId: null, tabOrder: [] })]
+      },
+      activeGroupIdByWorktree: { [worktreeId]: 'group-1' },
+      browserTabsByWorktree: {},
+      unifiedTabsByWorktree: {}
+    })
+
+    const created = store.getState().createBrowserTab(worktreeId, 'https://example.com/home', {
+      title: 'Home',
+      focusAddressBar: true
+    })
+
+    const pageId = store.getState().browserPagesByWorkspace[created.id]?.[0]?.id
+    expect(pageId).toBeDefined()
+    expect(store.getState().pendingAddressBarFocusByTabId[created.id]).toBe(true)
+    expect(store.getState().pendingAddressBarFocusByPageId[pageId!]).toBe(true)
+  })
+
+  it('does not set pending address-bar focus for non-blank URLs when focusAddressBar is not set', () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/tmp/wt-1'
+    seedStore(store, {
+      activeRepoId: 'repo1',
+      activeWorktreeId: worktreeId,
+      activeTabType: 'terminal',
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1', path: '/tmp/wt-1' })]
+      },
+      groupsByWorktree: {
+        [worktreeId]: [makeTabGroup({ id: 'group-1', worktreeId, activeTabId: null, tabOrder: [] })]
+      },
+      activeGroupIdByWorktree: { [worktreeId]: 'group-1' },
+      browserTabsByWorktree: {},
+      unifiedTabsByWorktree: {}
+    })
+
+    const created = store.getState().createBrowserTab(worktreeId, 'https://example.com/home', {
+      title: 'Home'
+    })
+
+    expect(store.getState().pendingAddressBarFocusByTabId[created.id]).toBeUndefined()
+  })
 })

@@ -5,15 +5,24 @@ import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
 import type { CliInstallStatus } from '../shared/cli-install-types'
+import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type {
   BaseRefDefaultResult,
   FsChangedPayload,
+  GhosttyImportPreview,
+  MemorySnapshot,
   NotificationDispatchResult,
-  OpenCodeStatusEvent
+  SearchResult
 } from '../shared/types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../shared/runtime-types'
 import type { RateLimitState } from '../shared/rate-limit-types'
-import type { SshConnectionState, SshTarget } from '../shared/ssh-types'
+import type {
+  SshConnectionState,
+  SshTarget,
+  PortForwardEntry,
+  DetectedPort
+} from '../shared/ssh-types'
+import type { AgentStatusState } from '../shared/agent-status-types'
 import {
   ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT,
   type EditorSaveDirtyFilesDetail
@@ -170,6 +179,10 @@ const api = {
     relaunch: (): Promise<void> => ipcRenderer.invoke('app:relaunch')
   },
 
+  wsl: {
+    isAvailable: (): Promise<boolean> => ipcRenderer.invoke('wsl:isAvailable')
+  },
+
   repos: {
     list: (): Promise<unknown[]> => ipcRenderer.invoke('repos:list'),
 
@@ -237,6 +250,14 @@ const api = {
       setupDecision?: 'inherit' | 'run' | 'skip'
     }): Promise<unknown> => ipcRenderer.invoke('worktrees:create', args),
 
+    resolvePrBase: (args: {
+      repoId: string
+      prNumber: number
+      headRefName?: string
+      isCrossRepository?: boolean
+    }): Promise<{ baseBranch: string } | { error: string }> =>
+      ipcRenderer.invoke('worktrees:resolvePrBase', args),
+
     remove: (args: { worktreeId: string; force?: boolean }): Promise<void> =>
       ipcRenderer.invoke('worktrees:remove', args),
 
@@ -266,6 +287,7 @@ const api = {
       connectionId?: string | null
       worktreeId?: string
       sessionId?: string
+      shellOverride?: string
     }): Promise<{
       id: string
       snapshot?: string
@@ -273,6 +295,8 @@ const api = {
       snapshotRows?: number
       isReattach?: boolean
       isAlternateScreen?: boolean
+      replay?: string
+      sessionExpired?: boolean
       coldRestore?: { scrollback: string; cwd: string }
     }> => ipcRenderer.invoke('pty:spawn', opts),
 
@@ -313,18 +337,18 @@ const api = {
       return () => ipcRenderer.removeListener('pty:data', listener)
     },
 
+    onReplay: (callback: (data: { id: string; data: string }) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: { id: string; data: string }) =>
+        callback(data)
+      ipcRenderer.on('pty:replay', listener)
+      return () => ipcRenderer.removeListener('pty:replay', listener)
+    },
+
     onExit: (callback: (data: { id: string; code: number }) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, data: { id: string; code: number }) =>
         callback(data)
       ipcRenderer.on('pty:exit', listener)
       return () => ipcRenderer.removeListener('pty:exit', listener)
-    },
-
-    onOpenCodeStatus: (callback: (event: OpenCodeStatusEvent) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, data: OpenCodeStatusEvent) =>
-        callback(data)
-      ipcRenderer.on('pty:opencode-status', listener)
-      return () => ipcRenderer.removeListener('pty:opencode-status', listener)
     }
   },
 
@@ -384,10 +408,14 @@ const api = {
     }): Promise<{ ok: true; number: number; url: string } | { ok: false; error: string }> =>
       ipcRenderer.invoke('gh:createIssue', args),
 
+    countWorkItems: (args: { repoPath: string; query?: string }): Promise<number> =>
+      ipcRenderer.invoke('gh:countWorkItems', args),
+
     listWorkItems: (args: {
       repoPath: string
       limit?: number
       query?: string
+      before?: string
     }): Promise<unknown[]> => ipcRenderer.invoke('gh:listWorkItems', args),
 
     prChecks: (args: {
@@ -422,6 +450,26 @@ const api = {
     }): Promise<{ ok: true } | { ok: false; error: string }> =>
       ipcRenderer.invoke('gh:mergePR', args),
 
+    updateIssue: (args: {
+      repoPath: string
+      number: number
+      updates: unknown
+    }): Promise<{ ok: true } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('gh:updateIssue', args),
+
+    addIssueComment: (args: {
+      repoPath: string
+      number: number
+      body: string
+    }): Promise<{ ok: true; id: number } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('gh:addIssueComment', args),
+
+    listLabels: (args: { repoPath: string }): Promise<string[]> =>
+      ipcRenderer.invoke('gh:listLabels', args),
+
+    listAssignableUsers: (args: { repoPath: string }): Promise<string[]> =>
+      ipcRenderer.invoke('gh:listAssignableUsers', args),
+
     checkOrcaStarred: (): Promise<boolean | null> => ipcRenderer.invoke('gh:checkOrcaStarred'),
     starOrca: (): Promise<boolean> => ipcRenderer.invoke('gh:starOrca')
   },
@@ -436,6 +484,9 @@ const api = {
 
     status: (): Promise<unknown> => ipcRenderer.invoke('linear:status'),
 
+    testConnection: (): Promise<{ ok: true; viewer: unknown } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('linear:testConnection'),
+
     searchIssues: (args: { query: string; limit?: number }): Promise<unknown[]> =>
       ipcRenderer.invoke('linear:searchIssues', args),
 
@@ -444,8 +495,42 @@ const api = {
       limit?: number
     }): Promise<unknown[]> => ipcRenderer.invoke('linear:listIssues', args),
 
+    createIssue: (args: {
+      teamId: string
+      title: string
+      description?: string
+    }): Promise<
+      { ok: true; id: string; identifier: string; url: string } | { ok: false; error: string }
+    > => ipcRenderer.invoke('linear:createIssue', args),
+
     getIssue: (args: { id: string }): Promise<unknown> =>
-      ipcRenderer.invoke('linear:getIssue', args)
+      ipcRenderer.invoke('linear:getIssue', args),
+
+    updateIssue: (args: {
+      id: string
+      updates: unknown
+    }): Promise<{ ok: true } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('linear:updateIssue', args),
+
+    addIssueComment: (args: {
+      issueId: string
+      body: string
+    }): Promise<{ ok: true; id: string } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('linear:addIssueComment', args),
+
+    issueComments: (args: { issueId: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('linear:issueComments', args),
+
+    listTeams: (): Promise<unknown[]> => ipcRenderer.invoke('linear:listTeams'),
+
+    teamStates: (args: { teamId: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('linear:teamStates', args),
+
+    teamLabels: (args: { teamId: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('linear:teamLabels', args),
+
+    teamMembers: (args: { teamId: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('linear:teamMembers', args)
   },
 
   starNag: {
@@ -465,7 +550,10 @@ const api = {
     set: (args: Record<string, unknown>): Promise<unknown> =>
       ipcRenderer.invoke('settings:set', args),
 
-    listFonts: (): Promise<string[]> => ipcRenderer.invoke('settings:listFonts')
+    listFonts: (): Promise<string[]> => ipcRenderer.invoke('settings:listFonts'),
+
+    previewGhosttyImport: (): Promise<GhosttyImportPreview> =>
+      ipcRenderer.invoke('settings:previewGhosttyImport')
   },
 
   codexAccounts: {
@@ -479,10 +567,32 @@ const api = {
       ipcRenderer.invoke('codexAccounts:select', args)
   },
 
+  claudeAccounts: {
+    list: (): Promise<unknown> => ipcRenderer.invoke('claudeAccounts:list'),
+    add: (): Promise<unknown> => ipcRenderer.invoke('claudeAccounts:add'),
+    reauthenticate: (args: { accountId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('claudeAccounts:reauthenticate', args),
+    remove: (args: { accountId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('claudeAccounts:remove', args),
+    select: (args: { accountId: string | null }): Promise<unknown> =>
+      ipcRenderer.invoke('claudeAccounts:select', args)
+  },
+
   cli: {
     getInstallStatus: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:getInstallStatus'),
     install: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:install'),
     remove: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:remove')
+  },
+
+  agentHooks: {
+    claudeStatus: (): Promise<AgentHookInstallStatus> =>
+      ipcRenderer.invoke('agentHooks:claudeStatus'),
+    codexStatus: (): Promise<AgentHookInstallStatus> =>
+      ipcRenderer.invoke('agentHooks:codexStatus'),
+    geminiStatus: (): Promise<AgentHookInstallStatus> =>
+      ipcRenderer.invoke('agentHooks:geminiStatus'),
+    cursorStatus: (): Promise<AgentHookInstallStatus> =>
+      ipcRenderer.invoke('agentHooks:cursorStatus')
   },
 
   preflight: {
@@ -498,7 +608,9 @@ const api = {
       agents: string[]
       addedPathSegments: string[]
       shellHydrationOk: boolean
-    }> => ipcRenderer.invoke('preflight:refreshAgents')
+    }> => ipcRenderer.invoke('preflight:refreshAgents'),
+    detectRemoteAgents: (args: { connectionId: string }): Promise<string[]> =>
+      ipcRenderer.invoke('preflight:detectRemoteAgents', args)
   },
 
   notifications: {
@@ -970,15 +1082,7 @@ const api = {
       excludePattern?: string
       maxResults?: number
       connectionId?: string
-    }): Promise<{
-      files: {
-        filePath: string
-        relativePath: string
-        matches: { line: number; column: number; matchLength: number; lineContent: string }[]
-      }[]
-      totalMatches: number
-      truncated: boolean
-    }> => ipcRenderer.invoke('fs:search', args),
+    }): Promise<SearchResult> => ipcRenderer.invoke('fs:search', args),
     importExternalPaths: (args: {
       sourcePaths: string[]
       destDir: string
@@ -1187,6 +1291,11 @@ const api = {
       ipcRenderer.on('ui:switchTab', listener)
       return () => ipcRenderer.removeListener('ui:switchTab', listener)
     },
+    onSwitchTerminalTab: (callback: (direction: 1 | -1) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, direction: 1 | -1) => callback(direction)
+      ipcRenderer.on('ui:switchTerminalTab', listener)
+      return () => ipcRenderer.removeListener('ui:switchTerminalTab', listener)
+    },
     onToggleStatusBar: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('ui:toggleStatusBar', listener)
@@ -1374,6 +1483,10 @@ const api = {
     }> => ipcRenderer.invoke('stats:summary')
   },
 
+  memory: {
+    getSnapshot: (): Promise<MemorySnapshot> => ipcRenderer.invoke('memory:getSnapshot')
+  },
+
   claudeUsage: {
     getScanState: (): Promise<unknown> => ipcRenderer.invoke('claudeUsage:getScanState'),
     setEnabled: (args: { enabled: boolean }): Promise<unknown> =>
@@ -1471,13 +1584,47 @@ const api = {
       remoteHost: string
       remotePort: number
       label?: string
-    }): Promise<unknown> => ipcRenderer.invoke('ssh:addPortForward', args),
+    }): Promise<PortForwardEntry> => ipcRenderer.invoke('ssh:addPortForward', args),
 
-    removePortForward: (args: { id: string }): Promise<boolean> =>
+    updatePortForward: (args: {
+      id: string
+      targetId: string
+      localPort: number
+      remoteHost: string
+      remotePort: number
+      label?: string
+    }): Promise<PortForwardEntry> => ipcRenderer.invoke('ssh:updatePortForward', args),
+
+    removePortForward: (args: { id: string }): Promise<PortForwardEntry | null> =>
       ipcRenderer.invoke('ssh:removePortForward', args),
 
-    listPortForwards: (args?: { targetId?: string }): Promise<unknown[]> =>
+    listPortForwards: (args?: { targetId?: string }): Promise<PortForwardEntry[]> =>
       ipcRenderer.invoke('ssh:listPortForwards', args),
+
+    listDetectedPorts: (args: { targetId: string }): Promise<DetectedPort[]> =>
+      ipcRenderer.invoke('ssh:listDetectedPorts', args),
+
+    onPortForwardsChanged: (
+      callback: (data: { targetId: string; forwards: PortForwardEntry[] }) => void
+    ): (() => void) => {
+      const handler = (
+        _event: Electron.IpcRendererEvent,
+        data: { targetId: string; forwards: PortForwardEntry[] }
+      ) => callback(data)
+      ipcRenderer.on('ssh:port-forwards-changed', handler)
+      return () => ipcRenderer.removeListener('ssh:port-forwards-changed', handler)
+    },
+
+    onDetectedPortsChanged: (
+      callback: (data: { targetId: string; ports: DetectedPort[] }) => void
+    ): (() => void) => {
+      const handler = (
+        _event: Electron.IpcRendererEvent,
+        data: { targetId: string; ports: DetectedPort[] }
+      ) => callback(data)
+      ipcRenderer.on('ssh:detected-ports-changed', handler)
+      return () => ipcRenderer.removeListener('ssh:detected-ports-changed', handler)
+    },
 
     browseDir: (args: {
       targetId: string
@@ -1520,6 +1667,42 @@ const api = {
   },
   e2e: {
     getConfig: () => preloadE2EConfig
+  },
+
+  agentStatus: {
+    /** Listen for agent status updates forwarded from native hook receivers. */
+    onSet: (
+      callback: (data: {
+        paneKey: string
+        tabId?: string
+        worktreeId?: string
+        state: AgentStatusState
+        prompt?: string
+        agentType?: string
+        toolName?: string
+        toolInput?: string
+        lastAssistantMessage?: string
+        interrupted?: boolean
+      }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: {
+          paneKey: string
+          tabId?: string
+          worktreeId?: string
+          state: AgentStatusState
+          prompt?: string
+          agentType?: string
+          toolName?: string
+          toolInput?: string
+          lastAssistantMessage?: string
+          interrupted?: boolean
+        }
+      ) => callback(data)
+      ipcRenderer.on('agentStatus:set', listener)
+      return () => ipcRenderer.removeListener('agentStatus:set', listener)
+    }
   }
 }
 

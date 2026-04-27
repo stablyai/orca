@@ -64,6 +64,46 @@ describe('SshPtyProvider', () => {
         env: { FOO: 'bar' }
       })
     })
+
+    it('reattaches an existing session and returns attach replay separately from snapshot', async () => {
+      mux.request.mockResolvedValue({ replay: 'buffered-output' })
+
+      const result = await provider.spawn({ cols: 80, rows: 24, sessionId: 'pty-old' })
+
+      expect(mux.request).toHaveBeenCalledWith('pty.attach', {
+        id: 'pty-old',
+        cols: 80,
+        rows: 24,
+        suppressReplayNotification: true
+      })
+      expect(result).toEqual({
+        id: 'pty-old',
+        isReattach: true,
+        replay: 'buffered-output'
+      })
+    })
+
+    it('falls back to fresh spawn when session reattach fails', async () => {
+      mux.request
+        .mockRejectedValueOnce(new Error('not found'))
+        .mockResolvedValueOnce({ id: 'pty-new' })
+
+      const result = await provider.spawn({ cols: 80, rows: 24, sessionId: 'pty-old' })
+
+      expect(mux.request).toHaveBeenNthCalledWith(1, 'pty.attach', {
+        id: 'pty-old',
+        cols: 80,
+        rows: 24,
+        suppressReplayNotification: true
+      })
+      expect(mux.request).toHaveBeenNthCalledWith(2, 'pty.spawn', {
+        cols: 80,
+        rows: 24,
+        cwd: undefined,
+        env: undefined
+      })
+      expect(result).toEqual({ id: 'pty-new', sessionExpired: true })
+    })
   })
 
   it('attach sends pty.attach request', async () => {

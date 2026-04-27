@@ -5,14 +5,22 @@
  * These functions depend only on their arguments (plus `rg` being on PATH),
  * so they are straightforward to test independently.
  */
-import { relative } from 'path'
-import { execFile, type ChildProcess } from 'child_process'
+import { spawn, execFile } from 'child_process'
+import {
+  buildRgArgs,
+  createAccumulator,
+  finalize,
+  ingestRgJsonLine,
+  SEARCH_TIMEOUT_MS as SHARED_SEARCH_TIMEOUT_MS
+} from '../shared/text-search'
+import type { SearchResult as SharedSearchResult } from '../shared/types'
 
 // ─── Constants ───────────────────────────────────────────────────────
 
 export const MAX_FILE_SIZE = 5 * 1024 * 1024
-export const SEARCH_TIMEOUT_MS = 15_000
-export const MAX_MATCHES_PER_FILE = 100
+// 10MB for relayed binaries (base64 → ~13.3MB frame payload at 16MB relay cap)
+export const MAX_PREVIEWABLE_BINARY_SIZE = 10 * 1024 * 1024
+export const SEARCH_TIMEOUT_MS = SHARED_SEARCH_TIMEOUT_MS
 export const DEFAULT_MAX_RESULTS = 2000
 
 export const IMAGE_MIME_TYPES: Record<string, string> = {
@@ -50,28 +58,19 @@ export type SearchOptions = {
   maxResults: number
 }
 
-type FileResult = {
-  filePath: string
-  relativePath: string
-  matches: {
-    line: number
-    column: number
-    matchLength: number
-    lineContent: string
-  }[]
-}
-
-export type SearchResult = {
-  files: FileResult[]
-  totalMatches: number
-  truncated: boolean
-}
+export type SearchResult = SharedSearchResult
 
 // ─── rg-based search ─────────────────────────────────────────────────
 
 /**
  * Run ripgrep (`rg`) with JSON output to collect text matches.
- * Returns a structured result that the relay can send to the client.
+ *
+ * Why `spawn` and not `execFile`: `execFile` buffers stdout internally and
+ * kills the child when `maxBuffer` is exceeded, even when 'data' listeners
+ * are attached. Under rg's verbose `--json` output, a 50MB buffer fills
+ * well before the match cap in large folders, and `execFile`'s silent
+ * buffer-exceeded error resolves the result as `truncated: false` despite
+ * dropping matches. See docs/design/share-text-search.md.
  */
 export function searchWithRg(
   rootPath: string,
@@ -79,65 +78,40 @@ export function searchWithRg(
   opts: SearchOptions
 ): Promise<SearchResult> {
   return new Promise((resolve) => {
-    const rgArgs = [
-      '--json',
-      '--hidden',
-      '--glob',
-      '!.git',
-      '--max-count',
-      String(MAX_MATCHES_PER_FILE),
-      '--max-filesize',
-      `${Math.floor(MAX_FILE_SIZE / 1024 / 1024)}M`
-    ]
-
-    if (!opts.caseSensitive) {
-      rgArgs.push('--ignore-case')
-    }
-    if (opts.wholeWord) {
-      rgArgs.push('--word-regexp')
-    }
-    if (!opts.useRegex) {
-      rgArgs.push('--fixed-strings')
-    }
-    if (opts.includePattern) {
-      for (const p of opts.includePattern
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean)) {
-        rgArgs.push('--glob', p)
-      }
-    }
-    if (opts.excludePattern) {
-      for (const p of opts.excludePattern
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean)) {
-        rgArgs.push('--glob', `!${p}`)
-      }
-    }
-    rgArgs.push('--', query, rootPath)
-
-    const fileMap = new Map<string, FileResult>()
-    let totalMatches = 0
-    let truncated = false
+    const rgArgs = buildRgArgs(query, rootPath, opts)
+    const acc = createAccumulator()
     let buffer = ''
     let resolved = false
-    let child: ChildProcess | null = null
 
-    const resolveOnce = () => {
+    // Why: spawn can throw synchronously on invalid options (e.g. bad cwd),
+    // which would leak out of the `new Promise` executor and leave the
+    // promise forever pending. Treat a synchronous throw as a clean
+    // "no results" fallback, the same way an async 'error' event is handled.
+    let child: ReturnType<typeof spawn>
+    try {
+      child = spawn('rg', rgArgs, {
+        cwd: rootPath,
+        stdio: ['ignore', 'pipe', 'pipe']
+      })
+    } catch {
+      resolve(finalize(acc))
+      return
+    }
+
+    const resolveOnce = (): void => {
       if (resolved) {
         return
       }
       resolved = true
       clearTimeout(killTimeout)
-      resolve({ files: Array.from(fileMap.values()), totalMatches, truncated })
+      resolve(finalize(acc))
     }
 
-    try {
-      child = execFile('rg', rgArgs, { maxBuffer: 50 * 1024 * 1024 })
-    } catch {
-      resolve({ files: [], totalMatches: 0, truncated: false })
-      return
+    const processLine = (line: string): void => {
+      const verdict = ingestRgJsonLine(line, rootPath, acc, opts.maxResults)
+      if (verdict === 'stop') {
+        child.kill()
+      }
     }
 
     child.stdout!.setEncoding('utf-8')
@@ -146,40 +120,7 @@ export function searchWithRg(
       const lines = buffer.split('\n')
       buffer = lines.pop() ?? ''
       for (const line of lines) {
-        if (!line || totalMatches >= opts.maxResults) {
-          continue
-        }
-        try {
-          const msg = JSON.parse(line)
-          if (msg.type !== 'match') {
-            continue
-          }
-          const data = msg.data
-          const absPath = data.path.text as string
-          const relPath = relative(rootPath, absPath).replace(/\\/g, '/')
-
-          let fileResult = fileMap.get(absPath)
-          if (!fileResult) {
-            fileResult = { filePath: absPath, relativePath: relPath, matches: [] }
-            fileMap.set(absPath, fileResult)
-          }
-          for (const sub of data.submatches) {
-            fileResult.matches.push({
-              line: data.line_number,
-              column: sub.start + 1,
-              matchLength: sub.end - sub.start,
-              lineContent: data.lines.text.replace(/\n$/, '')
-            })
-            totalMatches++
-            if (totalMatches >= opts.maxResults) {
-              truncated = true
-              child?.kill()
-              break
-            }
-          }
-        } catch {
-          /* skip malformed */
-        }
+        processLine(line)
       }
     })
     child.stderr!.on('data', () => {
@@ -187,126 +128,47 @@ export function searchWithRg(
     })
     child.once('error', () => resolveOnce())
     child.once('close', () => {
-      if (buffer && totalMatches < opts.maxResults) {
-        try {
-          const msg = JSON.parse(buffer)
-          if (msg.type === 'match') {
-            const data = msg.data
-            const absPath = data.path.text as string
-            const relPath = relative(rootPath, absPath).replace(/\\/g, '/')
-
-            let fileResult = fileMap.get(absPath)
-            if (!fileResult) {
-              fileResult = { filePath: absPath, relativePath: relPath, matches: [] }
-              fileMap.set(absPath, fileResult)
-            }
-            for (const sub of data.submatches) {
-              fileResult.matches.push({
-                line: data.line_number,
-                column: sub.start + 1,
-                matchLength: sub.end - sub.start,
-                lineContent: data.lines.text.replace(/\n$/, '')
-              })
-              totalMatches++
-              if (totalMatches >= opts.maxResults) {
-                truncated = true
-                break
-              }
-            }
-          }
-        } catch {
-          /* skip malformed */
-        }
+      if (buffer) {
+        processLine(buffer)
       }
       resolveOnce()
     })
 
     const killTimeout = setTimeout(() => {
-      truncated = true
-      child?.kill()
+      acc.truncated = true
+      child.kill()
     }, SEARCH_TIMEOUT_MS)
   })
 }
 
 // ─── rg availability check ──────────────────────────────────────────
 
-let rgAvailableCache: boolean | null = null
-
+// Why no cache: `rg --version` is a sub-10ms local spawn, and caching the
+// result caused a footgun — a negative cache persisted across rg installs
+// (forcing a relay restart), while a positive cache could mask an rg that
+// was uninstalled or broken mid-session. The `settled` flag below closes
+// the original race between 'error' and 'close' that the cache was added
+// to paper over, so re-checking per call is both simpler and safer.
 export function checkRgAvailable(): Promise<boolean> {
-  if (rgAvailableCache !== null) {
-    return Promise.resolve(rgAvailableCache)
-  }
   return new Promise((resolve) => {
+    let settled = false
     const child = execFile('rg', ['--version'])
     child.once('error', () => {
-      rgAvailableCache = false
+      if (settled) {
+        return
+      }
+      settled = true
       resolve(false)
     })
     child.once('close', (code) => {
-      if (rgAvailableCache !== null) {
+      if (settled) {
         return
       }
-      rgAvailableCache = code === 0
-      resolve(rgAvailableCache)
+      settled = true
+      resolve(code === 0)
     })
   })
 }
 
-// ─── rg-based file listing ───────────────────────────────────────────
-
-/**
- * List all non-ignored files under `rootPath` using ripgrep's `--files` mode.
- * Returns relative POSIX paths.
- */
-export function listFilesWithRg(rootPath: string): Promise<string[]> {
-  return new Promise((resolve) => {
-    const files: string[] = []
-    let buffer = ''
-    let done = false
-
-    const finish = () => {
-      if (done) {
-        return
-      }
-      done = true
-      clearTimeout(timer)
-      resolve(files)
-    }
-
-    const child = execFile(
-      'rg',
-      ['--files', '--hidden', '--glob', '!**/node_modules', '--glob', '!**/.git', rootPath],
-      { maxBuffer: 50 * 1024 * 1024 }
-    )
-
-    child.stdout!.setEncoding('utf-8')
-    child.stdout!.on('data', (chunk: string) => {
-      buffer += chunk
-      const lines = buffer.split('\n')
-      buffer = lines.pop() ?? ''
-      for (const line of lines) {
-        if (!line) {
-          continue
-        }
-        const relPath = relative(rootPath, line).replace(/\\/g, '/')
-        if (!relPath.startsWith('..')) {
-          files.push(relPath)
-        }
-      }
-    })
-    child.stderr!.on('data', () => {
-      /* drain */
-    })
-    child.once('error', () => finish())
-    child.once('close', () => {
-      if (buffer) {
-        const relPath = relative(rootPath, buffer.trim()).replace(/\\/g, '/')
-        if (relPath && !relPath.startsWith('..')) {
-          files.push(relPath)
-        }
-      }
-      finish()
-    })
-    const timer = setTimeout(() => child.kill(), 10_000)
-  })
-}
+// Moved to fs-handler-list-files.ts to keep this file under 300 lines (oxlint)
+export { listFilesWithRg, LIST_FILES_TIMEOUT_MS } from './fs-handler-list-files'

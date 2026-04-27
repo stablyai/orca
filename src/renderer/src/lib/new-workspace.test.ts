@@ -88,4 +88,28 @@ describe('getWorkspaceSeedName', () => {
       })
     ).toBe('workspace')
   })
+
+  it('uses the fallback name when no other seed source is available', () => {
+    expect(
+      getWorkspaceSeedName({
+        explicitName: '',
+        prompt: '',
+        linkedIssueNumber: null,
+        linkedPR: null,
+        fallbackName: 'Nautilus'
+      })
+    ).toBe('Nautilus')
+  })
+
+  it('prefers an explicit name over the fallback name', () => {
+    expect(
+      getWorkspaceSeedName({
+        explicitName: 'my-workspace',
+        prompt: '',
+        linkedIssueNumber: null,
+        linkedPR: null,
+        fallbackName: 'Nautilus'
+      })
+    ).toBe('my-workspace')
+  })
 })

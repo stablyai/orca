@@ -15,10 +15,17 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import type { Worktree, Repo } from '../../../../shared/types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
-import { buildWorktreeComparator } from './smart-sort'
+import { AGENT_DASHBOARD_ENABLED } from '../../../../shared/constants'
+import {
+  buildExplicitEntriesByTabId,
+  buildWorktreeComparator,
+  computeSmartScore
+} from './smart-sort'
 import {
   type GroupHeaderRow,
   type Row,
+  ALL_GROUP_KEY,
+  PINNED_GROUP_KEY,
   buildRows,
   getGroupKeyForWorktree
 } from './worktree-list-groups'
@@ -113,12 +120,28 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       return
     }
 
-    if (groupBy !== 'none') {
+    {
       const targetWorktree = worktrees.find((w) => w.id === pendingRevealWorktreeId)
-      if (targetWorktree) {
+      if (targetWorktree?.isPinned) {
+        // Why: pinned worktrees live in the dedicated "Pinned" section regardless
+        // of their PR-status / repo group. Only uncollapse the Pinned header
+        // itself — expanding the underlying status group would be surprising since
+        // the user intentionally collapsed it.
+        if (collapsedGroups.has(PINNED_GROUP_KEY)) {
+          toggleGroup(PINNED_GROUP_KEY)
+        }
+      } else if (targetWorktree && groupBy !== 'none') {
         const groupKey = getGroupKeyForWorktree(groupBy, targetWorktree, repoMap, prCache)
         if (groupKey && collapsedGroups.has(groupKey)) {
           toggleGroup(groupKey)
+        }
+      } else if (targetWorktree && groupBy === 'none') {
+        // Why: when any worktree is pinned, buildRows emits a sibling "All"
+        // header for the unpinned block (see worktree-list-groups.ts). If that
+        // header is collapsed, revealing an unpinned target would otherwise
+        // leave it hidden — uncollapse it so the card is actually visible.
+        if (collapsedGroups.has(ALL_GROUP_KEY)) {
+          toggleGroup(ALL_GROUP_KEY)
         }
       }
     }
@@ -160,9 +183,18 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
 
   const navigateWorktree = useCallback(
     (direction: 'up' | 'down') => {
-      const worktreeRows = rows.filter(
-        (r): r is Extract<Row, { type: 'item' }> => r.type === 'item'
-      )
+      // Why: derive the cycling order from an all-expanded layout, not the
+      // rendered rows. Otherwise Cmd+Shift+Up/Down would skip any worktree
+      // hidden in a collapsed group — in particular it couldn't cross the
+      // Pinned/All boundary when either section is collapsed. Reveal will
+      // uncollapse the target section (see pendingRevealWorktreeId effect).
+      const worktreeRows = buildRows(
+        groupBy,
+        worktrees,
+        repoMap,
+        prCache,
+        new Set<string>()
+      ).filter((r): r is Extract<Row, { type: 'item' }> => r.type === 'item')
       if (worktreeRows.length === 0) {
         return
       }
@@ -194,7 +226,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         virtualizer.scrollToIndex(rowIndex, { align: 'auto' })
       }
     },
-    [rows, activeWorktreeId, virtualizer]
+    [rows, activeWorktreeId, virtualizer, groupBy, worktrees, repoMap, prCache]
   )
 
   useEffect(() => {
@@ -521,8 +553,51 @@ const WorktreeList = React.memo(function WorktreeList() {
     }
 
     const currentTabs = state.tabsByWorktree
+    const now = Date.now()
+    // Why precompute: this is the hot sidebar sort. Array.sort invokes the
+    // comparator O(N log N) times, and the smart-score computation would
+    // otherwise scan `agentStatusByPaneKey` (O(E)) or do per-worktree O(T)
+    // index lookups on every call. Two layered optimizations:
+    //   1. Build the tabId → explicit-entries index ONCE (O(E)) so the
+    //      per-worktree scoring does cheap lookups instead of rescanning.
+    //   2. Precompute scores once per worktree (decorate-sort-undecorate) so
+    //      the comparator does O(1) map lookups instead of re-scoring per
+    //      comparison.
+    // Combined: O(E) index + O(N×T) scoring + O(N log N) sort, instead of
+    // O(N × E × T) per sortEpoch bump. Only smart mode uses the score map;
+    // other modes ignore it.
+    const agentStatusForSort = AGENT_DASHBOARD_ENABLED ? state.agentStatusByPaneKey : undefined
+    const explicitByTabId =
+      sortBy === 'smart' ? buildExplicitEntriesByTabId(agentStatusForSort) : undefined
+    const precomputedScores =
+      sortBy === 'smart'
+        ? new Map<string, number>(
+            nonArchivedWorktrees.map((w) => [
+              w.id,
+              computeSmartScore(
+                w,
+                currentTabs,
+                repoMap,
+                state.prCache,
+                now,
+                agentStatusForSort,
+                explicitByTabId
+              )
+            ])
+          )
+        : undefined
     nonArchivedWorktrees.sort(
-      buildWorktreeComparator(sortBy, currentTabs, repoMap, state.prCache, Date.now())
+      buildWorktreeComparator(
+        sortBy,
+        currentTabs,
+        repoMap,
+        state.prCache,
+        now,
+        null,
+        agentStatusForSort,
+        precomputedScores,
+        explicitByTabId
+      )
     )
     return nonArchivedWorktrees.map((w) => w.id)
     // debouncedSortEpoch is an intentional trigger: it's not read inside the

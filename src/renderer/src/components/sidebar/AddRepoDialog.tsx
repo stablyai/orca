@@ -316,6 +316,11 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
               setRemoteError(null)
             }}
             onAdd={handleAddRemoteRepo}
+            onOpenSshSettings={() => {
+              closeModal()
+              openSettingsTarget({ pane: 'ssh', repoId: null, sectionId: 'ssh' })
+              openSettingsPage()
+            }}
           />
         ) : step === 'clone' ? (
           <CloneStep
@@ -349,7 +354,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
             </DialogHeader>
 
             {hasWorktrees && (
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                   Existing worktrees
                 </p>

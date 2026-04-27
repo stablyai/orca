@@ -404,3 +404,70 @@ describe('removeWorktree state cleanup', () => {
     expect(store.getState().editorDrafts).toBe(drafts)
   })
 })
+
+// Why: ghostty "show until interact" model — BEL must raise the sidebar dot
+// even on the active worktree, and only clearWorktreeUnread (called from the
+// terminal pane on keystroke / pointerdown) dismisses it. Pins both halves
+// of that contract.
+describe('worktree unread (show-until-interact)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('markWorktreeUnread sets isUnread even when the worktree is active', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+    store.setState({
+      worktreesByRepo: { repo1: [wt] },
+      activeWorktreeId: wt.id
+    } as Partial<AppState>)
+
+    store.getState().markWorktreeUnread(wt.id)
+
+    const after = store.getState().worktreesByRepo.repo1[0]
+    expect(after.isUnread).toBe(true)
+    expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith(
+      expect.objectContaining({
+        worktreeId: wt.id,
+        updates: expect.objectContaining({ isUnread: true })
+      })
+    )
+  })
+
+  it('clearWorktreeUnread clears isUnread and persists the change', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      isUnread: true
+    })
+    store.setState({
+      worktreesByRepo: { repo1: [wt] },
+      activeWorktreeId: wt.id
+    } as Partial<AppState>)
+
+    store.getState().clearWorktreeUnread(wt.id)
+
+    const after = store.getState().worktreesByRepo.repo1[0]
+    expect(after.isUnread).toBe(false)
+    expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith(
+      expect.objectContaining({
+        worktreeId: wt.id,
+        updates: { isUnread: false }
+      })
+    )
+  })
+
+  it('clearWorktreeUnread is a no-op when already cleared', () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+    const initial = { repo1: [wt] }
+    store.setState({ worktreesByRepo: initial } as Partial<AppState>)
+
+    store.getState().clearWorktreeUnread(wt.id)
+
+    expect(store.getState().worktreesByRepo).toBe(initial)
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
+  })
+})

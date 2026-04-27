@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <a href="../README.md">English</a> · <a href="README.zh-CN.md">中文</a> · <a href="README.ja.md">日本語</a>
+  <a href="../README.md">English</a> · <a href="README.zh-CN.md">中文</a> · <a href="README.ja.md">日本語</a> · <a href="README.es.md">Español</a>
 </p>
 
 <p align="center">
@@ -68,6 +68,7 @@ Orca 支持任何 CLI Agent (_不仅限于以下列表_)。
 - **内置版本控制** — 查看 AI 生成的代码Diff，进行快速修改并直接提交，无需离开 Orca。
 - **集成 GitHub** — PR、Issues 和 Actions 检查会自动链接到对应的工作区。
 - **通知系统** — 当代理完成任务或需要关注时及时通知你。支持标记为未读稍后处理。
+- **SSH 支持** — 连接远程机器，直接在 Orca 中运行远程 Agent。
 
 ---
 
@@ -75,6 +76,18 @@ Orca 支持任何 CLI Agent (_不仅限于以下列表_)。
 
 - **[从 onOrca.dev 下载](https://onOrca.dev)**
 - 或者通过 **[GitHub Releases 页面](https://github.com/stablyai/orca/releases)** 下载最新的安装包。
+
+---
+
+## [全新] AI Diff 标注
+
+**直接在 AI 生成的 Diff 上添加批注。**
+
+在 AI 生成的 Diff 的任意一行添加你的反馈，然后发回给 Agent 进行修订。保持评审循环高效顺畅 — 无需复制行号，也无需切换上下文。
+
+<p align="center">
+  <img src="docs/assets/annotate-ai-diff.gif" alt="Orca AI Diff 标注 — 在 AI 生成的 Diff 上评论并将反馈发送给 Agent" width="800" />
+</p>
 
 ---
 

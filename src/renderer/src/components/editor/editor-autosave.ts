@@ -73,7 +73,7 @@ export function getOpenFilesForExternalFileChange(
     if (file.worktreeId !== target.worktreeId) {
       return false
     }
-    if (file.mode === 'edit') {
+    if (file.mode === 'edit' || file.mode === 'markdown-preview') {
       return file.filePath === absolutePath
     }
     if (file.mode === 'diff') {

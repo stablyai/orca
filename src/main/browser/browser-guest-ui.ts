@@ -10,6 +10,16 @@ import {
 
 type ResolveRenderer = (browserTabId: string) => Electron.WebContents | null
 
+function isTerminalTabSwitchChord(input: Electron.Input): boolean {
+  return (
+    Boolean(input.control) &&
+    !input.meta &&
+    !input.alt &&
+    !input.shift &&
+    (input.code === 'PageDown' || input.code === 'PageUp')
+  )
+}
+
 export function setupGuestContextMenu(args: {
   browserTabId: string
   guest: Electron.WebContents
@@ -225,6 +235,16 @@ export function setupGuestShortcutForwarding(args: {
       event.preventDefault()
       const renderer = resolveRenderer(browserTabId)
       renderer?.send('ui:worktreeHistoryNavigate', action.direction)
+      return
+    }
+
+    // Why: terminal-only tab switching is intentionally Ctrl+PageUp/PageDown on
+    // every platform. Handle it before the primary-modifier gate so macOS Ctrl
+    // (non-primary there) still forwards out of focused browser guests.
+    if (isTerminalTabSwitchChord(input)) {
+      event.preventDefault()
+      const renderer = resolveRenderer(browserTabId)
+      renderer?.send('ui:switchTerminalTab', input.code === 'PageDown' ? 1 : -1)
       return
     }
 

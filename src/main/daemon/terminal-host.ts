@@ -1,4 +1,5 @@
 import { Session, type SubprocessHandle } from './session'
+import { normalizePtySize } from './daemon-pty-size'
 import type { SessionInfo, TerminalSnapshot, ShellReadyState } from './types'
 import { SessionNotFoundError } from './types'
 
@@ -11,6 +12,11 @@ export type CreateOrAttachOptions = {
   cwd?: string
   env?: Record<string, string>
   command?: string
+  /** Explicit shell the renderer asked for (e.g. 'wsl.exe' for "New WSL
+   *  terminal" from the "+" menu). Forwarded to the subprocess spawner so the
+   *  daemon path honors per-tab shell selection the same way LocalPtyProvider
+   *  does. */
+  shellOverride?: string
   shellReadySupported?: boolean
   streamClient: { onData: (data: string) => void; onExit: (code: number) => void }
 }
@@ -31,16 +37,23 @@ export type TerminalHostOptions = {
     cwd?: string
     env?: Record<string, string>
     command?: string
+    shellOverride?: string
   }) => SubprocessHandle
+  // Why: on graceful shutdown, the host writes final checkpoints for all live
+  // sessions before killing them. This bypasses the RPC round-trip — the daemon
+  // writes checkpoints in-process, guaranteeing completion before teardown.
+  onFinalCheckpoint?: (sessionId: string, snapshot: TerminalSnapshot) => void
 }
 
 export class TerminalHost {
   private sessions = new Map<string, Session>()
   private killedTombstones = new Map<string, number>()
   private spawnSubprocess: TerminalHostOptions['spawnSubprocess']
+  private onFinalCheckpoint: TerminalHostOptions['onFinalCheckpoint']
 
   constructor(opts: TerminalHostOptions) {
     this.spawnSubprocess = opts.spawnSubprocess
+    this.onFinalCheckpoint = opts.onFinalCheckpoint
   }
 
   async createOrAttach(opts: CreateOrAttachOptions): Promise<CreateOrAttachResult> {
@@ -72,20 +85,22 @@ export class TerminalHost {
 
     // Clear tombstone if re-creating a killed session
     this.killedTombstones.delete(opts.sessionId)
+    const size = normalizePtySize(opts.cols, opts.rows)
 
     const subprocess = this.spawnSubprocess({
       sessionId: opts.sessionId,
-      cols: opts.cols,
-      rows: opts.rows,
+      cols: size.cols,
+      rows: size.rows,
       cwd: opts.cwd,
       env: opts.env,
-      command: opts.command
+      command: opts.command,
+      shellOverride: opts.shellOverride
     })
 
     const session = new Session({
       sessionId: opts.sessionId,
-      cols: opts.cols,
-      rows: opts.rows,
+      cols: size.cols,
+      rows: size.rows,
       subprocess,
       shellReadySupported: opts.shellReadySupported ?? false
     })
@@ -99,7 +114,13 @@ export class TerminalHost {
       // the daemon keeps for the pane. Session.write() handles the shell-ready
       // barrier for supported shells and falls back to an immediate write for
       // unsupported ones.
-      session.write(opts.command.endsWith('\n') ? opts.command : `${opts.command}\n`)
+      // Why CR on Windows: PowerShell's PSReadLine and cmd.exe submit the line
+      // on CR (`\r`); a bare LF leaves the command typed but unsubmitted, so
+      // the user would need to press Enter after Orca launches the agent or
+      // setup script. POSIX shells accept CR as Enter under ICRNL.
+      const submit = process.platform === 'win32' ? '\r' : '\n'
+      const endsWithSubmit = opts.command.endsWith('\r') || opts.command.endsWith('\n')
+      session.write(endsWithSubmit ? opts.command : `${opts.command}${submit}`)
     }
 
     return {
@@ -142,6 +163,17 @@ export class TerminalHost {
     this.getAliveSession(sessionId).clearScrollback()
   }
 
+  // Why: unlike getAliveSession (which throws), this returns null for dead/missing
+  // sessions. Checkpoint is best-effort — a session that exited between the timer
+  // firing and the RPC arriving should not throw.
+  getSnapshot(sessionId: string): TerminalSnapshot | null {
+    const session = this.sessions.get(sessionId)
+    if (!session || !session.isAlive) {
+      return null
+    }
+    return session.getSnapshot()
+  }
+
   isKilled(sessionId: string): boolean {
     return this.killedTombstones.has(sessionId)
   }
@@ -169,6 +201,24 @@ export class TerminalHost {
   }
 
   dispose(): void {
+    // Why: write final checkpoints before killing sessions so graceful shutdown
+    // has zero data loss. The checkpoint callback writes synchronously to disk.
+    if (this.onFinalCheckpoint) {
+      for (const [sessionId, session] of this.sessions) {
+        if (!session.isAlive) {
+          continue
+        }
+        const snapshot = session.getSnapshot()
+        if (snapshot) {
+          try {
+            this.onFinalCheckpoint(sessionId, snapshot)
+          } catch {
+            // Best-effort — don't block shutdown
+          }
+        }
+      }
+    }
+
     for (const [, session] of this.sessions) {
       session.detachAllClients()
       session.kill()

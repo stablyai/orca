@@ -21,7 +21,8 @@ const {
   unstageFileMock,
   bulkUnstageFilesMock,
   discardChangesMock,
-  listWorktreesMock
+  listWorktreesMock,
+  getSshFilesystemProviderMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   trashItemMock: vi.fn(),
@@ -40,7 +41,8 @@ const {
   unstageFileMock: vi.fn(),
   bulkUnstageFilesMock: vi.fn(),
   discardChangesMock: vi.fn(),
-  listWorktreesMock: vi.fn()
+  listWorktreesMock: vi.fn(),
+  getSshFilesystemProviderMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -75,6 +77,14 @@ vi.mock('../git/status', () => ({
 
 vi.mock('../git/worktree', () => ({
   listWorktrees: listWorktreesMock
+}))
+
+vi.mock('../providers/ssh-filesystem-dispatch', () => ({
+  getSshFilesystemProvider: getSshFilesystemProviderMock
+}))
+
+vi.mock('../providers/ssh-git-dispatch', () => ({
+  getSshGitProvider: vi.fn().mockReturnValue(null)
 }))
 
 import { registerFilesystemHandlers } from './filesystem'
@@ -122,7 +132,8 @@ describe('registerFilesystemHandlers', () => {
       unstageFileMock,
       bulkUnstageFilesMock,
       discardChangesMock,
-      listWorktreesMock
+      listWorktreesMock,
+      getSshFilesystemProviderMock
     ]) {
       mock.mockReset()
     }
@@ -467,6 +478,28 @@ describe('registerFilesystemHandlers', () => {
       mergeBase: 'merge-base-oid',
       filePath: path.join('src', 'file.ts'),
       oldPath: path.join('src', 'old-file.ts')
+    })
+  })
+
+  // Why: the original SSH Quick Open bug had two halves — relay-side policy
+  // drift AND the main dispatcher silently dropping excludePaths before the
+  // provider saw them. This test guards the second half: regardless of
+  // relay behavior, a new linked worktree under the root must be forwarded
+  // so the remote scan can prune it. See docs/design/share-quick-open-file-listing.md.
+  it('fs:listFiles forwards excludePaths to the SSH filesystem provider', async () => {
+    const listFilesMock = vi.fn().mockResolvedValue([])
+    getSshFilesystemProviderMock.mockReturnValue({ listFiles: listFilesMock })
+
+    registerFilesystemHandlers(store as never)
+
+    await handlers.get('fs:listFiles')!(null, {
+      rootPath: '/home/user/repo',
+      connectionId: 'conn-1',
+      excludePaths: ['/home/user/repo/worktrees/feature']
+    })
+
+    expect(listFilesMock).toHaveBeenCalledWith('/home/user/repo', {
+      excludePaths: ['/home/user/repo/worktrees/feature']
     })
   })
 })

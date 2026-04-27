@@ -5,6 +5,9 @@ place while this surface is still evolving. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowRight,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   CircleDot,
   EllipsisVertical,
   ExternalLink,
@@ -18,10 +21,18 @@ import {
   X
 } from 'lucide-react'
 import { toast } from 'sonner'
+
 import { useAppStore } from '@/store'
 import { useRepoMap } from '@/store/selectors'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select'
 import {
   Dialog,
   DialogContent,
@@ -37,16 +48,24 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import RepoMultiCombobox from '@/components/ui/repo-multi-combobox'
+import TeamMultiCombobox from '@/components/ui/team-multi-combobox'
 import RepoDotLabel from '@/components/repo/RepoDotLabel'
 import { stripRepoQualifiers } from '../../../shared/task-query'
 import GitHubItemDrawer from '@/components/GitHubItemDrawer'
 import LinearItemDrawer from '@/components/LinearItemDrawer'
 import { cn } from '@/lib/utils'
-import { getLinkedWorkItemSuggestedName, getTaskPresetQuery } from '@/lib/new-workspace'
+import {
+  getLinkedWorkItemSuggestedName,
+  getTaskPresetQuery,
+  PER_REPO_FETCH_LIMIT,
+  CROSS_REPO_DISPLAY_LIMIT
+} from '@/lib/new-workspace'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
 import { isGitRepoKind } from '../../../shared/repo-kind'
+import { useTeamStates } from '@/hooks/useIssueMetadata'
 import type { GitHubWorkItem, LinearIssue, TaskViewPresetId } from '../../../shared/types'
 import { shouldSuppressEnterSubmit } from '@/lib/new-workspace-enter-guard'
 
@@ -105,7 +124,7 @@ const LINEAR_PRESETS: LinearPreset[] = [
 ]
 
 const TASK_SEARCH_DEBOUNCE_MS = 300
-const WORK_ITEM_LIMIT = 36
+const LINEAR_ITEM_LIMIT = 36
 
 // Why: Intl.RelativeTimeFormat allocation is non-trivial, and previously we
 // built a new formatter per work-item row render. Hoisting to module scope
@@ -164,8 +183,425 @@ const LINEAR_PRIORITY_LABELS: Record<number, string> = {
   4: 'Low'
 }
 
-function getLinearPriorityLabel(priority: number): string {
-  return LINEAR_PRIORITY_LABELS[priority] ?? 'None'
+function GHStatusCell({
+  item,
+  repoPath
+}: {
+  item: GitHubWorkItem
+  repoPath: string | null
+}): React.JSX.Element {
+  const patchWorkItem = useAppStore((s) => s.patchWorkItem)
+  const [localState, setLocalState] = useState(item.state)
+  const [open, setOpen] = useState(false)
+  const reqRef = useRef(0)
+
+  useEffect(() => {
+    setLocalState(item.state)
+  }, [item.state])
+
+  const handleStateChange = useCallback(
+    (newState: 'open' | 'closed') => {
+      if (newState === localState || !repoPath || item.type !== 'issue') {
+        return
+      }
+      reqRef.current += 1
+      const reqId = reqRef.current
+      setLocalState(newState)
+      patchWorkItem(item.id, { state: newState })
+      window.api.gh
+        .updateIssue({ repoPath, number: item.number, updates: { state: newState } })
+        .then((result) => {
+          if (reqId !== reqRef.current) {
+            return
+          }
+          const typed = result as { ok?: boolean; error?: string }
+          if (typed && typed.ok === false) {
+            setLocalState(newState === 'closed' ? 'open' : 'closed')
+            patchWorkItem(item.id, { state: newState === 'closed' ? 'open' : 'closed' })
+            toast.error(typed.error ?? 'Failed to update state')
+          }
+        })
+        .catch(() => {
+          if (reqId !== reqRef.current) {
+            return
+          }
+          setLocalState(newState === 'closed' ? 'open' : 'closed')
+          patchWorkItem(item.id, { state: newState === 'closed' ? 'open' : 'closed' })
+          toast.error('Failed to update state')
+        })
+    },
+    [item.id, item.number, item.type, localState, repoPath, patchWorkItem]
+  )
+
+  if (item.type !== 'issue' || !repoPath) {
+    return (
+      <span
+        className={cn(
+          'rounded-full border px-2 py-0.5 text-[10px] font-medium opacity-70',
+          getTaskStatusTone(item)
+        )}
+      >
+        {getTaskStatusLabel(item)}
+      </span>
+    )
+  }
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          onClick={(e) => e.stopPropagation()}
+          className={cn(
+            'group/status inline-flex items-center gap-0.5 rounded-full border px-2 py-0.5 text-[10px] font-medium transition hover:brightness-125 hover:ring-1 hover:ring-white/10',
+            localState === 'closed'
+              ? 'border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-300'
+              : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
+          )}
+        >
+          {localState === 'closed' ? 'Closed' : 'Open'}
+          <ChevronDown className="size-2.5 opacity-50" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-36 p-1" align="start" onClick={(e) => e.stopPropagation()}>
+        <button
+          type="button"
+          onClick={() => {
+            handleStateChange('open')
+            setOpen(false)
+          }}
+          className={cn(
+            'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent',
+            localState === 'open' && 'bg-accent/50'
+          )}
+        >
+          <CircleDot className="size-3 text-emerald-500" />
+          Open
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            handleStateChange('closed')
+            setOpen(false)
+          }}
+          className={cn(
+            'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent',
+            localState === 'closed' && 'bg-accent/50'
+          )}
+        >
+          <CircleDot className="size-3 text-rose-500" />
+          Closed
+        </button>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+function LinearStatusCell({ issue }: { issue: LinearIssue }): React.JSX.Element {
+  const patchLinearIssue = useAppStore((s) => s.patchLinearIssue)
+  const fetchLinearIssue = useAppStore((s) => s.fetchLinearIssue)
+  const [localState, setLocalState] = useState(issue.state)
+  const reqRef = useRef(0)
+
+  useEffect(() => {
+    setLocalState(issue.state)
+  }, [issue.state])
+
+  const teamId = issue.team?.id || null
+  const states = useTeamStates(teamId)
+
+  const handleStateChange = useCallback(
+    (stateId: string) => {
+      const newState = states.data.find((s) => s.id === stateId)
+      if (!newState) {
+        return
+      }
+
+      const stateValue = { name: newState.name, type: newState.type, color: newState.color }
+      reqRef.current += 1
+      const reqId = reqRef.current
+
+      setLocalState(stateValue)
+      patchLinearIssue(issue.id, { state: stateValue })
+      window.api.linear
+        .updateIssue({ id: issue.id, updates: { stateId } })
+        .then((result) => {
+          if (reqId !== reqRef.current) {
+            return
+          }
+          const typed = result as { ok?: boolean; error?: string }
+          if (typed && typed.ok === false) {
+            setLocalState(issue.state)
+            patchLinearIssue(issue.id, { state: issue.state })
+            toast.error(typed.error ?? 'Failed to update status')
+          } else {
+            fetchLinearIssue(issue.id)
+          }
+        })
+        .catch(() => {
+          if (reqId !== reqRef.current) {
+            return
+          }
+          setLocalState(issue.state)
+          patchLinearIssue(issue.id, { state: issue.state })
+          toast.error('Failed to update status')
+        })
+    },
+    [issue.id, issue.state, states.data, patchLinearIssue, fetchLinearIssue]
+  )
+
+  const currentStateId = states.data.find(
+    (s) => s.name === localState.name && s.type === localState.type
+  )?.id
+
+  const [open, setOpen] = useState(false)
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          onClick={(e) => e.stopPropagation()}
+          disabled={states.loading}
+          className="group/status flex items-center gap-1.5 rounded-sm px-1 py-0.5 transition hover:bg-muted/60 disabled:opacity-50"
+        >
+          <span
+            className="inline-block size-2 shrink-0 rounded-full"
+            style={{ backgroundColor: localState.color }}
+          />
+          <span className="truncate text-xs text-muted-foreground">{localState.name}</span>
+          <ChevronDown className="size-2.5 shrink-0 text-muted-foreground opacity-50" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        className="popover-scroll-content scrollbar-sleek w-48 p-1"
+        align="start"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div>
+          {states.data.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => {
+                handleStateChange(s.id)
+                setOpen(false)
+              }}
+              className={cn(
+                'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent',
+                currentStateId === s.id && 'bg-accent/50'
+              )}
+            >
+              <span
+                className="inline-block size-2 rounded-full"
+                style={{ backgroundColor: s.color }}
+              />
+              {s.name}
+            </button>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+function LinearPriorityCell({ issue }: { issue: LinearIssue }): React.JSX.Element {
+  const patchLinearIssue = useAppStore((s) => s.patchLinearIssue)
+  const fetchLinearIssue = useAppStore((s) => s.fetchLinearIssue)
+  const [localPriority, setLocalPriority] = useState(issue.priority)
+  const [pending, setPending] = useState(false)
+  const reqRef = useRef(0)
+
+  useEffect(() => {
+    setLocalPriority(issue.priority)
+  }, [issue.priority])
+
+  const handlePriorityChange = useCallback(
+    (priority: number) => {
+      if (priority === localPriority) {
+        return
+      }
+      reqRef.current += 1
+      const reqId = reqRef.current
+      setLocalPriority(priority)
+      patchLinearIssue(issue.id, { priority })
+      setPending(true)
+      window.api.linear
+        .updateIssue({ id: issue.id, updates: { priority } })
+        .then((result) => {
+          if (reqId !== reqRef.current) {
+            return
+          }
+          const typed = result as { ok?: boolean; error?: string }
+          if (typed && typed.ok === false) {
+            setLocalPriority(issue.priority)
+            patchLinearIssue(issue.id, { priority: issue.priority })
+            toast.error(typed.error ?? 'Failed to update priority')
+          } else {
+            fetchLinearIssue(issue.id)
+          }
+        })
+        .catch(() => {
+          if (reqId !== reqRef.current) {
+            return
+          }
+          setLocalPriority(issue.priority)
+          patchLinearIssue(issue.id, { priority: issue.priority })
+          toast.error('Failed to update priority')
+        })
+        .finally(() => {
+          if (reqId !== reqRef.current) {
+            return
+          }
+          setPending(false)
+        })
+    },
+    [issue.id, issue.priority, localPriority, patchLinearIssue, fetchLinearIssue]
+  )
+
+  const [open, setOpen] = useState(false)
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          onClick={(e) => e.stopPropagation()}
+          disabled={pending}
+          className="group/priority inline-flex items-center gap-0.5 rounded-sm px-1 py-0.5 text-xs text-muted-foreground transition hover:bg-muted/60 disabled:opacity-50"
+        >
+          {LINEAR_PRIORITY_LABELS[localPriority] ?? `P${localPriority}`}
+          {pending ? (
+            <LoaderCircle className="ml-1 inline size-3 animate-spin" />
+          ) : (
+            <ChevronDown className="size-2.5 shrink-0 opacity-50" />
+          )}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-36 p-1" align="start" onClick={(e) => e.stopPropagation()}>
+        {[0, 1, 2, 3, 4].map((p) => (
+          <button
+            key={p}
+            type="button"
+            onClick={() => {
+              handlePriorityChange(p)
+              setOpen(false)
+            }}
+            className={cn(
+              'flex w-full items-center rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent',
+              localPriority === p && 'bg-accent/50'
+            )}
+          >
+            {LINEAR_PRIORITY_LABELS[p]}
+          </button>
+        ))}
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+// Why: builds the page number array with ellipsis gaps, matching GitHub's
+// pagination pattern: always show first page, last page, and a window of
+// pages around the current page with "..." gaps between distant ranges.
+function getPageNumbers(current: number, total: number): (number | 'ellipsis')[] {
+  if (total <= 9) {
+    return Array.from({ length: total }, (_, i) => i)
+  }
+  const pages = new Set<number>()
+  pages.add(0)
+  pages.add(total - 1)
+  for (let i = Math.max(0, current - 2); i <= Math.min(total - 1, current + 2); i++) {
+    pages.add(i)
+  }
+  const sorted = [...pages].sort((a, b) => a - b)
+  const result: (number | 'ellipsis')[] = []
+  for (let i = 0; i < sorted.length; i++) {
+    if (i > 0 && sorted[i] - sorted[i - 1] > 1) {
+      result.push('ellipsis')
+    }
+    result.push(sorted[i])
+  }
+  return result
+}
+
+function PaginationBar({
+  currentPage,
+  totalPages,
+  loadingTarget,
+  onPageChange
+}: {
+  currentPage: number
+  totalPages: number
+  loadingTarget: number | null
+  onPageChange: (page: number) => void
+}): React.JSX.Element {
+  const pageNumbers = getPageNumbers(currentPage, totalPages)
+  const btnClass =
+    'inline-flex items-center gap-0.5 rounded-md px-2 py-1 text-sm text-muted-foreground transition hover:bg-muted/60 hover:text-foreground disabled:pointer-events-none disabled:opacity-40'
+  const numClass = (page: number): string =>
+    cn(
+      'inline-flex size-8 items-center justify-center rounded-md text-sm transition',
+      page === currentPage
+        ? 'bg-primary text-primary-foreground font-medium'
+        : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+    )
+
+  return (
+    <nav
+      aria-label="Pagination"
+      className="flex items-center justify-center gap-1 border-t border-border/50 px-4 py-3"
+    >
+      <button
+        type="button"
+        disabled={currentPage === 0 || loadingTarget !== null}
+        onClick={() => onPageChange(currentPage - 1)}
+        aria-label="Previous page"
+        className={btnClass}
+      >
+        <ChevronLeft className="size-4" />
+        Previous
+      </button>
+
+      {pageNumbers.map((entry, idx) =>
+        entry === 'ellipsis' ? (
+          <span
+            key={`ellipsis-${idx}`}
+            aria-hidden
+            className="inline-flex size-8 items-center justify-center text-sm text-muted-foreground"
+          >
+            &hellip;
+          </span>
+        ) : (
+          <button
+            key={entry}
+            type="button"
+            disabled={loadingTarget !== null && loadingTarget !== entry}
+            onClick={() => onPageChange(entry)}
+            aria-label={`Page ${entry + 1}`}
+            aria-current={entry === currentPage ? 'page' : undefined}
+            className={numClass(entry)}
+          >
+            {loadingTarget === entry ? (
+              <LoaderCircle className="size-3.5 animate-spin" />
+            ) : (
+              entry + 1
+            )}
+          </button>
+        )
+      )}
+
+      <button
+        type="button"
+        disabled={currentPage >= totalPages - 1 || loadingTarget !== null}
+        onClick={() => onPageChange(currentPage + 1)}
+        aria-label="Next page"
+        className={btnClass}
+      >
+        Next
+        <ChevronRight className="size-4" />
+      </button>
+    </nav>
+  )
 }
 
 export default function TaskPage(): React.JSX.Element {
@@ -190,7 +626,7 @@ export default function TaskPage(): React.JSX.Element {
   // keep the top band continuous with the sidebar header and tab rows. When
   // the sidebar is also collapsed, App.tsx floats its titlebar-left controls
   // (traffic lights, sidebar toggle, agent badge) over our strip — reserve
-  // the measured width of those controls on the left so our "Tasks" label
+  // the measured width of those controls on the left so the titlebar strip
   // never sits behind them. In non-workspace mode App.tsx already owns the
   // top titlebar, so skip our strip to avoid a duplicate band.
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
@@ -264,13 +700,10 @@ export default function TaskPage(): React.JSX.Element {
     [eligibleRepos, repoSelection]
   )
 
-  // Why: many single-repo-only affordances (new-issue dialog target, drawer
-  // repo path lookup, optimistic stub) need *a* repo. When exactly one is
-  // selected we use it; otherwise we pick the first to keep the UI
-  // functional, and disable the single-repo features that don't make sense
-  // cross-repo (new-issue button) explicitly.
+  // Why: many affordances (new-issue dialog default, drawer repo path lookup,
+  // optimistic stub) need *a* repo. First selected is used as the default;
+  // cross-repo dialogs still let the user override per-action.
   const primaryRepo = selectedRepos[0] ?? null
-  const isSingleRepo = selectedRepos.length === 1
 
   // Why: seed the preset + query from the user's saved default synchronously
   // so the first fetch effect issues exactly one request keyed to the final
@@ -280,7 +713,8 @@ export default function TaskPage(): React.JSX.Element {
   const defaultTaskViewPreset = settings?.defaultTaskViewPreset ?? 'all'
   const initialTaskQuery = getTaskPresetQuery(defaultTaskViewPreset)
 
-  const [taskSource, setTaskSource] = useState<TaskSource>(pageData.taskSource ?? 'github')
+  const defaultTaskSource = settings?.defaultTaskSource ?? 'github'
+  const [taskSource, setTaskSource] = useState<TaskSource>(pageData.taskSource ?? defaultTaskSource)
 
   // Why: pageData.taskSource changes when the user clicks a specific source
   // icon in the sidebar while the task page is already open. useState only
@@ -290,6 +724,15 @@ export default function TaskPage(): React.JSX.Element {
       setTaskSource(pageData.taskSource)
     }
   }, [pageData.taskSource])
+
+  // Why: settings load asynchronously — the useState initializer may capture
+  // null settings on fast navigation. Sync once settings arrive, but only
+  // when no explicit source was passed via sidebar icon click.
+  useEffect(() => {
+    if (!pageData.taskSource && settings?.defaultTaskSource) {
+      setTaskSource(settings.defaultTaskSource)
+    }
+  }, [settings?.defaultTaskSource, pageData.taskSource])
 
   const [taskSearchInput, setTaskSearchInput] = useState(initialTaskQuery)
   const [appliedTaskSearch, setAppliedTaskSearch] = useState(initialTaskQuery)
@@ -307,36 +750,108 @@ export default function TaskPage(): React.JSX.Element {
   // user clicking the refresh button (force=true) vs. re-running for any
   // other reason — e.g. a repo change while the nonce happens to be > 0.
   const lastFetchedNonceRef = useRef(-1)
-  // Why: seed from the SWR cache across every initially-selected repo so the
-  // first paint shows the merged-and-sorted view instantly when all repos are
-  // already cached. Any missing cache entry simply contributes nothing here
-  // and will be filled in by the effect's fetch.
-  const [workItems, setWorkItems] = useState<GitHubWorkItem[]>(() => {
+  // Why: pages holds all fetched pages of work items. Page 0 is seeded from
+  // cache for instant first paint; subsequent pages are loaded via date cursors.
+  const [pages, setPages] = useState<GitHubWorkItem[][]>(() => {
     const trimmed = initialTaskQuery.trim()
     const merged: GitHubWorkItem[] = []
     for (const r of selectedRepos) {
-      const cached = getCachedWorkItems(r.path, WORK_ITEM_LIMIT, trimmed)
+      const cached = getCachedWorkItems(r.path, PER_REPO_FETCH_LIMIT, trimmed)
       if (cached) {
         merged.push(...cached)
       }
     }
     if (merged.length === 0) {
-      return []
+      return [[]]
     }
-    return [...merged]
+    const page0 = [...merged]
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-      .slice(0, WORK_ITEM_LIMIT)
+      .slice(0, CROSS_REPO_DISPLAY_LIMIT)
+    return [page0]
   })
+  const [currentPage, setCurrentPage] = useState(0)
+  const [paginationLoading, setPaginationLoading] = useState(false)
+  const [loadingTargetPage, setLoadingTargetPage] = useState<number | null>(null)
+  const [totalItemCount, setTotalItemCount] = useState<number | null>(null)
+  const fetchWorkItemsNextPage = useAppStore((s) => s.fetchWorkItemsNextPage)
+  const countWorkItemsAcrossRepos = useAppStore((s) => s.countWorkItemsAcrossRepos)
+
   // Why: clicking a GitHub row opens this drawer for a read-only preview.
   // Drawer's "Use" button routes through the same direct-launch flow as the
   // row-level "Use" CTA so behavior is consistent regardless of entry point.
-  const [drawerWorkItem, setDrawerWorkItem] = useState<GitHubWorkItem | null>(null)
+  const [drawerWorkItemId, setDrawerWorkItemId] = useState<string | null>(null)
+  const [drawerWorkItemFallback, setDrawerWorkItemFallback] = useState<GitHubWorkItem | null>(null)
+
+  const workItemsCache = useAppStore((s) => s.workItemsCache)
+  const linearIssueCache = useAppStore((s) => s.linearIssueCache)
+  const linearSearchCache = useAppStore((s) => s.linearSearchCache)
+
+  // Why: derive the drawer's work item from the store cache so it reflects
+  // optimistic patches (e.g. table-cell status toggle). Falls back to the
+  // snapshot stored at click time for newly-created stubs not yet in the cache.
+  const drawerWorkItem = useMemo(() => {
+    if (!drawerWorkItemId) {
+      return null
+    }
+    for (const entry of Object.values(workItemsCache)) {
+      const found = entry?.data?.find((wi) => wi.id === drawerWorkItemId)
+      if (found) {
+        return found
+      }
+    }
+    return drawerWorkItemFallback
+  }, [drawerWorkItemId, workItemsCache, drawerWorkItemFallback])
+
+  const setDrawerWorkItem = useCallback((item: GitHubWorkItem | null) => {
+    setDrawerWorkItemId(item?.id ?? null)
+    setDrawerWorkItemFallback(item)
+  }, [])
   const [newIssueOpen, setNewIssueOpen] = useState(false)
   const [newIssueTitle, setNewIssueTitle] = useState('')
   const [newIssueBody, setNewIssueBody] = useState('')
   const [newIssueSubmitting, setNewIssueSubmitting] = useState(false)
+  const [newIssueRepoId, setNewIssueRepoId] = useState<string | null>(null)
 
-  const [drawerLinearIssue, setDrawerLinearIssue] = useState<LinearIssue | null>(null)
+  // Why: resolve the target repo from the user's choice, falling back to the
+  // first selected repo if the chosen id drops out of the selection while the
+  // dialog is open — keeps submit always landing on a valid repo.
+  const newIssueTargetRepo = useMemo(
+    () => selectedRepos.find((r) => r.id === newIssueRepoId) ?? selectedRepos[0] ?? null,
+    [selectedRepos, newIssueRepoId]
+  )
+
+  const [drawerLinearIssueId, setDrawerLinearIssueId] = useState<string | null>(null)
+  const [drawerLinearIssueFallback, setDrawerLinearIssueFallback] = useState<LinearIssue | null>(
+    null
+  )
+
+  // Why: the Linear table keeps its own fetched array, while cell edits patch
+  // the shared caches. Deriving the drawer item from those caches prevents a
+  // stale row snapshot from mounting in the drawer after status/priority edits.
+  const drawerLinearIssue = useMemo(() => {
+    if (!drawerLinearIssueId) {
+      return null
+    }
+
+    const cachedIssue = linearIssueCache[drawerLinearIssueId]?.data
+    if (cachedIssue) {
+      return cachedIssue
+    }
+
+    for (const entry of Object.values(linearSearchCache)) {
+      const found = entry?.data?.find((issue) => issue.id === drawerLinearIssueId)
+      if (found) {
+        return found
+      }
+    }
+
+    return drawerLinearIssueFallback
+  }, [drawerLinearIssueId, linearIssueCache, linearSearchCache, drawerLinearIssueFallback])
+
+  const setDrawerLinearIssue = useCallback((issue: LinearIssue | null) => {
+    setDrawerLinearIssueId(issue?.id ?? null)
+    setDrawerLinearIssueFallback(issue)
+  }, [])
 
   // Linear tab state
   const [linearIssues, setLinearIssues] = useState<LinearIssue[]>([])
@@ -345,6 +860,62 @@ export default function TaskPage(): React.JSX.Element {
   const [linearSearchInput, setLinearSearchInput] = useState('')
   const [activeLinearPreset, setActiveLinearPreset] = useState<LinearPresetId>('all')
   const [linearRefreshNonce, setLinearRefreshNonce] = useState(0)
+
+  // Why: fetch the full team list from the Linear API so the selector shows
+  // all teams the user belongs to, not just teams with issues in the current
+  // fetch window. Fetched once when the Linear tab is active and connected.
+  const [availableTeams, setAvailableTeams] = useState<{ id: string; name: string; key: string }[]>(
+    []
+  )
+
+  useEffect(() => {
+    if (taskSource !== 'linear' || !linearStatus.connected) {
+      return
+    }
+    void window.api.linear
+      .listTeams()
+      .then(setAvailableTeams)
+      .catch(() => {
+        console.warn('[TaskPage] Failed to fetch Linear teams')
+      })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskSource, linearStatus.connected])
+
+  const defaultLinearTeamSelection = settings?.defaultLinearTeamSelection
+  const [linearTeamSelection, setLinearTeamSelection] = useState<ReadonlySet<string>>(() => {
+    if (!defaultLinearTeamSelection) {
+      return new Set<string>()
+    }
+    return new Set(defaultLinearTeamSelection)
+  })
+
+  // Why: in sticky-all mode, auto-include all teams once the list arrives.
+  // In explicit-selection mode, the set is already correct from the initializer.
+  useEffect(() => {
+    if (availableTeams.length === 0) {
+      return
+    }
+    if (!defaultLinearTeamSelection) {
+      setLinearTeamSelection(new Set(availableTeams.map((t) => t.id)))
+    }
+  }, [availableTeams, defaultLinearTeamSelection])
+
+  const filteredLinearIssues = useMemo(
+    () => linearIssues.filter((issue) => linearTeamSelection.has(issue.team.id)),
+    [linearIssues, linearTeamSelection]
+  )
+  // New Linear issue dialog state
+  const [newLinearIssueOpen, setNewLinearIssueOpen] = useState(false)
+  const [newLinearIssueTitle, setNewLinearIssueTitle] = useState('')
+  const [newLinearIssueBody, setNewLinearIssueBody] = useState('')
+  const [newLinearIssueTeamId, setNewLinearIssueTeamId] = useState<string | null>(null)
+  const [newLinearIssueSubmitting, setNewLinearIssueSubmitting] = useState(false)
+
+  const newLinearIssueTargetTeam = useMemo(
+    () => availableTeams.find((t) => t.id === newLinearIssueTeamId) ?? availableTeams[0] ?? null,
+    [availableTeams, newLinearIssueTeamId]
+  )
+
   const [linearConnectOpen, setLinearConnectOpen] = useState(false)
   const [linearApiKeyDraft, setLinearApiKeyDraft] = useState('')
   const [linearConnectState, setLinearConnectState] = useState<'idle' | 'connecting' | 'error'>(
@@ -352,30 +923,103 @@ export default function TaskPage(): React.JSX.Element {
   )
   const [linearConnectError, setLinearConnectError] = useState<string | null>(null)
 
-  const filteredWorkItems = useMemo(() => {
-    if (!activeTaskPreset) {
-      return workItems
-    }
+  // Why: defense-in-depth safety net applied to the current page's items.
+  // The server-side query now includes is:issue / is:pr qualifiers so this
+  // filter is a no-op in the happy path. Kept as a guard against parser
+  // regressions or stale cache contamination.
+  const applyTypeFilter = useCallback(
+    (items: GitHubWorkItem[]) => {
+      if (!activeTaskPreset) {
+        return items
+      }
+      return items.filter((item) => {
+        if (activeTaskPreset === 'issues' || activeTaskPreset === 'my-issues') {
+          return item.type === 'issue'
+        }
+        if (
+          activeTaskPreset === 'prs' ||
+          activeTaskPreset === 'my-prs' ||
+          activeTaskPreset === 'review'
+        ) {
+          return item.type === 'pr'
+        }
+        return true
+      })
+    },
+    [activeTaskPreset]
+  )
 
-    return workItems.filter((item) => {
-      if (activeTaskPreset === 'issues') {
-        return item.type === 'issue'
+  const currentPageItems = useMemo(() => pages[currentPage] ?? [], [pages, currentPage])
+
+  const filteredWorkItems = useMemo(
+    () => applyTypeFilter(currentPageItems),
+    [applyTypeFilter, currentPageItems]
+  )
+
+  // Why: totalPages is derived from the search API count when available,
+  // so the pagination bar shows the full range (with ellipsis) upfront.
+  // Falls back to the loaded page count when the count hasn't returned yet.
+  const totalPages =
+    totalItemCount !== null
+      ? Math.max(pages.length, Math.ceil(totalItemCount / CROSS_REPO_DISPLAY_LIMIT))
+      : pages.length
+
+  // Why: loads the next page using the oldest item's updatedAt as a cursor.
+  // When targetPage is provided (from clicking a numbered page beyond loaded
+  // pages), it chains fetches until that page is loaded.
+  const handleLoadNextPage = useCallback(
+    async (targetPage?: number) => {
+      if (paginationLoading || selectedRepos.length === 0) {
+        return
       }
-      if (activeTaskPreset === 'review') {
-        return item.type === 'pr'
+      const lastPage = pages.at(-1)
+      if (!lastPage || lastPage.length === 0) {
+        return
       }
-      if (activeTaskPreset === 'my-issues') {
-        return item.type === 'issue'
+      const oldestItem = lastPage.at(-1)
+      if (!oldestItem?.updatedAt) {
+        return
       }
-      if (activeTaskPreset === 'prs') {
-        return item.type === 'pr'
+      const q = stripRepoQualifiers(appliedTaskSearch.trim())
+      const repoArgs = selectedRepos.map((r) => ({ repoId: r.id, path: r.path }))
+
+      const target = targetPage ?? pages.length
+      setPaginationLoading(true)
+      setLoadingTargetPage(target)
+      try {
+        let cursor = oldestItem.updatedAt
+        let loadedPages = pages.length
+        const newPages: GitHubWorkItem[][] = []
+
+        while (loadedPages <= target) {
+          const { items } = await fetchWorkItemsNextPage(
+            repoArgs,
+            PER_REPO_FETCH_LIMIT,
+            CROSS_REPO_DISPLAY_LIMIT,
+            q,
+            cursor
+          )
+          if (items.length === 0) {
+            break
+          }
+          newPages.push(items)
+          cursor = items.at(-1)!.updatedAt
+          loadedPages += 1
+        }
+
+        if (newPages.length > 0) {
+          setPages((prev) => [...prev, ...newPages])
+          setCurrentPage(target < loadedPages ? target : loadedPages - 1)
+        }
+      } catch (err) {
+        console.error('Failed to load next page:', err)
+      } finally {
+        setPaginationLoading(false)
+        setLoadingTargetPage(null)
       }
-      if (activeTaskPreset === 'my-prs') {
-        return item.type === 'pr'
-      }
-      return true
-    })
-  }, [activeTaskPreset, workItems])
+    },
+    [paginationLoading, selectedRepos, pages, appliedTaskSearch, fetchWorkItemsNextPage]
+  )
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -405,7 +1049,7 @@ export default function TaskPage(): React.JSX.Element {
     const preMerged: GitHubWorkItem[] = []
     let anyUncached = false
     for (const r of selectedRepos) {
-      const cached = getCachedWorkItems(r.path, WORK_ITEM_LIMIT, q)
+      const cached = getCachedWorkItems(r.path, PER_REPO_FETCH_LIMIT, q)
       if (cached === null) {
         anyUncached = true
       } else {
@@ -415,13 +1059,15 @@ export default function TaskPage(): React.JSX.Element {
     // Why: always replace — if preMerged is empty (e.g. query just changed and
     // no repo has a cache entry for it), we clear the previous query's rows
     // rather than leaving them on screen under the spinner.
-    setWorkItems(
+    const page0 =
       preMerged.length > 0
         ? [...preMerged]
             .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-            .slice(0, WORK_ITEM_LIMIT)
+            .slice(0, CROSS_REPO_DISPLAY_LIMIT)
         : []
-    )
+    setPages([page0])
+    setCurrentPage(0)
+    setTotalItemCount(null)
     setTasksError(null)
     setFailedCount(0) // reset so a prior failure banner doesn't linger
     setTasksLoading(anyUncached)
@@ -431,14 +1077,15 @@ export default function TaskPage(): React.JSX.Element {
     lastFetchedNonceRef.current = taskRefreshNonce
 
     const repoArgs = selectedRepos.map((r) => ({ repoId: r.id, path: r.path }))
-    void fetchWorkItemsAcrossRepos(repoArgs, WORK_ITEM_LIMIT, q, {
+    void fetchWorkItemsAcrossRepos(repoArgs, PER_REPO_FETCH_LIMIT, CROSS_REPO_DISPLAY_LIMIT, q, {
       force: forceRefresh && taskRefreshNonce > 0
     })
       .then(({ items, failedCount: failed }) => {
         if (cancelled) {
           return
         }
-        setWorkItems(items)
+        setPages([items])
+        setCurrentPage(0)
         setFailedCount(failed)
         setTasksLoading(false)
       })
@@ -452,6 +1099,18 @@ export default function TaskPage(): React.JSX.Element {
         setFailedCount(0) // the per-repo banner would be misleading next to tasksError
         setTasksLoading(false)
       })
+
+    // Why: fire-and-forget count query in parallel with the items fetch.
+    // The search API is cached 120s server-side so this doesn't add
+    // meaningful latency or rate-limit pressure.
+    void countWorkItemsAcrossRepos(
+      selectedRepos.map((r) => ({ path: r.path })),
+      q
+    ).then((count) => {
+      if (!cancelled) {
+        setTotalItemCount(count)
+      }
+    })
 
     return () => {
       cancelled = true
@@ -542,7 +1201,7 @@ export default function TaskPage(): React.JSX.Element {
   )
 
   const handleCreateNewIssue = useCallback(async (): Promise<void> => {
-    if (!primaryRepo || !isSingleRepo) {
+    if (!newIssueTargetRepo) {
       return
     }
     const title = newIssueTitle.trim()
@@ -552,7 +1211,7 @@ export default function TaskPage(): React.JSX.Element {
     setNewIssueSubmitting(true)
     try {
       const result = await window.api.gh.createIssue({
-        repoPath: primaryRepo.path,
+        repoPath: newIssueTargetRepo.path,
         title,
         body: newIssueBody
       })
@@ -579,7 +1238,7 @@ export default function TaskPage(): React.JSX.Element {
       // has immediate content, then refine with the full `workItem` fetch.
       const stub: GitHubWorkItem = {
         id: `issue:${String(result.number)}`,
-        repoId: primaryRepo.id,
+        repoId: newIssueTargetRepo.id,
         type: 'issue',
         number: result.number,
         title,
@@ -590,9 +1249,9 @@ export default function TaskPage(): React.JSX.Element {
         author: null
       }
       setDrawerWorkItem(stub)
-      const stubRepoId = primaryRepo.id
+      const stubRepoId = newIssueTargetRepo.id
       void window.api.gh
-        .workItem({ repoPath: primaryRepo.path, number: result.number })
+        .workItem({ repoPath: newIssueTargetRepo.path, number: result.number })
         .then((full) => {
           if (full) {
             // Why: `full` is `Omit<GitHubWorkItem, 'repoId'>` (IPC shape).
@@ -607,11 +1266,70 @@ export default function TaskPage(): React.JSX.Element {
     } finally {
       setNewIssueSubmitting(false)
     }
-  }, [isSingleRepo, newIssueBody, newIssueSubmitting, newIssueTitle, primaryRepo])
+  }, [newIssueBody, newIssueSubmitting, newIssueTargetRepo, newIssueTitle, setDrawerWorkItem])
+
+  const handleCreateNewLinearIssue = useCallback(async (): Promise<void> => {
+    if (!newLinearIssueTargetTeam) {
+      return
+    }
+    const title = newLinearIssueTitle.trim()
+    if (!title || newLinearIssueSubmitting) {
+      return
+    }
+    setNewLinearIssueSubmitting(true)
+    try {
+      const result = await window.api.linear.createIssue({
+        teamId: newLinearIssueTargetTeam.id,
+        title,
+        description: newLinearIssueBody || undefined
+      })
+      if (!result.ok) {
+        toast.error(result.error || 'Failed to create issue.')
+        return
+      }
+      toast.success(`Created ${result.identifier}`, {
+        action: result.url
+          ? {
+              label: 'View',
+              onClick: () => window.open(result.url, '_blank')
+            }
+          : undefined
+      })
+      setNewLinearIssueOpen(false)
+      setNewLinearIssueTitle('')
+      setNewLinearIssueBody('')
+      setLinearRefreshNonce((n) => n + 1)
+
+      // Why: auto-open the new issue in the side drawer so the user sees
+      // exactly what was filed, mirroring the GitHub create-issue flow.
+      void window.api.linear
+        .getIssue({ id: result.id })
+        .then((full) => {
+          if (full) {
+            setDrawerLinearIssue(full)
+          }
+        })
+        .catch(() => {})
+    } finally {
+      setNewLinearIssueSubmitting(false)
+    }
+  }, [
+    newLinearIssueBody,
+    newLinearIssueSubmitting,
+    newLinearIssueTargetTeam,
+    newLinearIssueTitle,
+    setDrawerLinearIssue
+  ])
 
   useEffect(() => {
     // Why: when a modal is open, let it own Esc dismissal.
-    if (drawerWorkItem || drawerLinearIssue || newIssueOpen || activeModal !== 'none') {
+    if (
+      drawerWorkItem ||
+      drawerLinearIssue ||
+      newIssueOpen ||
+      newLinearIssueOpen ||
+      activeModal !== 'none'
+    ) {
       return
     }
 
@@ -645,7 +1363,14 @@ export default function TaskPage(): React.JSX.Element {
 
     window.addEventListener('keydown', onKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
-  }, [activeModal, closeTaskPage, drawerLinearIssue, drawerWorkItem, newIssueOpen])
+  }, [
+    activeModal,
+    closeTaskPage,
+    drawerLinearIssue,
+    drawerWorkItem,
+    newIssueOpen,
+    newLinearIssueOpen
+  ])
 
   // Why: check Linear connection status on mount so the UI can show the
   // correct connected/disconnected state without requiring a settings visit.
@@ -682,8 +1407,8 @@ export default function TaskPage(): React.JSX.Element {
     const trimmed = appliedLinearSearch.trim()
     const request =
       trimmed.length > 0
-        ? searchLinearIssues(trimmed, WORK_ITEM_LIMIT)
-        : listLinearIssues(activeLinearPreset, WORK_ITEM_LIMIT)
+        ? searchLinearIssues(trimmed, LINEAR_ITEM_LIMIT)
+        : listLinearIssues(activeLinearPreset, LINEAR_ITEM_LIMIT)
 
     void request
       .then((issues) => {
@@ -833,42 +1558,39 @@ export default function TaskPage(): React.JSX.Element {
               />
             ) : null}
             <div
-              className="flex h-full flex-1 items-center border-b border-border bg-card px-4 text-sm font-medium text-muted-foreground"
+              className="flex h-full flex-1 items-center border-b border-border bg-card"
               style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-            >
-              <span>Tasks</span>
-            </div>
+            />
           </div>
         ) : null}
 
-        {/* Why: Close sits in its own row below the titlebar strip so it can
-            never overlap the floating macOS traffic lights. Kept left-aligned
-            to stay out of the app sidebar on the right edge. */}
-        <div className="flex-none flex items-center justify-start px-5 pt-3 pb-1 md:px-8 md:pt-4">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-8 rounded-full"
-                onClick={closeTaskPage}
-                aria-label="Close tasks"
-              >
-                <X className="size-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={6}>
-              Close · Esc
-            </TooltipContent>
-          </Tooltip>
-        </div>
-
-        <div className="mx-auto flex w-full flex-1 flex-col min-h-0 px-5 pb-5 md:px-8 md:pb-7">
-          <div className="flex-none flex flex-col gap-5">
-            <section className="flex flex-col gap-4">
-              <div className="flex flex-col gap-4">
-                <div className="flex items-center justify-between">
+        <div className="mx-auto flex w-full flex-1 flex-col min-h-0 px-5 pt-3 pb-5 md:px-8 md:pt-3 md:pb-7">
+          <div className="flex-none flex flex-col gap-3">
+            <section className="flex flex-col gap-3">
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
+                    {/* Why: Close is anchored left in the same row as the
+                        source icons so the top chrome is one compact band.
+                        Left-aligned keeps it clear of the app sidebar on the
+                        right edge. */}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-7 rounded-full"
+                          onClick={closeTaskPage}
+                          aria-label="Close tasks"
+                        >
+                          <X className="size-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" sideOffset={6}>
+                        Close · Esc
+                      </TooltipContent>
+                    </Tooltip>
+                    <div className="mx-1 h-5 w-px bg-border/50" aria-hidden />
                     {SOURCE_OPTIONS.map((source) => {
                       const active = taskSource === source.id
                       return (
@@ -877,7 +1599,12 @@ export default function TaskPage(): React.JSX.Element {
                             <button
                               type="button"
                               disabled={source.disabled}
-                              onClick={() => setTaskSource(source.id)}
+                              onClick={() => {
+                                setTaskSource(source.id)
+                                void updateSettings({ defaultTaskSource: source.id }).catch(() => {
+                                  toast.error('Failed to save default task source.')
+                                })
+                              }}
                               aria-label={source.label}
                               className={cn(
                                 'group flex h-8 w-8 items-center justify-center rounded-md border transition',
@@ -897,31 +1624,47 @@ export default function TaskPage(): React.JSX.Element {
                       )
                     })}
                   </div>
-                  {/* Why: Linear issues are not repo-scoped, so the repo
-                      selector is only relevant for the GitHub tab. */}
-                  <div className={cn('w-[200px]', taskSource !== 'github' && 'invisible')}>
-                    <RepoMultiCombobox
-                      repos={eligibleRepos}
-                      selected={repoSelection}
-                      onChange={(next) => {
-                        setRepoSelection(next)
-                        // Why: persist the curated subset so the same set reopens
-                        // next launch. Sticky-all uses onSelectAll instead.
-                        void updateSettings({ defaultRepoSelection: [...next] }).catch(() => {
-                          toast.error('Failed to save repo selection.')
-                        })
-                      }}
-                      onSelectAll={() => {
-                        const allIds = new Set(eligibleRepos.map((r) => r.id))
-                        setRepoSelection(allIds)
-                        // Why: persist `null` so new repos added later are
-                        // automatically included — a frozen array would exclude them.
-                        void updateSettings({ defaultRepoSelection: null }).catch(() => {
-                          toast.error('Failed to save repo selection.')
-                        })
-                      }}
-                      triggerClassName="h-8 w-full rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
-                    />
+                  <div className="w-[200px]">
+                    {taskSource === 'github' ? (
+                      <RepoMultiCombobox
+                        repos={eligibleRepos}
+                        selected={repoSelection}
+                        onChange={(next) => {
+                          setRepoSelection(next)
+                          void updateSettings({ defaultRepoSelection: [...next] }).catch(() => {
+                            toast.error('Failed to save repo selection.')
+                          })
+                        }}
+                        onSelectAll={() => {
+                          const allIds = new Set(eligibleRepos.map((r) => r.id))
+                          setRepoSelection(allIds)
+                          void updateSettings({ defaultRepoSelection: null }).catch(() => {
+                            toast.error('Failed to save repo selection.')
+                          })
+                        }}
+                        triggerClassName="h-8 w-full rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
+                      />
+                    ) : availableTeams.length > 0 ? (
+                      <TeamMultiCombobox
+                        teams={availableTeams}
+                        selected={linearTeamSelection}
+                        onChange={(next) => {
+                          setLinearTeamSelection(next)
+                          void updateSettings({ defaultLinearTeamSelection: [...next] }).catch(
+                            () => {
+                              toast.error('Failed to save team selection.')
+                            }
+                          )
+                        }}
+                        onSelectAll={() => {
+                          setLinearTeamSelection(new Set(availableTeams.map((t) => t.id)))
+                          void updateSettings({ defaultLinearTeamSelection: null }).catch(() => {
+                            toast.error('Failed to save team selection.')
+                          })
+                        }}
+                        triggerClassName="h-8 w-full rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
+                      />
+                    ) : null}
                   </div>
                 </div>
 
@@ -968,9 +1711,10 @@ export default function TaskPage(): React.JSX.Element {
                               onClick={() => {
                                 setNewIssueTitle('')
                                 setNewIssueBody('')
+                                setNewIssueRepoId(primaryRepo?.id ?? null)
                                 setNewIssueOpen(true)
                               }}
-                              disabled={!primaryRepo || !isSingleRepo}
+                              disabled={!newIssueTargetRepo}
                               aria-label="New GitHub issue"
                               className="border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
                             >
@@ -978,9 +1722,7 @@ export default function TaskPage(): React.JSX.Element {
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent side="bottom" sideOffset={6}>
-                            {isSingleRepo
-                              ? 'New GitHub issue'
-                              : 'Select a single repo to create an issue'}
+                            New GitHub issue
                           </TooltipContent>
                         </Tooltip>
                         <Tooltip>
@@ -1063,27 +1805,51 @@ export default function TaskPage(): React.JSX.Element {
                           )
                         })}
                       </div>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={() => setLinearRefreshNonce((n) => n + 1)}
-                            disabled={linearLoading}
-                            aria-label="Refresh Linear issues"
-                            className="border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
-                          >
-                            {linearLoading ? (
-                              <LoaderCircle className="size-4 animate-spin" />
-                            ) : (
-                              <RefreshCw className="size-4" />
-                            )}
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom" sideOffset={6}>
-                          Refresh Linear issues
-                        </TooltipContent>
-                      </Tooltip>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={() => {
+                                setNewLinearIssueTitle('')
+                                setNewLinearIssueBody('')
+                                setNewLinearIssueTeamId(availableTeams[0]?.id ?? null)
+                                setNewLinearIssueOpen(true)
+                              }}
+                              disabled={availableTeams.length === 0}
+                              aria-label="New Linear issue"
+                              className="border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
+                            >
+                              <Plus className="size-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" sideOffset={6}>
+                            New Linear issue
+                          </TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={() => setLinearRefreshNonce((n) => n + 1)}
+                              disabled={linearLoading}
+                              aria-label="Refresh Linear issues"
+                              className="border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
+                            >
+                              {linearLoading ? (
+                                <LoaderCircle className="size-4 animate-spin" />
+                              ) : (
+                                <RefreshCw className="size-4" />
+                              )}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" sideOffset={6}>
+                            Refresh Linear issues
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
                     </div>
                     <div className="mt-3 flex items-center gap-3">
                       <div className="relative min-w-[320px] flex-1">
@@ -1279,14 +2045,7 @@ export default function TaskPage(): React.JSX.Element {
                         </div>
 
                         <div className="flex items-center">
-                          <span
-                            className={cn(
-                              'rounded-full border px-2 py-0.5 text-[10px] font-medium',
-                              getTaskStatusTone(item)
-                            )}
-                          >
-                            {getTaskStatusLabel(item)}
-                          </span>
+                          <GHStatusCell item={item} repoPath={itemRepo?.path ?? null} />
                         </div>
 
                         <Tooltip>
@@ -1329,7 +2088,7 @@ export default function TaskPage(): React.JSX.Element {
                               </button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                              <DropdownMenuItem onSelect={() => window.open(item.url, '_blank')}>
+                              <DropdownMenuItem onSelect={() => window.api.shell.openUrl(item.url)}>
                                 <ExternalLink className="size-4" />
                                 Open in browser
                               </DropdownMenuItem>
@@ -1340,6 +2099,22 @@ export default function TaskPage(): React.JSX.Element {
                     )
                   })}
                 </div>
+
+                {/* Pagination controls — GitHub-style with ellipsis */}
+                {filteredWorkItems.length > 0 && !tasksLoading && totalPages > 1 ? (
+                  <PaginationBar
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    loadingTarget={loadingTargetPage}
+                    onPageChange={(page) => {
+                      if (page < pages.length) {
+                        setCurrentPage(page)
+                      } else {
+                        void handleLoadNextPage(page)
+                      }
+                    }}
+                  />
+                ) : null}
               </div>
             </div>
           ) : !linearStatusChecked ? (
@@ -1435,8 +2210,19 @@ export default function TaskPage(): React.JSX.Element {
                   </div>
                 ) : null}
 
+                {!linearLoading && linearIssues.length > 0 && filteredLinearIssues.length === 0 ? (
+                  <div className="px-4 py-10 text-center">
+                    <p className="text-base font-medium text-foreground">
+                      No issues match the selected teams
+                    </p>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      Try selecting more teams or click &ldquo;All teams&rdquo;.
+                    </p>
+                  </div>
+                ) : null}
+
                 <div className="divide-y divide-border/50">
-                  {linearIssues.map((issue) => (
+                  {filteredLinearIssues.map((issue) => (
                     <div
                       key={issue.id}
                       role="button"
@@ -1479,21 +2265,12 @@ export default function TaskPage(): React.JSX.Element {
                         <span className="truncate">{issue.team.name}</span>
                       </div>
 
-                      <div className="flex items-center gap-1.5">
-                        {/* Why: render the status dot using the color Linear
-                              provides per-state so users recognise their workflow
-                              colours without a separate legend. */}
-                        <span
-                          className="inline-block size-2 shrink-0 rounded-full"
-                          style={{ backgroundColor: issue.state.color }}
-                        />
-                        <span className="truncate text-xs text-muted-foreground">
-                          {issue.state.name}
-                        </span>
+                      <div className="flex items-center">
+                        <LinearStatusCell issue={issue} />
                       </div>
 
-                      <div className="flex items-center text-xs text-muted-foreground">
-                        {getLinearPriorityLabel(issue.priority)}
+                      <div className="flex items-center">
+                        <LinearPriorityCell issue={issue} />
                       </div>
 
                       <Tooltip>
@@ -1530,8 +2307,8 @@ export default function TaskPage(): React.JSX.Element {
                               <EllipsisVertical className="size-4" />
                             </button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onSelect={() => window.open(issue.url, '_blank')}>
+                          <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                            <DropdownMenuItem onSelect={() => window.api.shell.openUrl(issue.url)}>
                               <ExternalLink className="size-4" />
                               Open in browser
                             </DropdownMenuItem>
@@ -1567,10 +2344,33 @@ export default function TaskPage(): React.JSX.Element {
           <DialogHeader>
             <DialogTitle>New GitHub issue</DialogTitle>
             <DialogDescription>
-              Opens a new issue in {primaryRepo?.displayName ?? 'this repository'}.
+              {selectedRepos.length > 1
+                ? 'Opens a new issue in the selected repository.'
+                : `Opens a new issue in ${newIssueTargetRepo?.displayName ?? 'this repository'}.`}
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3">
+            {selectedRepos.length > 1 ? (
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] font-medium text-muted-foreground">Repository</label>
+                <Select
+                  value={newIssueRepoId ?? undefined}
+                  onValueChange={(v) => setNewIssueRepoId(v)}
+                  disabled={newIssueSubmitting}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {selectedRepos.map((r) => (
+                      <SelectItem key={r.id} value={r.id}>
+                        <RepoDotLabel name={r.displayName} color={r.badgeColor} />
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-medium text-muted-foreground">Title</label>
               <Input
@@ -1612,11 +2412,114 @@ export default function TaskPage(): React.JSX.Element {
             </Button>
             <Button
               onClick={() => void handleCreateNewIssue()}
-              disabled={
-                !primaryRepo || !isSingleRepo || !newIssueTitle.trim() || newIssueSubmitting
-              }
+              disabled={!newIssueTargetRepo || !newIssueTitle.trim() || newIssueSubmitting}
             >
               {newIssueSubmitting ? (
+                <>
+                  <LoaderCircle className="size-4 animate-spin" />
+                  Creating…
+                </>
+              ) : (
+                'Create issue'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={newLinearIssueOpen}
+        onOpenChange={(open) => {
+          if (!newLinearIssueSubmitting) {
+            setNewLinearIssueOpen(open)
+          }
+        }}
+      >
+        <DialogContent
+          className="sm:max-w-lg"
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+              event.preventDefault()
+              void handleCreateNewLinearIssue()
+            }
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>New Linear issue</DialogTitle>
+            <DialogDescription>
+              {availableTeams.length > 1
+                ? 'Creates a new issue in the selected team.'
+                : `Creates a new issue in ${newLinearIssueTargetTeam?.name ?? 'your team'}.`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3">
+            {availableTeams.length > 1 ? (
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] font-medium text-muted-foreground">Team</label>
+                <Select
+                  value={newLinearIssueTeamId ?? undefined}
+                  onValueChange={(v) => setNewLinearIssueTeamId(v)}
+                  disabled={newLinearIssueSubmitting}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableTeams.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.key} — {t.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-medium text-muted-foreground">Title</label>
+              <Input
+                autoFocus
+                value={newLinearIssueTitle}
+                onChange={(e) => setNewLinearIssueTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                    e.preventDefault()
+                    void handleCreateNewLinearIssue()
+                  }
+                }}
+                placeholder="Short summary"
+                disabled={newLinearIssueSubmitting}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-medium text-muted-foreground">
+                Description (optional, markdown)
+              </label>
+              <textarea
+                value={newLinearIssueBody}
+                onChange={(e) => setNewLinearIssueBody(e.target.value)}
+                placeholder="What's going on?"
+                rows={6}
+                disabled={newLinearIssueSubmitting}
+                className="w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 resize-none max-h-60 overflow-y-auto"
+              />
+            </div>
+            <p className="text-[10px] text-muted-foreground">Cmd/Ctrl+Enter to submit.</p>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setNewLinearIssueOpen(false)}
+              disabled={newLinearIssueSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void handleCreateNewLinearIssue()}
+              disabled={
+                !newLinearIssueTargetTeam || !newLinearIssueTitle.trim() || newLinearIssueSubmitting
+              }
+            >
+              {newLinearIssueSubmitting ? (
                 <>
                   <LoaderCircle className="size-4 animate-spin" />
                   Creating…
@@ -1675,10 +2578,11 @@ export default function TaskPage(): React.JSX.Element {
             }
           }}
         >
-          <DialogHeader>
-            <DialogTitle>Connect Linear</DialogTitle>
+          <DialogHeader className="gap-3">
+            <DialogTitle className="leading-tight">Connect Linear</DialogTitle>
             <DialogDescription>
-              Paste a Personal API key to browse your assigned issues.
+              Paste a <strong className="font-semibold text-foreground">Personal API key</strong> to
+              browse your assigned issues.
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3">
@@ -1700,7 +2604,7 @@ export default function TaskPage(): React.JSX.Element {
               <p className="text-xs text-destructive">{linearConnectError}</p>
             )}
             <p className="text-xs text-muted-foreground">
-              Create a key at{' '}
+              Create one in{' '}
               <button
                 className="text-primary underline-offset-2 hover:underline"
                 onClick={() =>
@@ -1708,7 +2612,9 @@ export default function TaskPage(): React.JSX.Element {
                 }
               >
                 Linear Settings → Security
-              </button>
+              </button>{' '}
+              → <strong className="font-semibold text-foreground">New API key</strong> (not{' '}
+              <span className="text-foreground">New passkey</span>).
             </p>
             <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
               <Lock className="size-3 shrink-0" />

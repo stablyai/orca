@@ -1,7 +1,7 @@
 /* eslint-disable max-lines */
 import { ipcMain, shell } from 'electron'
 import { readdir, readFile, writeFile, stat, lstat } from 'fs/promises'
-import { extname, relative } from 'path'
+import { extname } from 'path'
 import type { ChildProcess } from 'child_process'
 import { wslAwareSpawn } from '../git/runner'
 import { parseWslPath, toWindowsWslPath } from '../wsl'
@@ -13,9 +13,16 @@ import type {
   GitDiffResult,
   GitStatusResult,
   SearchOptions,
-  SearchResult,
-  SearchFileResult
+  SearchResult
 } from '../../shared/types'
+import {
+  buildRgArgs,
+  createAccumulator,
+  DEFAULT_SEARCH_MAX_RESULTS,
+  finalize,
+  ingestRgJsonLine,
+  SEARCH_TIMEOUT_MS
+} from '../../shared/text-search'
 import {
   getStatus,
   detectConflictOperation,
@@ -45,9 +52,14 @@ import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
-const DEFAULT_SEARCH_MAX_RESULTS = 2000
-const MAX_MATCHES_PER_FILE = 100
-const SEARCH_TIMEOUT_MS = 15000
+// Why: previewable binaries (PDFs, images) are rendered by the viewer as
+// base64 blobs, not parsed as text — 5MB is tight for real-world PDFs, and
+// raising this cap only affects binary preview, not text/search paths.
+// The relay (SSH) uses a smaller 10MB cap because its JSON-RPC frames are
+// bounded by MAX_MESSAGE_SIZE = 16MB; the local IPC path has no such limit,
+// so 50MB covers real-world PDFs (specs, datasheets, image-heavy contracts).
+// See src/relay/fs-handler-utils.ts for the remote-side reasoning.
+const MAX_PREVIEWABLE_BINARY_SIZE = 50 * 1024 * 1024 // 50MB
 const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
@@ -58,10 +70,6 @@ const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
   '.bmp': 'image/bmp',
   '.ico': 'image/x-icon',
   '.pdf': 'application/pdf'
-}
-
-function normalizeRelativePath(path: string): string {
-  return path.replace(/[\\/]+/g, '/').replace(/^\/+/, '')
 }
 
 /**
@@ -124,14 +132,15 @@ export function registerFilesystemHandlers(store: Store): void {
       }
       const filePath = await resolveAuthorizedPath(args.filePath, store)
       const stats = await stat(filePath)
-      if (stats.size > MAX_FILE_SIZE) {
+      const mimeType = PREVIEWABLE_BINARY_MIME_TYPES[extname(filePath).toLowerCase()]
+      const sizeLimit = mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_FILE_SIZE
+      if (stats.size > sizeLimit) {
         throw new Error(
-          `File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit`
+          `File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB exceeds ${sizeLimit / 1024 / 1024}MB limit`
         )
       }
 
       const buffer = await readFile(filePath)
-      const mimeType = PREVIEWABLE_BINARY_MIME_TYPES[extname(filePath).toLowerCase()]
       if (mimeType) {
         return {
           content: buffer.toString('base64'),
@@ -275,44 +284,7 @@ export function registerFilesystemHandlers(store: Store): void {
       }
 
       return new Promise((resolvePromise) => {
-        const rgArgs: string[] = [
-          '--json',
-          '--hidden',
-          '--glob',
-          '!.git',
-          '--max-count',
-          String(MAX_MATCHES_PER_FILE),
-          '--max-filesize',
-          `${Math.floor(MAX_FILE_SIZE / 1024 / 1024)}M`
-        ]
-
-        if (!args.caseSensitive) {
-          rgArgs.push('--ignore-case')
-        }
-        if (args.wholeWord) {
-          rgArgs.push('--word-regexp')
-        }
-        if (!args.useRegex) {
-          rgArgs.push('--fixed-strings')
-        }
-        if (args.includePattern) {
-          for (const pat of args.includePattern
-            .split(',')
-            .map((s) => s.trim())
-            .filter(Boolean)) {
-            rgArgs.push('--glob', pat)
-          }
-        }
-        if (args.excludePattern) {
-          for (const pat of args.excludePattern
-            .split(',')
-            .map((s) => s.trim())
-            .filter(Boolean)) {
-            rgArgs.push('--glob', `!${pat}`)
-          }
-        }
-
-        rgArgs.push('--', args.query, rootPath)
+        const rgArgs = buildRgArgs(args.query, rootPath, args)
 
         // Why: search requests are fired on each query/options change. If the
         // previous ripgrep process keeps running, it can continue streaming and
@@ -321,12 +293,18 @@ export function registerFilesystemHandlers(store: Store): void {
         // experience in large repos.
         activeTextSearches.get(searchKey)?.kill()
 
-        const fileMap = new Map<string, SearchFileResult>()
-        let totalMatches = 0
-        let truncated = false
+        const acc = createAccumulator()
         let stdoutBuffer = ''
         let resolved = false
         let child: ChildProcess | null = null
+
+        // Why: when rg runs inside WSL, output paths are Linux-native
+        // (e.g. /home/user/repo/src/file.ts). Translate them back to
+        // Windows UNC paths so path.relative() and Node fs APIs work.
+        const wslInfo = parseWslPath(rootPath)
+        const transformAbsPath = wslInfo
+          ? (p: string): string => toWindowsWslPath(p, wslInfo.distro)
+          : undefined
 
         const resolveOnce = (): void => {
           if (resolved) {
@@ -337,56 +315,13 @@ export function registerFilesystemHandlers(store: Store): void {
             activeTextSearches.delete(searchKey)
           }
           clearTimeout(killTimeout)
-          resolvePromise({
-            files: Array.from(fileMap.values()),
-            totalMatches,
-            truncated
-          })
+          resolvePromise(finalize(acc))
         }
 
         const processLine = (line: string): void => {
-          if (!line || totalMatches >= maxResults) {
-            return
-          }
-
-          try {
-            const msg = JSON.parse(line)
-            if (msg.type !== 'match') {
-              return
-            }
-
-            const data = msg.data
-            // Why: when rg runs inside WSL, output paths are Linux-native
-            // (e.g. /home/user/repo/src/file.ts). Translate them back to
-            // Windows UNC paths so path.relative() and Node fs APIs work.
-            const wslInfo = parseWslPath(rootPath)
-            const absPath: string = wslInfo
-              ? toWindowsWslPath(data.path.text, wslInfo.distro)
-              : data.path.text
-            const relPath = normalizeRelativePath(relative(rootPath, absPath))
-
-            let fileResult = fileMap.get(absPath)
-            if (!fileResult) {
-              fileResult = { filePath: absPath, relativePath: relPath, matches: [] }
-              fileMap.set(absPath, fileResult)
-            }
-
-            for (const sub of data.submatches) {
-              fileResult.matches.push({
-                line: data.line_number,
-                column: sub.start + 1,
-                matchLength: sub.end - sub.start,
-                lineContent: data.lines.text.replace(/\n$/, '')
-              })
-              totalMatches++
-              if (totalMatches >= maxResults) {
-                truncated = true
-                child?.kill()
-                break
-              }
-            }
-          } catch {
-            // skip malformed JSON lines
+          const verdict = ingestRgJsonLine(line, rootPath, acc, maxResults, transformAbsPath)
+          if (verdict === 'stop') {
+            child?.kill()
           }
         }
 
@@ -424,7 +359,7 @@ export function registerFilesystemHandlers(store: Store): void {
         // Why: if the timeout fires, the child is killed and results are partial.
         // We must mark them as truncated so the UI can indicate incomplete results.
         const killTimeout = setTimeout(() => {
-          truncated = true
+          acc.truncated = true
           child?.kill()
         }, SEARCH_TIMEOUT_MS)
       })
@@ -440,10 +375,17 @@ export function registerFilesystemHandlers(store: Store): void {
     ): Promise<string[]> => {
       if (args.connectionId) {
         const provider = getSshFilesystemProvider(args.connectionId)
+        // Why: when the SSH connection is not yet established (cold start) or
+        // temporarily disconnected, return [] so quick-open shows "No matching
+        // files" instead of an error banner. The file list will repopulate when
+        // the user re-opens quick-open after the connection is restored.
         if (!provider) {
-          throw new Error(`No filesystem provider for connection "${args.connectionId}"`)
+          return []
         }
-        return provider.listFiles(args.rootPath)
+        // Why: forward excludePaths through to the remote provider.
+        // Dropping it here would silently double-scan nested linked worktrees
+        // over SSH and contribute to timeout-induced partial results.
+        return provider.listFiles(args.rootPath, { excludePaths: args.excludePaths })
       }
       return listQuickOpenFiles(args.rootPath, store, args.excludePaths)
     }

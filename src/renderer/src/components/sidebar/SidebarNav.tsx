@@ -1,10 +1,10 @@
 import React from 'react'
-import { Github, ListChecks } from 'lucide-react'
+import { Github, List } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useRepoMap } from '@/store/selectors'
 import { cn } from '@/lib/utils'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
-import { getTaskPresetQuery } from '@/lib/new-workspace'
+import { getTaskPresetQuery, PER_REPO_FETCH_LIMIT } from '@/lib/new-workspace'
 
 function LinearIcon({ className }: { className?: string }): React.JSX.Element {
   return (
@@ -20,6 +20,7 @@ const SidebarNav = React.memo(function SidebarNav() {
   const repos = useAppStore((s) => s.repos)
   const repoMap = useRepoMap()
   const canBrowseTasks = repos.some((repo) => isGitRepoKind(repo))
+  const showTaskProviderIcons = useAppStore((s) => s.settings?.showTaskProviderIcons !== false)
 
   // Why: warm the GitHub work-item cache on hover/focus so by the time the
   // user's click finishes the round-trip has either completed or is already
@@ -42,7 +43,7 @@ const SidebarNav = React.memo(function SidebarNav() {
       prefetchWorkItems(
         firstGitRepo.id,
         firstGitRepo.path,
-        36,
+        PER_REPO_FETCH_LIMIT,
         getTaskPresetQuery(defaultTaskViewPreset)
       )
     }
@@ -65,45 +66,47 @@ const SidebarNav = React.memo(function SidebarNav() {
         disabled={!canBrowseTasks}
         aria-current={tasksActive ? 'page' : undefined}
         className={cn(
-          'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors',
+          'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
           tasksActive
             ? 'bg-sidebar-accent text-sidebar-accent-foreground'
             : 'text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground',
           !canBrowseTasks && 'cursor-not-allowed opacity-50 hover:bg-transparent'
         )}
       >
-        <ListChecks className="size-4 shrink-0" />
+        <List className="size-4 shrink-0" strokeWidth={2.25} />
         <span className="flex-1">Tasks</span>
-        <span className="flex items-center gap-1">
-          <span
-            role="button"
-            tabIndex={-1}
-            onClick={(e) => {
-              e.stopPropagation()
-              if (!canBrowseTasks) {
-                return
-              }
-              openTaskPage({ taskSource: 'github' })
-            }}
-            className="rounded p-0.5 text-muted-foreground/70 transition-colors hover:text-foreground"
-          >
-            <Github className="size-3.5" aria-hidden />
+        {showTaskProviderIcons ? (
+          <span className="flex items-center gap-1">
+            <span
+              role="button"
+              tabIndex={-1}
+              onClick={(e) => {
+                e.stopPropagation()
+                if (!canBrowseTasks) {
+                  return
+                }
+                openTaskPage({ taskSource: 'github' })
+              }}
+              className="rounded p-0.5 text-muted-foreground/70 transition-colors hover:text-foreground"
+            >
+              <Github className="size-3.5" aria-hidden />
+            </span>
+            <span
+              role="button"
+              tabIndex={-1}
+              onClick={(e) => {
+                e.stopPropagation()
+                if (!canBrowseTasks) {
+                  return
+                }
+                openTaskPage({ taskSource: 'linear' })
+              }}
+              className="rounded p-0.5 text-muted-foreground/70 transition-colors hover:text-foreground"
+            >
+              <LinearIcon className="size-3.5" />
+            </span>
           </span>
-          <span
-            role="button"
-            tabIndex={-1}
-            onClick={(e) => {
-              e.stopPropagation()
-              if (!canBrowseTasks) {
-                return
-              }
-              openTaskPage({ taskSource: 'linear' })
-            }}
-            className="rounded p-0.5 text-muted-foreground/70 transition-colors hover:text-foreground"
-          >
-            <LinearIcon className="size-3.5" />
-          </span>
-        </span>
+        ) : null}
       </button>
     </div>
   )

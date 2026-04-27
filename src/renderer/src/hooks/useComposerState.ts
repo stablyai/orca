@@ -30,9 +30,11 @@ import {
   getLinkedWorkItemSuggestedName,
   getSetupConfig,
   getWorkspaceSeedName,
+  PER_REPO_FETCH_LIMIT,
   renderIssueCommandTemplate,
   type LinkedWorkItemSummary
 } from '@/lib/new-workspace'
+import { getSuggestedCreatureName } from '@/components/sidebar/worktree-name-suggestions'
 
 export type UseComposerStateOptions = {
   initialRepoId?: string
@@ -91,6 +93,21 @@ export type ComposerCardProps = {
   onCreate: () => void
   note: string
   onNoteChange: (value: string) => void
+  baseBranch: string | undefined
+  onBaseBranchChange: (next: string | undefined) => void
+  /** Called when a PR is selected in the Start-from picker. Updates both
+   *  baseBranch and linkedWorkItem/linkedPR in one pass. */
+  onBaseBranchPrSelect: (baseBranch: string, item: GitHubWorkItem) => void
+  /** PR number selected via the Start-from picker (when applicable). Used so the
+   *  field can render "PR #N" copy. */
+  baseBranchLinkedPrNumber: number | null
+  /** Absolute path of the selected repo, used by Start-from picker for SWR. */
+  selectedRepoPath: string | null
+  /** True when the selected repo is a remote SSH repo; disables the PR tab in v1. */
+  selectedRepoIsRemote: boolean
+  /** Transient inline hint shown next to the Start-from trigger after a repo
+   *  switch resets a prior selection (e.g. "was PR #8778"). Null when none. */
+  startFromResetHint: string | null
   setupConfig: { source: 'yaml' | 'legacy'; command: string } | null
   requiresExplicitSetupChoice: boolean
   setupDecision: 'run' | 'skip' | null
@@ -149,7 +166,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       setRightSidebarTab: s.setRightSidebarTab,
       closeModal: s.closeModal,
       openSettingsPage: s.openSettingsPage,
-      openSettingsTarget: s.openSettingsTarget
+      openSettingsTarget: s.openSettingsTarget,
+      prefetchWorkItems: s.prefetchWorkItems
     }))
   )
   const {
@@ -162,13 +180,15 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     setRightSidebarTab,
     closeModal,
     openSettingsPage,
-    openSettingsTarget
+    openSettingsTarget,
+    prefetchWorkItems
   } = actions
 
   const repos = useAppStore((s) => s.repos)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
   const settings = useAppStore((s) => s.settings)
   const newWorkspaceDraft = useAppStore((s) => s.newWorkspaceDraft)
+  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
 
   const eligibleRepos = useMemo(() => repos.filter((repo) => isGitRepoKind(repo)), [repos])
   const draftRepoId = persistDraft ? (newWorkspaceDraft?.repoId ?? null) : null
@@ -225,6 +245,13 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     }
     return initialLinkedWorkItem?.type === 'pr' ? initialLinkedWorkItem.number : null
   })
+  const [baseBranch, setBaseBranch] = useState<string | undefined>(
+    persistDraft ? newWorkspaceDraft?.baseBranch : undefined
+  )
+  // Why: when a repo switch wipes a prior Start-from selection, surface the
+  // reset inline (e.g. "was PR #8778") so the change is recoverable visually
+  // instead of slipping past the user. Cleared on any subsequent selection.
+  const [startFromResetHint, setStartFromResetHint] = useState<string | null>(null)
   // Why: the long-form composer's agent selection is a required TuiAgent (not
   // null/blank), so 'blank' preferences from global settings must collapse to
   // the Claude default here — the blank-terminal affordance only lives in the
@@ -236,8 +263,21 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const [tuiAgent, setTuiAgent] = useState<TuiAgent>(
     persistDraft ? (newWorkspaceDraft?.agent ?? fallbackDefaultAgent) : fallbackDefaultAgent
   )
-  const detectedAgentList = useAppStore((s) => s.detectedAgentIds)
+  // Why: when the selected repo is remote (has a connectionId), read the
+  // per-connection agent list instead of the local one. This ensures the
+  // Create Workspace dialog shows agents installed on the SSH host, not the
+  // local machine. Derived from eligibleRepos directly because selectedRepo
+  // is declared later in this function.
+  const connectionId = eligibleRepos.find((r) => r.id === repoId)?.connectionId ?? null
+  const isRemote = typeof connectionId === 'string'
+  const detectedAgentList = useAppStore((s) => {
+    if (isRemote) {
+      return s.remoteDetectedAgentIds[connectionId] ?? null
+    }
+    return s.detectedAgentIds
+  })
   const ensureDetectedAgents = useAppStore((s) => s.ensureDetectedAgents)
+  const ensureRemoteDetectedAgents = useAppStore((s) => s.ensureRemoteDetectedAgents)
   const detectedAgentIds = useMemo<Set<TuiAgent> | null>(
     () => (detectedAgentList ? new Set(detectedAgentList) : null),
     [detectedAgentList]
@@ -266,6 +306,15 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const lastAutoNameRef = useRef<string>(
     persistDraft ? (newWorkspaceDraft?.name ?? initialName) : initialName
   )
+  // Why: tracks the note value we auto-prefilled from a Start-from PR pick, so
+  // a subsequent PR change can replace it without clobbering user-typed text.
+  const lastAutoNoteRef = useRef<string>('')
+  // Why: read the latest note inside handleBaseBranchPrSelect without adding
+  // `note` to its deps (which would rebuild the callback on every keystroke).
+  const noteRef = useRef<string>(note)
+  useEffect(() => {
+    noteRef.current = note
+  }, [note])
   const composerRef = useRef<HTMLDivElement | null>(null)
   const promptTextareaRef = useRef<HTMLTextAreaElement | null>(null)
   const nameInputRef = useRef<HTMLInputElement | null>(null)
@@ -307,15 +356,24 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const isSetupCheckPending = Boolean(repoId) && checkedHooksRepoId !== repoId
   const shouldWaitForSetupCheck = Boolean(selectedRepo) && isSetupCheckPending
 
+  // Why: when the user leaves the workspace name blank and provides no other
+  // seed source (prompt, linked issue/PR), pick a repo-scoped unique marine
+  // creature name so the workspace gets a distinct, readable identifier
+  // instead of colliding on a literal "workspace" default.
+  const fallbackCreatureName = useMemo(
+    () => getSuggestedCreatureName(repoId, worktreesByRepo, settings?.nestWorkspaces ?? true),
+    [repoId, worktreesByRepo, settings?.nestWorkspaces]
+  )
   const workspaceSeedName = useMemo(
     () =>
       getWorkspaceSeedName({
         explicitName: name,
         prompt: agentPrompt,
         linkedIssueNumber: parsedLinkedIssueNumber,
-        linkedPR
+        linkedPR,
+        fallbackName: fallbackCreatureName
       }),
-    [agentPrompt, linkedPR, name, parsedLinkedIssueNumber]
+    [agentPrompt, fallbackCreatureName, linkedPR, name, parsedLinkedIssueNumber]
   )
   // Why: when the user links an issue/PR but has not typed any prompt text
   // (attachments don't count), swap the generic "Linked work items:" context
@@ -396,12 +454,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       linkedWorkItem,
       agent: tuiAgent,
       linkedIssue,
-      linkedPR
+      linkedPR,
+      ...(baseBranch !== undefined ? { baseBranch } : {})
     })
   }, [
     persistDraft,
     agentPrompt,
     attachmentPaths,
+    baseBranch,
     linkedIssue,
     linkedPR,
     linkedWorkItem,
@@ -419,12 +479,13 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     }
   }, [eligibleRepos, repoId, setRepoId])
 
-  // Detect installed agents once on mount via the shared store slice so the
-  // page composer, quick-composer modal, settings pane, and tab-bar quick-launch
-  // share a single IPC round-trip and stay in sync on refresh.
+  // Why: detect agents for the selected repo. For local repos this runs once
+  // on mount (deduped by the store). For remote repos it re-runs when the
+  // selected repo changes so the agent list matches the SSH host.
   useEffect(() => {
     let cancelled = false
-    void ensureDetectedAgents().then((ids) => {
+    const detect = isRemote ? ensureRemoteDetectedAgents(connectionId) : ensureDetectedAgents()
+    void detect.then((ids) => {
       if (cancelled) {
         return
       }
@@ -438,10 +499,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     return () => {
       cancelled = true
     }
-    // Why: intentionally run only once on mount — detection is a best-effort
-    // PATH snapshot and does not need to re-run when the draft or settings change.
+    // Why: re-run when connectionId changes (user picks a different repo) so
+    // detection targets the correct host. Draft/settings deps are intentionally
+    // excluded — detection is a best-effort PATH snapshot.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [connectionId, isRemote])
 
   // Per-repo: load yaml hooks + issue command template.
   useEffect(() => {
@@ -489,6 +551,16 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       cancelled = true
     }
   }, [repoId])
+
+  // Why: warm the Start-from picker's PR cache on composer mount and whenever
+  // the selected repo changes so opening the picker paints instantly from
+  // cache. Local repos only — remote SSH repos disable the PR tab in v1.
+  useEffect(() => {
+    if (!selectedRepo?.path || selectedRepo.connectionId) {
+      return
+    }
+    prefetchWorkItems(selectedRepo.id, selectedRepo.path, PER_REPO_FETCH_LIMIT, 'is:pr is:open')
+  }, [prefetchWorkItems, selectedRepo?.connectionId, selectedRepo?.id, selectedRepo?.path])
 
   // Per-repo: resolve repo slug for GH URL mismatch detection.
   useEffect(() => {
@@ -832,12 +904,59 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
 
   const handleRepoChange = useCallback(
     (value: string): void => {
+      if (value === repoId) {
+        setRepoId(value)
+        return
+      }
+      // Why: capture a short descriptor of the prior Start-from selection so
+      // the field can render an inline reset (e.g. "was PR #8778") after the
+      // repo changes and the selection is wiped.
+      let hint: string | null = null
+      if (linkedWorkItem?.type === 'pr' && baseBranch) {
+        hint = `was PR #${linkedWorkItem.number}`
+      } else if (baseBranch) {
+        hint = `was ${baseBranch}`
+      }
       setRepoId(value)
       setLinkedIssue('')
       setLinkedPR(null)
       setLinkedWorkItem(null)
+      // Why: the Start-from picker is repo-scoped, so any prior branch/PR
+      // selection is meaningless in the new repo. Resetting to undefined
+      // makes the field fall back to the new repo's effective base ref.
+      setBaseBranch(undefined)
+      setStartFromResetHint(hint)
     },
-    [setRepoId]
+    [baseBranch, linkedWorkItem, repoId, setRepoId]
+  )
+
+  const handleBaseBranchChange = useCallback((next: string | undefined): void => {
+    setBaseBranch(next)
+    setStartFromResetHint(null)
+  }, [])
+
+  const handleBaseBranchPrSelect = useCallback(
+    (nextBaseBranch: string, item: GitHubWorkItem): void => {
+      setBaseBranch(nextBaseBranch)
+      setStartFromResetHint(null)
+      // Why: per spec, a PR selection in the Start-from picker is also a
+      // linkedWorkItem assignment. Reuse applyLinkedWorkItem so auto-name and
+      // linkedPR state stay in a single code path.
+      applyLinkedWorkItem(item)
+      // Why: starting a worktree from a PR is a strong hint for what the
+      // worktree's comment should surface (`orca worktree current`, sidebar).
+      // Prefill the note if it's empty or still equal to a prior auto-fill, so
+      // we don't overwrite anything the user has typed.
+      if (item.type === 'pr') {
+        const suggestedNote = `PR #${item.number} — ${item.title}`
+        const currentNote = noteRef.current
+        if (!currentNote.trim() || currentNote === lastAutoNoteRef.current) {
+          setNote(suggestedNote)
+          lastAutoNoteRef.current = suggestedNote
+        }
+      }
+    },
+    [applyLinkedWorkItem]
   )
 
   const handleOpenAgentSettings = useCallback((): void => {
@@ -886,7 +1005,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       const result = await createWorktree(
         repoId,
         workspaceName,
-        undefined,
+        baseBranch,
         (resolvedSetupDecision ?? 'inherit') as SetupDecision
       )
       const worktree = result.worktree
@@ -940,6 +1059,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       setCreating(false)
     }
   }, [
+    baseBranch,
     clearNewWorkspaceDraft,
     createWorktree,
     applyWorktreeMeta,
@@ -974,7 +1094,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         explicitName: name,
         prompt: '',
         linkedIssueNumber: null,
-        linkedPR: null
+        linkedPR: null,
+        fallbackName: fallbackCreatureName
       })
       if (
         !repoId ||
@@ -992,7 +1113,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         const result = await createWorktree(
           repoId,
           workspaceName,
-          undefined,
+          baseBranch,
           (resolvedSetupDecision ?? 'inherit') as SetupDecision
         )
         const worktree = result.worktree
@@ -1040,8 +1161,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     },
     [
       applyWorktreeMeta,
+      baseBranch,
       clearNewWorkspaceDraft,
       createWorktree,
+      fallbackCreatureName,
       name,
       note,
       onCreated,
@@ -1104,6 +1227,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     createDisabled,
     creating,
     onCreate: () => void submit(),
+    baseBranch,
+    onBaseBranchChange: handleBaseBranchChange,
+    onBaseBranchPrSelect: handleBaseBranchPrSelect,
+    baseBranchLinkedPrNumber:
+      linkedWorkItem?.type === 'pr' && baseBranch ? linkedWorkItem.number : null,
+    selectedRepoPath: selectedRepo?.path ?? null,
+    selectedRepoIsRemote: Boolean(selectedRepo?.connectionId),
+    startFromResetHint,
     note,
     onNoteChange: setNote,
     setupConfig,

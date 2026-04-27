@@ -399,7 +399,10 @@ export function useTabGroupWorkspaceModel({
       createSplitGroup,
       newBrowserTab: () => {
         const defaultUrl = useAppStore.getState().browserDefaultUrl ?? 'about:blank'
-        createBrowserTab(worktreeId, defaultUrl, { title: 'New Browser Tab' })
+        createBrowserTab(worktreeId, defaultUrl, {
+          title: 'New Browser Tab',
+          focusAddressBar: true
+        })
       },
       duplicateBrowserTab: (browserTabId: string) => {
         const state = useAppStore.getState()
@@ -431,6 +434,11 @@ export function useTabGroupWorkspaceModel({
       },
       newTerminalTab: () => {
         const terminal = createTab(worktreeId, groupId)
+        setActiveTab(terminal.id)
+        setActiveTabType('terminal')
+      },
+      newTerminalWithShell: (shellOverride: string) => {
+        const terminal = createTab(worktreeId, groupId, shellOverride)
         setActiveTab(terminal.id)
         setActiveTabType('terminal')
       },

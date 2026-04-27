@@ -11,11 +11,19 @@ import {
   Files,
   Copy,
   Check,
-  MessageSquare
+  MessageSquare,
+  ChevronDown
 } from 'lucide-react'
 import { ExternalLink } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import type { PRInfo, PRCheckDetail, PRComment } from '../../../../shared/types'
+import {
+  filterPRCommentsByAudience,
+  isAutomatedPRComment,
+  type PRCommentAudienceFilter
+} from './pr-comment-filters'
+import { useCheckDetailsResize } from './check-details-resize'
 
 export const PullRequestIcon = GitPullRequest
 
@@ -106,6 +114,10 @@ export function ChecksList({
   checks: PRCheckDetail[]
   checksLoading: boolean
 }): React.JSX.Element {
+  const [checksExpanded, setChecksExpanded] = useState(true)
+  const { detailsHeight, handleResizeStart } = useCheckDetailsResize(
+    checksExpanded && checks.length > 0
+  )
   const sorted = [...checks].sort(
     (a, b) =>
       (CHECK_SORT_ORDER[a.conclusion ?? 'pending'] ?? 3) -
@@ -123,7 +135,15 @@ export function ChecksList({
     <>
       {/* Checks Summary */}
       {checks.length > 0 && (
-        <div className="flex items-center gap-3 px-3 py-2 border-b border-border text-[10px] text-muted-foreground">
+        <button
+          type="button"
+          className="flex w-full items-center gap-3 border-b border-border px-3 py-2 text-left text-[10px] text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground"
+          onClick={() => setChecksExpanded((expanded) => !expanded)}
+          aria-expanded={checksExpanded}
+        >
+          <ChevronDown
+            className={cn('size-3 shrink-0 transition-transform', !checksExpanded && '-rotate-90')}
+          />
           {passingCount > 0 && (
             <span className="flex items-center gap-1">
               <CircleCheck className="size-3 text-emerald-500" />
@@ -142,7 +162,9 @@ export function ChecksList({
               {pendingCount} pending
             </span>
           )}
-        </div>
+          <span className="flex-1" />
+          {checksLoading && <LoaderCircle className="size-3 animate-spin text-muted-foreground" />}
+        </button>
       )}
 
       {/* Checks List */}
@@ -154,38 +176,54 @@ export function ChecksList({
         <div className="flex items-center justify-center py-8 text-[11px] text-muted-foreground">
           No checks configured
         </div>
-      ) : (
-        <div className="py-1">
-          {sorted.map((check) => {
-            const conclusion = check.conclusion ?? 'pending'
-            const Icon = CHECK_ICON[conclusion] ?? CircleDashed
-            const color = CHECK_COLOR[conclusion] ?? 'text-muted-foreground'
-            return (
-              <div
-                key={check.name}
-                className={cn(
-                  'flex items-center gap-2 px-3 py-1.5 hover:bg-accent/40 transition-colors',
-                  check.url && 'cursor-pointer'
-                )}
-                onClick={() => {
-                  if (check.url) {
-                    window.api.shell.openUrl(check.url)
-                  }
-                }}
-              >
-                <Icon
+      ) : !checksExpanded ? null : (
+        <>
+          <div
+            className="overflow-y-auto py-1 scrollbar-sleek"
+            style={{ maxHeight: detailsHeight }}
+          >
+            {sorted.map((check) => {
+              const conclusion = check.conclusion ?? 'pending'
+              const Icon = CHECK_ICON[conclusion] ?? CircleDashed
+              const color = CHECK_COLOR[conclusion] ?? 'text-muted-foreground'
+              return (
+                <div
+                  key={check.name}
                   className={cn(
-                    'size-3.5 shrink-0',
-                    color,
-                    conclusion === 'pending' && 'animate-spin'
+                    'flex items-center gap-2 px-3 py-1.5 hover:bg-accent/40 transition-colors',
+                    check.url && 'cursor-pointer'
                   )}
-                />
-                <span className="flex-1 truncate text-[12px] text-foreground">{check.name}</span>
-                {check.url && <ExternalLink className="size-3 text-muted-foreground/40 shrink-0" />}
-              </div>
-            )
-          })}
-        </div>
+                  onClick={() => {
+                    if (check.url) {
+                      window.api.shell.openUrl(check.url)
+                    }
+                  }}
+                >
+                  <Icon
+                    className={cn(
+                      'size-3.5 shrink-0',
+                      color,
+                      conclusion === 'pending' && 'animate-spin'
+                    )}
+                  />
+                  <span className="flex-1 truncate text-[12px] text-foreground">{check.name}</span>
+                  {check.url && (
+                    <ExternalLink className="size-3 shrink-0 text-muted-foreground/40" />
+                  )}
+                </div>
+              )
+            })}
+          </div>
+          <div
+            role="separator"
+            aria-orientation="horizontal"
+            title="Drag to resize checks"
+            className="group flex h-2 cursor-row-resize items-center border-b border-border"
+            onMouseDown={handleResizeStart}
+          >
+            <div className="h-px w-full bg-transparent transition-colors group-hover:bg-ring/40" />
+          </div>
+        </>
       )}
     </>
   )
@@ -284,6 +322,7 @@ function CommentRow({
   showResolve: boolean
   onResolve?: (threadId: string, resolve: boolean) => void
 }): React.JSX.Element {
+  const automated = isAutomatedPRComment(comment)
   return (
     <div
       className={cn(
@@ -319,6 +358,11 @@ function CommentRow({
           >
             {comment.author}
           </span>
+          {automated && (
+            <span className="shrink-0 rounded border border-border bg-accent/40 px-1 py-px text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
+              bot
+            </span>
+          )}
           {!isReply && comment.path && (
             <span className="text-[10px] font-mono text-muted-foreground/60 truncate min-w-0">
               {comment.path.split('/').pop()}
@@ -337,15 +381,14 @@ function CommentRow({
             <CopyButton text={buildCopyText(comment)} />
           </div>
         </div>
-        {/* Comment body */}
-        <p
+        <CommentMarkdown
+          content={comment.body}
           className={cn(
-            'text-[11px] text-muted-foreground leading-snug mt-0.5',
-            isReply ? 'pl-5 line-clamp-1' : 'pl-[22px] line-clamp-2'
+            'mt-1 text-[11px] leading-snug text-muted-foreground',
+            'break-words [&_p]:my-1 [&_pre]:max-h-none [&_table]:min-w-max',
+            isReply ? 'pl-5' : 'pl-[22px]'
           )}
-        >
-          {comment.body}
-        </p>
+        />
       </div>
     </div>
   )
@@ -404,16 +447,53 @@ export function PRCommentsList({
   commentsLoading: boolean
   onResolve?: (threadId: string, resolve: boolean) => void
 }): React.JSX.Element {
-  const groups = React.useMemo(() => groupComments(comments), [comments])
+  const [audienceFilter, setAudienceFilter] = useState<PRCommentAudienceFilter>('all')
+  const humanCount = React.useMemo(
+    () => comments.filter((comment) => !isAutomatedPRComment(comment)).length,
+    [comments]
+  )
+  const botCount = comments.length - humanCount
+  const filteredComments = React.useMemo(
+    () => filterPRCommentsByAudience(comments, audienceFilter),
+    [comments, audienceFilter]
+  )
+  const groups = React.useMemo(() => groupComments(filteredComments), [filteredComments])
+  const filterOptions: { value: PRCommentAudienceFilter; label: string; count: number }[] = [
+    { value: 'all', label: 'All', count: comments.length },
+    { value: 'human', label: 'Humans', count: humanCount },
+    { value: 'bot', label: 'Bots', count: botCount }
+  ]
 
   return (
     <div className="border-t border-border">
       {/* Header */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
-        <MessageSquare className="size-3.5 text-muted-foreground" />
-        <span className="text-[11px] font-medium text-foreground">Comments</span>
+      <div className="border-b border-border px-3 py-2">
+        <div className="flex items-center gap-2">
+          <MessageSquare className="size-3.5 text-muted-foreground" />
+          <span className="text-[11px] font-medium text-foreground">Comments</span>
+          {comments.length > 0 && (
+            <span className="text-[10px] text-muted-foreground">{comments.length}</span>
+          )}
+        </div>
         {comments.length > 0 && (
-          <span className="text-[10px] text-muted-foreground">{comments.length}</span>
+          <div className="mt-2 grid grid-cols-3 rounded-md border border-border bg-background p-0.5">
+            {filterOptions.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={cn(
+                  'rounded px-1.5 py-1 text-[10px] font-medium leading-none transition-colors',
+                  audienceFilter === option.value
+                    ? 'bg-accent text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+                onClick={() => setAudienceFilter(option.value)}
+              >
+                {option.label}{' '}
+                <span className="text-[9px] tabular-nums opacity-70">{option.count}</span>
+              </button>
+            ))}
+          </div>
         )}
       </div>
 
@@ -425,6 +505,10 @@ export function PRCommentsList({
       ) : comments.length === 0 ? (
         <div className="flex items-center justify-center py-6 text-[11px] text-muted-foreground">
           No comments
+        </div>
+      ) : filteredComments.length === 0 ? (
+        <div className="flex items-center justify-center py-6 text-[11px] text-muted-foreground">
+          No {audienceFilter === 'human' ? 'human' : 'bot'} comments
         </div>
       ) : (
         <div className="py-1">

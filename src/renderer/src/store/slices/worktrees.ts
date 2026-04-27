@@ -333,11 +333,11 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   },
 
   markWorktreeUnread: (worktreeId) => {
-    const activeWorktreeId = get().activeWorktreeId
-    if (activeWorktreeId === worktreeId) {
-      return
-    }
-
+    // Why: BEL must fire regardless of focus (ghostty semantics — "show
+    // until interact"). Interaction with a pane inside the worktree
+    // dismisses the dot via clearWorktreeUnread. Worktree activation via
+    // setActiveWorktree also clears isUnread as a side-effect; that path
+    // predates this PR and is unaffected here.
     let shouldPersist = false
     const now = Date.now()
     set((s) => {
@@ -363,6 +363,37 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       .updateMeta({ worktreeId, updates: { isUnread: true, lastActivityAt: now } })
       .catch((err) => {
         console.error('Failed to persist unread worktree state:', err)
+        void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+      })
+  },
+
+  clearWorktreeUnread: (worktreeId) => {
+    let shouldPersist = false
+    set((s) => {
+      const worktree = findWorktreeById(s.worktreesByRepo, worktreeId)
+      if (!worktree || !worktree.isUnread) {
+        // Why: return `s` (not `{}`) to preserve the exact object reference
+        // on no-op. This matches the sibling `clearTerminalTabUnread` in
+        // terminals.ts and avoids downstream selector churn on the hot path
+        // (called on every keystroke and pointerdown).
+        return s
+      }
+      shouldPersist = true
+      return {
+        worktreesByRepo: applyWorktreeUpdates(s.worktreesByRepo, worktreeId, {
+          isUnread: false
+        })
+      }
+    })
+
+    if (!shouldPersist) {
+      return
+    }
+
+    void window.api.worktrees
+      .updateMeta({ worktreeId, updates: { isUnread: false } })
+      .catch((err) => {
+        console.error('Failed to persist cleared unread worktree state:', err)
         void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
       })
   },

@@ -9,6 +9,7 @@ import {
   type ParsedAgentStatusPayload
 } from '../../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../../shared/types'
+import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 
 /** Snapshot of a finished (or vanished) agent status entry, kept around so
  *  the dashboard + sidebar hover can continue showing the completion until the
@@ -209,15 +210,28 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           // it when a new turn starts (working → Stop reprices it).
           interrupted: payload.interrupted
         }
+        // Why: `agentStatusEpoch` bumps on every update because visual +
+        // freshness selectors (WorktreeCard status, hover content) care about
+        // tool-name/prompt/assistant-message churn within a turn. `sortEpoch`,
+        // on the other hand, bumps only when sort-relevant inputs change —
+        // avoiding sidebar re-sorts on every tool/prompt event would stress
+        // the smart-sort debounce for no reason. Sort-relevant inputs are:
+        //   1. `state` transitions — sort score is a function of state.
+        //   2. Freshness transitions (stale → fresh) — `computeSmartScoreFromSignals`
+        //      in smart-sort.ts filters entries through
+        //      `isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)`
+        //      (30-min TTL). A stale entry that refreshes with the SAME state
+        //      goes from "not contributing" to contributing +60 (working) or
+        //      +35 (blocked/waiting) to the score — order must update. The new
+        //      entry below always has `updatedAt = now`, so it is fresh; we
+        //      only need to detect the stale→fresh flip on `existing`.
+        const wasFresh =
+          !!existing && isExplicitAgentStatusFresh(existing, now, AGENT_STATUS_STALE_AFTER_MS)
+        const sortRelevantChange = !existing || existing.state !== payload.state || !wasFresh
         return {
           agentStatusByPaneKey: { ...s.agentStatusByPaneKey, [paneKey]: entry },
-          // Why: bump both epochs so WorktreeCard re-derives its visual status
-          // and WorktreeList re-sorts immediately when an agent reports status.
-          // The freshness-expiry timer and the remove* paths bump both epochs
-          // for the same reason — agent transitions (new, stale, removed) can
-          // all legitimately change worktree sort order.
           agentStatusEpoch: s.agentStatusEpoch + 1,
-          sortEpoch: s.sortEpoch + 1
+          sortEpoch: sortRelevantChange ? s.sortEpoch + 1 : s.sortEpoch
         }
       })
       // Why: schedule after set completes so the timer reads the updated map.

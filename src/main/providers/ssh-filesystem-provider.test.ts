@@ -136,6 +136,23 @@ describe('SshFilesystemProvider', () => {
     expect(result).toEqual(['src/index.ts', 'package.json'])
   })
 
+  it('listFiles forwards excludePaths when provided', async () => {
+    mux.request.mockResolvedValue([])
+    await provider.listFiles('/home/user/project', {
+      excludePaths: ['/home/user/project/worktrees/b']
+    })
+    expect(mux.request).toHaveBeenCalledWith('fs.listFiles', {
+      rootPath: '/home/user/project',
+      excludePaths: ['/home/user/project/worktrees/b']
+    })
+  })
+
+  it('listFiles omits excludePaths when empty', async () => {
+    mux.request.mockResolvedValue([])
+    await provider.listFiles('/home/user/project', { excludePaths: [] })
+    expect(mux.request).toHaveBeenCalledWith('fs.listFiles', { rootPath: '/home/user/project' })
+  })
+
   describe('watch', () => {
     it('sends fs.watch request and returns unsubscribe', async () => {
       const callback = vi.fn()

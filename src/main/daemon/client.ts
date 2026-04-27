@@ -11,6 +11,7 @@ const REQUEST_TIMEOUT_MS = 30000
 export type DaemonClientOptions = {
   socketPath: string
   tokenPath: string
+  protocolVersion?: number
 }
 
 type PendingRequest = {
@@ -22,6 +23,7 @@ type PendingRequest = {
 export class DaemonClient {
   private socketPath: string
   private tokenPath: string
+  private protocolVersion: number
   private clientId = randomUUID()
 
   private controlSocket: Socket | null = null
@@ -46,6 +48,7 @@ export class DaemonClient {
   constructor(opts: DaemonClientOptions) {
     this.socketPath = opts.socketPath
     this.tokenPath = opts.tokenPath
+    this.protocolVersion = opts.protocolVersion ?? PROTOCOL_VERSION
   }
 
   isConnected(): boolean {
@@ -196,7 +199,7 @@ export class DaemonClient {
     return new Promise((resolve, reject) => {
       const hello: HelloMessage = {
         type: 'hello',
-        version: PROTOCOL_VERSION,
+        version: this.protocolVersion,
         token,
         clientId: this.clientId,
         role

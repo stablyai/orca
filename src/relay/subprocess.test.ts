@@ -190,13 +190,89 @@ describe('Subprocess: Relay entry point', () => {
     expect(relay.proc.exitCode !== null || relay.proc.signalCode !== null).toBe(true)
   }, 10_000)
 
-  it('exits immediately on stdin close when no PTYs exist', async () => {
-    relay = spawn(['--grace-time', '100'])
+  it('exits after grace period on stdin close when no PTYs exist', async () => {
+    // Why: grace timer always waits the full period now (even with zero PTYs)
+    // so a detached relay has time for a --connect client to arrive.
+    relay = spawn(['--grace-time', '1'])
     await relay.sentinelReceived
 
     relay.proc.stdin!.end()
 
-    await relay.waitForExit(3000)
+    await relay.waitForExit(5000)
     expect(relay.proc.exitCode).toBe(0)
+  }, 10_000)
+
+  it('registers root via request and returns acknowledgment', async () => {
+    tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-sub-'))
+    writeFileSync(path.join(tmpDir, 'test.txt'), 'hello')
+
+    relay = spawn()
+    await relay.sentinelReceived
+
+    const id = relay.send('session.registerRoot', { rootPath: tmpDir })
+    const resp = await relay.waitForResponse(id)
+
+    expect(resp.error).toBeUndefined()
+    expect(resp.result).toEqual({ ok: true })
+
+    const statId = relay.send('fs.stat', { filePath: path.join(tmpDir, 'test.txt') })
+    const statResp = await relay.waitForResponse(statId)
+    expect(statResp.error).toBeUndefined()
+    expect((statResp.result as { type: string }).type).toBe('file')
+  }, 10_000)
+
+  it('rejects fs operations when no roots are registered', async () => {
+    tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-sub-'))
+    writeFileSync(path.join(tmpDir, 'test.txt'), 'hello')
+
+    relay = spawn()
+    await relay.sentinelReceived
+
+    const id = relay.send('fs.stat', { filePath: path.join(tmpDir, 'test.txt') })
+    const resp = await relay.waitForResponse(id)
+
+    expect(resp.error).toBeDefined()
+    expect(resp.error!.message).toContain('No workspace roots registered yet')
+  }, 10_000)
+
+  it('rejects paths outside registered roots', async () => {
+    tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-sub-'))
+    const outsideDir = mkdtempSync(path.join(tmpdir(), 'relay-outside-'))
+    writeFileSync(path.join(outsideDir, 'secret.txt'), 'secret')
+
+    relay = spawn()
+    await relay.sentinelReceived
+    relay.sendNotification('session.registerRoot', { rootPath: tmpDir })
+
+    const id = relay.send('fs.stat', { filePath: path.join(outsideDir, 'secret.txt') })
+    const resp = await relay.waitForResponse(id)
+
+    expect(resp.error).toBeDefined()
+    expect(resp.error!.message).toContain('Path outside authorized workspace')
+
+    await rm(outsideDir, { recursive: true, force: true }).catch(() => {})
+  }, 10_000)
+
+  it('resolves ~ to home directory via session.resolveHome', async () => {
+    relay = spawn()
+    await relay.sentinelReceived
+
+    const homeDir = require('os').homedir()
+
+    const id1 = relay.send('session.resolveHome', { path: '~' })
+    const id2 = relay.send('session.resolveHome', { path: '~/projects' })
+    const id3 = relay.send('session.resolveHome', { path: '/absolute/path' })
+
+    const [r1, r2, r3] = await Promise.all([
+      relay.waitForResponse(id1),
+      relay.waitForResponse(id2),
+      relay.waitForResponse(id3)
+    ])
+
+    expect((r1.result as { resolvedPath: string }).resolvedPath).toBe(homeDir)
+    expect((r2.result as { resolvedPath: string }).resolvedPath).toBe(
+      path.join(homeDir, 'projects')
+    )
+    expect((r3.result as { resolvedPath: string }).resolvedPath).toBe('/absolute/path')
   }, 10_000)
 })

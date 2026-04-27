@@ -30,10 +30,6 @@ vi.mock('../startup/hydrate-shell-path', () => ({
   mergePathSegments: mergePathSegmentsMock
 }))
 
-vi.mock('../linear/client', () => ({
-  loadToken: vi.fn().mockReturnValue(null)
-}))
-
 import {
   _resetPreflightCache,
   detectInstalledAgents,
@@ -72,8 +68,7 @@ describe('preflight', () => {
 
     expect(status).toEqual({
       git: { installed: true },
-      gh: { installed: true, authenticated: true },
-      linear: { connected: false }
+      gh: { installed: true, authenticated: true }
     })
     expect(execFileAsyncMock).toHaveBeenNthCalledWith(3, 'gh', ['auth', 'status'], {
       encoding: 'utf-8'
@@ -131,8 +126,7 @@ describe('preflight', () => {
 
     expect(status).toEqual({
       git: { installed: true },
-      gh: { installed: true, authenticated: true },
-      linear: { connected: false }
+      gh: { installed: true, authenticated: true }
     })
   })
 
@@ -152,13 +146,11 @@ describe('preflight', () => {
 
     expect(firstStatus).toEqual({
       git: { installed: true },
-      gh: { installed: true, authenticated: false },
-      linear: { connected: false }
+      gh: { installed: true, authenticated: false }
     })
     expect(refreshedStatus).toEqual({
       git: { installed: true },
-      gh: { installed: true, authenticated: true },
-      linear: { connected: false }
+      gh: { installed: true, authenticated: true }
     })
   })
 

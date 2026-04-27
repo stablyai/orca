@@ -1,3 +1,4 @@
+/* oxlint-disable max-lines */
 import { execSync } from 'child_process'
 import { existsSync, statSync } from 'fs'
 import { join, basename } from 'path'
@@ -345,6 +346,63 @@ export function buildSearchBaseRefsArgv(normalizedQuery: string): string[] {
   // branch is what makes re-typing a visible result actually find it.
   const segmented = tokens.map((token) => `*${token}*`).join('/')
   return [...base, `refs/remotes/${segmented}`, `refs/heads/${segmented}`]
+}
+
+/**
+ * Resolve the default push remote for a repo.
+ * Order: remote configured on the current default branch → origin → the single
+ * remote when the repo has exactly one → error.
+ */
+export async function getDefaultRemote(path: string): Promise<string> {
+  const defaultRef = await getDefaultBaseRefAsync(path)
+  // Why: getDefaultBaseRefAsync returns null when no default branch can be
+  // detected (e.g. a brand-new repo with no commits on origin). Guard so we
+  // don't crash on .includes(); fall through to the remote-list heuristics.
+  const defaultBranch = defaultRef
+    ? defaultRef.includes('/')
+      ? defaultRef.split('/').slice(1).join('/')
+      : defaultRef
+    : null
+
+  if (defaultBranch) {
+    try {
+      const { stdout } = await gitExecFileAsync(
+        ['config', '--get', `branch.${defaultBranch}.remote`],
+        { cwd: path }
+      )
+      const value = stdout.trim()
+      if (value) {
+        return value
+      }
+    } catch {
+      // Fall through: branch has no explicit remote configured.
+    }
+  }
+
+  try {
+    const { stdout } = await gitExecFileAsync(['remote'], { cwd: path })
+    const remotes = stdout
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+    if (remotes.includes('origin')) {
+      return 'origin'
+    }
+    if (remotes.length === 1) {
+      return remotes[0]
+    }
+    if (remotes.length === 0) {
+      throw new Error('Repo has no configured git remotes.')
+    }
+    throw new Error(
+      `Repo has multiple remotes (${remotes.join(', ')}) and no default is configured. Set branch.<default>.remote.`
+    )
+  } catch (error) {
+    if (error instanceof Error) {
+      throw error
+    }
+    throw new Error('Failed to resolve default remote for repo.')
+  }
 }
 
 export async function searchBaseRefs(path: string, query: string, limit = 25): Promise<string[]> {

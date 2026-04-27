@@ -74,6 +74,43 @@ function getShellReadyWrapperRoot(): string {
   return `${app.getPath('userData')}/shell-ready`
 }
 
+// Why: if our own process inherited ZDOTDIR from a parent shell that was
+// itself an Orca PTY (e.g. the user launched `pn dev` from a terminal inside
+// a running Orca), that ZDOTDIR points at an Orca shell-ready wrapper dir.
+// Propagating it as the new PTY's ORCA_ORIG_ZDOTDIR makes the wrapper's
+// `source "$ORCA_ORIG_ZDOTDIR/.zshenv"` line source itself recursively —
+// zsh gives "job table full or recursion limit exceeded" and the shell
+// never reaches a usable prompt.
+//
+// Any path component ending in `/shell-ready/zsh` is an Orca wrapper dir
+// (regardless of whether it came from this app's userData, a packaged Orca,
+// or a different dev build). Treat it as if ZDOTDIR were unset so the caller
+// falls back to HOME for the user's real config root.
+function normalizeOriginalZdotdirCandidate(value: string | undefined): string | null {
+  if (!value) {
+    return null
+  }
+  // Why: tolerate trailing slashes — some shell startup scripts export
+  // `ZDOTDIR="$dir/"`, and without normalization the suffix check would
+  // miss the self-loop path and restore the recursion bug. Also collapses
+  // a pathological `ZDOTDIR=/` to empty so we fall back to HOME rather than
+  // sourcing `/.zshenv` (which is never the user's real config).
+  const normalized = value.replace(/\/+$/, '')
+  if (!normalized || normalized.endsWith('/shell-ready/zsh')) {
+    return null
+  }
+  return value
+}
+
+function resolveOriginalZdotdir(): string {
+  return (
+    normalizeOriginalZdotdirCandidate(process.env.ZDOTDIR) ||
+    normalizeOriginalZdotdirCandidate(process.env.ORCA_ORIG_ZDOTDIR) ||
+    process.env.HOME ||
+    ''
+  )
+}
+
 export function getBashShellReadyRcfileContent(): string {
   return `# Orca bash shell-ready wrapper
 [[ -f /etc/profile ]] && source /etc/profile
@@ -87,19 +124,29 @@ fi
 # Why: preserve bash's normal login-shell contract. Many users already source
 # ~/.bashrc from ~/.bash_profile; forcing ~/.bashrc again here would duplicate
 # PATH edits, hooks, and prompt init in Orca startup-command shells.
+__orca_restore_attribution_path() {
+  [[ -n "\${ORCA_ATTRIBUTION_SHIM_DIR:-}" ]] || return 0
+  case "$PATH" in
+    "\${ORCA_ATTRIBUTION_SHIM_DIR}"|"\${ORCA_ATTRIBUTION_SHIM_DIR}:"*) return 0 ;;
+  esac
+  export PATH="\${ORCA_ATTRIBUTION_SHIM_DIR}:$PATH"
+}
+__orca_restore_attribution_path
 # Why: append the marker through PROMPT_COMMAND so it fires after the login
 # startup files have rebuilt the prompt, without re-running user rc files.
-__orca_prompt_mark() {
-  printf "\\033]133;A\\007"
-}
-if [[ "$(declare -p PROMPT_COMMAND 2>/dev/null)" == "declare -a"* ]]; then
-  PROMPT_COMMAND=("\${PROMPT_COMMAND[@]}" "__orca_prompt_mark")
-else
-  _orca_prev_prompt_command="\${PROMPT_COMMAND}"
-  if [[ -n "\${_orca_prev_prompt_command}" ]]; then
-    PROMPT_COMMAND="\${_orca_prev_prompt_command};__orca_prompt_mark"
+if [[ "\${ORCA_SHELL_READY_MARKER:-0}" == "1" ]]; then
+  __orca_prompt_mark() {
+    printf "\\033]133;A\\007"
+  }
+  if [[ "$(declare -p PROMPT_COMMAND 2>/dev/null)" == "declare -a"* ]]; then
+    PROMPT_COMMAND=("\${PROMPT_COMMAND[@]}" "__orca_prompt_mark")
   else
-    PROMPT_COMMAND="__orca_prompt_mark"
+    _orca_prev_prompt_command="\${PROMPT_COMMAND}"
+    if [[ -n "\${_orca_prev_prompt_command}" ]]; then
+      PROMPT_COMMAND="\${_orca_prev_prompt_command};__orca_prompt_mark"
+    else
+      PROMPT_COMMAND="__orca_prompt_mark"
+    fi
   fi
 fi
 `
@@ -117,30 +164,60 @@ function ensureShellReadyWrappers(): void {
 
   const zshEnv = `# Orca zsh shell-ready wrapper
 export ORCA_ORIG_ZDOTDIR="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
+case "\${ORCA_ORIG_ZDOTDIR%/}" in
+  */shell-ready/zsh) export ORCA_ORIG_ZDOTDIR="$HOME" ;;
+esac
 [[ -f "$ORCA_ORIG_ZDOTDIR/.zshenv" ]] && source "$ORCA_ORIG_ZDOTDIR/.zshenv"
 export ZDOTDIR=${quotePosixSingle(zshDir)}
 `
   const zshProfile = `# Orca zsh shell-ready wrapper
 _orca_home="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
+case "\${_orca_home%/}" in
+  */shell-ready/zsh) _orca_home="$HOME" ;;
+esac
 [[ -f "$_orca_home/.zprofile" ]] && source "$_orca_home/.zprofile"
 `
   const zshRc = `# Orca zsh shell-ready wrapper
 _orca_home="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
+case "\${_orca_home%/}" in
+  */shell-ready/zsh) _orca_home="$HOME" ;;
+esac
 if [[ -o interactive && -f "$_orca_home/.zshrc" ]]; then
   source "$_orca_home/.zshrc"
 fi
+__orca_restore_attribution_path() {
+  [[ -n "\${ORCA_ATTRIBUTION_SHIM_DIR:-}" ]] || return 0
+  case "$PATH" in
+    "\${ORCA_ATTRIBUTION_SHIM_DIR}"|"\${ORCA_ATTRIBUTION_SHIM_DIR}:"*) return 0 ;;
+  esac
+  export PATH="\${ORCA_ATTRIBUTION_SHIM_DIR}:$PATH"
+}
+[[ ! -o login ]] && __orca_restore_attribution_path
 `
   const zshLogin = `# Orca zsh shell-ready wrapper
 _orca_home="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
+case "\${_orca_home%/}" in
+  */shell-ready/zsh) _orca_home="$HOME" ;;
+esac
 if [[ -o interactive && -f "$_orca_home/.zlogin" ]]; then
   source "$_orca_home/.zlogin"
 fi
+__orca_restore_attribution_path() {
+  [[ -n "\${ORCA_ATTRIBUTION_SHIM_DIR:-}" ]] || return 0
+  case "$PATH" in
+    "\${ORCA_ATTRIBUTION_SHIM_DIR}"|"\${ORCA_ATTRIBUTION_SHIM_DIR}:"*) return 0 ;;
+  esac
+  export PATH="\${ORCA_ATTRIBUTION_SHIM_DIR}:$PATH"
+}
+__orca_restore_attribution_path
 # Why: emit OSC 133;A only after the user's startup hooks finish so Orca knows
 # the prompt is actually ready for a long startup command paste.
-__orca_prompt_mark() {
-  printf "\\033]133;A\\007"
-}
-precmd_functions=(\${precmd_functions[@]} __orca_prompt_mark)
+if [[ "\${ORCA_SHELL_READY_MARKER:-0}" == "1" ]]; then
+  __orca_prompt_mark() {
+    printf "\\033]133;A\\007"
+  }
+  precmd_functions=(\${precmd_functions[@]} __orca_prompt_mark)
+fi
 `
   const bashRc = getBashShellReadyRcfileContent()
 
@@ -168,7 +245,10 @@ export type ShellReadyLaunchConfig = {
   supportsReadyMarker: boolean
 }
 
-export function getShellReadyLaunchConfig(shellPath: string): ShellReadyLaunchConfig {
+function getWrappedShellLaunchConfig(
+  shellPath: string,
+  options: { emitReadyMarker: boolean }
+): ShellReadyLaunchConfig {
   const shellName = basename(shellPath).toLowerCase()
 
   if (shellName === 'zsh') {
@@ -176,10 +256,11 @@ export function getShellReadyLaunchConfig(shellPath: string): ShellReadyLaunchCo
     return {
       args: ['-l'],
       env: {
-        ORCA_ORIG_ZDOTDIR: process.env.ZDOTDIR || process.env.HOME || '',
-        ZDOTDIR: `${getShellReadyWrapperRoot()}/zsh`
+        ORCA_ORIG_ZDOTDIR: resolveOriginalZdotdir(),
+        ZDOTDIR: `${getShellReadyWrapperRoot()}/zsh`,
+        ORCA_SHELL_READY_MARKER: options.emitReadyMarker ? '1' : '0'
       },
-      supportsReadyMarker: true
+      supportsReadyMarker: options.emitReadyMarker
     }
   }
 
@@ -187,8 +268,10 @@ export function getShellReadyLaunchConfig(shellPath: string): ShellReadyLaunchCo
     ensureShellReadyWrappers()
     return {
       args: ['--rcfile', `${getShellReadyWrapperRoot()}/bash/rcfile`],
-      env: {},
-      supportsReadyMarker: true
+      env: {
+        ORCA_SHELL_READY_MARKER: options.emitReadyMarker ? '1' : '0'
+      },
+      supportsReadyMarker: options.emitReadyMarker
     }
   }
 
@@ -197,6 +280,14 @@ export function getShellReadyLaunchConfig(shellPath: string): ShellReadyLaunchCo
     env: {},
     supportsReadyMarker: false
   }
+}
+
+export function getShellReadyLaunchConfig(shellPath: string): ShellReadyLaunchConfig {
+  return getWrappedShellLaunchConfig(shellPath, { emitReadyMarker: true })
+}
+
+export function getAttributionShellLaunchConfig(shellPath: string): ShellReadyLaunchConfig {
+  return getWrappedShellLaunchConfig(shellPath, { emitReadyMarker: false })
 }
 
 // ── Startup command writer ──────────────────────────────────────────
@@ -236,7 +327,15 @@ export function writeStartupCommandWhenShellReady(
     // open for the pane. Spawning `shell -c <command>; exec shell -l` would
     // avoid the race, but it would also replace the session after the agent
     // exits and break "stay in this terminal" workflows.
-    const payload = startupCommand.endsWith('\n') ? startupCommand : `${startupCommand}\n`
+    // Why CR on Windows: PowerShell's PSReadLine and cmd.exe submit the line
+    // on CR (`\r`) — a bare LF leaves the command typed at the prompt but
+    // unsubmitted, forcing the user to press Enter after Orca launches the
+    // agent or setup script. POSIX shells (bash/zsh) treat either CR or LF as
+    // Enter under ICRNL, so CR works there too, but this code path is reached
+    // on Windows as well as POSIX via writeStartupCommandWhenShellReady.
+    const submit = process.platform === 'win32' ? '\r' : '\n'
+    const endsWithSubmit = startupCommand.endsWith('\r') || startupCommand.endsWith('\n')
+    const payload = endsWithSubmit ? startupCommand : `${startupCommand}${submit}`
     // Why: startup commands are usually long, quoted agent launches. Writing
     // them in one PTY call after the shell-ready barrier avoids the incremental
     // paste behavior that still dropped characters in practice.

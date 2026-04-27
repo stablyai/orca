@@ -1,3 +1,6 @@
+/* eslint-disable max-lines -- Why: explorer drag/drop keeps move, native-file
+drop, auto-expand, and undo/redo coordination in one hook because splitting the
+DnD state machine across files makes those interactions harder to reason about. */
 import type { RefObject } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
@@ -7,6 +10,7 @@ import { detectLanguage } from '@/lib/language-detect'
 import { getConnectionId } from '@/lib/connection-context'
 import { requestEditorSaveQuiesce } from '@/components/editor/editor-autosave'
 import { commitFileExplorerOp } from './fileExplorerUndoRedo'
+
 function extractIpcErrorMessage(err: unknown, fallback: string): string {
   if (!(err instanceof Error)) {
     return fallback
@@ -161,19 +165,32 @@ export function useFileExplorerDragDrop({
           const draft = state.editorDrafts[file.id]
           const wasDirty = file.isDirty
 
-          state.closeFile(oldFilePath)
+          // Why: markdown preview tabs use a synthetic tab id rather than the
+          // file path, so move remaps must close the actual tab id before
+          // reopening the file at its new path.
+          state.closeFile(file.id)
 
-          if (file.mode !== 'edit') {
+          if (file.mode === 'edit') {
+            state.openFile({
+              filePath: updatedPath,
+              relativePath: updatedRelative,
+              worktreeId: file.worktreeId,
+              language: detectLanguage(basename(updatedPath)),
+              mode: 'edit'
+            })
+          } else if (file.mode === 'markdown-preview') {
+            state.openMarkdownPreview(
+              {
+                filePath: updatedPath,
+                relativePath: updatedRelative,
+                worktreeId: file.worktreeId,
+                language: 'markdown'
+              },
+              { anchor: file.markdownPreviewAnchor ?? null }
+            )
+          } else {
             continue
           }
-
-          state.openFile({
-            filePath: updatedPath,
-            relativePath: updatedRelative,
-            worktreeId: file.worktreeId,
-            language: detectLanguage(basename(updatedPath)),
-            mode: 'edit'
-          })
 
           if (draft !== undefined) {
             state.setEditorDraft(updatedPath, draft)

@@ -1,7 +1,13 @@
 import * as pty from 'node-pty'
 import type { SubprocessHandle } from './session'
-import { getShellReadyLaunchConfig, resolvePtyShellPath } from './shell-ready'
+import {
+  getAttributionShellLaunchConfig,
+  getShellReadyLaunchConfig,
+  resolvePtyShellPath
+} from './shell-ready'
+import { isValidPtySize, normalizePtySize } from './daemon-pty-size'
 import { ensureNodePtySpawnHelperExecutable } from '../providers/local-pty-utils'
+import { resolveWindowsShellLaunchArgs } from '../providers/windows-shell-args'
 
 export type PtySubprocessOptions = {
   sessionId: string
@@ -10,6 +16,10 @@ export type PtySubprocessOptions = {
   cwd?: string
   env?: Record<string, string>
   command?: string
+  /** Explicit shell executable path/basename the renderer asked for.
+   *  Overrides env.COMSPEC / env.SHELL resolution inside the daemon so a user
+   *  who picks "New WSL terminal" from the "+" menu actually gets WSL. */
+  shellOverride?: string
 }
 
 function getDefaultCwd(): string {
@@ -30,6 +40,7 @@ function getDefaultCwd(): string {
 }
 
 export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandle {
+  const size = normalizePtySize(opts.cols, opts.rows)
   const env: Record<string, string> = {
     ...process.env,
     ...opts.env,
@@ -39,22 +50,46 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     // Why: TUIs feature-gate on TERM_PROGRAM_VERSION. The daemon is forked
     // by main (daemon-init.ts:93) with the parent's env, so ORCA_APP_VERSION
     // — set in src/main/index.ts from app.getVersion() — is inherited here.
-    TERM_PROGRAM_VERSION: process.env.ORCA_APP_VERSION ?? '0.0.0-dev'
+    TERM_PROGRAM_VERSION: process.env.ORCA_APP_VERSION ?? '0.0.0-dev',
+    // Why: opt tools (Claude Code, ls --hyperlink, etc.) into emitting OSC 8
+    // hyperlinks. The `supports-hyperlinks` npm package gates on a hard-coded
+    // TERM_PROGRAM allowlist (iTerm.app / WezTerm / vscode) and returns false
+    // for TERM_PROGRAM=Orca, so callers drop OSC 8 output entirely and emit
+    // bare text instead. xterm.js in Orca parses OSC 8 and the pane's
+    // linkHandler routes clicks, so forcing the advertisement is safe and
+    // restores clickable refs like `owner/repo#123` / `PR#123`.
+    FORCE_HYPERLINK: '1'
   } as Record<string, string>
 
   env.LANG ??= 'en_US.UTF-8'
 
-  const shellPath = resolvePtyShellPath(env)
+  // Why: the shellOverride from the "+" menu (or persisted default shell
+  // setting, relayed by main) takes priority over env.COMSPEC — otherwise
+  // Windows always resolves to cmd.exe (COMSPEC) or PowerShell by fallback,
+  // no matter which shell the user actually picked.
+  const shellPath = opts.shellOverride || resolvePtyShellPath(env)
   let shellArgs: string[]
+  let spawnCwd = opts.cwd || getDefaultCwd()
 
   if (process.platform === 'win32') {
-    shellArgs = []
+    // Why: matches LocalPtyProvider — CMD needs chcp 65001, PowerShell needs
+    // $PROFILE dot-sourcing, WSL needs a --bash entry with a translated cwd.
+    // Previously the daemon passed `[]` here which made every shell launch as
+    // a bare interactive process; that silently degraded PowerShell (no
+    // profile) and never worked at all for WSL (which needs explicit args).
+    const resolved = resolveWindowsShellLaunchArgs(shellPath, spawnCwd, getDefaultCwd())
+    shellArgs = resolved.shellArgs
+    spawnCwd = resolved.effectiveCwd
   } else {
-    const shellReadyLaunch = opts.command ? getShellReadyLaunchConfig(shellPath) : null
-    if (shellReadyLaunch) {
-      Object.assign(env, shellReadyLaunch.env)
+    const shellLaunch = opts.command
+      ? getShellReadyLaunchConfig(shellPath)
+      : env.ORCA_ATTRIBUTION_SHIM_DIR
+        ? getAttributionShellLaunchConfig(shellPath)
+        : null
+    if (shellLaunch) {
+      Object.assign(env, shellLaunch.env)
     }
-    shellArgs = shellReadyLaunch?.args ?? ['-l']
+    shellArgs = shellLaunch?.args ?? ['-l']
   }
 
   // Why: asar packaging can strip the +x bit from node-pty's spawn-helper
@@ -64,9 +99,9 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
 
   const proc = pty.spawn(shellPath, shellArgs, {
     name: 'xterm-256color',
-    cols: opts.cols,
-    rows: opts.rows,
-    cwd: opts.cwd || getDefaultCwd(),
+    cols: size.cols,
+    rows: size.rows,
+    cwd: spawnCwd,
     env
   })
 
@@ -100,6 +135,9 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     },
     resize: (cols, rows) => {
       if (dead) {
+        return
+      }
+      if (!isValidPtySize(cols, rows)) {
         return
       }
       try {

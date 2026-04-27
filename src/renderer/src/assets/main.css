@@ -1,6 +1,7 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import '@xterm/xterm/css/xterm.css';
+@import 'katex/dist/katex.min.css';
 @import './rich-markdown-editor.css';
 @import './markdown-preview.css';
 @import './terminal.css';
@@ -225,6 +226,20 @@
   scrollbar-color: color-mix(in srgb, var(--muted-foreground, #737373) 48%, transparent) transparent;
 }
 
+[data-slot='popover-content'] {
+  max-height: var(--radix-popover-content-available-height);
+}
+
+/* Radix owns the available-height variable on PopoverContent. Make that same
+   node scrollable so Chromium scrollbar hit-testing stays inside the layer. */
+.popover-scroll-content {
+  color-scheme: dark;
+  max-height: min(15rem, var(--radix-popover-content-available-height, 15rem));
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 /* ── Editor-style scrollbar (matches Monaco) ────────── */
 
 .scrollbar-editor {
@@ -264,6 +279,11 @@
   height: 0;
 }
 
+/* Tab activity affordance (amber wash) is rendered as a React DOM child in
+   SortableTab.tsx rather than via ::after here, so the drop-indicator
+   ::before/::after pseudo-elements stay free for drag-and-drop feedback. See
+   drop-indicator.ts and SortableTab.tsx for the implementation. */
+
 /* ── Layout ──────────────────────────────────────────── */
 
 #root {
@@ -281,6 +301,20 @@
 }
 
 /* ── Titlebar ────────────────────────────────────────── */
+
+/* Why: Radix portals (dropdowns, popovers, dialogs, sheets) render at the
+   document root. Electron's OS-level drag hit-test ignores z-index — portaled
+   content that visually overlaps a -webkit-app-region: drag element is
+   unclickable without an explicit no-drag. These rules cover every Radix
+   portal variant: popper wrappers (dropdowns, popovers), dialog/sheet
+   overlays, and their content panels. */
+[data-radix-popper-content-wrapper],
+[data-slot='sheet-overlay'],
+[data-slot='sheet-content'],
+[data-slot='dialog-overlay'],
+[data-slot='dialog-content'] {
+  -webkit-app-region: no-drag;
+}
 
 .titlebar {
   height: 42px;
@@ -334,6 +368,13 @@
 .sidebar-toggle:hover {
   background: var(--accent);
   color: var(--foreground);
+}
+
+/* Why: tighter padding for the back/forward pair so the arrows sit
+   close together as a single navigation group, while the standard
+   .sidebar-toggle spacing stays unchanged for other titlebar icons. */
+.sidebar-toggle-compact {
+  padding: 4px 5px;
 }
 
 .sidebar-toggle:disabled {
@@ -856,6 +897,42 @@
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warning, #f59e0b) 52%, transparent);
 }
 
+/* Why: Monaco's find-widget button tooltips (Close, Find in Selection, etc.)
+   render inside a `.context-view` wrapper → `.workbench-hover-container` →
+   `.workbench-hover.compact`, positioned above the target button. The wrapper's
+   bounding box (z-index 2576, `pointer-events: auto`) overlaps the button hit
+   area, so as the tooltip appears it fires `mouseleave` on the button → 200ms
+   debounce → hover disposes → mouse is again "over" the button → `mouseover`
+   re-fires a new tooltip → loop. The visible effect is an infinitely flashing
+   tooltip that also blocks clicks on the button beneath it. The overlap is
+   only reliably reproducible when the right sidebar is open, because the find
+   widget's x-position shifts the wrapper onto the button rect; with the
+   sidebar closed the wrapper often lands slightly offset and doesn't intercept.
+
+   These are compact tooltips (`HoverStyle.Pointer` → `.workbench-hover.compact`)
+   configured with `hideOnHover: true`, so the CompositeMouseTracker only tracks
+   the target element — not the wrapper. Making the entire wrapper chain
+   non-interactive breaks the overlap feedback loop without affecting tracker
+   logic, keyboard focus traps, or interactive markdown hovers (which are never
+   `.compact`). The `:has()` selector ensures we only disable pointer events on
+   context-views that actually contain a compact hover, leaving menus, dropdown
+   popups and other context-view consumers untouched. */
+.context-view:has(> .workbench-hover-container > .workbench-hover.compact),
+.workbench-hover-container:has(> .workbench-hover.compact) {
+  pointer-events: none;
+}
+
+/* Why: compact hovers for simple label strings (e.g. "Find in Selection (⌥⌘L)")
+   get `white-space: pre-wrap` inline-set by Monaco, so when the tooltip lands
+   near the viewport edge its max-width clamps and the label wraps to 2–3 lines,
+   pushing the tooltip down over the find-widget buttons. These labels are
+   single-line by design; forcing nowrap keeps the tooltip on one line and lets
+   the positioning logic flip/shift as needed to fit. Only applies to compact
+   hovers — markdown hovers still wrap normally. */
+.workbench-hover.compact .hover-contents {
+  white-space: nowrap !important;
+}
+
 /* ── Update card animations ───────────────────────────────────────── */
 
 @keyframes update-card-enter {
@@ -1051,6 +1128,7 @@
   width: 100%;
   min-height: 56px;
   max-height: 240px;
+  overflow-y: auto;
   resize: none;
   padding: 6px 8px;
   border: 1px solid color-mix(in srgb, var(--foreground) 18%, transparent);
@@ -1063,6 +1141,22 @@
   font-size: 12px;
   line-height: 1.4;
   outline: none;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--muted-foreground, #737373) 34%, transparent) transparent;
+}
+
+.orca-diff-comment-popover-textarea::-webkit-scrollbar {
+  width: 12px;
+}
+
+.orca-diff-comment-popover-textarea::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.orca-diff-comment-popover-textarea::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--muted-foreground, #737373) 28%, transparent);
+  border: 3px solid transparent;
+  background-clip: padding-box;
 }
 
 .orca-diff-comment-popover-textarea:focus {

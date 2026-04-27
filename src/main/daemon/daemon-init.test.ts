@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { mkdtempSync, rmSync, existsSync } from 'fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'fs'
+import { createServer, type Server, type Socket } from 'net'
 import type { SubprocessHandle } from './session'
 import type * as DaemonInitModule from './daemon-init'
 
@@ -41,6 +42,92 @@ async function importFreshDaemonInit(): Promise<typeof DaemonInitModule> {
   return import('./daemon-init')
 }
 
+function writeNdjson(socket: Socket, message: unknown): void {
+  socket.write(`${JSON.stringify(message)}\n`)
+}
+
+async function startLegacyDaemonStub(
+  socketPath: string,
+  tokenPath: string,
+  protocolVersion = 1
+): Promise<{ shutdown: () => Promise<void>; shutdownRequested: () => boolean }> {
+  mkdirSync(join(tokenPath, '..'), { recursive: true })
+  writeFileSync(tokenPath, 'legacy-token', { mode: 0o600 })
+  let shutdownRequested = false
+
+  const server = createServer((socket) => {
+    let buffer = ''
+    let greeted = false
+    socket.on('data', (chunk) => {
+      buffer += chunk.toString()
+      for (;;) {
+        const newlineIdx = buffer.indexOf('\n')
+        if (newlineIdx === -1) {
+          break
+        }
+        const line = buffer.slice(0, newlineIdx)
+        buffer = buffer.slice(newlineIdx + 1)
+        const message = JSON.parse(line)
+        if (!greeted) {
+          greeted = true
+          expect(message).toMatchObject({
+            type: 'hello',
+            version: protocolVersion,
+            token: 'legacy-token'
+          })
+          writeNdjson(socket, { type: 'hello', ok: true })
+          continue
+        }
+        if (message.type === 'listSessions') {
+          writeNdjson(socket, {
+            id: message.id,
+            ok: true,
+            payload: { sessions: [{ sessionId: 'legacy', isAlive: true }] }
+          })
+        } else if (message.type === 'shutdown') {
+          shutdownRequested = true
+          writeNdjson(socket, { id: message.id, ok: true, payload: {} })
+          setTimeout(() => {
+            socket.destroy()
+            server.close(() => {
+              if (process.platform !== 'win32') {
+                try {
+                  unlinkSync(socketPath)
+                } catch {
+                  // Best-effort
+                }
+              }
+            })
+          }, 0)
+        }
+      }
+    })
+  })
+
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject)
+    server.listen(socketPath, () => {
+      server.off('error', reject)
+      resolve()
+    })
+  })
+
+  return {
+    shutdown: () => closeServer(server),
+    shutdownRequested: () => shutdownRequested
+  }
+}
+
+function closeServer(server: Server): Promise<void> {
+  return new Promise((resolve) => {
+    if (!server.listening) {
+      resolve()
+      return
+    }
+    server.close(() => resolve())
+  })
+}
+
 describe('cleanupOrphanedDaemon', () => {
   let userDataDir: string
 
@@ -60,6 +147,21 @@ describe('cleanupOrphanedDaemon', () => {
     const result = await cleanupOrphanedDaemon()
     expect(result.cleaned).toBe(false)
     expect(result.killedCount).toBe(0)
+  })
+
+  it('removes stale pid files when no daemon socket exists', async () => {
+    const { cleanupOrphanedDaemon } = await importFreshDaemonInit()
+    const { getDaemonPidPath } = await import('./daemon-spawner')
+
+    const runtimeDir = join(userDataDir, 'daemon')
+    mkdirSync(runtimeDir, { recursive: true })
+    const pidPath = getDaemonPidPath(runtimeDir)
+    writeFileSync(pidPath, '999999', { mode: 0o600 })
+
+    const result = await cleanupOrphanedDaemon()
+
+    expect(result.cleaned).toBe(false)
+    expect(existsSync(pidPath)).toBe(false)
   })
 
   it('kills live sessions and shuts down a running daemon', async () => {
@@ -111,6 +213,90 @@ describe('cleanupOrphanedDaemon', () => {
     // Best-effort teardown of any surviving handles from the spawner side.
     for (const handle of daemonHandles) {
       await handle.shutdown().catch(() => {})
+    }
+  })
+
+  it('cleans up previous protocol daemons after a protocol bump', async () => {
+    const { cleanupOrphanedDaemon } = await importFreshDaemonInit()
+    const { getDaemonPidPath, getDaemonSocketPath, getDaemonTokenPath } =
+      await import('./daemon-spawner')
+
+    const runtimeDir = join(userDataDir, 'daemon')
+    mkdirSync(runtimeDir, { recursive: true })
+    const legacySocketPath = getDaemonSocketPath(runtimeDir, 1)
+    const legacyTokenPath = getDaemonTokenPath(runtimeDir, 1)
+    const legacyPidPath = getDaemonPidPath(runtimeDir, 1)
+    writeFileSync(legacyPidPath, String(process.pid), { mode: 0o600 })
+    const legacyDaemon = await startLegacyDaemonStub(legacySocketPath, legacyTokenPath)
+
+    try {
+      const result = await cleanupOrphanedDaemon()
+
+      expect(result).toEqual({ cleaned: true, killedCount: 1 })
+      expect(legacyDaemon.shutdownRequested()).toBe(true)
+      expect(existsSync(legacyPidPath)).toBe(false)
+    } finally {
+      await legacyDaemon.shutdown()
+    }
+  })
+
+  it('cleans up v2 daemon sessions when daemon mode is disabled', async () => {
+    const { cleanupOrphanedDaemon } = await importFreshDaemonInit()
+    const { getDaemonPidPath, getDaemonSocketPath, getDaemonTokenPath } =
+      await import('./daemon-spawner')
+
+    const runtimeDir = join(userDataDir, 'daemon')
+    mkdirSync(runtimeDir, { recursive: true })
+    const v2SocketPath = getDaemonSocketPath(runtimeDir, 2)
+    const v2TokenPath = getDaemonTokenPath(runtimeDir, 2)
+    const v2PidPath = getDaemonPidPath(runtimeDir, 2)
+    writeFileSync(v2PidPath, String(process.pid), { mode: 0o600 })
+    const v2Daemon = await startLegacyDaemonStub(v2SocketPath, v2TokenPath, 2)
+
+    try {
+      const result = await cleanupOrphanedDaemon()
+
+      expect(result).toEqual({ cleaned: true, killedCount: 1 })
+      expect(v2Daemon.shutdownRequested()).toBe(true)
+      expect(existsSync(v2PidPath)).toBe(false)
+    } finally {
+      await v2Daemon.shutdown()
+    }
+  })
+
+  it('does not report cleaned when fallback cleanup preserves an unowned live socket', async () => {
+    if (process.platform === 'win32') {
+      return
+    }
+
+    const { cleanupOrphanedDaemon } = await importFreshDaemonInit()
+    const { getDaemonPidPath, getDaemonSocketPath, getDaemonTokenPath } =
+      await import('./daemon-spawner')
+
+    const runtimeDir = join(userDataDir, 'daemon')
+    mkdirSync(runtimeDir, { recursive: true })
+    const socketPath = getDaemonSocketPath(runtimeDir)
+    const tokenPath = getDaemonTokenPath(runtimeDir)
+    const server = createServer((socket) => {
+      socket.once('data', () => socket.end('not daemon protocol\n'))
+    })
+    writeFileSync(tokenPath, 'bad-token', { mode: 0o600 })
+    writeFileSync(getDaemonPidPath(runtimeDir), String(process.pid), { mode: 0o600 })
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject)
+      server.listen(socketPath, () => {
+        server.off('error', reject)
+        resolve()
+      })
+    })
+
+    try {
+      const result = await cleanupOrphanedDaemon()
+
+      expect(result).toEqual({ cleaned: false, killedCount: 0 })
+      expect(existsSync(socketPath)).toBe(true)
+    } finally {
+      await closeServer(server)
     }
   })
 })

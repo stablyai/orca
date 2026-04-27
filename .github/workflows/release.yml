@@ -86,12 +86,21 @@ jobs:
           - os: macos-15
             platform: mac
             release_command: ORCA_MAC_RELEASE=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always
+            eb_cache_path: |
+              ~/Library/Caches/electron
+              ~/Library/Caches/electron-builder
           - os: windows-latest
             platform: win
             release_command: pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish always
+            eb_cache_path: |
+              ~\AppData\Local\electron\Cache
+              ~\AppData\Local\electron-builder\Cache
           - os: ubuntu-latest
             platform: linux
             release_command: pnpm exec electron-builder --config config/electron-builder.config.cjs --linux --publish always
+            eb_cache_path: |
+              ~/.cache/electron
+              ~/.cache/electron-builder
 
     runs-on: ${{ matrix.os }}
 
@@ -104,15 +113,27 @@ jobs:
         with:
           ref: ${{ needs.resolve-release.outputs.ref }}
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-
+      # pnpm must be on PATH before setup-node so setup-node can locate the store for caching.
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      # Cache the Electron binary + electron-builder tool downloads (notarytool,
+      # winCodeSign, nsis, squirrel, AppImage). Saves ~30-90s per job, incl. mac.
+      - name: Cache electron-builder downloads
+        uses: actions/cache@v4
+        with:
+          path: ${{ matrix.eb_cache_path }}
+          key: electron-builder-${{ matrix.platform }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            electron-builder-${{ matrix.platform }}-
 
       # Why: pnpm install triggers electron's postinstall, which downloads the
       # Electron binary from GitHub release assets. GitHub's download CDN

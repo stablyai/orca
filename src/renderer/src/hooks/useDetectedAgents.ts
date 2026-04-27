@@ -20,19 +20,59 @@ export type UseDetectedAgentsResult = {
  * `detect-agents-cached.ts` each ran their own detection. A tab-bar button
  * that doesn't refresh when Settings → Agents refreshes would feel broken;
  * centralizing the state eliminates multi-owner drift.
+ *
+ * @param connectionId — Pass a string to detect agents on a remote SSH host.
+ * Pass null for local detection. Pass undefined (or omit) when the connection
+ * context is not yet known (store not hydrated) — returns loading state.
+ * Backward-compatible: all existing callers pass no argument.
  */
-export function useDetectedAgents(): UseDetectedAgentsResult {
-  const detectedIds = useAppStore((s) => s.detectedAgentIds)
-  const isLoading = useAppStore((s) => s.isDetectingAgents)
-  const isRefreshing = useAppStore((s) => s.isRefreshingAgents)
-  const ensure = useAppStore((s) => s.ensureDetectedAgents)
+export function useDetectedAgents(
+  connectionId: string | null | undefined = null
+): UseDetectedAgentsResult {
+  // Why: undefined means "store not yet hydrated" — we don't know if the
+  // worktree is local or remote yet. null means confirmed-local. string means
+  // confirmed-remote. This three-way distinction prevents flashing local agents
+  // for remote worktrees during hydration.
+  const isRemote = typeof connectionId === 'string'
+  const isUnknown = connectionId === undefined
+
+  const detectedIds = useAppStore((s) => {
+    if (isUnknown) {
+      return null
+    }
+    if (isRemote) {
+      return s.remoteDetectedAgentIds[connectionId] ?? null
+    }
+    return s.detectedAgentIds
+  })
+  const isLoading = useAppStore((s) => {
+    if (isUnknown) {
+      return true
+    }
+    if (isRemote) {
+      return s.isDetectingRemoteAgents[connectionId] ?? false
+    }
+    return s.isDetectingAgents
+  })
+  const isRefreshing = useAppStore((s) => (isRemote || isUnknown ? false : s.isRefreshingAgents))
+  const ensureLocal = useAppStore((s) => s.ensureDetectedAgents)
+  const ensureRemote = useAppStore((s) => s.ensureRemoteDetectedAgents)
   const refresh = useAppStore((s) => s.refreshDetectedAgents)
 
   useEffect(() => {
-    if (detectedIds === null) {
-      void ensure()
+    if (isUnknown) {
+      return
     }
-  }, [detectedIds, ensure])
+    if (isRemote) {
+      if (detectedIds === null) {
+        void ensureRemote(connectionId)
+      }
+    } else {
+      if (detectedIds === null) {
+        void ensureLocal()
+      }
+    }
+  }, [isRemote, isUnknown, connectionId, detectedIds, ensureLocal, ensureRemote])
 
   return { detectedIds, isLoading, isRefreshing, refresh }
 }

@@ -125,6 +125,7 @@ function SplitNode({
         // "focused", Cmd/Ctrl+W and split shortcuts can hit the wrong worktree.
         isFocused={isWorktreeActive && node.groupId === focusedGroupId}
         hasSplitGroups={hasSplitGroups}
+        touchesRightEdge={touchesRightEdge}
         reserveClosedExplorerToggleSpace={touchesTopEdge && touchesRightEdge}
         reserveCollapsedSidebarHeaderSpace={touchesTopEdge && touchesLeftEdge}
         isTabDragActive={isTabDragActive}
@@ -198,6 +199,7 @@ export default function TabGroupSplitLayout({
   isWorktreeActive: boolean
 }): React.JSX.Element {
   const dragSplit = useTabDragSplit({ worktreeId, enabled: isWorktreeActive })
+  const hasSplits = layout.type === 'split'
 
   return (
     <DndContext
@@ -215,22 +217,38 @@ export default function TabGroupSplitLayout({
       // so disabling it is the simplest fix.
       autoScroll={false}
     >
-      <div className="flex flex-1 min-w-0 min-h-0 overflow-hidden">
-        <SplitNode
-          node={layout}
-          nodePath=""
-          worktreeId={worktreeId}
-          focusedGroupId={focusedGroupId}
-          isWorktreeActive={isWorktreeActive}
-          hasSplitGroups={layout.type === 'split'}
-          touchesTopEdge={true}
-          touchesRightEdge={true}
-          touchesLeftEdge={true}
-          isTabDragActive={dragSplit.activeDrag !== null}
-          activeDropGroupId={dragSplit.hoveredDropTarget?.groupId ?? null}
-          activeDropZone={dragSplit.hoveredDropTarget?.zone ?? null}
-          hoveredTabInsertion={dragSplit.hoveredTabInsertion}
+      {/* Why: the 6px drag strip sits ABOVE the split layout — lifted out of
+          each pane — so vertical split resize handles don't extend into the
+          window-drag region at the top. Only the split layout's own panes
+          own the resize handles, while this strip keeps the whole top of the
+          center column draggable regardless of how the splits are arranged.
+          Why `border-l` on the wrapper: paint a single full-height divider
+          between the left sidebar and the terminal area, regardless of
+          split state. When splits exist, the leftmost pane also renders its
+          own `border-l` at the same x — both use `border-border` so the
+          overlapping 1px lines read as one clean seam. */}
+      <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden border-l border-border">
+        <div
+          className="h-[6px] shrink-0 bg-card"
+          style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
         />
+        <div className="flex flex-1 min-w-0 min-h-0 overflow-hidden">
+          <SplitNode
+            node={layout}
+            nodePath=""
+            worktreeId={worktreeId}
+            focusedGroupId={focusedGroupId}
+            isWorktreeActive={isWorktreeActive}
+            hasSplitGroups={hasSplits}
+            touchesTopEdge={true}
+            touchesRightEdge={true}
+            touchesLeftEdge={true}
+            isTabDragActive={dragSplit.activeDrag !== null}
+            activeDropGroupId={dragSplit.hoveredDropTarget?.groupId ?? null}
+            activeDropZone={dragSplit.hoveredDropTarget?.zone ?? null}
+            hoveredTabInsertion={dragSplit.hoveredTabInsertion}
+          />
+        </div>
       </div>
       {/* Why: the sortable tab is anchored inside its source tab strip (no
           transform while dragging), and that strip uses overflow-hidden so

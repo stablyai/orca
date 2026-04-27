@@ -1,4 +1,5 @@
 import { paneLeafId, serializePaneTree } from '@/components/terminal-pane/layout-serialization'
+import { warnTerminalLifecycleAnomaly } from '@/components/terminal-pane/terminal-lifecycle-diagnostics'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { AppState } from '@/store/types'
 import type { RuntimeSyncWindowGraph } from '../../../shared/runtime-types'
@@ -83,13 +84,26 @@ async function syncRuntimeGraph(): Promise<void> {
       layout: serializePaneTree(root)
     })
 
+    const savedPtyIdsByLeafId = state.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId ?? {}
     for (const pane of manager?.getPanes() ?? []) {
+      const leafId = paneLeafId(pane.id)
+      const ptyId = registeredTab.getPtyIdForPane(pane.id)
+      const savedPtyId = savedPtyIdsByLeafId[leafId] ?? null
+      if (!ptyId && savedPtyId) {
+        warnTerminalLifecycleAnomaly('mounted terminal leaf has saved PTY but no live transport', {
+          tabId,
+          worktreeId: registeredTab.worktreeId,
+          leafId,
+          paneId: pane.id,
+          ptyId: savedPtyId
+        })
+      }
       graph.leaves.push({
         tabId,
         worktreeId: registeredTab.worktreeId,
-        leafId: paneLeafId(pane.id),
+        leafId,
         paneRuntimeId: pane.id,
-        ptyId: registeredTab.getPtyIdForPane(pane.id)
+        ptyId
       })
     }
   }

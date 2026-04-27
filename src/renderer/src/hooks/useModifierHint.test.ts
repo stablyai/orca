@@ -72,4 +72,19 @@ describe('useModifierHint helpers', () => {
       } as KeyboardEvent)
     ).toBe(false)
   })
+
+  it('detects whether the platform modifier is held per OS', async () => {
+    vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
+    const mac = await import('./useModifierHint')
+    expect(mac.isPlatformModifierHeld({ metaKey: true, ctrlKey: false })).toBe(true)
+    expect(mac.isPlatformModifierHeld({ metaKey: false, ctrlKey: true })).toBe(false)
+    expect(mac.isPlatformModifierHeld({ metaKey: false, ctrlKey: false })).toBe(false)
+
+    vi.resetModules()
+    vi.stubGlobal('navigator', { userAgent: 'Windows NT 10.0' })
+    const win = await import('./useModifierHint')
+    expect(win.isPlatformModifierHeld({ metaKey: false, ctrlKey: true })).toBe(true)
+    expect(win.isPlatformModifierHeld({ metaKey: true, ctrlKey: false })).toBe(false)
+    expect(win.isPlatformModifierHeld({ metaKey: false, ctrlKey: false })).toBe(false)
+  })
 })

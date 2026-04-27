@@ -1,3 +1,8 @@
+/* eslint-disable max-lines -- Why: this is Orca's main-process entry point;
+   it owns app lifecycle, service wiring, window creation, and hook/daemon
+   startup. Splitting by line count would fragment tightly coupled startup
+   logic across files without a cleaner ownership seam. */
+import { grantDirAcl } from './win32-utils'
 import { app, BrowserWindow, nativeImage, nativeTheme } from 'electron'
 import { electronApp, is } from '@electron-toolkit/utils'
 import devIcon from '../../resources/icon-dev.png?asset'
@@ -33,8 +38,16 @@ import { attachMainWindowServices } from './window/attach-main-window-services'
 import { createMainWindow } from './window/createMainWindow'
 import { CodexAccountService } from './codex-accounts/service'
 import { CodexRuntimeHomeService } from './codex-accounts/runtime-home-service'
-import { openCodeHookService } from './opencode/hook-service'
+import { ClaudeAccountService } from './claude-accounts/service'
+import { ClaudeRuntimeAuthService } from './claude-accounts/runtime-auth-service'
 import { StarNagService } from './star-nag/service'
+import { agentHookServer } from './agent-hooks/server'
+import { claudeHookService } from './claude/hook-service'
+import { codexHookService } from './codex/hook-service'
+import { geminiHookService } from './gemini/hook-service'
+import { cursorHookService } from './cursor/hook-service'
+import { getPtyIdForPaneKey, registerPaneKeyTeardownListener } from './ipc/pty'
+import { AGENT_DASHBOARD_ENABLED } from '../shared/constants'
 import { AgentBrowserBridge } from './browser/agent-browser-bridge'
 import { browserManager } from './browser/browser-manager'
 
@@ -49,6 +62,8 @@ let claudeUsage: ClaudeUsageStore | null = null
 let codexUsage: CodexUsageStore | null = null
 let codexAccounts: CodexAccountService | null = null
 let codexRuntimeHome: CodexRuntimeHomeService | null = null
+let claudeAccounts: ClaudeAccountService | null = null
+let claudeRuntimeAuth: ClaudeRuntimeAuthService | null = null
 let runtime: OrcaRuntimeService | null = null
 let rateLimits: RateLimitService | null = null
 let runtimeRpc: OrcaRuntimeRpcServer | null = null
@@ -115,6 +130,27 @@ function openMainWindow(): BrowserWindow {
   if (!codexRuntimeHome) {
     throw new Error('Codex runtime home service must be initialized before opening the main window')
   }
+  if (!claudeAccounts) {
+    throw new Error('Claude account service must be initialized before opening the main window')
+  }
+  if (!claudeRuntimeAuth) {
+    throw new Error(
+      'Claude runtime auth service must be initialized before opening the main window'
+    )
+  }
+
+  // Why: Chromium's BrowserWindow constructor resets the userData DACL to a
+  // Protected DACL. Grant explicit Full Control ACEs on all existing children
+  // before the constructor runs so they survive the upcoming DACL reset.
+  // Per-write EPERM retries in fs-utils/installer-utils serve as the backstop
+  // for any directories created after startup.
+  if (process.platform === 'win32') {
+    try {
+      grantDirAcl(app.getPath('userData'), { recursive: true })
+    } catch {
+      // Non-fatal; per-call retries are the backstop.
+    }
+  }
 
   const window = createMainWindow(store, {
     getIsQuitting: () => isQuitting,
@@ -122,6 +158,7 @@ function openMainWindow(): BrowserWindow {
       isQuitting = false
     }
   })
+
   registerCoreHandlers(
     store,
     runtime,
@@ -129,19 +166,151 @@ function openMainWindow(): BrowserWindow {
     claudeUsage,
     codexUsage,
     codexAccounts,
+    claudeAccounts,
     rateLimits,
     window.webContents.id
   )
-  attachMainWindowServices(window, store, runtime, () => codexRuntimeHome!.prepareForCodexLaunch())
+  attachMainWindowServices(
+    window,
+    store,
+    runtime,
+    () => codexRuntimeHome!.prepareForCodexLaunch(),
+    () => claudeRuntimeAuth!.prepareForClaudeLaunch()
+  )
   rateLimits.attach(window)
   rateLimits.start()
   window.on('closed', () => {
     if (mainWindow === window) {
       mainWindow = null
     }
+    // Why: detach the agent hook listener on window close so the server
+    // never fires into a destroyed webContents during the gap before
+    // reopen (e.g. macOS dock re-activation). This also ensures the
+    // replay-loop through lastStatusByPaneKey runs only on deliberate
+    // window recreations instead of stacking on top of stale listeners.
+    agentHookServer.setListener(null)
+    // Why: any running cursor spinner intervals would fire into a destroyed
+    // webContents; stop them all here instead of deferring to per-pane
+    // teardown, which may never run for restored-but-never-torn-down panes
+    // when the window goes away.
+    // Why: stopCursorSpinner deletes only the current entry, which the Map
+    // iterator handles safely — no snapshot copy needed.
+    for (const paneKey of cursorSpinnerByPaneKey.keys()) {
+      stopCursorSpinner(paneKey)
+    }
   })
   mainWindow = window
+  agentHookServer.setListener(({ paneKey, tabId, worktreeId, payload }) => {
+    if (mainWindow?.isDestroyed()) {
+      return
+    }
+    if (AGENT_DASHBOARD_ENABLED) {
+      mainWindow?.webContents.send('agentStatus:set', {
+        paneKey,
+        tabId,
+        worktreeId,
+        ...payload
+      })
+    }
+    // Why: cursor-agent emits no title-based working/idle signal — its OSC
+    // title stays "Cursor Agent" for the whole turn. Synthesize an OSC title
+    // update from the hook state and inject it into the pane's data stream so
+    // the existing renderer-side title tracker (the one that drives the
+    // sidebar spinner, unread badge, and Claude prompt-cache timer for every
+    // other agent) lights up for cursor panes too. Braille prefix ⠋ → working
+    // keyword path; "action required" keyword → permission; bare label → idle.
+    // This runs regardless of AGENT_DASHBOARD_ENABLED because cursor has no
+    // pre-dashboard title heuristic to fall back to.
+    if (payload.agentType === 'cursor') {
+      driveCursorPaneFromHook(paneKey, payload.state)
+    }
+  })
   return window
+}
+
+// Why: Pi-style persistent spinner — cursor-agent re-emits its own
+// "Cursor Agent" OSC title on every internal redraw, so a single synthesized
+// "⠋ Cursor Agent" frame gets silently overwritten in the renderer within
+// milliseconds and the sidebar dot snaps back to solid. Keep asserting a
+// fresh working frame on an interval until the hook reports a non-working
+// state. Interval matches Pi's 80ms cadence — fast enough for a smooth
+// spinner, slow enough to stay well under the per-flush IPC budget.
+const CURSOR_SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+const CURSOR_SPINNER_INTERVAL_MS = 80
+const cursorSpinnerByPaneKey = new Map<
+  string,
+  { timer: ReturnType<typeof setInterval>; frame: number }
+>()
+
+// Why: on PTY teardown the paneKey→ptyId mapping is dropped, so the spinner
+// interval would keep firing but sendCursorTitle would no-op forever. Stop
+// the interval explicitly so the process doesn't carry a timer per dead pane.
+registerPaneKeyTeardownListener((paneKey) => {
+  stopCursorSpinner(paneKey)
+})
+
+function sendCursorTitle(ptyId: string, data: string): void {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return
+  }
+  mainWindow.webContents.send('pty:data', { id: ptyId, data })
+}
+
+function stopCursorSpinner(paneKey: string): void {
+  const entry = cursorSpinnerByPaneKey.get(paneKey)
+  if (entry) {
+    clearInterval(entry.timer)
+    cursorSpinnerByPaneKey.delete(paneKey)
+  }
+}
+
+function driveCursorPaneFromHook(paneKey: string, state: string): void {
+  const ptyId = getPtyIdForPaneKey(paneKey)
+  if (!ptyId) {
+    return
+  }
+  if (state === 'working') {
+    // Why: immediately emit the first frame so the spinner starts visible at
+    // this hook event even if the interval's next tick is 80ms away. Subsequent
+    // frames come from the interval below.
+    const existing = cursorSpinnerByPaneKey.get(paneKey)
+    const frame = existing ? existing.frame : 0
+    sendCursorTitle(ptyId, `\x1b]0;${CURSOR_SPINNER_FRAMES[frame]} Cursor Agent\x07`)
+    if (existing) {
+      return
+    }
+    const timer = setInterval(() => {
+      const ptyIdNow = getPtyIdForPaneKey(paneKey)
+      if (!ptyIdNow) {
+        stopCursorSpinner(paneKey)
+        return
+      }
+      const cur = cursorSpinnerByPaneKey.get(paneKey)
+      if (!cur) {
+        return
+      }
+      cur.frame = (cur.frame + 1) % CURSOR_SPINNER_FRAMES.length
+      sendCursorTitle(ptyIdNow, `\x1b]0;${CURSOR_SPINNER_FRAMES[cur.frame]} Cursor Agent\x07`)
+    }, CURSOR_SPINNER_INTERVAL_MS)
+    cursorSpinnerByPaneKey.set(paneKey, { timer, frame })
+    return
+  }
+  // Why: leaving the spinner running after a `blocked`/`waiting`/`done` event
+  // would immediately race the terminal state back to "working" on the next
+  // tick. Stop first, then inject the terminal frame. Idle/done uses a
+  // decorated "Cursor ready" label rather than the bare native "Cursor Agent"
+  // — which the detector deliberately treats as a no-op so cursor's own
+  // per-turn re-emissions cannot clobber our synthesized state. The
+  // done/permission frames also carry a trailing BEL (0x07 outside of any OSC
+  // sequence) because cursor-agent does not emit one on its own — and the
+  // tab-level unread badge + notification dispatch in pty-connection keys off
+  // BEL, not the working→idle title transition.
+  stopCursorSpinner(paneKey)
+  const synthetic =
+    state === 'blocked' || state === 'waiting'
+      ? '\x1b]0;Cursor - action required\x07\x07'
+      : '\x1b]0;Cursor ready\x07\x07'
+  sendCursorTitle(ptyId, synthetic)
 }
 
 app.whenReady().then(async () => {
@@ -160,13 +329,44 @@ app.whenReady().then(async () => {
   rateLimits = new RateLimitService()
   codexRuntimeHome = new CodexRuntimeHomeService(store)
   codexAccounts = new CodexAccountService(store, rateLimits, codexRuntimeHome)
+  claudeRuntimeAuth = new ClaudeRuntimeAuthService(store)
+  claudeAccounts = new ClaudeAccountService(store, rateLimits, claudeRuntimeAuth)
   rateLimits.setCodexHomePathResolver(() => codexRuntimeHome!.prepareForRateLimitFetch())
+  rateLimits.setClaudeAuthPreparationResolver(() => claudeRuntimeAuth!.prepareForRateLimitFetch())
   runtime = new OrcaRuntimeService(store, stats)
   starNag = new StarNagService(store, stats)
   starNag.start()
   starNag.registerIpcHandlers()
   runtime.setAgentBrowserBridge(new AgentBrowserBridge(browserManager))
   nativeTheme.themeSource = store.getSettings().theme ?? 'system'
+  // Why: managed hook installation mutates user-global agent config.
+  // Startup must fail open so a malformed local config never bricks Orca.
+  // Claude/Codex/Gemini installs are gated behind AGENT_DASHBOARD_ENABLED
+  // because the surface they feed (the in-progress agent dashboard) isn't
+  // shippable yet. Cursor installs unconditionally because cursor-agent
+  // emits no title-based working/idle signal at all (its terminal title
+  // stays literally "Cursor Agent" across a turn), so the hook channel is
+  // the only way to drive the sidebar spinner + unread path for it — there
+  // is no "pre-dashboard" fallback to degrade to the way Claude/Codex have.
+  if (AGENT_DASHBOARD_ENABLED) {
+    for (const installManagedHooks of [
+      () => claudeHookService.install(),
+      () => codexHookService.install(),
+      () => geminiHookService.install()
+    ]) {
+      try {
+        installManagedHooks()
+      } catch (error) {
+        console.error('[agent-hooks] Failed to install managed hooks:', error)
+      }
+    }
+  }
+  try {
+    cursorHookService.install()
+  } catch (error) {
+    console.error('[agent-hooks] Failed to install Cursor managed hooks:', error)
+  }
+
   registerAppMenu({
     onCheckForUpdates: (options) => checkForUpdatesFromMenu(options),
     onOpenSettings: () => {
@@ -224,13 +424,25 @@ app.whenReady().then(async () => {
   }
   setAppRuntimeFlags({ daemonEnabledAtStartup: daemonStarted })
 
-  // Why: both server binds are independent and neither blocks window creation.
-  // Parallelizing them with the window open shaves ~100-200ms off cold start.
+  // Why: the hook server also runs unconditionally so cursor-agent panes can
+  // reach it. Claude/Codex/Gemini hook scripts stay uninstalled while
+  // AGENT_DASHBOARD_ENABLED is false, so only cursor events flow in. PTY
+  // spawn env reads ORCA_AGENT_HOOK_* from the live server state, so the
+  // server must start before the window opens — otherwise restored terminals
+  // race ahead without the env on first launch.
+  try {
+    await agentHookServer.start({ env: app.isPackaged ? 'production' : 'development' })
+  } catch (error) {
+    // Why: Claude/Codex/Gemini/OpenCode/Cursor hook callbacks are sidebar
+    // enrichment only. Orca must still boot even if the local loopback
+    // receiver cannot bind on this launch.
+    console.error('[agent-hooks] Failed to start local hook server:', error)
+  }
+
+  // Why: once the hook server is ready (or has already failed open), window
+  // creation and runtime RPC startup are independent.
   const [win] = await Promise.all([
     Promise.resolve(openMainWindow()),
-    openCodeHookService.start().catch((error) => {
-      console.error('[opencode] Failed to start local hook server:', error)
-    }),
     runtimeRpc.start().catch((error) => {
       console.error('[runtime] Failed to start local RPC transport:', error)
     })
@@ -264,25 +476,24 @@ app.on('before-quit', () => {
   rateLimits?.stop()
 })
 
-app.on('will-quit', () => {
+// Why: will-quit fires twice when daemon disconnect needs an async flush.
+// First pass: run all sync cleanup, then preventDefault to await the final
+// checkpoint writes. Second pass (after disconnect resolves): skip the
+// async work and let Electron exit.
+let daemonDisconnectDone = false
+app.on('will-quit', (e) => {
   // Why: stats.flush() must run before killAllPty() so it can read the
   // live agent state and emit synthetic agent_stop events for agents that
   // are still running. killAllPty() does not call runtime.onPtyExit(),
   // so without this ordering, running agents would produce orphaned
   // agent_start events with no matching stops.
-  openCodeHookService.stop()
   starNag?.stop()
+  agentHookServer.stop()
   stats?.flush()
   // Why: agent-browser daemon processes would otherwise linger after Orca quits,
   // holding ports and leaving stale session state on disk.
   runtime?.getAgentBrowserBridge()?.destroyAllSessions()
   killAllPty()
-  // Why: in daemon mode, killAllPty is a no-op (daemon sessions survive app
-  // quit) but the client connection must be closed so sockets are released.
-  // disconnectDaemon only tears down the client transport — it does NOT kill
-  // the daemon process or mark its history as cleanly ended, preserving both
-  // warm reattach and crash recovery on next launch.
-  disconnectDaemon()
   void closeAllWatchers()
   if (runtimeRpc) {
     void runtimeRpc.stop().catch((error) => {
@@ -290,6 +501,18 @@ app.on('will-quit', () => {
     })
   }
   store?.flush()
+
+  // Why: disconnectDaemon writes final checkpoints via async getSnapshot RPCs.
+  // Without preventDefault, Electron exits before the RPCs complete and the
+  // checkpoint data is lost. The guard prevents an infinite quit loop —
+  // app.quit() re-fires will-quit, but the second pass skips straight through.
+  if (!daemonDisconnectDone) {
+    e.preventDefault()
+    disconnectDaemon().finally(() => {
+      daemonDisconnectDone = true
+      app.quit()
+    })
+  }
 })
 
 app.on('window-all-closed', () => {

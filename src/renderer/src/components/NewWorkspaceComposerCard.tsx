@@ -18,8 +18,8 @@ import AgentCombobox from '@/components/agent/AgentCombobox'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
-import type { TuiAgent } from '../../../shared/types'
-import { isGitRepoKind } from '../../../shared/repo-kind'
+import type { GitHubWorkItem, TuiAgent } from '../../../shared/types'
+import StartFromField from '@/components/new-workspace/StartFromField'
 
 const isMac = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
 
@@ -45,6 +45,13 @@ type NewWorkspaceComposerCardProps = {
   onCreate: () => void
   note: string
   onNoteChange: (value: string) => void
+  baseBranch: string | undefined
+  onBaseBranchChange: (next: string | undefined) => void
+  onBaseBranchPrSelect: (baseBranch: string, item: GitHubWorkItem) => void
+  baseBranchLinkedPrNumber: number | null
+  selectedRepoPath: string | null
+  selectedRepoIsRemote: boolean
+  startFromResetHint: string | null
   setupConfig: { source: 'yaml' | 'legacy'; command: string } | null
   requiresExplicitSetupChoice: boolean
   setupDecision: 'run' | 'skip' | null
@@ -181,6 +188,13 @@ export default function NewWorkspaceComposerCard({
   onCreate,
   note,
   onNoteChange,
+  baseBranch,
+  onBaseBranchChange,
+  onBaseBranchPrSelect,
+  baseBranchLinkedPrNumber,
+  selectedRepoPath,
+  selectedRepoIsRemote,
+  startFromResetHint,
   setupConfig,
   requiresExplicitSetupChoice,
   setupDecision,
@@ -190,11 +204,9 @@ export default function NewWorkspaceComposerCard({
   createError
 }: NewWorkspaceComposerCardProps): React.JSX.Element {
   const { isFileDragOver, dragHandlers } = useComposerFileDragOver()
-  const addRepo = useAppStore((s) => s.addRepo)
-  const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
+  const openModal = useAppStore((s) => s.openModal)
   const defaultTuiAgent = useAppStore((s) => s.settings?.defaultTuiAgent ?? null)
   const updateSettings = useAppStore((s) => s.updateSettings)
-  const [isAddingRepo, setIsAddingRepo] = React.useState(false)
 
   const handleSetDefaultAgent = React.useCallback(
     (next: TuiAgent | 'blank' | null) => {
@@ -218,25 +230,9 @@ export default function NewWorkspaceComposerCard({
     [detectedAgentIds]
   )
 
-  const handleAddRepo = React.useCallback(async (): Promise<void> => {
-    if (isAddingRepo) {
-      return
-    }
-    setIsAddingRepo(true)
-    try {
-      const repo = await addRepo()
-      if (!repo) {
-        return
-      }
-      if (isGitRepoKind(repo)) {
-        await fetchWorktrees(repo.id)
-      }
-      onRepoChange(repo.id)
-      focusNameInput()
-    } finally {
-      setIsAddingRepo(false)
-    }
-  }, [addRepo, fetchWorktrees, focusNameInput, isAddingRepo, onRepoChange])
+  const handleAddRepo = React.useCallback((): void => {
+    openModal('add-repo')
+  }, [openModal])
 
   return (
     <div
@@ -265,12 +261,9 @@ export default function NewWorkspaceComposerCard({
                   type="button"
                   variant="ghost"
                   size="icon-xs"
-                  disabled={isAddingRepo}
-                  onClick={() => void handleAddRepo()}
+                  onClick={handleAddRepo}
                   className="size-5 shrink-0 rounded-sm text-muted-foreground hover:text-foreground"
-                  aria-label={
-                    isAddingRepo ? 'Adding folder or repository' : 'Add folder or repository'
-                  }
+                  aria-label="Add folder or repository"
                 >
                   <FolderPlus className="size-3" />
                 </Button>
@@ -370,6 +363,19 @@ export default function NewWorkspaceComposerCard({
                 inside the overflow-hidden drawer above. Without it the ring
                 gets clipped on the right edge when the field is focused. */}
             <div className="space-y-4 px-1 pt-1">
+              {repoId ? (
+                <StartFromField
+                  repoId={repoId}
+                  repoPath={selectedRepoPath}
+                  isRemoteRepo={selectedRepoIsRemote}
+                  baseBranch={baseBranch}
+                  baseBranchLinkedPrNumber={baseBranchLinkedPrNumber}
+                  onBaseBranchChange={onBaseBranchChange}
+                  onBaseBranchPrSelect={onBaseBranchPrSelect}
+                  resetHint={startFromResetHint}
+                />
+              ) : null}
+
               <div className="space-y-1">
                 <label className="text-xs font-medium text-muted-foreground">Note</label>
                 <textarea

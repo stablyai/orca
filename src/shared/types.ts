@@ -165,6 +165,11 @@ export type TerminalTab = {
   createdAt: number
   /** Bumped on shutdown so TerminalPane remounts with a fresh PTY. */
   generation?: number
+  /** Why: records the shell this tab was explicitly opened with (e.g. 'wsl.exe'
+   *  from the "+" submenu) so the PTY can re-use the same shell on reconnect
+   *  without needing the user to interact with the tab again. Undefined means
+   *  "use the default shell setting". */
+  shellOverride?: string
 }
 
 export type BrowserHistoryEntry = {
@@ -331,6 +336,13 @@ export type WorkspaceSessionState = {
   tabGroupLayouts?: Record<string, TabGroupLayoutNode>
   /** Per-worktree focused group at shutdown. */
   activeGroupIdByWorktree?: Record<string, string>
+  /** SSH target IDs that were connected at shutdown. Used on startup to
+   *  auto-reconnect before attempting remote PTY reattach. */
+  activeConnectionIdsAtShutdown?: string[]
+  /** Maps tab IDs to their remote relay PTY session IDs. Populated at
+   *  shutdown from renderer state so remote PTYs can be reattached via
+   *  the relay's pty.attach RPC on startup. */
+  remoteSessionIdsByTabId?: Record<string, string>
 }
 
 // ─── GitHub ──────────────────────────────────────────────────────────
@@ -395,6 +407,12 @@ export type PRComment = {
   line?: number
   /** Start line of the review annotation range (1-based). Absent for single-line comments. */
   startLine?: number
+  /** True when GitHub identifies the author as a bot (REST `user.type === 'Bot'` or
+   *  GraphQL `__typename === 'Bot'`). Preferred over login-string heuristics because
+   *  third-party review bots (e.g. qodo-ai-reviewer, coderabbitai) don't follow a
+   *  predictable naming convention. Absent when the data source can't report it
+   *  (non-GitHub fallbacks via `gh pr view`). */
+  isBot?: boolean
 }
 
 export type IssueInfo = {
@@ -422,6 +440,10 @@ export type GitHubWorkItem = {
   author: string | null
   branchName?: string
   baseRefName?: string
+  // Why: true when a PR's head lives on a fork (headRepositoryOwner !== selected repo owner).
+  // The Start-from picker disables fork PRs in v1 because the create flow cannot
+  // safely resolve a fork head from headRefName alone.
+  isCrossRepository?: boolean
   /** Why: required because the cross-repo view merges items from every selected
    *  repo — the table row's repo pill and the "open in browser" fallback need
    *  to know which repo an item came from. Stamped by the renderer fetcher
@@ -457,6 +479,8 @@ export type GitHubWorkItemDetails = {
   baseSha?: string
   checks?: PRCheckDetail[]
   files?: GitHubPRFile[]
+  /** Logins of current assignees. Only set for issues. */
+  assignees?: string[]
 }
 
 // ─── Linear ─────────────────────────────────────────────────────────
@@ -483,16 +507,85 @@ export type LinearIssue = {
     color: string
   }
   team: {
+    id: string
     name: string
     key: string
   }
   labels: string[]
+  labelIds: string[]
   assignee?: {
+    id: string
     displayName: string
     avatarUrl?: string
   }
   priority: number
   updatedAt: string
+}
+
+export type LinearComment = {
+  id: string
+  body: string
+  createdAt: string
+  user?: {
+    displayName: string
+    avatarUrl?: string
+  }
+}
+
+// ─── Issue Mutations ────────────────────────────────────────────────
+
+export type GitHubIssueUpdate = {
+  state?: 'open' | 'closed'
+  title?: string
+  addLabels?: string[]
+  removeLabels?: string[]
+  addAssignees?: string[]
+  removeAssignees?: string[]
+}
+
+export type LinearIssueUpdate = {
+  stateId?: string
+  title?: string
+  assigneeId?: string | null
+  priority?: number
+  labelIds?: string[]
+}
+
+export type ClassifiedError = {
+  type:
+    | 'permission_denied'
+    | 'not_found'
+    | 'validation_error'
+    | 'rate_limited'
+    | 'network_error'
+    | 'unknown'
+  message: string
+}
+
+export type LinearWorkflowState = {
+  id: string
+  name: string
+  type: string
+  color: string
+  position: number
+}
+
+export type LinearLabel = {
+  id: string
+  name: string
+  color: string
+}
+
+export type LinearMember = {
+  id: string
+  displayName: string
+  avatarUrl?: string
+}
+
+export type LinearTeam = {
+  id: string
+  name: string
+  key: string
 }
 
 // ─── Hooks (orca.yaml) ──────────────────────────────────────────────
@@ -609,6 +702,34 @@ export type CodexRateLimitAccountsState = {
   activeAccountId: string | null
 }
 
+export type ClaudeManagedAccount = {
+  id: string
+  email: string
+  managedAuthPath: string
+  authMethod: 'subscription-oauth' | 'unknown'
+  organizationUuid?: string | null
+  organizationName?: string | null
+  createdAt: number
+  updatedAt: number
+  lastAuthenticatedAt: number
+}
+
+export type ClaudeManagedAccountSummary = {
+  id: string
+  email: string
+  authMethod: 'subscription-oauth' | 'unknown'
+  organizationUuid?: string | null
+  organizationName?: string | null
+  createdAt: number
+  updatedAt: number
+  lastAuthenticatedAt: number
+}
+
+export type ClaudeRateLimitAccountsState = {
+  accounts: ClaudeManagedAccountSummary[]
+  activeAccountId: string | null
+}
+
 /** All AI coding agents Orca knows how to launch. Used for the agent picker in the new-workspace
  *  flow and for the default-agent setting. Extend this union as new agents are added. */
 export type TuiAgent =
@@ -647,12 +768,42 @@ export type SetupScriptLaunchMode = 'split-vertical' | 'split-horizontal' | 'new
 /** Direction used when the setup script launch mode is a split. */
 export type SetupSplitDirection = 'vertical' | 'horizontal'
 
+export type TerminalColorOverrides = {
+  foreground?: string
+  background?: string
+  cursor?: string
+  cursorAccent?: string
+  selectionBackground?: string
+  selectionForeground?: string
+  black?: string
+  red?: string
+  green?: string
+  yellow?: string
+  blue?: string
+  magenta?: string
+  cyan?: string
+  white?: string
+  brightBlack?: string
+  brightRed?: string
+  brightGreen?: string
+  brightYellow?: string
+  brightBlue?: string
+  brightMagenta?: string
+  brightCyan?: string
+  brightWhite?: string
+  // Why: xterm.js ITheme does not expose a `bold` key, but Ghostty users
+  // expect the setting to be preserved so a future renderer CSS override
+  // or xterm upgrade can honour it without a migration.
+  bold?: string
+}
+
 export type GlobalSettings = {
   workspaceDir: string
   nestWorkspaces: boolean
   refreshLocalBaseRefOnWorktreeCreate: boolean
   branchPrefix: 'git-username' | 'custom' | 'none'
   branchPrefixCustom: string
+  enableGitHubAttribution: boolean
   theme: 'system' | 'dark' | 'light'
   editorAutoSave: boolean
   editorAutoSaveDelayMs: number
@@ -660,6 +811,15 @@ export type GlobalSettings = {
   terminalFontFamily: string
   terminalFontWeight: number
   terminalLineHeight: number
+  /** Whether to enable programming-ligatures rendering via
+   *  `@xterm/addon-ligatures`.
+   *  - `'auto'` (default): enabled only when the configured font is known to
+   *    ship ligatures (Fira Code, JetBrains Mono, Cascadia Code, etc.). This
+   *    keeps the out-of-the-box experience right for users who install a
+   *    ligature font without touching settings.
+   *  - `'on'` / `'off'`: explicit override. Never changes when the user
+   *    switches fonts, so "off" always stays off. */
+  terminalLigatures: 'auto' | 'on' | 'off'
   terminalCursorStyle: 'bar' | 'block' | 'underline'
   terminalCursorBlink: boolean
   terminalThemeDark: string
@@ -671,6 +831,14 @@ export type GlobalSettings = {
   terminalActivePaneOpacity: number
   terminalPaneOpacityTransitionMs: number
   terminalDividerThicknessPx: number
+  terminalBackgroundOpacity?: number
+  terminalColorOverrides?: TerminalColorOverrides
+  terminalPaddingX?: number
+  terminalPaddingY?: number
+  terminalMouseHideWhileTyping?: boolean
+  terminalWordSeparator?: string
+  terminalCursorOpacity?: number
+  windowBackgroundBlur?: boolean
   /** Why: Windows terminals conventionally use right-click as a paste gesture.
    *  The setting stays Windows-only so macOS/Linux keep their existing context
    *  menu behavior and users can still reach the menu with Ctrl+right-click. */
@@ -706,6 +874,9 @@ export type GlobalSettings = {
   rightSidebarOpenByDefault: boolean
   /** Whether to show the live agent activity count badge in the titlebar. */
   showTitlebarAgentActivity: boolean
+  /** Why: the Tasks sidebar label can be kept cleaner for users who do not
+   *  actively use the GitHub/Linear integrations behind it. */
+  showTaskProviderIcons: boolean
   diffDefaultView: 'inline' | 'side-by-side'
   notifications: NotificationSettings
   /** When true, a countdown timer is shown after a Claude agent becomes idle,
@@ -722,6 +893,11 @@ export type GlobalSettings = {
    *  analytics and external terminal sessions. */
   codexManagedAccounts: CodexManagedAccount[]
   activeCodexManagedAccountId: string | null
+  /** Why: Claude Code keeps conversations under one shared config root. Orca
+   *  persists only per-account auth material here so switching accounts does
+   *  not fork prior chat/session context the way CLAUDE_CONFIG_DIR swapping would. */
+  claudeManagedAccounts: ClaudeManagedAccount[]
+  activeClaudeManagedAccountId: string | null
   /** When true, each worktree gets its own shell history file so ArrowUp
    *  does not surface commands from other worktrees. Defaults to true.
    *  Disable to revert to shared global shell history. */
@@ -739,6 +915,9 @@ export type GlobalSettings = {
   skipDeleteWorktreeConfirm: boolean
   /** Default preset in the new-workspace GitHub task view. */
   defaultTaskViewPreset: TaskViewPresetId
+  /** Why: persists the user's last-used task source so the Tasks page
+   *  reopens to the same provider instead of always defaulting to GitHub. */
+  defaultTaskSource: 'github' | 'linear'
   /** Why: persists the user's repo selection in the cross-repo tasks view.
    *  `null` means sticky-all — every eligible repo is selected, including
    *  repos added in future sessions, so the "All repos" label stays
@@ -746,6 +925,10 @@ export type GlobalSettings = {
    *  eligible are silently dropped on load. An empty array after that drop
    *  is treated as `null`. */
   defaultRepoSelection: string[] | null
+  /** Why: persists the user's Linear team selection in the tasks view.
+   *  Same nullable-array pattern as `defaultRepoSelection`: `null` = sticky-all,
+   *  `string[]` = frozen subset of team IDs. */
+  defaultLinearTeamSelection: string[] | null
   /** Per-agent CLI command overrides. A missing key means use the catalog default binary name. */
   agentCmdOverrides: Partial<Record<TuiAgent, string>>
   /** Why: macOS terminals must choose between letting Option compose layout
@@ -778,15 +961,14 @@ export type GlobalSettings = {
    *  toast shown to users upgrading from v1.3.0 (where the daemon was on by
    *  default). Set to true the first time the toast fires so it never repeats. */
   experimentalTerminalDaemonNoticeShown: boolean
-  /** When true, Orca sets FORCE_HYPERLINK=1 in every spawned PTY's env. That
-   *  makes modern CLIs (oh-my-zsh's supports_hyperlinks(), coreutils, the Rust
-   *  supports-hyperlinks crate, etc.) emit OSC-8 hyperlink escapes even when
-   *  they would otherwise skip them. Defaults to true to preserve prior
-   *  behavior, but users with heavy shell init (large oh-my-zsh / p10k / nvm /
-   *  pyenv / conda setups) can measurably speed up terminal start by turning
-   *  this off — the extra branching and escape emission across the many
-   *  subshells fired during rc init can multiply startup time. */
-  terminalForceHyperlink: boolean
+}
+
+export type GhosttyImportPreview = {
+  found: boolean
+  configPath?: string
+  diff: Partial<GlobalSettings>
+  unsupportedKeys: string[]
+  error?: string
 }
 
 export type NotificationEventSource = 'agent-task-complete' | 'terminal-bell' | 'test'
@@ -806,17 +988,9 @@ export type NotificationDispatchResult = {
   reason?: 'disabled' | 'source-disabled' | 'suppressed-focus' | 'cooldown' | 'not-supported'
 }
 
-export type OpenCodeStatusEvent = {
-  ptyId: string
-  /** Compatibility shim for OpenCode: Orca's activity surfaces already depend
-   *  on this normalized state machine, so hook payloads collapse into the same
-   *  working/idle/permission categories instead of inventing a parallel model. */
-  status: 'working' | 'idle' | 'permission'
-}
-
 export type WorktreeCardProperty = 'status' | 'unread' | 'ci' | 'issue' | 'pr' | 'comment'
 
-export type StatusBarItem = 'claude' | 'codex' | 'ssh' | 'sessions'
+export type StatusBarItem = 'claude' | 'codex' | 'ssh' | 'sessions' | 'memory'
 
 export type PersistedUIState = {
   lastActiveRepoId: string | null
@@ -1010,6 +1184,8 @@ export type SearchMatch = {
   column: number
   matchLength: number
   lineContent: string
+  displayColumn?: number
+  displayMatchLength?: number
 }
 
 export type SearchFileResult = {
@@ -1044,4 +1220,64 @@ export type StatsSummary = {
   // For display formatting — sourced from aggregates, not the event log,
   // so it survives event trimming.
   firstEventAt: number | null // timestamp of first-ever event, for "tracking since..."
+}
+
+// ─── Memory dashboard ──────────────────────────────────────────────
+// Resource-metrics snapshot shared across main, preload, and renderer so
+// the IPC payload is the same shape everywhere. Memory is in bytes; CPU
+// is a percentage (can exceed 100 on multi-core).
+
+/** cpu is percent of a single core — can exceed 100 on multi-core. memory is in bytes. */
+export type UsageValues = {
+  cpu: number
+  memory: number
+}
+
+/** The top-level cpu/memory are the sum of main + renderer + other. */
+export type AppMemory = UsageValues & {
+  main: UsageValues
+  renderer: UsageValues
+  other: UsageValues
+  /** Oldest-first memory samples (bytes) for the whole Orca app, one per
+   *  successful collection. Used to render the sparkline in the dashboard.
+   *  Empty before the first snapshot is recorded. */
+  history: number[]
+}
+
+export type SessionMemory = UsageValues & {
+  sessionId: string
+  paneKey: string | null
+  pid: number
+}
+
+/** The top-level cpu/memory are the sum of sessions. */
+export type WorktreeMemory = UsageValues & {
+  worktreeId: string
+  worktreeName: string
+  repoId: string
+  repoName: string
+  sessions: SessionMemory[]
+  /** Oldest-first memory samples (bytes) for this worktree's tracked
+   *  subtrees, one per successful collection. */
+  history: number[]
+}
+
+export type HostMemory = {
+  totalMemory: number
+  freeMemory: number
+  usedMemory: number
+  memoryUsagePercent: number
+  cpuCoreCount: number
+  loadAverage1m: number
+}
+
+export type MemorySnapshot = {
+  app: AppMemory
+  worktrees: WorktreeMemory[]
+  host: HostMemory
+  /** Sum of app + all tracked worktree sessions. Percent of a single core, so may exceed 100 on multi-core machines. */
+  totalCpu: number
+  /** Sum of app + all tracked worktree sessions in bytes. NOT the same as host.totalMemory, which is physical RAM. */
+  totalMemory: number
+  collectedAt: number
 }

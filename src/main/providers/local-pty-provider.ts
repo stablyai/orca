@@ -2,10 +2,11 @@
 ~70 lines of scanner/promise wiring to spawn(). Splitting the method would scatter
 tightly coupled PTY lifecycle logic (scan → ready → write → exit cleanup) across
 files without a cleaner ownership seam. */
-import { basename, win32 as pathWin32 } from 'path'
+import { basename } from 'path'
+import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
 import { existsSync } from 'fs'
 import * as pty from 'node-pty'
-import { parseWslPath } from '../wsl'
+import { parseWslPath, isWslAvailable } from '../wsl'
 import {
   injectHistoryEnv,
   updateHistFileForFallback,
@@ -18,6 +19,7 @@ import {
   spawnShellWithFallback
 } from './local-pty-utils'
 import {
+  getAttributionShellLaunchConfig,
   getShellReadyLaunchConfig,
   createShellReadyScanState,
   scanForShellReady,
@@ -92,12 +94,6 @@ export type LocalPtyProviderOptions = {
   /** Whether worktree-scoped shell history is enabled. When true (or absent)
    *  and a worktreeId is provided, HISTFILE is scoped per-worktree. */
   isHistoryEnabled?: () => boolean
-  /** Whether to set FORCE_HYPERLINK=1 in spawned PTYs. Historically always on;
-   *  now user-togglable because the extra OSC-8 emission branches in oh-my-zsh,
-   *  coreutils, and the Rust supports-hyperlinks crate can compound to a
-   *  significant shell-startup slowdown with heavy rc files. When absent,
-   *  defaults to the prior behavior (on). */
-  isForceHyperlinkEnabled?: () => boolean
   /** Why: COMSPEC is always cmd.exe on a stock Windows machine, so reading it
    *  directly would ignore the user's shell preference. This callback lets the
    *  IPC layer inject the persisted setting without coupling the provider to the
@@ -139,37 +135,25 @@ export class LocalPtyProvider implements IPtyProvider {
       effectiveCwd = getDefaultCwd()
       validationCwd = cwd
     } else if (process.platform === 'win32') {
-      shellPath = this.opts.getWindowsShell?.() || process.env.COMSPEC || 'powershell.exe'
-      // Why: use path.win32.basename so backslash-separated Windows paths
-      // are parsed correctly even when tests mock process.platform on Linux CI.
-      const shellBasename = pathWin32.basename(shellPath).toLowerCase()
-      // Why: On CJK Windows (Chinese, Japanese, Korean), the console code page
-      // defaults to the system ANSI code page (e.g. 936/GBK for Chinese).
-      // ConPTY encodes its output pipe using this code page, but node-pty
-      // always decodes as UTF-8. Without switching to code page 65001 (UTF-8),
-      // multi-byte CJK characters are garbled because the GBK/Shift-JIS/EUC-KR
-      // byte sequences are misinterpreted as UTF-8.
-      if (shellBasename === 'cmd.exe') {
-        shellArgs = ['/K', 'chcp 65001 > nul']
-      } else if (shellBasename === 'powershell.exe' || shellBasename === 'pwsh.exe') {
-        // Why: `-NoExit -Command` alone skips the user's $PROFILE, breaking
-        // custom prompts (oh-my-posh, starship), aliases, and PSReadLine
-        // configuration. Dot-sourcing $PROFILE first restores the normal
-        // startup experience.
-        shellArgs = [
-          '-NoExit',
-          '-Command',
-          'try { . $PROFILE } catch {}; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
-        ]
-      } else {
-        shellArgs = []
-      }
-      effectiveCwd = cwd
-      validationCwd = cwd
+      // Why: shellOverride lets a single tab open in a different shell than the
+      // persisted default (e.g. "New WSL terminal" from the "+" submenu) without
+      // changing the user's setting. It takes priority over the setting.
+      shellPath =
+        args.shellOverride ||
+        this.opts.getWindowsShell?.() ||
+        process.env.COMSPEC ||
+        'powershell.exe'
+      // Why: both this path and the daemon-subprocess path must derive the
+      // same shellArgs for the same (shell, cwd) pair. The helper keeps CJK
+      // UTF-8 setup (chcp 65001), PowerShell $PROFILE dot-sourcing, and the
+      // wsl.exe /mnt/<drive> cwd translation in one place.
+      const resolved = resolveWindowsShellLaunchArgs(shellPath, cwd, defaultCwd)
+      shellArgs = resolved.shellArgs
+      effectiveCwd = resolved.effectiveCwd
+      validationCwd = resolved.validationCwd
     } else {
       shellPath = args.env?.SHELL || process.env.SHELL || '/bin/zsh'
-      shellReadyLaunch = args.command ? getShellReadyLaunchConfig(shellPath) : null
-      shellArgs = shellReadyLaunch?.args ?? ['-l']
+      shellArgs = ['-l']
       effectiveCwd = cwd
       validationCwd = cwd
     }
@@ -180,7 +164,6 @@ export class LocalPtyProvider implements IPtyProvider {
     const spawnEnv: Record<string, string> = {
       ...process.env,
       ...args.env,
-      ...shellReadyLaunch?.env,
       TERM: 'xterm-256color',
       COLORTERM: 'truecolor',
       TERM_PROGRAM: 'Orca',
@@ -188,22 +171,18 @@ export class LocalPtyProvider implements IPtyProvider {
       // autodetection, bat/delta paging hints). Sourced from ORCA_APP_VERSION
       // which main/index.ts seeds from app.getVersion() at startup; the
       // fallback keeps tests and non-Electron runs working.
-      TERM_PROGRAM_VERSION: process.env.ORCA_APP_VERSION ?? '0.0.0-dev'
+      TERM_PROGRAM_VERSION: process.env.ORCA_APP_VERSION ?? '0.0.0-dev',
+      // Why: opt tools (Claude Code, ls --hyperlink, etc.) into emitting OSC 8
+      // hyperlinks. The `supports-hyperlinks` npm package gates on a hard-coded
+      // TERM_PROGRAM allowlist (iTerm.app / WezTerm / vscode) and returns false
+      // for TERM_PROGRAM=Orca, so callers drop OSC 8 output entirely and emit
+      // bare text instead. xterm.js in Orca parses OSC 8 and the pane's
+      // linkHandler routes clicks, so forcing the advertisement is safe and
+      // restores clickable refs like `owner/repo#123` / `PR#123`.
+      FORCE_HYPERLINK: '1'
     } as Record<string, string>
-
-    // Why: FORCE_HYPERLINK=1 is read by oh-my-zsh's supports_hyperlinks(), the
-    // Rust supports-hyperlinks crate, GNU coreutils, and other tooling.
-    // Forcing it on makes every subprocess invoked during shell init take
-    // extra branches and emit OSC-8 escapes, which compounded with a heavy
-    // zshrc (oh-my-zsh + p10k + nvm + pyenv + conda) can 3×+ the startup time
-    // — reported by users as a multi-minute-to-hour "terminal hang."
-    // We keep the historical default (on) so existing users don't lose link
-    // emission silently, but expose it as a toggle so users with heavy rc
-    // files can opt out. Orca's xterm still renders OSC-8 hyperlinks when
-    // tools emit them on their own detection, so link support is preserved
-    // for the typical modern CLI even when this toggle is off.
-    if (this.opts.isForceHyperlinkEnabled?.() ?? true) {
-      spawnEnv.FORCE_HYPERLINK = '1'
+    for (const key of args.envToDelete ?? []) {
+      delete spawnEnv[key]
     }
 
     spawnEnv.LANG ??= 'en_US.UTF-8'
@@ -218,6 +197,18 @@ export class LocalPtyProvider implements IPtyProvider {
     }
 
     const finalEnv = this.opts.buildSpawnEnv ? this.opts.buildSpawnEnv(id, spawnEnv) : spawnEnv
+    if (!wslInfo && process.platform !== 'win32') {
+      const shellLaunch = args.command
+        ? getShellReadyLaunchConfig(shellPath)
+        : finalEnv.ORCA_ATTRIBUTION_SHIM_DIR
+          ? getAttributionShellLaunchConfig(shellPath)
+          : null
+      if (shellLaunch) {
+        Object.assign(finalEnv, shellLaunch.env)
+        shellArgs = shellLaunch.args ?? shellArgs
+        shellReadyLaunch = args.command ? shellLaunch : null
+      }
+    }
 
     // ── Worktree-scoped shell history (§7–§10 of terminal-history-scope-design) ──
     // Why: without this, all worktree terminals share a single global HISTFILE
@@ -340,7 +331,12 @@ export class LocalPtyProvider implements IPtyProvider {
       })
     }
 
-    return { id }
+    // Why: publish the OS pid so ipc/pty can register the PTY with the memory
+    // collector without reaching back into the provider. `proc.pid` may be
+    // briefly 0/undefined if node-pty hasn't observed the forked child yet.
+    const rawPid = proc.pid
+    const pid = typeof rawPid === 'number' && Number.isFinite(rawPid) && rawPid > 0 ? rawPid : null
+    return { id, pid }
   }
 
   // Local PTYs are always attached -- no-op. Remote providers use this to resubscribe.
@@ -459,10 +455,14 @@ export class LocalPtyProvider implements IPtyProvider {
 
   async getProfiles(): Promise<{ name: string; path: string }[]> {
     if (process.platform === 'win32') {
-      return [
+      const profiles: { name: string; path: string }[] = [
         { name: 'PowerShell', path: 'powershell.exe' },
         { name: 'Command Prompt', path: 'cmd.exe' }
       ]
+      if (isWslAvailable()) {
+        profiles.push({ name: 'WSL', path: 'wsl.exe' })
+      }
+      return profiles
     }
     const shells = ['/bin/zsh', '/bin/bash', '/bin/sh']
     return shells.filter((s) => existsSync(s)).map((s) => ({ name: basename(s), path: s }))

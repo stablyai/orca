@@ -37,6 +37,8 @@ function createPane({
     xtermContainer: {} as never,
     linkTooltip: {} as never,
     gpuRenderingEnabled: true,
+    webglAttachmentDeferred: false,
+    webglDisabledAfterContextLoss: false,
     fitAddon: {
       fit,
       proposeDimensions
@@ -48,9 +50,9 @@ function createPane({
     unicode11Addon: {} as never,
     webLinksAddon: {} as never,
     webglAddon: null,
+    ligaturesAddon: null,
     compositionHandler: null,
-    pendingSplitScrollState: null,
-    pendingDragScrollState: null
+    pendingSplitScrollState: null
   }
 }
 

@@ -75,12 +75,15 @@ const SearchBar = React.memo(function SearchBar() {
   return (
     <div className="px-2 pb-4">
       <div className="relative flex items-center">
-        <Search className="absolute left-2 size-3.5 text-muted-foreground pointer-events-none" />
+        <Search
+          className="absolute left-2.5 size-3.5 text-muted-foreground pointer-events-none"
+          strokeWidth={2.25}
+        />
         <Input
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search..."
-          className="h-7 pl-7 pr-20 text-[11px] border-none bg-muted/50 shadow-none focus-visible:ring-1 focus-visible:ring-ring/30"
+          className="h-7 pl-7 pr-20 text-[12px] border-none bg-muted/50 shadow-none focus-visible:ring-1 focus-visible:ring-ring/30 placeholder:text-muted-foreground/70"
         />
         <div className="absolute right-1 flex items-center gap-0.5">
           {searchQuery && (
@@ -104,7 +107,7 @@ const SearchBar = React.memo(function SearchBar() {
                         : 'size-5 w-5 bg-transparent hover:bg-accent/60'
                     )}
                   >
-                    <ListFilter className="size-3 shrink-0" />
+                    <ListFilter className="size-3 shrink-0" strokeWidth={2.25} />
                     {filterSummary}
                   </Button>
                 </DropdownMenuTrigger>

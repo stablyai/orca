@@ -1,16 +1,17 @@
 import {
   cpSync,
   existsSync,
+  lstatSync,
   linkSync,
   mkdirSync,
   readdirSync,
-  rmSync,
-  statSync,
+  rmdirSync,
   symlinkSync,
+  unlinkSync,
   writeFileSync
 } from 'fs'
 import { homedir } from 'os'
-import { basename, join } from 'path'
+import { basename, join, relative, resolve, sep } from 'path'
 import { app } from 'electron'
 
 const ORCA_PI_EXTENSION_FILE = 'orca-titlebar-spinner.ts'
@@ -85,10 +86,17 @@ function getDefaultPiAgentDir(): string {
 }
 
 function mirrorEntry(sourcePath: string, targetPath: string): void {
-  const sourceStats = statSync(sourcePath)
+  // Why: lstatSync (not statSync) so that if the user's Pi dir contains its
+  // OWN symlinks (e.g. skills symlinked from ~/.agents/skills), we mirror the
+  // link itself rather than resolving it to a type and then creating a junction
+  // at an unrelated path. isSymbolicLink() MUST be checked before isDirectory()
+  // on Windows because directory junctions/reparse points report both true.
+  const sourceStats = lstatSync(sourcePath)
+  const isSymlink = sourceStats.isSymbolicLink()
+  const isDirectoryLike = !isSymlink && sourceStats.isDirectory()
 
   if (process.platform === 'win32') {
-    if (sourceStats.isDirectory()) {
+    if (isDirectoryLike) {
       symlinkSync(sourcePath, targetPath, 'junction')
       return
     }
@@ -102,12 +110,112 @@ function mirrorEntry(sourcePath: string, targetPath: string): void {
     }
   }
 
-  symlinkSync(sourcePath, targetPath, sourceStats.isDirectory() ? 'dir' : 'file')
+  symlinkSync(sourcePath, targetPath, isDirectoryLike ? 'dir' : 'file')
+}
+
+// Exported for tests. A "descend candidate" is an entry whose children we
+// should recurse into when tearing down the overlay. Anything that is a
+// symlink (including a Windows directory junction) must NOT be a candidate
+// even if it also reports isDirectory() — following it would walk into the
+// link target and delete user data, which is the bug in #1083.
+export function isSafeDescendCandidate(stats: {
+  isSymbolicLink(): boolean
+  isDirectory(): boolean
+}): boolean {
+  if (stats.isSymbolicLink()) {
+    return false
+  }
+  return stats.isDirectory()
 }
 
 export class PiTitlebarExtensionService {
+  private getOverlayRoot(): string {
+    return join(app.getPath('userData'), PI_OVERLAY_DIR_NAME)
+  }
+
   private getOverlayDir(ptyId: string): string {
-    return join(app.getPath('userData'), PI_OVERLAY_DIR_NAME, ptyId)
+    return join(this.getOverlayRoot(), ptyId)
+  }
+
+  // Why: the overlay tree contains symlinks/junctions that point back into the
+  // user's real Pi state (~/.pi/agent or $PI_CODING_AGENT_DIR). fs.rmSync with
+  // { recursive: true } has repeatedly regressed on Windows when walking
+  // NTFS junctions — it can follow them and delete the *target*, destroying
+  // the user's skills, extensions, sessions, and auth.json. See issue #1083.
+  //
+  // Never descend into a symlink/junction here: for any non-real-directory
+  // entry we unlink the link itself; only entries that are truly directories
+  // on disk (our own extensions/ dir and the overlay root) are recursed into.
+  // We also refuse to operate on any path outside the overlay root as a
+  // last-line guard against PI_OVERLAY_DIR_NAME ever being mis-resolved.
+  private safeRemoveOverlay(overlayDir: string): void {
+    const overlayRoot = this.getOverlayRoot()
+    const resolvedRoot = resolve(overlayRoot)
+    const resolvedTarget = resolve(overlayDir)
+    const rel = relative(resolvedRoot, resolvedTarget)
+    if (rel === '' || rel.startsWith('..') || rel.includes(`..${sep}`)) {
+      // Target is not strictly inside the overlay root — refuse to touch it.
+      // Log so a misconfigured caller does not silently leak overlays forever
+      // with no signal that this guard is firing.
+      console.warn(
+        `[pi-titlebar] refusing to remove overlay outside root: target=${resolvedTarget} root=${resolvedRoot}`
+      )
+      return
+    }
+    this.safeRemoveTree(resolvedTarget)
+  }
+
+  private safeRemoveTree(path: string): void {
+    let stat
+    try {
+      stat = lstatSync(path)
+    } catch {
+      return
+    }
+
+    // Any symlink or Windows junction is unlinked in place, NEVER descended.
+    // statSync would follow the link and report the target's stats, which is
+    // exactly the bug we are guarding against, so the check uses lstat.
+    //
+    // On Windows, lstat on a directory junction can report BOTH
+    // isSymbolicLink() === true AND isDirectory() === true, so we MUST check
+    // isSymbolicLink first — otherwise a junction enters the recursive branch
+    // and readdirSync enumerates the link's target, the exact bug in #1083.
+    if (!isSafeDescendCandidate(stat)) {
+      try {
+        unlinkSync(path)
+      } catch {
+        // Best-effort: antivirus/indexers can hold handles briefly on Windows.
+        // A leftover link is harmless; the next spawn rebuilds the overlay.
+      }
+      return
+    }
+
+    let entries
+    try {
+      entries = readdirSync(path, { withFileTypes: true })
+    } catch {
+      return
+    }
+
+    for (const entry of entries) {
+      const child = join(path, entry.name)
+      if (isSafeDescendCandidate(entry)) {
+        this.safeRemoveTree(child)
+        continue
+      }
+      try {
+        unlinkSync(child)
+      } catch {
+        // best-effort, see above
+      }
+    }
+
+    try {
+      rmdirSync(path)
+    } catch {
+      // Directory may be non-empty if an unlink above failed; harmless.
+    }
   }
 
   private mirrorAgentDir(sourceAgentDir: string, overlayDir: string): void {
@@ -143,13 +251,13 @@ export class PiTitlebarExtensionService {
     const overlayDir = this.getOverlayDir(ptyId)
 
     try {
-      rmSync(overlayDir, { recursive: true, force: true })
+      this.safeRemoveOverlay(overlayDir)
     } catch {
       // Why: on Windows the overlay directory can be locked by another process
       // (e.g. antivirus, indexer, or a previous Orca session that didn't clean up).
-      // rmSync with force:true handles ENOENT but not EPERM/EBUSY. If we can't
-      // remove the stale overlay, fall back to the user's own Pi agent dir so the
-      // terminal still spawns — the titlebar spinner is not worth blocking the PTY.
+      // If we can't remove the stale overlay, fall back to the user's own Pi agent
+      // dir so the terminal still spawns — the titlebar spinner is not worth
+      // blocking the PTY.
       return existingAgentDir ? { PI_CODING_AGENT_DIR: existingAgentDir } : {}
     }
 
@@ -180,7 +288,7 @@ export class PiTitlebarExtensionService {
 
   clearPty(ptyId: string): void {
     try {
-      rmSync(this.getOverlayDir(ptyId), { recursive: true, force: true })
+      this.safeRemoveOverlay(this.getOverlayDir(ptyId))
     } catch {
       // Why: on Windows the overlay dir can be locked (EPERM/EBUSY) by antivirus
       // or indexers. Overlay cleanup is best-effort — a stale directory in userData

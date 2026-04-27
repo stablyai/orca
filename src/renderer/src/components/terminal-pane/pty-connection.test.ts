@@ -1,17 +1,26 @@
 /* oxlint-disable max-lines */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { POST_REPLAY_FOCUS_REPORTING_RESET, POST_REPLAY_MODE_RESET } from './layout-serialization'
+
+const toastInfo = vi.fn()
 
 type StoreState = {
-  tabsByWorktree: Record<string, { id: string; ptyId: string | null }[]>
+  tabsByWorktree: Record<string, { id: string; ptyId: string | null; title?: string }[]>
   ptyIdsByTabId?: Record<string, string[]>
+  unreadTerminalTabs?: Record<string, true>
   worktreesByRepo: Record<string, { id: string; repoId: string; path: string }[]>
   repos: { id: string; connectionId?: string | null }[]
+  sshConnectionStates: Map<string, { status: string }>
   cacheTimerByKey: Record<string, number | null>
   settings: { promptCacheTimerEnabled?: boolean; experimentalTerminalDaemon?: boolean } | null
   codexRestartNoticeByPtyId: Record<
     string,
     { previousAccountLabel: string; nextAccountLabel: string }
   >
+  deferredSshReconnectTargets: string[]
+  deferredSshSessionIdsByTabId: Record<string, string>
+  removeDeferredSshReconnectTarget: ReturnType<typeof vi.fn>
+  removeDeferredSshSessionId: ReturnType<typeof vi.fn>
   consumePendingColdRestore: ReturnType<typeof vi.fn>
   consumePendingSnapshot: ReturnType<typeof vi.fn>
 }
@@ -25,9 +34,7 @@ type MockTransport = {
   attach: ReturnType<typeof vi.fn>
   connect: ReturnType<typeof vi.fn> & {
     mockImplementation: (
-      impl: (
-        opts: { callbacks?: ConnectCallbacks } & Record<string, unknown>
-      ) => Promise<string | null>
+      impl: (opts: { callbacks?: ConnectCallbacks } & Record<string, unknown>) => Promise<unknown>
     ) => unknown
   }
   sendInput: ReturnType<typeof vi.fn>
@@ -52,13 +59,26 @@ vi.mock('@/store', () => ({
   }
 }))
 
-vi.mock('@/lib/agent-status', () => ({
-  isGeminiTerminalTitle: vi.fn(() => false),
-  isClaudeAgent: vi.fn(() => false)
-}))
+vi.mock('@/lib/agent-status', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>()
+  return {
+    ...actual,
+    isGeminiTerminalTitle: vi.fn(() => false),
+    isClaudeAgent: vi.fn(() => false),
+    detectAgentStatusFromTitle: vi.fn((title: string) =>
+      /Claude (working|done)/.test(title) ? (/working/.test(title) ? 'working' : 'idle') : null
+    )
+  }
+})
 
 vi.mock('./cache-timer-seeding', () => ({
   shouldSeedCacheTimerOnInitialTitle
+}))
+
+vi.mock('sonner', () => ({
+  toast: {
+    info: toastInfo
+  }
 }))
 
 vi.mock('./pty-transport', () => ({
@@ -111,7 +131,8 @@ function createManager(paneCount = 1) {
   return {
     setPaneGpuRendering: vi.fn(),
     getPanes: vi.fn(() => Array.from({ length: paneCount }, (_, index) => ({ id: index + 1 }))),
-    closePane: vi.fn()
+    closePane: vi.fn(),
+    getActivePane: vi.fn<() => { id: number } | null>(() => null)
   }
 }
 
@@ -137,11 +158,22 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     clearRuntimePaneTitle: vi.fn(),
     updateTabPtyId: vi.fn(),
     markWorktreeUnread: vi.fn(),
+    markTerminalTabUnread: vi.fn(),
+    clearWorktreeUnread: vi.fn(),
+    clearTerminalTabUnread: vi.fn(),
     dispatchNotification: vi.fn(),
     setCacheTimerStartedAt: vi.fn(),
     syncPanePtyLayoutBinding: vi.fn(),
     ...overrides
   }
+}
+
+function createDeferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolveDeferred!: (value: T) => void
+  const promise = new Promise<T>((resolve) => {
+    resolveDeferred = resolve
+  })
+  return { promise, resolve: resolveDeferred }
 }
 
 describe('connectPanePty', () => {
@@ -160,16 +192,34 @@ describe('connectPanePty', () => {
       ptyIdsByTabId: {
         'tab-1': ['tab-pty']
       },
+      unreadTerminalTabs: {},
       worktreesByRepo: {
         repo1: [{ id: 'wt-1', repoId: 'repo1', path: '/tmp/wt-1' }]
       },
       repos: [{ id: 'repo1', connectionId: null }],
+      sshConnectionStates: new Map(),
       cacheTimerByKey: {},
       settings: { promptCacheTimerEnabled: true },
       codexRestartNoticeByPtyId: {},
+      deferredSshReconnectTargets: [],
+      deferredSshSessionIdsByTabId: {},
+      removeDeferredSshReconnectTarget: vi.fn(),
+      removeDeferredSshSessionId: vi.fn(),
       consumePendingColdRestore: vi.fn(() => null),
-      consumePendingSnapshot: vi.fn(() => null)
+      consumePendingSnapshot: vi.fn(() => null),
+      removeAgentStatus: vi.fn()
     } as StoreState
+    ;(globalThis as unknown as { window: unknown }).window = {
+      api: {
+        ssh: {
+          connect: vi.fn().mockResolvedValue({ status: 'connected' })
+        },
+        pty: {
+          signal: vi.fn(),
+          ackColdRestore: vi.fn()
+        }
+      }
+    }
     globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
       callback(0)
       return 1
@@ -190,6 +240,7 @@ describe('connectPanePty', () => {
       delete (globalThis as { cancelAnimationFrame?: typeof cancelAnimationFrame })
         .cancelAnimationFrame
     }
+    delete (globalThis as unknown as { window?: unknown }).window
   })
 
   it('does not send startup command via sendInput for local connections', async () => {
@@ -228,6 +279,56 @@ describe('connectPanePty', () => {
     expect(transport.sendInput).not.toHaveBeenCalledWith(
       expect.stringContaining("claude 'say test'")
     )
+  })
+
+  it('does not reuse a sibling split pane pending spawn after remount', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+
+    const mainSpawn = createDeferred<string>()
+    const setupSpawn = createDeferred<string>()
+
+    const mainTransport = createMockTransport()
+    mainTransport.connect.mockImplementation(async () => mainSpawn.promise)
+    const setupTransport = createMockTransport()
+    setupTransport.connect.mockImplementation(async () => setupSpawn.promise)
+    const remountTransport = createMockTransport()
+    transportFactoryQueue.push(mainTransport, setupTransport, remountTransport)
+
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      repos: [{ id: 'repo1', connectionId: null }]
+    }
+
+    const sharedTransportsRef = { current: new Map() }
+    connectPanePty(
+      createPane(1) as never,
+      createManager(2) as never,
+      createDeps({ paneTransportsRef: sharedTransportsRef }) as never
+    )
+    connectPanePty(
+      createPane(2) as never,
+      createManager(2) as never,
+      createDeps({
+        startup: { command: 'bash setup-runner.sh' },
+        paneTransportsRef: sharedTransportsRef
+      }) as never
+    )
+
+    const remountDeps = createDeps()
+    connectPanePty(createPane(1) as never, createManager(2) as never, remountDeps as never)
+
+    setupSpawn.resolve('pty-setup')
+    mainSpawn.resolve('pty-main')
+    for (let i = 0; i < 20; i++) {
+      await Promise.resolve()
+    }
+
+    expect(remountTransport.attach).toHaveBeenCalledWith(
+      expect.objectContaining({ existingPtyId: 'pty-main' })
+    )
+    expect(remountDeps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(1, 'pty-main')
+    expect(remountDeps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'pty-main')
   })
 
   it('drops xterm onData while pane is replaying restored bytes', async () => {
@@ -429,6 +530,98 @@ describe('connectPanePty', () => {
     expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'leaf-pty-2')
   })
 
+  it('spawns a fresh PTY when a restored daemon split session cannot reattach', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async (opts: { sessionId?: string }) => {
+      if (opts.sessionId) {
+        return undefined
+      }
+      const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
+        | ((ptyId: string) => void)
+        | undefined
+      onPtySpawn?.('fresh-pty')
+      return 'fresh-pty'
+    })
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      settings: {
+        ...mockStoreState.settings,
+        experimentalTerminalDaemon: true
+      }
+    } as StoreState
+    const pane = createPane(2)
+    const manager = createManager(2)
+    const deps = createDeps({
+      restoredLeafId: 'pane:2',
+      restoredPtyIdByLeafId: { 'pane:2': 'stale-pty' }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(transport.connect).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ sessionId: 'stale-pty' })
+    )
+    expect(transport.connect).toHaveBeenNthCalledWith(
+      2,
+      expect.not.objectContaining({ sessionId: expect.any(String) })
+    )
+    expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, null)
+    expect(deps.clearTabPtyId).toHaveBeenCalledWith('tab-1', 'stale-pty')
+    expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'fresh-pty')
+    expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'fresh-pty')
+  })
+
+  it('resets focus reporting after daemon snapshot replay without applying the full mode reset', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+      if (sessionId) {
+        return { id: sessionId, snapshot: '\x1b[?1004hrestored snapshot' }
+      }
+      return null
+    })
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty' }]
+      },
+      settings: {
+        ...mockStoreState.settings,
+        experimentalTerminalDaemon: true
+      }
+    } as StoreState
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      restoredLeafId: 'pane:1',
+      restoredPtyIdByLeafId: { 'pane:1': 'tab-pty' }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await Promise.resolve()
+
+    expect(pane.terminal.write).toHaveBeenCalledWith('\x1b[2J\x1b[3J\x1b[H', expect.any(Function))
+    expect(pane.terminal.write).toHaveBeenCalledWith(
+      '\x1b[?1004hrestored snapshot',
+      expect.any(Function)
+    )
+    expect(pane.terminal.write).toHaveBeenCalledWith(
+      POST_REPLAY_FOCUS_REPORTING_RESET,
+      expect.any(Function)
+    )
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(
+      POST_REPLAY_MODE_RESET,
+      expect.any(Function)
+    )
+  })
+
   it('reuses the existing local PTY on split remount when the daemon is disabled', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
@@ -551,5 +744,292 @@ describe('connectPanePty', () => {
     expect(remountTransport.attach).not.toHaveBeenCalled()
     await Promise.resolve()
     expect(remountDeps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(1, 'pty-restarted')
+  })
+
+  // Why: BEL (0x07) is the attention signal. connectPanePty wires an
+  // onBell handler that raises the worktree unread dot, the tab-level
+  // bell indicator, and an OS notification. Under the ghostty
+  // show-until-interact model, the unread flags clear when the user
+  // actually interacts with the pane — keystroke via xterm onData or
+  // pointerdown on the container (see TerminalPane.tsx). This test
+  // locks in the mark wiring; separate tests below cover the clear path.
+  it('wires onBell to raise worktree unread, tab unread, and OS notification', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    const bellHandler = createdTransportOptions[0]?.onBell as (() => void) | undefined
+    if (!bellHandler) {
+      throw new Error('Expected onBell to be registered')
+    }
+
+    bellHandler()
+
+    expect(deps.markWorktreeUnread).toHaveBeenCalledTimes(1)
+    expect(deps.markTerminalTabUnread).toHaveBeenCalledWith('tab-1')
+    expect(deps.dispatchNotification).toHaveBeenCalledWith({ source: 'terminal-bell' })
+  })
+
+  // Why: show-until-interact — a real keystroke through xterm onData is the
+  // canonical "user is here" signal that dismisses the bell. Guarded by the
+  // replay and codex-stale checks (see separate tests) so synthetic xterm
+  // auto-replies and blocked stale input never count as interaction.
+  it('clears tab and worktree unread on real keystroke via onData', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    let onDataHandler: ((data: string) => void) | null = null
+    pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
+      onDataHandler = handler
+      return { dispose: vi.fn() }
+    }) as typeof pane.terminal.onData)
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    if (!onDataHandler) {
+      throw new Error('expected onData handler to be registered')
+    }
+    ;(onDataHandler as (data: string) => void)('a')
+
+    expect(deps.clearTerminalTabUnread).toHaveBeenCalledWith('tab-1')
+    expect(deps.clearWorktreeUnread).toHaveBeenCalledWith('wt-1')
+    expect(transport.sendInput).toHaveBeenCalledWith('a')
+  })
+
+  // Why: xterm auto-replies during replay must not masquerade as user
+  // interaction. If they did, a pane that BELed during its scrollback
+  // replay would instantly self-dismiss without the user ever seeing it.
+  it('does not clear unread when onData fires during replay', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    let onDataHandler: ((data: string) => void) | null = null
+    pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
+      onDataHandler = handler
+      return { dispose: vi.fn() }
+    }) as typeof pane.terminal.onData)
+    const manager = createManager(1)
+    const replayingPanesRef = { current: new Map<number, number>([[1, 1]]) }
+    const deps = createDeps({ replayingPanesRef })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    if (!onDataHandler) {
+      throw new Error('expected onData handler to be registered')
+    }
+    ;(onDataHandler as (data: string) => void)('\x1b[?1;2c')
+
+    expect(deps.clearTerminalTabUnread).not.toHaveBeenCalled()
+    expect(deps.clearWorktreeUnread).not.toHaveBeenCalled()
+  })
+
+  // Why: symmetric to the replay guard — if the pane is stale-codex (pending
+  // account-switch restart), xterm onData bytes are either blocked synthetic
+  // input or keystrokes that would execute under the wrong account. Either
+  // way they must not count as user interaction and dismiss the bell. The
+  // production code also blocks the transport.sendInput call in this branch
+  // (see pty-connection.ts lines 275-277), so we assert that too.
+  it('does not clear unread when onData fires on a stale codex pane', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-codex-stale')
+    transportFactoryQueue.push(transport)
+    // isCodexPaneStale reads codexRestartNoticeByPtyId from the store, so
+    // trigger the stale branch by seeding a restart notice for the pane's PTY.
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'pty-codex-stale' }]
+      },
+      ptyIdsByTabId: {
+        'tab-1': ['pty-codex-stale']
+      },
+      codexRestartNoticeByPtyId: {
+        'pty-codex-stale': { previousAccountLabel: 'A', nextAccountLabel: 'B' }
+      }
+    }
+
+    const pane = createPane(1)
+    let onDataHandler: ((data: string) => void) | null = null
+    pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
+      onDataHandler = handler
+      return { dispose: vi.fn() }
+    }) as typeof pane.terminal.onData)
+
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    if (!onDataHandler) {
+      throw new Error('expected onData handler to be registered')
+    }
+    ;(onDataHandler as (data: string) => void)('a')
+
+    expect(deps.clearTerminalTabUnread).not.toHaveBeenCalled()
+    expect(deps.clearWorktreeUnread).not.toHaveBeenCalled()
+    // Stale-codex input is also blocked from reaching the transport.
+    expect(transport.sendInput).not.toHaveBeenCalled()
+  })
+
+  it('replays attach buffer for deferred SSH reattach and clears stale tab session metadata', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async (opts: { sessionId?: string }) => {
+      return { id: opts.sessionId ?? 'pty-new', replay: 'restored-ssh-output' }
+    })
+    transportFactoryQueue.push(transport)
+
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      repos: [{ id: 'repo1', connectionId: 'conn-1' }],
+      deferredSshReconnectTargets: ['conn-1'],
+      deferredSshSessionIdsByTabId: { 'tab-1': 'tab-level-stale-session' }
+    }
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      restoredLeafId: 'leaf-1',
+      restoredPtyIdByLeafId: { 'leaf-1': 'leaf-session' }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    for (let i = 0; i < 5; i++) {
+      await Promise.resolve()
+    }
+
+    const api = (
+      globalThis as unknown as {
+        window: {
+          api: {
+            ssh: { connect: ReturnType<typeof vi.fn> }
+            pty: { signal: ReturnType<typeof vi.fn> }
+          }
+        }
+      }
+    ).window.api
+    expect(api.ssh.connect).toHaveBeenCalledWith({ targetId: 'conn-1' })
+    expect(transport.connect).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: 'leaf-session' })
+    )
+    expect(mockStoreState.removeDeferredSshSessionId).toHaveBeenCalledWith('tab-1')
+    expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(1, 'leaf-session')
+    expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'leaf-session')
+    // Why: the relay's replay buffer holds the full terminal history, so the
+    // client clears xterm before writing to prevent duplication with any
+    // content already in the terminal from a prior session.
+    expect(pane.terminal.write).toHaveBeenCalledWith('\x1b[2J\x1b[3J\x1b[H', expect.any(Function))
+    expect(pane.terminal.write).toHaveBeenCalledWith('restored-ssh-output', expect.any(Function))
+    expect(pane.terminal.write).toHaveBeenCalledWith(
+      POST_REPLAY_FOCUS_REPORTING_RESET,
+      expect.any(Function)
+    )
+    expect(api.pty.signal).toHaveBeenCalledWith('leaf-session', 'SIGWINCH')
+  })
+
+  it('shows an informational toast instead of a terminal error when an SSH session expired', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async (opts: { sessionId?: string }) => {
+      return { id: opts.sessionId ?? 'pty-new', sessionExpired: true }
+    })
+    transportFactoryQueue.push(transport)
+
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      repos: [{ id: 'repo1', connectionId: 'conn-1' }],
+      deferredSshReconnectTargets: ['conn-1'],
+      deferredSshSessionIdsByTabId: { 'tab-1': 'expired-session' }
+    }
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      restoredLeafId: 'leaf-1',
+      restoredPtyIdByLeafId: { 'leaf-1': 'leaf-session' }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    for (let i = 0; i < 5; i++) {
+      await Promise.resolve()
+    }
+
+    expect(deps.onPtyErrorRef.current).not.toHaveBeenCalledWith(
+      expect.any(Number),
+      expect.stringContaining('Previous session expired')
+    )
+    expect(toastInfo).toHaveBeenCalledWith('Previous SSH session expired.', {
+      id: 'ssh-session-expired-tab-1',
+      description: 'Started a new shell.'
+    })
+  })
+
+  // Why: the working→idle transition is kept solely to drive Claude's
+  // prompt-cache timer. It MUST NOT raise attention — doing so would
+  // double-fire with the BEL path above (since Claude's "done" state is
+  // accompanied by a BEL), plus it would mean agents silently fire alerts
+  // that non-agent programs cannot. Attention is BEL-only; this is just
+  // the cache timer hook.
+  it('does not raise attention on agent working→idle (BEL is the sole attention signal)', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
+      | ((title: string) => void)
+      | undefined
+    if (!idleHandler) {
+      throw new Error('Expected onAgentBecameIdle to be registered')
+    }
+
+    idleHandler('* Claude done')
+
+    expect(deps.markWorktreeUnread).not.toHaveBeenCalled()
+    expect(deps.markTerminalTabUnread).not.toHaveBeenCalled()
+    expect(deps.dispatchNotification).not.toHaveBeenCalled()
+  })
+
+  // Why: onAgentExited must clear any running prompt-cache countdown so the
+  // sidebar does not show a stale timer for a tab that no longer has an
+  // active Claude session.
+  it('clears the cache timer when the agent exits', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    const agentExitedHandler = createdTransportOptions[0]?.onAgentExited as (() => void) | undefined
+    if (!agentExitedHandler) {
+      throw new Error('Expected onAgentExited to be registered')
+    }
+
+    agentExitedHandler()
+
+    expect(deps.setCacheTimerStartedAt).toHaveBeenCalledWith('tab-1:1', null)
   })
 })

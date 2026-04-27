@@ -18,7 +18,7 @@ type CliSectionProps = {
   currentPlatform: string
 }
 
-const ORCA_SKILL_INSTALL_COMMAND =
+const ORCA_CLI_SKILL_INSTALL_COMMAND =
   'npx skills add https://github.com/stablyai/orca --skill orca-cli'
 
 function getRevealLabel(platform: string): string {
@@ -99,10 +99,10 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
     }
   }
 
-  const handleCopySkillInstallCommand = async (): Promise<void> => {
+  const handleCopySkillInstallCommand = async (command: string): Promise<void> => {
     try {
-      await window.api.ui.writeClipboardText(ORCA_SKILL_INSTALL_COMMAND)
-      toast.success('Copied Orca skill install command.')
+      await window.api.ui.writeClipboardText(command)
+      toast.success('Copied skill install command.')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to copy install command.')
     }
@@ -205,36 +205,39 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
 
         <div className="border-t border-border/60 pt-3">
           <div className="space-y-0.5">
-            <Label>Agent skill</Label>
+            <Label>Agent skills</Label>
             <p className="text-xs text-muted-foreground">
-              Install the Orca skill so agents know to use the{' '}
-              <code className="rounded bg-muted px-1 py-0.5 text-[11px]">orca</code> CLI.
+              Install skills so agents know how to use Orca and report status.
             </p>
           </div>
 
-          <div className="mt-3 space-y-1">
-            <p className="text-xs text-muted-foreground">Install command</p>
-            <div className="inline-flex max-w-full items-center gap-2 rounded-lg border border-border/60 bg-background/60 px-3 py-2">
-              <code className="overflow-x-auto whitespace-nowrap text-[11px] text-muted-foreground">
-                {ORCA_SKILL_INSTALL_COMMAND}
-              </code>
-              <TooltipProvider delayDuration={250}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      onClick={() => void handleCopySkillInstallCommand()}
-                      aria-label="Copy skill install command"
-                    >
-                      <Copy className="size-3.5" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" sideOffset={6}>
-                    Copy
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+          <div className="mt-3 space-y-3">
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">CLI skill</p>
+              <div className="inline-flex max-w-full items-center gap-2 rounded-lg border border-border/60 bg-background/60 px-3 py-2">
+                <code className="overflow-x-auto whitespace-nowrap text-[11px] text-muted-foreground">
+                  {ORCA_CLI_SKILL_INSTALL_COMMAND}
+                </code>
+                <TooltipProvider delayDuration={250}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        onClick={() =>
+                          void handleCopySkillInstallCommand(ORCA_CLI_SKILL_INSTALL_COMMAND)
+                        }
+                        aria-label="Copy CLI skill install command"
+                      >
+                        <Copy className="size-3.5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" sideOffset={6}>
+                      Copy
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
             </div>
           </div>
         </div>

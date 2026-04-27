@@ -112,6 +112,15 @@ describe('DaemonServer', () => {
       expect(result.sessions).toHaveLength(1)
     })
 
+    it('handles ping health checks', async () => {
+      await startServer()
+      const c = await connectClient()
+
+      const result = await c.request<{ pong: boolean }>('ping', undefined)
+
+      expect(result).toEqual({ pong: true })
+    })
+
     it('handles write (fire-and-forget)', async () => {
       await startServer()
       const c = await connectClient()
@@ -173,6 +182,24 @@ describe('DaemonServer', () => {
       await expect(c.request('write', { sessionId: 'nonexistent', data: 'hi' })).rejects.toThrow(
         'Session not found'
       )
+    })
+
+    it('emits exit when a fire-and-forget write targets a missing session', async () => {
+      await startServer()
+      const c = await connectClient()
+
+      const exitEvent = new Promise<unknown>((resolve) => {
+        c.onEvent((event) => resolve(event))
+      })
+
+      c.notify('write', { sessionId: 'missing-session', data: 'hi' })
+
+      await expect(exitEvent).resolves.toMatchObject({
+        type: 'event',
+        event: 'exit',
+        sessionId: 'missing-session',
+        payload: { code: -1 }
+      })
     })
   })
 

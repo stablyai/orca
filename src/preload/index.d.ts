@@ -2,15 +2,16 @@ import type { ElectronAPI } from '@electron-toolkit/preload'
 import type {
   BaseRefDefaultResult,
   CreateWorktreeResult,
+  GhosttyImportPreview,
   GitHubPRFile,
   GitHubPRFileContents,
   GitHubWorkItem,
   GitHubWorkItemDetails,
   GitHubViewer,
-  CreateWorktreeArgs,
-  OpenCodeStatusEvent
+  CreateWorktreeArgs
 } from '../../shared/types'
 import type { SshTarget, SshConnectionState } from '../../shared/ssh-types'
+import type { AgentStatusState } from '../../shared/agent-status-types'
 import type { PreloadApi } from './api-types'
 
 type ReposApi = {
@@ -53,6 +54,10 @@ type WorktreesApi = {
   onChanged: (callback: (data: { repoId: string }) => void) => () => void
 }
 
+type WslApi = {
+  isAvailable: () => Promise<boolean>
+}
+
 type PtyApi = {
   spawn: (opts: {
     cols: number
@@ -63,6 +68,7 @@ type PtyApi = {
     connectionId?: string | null
     worktreeId?: string
     sessionId?: string
+    shellOverride?: string
   }) => Promise<{
     id: string
     snapshot?: string
@@ -70,6 +76,8 @@ type PtyApi = {
     snapshotRows?: number
     isReattach?: boolean
     isAlternateScreen?: boolean
+    replay?: string
+    sessionExpired?: boolean
     coldRestore?: { scrollback: string; cwd: string }
   }>
   write: (id: string, data: string) => void
@@ -82,7 +90,6 @@ type PtyApi = {
   listSessions: () => Promise<{ id: string; cwd: string; title: string }[]>
   onData: (callback: (data: { id: string; data: string }) => void) => () => void
   onExit: (callback: (data: { id: string; code: number }) => void) => () => void
-  onOpenCodeStatus: (callback: (event: OpenCodeStatusEvent) => void) => () => void
 }
 
 type GhApi = {
@@ -146,6 +153,7 @@ type SettingsApi = {
   get: () => Promise<GlobalSettings>
   set: (args: Partial<GlobalSettings>) => Promise<GlobalSettings>
   listFonts: () => Promise<string[]>
+  previewGhosttyImport: () => Promise<GhosttyImportPreview>
 }
 
 type CliApi = {
@@ -193,11 +201,40 @@ type SshApi = {
   }>
 }
 
+type AgentStatusApi = {
+  /** Listen for agent status updates forwarded from native hook receivers. */
+  onSet: (
+    callback: (data: {
+      paneKey: string
+      tabId?: string
+      worktreeId?: string
+      state: AgentStatusState
+      prompt?: string
+      agentType?: string
+      toolName?: string
+      toolInput?: string
+      lastAssistantMessage?: string
+      interrupted?: boolean
+    }) => void
+  ) => () => void
+}
+
+// Why: Only locally-defined *Api types are listed here. Keys like preflight,
+// hooks, cache, session, updater, fs, git, ui, and runtime are inherited via
+// the PreloadApi intersection (see ./api-types), so re-declaring them would
+// reference undefined type names and risk drifting from the canonical surface.
 type Api = PreloadApi & {
   repos: ReposApi
   worktrees: WorktreesApi
   pty: PtyApi
   ssh: SshApi
+  gh: GhApi
+  settings: SettingsApi
+  cli: CliApi
+  notifications: NotificationsApi
+  shell: ShellApi
+  agentStatus: AgentStatusApi
+  wsl: WslApi
 }
 
 declare global {

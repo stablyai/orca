@@ -5,6 +5,7 @@ import { readFile, rm } from 'fs/promises'
 import * as path from 'path'
 import type { RelayDispatcher } from './dispatcher'
 import type { RelayContext } from './context'
+import { expandTilde } from './context'
 import {
   parseStatusOutput,
   parseUnmergedEntry,
@@ -56,7 +57,7 @@ export class GitHandler {
     opts?: { maxBuffer?: number }
   ): Promise<{ stdout: string; stderr: string }> {
     return execFileAsync('git', args, {
-      cwd,
+      cwd: expandTilde(cwd),
       encoding: 'utf-8',
       maxBuffer: opts?.maxBuffer ?? MAX_GIT_BUFFER
     })

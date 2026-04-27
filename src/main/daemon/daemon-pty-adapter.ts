@@ -8,12 +8,19 @@ import { DaemonClient } from './client'
 import { HistoryManager } from './history-manager'
 import { HistoryReader } from './history-reader'
 import { supportsPtyStartupBarrier } from './shell-ready'
-import type { CreateOrAttachResult, DaemonEvent, ListSessionsResult } from './types'
+import {
+  PROTOCOL_VERSION,
+  type CreateOrAttachResult,
+  type DaemonEvent,
+  type GetSnapshotResult,
+  type ListSessionsResult
+} from './types'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
 
 export type DaemonPtyAdapterOptions = {
   socketPath: string
   tokenPath: string
+  protocolVersion?: number
   /** Directory for disk-based terminal history. When set, the adapter writes
    *  raw PTY output to disk for cold restore on daemon crash. */
   historyPath?: string
@@ -55,15 +62,24 @@ export class DaemonPtyAdapter implements IPtyProvider {
   // mount → ??? The sticky cache returns the same cold restore data on the
   // second mount until the renderer explicitly acknowledges it.
   private coldRestoreCache = new Map<string, { scrollback: string; cwd: string }>()
+  private activeSessionIds = new Set<string>()
+  private checkpointInterval: ReturnType<typeof setInterval> | null = null
+  private checkpointInFlight: Promise<void> | null = null
+  // Why: checkpoint-based persistence requires the getSnapshot RPC (v4+).
+  // Legacy daemons reject it, causing noisy log spam every 5 seconds.
+  private supportsCheckpoints: boolean
+  private static CHECKPOINT_INTERVAL_MS = 5_000
 
   constructor(opts: DaemonPtyAdapterOptions) {
     this.client = new DaemonClient({
       socketPath: opts.socketPath,
-      tokenPath: opts.tokenPath
+      tokenPath: opts.tokenPath,
+      protocolVersion: opts.protocolVersion
     })
     this.historyManager = opts.historyPath ? new HistoryManager(opts.historyPath) : null
     this.historyReader = opts.historyPath ? new HistoryReader(opts.historyPath) : null
     this.respawnFn = opts.respawn ?? null
+    this.supportsCheckpoints = (opts.protocolVersion ?? PROTOCOL_VERSION) >= 4
   }
 
   getHistoryManager(): HistoryManager | null {
@@ -100,6 +116,12 @@ export class DaemonPtyAdapter implements IPtyProvider {
       cwd: effectiveCwd,
       env: opts.env,
       command: opts.command,
+      // Why: without this, the daemon always spawns cmd.exe (COMSPEC) or
+      // PowerShell as a fallback — regardless of which shell the renderer
+      // asked for in the "+" menu or persisted as the default. Forwarding
+      // the override makes the daemon path behave the same as the in-process
+      // LocalPtyProvider.
+      shellOverride: opts.shellOverride,
       shellReadySupported: opts.command ? supportsPtyStartupBarrier(opts.env ?? {}) : false
     })
 
@@ -107,35 +129,51 @@ export class DaemonPtyAdapter implements IPtyProvider {
       this.initialCwds.set(sessionId, effectiveCwd)
     }
 
+    // Why: the daemon RPC returns the shell pid of the backing subprocess.
+    // Surfacing it through PtySpawnResult lets ipc/pty register with the
+    // memory collector without a provider-specific accessor.
+    const pid = typeof result.pid === 'number' && result.pid > 0 ? result.pid : null
+
     // Why: check sticky cache first — StrictMode double-mounts call spawn
     // twice. The second call finds an existing daemon session (isNew=false)
     // but should still return the cached cold restore data.
     const cachedRestore = this.coldRestoreCache.get(sessionId)
     if (cachedRestore) {
-      return { id: sessionId, coldRestore: cachedRestore }
+      return { id: sessionId, pid, coldRestore: cachedRestore }
     }
+
+    this.activeSessionIds.add(sessionId)
 
     // Cold restore: daemon created a new session but disk history shows
     // an unclean shutdown → return saved scrollback so the renderer can
-    // display the previous terminal content. Must run BEFORE openSession
-    // which would overwrite the saved history files.
+    // display the previous terminal content.
     if (result.isNew && restoreInfo) {
-      const coldRestore = { scrollback: restoreInfo.scrollback, cwd: restoreInfo.cwd }
-      this.coldRestoreCache.set(sessionId, coldRestore)
-      // Why: seed the reopened history with the recovered metadata, not the
-      // renderer's transient mount-time size, so a second crash restores the
-      // same terminal context the daemon just revived.
+      // Why: if the checkpoint was captured while an alternate-screen app
+      // (vim, less, htop) was active, snapshotAnsi is the alt buffer content.
+      // Replaying that into a fresh shell would show stale TUI content. Use
+      // scrollbackAnsi (rows above the viewport only) which excludes the alt
+      // buffer. For normal sessions, use the full snapshot with rehydrate
+      // sequences to restore terminal modes (colors, cursor position, etc).
+      // Why: scrollbackAnsi may be empty if the emulator hadn't accumulated
+      // scrollback before the alt-screen app launched. In that case, skip
+      // cold restore entirely rather than showing a blank terminal — no
+      // content is better than confusing the user with an empty restore.
+      const isAltScreen = restoreInfo.modes.alternateScreen
+      const scrollback = isAltScreen
+        ? restoreInfo.scrollbackAnsi || null
+        : restoreInfo.rehydrateSequences + restoreInfo.snapshotAnsi
+      // Why: use registerWriter (not openSession) to avoid deleting the
+      // existing checkpoint.json. If the revived daemon crashes again before
+      // the next 5s tick, the checkpoint is the only recovery data available.
       if (this.historyManager) {
-        void this.historyManager
-          .openSession(sessionId, {
-            cwd: restoreInfo.cwd,
-            cols: restoreInfo.cols,
-            rows: restoreInfo.rows,
-            initialScrollback: restoreInfo.scrollback
-          })
-          .catch((err) => console.warn('[history] openSession failed:', sessionId, err))
+        this.historyManager.registerWriter(sessionId)
       }
-      return { id: sessionId, coldRestore }
+      if (scrollback) {
+        const coldRestore = { scrollback, cwd: restoreInfo.cwd }
+        this.coldRestoreCache.set(sessionId, coldRestore)
+        return { id: sessionId, pid, coldRestore }
+      }
+      return { id: sessionId, pid }
     }
 
     if (this.historyManager && result.isNew) {
@@ -143,21 +181,27 @@ export class DaemonPtyAdapter implements IPtyProvider {
         .openSession(sessionId, {
           cwd: effectiveCwd ?? '',
           cols: effectiveCols,
-          rows: effectiveRows,
-          initialScrollback: result.snapshot?.snapshotAnsi
+          rows: effectiveRows
         })
         .catch((err) => console.warn('[history] openSession failed:', sessionId, err))
+    } else if (this.historyManager) {
+      // Why: on warm reattach after app relaunch, the HistoryManager is a
+      // fresh instance with no writers. registerWriter adds the writer
+      // without overwriting meta.json or deleting the existing checkpoint
+      // (which is the only valid recovery data until the next tick).
+      this.historyManager.registerWriter(sessionId)
     }
 
     const isReattach = !result.isNew
     if (!isReattach || !result.snapshot) {
-      return { id: sessionId }
+      return { id: sessionId, pid }
     }
 
     const isAltScreen = result.snapshot.modes.alternateScreen
     const snapshotPayload = result.snapshot.rehydrateSequences + result.snapshot.snapshotAnsi
     return {
       id: sessionId,
+      pid,
       snapshot: snapshotPayload,
       snapshotCols: result.snapshot.cols,
       snapshotRows: result.snapshot.rows,
@@ -186,6 +230,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
   async shutdown(id: string, _immediate: boolean): Promise<void> {
     await this.client.request('kill', { sessionId: id })
+    this.activeSessionIds.delete(id)
     this.initialCwds.delete(id)
     // Why: user explicitly closed this terminal — clean up disk history
     // so it doesn't trigger a false cold restore on next launch.
@@ -294,6 +339,12 @@ export class DaemonPtyAdapter implements IPtyProvider {
         killed.push(session.sessionId)
       } else {
         alive.push(session.sessionId)
+        // Why: background sessions discovered here may produce output before
+        // the user reattaches their pane. Without adding them to the checkpoint
+        // set, disconnectOnly()'s final checkpoint would skip them, leaving
+        // stale recovery data if the daemon later crashes.
+        this.activeSessionIds.add(session.sessionId)
+        this.historyManager?.registerWriter(session.sessionId)
       }
     }
 
@@ -355,8 +406,15 @@ export class DaemonPtyAdapter implements IPtyProvider {
   }
 
   dispose(): void {
+    if (this.checkpointInterval) {
+      clearInterval(this.checkpointInterval)
+      this.checkpointInterval = null
+    }
     this.removeEventListener?.()
     this.removeEventListener = null
+    // Why: final checkpoints are written daemon-side in TerminalHost.dispose()
+    // which has direct access to sessions. The adapter only marks sessions as
+    // cleanly ended here so they don't trigger false cold restores.
     if (this.historyManager) {
       void this.historyManager
         .dispose()
@@ -369,7 +427,25 @@ export class DaemonPtyAdapter implements IPtyProvider {
   // dispose() writes endedAt for all sessions, which would prevent cold
   // restore. disconnectOnly() leaves history files in unclean state so
   // the next launch detects them as crash-recoverable.
-  disconnectOnly(): void {
+  // We write a final checkpoint before disconnecting so that if the daemon
+  // later crashes while Orca is closed, checkpoint.json has recovery data.
+  async disconnectOnly(): Promise<void> {
+    if (this.checkpointInterval) {
+      clearInterval(this.checkpointInterval)
+      this.checkpointInterval = null
+    }
+    // Why: wait for any in-flight timer pass to finish before starting
+    // the final checkpoint. Otherwise both passes race on the shared tmp
+    // file, risking ENOENT on rename and disabling future writes.
+    if (this.checkpointInFlight) {
+      await this.checkpointInFlight
+    }
+    // Why: without a final checkpoint, sessions opened after the last timer
+    // tick have no checkpoint.json on disk. If the detached daemon later
+    // dies, detectColdRestore finds nothing to restore from. Must await
+    // before disconnecting — fire-and-forget would race with client.disconnect()
+    // and the pending getSnapshot RPCs would be rejected.
+    await this.checkpointAllSessions()
     this.removeEventListener?.()
     this.removeEventListener = null
     this.client.disconnect()
@@ -378,6 +454,50 @@ export class DaemonPtyAdapter implements IPtyProvider {
   private async ensureConnected(): Promise<void> {
     await this.client.ensureConnected()
     this.setupEventRouting()
+    this.startCheckpointTimer()
+  }
+
+  private startCheckpointTimer(): void {
+    if (this.checkpointInterval || !this.historyManager || !this.supportsCheckpoints) {
+      return
+    }
+    this.checkpointInterval = setInterval(() => {
+      // Why: if the previous pass is still in-flight (slow RPC or disk),
+      // skip this tick. Overlapping passes race on the shared tmp file
+      // in checkpoint(), and a lost rename triggers handleWriteError which
+      // permanently disables the session's history writes.
+      if (this.checkpointInFlight) {
+        return
+      }
+      this.checkpointInFlight = this.checkpointAllSessions().finally(() => {
+        this.checkpointInFlight = null
+      })
+    }, DaemonPtyAdapter.CHECKPOINT_INTERVAL_MS)
+  }
+
+  // Why: the adapter runs in the Electron main process and does not have direct
+  // access to daemon Session objects. It calls the getSnapshot RPC over the
+  // daemon socket per session. Returns a promise that resolves when all
+  // checkpoint writes complete (callers that don't need to wait can void it).
+  private async checkpointAllSessions(): Promise<void> {
+    if (!this.historyManager) {
+      return
+    }
+    const promises: Promise<void>[] = []
+    for (const sessionId of this.activeSessionIds) {
+      promises.push(
+        this.client
+          .request<GetSnapshotResult>('getSnapshot', { sessionId })
+          .then((result) => {
+            if (result.snapshot && this.historyManager) {
+              return this.historyManager.checkpoint(sessionId, result.snapshot)
+            }
+            return undefined
+          })
+          .catch((err) => console.warn('[history] checkpoint failed:', sessionId, err))
+      )
+    }
+    await Promise.all(promises)
   }
 
   // Why: when the daemon process dies, operations fail with ENOENT (socket
@@ -423,16 +543,12 @@ export class DaemonPtyAdapter implements IPtyProvider {
       }
 
       if (event.event === 'data') {
-        if (this.historyManager) {
-          void this.historyManager
-            .appendData(event.sessionId, event.payload.data)
-            .catch((err) => console.warn('[history] appendData failed:', event.sessionId, err))
-        }
         // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
         for (const listener of [...this.dataListeners]) {
           listener({ id: event.sessionId, data: event.payload.data })
         }
       } else if (event.event === 'exit') {
+        this.activeSessionIds.delete(event.sessionId)
         if (this.historyManager) {
           void this.historyManager
             .closeSession(event.sessionId, event.payload.code)

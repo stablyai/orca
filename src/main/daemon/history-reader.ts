@@ -1,13 +1,17 @@
 import { join } from 'path'
 import { readFileSync, existsSync, readdirSync } from 'fs'
 import type { SessionMeta } from './history-manager'
+import type { TerminalModes } from './types'
 import { getHistorySessionDirName } from './history-paths'
 
 export type ColdRestoreInfo = {
-  scrollback: string
+  snapshotAnsi: string
+  scrollbackAnsi: string
+  rehydrateSequences: string
   cwd: string
   cols: number
   rows: number
+  modes: TerminalModes
 }
 
 const ALT_SCREEN_ON = '\x1b[?1049h'
@@ -29,12 +33,43 @@ export class HistoryReader {
       return null
     }
 
-    const scrollback = this.readScrollback(sessionId)
-    return {
-      scrollback: this.truncateAltScreen(scrollback),
-      cwd: meta.cwd,
-      cols: meta.cols,
-      rows: meta.rows
+    const checkpointPath = join(
+      this.basePath,
+      getHistorySessionDirName(sessionId),
+      'checkpoint.json'
+    )
+    if (!existsSync(checkpointPath)) {
+      // Why: backward compatibility with pre-checkpoint sessions. If the user
+      // upgrades and then the daemon crashes before a checkpoint is written,
+      // the old scrollback.bin is still the best recovery data available.
+      return this.detectColdRestoreFromScrollback(sessionId, meta)
+    }
+
+    try {
+      const checkpoint = JSON.parse(readFileSync(checkpointPath, 'utf-8'))
+      // Why: HeadlessEmulator.getSnapshot() doesn't populate scrollbackAnsi
+      // (it's always ''). For non-alt-screen checkpoints, snapshotAnsi IS
+      // the normal buffer content and is safe to use as scrollback. For
+      // alt-screen checkpoints, snapshotAnsi is the serialized TUI buffer
+      // (not raw PTY stream), so truncateAltScreen won't find transition
+      // sequences and would return stale TUI content. Return empty instead
+      // — the adapter skips cold restore when scrollbackAnsi is falsy.
+      const scrollbackAnsi =
+        checkpoint.scrollbackAnsi ||
+        (checkpoint.modes?.alternateScreen ? '' : (checkpoint.snapshotAnsi ?? ''))
+      return {
+        snapshotAnsi: checkpoint.snapshotAnsi,
+        scrollbackAnsi,
+        rehydrateSequences: checkpoint.rehydrateSequences,
+        cwd: checkpoint.cwd,
+        cols: checkpoint.cols,
+        rows: checkpoint.rows,
+        modes: checkpoint.modes
+      }
+    } catch {
+      // Why: corrupt checkpoint — fall back to scrollback.bin rather than
+      // discarding recoverable data entirely.
+      return this.detectColdRestoreFromScrollback(sessionId, meta)
     }
   }
 
@@ -77,19 +112,39 @@ export class HistoryReader {
     }
   }
 
-  private readScrollback(sessionId: string): string {
+  // Why: handles the upgrade transition where sessions created before the
+  // checkpoint migration still have scrollback.bin but no checkpoint.json.
+  private detectColdRestoreFromScrollback(
+    sessionId: string,
+    meta: SessionMeta
+  ): ColdRestoreInfo | null {
     const scrollbackPath = join(
       this.basePath,
       getHistorySessionDirName(sessionId),
       'scrollback.bin'
     )
     if (!existsSync(scrollbackPath)) {
-      return ''
+      return null
     }
     try {
-      return readFileSync(scrollbackPath, 'utf-8')
+      const scrollback = readFileSync(scrollbackPath, 'utf-8')
+      const truncated = this.truncateAltScreen(scrollback)
+      return {
+        snapshotAnsi: truncated,
+        scrollbackAnsi: truncated,
+        rehydrateSequences: '',
+        cwd: meta.cwd,
+        cols: meta.cols,
+        rows: meta.rows,
+        modes: {
+          bracketedPaste: false,
+          mouseTracking: false,
+          applicationCursor: false,
+          alternateScreen: false
+        }
+      }
     } catch {
-      return ''
+      return null
     }
   }
 
@@ -111,9 +166,6 @@ export class HistoryReader {
       }
 
       if (onIdx !== -1 && (offIdx === -1 || onIdx < offIdx)) {
-        // Why: track where depth first goes above 0 — that's the outermost
-        // unmatched ON. Nested ONs (depth > 1) are inside the same alt-screen
-        // block, so we truncate at the outermost boundary.
         if (depth === 0) {
           outermostUnmatchedOnIdx = onIdx
         }

@@ -7,10 +7,12 @@ import type {
   BrowserSessionProfile,
   BrowserSessionProfileScope,
   BrowserSessionProfileSource,
+  ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState,
   CreateWorktreeResult,
   DirEntry,
   FsChangedPayload,
+  GhosttyImportPreview,
   GlobalSettings,
   GitBranchCompareResult,
   GitConflictOperation,
@@ -25,9 +27,15 @@ import type {
   LinearViewer,
   LinearConnectionStatus,
   LinearIssue,
+  LinearIssueUpdate,
+  LinearComment,
+  LinearWorkflowState,
+  LinearLabel,
+  LinearMember,
+  LinearTeam,
+  GitHubIssueUpdate,
   NotificationDispatchRequest,
   NotificationDispatchResult,
-  OpenCodeStatusEvent,
   OrcaHooks,
   PersistedUIState,
   PRCheckDetail,
@@ -37,6 +45,7 @@ import type {
   SearchOptions,
   SearchResult,
   StatsSummary,
+  MemorySnapshot,
   UpdateStatus,
   Worktree,
   WorktreeMeta,
@@ -65,6 +74,7 @@ import type {
 } from '../../shared/browser-guest-events'
 import type { CliInstallStatus } from '../../shared/cli-install-types'
 import type { E2EConfig } from '../../shared/e2e-config'
+import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../../shared/runtime-types'
 import type {
   ClaudeUsageBreakdownKind,
@@ -77,7 +87,12 @@ import type {
   ClaudeUsageSummary
 } from '../../shared/claude-usage-types'
 import type { RateLimitState } from '../../shared/rate-limit-types'
-import type { SshConnectionState, SshTarget } from '../../shared/ssh-types'
+import type {
+  SshConnectionState,
+  SshTarget,
+  PortForwardEntry,
+  DetectedPort
+} from '../../shared/ssh-types'
 import type {
   CodexUsageBreakdownKind,
   CodexUsageBreakdownRow,
@@ -167,7 +182,6 @@ export type DetectedBrowserInfo = {
 export type PreflightStatus = {
   git: { installed: boolean }
   gh: { installed: boolean; authenticated: boolean }
-  linear: { connected: boolean }
 }
 
 export type RefreshAgentsResult = {
@@ -180,6 +194,7 @@ export type PreflightApi = {
   check: (args?: { force?: boolean }) => Promise<PreflightStatus>
   detectAgents: () => Promise<string[]>
   refreshAgents: () => Promise<RefreshAgentsResult>
+  detectRemoteAgents: (args: { connectionId: string }) => Promise<string[]>
 }
 
 export type ExportApi = {
@@ -193,6 +208,10 @@ export type ExportApi = {
 
 export type StatsApi = {
   getSummary: () => Promise<StatsSummary>
+}
+
+export type MemoryApi = {
+  getSnapshot: () => Promise<MemorySnapshot>
 }
 
 export type ClaudeUsageApi = {
@@ -312,6 +331,12 @@ export type PreloadApi = {
       baseBranch?: string
       setupDecision?: 'inherit' | 'run' | 'skip'
     }) => Promise<CreateWorktreeResult>
+    resolvePrBase: (args: {
+      repoId: string
+      prNumber: number
+      headRefName?: string
+      isCrossRepository?: boolean
+    }) => Promise<{ baseBranch: string } | { error: string }>
     remove: (args: { worktreeId: string; force?: boolean }) => Promise<void>
     updateMeta: (args: { worktreeId: string; updates: Partial<WorktreeMeta> }) => Promise<Worktree>
     persistSortOrder: (args: { orderedIds: string[] }) => Promise<void>
@@ -334,6 +359,8 @@ export type PreloadApi = {
       snapshotRows?: number
       isReattach?: boolean
       isAlternateScreen?: boolean
+      replay?: string
+      sessionExpired?: boolean
       coldRestore?: { scrollback: string; cwd: string }
     }>
     write: (id: string, data: string) => void
@@ -345,8 +372,8 @@ export type PreloadApi = {
     getForegroundProcess: (id: string) => Promise<string | null>
     listSessions: () => Promise<{ id: string; cwd: string; title: string }[]>
     onData: (callback: (data: { id: string; data: string }) => void) => () => void
+    onReplay: (callback: (data: { id: string; data: string }) => void) => () => void
     onExit: (callback: (data: { id: string; code: number }) => void) => () => void
-    onOpenCodeStatus: (callback: (event: OpenCodeStatusEvent) => void) => () => void
   }
   feedback: {
     submit: (args: {
@@ -384,10 +411,12 @@ export type PreloadApi = {
       title: string
       body: string
     }) => Promise<{ ok: true; number: number; url: string } | { ok: false; error: string }>
+    countWorkItems: (args: { repoPath: string; query?: string }) => Promise<number>
     listWorkItems: (args: {
       repoPath: string
       limit?: number
       query?: string
+      before?: string
     }) => Promise<Omit<GitHubWorkItem, 'repoId'>[]>
     prChecks: (args: {
       repoPath: string
@@ -411,6 +440,18 @@ export type PreloadApi = {
       prNumber: number
       method?: 'merge' | 'squash' | 'rebase'
     }) => Promise<{ ok: true } | { ok: false; error: string }>
+    updateIssue: (args: {
+      repoPath: string
+      number: number
+      updates: GitHubIssueUpdate
+    }) => Promise<{ ok: true } | { ok: false; error: string }>
+    addIssueComment: (args: {
+      repoPath: string
+      number: number
+      body: string
+    }) => Promise<{ ok: true; id: number } | { ok: false; error: string }>
+    listLabels: (args: { repoPath: string }) => Promise<string[]>
+    listAssignableUsers: (args: { repoPath: string }) => Promise<string[]>
     checkOrcaStarred: () => Promise<boolean | null>
     starOrca: () => Promise<boolean>
   }
@@ -420,12 +461,33 @@ export type PreloadApi = {
     }) => Promise<{ ok: true; viewer: LinearViewer } | { ok: false; error: string }>
     disconnect: () => Promise<void>
     status: () => Promise<LinearConnectionStatus>
+    testConnection: () => Promise<{ ok: true; viewer: LinearViewer } | { ok: false; error: string }>
     searchIssues: (args: { query: string; limit?: number }) => Promise<LinearIssue[]>
     listIssues: (args?: {
       filter?: 'assigned' | 'created' | 'all' | 'completed'
       limit?: number
     }) => Promise<LinearIssue[]>
+    createIssue: (args: {
+      teamId: string
+      title: string
+      description?: string
+    }) => Promise<
+      { ok: true; id: string; identifier: string; url: string } | { ok: false; error: string }
+    >
     getIssue: (args: { id: string }) => Promise<LinearIssue | null>
+    updateIssue: (args: {
+      id: string
+      updates: LinearIssueUpdate
+    }) => Promise<{ ok: true } | { ok: false; error: string }>
+    addIssueComment: (args: {
+      issueId: string
+      body: string
+    }) => Promise<{ ok: true; id: string } | { ok: false; error: string }>
+    issueComments: (args: { issueId: string }) => Promise<LinearComment[]>
+    listTeams: () => Promise<LinearTeam[]>
+    teamStates: (args: { teamId: string }) => Promise<LinearWorkflowState[]>
+    teamLabels: (args: { teamId: string }) => Promise<LinearLabel[]>
+    teamMembers: (args: { teamId: string }) => Promise<LinearMember[]>
   }
   starNag: {
     onShow: (callback: () => void) => () => void
@@ -437,6 +499,7 @@ export type PreloadApi = {
     get: () => Promise<GlobalSettings>
     set: (args: Partial<GlobalSettings>) => Promise<GlobalSettings>
     listFonts: () => Promise<string[]>
+    previewGhosttyImport: () => Promise<GhosttyImportPreview>
   }
   codexAccounts: {
     list: () => Promise<CodexRateLimitAccountsState>
@@ -445,10 +508,22 @@ export type PreloadApi = {
     remove: (args: { accountId: string }) => Promise<CodexRateLimitAccountsState>
     select: (args: { accountId: string | null }) => Promise<CodexRateLimitAccountsState>
   }
+  claudeAccounts: {
+    list: () => Promise<ClaudeRateLimitAccountsState>
+    add: () => Promise<ClaudeRateLimitAccountsState>
+    reauthenticate: (args: { accountId: string }) => Promise<ClaudeRateLimitAccountsState>
+    remove: (args: { accountId: string }) => Promise<ClaudeRateLimitAccountsState>
+    select: (args: { accountId: string | null }) => Promise<ClaudeRateLimitAccountsState>
+  }
   cli: {
     getInstallStatus: () => Promise<CliInstallStatus>
     install: () => Promise<CliInstallStatus>
     remove: () => Promise<CliInstallStatus>
+  }
+  agentHooks: {
+    claudeStatus: () => Promise<AgentHookInstallStatus>
+    codexStatus: () => Promise<AgentHookInstallStatus>
+    geminiStatus: () => Promise<AgentHookInstallStatus>
   }
   preflight: PreflightApi
   notifications: {
@@ -513,6 +588,7 @@ export type PreloadApi = {
     onClearDismissal: (callback: () => void) => () => void
   }
   stats: StatsApi
+  memory: MemoryApi
   claudeUsage: ClaudeUsageApi
   codexUsage: CodexUsageApi
   fs: {
@@ -657,6 +733,7 @@ export type PreloadApi = {
     onHardReloadBrowserPage: (callback: () => void) => () => void
     onCloseActiveTab: (callback: () => void) => () => void
     onSwitchTab: (callback: (direction: 1 | -1) => void) => () => void
+    onSwitchTerminalTab: (callback: (direction: 1 | -1) => void) => () => void
     onToggleStatusBar: (callback: () => void) => () => void
     onExportPdfRequested: (callback: () => void) => () => void
     onActivateWorktree: (
@@ -750,9 +827,24 @@ export type PreloadApi = {
       remoteHost: string
       remotePort: number
       label?: string
-    }) => Promise<unknown>
-    removePortForward: (args: { id: string }) => Promise<boolean>
-    listPortForwards: (args?: { targetId?: string }) => Promise<unknown[]>
+    }) => Promise<PortForwardEntry>
+    updatePortForward: (args: {
+      id: string
+      targetId: string
+      localPort: number
+      remoteHost: string
+      remotePort: number
+      label?: string
+    }) => Promise<PortForwardEntry>
+    removePortForward: (args: { id: string }) => Promise<PortForwardEntry | null>
+    listPortForwards: (args?: { targetId?: string }) => Promise<PortForwardEntry[]>
+    listDetectedPorts: (args: { targetId: string }) => Promise<DetectedPort[]>
+    onPortForwardsChanged: (
+      callback: (data: { targetId: string; forwards: PortForwardEntry[] }) => void
+    ) => () => void
+    onDetectedPortsChanged: (
+      callback: (data: { targetId: string; ports: DetectedPort[] }) => void
+    ) => () => void
     browseDir: (args: { targetId: string; dirPath: string }) => Promise<{
       entries: { name: string; isDirectory: boolean }[]
       resolvedPath: string

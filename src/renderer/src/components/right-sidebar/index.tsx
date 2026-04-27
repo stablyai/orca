@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Files, Search, GitBranch, ListChecks, PanelRight } from 'lucide-react'
+import { Files, Search, GitBranch, ListChecks, Cable, PanelRight } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { getRepoMapFromState, useActiveWorktree, useRepoById } from '@/store/selectors'
 import { cn } from '@/lib/utils'
@@ -21,6 +21,7 @@ import FileExplorer from './FileExplorer'
 import SourceControl from './SourceControl'
 import SearchPanel from './Search'
 import ChecksPanel from './ChecksPanel'
+import PortsPanel from './PortsPanel'
 
 const MIN_WIDTH = 220
 // Why: long file names (e.g. construction drawing sheets, multi-part document
@@ -66,6 +67,8 @@ type ActivityBarItem = {
   shortcut: string
   /** When true, hidden for non-git (folder-mode) repos. */
   gitOnly?: boolean
+  /** When true, only shown when at least one SSH connection is active. */
+  sshOnly?: boolean
 }
 
 const isMac = navigator.userAgent.includes('Mac')
@@ -97,6 +100,15 @@ const ACTIVITY_ITEMS: ActivityBarItem[] = [
     title: 'Checks',
     shortcut: `${isMac ? '\u21E7' : 'Shift+'}${mod}K`,
     gitOnly: true
+  },
+  {
+    id: 'ports',
+    icon: Cable,
+    title: 'Ports',
+    // Why: Ctrl+Shift+I is the DevTools accelerator on Windows/Linux, so this
+    // shortcut is macOS-only. On other platforms the tooltip omits it.
+    shortcut: isMac ? `\u21E7${mod}I` : '',
+    sshOnly: true
   }
 ]
 
@@ -116,9 +128,85 @@ function RightSidebarInner(): React.JSX.Element {
   // Hide those tabs so the activity bar only shows relevant actions.
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
   const isFolder = activeRepo ? isFolderRepo(activeRepo) : false
+
+  // Why: show the Ports tab only when the active worktree belongs to a
+  // remote (SSH) repo, not for any global SSH connection. Switching to a
+  // local worktree should hide the tab even if SSH sessions are alive.
+  const isRemoteWorktree = !!activeRepo?.connectionId
+  const hasActiveSshConnection = useAppStore((s) => {
+    if (!activeRepo?.connectionId) {
+      return false
+    }
+    const state = s.sshConnectionStates.get(activeRepo.connectionId)
+    return state?.status === 'connected'
+  })
+
+  // Why: when the SSH connection drops while the user is viewing the Ports
+  // panel, hiding the tab immediately would be jarring. Keep it visible
+  // during a 30-second grace period, then hide it.
+  const isPortsPanelActive = rightSidebarTab === 'ports'
+  // Why: graceActiveRef is set synchronously during render (not via useEffect)
+  // so that the very first render after disconnect already sees the grace flag,
+  // preventing a one-frame flicker to the Explorer tab.
+  const graceActiveRef = React.useRef(false)
+  const graceTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [, forceUpdate] = useState(0)
+
+  if (!hasActiveSshConnection && isPortsPanelActive && !graceActiveRef.current) {
+    graceActiveRef.current = true
+  } else if (graceActiveRef.current && (hasActiveSshConnection || !isPortsPanelActive)) {
+    // Why: clear grace when either (a) the SSH session reconnects, or (b) the
+    // user navigates away from the Ports tab — no reason to keep it visible
+    // once they've moved on.
+    graceActiveRef.current = false
+    if (graceTimerRef.current) {
+      clearTimeout(graceTimerRef.current)
+      graceTimerRef.current = null
+    }
+  }
+
+  const disconnectGraceActive = graceActiveRef.current
+
+  useEffect(() => {
+    if (disconnectGraceActive) {
+      graceTimerRef.current = setTimeout(() => {
+        graceActiveRef.current = false
+        graceTimerRef.current = null
+        // Why: only reset the tab if the user is still on Ports. If they
+        // already navigated to Search/Checks/etc during the grace period,
+        // forcing them back to Explorer would be disruptive.
+        if (useAppStore.getState().rightSidebarTab === 'ports') {
+          setRightSidebarTab('explorer')
+        }
+        forceUpdate((n) => n + 1)
+      }, 30_000)
+      return () => {
+        if (graceTimerRef.current) {
+          clearTimeout(graceTimerRef.current)
+          graceTimerRef.current = null
+        }
+      }
+    }
+    return undefined
+  }, [disconnectGraceActive, setRightSidebarTab])
+
   const visibleItems = useMemo(
-    () => (isFolder ? ACTIVITY_ITEMS.filter((item) => !item.gitOnly) : ACTIVITY_ITEMS),
-    [isFolder]
+    () =>
+      ACTIVITY_ITEMS.filter((item) => {
+        if (item.gitOnly && isFolder) {
+          return false
+        }
+        if (item.sshOnly) {
+          if (!isRemoteWorktree) {
+            return false
+          }
+          if (!hasActiveSshConnection && !disconnectGraceActive) {
+            return false
+          }
+        }
+        return true
+      }),
+    [isFolder, isRemoteWorktree, hasActiveSshConnection, disconnectGraceActive]
   )
 
   // If the active tab is hidden (e.g. switched from a git repo to a folder),
@@ -151,6 +239,7 @@ function RightSidebarInner(): React.JSX.Element {
       {effectiveTab === 'search' && <SearchPanel />}
       {effectiveTab === 'source-control' && <SourceControl />}
       {effectiveTab === 'checks' && <ChecksPanel />}
+      {effectiveTab === 'ports' && <PortsPanel />}
     </div>
   )
 
@@ -318,7 +407,7 @@ function ActivityBarButton({
             active ? 'text-foreground' : 'text-muted-foreground/60 hover:text-muted-foreground'
           )}
           onClick={onClick}
-          aria-label={`${item.title} (${item.shortcut})`}
+          aria-label={item.shortcut ? `${item.title} (${item.shortcut})` : item.title}
         >
           <Icon size={isTop ? 16 : 18} />
 
@@ -343,7 +432,7 @@ function ActivityBarButton({
         </button>
       </TooltipTrigger>
       <TooltipContent side={isTop ? 'bottom' : 'left'} sideOffset={6}>
-        {item.title} ({item.shortcut})
+        {item.shortcut ? `${item.title} (${item.shortcut})` : item.title}
       </TooltipContent>
     </Tooltip>
   )
