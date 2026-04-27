@@ -1,4 +1,10 @@
+/* eslint-disable max-lines -- Why: this file groups all repos IPC handler
+tests (addRemote, getBaseRefDefault envelope, searchBaseRefs SSH relay) so
+fixture setup and mock plumbing can be shared. Splitting by line count would
+duplicate the hoisted mocks and the `../git/repo` partial-real/partial-stub
+setup. */
 import { describe, expect, it, vi, beforeEach } from 'vitest'
+import type * as RepoModule from '../git/repo'
 
 const { handleMock, mockStore, mockGitProvider } = vi.hoisted(() => ({
   handleMock: vi.fn(),
@@ -29,8 +35,7 @@ vi.mock('../git/repo', async () => {
   // exercise the actual probe list and query sanitizer, not frozen copies.
   // Drift in DEFAULT_BASE_REF_PROBES or normalizeRefSearchQuery now surfaces
   // as test failure, not silent test-passes against stale behavior.
-  const actual =
-    await vi.importActual<typeof import('../git/repo')>('../git/repo')
+  const actual = await vi.importActual<typeof RepoModule>('../git/repo')
   return {
     ...actual,
     // Stub only the functions that spawn git / touch the filesystem.
@@ -386,5 +391,175 @@ describe('repos:getBaseRefDefault envelope', () => {
     // the local path's getDefaultBaseRefAsync behavior.
     expect(result.defaultBaseRef).toBe('origin/master')
     expect(result.remoteCount).toBe(1)
+  })
+})
+
+describe('repos:searchBaseRefs SSH relay', () => {
+  const handlers = new Map<string, (_event: unknown, args: unknown) => unknown>()
+  const mockWindow = {
+    isDestroyed: () => false,
+    webContents: { send: vi.fn() }
+  }
+
+  beforeEach(() => {
+    handlers.clear()
+    handleMock.mockReset()
+    handleMock.mockImplementation((channel: string, handler: (...a: unknown[]) => unknown) => {
+      handlers.set(channel, handler)
+    })
+    mockStore.getRepos.mockReset().mockReturnValue([])
+    mockStore.getRepo.mockReset()
+    mockGitProvider.exec = vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
+    registerRepoHandlers(mockWindow as never, mockStore as never)
+  })
+
+  it('returns [] for a folder-mode repo without invoking the relay', async () => {
+    mockStore.getRepo.mockReturnValue({
+      id: 'r1',
+      path: '/some/folder',
+      kind: 'folder',
+      connectionId: 'conn-1'
+    })
+
+    const result = await handlers.get('repos:searchBaseRefs')!(null, {
+      repoId: 'r1',
+      query: 'main'
+    })
+
+    expect(result).toEqual([])
+    expect(mockGitProvider.exec).not.toHaveBeenCalled()
+  })
+
+  it('short-circuits an empty query without calling the relay', async () => {
+    mockStore.getRepo.mockReturnValue({
+      id: 'r1',
+      path: '/remote/repo',
+      connectionId: 'conn-1',
+      kind: 'git'
+    })
+
+    const result = await handlers.get('repos:searchBaseRefs')!(null, {
+      repoId: 'r1',
+      query: ''
+    })
+
+    // Why: empty-query short-circuit must happen in the handler (mirrors the
+    // local path's normalizeRefSearchQuery guard). Without it a user-typed
+    // empty query would leak every ref from the remote.
+    expect(result).toEqual([])
+    expect(mockGitProvider.exec).not.toHaveBeenCalled()
+  })
+
+  it('short-circuits a query containing only glob metacharacters', async () => {
+    mockStore.getRepo.mockReturnValue({
+      id: 'r1',
+      path: '/remote/repo',
+      connectionId: 'conn-1',
+      kind: 'git'
+    })
+
+    const result = await handlers.get('repos:searchBaseRefs')!(null, {
+      repoId: 'r1',
+      query: '***'
+    })
+
+    // Why: normalizeRefSearchQuery strips `*?[]\`, so a query made up only of
+    // glob metacharacters normalizes to '' and must be treated like an empty
+    // query (no relay call, no leaked refs). Guards against glob injection
+    // via the SSH branch.
+    expect(result).toEqual([])
+    expect(mockGitProvider.exec).not.toHaveBeenCalled()
+  })
+
+  it('sends the widened argv (refs/remotes/*/*) so upstream branches are discoverable', async () => {
+    // Why: this is the core issue-624 behavior — the SSH path must glob all
+    // remotes, not just origin. If this ever regresses to refs/remotes/origin/*,
+    // SSH fork users go back to being structurally blocked.
+    mockGitProvider.exec = vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
+
+    mockStore.getRepo.mockReturnValue({
+      id: 'r1',
+      path: '/remote/repo',
+      connectionId: 'conn-1',
+      kind: 'git'
+    })
+
+    await handlers.get('repos:searchBaseRefs')!(null, { repoId: 'r1', query: 'upstream' })
+
+    expect(mockGitProvider.exec).toHaveBeenCalledTimes(1)
+    const [argv, path] = mockGitProvider.exec.mock.calls[0]
+    expect(path).toBe('/remote/repo')
+    expect(argv[0]).toBe('for-each-ref')
+    expect(argv).toContain('refs/remotes/*upstream*/*')
+    expect(argv).toContain('refs/remotes/*/*upstream*')
+    expect(argv).toContain('refs/heads/*upstream*')
+    // Guard against regression to the old origin-only glob.
+    expect(argv).not.toContain('refs/remotes/origin/*upstream*')
+  })
+
+  it('parses NUL-delimited stdout and filters <remote>/HEAD pseudo-refs', async () => {
+    // Why: exercises the shared parseAndFilterSearchRefs pipeline end-to-end
+    // on the SSH path — confirms the HEAD filter works for any remote (not
+    // just origin) when results come from the relay.
+    const stdout = [
+      'refs/remotes/origin/main\0origin/main',
+      'refs/remotes/upstream/main\0upstream/main',
+      'refs/remotes/upstream/HEAD\0upstream/HEAD',
+      'refs/remotes/origin/HEAD\0origin/HEAD'
+    ].join('\n')
+    mockGitProvider.exec = vi.fn().mockResolvedValue({ stdout, stderr: '' })
+
+    mockStore.getRepo.mockReturnValue({
+      id: 'r1',
+      path: '/remote/repo',
+      connectionId: 'conn-1',
+      kind: 'git'
+    })
+
+    const result = (await handlers.get('repos:searchBaseRefs')!(null, {
+      repoId: 'r1',
+      query: 'main'
+    })) as string[]
+
+    expect(result).toEqual(['origin/main', 'upstream/main'])
+    expect(result).not.toContain('origin/HEAD')
+    expect(result).not.toContain('upstream/HEAD')
+  })
+
+  it('returns [] when the relay exec throws', async () => {
+    mockGitProvider.exec = vi.fn().mockRejectedValue(new Error('ssh connection dropped'))
+
+    mockStore.getRepo.mockReturnValue({
+      id: 'r1',
+      path: '/remote/repo',
+      connectionId: 'conn-1',
+      kind: 'git'
+    })
+
+    const result = await handlers.get('repos:searchBaseRefs')!(null, {
+      repoId: 'r1',
+      query: 'main'
+    })
+
+    // Why: transport failure must fall back to an empty result set — mirrors
+    // the local path's catch, so SSH users see "no matches" instead of a
+    // crashed picker when the relay drops.
+    expect(result).toEqual([])
+  })
+
+  it('returns [] when the SSH provider is not connected', async () => {
+    mockStore.getRepo.mockReturnValue({
+      id: 'r1',
+      path: '/remote/repo',
+      connectionId: 'unknown-conn',
+      kind: 'git'
+    })
+
+    const result = await handlers.get('repos:searchBaseRefs')!(null, {
+      repoId: 'r1',
+      query: 'main'
+    })
+
+    expect(result).toEqual([])
   })
 })
