@@ -2,6 +2,7 @@
    body/comments/files/checks fetch paths alongside the file-contents resolver
    so the drawer's rate-limit and caching strategy lives in one place. */
 import type {
+  GitHubAssignableUser,
   GitHubPRFile,
   GitHubPRFileContents,
   GitHubWorkItem,
@@ -16,6 +17,43 @@ import { getWorkItem, getPRChecks, getPRComments } from './client'
 // at 100 per page; we cap at a reasonable total so a massive PR cannot starve
 // the gh semaphore while we fetch file listings.
 const MAX_PR_FILES = 300
+
+const WORK_ITEM_PARTICIPANTS_QUERY = `query($owner: String!, $repo: String!, $number: Int!, $isPr: Boolean!) {
+  repository(owner: $owner, name: $repo) {
+    pullRequest(number: $number) @include(if: $isPr) {
+      participants(first: 100) {
+        nodes { login avatarUrl(size: 48) ... on User { name } }
+      }
+    }
+    issue(number: $number) @skip(if: $isPr) {
+      participants(first: 100) {
+        nodes { login avatarUrl(size: 48) ... on User { name } }
+      }
+    }
+  }
+}`
+
+function mergeGitHubUsers(users: GitHubAssignableUser[]): GitHubAssignableUser[] {
+  const byLogin = new Map<string, GitHubAssignableUser>()
+  for (const user of users) {
+    if (!user.login) {
+      continue
+    }
+    const key = user.login.toLowerCase()
+    const existing = byLogin.get(key)
+    if (existing) {
+      if (!existing.name && user.name) {
+        existing.name = user.name
+      }
+      if (!existing.avatarUrl && user.avatarUrl) {
+        existing.avatarUrl = user.avatarUrl
+      }
+      continue
+    }
+    byLogin.set(key, user)
+  }
+  return Array.from(byLogin.values())
+}
 
 type RESTPRFile = {
   filename: string
@@ -230,6 +268,153 @@ async function getPRBody(repoPath: string, prNumber: number): Promise<string> {
   }
 }
 
+async function getWorkItemParticipants(
+  repoPath: string,
+  item: Pick<GitHubWorkItem, 'number' | 'type'>
+): Promise<GitHubAssignableUser[]> {
+  const ownerRepo = await getOwnerRepo(repoPath)
+  if (!ownerRepo) {
+    return []
+  }
+  try {
+    const { stdout } = await ghExecFileAsync(
+      [
+        'api',
+        'graphql',
+        '-f',
+        `query=${WORK_ITEM_PARTICIPANTS_QUERY}`,
+        '-f',
+        `owner=${ownerRepo.owner}`,
+        '-f',
+        `repo=${ownerRepo.repo}`,
+        '-F',
+        `number=${item.number}`,
+        '-F',
+        `isPr=${item.type === 'pr'}`
+      ],
+      { cwd: repoPath }
+    )
+    const data = JSON.parse(stdout) as {
+      data?: {
+        repository?: {
+          pullRequest?: {
+            participants?: { nodes?: GitHubAssignableUser[] }
+          } | null
+          issue?: {
+            participants?: { nodes?: GitHubAssignableUser[] }
+          } | null
+        }
+      }
+    }
+    const nodes =
+      data.data?.repository?.pullRequest?.participants?.nodes ??
+      data.data?.repository?.issue?.participants?.nodes ??
+      []
+    return nodes
+      .map((user) => ({
+        login: user.login,
+        name: user.name ?? null,
+        avatarUrl: user.avatarUrl ?? ''
+      }))
+      .filter((user) => user.login)
+  } catch {
+    return []
+  }
+}
+
+async function getGitHubUsersByLogin(
+  repoPath: string,
+  logins: string[]
+): Promise<GitHubAssignableUser[]> {
+  const uniqueLogins = Array.from(
+    new Set(logins.filter((login) => login && login !== 'ghost').map((login) => login.trim()))
+  ).slice(0, 40)
+  if (uniqueLogins.length === 0) {
+    return []
+  }
+  const fields = uniqueLogins
+    .map(
+      (login, index) =>
+        `u${index}: user(login: ${JSON.stringify(login)}) { login name avatarUrl(size: 48) }`
+    )
+    .join('\n')
+  try {
+    const { stdout } = await ghExecFileAsync(
+      ['api', 'graphql', '-f', `query=query { ${fields} }`],
+      {
+        cwd: repoPath
+      }
+    )
+    const data = JSON.parse(stdout) as {
+      data?: Record<
+        string,
+        { login?: string; name?: string | null; avatarUrl?: string | null } | null
+      >
+    }
+    return Object.values(data.data ?? {})
+      .filter((user): user is { login: string; name?: string | null; avatarUrl?: string | null } =>
+        Boolean(user?.login)
+      )
+      .map((user) => ({
+        login: user.login,
+        name: user.name ?? null,
+        avatarUrl: user.avatarUrl ?? ''
+      }))
+  } catch {
+    return []
+  }
+}
+
+async function getGitHubUserProfilesByLogin(
+  repoPath: string,
+  logins: string[]
+): Promise<GitHubAssignableUser[]> {
+  const uniqueLogins = Array.from(
+    new Set(logins.filter((login) => login && login !== 'ghost').map((login) => login.trim()))
+  ).slice(0, 20)
+  const results = await Promise.allSettled(
+    uniqueLogins.map((login) =>
+      ghExecFileAsync(['api', `users/${login}`], {
+        cwd: repoPath
+      })
+    )
+  )
+  return results.flatMap((result) => {
+    if (result.status !== 'fulfilled') {
+      return []
+    }
+    const data = JSON.parse(result.value.stdout) as {
+      login?: string
+      name?: string | null
+      avatar_url?: string | null
+    }
+    if (!data.login) {
+      return []
+    }
+    return [
+      {
+        login: data.login,
+        name: data.name ?? null,
+        avatarUrl: data.avatar_url ?? ''
+      }
+    ]
+  })
+}
+
+async function getMentionParticipants(
+  repoPath: string,
+  item: Pick<GitHubWorkItem, 'author' | 'number' | 'type'>,
+  comments: PRComment[],
+  participants: GitHubAssignableUser[]
+): Promise<GitHubAssignableUser[]> {
+  const visibleLogins = [item.author ?? '', ...comments.map((comment) => comment.author)]
+  const [graphQlUsers, restUsers] = await Promise.all([
+    getGitHubUsersByLogin(repoPath, visibleLogins),
+    getGitHubUserProfilesByLogin(repoPath, visibleLogins)
+  ])
+  return mergeGitHubUsers([...participants, ...graphQlUsers, ...restUsers])
+}
+
 export async function getWorkItemDetails(
   repoPath: string,
   number: number
@@ -246,16 +431,25 @@ export async function getWorkItemDetails(
   try {
     if (item.type === 'issue') {
       const { body, comments, assignees } = await getIssueBodyAndComments(repoPath, item.number)
-      return { item, body, comments, assignees }
+      const participants = await getWorkItemParticipants(repoPath, item)
+      const mentionParticipants = await getMentionParticipants(
+        repoPath,
+        item,
+        comments,
+        participants
+      )
+      return { item, body, comments, assignees, participants: mentionParticipants }
     }
 
     // PR: fetch body + comments + checks + files + head/base SHAs in parallel.
-    const [body, comments, shas, files] = await Promise.all([
+    const [body, comments, shas, files, participants] = await Promise.all([
       getPRBody(repoPath, item.number),
       getPRComments(repoPath, item.number),
       getPRHeadBaseSha(repoPath, item.number),
-      getPRFiles(repoPath, item.number)
+      getPRFiles(repoPath, item.number),
+      getWorkItemParticipants(repoPath, item)
     ])
+    const mentionParticipants = await getMentionParticipants(repoPath, item, comments, participants)
 
     const checks: PRCheckDetail[] = shas?.headSha
       ? await getPRChecks(repoPath, item.number, shas.headSha)
@@ -268,7 +462,8 @@ export async function getWorkItemDetails(
       headSha: shas?.headSha,
       baseSha: shas?.baseSha,
       checks,
-      files
+      files,
+      participants: mentionParticipants
     }
   } finally {
     release()

@@ -368,6 +368,21 @@ export type PRCheckDetail = {
   url: string | null
 }
 
+export type GitHubReactionContent =
+  | '+1'
+  | '-1'
+  | 'laugh'
+  | 'confused'
+  | 'heart'
+  | 'hooray'
+  | 'rocket'
+  | 'eyes'
+
+export type GitHubReaction = {
+  content: GitHubReactionContent
+  count: number
+}
+
 export type PRComment = {
   id: number
   author: string
@@ -375,6 +390,7 @@ export type PRComment = {
   body: string
   createdAt: string
   url: string
+  reactions?: GitHubReaction[]
   /** File path for inline review comments (absent for top-level conversation comments). */
   path?: string
   /** GraphQL node ID of the review thread — present only for inline review comments.
@@ -394,6 +410,8 @@ export type PRComment = {
   isBot?: boolean
 }
 
+export type GitHubCommentResult = { ok: true; comment: PRComment } | { ok: false; error: string }
+
 export type IssueInfo = {
   number: number
   title: string
@@ -405,6 +423,12 @@ export type IssueInfo = {
 export type GitHubViewer = {
   login: string
   email: string | null
+}
+
+export type GitHubAssignableUser = {
+  login: string
+  name: string | null
+  avatarUrl: string
 }
 
 export type GitHubWorkItem = {
@@ -447,6 +471,16 @@ export type GitHubPRFileContents = {
   modifiedIsBinary: boolean
 }
 
+export type GitHubPRReviewCommentInput = {
+  repoPath: string
+  prNumber: number
+  commitId: string
+  path: string
+  line: number
+  startLine?: number
+  body: string
+}
+
 export type GitHubWorkItemDetails = {
   // Why: main-process doesn't know Orca's Repo.id, so this inner item omits
   // repoId. The renderer stamps it when routing the details through the store.
@@ -458,6 +492,7 @@ export type GitHubWorkItemDetails = {
   baseSha?: string
   checks?: PRCheckDetail[]
   files?: GitHubPRFile[]
+  participants?: GitHubAssignableUser[]
   /** Logins of current assignees. Only set for issues. */
   assignees?: string[]
 }

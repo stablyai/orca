@@ -20,6 +20,8 @@ import {
   getPRChecks,
   getPRComments,
   resolveReviewThread,
+  addPRReviewComment,
+  addPRReviewCommentReply,
   updatePRTitle,
   mergePR,
   checkOrcaStarred,
@@ -161,6 +163,105 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
     (_event, args: { repoPath: string; threadId: string; resolve: boolean }) => {
       const repo = assertRegisteredRepo(args.repoPath, store)
       return resolveReviewThread(repo.path, args.threadId, args.resolve)
+    }
+  )
+
+  ipcMain.handle(
+    'gh:addPRReviewCommentReply',
+    (
+      _event,
+      args: {
+        repoPath: string
+        prNumber: number
+        commentId: number
+        body: string
+        threadId?: string
+        path?: string
+        line?: number
+      }
+    ) => {
+      const repo = assertRegisteredRepo(args.repoPath, store)
+      if (
+        typeof args.prNumber !== 'number' ||
+        !Number.isInteger(args.prNumber) ||
+        args.prNumber < 1
+      ) {
+        return { ok: false, error: 'Invalid PR number' }
+      }
+      if (
+        typeof args.commentId !== 'number' ||
+        !Number.isInteger(args.commentId) ||
+        args.commentId < 1
+      ) {
+        return { ok: false, error: 'Invalid comment ID' }
+      }
+      if (!args.body?.trim()) {
+        return { ok: false, error: 'Comment body required' }
+      }
+      return addPRReviewCommentReply(
+        repo.path,
+        args.prNumber,
+        args.commentId,
+        args.body.trim(),
+        args.threadId,
+        args.path,
+        args.line
+      )
+    }
+  )
+
+  ipcMain.handle(
+    'gh:addPRReviewComment',
+    (
+      _event,
+      args: {
+        repoPath: string
+        prNumber: number
+        commitId: string
+        path: string
+        line: number
+        startLine?: number
+        body: string
+      }
+    ) => {
+      const repo = assertRegisteredRepo(args.repoPath, store)
+      if (
+        typeof args.prNumber !== 'number' ||
+        !Number.isInteger(args.prNumber) ||
+        args.prNumber < 1
+      ) {
+        return { ok: false, error: 'Invalid PR number' }
+      }
+      if (typeof args.line !== 'number' || !Number.isInteger(args.line) || args.line < 1) {
+        return { ok: false, error: 'Invalid line number' }
+      }
+      if (
+        args.startLine !== undefined &&
+        (typeof args.startLine !== 'number' ||
+          !Number.isInteger(args.startLine) ||
+          args.startLine < 1 ||
+          args.startLine > args.line)
+      ) {
+        return { ok: false, error: 'Invalid start line' }
+      }
+      if (!args.commitId?.trim()) {
+        return { ok: false, error: 'Missing PR head SHA' }
+      }
+      if (!args.path?.trim()) {
+        return { ok: false, error: 'File path required' }
+      }
+      if (!args.body?.trim()) {
+        return { ok: false, error: 'Comment body required' }
+      }
+      return addPRReviewComment({
+        repoPath: repo.path,
+        prNumber: args.prNumber,
+        commitId: args.commitId.trim(),
+        path: args.path,
+        line: args.line,
+        startLine: args.startLine,
+        body: args.body.trim()
+      })
     }
   )
 

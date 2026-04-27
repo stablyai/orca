@@ -17,8 +17,11 @@ import type {
   GitConflictOperation,
   GitDiffResult,
   GitStatusEntry,
+  GitHubAssignableUser,
   GitHubPRFile,
   GitHubPRFileContents,
+  GitHubPRReviewCommentInput,
+  GitHubCommentResult,
   GitHubWorkItem,
   GitHubWorkItemDetails,
   GitHubViewer,
@@ -448,9 +451,19 @@ export type PreloadApi = {
       repoPath: string
       number: number
       body: string
-    }) => Promise<{ ok: true; id: number } | { ok: false; error: string }>
+    }) => Promise<GitHubCommentResult>
+    addPRReviewCommentReply: (args: {
+      repoPath: string
+      prNumber: number
+      commentId: number
+      body: string
+      threadId?: string
+      path?: string
+      line?: number
+    }) => Promise<GitHubCommentResult>
+    addPRReviewComment: (args: GitHubPRReviewCommentInput) => Promise<GitHubCommentResult>
     listLabels: (args: { repoPath: string }) => Promise<string[]>
-    listAssignableUsers: (args: { repoPath: string }) => Promise<string[]>
+    listAssignableUsers: (args: { repoPath: string }) => Promise<GitHubAssignableUser[]>
     checkOrcaStarred: () => Promise<boolean | null>
     starOrca: () => Promise<boolean>
   }

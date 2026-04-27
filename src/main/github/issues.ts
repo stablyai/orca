@@ -1,4 +1,10 @@
-import type { IssueInfo, GitHubIssueUpdate } from '../../shared/types'
+import type {
+  GitHubAssignableUser,
+  GitHubCommentResult,
+  GitHubIssueUpdate,
+  IssueInfo,
+  PRComment
+} from '../../shared/types'
 import { mapIssueInfo } from './mappers'
 import { ghExecFileAsync, acquire, release, getOwnerRepo, classifyGhError } from './gh-utils'
 
@@ -205,7 +211,7 @@ export async function addIssueComment(
   repoPath: string,
   issueNumber: number,
   body: string
-): Promise<{ ok: true; id: number } | { ok: false; error: string }> {
+): Promise<GitHubCommentResult> {
   const ownerRepo = await getOwnerRepo(repoPath)
   if (!ownerRepo) {
     return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
@@ -223,8 +229,23 @@ export async function addIssueComment(
       ],
       { cwd: repoPath }
     )
-    const data = JSON.parse(stdout) as { id?: number }
-    return { ok: true, id: data.id ?? 0 }
+    const data = JSON.parse(stdout) as {
+      id?: number
+      user: { login: string; avatar_url: string; type?: string } | null
+      body?: string
+      created_at?: string
+      html_url?: string
+    }
+    const comment: PRComment = {
+      id: data.id ?? Date.now(),
+      author: data.user?.login ?? 'You',
+      authorAvatarUrl: data.user?.avatar_url ?? '',
+      body: data.body ?? body,
+      createdAt: data.created_at ?? new Date().toISOString(),
+      url: data.html_url ?? '',
+      isBot: data.user?.type === 'Bot'
+    }
+    return { ok: true, comment }
   } catch (err) {
     const stderr = err instanceof Error ? err.message : String(err)
     return { ok: false, error: classifyGhError(stderr).message }
@@ -261,7 +282,7 @@ export async function listLabels(repoPath: string): Promise<string[]> {
   }
 }
 
-export async function listAssignableUsers(repoPath: string): Promise<string[]> {
+export async function listAssignableUsers(repoPath: string): Promise<GitHubAssignableUser[]> {
   const ownerRepo = await getOwnerRepo(repoPath)
   if (!ownerRepo) {
     return []
@@ -271,17 +292,36 @@ export async function listAssignableUsers(repoPath: string): Promise<string[]> {
     const { stdout } = await ghExecFileAsync(
       [
         'api',
-        '--paginate',
-        `repos/${ownerRepo.owner}/${ownerRepo.repo}/assignees`,
-        '--jq',
-        '.[].login'
+        'graphql',
+        '-f',
+        `owner=${ownerRepo.owner}`,
+        '-f',
+        `repo=${ownerRepo.repo}`,
+        '-f',
+        'query=query($owner: String!, $repo: String!) { repository(owner: $owner, name: $repo) { assignableUsers(first: 100) { nodes { login name avatarUrl(size: 48) } } } }'
       ],
       { cwd: repoPath }
     )
-    return stdout
-      .trim()
-      .split('\n')
-      .filter((l) => l.length > 0)
+    const data = JSON.parse(stdout) as {
+      data?: {
+        repository?: {
+          assignableUsers?: {
+            nodes?: {
+              login?: string
+              name?: string | null
+              avatarUrl?: string | null
+            }[]
+          }
+        }
+      }
+    }
+    return (data.data?.repository?.assignableUsers?.nodes ?? [])
+      .map((user) => ({
+        login: user.login ?? '',
+        name: user.name ?? null,
+        avatarUrl: user.avatarUrl ?? ''
+      }))
+      .filter((user) => user.login.length > 0)
   } catch {
     return []
   } finally {
