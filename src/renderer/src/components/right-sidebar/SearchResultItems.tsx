@@ -130,12 +130,22 @@ export function MatchResultRow({
   // Highlight the matched text within the line
   const parts = useMemo(() => {
     const content = match.lineContent
-    const col = match.column - 1 // convert to 0-indexed
-    const len = match.matchLength
+    const col = (match.displayColumn ?? match.column) - 1 // convert to 0-indexed
+    const len = match.displayMatchLength ?? match.matchLength
 
     if (col >= 0 && col + len <= content.length) {
+      // Why: left-truncate the pre-match text so the highlight stays visible at
+      // narrow sidebar widths. Without this, a long `before` pushes the match
+      // off the right edge even with overflow ellipsis. Mirrors VS Code's
+      // search view (see searchTreeModel/match.ts#preview → lcut).
+      const BEFORE_MAX = 26
+      const rawBefore = content.slice(0, col).trimStart()
+      const before =
+        rawBefore.length > BEFORE_MAX
+          ? `…${rawBefore.slice(rawBefore.length - BEFORE_MAX)}`
+          : rawBefore
       return {
-        before: content.slice(0, col),
+        before,
         match: content.slice(col, col + len),
         after: content.slice(col + len)
       }
@@ -143,7 +153,13 @@ export function MatchResultRow({
 
     // Fallback
     return { before: content, match: '', after: '' }
-  }, [match.lineContent, match.column, match.matchLength])
+  }, [
+    match.lineContent,
+    match.column,
+    match.matchLength,
+    match.displayColumn,
+    match.displayMatchLength
+  ])
 
   return (
     <ContextMenu>
@@ -165,12 +181,14 @@ export function MatchResultRow({
           <span className="text-[10px] text-muted-foreground flex-shrink-0 tabular-nums mt-px">
             {match.line}
           </span>
-          <span className="text-xs truncate">
-            <span className="text-muted-foreground">{parts.before.trimStart()}</span>
+          <span className="text-xs flex min-w-0 items-baseline whitespace-pre">
+            <span className="text-muted-foreground flex-shrink-0">{parts.before}</span>
             {parts.match && (
-              <span className="bg-amber-500/30 text-foreground rounded-sm">{parts.match}</span>
+              <span className="bg-amber-500/30 text-foreground rounded-sm flex-shrink-0">
+                {parts.match}
+              </span>
             )}
-            <span className="text-muted-foreground">{parts.after}</span>
+            <span className="text-muted-foreground min-w-0 truncate">{parts.after}</span>
           </span>
         </Button>
       </ContextMenuTrigger>

@@ -212,8 +212,8 @@ export async function initDaemonPtyProvider(): Promise<void> {
 // separate process and survives app quit — sessions stay alive for warm
 // reattach on next launch. Leave history sessions marked "unclean" here so a
 // later daemon crash while Orca is closed is still recoverable on next launch.
-export function disconnectDaemon(): void {
-  adapter?.disconnectOnly()
+export async function disconnectDaemon(): Promise<void> {
+  await adapter?.disconnectOnly()
   adapter = null
 }
 
@@ -327,6 +327,11 @@ async function createLegacyDaemonAdapters(runtimeDir: string): Promise<DaemonPty
     // Legacy adapters intentionally do not respawn: respawning an old protocol
     // daemon from new code would recreate stale env semantics and can be less
     // predictable than letting the session fail if that old daemon dies.
+    // Why historyPath is still passed: checkpoint writes will fail silently
+    // (pre-v4 daemons don't support getSnapshot), but the HistoryManager is
+    // still needed for cleanup — close/exit events must remove history dirs
+    // and mark meta.json as ended. Without it, a later v4 session reusing
+    // the same ID could false-restore stale scrollback.bin.
     adapters.push(
       new DaemonPtyAdapter({
         socketPath,

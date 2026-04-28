@@ -344,7 +344,7 @@ export function registerPtyHandlers(
           isPackaged: app.isPackaged,
           userDataPath: app.getPath('userData'),
           selectedCodexHomePath: getSelectedCodexHomePath?.() ?? null,
-          githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? true
+          githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false
         }),
       onSpawned: (id) => runtime?.onPtySpawned(id),
       onExit: (id, code) => {
@@ -536,7 +536,7 @@ export function registerPtyHandlers(
           isPackaged: app.isPackaged,
           userDataPath: app.getPath('userData'),
           selectedCodexHomePath: getSelectedCodexHomePath?.() ?? null,
-          githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? true
+          githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false
         })
       }
       const envToDelete = claudeAuth?.stripAuthEnv
@@ -560,8 +560,20 @@ export function registerPtyHandlers(
       if (effectiveSessionId !== undefined) {
         spawnOptions.sessionId = effectiveSessionId
       }
-      if (args.shellOverride !== undefined) {
-        spawnOptions.shellOverride = args.shellOverride
+      // Why: on Windows, fall back to the persisted default-shell setting
+      // when the renderer didn't send a per-tab override. Without this, the
+      // daemon path ignores the user's "Default Shell" preference entirely —
+      // it just calls resolvePtyShellPath(env) which reads COMSPEC (cmd.exe)
+      // or falls back to PowerShell. The LocalPtyProvider already consults
+      // getWindowsShell(); this mirrors that on the daemon path so users who
+      // set WSL as default actually get WSL when pressing Ctrl+T.
+      const effectiveShellOverride =
+        args.shellOverride ??
+        (process.platform === 'win32' && !args.connectionId
+          ? getSettings?.()?.terminalWindowsShell
+          : undefined)
+      if (effectiveShellOverride !== undefined) {
+        spawnOptions.shellOverride = effectiveShellOverride
       }
       const result = await provider.spawn(spawnOptions)
       ptyOwnership.set(result.id, args.connectionId ?? null)

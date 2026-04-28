@@ -22,6 +22,7 @@ export type DaemonServerOptions = {
     cwd?: string
     env?: Record<string, string>
     command?: string
+    shellOverride?: string
   }) => SubprocessHandle
 }
 
@@ -199,6 +200,7 @@ export class DaemonServer {
           cwd: p.cwd,
           env: p.env,
           command: p.command,
+          shellOverride: p.shellOverride,
           shellReadySupported: p.shellReadySupported,
           streamClient: {
             onData: (data) => {
@@ -279,6 +281,9 @@ export class DaemonServer {
 
       case 'listSessions':
         return { sessions: this.host.listSessions() }
+
+      case 'getSnapshot':
+        return { snapshot: this.host.getSnapshot(request.payload.sessionId) }
 
       case 'ping':
         return { pong: true }

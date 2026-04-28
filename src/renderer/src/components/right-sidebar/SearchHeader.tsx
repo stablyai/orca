@@ -1,13 +1,5 @@
 import React from 'react'
-import {
-  Search as SearchIcon,
-  CaseSensitive,
-  WholeWord,
-  Regex,
-  X,
-  Loader2,
-  Ellipsis
-} from 'lucide-react'
+import { Search as SearchIcon, CaseSensitive, WholeWord, Regex, X, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SearchFilters } from './SearchFilters'
 import { ToggleButton } from './SearchResultItems'
@@ -18,7 +10,6 @@ type SearchHeaderProps = {
   excludeInputRef: React.RefObject<HTMLInputElement | null>
   query: string
   loading: boolean
-  detailsVisible: boolean
   caseSensitive: boolean
   wholeWord: boolean
   useRegex: boolean
@@ -27,7 +18,6 @@ type SearchHeaderProps = {
   onQueryChange: (e: React.ChangeEvent<HTMLInputElement>) => void
   onKeyDown: (e: React.KeyboardEvent) => void
   onClearSearch: () => void
-  onToggleSearchDetails: () => void
   onToggleCaseSensitive: () => void
   onToggleWholeWord: () => void
   onToggleRegex: () => void
@@ -41,7 +31,6 @@ export function SearchHeader({
   excludeInputRef,
   query,
   loading,
-  detailsVisible,
   caseSensitive,
   wholeWord,
   useRegex,
@@ -50,7 +39,6 @@ export function SearchHeader({
   onQueryChange,
   onKeyDown,
   onClearSearch,
-  onToggleSearchDetails,
   onToggleCaseSensitive,
   onToggleWholeWord,
   onToggleRegex,
@@ -85,14 +73,6 @@ export function SearchHeader({
             <X size={12} />
           </Button>
         )}
-        <ToggleButton
-          active={detailsVisible}
-          onClick={onToggleSearchDetails}
-          title="Toggle Search Details"
-          ariaExpanded={detailsVisible}
-        >
-          <Ellipsis size={14} />
-        </ToggleButton>
         <ToggleButton active={caseSensitive} onClick={onToggleCaseSensitive} title="Match Case">
           <CaseSensitive size={14} />
         </ToggleButton>
@@ -104,19 +84,17 @@ export function SearchHeader({
         </ToggleButton>
       </div>
 
-      {detailsVisible && (
-        // Why: VS Code keeps include/exclude scope controls tucked behind a
-        // dedicated details toggle so the default search UI stays compact
-        // until the user asks for extra filtering options.
-        <SearchFilters
-          includePattern={includePattern}
-          excludePattern={excludePattern}
-          includeInputRef={includeInputRef}
-          excludeInputRef={excludeInputRef}
-          onIncludeChange={onIncludeChange}
-          onExcludeChange={onExcludeChange}
-        />
-      )}
+      {/* Why: the Search tab is a secondary destination — users switch to it
+         when they want powerful, scoped search, so include/exclude fields
+         stay visible instead of hidden behind a toggle. */}
+      <SearchFilters
+        includePattern={includePattern}
+        excludePattern={excludePattern}
+        includeInputRef={includeInputRef}
+        excludeInputRef={excludeInputRef}
+        onIncludeChange={onIncludeChange}
+        onExcludeChange={onExcludeChange}
+      />
     </div>
   )
 }

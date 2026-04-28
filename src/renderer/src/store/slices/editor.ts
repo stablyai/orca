@@ -267,7 +267,6 @@ export type EditorSlice = {
     string,
     {
       query: string
-      queryDetailsExpanded: boolean
       caseSensitive: boolean
       wholeWord: boolean
       useRegex: boolean
@@ -1727,7 +1726,6 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     set((s) => {
       const current = s.fileSearchStateByWorktree[worktreeId] || {
         query: '',
-        queryDetailsExpanded: false,
         caseSensitive: false,
         wholeWord: false,
         useRegex: false,

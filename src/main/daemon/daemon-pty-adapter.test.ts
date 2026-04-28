@@ -434,7 +434,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       historyAdapter?.dispose()
     })
 
-    it('writes scrollback to disk on data events', async () => {
+    it('does not write to disk on individual data events (checkpoint-based)', async () => {
       historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
 
       const { id } = await historyAdapter.spawn({
@@ -447,11 +447,11 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       lastSubprocess._simulateData('hello from pty\r\n')
       await new Promise((r) => setTimeout(r, 50))
 
-      const scrollback = readFileSync(
-        join(historyDir, getHistorySessionDirName(id), 'scrollback.bin'),
-        'utf-8'
+      // Why: checkpoint-based persistence does not write on every data event.
+      // No scrollback.bin should exist — checkpoints write checkpoint.json on a timer.
+      expect(existsSync(join(historyDir, getHistorySessionDirName(id), 'scrollback.bin'))).toBe(
+        false
       )
-      expect(scrollback).toContain('hello from pty')
     })
 
     it('writes meta.json with endedAt on exit', async () => {
@@ -559,7 +559,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(third.coldRestore).toBeUndefined()
     })
 
-    it('records post-cold-restore data to disk for future restores', async () => {
+    it('opens session for checkpointing after cold restore', async () => {
       const sessionId = 'post-restore-data'
       const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
       mkdirSync(sessionDir, { recursive: true })
@@ -581,24 +581,17 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const result = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
       expect(result.coldRestore).toBeDefined()
 
-      // Restored scrollback is seeded into the new history file immediately
-      const seeded = readFileSync(
-        join(historyDir, getHistorySessionDirName(sessionId), 'scrollback.bin'),
-        'utf-8'
-      )
-      expect(seeded).toContain('old output')
-
-      // Simulate new data arriving after cold restore
-      lastSubprocess._simulateData('new post-restore output\r\n')
       await new Promise((r) => setTimeout(r, 50))
 
-      // History should now contain both the seeded and new data
-      const scrollback = readFileSync(
-        join(historyDir, getHistorySessionDirName(sessionId), 'scrollback.bin'),
-        'utf-8'
+      // Why: checkpoint-based persistence opens the session for future
+      // checkpointing but does not seed scrollback.bin. New data is persisted
+      // via periodic checkpoint timer, not per-chunk appendData.
+      const meta = JSON.parse(
+        readFileSync(join(historyDir, getHistorySessionDirName(sessionId), 'meta.json'), 'utf-8')
       )
-      expect(scrollback).toContain('old output')
-      expect(scrollback).toContain('new post-restore output')
+      expect(meta.cwd).toBe('/tmp')
+      expect(meta.cols).toBe(80)
+      expect(meta.rows).toBe(24)
     })
 
     it('does not cold-restore for clean shutdown (endedAt set)', async () => {

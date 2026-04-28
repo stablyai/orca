@@ -89,6 +89,27 @@ function isZoomOutShortcut(input: WindowShortcutInput): boolean {
   )
 }
 
+// Why: letter shortcuts must follow the user's active keyboard layout. Matching
+// solely on `input.code` uses the physical QWERTY position of the key, which
+// breaks on Dvorak, Colemak, AZERTY, and other non-QWERTY layouts — e.g. on
+// Dvorak the key that types 'b' sits at physical position 'KeyN', so
+// `input.code === 'KeyB'` never fires when the user presses what is, to them,
+// "Cmd+B". `input.key` carries the layout-aware character, so we prefer it
+// when it looks like a letter. We fall back to the QWERTY code when `key` is
+// empty or non-letter (dead keys, some IME states, rare Electron edge cases)
+// so shortcuts still reach users whose driver does not surface `key`.
+function matchesLetterShortcut(
+  input: WindowShortcutInput,
+  letter: string,
+  codeFallback: string
+): boolean {
+  const key = (input.key ?? '').toLowerCase()
+  if (key.length === 1 && key >= 'a' && key <= 'z') {
+    return key === letter
+  }
+  return input.code === codeFallback
+}
+
 export function resolveWindowShortcutAction(
   input: WindowShortcutInput,
   platform: NodeJS.Platform
@@ -120,7 +141,7 @@ export function resolveWindowShortcutAction(
   }
 
   if (
-    input.code === 'KeyJ' &&
+    matchesLetterShortcut(input, 'j', 'KeyJ') &&
     ((platform === 'darwin' && !input.shift) || (platform !== 'darwin' && input.shift))
   ) {
     return { type: 'toggleWorktreePalette' }
@@ -130,15 +151,15 @@ export function resolveWindowShortcutAction(
   // Without main-process interception, xterm.js processes the keydown before
   // the renderer's window-capture handler can preventDefault, causing ^B / ^L
   // to appear in the terminal alongside the sidebar toggle.
-  if (input.code === 'KeyB' && !input.shift) {
+  if (matchesLetterShortcut(input, 'b', 'KeyB') && !input.shift) {
     return { type: 'toggleLeftSidebar' }
   }
 
-  if (input.code === 'KeyL' && !input.shift) {
+  if (matchesLetterShortcut(input, 'l', 'KeyL') && !input.shift) {
     return { type: 'toggleRightSidebar' }
   }
 
-  if (input.code === 'KeyP' && !input.shift) {
+  if (matchesLetterShortcut(input, 'p', 'KeyP') && !input.shift) {
     return { type: 'openQuickOpen' }
   }
 
@@ -146,7 +167,7 @@ export function resolveWindowShortcutAction(
   // main process so it reaches the renderer even when focus lives inside
   // a contentEditable surface (markdown rich editor) or a browser guest
   // webContents, both of which bypass the renderer's window-level keydown.
-  if (input.code === 'KeyN' && !input.shift) {
+  if (matchesLetterShortcut(input, 'n', 'KeyN') && !input.shift) {
     return { type: 'openNewWorkspace' }
   }
 

@@ -483,7 +483,12 @@ app.on('before-quit', () => {
   rateLimits?.stop()
 })
 
-app.on('will-quit', () => {
+// Why: will-quit fires twice when daemon disconnect needs an async flush.
+// First pass: run all sync cleanup, then preventDefault to await the final
+// checkpoint writes. Second pass (after disconnect resolves): skip the
+// async work and let Electron exit.
+let daemonDisconnectDone = false
+app.on('will-quit', (e) => {
   // Why: stats.flush() must run before killAllPty() so it can read the
   // live agent state and emit synthetic agent_stop events for agents that
   // are still running. killAllPty() does not call runtime.onPtyExit(),
@@ -496,12 +501,6 @@ app.on('will-quit', () => {
   // holding ports and leaving stale session state on disk.
   runtime?.getAgentBrowserBridge()?.destroyAllSessions()
   killAllPty()
-  // Why: in daemon mode, killAllPty is a no-op (daemon sessions survive app
-  // quit) but the client connection must be closed so sockets are released.
-  // disconnectDaemon only tears down the client transport — it does NOT kill
-  // the daemon process or mark its history as cleanly ended, preserving both
-  // warm reattach and crash recovery on next launch.
-  disconnectDaemon()
   void closeAllWatchers()
   if (runtimeRpc) {
     void runtimeRpc.stop().catch((error) => {
@@ -509,6 +508,18 @@ app.on('will-quit', () => {
     })
   }
   store?.flush()
+
+  // Why: disconnectDaemon writes final checkpoints via async getSnapshot RPCs.
+  // Without preventDefault, Electron exits before the RPCs complete and the
+  // checkpoint data is lost. The guard prevents an infinite quit loop —
+  // app.quit() re-fires will-quit, but the second pass skips straight through.
+  if (!daemonDisconnectDone) {
+    e.preventDefault()
+    disconnectDaemon().finally(() => {
+      daemonDisconnectDone = true
+      app.quit()
+    })
+  }
 })
 
 app.on('window-all-closed', () => {

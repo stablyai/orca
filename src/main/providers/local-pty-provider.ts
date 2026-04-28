@@ -2,7 +2,8 @@
 ~70 lines of scanner/promise wiring to spawn(). Splitting the method would scatter
 tightly coupled PTY lifecycle logic (scan → ready → write → exit cleanup) across
 files without a cleaner ownership seam. */
-import { basename, win32 as pathWin32 } from 'path'
+import { basename } from 'path'
+import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
 import { existsSync } from 'fs'
 import * as pty from 'node-pty'
 import { parseWslPath, isWslAvailable } from '../wsl'
@@ -137,51 +138,19 @@ export class LocalPtyProvider implements IPtyProvider {
       // Why: shellOverride lets a single tab open in a different shell than the
       // persisted default (e.g. "New WSL terminal" from the "+" submenu) without
       // changing the user's setting. It takes priority over the setting.
-      shellPath = args.shellOverride || this.opts.getWindowsShell?.() || process.env.COMSPEC || 'powershell.exe'
-      // Why: use path.win32.basename so backslash-separated Windows paths
-      // are parsed correctly even when tests mock process.platform on Linux CI.
-      const shellBasename = pathWin32.basename(shellPath).toLowerCase()
-      // Why: On CJK Windows (Chinese, Japanese, Korean), the console code page
-      // defaults to the system ANSI code page (e.g. 936/GBK for Chinese).
-      // ConPTY encodes its output pipe using this code page, but node-pty
-      // always decodes as UTF-8. Without switching to code page 65001 (UTF-8),
-      // multi-byte CJK characters are garbled because the GBK/Shift-JIS/EUC-KR
-      // byte sequences are misinterpreted as UTF-8.
-      if (shellBasename === 'cmd.exe') {
-        shellArgs = ['/K', 'chcp 65001 > nul']
-        effectiveCwd = cwd
-        validationCwd = cwd
-      } else if (shellBasename === 'powershell.exe' || shellBasename === 'pwsh.exe') {
-        // Why: `-NoExit -Command` alone skips the user's $PROFILE, breaking
-        // custom prompts (oh-my-posh, starship), aliases, and PSReadLine
-        // configuration. Dot-sourcing $PROFILE first restores the normal
-        // startup experience.
-        shellArgs = [
-          '-NoExit',
-          '-Command',
-          'try { . $PROFILE } catch {}; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
-        ]
-        effectiveCwd = cwd
-        validationCwd = cwd
-      } else if (shellBasename === 'wsl.exe') {
-        // Why: this branch handles the "user chose WSL as their shell" case,
-        // distinct from the wslInfo branch above which is for repos whose cwd
-        // lives on a WSL filesystem. Here the cwd is a normal Windows path, so
-        // we translate it to a Linux /mnt/<drive>/... path and open a login
-        // bash in the user's default distro (no -d flag = default distro).
-        const driveMatch = cwd.replace(/\\/g, '/').match(/^([A-Za-z]):\/?(.*)$/)
-        const linuxCwd = driveMatch
-          ? `/mnt/${driveMatch[1].toLowerCase()}/${driveMatch[2]}`
-          : '/mnt/c'
-        const escapedLinuxCwd = linuxCwd.replace(/'/g, "'\\''")
-        shellArgs = ['--', 'bash', '-c', `cd '${escapedLinuxCwd}' && exec bash -l`]
-        effectiveCwd = getDefaultCwd()
-        validationCwd = cwd
-      } else {
-        shellArgs = []
-        effectiveCwd = cwd
-        validationCwd = cwd
-      }
+      shellPath =
+        args.shellOverride ||
+        this.opts.getWindowsShell?.() ||
+        process.env.COMSPEC ||
+        'powershell.exe'
+      // Why: both this path and the daemon-subprocess path must derive the
+      // same shellArgs for the same (shell, cwd) pair. The helper keeps CJK
+      // UTF-8 setup (chcp 65001), PowerShell $PROFILE dot-sourcing, and the
+      // wsl.exe /mnt/<drive> cwd translation in one place.
+      const resolved = resolveWindowsShellLaunchArgs(shellPath, cwd, defaultCwd)
+      shellArgs = resolved.shellArgs
+      effectiveCwd = resolved.effectiveCwd
+      validationCwd = resolved.validationCwd
     } else {
       shellPath = args.env?.SHELL || process.env.SHELL || '/bin/zsh'
       shellArgs = ['-l']

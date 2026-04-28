@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { X, Terminal as TerminalIcon, Minimize2, Columns2, Rows2 } from 'lucide-react'
+import { ShellIcon } from './shell-icons'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -233,6 +234,21 @@ export default function SortableTab({
             // every "needs your attention" surface in Orca consistent.
             <span data-testid="tab-activity-bell" className="inline-flex shrink-0">
               <FilledBellIcon className="w-3 h-3 mr-1 text-amber-500 drop-shadow-sm" />
+            </span>
+          ) : tab.shellOverride ? (
+            // Why: when the tab was explicitly opened with a specific Windows
+            // shell (PowerShell / CMD / WSL via the "+" menu), render the
+            // matching brand-style glyph so the strip shows at a glance which
+            // shell this tab is running. Falls back to the generic lucide
+            // TerminalIcon below for mac/linux shells and for Windows tabs
+            // that were spawned before the per-tab shell override landed
+            // (shellOverride absent → same neutral glyph as before, no visual
+            // regression for existing sessions).
+            <span
+              className={`mr-1 inline-flex shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
+              aria-hidden
+            >
+              <ShellIcon shell={tab.shellOverride} size={12} />
             </span>
           ) : (
             <TerminalIcon

@@ -215,7 +215,7 @@ export function RepositoryPane({
           keywords={[repo.displayName, repo.path, 'repository name']}
           className="space-y-2"
         >
-          <Label>Display Name</Label>
+          <Label className="text-sm font-semibold">Display Name</Label>
           <Input
             value={repo.displayName}
             onChange={(e) =>
@@ -233,7 +233,7 @@ export function RepositoryPane({
           keywords={[repo.displayName, 'color', 'badge']}
           className="space-y-2"
         >
-          <Label>Badge Color</Label>
+          <Label className="text-sm font-semibold">Badge Color</Label>
           <div className="flex flex-wrap gap-2">
             {REPO_COLORS.map((color) => (
               <button
@@ -258,7 +258,7 @@ export function RepositoryPane({
             keywords={[repo.displayName, 'base ref', 'branch']}
             className="space-y-3"
           >
-            <Label>Default Worktree Base</Label>
+            <Label className="text-sm font-semibold">Default Worktree Base</Label>
             <BaseRefPicker
               repoId={repo.id}
               currentBaseRef={repo.worktreeBaseRef}

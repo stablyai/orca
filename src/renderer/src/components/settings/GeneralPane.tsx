@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: GeneralPane is the single owner of all general settings UI;
    splitting individual settings into separate files would scatter related controls without a
    meaningful abstraction boundary. */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState,
@@ -121,6 +121,30 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const updateStatus = useAppStore((s) => s.updateStatus)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
+  // Why: the 'error' variant of UpdateStatus does not carry a `version` field.
+  // The main process emits `{ state: 'error' }` for both check failures (no
+  // version known yet) and download/install failures (version was known from
+  // the preceding 'available'/'downloading'/'downloaded' state). Cache the
+  // last-known version so the error copy below can distinguish the two cases
+  // without adding IPC. Mirrors `versionRef` in UpdateCard.tsx.
+  const updateVersionRef = useRef<string | null>(null)
+  if (
+    (updateStatus.state === 'available' ||
+      updateStatus.state === 'downloading' ||
+      updateStatus.state === 'downloaded') &&
+    updateStatus.version
+  ) {
+    updateVersionRef.current = updateStatus.version
+  } else if (
+    updateStatus.state === 'checking' ||
+    updateStatus.state === 'idle' ||
+    updateStatus.state === 'not-available'
+  ) {
+    // Why: a new check cycle has started or completed cleanly. Clear the
+    // cached version so a subsequent check failure cannot be mis-classified
+    // as a download failure based on a stale version from a prior cycle.
+    updateVersionRef.current = null
+  }
   const [appVersion, setAppVersion] = useState<string | null>(null)
   const [autoSaveDelayDraft, setAutoSaveDelayDraft] = useState(
     String(settings.editorAutoSaveDelayMs)
@@ -1089,7 +1113,15 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
                 </a>
               </>
             )}
-            {updateStatus.state === 'error' && `Update error: ${updateStatus.message}`}
+            {updateStatus.state === 'error' &&
+              // Why: `{ state: 'error' }` is emitted for both check-time
+              // failures (no version cached) and download/install failures
+              // (version cached from a prior 'available'/'downloading'/
+              // 'downloaded' state). Label accordingly so a download failure
+              // isn't mislabeled as a "check" failure. Mirrors UpdateCard.tsx.
+              (updateVersionRef.current
+                ? `Update error. ${updateStatus.message}`
+                : `Update check failed. ${updateStatus.message}`)}
           </p>
         </SearchableSetting>
       </section>

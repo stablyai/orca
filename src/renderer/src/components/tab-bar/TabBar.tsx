@@ -3,7 +3,7 @@
  * to a file that was already ~398 code lines on main. The per-type render
  * branches share little beyond drag data, so consolidating them would cost
  * more clarity than the ~5 lines of bloat is worth. */
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { SortableContext } from '@dnd-kit/sortable'
 import { FilePlus, Globe, Plus, TerminalSquare } from 'lucide-react'
 import type {
@@ -23,14 +23,12 @@ import { reconcileTabOrder } from './reconcile-order'
 import type { HoveredTabInsertion, TabDragItemData } from '../tab-group/useTabDragSplit'
 import { resolveTabIndicatorEdges } from '../tab-group/tab-insertion'
 import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
+import { ShellIcon } from './shell-icons'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuShortcut,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 
@@ -141,11 +139,29 @@ function TabBarInner({
   wslAvailable
 }: TabBarProps): React.JSX.Element {
   const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
+  const defaultWindowsShell = useAppStore(
+    (s) => s.settings?.terminalWindowsShell ?? 'powershell.exe'
+  )
   const resolvedGroupId = groupId ?? worktreeId
   const statusByRelativePath = useMemo(
     () => buildStatusMap(gitStatusByWorktree[worktreeId] ?? []),
     [worktreeId, gitStatusByWorktree]
   )
+
+  // Why: Electron <webview> elements run in a separate process, so clicking
+  // inside one never dispatches a pointerdown on the renderer document.
+  // Radix DropdownMenu relies on document pointerdown to detect outside
+  // clicks, so it misses webview clicks entirely. Listening for window blur
+  // catches the moment focus leaves the renderer (including into a webview).
+  const [newTabMenuOpen, setNewTabMenuOpen] = useState(false)
+  useEffect(() => {
+    if (!newTabMenuOpen) {
+      return
+    }
+    const dismiss = (): void => setNewTabMenuOpen(false)
+    window.addEventListener('blur', dismiss)
+    return () => window.removeEventListener('blur', dismiss)
+  }, [newTabMenuOpen])
 
   const terminalMap = useMemo(() => new Map(tabs.map((t) => [t.id, t])), [tabs])
   const editorMap = useMemo(
@@ -434,7 +450,7 @@ function TabBarInner({
           })}
         </div>
       </SortableContext>
-      <DropdownMenu>
+      <DropdownMenu open={newTabMenuOpen} onOpenChange={setNewTabMenuOpen}>
         <DropdownMenuTrigger asChild>
           <button
             className="ml-2 my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground"
@@ -457,25 +473,36 @@ function TabBarInner({
           }}
         >
           {isWindows && onNewTerminalWithShell ? (
-            // Why: on Windows there are multiple shell choices (PowerShell, CMD,
-            // WSL). A submenu mirrors Windows Terminal and VS Code's UX where
-            // the "+" arrow expands to show all available profiles.
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium">
-                <TerminalSquare className="size-4 text-muted-foreground" />
-                New Terminal
-                <DropdownMenuShortcut>{NEW_TERMINAL_SHORTCUT}</DropdownMenuShortcut>
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent className="min-w-[10rem] rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]">
-                {[
-                  { label: 'PowerShell', shell: 'powershell.exe' },
-                  { label: 'Command Prompt', shell: 'cmd.exe' },
-                  ...(wslAvailable ? [{ label: 'WSL', shell: 'wsl.exe' }] : [])
-                ].map(({ label, shell }) => (
+            // Why: previously the Windows path nested shell choices under a
+            // Radix submenu. In practice the submenu frequently failed to open
+            // on hover/click, and even when it worked the two-step expansion
+            // hid the fact that multiple shells were available. Inlining all
+            // shells as flat items — default pinned to the top with the
+            // Ctrl+T hint — matches the "no popouts, show all options at
+            // once" rec. Each entry uses a shell-specific icon (ShellIcon)
+            // so PowerShell / CMD / WSL are distinguishable at a glance.
+            // Labels use "CMD Prompt" instead of "Command Prompt" to keep
+            // each row narrow enough that the shortcut hint fits without
+            // wrapping.
+            (() => {
+              const allShells = [
+                { label: 'PowerShell', shell: 'powershell.exe' },
+                { label: 'CMD Prompt', shell: 'cmd.exe' },
+                ...(wslAvailable ? [{ label: 'WSL', shell: 'wsl.exe' }] : [])
+              ]
+              const defaultEntry =
+                allShells.find((s) => s.shell === defaultWindowsShell) ?? allShells[0]
+              const orderedShells = [
+                defaultEntry,
+                ...allShells.filter((s) => s.shell !== defaultEntry.shell)
+              ]
+              return orderedShells.map((entry, idx) => {
+                const isDefault = idx === 0
+                return (
                   <DropdownMenuItem
-                    key={shell}
+                    key={entry.shell}
                     onSelect={() => {
-                      onNewTerminalWithShell(shell)
+                      onNewTerminalWithShell(entry.shell)
                       const newActiveTabId = useAppStore.getState().activeTabId
                       if (newActiveTabId) {
                         focusTerminalTabSurface(newActiveTabId)
@@ -483,12 +510,15 @@ function TabBarInner({
                     }}
                     className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
                   >
-                    <TerminalSquare className="size-4 text-muted-foreground" />
-                    {label}
+                    <ShellIcon shell={entry.shell} size={14} />
+                    <span className="flex-1">New Terminal: {entry.label}</span>
+                    {isDefault ? (
+                      <DropdownMenuShortcut>{NEW_TERMINAL_SHORTCUT}</DropdownMenuShortcut>
+                    ) : null}
                   </DropdownMenuItem>
-                ))}
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
+                )
+              })
+            })()
           ) : (
             <DropdownMenuItem
               onSelect={() => {

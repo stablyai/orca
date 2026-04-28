@@ -7,6 +7,7 @@ import {
 } from './shell-ready'
 import { isValidPtySize, normalizePtySize } from './daemon-pty-size'
 import { ensureNodePtySpawnHelperExecutable } from '../providers/local-pty-utils'
+import { resolveWindowsShellLaunchArgs } from '../providers/windows-shell-args'
 
 export type PtySubprocessOptions = {
   sessionId: string
@@ -15,6 +16,10 @@ export type PtySubprocessOptions = {
   cwd?: string
   env?: Record<string, string>
   command?: string
+  /** Explicit shell executable path/basename the renderer asked for.
+   *  Overrides env.COMSPEC / env.SHELL resolution inside the daemon so a user
+   *  who picks "New WSL terminal" from the "+" menu actually gets WSL. */
+  shellOverride?: string
 }
 
 function getDefaultCwd(): string {
@@ -58,11 +63,23 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
 
   env.LANG ??= 'en_US.UTF-8'
 
-  const shellPath = resolvePtyShellPath(env)
+  // Why: the shellOverride from the "+" menu (or persisted default shell
+  // setting, relayed by main) takes priority over env.COMSPEC — otherwise
+  // Windows always resolves to cmd.exe (COMSPEC) or PowerShell by fallback,
+  // no matter which shell the user actually picked.
+  const shellPath = opts.shellOverride || resolvePtyShellPath(env)
   let shellArgs: string[]
+  let spawnCwd = opts.cwd || getDefaultCwd()
 
   if (process.platform === 'win32') {
-    shellArgs = []
+    // Why: matches LocalPtyProvider — CMD needs chcp 65001, PowerShell needs
+    // $PROFILE dot-sourcing, WSL needs a --bash entry with a translated cwd.
+    // Previously the daemon passed `[]` here which made every shell launch as
+    // a bare interactive process; that silently degraded PowerShell (no
+    // profile) and never worked at all for WSL (which needs explicit args).
+    const resolved = resolveWindowsShellLaunchArgs(shellPath, spawnCwd, getDefaultCwd())
+    shellArgs = resolved.shellArgs
+    spawnCwd = resolved.effectiveCwd
   } else {
     const shellLaunch = opts.command
       ? getShellReadyLaunchConfig(shellPath)
@@ -84,7 +101,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     name: 'xterm-256color',
     cols: size.cols,
     rows: size.rows,
-    cwd: opts.cwd || getDefaultCwd(),
+    cwd: spawnCwd,
     env
   })
 

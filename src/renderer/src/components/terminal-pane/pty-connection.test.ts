@@ -168,6 +168,14 @@ function createDeps(overrides: Record<string, unknown> = {}) {
   }
 }
 
+function createDeferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolveDeferred!: (value: T) => void
+  const promise = new Promise<T>((resolve) => {
+    resolveDeferred = resolve
+  })
+  return { promise, resolve: resolveDeferred }
+}
+
 describe('connectPanePty', () => {
   const originalRequestAnimationFrame = globalThis.requestAnimationFrame
   const originalCancelAnimationFrame = globalThis.cancelAnimationFrame
@@ -271,6 +279,56 @@ describe('connectPanePty', () => {
     expect(transport.sendInput).not.toHaveBeenCalledWith(
       expect.stringContaining("claude 'say test'")
     )
+  })
+
+  it('does not reuse a sibling split pane pending spawn after remount', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+
+    const mainSpawn = createDeferred<string>()
+    const setupSpawn = createDeferred<string>()
+
+    const mainTransport = createMockTransport()
+    mainTransport.connect.mockImplementation(async () => mainSpawn.promise)
+    const setupTransport = createMockTransport()
+    setupTransport.connect.mockImplementation(async () => setupSpawn.promise)
+    const remountTransport = createMockTransport()
+    transportFactoryQueue.push(mainTransport, setupTransport, remountTransport)
+
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      repos: [{ id: 'repo1', connectionId: null }]
+    }
+
+    const sharedTransportsRef = { current: new Map() }
+    connectPanePty(
+      createPane(1) as never,
+      createManager(2) as never,
+      createDeps({ paneTransportsRef: sharedTransportsRef }) as never
+    )
+    connectPanePty(
+      createPane(2) as never,
+      createManager(2) as never,
+      createDeps({
+        startup: { command: 'bash setup-runner.sh' },
+        paneTransportsRef: sharedTransportsRef
+      }) as never
+    )
+
+    const remountDeps = createDeps()
+    connectPanePty(createPane(1) as never, createManager(2) as never, remountDeps as never)
+
+    setupSpawn.resolve('pty-setup')
+    mainSpawn.resolve('pty-main')
+    for (let i = 0; i < 20; i++) {
+      await Promise.resolve()
+    }
+
+    expect(remountTransport.attach).toHaveBeenCalledWith(
+      expect.objectContaining({ existingPtyId: 'pty-main' })
+    )
+    expect(remountDeps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(1, 'pty-main')
+    expect(remountDeps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'pty-main')
   })
 
   it('drops xterm onData while pane is replaying restored bytes', async () => {

@@ -1,5 +1,19 @@
-import { describe, expect, it } from 'vitest'
-import { _internals } from './hook-service'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { existsSync, mkdtempSync, rmSync, readFileSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
+
+const { getPathMock } = vi.hoisted(() => ({
+  getPathMock: vi.fn<(name: string) => string>()
+}))
+
+vi.mock('electron', () => ({
+  app: {
+    getPath: getPathMock
+  }
+}))
+
+import { OpenCodeHookService, _internals } from './hook-service'
 
 const { isUsableId, toSafeDirName } = _internals
 
@@ -101,5 +115,84 @@ describe('OpenCode id safety guard', () => {
 
   it('produces different names for different ids', () => {
     expect(toSafeDirName('a')).not.toBe(toSafeDirName('b'))
+  })
+})
+
+describe('OpenCodeHookService buildPtyEnv / clearPty round-trip', () => {
+  // Why: the primitives above only prove the helpers work in isolation. This
+  // suite exercises the public surface against a real filesystem so a future
+  // regression — e.g. re-tightening the id guard or desyncing the path used by
+  // writePluginConfig vs clearPty — fails loudly. Before #1148 the service
+  // silently returned {} for daemon-shaped ids; these tests lock that in.
+  const daemonSessionId =
+    '50c010a2-bc8e-4eb1-8847-5812133ad6df::/Users/thebr/ghostx/workspaces/noqa/autoheal@@a1b2c3d4'
+  const plainUuidId = 'c0ffee00-0000-4000-8000-000000000000'
+  let userDataDir: string
+
+  beforeAll(() => {
+    userDataDir = mkdtempSync(join(tmpdir(), 'orca-opencode-hooks-'))
+    getPathMock.mockImplementation((name: string) => {
+      if (name === 'userData') {
+        return userDataDir
+      }
+      throw new Error(`unexpected getPath(${name})`)
+    })
+  })
+
+  afterAll(() => {
+    rmSync(userDataDir, { recursive: true, force: true })
+  })
+
+  afterEach(() => {
+    const hooksRoot = join(userDataDir, 'opencode-hooks')
+    rmSync(hooksRoot, { recursive: true, force: true })
+  })
+
+  it('writes OPENCODE_CONFIG_DIR for a daemon-shaped sessionId and installs the plugin file', () => {
+    const service = new OpenCodeHookService()
+    const env = service.buildPtyEnv(daemonSessionId)
+
+    expect(env.OPENCODE_CONFIG_DIR).toBeTruthy()
+    expect(env.OPENCODE_CONFIG_DIR).toBe(
+      join(userDataDir, 'opencode-hooks', toSafeDirName(daemonSessionId))
+    )
+
+    const pluginPath = join(env.OPENCODE_CONFIG_DIR!, 'plugins', 'orca-opencode-status.js')
+    expect(existsSync(pluginPath)).toBe(true)
+    // Sanity-check the file has plugin source, not a stray write.
+    expect(readFileSync(pluginPath, 'utf8')).toContain('OrcaOpenCodeStatusPlugin')
+  })
+
+  it('clearPty removes the same directory buildPtyEnv created', () => {
+    const service = new OpenCodeHookService()
+    const env = service.buildPtyEnv(daemonSessionId)
+    const configDir = env.OPENCODE_CONFIG_DIR!
+    expect(existsSync(configDir)).toBe(true)
+
+    service.clearPty(daemonSessionId)
+    expect(existsSync(configDir)).toBe(false)
+  })
+
+  it('buildPtyEnv returns {} for an unusable id and creates nothing on disk', () => {
+    const service = new OpenCodeHookService()
+    const hooksRoot = join(userDataDir, 'opencode-hooks')
+
+    expect(service.buildPtyEnv('')).toEqual({})
+    expect(existsSync(hooksRoot)).toBe(false)
+  })
+
+  it('works end-to-end for a plain UUID id (non-daemon path)', () => {
+    const service = new OpenCodeHookService()
+    const env = service.buildPtyEnv(plainUuidId)
+
+    expect(env.OPENCODE_CONFIG_DIR).toBe(
+      join(userDataDir, 'opencode-hooks', toSafeDirName(plainUuidId))
+    )
+    expect(existsSync(join(env.OPENCODE_CONFIG_DIR!, 'plugins', 'orca-opencode-status.js'))).toBe(
+      true
+    )
+
+    service.clearPty(plainUuidId)
+    expect(existsSync(env.OPENCODE_CONFIG_DIR!)).toBe(false)
   })
 })

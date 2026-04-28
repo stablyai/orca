@@ -21,6 +21,27 @@ export type Repo = {
 export type SetupRunPolicy = 'ask' | 'run-by-default' | 'skip-by-default'
 export type SetupDecision = 'inherit' | 'run' | 'skip'
 
+/**
+ * Envelope returned by the `repos:getBaseRefDefault` IPC handler.
+ *
+ * Why: declared in `shared/` rather than colocated with the handler so the
+ * preload bridge and renderer can import the same named type. Before this
+ * lived in `src/main/git/repo.ts` — the preload layer cannot import from
+ * `src/main/`, which forced three sites to inline the same structural shape
+ * and risk silent drift.
+ *
+ * Why `remoteCount`: BaseRefPicker renders a multi-remote hint when the repo
+ * has more than one configured remote; piggybacking the count on this IPC
+ * avoids a second round-trip.
+ *
+ * Why `defaultBaseRef` (not `default`): `default` is a reserved word and is
+ * awkward to destructure.
+ */
+export type BaseRefDefaultResult = {
+  defaultBaseRef: string | null
+  remoteCount: number
+}
+
 // ─── Worktree (git-level) ────────────────────────────────────────────
 export type GitWorktreeInfo = {
   path: string
@@ -149,6 +170,16 @@ export type TerminalTab = {
    *  without needing the user to interact with the tab again. Undefined means
    *  "use the default shell setting". */
   shellOverride?: string
+  /** Why: when `setActiveWorktree` bumps generation on all-dead tabs to drive a
+   *  TerminalPane remount, the fresh PTY that results is caused by navigation,
+   *  not by the user doing work. Without this flag the resulting
+   *  `updateTabPtyId` call would call `bumpWorktreeActivity` and flip the
+   *  sidebar's recency sort on every click — the reorder-on-click bug. The
+   *  flag is set by `setActiveWorktree` and consumed (cleared) by the first
+   *  `updateTabPtyId` that follows, which then suppresses the activity bump
+   *  and the `sortEpoch` increment. Never persisted — it is a transient
+   *  handoff between the two calls. */
+  pendingActivationSpawn?: boolean
 }
 
 export type BrowserHistoryEntry = {
@@ -1173,6 +1204,8 @@ export type SearchMatch = {
   column: number
   matchLength: number
   lineContent: string
+  displayColumn?: number
+  displayMatchLength?: number
 }
 
 export type SearchFileResult = {
