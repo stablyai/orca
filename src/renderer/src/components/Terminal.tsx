@@ -8,6 +8,7 @@ import { useAppStore } from '../store'
 import { useAllWorktrees } from '../store/selectors'
 import { findWorktreeById } from '../store/slices/worktree-helpers'
 import { createUntitledMarkdownFile } from '../lib/create-untitled-markdown'
+import { getConnectionId } from '../lib/connection-context'
 import { extractIpcErrorMessage } from '../lib/ipc-error'
 import {
   Dialog,
@@ -447,7 +448,12 @@ function Terminal(): React.JSX.Element | null {
       // current focused group explicitly. Otherwise split layouts fall back to
       // the ambient/default group and open the file in the wrong pane.
       const targetGroupId = useAppStore.getState().activeGroupIdByWorktree[activeWorktreeId]
-      const fileInfo = await createUntitledMarkdownFile(worktree.path, activeWorktreeId)
+      const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+      const fileInfo = await createUntitledMarkdownFile(
+        worktree.path,
+        activeWorktreeId,
+        connectionId
+      )
       openFile(fileInfo, { preview: false, targetGroupId })
     } catch (err) {
       toast.error(extractIpcErrorMessage(err, 'Failed to create untitled markdown file.'))

@@ -14,6 +14,7 @@ import type {
 import { useAppStore } from '../../store'
 import { useAllWorktrees } from '../../store/selectors'
 import { createUntitledMarkdownFile } from '../../lib/create-untitled-markdown'
+import { getConnectionId } from '../../lib/connection-context'
 import { extractIpcErrorMessage } from '../../lib/ipc-error'
 import { destroyPersistentWebview } from '../browser-pane/BrowserPane'
 
@@ -426,7 +427,8 @@ export function useTabGroupWorkspaceModel({
           return
         }
         try {
-          const fileInfo = await createUntitledMarkdownFile(path, worktreeId)
+          const connectionId = getConnectionId(worktreeId) ?? undefined
+          const fileInfo = await createUntitledMarkdownFile(path, worktreeId, connectionId)
           openFile(fileInfo, { preview: false, targetGroupId: groupId })
         } catch (err) {
           toast.error(extractIpcErrorMessage(err, 'Failed to create untitled markdown file.'))
