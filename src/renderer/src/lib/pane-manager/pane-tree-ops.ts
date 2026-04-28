@@ -174,10 +174,23 @@ export function insertPaneNextTo(
     split.appendChild(source.container)
   }
 
-  // Refit both
+  // Refit both and refresh rendering surfaces — both panes were reparented
+  // into the new split wrapper, which can leave the WebGL canvas in a stale
+  // state (same mechanism as wrapInSplit; see refreshAfterReparent in
+  // pane-split-scroll.ts).
   requestAnimationFrame(() => {
     callbacks.safeFit(source)
     callbacks.safeFit(target)
+    try {
+      source.terminal.refresh(0, source.terminal.rows - 1)
+    } catch {
+      /* ignore */
+    }
+    try {
+      target.terminal.refresh(0, target.terminal.rows - 1)
+    } catch {
+      /* ignore */
+    }
   })
 }
 
