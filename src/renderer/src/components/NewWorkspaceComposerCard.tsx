@@ -19,8 +19,7 @@ import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import type { SparsePreset, TuiAgent } from '../../../shared/types'
-import SparsePresetPicker from '@/components/sparse/SparsePresetPicker'
-import SparsePresetSaveButton from '@/components/sparse/SparsePresetSaveButton'
+import SparseCheckoutPresetSelect from '@/components/sparse/SparseCheckoutPresetSelect'
 
 const isMac = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
 
@@ -53,16 +52,10 @@ type NewWorkspaceComposerCardProps = {
   shouldWaitForSetupCheck: boolean
   resolvedSetupDecision: 'run' | 'skip' | null
   createError: string | null
-  sparseEnabled: boolean
-  onSparseEnabledChange: (value: boolean) => void
-  sparseDirectories: string
-  onSparseDirectoriesChange: (value: string) => void
-  sparseError: string | null
   canUseSparseCheckout: boolean
   sparsePresets: SparsePreset[]
   sparseSelectedPresetId: string | null
   onSparseSelectPreset: (preset: SparsePreset | null) => void
-  sparseDirectoriesArray: string[]
 }
 
 function SetupCommandPreview({
@@ -199,16 +192,10 @@ export default function NewWorkspaceComposerCard({
   shouldWaitForSetupCheck,
   resolvedSetupDecision,
   createError,
-  sparseEnabled,
-  onSparseEnabledChange,
-  sparseDirectories,
-  onSparseDirectoriesChange,
-  sparseError,
   canUseSparseCheckout,
   sparsePresets,
   sparseSelectedPresetId,
-  onSparseSelectPreset,
-  sparseDirectoriesArray
+  onSparseSelectPreset
 }: NewWorkspaceComposerCardProps): React.JSX.Element {
   const { isFileDragOver, dragHandlers } = useComposerFileDragOver()
   const openModal = useAppStore((s) => s.openModal)
@@ -359,8 +346,8 @@ export default function NewWorkspaceComposerCard({
 
         <div
           className={cn(
-            'grid overflow-hidden transition-[grid-template-rows,opacity] duration-200 ease-out',
-            advancedOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+            'grid overflow-hidden transition-[grid-template-rows] duration-200 ease-out',
+            advancedOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
           )}
           aria-hidden={!advancedOpen}
         >
@@ -369,7 +356,14 @@ export default function NewWorkspaceComposerCard({
                 textarea's 3px outset focus ring has horizontal breathing room
                 inside the overflow-hidden drawer above. Without it the ring
                 gets clipped on the right edge when the field is focused. */}
-            <div className="space-y-4 px-1 pt-1">
+            <div
+              className={cn(
+                'space-y-4 px-1 pt-1 pb-3 transition-[opacity,transform] duration-150 ease-out',
+                advancedOpen
+                  ? 'translate-y-0 opacity-100 delay-200'
+                  : '-translate-y-1 opacity-0 delay-0'
+              )}
+            >
               <div className="space-y-1">
                 <label className="text-xs font-medium text-muted-foreground">Note</label>
                 <textarea
@@ -389,79 +383,16 @@ export default function NewWorkspaceComposerCard({
                 />
               </div>
 
-              <div className="space-y-1">
-                <div className="flex items-center justify-between gap-2">
-                  <label
-                    htmlFor="sparse-directories"
-                    className={cn(
-                      'text-xs font-medium text-muted-foreground',
-                      !canUseSparseCheckout && 'opacity-60'
-                    )}
-                  >
-                    Sparse checkout
-                  </label>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={sparseEnabled}
-                    aria-label="Sparse checkout"
-                    disabled={!canUseSparseCheckout}
-                    onClick={() => onSparseEnabledChange(!sparseEnabled)}
-                    className={cn(
-                      'relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors disabled:cursor-not-allowed disabled:opacity-60',
-                      sparseEnabled ? 'bg-foreground' : 'bg-muted-foreground/30'
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        'pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform',
-                        sparseEnabled ? 'translate-x-4' : 'translate-x-0.5'
-                      )}
-                    />
-                  </button>
-                </div>
-                {sparseEnabled && canUseSparseCheckout ? (
-                  <div className="space-y-2 pt-1">
-                    {/* Why: picker and save button sit side-by-side as two
-                        distinct controls (modeled after Linear's "Save view"
-                        + view picker pair). The picker only selects; the
-                        bookmark+ button only saves. Each control does one
-                        thing, so neither has to grow a hybrid menu. */}
-                    <div className="flex items-center gap-1.5">
-                      <SparsePresetPicker
-                        repoId={repoId}
-                        presets={sparsePresets}
-                        directories={sparseDirectoriesArray}
-                        selectedPresetId={sparseSelectedPresetId}
-                        onSelectPreset={onSparseSelectPreset}
-                        canSaveCurrent={!sparseError && sparseDirectoriesArray.length > 0}
-                      />
-                      <SparsePresetSaveButton
-                        repoId={repoId}
-                        presets={sparsePresets}
-                        directories={sparseDirectoriesArray}
-                        enabled={!sparseError && sparseDirectoriesArray.length > 0}
-                        onSaved={onSparseSelectPreset}
-                      />
-                    </div>
-                    <textarea
-                      id="sparse-directories"
-                      value={sparseDirectories}
-                      onChange={(event) => onSparseDirectoriesChange(event.target.value)}
-                      placeholder={'packages/web\nshared/ui'}
-                      rows={3}
-                      spellCheck={false}
-                      className="w-full min-w-0 resize-y rounded-md border border-input bg-transparent px-3 py-1.5 font-mono text-[12px] leading-5 shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                    />
-                    <p className="text-[11px] text-muted-foreground">
-                      {sparseError ? (
-                        <span className="text-destructive">{sparseError}</span>
-                      ) : (
-                        'Use repo-relative directories, one per line, like packages/web or apps/api. Search and the file tree will only see these paths.'
-                      )}
-                    </p>
-                  </div>
-                ) : !canUseSparseCheckout ? (
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Sparse checkout</label>
+                <SparseCheckoutPresetSelect
+                  repoId={repoId}
+                  presets={sparsePresets}
+                  selectedPresetId={sparseSelectedPresetId}
+                  onSelectPreset={onSparseSelectPreset}
+                  disabled={!canUseSparseCheckout}
+                />
+                {!canUseSparseCheckout ? (
                   <p className="text-[11px] text-muted-foreground">
                     Only available for local repositories.
                   </p>

@@ -121,24 +121,13 @@ export type ComposerCardProps = {
   shouldWaitForSetupCheck: boolean
   resolvedSetupDecision: 'run' | 'skip' | null
   createError: string | null
-  sparseEnabled: boolean
-  onSparseEnabledChange: (value: boolean) => void
-  sparseDirectories: string
-  onSparseDirectoriesChange: (value: string) => void
-  sparseError: string | null
   canUseSparseCheckout: boolean
   /** Saved presets for the currently-selected repo. Empty array when no
-   *  presets exist or when the repo is remote (presets aren't shown there). */
+   *  presets exist or when the repo is remote. */
   sparsePresets: SparsePreset[]
-  /** ID of the preset whose directories the user just selected from the
-   *  picker. Cleared when the user picks "Custom directories" or switches
-   *  repos. The picker still highlights presets whose contents match the
-   *  textarea even if `sparseSelectedPresetId` is null. */
+  /** ID of the selected sparse preset. Null means sparse checkout is off. */
   sparseSelectedPresetId: string | null
   onSparseSelectPreset: (preset: SparsePreset | null) => void
-  /** Normalized directories from the textarea — handed to the picker so it
-   *  can detect content matches and seed the Save dialog. */
-  sparseDirectoriesArray: string[]
 }
 
 export type UseComposerStateResult = {
@@ -550,19 +539,17 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     }
   }, [eligibleRepos, repoId, setRepoId])
 
-  // Why: lazy-load presets per repo when the picker is about to be relevant
-  // (sparse toggle on, local repo). Subscribing to `sparsePresets:changed` is
-  // handled at the slice level — re-fetching here just covers first-touch
-  // for a repo that hasn't been opened in this session yet.
+  // Why: the compact sparse dropdown is always visible under Advanced, so
+  // presets must load before sparse mode is enabled.
   useEffect(() => {
-    if (!repoId || !sparseEnabled) {
+    if (!repoId || selectedRepo?.connectionId) {
       return
     }
     if (sparsePresetsByRepo[repoId] !== undefined) {
       return
     }
     void fetchSparsePresets(repoId)
-  }, [fetchSparsePresets, repoId, sparseEnabled, sparsePresetsByRepo])
+  }, [fetchSparsePresets, repoId, selectedRepo?.connectionId, sparsePresetsByRepo])
 
   // Why: detect agents for the selected repo. For local repos this runs once
   // on mount (deduped by the store). For remote repos it re-runs when the
@@ -994,25 +981,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     [baseBranch, linkedWorkItem, repoId, setRepoId]
   )
 
-  const handleSparseDirectoriesChange = useCallback((value: string): void => {
-    setSparseDirectories(value)
-  }, [])
-
-  const handleSparseEnabledChange = useCallback((enabled: boolean): void => {
-    setSparseEnabled(enabled)
-    if (!enabled) {
-      // Why: clearing the selection on toggle-off means the next time the
-      // user toggles sparse back on we don't carry over a stale preset
-      // attribution that's no longer reflected by the (cleared) textarea.
-      setSparseSelectedPresetId(null)
-    }
-  }, [])
-
   const handleSparseSelectPreset = useCallback((preset: SparsePreset | null): void => {
     if (preset) {
+      setSparseEnabled(true)
       setSparseDirectories(preset.directories.join('\n'))
       setSparseSelectedPresetId(preset.id)
     } else {
+      setSparseEnabled(false)
+      setSparseDirectories('')
       setSparseSelectedPresetId(null)
     }
   }, [])
@@ -1375,16 +1351,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     shouldWaitForSetupCheck,
     resolvedSetupDecision,
     createError,
-    sparseEnabled,
-    onSparseEnabledChange: handleSparseEnabledChange,
-    sparseDirectories,
-    onSparseDirectoriesChange: handleSparseDirectoriesChange,
-    sparseError,
     canUseSparseCheckout: !selectedRepo?.connectionId,
     sparsePresets,
     sparseSelectedPresetId,
-    onSparseSelectPreset: handleSparseSelectPreset,
-    sparseDirectoriesArray: normalizedSparseDirectories
+    onSparseSelectPreset: handleSparseSelectPreset
   }
 
   return {
