@@ -710,9 +710,19 @@ describe('createEditorSlice remote branch actions', () => {
       publishError.message
     )
 
+    expect(toastErrorMock).toHaveBeenCalledWith(publishError.message)
     expect(gitStatusMock).not.toHaveBeenCalled()
     expect(gitUpstreamStatusMock).not.toHaveBeenCalled()
     expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+
+  it('uses a fallback remote failure message when push rejects without Error', async () => {
+    const store = createEditorStore()
+    gitPushMock.mockRejectedValueOnce('failure')
+
+    await expect(store.getState().pushBranch('wt-1', '/repo', false)).rejects.toBe('failure')
+
+    expect(toastErrorMock).toHaveBeenCalledWith('Remote operation failed')
   })
 })
 

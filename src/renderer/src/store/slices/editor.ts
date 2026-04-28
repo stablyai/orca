@@ -362,6 +362,11 @@ function openWorkspaceEditorItem(
 
 const REMOTE_PULL_SYNC_GUARD_MESSAGE =
   'Cannot pull/sync with uncommitted changes or active conflicts.'
+const REMOTE_OPERATION_FAILED_MESSAGE = 'Remote operation failed'
+
+function resolveRemoteOperationErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : REMOTE_OPERATION_FAILED_MESSAGE
+}
 
 function hasBlockedPullOrSync(state: EditorSlice, worktreeId: string): boolean {
   const hasUncommittedEntries = (state.gitStatusByWorktree[worktreeId] ?? []).length > 0
@@ -1769,6 +1774,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       })) as GitStatusResult
       get().setGitStatus(worktreeId, status)
       await get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId)
+    } catch (error) {
+      // Why: centralize remote git failure feedback in the store so every caller
+      // gets the same actionable message without duplicating toast handling.
+      toast.error(resolveRemoteOperationErrorMessage(error))
+      throw error
     } finally {
       get().setRemoteOperationActive(false)
     }
@@ -1787,6 +1797,9 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       })) as GitStatusResult
       get().setGitStatus(worktreeId, status)
       await get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId)
+    } catch (error) {
+      toast.error(resolveRemoteOperationErrorMessage(error))
+      throw error
     } finally {
       get().setRemoteOperationActive(false)
     }
@@ -1807,6 +1820,9 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       })) as GitStatusResult
       get().setGitStatus(worktreeId, status)
       await get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId)
+    } catch (error) {
+      toast.error(resolveRemoteOperationErrorMessage(error))
+      throw error
     } finally {
       get().setRemoteOperationActive(false)
     }

@@ -634,7 +634,9 @@ function SourceControlInner(): React.JSX.Element {
       }
       await syncBranch(activeWorktreeId, worktreePath, connectionId)
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Remote operation failed')
+      // Why: remote action failures are surfaced by editor-slice actions to keep
+      // one consistent toast path and avoid duplicate notifications in the UI.
+      void error
     }
   }, [
     activeWorktreeId,
