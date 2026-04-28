@@ -22,7 +22,8 @@ import {
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
+import { VisuallyHidden } from 'radix-ui'
 import {
   Accordion,
   AccordionContent,
@@ -2045,22 +2046,30 @@ export default function GitHubItemDialog({
   )
 
   return (
-    <Dialog open={workItem !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent
+    <Sheet open={workItem !== null} onOpenChange={(open) => !open && onClose()}>
+      <SheetContent
+        side="right"
         showCloseButton={false}
-        className="flex h-[88vh] max-w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden rounded-lg p-0 sm:max-w-[calc(100vw-2rem)] lg:w-[80vw] lg:max-w-[80vw] xl:w-[80vw] xl:max-w-[80vw]"
+        className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-[960px] lg:max-w-[1100px] xl:max-w-[1280px]"
         onOpenAutoFocus={(event) => {
-          // Why: focusing the first actionable element inside the dialog
+          // Why: focusing the first actionable element inside the drawer
           // causes the "Start workspace" action to receive focus and
           // get visually highlighted on open. Preventing auto-focus keeps the
-          // dialog feeling like a passive preview until the user acts.
+          // drawer feeling like a passive preview until the user acts.
           event.preventDefault()
         }}
       >
-        <DialogTitle className="sr-only">{workItem?.title ?? 'GitHub item'}</DialogTitle>
-        <DialogDescription className="sr-only">
-          Read-only preview of the selected GitHub issue or pull request.
-        </DialogDescription>
+        {/* Why: SheetTitle/Description are required by Radix Dialog for a11y,
+            but the visible header carries the same info. Wrap each with
+            `asChild` so the VisuallyHidden span wraps the element cleanly. */}
+        <VisuallyHidden.Root asChild>
+          <SheetTitle>{workItem?.title ?? 'GitHub item'}</SheetTitle>
+        </VisuallyHidden.Root>
+        <VisuallyHidden.Root asChild>
+          <SheetDescription>
+            Read-only preview of the selected GitHub issue or pull request.
+          </SheetDescription>
+        </VisuallyHidden.Root>
 
         {workItem && (
           <div className="flex h-full min-h-0 flex-col">
@@ -2214,7 +2223,7 @@ export default function GitHubItemDialog({
             </div>
           </div>
         )}
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   )
 }
