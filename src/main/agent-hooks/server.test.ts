@@ -1,7 +1,16 @@
 /* eslint-disable max-lines -- Why: this suite exercises the full hook HTTP surface (Claude/Codex/Gemini parsing, transcript chunked scan, paneKey dispatch) and keeping the scenarios co-located avoids fixture drift across files. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { execFileSync } from 'child_process'
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync
+} from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { AgentHookServer, _internals } from './server'
@@ -961,6 +970,50 @@ describe('Endpoint file lifecycle', () => {
   it('buildPtyEnv returns empty when the server is not running', () => {
     const server = new AgentHookServer()
     expect(server.buildPtyEnv()).toEqual({})
+  })
+
+  it('sweeps stale .endpoint-*.tmp orphans older than 5 minutes on start', async () => {
+    // Why: writeEndpointFile() writes to a unique tmp path then renames. A crash
+    // between write and rename leaves an orphan tmp; the sweep inside
+    // writeEndpointFile() must drop ones older than 5 min without touching
+    // fresh ones (a concurrent writer's in-flight tmp).
+    const dir = join(userDataPath, 'agent-hooks')
+    mkdirSync(dir, { recursive: true })
+    const staleTmp = join(dir, '.endpoint-999-stale.tmp')
+    const freshTmp = join(dir, '.endpoint-999-fresh.tmp')
+    writeFileSync(staleTmp, 'stale')
+    writeFileSync(freshTmp, 'fresh')
+    const sixMinAgo = (Date.now() - 6 * 60 * 1000) / 1000
+    utimesSync(staleTmp, sixMinAgo, sixMinAgo)
+
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      expect(existsSync(staleTmp)).toBe(false)
+      expect(existsSync(freshTmp)).toBe(true)
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('refuses to write the endpoint file when a value contains shell metacharacters', async () => {
+    // Why: every value written is sourced as shell. The isShellSafeEndpointValue
+    // allowlist must reject a metacharacter-bearing value so a future caller
+    // cannot command-inject via the sourced file. `env` is the only caller-
+    // provided field we can easily poison from a test — feed it a semicolon
+    // and assert the file is not written and buildPtyEnv() omits the ENDPOINT
+    // key (gated on endpointFileWritten).
+    const server = new AgentHookServer()
+    await server.start({ env: 'bad;value', userDataPath })
+    try {
+      expect(existsSync(server.endpointFilePath!)).toBe(false)
+      expect(server.buildPtyEnv().ORCA_AGENT_HOOK_ENDPOINT).toBeUndefined()
+      // PORT/TOKEN still flow via PTY env — fail-open to v1 behavior.
+      expect(server.buildPtyEnv().ORCA_AGENT_HOOK_PORT).toBeTruthy()
+      expect(server.buildPtyEnv().ORCA_AGENT_HOOK_TOKEN).toBeTruthy()
+    } finally {
+      server.stop()
+    }
   })
 
   it('endpoint file contents are re-parseable by /bin/sh', async () => {
