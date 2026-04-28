@@ -208,14 +208,20 @@ export function connectPanePty(
     deps.dispatchNotification({ source: 'terminal-bell' })
   }
 
-  // ─── Prompt-cache timer: driven by agent lifecycle, not attention ─────
+  // ─── Agent task-complete: OS notification, not tab attention ──────────
   //
-  // The working→idle title transition is kept purely to drive Claude's
-  // prompt-cache countdown in the sidebar. It intentionally does NOT raise
-  // attention — that would double-fire with the BEL above, and OSC title
-  // transitions are too narrow a signal to be the sole attention source
-  // (only agent TUIs emit them; non-agent long-running tasks would never
-  // get surfaced).
+  // The working→idle title transition drives two independent concerns:
+  //   1. The Claude prompt-cache countdown in the sidebar.
+  //   2. The "Agent Task Complete" OS notification users toggle in Settings.
+  //
+  // We intentionally do NOT raise tab/worktree unread from here — that
+  // remains BEL-only so non-agent long-running tasks stay first-class and
+  // so unread state only reflects what the terminal byte stream actually
+  // signals. OS notifications are a separate channel: not every agent CLI
+  // reliably emits BEL on completion (Gemini, some Codex flows), and
+  // without this dispatch the Settings toggle would have zero producers.
+  // Double-firing with a concurrent BEL is handled by the 5 s per-worktree
+  // dedupe in main/ipc/notifications.ts.
   const onAgentBecameIdle = (title: string): void => {
     // Why: only start the prompt-cache countdown for Claude agents — other
     // agents have different (or no) prompt-caching semantics and showing a
@@ -231,6 +237,12 @@ export function connectPanePty(
     if (isClaudeAgent(title) && (settings === null || settings.promptCacheTimerEnabled)) {
       deps.setCacheTimerStartedAt(cacheKey, Date.now())
     }
+    // Why: this is the sole producer of 'agent-task-complete' in the renderer;
+    // removing it (as #944 did) leaves the user-facing Settings toggle with no
+    // events to fire. Dispatch is gated per-source in main; the main-process
+    // dedupe also collapses concurrent BEL + task-complete for the same
+    // worktree into a single notification.
+    deps.dispatchNotification({ source: 'agent-task-complete', terminalTitle: title })
   }
   const onAgentBecameWorking = (): void => {
     // Why: a new API call refreshes the prompt-cache TTL, so clear any running

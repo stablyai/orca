@@ -97,7 +97,10 @@ type UseTerminalPaneLifecycleDeps = {
   markTerminalTabUnread: (tabId: string) => void
   clearWorktreeUnread: (worktreeId: string) => void
   clearTerminalTabUnread: (tabId: string) => void
-  dispatchNotification: (event: { source: 'terminal-bell' }) => void
+  dispatchNotification: (event: {
+    source: 'terminal-bell' | 'agent-task-complete'
+    terminalTitle?: string
+  }) => void
   setCacheTimerStartedAt: (key: string, ts: number | null) => void
   syncPanePtyLayoutBinding: (paneId: number, ptyId: string | null) => void
   setTabPaneExpanded: (tabId: string, expanded: boolean) => void

@@ -978,13 +978,12 @@ describe('connectPanePty', () => {
     })
   })
 
-  // Why: the working→idle transition is kept solely to drive Claude's
-  // prompt-cache timer. It MUST NOT raise attention — doing so would
-  // double-fire with the BEL path above (since Claude's "done" state is
-  // accompanied by a BEL), plus it would mean agents silently fire alerts
-  // that non-agent programs cannot. Attention is BEL-only; this is just
-  // the cache timer hook.
-  it('does not raise attention on agent working→idle (BEL is the sole attention signal)', async () => {
+  // Why: the working→idle transition fires an 'agent-task-complete' OS
+  // notification (user-toggleable in Settings) but MUST NOT raise tab/worktree
+  // unread — those stay BEL-only so non-agent long-running tasks remain
+  // first-class attention sources. Double-firing with a concurrent BEL is
+  // collapsed by the per-worktree dedupe in main/ipc/notifications.ts.
+  it('dispatches agent-task-complete on working→idle but does not raise tab/worktree unread', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
@@ -1006,7 +1005,10 @@ describe('connectPanePty', () => {
 
     expect(deps.markWorktreeUnread).not.toHaveBeenCalled()
     expect(deps.markTerminalTabUnread).not.toHaveBeenCalled()
-    expect(deps.dispatchNotification).not.toHaveBeenCalled()
+    expect(deps.dispatchNotification).toHaveBeenCalledWith({
+      source: 'agent-task-complete',
+      terminalTitle: '* Claude done'
+    })
   })
 
   // Why: onAgentExited must clear any running prompt-cache countdown so the

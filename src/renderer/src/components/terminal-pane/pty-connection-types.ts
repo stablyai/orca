@@ -25,11 +25,14 @@ export type PtyConnectionDeps = {
   markTerminalTabUnread: (tabId: string) => void
   clearWorktreeUnread: (worktreeId: string) => void
   clearTerminalTabUnread: (tabId: string) => void
-  // Why: the renderer-side dispatcher only handles BEL-sourced notifications
-  // now. shared/types.ts keeps a wider NotificationEventSource union because
-  // main-process callers can still emit others (e.g. `'test'` for the
-  // settings-pane button).
-  dispatchNotification: (event: { source: 'terminal-bell' }) => void
+  // Why: the renderer dispatches two notification sources — BEL from the PTY
+  // byte stream and agent-task-complete on the working→idle title transition.
+  // shared/types.ts keeps a wider NotificationEventSource union because the
+  // main process can also emit `'test'` from the settings-pane button.
+  dispatchNotification: (event: {
+    source: 'terminal-bell' | 'agent-task-complete'
+    terminalTitle?: string
+  }) => void
   setCacheTimerStartedAt: (key: string, ts: number | null) => void
   syncPanePtyLayoutBinding: (paneId: number, ptyId: string | null) => void
 }
