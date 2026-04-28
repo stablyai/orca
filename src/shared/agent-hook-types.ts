@@ -19,11 +19,10 @@ export type AgentHookInstallStatus = {
 // Why: bumped whenever the managed script's request shape changes. The
 // receiver logs a warning when it sees a request from a different version so a
 // stale script installed by an older app build is diagnosable instead of
-// silently producing partial payloads.
-//
-// v2 (2026-04): scripts now source ORCA_AGENT_HOOK_ENDPOINT (an on-disk file
-// written by each Orca start()) for live PORT/TOKEN/ENV/VERSION values,
-// falling back to PTY env. Required for surviving PTYs to reach the current
-// Orca after a restart — a pre-v2 script still works on a freshly spawned
-// PTY but cannot self-heal after the Orca it was stamped with is gone.
-export const ORCA_HOOK_PROTOCOL_VERSION = '2' as const
+// silently producing partial payloads. Still at v1 because the endpoint-file
+// rollout is additive — pre-endpoint-file scripts still post the same JSON
+// body shape, and no caller was ever shipped on v2 (the Claude/Codex/Gemini
+// install path has been gated behind AGENT_DASHBOARD_ENABLED=false, and the
+// Cursor/OpenCode scripts reroll on every Orca launch so no in-wild fleet
+// exists to distinguish from). Reserve the next bump for a real wire change.
+export const ORCA_HOOK_PROTOCOL_VERSION = '1' as const

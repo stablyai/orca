@@ -98,7 +98,7 @@ Format: shell-sourceable `KEY=VALUE` lines. This avoids a JSON parser dependency
 ORCA_AGENT_HOOK_PORT=54321
 ORCA_AGENT_HOOK_TOKEN=8f2c...
 ORCA_AGENT_HOOK_ENV=development
-ORCA_AGENT_HOOK_VERSION=2
+ORCA_AGENT_HOOK_VERSION=1
 ```
 
 ```
@@ -106,7 +106,7 @@ ORCA_AGENT_HOOK_VERSION=2
 set ORCA_AGENT_HOOK_PORT=54321
 set ORCA_AGENT_HOOK_TOKEN=8f2c...
 set ORCA_AGENT_HOOK_ENV=development
-set ORCA_AGENT_HOOK_VERSION=2
+set ORCA_AGENT_HOOK_VERSION=1
 ```
 
 Permissions: `0600` on POSIX. The token is a loopback bearer credential and must not be readable by other local users. (Parity with what PTY env already exposes via `/proc/<pid>/environ`, which is also owner-only on modern Linux.)
@@ -159,7 +159,7 @@ No change to the HTTP transport, payload shape, or server routing.
 
 **Add** a private method `writeEndpointFile()` that writes the four coordinates atomically with `0o600` permissions. Called at the end of `start()`, after `listen()` returns and `this.port` is populated. On failure (EACCES on userData, ENOSPC, etc.), log at `console.error` with the error message and fall through so `start()` still succeeds — the server remains usable via PTY env for freshly-spawned PTYs; only survivors lose the endpoint-file path. This is fail-open, matching the hook-payload failure-open policy already documented in `server.ts`.
 
-**`stop()`** deliberately does NOT unlink the endpoint file. A stale file pointing at a dead port is the fail-open path (hook POSTs silently fail, same as pre-v2 behavior). Unlinking would introduce a TOCTOU race: a concurrent Orca instance sharing userData could rewrite the file between our token check and unlink, and we would delete its live endpoint. The next successful `start()` overwrites the file atomically; orphan hygiene is handled by the tmp-file sweep inside `writeEndpointFile()`. The mode `0o600` on the file itself means there is no world-readable-cleanup urgency either.
+**`stop()`** deliberately does NOT unlink the endpoint file. A stale file pointing at a dead port is the fail-open path (hook POSTs silently fail, same as pre-endpoint-file behavior). Unlinking would introduce a TOCTOU race: a concurrent Orca instance sharing userData could rewrite the file between our token check and unlink, and we would delete its live endpoint. The next successful `start()` overwrites the file atomically; orphan hygiene is handled by the tmp-file sweep inside `writeEndpointFile()`. The mode `0o600` on the file itself means there is no world-readable-cleanup urgency either.
 
 **Modify** `buildPtyEnv()` to include `ORCA_AGENT_HOOK_ENDPOINT: <endpoint file path>` alongside the existing four variables. Keep the existing four for back-compat: a hook script that was installed before this change doesn't know to source the file, but still has (potentially stale) env to fall back on, and a hook script installed after the change will source the file first and then use the env as a fallback.
 
@@ -315,5 +315,5 @@ Bumped `ORCA_HOOK_PROTOCOL_VERSION` from `'1'` → `'2'` (monotonic, no skipped 
 
 ## Open Questions
 
-1. **Should we delete the endpoint file on clean shutdown?** **Resolved: no.** `stop()` intentionally leaves the file on disk. A stale file points at a dead port, which matches the fail-open policy (hook POSTs silently fail, same as pre-v2). An earlier iteration added a token-matched `unlinkEndpointFile()` on stop for "filesystem hygiene", but that has a residual TOCTOU: between the token read and the `unlinkSync`, a concurrent Orca instance sharing userData can `renameSync` a fresh file over our path, and our unlink then deletes the peer's live file despite the token check passing moments before. The original hygiene argument is also weak: the endpoint file is written with mode `0o600`, so it is not world-readable in the first place. The next successful `start()` overwrites the file atomically; orphan `.tmp` files from crashed writers are swept inside `writeEndpointFile()`. TOCTOU-free by construction.
+1. **Should we delete the endpoint file on clean shutdown?** **Resolved: no.** `stop()` intentionally leaves the file on disk. A stale file points at a dead port, which matches the fail-open policy (hook POSTs silently fail, same as pre-endpoint-file behavior). An earlier iteration added a token-matched `unlinkEndpointFile()` on stop for "filesystem hygiene", but that has a residual TOCTOU: between the token read and the `unlinkSync`, a concurrent Orca instance sharing userData can `renameSync` a fresh file over our path, and our unlink then deletes the peer's live file despite the token check passing moments before. The original hygiene argument is also weak: the endpoint file is written with mode `0o600`, so it is not world-readable in the first place. The next successful `start()` overwrites the file atomically; orphan `.tmp` files from crashed writers are swept inside `writeEndpointFile()`. TOCTOU-free by construction.
 2. **Hook-script auto-upgrade on version mismatch.** Deferred — see "Migration gap" under Goals for the resolution. In short: users with a pre-fix script either reinstall from Settings (prompted by the existing throttled server-log warning) or simply spawn a new PTY. Auto-reinstall would silently overwrite user-customized `settings.json` hook blocks and needs its own design before shipping.

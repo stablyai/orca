@@ -865,7 +865,7 @@ describe('Endpoint file lifecycle', () => {
       expect(contents).toContain(`${prefix}ORCA_AGENT_HOOK_PORT=${expectedPort}`)
       expect(contents).toContain(`${prefix}ORCA_AGENT_HOOK_TOKEN=${expectedToken}`)
       expect(contents).toContain(`${prefix}ORCA_AGENT_HOOK_ENV=development`)
-      expect(contents).toContain(`${prefix}ORCA_AGENT_HOOK_VERSION=2`)
+      expect(contents).toContain(`${prefix}ORCA_AGENT_HOOK_VERSION=1`)
     } finally {
       server.stop()
     }
