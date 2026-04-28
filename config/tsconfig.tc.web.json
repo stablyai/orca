@@ -4,7 +4,7 @@
     "../src/renderer/src/env.d.ts",
     "../src/renderer/src/**/*",
     "../src/renderer/src/**/*.tsx",
-    "../src/preload/*.d.ts",
+    "../src/preload/api-types.ts",
     "../src/shared/**/*",
     "../src/main/ipc/worktree-logic.ts",
     "../src/main/wsl.ts"

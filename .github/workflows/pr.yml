@@ -35,6 +35,23 @@ jobs:
       - name: Lint
         run: pnpm exec oxlint --format github
 
+      # Why: project-owned type declarations must live in .ts so tsc
+      # actually checks them. TypeScript's skipLibCheck: true (inherited
+      # from @electron-toolkit/tsconfig) silently widens unresolved names
+      # in .d.ts to `any`, which is how #1186 shipped a broken IPC signature
+      # past typecheck. See docs/preload-typecheck-hole.md.
+      - name: Guard against project-owned .d.ts in preload/shared
+        run: |
+          matches=$(find src/preload src/shared -name '*.d.ts' 2>/dev/null || true)
+          if [ -n "$matches" ]; then
+            echo "::error::Project-owned .d.ts files are not allowed under src/preload or src/shared."
+            echo "Move type declarations into a .ts file so skipLibCheck does not hide errors."
+            echo "See docs/preload-typecheck-hole.md."
+            echo "Found:"
+            echo "$matches"
+            exit 1
+          fi
+
       - name: Typecheck
         run: pnpm typecheck
 
