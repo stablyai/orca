@@ -314,7 +314,27 @@ type FileRowProps = {
   baseSha: string | undefined
 }
 
+// Why: bounded LRU — opening many PRs with many files during a session
+// would otherwise grow this module-level map without bound until reload.
+const PR_FILE_CONTENT_CACHE_MAX = 64
 const prFileContentCache = new Map<string, Promise<GitHubPRFileContents> | GitHubPRFileContents>()
+
+function touchPRFileContentCache(
+  key: string,
+  value: Promise<GitHubPRFileContents> | GitHubPRFileContents
+): void {
+  // Why: re-insert to move to the most-recently-used position; Map preserves
+  // insertion order so the oldest key is always first when evicting.
+  prFileContentCache.delete(key)
+  prFileContentCache.set(key, value)
+  while (prFileContentCache.size > PR_FILE_CONTENT_CACHE_MAX) {
+    const oldest = prFileContentCache.keys().next().value
+    if (oldest === undefined) {
+      break
+    }
+    prFileContentCache.delete(oldest)
+  }
+}
 
 function getPRFileContentCacheKey(args: {
   repoPath: string
@@ -344,6 +364,7 @@ function loadPRFileContents(args: {
   const cacheKey = getPRFileContentCacheKey(args)
   const cached = prFileContentCache.get(cacheKey)
   if (cached) {
+    touchPRFileContentCache(cacheKey, cached)
     return Promise.resolve(cached)
   }
   const request = window.api.gh
@@ -357,14 +378,14 @@ function loadPRFileContents(args: {
       baseSha: args.baseSha
     })
     .then((contents) => {
-      prFileContentCache.set(cacheKey, contents)
+      touchPRFileContentCache(cacheKey, contents)
       return contents
     })
     .catch((err) => {
       prFileContentCache.delete(cacheKey)
       throw err
     })
-  prFileContentCache.set(cacheKey, request)
+  touchPRFileContentCache(cacheKey, request)
   return request
 }
 

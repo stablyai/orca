@@ -54,7 +54,6 @@ import TeamMultiCombobox from '@/components/ui/team-multi-combobox'
 import RepoDotLabel from '@/components/repo/RepoDotLabel'
 import { stripRepoQualifiers } from '../../../shared/task-query'
 import GitHubItemDialog from '@/components/GitHubItemDialog'
-import GitHubItemDrawer from '@/components/GitHubItemDrawer'
 import LinearItemDrawer from '@/components/LinearItemDrawer'
 import { cn } from '@/lib/utils'
 import {
@@ -777,15 +776,12 @@ export default function TaskPage(): React.JSX.Element {
   const fetchWorkItemsNextPage = useAppStore((s) => s.fetchWorkItemsNextPage)
   const countWorkItemsAcrossRepos = useAppStore((s) => s.countWorkItemsAcrossRepos)
 
-  // Why: the GitHub create flow opens this dialog with an optimistic stub
-  // before the freshly created item is fetched from the cache.
+  // Why: clicking a GitHub row (or completing the create-issue flow) opens
+  // this dialog for a read/review surface. The dialog's "Use" button routes
+  // through the same direct-launch flow as the row-level "Use" CTA so
+  // behavior is consistent regardless of entry point.
   const [dialogWorkItemId, setDialogWorkItemId] = useState<string | null>(null)
   const [dialogWorkItemFallback, setDialogWorkItemFallback] = useState<GitHubWorkItem | null>(null)
-  // Why: clicking a GitHub row opens this drawer for a read-only preview.
-  // Drawer's "Use" button routes through the same direct-launch flow as the
-  // row-level "Use" CTA so behavior is consistent regardless of entry point.
-  const [drawerWorkItemId, setDrawerWorkItemId] = useState<string | null>(null)
-  const [drawerWorkItemFallback, setDrawerWorkItemFallback] = useState<GitHubWorkItem | null>(null)
 
   const workItemsCache = useAppStore((s) => s.workItemsCache)
   const linearIssueCache = useAppStore((s) => s.linearIssueCache)
@@ -810,27 +806,6 @@ export default function TaskPage(): React.JSX.Element {
   const setDialogWorkItem = useCallback((item: GitHubWorkItem | null) => {
     setDialogWorkItemId(item?.id ?? null)
     setDialogWorkItemFallback(item)
-  }, [])
-
-  // Why: derive the drawer's work item from the store cache so it reflects
-  // optimistic patches (e.g. table-cell status toggle). Falls back to the
-  // snapshot stored at click time for newly-created stubs not yet in the cache.
-  const drawerWorkItem = useMemo(() => {
-    if (!drawerWorkItemId) {
-      return null
-    }
-    for (const entry of Object.values(workItemsCache)) {
-      const found = entry?.data?.find((wi) => wi.id === drawerWorkItemId)
-      if (found) {
-        return found
-      }
-    }
-    return drawerWorkItemFallback
-  }, [drawerWorkItemId, workItemsCache, drawerWorkItemFallback])
-
-  const setDrawerWorkItem = useCallback((item: GitHubWorkItem | null) => {
-    setDrawerWorkItemId(item?.id ?? null)
-    setDrawerWorkItemFallback(item)
   }, [])
   const [newIssueOpen, setNewIssueOpen] = useState(false)
   const [newIssueTitle, setNewIssueTitle] = useState('')
@@ -1351,7 +1326,6 @@ export default function TaskPage(): React.JSX.Element {
     // Why: when a modal is open, let it own Esc dismissal.
     if (
       dialogWorkItem ||
-      drawerWorkItem ||
       drawerLinearIssue ||
       newIssueOpen ||
       newLinearIssueOpen ||
@@ -1395,7 +1369,6 @@ export default function TaskPage(): React.JSX.Element {
     closeTaskPage,
     dialogWorkItem,
     drawerLinearIssue,
-    drawerWorkItem,
     newIssueOpen,
     newLinearIssueOpen
   ])
@@ -2012,11 +1985,11 @@ export default function TaskPage(): React.JSX.Element {
                         key={item.id}
                         role="button"
                         tabIndex={0}
-                        onClick={() => setDrawerWorkItem(item)}
+                        onClick={() => setDialogWorkItem(item)}
                         onKeyDown={(event) => {
                           if (event.key === 'Enter' || event.key === ' ') {
                             event.preventDefault()
-                            setDrawerWorkItem(item)
+                            setDialogWorkItem(item)
                           }
                         }}
                         className="grid w-full cursor-pointer gap-2 px-3 py-2 text-left transition hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 grid-cols-[80px_minmax(0,3fr)_minmax(110px,0.8fr)_100px_110px_112px]"
@@ -2569,22 +2542,6 @@ export default function TaskPage(): React.JSX.Element {
           handleUseWorkItem(item)
         }}
         onClose={() => setDialogWorkItem(null)}
-      />
-
-      <GitHubItemDrawer
-        workItem={drawerWorkItem}
-        repoPath={
-          // Why: the drawer is for a single item — resolve its repoPath from the
-          // item's own repoId (set when fan-out merged the list) so it works in
-          // cross-repo mode too. Reusing the memoized repo map avoids an O(n)
-          // scan on every render while the drawer is open.
-          drawerWorkItem ? (repoMap.get(drawerWorkItem.repoId)?.path ?? null) : null
-        }
-        onUse={(item) => {
-          setDrawerWorkItem(null)
-          handleUseWorkItem(item)
-        }}
-        onClose={() => setDrawerWorkItem(null)}
       />
 
       <LinearItemDrawer
