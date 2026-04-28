@@ -319,237 +319,232 @@ const WorktreeCard = React.memo(function WorktreeCard({
 
   const unreadTooltip = worktree.isUnread ? 'Mark read' : 'Mark unread'
 
-  return (
-    <>
-      <WorktreeContextMenu worktree={worktree}>
-        <div
-          className={cn(
-            'group relative flex items-start gap-2.5 px-2 py-2 rounded-lg cursor-pointer transition-all duration-200 outline-none select-none ml-1',
-            isActive
-              ? 'bg-black/[0.06] shadow-[0_1px_2px_rgba(0,0,0,0.03)] border border-border/60 dark:bg-white/[0.10] dark:border-border/40'
-              : 'border border-transparent hover:bg-accent/40',
-            isDeleting && 'opacity-50 grayscale cursor-not-allowed',
-            isSshDisconnected && !isDeleting && 'opacity-60'
-          )}
-          onClick={handleClick}
-          onDoubleClick={handleDoubleClick}
-          aria-busy={isDeleting}
-        >
-          {isDeleting && (
-            <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-background/50 backdrop-blur-[1px]">
-              <div className="inline-flex items-center gap-1.5 rounded-full bg-background px-3 py-1 text-[11px] font-medium text-foreground shadow-sm border border-border/50">
-                <LoaderCircle className="size-3.5 animate-spin text-muted-foreground" />
-                Deleting…
-              </div>
-            </div>
-          )}
+  // Why: the whole card is the hover target for the agent-status panel, not
+  // just the dot. Hovering any part of the workspace row reveals the panel
+  // to the right (HoverCardContent inside AgentStatusHover uses
+  // side="right"). A dot-sized target was too easy to miss; the card-level
+  // trigger preserves the dot as an at-a-glance cue while giving users a
+  // much larger surface to surface the "agent activity" detail. Gated by
+  // dashboardExperimentEnabled to match the previous feature-flag scope.
+  const cardBody = (
+    <div
+      className={cn(
+        'group relative flex items-start gap-2.5 px-2 py-2 rounded-lg cursor-pointer transition-all duration-200 outline-none select-none ml-1',
+        isActive
+          ? 'bg-black/[0.06] shadow-[0_1px_2px_rgba(0,0,0,0.03)] border border-border/60 dark:bg-white/[0.10] dark:border-border/40'
+          : 'border border-transparent hover:bg-accent/40',
+        isDeleting && 'opacity-50 grayscale cursor-not-allowed',
+        isSshDisconnected && !isDeleting && 'opacity-60'
+      )}
+      onClick={handleClick}
+      onDoubleClick={handleDoubleClick}
+      aria-busy={isDeleting}
+    >
+      {isDeleting && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-background/50 backdrop-blur-[1px]">
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-background px-3 py-1 text-[11px] font-medium text-foreground shadow-sm border border-border/50">
+            <LoaderCircle className="size-3.5 animate-spin text-muted-foreground" />
+            Deleting…
+          </div>
+        </div>
+      )}
 
-          {/* Cmd+N hint badge — decorative only, shown when the user holds the
+      {/* Cmd+N hint badge — decorative only, shown when the user holds the
             platform modifier key for discoverability of Cmd+1–9 shortcuts.
             Why centered on the left edge: placing it at the top clipped the
             glyph against the card bounds on some sizes, while mid-card keeps
             the badge fully visible without competing with the title row. */}
-          {hintNumber != null && (
-            <div
-              aria-hidden="true"
-              className="absolute -left-1 top-1/2 z-20 flex h-4 w-4 -translate-y-1/2 items-center justify-center rounded bg-zinc-500/85 text-white shadow-sm animate-in fade-in zoom-in-75 duration-150"
-            >
-              <span className="relative block pt-px text-[9px] leading-none font-medium [font-variant-numeric:tabular-nums]">
-                {hintNumber}
+      {hintNumber != null && (
+        <div
+          aria-hidden="true"
+          className="absolute -left-1 top-1/2 z-20 flex h-4 w-4 -translate-y-1/2 items-center justify-center rounded bg-zinc-500/85 text-white shadow-sm animate-in fade-in zoom-in-75 duration-150"
+        >
+          <span className="relative block pt-px text-[9px] leading-none font-medium [font-variant-numeric:tabular-nums]">
+            {hintNumber}
+          </span>
+        </div>
+      )}
+
+      {/* Status indicator on the left */}
+      {(cardProps.includes('status') || cardProps.includes('unread')) && (
+        <div className="flex flex-col items-center justify-start pt-[2px] gap-2 shrink-0">
+          {/* Why: the agent-status hovercard is now attached to the whole
+                  card (see AgentStatusHover wrapper below), not just the dot,
+                  so the dot renders as a plain visual indicator. A dot-sized
+                  hover target was too easy to miss; hovering any part of the
+                  card is a far more forgiving way to reveal the "agent
+                  activity" panel that appears to the right of the card. */}
+          {cardProps.includes('status') && <StatusIndicator status={status} />}
+
+          {cardProps.includes('unread') && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={handleToggleUnreadQuick}
+                  className={cn(
+                    'group/unread flex size-4 cursor-pointer items-center justify-center rounded transition-all',
+                    'hover:bg-accent/80 active:scale-95',
+                    'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
+                  )}
+                  aria-label={worktree.isUnread ? 'Mark as read' : 'Mark as unread'}
+                >
+                  {worktree.isUnread ? (
+                    <FilledBellIcon className="size-[13px] text-amber-500 drop-shadow-sm" />
+                  ) : (
+                    <Bell className="size-3 text-muted-foreground/40 opacity-0 group-hover:opacity-100 group-hover/unread:opacity-100 transition-opacity" />
+                  )}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right" sideOffset={8}>
+                <span>{unreadTooltip}</span>
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </div>
+      )}
+
+      {/* Content area */}
+      <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+        {/* Header row: Title and Checks */}
+        <div className="flex items-center justify-between min-w-0 gap-2">
+          <div className="flex items-center gap-1.5 min-w-0">
+            {repo?.connectionId && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="shrink-0 inline-flex items-center">
+                    {isSshDisconnected ? (
+                      <ServerOff className="size-3 text-red-400" />
+                    ) : (
+                      <Server className="size-3 text-muted-foreground" />
+                    )}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="right" sideOffset={8}>
+                  {isSshDisconnected ? 'SSH disconnected' : 'Remote repository via SSH'}
+                </TooltipContent>
+              </Tooltip>
+            )}
+
+            <div className="text-[12px] font-semibold text-foreground truncate leading-tight">
+              {worktree.displayName}
+            </div>
+
+            {/* Why: the primary worktree (the original clone directory) cannot be
+                 deleted via `git worktree remove`. Placing this badge next to the
+                 name makes it immediately visible and avoids confusion with the
+                 branch name "main" shown below. */}
+            {worktree.isMainWorktree && !isFolder && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge
+                    variant="outline"
+                    className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 leading-none text-muted-foreground border-muted-foreground/30 bg-muted-foreground/5"
+                  >
+                    primary
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent side="right" sideOffset={8}>
+                  Primary worktree (original clone directory)
+                </TooltipContent>
+              </Tooltip>
+            )}
+          </div>
+
+          {/* CI Checks & PR state on the right */}
+          {cardProps.includes('ci') && pr && pr.checksStatus !== 'neutral' && (
+            <div className="flex items-center gap-2 shrink-0">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex items-center opacity-80 hover:opacity-100 transition-opacity">
+                    {pr.checksStatus === 'success' && (
+                      <CircleCheck className="size-3.5 text-emerald-500" />
+                    )}
+                    {pr.checksStatus === 'failure' && (
+                      <CircleX className="size-3.5 text-rose-500" />
+                    )}
+                    {pr.checksStatus === 'pending' && (
+                      <LoaderCircle className="size-3.5 text-amber-500 animate-spin" />
+                    )}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="right" sideOffset={8}>
+                  <span>CI checks {checksLabel(pr.checksStatus).toLowerCase()}</span>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          )}
+        </div>
+
+        {/* Subtitle row: Repo badge + Branch */}
+        <div className="flex items-center gap-1.5 min-w-0">
+          {repo && !hideRepoBadge && (
+            <div className="flex items-center gap-1.5 shrink-0 px-1.5 py-0.5 rounded-[4px] bg-accent border border-border dark:bg-accent/50 dark:border-border/60">
+              <div className="size-1.5 rounded-full" style={{ backgroundColor: repo.badgeColor }} />
+              <span className="text-[10px] font-semibold text-foreground truncate max-w-[6rem] leading-none lowercase">
+                {repo.displayName}
               </span>
             </div>
           )}
 
-          {/* Status indicator on the left */}
-          {(cardProps.includes('status') || cardProps.includes('unread')) && (
-            <div className="flex flex-col items-center justify-start pt-[2px] gap-2 shrink-0">
-              {cardProps.includes('status') &&
-                (dashboardExperimentEnabled ? (
-                  <AgentStatusHover worktreeId={worktree.id}>
-                    {/* Why: make the hover trigger keyboard-focusable so
-                        keyboard-only users can open the hover panel (Radix
-                        HoverCardTrigger asChild does not promote a
-                        non-interactive child to focusable).
-                        Why inline-flex: a default `display: inline` span
-                        contains the inline-flex StatusIndicator on the text
-                        baseline, pushing the dot ~2px down inside the card's
-                        flex-column container. `inline-flex` removes the line
-                        box so the dot stays top-aligned with the title. */}
-                    <span
-                      tabIndex={0}
-                      role="button"
-                      aria-label={`Worktree status: ${status}. Show running agents.`}
-                      className="inline-flex"
-                    >
-                      <StatusIndicator status={status} />
-                    </span>
-                  </AgentStatusHover>
-                ) : (
-                  <StatusIndicator status={status} />
-                ))}
-
-              {cardProps.includes('unread') && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      onClick={handleToggleUnreadQuick}
-                      className={cn(
-                        'group/unread flex size-4 cursor-pointer items-center justify-center rounded transition-all',
-                        'hover:bg-accent/80 active:scale-95',
-                        'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
-                      )}
-                      aria-label={worktree.isUnread ? 'Mark as read' : 'Mark as unread'}
-                    >
-                      {worktree.isUnread ? (
-                        <FilledBellIcon className="size-[13px] text-amber-500 drop-shadow-sm" />
-                      ) : (
-                        <Bell className="size-3 text-muted-foreground/40 opacity-0 group-hover:opacity-100 group-hover/unread:opacity-100 transition-opacity" />
-                      )}
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="right" sideOffset={8}>
-                    <span>{unreadTooltip}</span>
-                  </TooltipContent>
-                </Tooltip>
-              )}
-            </div>
+          {isFolder ? (
+            <Badge
+              variant="secondary"
+              className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 text-muted-foreground bg-accent border border-border dark:bg-accent/80 dark:border-border/50 leading-none"
+            >
+              {repo ? getRepoKindLabel(repo) : 'Folder'}
+            </Badge>
+          ) : (
+            <span className="text-[11px] text-muted-foreground truncate leading-none">
+              {branch}
+            </span>
           )}
 
-          {/* Content area */}
-          <div className="flex-1 min-w-0 flex flex-col gap-1.5">
-            {/* Header row: Title and Checks */}
-            <div className="flex items-center justify-between min-w-0 gap-2">
-              <div className="flex items-center gap-1.5 min-w-0">
-                {repo?.connectionId && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="shrink-0 inline-flex items-center">
-                        {isSshDisconnected ? (
-                          <ServerOff className="size-3 text-red-400" />
-                        ) : (
-                          <Server className="size-3 text-muted-foreground" />
-                        )}
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent side="right" sideOffset={8}>
-                      {isSshDisconnected ? 'SSH disconnected' : 'Remote repository via SSH'}
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-
-                <div className="text-[12px] font-semibold text-foreground truncate leading-tight">
-                  {worktree.displayName}
-                </div>
-
-                {/* Why: the primary worktree (the original clone directory) cannot be
-                 deleted via `git worktree remove`. Placing this badge next to the
-                 name makes it immediately visible and avoids confusion with the
-                 branch name "main" shown below. */}
-                {worktree.isMainWorktree && !isFolder && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Badge
-                        variant="outline"
-                        className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 leading-none text-muted-foreground border-muted-foreground/30 bg-muted-foreground/5"
-                      >
-                        primary
-                      </Badge>
-                    </TooltipTrigger>
-                    <TooltipContent side="right" sideOffset={8}>
-                      Primary worktree (original clone directory)
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-              </div>
-
-              {/* CI Checks & PR state on the right */}
-              {cardProps.includes('ci') && pr && pr.checksStatus !== 'neutral' && (
-                <div className="flex items-center gap-2 shrink-0">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="inline-flex items-center opacity-80 hover:opacity-100 transition-opacity">
-                        {pr.checksStatus === 'success' && (
-                          <CircleCheck className="size-3.5 text-emerald-500" />
-                        )}
-                        {pr.checksStatus === 'failure' && (
-                          <CircleX className="size-3.5 text-rose-500" />
-                        )}
-                        {pr.checksStatus === 'pending' && (
-                          <LoaderCircle className="size-3.5 text-amber-500 animate-spin" />
-                        )}
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent side="right" sideOffset={8}>
-                      <span>CI checks {checksLabel(pr.checksStatus).toLowerCase()}</span>
-                    </TooltipContent>
-                  </Tooltip>
-                </div>
-              )}
-            </div>
-
-            {/* Subtitle row: Repo badge + Branch */}
-            <div className="flex items-center gap-1.5 min-w-0">
-              {repo && !hideRepoBadge && (
-                <div className="flex items-center gap-1.5 shrink-0 px-1.5 py-0.5 rounded-[4px] bg-accent border border-border dark:bg-accent/50 dark:border-border/60">
-                  <div
-                    className="size-1.5 rounded-full"
-                    style={{ backgroundColor: repo.badgeColor }}
-                  />
-                  <span className="text-[10px] font-semibold text-foreground truncate max-w-[6rem] leading-none lowercase">
-                    {repo.displayName}
-                  </span>
-                </div>
-              )}
-
-              {isFolder ? (
-                <Badge
-                  variant="secondary"
-                  className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 text-muted-foreground bg-accent border border-border dark:bg-accent/80 dark:border-border/50 leading-none"
-                >
-                  {repo ? getRepoKindLabel(repo) : 'Folder'}
-                </Badge>
-              ) : (
-                <span className="text-[11px] text-muted-foreground truncate leading-none">
-                  {branch}
-                </span>
-              )}
-
-              {/* Why: the conflict operation (merge/rebase/cherry-pick) is the
+          {/* Why: the conflict operation (merge/rebase/cherry-pick) is the
                only signal that the worktree is in an incomplete operation state.
                Showing it on the card lets the user spot worktrees that need
                attention without switching to them first. */}
-              {conflictOperation && conflictOperation !== 'unknown' && (
-                <Badge
-                  variant="outline"
-                  className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 gap-1 text-amber-600 border-amber-500/30 bg-amber-500/5 dark:text-amber-400 dark:border-amber-400/30 dark:bg-amber-400/5 leading-none"
-                >
-                  <GitMerge className="size-2.5" />
-                  {CONFLICT_OPERATION_LABELS[conflictOperation]}
-                </Badge>
-              )}
+          {conflictOperation && conflictOperation !== 'unknown' && (
+            <Badge
+              variant="outline"
+              className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 gap-1 text-amber-600 border-amber-500/30 bg-amber-500/5 dark:text-amber-400 dark:border-amber-400/30 dark:bg-amber-400/5 leading-none"
+            >
+              <GitMerge className="size-2.5" />
+              {CONFLICT_OPERATION_LABELS[conflictOperation]}
+            </Badge>
+          )}
 
-              <CacheTimer worktreeId={worktree.id} />
-            </div>
+          <CacheTimer worktreeId={worktree.id} />
+        </div>
 
-            {/* Meta section: Issue / PR Links / Comment
+        {/* Meta section: Issue / PR Links / Comment
              Layout coupling: spacing here is used to derive size estimates in
              WorktreeList's estimateSize. Update that function if changing spacing. */}
-            {((cardProps.includes('issue') && issue) ||
-              (cardProps.includes('pr') && pr) ||
-              (cardProps.includes('comment') && worktree.comment)) && (
-              <div className="flex flex-col gap-[3px] mt-0.5">
-                {cardProps.includes('issue') && issue && (
-                  <IssueSection issue={issue} onClick={handleEditIssue} />
-                )}
-                {cardProps.includes('pr') && pr && <PrSection pr={pr} onClick={handleEditIssue} />}
-                {cardProps.includes('comment') && worktree.comment && (
-                  <CommentSection comment={worktree.comment} onDoubleClick={handleEditComment} />
-                )}
-              </div>
+        {((cardProps.includes('issue') && issue) ||
+          (cardProps.includes('pr') && pr) ||
+          (cardProps.includes('comment') && worktree.comment)) && (
+          <div className="flex flex-col gap-[3px] mt-0.5">
+            {cardProps.includes('issue') && issue && (
+              <IssueSection issue={issue} onClick={handleEditIssue} />
+            )}
+            {cardProps.includes('pr') && pr && <PrSection pr={pr} onClick={handleEditIssue} />}
+            {cardProps.includes('comment') && worktree.comment && (
+              <CommentSection comment={worktree.comment} onDoubleClick={handleEditComment} />
             )}
           </div>
-        </div>
+        )}
+      </div>
+    </div>
+  )
+
+  return (
+    <>
+      <WorktreeContextMenu worktree={worktree}>
+        {dashboardExperimentEnabled ? (
+          <AgentStatusHover worktreeId={worktree.id}>{cardBody}</AgentStatusHover>
+        ) : (
+          cardBody
+        )}
       </WorktreeContextMenu>
 
       {repo?.connectionId && (
