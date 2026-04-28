@@ -43,14 +43,14 @@ function formatTimeAgo(ts: number, now: number): string {
 }
 
 // Why: surface the moment the agent most recently transitioned *into* done.
-// History entries are stamped with the state's own startedAt on push, so a
-// past done sits at `history[i].startedAt`. When the current live state is
-// done, the best approximation we have is `updatedAt` (exact on first report,
-// drifts by at most one re-report interval thereafter).
+// When the current live state is done, use `stateStartedAt` (not `updatedAt`)
+// — `updatedAt` is refreshed on within-state pings (tool/prompt) and would
+// drift away from the true transition moment. For past dones, stateHistory
+// entries already store the per-transition `startedAt` so we read it directly.
 function lastEnteredDoneAt(agent: DashboardAgentRowData): number | null {
   const entry = agent.entry
   if (entry.state === 'done') {
-    return entry.updatedAt
+    return entry.stateStartedAt
   }
   for (let i = entry.stateHistory.length - 1; i >= 0; i--) {
     if (entry.stateHistory[i].state === 'done') {

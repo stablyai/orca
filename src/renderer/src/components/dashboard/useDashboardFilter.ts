@@ -133,7 +133,20 @@ export function useDashboardFilter(
         // to wt.earliestStartedAt is needed — and using that upstream value
         // would reintroduce the exact phantom sort key this block avoids.
         const filteredEarliest = agents[0].startedAt
-        worktrees.push({ ...wt, agents, earliestStartedAt: filteredEarliest })
+        // Why: preserve worktree card identity in the no-op case so
+        // React.memo on DashboardWorktreeCard can short-circuit. `filter`
+        // always allocates a new array even when no elements are removed, so
+        // reference equality against `wt.agents` is never true — length
+        // equality is our proxy for "nothing was filtered out" (safe because
+        // .filter preserves order, so equal length means every element
+        // passed). When agents are full AND earliestStartedAt is unchanged,
+        // the upstream `wt` object is already the correct card and spreading
+        // would only defeat memoization, causing every `now` tick or
+        // unrelated store update to re-render all cards.
+        const stateMatchedAll = stateMatched.length === wt.agents.length
+        const agentsAreFull = stateMatchedAll && agents.length === wt.agents.length
+        const passthrough = agentsAreFull && filteredEarliest === wt.earliestStartedAt
+        worktrees.push(passthrough ? wt : { ...wt, agents, earliestStartedAt: filteredEarliest })
       }
       if (worktrees.length === 0) {
         continue

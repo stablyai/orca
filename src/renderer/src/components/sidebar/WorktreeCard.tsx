@@ -158,56 +158,60 @@ const WorktreeCard = React.memo(function WorktreeCard({
   // permission wins over done because a newer blocked agent in the same
   // worktree means the user needs to act now, not admire a previous
   // completion.
-  // Why: collapse live hook entries to two booleans inside the selector so the
+  // Why: collapse live hook entries to booleans inside the selector so the
   // snapshot is a stable scalar (useShallow compares element identity — an
   // array of freshly-constructed {state,updatedAt} objects would never hit
   // the cache and trip React's "getSnapshot should be cached" infinite-loop
   // guard). Staleness is applied here too so the selector already reflects
   // the 30-min TTL; agentStatusEpoch pulls in the tick that fires when a
-  // fresh entry crosses the stale boundary.
-  const { hasPermission, hasLiveDone } = useAppStore(
+  // fresh entry crosses the stale boundary. The same useShallow wrapper
+  // covers hasPermission, hasLiveDone, *and* hasRetainedDone — merging the
+  // retained scan into the same selector avoids a second full-map iteration
+  // per card on every retention write (with N sidebar cards on screen a
+  // standalone retained selector scans Object.values(...) N times per tick).
+  const { hasPermission, hasLiveDone, hasRetainedDone } = useAppStore(
     useShallow((s) => {
       // Touch the epoch so this selector re-runs when the freshness scheduler
       // ticks — otherwise a stale transition wouldn't flip the booleans until
       // some unrelated store write happened to rerun us.
       void s.agentStatusEpoch
       const wtTabs = s.tabsByWorktree[worktree.id] ?? EMPTY_TABS
-      if (wtTabs.length === 0) {
-        return { hasPermission: false, hasLiveDone: false }
-      }
-      const tabIds = new Set(wtTabs.map((t) => t.id))
-      const now = Date.now()
       let perm = false
-      let done = false
-      for (const [paneKey, entry] of Object.entries(s.agentStatusByPaneKey)) {
-        const sepIdx = paneKey.indexOf(':')
-        if (sepIdx <= 0) {
-          continue
-        }
-        const tabId = paneKey.slice(0, sepIdx)
-        if (!tabIds.has(tabId)) {
-          continue
-        }
-        if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
-          continue
-        }
-        if (entry.state === 'blocked' || entry.state === 'waiting') {
-          perm = true
-        } else if (entry.state === 'done') {
-          done = true
+      let live = false
+      if (wtTabs.length > 0) {
+        const tabIds = new Set(wtTabs.map((t) => t.id))
+        const now = Date.now()
+        for (const [paneKey, entry] of Object.entries(s.agentStatusByPaneKey)) {
+          const sepIdx = paneKey.indexOf(':')
+          if (sepIdx <= 0) {
+            continue
+          }
+          const tabId = paneKey.slice(0, sepIdx)
+          if (!tabIds.has(tabId)) {
+            continue
+          }
+          if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
+            continue
+          }
+          if (entry.state === 'blocked' || entry.state === 'waiting') {
+            perm = true
+          } else if (entry.state === 'done') {
+            live = true
+          }
         }
       }
-      return { hasPermission: perm, hasLiveDone: done }
+      // Retained scan — one pass in the same selector avoids a second
+      // Object.values(...) per store tick (one per sidebar card).
+      let retained = false
+      for (const ra of Object.values(s.retainedAgentsByPaneKey)) {
+        if (ra.worktreeId === worktree.id) {
+          retained = true
+          break
+        }
+      }
+      return { hasPermission: perm, hasLiveDone: live, hasRetainedDone: retained }
     })
   )
-  const hasRetainedDone = useAppStore((s) => {
-    for (const ra of Object.values(s.retainedAgentsByPaneKey)) {
-      if (ra.worktreeId === worktree.id) {
-        return true
-      }
-    }
-    return false
-  })
 
   const status: WorktreeStatus = useMemo(() => {
     if (hasPermission) {

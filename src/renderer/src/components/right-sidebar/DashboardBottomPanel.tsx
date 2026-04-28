@@ -5,6 +5,8 @@ import AgentDashboard from '../dashboard/AgentDashboard'
 const MIN_HEIGHT = 140
 const DEFAULT_HEIGHT = 220
 const HEADER_HEIGHT = 28
+// Why: leave room for the tab content above the dashboard — used in both the drag max and the layout-effect measure, must stay in sync.
+const RESERVED_ABOVE_PX = 160
 const STORAGE_KEY = 'orca.dashboardSidebarPanel'
 
 type PersistedState = {
@@ -184,7 +186,7 @@ export default function DashboardBottomPanel(): React.JSX.Element {
       // content to a zero-height strip. Leave 160px for the panel above.
       const sidebarEl = containerRef.current?.parentElement
       const sidebarHeight = sidebarEl?.getBoundingClientRect().height ?? 800
-      const maxHeight = Math.max(MIN_HEIGHT, sidebarHeight - 160)
+      const maxHeight = Math.max(MIN_HEIGHT, sidebarHeight - RESERVED_ABOVE_PX)
       resizeStateRef.current = {
         startY: event.clientY,
         // Why: use the CLAMPED height, not the raw persisted value. If the
@@ -253,7 +255,7 @@ export default function DashboardBottomPanel(): React.JSX.Element {
       if (typeof sidebarHeight !== 'number' || !Number.isFinite(sidebarHeight)) {
         return
       }
-      const max = Math.max(MIN_HEIGHT, sidebarHeight - 160)
+      const max = Math.max(MIN_HEIGHT, sidebarHeight - RESERVED_ABOVE_PX)
       setMeasuredMaxHeight(max)
     }
     measure()
@@ -287,7 +289,8 @@ export default function DashboardBottomPanel(): React.JSX.Element {
           role="separator"
           tabIndex={0}
           aria-orientation="horizontal"
-          aria-valuenow={Math.round(height)}
+          // Why: advertise the clamped rendered height, not the raw persisted value — otherwise valuenow can exceed valuemax when the persisted preference is larger than the current sidebar.
+          aria-valuenow={Math.round(effectiveHeight)}
           aria-valuemin={MIN_HEIGHT}
           // Why: WAI-ARIA best practice is to always expose a finite range
           // alongside aria-valuenow so assistive tech can announce a
