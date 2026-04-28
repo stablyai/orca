@@ -45,7 +45,7 @@ describe('OpenCode hook plugin source', () => {
     expect(source).toContain('function readEndpointFile()')
     expect(source).toContain('process.env.ORCA_AGENT_HOOK_ENDPOINT')
     // Parser accepts both `KEY=VALUE` (Unix) and `set KEY=VALUE` (Windows):
-    expect(source).toContain('/^(?:set\\s+)?([A-Z_]+)=(.*)$/')
+    expect(source).toContain('/^(?:set\\s+)?([A-Z0-9_]+)=(.*)$/')
     expect(source).toContain('function resolveHookCoords()')
     // File takes precedence over env — the whole point of v2:
     expect(source).toContain(
@@ -58,6 +58,26 @@ describe('OpenCode hook plugin source', () => {
     expect(source).toContain('const coords = resolveHookCoords();')
     expect(source).toContain('`http://127.0.0.1:${coords.port}/hook/opencode`')
     expect(source).toContain('"X-Orca-Agent-Hook-Token": coords.token')
+  })
+
+  it('caches the parsed endpoint file on mtime+size+inode to skip re-reads per post', () => {
+    // Why: message.part.updated fires many times per second during a streaming
+    // assistant reply. Each post() calls resolveHookCoords() which reads the
+    // endpoint file — without the cache we'd readFileSync + parse on every
+    // streamed Part. The cache key combines mtime + size + inode so renameSync
+    // (writeEndpointFile's atomic swap) invalidates the cache via the ino
+    // change even when mtime resolution is coarse and size happens to match.
+    const source = _internals.getOpenCodePluginSource()
+
+    expect(source).toContain('let cachedEndpointKey = "";')
+    expect(source).toContain('let cachedEndpointValues = null;')
+    expect(source).toContain('const stat = fs.statSync(path);')
+    expect(source).toContain('const cacheKey = stat.mtimeMs + ":" + stat.size + ":" + stat.ino;')
+    expect(source).toContain('if (cacheKey === cachedEndpointKey && cachedEndpointValues) {')
+    expect(source).toContain('return cachedEndpointValues;')
+    // Stat failure must invalidate the cache, not lock in stale values:
+    expect(source).toContain('cachedEndpointKey = "";')
+    expect(source).toContain('cachedEndpointValues = null;')
   })
 
   it('guards endpoint-file parse warnings with a process-lifetime latch', () => {

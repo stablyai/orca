@@ -171,6 +171,12 @@ export default function SortableTab({
           data-testid="sortable-tab"
           data-tab-id={tab.id}
           data-tab-title={tab.customTitle ?? tab.title}
+          // Why: expose the active/inactive flag as a DOM attribute so E2E specs
+          // can assert on user-observable selection state without reading the
+          // Zustand store. A store-only "is this tab active?" round-trip would
+          // pass even if the tab-bar render path had silently broken (the same
+          // tautology that let PR #1186's render crash ship past E2E in #1193).
+          data-active={isActive ? 'true' : 'false'}
           {...attributes}
           {...dragListeners}
           // Why: on unread activity, tint the whole tab with a subtle amber
@@ -329,6 +335,12 @@ export default function SortableTab({
                   ? 'text-muted-foreground hover:text-foreground hover:bg-muted'
                   : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted'
               }`}
+              // Why: per-tab close affordance needs a stable accessible name so
+              // E2E specs can drive the same path a user takes (hover → click X)
+              // instead of bypassing the render layer by calling closeTab() on
+              // the store — a store-only assertion would pass even if this
+              // button had been accidentally unmounted.
+              aria-label={`Close tab ${tab.customTitle ?? tab.title}`}
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.stopPropagation()
