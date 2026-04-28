@@ -170,6 +170,16 @@ export type TerminalTab = {
    *  without needing the user to interact with the tab again. Undefined means
    *  "use the default shell setting". */
   shellOverride?: string
+  /** Why: when `setActiveWorktree` bumps generation on all-dead tabs to drive a
+   *  TerminalPane remount, the fresh PTY that results is caused by navigation,
+   *  not by the user doing work. Without this flag the resulting
+   *  `updateTabPtyId` call would call `bumpWorktreeActivity` and flip the
+   *  sidebar's recency sort on every click — the reorder-on-click bug. The
+   *  flag is set by `setActiveWorktree` and consumed (cleared) by the first
+   *  `updateTabPtyId` that follows, which then suppresses the activity bump
+   *  and the `sortEpoch` increment. Never persisted — it is a transient
+   *  handoff between the two calls. */
+  pendingActivationSpawn?: boolean
 }
 
 export type BrowserHistoryEntry = {

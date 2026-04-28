@@ -34,6 +34,63 @@ describe('OpenCode hook plugin source', () => {
     expect(source).toContain('export const OrcaOpenCodeStatusPlugin = async (_ctx) => {')
     expect(source).toContain('const client = _ctx?.client;')
   })
+
+  it('resolves hook coords from the endpoint file before falling back to process.env', () => {
+    // Why: a long-running OpenCode session was fork()ed with the prior Orca's
+    // PORT/TOKEN frozen into process.env. The plugin must prefer the on-disk
+    // endpoint file (rewritten on every Orca start()) over env, otherwise it
+    // keeps posting to a dead port after an Orca restart.
+    const source = _internals.getOpenCodePluginSource()
+
+    expect(source).toContain('function readEndpointFile()')
+    expect(source).toContain('process.env.ORCA_AGENT_HOOK_ENDPOINT')
+    // Parser accepts both `KEY=VALUE` (Unix) and `set KEY=VALUE` (Windows):
+    expect(source).toContain('/^(?:set\\s+)?([A-Z0-9_]+)=(.*)$/')
+    expect(source).toContain('function resolveHookCoords()')
+    // File takes precedence over env — the whole point of v2:
+    expect(source).toContain(
+      'port: fileEnv.ORCA_AGENT_HOOK_PORT || process.env.ORCA_AGENT_HOOK_PORT'
+    )
+    expect(source).toContain(
+      'token: fileEnv.ORCA_AGENT_HOOK_TOKEN || process.env.ORCA_AGENT_HOOK_TOKEN'
+    )
+    // post() uses the resolved coords, not a cached-at-startup url:
+    expect(source).toContain('const coords = resolveHookCoords();')
+    expect(source).toContain('`http://127.0.0.1:${coords.port}/hook/opencode`')
+    expect(source).toContain('"X-Orca-Agent-Hook-Token": coords.token')
+  })
+
+  it('caches the parsed endpoint file on mtime+size+inode to skip re-reads per post', () => {
+    // Why: message.part.updated fires many times per second during a streaming
+    // assistant reply. Each post() calls resolveHookCoords() which reads the
+    // endpoint file — without the cache we'd readFileSync + parse on every
+    // streamed Part. The cache key combines mtime + size + inode so renameSync
+    // (writeEndpointFile's atomic swap) invalidates the cache via the ino
+    // change even when mtime resolution is coarse and size happens to match.
+    const source = _internals.getOpenCodePluginSource()
+
+    expect(source).toContain('let cachedEndpointKey = "";')
+    expect(source).toContain('let cachedEndpointValues = null;')
+    expect(source).toContain('const stat = fs.statSync(path);')
+    expect(source).toContain('const cacheKey = stat.mtimeMs + ":" + stat.size + ":" + stat.ino;')
+    expect(source).toContain('if (cacheKey === cachedEndpointKey && cachedEndpointValues) {')
+    expect(source).toContain('return cachedEndpointValues;')
+    // Stat failure must invalidate the cache, not lock in stale values:
+    expect(source).toContain('cachedEndpointKey = "";')
+    expect(source).toContain('cachedEndpointValues = null;')
+  })
+
+  it('guards endpoint-file parse warnings with a process-lifetime latch', () => {
+    // Why: ENOENT is the normal pre-install case and must stay silent, but a
+    // malformed/unreadable file (EACCES, EIO, parse error) would otherwise
+    // spam stderr once per hook post. The latch keeps the warning to once per
+    // OpenCode process — mirrors server.ts's warnedVersions/warnedEnvs intent.
+    const source = _internals.getOpenCodePluginSource()
+
+    expect(source).toContain('let warnedBadEndpoint = false;')
+    expect(source).toContain('err.code !== "ENOENT"')
+    expect(source).toContain('warnedBadEndpoint = true;')
+  })
 })
 
 describe('OpenCode id safety guard', () => {

@@ -2,25 +2,22 @@
    sparkline, and the formatters are all small pieces that only exist to
    serve this one status-bar segment. Keeping them co-located follows the
    same convention as the other *StatusSegment.tsx files (see StatusBar.tsx). */
-import React, { memo, useEffect, useMemo, useState } from 'react'
-import { ArrowDownWideNarrow, ChevronDown, ChevronRight, MemoryStick } from 'lucide-react'
+import React, { memo, useCallback, useEffect, useMemo, useState } from 'react'
+import { ChevronDown, ChevronRight, MemoryStick, Moon, Trash2 } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useAppStore } from '../../store'
+import { useWorktreeMap } from '../../store/selectors'
+import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
+import { runSleepWorktree } from '../sidebar/sleep-worktree-flow'
 import type {
   AppMemory,
   SessionMemory,
   TerminalTab,
   UsageValues,
+  Worktree,
   WorktreeMemory
 } from '../../../../shared/types'
 import { ORPHAN_WORKTREE_ID } from '../../../../shared/constants'
@@ -30,12 +27,6 @@ import { ORPHAN_WORKTREE_ID } from '../../../../shared/constants'
 const POLL_MS = 2_000
 
 type SortOption = 'memory' | 'cpu' | 'name'
-
-const SORT_LABELS: Record<SortOption, string> = {
-  memory: 'Memory',
-  cpu: 'CPU',
-  name: 'Name'
-}
 
 const METRIC_COLUMNS_CLS = 'flex items-center shrink-0 tabular-nums'
 const CPU_COLUMN_CLS = 'w-12 text-right'
@@ -144,14 +135,21 @@ function bucketByRepo(worktrees: WorktreeMemory[]): RepoGroup[] {
   return [...map.values()]
 }
 
-function sortWorktreesBy(list: WorktreeMemory[], sort: SortOption): WorktreeMemory[] {
+function sortWorktreesBy(
+  list: WorktreeMemory[],
+  sort: SortOption,
+  labelFor: (wt: WorktreeMemory) => string
+): WorktreeMemory[] {
   const copy = [...list]
   if (sort === 'memory') {
     copy.sort((a, b) => b.memory - a.memory)
   } else if (sort === 'cpu') {
     copy.sort((a, b) => b.cpu - a.cpu)
   } else {
-    copy.sort((a, b) => a.worktreeName.localeCompare(b.worktreeName))
+    // Why labelFor instead of worktreeName: the row label prefers the
+    // user-editable displayName over the dirname, so alphabetical order
+    // needs to match what the user actually sees in the list.
+    copy.sort((a, b) => labelFor(a).localeCompare(labelFor(b)))
   }
   return copy
 }
@@ -251,41 +249,7 @@ const Sparkline = memo(SparklineImpl, (a, b) => {
   return true
 })
 
-// ─── Leaf UI: metric chip + row ─────────────────────────────────────
-
-function MetricChip({
-  label,
-  value,
-  tooltip
-}: {
-  label: string
-  value: string
-  tooltip?: string
-}): React.JSX.Element {
-  const body = (
-    <div className="min-w-0 px-1 py-0.5">
-      <span className="block text-[10px] text-muted-foreground uppercase tracking-wide whitespace-nowrap">
-        {label}
-      </span>
-      <span className="block text-base leading-5 font-medium tabular-nums whitespace-nowrap text-foreground">
-        {value}
-      </span>
-    </div>
-  )
-  if (!tooltip) {
-    return body
-  }
-  return (
-    <Tooltip delayDuration={150}>
-      <TooltipTrigger asChild>{body}</TooltipTrigger>
-      {/* Why z-[70]: parent PopoverContent stacks at z-[60]; the default
-          tooltip z-50 would render behind it. */}
-      <TooltipContent side="top" sideOffset={6} className="z-[70] max-w-xs">
-        {tooltip}
-      </TooltipContent>
-    </Tooltip>
-  )
-}
+// ─── Leaf UI: metric row ────────────────────────────────────────────
 
 function MetricPair({
   cpu,
@@ -307,20 +271,49 @@ function MetricPair({
 
 // ─── Section: app (main / renderer / other) ─────────────────────────
 
-function AppSection({ app }: { app: AppMemory }): React.JSX.Element {
+function AppSection({
+  app,
+  isCollapsed,
+  onToggle
+}: {
+  app: AppMemory
+  isCollapsed: boolean
+  onToggle: () => void
+}): React.JSX.Element {
   return (
-    <div className="border-b border-border/50">
-      <div className="px-3 py-2 flex items-center justify-between">
-        <span className="text-xs font-medium truncate">Orca App</span>
-        <div className="flex items-center gap-2 shrink-0">
-          <Sparkline samples={app.history} />
-          <MetricPair cpu={app.cpu} memory={app.memory} />
+    <div className="border-t border-border/50">
+      <div className="flex items-center">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="pl-2 py-2 pr-0.5 transition-colors hover:bg-muted/50"
+          aria-label={isCollapsed ? 'Expand Orca' : 'Collapse Orca'}
+          aria-expanded={!isCollapsed}
+        >
+          {isCollapsed ? (
+            <ChevronRight className="h-3 w-3 text-muted-foreground" />
+          ) : (
+            <ChevronDown className="h-3 w-3 text-muted-foreground" />
+          )}
+        </button>
+        <div className="flex-1 min-w-0 py-2 pr-3 flex items-center justify-between">
+          <span className="text-[11px] font-semibold uppercase tracking-wide truncate text-muted-foreground">
+            Orca
+          </span>
+          <div className="flex items-center gap-2 shrink-0">
+            <Sparkline samples={app.history} />
+            <MetricPair cpu={app.cpu} memory={app.memory} />
+          </div>
         </div>
       </div>
-      <AppSubRow label="Main" values={app.main} />
-      <AppSubRow label="Renderer" values={app.renderer} />
-      {(app.other.cpu > 0 || app.other.memory > 0) && (
-        <AppSubRow label="Other" values={app.other} />
+      {!isCollapsed && (
+        <div className="border-t border-border/30">
+          <AppSubRow label="Main" values={app.main} />
+          <AppSubRow label="Renderer" values={app.renderer} />
+          {(app.other.cpu > 0 || app.other.memory > 0) && (
+            <AppSubRow label="Other" values={app.other} />
+          )}
+        </div>
       )}
     </div>
   )
@@ -344,7 +337,9 @@ function WorktreeSection({
   toggleRepo,
   collapsedWorktrees,
   toggleWorktree,
-  navigateToWorktree
+  navigateToWorktree,
+  onSleep,
+  onDelete
 }: {
   worktrees: WorktreeMemory[]
   sortOption: SortOption
@@ -353,6 +348,8 @@ function WorktreeSection({
   collapsedWorktrees: Set<string>
   toggleWorktree: (worktreeId: string) => void
   navigateToWorktree: (worktreeId: string) => void
+  onSleep: (worktreeId: string) => void
+  onDelete: (worktreeId: string) => void
 }): React.JSX.Element {
   // Why: these slices mutate frequently (runtimePaneTitlesByTabId updates on
   // every terminal OSC escape). Subscribing inside WorktreeSection — which
@@ -361,16 +358,58 @@ function WorktreeSection({
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const runtimePaneTitlesByTabId = useAppStore((s) => s.runtimePaneTitlesByTabId)
 
+  // Why: WorktreeMemory is a lightweight snapshot; we look the real Worktree
+  // record up from the store so rows can (a) disable Delete for the main
+  // worktree, and (b) render the user-editable displayName instead of the
+  // dirname. Use the shared cached selector so we don't duplicate the
+  // WeakMap-cached Map the rest of the app already shares.
+  const worktreeById = useWorktreeMap()
+
+  // Shared label resolver: prefer displayName, fall back to the dirname
+  // carried on the memory snapshot. Used for both rendering and alpha-sort.
+  const labelFor = useCallback(
+    (wt: WorktreeMemory): string =>
+      worktreeById.get(wt.worktreeId)?.displayName?.trim() || wt.worktreeName,
+    [worktreeById]
+  )
+
   // Memoize grouping: popover polls every 2s, so without this we'd rebuild
   // the Map + arrays on every render even when nothing changed.
   const repoGroups = useMemo(
     () =>
       sortRepoGroupsBy(bucketByRepo(worktrees), sortOption).map((group) => ({
         ...group,
-        worktrees: sortWorktreesBy(group.worktrees, sortOption)
+        worktrees: sortWorktreesBy(group.worktrees, sortOption, labelFor)
       })),
-    [worktrees, sortOption]
+    [worktrees, sortOption, labelFor]
   )
+
+  // Why: when only one repo is active, the repo header row adds a useless
+  // level of nesting — the worktrees are the interesting thing. Flatten
+  // straight to worktree rows in that case.
+  const singleRepo = repoGroups.length === 1
+
+  const renderWorktree = (wt: WorktreeMemory): React.JSX.Element => {
+    const storeRecord = worktreeById.get(wt.worktreeId) ?? null
+    return (
+      <WorktreeRow
+        key={wt.worktreeId}
+        worktree={wt}
+        storeRecord={storeRecord}
+        isCollapsed={collapsedWorktrees.has(wt.worktreeId)}
+        onToggle={() => toggleWorktree(wt.worktreeId)}
+        onNavigate={() => navigateToWorktree(wt.worktreeId)}
+        onSleep={() => onSleep(wt.worktreeId)}
+        onDelete={() => onDelete(wt.worktreeId)}
+        tabsByWorktree={tabsByWorktree}
+        runtimePaneTitlesByTabId={runtimePaneTitlesByTabId}
+      />
+    )
+  }
+
+  if (singleRepo) {
+    return <>{repoGroups[0].worktrees.map(renderWorktree)}</>
+  }
 
   return (
     <>
@@ -400,19 +439,7 @@ function WorktreeSection({
             </div>
 
             {!repoCollapsed && (
-              <div className="border-t border-border/30">
-                {group.worktrees.map((wt) => (
-                  <WorktreeRow
-                    key={wt.worktreeId}
-                    worktree={wt}
-                    isCollapsed={collapsedWorktrees.has(wt.worktreeId)}
-                    onToggle={() => toggleWorktree(wt.worktreeId)}
-                    onNavigate={() => navigateToWorktree(wt.worktreeId)}
-                    tabsByWorktree={tabsByWorktree}
-                    runtimePaneTitlesByTabId={runtimePaneTitlesByTabId}
-                  />
-                ))}
-              </div>
+              <div className="border-t border-border/30">{group.worktrees.map(renderWorktree)}</div>
             )}
           </div>
         )
@@ -423,30 +450,44 @@ function WorktreeSection({
 
 function WorktreeRow({
   worktree,
+  storeRecord,
   isCollapsed,
   onToggle,
   onNavigate,
+  onSleep,
+  onDelete,
   tabsByWorktree,
   runtimePaneTitlesByTabId
 }: {
   worktree: WorktreeMemory
+  storeRecord: Worktree | null
   isCollapsed: boolean
   onToggle: () => void
   onNavigate: () => void
+  onSleep: () => void
+  onDelete: () => void
   tabsByWorktree: Record<string, TerminalTab[]>
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
 }): React.JSX.Element {
   const hasSessions = worktree.sessions.length > 0
+  // Why: actions are only meaningful for real worktrees — orphan/unknown
+  // rows are synthetic buckets with no row to act on.
+  const showActions = worktree.worktreeId !== ORPHAN_WORKTREE_ID && storeRecord !== null
+  const isMainWorktree = storeRecord?.isMainWorktree ?? false
+  // Why: Worktree.displayName is the user-editable workspace name (set via
+  // Rename). Fall back to the dirname-shaped worktreeName from the memory
+  // snapshot for orphan/unresolved rows that have no store record.
+  const rowLabel = storeRecord?.displayName?.trim() || worktree.worktreeName
 
   return (
     <div className="border-b border-border/20 last:border-b-0">
-      <div className="flex items-center ml-2">
-        {hasSessions && (
+      <div className="group/wtrow flex items-center ml-2 transition-colors hover:bg-muted/60">
+        {hasSessions ? (
           <button
             type="button"
             onClick={onToggle}
-            className="pl-2 py-2 pr-0.5 transition-colors shrink-0 hover:bg-muted/60"
-            aria-label={isCollapsed ? 'Expand worktree' : 'Collapse worktree'}
+            className="pl-2 py-2 pr-0.5 shrink-0"
+            aria-label={isCollapsed ? 'Expand workspace' : 'Collapse workspace'}
           >
             {isCollapsed ? (
               <ChevronRight className="h-3 w-3 text-muted-foreground" />
@@ -454,22 +495,94 @@ function WorktreeRow({
               <ChevronDown className="h-3 w-3 text-muted-foreground" />
             )}
           </button>
+        ) : (
+          // Why this width: matches the chevron button's pl-2 + w-3 + pr-0.5
+          // footprint so rows without sessions don't shift horizontally
+          // relative to rows with sessions.
+          <span
+            className="pl-2 py-2 pr-0.5 shrink-0 w-[calc(0.5rem+0.75rem+0.125rem)]"
+            aria-hidden
+          />
         )}
         <button
           type="button"
           onClick={onNavigate}
-          aria-label={`Open worktree ${worktree.worktreeName}`}
-          className={cn(
-            'flex-1 min-w-0 py-2 pr-3 flex items-center justify-between transition-colors hover:bg-muted/60',
-            hasSessions ? 'pl-1' : 'pl-3'
-          )}
+          aria-label={`Open workspace ${rowLabel}`}
+          className="flex-1 min-w-0 py-2 pr-2 pl-1 text-left"
         >
-          <span className="text-xs font-medium truncate min-w-0 mr-2">{worktree.worktreeName}</span>
-          <div className="flex items-center gap-2 shrink-0">
-            <Sparkline samples={worktree.history} />
-            <MetricPair cpu={worktree.cpu} memory={worktree.memory} />
-          </div>
+          <span className="text-xs font-medium truncate block">{rowLabel}</span>
         </button>
+        <div className="flex items-center gap-2 shrink-0 pr-3">
+          {/* Why the relative wrapper + absolute actions: the sparkline
+              reserves the space so the row width never changes on hover.
+              The actions fade in on top of the sparkline (which fades out
+              in the same transition), preventing the layout "jump" that
+              happened when the sparkline was toggled via display:none. */}
+          <div className="relative">
+            <span
+              className={cn(
+                'block transition-opacity',
+                showActions &&
+                  'group-hover/wtrow:opacity-0 group-hover/wtrow:pointer-events-none group-focus-within/wtrow:opacity-0 group-focus-within/wtrow:pointer-events-none'
+              )}
+              aria-hidden={showActions ? undefined : true}
+            >
+              <Sparkline samples={worktree.history} />
+            </span>
+            {showActions && (
+              // Why pointer-events pairing: opacity alone leaves the buttons
+              // clickable when invisible (touch devices have no hover state),
+              // so the Delete button can fire on an accidental tap.
+              <div className="absolute inset-0 flex items-center justify-end gap-0.5 opacity-0 pointer-events-none transition-opacity group-hover/wtrow:opacity-100 group-hover/wtrow:pointer-events-auto group-focus-within/wtrow:opacity-100 group-focus-within/wtrow:pointer-events-auto">
+                <Tooltip delayDuration={300}>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={onSleep}
+                      aria-label={`Sleep workspace ${rowLabel}`}
+                      className="p-0.5 rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                    >
+                      <Moon className="size-3" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent
+                    side="top"
+                    sideOffset={4}
+                    className="z-[70] max-w-[200px] text-pretty"
+                  >
+                    Sleep — close all panels in this workspace to free memory.
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip delayDuration={300}>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={onDelete}
+                      disabled={isMainWorktree}
+                      aria-label={`Delete workspace ${rowLabel}`}
+                      className={cn(
+                        'p-0.5 rounded text-muted-foreground transition-colors',
+                        isMainWorktree
+                          ? 'opacity-40 cursor-not-allowed'
+                          : 'hover:bg-destructive/10 hover:text-destructive'
+                      )}
+                    >
+                      <Trash2 className="size-3" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent
+                    side="top"
+                    sideOffset={4}
+                    className="z-[70] max-w-[200px] text-pretty"
+                  >
+                    {isMainWorktree ? 'The main workspace cannot be deleted.' : 'Delete workspace.'}
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            )}
+          </div>
+          <MetricPair cpu={worktree.cpu} memory={worktree.memory} />
+        </div>
       </div>
 
       {!isCollapsed &&
@@ -494,6 +607,8 @@ function WorktreeRow({
         ))}
     </div>
   )
+
+  // Why: wrap real rows in the shared context menu so right-click exposes
 }
 
 // ─── Segment (top-level) ────────────────────────────────────────────
@@ -509,11 +624,23 @@ export function MemoryStatusSegment({
 }): React.JSX.Element {
   const snapshot = useAppStore((s) => s.memorySnapshot)
   const fetchSnapshot = useAppStore((s) => s.fetchMemorySnapshot)
+  // Why: worktree metadata (map, skipDeleteWorktreeConfirm,
+  // clearWorktreeDeleteState, openModal) is only needed at click time inside
+  // `deleteWorktree`. This segment is always mounted in the status bar, so
+  // subscribing to those slices at the top level would cause it (and every
+  // descendant) to re-render on unrelated worktree metadata churn
+  // (pin/rename/unread/session). The shared `runWorktreeDelete` helper pulls
+  // them imperatively via `useAppStore.getState()` instead.
 
   const [open, setOpen] = useState(false)
   const [sortOption, setSortOption] = useState<SortOption>('memory')
   const [collapsedRepos, setCollapsedRepos] = useState<Set<string>>(new Set())
   const [collapsedWorktrees, setCollapsedWorktrees] = useState<Set<string>>(new Set())
+  // Why: the Orca app breakdown (Main/Renderer/Other) is a diagnostic detail
+  // most users don't need to see every time — collapse it by default and
+  // surface the per-worktree usage, which is what people usually open this
+  // popover to investigate.
+  const [appCollapsed, setAppCollapsed] = useState(true)
 
   // Why: only poll while the popover is open. When closed, the badge shows
   // whatever value was last fetched — good enough for a passive indicator
@@ -543,7 +670,11 @@ export function MemoryStatusSegment({
     }
   }, [snapshot])
 
-  const toggleRepo = (repoId: string): void => {
+  // Why empty deps: these callbacks only call the state setter returned by
+  // useState, which React guarantees is stable across renders — so we don't
+  // need to list it. Wrapping in useCallback keeps the reference stable across
+  // the 2s polling re-renders so descendants can be memoized downstream.
+  const toggleRepo = useCallback((repoId: string): void => {
     setCollapsedRepos((prev) => {
       const next = new Set(prev)
       if (next.has(repoId)) {
@@ -553,9 +684,9 @@ export function MemoryStatusSegment({
       }
       return next
     })
-  }
+  }, [])
 
-  const toggleWorktree = (worktreeId: string): void => {
+  const toggleWorktree = useCallback((worktreeId: string): void => {
     setCollapsedWorktrees((prev) => {
       const next = new Set(prev)
       if (next.has(worktreeId)) {
@@ -565,9 +696,11 @@ export function MemoryStatusSegment({
       }
       return next
     })
-  }
+  }, [])
 
-  const navigateToWorktree = (worktreeId: string): void => {
+  // Deps intentionally empty: only uses the stable setOpen setter and
+  // module-level imports (ORPHAN_WORKTREE_ID, activateAndRevealWorktree).
+  const navigateToWorktree = useCallback((worktreeId: string): void => {
     // Orphan bucket has a synthetic id with no real worktree to reveal.
     if (worktreeId === ORPHAN_WORKTREE_ID) {
       setOpen(false)
@@ -581,7 +714,21 @@ export function MemoryStatusSegment({
       return
     }
     setOpen(false)
-  }
+  }, [])
+
+  // Why this thin wrapper: the popover needs to close before the modal/toast
+  // appears (Radix's outside-pointerdown would otherwise dismiss the dialog).
+  // The actual decision tree lives in `runWorktreeDelete` so both the popover
+  // and the sidebar context menu stay in sync.
+  const deleteWorktree = useCallback((worktreeId: string): void => {
+    setOpen(false)
+    runWorktreeDelete(worktreeId)
+  }, [])
+
+  // Stable callback so onSleep prop identity doesn't churn across polls.
+  const handleSleep = useCallback((id: string): void => {
+    void runSleepWorktree(id)
+  }, [])
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -607,66 +754,122 @@ export function MemoryStatusSegment({
         </TooltipContent>
       </Tooltip>
 
-      <PopoverContent side="top" align="end" sideOffset={8} className="w-[26rem] p-0">
-        <div className="p-3 border-b border-border">
-          <div className="flex items-center justify-between">
-            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-              Memory &amp; CPU
-            </h4>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-muted-foreground hover:bg-muted transition-colors"
-                  aria-label="Sort worktrees"
+      <PopoverContent
+        side="top"
+        align="end"
+        sideOffset={8}
+        className="w-[26rem] p-0"
+        // Why: the first focusable element inside is the CPU/memory/% span
+        // (tabIndex=0 so the tooltip is keyboard-reachable). Without this,
+        // Radix auto-focuses that span on open, which triggers its tooltip
+        // and leaves it stuck until the user mouses over something else.
+        onOpenAutoFocus={(event) => event.preventDefault()}
+      >
+        {/* Why: the popover trigger already announces "Memory & CPU", so a
+            heading row is redundant. We lead with the totals — which is what
+            most people open this for — on a single compact line. */}
+        {snapshot && (
+          <div className="px-3 py-2 border-b border-border flex items-baseline gap-3 text-xs tabular-nums">
+            <Tooltip delayDuration={200}>
+              <TooltipTrigger asChild>
+                {/* Why tabIndex on span triggers: Radix Tooltip needs a
+                    focusable child for keyboard reveal; plain <span> isn't
+                    focusable by default. */}
+                <span
+                  tabIndex={0}
+                  className="font-medium text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:rounded"
                 >
-                  <ArrowDownWideNarrow className="h-3.5 w-3.5" />
-                  <span>{SORT_LABELS[sortOption]}</span>
-                </button>
-              </DropdownMenuTrigger>
-              {/* Why z-[70]: PopoverContent is z-[60]; the default dropdown
-                  z-50 would render behind it. */}
-              <DropdownMenuContent align="end" className="w-40 z-[70]">
-                <DropdownMenuRadioGroup
-                  value={sortOption}
-                  onValueChange={(value) => {
-                    if (value === 'memory' || value === 'cpu' || value === 'name') {
-                      setSortOption(value)
-                    }
-                  }}
+                  {formatCpu(totalCpu)}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={6} className="z-[70] max-w-xs">
+                Combined CPU load. Values above 100% mean more than one core is working at once.
+              </TooltipContent>
+            </Tooltip>
+            <span className="text-muted-foreground/50">·</span>
+            <Tooltip delayDuration={200}>
+              <TooltipTrigger asChild>
+                <span
+                  tabIndex={0}
+                  className="font-medium text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:rounded"
                 >
-                  <DropdownMenuRadioItem value="memory">Memory</DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="cpu">CPU</DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="name">Name</DropdownMenuRadioItem>
-                </DropdownMenuRadioGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  {formatMemory(totalMemory)}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={6} className="z-[70] max-w-xs">
+                Resident memory held by Orca plus the processes under each worktree&apos;s
+                terminals.
+              </TooltipContent>
+            </Tooltip>
+            <span className="text-muted-foreground/50">·</span>
+            <Tooltip delayDuration={200}>
+              <TooltipTrigger asChild>
+                <span
+                  tabIndex={0}
+                  className="text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:rounded"
+                >
+                  {formatPercent(hostShare)} of system RAM
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={6} className="z-[70] max-w-xs">
+                How much of this machine&apos;s physical RAM the Orca-tracked processes are sitting
+                on.
+              </TooltipContent>
+            </Tooltip>
           </div>
+        )}
 
-          {snapshot && (
-            <div className="mt-2 grid grid-cols-3 gap-2">
-              <MetricChip
-                label="CPU"
-                value={formatCpu(totalCpu)}
-                tooltip="Combined CPU load across the Orca app and the shell subtrees Orca launched. Values above 100% mean more than one core is working at once."
-              />
-              <MetricChip
-                label="Memory"
-                value={formatMemory(totalMemory)}
-                tooltip="Resident memory held by the Orca app plus the processes under each worktree's terminals. A number that only climbs usually points at a worktree keeping something alive."
-              />
-              <MetricChip
-                label="% of system RAM"
-                value={formatPercent(hostShare)}
-                tooltip="How much of this machine's physical RAM the Orca-tracked processes are sitting on. A low number here while the system feels slow means the pressure is coming from something else."
-              />
+        {/* Why click-to-sort on the column headers: the headers already
+            label the columns, so doubling them up with a separate sort
+            control was pure redundancy. The active column is bolded so
+            users can see at a glance which one drives the order. */}
+        {snapshot && (
+          <div className="flex items-center justify-between px-3 py-1 bg-muted/30 border-b border-border/50 text-[10px] uppercase tracking-wide">
+            <button
+              type="button"
+              onClick={() => setSortOption('name')}
+              className={cn(
+                'hover:text-foreground transition-colors',
+                sortOption === 'name' ? 'font-semibold text-foreground' : 'text-muted-foreground/80'
+              )}
+              aria-pressed={sortOption === 'name'}
+            >
+              Name
+            </button>
+            <div className={cn(METRIC_COLUMNS_CLS, 'text-[10px]')}>
+              <button
+                type="button"
+                onClick={() => setSortOption('cpu')}
+                className={cn(
+                  CPU_COLUMN_CLS,
+                  'hover:text-foreground transition-colors',
+                  sortOption === 'cpu'
+                    ? 'font-semibold text-foreground'
+                    : 'text-muted-foreground/80'
+                )}
+                aria-pressed={sortOption === 'cpu'}
+              >
+                CPU
+              </button>
+              <button
+                type="button"
+                onClick={() => setSortOption('memory')}
+                className={cn(
+                  MEM_COLUMN_CLS,
+                  'hover:text-foreground transition-colors',
+                  sortOption === 'memory'
+                    ? 'font-semibold text-foreground'
+                    : 'text-muted-foreground/80'
+                )}
+                aria-pressed={sortOption === 'memory'}
+              >
+                Memory
+              </button>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         <div className="max-h-[50vh] overflow-y-auto scrollbar-sleek">
-          {snapshot && <AppSection app={snapshot.app} />}
-
           {snapshot && snapshot.worktrees.length > 0 && (
             <WorktreeSection
               worktrees={snapshot.worktrees}
@@ -676,6 +879,8 @@ export function MemoryStatusSegment({
               collapsedWorktrees={collapsedWorktrees}
               toggleWorktree={toggleWorktree}
               navigateToWorktree={navigateToWorktree}
+              onSleep={handleSleep}
+              onDelete={deleteWorktree}
             />
           )}
 
@@ -683,6 +888,17 @@ export function MemoryStatusSegment({
             <div className="px-3 py-4 text-center text-xs text-muted-foreground">
               Nothing running right now
             </div>
+          )}
+
+          {/* Why Orca App at the bottom: it's a constant baseline everyone has,
+              so it's less informative than the per-worktree breakdown. Keep
+              it available but out of the way. */}
+          {snapshot && (
+            <AppSection
+              app={snapshot.app}
+              isCollapsed={appCollapsed}
+              onToggle={() => setAppCollapsed((v) => !v)}
+            />
           )}
 
           {!snapshot && (

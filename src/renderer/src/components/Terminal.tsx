@@ -360,7 +360,11 @@ function Terminal(): React.JSX.Element | null {
     if (!shouldAutoCreateInitialTerminal(renderableTabCount)) {
       return
     }
-    createTab(activeWorktreeId)
+    // Why: this tab only exists because the user clicked a never-visited
+    // worktree. Tag it so the PTY spawn it triggers does not count as
+    // activity and reshuffle the sidebar. Explicit "New Tab" actions
+    // (handleNewTab below) still bump normally.
+    createTab(activeWorktreeId, undefined, undefined, { pendingActivationSpawn: true })
   }, [workspaceSessionReady, activeWorktreeId, createTab, reconcileWorktreeTabModel])
 
   const handleNewTab = useCallback(

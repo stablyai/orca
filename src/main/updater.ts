@@ -202,25 +202,24 @@ async function sendCheckFailureStatus(message: string, userInitiated?: boolean):
   const handleFailure = async (): Promise<void> => {
     if (isBenignCheckFailure(message)) {
       // Why: release transition failures (missing latest.yml while a new
-      // release is being published) and network blips are transient.  The
-      // previous approach sent 'not-available' for user-initiated checks
-      // during a release transition, which falsely told the user "you're
-      // on the latest version" — the toast would flash and auto-dismiss,
-      // hiding the fact that a newer release is mid-publish.  Now all
-      // benign failures go to 'idle' uniformly: the toast controller
-      // converts a user-initiated checking→idle transition into an honest
-      // "currently rolling out" message, and a background retry is
-      // always scheduled so the update notification arrives once the
-      // release finishes.
+      // release is being published) and network blips are transient. Schedule
+      // a background retry so the notification arrives once the release
+      // finishes, and intentionally skip persistLastUpdateCheckAt — the check
+      // didn't truly complete, and recording a timestamp would suppress the
+      // next startup check.
       console.warn('[updater] benign check failure:', message)
       clearAvailableUpdateContext()
       scheduleAutomaticUpdateCheck(AUTO_UPDATE_RETRY_INTERVAL_MS)
-      // Why: we intentionally do NOT call persistLastUpdateCheckAt here.
-      // The check didn't truly complete (the manifest was unreachable due
-      // to a release transition or network blip), so recording a timestamp
-      // would suppress the next startup check and delay discovery of the
-      // new version.
-      sendStatus({ state: 'idle' })
+      if (userInitiated) {
+        // Why: a user-initiated click expects visible feedback — silently
+        // dropping to 'idle' makes the button look broken. The card already
+        // prefixes "Could not check for updates." and Settings prefixes
+        // "Update check failed.", so the message here only carries the
+        // actionable cause.
+        sendErrorStatus('GitHub may be temporarily unavailable. Try again in a minute.', true)
+      } else {
+        sendStatus({ state: 'idle' })
+      }
       return
     }
 

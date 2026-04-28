@@ -2,7 +2,6 @@
 import type {
   BaseRefDefaultResult,
   BrowserCookieImportResult,
-  BrowserCookieImportSummary,
   BrowserLoadError,
   BrowserSessionProfile,
   BrowserSessionProfileScope,
@@ -54,7 +53,7 @@ import type {
   WorktreeMeta,
   WorktreeSetupLaunch,
   WorkspaceSessionState
-} from '../../shared/types'
+} from '../shared/types'
 import type {
   BrowserSetGrabModeArgs,
   BrowserSetGrabModeResult,
@@ -65,7 +64,7 @@ import type {
   BrowserCaptureSelectionScreenshotResult,
   BrowserExtractHoverArgs,
   BrowserExtractHoverResult
-} from '../../shared/browser-grab-types'
+} from '../shared/browser-grab-types'
 import type {
   BrowserContextMenuDismissedEvent,
   BrowserContextMenuRequestedEvent,
@@ -74,11 +73,13 @@ import type {
   BrowserDownloadRequestedEvent,
   BrowserPermissionDeniedEvent,
   BrowserPopupEvent
-} from '../../shared/browser-guest-events'
-import type { CliInstallStatus } from '../../shared/cli-install-types'
-import type { E2EConfig } from '../../shared/e2e-config'
-import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
-import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../../shared/runtime-types'
+} from '../shared/browser-guest-events'
+import type { ElectronAPI } from '@electron-toolkit/preload'
+import type { CliInstallStatus } from '../shared/cli-install-types'
+import type { E2EConfig } from '../shared/e2e-config'
+import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
+import type { AgentStatusState } from '../shared/agent-status-types'
+import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../shared/runtime-types'
 import type {
   ClaudeUsageBreakdownKind,
   ClaudeUsageBreakdownRow,
@@ -88,14 +89,14 @@ import type {
   ClaudeUsageScope,
   ClaudeUsageSessionRow,
   ClaudeUsageSummary
-} from '../../shared/claude-usage-types'
-import type { RateLimitState } from '../../shared/rate-limit-types'
+} from '../shared/claude-usage-types'
+import type { RateLimitState } from '../shared/rate-limit-types'
 import type {
   SshConnectionState,
   SshTarget,
   PortForwardEntry,
   DetectedPort
-} from '../../shared/ssh-types'
+} from '../shared/ssh-types'
 import type {
   CodexUsageBreakdownKind,
   CodexUsageBreakdownRow,
@@ -105,7 +106,7 @@ import type {
   CodexUsageScope,
   CodexUsageSessionRow,
   CodexUsageSummary
-} from '../../shared/codex-usage-types'
+} from '../shared/codex-usage-types'
 
 export type BrowserApi = {
   registerGuest: (args: {
@@ -355,6 +356,10 @@ export type PreloadApi = {
       connectionId?: string | null
       worktreeId?: string
       sessionId?: string
+      // Why: lets a single tab open in a different shell than the user's default.
+      // Preserved from the deleted index.d.ts PtyApi duplicate during the
+      // single-source-of-truth collapse (see docs/preload-typecheck-hole.md §1).
+      shellOverride?: string
     }) => Promise<{
       id: string
       snapshot?: string
@@ -537,6 +542,7 @@ export type PreloadApi = {
     claudeStatus: () => Promise<AgentHookInstallStatus>
     codexStatus: () => Promise<AgentHookInstallStatus>
     geminiStatus: () => Promise<AgentHookInstallStatus>
+    cursorStatus: () => Promise<AgentHookInstallStatus>
   }
   preflight: PreflightApi
   notifications: {
@@ -872,5 +878,33 @@ export type PreloadApi = {
     ) => () => void
     onCredentialResolved: (callback: (data: { requestId: string }) => void) => () => void
     submitCredential: (args: { requestId: string; value: string | null }) => Promise<void>
+  }
+  wsl: {
+    isAvailable: () => Promise<boolean>
+  }
+  agentStatus: {
+    /** Listen for agent status updates forwarded from native hook receivers. */
+    onSet: (
+      callback: (data: {
+        paneKey: string
+        tabId?: string
+        worktreeId?: string
+        state: AgentStatusState
+        prompt?: string
+        agentType?: string
+        toolName?: string
+        toolInput?: string
+        lastAssistantMessage?: string
+        interrupted?: boolean
+      }) => void
+    ) => () => void
+  }
+}
+
+declare global {
+  // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface
+  interface Window {
+    electron: ElectronAPI
+    api: PreloadApi
   }
 }

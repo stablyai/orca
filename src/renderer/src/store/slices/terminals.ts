@@ -121,7 +121,12 @@ export type TerminalSlice = {
    *  fresh shell prompt. */
   pendingColdRestoreByPtyId: Record<string, { scrollback: string; cwd: string }>
   consumePendingColdRestore: (ptyId: string) => { scrollback: string; cwd: string } | null
-  createTab: (worktreeId: string, targetGroupId?: string, shellOverride?: string) => TerminalTab
+  createTab: (
+    worktreeId: string,
+    targetGroupId?: string,
+    shellOverride?: string,
+    options?: { pendingActivationSpawn?: boolean }
+  ) => TerminalTab
   closeTab: (tabId: string) => void
   reorderTabs: (worktreeId: string, tabIds: string[]) => void
   setTabBarOrder: (worktreeId: string, order: string[]) => void
@@ -296,7 +301,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       return { deferredSshSessionIdsByTabId: next }
     }),
 
-  createTab: (worktreeId, targetGroupId, shellOverride) => {
+  createTab: (worktreeId, targetGroupId, shellOverride, options) => {
     const id = globalThis.crypto.randomUUID()
     let tab!: TerminalTab
     set((s) => {
@@ -320,7 +325,15 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         color: null,
         sortOrder: existing.length,
         createdAt: Date.now(),
-        ...(shellOverride !== undefined ? { shellOverride } : {})
+        ...(shellOverride !== undefined ? { shellOverride } : {}),
+        // Why: when Terminal.tsx's activation fallback auto-creates a tab for a
+        // first-visit worktree, the resulting PTY spawn is caused by the user
+        // clicking the worktree, not by work happening in it. Tagging the tab
+        // lets updateTabPtyId suppress the activity bump and sortEpoch bump.
+        // Without this, clicking a never-visited worktree would stamp
+        // lastActivityAt and reorder Recent/Smart on click — same bug class as
+        // the generation-bump → remount path, different code path.
+        ...(options?.pendingActivationSpawn ? { pendingActivationSpawn: true } : {})
       }
       const validTargetGroupId =
         targetGroupId && s.groupsByWorktree[worktreeId]?.some((group) => group.id === targetGroupId)
@@ -800,6 +813,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
 
   updateTabPtyId: (tabId, ptyId) => {
     let worktreeId: string | null = null
+    let wasActivationSpawn = false
     set((s) => {
       const next = { ...s.tabsByWorktree }
       for (const wId of Object.keys(next)) {
@@ -815,8 +829,19 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           const nextPtyIds = existingPtyIds.includes(ptyId)
             ? existingPtyIds
             : [...existingPtyIds, ptyId]
+          if (t.pendingActivationSpawn) {
+            wasActivationSpawn = true
+          }
+          // Why: consume pendingActivationSpawn here. The flag is set by
+          // setActiveWorktree when it bumps generation on all-dead tabs, and
+          // must be cleared on the first PTY that comes back or a later
+          // legitimate respawn (e.g. the user restarting a codex tab) would
+          // also be classified as activation and silently dropped from the
+          // recency sort.
+          const { pendingActivationSpawn: _unused, ...rest } = t
+          void _unused
           return {
-            ...t,
+            ...rest,
             // Why: tab.ptyId is the single-pane fallback used by legacy attach
             // paths. In split panes, later pane spawns must not steal that
             // primary binding from the original pane or remount/close flows can
@@ -827,14 +852,14 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       }
       const existingPtyIds = s.ptyIdsByTabId[tabId] ?? []
       // Why: when a brand-new tab in the active worktree receives its first
-      // PTY, the live-tab signal (+12) flips on. bumpWorktreeActivity (below)
-      // intentionally skips sortEpoch for the active worktree to prevent the
-      // reorder-on-click bug (PR #209), but that means the sort never sees
-      // the new signal. Bump sortEpoch here so a just-created worktree
-      // immediately reflects its live-tab score instead of waiting for an
-      // unrelated event to trigger a re-sort.
+      // PTY, the live-tab signal (+12) flips on. Normally we bump sortEpoch
+      // here so the sort reflects the new signal immediately. Suppress the
+      // bump on activation-driven spawns because they are side-effects of the
+      // user clicking on a worktree, not real activity — otherwise clicking a
+      // dormant worktree would always trigger a re-sort.
       const isFirstPty = existingPtyIds.length === 0
       const isActiveWorktree = worktreeId != null && s.activeWorktreeId === worktreeId
+      const shouldBumpSortEpoch = isFirstPty && isActiveWorktree && !wasActivationSpawn
       return {
         tabsByWorktree: next,
         ptyIdsByTabId: {
@@ -845,18 +870,23 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           ...s.lastKnownRelayPtyIdByTabId,
           [tabId]: ptyId
         },
-        ...(isFirstPty && isActiveWorktree ? { sortEpoch: s.sortEpoch + 1 } : {})
+        ...(shouldBumpSortEpoch ? { sortEpoch: s.sortEpoch + 1 } : {})
       }
     })
 
-    // Bump meaningful activity when a PTY spawns
-    if (worktreeId) {
+    // Why: activation-driven spawns are caused by the user clicking a
+    // worktree, not by work happening in it. Skip both the lastActivityAt
+    // stamp and the sortEpoch bump so the sidebar does not reorder on click.
+    // Other spawn reasons (new tab, codex restart, reconnect) still flow
+    // through bumpWorktreeActivity as a normal activity signal.
+    if (worktreeId && !wasActivationSpawn) {
       get().bumpWorktreeActivity(worktreeId)
     }
   },
 
   clearTabPtyId: (tabId, ptyId) => {
     let worktreeId: string | null = null
+    let wasActivationSpawn = false
     set((s) => {
       const next = { ...s.tabsByWorktree }
       for (const wId of Object.keys(next)) {
@@ -867,10 +897,20 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           if (t.id !== tabId) {
             return t
           }
+          if (t.pendingActivationSpawn) {
+            wasActivationSpawn = true
+          }
           const remainingPtyIds = ptyId
             ? (s.ptyIdsByTabId[tabId] ?? []).filter((id) => id !== ptyId)
             : []
-          return { ...t, ptyId: remainingPtyIds.at(-1) ?? null }
+          // Why: consume pendingActivationSpawn here too. Panes tearing down
+          // during a worktree switch (e.g. the previously-active worktree
+          // unmounting its panes) fire onExit → clearTabPtyId, which must
+          // not count as activity. Strip the flag on consumption so later
+          // legitimate exits still bump.
+          const { pendingActivationSpawn: _unused, ...rest } = t
+          void _unused
+          return { ...rest, ptyId: remainingPtyIds.at(-1) ?? null }
         })
       }
       const nextPtyIdsByTabId = { ...s.ptyIdsByTabId }
@@ -908,8 +948,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     })
 
     // Bump meaningful activity when a PTY exits, but skip if this exit
-    // was triggered by an intentional shutdown (suppressed exits).
-    if (worktreeId && !(ptyId && get().suppressedPtyExitIds[ptyId])) {
+    // was triggered by an intentional shutdown (suppressed exits) OR by a
+    // click-driven pane unmount (pendingActivationSpawn).
+    if (worktreeId && !wasActivationSpawn && !(ptyId && get().suppressedPtyExitIds[ptyId])) {
       get().bumpWorktreeActivity(worktreeId)
     }
   },
@@ -1292,6 +1333,18 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           }
         }
       }
+      // Why pendingActivationSpawn on hydrated tabs: when a worktree restored
+      // from the previous session is mounted for the first time this session
+      // (either because it's the restored activeWorktreeId, or because the
+      // user clicks it), TerminalPane's connectPanePty fires — either
+      // reattaching to the daemon/relay session or spawning fresh. Both call
+      // updateTabPtyId, which would otherwise bump lastActivityAt and make
+      // the worktree bounce to the top of Recent ~5 seconds later when an
+      // unrelated event triggers a re-sort. Tagging at hydration covers the
+      // restored-active worktree (which never goes through setActiveWorktree
+      // again) and any other restored worktrees the user clicks later. The
+      // tag is consumed on the first updateTabPtyId/clearTabPtyId per tab,
+      // so subsequent legitimate events (codex restart, new pane) still bump.
       const tabsByWorktree: Record<string, TerminalTab[]> = Object.fromEntries(
         Object.entries(session.tabsByWorktree)
           .filter(([worktreeId]) => validWorktreeIds.has(worktreeId))
@@ -1301,7 +1354,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
               .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt)
               .map((tab, index) => ({
                 ...clearTransientTerminalState(tab, index),
-                sortOrder: index
+                sortOrder: index,
+                pendingActivationSpawn: true
               }))
           ])
           .filter(([, tabs]) => tabs.length > 0)
@@ -1466,6 +1520,16 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         worktreesByRepo[repoId] = [...(worktreesByRepo[repoId] ?? []), placeholder]
       }
 
+      // Why: the restored-active worktree is set as activeWorktreeId here
+      // without ever going through setActiveWorktree, so its first-activation
+      // tagging needs to happen at hydration. Record it in
+      // everActivatedWorktreeIds so a later re-click doesn't re-tag (which
+      // would suppress real activity).
+      const nextEverActivated = new Set(s.everActivatedWorktreeIds)
+      if (activeWorktreeId) {
+        nextEverActivated.add(activeWorktreeId)
+      }
+
       return {
         activeRepoId,
         activeWorktreeId,
@@ -1476,6 +1540,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         pendingReconnectWorktreeIds,
         pendingReconnectTabByWorktree,
         pendingReconnectPtyIdByTabId,
+        everActivatedWorktreeIds: nextEverActivated,
         // Why: seed worktree nav history with the hydrated active worktree so
         // the first user-driven activation (e.g. a sidebar click to a different
         // worktree) has a prior entry to go Back to. Without this the restored

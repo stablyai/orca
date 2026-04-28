@@ -379,6 +379,15 @@ describe('hydrateWorkspaceSession', () => {
     expect(s.activeWorktreeId).toBe(validWt)
     expect(s.activeTabId).toBe('tab1')
     expect(s.activeRepoId).toBe('repo1')
+
+    // Why: restored tabs receive pendingActivationSpawn so the pane mount's
+    // reattach (or fresh spawn if the daemon session died) does not count as
+    // activity and bounce the worktree to the top of Recent.
+    expect(s.tabsByWorktree[validWt][0].pendingActivationSpawn).toBe(true)
+
+    // The restored-active worktree is marked ever-activated so a later click
+    // doesn't retag (which would suppress a real codex-restart / new-pane bump).
+    expect(s.everActivatedWorktreeIds.has(validWt)).toBe(true)
   })
 })
 
@@ -658,6 +667,227 @@ describe('terminal slice behaviors', () => {
     const tab = store.getState().tabsByWorktree[worktreeId][0]
     expect(tab.ptyId).toBe('pty-1')
     expect(store.getState().ptyIdsByTabId['tab-1']).toEqual(['pty-1', 'pty-2'])
+  })
+
+  // Why: clicking a worktree in the sidebar triggers a generation bump on
+  // dead-PTY tabs which remounts TerminalPane and fresh-spawns a PTY. That
+  // fresh spawn calls updateTabPtyId → bumpWorktreeActivity. Without the
+  // pendingActivationSpawn tag, the just-clicked worktree would be stamped
+  // with Date.now() and float to the top of Recent on every click. isReattach
+  // is not set on fresh spawns, so this bug slips past PR 310e9daf.
+  it('does not bump lastActivityAt when a click-driven fresh spawn follows setActiveWorktree', () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/path/wt1'
+    const originalLastActivityAt = 1000
+
+    // Why: a tab with a null ptyId triggers the allDead branch in
+    // setActiveWorktree, which bumps generation and sets
+    // pendingActivationSpawn so the subsequent fresh spawn is suppressed.
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({
+            id: worktreeId,
+            repoId: 'repo1',
+            path: '/path/wt1',
+            lastActivityAt: originalLastActivityAt
+          })
+        ]
+      },
+      tabsByWorktree: {
+        [worktreeId]: [makeTab({ id: 'tab-1', worktreeId, ptyId: null })]
+      },
+      ptyIdsByTabId: { 'tab-1': [] },
+      unifiedTabsByWorktree: {
+        [worktreeId]: [
+          {
+            id: 'tab-1',
+            entityId: 'tab-1',
+            groupId: 'group-1',
+            worktreeId,
+            contentType: 'terminal',
+            label: 'Terminal 1',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      groupsByWorktree: {
+        [worktreeId]: [{ id: 'group-1', worktreeId, activeTabId: 'tab-1', tabOrder: ['tab-1'] }]
+      },
+      activeGroupIdByWorktree: { [worktreeId]: 'group-1' }
+    })
+
+    store.getState().setActiveWorktree(worktreeId)
+    // The allDead generation bump tagged the tab with pendingActivationSpawn.
+    expect(store.getState().tabsByWorktree[worktreeId][0].pendingActivationSpawn).toBe(true)
+
+    // Simulate the fresh spawn coming back from TerminalPane's remount.
+    store.getState().updateTabPtyId('tab-1', 'pty-fresh')
+
+    const worktree = store.getState().worktreesByRepo.repo1[0]
+    expect(worktree.lastActivityAt).toBe(originalLastActivityAt)
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        updates: expect.objectContaining({ lastActivityAt: expect.any(Number) })
+      })
+    )
+    // The flag is consumed so a later legitimate respawn (codex restart etc.)
+    // is not silently suppressed as well.
+    expect(store.getState().tabsByWorktree[worktreeId][0].pendingActivationSpawn).toBeUndefined()
+  })
+
+  // Why: the FIRST activation of a worktree tags every tab — even if tab.ptyId
+  // already looks live, because reconnectPersistedTerminals can re-populate
+  // tab.ptyId with a restored daemon session ID before the pane mounts, making
+  // the upcoming updateTabPtyId look like new activity when it is really just
+  // the click-driven reattach. Subsequent activations of the SAME worktree
+  // must NOT re-tag — otherwise a later split-pane spawn or codex restart
+  // would be silently suppressed.
+  it('tags on first activation but not on re-activation', () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/path/wt1'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [worktreeId]: [makeTab({ id: 'tab-1', worktreeId, ptyId: 'pty-restored' })]
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-restored'] },
+      unifiedTabsByWorktree: {
+        [worktreeId]: [
+          {
+            id: 'tab-1',
+            entityId: 'tab-1',
+            groupId: 'group-1',
+            worktreeId,
+            contentType: 'terminal',
+            label: 'Terminal 1',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      groupsByWorktree: {
+        [worktreeId]: [{ id: 'group-1', worktreeId, activeTabId: 'tab-1', tabOrder: ['tab-1'] }]
+      },
+      activeGroupIdByWorktree: { [worktreeId]: 'group-1' }
+    })
+
+    // First activation: tabs get tagged even though tab.ptyId is non-null.
+    store.getState().setActiveWorktree(worktreeId)
+    expect(store.getState().tabsByWorktree[worktreeId][0].pendingActivationSpawn).toBe(true)
+
+    // updateTabPtyId from the pane mount consumes the tag.
+    store.getState().updateTabPtyId('tab-1', 'pty-live')
+    expect(store.getState().tabsByWorktree[worktreeId][0].pendingActivationSpawn).toBeUndefined()
+
+    // Switch away, then re-activate. The re-activation must NOT tag again,
+    // or a later legitimate spawn (codex restart, new pane) would be dropped.
+    store.getState().setActiveWorktree(null)
+    store.getState().setActiveWorktree(worktreeId)
+    expect(store.getState().tabsByWorktree[worktreeId][0].pendingActivationSpawn).toBeUndefined()
+  })
+
+  // Why: first-visit worktrees (no tabs yet) trigger Terminal.tsx's activation
+  // fallback which calls createTab(). That auto-created tab passes
+  // pendingActivationSpawn: true so its PTY spawn is suppressed — otherwise
+  // clicking a never-visited worktree in the sidebar would stamp lastActivityAt
+  // and reshuffle Recent/Smart (the user-reported bounce ~5s after click).
+  it('does not bump lastActivityAt when createTab auto-creates for a first-visit worktree', () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/path/wt1'
+    const originalLastActivityAt = 1000
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({
+            id: worktreeId,
+            repoId: 'repo1',
+            path: '/path/wt1',
+            lastActivityAt: originalLastActivityAt
+          })
+        ]
+      },
+      // No tabs yet — this is a fresh worktree the user is visiting for the
+      // first time in this session.
+      tabsByWorktree: {},
+      ptyIdsByTabId: {},
+      activeWorktreeId: worktreeId
+    })
+
+    // Simulate Terminal.tsx's auto-create effect: tag as activation-driven.
+    const newTab = store
+      .getState()
+      .createTab(worktreeId, undefined, undefined, { pendingActivationSpawn: true })
+
+    expect(store.getState().tabsByWorktree[worktreeId][0].pendingActivationSpawn).toBe(true)
+
+    // PTY comes back from the newly-mounted TerminalPane.
+    store.getState().updateTabPtyId(newTab.id, 'pty-fresh')
+
+    const worktree = store.getState().worktreesByRepo.repo1[0]
+    expect(worktree.lastActivityAt).toBe(originalLastActivityAt)
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        updates: expect.objectContaining({ lastActivityAt: expect.any(Number) })
+      })
+    )
+    // Flag is consumed — later legitimate respawns still bump.
+    expect(store.getState().tabsByWorktree[worktreeId][0].pendingActivationSpawn).toBeUndefined()
+  })
+
+  // Why: real background events (agent output, OSC titles) must still bump
+  // activity. Only the specific activation-driven spawn is suppressed.
+  it('bumps lastActivityAt for a fresh spawn with no activation tag', () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/path/wt1'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({
+            id: worktreeId,
+            repoId: 'repo1',
+            path: '/path/wt1',
+            lastActivityAt: 1000
+          })
+        ]
+      },
+      tabsByWorktree: {
+        [worktreeId]: [makeTab({ id: 'tab-1', worktreeId, ptyId: null })]
+      }
+    })
+
+    store.getState().updateTabPtyId('tab-1', 'pty-fresh')
+
+    const worktree = store.getState().worktreesByRepo.repo1[0]
+    expect(worktree.lastActivityAt).toBeGreaterThan(1000)
+    expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith(
+      expect.objectContaining({
+        worktreeId,
+        updates: expect.objectContaining({ lastActivityAt: expect.any(Number) })
+      })
+    )
   })
 })
 

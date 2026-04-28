@@ -107,7 +107,7 @@ describe('updater check failure handling', () => {
     vi.unstubAllGlobals()
   })
 
-  it('treats GitHub release transition errors as idle for user-initiated checks', async () => {
+  it('surfaces GitHub release transition errors to user-initiated checks', async () => {
     autoUpdaterMock.checkForUpdates.mockResolvedValueOnce(undefined).mockImplementationOnce(() => {
       autoUpdaterMock.emit('checking-for-update')
       queueMicrotask(() => {
@@ -127,18 +127,22 @@ describe('updater check failure handling', () => {
       const statuses = sendMock.mock.calls
         .filter(([channel]) => channel === 'updater:status')
         .map(([, status]) => status)
-      // Why: release transition failures should NOT pretend the user is up to
-      // date.  Sending 'idle' lets the toast controller show an honest
-      // "currently rolling out" message instead of the misleading "you're on the
-      // latest version" that auto-dismisses.
-      expect(statuses).toContainEqual({ state: 'idle' })
+      // Why: a user-initiated benign failure must show a visible error. Silently
+      // sending 'idle' (or 'not-available') makes the button look broken.
+      expect(statuses).toContainEqual(
+        expect.objectContaining({
+          state: 'error',
+          userInitiated: true,
+          message: expect.stringContaining('GitHub may be temporarily unavailable')
+        })
+      )
       expect(statuses).not.toContainEqual(
         expect.objectContaining({ state: 'not-available', userInitiated: true })
       )
     })
   })
 
-  it('treats missing latest-mac.yml during user-initiated checks as idle', async () => {
+  it('surfaces missing latest-mac.yml to user-initiated checks', async () => {
     autoUpdaterMock.checkForUpdates.mockResolvedValueOnce(undefined).mockImplementationOnce(() => {
       autoUpdaterMock.emit('checking-for-update')
       queueMicrotask(() => {
@@ -163,10 +167,43 @@ describe('updater check failure handling', () => {
       const statuses = sendMock.mock.calls
         .filter(([channel]) => channel === 'updater:status')
         .map(([, status]) => status)
-      expect(statuses).toContainEqual({ state: 'idle' })
+      expect(statuses).toContainEqual(
+        expect.objectContaining({
+          state: 'error',
+          userInitiated: true,
+          message: expect.stringContaining('GitHub may be temporarily unavailable')
+        })
+      )
       expect(statuses).not.toContainEqual(
         expect.objectContaining({ state: 'not-available', userInitiated: true })
       )
+    })
+  })
+
+  it('silently drops background benign failures to idle', async () => {
+    // Why: background checks must stay quiet; only user-initiated clicks get
+    // an error card. This prevents noisy nag during a release transition.
+    autoUpdaterMock.checkForUpdates.mockImplementationOnce(() => {
+      autoUpdaterMock.emit('checking-for-update')
+      queueMicrotask(() => {
+        autoUpdaterMock.emit('error', new Error('Unable to find latest version on GitHub'))
+      })
+      return Promise.reject(new Error('Unable to find latest version on GitHub'))
+    })
+
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+
+    const { setupAutoUpdater, checkForUpdates } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never)
+    checkForUpdates()
+    await vi.waitFor(() => {
+      const statuses = sendMock.mock.calls
+        .filter(([channel]) => channel === 'updater:status')
+        .map(([, status]) => status)
+      expect(statuses).toContainEqual({ state: 'idle' })
+      expect(statuses).not.toContainEqual(expect.objectContaining({ state: 'error' }))
     })
   })
 })

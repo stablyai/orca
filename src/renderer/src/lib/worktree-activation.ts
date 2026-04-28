@@ -16,7 +16,12 @@ export type IssueCommandLaunch =
 
 type WorktreeActivationStore = {
   tabsByWorktree: Record<string, { id: string }[]>
-  createTab: (worktreeId: string) => { id: string }
+  createTab: (
+    worktreeId: string,
+    targetGroupId?: string,
+    shellOverride?: string,
+    options?: { pendingActivationSpawn?: boolean }
+  ) => { id: string }
   setActiveTab: (tabId: string) => void
   setTabCustomTitle: (tabId: string, title: string | null) => void
   reconcileWorktreeTabModel: (worktreeId: string) => { renderableTabCount: number }
@@ -132,7 +137,13 @@ export function ensureWorktreeHasInitialTerminal(
     return null
   }
 
-  const terminalTab = store.createTab(worktreeId)
+  // Why: this tab only exists because the user clicked/activated a worktree
+  // that had no focusable surface yet. Tag it so the resulting PTY spawn
+  // does not count as activity and reshuffle the Recent sort. Explicit
+  // "New Tab" actions (handleNewTab in Terminal.tsx) do not set the flag.
+  const terminalTab = store.createTab(worktreeId, undefined, undefined, {
+    pendingActivationSpawn: true
+  })
   store.setActiveTab(terminalTab.id)
 
   // Why: the new-workspace flow can seed the first terminal with a selected

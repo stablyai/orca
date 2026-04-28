@@ -182,7 +182,7 @@ describe('updater', () => {
     expect(errorStatuses).toEqual([{ state: 'error', message: 'boom', userInitiated: true }])
   })
 
-  it('treats net::ERR_FAILED during checks as a benign idle transition', async () => {
+  it('surfaces net::ERR_FAILED to user-initiated checks with a friendly message', async () => {
     autoUpdaterMock.checkForUpdates.mockResolvedValueOnce(undefined).mockImplementationOnce(() => {
       autoUpdaterMock.emit('checking-for-update')
       queueMicrotask(() => {
@@ -202,7 +202,13 @@ describe('updater', () => {
       const statuses = sendMock.mock.calls
         .filter(([channel]) => channel === 'updater:status')
         .map(([, status]) => status)
-      expect(statuses).toContainEqual({ state: 'idle' })
+      expect(statuses).toContainEqual(
+        expect.objectContaining({
+          state: 'error',
+          userInitiated: true,
+          message: expect.stringContaining('GitHub may be temporarily unavailable')
+        })
+      )
     })
 
     const statuses = sendMock.mock.calls
@@ -210,7 +216,8 @@ describe('updater', () => {
       .map(([, status]) => status)
 
     expect(statuses).toContainEqual({ state: 'checking', userInitiated: true })
-    expect(statuses).toContainEqual({ state: 'idle' })
+    // Why: the raw electron-updater message is replaced with a user-friendly
+    // one so we never surface "net::ERR_FAILED" directly to the UI.
     expect(statuses).not.toContainEqual(
       expect.objectContaining({ state: 'error', message: 'net::ERR_FAILED' })
     )

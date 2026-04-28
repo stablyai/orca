@@ -424,14 +424,21 @@ app.whenReady().then(async () => {
   }
   setAppRuntimeFlags({ daemonEnabledAtStartup: daemonStarted })
 
-  // Why: the hook server also runs unconditionally so cursor-agent panes can
-  // reach it. Claude/Codex/Gemini hook scripts stay uninstalled while
+  // Why: the hook server runs unconditionally so cursor-agent panes can reach
+  // it. Claude/Codex/Gemini hook scripts stay uninstalled while
   // AGENT_DASHBOARD_ENABLED is false, so only cursor events flow in. PTY
   // spawn env reads ORCA_AGENT_HOOK_* from the live server state, so the
   // server must start before the window opens — otherwise restored terminals
   // race ahead without the env on first launch.
   try {
-    await agentHookServer.start({ env: app.isPackaged ? 'production' : 'development' })
+    await agentHookServer.start({
+      env: app.isPackaged ? 'production' : 'development',
+      // Why: passing the userData path lets the server write its endpoint
+      // file (PORT/TOKEN/ENV/VERSION) to a stable location. Hook scripts
+      // source that file at invocation time so they reach the current Orca
+      // even when the PTY's env was frozen under a prior instance.
+      userDataPath: app.getPath('userData')
+    })
   } catch (error) {
     // Why: Claude/Codex/Gemini/OpenCode/Cursor hook callbacks are sidebar
     // enrichment only. Orca must still boot even if the local loopback

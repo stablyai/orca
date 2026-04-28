@@ -456,6 +456,11 @@ function TabBarInner({
             className="ml-2 my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground"
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
             title="New tab"
+            // Why: aria-label matches the tooltip so E2E can locate the "+"
+            // affordance via getByRole('button', { name: 'New tab' }). The
+            // store-only createTab() round-trip that preceded this was a
+            // tautology — it would pass even if the + button had been deleted.
+            aria-label="New tab"
           >
             <Plus className="w-3.5 h-3.5" />
           </button>

@@ -24,11 +24,15 @@ export const EMPTY_LAYOUT: TerminalLayoutSnapshot = {
 // so replayed mode bits do not leak into the fresh shell. ghostty achieves
 // the same end by not restoring state at all.
 //
+//   25                  — DECTCEM cursor visibility (SerializeAddon captures
+//                         `?25l` when the cursor was hidden at snapshot time;
+//                         without an explicit `?25h` here the cursor stays
+//                         invisible in the restored terminal)
 //   1000/1002/1003/1006 — mouse reporting variants
 //   1004                — focus event reporting (the actual bug source)
 //   2004                — bracketed paste
 export const POST_REPLAY_MODE_RESET =
-  '\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1004l\x1b[?1006l\x1b[?2004l'
+  '\x1b[?25h\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1004l\x1b[?1006l\x1b[?2004l'
 
 // Why: daemon snapshot restore reattaches to a live session, so we avoid the
 // full POST_REPLAY_MODE_RESET bundle there — a still-running TUI may still

@@ -1,7 +1,19 @@
 /* eslint-disable max-lines -- Why: the hook server owns the full HTTP ingest surface (routing, body parsing, per-CLI normalization, transcript scan, pane dispatch) in one place so the contract with Claude/Codex/Gemini hooks stays consistent and doesn't drift across files. */
 import { createServer, type IncomingMessage, type ServerResponse } from 'http'
 import { randomUUID } from 'crypto'
-import { closeSync, openSync, readSync, statSync } from 'fs'
+import {
+  chmodSync,
+  closeSync,
+  mkdirSync,
+  openSync,
+  readdirSync,
+  readSync,
+  renameSync,
+  statSync,
+  unlinkSync,
+  writeFileSync
+} from 'fs'
+import { join } from 'path'
 import {
   parseAgentStatusPayload,
   type ParsedAgentStatusPayload
@@ -1038,6 +1050,29 @@ function normalizeHookPayload(
   return payload ? { paneKey, tabId, worktreeId, payload } : null
 }
 
+// Why: the endpoint file lives under userData so each Orca install (dev vs.
+// packaged) has its own path and the two cannot clobber each other. Using a
+// per-platform extension (`.env` on POSIX, `.cmd` on Windows) lets the hook
+// scripts source the file with their platform-native syntax (`.` on POSIX,
+// `call` on Windows); the OpenCode plugin's regex accepts both shapes so no
+// platform detection is needed inside the plugin source either.
+function getEndpointFileName(): string {
+  return process.platform === 'win32' ? 'endpoint.cmd' : 'endpoint.env'
+}
+
+// Why: every value in the endpoint file is sourced as shell. Reject any
+// value that contains shell/cmd metacharacters so a future field whose
+// value is not shell-safe-by-construction cannot command-inject via the
+// sourced file. Keep to a conservative allowlist of common printable
+// chars plus hyphen/dot/slash/colon/underscore — sufficient for ports,
+// UUIDs, version strings, and env names.
+// Rejects empty values (`+` quantifier) as defense-in-depth for future
+// callers — an empty sourced `KEY=` would silently clear the env var in
+// the sourcing shell, masking whatever legitimate value was previously set.
+function isShellSafeEndpointValue(value: string): boolean {
+  return /^[A-Za-z0-9._:/-]+$/.test(value)
+}
+
 export class AgentHookServer {
   private server: ReturnType<typeof createServer> | null = null
   private port = 0
@@ -1047,6 +1082,21 @@ export class AgentHookServer {
   // caller's knowledge of whether this is a packaged build.
   private env = 'production'
   private onAgentStatus: ((payload: AgentHookEventPayload) => void) | null = null
+  // Why: directory that holds the on-disk endpoint file. Set via start()'s
+  // `userDataPath` option so the class has no direct Electron dependency
+  // (keeps it mockable in the vitest node environment). When unset, we skip
+  // the endpoint-file write entirely — hooks still work via PTY env, just
+  // without survive-a-restart semantics.
+  private endpointDir: string | null = null
+  private endpointFilePathCache: string | null = null
+  // Why: tracks whether writeEndpointFile() succeeded for the *current*
+  // start(). Without this flag, buildPtyEnv() would expose
+  // ORCA_AGENT_HOOK_ENDPOINT pointing at a path that may hold stale
+  // coordinates from a prior crashed instance — hook scripts would source
+  // those stale coords and silently post to a dead server. Gating the
+  // ENDPOINT env var on a successful write preserves the
+  // fail-open-to-fresh-env guarantee.
+  private endpointFileWritten = false
 
   setListener(listener: ((payload: AgentHookEventPayload) => void) | null): void {
     this.onAgentStatus = listener
@@ -1064,7 +1114,7 @@ export class AgentHookServer {
     }
   }
 
-  async start(options?: { env?: string }): Promise<void> {
+  async start(options?: { env?: string; userDataPath?: string }): Promise<void> {
     if (this.server) {
       return
     }
@@ -1072,7 +1122,12 @@ export class AgentHookServer {
     if (options?.env) {
       this.env = options.env
     }
+    if (options?.userDataPath) {
+      this.endpointDir = join(options.userDataPath, 'agent-hooks')
+      this.endpointFilePathCache = join(this.endpointDir, getEndpointFileName())
+    }
     this.token = randomUUID()
+    this.endpointFileWritten = false
     this.server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
       if (req.method !== 'POST') {
         res.writeHead(404)
@@ -1153,6 +1208,11 @@ export class AgentHookServer {
         if (address && typeof address === 'object') {
           this.port = address.port
         }
+        // Why: the endpoint file is the core of the survives-Orca-restart
+        // design. Write it *after* we have a concrete port — hooks that source
+        // the file must see a usable coordinate set, not a stale one left over
+        // from a previous process (e.g. one that crashed before getting here).
+        this.writeEndpointFile()
         resolve()
       }
       this.server!.once('error', onStartupError)
@@ -1167,6 +1227,17 @@ export class AgentHookServer {
     this.token = ''
     this.env = 'production'
     this.onAgentStatus = null
+    // Why: intentionally do NOT delete the endpoint file on stop(). A stale
+    // file points at a dead port, which matches the fail-open policy (hook
+    // POSTs silently fail → same as pre-endpoint-file behavior). Attempting to unlink
+    // introduces a TOCTOU race: a concurrent Orca instance sharing userData
+    // could rewrite the file between our token check and unlink, and we'd
+    // delete their live endpoint file. The next successful start() overwrites
+    // the file atomically; the tmp-file sweep inside writeEndpointFile()
+    // handles orphan hygiene.
+    this.endpointDir = null
+    this.endpointFilePathCache = null
+    this.endpointFileWritten = false
     // Why: drop all per-pane cache entries on shutdown so a subsequent start()
     // in the same process (e.g. during tests or a settings-driven restart)
     // does not inherit stale prompt/tool state from the previous run.
@@ -1194,11 +1265,152 @@ export class AgentHookServer {
       return {}
     }
 
-    return {
+    // Why: ORCA_AGENT_HOOK_ENDPOINT is the key that lets a surviving PTY reach
+    // the *current* Orca after a restart. The other four variables are retained
+    // for back-compat so pre-endpoint-file hook scripts (which do not know to
+    // source the endpoint file) continue to work on freshly spawned PTYs, and
+    // so the current script can fall through to env if the file is
+    // missing/unreadable for any reason.
+    const env: Record<string, string> = {
       ORCA_AGENT_HOOK_PORT: String(this.port),
       ORCA_AGENT_HOOK_TOKEN: this.token,
       ORCA_AGENT_HOOK_ENV: this.env,
       ORCA_AGENT_HOOK_VERSION: ORCA_HOOK_PROTOCOL_VERSION
+    }
+    if (this.endpointFileWritten && this.endpointFilePathCache) {
+      env.ORCA_AGENT_HOOK_ENDPOINT = this.endpointFilePathCache
+    }
+    return env
+  }
+
+  // Why: exposed as a read-only getter so tests (and any future main-process
+  // caller that needs the path for diagnostics) do not have to reconstruct
+  // the path convention.
+  get endpointFilePath(): string | null {
+    return this.endpointFilePathCache
+  }
+
+  // Why: writes the four coordinates atomically via a tmp-then-rename so a
+  // hook reading concurrently either sees the old file or the new one, never
+  // a half-written one. Fail-open: on EACCES / ENOSPC / etc. we log and move
+  // on — start() remains usable via PTY env for freshly-spawned PTYs. Only
+  // survivors lose the endpoint-file path, matching the hook-payload
+  // fail-open policy already enforced on the receiving end.
+  private writeEndpointFile(): void {
+    if (!this.endpointDir || !this.endpointFilePathCache) {
+      return
+    }
+    // Why: defensive reset — buildPtyEnv() must not see a stale `true` from
+    // a previous start() if this write fails before reaching the success
+    // assignment below.
+    this.endpointFileWritten = false
+    const finalPath = this.endpointFilePathCache
+    // Why: unique-per-call tmp name (mirrors persistence.ts / installer-utils.ts); prevents cross-process collision if two writers race on the same endpoint dir.
+    const tmpPath = join(this.endpointDir, `.endpoint-${process.pid}-${randomUUID()}.tmp`)
+    const prefix = process.platform === 'win32' ? 'set ' : ''
+    // Why: every value written here is sourced as shell (`. "$file"` on
+    // POSIX, `call "%file%"` on Windows) — the file format IS shell, not
+    // key=value data. The current four inputs are shell-safe by
+    // construction: PORT is a number from listen(), TOKEN is randomUUID()
+    // output (hex + dashes only), VERSION is a compile-time string
+    // constant, and ENV is a fixed 'production' / 'development' literal
+    // passed from index.ts. Any future change that relaxes these
+    // invariants (user-supplied env name, persisted token, arbitrary
+    // free-form field) MUST add escaping or a safe-character validator
+    // before the write — otherwise a value like `foo&malicious` on Windows
+    // would command-inject via `call`, and a newline in any value would
+    // corrupt the POSIX sourceable output. The isShellSafeEndpointValue
+    // check below enforces this contract at runtime.
+    const valuesToWrite: [string, string][] = [
+      ['ORCA_AGENT_HOOK_PORT', String(this.port)],
+      ['ORCA_AGENT_HOOK_TOKEN', this.token],
+      ['ORCA_AGENT_HOOK_ENV', this.env],
+      ['ORCA_AGENT_HOOK_VERSION', ORCA_HOOK_PROTOCOL_VERSION]
+    ]
+    for (const [key, value] of valuesToWrite) {
+      if (!isShellSafeEndpointValue(value)) {
+        console.error(
+          `[agent-hooks] refusing to write endpoint file: ${key} contains ` +
+            'characters unsafe for shell sourcing. Falling back to PTY env.'
+        )
+        return
+      }
+    }
+    const lines = [...valuesToWrite.map(([key, value]) => `${prefix}${key}=${value}`), '']
+    let tmpWritten = false
+    try {
+      // Why: mode 0o700 — match the file's owner-only policy so the
+      // agent-hooks/ directory itself does not leak the existence of this
+      // Orca install (or the presence of the endpoint file) to other local
+      // users on a multi-user POSIX host. Default umask would otherwise
+      // leave the dir at 0o755 even though the file inside is 0o600.
+      mkdirSync(this.endpointDir, { recursive: true, mode: 0o700 })
+      if (process.platform !== 'win32') {
+        // Why: mkdirSync's `mode` only applies when the dir is newly created —
+        // a pre-existing agent-hooks/ dir (from an earlier build or user
+        // intervention) keeps its original permissions. Re-chmod on every
+        // start() so the directory matches the 0600 file inside it. POSIX
+        // only; chmod semantics differ on Windows and the filesystem-level
+        // ACL model makes this check meaningless there.
+        try {
+          chmodSync(this.endpointDir, 0o700)
+        } catch {
+          // Why: best-effort — a chmod failure (exotic fs, read-only mount)
+          // must not block the endpoint-file write itself.
+        }
+      }
+      // Why: a crash between writeFileSync and renameSync leaves stale
+      // `.endpoint-<pid>-<uuid>.tmp` in this directory. Sweep older-than-5-min
+      // orphans so the dir does not grow unboundedly. Fresh tmps are left
+      // alone so a legitimate concurrent instance is not disturbed.
+      try {
+        const entries = readdirSync(this.endpointDir)
+        const cutoff = Date.now() - 5 * 60 * 1000
+        for (const entry of entries) {
+          if (!entry.startsWith('.endpoint-') || !entry.endsWith('.tmp')) {
+            continue
+          }
+          const entryPath = join(this.endpointDir, entry)
+          try {
+            if (statSync(entryPath).mtimeMs < cutoff) {
+              unlinkSync(entryPath)
+            }
+          } catch {
+            // best-effort sweep
+          }
+        }
+      } catch {
+        // readdirSync can fail on exotic filesystems; never block the write
+      }
+      // Why: 0o600 — the token is a loopback bearer credential and must not
+      // be readable by other local users. Parity with PTY env exposure via
+      // /proc/<pid>/environ (owner-only on modern Linux).
+      // Why: `.cmd` files require CRLF for consistent `set` parsing across
+      // Windows versions — LF-only terminators are silently mis-parsed by
+      // some cmd.exe versions, which would break hook coord refresh (exactly
+      // the bug this file exists to fix). POSIX stays LF.
+      const separator = process.platform === 'win32' ? '\r\n' : '\n'
+      writeFileSync(tmpPath, lines.join(separator), { mode: 0o600 })
+      tmpWritten = true
+      renameSync(tmpPath, finalPath)
+      this.endpointFileWritten = true
+    } catch (err) {
+      console.error('[agent-hooks] failed to write endpoint file:', err)
+      // Why: clean up tmp; never nuke the prior finalPath when we cannot
+      // guarantee we have replaced it. Stale finalPath → dead port → silent
+      // fail on hook POST matches the fail-open policy documented on the
+      // receiver side. Destroying the prior file would strand surviving PTYs
+      // that *could* have continued to fail silently against a dead port —
+      // strictly worse than leaving the prior coords in place until the next
+      // successful start() overwrites them.
+      if (tmpWritten) {
+        try {
+          unlinkSync(tmpPath)
+        } catch {
+          // Why: tmp may already be gone (rename partially succeeded, or an
+          // external process cleaned it). Nothing to do.
+        }
+      }
     }
   }
 }
