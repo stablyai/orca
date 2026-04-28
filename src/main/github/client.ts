@@ -718,8 +718,17 @@ export async function getWorkItem(
       if (issue) {
         return issue
       }
-    } catch {
-      // Raw number lookup preserves legacy issue-first behavior, then tries PR.
+    } catch (err) {
+      // Why: the issue lookup now targets `upstream` while the PR lookup targets `origin`,
+      // so a transient upstream failure (5xx, rate limit, network flake) on issue #N would
+      // silently fall through to origin's PR #N — potentially a completely unrelated item.
+      // Only fall through when the issue genuinely doesn't exist (404); re-throw everything
+      // else so the outer catch returns null and the caller sees a real failure instead of
+      // a wrong item. classifyGhError centralizes the 404/"not found" pattern-matching.
+      const stderr = err instanceof Error ? err.message : String(err)
+      if (classifyGhError(stderr).type !== 'not_found') {
+        throw err
+      }
     }
     return await fetchPullRequestWorkItem(repoPath, await getOwnerRepo(repoPath), number)
   } catch {

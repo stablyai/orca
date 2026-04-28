@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as GhUtils from './gh-utils'
 
 const {
   execFileAsyncMock,
@@ -16,15 +17,19 @@ const {
   releaseMock: vi.fn()
 }))
 
-vi.mock('./gh-utils', () => ({
-  execFileAsync: execFileAsyncMock,
-  ghExecFileAsync: ghExecFileAsyncMock,
-  getOwnerRepo: getOwnerRepoMock,
-  getIssueOwnerRepo: getIssueOwnerRepoMock,
-  acquire: acquireMock,
-  release: releaseMock,
-  _resetOwnerRepoCache: vi.fn()
-}))
+vi.mock('./gh-utils', async () => {
+  const actual = await vi.importActual<typeof GhUtils>('./gh-utils')
+  return {
+    ...actual,
+    execFileAsync: execFileAsyncMock,
+    ghExecFileAsync: ghExecFileAsyncMock,
+    getOwnerRepo: getOwnerRepoMock,
+    getIssueOwnerRepo: getIssueOwnerRepoMock,
+    acquire: acquireMock,
+    release: releaseMock,
+    _resetOwnerRepoCache: vi.fn()
+  }
+})
 
 import { countWorkItems, getWorkItem, listWorkItems, _resetOwnerRepoCache } from './client'
 
@@ -187,7 +192,10 @@ describe('GitHub issue source split', () => {
 
   it('raw number lookup tries upstream issue before origin PR', async () => {
     getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
-    ghExecFileAsyncMock.mockRejectedValueOnce(new Error('issue missing'))
+    // Why: simulate a real gh 404 (the only error type that should fall through).
+    // Non-404 errors re-throw so transient upstream failures don't misroute to an
+    // unrelated origin PR with the same number.
+    ghExecFileAsyncMock.mockRejectedValueOnce(new Error('HTTP 404: Not Found'))
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
     ghExecFileAsyncMock.mockResolvedValueOnce({
       stdout: JSON.stringify({
@@ -213,5 +221,18 @@ describe('GitHub issue source split', () => {
       cwd: '/repo-root'
     })
     expect(item?.type).toBe('pr')
+  })
+
+  it('raw number lookup does not fall through on transient upstream errors', async () => {
+    // Why: with issue source split, a non-404 upstream failure must not silently
+    // route to origin's PR #N — that would return an unrelated item.
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    ghExecFileAsyncMock.mockRejectedValueOnce(new Error('HTTP 500: server error'))
+
+    const item = await getWorkItem('/repo-root', 42)
+
+    expect(item).toBeNull()
+    expect(getOwnerRepoMock).not.toHaveBeenCalled()
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
   })
 })

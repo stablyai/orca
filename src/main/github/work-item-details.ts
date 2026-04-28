@@ -276,7 +276,11 @@ async function getWorkItemParticipants(
   repoPath: string,
   item: Pick<GitHubWorkItem, 'number' | 'type'>
 ): Promise<GitHubAssignableUser[]> {
-  const ownerRepo = await getOwnerRepo(repoPath)
+  // Why: issues in a fork live on the upstream remote, so participants must be
+  // resolved via getIssueOwnerRepo to stay consistent with getIssueBodyAndComments.
+  // PRs remain tied to origin via getOwnerRepo.
+  const ownerRepo =
+    item.type === 'issue' ? await getIssueOwnerRepo(repoPath) : await getOwnerRepo(repoPath)
   if (!ownerRepo) {
     return []
   }

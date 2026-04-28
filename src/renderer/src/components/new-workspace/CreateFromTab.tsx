@@ -20,7 +20,6 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { normalizeGitHubLinkQuery } from '@/lib/github-links'
-import type { RepoSlug } from '@/lib/github-links'
 import { launchWorkItemDirect, launchFromBranch } from '@/lib/launch-work-item-direct'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { GitHubWorkItem, LinearIssue } from '../../../../shared/types'
@@ -201,37 +200,9 @@ export default function CreateFromTab({
   )
   const isRemoteRepo = Boolean(selectedRepo?.connectionId)
 
-  // Why: resolve the repo slug once so normalizeGitHubLinkQuery can detect
-  // pasted URLs that target a different repo than the selected one — same
-  // treatment StartFromPicker applies, so the "paste a URL" flow feels
-  // identical between the two surfaces.
-  const [repoSlug, setRepoSlug] = useState<RepoSlug | null>(null)
-  useEffect(() => {
-    if (!selectedRepo?.path) {
-      setRepoSlug(null)
-      return
-    }
-    let stale = false
-    void window.api.gh
-      .repoSlug({ repoPath: selectedRepo.path })
-      .then((slug) => {
-        if (!stale) {
-          setRepoSlug(slug)
-        }
-      })
-      .catch(() => {
-        if (!stale) {
-          setRepoSlug(null)
-        }
-      })
-    return () => {
-      stale = true
-    }
-  }, [selectedRepo?.path])
-
   const normalizedGhQuery = useMemo(
-    () => normalizeGitHubLinkQuery(debouncedQuery, repoSlug),
-    [debouncedQuery, repoSlug]
+    () => normalizeGitHubLinkQuery(debouncedQuery),
+    [debouncedQuery]
   )
 
   // ---------------------------------------------------------------------
@@ -250,10 +221,7 @@ export default function CreateFromTab({
       return // handled by direct-lookup effect below
     }
     const trimmed = debouncedQuery.trim()
-    const q =
-      trimmed && !normalizedGhQuery.repoMismatch
-        ? `is:pr is:open ${normalizedGhQuery.query}`
-        : 'is:pr is:open'
+    const q = trimmed ? `is:pr is:open ${normalizedGhQuery.query}` : 'is:pr is:open'
 
     let stale = false
     setPrLoading(true)
@@ -288,7 +256,6 @@ export default function CreateFromTab({
     isRemoteRepo,
     debouncedQuery,
     normalizedGhQuery.query,
-    normalizedGhQuery.repoMismatch,
     normalizedGhQuery.directNumber
   ])
 
@@ -307,10 +274,7 @@ export default function CreateFromTab({
       return
     }
     const trimmed = debouncedQuery.trim()
-    const q =
-      trimmed && !normalizedGhQuery.repoMismatch
-        ? `is:issue is:open ${normalizedGhQuery.query}`
-        : 'is:issue is:open'
+    const q = trimmed ? `is:issue is:open ${normalizedGhQuery.query}` : 'is:issue is:open'
 
     let stale = false
     setIssueLoading(true)
@@ -345,7 +309,6 @@ export default function CreateFromTab({
     isRemoteRepo,
     debouncedQuery,
     normalizedGhQuery.query,
-    normalizedGhQuery.repoMismatch,
     normalizedGhQuery.directNumber
   ])
 
@@ -735,12 +698,6 @@ export default function CreateFromTab({
       if (isRemoteRepo) {
         return { kind: 'empty', message: "PR start points aren't supported for remote repos yet." }
       }
-      if (normalizedGhQuery.repoMismatch && normalizedGhQuery.directNumber === null) {
-        return {
-          kind: 'empty',
-          message: `URL targets ${normalizedGhQuery.repoMismatch}, not the selected repo.`
-        }
-      }
       if (prError) {
         return {
           kind: 'empty',
@@ -773,12 +730,6 @@ export default function CreateFromTab({
         return {
           kind: 'empty',
           message: "Issue start points aren't supported for remote repos yet."
-        }
-      }
-      if (normalizedGhQuery.repoMismatch && normalizedGhQuery.directNumber === null) {
-        return {
-          kind: 'empty',
-          message: `URL targets ${normalizedGhQuery.repoMismatch}, not the selected repo.`
         }
       }
       if (issueError) {
@@ -869,7 +820,6 @@ export default function CreateFromTab({
     linearLoading,
     linearStatus.connected,
     normalizedGhQuery.directNumber,
-    normalizedGhQuery.repoMismatch,
     prError,
     prLoading,
     query,

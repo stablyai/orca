@@ -8,7 +8,6 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { parseGitHubIssueOrPRNumber, normalizeGitHubLinkQuery } from '@/lib/github-links'
-import type { RepoSlug } from '@/lib/github-links'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { buildAgentStartupPlan } from '@/lib/tui-agent-startup'
 import { isGitRepoKind } from '../../../shared/repo-kind'
@@ -84,7 +83,7 @@ export type ComposerCardProps = {
   filteredLinkItems: GitHubWorkItem[]
   linkItemsLoading: boolean
   linkDirectLoading: boolean
-  normalizedLinkQuery: { query: string; repoMismatch: string | null }
+  normalizedLinkQuery: { query: string }
   onSelectLinkedItem: (item: GitHubWorkItem) => void
   tuiAgent: TuiAgent
   onTuiAgentChange: (value: TuiAgent) => void
@@ -306,7 +305,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const [linkItemsLoading, setLinkItemsLoading] = useState(false)
   const [linkDirectItem, setLinkDirectItem] = useState<GitHubWorkItem | null>(null)
   const [linkDirectLoading, setLinkDirectLoading] = useState(false)
-  const [linkRepoSlug, setLinkRepoSlug] = useState<RepoSlug | null>(null)
 
   const lastAutoNameRef = useRef<string>(
     persistDraft ? (newWorkspaceDraft?.name ?? initialName) : initialName
@@ -415,8 +413,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     shouldApplyLinkedOnlyTemplate
   ])
   const normalizedLinkQuery = useMemo(
-    () => normalizeGitHubLinkQuery(linkDebouncedQuery, linkRepoSlug),
-    [linkDebouncedQuery, linkRepoSlug]
+    () => normalizeGitHubLinkQuery(linkDebouncedQuery),
+    [linkDebouncedQuery]
   )
 
   const filteredLinkItems = useMemo(() => {
@@ -566,32 +564,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     }
     prefetchWorkItems(selectedRepo.id, selectedRepo.path, PER_REPO_FETCH_LIMIT, 'is:pr is:open')
   }, [prefetchWorkItems, selectedRepo?.connectionId, selectedRepo?.id, selectedRepo?.path])
-
-  // Per-repo: resolve repo slug for GH URL mismatch detection.
-  useEffect(() => {
-    if (!selectedRepo) {
-      setLinkRepoSlug(null)
-      return
-    }
-
-    let cancelled = false
-    void window.api.gh
-      .repoSlug({ repoPath: selectedRepo.path })
-      .then((slug) => {
-        if (!cancelled) {
-          setLinkRepoSlug(slug)
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setLinkRepoSlug(null)
-        }
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [selectedRepo])
 
   // Reset setup decision when config / policy changes.
   useEffect(() => {

@@ -8,7 +8,6 @@ export type RepoSlug = {
 
 export type GitHubLinkQuery = {
   query: string
-  repoMismatch: string | null
   directNumber: number | null
 }
 
@@ -85,27 +84,27 @@ export function parseGitHubIssueOrPRLink(input: string): {
  * Normalizes link-picker input so both raw issue/PR numbers and full GitHub
  * URLs resolve to a usable query + direct-number lookup.
  */
-export function normalizeGitHubLinkQuery(raw: string, _repoSlug: RepoSlug | null): GitHubLinkQuery {
+export function normalizeGitHubLinkQuery(raw: string): GitHubLinkQuery {
   const trimmed = raw.trim()
   if (!trimmed) {
-    return { query: '', repoMismatch: null, directNumber: null }
+    return { query: '', directNumber: null }
   }
 
   const direct = parseGitHubIssueOrPRNumber(trimmed)
   if (direct !== null && !trimmed.startsWith('http')) {
-    return { query: trimmed, repoMismatch: null, directNumber: direct }
+    return { query: trimmed, directNumber: direct }
   }
 
   const link = parseGitHubIssueOrPRLink(trimmed)
   if (!link) {
-    return { query: trimmed, repoMismatch: null, directNumber: null }
+    return { query: trimmed, directNumber: null }
   }
 
-  // Why: full GitHub URLs are explicit user input. Fork checkouts can have an
-  // origin slug that differs from the upstream issue tracker the URL targets.
+  // Why: any github.com issue/pull URL is accepted by number regardless of
+  // slug, since fork checkouts can legitimately target upstream issues whose
+  // slug differs from the origin remote.
   return {
     query: trimmed,
-    repoMismatch: null,
     directNumber: link.number
   }
 }
