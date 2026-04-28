@@ -1053,8 +1053,9 @@ function normalizeHookPayload(
 // Why: the endpoint file lives under userData so each Orca install (dev vs.
 // packaged) has its own path and the two cannot clobber each other. Using a
 // per-platform extension (`.env` on POSIX, `.cmd` on Windows) lets the hook
-// scripts source the file with their platform-native syntax without any
-// inline path detection — the OpenCode plugin parser accepts both shapes.
+// scripts source the file with their platform-native syntax (`.` on POSIX,
+// `call` on Windows); the OpenCode plugin's regex accepts both shapes so no
+// platform detection is needed inside the plugin source either.
 function getEndpointFileName(): string {
   return process.platform === 'win32' ? 'endpoint.cmd' : 'endpoint.env'
 }
