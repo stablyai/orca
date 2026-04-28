@@ -364,8 +364,47 @@ const REMOTE_PULL_SYNC_GUARD_MESSAGE =
   'Cannot pull/sync with uncommitted changes or active conflicts.'
 const REMOTE_OPERATION_FAILED_MESSAGE = 'Remote operation failed'
 
-function resolveRemoteOperationErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : REMOTE_OPERATION_FAILED_MESSAGE
+function extractPublishFailureDetail(message: string): string | null {
+  const normalized = message.replace(/\r\n/g, '\n')
+  const lines = normalized
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+  const fatalLine = lines.find((line) => line.startsWith('fatal:'))
+  if (fatalLine) {
+    return fatalLine.slice('fatal:'.length).trim()
+  }
+  const remoteLine = lines.find((line) => line.startsWith('remote:'))
+  if (remoteLine) {
+    return remoteLine.slice('remote:'.length).trim()
+  }
+  return null
+}
+
+function resolveRemoteOperationErrorMessage(
+  error: unknown,
+  options?: { publish?: boolean }
+): string {
+  if (!(error instanceof Error)) {
+    return REMOTE_OPERATION_FAILED_MESSAGE
+  }
+
+  if (!options?.publish) {
+    return error.message
+  }
+
+  if (/non-fast-forward|fetch first/i.test(error.message)) {
+    return error.message
+  }
+
+  // Why: publish failures often bubble up as raw wrapped git/IPC payloads; this
+  // keeps the toast human-readable while preserving the actionable fatal reason.
+  const detail = extractPublishFailureDetail(error.message)
+  if (detail) {
+    return `Publish Branch failed. ${detail}. Check your remote access and try again.`
+  }
+
+  return error.message
 }
 
 function hasBlockedPullOrSync(state: EditorSlice, worktreeId: string): boolean {
@@ -1777,7 +1816,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     } catch (error) {
       // Why: centralize remote git failure feedback in the store so every caller
       // gets the same actionable message without duplicating toast handling.
-      toast.error(resolveRemoteOperationErrorMessage(error))
+      toast.error(resolveRemoteOperationErrorMessage(error, { publish }))
       throw error
     } finally {
       get().setRemoteOperationActive(false)

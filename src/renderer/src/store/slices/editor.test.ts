@@ -716,6 +716,22 @@ describe('createEditorSlice remote branch actions', () => {
     expect(store.getState().isRemoteOperationActive).toBe(false)
   })
 
+  it('maps raw publish wrapper errors into a cleaner actionable toast', async () => {
+    const store = createEditorStore()
+    const rawPublishError = new Error(
+      'git push failed: Command failed: git push --set-upstream origin feature-branch\nremote: Repository not found.\nfatal: Authentication failed for https://github.com/acme/private-repo.git'
+    )
+    gitPushMock.mockRejectedValueOnce(rawPublishError)
+
+    await expect(store.getState().pushBranch('wt-1', '/repo', true)).rejects.toThrow(
+      rawPublishError.message
+    )
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Publish Branch failed. Authentication failed for https://github.com/acme/private-repo.git. Check your remote access and try again.'
+    )
+  })
+
   it('uses a fallback remote failure message when push rejects without Error', async () => {
     const store = createEditorStore()
     gitPushMock.mockRejectedValueOnce('failure')
