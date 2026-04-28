@@ -17,7 +17,7 @@ export const SCHEMA_VERSION = 1
 // PR will delete this constant and every `if (!AGENT_DASHBOARD_ENABLED)` branch
 // entirely, making the feature permanent. Not user-facing — do not read from
 // settings, env, or IPC.
-export const AGENT_DASHBOARD_ENABLED = false
+export const AGENT_DASHBOARD_ENABLED = true
 
 export const ORCA_BROWSER_PARTITION = 'persist:orca-browser'
 // Why: blank browser tabs must start from an inert guest URL that does not

@@ -243,6 +243,14 @@ export function connectPanePty(
     deps.setCacheTimerStartedAt(cacheKey, null)
     // Why: the agent process is gone, so its explicit status is no longer meaningful.
     // Remove the entry so the hover UI does not show stale "working" for a dead agent.
+    //
+    // TODO(#1167): this path only fires on idle→shell title transitions, which
+    // means Ctrl+C'd `working` rows (Codex, Gemini, OpenCode — agents with no
+    // interrupt hook) linger until the 30-min AGENT_STATUS_STALE_AFTER_MS TTL
+    // decays them to idle or the pane/tab is closed. PR #1167 replaces this
+    // heuristic with authoritative foreground-process tracking in main so the
+    // row drops within 2s of the CLI process exiting. See branch
+    // brennanb2025/foreground-process-agent-exit.
     useAppStore.getState().removeAgentStatus(cacheKey)
   }
   // Why: inject ORCA_PANE_KEY so global Claude/Codex hooks can attribute their

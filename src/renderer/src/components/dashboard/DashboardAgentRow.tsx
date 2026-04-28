@@ -144,12 +144,11 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const toolInput = isWorking ? (agent.entry.toolInput?.trim() ?? '') : ''
   const lastAssistantMessage = agent.entry.lastAssistantMessage?.trim() ?? ''
 
-  // Why: include `toolInput` for working rows so the chevron appears when only
-  // the tool-input expanded <pre> would reveal new content. Without this, a
-  // working agent with a long tool command but no prompt/message silently
-  // hides the expand control even though there IS more to show.
-  const canExpand =
-    prompt.length > 0 || lastAssistantMessage.length > 0 || (isWorking && toolInput.length > 0)
+  // Why: always show the chevron to keep the row's right edge stable — a
+  // conditional control would appear/disappear as agent content grows and
+  // shrinks mid-turn, which reads as UI flicker. Expanding a row whose
+  // content already fits is a no-op; the cost of an occasionally inert
+  // toggle is much lower than layout jitter on every live row.
 
   const tsParts: string[] = []
   if (startedAt !== null) {
@@ -349,26 +348,19 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
               old node unmounts. Invisible placeholder keeps vertical
               alignment stable across rows when nothing is expandable
               so the row-trailing edge stays stable. */}
-          {canExpand ? (
-            <button
-              type="button"
-              onClick={handleToggleExpand}
-              onMouseDown={stopMouseDown}
-              onKeyDown={stopKeyDown}
-              className="inline-flex shrink-0 items-center justify-center text-muted-foreground/60 hover:text-foreground"
-              aria-label={expanded ? 'Collapse details' : 'Expand details'}
-              aria-expanded={expanded}
-            >
-              <ChevronDown
-                className={cn(
-                  'size-3.5 transition-transform duration-150',
-                  expanded && 'rotate-180'
-                )}
-              />
-            </button>
-          ) : (
-            <span className="inline-block size-3.5 shrink-0" aria-hidden />
-          )}
+          <button
+            type="button"
+            onClick={handleToggleExpand}
+            onMouseDown={stopMouseDown}
+            onKeyDown={stopKeyDown}
+            className="inline-flex shrink-0 items-center justify-center text-muted-foreground/60 hover:text-foreground"
+            aria-label={expanded ? 'Collapse details' : 'Expand details'}
+            aria-expanded={expanded}
+          >
+            <ChevronDown
+              className={cn('size-3.5 transition-transform duration-150', expanded && 'rotate-180')}
+            />
+          </button>
         </span>
       </div>
       {/* Why: tool row and message row both carry different info — tool shows
