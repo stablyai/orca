@@ -1054,7 +1054,7 @@ function normalizeHookPayload(
 // packaged) has its own path and the two cannot clobber each other. Using a
 // per-platform extension (`.env` on POSIX, `.cmd` on Windows) lets the hook
 // scripts source the file with their platform-native syntax without any
-// inline path detection — the parser in §2b accepts both shapes.
+// inline path detection — the OpenCode plugin parser accepts both shapes.
 function getEndpointFileName(): string {
   return process.platform === 'win32' ? 'endpoint.cmd' : 'endpoint.env'
 }
