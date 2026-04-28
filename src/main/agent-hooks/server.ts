@@ -1274,7 +1274,8 @@ export class AgentHookServer {
       return
     }
     const finalPath = this.endpointFilePathCache
-    const tmpPath = `${finalPath}.tmp`
+    // Why: unique-per-call tmp name (mirrors persistence.ts / installer-utils.ts); prevents cross-process collision if two writers race on the same endpoint dir.
+    const tmpPath = join(this.endpointDir, `.endpoint-${process.pid}-${randomUUID()}.tmp`)
     const prefix = process.platform === 'win32' ? 'set ' : ''
     const lines = [
       `${prefix}ORCA_AGENT_HOOK_PORT=${this.port}`,

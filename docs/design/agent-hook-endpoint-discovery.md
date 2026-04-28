@@ -141,16 +141,10 @@ fi
 # ...rest unchanged...
 ```
 
-**Windows (PowerShell, cmd wrapper)** — mirror the same shape:
+**Windows (`.cmd` via `call`)** — the managed hook wrapper is a `.cmd` script, and the endpoint file is itself a `.cmd` script containing `set KEY=VALUE` lines. `call`ing it runs those `set` statements in the current cmd context, which is exactly the Windows analog of sourcing on POSIX — no PowerShell parser needed:
 
-```powershell
-if ($env:ORCA_AGENT_HOOK_ENDPOINT -and (Test-Path $env:ORCA_AGENT_HOOK_ENDPOINT)) {
-  Get-Content $env:ORCA_AGENT_HOOK_ENDPOINT | ForEach-Object {
-    if ($_ -match '^\s*set\s+([^=]+)=(.*)$') {
-      [Environment]::SetEnvironmentVariable($Matches[1], $Matches[2], 'Process')
-    }
-  }
-}
+```
+if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%"
 ```
 
 No change to the HTTP transport, payload shape, or server routing.
@@ -222,7 +216,7 @@ function readEndpointFile() {
 
 Bump `ORCA_HOOK_PROTOCOL_VERSION` from `'1'` → `'2'` (monotonic, no skipped version). The server already warns on mismatch, so users with stale installs see a clear, already-throttled diagnostic directing them to reinstall hooks.
 
-### 4. `src/main/agent-hooks/__tests__/server.test.ts` (or nearest equivalent) — Coverage
+### 4. `src/main/agent-hooks/server.test.ts` — Coverage
 
 - `start()` writes endpoint file with correct permissions (POSIX-only assertion).
 - `start()` → `stop()` → `start()` writes a *different* port but the file path is stable.
@@ -271,5 +265,5 @@ Bump `ORCA_HOOK_PROTOCOL_VERSION` from `'1'` → `'2'` (monotonic, no skipped ve
 
 ## Open Questions
 
-1. **Should we delete the endpoint file on clean shutdown?** Cosmetic — as noted above, a stale file causes the same silent-failure mode that exists today (hook posts to dead port). Leaving it makes crash recovery simpler (the next start just overwrites). Default: leave it. Revisit only if a user surfaces confusion.
+1. **Should we delete the endpoint file on clean shutdown?** **Resolved:** `stop()` unlinks the endpoint file (see `unlinkEndpointFile()` in `src/main/agent-hooks/server.ts`). Rationale: filesystem hygiene — a user who moves their userData directory or uninstalls Orca should not leave a world-readable-looking file hanging around, and the next `start()` overwrites it anyway. Crashes skip `stop()` and leave the stale file, which is fine: the next `start()` overwrites it, and in the crash-then-no-restart window the stale coordinates just hit a dead port and the hook fails silently (fail-open, same as today). The world-readable concern is independently mitigated by the `0o600` mode on `writeFileSync`; unlinking on clean shutdown is belt-and-suspenders.
 2. **Hook-script auto-upgrade on version mismatch.** Deferred — see "Migration gap" under Goals for the resolution. In short: users with a pre-fix script either reinstall from Settings (prompted by the existing throttled server-log warning) or simply spawn a new PTY. Auto-reinstall would silently overwrite user-customized `settings.json` hook blocks and needs its own design before shipping.

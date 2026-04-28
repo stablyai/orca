@@ -884,22 +884,32 @@ describe('Endpoint file lifecycle', () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
     const firstPath = server.endpointFilePath
-    const firstPort = server.buildPtyEnv().ORCA_AGENT_HOOK_PORT
+    const firstToken = server.buildPtyEnv().ORCA_AGENT_HOOK_TOKEN
     server.stop()
 
     await server.start({ env: 'production', userDataPath })
     try {
       const secondPath = server.endpointFilePath
       const secondPort = server.buildPtyEnv().ORCA_AGENT_HOOK_PORT
+      const secondToken = server.buildPtyEnv().ORCA_AGENT_HOOK_TOKEN
       // Path is stable (so PTYs stamped before restart can still find the file)
       expect(secondPath).toBe(firstPath)
-      // But contents are refreshed with the new port — that is the whole point
-      // of the design: survivors reading a stale-env file reach the live port.
-      expect(secondPort).toBeTruthy()
-      expect(secondPort).not.toBe(firstPort)
+      // But contents are refreshed with the new token (and port) — that is the
+      // whole point of the design: survivors reading a stale-env file reach the
+      // live server. Why token-first: the token is randomUUID()-minted per
+      // start(), so it is guaranteed to differ across restarts. The port comes
+      // from listen(0) and the kernel can legitimately reassign the same
+      // ephemeral port, so asserting port-inequality would be a latent flake.
+      expect(secondToken).toBeTruthy()
+      expect(secondToken).not.toBe(firstToken)
       const contents = readFileSync(secondPath!, 'utf8')
+      // Why: token-based content check is the rewrite signal. A strict
+      // "contents does NOT contain firstPort" assertion would flake on the
+      // (rare but legitimate) case where listen(0) reuses the same ephemeral
+      // port across restarts. The token is randomUUID() and cannot collide.
       expect(contents).toContain(`ORCA_AGENT_HOOK_PORT=${secondPort}`)
-      expect(contents).not.toContain(`ORCA_AGENT_HOOK_PORT=${firstPort}`)
+      expect(contents).toContain(`ORCA_AGENT_HOOK_TOKEN=${secondToken}`)
+      expect(contents).not.toContain(`ORCA_AGENT_HOOK_TOKEN=${firstToken}`)
     } finally {
       server.stop()
     }
