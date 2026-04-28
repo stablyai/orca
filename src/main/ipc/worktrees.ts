@@ -172,7 +172,10 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
 
       // Skip the gh lookup when both hints are present (picker already has them).
       if (!headRefName) {
-        const item = await getWorkItem(repo.path, args.prNumber)
+        // Why: the caller already knows this is a PR number, so scope the
+        // lookup to `type: 'pr'` and skip the speculative issue-first probe
+        // that would hit the upstream issue tracker for fork checkouts.
+        const item = await getWorkItem(repo.path, args.prNumber, 'pr')
         if (!item || item.type !== 'pr') {
           return { error: `PR #${args.prNumber} not found.` }
         }

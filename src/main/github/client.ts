@@ -601,7 +601,13 @@ async function countWorkItemsForQuery(
 }
 
 function sameOwnerRepo(left: OwnerRepo | null, right: OwnerRepo | null): boolean {
-  return left?.owner === right?.owner && left?.repo === right?.repo
+  // Why: GitHub treats owner and repo names as case-insensitive, so remotes
+  // with different casing (StablyAI/Orca vs stablyai/orca) point at the same
+  // repo and should not split into two search queries.
+  return (
+    left?.owner.toLowerCase() === right?.owner.toLowerCase() &&
+    left?.repo.toLowerCase() === right?.repo.toLowerCase()
+  )
 }
 
 function defaultOpenWorkItemQuery(): ParsedTaskQuery {
@@ -642,7 +648,19 @@ export async function countWorkItems(repoPath: string, query?: string): Promise<
     }
 
     const counts: Promise<number>[] = []
-    if (effectiveQuery.scope !== 'pr' && effectiveQuery.state !== 'merged' && issueOwnerRepo) {
+    // Why: `draft`, `reviewRequested`, and `reviewedBy` are PR-only predicates.
+    // When present, the issue half would always return 0 and wastes a search
+    // API call — skip the issue half entirely in that case.
+    const hasPrOnlyFilter =
+      effectiveQuery.draft ||
+      effectiveQuery.reviewRequested !== null ||
+      effectiveQuery.reviewedBy !== null
+    if (
+      effectiveQuery.scope !== 'pr' &&
+      effectiveQuery.state !== 'merged' &&
+      !hasPrOnlyFilter &&
+      issueOwnerRepo
+    ) {
       counts.push(
         countWorkItemsForQuery(repoPath, issueOwnerRepo, { ...effectiveQuery, scope: 'issue' })
       )
@@ -650,8 +668,19 @@ export async function countWorkItems(repoPath: string, query?: string): Promise<
     if (effectiveQuery.scope !== 'issue' && prOwnerRepo) {
       counts.push(countWorkItemsForQuery(repoPath, prOwnerRepo, { ...effectiveQuery, scope: 'pr' }))
     }
-    const results = await Promise.all(counts)
-    return results.reduce((sum, count) => sum + count, 0)
+    // Why: allSettled so a single failing search (e.g. transient network, rate
+    // limit on one side) doesn't silently zero out the total; sum only the
+    // fulfilled halves instead.
+    const results = await Promise.allSettled(counts)
+    let total = 0
+    for (const r of results) {
+      if (r.status === 'fulfilled') {
+        total += r.value
+      } else {
+        console.warn('countWorkItems partial failure:', r.reason)
+      }
+    }
+    return total
   } catch (err) {
     console.warn('countWorkItems failed:', err)
     return 0

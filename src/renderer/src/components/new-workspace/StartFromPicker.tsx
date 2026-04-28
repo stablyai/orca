@@ -10,7 +10,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { normalizeGitHubLinkQuery } from '@/lib/github-links'
-import type { RepoSlug } from '@/lib/github-links'
 import type { GitHubWorkItem } from '../../../../shared/types'
 
 export type StartFromSelection =
@@ -51,7 +50,6 @@ export default function StartFromPicker({
   const [tab, setTab] = useState<PickerTab>(isRemoteRepo ? 'branches' : 'prs')
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
-  const [repoSlug, setRepoSlug] = useState<RepoSlug | null>(null)
 
   // Branches tab state
   const [branches, setBranches] = useState<string[]>([])
@@ -79,30 +77,6 @@ export default function StartFromPicker({
     const timer = window.setTimeout(() => setDebouncedQuery(query), 150)
     return () => window.clearTimeout(timer)
   }, [query])
-
-  // Resolve slug for URL-mismatch detection.
-  useEffect(() => {
-    if (!repoPath) {
-      setRepoSlug(null)
-      return
-    }
-    let stale = false
-    void window.api.gh
-      .repoSlug({ repoPath })
-      .then((slug) => {
-        if (!stale) {
-          setRepoSlug(slug)
-        }
-      })
-      .catch(() => {
-        if (!stale) {
-          setRepoSlug(null)
-        }
-      })
-    return () => {
-      stale = true
-    }
-  }, [repoPath])
 
   // Branches fetch (debounced, only when active).
   useEffect(() => {
@@ -135,8 +109,8 @@ export default function StartFromPicker({
   }, [tab, debouncedQuery, repoId])
 
   const normalizedPrQuery = useMemo(
-    () => normalizeGitHubLinkQuery(debouncedQuery, repoSlug),
-    [debouncedQuery, repoSlug]
+    () => normalizeGitHubLinkQuery(debouncedQuery),
+    [debouncedQuery]
   )
 
   // PR list fetch (cached-first).
@@ -151,10 +125,7 @@ export default function StartFromPicker({
       return // handled by the direct-lookup effect
     }
 
-    const q =
-      trimmed && !normalizedPrQuery.repoMismatch
-        ? `${PR_LIST_QUERY} ${normalizedPrQuery.query}`
-        : PR_LIST_QUERY
+    const q = trimmed ? `${PR_LIST_QUERY} ${normalizedPrQuery.query}` : PR_LIST_QUERY
 
     const cached = getCachedWorkItems(repoPath, PR_LIST_LIMIT, q)
     if (cached !== null) {
@@ -189,7 +160,6 @@ export default function StartFromPicker({
     debouncedQuery,
     normalizedPrQuery.directNumber,
     normalizedPrQuery.query,
-    normalizedPrQuery.repoMismatch,
     fetchWorkItems,
     getCachedWorkItems
   ])
@@ -370,10 +340,6 @@ export default function StartFromPicker({
             {isRemoteRepo ? (
               <div className="px-3 py-6 text-center text-xs text-muted-foreground">
                 PR start points aren&apos;t supported for remote repos yet.
-              </div>
-            ) : normalizedPrQuery.repoMismatch && normalizedPrQuery.directNumber === null ? (
-              <div className="px-3 py-6 text-center text-xs text-muted-foreground">
-                URL targets a different repo; searching by text instead.
               </div>
             ) : prsError ? (
               <div className="px-3 py-6 text-center text-xs text-muted-foreground">

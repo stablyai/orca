@@ -92,7 +92,14 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
     'gh:workItem',
     (_event, args: { repoPath: string; number: number; type?: 'issue' | 'pr' }) => {
       const repo = assertRegisteredRepo(args.repoPath, store)
-      return getWorkItem(repo.path, args.number, args.type)
+      if (typeof args.number !== 'number' || !Number.isInteger(args.number) || args.number < 1) {
+        return null
+      }
+      // Why: renderer input is untrusted; coerce unknown `type` values to undefined so
+      // getWorkItem uses its issue-then-PR fallback rather than silently dispatching
+      // to the wrong branch.
+      const type = args.type === 'issue' || args.type === 'pr' ? args.type : undefined
+      return getWorkItem(repo.path, args.number, type)
     }
   )
 
@@ -100,7 +107,11 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
     'gh:workItemDetails',
     (_event, args: { repoPath: string; number: number; type?: 'issue' | 'pr' }) => {
       const repo = assertRegisteredRepo(args.repoPath, store)
-      return getWorkItemDetails(repo.path, args.number, args.type)
+      if (typeof args.number !== 'number' || !Number.isInteger(args.number) || args.number < 1) {
+        return null
+      }
+      const type = args.type === 'issue' || args.type === 'pr' ? args.type : undefined
+      return getWorkItemDetails(repo.path, args.number, type)
     }
   )
 

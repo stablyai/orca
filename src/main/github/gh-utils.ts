@@ -75,7 +75,7 @@ export function _resetOwnerRepoCache(): void {
 }
 
 export function parseGitHubOwnerRepo(remoteUrl: string): OwnerRepo | null {
-  const match = remoteUrl.trim().match(/github\.com[:/]([^/]+)\/(.+?)(?:\.git)?$/)
+  const match = remoteUrl.trim().match(/github\.com[:/]([^/]+)\/([^/]+?)(?:\.git)?$/)
   if (!match) {
     return null
   }

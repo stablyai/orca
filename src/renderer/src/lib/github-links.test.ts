@@ -15,14 +15,8 @@ describe('parseGitHubIssueOrPRNumber', () => {
 
 describe('normalizeGitHubLinkQuery', () => {
   it('accepts full GitHub URLs whose slug differs from the selected repo slug', () => {
-    expect(
-      normalizeGitHubLinkQuery('https://github.com/stablyai/orca/issues/923', {
-        owner: 'colinchambachan',
-        repo: 'orca'
-      })
-    ).toEqual({
+    expect(normalizeGitHubLinkQuery('https://github.com/stablyai/orca/issues/923')).toEqual({
       query: 'https://github.com/stablyai/orca/issues/923',
-      repoMismatch: null,
       directNumber: 923
     })
   })
