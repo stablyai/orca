@@ -36,11 +36,13 @@ package-lock.json
 # IDE
 .vscode/
 .idea/
+.serena/
 *.swp
 *.swo
 *~
 
 # OS
+*.stackdump
 .DS_Store
 Thumbs.db
 
@@ -61,6 +63,7 @@ tmp/
 .tmp/
 design-docs/
 .context/
+.atl/
 
 # Local-only design/planning docs (not checked in)
 docs/*-design.md

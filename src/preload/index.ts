@@ -4,12 +4,27 @@ review and type drift checks easier than scattering these bindings across module
 import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
+import type { AppRuntimeFlags, DaemonTransitionNotice } from './api-types'
 import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
-import type { FsChangedPayload, NotificationDispatchResult } from '../shared/types'
+import type {
+  BaseRefDefaultResult,
+  FsChangedPayload,
+  GitHubAssignableUser,
+  GitHubCommentResult,
+  GhosttyImportPreview,
+  MemorySnapshot,
+  NotificationDispatchResult,
+  SearchResult
+} from '../shared/types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../shared/runtime-types'
 import type { RateLimitState } from '../shared/rate-limit-types'
-import type { SshConnectionState, SshTarget } from '../shared/ssh-types'
+import type {
+  SshConnectionState,
+  SshTarget,
+  PortForwardEntry,
+  DetectedPort
+} from '../shared/ssh-types'
 import type { AgentStatusState } from '../shared/agent-status-types'
 import {
   ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT,
@@ -160,11 +175,21 @@ document.addEventListener(
 // Custom APIs for renderer
 const api = {
   app: {
-    getRuntimeFlags: (): Promise<{ daemonEnabledAtStartup: boolean }> =>
-      ipcRenderer.invoke('app:getRuntimeFlags'),
-    consumeDaemonTransitionNotice: (): Promise<{ killedCount: number } | null> =>
+    getRuntimeFlags: (): Promise<AppRuntimeFlags> => ipcRenderer.invoke('app:getRuntimeFlags'),
+    consumeDaemonTransitionNotice: (): Promise<DaemonTransitionNotice | null> =>
       ipcRenderer.invoke('app:consumeDaemonTransitionNotice'),
-    relaunch: (): Promise<void> => ipcRenderer.invoke('app:relaunch')
+    relaunch: (): Promise<void> => ipcRenderer.invoke('app:relaunch'),
+    // Why: on macOS this returns AppleCurrentKeyboardLayoutInputSourceID so
+    // the renderer's keyboard-layout probe can distinguish Polish Pro / US
+    // Extended / ABC Extended / IME Roman modes from plain US QWERTY (see
+    // src/renderer/src/lib/keyboard-layout/input-source-id.ts, issue #1205).
+    // Returns null on non-Darwin or when the defaults read fails.
+    getKeyboardInputSourceId: (): Promise<string | null> =>
+      ipcRenderer.invoke('app:getKeyboardInputSourceId')
+  },
+
+  wsl: {
+    isAvailable: (): Promise<boolean> => ipcRenderer.invoke('wsl:isAvailable')
   },
 
   repos: {
@@ -208,7 +233,7 @@ const api = {
     getGitUsername: (args: { repoId: string }): Promise<string> =>
       ipcRenderer.invoke('repos:getGitUsername', args),
 
-    getBaseRefDefault: (args: { repoId: string }): Promise<string | null> =>
+    getBaseRefDefault: (args: { repoId: string }): Promise<BaseRefDefaultResult> =>
       ipcRenderer.invoke('repos:getBaseRefDefault', args),
 
     searchBaseRefs: (args: { repoId: string; query: string; limit?: number }): Promise<string[]> =>
@@ -271,6 +296,7 @@ const api = {
       connectionId?: string | null
       worktreeId?: string
       sessionId?: string
+      shellOverride?: string
     }): Promise<{
       id: string
       snapshot?: string
@@ -450,13 +476,32 @@ const api = {
       repoPath: string
       number: number
       body: string
-    }): Promise<{ ok: true; id: number } | { ok: false; error: string }> =>
-      ipcRenderer.invoke('gh:addIssueComment', args),
+    }): Promise<GitHubCommentResult> => ipcRenderer.invoke('gh:addIssueComment', args),
+
+    addPRReviewCommentReply: (args: {
+      repoPath: string
+      prNumber: number
+      commentId: number
+      body: string
+      threadId?: string
+      path?: string
+      line?: number
+    }): Promise<GitHubCommentResult> => ipcRenderer.invoke('gh:addPRReviewCommentReply', args),
+
+    addPRReviewComment: (args: {
+      repoPath: string
+      prNumber: number
+      commitId: string
+      path: string
+      line: number
+      startLine?: number
+      body: string
+    }): Promise<GitHubCommentResult> => ipcRenderer.invoke('gh:addPRReviewComment', args),
 
     listLabels: (args: { repoPath: string }): Promise<string[]> =>
       ipcRenderer.invoke('gh:listLabels', args),
 
-    listAssignableUsers: (args: { repoPath: string }): Promise<string[]> =>
+    listAssignableUsers: (args: { repoPath: string }): Promise<GitHubAssignableUser[]> =>
       ipcRenderer.invoke('gh:listAssignableUsers', args),
 
     checkOrcaStarred: (): Promise<boolean | null> => ipcRenderer.invoke('gh:checkOrcaStarred'),
@@ -473,6 +518,9 @@ const api = {
 
     status: (): Promise<unknown> => ipcRenderer.invoke('linear:status'),
 
+    testConnection: (): Promise<{ ok: true; viewer: unknown } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('linear:testConnection'),
+
     searchIssues: (args: { query: string; limit?: number }): Promise<unknown[]> =>
       ipcRenderer.invoke('linear:searchIssues', args),
 
@@ -480,6 +528,14 @@ const api = {
       filter?: 'assigned' | 'created' | 'all' | 'completed'
       limit?: number
     }): Promise<unknown[]> => ipcRenderer.invoke('linear:listIssues', args),
+
+    createIssue: (args: {
+      teamId: string
+      title: string
+      description?: string
+    }): Promise<
+      { ok: true; id: string; identifier: string; url: string } | { ok: false; error: string }
+    > => ipcRenderer.invoke('linear:createIssue', args),
 
     getIssue: (args: { id: string }): Promise<unknown> =>
       ipcRenderer.invoke('linear:getIssue', args),
@@ -528,7 +584,10 @@ const api = {
     set: (args: Record<string, unknown>): Promise<unknown> =>
       ipcRenderer.invoke('settings:set', args),
 
-    listFonts: (): Promise<string[]> => ipcRenderer.invoke('settings:listFonts')
+    listFonts: (): Promise<string[]> => ipcRenderer.invoke('settings:listFonts'),
+
+    previewGhosttyImport: (): Promise<GhosttyImportPreview> =>
+      ipcRenderer.invoke('settings:previewGhosttyImport')
   },
 
   codexAccounts: {
@@ -1057,15 +1116,7 @@ const api = {
       excludePattern?: string
       maxResults?: number
       connectionId?: string
-    }): Promise<{
-      files: {
-        filePath: string
-        relativePath: string
-        matches: { line: number; column: number; matchLength: number; lineContent: string }[]
-      }[]
-      totalMatches: number
-      truncated: boolean
-    }> => ipcRenderer.invoke('fs:search', args),
+    }): Promise<SearchResult> => ipcRenderer.invoke('fs:search', args),
     importExternalPaths: (args: {
       sourcePaths: string[]
       destDir: string
@@ -1186,8 +1237,13 @@ const api = {
       ipcRenderer.on('ui:openQuickOpen', listener)
       return () => ipcRenderer.removeListener('ui:openQuickOpen', listener)
     },
-    onOpenNewWorkspace: (callback: () => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent) => callback()
+    onOpenNewWorkspace: (callback: (tab: 'quick' | 'create-from') => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, tab: 'quick' | 'create-from') => {
+        // Why: older main-process builds may send this event without a payload
+        // — default to 'quick' so the preload contract stays forward-compatible
+        // during a partial rollout where only one side has shipped the tab arg.
+        callback(tab ?? 'quick')
+      }
       ipcRenderer.on('ui:openNewWorkspace', listener)
       return () => ipcRenderer.removeListener('ui:openNewWorkspace', listener)
     },
@@ -1466,6 +1522,10 @@ const api = {
     }> => ipcRenderer.invoke('stats:summary')
   },
 
+  memory: {
+    getSnapshot: (): Promise<MemorySnapshot> => ipcRenderer.invoke('memory:getSnapshot')
+  },
+
   claudeUsage: {
     getScanState: (): Promise<unknown> => ipcRenderer.invoke('claudeUsage:getScanState'),
     setEnabled: (args: { enabled: boolean }): Promise<unknown> =>
@@ -1563,13 +1623,47 @@ const api = {
       remoteHost: string
       remotePort: number
       label?: string
-    }): Promise<unknown> => ipcRenderer.invoke('ssh:addPortForward', args),
+    }): Promise<PortForwardEntry> => ipcRenderer.invoke('ssh:addPortForward', args),
 
-    removePortForward: (args: { id: string }): Promise<boolean> =>
+    updatePortForward: (args: {
+      id: string
+      targetId: string
+      localPort: number
+      remoteHost: string
+      remotePort: number
+      label?: string
+    }): Promise<PortForwardEntry> => ipcRenderer.invoke('ssh:updatePortForward', args),
+
+    removePortForward: (args: { id: string }): Promise<PortForwardEntry | null> =>
       ipcRenderer.invoke('ssh:removePortForward', args),
 
-    listPortForwards: (args?: { targetId?: string }): Promise<unknown[]> =>
+    listPortForwards: (args?: { targetId?: string }): Promise<PortForwardEntry[]> =>
       ipcRenderer.invoke('ssh:listPortForwards', args),
+
+    listDetectedPorts: (args: { targetId: string }): Promise<DetectedPort[]> =>
+      ipcRenderer.invoke('ssh:listDetectedPorts', args),
+
+    onPortForwardsChanged: (
+      callback: (data: { targetId: string; forwards: PortForwardEntry[] }) => void
+    ): (() => void) => {
+      const handler = (
+        _event: Electron.IpcRendererEvent,
+        data: { targetId: string; forwards: PortForwardEntry[] }
+      ) => callback(data)
+      ipcRenderer.on('ssh:port-forwards-changed', handler)
+      return () => ipcRenderer.removeListener('ssh:port-forwards-changed', handler)
+    },
+
+    onDetectedPortsChanged: (
+      callback: (data: { targetId: string; ports: DetectedPort[] }) => void
+    ): (() => void) => {
+      const handler = (
+        _event: Electron.IpcRendererEvent,
+        data: { targetId: string; ports: DetectedPort[] }
+      ) => callback(data)
+      ipcRenderer.on('ssh:detected-ports-changed', handler)
+      return () => ipcRenderer.removeListener('ssh:detected-ports-changed', handler)
+    },
 
     browseDir: (args: {
       targetId: string

@@ -1,5 +1,6 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
+import { getWorktreeMapFromState } from '@/store/selectors'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { getDeleteWorktreeToastCopy } from './delete-worktree-toast'
 
@@ -72,4 +73,44 @@ export function runWorktreeDeleteWithToast(worktreeId: string, worktreeName: str
         description: err instanceof Error ? err.message : String(err)
       })
     })
+}
+
+/**
+ * Shared funnel for the standard (non-folder) delete decision tree, called
+ * from both WorktreeContextMenu and MemoryStatusSegment. Mirrors the
+ * `runSleepWorktree` pattern: reads state imperatively so the helper can be
+ * invoked from any handler without plumbing selectors through props, then
+ * branches on the user's `skipDeleteWorktreeConfirm` preference — either
+ * running the delete immediately with toast feedback, or opening the
+ * confirmation modal.
+ *
+ * Why folder mode is handled at the call site: folder-repo removal branches
+ * to a different modal (`confirm-remove-folder`) and the folder-vs-git
+ * determination requires the full Worktree record's repoId. Keeping that
+ * decision adjacent to the caller (rather than branching inside this helper)
+ * avoids bleeding folder-mode concerns into what is otherwise a simple
+ * skip-confirm-vs-modal decision, and lets the context menu short-circuit
+ * before ever entering this funnel.
+ *
+ * The main-worktree / missing-record guard here is defense-in-depth — the
+ * caller is responsible for disabling UI when this is known ahead of time,
+ * but we still refuse to act if the record disappeared between render and
+ * click (e.g. a concurrent delete or state reset).
+ */
+export function runWorktreeDelete(worktreeId: string): void {
+  const state = useAppStore.getState()
+  const target = getWorktreeMapFromState(state).get(worktreeId) ?? null
+  // Guard: main worktrees cannot be deleted, and a missing record means the
+  // worktree was removed out from under us — either way, no-op silently
+  // rather than opening a modal with stale/invalid context.
+  if (!target || target.isMainWorktree) {
+    return
+  }
+  state.clearWorktreeDeleteState(worktreeId)
+  const skipConfirm = state.settings?.skipDeleteWorktreeConfirm ?? false
+  if (skipConfirm) {
+    runWorktreeDeleteWithToast(worktreeId, target.displayName)
+    return
+  }
+  state.openModal('delete-worktree', { worktreeId })
 }

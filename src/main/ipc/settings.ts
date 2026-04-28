@@ -2,6 +2,7 @@ import { ipcMain, nativeTheme } from 'electron'
 import type { Store } from '../persistence'
 import type { GlobalSettings, PersistedState } from '../../shared/types'
 import { listSystemFontFamilies } from '../system-fonts'
+import { previewGhosttyImport } from '../ghostty/index'
 
 export function registerSettingsHandlers(store: Store): void {
   ipcMain.handle('settings:get', () => {
@@ -17,6 +18,10 @@ export function registerSettingsHandlers(store: Store): void {
 
   ipcMain.handle('settings:listFonts', () => {
     return listSystemFontFamilies()
+  })
+
+  ipcMain.handle('settings:previewGhosttyImport', () => {
+    return previewGhosttyImport(store)
   })
 
   ipcMain.handle('cache:getGitHub', () => {

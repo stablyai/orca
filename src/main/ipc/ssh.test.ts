@@ -109,6 +109,8 @@ vi.mock('./pty', () => ({
   registerSshPtyProvider: vi.fn(),
   unregisterSshPtyProvider: vi.fn(),
   clearPtyOwnershipForConnection: vi.fn(),
+  clearProviderPtyState: vi.fn(),
+  deletePtyOwnership: vi.fn(),
   getSshPtyProvider: vi.fn(),
   getPtyIdsForConnection: vi.fn().mockReturnValue([])
 }))
@@ -266,6 +268,43 @@ describe('SSH IPC handlers', () => {
     await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
 
     expect(mockConnectionManager.connect).toHaveBeenCalledWith(target)
+  })
+
+  it('forwards remote PTY events into the runtime', async () => {
+    const runtime = {
+      onPtyData: vi.fn(),
+      onPtyExit: vi.fn()
+    }
+    registerSshHandlers(mockStore, () => mockWindow as never, runtime as never)
+    const target: SshTarget = {
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    }
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.connect.mockResolvedValue({})
+    mockConnectionManager.getState.mockReturnValue({
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
+
+    await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
+    const onData = mockPtyProvider.onData.mock.calls[0]?.[0] as
+      | ((payload: { id: string; data: string }) => void)
+      | undefined
+    const onExit = mockPtyProvider.onExit.mock.calls[0]?.[0] as
+      | ((payload: { id: string; code: number }) => void)
+      | undefined
+
+    onData?.({ id: 'remote-pty', data: 'hello' })
+    onExit?.({ id: 'remote-pty', code: 7 })
+
+    expect(runtime.onPtyData).toHaveBeenCalledWith('remote-pty', 'hello', expect.any(Number))
+    expect(runtime.onPtyExit).toHaveBeenCalledWith('remote-pty', 7)
   })
 
   it('ssh:disconnect calls connection manager', async () => {

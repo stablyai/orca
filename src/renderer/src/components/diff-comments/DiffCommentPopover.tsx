@@ -10,14 +10,24 @@ import { Button } from '@/components/ui/button'
 
 type Props = {
   lineNumber: number
+  startLine?: number
   top: number
+  title?: string
+  placeholder?: string
+  submitLabel?: string
+  submittingLabel?: string
   onCancel: () => void
   onSubmit: (body: string) => Promise<void>
 }
 
 export function DiffCommentPopover({
   lineNumber,
+  startLine,
   top,
+  title,
+  placeholder = 'Add note for the AI',
+  submitLabel = 'Add note',
+  submittingLabel = 'Saving…',
   onCancel,
   onSubmit
 }: Props): React.JSX.Element {
@@ -108,12 +118,15 @@ export function DiffCommentPopover({
       onClick={(ev) => ev.stopPropagation()}
     >
       <div id={labelId} className="orca-diff-comment-popover-label">
-        Line {lineNumber}
+        {title ??
+          (startLine && startLine !== lineNumber
+            ? `Lines ${startLine}-${lineNumber}`
+            : `Line ${lineNumber}`)}
       </div>
       <textarea
         ref={textareaRef}
         className="orca-diff-comment-popover-textarea"
-        placeholder="Add note for the AI"
+        placeholder={placeholder}
         value={body}
         onChange={(e) => {
           setBody(e.target.value)
@@ -150,7 +163,7 @@ export function DiffCommentPopover({
           Cancel
         </Button>
         <Button size="sm" onClick={handleSubmit} disabled={submitting || body.trim().length === 0}>
-          {submitting ? 'Saving…' : 'Add note'}
+          {submitting ? submittingLabel : submitLabel}
           {!submitting && <CornerDownLeft className="ml-1 size-3 opacity-70" />}
         </Button>
       </div>

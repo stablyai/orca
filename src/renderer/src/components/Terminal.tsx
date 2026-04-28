@@ -8,6 +8,7 @@ import { useAppStore } from '../store'
 import { useAllWorktrees } from '../store/selectors'
 import { findWorktreeById } from '../store/slices/worktree-helpers'
 import { createUntitledMarkdownFile } from '../lib/create-untitled-markdown'
+import { getConnectionId } from '../lib/connection-context'
 import { extractIpcErrorMessage } from '../lib/ipc-error'
 import {
   Dialog,
@@ -122,6 +123,14 @@ function Terminal(): React.JSX.Element | null {
   const activeWorktreeBrowserTabIdsKey = activeWorktreeId
     ? (browserTabsByWorktree[activeWorktreeId] ?? []).map((tab) => tab.id).join(',')
     : ''
+
+  const [wslAvailable, setWslAvailable] = useState(false)
+  useEffect(() => {
+    // Why: wsl:isAvailable is synchronous on the main-process side but we
+    // call it asynchronously so the renderer doesn't block on startup. The
+    // result only gates UI options, so a brief false→true transition is fine.
+    void window.api.wsl.isAvailable().then(setWslAvailable)
+  }, [])
 
   // Save confirmation dialog state
   const [saveDialogFileId, setSaveDialogFileId] = useState<string | null>(null)
@@ -352,41 +361,48 @@ function Terminal(): React.JSX.Element | null {
     if (!shouldAutoCreateInitialTerminal(renderableTabCount)) {
       return
     }
-    createTab(activeWorktreeId)
+    // Why: this tab only exists because the user clicked a never-visited
+    // worktree. Tag it so the PTY spawn it triggers does not count as
+    // activity and reshuffle the sidebar. Explicit "New Tab" actions
+    // (handleNewTab below) still bump normally.
+    createTab(activeWorktreeId, undefined, undefined, { pendingActivationSpawn: true })
   }, [workspaceSessionReady, activeWorktreeId, createTab, reconcileWorktreeTabModel])
 
-  const handleNewTab = useCallback(() => {
-    if (!activeWorktreeId) {
-      return
-    }
-    const newTab = createTab(activeWorktreeId)
-    setActiveTabType('terminal')
-    // Why: persist the tab bar order with the new terminal at the end of the
-    // current visual order. Without this, reconcileOrder falls back to
-    // terminals-first when tabBarOrderByWorktree is unset, causing a new
-    // terminal to jump to index 0 instead of appending after editor tabs.
-    const state = useAppStore.getState()
-    const currentTerminals = state.tabsByWorktree[activeWorktreeId] ?? []
-    const currentEditors = state.openFiles.filter((f) => f.worktreeId === activeWorktreeId)
-    const currentBrowsers = state.browserTabsByWorktree[activeWorktreeId] ?? []
-    const stored = state.tabBarOrderByWorktree[activeWorktreeId]
-    const termIds = currentTerminals.map((t) => t.id)
-    const editorIds = currentEditors.map((f) => f.id)
-    const browserIds = currentBrowsers.map((tab) => tab.id)
-    const validIds = new Set([...termIds, ...editorIds, ...browserIds])
-    const base = (stored ?? []).filter((id) => validIds.has(id))
-    const inBase = new Set(base)
-    for (const id of [...termIds, ...editorIds, ...browserIds]) {
-      if (!inBase.has(id)) {
-        base.push(id)
-        inBase.add(id)
+  const handleNewTab = useCallback(
+    (shellOverride?: string) => {
+      if (!activeWorktreeId) {
+        return
       }
-    }
-    // The new tab is already in base via termIds; move it to the end
-    const order = base.filter((id) => id !== newTab.id)
-    order.push(newTab.id)
-    setTabBarOrder(activeWorktreeId, order)
-  }, [activeWorktreeId, createTab, setActiveTabType, setTabBarOrder])
+      const newTab = createTab(activeWorktreeId, undefined, shellOverride)
+      setActiveTabType('terminal')
+      // Why: persist the tab bar order with the new terminal at the end of the
+      // current visual order. Without this, reconcileOrder falls back to
+      // terminals-first when tabBarOrderByWorktree is unset, causing a new
+      // terminal to jump to index 0 instead of appending after editor tabs.
+      const state = useAppStore.getState()
+      const currentTerminals = state.tabsByWorktree[activeWorktreeId] ?? []
+      const currentEditors = state.openFiles.filter((f) => f.worktreeId === activeWorktreeId)
+      const currentBrowsers = state.browserTabsByWorktree[activeWorktreeId] ?? []
+      const stored = state.tabBarOrderByWorktree[activeWorktreeId]
+      const termIds = currentTerminals.map((t) => t.id)
+      const editorIds = currentEditors.map((f) => f.id)
+      const browserIds = currentBrowsers.map((tab) => tab.id)
+      const validIds = new Set([...termIds, ...editorIds, ...browserIds])
+      const base = (stored ?? []).filter((id) => validIds.has(id))
+      const inBase = new Set(base)
+      for (const id of [...termIds, ...editorIds, ...browserIds]) {
+        if (!inBase.has(id)) {
+          base.push(id)
+          inBase.add(id)
+        }
+      }
+      // The new tab is already in base via termIds; move it to the end
+      const order = base.filter((id) => id !== newTab.id)
+      order.push(newTab.id)
+      setTabBarOrder(activeWorktreeId, order)
+    },
+    [activeWorktreeId, createTab, setActiveTabType, setTabBarOrder]
+  )
 
   const handleNewBrowserTab = useCallback(() => {
     if (!activeWorktreeId) {
@@ -432,7 +448,12 @@ function Terminal(): React.JSX.Element | null {
       // current focused group explicitly. Otherwise split layouts fall back to
       // the ambient/default group and open the file in the wrong pane.
       const targetGroupId = useAppStore.getState().activeGroupIdByWorktree[activeWorktreeId]
-      const fileInfo = await createUntitledMarkdownFile(worktree.path, activeWorktreeId)
+      const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+      const fileInfo = await createUntitledMarkdownFile(
+        worktree.path,
+        activeWorktreeId,
+        connectionId
+      )
       openFile(fileInfo, { preview: false, targetGroupId })
     } catch (err) {
       toast.error(extractIpcErrorMessage(err, 'Failed to create untitled markdown file.'))
@@ -955,9 +976,11 @@ function Terminal(): React.JSX.Element | null {
             onClose={handleCloseTab}
             onCloseOthers={handleCloseOthers}
             onCloseToRight={handleCloseTabsToRight}
-            onNewTerminalTab={handleNewTab}
+            onNewTerminalTab={() => handleNewTab()}
+            onNewTerminalWithShell={handleNewTab}
             onNewBrowserTab={handleNewBrowserTab}
             onNewFileTab={handleNewFile}
+            wslAvailable={wslAvailable}
             onSetCustomTitle={setTabCustomTitle}
             onSetTabColor={setTabColor}
             expandedPaneByTabId={expandedPaneByTabId}

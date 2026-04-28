@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: the preload contract is intentionally centralized in one declaration file so renderer and preload stay in lockstep when IPC surfaces change. */
 import type {
+  BaseRefDefaultResult,
   BrowserCookieImportResult,
-  BrowserCookieImportSummary,
   BrowserLoadError,
   BrowserSessionProfile,
   BrowserSessionProfileScope,
@@ -11,13 +11,17 @@ import type {
   CreateWorktreeResult,
   DirEntry,
   FsChangedPayload,
+  GhosttyImportPreview,
   GlobalSettings,
   GitBranchCompareResult,
   GitConflictOperation,
   GitDiffResult,
   GitStatusEntry,
+  GitHubAssignableUser,
   GitHubPRFile,
   GitHubPRFileContents,
+  GitHubPRReviewCommentInput,
+  GitHubCommentResult,
   GitHubWorkItem,
   GitHubWorkItemDetails,
   GitHubViewer,
@@ -43,12 +47,13 @@ import type {
   SearchOptions,
   SearchResult,
   StatsSummary,
+  MemorySnapshot,
   UpdateStatus,
   Worktree,
   WorktreeMeta,
   WorktreeSetupLaunch,
   WorkspaceSessionState
-} from '../../shared/types'
+} from '../shared/types'
 import type {
   BrowserSetGrabModeArgs,
   BrowserSetGrabModeResult,
@@ -59,7 +64,7 @@ import type {
   BrowserCaptureSelectionScreenshotResult,
   BrowserExtractHoverArgs,
   BrowserExtractHoverResult
-} from '../../shared/browser-grab-types'
+} from '../shared/browser-grab-types'
 import type {
   BrowserContextMenuDismissedEvent,
   BrowserContextMenuRequestedEvent,
@@ -68,11 +73,13 @@ import type {
   BrowserDownloadRequestedEvent,
   BrowserPermissionDeniedEvent,
   BrowserPopupEvent
-} from '../../shared/browser-guest-events'
-import type { CliInstallStatus } from '../../shared/cli-install-types'
-import type { E2EConfig } from '../../shared/e2e-config'
-import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
-import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../../shared/runtime-types'
+} from '../shared/browser-guest-events'
+import type { ElectronAPI } from '@electron-toolkit/preload'
+import type { CliInstallStatus } from '../shared/cli-install-types'
+import type { E2EConfig } from '../shared/e2e-config'
+import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
+import type { AgentStatusState } from '../shared/agent-status-types'
+import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../shared/runtime-types'
 import type {
   ClaudeUsageBreakdownKind,
   ClaudeUsageBreakdownRow,
@@ -82,9 +89,14 @@ import type {
   ClaudeUsageScope,
   ClaudeUsageSessionRow,
   ClaudeUsageSummary
-} from '../../shared/claude-usage-types'
-import type { RateLimitState } from '../../shared/rate-limit-types'
-import type { SshConnectionState, SshTarget } from '../../shared/ssh-types'
+} from '../shared/claude-usage-types'
+import type { RateLimitState } from '../shared/rate-limit-types'
+import type {
+  SshConnectionState,
+  SshTarget,
+  PortForwardEntry,
+  DetectedPort
+} from '../shared/ssh-types'
 import type {
   CodexUsageBreakdownKind,
   CodexUsageBreakdownRow,
@@ -94,7 +106,7 @@ import type {
   CodexUsageScope,
   CodexUsageSessionRow,
   CodexUsageSummary
-} from '../../shared/codex-usage-types'
+} from '../shared/codex-usage-types'
 
 export type BrowserApi = {
   registerGuest: (args: {
@@ -202,6 +214,10 @@ export type StatsApi = {
   getSummary: () => Promise<StatsSummary>
 }
 
+export type MemoryApi = {
+  getSnapshot: () => Promise<MemorySnapshot>
+}
+
 export type ClaudeUsageApi = {
   getScanState: () => Promise<ClaudeUsageScanState>
   setEnabled: (args: { enabled: boolean }) => Promise<ClaudeUsageScanState>
@@ -252,6 +268,7 @@ export type CodexUsageApi = {
 
 export type AppRuntimeFlags = {
   daemonEnabledAtStartup: boolean
+  agentDashboardEnabledAtStartup: boolean
 }
 
 export type DaemonTransitionNotice = {
@@ -272,6 +289,12 @@ export type AppApi = {
   /** Relaunches the app via Electron's app.relaunch() + app.exit(0). Used
    *  by the "Restart now" button on the Experimental settings pane. */
   relaunch: () => Promise<void>
+  /** Returns the macOS `AppleCurrentKeyboardLayoutInputSourceID` when
+   *  available (e.g. `com.apple.keylayout.PolishPro`). Used by the
+   *  keyboard-layout probe to distinguish layouts whose base layer matches
+   *  US QWERTY but whose Option layer composes characters (issue #1205).
+   *  Returns null on non-Darwin platforms or when the defaults read fails. */
+  getKeyboardInputSourceId: () => Promise<string | null>
 }
 
 export type PreloadApi = {
@@ -306,7 +329,7 @@ export type PreloadApi = {
     }) => Promise<{ repo: Repo } | { error: string }>
     onCloneProgress: (callback: (data: { phase: string; percent: number }) => void) => () => void
     getGitUsername: (args: { repoId: string }) => Promise<string>
-    getBaseRefDefault: (args: { repoId: string }) => Promise<string | null>
+    getBaseRefDefault: (args: { repoId: string }) => Promise<BaseRefDefaultResult>
     searchBaseRefs: (args: { repoId: string; query: string; limit?: number }) => Promise<string[]>
     onChanged: (callback: () => void) => () => void
   }
@@ -340,6 +363,10 @@ export type PreloadApi = {
       connectionId?: string | null
       worktreeId?: string
       sessionId?: string
+      // Why: lets a single tab open in a different shell than the user's default.
+      // Preserved from the deleted index.d.ts PtyApi duplicate during the
+      // single-source-of-truth collapse (see docs/preload-typecheck-hole.md §1).
+      shellOverride?: string
     }) => Promise<{
       id: string
       snapshot?: string
@@ -439,9 +466,19 @@ export type PreloadApi = {
       repoPath: string
       number: number
       body: string
-    }) => Promise<{ ok: true; id: number } | { ok: false; error: string }>
+    }) => Promise<GitHubCommentResult>
+    addPRReviewCommentReply: (args: {
+      repoPath: string
+      prNumber: number
+      commentId: number
+      body: string
+      threadId?: string
+      path?: string
+      line?: number
+    }) => Promise<GitHubCommentResult>
+    addPRReviewComment: (args: GitHubPRReviewCommentInput) => Promise<GitHubCommentResult>
     listLabels: (args: { repoPath: string }) => Promise<string[]>
-    listAssignableUsers: (args: { repoPath: string }) => Promise<string[]>
+    listAssignableUsers: (args: { repoPath: string }) => Promise<GitHubAssignableUser[]>
     checkOrcaStarred: () => Promise<boolean | null>
     starOrca: () => Promise<boolean>
   }
@@ -451,11 +488,19 @@ export type PreloadApi = {
     }) => Promise<{ ok: true; viewer: LinearViewer } | { ok: false; error: string }>
     disconnect: () => Promise<void>
     status: () => Promise<LinearConnectionStatus>
+    testConnection: () => Promise<{ ok: true; viewer: LinearViewer } | { ok: false; error: string }>
     searchIssues: (args: { query: string; limit?: number }) => Promise<LinearIssue[]>
     listIssues: (args?: {
       filter?: 'assigned' | 'created' | 'all' | 'completed'
       limit?: number
     }) => Promise<LinearIssue[]>
+    createIssue: (args: {
+      teamId: string
+      title: string
+      description?: string
+    }) => Promise<
+      { ok: true; id: string; identifier: string; url: string } | { ok: false; error: string }
+    >
     getIssue: (args: { id: string }) => Promise<LinearIssue | null>
     updateIssue: (args: {
       id: string
@@ -481,6 +526,7 @@ export type PreloadApi = {
     get: () => Promise<GlobalSettings>
     set: (args: Partial<GlobalSettings>) => Promise<GlobalSettings>
     listFonts: () => Promise<string[]>
+    previewGhosttyImport: () => Promise<GhosttyImportPreview>
   }
   codexAccounts: {
     list: () => Promise<CodexRateLimitAccountsState>
@@ -505,6 +551,7 @@ export type PreloadApi = {
     claudeStatus: () => Promise<AgentHookInstallStatus>
     codexStatus: () => Promise<AgentHookInstallStatus>
     geminiStatus: () => Promise<AgentHookInstallStatus>
+    cursorStatus: () => Promise<AgentHookInstallStatus>
   }
   preflight: PreflightApi
   notifications: {
@@ -569,6 +616,7 @@ export type PreloadApi = {
     onClearDismissal: (callback: () => void) => () => void
   }
   stats: StatsApi
+  memory: MemoryApi
   claudeUsage: ClaudeUsageApi
   codexUsage: CodexUsageApi
   fs: {
@@ -694,7 +742,7 @@ export type PreloadApi = {
     onToggleRightSidebar: (callback: () => void) => () => void
     onToggleWorktreePalette: (callback: () => void) => () => void
     onOpenQuickOpen: (callback: () => void) => () => void
-    onOpenNewWorkspace: (callback: () => void) => () => void
+    onOpenNewWorkspace: (callback: (tab: 'quick' | 'create-from') => void) => () => void
     onJumpToWorktreeIndex: (callback: (index: number) => void) => () => void
     onWorktreeHistoryNavigate: (callback: (direction: 'back' | 'forward') => void) => () => void
     onNewBrowserTab: (callback: () => void) => () => void
@@ -807,9 +855,24 @@ export type PreloadApi = {
       remoteHost: string
       remotePort: number
       label?: string
-    }) => Promise<unknown>
-    removePortForward: (args: { id: string }) => Promise<boolean>
-    listPortForwards: (args?: { targetId?: string }) => Promise<unknown[]>
+    }) => Promise<PortForwardEntry>
+    updatePortForward: (args: {
+      id: string
+      targetId: string
+      localPort: number
+      remoteHost: string
+      remotePort: number
+      label?: string
+    }) => Promise<PortForwardEntry>
+    removePortForward: (args: { id: string }) => Promise<PortForwardEntry | null>
+    listPortForwards: (args?: { targetId?: string }) => Promise<PortForwardEntry[]>
+    listDetectedPorts: (args: { targetId: string }) => Promise<DetectedPort[]>
+    onPortForwardsChanged: (
+      callback: (data: { targetId: string; forwards: PortForwardEntry[] }) => void
+    ) => () => void
+    onDetectedPortsChanged: (
+      callback: (data: { targetId: string; ports: DetectedPort[] }) => void
+    ) => () => void
     browseDir: (args: { targetId: string; dirPath: string }) => Promise<{
       entries: { name: string; isDirectory: boolean }[]
       resolvedPath: string
@@ -824,5 +887,33 @@ export type PreloadApi = {
     ) => () => void
     onCredentialResolved: (callback: (data: { requestId: string }) => void) => () => void
     submitCredential: (args: { requestId: string; value: string | null }) => Promise<void>
+  }
+  wsl: {
+    isAvailable: () => Promise<boolean>
+  }
+  agentStatus: {
+    /** Listen for agent status updates forwarded from native hook receivers. */
+    onSet: (
+      callback: (data: {
+        paneKey: string
+        tabId?: string
+        worktreeId?: string
+        state: AgentStatusState
+        prompt?: string
+        agentType?: string
+        toolName?: string
+        toolInput?: string
+        lastAssistantMessage?: string
+        interrupted?: boolean
+      }) => void
+    ) => () => void
+  }
+}
+
+declare global {
+  // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface
+  interface Window {
+    electron: ElectronAPI
+    api: PreloadApi
   }
 }

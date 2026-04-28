@@ -305,9 +305,11 @@ export default function TerminalPane({
         // a single split pane doesn't go through closeTab.
         useAppStore.getState().setCacheTimerStartedAt(`${tabId}:${paneId}`, null)
         syncPanePtyLayoutBinding(paneId, null)
-        // Why: pane teardown can bypass the PTY exit callback ordering, so
-        // explicit agent status must be cleared on the direct UI close path too.
-        useAppStore.getState().removeAgentStatus(`${tabId}:${paneId}`)
+        // Why: Cmd+W on a split pane is user-initiated teardown — drop (not
+        // remove) so any retained `done` snapshot for this pane is also cleared
+        // and a same-frame live→gone transition cannot re-snapshot it via the
+        // retention sync.
+        useAppStore.getState().dropAgentStatus(`${tabId}:${paneId}`)
         manager.closePane(paneId)
       }
     },

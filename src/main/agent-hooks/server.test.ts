@@ -1,6 +1,16 @@
 /* eslint-disable max-lines -- Why: this suite exercises the full hook HTTP surface (Claude/Codex/Gemini parsing, transcript chunked scan, paneKey dispatch) and keeping the scenarios co-located avoids fixture drift across files. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, rmSync, writeFileSync } from 'fs'
+import { execFileSync } from 'child_process'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync
+} from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { AgentHookServer, _internals } from './server'
@@ -827,5 +837,204 @@ describe('Cursor hook normalization', () => {
       'production'
     )
     expect(result).toBeNull()
+  })
+})
+
+describe('Endpoint file lifecycle', () => {
+  let userDataPath: string
+
+  beforeEach(() => {
+    userDataPath = mkdtempSync(join(tmpdir(), 'orca-endpoint-'))
+  })
+
+  afterEach(() => {
+    rmSync(userDataPath, { recursive: true, force: true })
+  })
+
+  it('writes the endpoint file with the expected shell-sourceable shape', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'development', userDataPath })
+    try {
+      const filePath = server.endpointFilePath
+      expect(filePath).toBeTruthy()
+      expect(existsSync(filePath!)).toBe(true)
+      const contents = readFileSync(filePath!, 'utf8')
+      const expectedPort = server.buildPtyEnv().ORCA_AGENT_HOOK_PORT
+      const expectedToken = server.buildPtyEnv().ORCA_AGENT_HOOK_TOKEN
+      const prefix = process.platform === 'win32' ? 'set ' : ''
+      expect(contents).toContain(`${prefix}ORCA_AGENT_HOOK_PORT=${expectedPort}`)
+      expect(contents).toContain(`${prefix}ORCA_AGENT_HOOK_TOKEN=${expectedToken}`)
+      expect(contents).toContain(`${prefix}ORCA_AGENT_HOOK_ENV=development`)
+      expect(contents).toContain(`${prefix}ORCA_AGENT_HOOK_VERSION=1`)
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('writes the endpoint file with owner-only permissions on POSIX', async () => {
+    if (process.platform === 'win32') {
+      return
+    }
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      const filePath = server.endpointFilePath!
+      // Why: mask off type/setuid bits so we assert only the rwx octet that
+      // writeFileSync(mode:0o600) sets. A leaky umask at dir-create time can
+      // leave group/other bits on the *parent* dir but not on the file itself.
+      const mode = statSync(filePath).mode & 0o777
+      expect(mode).toBe(0o600)
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('rewrites the endpoint file with a new port after restart on the same path', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    const firstPath = server.endpointFilePath
+    const firstToken = server.buildPtyEnv().ORCA_AGENT_HOOK_TOKEN
+    server.stop()
+
+    await server.start({ env: 'production', userDataPath })
+    try {
+      const secondPath = server.endpointFilePath
+      const secondPort = server.buildPtyEnv().ORCA_AGENT_HOOK_PORT
+      const secondToken = server.buildPtyEnv().ORCA_AGENT_HOOK_TOKEN
+      // Path is stable (so PTYs stamped before restart can still find the file)
+      expect(secondPath).toBe(firstPath)
+      // But contents are refreshed with the new token (and port) — that is the
+      // whole point of the design: survivors reading a stale-env file reach the
+      // live server. Why token-first: the token is randomUUID()-minted per
+      // start(), so it is guaranteed to differ across restarts. The port comes
+      // from listen(0) and the kernel can legitimately reassign the same
+      // ephemeral port, so asserting port-inequality would be a latent flake.
+      expect(secondToken).toBeTruthy()
+      expect(secondToken).not.toBe(firstToken)
+      const contents = readFileSync(secondPath!, 'utf8')
+      // Why: token-based content check is the rewrite signal. A strict
+      // "contents does NOT contain firstPort" assertion would flake on the
+      // (rare but legitimate) case where listen(0) reuses the same ephemeral
+      // port across restarts. The token is randomUUID() and cannot collide.
+      expect(contents).toContain(`ORCA_AGENT_HOOK_PORT=${secondPort}`)
+      expect(contents).toContain(`ORCA_AGENT_HOOK_TOKEN=${secondToken}`)
+      expect(contents).not.toContain(`ORCA_AGENT_HOOK_TOKEN=${firstToken}`)
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('leaves the endpoint file in place on stop()', async () => {
+    // Why: stop() deliberately does NOT unlink the endpoint file. A stale file
+    // points at a dead port — the fail-open path (hook POSTs silently fail,
+    // same as pre-endpoint-file). Unlinking would introduce a TOCTOU race with a
+    // concurrent Orca instance sharing userData that could rewrite the file
+    // between our token check and unlink. The next successful start()
+    // overwrites the file atomically; tmp-file orphan hygiene is handled by
+    // the sweep inside writeEndpointFile().
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    const filePath = server.endpointFilePath!
+    expect(existsSync(filePath)).toBe(true)
+    server.stop()
+    expect(existsSync(filePath)).toBe(true)
+  })
+
+  it('buildPtyEnv includes ORCA_AGENT_HOOK_ENDPOINT when the server is running', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      const env = server.buildPtyEnv()
+      expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBe(server.endpointFilePath)
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('buildPtyEnv omits ORCA_AGENT_HOOK_ENDPOINT when no userDataPath was provided', async () => {
+    // Why: the endpoint file is opt-in via start({ userDataPath }). In tests
+    // and in the packaged main-process path where userData is unset for any
+    // reason, hooks should fall back to the v1 behavior (no ENDPOINT key).
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBeUndefined()
+      expect(env.ORCA_AGENT_HOOK_PORT).toBeTruthy()
+      expect(env.ORCA_AGENT_HOOK_TOKEN).toBeTruthy()
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('buildPtyEnv returns empty when the server is not running', () => {
+    const server = new AgentHookServer()
+    expect(server.buildPtyEnv()).toEqual({})
+  })
+
+  it('sweeps stale .endpoint-*.tmp orphans older than 5 minutes on start', async () => {
+    // Why: writeEndpointFile() writes to a unique tmp path then renames. A crash
+    // between write and rename leaves an orphan tmp; the sweep inside
+    // writeEndpointFile() must drop ones older than 5 min without touching
+    // fresh ones (a concurrent writer's in-flight tmp).
+    const dir = join(userDataPath, 'agent-hooks')
+    mkdirSync(dir, { recursive: true })
+    const staleTmp = join(dir, '.endpoint-999-stale.tmp')
+    const freshTmp = join(dir, '.endpoint-999-fresh.tmp')
+    writeFileSync(staleTmp, 'stale')
+    writeFileSync(freshTmp, 'fresh')
+    const sixMinAgo = (Date.now() - 6 * 60 * 1000) / 1000
+    utimesSync(staleTmp, sixMinAgo, sixMinAgo)
+
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      expect(existsSync(staleTmp)).toBe(false)
+      expect(existsSync(freshTmp)).toBe(true)
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('refuses to write the endpoint file when a value contains shell metacharacters', async () => {
+    // Why: every value written is sourced as shell. The isShellSafeEndpointValue
+    // allowlist must reject a metacharacter-bearing value so a future caller
+    // cannot command-inject via the sourced file. `env` is the only caller-
+    // provided field we can easily poison from a test — feed it a semicolon
+    // and assert the file is not written and buildPtyEnv() omits the ENDPOINT
+    // key (gated on endpointFileWritten).
+    const server = new AgentHookServer()
+    await server.start({ env: 'bad;value', userDataPath })
+    try {
+      expect(existsSync(server.endpointFilePath!)).toBe(false)
+      expect(server.buildPtyEnv().ORCA_AGENT_HOOK_ENDPOINT).toBeUndefined()
+      // PORT/TOKEN still flow via PTY env — fail-open to v1 behavior.
+      expect(server.buildPtyEnv().ORCA_AGENT_HOOK_PORT).toBeTruthy()
+      expect(server.buildPtyEnv().ORCA_AGENT_HOOK_TOKEN).toBeTruthy()
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('endpoint file contents are re-parseable by /bin/sh', async () => {
+    if (process.platform === 'win32') {
+      return
+    }
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      const filePath = server.endpointFilePath!
+      const expectedPort = server.buildPtyEnv().ORCA_AGENT_HOOK_PORT
+      // Why: sources the file in a subshell and echoes the resulting env var,
+      // exactly as the managed hook script does at runtime. If the file shape
+      // ever drifts from `KEY=VALUE` (e.g. someone adds shell metacharacters
+      // without quoting), this test catches it before users do.
+      const out = execFileSync('/bin/sh', ['-c', `. "${filePath}" && echo "$ORCA_AGENT_HOOK_PORT"`])
+        .toString()
+        .trim()
+      expect(out).toBe(expectedPort)
+    } finally {
+      server.stop()
+    }
   })
 })

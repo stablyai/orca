@@ -49,6 +49,11 @@ function getManagedScript(): string {
       // to return. Emit `{}` first so the agent never stalls parsing our
       // output, even if the env-var guards below cause an early exit.
       'echo {}',
+      // Why: see claude/hook-service.ts for rationale. The endpoint file holds
+      // the live port/token for this Orca install; sourcing it here lets a
+      // surviving PTY reach the current server even though its env points at
+      // the prior Orca's coordinates.
+      'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
       'if "%ORCA_AGENT_HOOK_PORT%"=="" exit /b 0',
       'if "%ORCA_AGENT_HOOK_TOKEN%"=="" exit /b 0',
       'if "%ORCA_PANE_KEY%"=="" exit /b 0',
@@ -64,6 +69,12 @@ function getManagedScript(): string {
     // to return. Emit `{}` first so the agent never stalls parsing our output,
     // even if the env-var guards below cause an early exit.
     'printf "{}\\n"',
+    // Why: see claude/hook-service.ts for rationale. Sourcing refreshes
+    // PORT/TOKEN/ENV/VERSION from the current Orca so a surviving PTY keeps
+    // reporting after a restart.
+    'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
+    '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
+    'fi',
     'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
     '  exit 0',
     'fi',

@@ -55,12 +55,25 @@ describe('COMMAND_SPECS collision check', () => {
 })
 
 describe('orca cli worktree awareness', () => {
+  const originalTerminalHandle = process.env.ORCA_TERMINAL_HANDLE
+  const originalUserDataPath = process.env.ORCA_USER_DATA_PATH
+
   beforeEach(() => {
     callMock.mockReset()
   })
 
   afterEach(() => {
     vi.restoreAllMocks()
+    if (originalTerminalHandle === undefined) {
+      delete process.env.ORCA_TERMINAL_HANDLE
+    } else {
+      process.env.ORCA_TERMINAL_HANDLE = originalTerminalHandle
+    }
+    if (originalUserDataPath === undefined) {
+      delete process.env.ORCA_USER_DATA_PATH
+    } else {
+      process.env.ORCA_USER_DATA_PATH = originalUserDataPath
+    }
   })
 
   it('builds the current worktree selector from cwd', () => {
@@ -150,6 +163,66 @@ describe('orca cli worktree awareness', () => {
 
     expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.show', {
       worktree: `path:${path.resolve('/tmp/repo/feature')}`
+    })
+  })
+
+  it('formats group orchestration sends in text mode', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_sender'
+    callMock.mockResolvedValueOnce({
+      id: 'req_send',
+      ok: true,
+      result: {
+        messages: [{ id: 'msg_1' }, { id: 'msg_2' }],
+        recipients: 2
+      },
+      _meta: {
+        runtimeId: 'runtime-1'
+      }
+    })
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['orchestration', 'send', '--to', '@all', '--subject', 'hello'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith('orchestration.send', {
+      from: 'term_sender',
+      to: '@all',
+      subject: 'hello',
+      body: undefined,
+      type: undefined,
+      priority: undefined,
+      threadId: undefined,
+      payload: undefined,
+      devMode: false
+    })
+    expect(logSpy).toHaveBeenCalledWith('Sent 2 messages to 2 recipients')
+  })
+
+  it('passes dev mode to injected orchestration dispatches', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_sender'
+    process.env.ORCA_USER_DATA_PATH = '/tmp/orca-dev'
+    callMock.mockResolvedValueOnce({
+      id: 'req_dispatch',
+      ok: true,
+      result: {
+        dispatch: { id: 'ctx_1', task_id: 'task_1', status: 'dispatched' }
+      },
+      _meta: {
+        runtimeId: 'runtime-1'
+      }
+    })
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['orchestration', 'dispatch', '--task', 'task_1', '--to', 'term_worker', '--inject'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('orchestration.dispatch', {
+      task: 'task_1',
+      to: 'term_worker',
+      from: 'term_sender',
+      inject: true,
+      devMode: true
     })
   })
 

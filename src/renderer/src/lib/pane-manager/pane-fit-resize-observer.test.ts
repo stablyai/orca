@@ -63,8 +63,7 @@ function createPane(): ManagedPaneInternal {
       firstVisibleLineContent: '',
       viewportY: 0,
       totalLines: 24
-    } satisfies ScrollState,
-    pendingDragScrollState: null
+    } satisfies ScrollState
   }
 }
 

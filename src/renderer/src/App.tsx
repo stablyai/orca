@@ -3,7 +3,11 @@ import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState }
 import { DEFAULT_STATUS_BAR_ITEMS, DEFAULT_WORKTREE_CARD_PROPERTIES } from '../../shared/constants'
 
 import { ArrowLeft, ArrowRight, Minimize2, PanelLeft, PanelRight } from 'lucide-react'
-import { FOCUS_TERMINAL_PANE_EVENT, TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
+import {
+  FOCUS_TERMINAL_PANE_EVENT,
+  SYNC_FIT_PANES_EVENT,
+  TOGGLE_TERMINAL_PANE_EXPAND_EVENT
+} from '@/constants/terminal'
 import { syncZoomCSSVar } from '@/lib/ui-zoom'
 import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
@@ -11,6 +15,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useAppStore } from './store'
 import { useShallow } from 'zustand/react/shallow'
 import { useIpcEvents } from './hooks/useIpcEvents'
+import RetainedAgentsSyncGate from './components/dashboard/RetainedAgentsSyncGate'
 import Sidebar from './components/Sidebar'
 import Terminal from './components/Terminal'
 import { shutdownBufferCaptures } from './components/terminal-pane/TerminalPane'
@@ -141,6 +146,22 @@ function App(): React.JSX.Element {
 
   // Subscribe to IPC push events
   useIpcEvents()
+  // Why: retention must run at App level (not inside AgentDashboard) because
+  // the sidebar hovercard also reads retained entries. If retention only ran
+  // when the dashboard is mounted, "done" agents would vanish from the hover
+  // any time the user collapses the dashboard panel.
+  //
+  // The retention hooks are hosted inside <RetainedAgentsSyncGate /> (a leaf
+  // component that renders null) rather than being called inline here.
+  // Calling useDashboardData() from App.tsx would subscribe the root component
+  // to high-churn slices (agentStatusByPaneKey + agentStatusEpoch tick at PTY
+  // event frequency), re-rendering the entire app tree on every agent status
+  // update. Hosting the subscriptions in a leaf isolates that churn.
+  //
+  // The experimentalAgentDashboard gate still lives inside the hooks
+  // themselves (useDashboardData early-returns [] from its memo;
+  // useRetainedAgentsSync early-returns from its effect), so the gate
+  // component is cheap when the setting is off.
   // Why: git conflict-operation state also drives the worktree cards. Polling
   // cannot live under RightSidebar because App unmounts that subtree when the
   // sidebar is closed, which leaves stale "Rebasing"/"Merging" badges behind
@@ -154,6 +175,17 @@ function App(): React.JSX.Element {
   // of tying reloads to the Explorer UI lifecycle.
   useEditorExternalWatch()
   useGlobalFileDrop()
+
+  // Why: sidebar open/close flips width instantaneously. useLayoutEffect
+  // runs synchronously after React commits the DOM but before paint, so
+  // dispatching SYNC_FIT_PANES_EVENT here lets the terminal reflow in the
+  // same frame as the width change — no "wrongly-sized terminal" transient
+  // and no delayed snap. The later ResizeObserver rAF and 150ms debounced
+  // fit both become no-ops because proposeDimensions() will match the
+  // already-fitted cols/rows.
+  useLayoutEffect(() => {
+    window.dispatchEvent(new CustomEvent(SYNC_FIT_PANES_EVENT))
+  }, [sidebarOpen, rightSidebarOpen])
 
   // Fetch initial data + hydrate GitHub cache from disk
   useEffect(() => {
@@ -595,10 +627,10 @@ function App(): React.JSX.Element {
         (isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey) &&
         (e.code === 'ArrowLeft' || e.code === 'ArrowRight')
       ) {
-        // Why: hidden buttons in non-terminal views mean the shortcut must be
-        // a no-op there too — navigating worktree history from Settings or
-        // Tasks is not a meaningful action.
-        if (activeView !== 'terminal') {
+        // Why: Back/Forward traverse mixed worktree + Tasks visits, so the
+        // shortcut is active wherever the titlebar button cluster is (terminal
+        // or tasks). Still suppressed in Settings to keep that view modal-ish.
+        if (activeView !== 'terminal' && activeView !== 'tasks') {
           return
         }
         dispatchClearModifierHints()
@@ -674,6 +706,48 @@ function App(): React.JSX.Element {
         dispatchClearModifierHints()
         e.preventDefault()
         actions.setRightSidebarTab('source-control')
+        actions.setRightSidebarOpen(true)
+        return
+      }
+
+      // Cmd/Ctrl+Shift+D — open right sidebar (agent dashboard is now
+      // docked at the sidebar bottom, so only toggle visibility).
+      // Why: skip when a terminal is focused — that combo is the terminal
+      // split-pane shortcut (see terminal-shortcut-policy.ts). Both listeners
+      // share the window capture phase and registration order can vary with
+      // React effect re-runs, so a DOM check is the reliable coordination
+      // mechanism (same pattern as Cmd+Shift+G above). xterm-helper-textarea
+      // is the focus target the terminal handler itself uses to detect
+      // terminal focus (see keyboard-handlers.ts isEditableTarget).
+      if (e.shiftKey && !e.altKey && e.key.toLowerCase() === 'd') {
+        // Why: read the experimental toggle at keypress time via getState() so
+        // flipping the setting takes effect immediately without re-binding the
+        // window-level listener (which would require adding `settings` to the
+        // effect deps and tearing down/rebinding on every unrelated settings
+        // change, like theme or font adjustments). Gated behind the key/modifier
+        // check so getState() isn't invoked on every unrelated keystroke.
+        const dashboardExperimentEnabled =
+          useAppStore.getState().settings?.experimentalAgentDashboard === true
+        if (!dashboardExperimentEnabled) {
+          return
+        }
+        const active = document.activeElement as HTMLElement | null
+        if (active?.classList.contains('xterm-helper-textarea')) {
+          return
+        }
+        dispatchClearModifierHints()
+        e.preventDefault()
+        actions.setRightSidebarOpen(true)
+        return
+      }
+
+      // Cmd+Shift+I — toggle right sidebar / ports tab (macOS only).
+      // Why: Ctrl+Shift+I is the built-in DevTools accelerator on Windows/Linux;
+      // intercepting it would break an essential developer tool.
+      if (isMac && e.shiftKey && !e.altKey && e.key.toLowerCase() === 'i') {
+        dispatchClearModifierHints()
+        e.preventDefault()
+        actions.setRightSidebarTab('ports')
         actions.setRightSidebarOpen(true)
       }
     }
@@ -867,11 +941,10 @@ function App(): React.JSX.Element {
           </Popover>
         ) : null}
       </div>
-      {/* Why: Back/Forward navigate worktree-activation history. Only
-          meaningful while viewing a worktree (terminal view); hidden in
-          Settings/Tasks/Landing to keep the titlebar compact and the
-          semantics unambiguous. */}
-      {activeView === 'terminal' && (
+      {/* Why: Back/Forward traverse mixed worktree + Tasks history, so the
+          cluster is shown wherever the history shortcut is live (terminal or
+          tasks). Hidden in Settings to keep that view modal-ish. */}
+      {(activeView === 'terminal' || activeView === 'tasks') && (
         <div className="ml-auto mr-3 flex items-center">
           <Tooltip>
             <TooltipTrigger asChild>
@@ -943,6 +1016,10 @@ function App(): React.JSX.Element {
       }
     >
       <TooltipProvider delayDuration={400}>
+        {/* Why: leaf-mounted retention sync. Hosts useDashboardData() +
+            useRetainedAgentsSync() so their high-churn store subscriptions
+            re-render a null component rather than the entire App tree. */}
+        <RetainedAgentsSyncGate />
         {/* Why: in workspace view (split groups always enabled), the full-width
             titlebar is removed so tab groups + terminal extend to the top of
             the window. Left titlebar controls move to a header above the sidebar.

@@ -1,5 +1,14 @@
 import { useEffect, useState } from 'react'
-import { Github, ExternalLink, LoaderCircle, Lock, Terminal, Unlink } from 'lucide-react'
+import {
+  Github,
+  ExternalLink,
+  LoaderCircle,
+  Lock,
+  Terminal,
+  Unlink,
+  CheckCircle2,
+  AlertCircle
+} from 'lucide-react'
 import { useAppStore } from '../../store'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
@@ -41,6 +50,7 @@ export function IntegrationsPane(): React.JSX.Element {
   const connectLinear = useAppStore((s) => s.connectLinear)
   const disconnectLinear = useAppStore((s) => s.disconnectLinear)
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
+  const testLinearConnection = useAppStore((s) => s.testLinearConnection)
 
   const [ghStatus, setGhStatus] = useState<GhStatus>('checking')
   const [linearDialogOpen, setLinearDialogOpen] = useState(false)
@@ -49,6 +59,10 @@ export function IntegrationsPane(): React.JSX.Element {
     'idle'
   )
   const [linearConnectError, setLinearConnectError] = useState<string | null>(null)
+  const [linearTestState, setLinearTestState] = useState<'idle' | 'testing' | 'ok' | 'error'>(
+    'idle'
+  )
+  const [linearTestError, setLinearTestError] = useState<string | null>(null)
 
   useEffect(() => {
     void checkLinearConnection()
@@ -90,6 +104,24 @@ export function IntegrationsPane(): React.JSX.Element {
     await disconnectLinear()
     setLinearConnectState('idle')
     setLinearConnectError(null)
+    setLinearTestState('idle')
+    setLinearTestError(null)
+  }
+
+  // Why: explicit user-triggered verification. This is the *only* path in
+  // settings that decrypts the stored API key, so the macOS Keychain prompt
+  // (if the app signature has changed since the item was stored) only
+  // appears when the user clicks Test — not just for opening Settings.
+  const handleLinearTest = async (): Promise<void> => {
+    setLinearTestState('testing')
+    setLinearTestError(null)
+    const result = await testLinearConnection()
+    if (result.ok) {
+      setLinearTestState('ok')
+    } else {
+      setLinearTestState('error')
+      setLinearTestError(result.error)
+    }
   }
 
   const handleRefreshGh = (): void => {
@@ -190,7 +222,9 @@ export function IntegrationsPane(): React.JSX.Element {
             <p className="text-sm font-medium">Linear</p>
             <p className="text-xs text-muted-foreground">
               {linearStatus.connected
-                ? `${linearStatus.viewer?.organizationName ?? ''} · ${linearStatus.viewer?.displayName ?? ''}${linearStatus.viewer?.email ? ` · ${linearStatus.viewer.email}` : ''}`
+                ? linearStatus.viewer
+                  ? `${linearStatus.viewer.organizationName} · ${linearStatus.viewer.displayName}${linearStatus.viewer.email ? ` · ${linearStatus.viewer.email}` : ''}`
+                  : 'API key saved. Test to verify.'
                 : 'Browse and link issues to workspaces.'}
             </p>
           </div>
@@ -216,6 +250,43 @@ export function IntegrationsPane(): React.JSX.Element {
             </button>
           )}
         </div>
+
+        {linearStatus.connected && (
+          <div className="mt-2.5 flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void handleLinearTest()}
+              disabled={linearTestState === 'testing'}
+            >
+              {linearTestState === 'testing' ? (
+                <>
+                  <LoaderCircle className="size-3.5 mr-1.5 animate-spin" />
+                  Testing…
+                </>
+              ) : (
+                'Test connection'
+              )}
+            </Button>
+            {linearTestState === 'ok' && (
+              <span className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
+                <CheckCircle2 className="size-3.5" />
+                Verified
+              </span>
+            )}
+            {linearTestState === 'error' && linearTestError && (
+              <span className="flex items-center gap-1 text-xs text-destructive">
+                <AlertCircle className="size-3.5" />
+                {linearTestError}
+              </span>
+            )}
+            {linearTestState === 'idle' && (
+              <span className="text-[11px] text-muted-foreground/70">
+                Verifies your API key against Linear.
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Linear Connect Dialog */}

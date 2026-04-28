@@ -73,7 +73,7 @@ function createAdapter(
     clearTombstone: vi.fn(),
     reconcileOnStartup: vi.fn(async () => reconcileResult ?? { alive: sessions, killed: [] }),
     dispose: vi.fn(),
-    disconnectOnly: vi.fn(),
+    disconnectOnly: vi.fn(async () => {}),
     emitData: (id: string, data: string) => {
       for (const listener of dataListeners) {
         listener({ id, data })

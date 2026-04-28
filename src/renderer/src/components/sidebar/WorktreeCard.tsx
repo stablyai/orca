@@ -4,7 +4,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { Bell, GitMerge, LoaderCircle, CircleCheck, CircleX, Globe, WifiOff } from 'lucide-react'
+import { Bell, GitMerge, LoaderCircle, CircleCheck, CircleX, Server, ServerOff } from 'lucide-react'
 import StatusIndicator from './StatusIndicator'
 import CacheTimer from './CacheTimer'
 import WorktreeContextMenu from './WorktreeContextMenu'
@@ -13,12 +13,8 @@ import AgentStatusHover from './AgentStatusHover'
 import { cn } from '@/lib/utils'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { getWorktreeStatus, type WorktreeStatus } from '@/lib/worktree-status'
-import { detectAgentStatusFromTitle, isExplicitAgentStatusFresh } from '@/lib/agent-status'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry
-} from '../../../../shared/agent-status-types'
-import { AGENT_DASHBOARD_ENABLED } from '../../../../shared/constants'
+import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-types'
 import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
 import type { Worktree, Repo, PRInfo, IssueInfo } from '../../../../shared/types'
 import {
@@ -27,7 +23,6 @@ import {
   CONFLICT_OPERATION_LABELS,
   EMPTY_TABS,
   EMPTY_BROWSER_TABS,
-  EMPTY_AGENT_ENTRIES,
   FilledBellIcon
 } from './WorktreeCardHelpers'
 import { IssueSection, PrSection, CommentSection } from './WorktreeCardMeta'
@@ -53,6 +48,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const fetchPRForBranch = useAppStore((s) => s.fetchPRForBranch)
   const fetchIssue = useAppStore((s) => s.fetchIssue)
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
+  const dashboardExperimentEnabled = useAppStore(
+    (s) => s.settings?.experimentalAgentDashboard === true
+  )
   const handleEditIssue = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
@@ -112,56 +110,6 @@ const WorktreeCard = React.memo(function WorktreeCard({
   // ── GRANULAR selectors: only subscribe to THIS worktree's data ──
   const tabs = useAppStore((s) => s.tabsByWorktree[worktree.id] ?? EMPTY_TABS)
   const browserTabs = useAppStore((s) => s.browserTabsByWorktree[worktree.id] ?? EMPTY_BROWSER_TABS)
-  // Why: subscribe only to the entries whose paneKey belongs to one of this
-  // worktree's tabs. Subscribing to the full `agentStatusByPaneKey` map would
-  // re-render every card on every status event across all worktrees, which is
-  // the render-amplification problem the PR's review focus flags. The selector
-  // reads `tabsByWorktree[worktree.id]` from zustand state (not external
-  // closure) so it stays reactive to tab-spawn/close events. `useShallow`
-  // keeps the array reference stable when no relevant entry actually changed,
-  // so the downstream `status` memo doesn't invalidate on unrelated updates.
-  const worktreeAgentEntries = useAppStore(
-    useShallow((s) => {
-      // Why: short-circuit when the dashboard flag is off — the status memo
-      // below gates the explicit-status branch on AGENT_DASHBOARD_ENABLED, so
-      // scanning agentStatusByPaneKey for every worktree on every store change
-      // is pure overhead while the flag is false. Keeping the flag check inside
-      // the selector body preserves reactivity if the flag ever becomes dynamic.
-      if (!AGENT_DASHBOARD_ENABLED) {
-        return EMPTY_AGENT_ENTRIES
-      }
-      const wtTabs = s.tabsByWorktree[worktree.id]
-      if (!wtTabs || wtTabs.length === 0) {
-        return EMPTY_AGENT_ENTRIES
-      }
-      const liveTabIds = new Set<string>()
-      for (const t of wtTabs) {
-        if (t.ptyId) {
-          liveTabIds.add(t.id)
-        }
-      }
-      if (liveTabIds.size === 0) {
-        return EMPTY_AGENT_ENTRIES
-      }
-      const out: AgentStatusEntry[] = []
-      for (const entry of Object.values(s.agentStatusByPaneKey)) {
-        // Why: paneKey must be `${tabId}:${paneId}`. Parse the prefix once via
-        // indexOf+slice and look it up in the Set for O(1) membership — the
-        // previous `startsWith(`${id}:`)` nested loop was O(E × T) per store
-        // event, matching the AgentStatusHover selector's O(E) approach.
-        const colonIdx = entry.paneKey.indexOf(':')
-        if (colonIdx <= 0) {
-          continue
-        }
-        const tabId = entry.paneKey.slice(0, colonIdx)
-        if (liveTabIds.has(tabId)) {
-          out.push(entry)
-        }
-      }
-      return out.length > 0 ? out : EMPTY_AGENT_ENTRIES
-    })
-  )
-  const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
   // Why: split-pane tabs expose per-pane titles that the aggregate
   // `tab.title` does not preserve (onActivePaneChange overwrites it with the
   // focused pane's title). getWorktreeStatus needs those pane titles to keep
@@ -199,111 +147,95 @@ const WorktreeCard = React.memo(function WorktreeCard({
 
   const isDeleting = deleteState?.isDeleting ?? false
 
-  // Derive status — when the dashboard flag is on, explicit agent status
-  // (OSC 9999) takes precedence over heuristic title parsing per the design
-  // doc's per-tab precedence rule. When it is off, delegate to the canonical
-  // `getWorktreeStatus` so the split-pane-aware heuristic path is the single
-  // source of truth for the sidebar's pre-dashboard behavior.
-  const status: WorktreeStatus = useMemo(() => {
-    if (!AGENT_DASHBOARD_ENABLED) {
-      return getWorktreeStatus(tabs, browserTabs, runtimePaneTitlesForWorktree)
-    }
-
-    const liveTabs = tabs.filter((tab) => tab.ptyId)
-    // Why: browser-only worktrees are still active from the user's point of
-    // view even when they have no PTY-backed terminal. The sidebar filter
-    // already treats them as active, so every navigation surface must reuse
-    // that rule instead of showing a misleading inactive dot.
-    const hasTerminals = liveTabs.length > 0 || browserTabs.length > 0
-    if (!hasTerminals) {
-      return 'inactive'
-    }
-
-    // Why: precedence is per-tab — explicit status (when fresh) wins over
-    // heuristics *for that tab only*. Aggregating explicit across all tabs
-    // before heuristics is wrong: if tab A has a fresh explicit `done` and
-    // tab B's title heuristically says `working`, the worktree still has a
-    // live working agent in B. Collect per-tab state, then reduce globally
-    // with priority permission > working > done.
-    const now = Date.now()
-    const freshByTabId = new Map<string, AgentStatusEntry[]>()
-    for (const entry of worktreeAgentEntries) {
-      if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
-        continue
-      }
-      const colonIdx = entry.paneKey.indexOf(':')
-      // Why: paneKey must be `${tabId}:${paneId}`. Skip malformed entries (no
-      // colon or leading colon) rather than bucketing under "" — aligns with
-      // `buildExplicitEntriesByTabId` and the AgentStatusHover selector which
-      // enforce the same invariant.
-      if (colonIdx <= 0) {
-        continue
-      }
-      const tabId = entry.paneKey.slice(0, colonIdx)
-      const bucket = freshByTabId.get(tabId)
-      if (bucket) {
-        bucket.push(entry)
-      } else {
-        freshByTabId.set(tabId, [entry])
-      }
-    }
-
-    let hasPermission = false
-    let hasWorking = false
-    let hasDone = false
-    for (const tab of liveTabs) {
-      const fresh = freshByTabId.get(tab.id)
-      if (fresh && fresh.length > 0) {
-        if (fresh.some((e) => e.state === 'blocked' || e.state === 'waiting')) {
-          hasPermission = true
-        } else if (fresh.some((e) => e.state === 'working')) {
-          hasWorking = true
-        } else if (fresh.some((e) => e.state === 'done')) {
-          hasDone = true
+  // Why: the sidebar dot overlays the *stable* hook-reported states (blocked,
+  // waiting, done) onto the title-heuristic base. `working` remains on the
+  // heuristic because hook pings flip on/off mid-turn and users complained
+  // that the spinner flickered; the blocked/waiting/done states don't have
+  // that problem — they're terminal (done) or attention-needed (blocked/
+  // waiting) and persist until the user acts. Retained "done" snapshots are
+  // consulted too so the sky dot keeps glowing after the agent process exits,
+  // matching the dashboard's retention behavior.
+  //
+  // Priority (highest first): permission (blocked/waiting) > heuristic
+  // 'working' > done > other heuristic ('active'/'inactive').
+  // permission wins over everything because a newer blocked agent in the same
+  // worktree means the user needs to act now, not admire a previous
+  // completion.
+  // heuristic 'working' wins over done because a spinner means the user has
+  // already re-prompted the agent after it reported done — the newer "work
+  // in progress" signal is more informative than a retained completion dot.
+  // Only the 'working' heuristic earns this precedence; 'active'/'inactive'
+  // mean "quiet terminal", which shouldn't drown out a recent done.
+  // Why: collapse live hook entries to booleans inside the selector so the
+  // snapshot is a stable scalar (useShallow compares element identity — an
+  // array of freshly-constructed {state,updatedAt} objects would never hit
+  // the cache and trip React's "getSnapshot should be cached" infinite-loop
+  // guard). Staleness is applied here too so the selector already reflects
+  // the 30-min TTL; agentStatusEpoch pulls in the tick that fires when a
+  // fresh entry crosses the stale boundary. The same useShallow wrapper
+  // covers hasPermission, hasLiveDone, *and* hasRetainedDone — merging the
+  // retained scan into the same selector avoids a second full-map iteration
+  // per card on every retention write (with N sidebar cards on screen a
+  // standalone retained selector scans Object.values(...) N times per tick).
+  const { hasPermission, hasLiveDone, hasRetainedDone } = useAppStore(
+    useShallow((s) => {
+      // Touch the epoch so this selector re-runs when the freshness scheduler
+      // ticks — otherwise a stale transition wouldn't flip the booleans until
+      // some unrelated store write happened to rerun us.
+      void s.agentStatusEpoch
+      const wtTabs = s.tabsByWorktree[worktree.id] ?? EMPTY_TABS
+      let perm = false
+      let live = false
+      if (wtTabs.length > 0) {
+        const tabIds = new Set(wtTabs.map((t) => t.id))
+        const now = Date.now()
+        for (const [paneKey, entry] of Object.entries(s.agentStatusByPaneKey)) {
+          const sepIdx = paneKey.indexOf(':')
+          if (sepIdx <= 0) {
+            continue
+          }
+          const tabId = paneKey.slice(0, sepIdx)
+          if (!tabIds.has(tabId)) {
+            continue
+          }
+          if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
+            continue
+          }
+          if (entry.state === 'blocked' || entry.state === 'waiting') {
+            perm = true
+          } else if (entry.state === 'done') {
+            live = true
+          }
         }
-        continue
       }
-      // Why: fall back to the split-pane-aware heuristic for tabs without a
-      // fresh explicit entry. Consult per-pane titles first (matching
-      // `getWorktreeStatus`) so an idle focused pane doesn't mask a working
-      // background pane in the same tab.
-      const paneTitles = runtimePaneTitlesForWorktree[tab.id]
-      const titlesToCheck =
-        paneTitles && Object.keys(paneTitles).length > 0 ? Object.values(paneTitles) : [tab.title]
-      for (const title of titlesToCheck) {
-        const heuristic = detectAgentStatusFromTitle(title)
-        if (heuristic === 'permission') {
-          hasPermission = true
+      // Retained scan — one pass in the same selector avoids a second
+      // Object.values(...) per store tick (one per sidebar card).
+      let retained = false
+      for (const ra of Object.values(s.retainedAgentsByPaneKey)) {
+        if (ra.worktreeId === worktree.id) {
+          retained = true
           break
         }
-        if (heuristic === 'working') {
-          hasWorking = true
-        }
       }
-    }
+      return { hasPermission: perm, hasLiveDone: live, hasRetainedDone: retained }
+    })
+  )
 
+  const status: WorktreeStatus = useMemo(() => {
     if (hasPermission) {
       return 'permission'
     }
-    if (hasWorking) {
+    // Compute the heuristic once so we can let 'working' beat done without
+    // letting quieter heuristic states ('active'/'inactive') erase a done.
+    const heuristic = getWorktreeStatus(tabs, browserTabs, runtimePaneTitlesForWorktree)
+    if (heuristic === 'working') {
       return 'working'
     }
-    // Why: surface 'done' as its own status so the sidebar dot turns blue
-    // (sky-500/80) — matching the dashboard's done color. A completed agent
-    // still has a live terminal, so 'inactive' would be misleading; calling
-    // it 'done' keeps the two surfaces in agreement on what the agent is.
-    if (hasDone) {
+    if (hasLiveDone || hasRetainedDone) {
       return 'done'
     }
-    // Why: execution reaches this point only when hasTerminals is true (top guard
-    // returned inactive otherwise), so any worktree here has at least one live
-    // PTY or browser tab — both are "active from the user's point of view".
-    return 'active'
-    // Why: agentStatusEpoch is a cache-busting counter, not data consumed by
-    // the memo body. It forces re-derivation when an agent status entry crosses
-    // the freshness threshold so the visual status updates without polling.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tabs, browserTabs, worktreeAgentEntries, runtimePaneTitlesForWorktree, agentStatusEpoch])
+    return heuristic
+  }, [tabs, browserTabs, runtimePaneTitlesForWorktree, hasPermission, hasLiveDone, hasRetainedDone])
 
   const showPR = cardProps.includes('pr')
   const showCI = cardProps.includes('ci')
@@ -432,16 +364,22 @@ const WorktreeCard = React.memo(function WorktreeCard({
           {(cardProps.includes('status') || cardProps.includes('unread')) && (
             <div className="flex flex-col items-center justify-start pt-[2px] gap-2 shrink-0">
               {cardProps.includes('status') &&
-                (AGENT_DASHBOARD_ENABLED ? (
+                (dashboardExperimentEnabled ? (
                   <AgentStatusHover worktreeId={worktree.id}>
                     {/* Why: make the hover trigger keyboard-focusable so
                         keyboard-only users can open the hover panel (Radix
                         HoverCardTrigger asChild does not promote a
-                        non-interactive child to focusable). */}
+                        non-interactive child to focusable).
+                        Why inline-flex: a default `display: inline` span
+                        contains the inline-flex StatusIndicator on the text
+                        baseline, pushing the dot ~2px down inside the card's
+                        flex-column container. `inline-flex` removes the line
+                        box so the dot stays top-aligned with the title. */}
                     <span
                       tabIndex={0}
                       role="button"
                       aria-label={`Worktree status: ${status}. Show running agents.`}
+                      className="inline-flex"
                     >
                       <StatusIndicator status={status} />
                     </span>
@@ -488,9 +426,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
                     <TooltipTrigger asChild>
                       <span className="shrink-0 inline-flex items-center">
                         {isSshDisconnected ? (
-                          <WifiOff className="size-3 text-red-400" />
+                          <ServerOff className="size-3 text-red-400" />
                         ) : (
-                          <Globe className="size-3 text-muted-foreground" />
+                          <Server className="size-3 text-muted-foreground" />
                         )}
                       </span>
                     </TooltipTrigger>

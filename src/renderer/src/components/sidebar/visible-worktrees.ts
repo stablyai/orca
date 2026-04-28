@@ -1,6 +1,5 @@
 import type { Worktree, Repo, TerminalTab } from '../../../../shared/types'
 import type { AppState } from '@/store/types'
-import { AGENT_DASHBOARD_ENABLED } from '../../../../shared/constants'
 import { matchesSearch } from './worktree-list-groups'
 import { buildWorktreeComparator, sortWorktreesSmart } from './smart-sort'
 import { useAppStore } from '@/store'
@@ -120,7 +119,11 @@ export function getVisibleWorktreeIds(): string[] {
 
   let sortedIds: string[]
 
-  const agentStatusForSort = AGENT_DASHBOARD_ENABLED ? state.agentStatusByPaneKey : undefined
+  // Why: matches WorktreeList's gate — when the experimental Agent Dashboard
+  // is off, the agent-status map is not populated, so fall back to the
+  // non-status sort heuristics instead of scoring against an empty map.
+  const agentStatusForSort =
+    state.settings?.experimentalAgentDashboard === true ? state.agentStatusByPaneKey : undefined
   if (state.sortBy === 'smart') {
     sortedIds = sortWorktreesSmart(
       allWorktrees,

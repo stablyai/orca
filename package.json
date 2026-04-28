@@ -1,11 +1,12 @@
 {
   "name": "orca",
-  "version": "1.3.21-rc.1",
+  "version": "1.3.24-rc.3",
   "description": "An Electron application with React and TypeScript",
   "homepage": "https://github.com/stablyai/orca",
   "author": "stablyai",
   "bin": {
-    "orca": "./out/cli/index.js"
+    "orca": "./out/cli/index.js",
+    "orca-dev": "./bin/orca-dev"
   },
   "main": "./out/main/index.js",
   "scripts": {
@@ -24,11 +25,12 @@
     "start": "electron-vite preview",
     "dev": "node config/scripts/run-electron-vite-dev.mjs",
     "build:relay": "node scripts/build-relay.mjs",
-    "build:cli": "tsc -p config/tsconfig.cli.json --outDir out --composite false --incremental false",
+    "build:cli": "tsc -p config/tsconfig.cli.json --outDir out --composite false --incremental false && node config/scripts/install-dev-cli.mjs",
     "build:electron-vite": "node config/scripts/run-electron-vite-build.mjs",
     "build": "pnpm run typecheck && pnpm run build:relay && pnpm run build:electron-vite && pnpm run build:cli",
     "build:release": "pnpm run build:relay && pnpm run build:electron-vite && pnpm run build:cli",
-    "postinstall": "pnpm rebuild electron && electron-builder install-app-deps",
+    "postinstall": "pnpm rebuild electron && node scripts/rebuild-native-deps.mjs",
+    "rebuild:electron": "node scripts/rebuild-native-deps.mjs",
     "build:unpack": "pnpm run build && electron-builder --config config/electron-builder.config.cjs --dir",
     "build:win": "pnpm run build && electron-builder --config config/electron-builder.config.cjs --win",
     "build:icons": "bash resources/icon-source/generate.sh",
@@ -72,6 +74,7 @@
     "@xterm/headless": "6.1.0-beta.198",
     "@xterm/xterm": "6.1.0-beta.198",
     "agent-browser": "~0.24.1",
+    "better-sqlite3": "^12.9.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
@@ -110,9 +113,11 @@
   },
   "devDependencies": {
     "@electron-toolkit/tsconfig": "^2.0.0",
+    "@electron/rebuild": "^4.0.3",
     "@playwright/test": "^1.59.1",
     "@stablyai/playwright-test": "^2.1.13",
     "@tailwindcss/vite": "^4.2.2",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.5.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
@@ -148,6 +153,7 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "@parcel/watcher",
+      "better-sqlite3",
       "cpu-features",
       "electron",
       "esbuild",

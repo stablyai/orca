@@ -8,6 +8,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { parseGitHubIssueOrPRNumber, normalizeGitHubLinkQuery } from '@/lib/github-links'
+import type { RepoSlug } from '@/lib/github-links'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { buildAgentStartupPlan } from '@/lib/tui-agent-startup'
 import { isGitRepoKind } from '../../../shared/repo-kind'
@@ -40,6 +41,10 @@ export type UseComposerStateOptions = {
   initialName?: string
   initialPrompt?: string
   initialLinkedWorkItem?: LinkedWorkItemSummary | null
+  /** Seed the Start-from selection when the composer opens. Used by the
+   *  Create-from → Quick fallback path so a PR pick that needs a setup
+   *  decision still lands with the resolved PR head as the base branch. */
+  initialBaseBranch?: string
   /** Why: the full-page composer persists drafts so users can navigate away
    *  without losing work; the quick-composer modal is transient and must not
    *  clobber or leak that long-running draft. */
@@ -79,7 +84,7 @@ export type ComposerCardProps = {
   filteredLinkItems: GitHubWorkItem[]
   linkItemsLoading: boolean
   linkDirectLoading: boolean
-  normalizedLinkQuery: { query: string }
+  normalizedLinkQuery: { query: string; repoMismatch: string | null }
   onSelectLinkedItem: (item: GitHubWorkItem) => void
   tuiAgent: TuiAgent
   onTuiAgentChange: (value: TuiAgent) => void
@@ -144,6 +149,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     initialName = '',
     initialPrompt = '',
     initialLinkedWorkItem = null,
+    initialBaseBranch,
     persistDraft,
     onCreated,
     repoIdOverride,
@@ -245,7 +251,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     return initialLinkedWorkItem?.type === 'pr' ? initialLinkedWorkItem.number : null
   })
   const [baseBranch, setBaseBranch] = useState<string | undefined>(
-    persistDraft ? newWorkspaceDraft?.baseBranch : undefined
+    persistDraft ? newWorkspaceDraft?.baseBranch : initialBaseBranch
   )
   // Why: when a repo switch wipes a prior Start-from selection, surface the
   // reset inline (e.g. "was PR #8778") so the change is recoverable visually
@@ -300,6 +306,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const [linkItemsLoading, setLinkItemsLoading] = useState(false)
   const [linkDirectItem, setLinkDirectItem] = useState<GitHubWorkItem | null>(null)
   const [linkDirectLoading, setLinkDirectLoading] = useState(false)
+  const [linkRepoSlug, setLinkRepoSlug] = useState<RepoSlug | null>(null)
 
   const lastAutoNameRef = useRef<string>(
     persistDraft ? (newWorkspaceDraft?.name ?? initialName) : initialName
@@ -408,8 +415,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     shouldApplyLinkedOnlyTemplate
   ])
   const normalizedLinkQuery = useMemo(
-    () => normalizeGitHubLinkQuery(linkDebouncedQuery),
-    [linkDebouncedQuery]
+    () => normalizeGitHubLinkQuery(linkDebouncedQuery, linkRepoSlug),
+    [linkDebouncedQuery, linkRepoSlug]
   )
 
   const filteredLinkItems = useMemo(() => {
@@ -559,6 +566,32 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     }
     prefetchWorkItems(selectedRepo.id, selectedRepo.path, PER_REPO_FETCH_LIMIT, 'is:pr is:open')
   }, [prefetchWorkItems, selectedRepo?.connectionId, selectedRepo?.id, selectedRepo?.path])
+
+  // Per-repo: resolve repo slug for GH URL mismatch detection.
+  useEffect(() => {
+    if (!selectedRepo) {
+      setLinkRepoSlug(null)
+      return
+    }
+
+    let cancelled = false
+    void window.api.gh
+      .repoSlug({ repoPath: selectedRepo.path })
+      .then((slug) => {
+        if (!cancelled) {
+          setLinkRepoSlug(slug)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLinkRepoSlug(null)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [selectedRepo])
 
   // Reset setup decision when config / policy changes.
   useEffect(() => {

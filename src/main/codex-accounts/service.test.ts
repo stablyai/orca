@@ -58,6 +58,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     openLinksInApp: false,
     rightSidebarOpenByDefault: true,
     showTitlebarAgentActivity: true,
+    showAgentDashboard: true,
     showTaskProviderIcons: true,
     diffDefaultView: 'inline',
     notifications: {
@@ -84,6 +85,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     terminalMacOptionAsAltMigrated: true,
     experimentalTerminalDaemon: false,
     experimentalTerminalDaemonNoticeShown: false,
+    experimentalAgentDashboard: false,
     terminalWindowsShell: 'powershell.exe',
     enableGitHubAttribution: true,
     ...overrides

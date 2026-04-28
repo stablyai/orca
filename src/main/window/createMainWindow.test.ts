@@ -871,6 +871,7 @@ describe('createMainWindow', () => {
         ({
           windowMaximized: true
         }) as never,
+      getSettings: () => ({ windowBackgroundBlur: false }) as never,
       updateUI: vi.fn()
     } as never)
 

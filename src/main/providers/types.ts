@@ -25,10 +25,21 @@ export type PtySpawnOptions = {
   /** Daemon session ID for reattach. When provided, the daemon reconnects
    *  to an existing session instead of creating a new one. */
   sessionId?: string
+  /** Why: allows the renderer to request a specific shell for a single new
+   *  terminal tab (e.g. "open this tab in WSL" from the "+" submenu) without
+   *  changing the user's persistent default shell setting. Only consulted on
+   *  Windows; ignored on macOS/Linux where shell selection is not exposed. */
+  shellOverride?: string
 }
 
 export type PtySpawnResult = {
   id: string
+  /** OS-level pid of the shell process, when available at spawn time.
+   *  Why: the memory collector needs this to walk each PTY's process
+   *  subtree. Daemon-backed providers return it from the RPC result;
+   *  local providers read it from node-pty. Null when the underlying
+   *  provider could not publish a pid (e.g., race during spawn). */
+  pid?: number | null
   /** ANSI snapshot of the terminal screen, present when reattaching to an
    *  existing daemon session. Write this to xterm.js to restore visual state. */
   snapshot?: string

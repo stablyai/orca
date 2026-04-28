@@ -1,188 +1,56 @@
 import React, { useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { X } from 'lucide-react'
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card'
 import { useAppStore } from '@/store'
-import { AgentIcon } from '@/lib/agent-catalog'
-import { AgentStateDot, type AgentDotState, agentStateLabel } from '@/components/AgentStateDot'
-import { isExplicitAgentStatusFresh, agentTypeToIconAgent } from '@/lib/agent-status'
+import DashboardAgentRow from '@/components/dashboard/DashboardAgentRow'
+import type { DashboardAgentRow as DashboardAgentRowType } from '@/components/dashboard/useDashboardData'
+import { useNow } from '@/components/dashboard/useNow'
+import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
+import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import type { TerminalTab } from '../../../../shared/types'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
-import { cn } from '@/lib/utils'
-import { EMPTY_TABS } from './WorktreeCardHelpers'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status'
-
-// Why: stable ordering used by the `rows` memo — working first, then
-// blocked/waiting/permission, then done, then idle. Hoisted to module scope
-// so the Record literal isn't re-allocated on every memo recompute.
-const STATE_RANK: Record<AgentDotState, number> = {
-  working: 0,
-  blocked: 1,
-  waiting: 1,
-  permission: 1,
-  done: 2,
-  idle: 3
-}
-
-// Why: stable empty arrays so the narrowed selectors below can return the
-// same reference when the worktree has no live/retained agents, avoiding
-// unnecessary re-renders through `useShallow`'s array identity check.
-const EMPTY_LIVE_ENTRIES: AgentStatusEntry[] = []
-const EMPTY_RETAINED: { paneKey: string; snapshot: RetainedAgentEntry }[] = []
-
-// Why: this hovercard is intentionally self-contained in PR 3 (sidebar). The
-// grouped Agent Dashboard (PR 4) will build its own view on top of the same
-// store slice (`agentStatusByPaneKey` + `retainedAgentsByPaneKey`). Reading
-// directly from the store here — rather than sharing a dashboard pipeline that
-// doesn't exist yet — lets the sidebar ship independently and guarantees both
-// PRs converge on the same source of truth without one depending on the other.
-// When PR 4 lands, it will populate retainedAgentsByPaneKey via its retention
-// sync effect; the union we build below already accounts for that, so no
-// changes are needed here.
 
 type AgentStatusHoverProps = {
   worktreeId: string
   children: React.ReactNode
 }
 
-type HoverAgentRow = {
-  paneKey: string
-  tabId: string
-  entry: AgentStatusEntry
-  dotState: AgentDotState
-  isRetained: boolean
-}
+// Why: stable empty-array references so narrow selectors return the same
+// reference when there's nothing for this worktree. Without stable empties,
+// zustand's shallow equality would see a new `[]` every render and trigger
+// unnecessary re-renders — defeating the purpose of the narrow selector.
+const EMPTY_TABS: TerminalTab[] = []
+const EMPTY_LIVE_ENTRIES: AgentStatusEntry[] = []
+const EMPTY_RETAINED: RetainedAgentEntry[] = []
 
-// Why: stale "working" entries (hook stream went silent past the freshness
-// TTL) should appear as idle rather than spinning indefinitely. All other
-// live states pass through 1:1 — AgentDotState is a superset of
-// AgentStatusState so the cast is safe for fresh entries.
-function liveEntryToDotState(entry: AgentStatusEntry, now: number): AgentDotState {
-  if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
-    return 'idle'
-  }
-  return entry.state as AgentDotState
-}
-
-function truncatePrompt(value: string, max = 80): string {
-  if (!value) {
-    return ''
-  }
-  if (value.length <= max) {
-    return value
-  }
-  return `${value.slice(0, max - 1).trimEnd()}…`
-}
-
-type InlineAgentRowProps = {
-  row: HoverAgentRow
-  onDismiss: (paneKey: string) => void
-  onActivate: (tabId: string) => void
-}
-
-// Why: defined at module scope (memoized) rather than inside the hovercard so
-// the row implementation is stable across re-renders and obviously shared
-// between live and retained entries — the only difference between them for
-// display purposes is the isRetained flag.
-const InlineAgentRow = React.memo(function InlineAgentRow({
-  row,
-  onDismiss,
-  onActivate
-}: InlineAgentRowProps) {
-  const { entry, dotState, isRetained, tabId, paneKey } = row
-  const iconAgent = agentTypeToIconAgent(entry.agentType)
-  const prompt = truncatePrompt(entry.prompt)
-  const label = prompt || agentStateLabel(dotState)
-
-  const handleActivateClick = useCallback(() => {
-    onActivate(tabId)
-  }, [onActivate, tabId])
-
-  const handleDismissClick = useCallback(
-    (e: React.MouseEvent<HTMLButtonElement>) => {
-      // Why: the activate button sits next to this one inside a shared row
-      // container (not a nested button — nesting <button> inside <button> is
-      // invalid HTML and causes inconsistent click dispatch across browsers).
-      // Still stop propagation defensively in case the row gains a click
-      // handler in a future change.
-      e.stopPropagation()
-      onDismiss(paneKey)
-    },
-    [onDismiss, paneKey]
-  )
-
-  return (
-    <div
-      className={cn(
-        'group flex w-full items-center gap-2 rounded px-1 py-1',
-        // Why: hover tints go in opposite directions per theme — dark mode
-        // adds light (bg-accent/60 over the dark popover reads instantly);
-        // light mode must darken the surface because accent (#f5f5f5) on
-        // near-white renders effectively transparent. Use a black alpha
-        // overlay in light and the original alpha-on-accent in dark.
-        'hover:bg-black/[0.06] dark:hover:bg-accent/60'
-      )}
-    >
-      <button
-        type="button"
-        onClick={handleActivateClick}
-        className={cn(
-          'flex min-w-0 flex-1 items-center gap-2 text-left',
-          'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
-        )}
-        aria-label={`Activate ${entry.prompt || agentStateLabel(dotState)}`}
-      >
-        <span className="flex size-4 shrink-0 items-center justify-center text-muted-foreground">
-          <AgentIcon agent={iconAgent} size={14} />
-        </span>
-        <AgentStateDot state={dotState} size="sm" />
-        <span
-          className={cn(
-            'min-w-0 flex-1 truncate text-xs',
-            isRetained ? 'text-muted-foreground' : 'text-foreground'
-          )}
-          title={entry.prompt || agentStateLabel(dotState)}
-        >
-          {label}
-        </span>
-      </button>
-      <button
-        type="button"
-        aria-label="Dismiss agent"
-        onClick={handleDismissClick}
-        className={cn(
-          'flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground/60',
-          'opacity-0 transition-opacity group-hover:opacity-100 hover:bg-accent hover:text-foreground',
-          'focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
-        )}
-      >
-        <X className="size-3" />
-      </button>
-    </div>
-  )
-})
-
+// Why: the hovercard must render the exact same information the per-worktree
+// dashboard card shows — hook-reported agents plus any retained "done"
+// snapshots. We intentionally do NOT call useDashboardData() +
+// enrichGroupsWithRetained() here, even though that would centralize the row-
+// building logic. AgentStatusHover wraps every WorktreeCard, so reusing the
+// full dashboard pipeline would mean every agent-status event recomputes the
+// entire repo × worktree × tabs × agentStatus aggregation once per card on
+// screen — O(worktrees²) work per update (render amplification). Instead we
+// read the store's primitive maps via narrow selectors and do a focused
+// per-worktree scan that mirrors buildAgentRowsForWorktree in
+// useDashboardData.ts and the retained-row merge in useRetainedAgents.ts.
+// Retention state itself is still hoisted into the store (see
+// useRetainedAgentsSync wired at App level), so dismissing in the hover
+// reflects in the dashboard and vice versa.
 const AgentStatusHover = React.memo(function AgentStatusHover({
   worktreeId,
   children
 }: AgentStatusHoverProps) {
-  // Why: narrowed selectors — this hovercard wraps every WorktreeCard's agent
-  // indicator, so subscribing to the three whole-store maps
-  // (`tabsByWorktree`, `agentStatusByPaneKey`, `retainedAgentsByPaneKey`)
-  // would make every card re-compute its `rows` memo on any unrelated agent
-  // event (the render-amplification problem flagged in review).
-  //
-  // Why two separate selectors (not one wrapper object): zustand's `shallow`
-  // comparator compares a plain object's keys with `Object.is` on each value.
-  // Because the selector body constructs fresh arrays each run, a wrapper
-  // `{ entries, retained }` would fail `Object.is` per-key on every unrelated
-  // store event and defeat `useShallow` for any worktree with at least one
-  // agent. Bare arrays, by contrast, are compared element-wise with
-  // `Object.is` (via `Array.prototype.entries`) — so when the entries haven't
-  // changed, identity IS preserved across runs. Mirrors the precedent in
-  // `WorktreeCard.tsx:115-149`.
+  const tabs = useAppStore((s) => s.tabsByWorktree[worktreeId])
+  // Why: narrow the store subscriptions to only THIS worktree's entries via
+  // useShallow. AgentStatusHover wraps every WorktreeCard, so subscribing to
+  // the whole agentStatusByPaneKey/retainedAgentsByPaneKey map would make every
+  // on-screen hovercard re-render on any agent-status update anywhere —
+  // O(worktrees²) render amplification. Pre-filtering here means the card only
+  // re-renders when something relevant to THIS worktree changes.
   const entries = useAppStore(
     useShallow((s) => {
       const wtTabs = s.tabsByWorktree[worktreeId] ?? EMPTY_TABS
@@ -190,12 +58,6 @@ const AgentStatusHover = React.memo(function AgentStatusHover({
         return EMPTY_LIVE_ENTRIES
       }
       const tabIds = new Set(wtTabs.map((t) => t.id))
-
-      // Why: scan all live entries once, keep those whose paneKey prefix
-      // (`${tabId}:`) matches a tab in this worktree. The paneKey format is
-      // enforced by the store slice (`${tabId}:${paneId}`), so prefix
-      // matching is the canonical lookup path without requiring an
-      // auxiliary index.
       const out: AgentStatusEntry[] = []
       for (const [paneKey, entry] of Object.entries(s.agentStatusByPaneKey)) {
         const sepIdx = paneKey.indexOf(':')
@@ -211,112 +73,131 @@ const AgentStatusHover = React.memo(function AgentStatusHover({
       return out.length > 0 ? out : EMPTY_LIVE_ENTRIES
     })
   )
-  // Why: retained snapshots for this worktree. PR 3 has no retention-sync
-  // hook yet, so this map is always empty here; the union is preserved so
-  // PR 4 can auto-populate without touching this file.
-  //
-  // Caveat (for PR 4): the `{ paneKey, snapshot }` wrapper objects below
-  // are freshly allocated on each selector run, so `compareIterables`'
-  // element-wise `Object.is` will report inequality even when the
-  // underlying snapshot identity is stable. That's fine while the map is
-  // empty, but once PR 4 populates `retainedAgentsByPaneKey` this shape
-  // may need a further refactor — e.g., caching wrappers by paneKey, or
-  // returning two parallel arrays (paneKeys + snapshots) that preserve
-  // per-element identity across runs.
   const retained = useAppStore(
     useShallow((s) => {
-      const out: { paneKey: string; snapshot: RetainedAgentEntry }[] = []
-      for (const [paneKey, snapshot] of Object.entries(s.retainedAgentsByPaneKey)) {
-        if (snapshot.worktreeId === worktreeId) {
-          out.push({ paneKey, snapshot })
+      const out: RetainedAgentEntry[] = []
+      for (const ra of Object.values(s.retainedAgentsByPaneKey)) {
+        if (ra.worktreeId === worktreeId) {
+          out.push(ra)
         }
       }
       return out.length > 0 ? out : EMPTY_RETAINED
     })
   )
-  // Why: subscribe to the freshness epoch so the hovercard re-renders the
-  // "idle" decay the moment an entry crosses AGENT_STATUS_STALE_AFTER_MS,
-  // without needing a separate ticking timer in this component.
+  // Why: agentStatusEpoch is included in the dependency array (but not in the
+  // computation itself) so the memo recomputes when freshness boundaries
+  // expire, even if no new PTY data arrives — same rationale as
+  // useDashboardData.
   const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
-  const removeAgentStatus = useAppStore((s) => s.removeAgentStatus)
+  const dropAgentStatus = useAppStore((s) => s.dropAgentStatus)
   const dismissRetainedAgent = useAppStore((s) => s.dismissRetainedAgent)
   const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
   const setActiveTab = useAppStore((s) => s.setActiveTab)
   const setActiveView = useAppStore((s) => s.setActiveView)
 
-  const rows = useMemo<HoverAgentRow[]>(() => {
-    if (entries.length === 0 && retained.length === 0) {
-      return []
-    }
+  const agents = useMemo<DashboardAgentRowType[]>(() => {
+    const rows: DashboardAgentRowType[] = []
+    const seenPaneKeys = new Set<string>()
+    // Why: Date.now() is read inside the memo (not as a dep) so stale-decay
+    // recalculates whenever agentStatusEpoch ticks — same pattern as
+    // useDashboardData.
     const now = Date.now()
-    const seen = new Set<string>()
-    const collected: HoverAgentRow[] = []
 
-    // Why: build a tabId lookup so we can resolve the tabId from each live
-    // entry's paneKey (the selector already filtered to this worktree's
-    // tabs, so every paneKey here is guaranteed to belong to one of them).
+    // Why: build a tabId -> entries index once instead of re-scanning every
+    // agent status entry inside the per-tab loop. paneKey is formatted as
+    // `${tabId}:${paneId}`; splitting on the first ':' lets us bucket entries
+    // by tab in a single O(N) pass, turning the per-worktree build from
+    // O(tabs × statuses) into O(tabs + statuses). Mirrors the same index
+    // built in useDashboardData.buildDashboardData. `entries` is already
+    // pre-filtered to this worktree by the narrow selector above, so this is
+    // O(M) where M is this-worktree-entries, not the global map.
+    const entriesByTabId = new Map<string, AgentStatusEntry[]>()
     for (const entry of entries) {
-      const paneKey = entry.paneKey
-      const sepIdx = paneKey.indexOf(':')
-      if (sepIdx <= 0) {
+      const colonIndex = entry.paneKey.indexOf(':')
+      if (colonIndex === -1) {
         continue
       }
-      const tabId = paneKey.slice(0, sepIdx)
-      collected.push({
-        paneKey,
-        tabId,
-        entry,
-        dotState: liveEntryToDotState(entry, now),
-        isRetained: false
-      })
-      seen.add(paneKey)
+      const tabId = entry.paneKey.slice(0, colonIndex)
+      const bucket = entriesByTabId.get(tabId)
+      if (bucket) {
+        bucket.push(entry)
+      } else {
+        entriesByTabId.set(tabId, [entry])
+      }
     }
 
-    for (const { paneKey, snapshot } of retained) {
-      if (seen.has(paneKey)) {
+    // Live rows — mirror buildAgentRowsForWorktree in useDashboardData.ts.
+    const worktreeTabs = tabs ?? []
+    for (const tab of worktreeTabs) {
+      const explicitEntries = entriesByTabId.get(tab.id) ?? []
+      for (const entry of explicitEntries) {
+        // Why: decay stale working/blocked/waiting entries to 'idle' when the
+        // hook stream has gone silent past AGENT_STATUS_STALE_AFTER_MS. Without
+        // this, an agent that exited without a final update would keep the
+        // hover's "Running agents" count and the dashboard filters inflated
+        // with dead work. `done` is terminal and must NOT decay to idle —
+        // retention (collectRetainedAgentsOnDisappear) only keeps rows whose
+        // prev state was 'done', so a stale done → idle would silently drop
+        // the completion signal. Mirrors useDashboardData.buildAgentRowsForWorktree.
+        const isFresh = isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)
+        const shouldDecay =
+          !isFresh &&
+          (entry.state === 'working' || entry.state === 'blocked' || entry.state === 'waiting')
+        rows.push({
+          paneKey: entry.paneKey,
+          entry,
+          tab,
+          agentType: entry.agentType ?? 'unknown',
+          state: shouldDecay ? 'idle' : entry.state,
+          // Why: the oldest stateHistory entry's startedAt is the agent's
+          // original "first seen" timestamp. When history is empty the entry
+          // has never transitioned state, so stateStartedAt (the moment the
+          // current — and only — state began) is the true first-seen
+          // timestamp. Do NOT fall back to updatedAt: it advances on every
+          // tool/prompt ping within the same state, which would corrupt
+          // oldest-first ordering and the "started … ago" display for
+          // long-running agents between state transitions. Matches
+          // useDashboardData's semantics exactly.
+          startedAt: entry.stateHistory[0]?.startedAt ?? entry.stateStartedAt
+        })
+        seenPaneKeys.add(entry.paneKey)
+      }
+    }
+
+    // Retained rows — mirror enrichGroupsWithRetained: add a retained snapshot
+    // only if it belongs to THIS worktree and no live row already occupies its
+    // paneKey. `retained` is already pre-filtered to this worktree by the
+    // narrow selector above.
+    for (const ra of retained) {
+      if (seenPaneKeys.has(ra.entry.paneKey)) {
         continue
       }
-      collected.push({
-        paneKey,
-        tabId: snapshot.tab.id,
-        entry: snapshot.entry,
-        // Why: retained entries are snapshots taken at completion time, so
-        // their freshness is meaningful only relative to when they were
-        // retained. Treat them uniformly as 'done' — the dashboard (PR 4)
-        // will own any richer retained-state vocabulary.
-        dotState: 'done',
-        isRetained: true
+      rows.push({
+        paneKey: ra.entry.paneKey,
+        entry: ra.entry,
+        tab: ra.tab,
+        agentType: ra.agentType,
+        state: 'done',
+        startedAt: ra.startedAt
       })
     }
 
-    // Why: stable ordering using the module-scoped STATE_RANK constant.
-    // Within a state bucket, newer updates come first.
-    collected.sort((a, b) => {
-      const r = STATE_RANK[a.dotState] - STATE_RANK[b.dotState]
-      if (r !== 0) {
-        return r
-      }
-      return b.entry.updatedAt - a.entry.updatedAt
-    })
-    return collected
-    // Why: agentStatusEpoch is a cache-busting counter, not data consumed by
-    // the memo body. It bumps on entry writes AND on stale-boundary ticks
-    // (see scheduleNextFreshnessExpiry in the agent-status slice), so listing
-    // it forces recomputation of `dotState` when entries decay to 'idle' even
-    // though the entries array itself hasn't changed.
+    // Why: sort oldest-first to match useDashboardData ordering — stable list
+    // order keeps new agents from shoving the row the user is reading.
+    rows.sort((a, b) => a.startedAt - b.startedAt)
+    return rows
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entries, retained, agentStatusEpoch])
+  }, [tabs, entries, retained, worktreeId, agentStatusEpoch])
 
-  // Why: dismissing wipes both the live entry (if present) and the retained
-  // snapshot (if present). In PR 3 only the live removal is reachable, but
-  // keeping both calls here means PR 4's retention sync doesn't need to patch
-  // this file.
+  // Why: mirror AgentDashboard.handleDismissAgent so dismissing in either
+  // surface has identical effect — removes the live store entry and the
+  // retained snapshot if either is present.
   const handleDismissAgent = useCallback(
     (paneKey: string) => {
-      removeAgentStatus(paneKey)
+      dropAgentStatus(paneKey)
       dismissRetainedAgent(paneKey)
     },
-    [removeAgentStatus, dismissRetainedAgent]
+    [dropAgentStatus, dismissRetainedAgent]
   )
 
   // Why: clicking a row activates the specific tab the agent runs in. Retained
@@ -343,37 +224,91 @@ const AgentStatusHover = React.memo(function AgentStatusHover({
           collapses to ~3% alpha and the card looks borderless. Override to
           explicit light/dark tokens so the card outline reads the same in
           both modes. */}
+      {/* Why: cap the card to the viewport and let its body scroll. When a row
+          is expanded (tool input, prompt, or assistant message unfurled), the
+          content can exceed the sidebar's vertical space; without a bounded
+          card the hover overflows off-screen with no way to reach the rows
+          below. `max-h-[85vh]` + `flex flex-col` keeps the card within the
+          viewport, and the inner list below owns the scroll so the "Agent
+          activity (N)" header stays pinned. */}
       <HoverCardContent
         side="right"
         align="start"
-        className="w-72 border-neutral-200 bg-popover p-3 text-xs dark:border-white/10"
+        className="flex w-72 max-h-[85vh] flex-col border-neutral-200 bg-popover p-3 text-xs dark:border-white/10"
       >
-        {rows.length === 0 ? (
-          <div className="py-1 text-center text-muted-foreground">No running agents</div>
-        ) : (
-          <div className="flex flex-col">
-            <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
-              Running agents ({rows.length})
-            </div>
-            {/* Why: same reason as the card border above — `divide-border/60`
-                on dark `--border` (0.07 alpha) evaluates to ~4% alpha and
-                the row separators disappear. Pin explicit light/dark tokens
-                so the dividers stay legible in either mode. */}
-            <div className="flex flex-col divide-y divide-neutral-200 dark:divide-white/10">
-              {rows.map((row) => (
-                <div key={row.paneKey} className="py-1">
-                  <InlineAgentRow
-                    row={row}
-                    onDismiss={handleDismissAgent}
-                    onActivate={handleActivateAgentTab}
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        <AgentStatusHoverContent
+          agents={agents}
+          onDismiss={handleDismissAgent}
+          onActivate={handleActivateAgentTab}
+        />
       </HoverCardContent>
     </HoverCard>
+  )
+})
+
+type AgentStatusHoverContentProps = {
+  agents: DashboardAgentRowType[]
+  onDismiss: (paneKey: string) => void
+  onActivate: (tabId: string) => void
+}
+
+// Why: split out so `useNow(30_000)` only runs while the hovercard body is
+// actually mounted. AgentStatusHover wraps EVERY WorktreeCard in the sidebar
+// and stays mounted regardless of whether the card is open, so placing the
+// timer on the outer component would run one 30s interval per visible
+// worktree for the entire session — strictly worse than pre-hoist, since the
+// common path is that the user never opens the hovercard. HoverCardContent is
+// portaled by Radix and only mounts while open, so rendering this child there
+// naturally gates the timer: 0 intervals while closed, exactly 1 per open
+// card. The outer component still owns the narrow store subscriptions and the
+// `agents` memo so those don't re-run on every open/close, and to preserve
+// the render-amplification protection that originally motivated the narrow
+// selectors.
+const AgentStatusHoverContent = React.memo(function AgentStatusHoverContent({
+  agents,
+  onDismiss,
+  onActivate
+}: AgentStatusHoverContentProps) {
+  // Why: own one 30s tick per OPEN hovercard instance and thread it to every
+  // row we render. Previously each DashboardAgentRow ran its own setInterval,
+  // so an N-row hovercard fired N staggered re-renders every cycle. Scoping
+  // this to the inner content (which only mounts while the card is open)
+  // keeps the overhead bounded to the card the user is actually looking at.
+  const now = useNow(30_000)
+
+  if (agents.length === 0) {
+    return <div className="py-1 text-center text-muted-foreground">No agent activity</div>
+  }
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      {/* Why: "Agent activity" rather than "Running agents" — the list
+          now includes retained 'done' snapshots and stale-decayed 'idle'
+          rows alongside live working/blocked/waiting agents, so
+          "running" would be semantically inaccurate. */}
+      <div className="mb-1 shrink-0 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
+        Agent activity ({agents.length})
+      </div>
+      {/* Why: same reason as the card border above — `divide-border/60`
+          on dark `--border` (0.07 alpha) evaluates to ~4% alpha and
+          the row separators disappear. Pin explicit light/dark tokens
+          so the dividers stay legible in either mode.
+          Why scroll here (and not on HoverCardContent): keeping the header
+          pinned above a scrolling list preserves the row count as context
+          when one row is expanded and pushes the rest below the fold. */}
+      <div className="flex min-h-0 flex-1 flex-col divide-y divide-neutral-200 overflow-y-auto dark:divide-white/10">
+        {agents.map((agent) => (
+          <div key={agent.paneKey} className="py-1">
+            <DashboardAgentRow
+              agent={agent}
+              onDismiss={onDismiss}
+              onActivate={onActivate}
+              now={now}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
   )
 })
 

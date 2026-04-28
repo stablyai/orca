@@ -288,19 +288,30 @@ export function useFileExplorerDragDrop({
         setIsNativeDragOver(true)
       }
     }, []),
-    onDragLeave: useCallback((_e: React.DragEvent) => {
-      // Decrement both counters since we cannot inspect types on dragleave
-      rootDragCounterRef.current -= 1
-      if (rootDragCounterRef.current <= 0) {
-        rootDragCounterRef.current = 0
-        setIsRootDragOver(false)
-      }
-      nativeRootDragCounterRef.current -= 1
-      if (nativeRootDragCounterRef.current <= 0) {
-        nativeRootDragCounterRef.current = 0
-        setIsNativeDragOver(false)
-      }
-    }, []),
+    onDragLeave: useCallback(
+      (_e: React.DragEvent) => {
+        // Decrement both counters since we cannot inspect types on dragleave
+        rootDragCounterRef.current -= 1
+        if (rootDragCounterRef.current <= 0) {
+          rootDragCounterRef.current = 0
+          setIsRootDragOver(false)
+        }
+        nativeRootDragCounterRef.current -= 1
+        if (nativeRootDragCounterRef.current <= 0) {
+          nativeRootDragCounterRef.current = 0
+          setIsNativeDragOver(false)
+        }
+        // Why: the edge auto-scroll rAF loop re-schedules itself as long as the
+        // last recorded cursor Y sits in an edge zone. If the drag leaves the
+        // explorer (dragged out of window, ESC-cancelled, or dropped elsewhere)
+        // neither onDrop nor onDragEnd fires here, so without this stop the
+        // loop keeps scrolling the viewport down and fights manual scroll-up.
+        if (rootDragCounterRef.current === 0 && nativeRootDragCounterRef.current === 0) {
+          stopDragEdgeScroll()
+        }
+      },
+      [stopDragEdgeScroll]
+    ),
     onDrop: useCallback(
       (e: React.DragEvent) => {
         e.preventDefault()

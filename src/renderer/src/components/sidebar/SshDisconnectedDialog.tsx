@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
-import { Globe, Loader2, WifiOff } from 'lucide-react'
+import { Loader2, Server, ServerOff } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -72,7 +72,7 @@ export function SshDisconnectedDialog({
             {isConnecting ? (
               <Loader2 className="size-4 text-yellow-500 animate-spin" />
             ) : (
-              <WifiOff className="size-4 text-muted-foreground" />
+              <ServerOff className="size-4 text-muted-foreground" />
             )}
             {isConnecting ? 'Reconnecting...' : 'SSH Disconnected'}
           </DialogTitle>
@@ -80,7 +80,7 @@ export function SshDisconnectedDialog({
         </DialogHeader>
 
         <div className="flex items-center gap-2.5 rounded-md border border-border/50 bg-card/40 px-3 py-2">
-          <Globe className="size-3.5 shrink-0 text-muted-foreground" />
+          <Server className="size-3.5 shrink-0 text-muted-foreground" />
           <div className="min-w-0 flex-1">
             <span className="text-xs font-medium">{targetLabel}</span>
           </div>

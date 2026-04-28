@@ -24,20 +24,30 @@ export const EMPTY_LAYOUT: TerminalLayoutSnapshot = {
 // so replayed mode bits do not leak into the fresh shell. ghostty achieves
 // the same end by not restoring state at all.
 //
+//   25                  — DECTCEM cursor visibility (SerializeAddon captures
+//                         `?25l` when the cursor was hidden at snapshot time;
+//                         without an explicit `?25h` here the cursor stays
+//                         invisible in the restored terminal)
 //   1000/1002/1003/1006 — mouse reporting variants
 //   1004                — focus event reporting (the actual bug source)
 //   2004                — bracketed paste
 export const POST_REPLAY_MODE_RESET =
-  '\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1004l\x1b[?1006l\x1b[?2004l'
+  '\x1b[?25h\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1004l\x1b[?1006l\x1b[?2004l'
 
 // Why: daemon snapshot restore reattaches to a live session, so we avoid the
 // full POST_REPLAY_MODE_RESET bundle there — a still-running TUI may still
-// rely on mouse or bracketed-paste modes. Focus reporting is the exception:
-// if xterm preserves `?1004h` across snapshot replay, pane focus/blur emits
-// `\e[I` / `\e[O` into the PTY and shells like zsh ring BEL when no TUI is
-// actively consuming them. Clearing only 1004 preserves the other live-session
-// modes while preventing phantom bells on restored background tabs.
-export const POST_REPLAY_FOCUS_REPORTING_RESET = '\x1b[?1004l'
+// rely on mouse or bracketed-paste modes. Two exceptions are safe to reset:
+//
+//   25   — DECTCEM cursor visibility: SerializeAddon bakes `?25l` into the
+//          snapshot when the cursor was hidden at capture time. Without `?25h`
+//          here the cursor stays invisible after reattach. If a TUI is still
+//          running and wants the cursor hidden, the SIGWINCH sent immediately
+//          after restore triggers a repaint that re-hides it — a brief flash
+//          that is far less harmful than a permanently invisible cursor.
+//   1004 — focus event reporting: preserving `?1004h` makes restored shells
+//          ring BEL on pane focus/blur (shells like zsh treat `\e[I`/`\e[O`
+//          as unbound key input).
+export const POST_REPLAY_FOCUS_REPORTING_RESET = '\x1b[?25h\x1b[?1004l'
 
 export function paneLeafId(paneId: number): string {
   return `pane:${paneId}`

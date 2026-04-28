@@ -18,6 +18,7 @@ import { createGitHubSlice } from './github'
 import { createLinearSlice } from './linear'
 import { createEditorSlice } from './editor'
 import { createStatsSlice } from './stats'
+import { createMemorySlice } from './memory'
 import { createClaudeUsageSlice } from './claude-usage'
 import { createCodexUsageSlice } from './codex-usage'
 import { createBrowserSlice } from './browser'
@@ -48,6 +49,7 @@ export function createTestStore() {
     ...createLinearSlice(...a),
     ...createEditorSlice(...a),
     ...createStatsSlice(...a),
+    ...createMemorySlice(...a),
     ...createClaudeUsageSlice(...a),
     ...createCodexUsageSlice(...a),
     ...createBrowserSlice(...a),

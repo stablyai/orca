@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react'
-import { Check, ChevronsUpDown, FolderPlus, Globe } from 'lucide-react'
+import { Check, ChevronsUpDown, FolderPlus, Server } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Command,
@@ -181,7 +181,7 @@ export default function RepoCombobox({
                 />
                 {selectedRepo.connectionId && (
                   <span className="shrink-0 inline-flex items-center gap-0.5 rounded bg-muted px-1 py-0.5 text-[9px] font-medium leading-none text-muted-foreground">
-                    <Globe className="size-2.5" />
+                    <Server className="size-2.5" />
                     SSH
                   </span>
                 )}
@@ -228,7 +228,7 @@ export default function RepoCombobox({
                       />
                       {repo.connectionId && (
                         <span className="shrink-0 inline-flex items-center gap-0.5 rounded bg-muted px-1 py-0.5 text-[9px] font-medium leading-none text-muted-foreground">
-                          <Globe className="size-2.5" />
+                          <Server className="size-2.5" />
                           SSH
                         </span>
                       )}

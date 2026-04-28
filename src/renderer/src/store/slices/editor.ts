@@ -119,7 +119,7 @@ export type OpenFile = {
   mode: 'edit' | 'diff' | 'conflict-review' | 'markdown-preview'
 }
 
-export type RightSidebarTab = 'explorer' | 'search' | 'source-control' | 'checks'
+export type RightSidebarTab = 'explorer' | 'search' | 'source-control' | 'checks' | 'ports'
 export type ActivityBarPosition = 'top' | 'side'
 
 export type MarkdownViewMode = 'source' | 'rich' | 'preview'
@@ -267,7 +267,6 @@ export type EditorSlice = {
     string,
     {
       query: string
-      queryDetailsExpanded: boolean
       caseSensitive: boolean
       wholeWord: boolean
       useRegex: boolean
@@ -1727,7 +1726,6 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     set((s) => {
       const current = s.fileSearchStateByWorktree[worktreeId] || {
         query: '',
-        queryDetailsExpanded: false,
         caseSensitive: false,
         wholeWord: false,
         useRegex: false,

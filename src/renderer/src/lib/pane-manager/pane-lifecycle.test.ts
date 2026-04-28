@@ -45,8 +45,7 @@ function createPane(): ManagedPaneInternal {
     webLinksAddon: {} as never,
     webglAddon: null,
     compositionHandler: null,
-    pendingSplitScrollState: null,
-    pendingDragScrollState: null
+    pendingSplitScrollState: null
   }
 }
 

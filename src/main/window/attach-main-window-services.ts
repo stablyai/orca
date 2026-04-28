@@ -54,7 +54,7 @@ export function attachMainWindowServices(
     }
     return ids
   })
-  registerSshHandlers(store, () => mainWindow)
+  registerSshHandlers(store, () => mainWindow, runtime)
   registerFileDropRelay(mainWindow)
   setupAutoUpdater(mainWindow, {
     getLastUpdateCheckAt: () => store.getUI().lastUpdateCheckAt,

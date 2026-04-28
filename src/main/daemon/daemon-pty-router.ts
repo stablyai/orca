@@ -180,13 +180,11 @@ export class DaemonPtyRouter implements IPtyProvider {
     }
   }
 
-  disconnectOnly(): void {
+  async disconnectOnly(): Promise<void> {
     for (const unsubscribe of this.unsubscribers.splice(0)) {
       unsubscribe()
     }
-    for (const adapter of this.allAdapters()) {
-      adapter.disconnectOnly()
-    }
+    await Promise.all([...this.allAdapters()].map((adapter) => adapter.disconnectOnly()))
   }
 
   private adapterFor(sessionId: string): DaemonPtyAdapter {

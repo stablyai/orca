@@ -15,7 +15,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import type { Worktree, Repo } from '../../../../shared/types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
-import { AGENT_DASHBOARD_ENABLED } from '../../../../shared/constants'
 import {
   buildExplicitEntriesByTabId,
   buildWorktreeComparator,
@@ -24,6 +23,7 @@ import {
 import {
   type GroupHeaderRow,
   type Row,
+  ALL_GROUP_KEY,
   PINNED_GROUP_KEY,
   buildRows,
   getGroupKeyForWorktree
@@ -134,6 +134,14 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         if (groupKey && collapsedGroups.has(groupKey)) {
           toggleGroup(groupKey)
         }
+      } else if (targetWorktree && groupBy === 'none') {
+        // Why: when any worktree is pinned, buildRows emits a sibling "All"
+        // header for the unpinned block (see worktree-list-groups.ts). If that
+        // header is collapsed, revealing an unpinned target would otherwise
+        // leave it hidden — uncollapse it so the card is actually visible.
+        if (collapsedGroups.has(ALL_GROUP_KEY)) {
+          toggleGroup(ALL_GROUP_KEY)
+        }
       }
     }
 
@@ -174,9 +182,18 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
 
   const navigateWorktree = useCallback(
     (direction: 'up' | 'down') => {
-      const worktreeRows = rows.filter(
-        (r): r is Extract<Row, { type: 'item' }> => r.type === 'item'
-      )
+      // Why: derive the cycling order from an all-expanded layout, not the
+      // rendered rows. Otherwise Cmd+Shift+Up/Down would skip any worktree
+      // hidden in a collapsed group — in particular it couldn't cross the
+      // Pinned/All boundary when either section is collapsed. Reveal will
+      // uncollapse the target section (see pendingRevealWorktreeId effect).
+      const worktreeRows = buildRows(
+        groupBy,
+        worktrees,
+        repoMap,
+        prCache,
+        new Set<string>()
+      ).filter((r): r is Extract<Row, { type: 'item' }> => r.type === 'item')
       if (worktreeRows.length === 0) {
         return
       }
@@ -208,7 +225,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         virtualizer.scrollToIndex(rowIndex, { align: 'auto' })
       }
     },
-    [rows, activeWorktreeId, virtualizer]
+    [rows, activeWorktreeId, virtualizer, groupBy, worktrees, repoMap, prCache]
   )
 
   useEffect(() => {
@@ -548,7 +565,13 @@ const WorktreeList = React.memo(function WorktreeList() {
     // Combined: O(E) index + O(N×T) scoring + O(N log N) sort, instead of
     // O(N × E × T) per sortEpoch bump. Only smart mode uses the score map;
     // other modes ignore it.
-    const agentStatusForSort = AGENT_DASHBOARD_ENABLED ? state.agentStatusByPaneKey : undefined
+    // Why: smart-sort only weighs live agent status when the experimental
+    // Agent Dashboard is opted in — that's the surface that populates
+    // agentStatusByPaneKey via hooks. With the setting off, pass undefined
+    // so the comparator falls back to the persisted-sortOrder + title
+    // heuristics instead of scoring against an empty map.
+    const agentStatusForSort =
+      state.settings?.experimentalAgentDashboard === true ? state.agentStatusByPaneKey : undefined
     const explicitByTabId =
       sortBy === 'smart' ? buildExplicitEntriesByTabId(agentStatusForSort) : undefined
     const precomputedScores =

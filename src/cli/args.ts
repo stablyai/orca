@@ -82,7 +82,8 @@ export function isCommandGroup(commandPath: string[]): boolean {
         'set',
         'clipboard',
         'dialog',
-        'storage'
+        'storage',
+        'orchestration'
       ].includes(commandPath[0])) ||
     (commandPath.length === 2 &&
       commandPath[0] === 'storage' &&

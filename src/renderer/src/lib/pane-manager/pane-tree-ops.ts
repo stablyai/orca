@@ -1,6 +1,5 @@
 import type { DropZone, ManagedPaneInternal, PaneStyleOptions } from './pane-manager-types'
 import { createDivider } from './pane-divider'
-import { captureScrollState, restoreScrollState } from './pane-scroll'
 
 export { findLineByContent, captureScrollState, restoreScrollState } from './pane-scroll'
 
@@ -13,8 +12,6 @@ type TreeOpsCallbacks = {
   getStyleOptions: () => PaneStyleOptions
   safeFit: (pane: ManagedPaneInternal) => void
   refitPanesUnder: (el: HTMLElement) => void
-  lockDragScroll: (el: HTMLElement) => void
-  unlockDragScroll: (el: HTMLElement) => void
   onLayoutChanged?: () => void
 }
 
@@ -26,6 +23,16 @@ function getProposedDimensions(pane: ManagedPaneInternal): { cols: number; rows:
   }
 }
 
+// Why: xterm's terminal.resize() (called by fitAddon.fit()) natively preserves
+// viewportY across reflows — see scroll-reflow.test.ts "reference: undisturbed".
+// A plain fit() is all we need during sidebar drags, divider drags, and window
+// resizes. This matches how Superset and VSCode handle the same cases.
+//
+// pendingSplitScrollState is the one case where fit() alone isn't enough:
+// wrapInSplit() reparents the container, which makes the browser reset
+// scrollTop to 0 asynchronously. splitPane captures the pre-split state and
+// scheduleSplitScrollRestore owns the authoritative restore on a timer, so
+// safeFit here just fits and lets the scheduled restore do its job.
 export function safeFit(pane: ManagedPaneInternal): void {
   try {
     const dims = getProposedDimensions(pane)
@@ -33,20 +40,23 @@ export function safeFit(pane: ManagedPaneInternal): void {
       // Why: divider drags fire refits every frame, but most frames do not
       // cross a cell boundary. Skipping those avoids FitAddon.clear()+refresh()
       // churn, which was causing visible terminal blinking while resizing.
+      //
+      // Why: diagnostic for intermittent dead-terminal-after-split. If a
+      // just-reparented pane's proposed dimensions match its current
+      // dimensions (the default 80×24 at certain screen widths), this
+      // early-return skips fitAddon.fit() and no terminal.resize() fires
+      // — leaving the WebGL canvas at stale dimensions.
+      if (pane.pendingSplitScrollState) {
+        console.warn(
+          '[terminal] safeFit early-return during pending split for pane',
+          pane.id,
+          `— dims ${dims.cols}×${dims.rows} match current, webgl:`,
+          !!pane.webglAddon
+        )
+      }
       return
     }
-    if (pane.pendingSplitScrollState) {
-      pane.fitAddon.fit()
-      return
-    }
-    if (pane.pendingDragScrollState) {
-      pane.fitAddon.fit()
-      restoreScrollState(pane.terminal, pane.pendingDragScrollState)
-      return
-    }
-    const state = captureScrollState(pane.terminal)
     pane.fitAddon.fit()
-    restoreScrollState(pane.terminal, state)
   } catch {
     // Container may not have dimensions yet
   }
@@ -54,26 +64,7 @@ export function safeFit(pane: ManagedPaneInternal): void {
 
 export function fitAllPanesInternal(panes: Map<number, ManagedPaneInternal>): void {
   for (const pane of panes.values()) {
-    try {
-      const dims = getProposedDimensions(pane)
-      if (dims && dims.cols === pane.terminal.cols && dims.rows === pane.terminal.rows) {
-        continue
-      }
-      if (pane.pendingSplitScrollState) {
-        pane.fitAddon.fit()
-        continue
-      }
-      if (pane.pendingDragScrollState) {
-        pane.fitAddon.fit()
-        restoreScrollState(pane.terminal, pane.pendingDragScrollState)
-        continue
-      }
-      const state = captureScrollState(pane.terminal)
-      pane.fitAddon.fit()
-      restoreScrollState(pane.terminal, state)
-    } catch {
-      /* ignore */
-    }
+    safeFit(pane)
   }
 }
 
@@ -176,8 +167,6 @@ export function insertPaneNextTo(
   // Create divider
   const divider = createDivider(isVertical, callbacks.getStyleOptions(), {
     refitPanesUnder: callbacks.refitPanesUnder,
-    lockDragScroll: callbacks.lockDragScroll,
-    unlockDragScroll: callbacks.unlockDragScroll,
     onLayoutChanged: callbacks.onLayoutChanged
   })
 
@@ -199,10 +188,23 @@ export function insertPaneNextTo(
     split.appendChild(source.container)
   }
 
-  // Refit both
+  // Refit both and refresh rendering surfaces — both panes were reparented
+  // into the new split wrapper, which can leave the WebGL canvas in a stale
+  // state (same mechanism as wrapInSplit; see refreshAfterReparent in
+  // pane-split-scroll.ts).
   requestAnimationFrame(() => {
     callbacks.safeFit(source)
     callbacks.safeFit(target)
+    try {
+      source.terminal.refresh(0, source.terminal.rows - 1)
+    } catch {
+      /* ignore */
+    }
+    try {
+      target.terminal.refresh(0, target.terminal.rows - 1)
+    } catch {
+      /* ignore */
+    }
   })
 }
 

@@ -11,6 +11,7 @@ import { BROWSER_COOKIE_HANDLERS } from './handlers/browser-cookie'
 import { BROWSER_CAPTURE_HANDLERS } from './handlers/browser-capture'
 import { BROWSER_ENV_HANDLERS } from './handlers/browser-env'
 import { BROWSER_STORAGE_HANDLERS } from './handlers/browser-storage'
+import { ORCHESTRATION_HANDLERS } from './handlers/orchestration'
 
 export type HandlerContext = {
   flags: Map<string, string | boolean>
@@ -34,7 +35,8 @@ function buildHandlers(): Map<string, CommandHandler> {
     BROWSER_COOKIE_HANDLERS,
     BROWSER_CAPTURE_HANDLERS,
     BROWSER_ENV_HANDLERS,
-    BROWSER_STORAGE_HANDLERS
+    BROWSER_STORAGE_HANDLERS,
+    ORCHESTRATION_HANDLERS
   ]
   for (const group of groups) {
     for (const [key, handler] of Object.entries(group)) {

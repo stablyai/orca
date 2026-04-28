@@ -39,6 +39,23 @@ Terminals:
   terminal focus            Alias for terminal switch
   terminal close            Close a terminal pane (or tab if last pane)
 
+Orchestration:
+  orchestration send        Send an inter-agent message
+  orchestration check       Check messages for a terminal
+  orchestration reply       Reply to a message
+  orchestration inbox       Show all messages across recipients
+  orchestration task-create Create an orchestration task
+  orchestration task-list   List orchestration tasks
+  orchestration task-update Update a task status
+  orchestration dispatch    Dispatch a task to a terminal
+  orchestration dispatch-show Show dispatch context for a task
+  orchestration run         Start the coordinator loop
+  orchestration run-stop    Stop the active coordinator run
+  orchestration gate-create Create a decision gate blocking a task
+  orchestration gate-resolve Resolve a pending decision gate
+  orchestration gate-list   List decision gates
+  orchestration reset       Reset orchestration state
+
 Browser Automation:
   tab create                Create a new browser tab (navigates to --url)
   tab list                  List open browser tabs

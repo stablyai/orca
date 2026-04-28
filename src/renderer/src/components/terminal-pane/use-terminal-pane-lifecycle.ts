@@ -29,6 +29,7 @@ import {
   mode2031SequenceFor
 } from './terminal-appearance'
 import { parseOsc52 } from './osc52-clipboard'
+import { installMouseHideWhileTyping } from './mouse-hide-while-typing'
 import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-option-as-alt'
 import { resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { connectPanePty } from './pty-connection'
@@ -96,7 +97,10 @@ type UseTerminalPaneLifecycleDeps = {
   markTerminalTabUnread: (tabId: string) => void
   clearWorktreeUnread: (worktreeId: string) => void
   clearTerminalTabUnread: (tabId: string) => void
-  dispatchNotification: (event: { source: 'terminal-bell' }) => void
+  dispatchNotification: (event: {
+    source: 'terminal-bell' | 'agent-task-complete'
+    terminalTitle?: string
+  }) => void
   setCacheTimerStartedAt: (key: string, ts: number | null) => void
   syncPanePtyLayoutBinding: (paneId: number, ptyId: string | null) => void
   setTabPaneExpanded: (tabId: string, expanded: boolean) => void
@@ -201,6 +205,7 @@ export function useTerminalPaneLifecycle({
   const selectionDisposablesRef = useRef(new Map<number, IDisposable>())
   const mode2031DisposablesRef = useRef(new Map<number, IDisposable[]>())
   const osc52DisposablesRef = useRef(new Map<number, IDisposable>())
+  const mouseHideDisposablesRef = useRef(new Map<number, IDisposable>())
 
   const applyAppearance = (manager: PaneManager): void => {
     const currentSettings = settingsRef.current
@@ -249,6 +254,7 @@ export function useTerminalPaneLifecycle({
     const pendingWrites = pendingWritesRef.current
     const linkDisposables = linkProviderDisposablesRef.current
     const selectionDisposables = selectionDisposablesRef.current
+    const mouseHideDisposables = mouseHideDisposablesRef.current
     const worktreePath =
       useAppStore
         .getState()
@@ -400,6 +406,12 @@ export function useTerminalPaneLifecycle({
           })
         })
         selectionDisposablesRef.current.set(pane.id, selectionDisposable)
+        // Hide mouse cursor while typing — classic terminal UX, scoped to the
+        // pane container so other UI elements keep their cursor.
+        if (settingsRef.current?.terminalMouseHideWhileTyping) {
+          const mouseHideDisposable = installMouseHideWhileTyping(pane.terminal, pane.container)
+          mouseHideDisposablesRef.current.set(pane.id, mouseHideDisposable)
+        }
         pane.terminal.options.linkHandler = {
           allowNonHttpProtocols: true,
           activate: (event, text) => {
@@ -474,6 +486,11 @@ export function useTerminalPaneLifecycle({
           osc52Disposable.dispose()
           osc52DisposablesRef.current.delete(paneId)
         }
+        const mouseHideDisposable = mouseHideDisposablesRef.current.get(paneId)
+        if (mouseHideDisposable) {
+          mouseHideDisposable.dispose()
+          mouseHideDisposablesRef.current.delete(paneId)
+        }
         const transport = paneTransportsRef.current.get(paneId)
         const panePtyBinding = panePtyBindings.get(paneId)
         if (panePtyBinding) {
@@ -486,10 +503,11 @@ export function useTerminalPaneLifecycle({
             syncPanePtyLayoutBinding(paneId, null)
             clearTabPtyId(tabId, ptyId)
           }
-          // Why: closing a pane can destroy the transport before its PTY-exit
-          // callback runs, so clear pane-scoped agent status during teardown
-          // instead of relying on PTY lifecycle ordering.
-          useAppStore.getState().removeAgentStatus(`${tabId}:${paneId}`)
+          // Why: closing a pane is user-initiated teardown of this row — drop
+          // (not remove) so any retained `done` snapshot for this pane is also
+          // cleared and a same-frame live→gone transition cannot re-snapshot
+          // it via the retention sync.
+          useAppStore.getState().dropAgentStatus(`${tabId}:${paneId}`)
           transport.destroy?.()
           paneTransportsRef.current.delete(paneId)
         }
@@ -575,7 +593,8 @@ export function useTerminalPaneLifecycle({
           cursorStyle: currentSettings?.terminalCursorStyle ?? 'bar',
           cursorBlink: currentSettings?.terminalCursorBlink ?? true,
           macOptionIsMeta: effectiveMacOptionAsAltRef.current === 'true',
-          lineHeight: currentSettings?.terminalLineHeight ?? 1
+          lineHeight: currentSettings?.terminalLineHeight ?? 1,
+          wordSeparator: currentSettings?.terminalWordSeparator
         }
       },
       onLinkClick: (event, url) => {
@@ -789,6 +808,10 @@ export function useTerminalPaneLifecycle({
         disposable.dispose()
       }
       selectionDisposables.clear()
+      for (const disposable of mouseHideDisposables.values()) {
+        disposable.dispose()
+      }
+      mouseHideDisposables.clear()
       for (const transport of paneTransports.values()) {
         if (tabStillExists && transport.getPtyId()) {
           // Why: moving a terminal tab between groups currently rehomes the
@@ -833,4 +856,23 @@ export function useTerminalPaneLifecycle({
     // immediately.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings, systemPrefersDark, effectiveMacOptionAsAlt])
+
+  useEffect(() => {
+    const manager = managerRef.current
+    if (!manager) {
+      return
+    }
+    const hide = settings?.terminalMouseHideWhileTyping ?? false
+    for (const pane of manager.getPanes()) {
+      const existing = mouseHideDisposablesRef.current.get(pane.id)
+      if (hide && !existing) {
+        const disposable = installMouseHideWhileTyping(pane.terminal, pane.container)
+        mouseHideDisposablesRef.current.set(pane.id, disposable)
+      } else if (!hide && existing) {
+        existing.dispose()
+        mouseHideDisposablesRef.current.delete(pane.id)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings?.terminalMouseHideWhileTyping])
 }

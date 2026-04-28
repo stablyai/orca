@@ -7,6 +7,7 @@ import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSyn
 import { join, relative, resolve, sep } from 'node:path'
 import { homedir } from 'node:os'
 import { app } from 'electron'
+import { getSpawnArgsForWindows } from '../win32-utils'
 import type {
   CodexManagedAccount,
   CodexManagedAccountSummary,
@@ -390,13 +391,17 @@ export class CodexAccountService {
   private async runCodexLogin(managedHomePath: string): Promise<void> {
     await new Promise<void>((resolvePromise, rejectPromise) => {
       const codexCommand = resolveCodexCommand()
-      const child = spawn(codexCommand, ['login'], {
+      // Why: on Windows, resolveCodexCommand() may return a .cmd/.bat file
+      // (e.g. codex.cmd from npm). Node's child_process.spawn cannot execute
+      // batch scripts directly without shell:true, but shell:true with an args
+      // array causes DEP0190 because args are concatenated, not escaped.
+      // Fix: detect batch scripts and invoke cmd.exe /c explicitly.
+      const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(codexCommand, ['login'])
+      const child = spawn(spawnCmd, spawnArgs, {
         stdio: ['ignore', 'pipe', 'pipe'],
-        // Why: on Windows, resolveCodexCommand() may return a .cmd/.bat file
-        // (e.g. codex.cmd from npm). Node's child_process.spawn cannot execute
-        // batch scripts directly — it needs cmd.exe as an intermediary. Setting
-        // shell: true on win32 avoids the EINVAL error this would otherwise cause.
-        shell: process.platform === 'win32',
+        // Why: route through cmd.exe for .cmd/.bat entrypoints would otherwise
+        // flash a console window in the packaged GUI app on Windows.
+        windowsHide: true,
         env: {
           ...process.env,
           CODEX_HOME: managedHomePath

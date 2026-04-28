@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: the agent-status slice co-locates live map, retained snapshots, retention-suppression, and tab-prefix sweep so the teardown contract stays readable end-to-end. Splitting across files would scatter the drop/remove/retain interactions that must stay in lockstep. */
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import {
@@ -10,6 +11,7 @@ import {
 } from '../../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../../shared/types'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
+import { createFreshnessScheduler } from './agent-status-freshness-scheduler'
 
 /** Snapshot of a finished (or vanished) agent status entry, kept around so
  *  the dashboard + sidebar hover can continue showing the completion until the
@@ -40,6 +42,11 @@ export type AgentStatusSlice = {
    *  agent-status hover so the two surfaces display identical rows. */
   retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>
 
+  /** Pane keys explicitly torn down (pane close, tab close, PTY exit, manual
+   *  dismissal) and therefore forbidden from being re-retained on their next
+   *  disappearance. Consumed by the retention sync as a one-shot suppressor. */
+  retentionSuppressedPaneKeys: Record<string, true>
+
   /** Update or insert an agent status entry from a status payload. */
   setAgentStatus: (
     paneKey: string,
@@ -54,8 +61,21 @@ export type AgentStatusSlice = {
    *  Used when a tab is closed — same prefix-sweep as cacheTimerByKey cleanup. */
   removeAgentStatusByTabPrefix: (tabIdPrefix: string) => void
 
-  /** Retain an agent snapshot (called by the top-level retention sync effect). */
-  retainAgent: (retained: RetainedAgentEntry) => void
+  /** Remove a single entry AND suppress re-retention on its next disappearance.
+   *  Used for USER-INITIATED teardown — the dashboard/hover X button, and
+   *  pane close — where the user is telling us "I'm done with this row". */
+  dropAgentStatus: (paneKey: string) => void
+
+  /** Remove all entries under a tab AND suppress re-retention for each.
+   *  Used on tab close — the user is tearing down the whole tab, so any
+   *  remaining agent rows (live or retained) must not reappear. */
+  dropAgentStatusByTabPrefix: (tabIdPrefix: string) => void
+
+  /** Retain agent snapshots (called by the top-level retention sync effect).
+   *  Accepts an array so multiple agents disappearing in the same frame
+   *  produce a single set(...) — avoids intermediate states visible
+   *  mid-loop to consumers. */
+  retainAgents: (entries: RetainedAgentEntry[]) => void
 
   /** Dismiss a retained entry by its paneKey. */
   dismissRetainedAgent: (paneKey: string) => void
@@ -65,53 +85,24 @@ export type AgentStatusSlice = {
 
   /** Prune retained entries whose worktreeId is not in the given set. */
   pruneRetainedAgents: (validWorktreeIds: Set<string>) => void
+
+  /** Clear one-shot teardown suppressors after the retention sync observes
+   *  that disappearance and decides not to retain the row. */
+  clearRetentionSuppressedPaneKeys: (paneKeys: string[]) => void
 }
 
 export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusSlice> = (
   set,
   get
 ) => {
-  // Why: tests that call setAgentStatus must use vi.useFakeTimers() or remove the entry before teardown — otherwise a real 30-minute setTimeout leaks into the test process.
-  let staleExpiryTimer: ReturnType<typeof setTimeout> | null = null
-
-  const clearStaleExpiryTimer = (): void => {
-    if (staleExpiryTimer !== null) {
-      clearTimeout(staleExpiryTimer)
-      staleExpiryTimer = null
-    }
-  }
-
-  const scheduleNextFreshnessExpiry = (): void => {
-    clearStaleExpiryTimer()
-
-    const entries = Object.values(get().agentStatusByPaneKey)
-    if (entries.length === 0) {
-      return
-    }
-
-    const now = Date.now()
-    let nextExpiryAt = Number.POSITIVE_INFINITY
-    // Why: skip entries already past the stale boundary — they each contribute
-    // exactly one epoch bump at crossing, and rescheduling on them would spin
-    // the timer forever because the bump doesn't clear them from the map
-    // (retention is intentional so freshness-aware selectors can decay).
-    for (const entry of entries) {
-      const expiryAt = entry.updatedAt + AGENT_STATUS_STALE_AFTER_MS
-      if (expiryAt > now) {
-        nextExpiryAt = Math.min(nextExpiryAt, expiryAt)
-      }
-    }
-    if (!Number.isFinite(nextExpiryAt)) {
-      return
-    }
-
-    // Why: +1 ms ensures the timer fires strictly after the stale boundary,
-    // so isExplicitAgentStatusFresh (which uses `<=`) flips to stale when the
-    // timer runs. Without the +1, float/rounding could leave the entry "just
-    // fresh enough" at the tick, delaying the epoch bump by one tick.
-    const delayMs = nextExpiryAt - now + 1
-    staleExpiryTimer = setTimeout(() => {
-      staleExpiryTimer = null
+  // Why: the freshness scheduler is intentionally process-lifetime-scoped —
+  // no dispose path — because it matches the store's own lifetime model
+  // (the zustand store is a module-level singleton that lives until process
+  // exit). Adding a teardown hook would require a store-dispose lifecycle
+  // that does not exist anywhere else in the codebase.
+  const freshness = createFreshnessScheduler({
+    getEntries: () => Object.values(get().agentStatusByPaneKey),
+    bumpEpochs: () => {
       // Why: freshness is time-based, not event-based. Advancing these epochs
       // at the exact stale boundary forces all freshness-aware selectors to
       // recompute — and re-sorts WorktreeList — even when no new PTY output
@@ -121,14 +112,14 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         agentStatusEpoch: s.agentStatusEpoch + 1,
         sortEpoch: s.sortEpoch + 1
       }))
-      scheduleNextFreshnessExpiry()
-    }, delayMs)
-  }
+    }
+  })
 
   return {
     agentStatusByPaneKey: {},
     agentStatusEpoch: 0,
     retainedAgentsByPaneKey: {},
+    retentionSuppressedPaneKeys: {},
 
     setAgentStatus: (paneKey, payload, terminalTitle) => {
       set((s) => {
@@ -195,9 +186,9 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           // stomped by a later ping that lost the identity (e.g. legacy/partial
           // integrations).
           agentType:
-            payload.agentType && payload.agentType !== 'unknown'
+            (payload.agentType && payload.agentType !== 'unknown'
               ? payload.agentType
-              : existing?.agentType,
+              : existing?.agentType) ?? 'unknown',
           paneKey,
           terminalTitle: effectiveTitle,
           stateHistory: history,
@@ -228,15 +219,29 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         const wasFresh =
           !!existing && isExplicitAgentStatusFresh(existing, now, AGENT_STATUS_STALE_AFTER_MS)
         const sortRelevantChange = !existing || existing.state !== payload.state || !wasFresh
+        // Why: a new status event means the agent is live again — lift any
+        // one-shot retention suppressor so the row can be retained normally
+        // on its next disappearance. setAgentStatus fires on every PTY status
+        // update (high frequency), so only clone retentionSuppressedPaneKeys
+        // when there is actually a suppressor to remove — otherwise every
+        // status ping would churn that map reference and force spurious
+        // re-renders in any subscriber selecting on it.
+        const hasSuppressor = paneKey in s.retentionSuppressedPaneKeys
+        let nextRetentionSuppressedPaneKeys = s.retentionSuppressedPaneKeys
+        if (hasSuppressor) {
+          nextRetentionSuppressedPaneKeys = { ...s.retentionSuppressedPaneKeys }
+          delete nextRetentionSuppressedPaneKeys[paneKey]
+        }
         return {
           agentStatusByPaneKey: { ...s.agentStatusByPaneKey, [paneKey]: entry },
+          retentionSuppressedPaneKeys: nextRetentionSuppressedPaneKeys,
           agentStatusEpoch: s.agentStatusEpoch + 1,
           sortEpoch: sortRelevantChange ? s.sortEpoch + 1 : s.sortEpoch
         }
       })
       // Why: schedule after set completes so the timer reads the updated map.
       // queueMicrotask avoids re-entry into the zustand store during set.
-      queueMicrotask(() => scheduleNextFreshnessExpiry())
+      queueMicrotask(() => freshness.schedule())
     },
 
     removeAgentStatus: (paneKey) => {
@@ -255,7 +260,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           sortEpoch: s.sortEpoch + 1
         }
       })
-      queueMicrotask(() => scheduleNextFreshnessExpiry())
+      queueMicrotask(() => freshness.schedule())
     },
 
     removeAgentStatusByTabPrefix: (tabIdPrefix) => {
@@ -280,29 +285,236 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           sortEpoch: s.sortEpoch + 1
         }
       })
-      queueMicrotask(() => scheduleNextFreshnessExpiry())
+      queueMicrotask(() => freshness.schedule())
     },
 
-    retainAgent: (retained) => {
+    dropAgentStatus: (paneKey) => {
+      // Why: single sync read — zustand set is synchronous, so the value we
+      // observe inside the set callback is the same one we would re-read via
+      // get() immediately after. Capture it once from inside the callback
+      // rather than double-reading the store before and during set.
+      let liveExisted = false
+      set((s) => {
+        const hasLive = paneKey in s.agentStatusByPaneKey
+        liveExisted = hasLive
+        const hasRetained = paneKey in s.retainedAgentsByPaneKey
+        // Why: bail when there is genuinely nothing to do. The old guard
+        // `!hasLive && !hasRetained && alreadySuppressed` leaked a phantom
+        // suppressor write in the `!hasLive && !hasRetained && !alreadySuppressed`
+        // case. With the hasLive-gated suppressor below, a no-op drop on a
+        // paneKey with no live and no retained entry truly has nothing to
+        // change, so short-circuit here.
+        if (!hasLive && !hasRetained) {
+          return s
+        }
+
+        const nextLive = hasLive ? { ...s.agentStatusByPaneKey } : s.agentStatusByPaneKey
+        if (hasLive) {
+          delete nextLive[paneKey]
+        }
+
+        const nextRetained = hasRetained
+          ? { ...s.retainedAgentsByPaneKey }
+          : s.retainedAgentsByPaneKey
+        if (hasRetained) {
+          delete nextRetained[paneKey]
+        }
+
+        // Why: explicit teardown means "the user is done with this row", so
+        // the next retention sync must not resurrect it from the previous frame.
+        //
+        // Why same-frame race is acceptable: if dropAgentStatus fires in the
+        // same React frame as setAgentStatus, before useRetainedAgentsSync's
+        // prevAgentsRef has captured the live entry, the planted suppressor
+        // may never be consumed by a live→gone transition and would persist.
+        // In practice suppressors are bounded by user-dismissed paneKeys (a
+        // small set), so the leak is pragmatically inert — accepting it is
+        // cheaper than threading frame-level ordering guarantees through the
+        // retention sync.
+        //
+        // Why gate on hasLive: the suppressor is a one-shot flag consumed by
+        // `collectRetainedAgentsOnDisappear` (useRetainedAgents.ts), which
+        // iterates the PREVIOUS render's LIVE agents to decide what to
+        // retain. If we dismiss a retained-only row (no live entry at drop
+        // time), no live→gone transition will ever fire for this paneKey, so
+        // the suppressor would never be consumed and would leak indefinitely
+        // — only clearing if the same paneKey later became live again via
+        // setAgentStatus. A retained-only dismissal just needs the retained
+        // entry removed; there is no live-agent resurrection risk to guard
+        // against. Only spread retentionSuppressedPaneKeys when hasLive.
+        //
+        // Why the `!(paneKey in s.retentionSuppressedPaneKeys)` check: if a
+        // suppressor is already present, re-spreading produces a new object
+        // reference with identical contents and spuriously re-renders any
+        // subscriber selecting on retentionSuppressedPaneKeys. Mirror the
+        // guard used in setAgentStatus.
+        const needsSuppressorWrite = hasLive && !(paneKey in s.retentionSuppressedPaneKeys)
+
+        return {
+          agentStatusByPaneKey: nextLive,
+          retainedAgentsByPaneKey: nextRetained,
+          ...(needsSuppressorWrite
+            ? {
+                retentionSuppressedPaneKeys: {
+                  ...s.retentionSuppressedPaneKeys,
+                  [paneKey]: true
+                }
+              }
+            : {}),
+          agentStatusEpoch: hasLive ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
+          // Why: mirrors removeAgentStatus — dropping a live working/blocked
+          // agent changes its contribution to the worktree sort score, so the
+          // sidebar smart-sort must recompute. Without this bump, a user-
+          // initiated dismissal via the dashboard/hovercard would leave the
+          // sidebar ordering stale until some unrelated event repaired it.
+          sortEpoch: hasLive ? s.sortEpoch + 1 : s.sortEpoch
+        }
+      })
+      // Why: freshness.schedule only matters when the live map changed —
+      // retained-only and no-op drops don't touch it. Gate on the live
+      // presence observed inside set() so a noop drop on a paneKey with no
+      // live and no retained entry (or a retained-only dismissal) skips the
+      // microtask.
+      if (liveExisted) {
+        queueMicrotask(() => freshness.schedule())
+      }
+    },
+
+    dropAgentStatusByTabPrefix: (tabIdPrefix) => {
+      const prefix = `${tabIdPrefix}:`
+      let hadLive = false
+      set((s) => {
+        const liveKeys = Object.keys(s.agentStatusByPaneKey).filter((k) => k.startsWith(prefix))
+        const retainedKeys = Object.keys(s.retainedAgentsByPaneKey).filter((k) =>
+          k.startsWith(prefix)
+        )
+        if (liveKeys.length === 0 && retainedKeys.length === 0) {
+          return s
+        }
+        hadLive = liveKeys.length > 0
+
+        const nextLive =
+          liveKeys.length > 0 ? { ...s.agentStatusByPaneKey } : s.agentStatusByPaneKey
+        for (const key of liveKeys) {
+          delete nextLive[key]
+        }
+
+        const nextRetained =
+          retainedKeys.length > 0 ? { ...s.retainedAgentsByPaneKey } : s.retainedAgentsByPaneKey
+        for (const key of retainedKeys) {
+          delete nextRetained[key]
+        }
+
+        // Why: plant suppressors only for paneKeys that had a live entry,
+        // mirroring the hasLive gate in dropAgentStatus — suppressors are
+        // one-shot flags consumed by collectRetainedAgentsOnDisappear on a
+        // live→gone transition, so a suppressor on a retained-only paneKey
+        // would leak because no such transition will ever fire. Also skip
+        // keys that are already suppressed so we don't spuriously reallocate
+        // the suppressor map for subscribers that select on its identity.
+        const suppressorAdds = liveKeys.filter((k) => !(k in s.retentionSuppressedPaneKeys))
+        let nextRetentionSuppressedPaneKeys = s.retentionSuppressedPaneKeys
+        if (suppressorAdds.length > 0) {
+          nextRetentionSuppressedPaneKeys = { ...s.retentionSuppressedPaneKeys }
+          for (const key of suppressorAdds) {
+            nextRetentionSuppressedPaneKeys[key] = true
+          }
+        }
+
+        return {
+          agentStatusByPaneKey: nextLive,
+          retainedAgentsByPaneKey: nextRetained,
+          retentionSuppressedPaneKeys: nextRetentionSuppressedPaneKeys,
+          // Why: mirrors removeAgentStatusByTabPrefix — only bump the live-map
+          // epoch / sortEpoch when the live map actually changed. Retained-only
+          // sweeps do not participate in smart-sort or freshness calculations.
+          agentStatusEpoch: hadLive ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
+          sortEpoch: hadLive ? s.sortEpoch + 1 : s.sortEpoch
+        }
+      })
+      if (hadLive) {
+        queueMicrotask(() => freshness.schedule())
+      }
+    },
+
+    retainAgents: (entries) => {
       // Why: retained entries are a pure read-overlay — consumers read
       // retainedAgentsByPaneKey directly each render, so no sort/status epoch
       // bump is needed. Retention does not participate in sort ordering.
-      set((s) => ({
-        retainedAgentsByPaneKey: {
-          ...s.retainedAgentsByPaneKey,
-          [retained.entry.paneKey]: retained
+      // Batching into a single set(...) keeps multi-agent disappearance atomic.
+      if (entries.length === 0) {
+        return
+      }
+      set((s) => {
+        // Why: skip the allocation + set(...) entirely when every input entry
+        // is already present by reference. Consumers of retainedAgentsByPaneKey
+        // select on its identity (dashboard + hovercard), so a spurious map
+        // reallocation forces re-renders even when nothing changed. Mirrors
+        // the identity-preservation pattern used by pruneRetainedAgents and
+        // clearRetentionSuppressedPaneKeys.
+        let changed = false
+        for (const retained of entries) {
+          if (s.retainedAgentsByPaneKey[retained.entry.paneKey] !== retained) {
+            changed = true
+            break
+          }
         }
-      }))
+        if (!changed) {
+          return s
+        }
+        const next = { ...s.retainedAgentsByPaneKey }
+        for (const retained of entries) {
+          // Why: INVARIANT — the map key equals retained.entry.paneKey. This
+          // lets callers look up a retained row by the same paneKey they use
+          // for agentStatusByPaneKey and keeps dismissal (dismissRetainedAgent)
+          // keyed on a single identifier. collectRetainedAgentsOnDisappear
+          // relies on this invariant too: it checks
+          // `retainedAgentsByPaneKey[paneKey]` to decide whether a vanished
+          // agent is already retained.
+          next[retained.entry.paneKey] = retained
+        }
+        return { retainedAgentsByPaneKey: next }
+      })
     },
 
     dismissRetainedAgent: (paneKey) => {
+      // Why: no agentStatusEpoch / sortEpoch bump here (mirrors retainAgents).
+      // Retained rows are a pure read-overlay on top of agentStatusByPaneKey —
+      // they do not contribute to smart-sort scoring (see computeSmartScore*
+      // in smart-sort.ts, which reads agentStatusByPaneKey only) and dashboard
+      // selectors re-render on retainedAgentsByPaneKey identity changes
+      // directly. Bumping epochs would force sidebar re-sorts and selector
+      // recomputations for a change that cannot affect either result.
       set((s) => {
         if (!(paneKey in s.retainedAgentsByPaneKey)) {
           return s
         }
         const next = { ...s.retainedAgentsByPaneKey }
         delete next[paneKey]
-        return { retainedAgentsByPaneKey: next }
+        // Why: mirror dropAgentStatus's hasLive-gated suppressor. If the same
+        // paneKey has BOTH a retained entry AND a concurrent live entry, simply
+        // removing the retained row leaves the live entry free to vanish
+        // cleanly on its next disappearance — and because
+        // collectRetainedAgentsOnDisappear (useRetainedAgents.ts) only skips
+        // paneKeys that are currently in retainedAgentsByPaneKey, the
+        // just-dismissed row would be resurrected by a new retention snapshot.
+        // Plant a one-shot suppressor so the next live→gone transition for
+        // this paneKey is ignored by the retention sync.
+        //
+        // Gate on `paneKey in agentStatusByPaneKey`: with no live entry there
+        // is no live→gone transition to guard against, and a stray suppressor
+        // would leak indefinitely (same rationale as dropAgentStatus).
+        const hasLive = paneKey in s.agentStatusByPaneKey
+        if (!hasLive || paneKey in s.retentionSuppressedPaneKeys) {
+          return { retainedAgentsByPaneKey: next }
+        }
+        return {
+          retainedAgentsByPaneKey: next,
+          retentionSuppressedPaneKeys: {
+            ...s.retentionSuppressedPaneKeys,
+            [paneKey]: true
+          }
+        }
       })
     },
 
@@ -310,18 +522,52 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       set((s) => {
         let changed = false
         const next: Record<string, RetainedAgentEntry> = {}
+        // Why: mirror dismissRetainedAgent's hasLive-gated suppressor logic.
+        // When a dismissed paneKey ALSO has a concurrent live entry in
+        // agentStatusByPaneKey, removing the retained row alone lets the next
+        // live→gone transition for that paneKey re-retain the row via the
+        // retention sync (collectRetainedAgentsOnDisappear only skips paneKeys
+        // currently present in retainedAgentsByPaneKey). Without planting a
+        // suppressor here, "Dismiss all" for a worktree would silently
+        // resurrect the just-dismissed rows as soon as the live agents
+        // disappeared. Only plant suppressors for the hasLive subset — a stray
+        // suppressor on a retained-only paneKey would leak indefinitely
+        // because no live→gone transition would ever consume it.
+        const toSuppress: string[] = []
         for (const [key, ra] of Object.entries(s.retainedAgentsByPaneKey)) {
           if (ra.worktreeId === worktreeId) {
             changed = true
+            if (key in s.agentStatusByPaneKey && !(key in s.retentionSuppressedPaneKeys)) {
+              toSuppress.push(key)
+            }
             continue
           }
           next[key] = ra
         }
-        return changed ? { retainedAgentsByPaneKey: next } : s
+        if (!changed) {
+          return s
+        }
+        if (toSuppress.length === 0) {
+          return { retainedAgentsByPaneKey: next }
+        }
+        const nextSuppressed = { ...s.retentionSuppressedPaneKeys }
+        for (const key of toSuppress) {
+          nextSuppressed[key] = true
+        }
+        return {
+          retainedAgentsByPaneKey: next,
+          retentionSuppressedPaneKeys: nextSuppressed
+        }
       })
     },
 
     pruneRetainedAgents: (validWorktreeIds) => {
+      // Why: deliberately does NOT sweep retentionSuppressedPaneKeys for
+      // pruned worktrees. PaneKeys are minted fresh when a worktree is
+      // re-created (worktrees keep unique tab IDs), so stale suppressors
+      // keyed on pruned paneKeys can never be matched by a future live entry
+      // — they are inert and harmless. Sweeping them would add churn for no
+      // observable benefit.
       set((s) => {
         let changed = false
         const next: Record<string, RetainedAgentEntry> = {}
@@ -333,6 +579,21 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           next[key] = ra
         }
         return changed ? { retainedAgentsByPaneKey: next } : s
+      })
+    },
+
+    clearRetentionSuppressedPaneKeys: (paneKeys) => {
+      set((s) => {
+        let changed = false
+        const next = { ...s.retentionSuppressedPaneKeys }
+        for (const paneKey of paneKeys) {
+          if (!(paneKey in next)) {
+            continue
+          }
+          delete next[paneKey]
+          changed = true
+        }
+        return changed ? { retentionSuppressedPaneKeys: next } : s
       })
     }
   }

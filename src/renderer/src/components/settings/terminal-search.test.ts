@@ -21,4 +21,13 @@ describe('getTerminalPaneSearchEntries', () => {
     const entries = getTerminalPaneSearchEntries({ isWindows: false, isMac: false })
     expect(entries.some((entry) => entry.title === 'Option as Alt')).toBe(false)
   })
+
+  it('includes the Ghostty import setting on all platforms', () => {
+    const entriesWindows = getTerminalPaneSearchEntries({ isWindows: true, isMac: false })
+    const entriesMac = getTerminalPaneSearchEntries({ isWindows: false, isMac: true })
+    const entriesLinux = getTerminalPaneSearchEntries({ isWindows: false, isMac: false })
+    expect(entriesWindows.some((entry) => entry.title === 'Import from Ghostty')).toBe(true)
+    expect(entriesMac.some((entry) => entry.title === 'Import from Ghostty')).toBe(true)
+    expect(entriesLinux.some((entry) => entry.title === 'Import from Ghostty')).toBe(true)
+  })
 })

@@ -434,3 +434,23 @@ export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
 
   return null
 }
+
+// Why: shared between the runtime (dispatch guard, tui-idle fallback) and the
+// renderer (agent-ready-wait, new-workspace). A bare shell is the only process
+// type that garbles injected preambles, so this is the negative signal for
+// "is an agent running".
+const SHELL_NAMES = new Set([
+  '',
+  'bash',
+  'zsh',
+  'sh',
+  'fish',
+  'cmd.exe',
+  'powershell.exe',
+  'pwsh.exe',
+  'nu'
+])
+
+export function isShellProcess(processName: string): boolean {
+  return SHELL_NAMES.has(processName.trim().toLowerCase())
+}

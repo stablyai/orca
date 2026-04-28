@@ -10,6 +10,7 @@ import {
 } from 'fs'
 import { dirname, join } from 'path'
 import { randomUUID } from 'crypto'
+import { grantDirAcl, isPermissionError } from '../win32-utils'
 
 export type HookCommandConfig = {
   type: 'command'
@@ -84,9 +85,30 @@ export function removeManagedCommands(
 
 export function writeManagedScript(scriptPath: string, content: string): void {
   mkdirSync(dirname(scriptPath), { recursive: true })
-  writeFileSync(scriptPath, content, 'utf-8')
+  writeScriptWithAclRetry(scriptPath, content)
   if (process.platform !== 'win32') {
     chmodSync(scriptPath, 0o755)
+  }
+}
+
+// Why: on Windows, Chromium's renderer initialization can reset the DACL on
+// the userData directory (Protected DACL without OI+CI propagation), leaving
+// child directories like agent-hooks with an empty DACL. Grant an explicit
+// directory ACL on EPERM and retry once.
+function writeScriptWithAclRetry(scriptPath: string, content: string): void {
+  try {
+    writeFileSync(scriptPath, content, 'utf-8')
+  } catch (error) {
+    if (isPermissionError(error) && process.platform === 'win32') {
+      try {
+        grantDirAcl(dirname(scriptPath))
+        writeFileSync(scriptPath, content, 'utf-8')
+        return
+      } catch {
+        // icacls failure is not actionable; re-throw the original EPERM
+      }
+    }
+    throw error
   }
 }
 

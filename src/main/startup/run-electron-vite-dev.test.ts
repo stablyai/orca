@@ -63,6 +63,7 @@ describe('run-electron-vite-dev', () => {
         env: {
           ...process.env,
           ORCA_ELECTRON_VITE_CLI: fakeCliPath,
+          ORCA_SKIP_DEV_CLI_PREPARE: '1',
           ORCA_DEV_WRAPPER_TEST_PID_FILE: pidFile
         },
         stdio: 'ignore'

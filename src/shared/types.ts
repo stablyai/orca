@@ -21,6 +21,27 @@ export type Repo = {
 export type SetupRunPolicy = 'ask' | 'run-by-default' | 'skip-by-default'
 export type SetupDecision = 'inherit' | 'run' | 'skip'
 
+/**
+ * Envelope returned by the `repos:getBaseRefDefault` IPC handler.
+ *
+ * Why: declared in `shared/` rather than colocated with the handler so the
+ * preload bridge and renderer can import the same named type. Before this
+ * lived in `src/main/git/repo.ts` — the preload layer cannot import from
+ * `src/main/`, which forced three sites to inline the same structural shape
+ * and risk silent drift.
+ *
+ * Why `remoteCount`: BaseRefPicker renders a multi-remote hint when the repo
+ * has more than one configured remote; piggybacking the count on this IPC
+ * avoids a second round-trip.
+ *
+ * Why `defaultBaseRef` (not `default`): `default` is a reserved word and is
+ * awkward to destructure.
+ */
+export type BaseRefDefaultResult = {
+  defaultBaseRef: string | null
+  remoteCount: number
+}
+
 // ─── Worktree (git-level) ────────────────────────────────────────────
 export type GitWorktreeInfo = {
   path: string
@@ -144,6 +165,21 @@ export type TerminalTab = {
   createdAt: number
   /** Bumped on shutdown so TerminalPane remounts with a fresh PTY. */
   generation?: number
+  /** Why: records the shell this tab was explicitly opened with (e.g. 'wsl.exe'
+   *  from the "+" submenu) so the PTY can re-use the same shell on reconnect
+   *  without needing the user to interact with the tab again. Undefined means
+   *  "use the default shell setting". */
+  shellOverride?: string
+  /** Why: when `setActiveWorktree` bumps generation on all-dead tabs to drive a
+   *  TerminalPane remount, the fresh PTY that results is caused by navigation,
+   *  not by the user doing work. Without this flag the resulting
+   *  `updateTabPtyId` call would call `bumpWorktreeActivity` and flip the
+   *  sidebar's recency sort on every click — the reorder-on-click bug. The
+   *  flag is set by `setActiveWorktree` and consumed (cleared) by the first
+   *  `updateTabPtyId` that follows, which then suppresses the activity bump
+   *  and the `sortEpoch` increment. Never persisted — it is a transient
+   *  handoff between the two calls. */
+  pendingActivationSpawn?: boolean
 }
 
 export type BrowserHistoryEntry = {
@@ -363,6 +399,21 @@ export type PRCheckDetail = {
   url: string | null
 }
 
+export type GitHubReactionContent =
+  | '+1'
+  | '-1'
+  | 'laugh'
+  | 'confused'
+  | 'heart'
+  | 'hooray'
+  | 'rocket'
+  | 'eyes'
+
+export type GitHubReaction = {
+  content: GitHubReactionContent
+  count: number
+}
+
 export type PRComment = {
   id: number
   author: string
@@ -370,6 +421,7 @@ export type PRComment = {
   body: string
   createdAt: string
   url: string
+  reactions?: GitHubReaction[]
   /** File path for inline review comments (absent for top-level conversation comments). */
   path?: string
   /** GraphQL node ID of the review thread — present only for inline review comments.
@@ -389,6 +441,8 @@ export type PRComment = {
   isBot?: boolean
 }
 
+export type GitHubCommentResult = { ok: true; comment: PRComment } | { ok: false; error: string }
+
 export type IssueInfo = {
   number: number
   title: string
@@ -400,6 +454,12 @@ export type IssueInfo = {
 export type GitHubViewer = {
   login: string
   email: string | null
+}
+
+export type GitHubAssignableUser = {
+  login: string
+  name: string | null
+  avatarUrl: string
 }
 
 export type GitHubWorkItem = {
@@ -442,6 +502,16 @@ export type GitHubPRFileContents = {
   modifiedIsBinary: boolean
 }
 
+export type GitHubPRReviewCommentInput = {
+  repoPath: string
+  prNumber: number
+  commitId: string
+  path: string
+  line: number
+  startLine?: number
+  body: string
+}
+
 export type GitHubWorkItemDetails = {
   // Why: main-process doesn't know Orca's Repo.id, so this inner item omits
   // repoId. The renderer stamps it when routing the details through the store.
@@ -453,6 +523,7 @@ export type GitHubWorkItemDetails = {
   baseSha?: string
   checks?: PRCheckDetail[]
   files?: GitHubPRFile[]
+  participants?: GitHubAssignableUser[]
   /** Logins of current assignees. Only set for issues. */
   assignees?: string[]
 }
@@ -742,6 +813,35 @@ export type SetupScriptLaunchMode = 'split-vertical' | 'split-horizontal' | 'new
 /** Direction used when the setup script launch mode is a split. */
 export type SetupSplitDirection = 'vertical' | 'horizontal'
 
+export type TerminalColorOverrides = {
+  foreground?: string
+  background?: string
+  cursor?: string
+  cursorAccent?: string
+  selectionBackground?: string
+  selectionForeground?: string
+  black?: string
+  red?: string
+  green?: string
+  yellow?: string
+  blue?: string
+  magenta?: string
+  cyan?: string
+  white?: string
+  brightBlack?: string
+  brightRed?: string
+  brightGreen?: string
+  brightYellow?: string
+  brightBlue?: string
+  brightMagenta?: string
+  brightCyan?: string
+  brightWhite?: string
+  // Why: xterm.js ITheme does not expose a `bold` key, but Ghostty users
+  // expect the setting to be preserved so a future renderer CSS override
+  // or xterm upgrade can honour it without a migration.
+  bold?: string
+}
+
 export type GlobalSettings = {
   workspaceDir: string
   nestWorkspaces: boolean
@@ -776,6 +876,14 @@ export type GlobalSettings = {
   terminalActivePaneOpacity: number
   terminalPaneOpacityTransitionMs: number
   terminalDividerThicknessPx: number
+  terminalBackgroundOpacity?: number
+  terminalColorOverrides?: TerminalColorOverrides
+  terminalPaddingX?: number
+  terminalPaddingY?: number
+  terminalMouseHideWhileTyping?: boolean
+  terminalWordSeparator?: string
+  terminalCursorOpacity?: number
+  windowBackgroundBlur?: boolean
   /** Why: Windows terminals conventionally use right-click as a paste gesture.
    *  The setting stays Windows-only so macOS/Linux keep their existing context
    *  menu behavior and users can still reach the menu with Ctrl+right-click. */
@@ -811,6 +919,16 @@ export type GlobalSettings = {
   rightSidebarOpenByDefault: boolean
   /** Whether to show the live agent activity count badge in the titlebar. */
   showTitlebarAgentActivity: boolean
+  /** Whether to show the Agent Dashboard panel at the bottom of the right sidebar.
+   *  Why: optional because readers use the `settings?.showAgentDashboard !== false`
+   *  idiom (right-sidebar/index.tsx, AgentsPane.tsx) which presumes the field may
+   *  be undefined — e.g. on first hydrate before main-process defaults apply, or
+   *  when migrating settings persisted before this field existed. A required
+   *  `boolean` here would make those readers' fallback branches dead-on-paper
+   *  while still being reached at runtime, which is exactly the kind of type
+   *  hack that drifts silently. Aligning the declaration with reader intent
+   *  keeps the contract honest. */
+  showAgentDashboard?: boolean
   /** Why: the Tasks sidebar label can be kept cleaner for users who do not
    *  actively use the GitHub/Linear integrations behind it. */
   showTaskProviderIcons: boolean
@@ -898,6 +1016,23 @@ export type GlobalSettings = {
    *  toast shown to users upgrading from v1.3.0 (where the daemon was on by
    *  default). Set to true the first time the toast fires so it never repeats. */
   experimentalTerminalDaemonNoticeShown: boolean
+  /** Experimental: live Agent Dashboard — a bottom-docked right-sidebar panel
+   *  that aggregates working/blocked/done agents across all worktrees, plus
+   *  the sidebar AgentStatusHover surface, retention of "done" rows, and the
+   *  hook-driven status slice that feeds them. Opt-in because the surface is
+   *  still in preview: managed hook installation (Claude/Codex/Gemini) only
+   *  runs when this is true, so toggling it on takes effect on the next app
+   *  launch. The in-pane status indicators and the cursor-agent hook path are
+   *  unaffected by this toggle. */
+  experimentalAgentDashboard: boolean
+}
+
+export type GhosttyImportPreview = {
+  found: boolean
+  configPath?: string
+  diff: Partial<GlobalSettings>
+  unsupportedKeys: string[]
+  error?: string
 }
 
 export type NotificationEventSource = 'agent-task-complete' | 'terminal-bell' | 'test'
@@ -919,7 +1054,7 @@ export type NotificationDispatchResult = {
 
 export type WorktreeCardProperty = 'status' | 'unread' | 'ci' | 'issue' | 'pr' | 'comment'
 
-export type StatusBarItem = 'claude' | 'codex' | 'ssh' | 'sessions'
+export type StatusBarItem = 'claude' | 'codex' | 'ssh' | 'sessions' | 'memory'
 
 export type PersistedUIState = {
   lastActiveRepoId: string | null
@@ -1113,6 +1248,8 @@ export type SearchMatch = {
   column: number
   matchLength: number
   lineContent: string
+  displayColumn?: number
+  displayMatchLength?: number
 }
 
 export type SearchFileResult = {
@@ -1147,4 +1284,64 @@ export type StatsSummary = {
   // For display formatting — sourced from aggregates, not the event log,
   // so it survives event trimming.
   firstEventAt: number | null // timestamp of first-ever event, for "tracking since..."
+}
+
+// ─── Memory dashboard ──────────────────────────────────────────────
+// Resource-metrics snapshot shared across main, preload, and renderer so
+// the IPC payload is the same shape everywhere. Memory is in bytes; CPU
+// is a percentage (can exceed 100 on multi-core).
+
+/** cpu is percent of a single core — can exceed 100 on multi-core. memory is in bytes. */
+export type UsageValues = {
+  cpu: number
+  memory: number
+}
+
+/** The top-level cpu/memory are the sum of main + renderer + other. */
+export type AppMemory = UsageValues & {
+  main: UsageValues
+  renderer: UsageValues
+  other: UsageValues
+  /** Oldest-first memory samples (bytes) for the whole Orca app, one per
+   *  successful collection. Used to render the sparkline in the dashboard.
+   *  Empty before the first snapshot is recorded. */
+  history: number[]
+}
+
+export type SessionMemory = UsageValues & {
+  sessionId: string
+  paneKey: string | null
+  pid: number
+}
+
+/** The top-level cpu/memory are the sum of sessions. */
+export type WorktreeMemory = UsageValues & {
+  worktreeId: string
+  worktreeName: string
+  repoId: string
+  repoName: string
+  sessions: SessionMemory[]
+  /** Oldest-first memory samples (bytes) for this worktree's tracked
+   *  subtrees, one per successful collection. */
+  history: number[]
+}
+
+export type HostMemory = {
+  totalMemory: number
+  freeMemory: number
+  usedMemory: number
+  memoryUsagePercent: number
+  cpuCoreCount: number
+  loadAverage1m: number
+}
+
+export type MemorySnapshot = {
+  app: AppMemory
+  worktrees: WorktreeMemory[]
+  host: HostMemory
+  /** Sum of app + all tracked worktree sessions. Percent of a single core, so may exceed 100 on multi-core machines. */
+  totalCpu: number
+  /** Sum of app + all tracked worktree sessions in bytes. NOT the same as host.totalMemory, which is physical RAM. */
+  totalMemory: number
+  collectedAt: number
 }

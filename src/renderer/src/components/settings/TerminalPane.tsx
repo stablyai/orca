@@ -41,11 +41,15 @@ import {
   TERMINAL_RIGHT_CLICK_TO_PASTE_SEARCH_ENTRY,
   TERMINAL_SETUP_SCRIPT_SEARCH_ENTRIES,
   TERMINAL_TYPOGRAPHY_SEARCH_ENTRIES,
+  TERMINAL_WINDOW_SEARCH_ENTRIES,
   TERMINAL_WINDOWS_SHELL_SEARCH_ENTRY
 } from './terminal-search'
 import { useDetectedOptionAsAlt } from '@/lib/keyboard-layout/use-effective-mac-option-as-alt'
 import { detectedCategoryToDefault } from '@/lib/keyboard-layout/detect-option-as-alt'
 import { DarkTerminalThemeSection, LightTerminalThemeSection } from './TerminalThemeSections'
+import { TerminalWindowSection } from './TerminalWindowSection'
+import { GhosttyImportModal } from './GhosttyImportModal'
+import type { UseGhosttyImportReturn } from './useGhosttyImport'
 
 type TerminalPaneProps = {
   settings: GlobalSettings
@@ -54,6 +58,12 @@ type TerminalPaneProps = {
   terminalFontSuggestions: string[]
   scrollbackMode: 'preset' | 'custom'
   setScrollbackMode: (mode: 'preset' | 'custom') => void
+  /** Ghostty import modal state + handlers. Lifted to the Settings shell so
+   *  the section header can render the trigger button as a headerAction
+   *  instead of taking its own row inside the settings list. */
+  ghostty: UseGhosttyImportReturn
+  /** Whether WSL is installed on this Windows machine. */
+  wslAvailable?: boolean
 }
 
 export function TerminalPane({
@@ -62,7 +72,9 @@ export function TerminalPane({
   systemPrefersDark,
   terminalFontSuggestions,
   scrollbackMode,
-  setScrollbackMode
+  setScrollbackMode,
+  ghostty,
+  wslAvailable
 }: TerminalPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const isWindows = isWindowsUserAgent()
@@ -113,12 +125,11 @@ export function TerminalPane({
         >
           <Label>Default Shell</Label>
           <div className="flex w-fit gap-1 rounded-md border border-border/50 p-1">
-            {(
-              [
-                { label: 'PowerShell', value: 'powershell.exe' },
-                { label: 'Command Prompt', value: 'cmd.exe' }
-              ] as const
-            ).map(({ label, value }) => (
+            {[
+              { label: 'PowerShell', value: 'powershell.exe' },
+              { label: 'Command Prompt', value: 'cmd.exe' },
+              ...(wslAvailable ? [{ label: 'WSL', value: 'wsl.exe' }] : [])
+            ].map(({ label, value }) => (
               <button
                 key={value}
                 onClick={() => updateSettings({ terminalWindowsShell: value })}
@@ -376,6 +387,28 @@ export function TerminalPane({
               />
             </button>
           </SearchableSetting>
+
+          <SearchableSetting
+            title="Cursor Opacity"
+            description="Opacity of the terminal cursor."
+            keywords={['terminal', 'cursor', 'opacity', 'transparency']}
+          >
+            <NumberField
+              label="Cursor Opacity"
+              description="Opacity of the terminal cursor."
+              value={settings.terminalCursorOpacity ?? 1}
+              defaultValue={1}
+              min={0}
+              max={1}
+              step={0.05}
+              suffix="0 to 1"
+              onChange={(value) =>
+                updateSettings({
+                  terminalCursorOpacity: clampNumber(value, 0, 1)
+                })
+              }
+            />
+          </SearchableSetting>
         </div>
       </section>
     ) : null,
@@ -597,6 +630,9 @@ export function TerminalPane({
         </SearchableSetting>
       </section>
     ) : null,
+    matchesSettingsSearch(searchQuery, TERMINAL_WINDOW_SEARCH_ENTRIES) ? (
+      <TerminalWindowSection key="window" settings={settings} updateSettings={updateSettings} />
+    ) : null,
     matchesSettingsSearch(searchQuery, TERMINAL_DARK_THEME_SEARCH_ENTRIES) ? (
       <DarkTerminalThemeSection
         key="dark-theme"
@@ -763,6 +799,26 @@ export function TerminalPane({
           ) : null}
         </SearchableSetting>
 
+        <SearchableSetting
+          title="Word Separators"
+          description="Characters treated as word boundaries for double-click selection."
+          keywords={['word', 'separator', 'boundary', 'double-click', 'selection']}
+          className="space-y-2"
+        >
+          <Label>Word Separators</Label>
+          <Input
+            value={settings.terminalWordSeparator ?? ''}
+            onChange={(e) => {
+              const value = e.target.value
+              updateSettings({ terminalWordSeparator: value || undefined })
+            }}
+            placeholder={` ()[]{},'"\``}
+            className="max-w-sm"
+          />
+          <p className="text-xs text-muted-foreground">
+            Characters treated as word boundaries for double-click selection.
+          </p>
+        </SearchableSetting>
         {isMac ? (
           <SearchableSetting
             title="Option as Alt"
@@ -835,6 +891,15 @@ export function TerminalPane({
           {section}
         </div>
       ))}
+      <GhosttyImportModal
+        open={ghostty.open}
+        onOpenChange={ghostty.handleOpenChange}
+        preview={ghostty.preview}
+        loading={ghostty.loading}
+        onApply={ghostty.handleApply}
+        applied={ghostty.applied}
+        applyError={ghostty.applyError}
+      />
     </div>
   )
 }

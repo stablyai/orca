@@ -221,10 +221,14 @@ function SourceControlInner(): React.JSX.Element {
       .getBaseRefDefault({ repoId: activeRepo.id })
       .then((result) => {
         if (!stale) {
-          setDefaultBaseRef(result)
+          // Why: IPC now returns a `{ defaultBaseRef, remoteCount }` envelope;
+          // this component only needs `defaultBaseRef`. `remoteCount` is used
+          // by BaseRefPicker for the multi-remote hint.
+          setDefaultBaseRef(result.defaultBaseRef)
         }
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error('[SourceControl] getBaseRefDefault failed', err)
         // Why: leave defaultBaseRef null on failure instead of fabricating
         // 'origin/main'. effectiveBaseRef stays falsy, so branch compare and
         // PR fetch skip running against a ref that may not exist.

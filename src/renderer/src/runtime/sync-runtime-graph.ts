@@ -98,12 +98,14 @@ async function syncRuntimeGraph(): Promise<void> {
           ptyId: savedPtyId
         })
       }
+      const paneTitles = state.runtimePaneTitlesByTabId[tabId] ?? {}
       graph.leaves.push({
         tabId,
         worktreeId: registeredTab.worktreeId,
         leafId,
         paneRuntimeId: pane.id,
-        ptyId
+        ptyId,
+        paneTitle: paneTitles[pane.id] ?? null
       })
     }
   }

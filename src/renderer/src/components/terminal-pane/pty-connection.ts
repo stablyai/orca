@@ -5,7 +5,6 @@ import { isGeminiTerminalTitle, isClaudeAgent } from '@/lib/agent-status'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
 import { toast } from 'sonner'
-import { AGENT_DASHBOARD_ENABLED } from '../../../../shared/constants'
 import type { PtyConnectResult } from './pty-transport'
 import { createIpcPtyTransport } from './pty-transport'
 import { shouldSeedCacheTimerOnInitialTitle } from './cache-timer-seeding'
@@ -18,7 +17,7 @@ import {
 } from './layout-serialization'
 import { warnTerminalLifecycleAnomaly } from './terminal-lifecycle-diagnostics'
 
-const pendingSpawnByTabId = new Map<string, Promise<string | null>>()
+const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
 
 // Why: when multiple panes/tabs need the same deferred SSH connection,
 // the first one calls ssh.connect() and subsequent ones must wait for it
@@ -105,6 +104,7 @@ export function connectPanePty(
   // Why: cache timer state is keyed per-pane (not per-tab) so split-pane tabs
   // can track each Claude session independently without overwriting each other.
   const cacheKey = `${deps.tabId}:${pane.id}`
+  const pendingSpawnKey = `${deps.tabId}:${paneLeafId(pane.id)}`
 
   const onExit = (ptyId: string): void => {
     deps.syncPanePtyLayoutBinding(pane.id, null)
@@ -207,14 +207,20 @@ export function connectPanePty(
     deps.dispatchNotification({ source: 'terminal-bell' })
   }
 
-  // ─── Prompt-cache timer: driven by agent lifecycle, not attention ─────
+  // ─── Agent task-complete: OS notification, not tab attention ──────────
   //
-  // The working→idle title transition is kept purely to drive Claude's
-  // prompt-cache countdown in the sidebar. It intentionally does NOT raise
-  // attention — that would double-fire with the BEL above, and OSC title
-  // transitions are too narrow a signal to be the sole attention source
-  // (only agent TUIs emit them; non-agent long-running tasks would never
-  // get surfaced).
+  // The working→idle title transition drives two independent concerns:
+  //   1. The Claude prompt-cache countdown in the sidebar.
+  //   2. The "Agent Task Complete" OS notification users toggle in Settings.
+  //
+  // We intentionally do NOT raise tab/worktree unread from here — that
+  // remains BEL-only so non-agent long-running tasks stay first-class and
+  // so unread state only reflects what the terminal byte stream actually
+  // signals. OS notifications are a separate channel: not every agent CLI
+  // reliably emits BEL on completion (Gemini, some Codex flows), and
+  // without this dispatch the Settings toggle would have zero producers.
+  // Double-firing with a concurrent BEL is handled by the 5 s per-worktree
+  // dedupe in main/ipc/notifications.ts.
   const onAgentBecameIdle = (title: string): void => {
     // Why: only start the prompt-cache countdown for Claude agents — other
     // agents have different (or no) prompt-caching semantics and showing a
@@ -230,6 +236,12 @@ export function connectPanePty(
     if (isClaudeAgent(title) && (settings === null || settings.promptCacheTimerEnabled)) {
       deps.setCacheTimerStartedAt(cacheKey, Date.now())
     }
+    // Why: this is the sole producer of 'agent-task-complete' in the renderer;
+    // removing it (as #944 did) leaves the user-facing Settings toggle with no
+    // events to fire. Dispatch is gated per-source in main; the main-process
+    // dedupe also collapses concurrent BEL + task-complete for the same
+    // worktree into a single notification.
+    deps.dispatchNotification({ source: 'agent-task-complete', terminalTitle: title })
   }
   const onAgentBecameWorking = (): void => {
     // Why: a new API call refreshes the prompt-cache TTL, so clear any running
@@ -243,6 +255,14 @@ export function connectPanePty(
     deps.setCacheTimerStartedAt(cacheKey, null)
     // Why: the agent process is gone, so its explicit status is no longer meaningful.
     // Remove the entry so the hover UI does not show stale "working" for a dead agent.
+    //
+    // TODO(#1167): this path only fires on idle→shell title transitions, which
+    // means Ctrl+C'd `working` rows (Codex, Gemini, OpenCode — agents with no
+    // interrupt hook) linger until the 30-min AGENT_STATUS_STALE_AFTER_MS TTL
+    // decays them to idle or the pane/tab is closed. PR #1167 replaces this
+    // heuristic with authoritative foreground-process tracking in main so the
+    // row drops within 2s of the CLI process exiting. See branch
+    // brennanb2025/foreground-process-agent-exit.
     useAppStore.getState().removeAgentStatus(cacheKey)
   }
   // Why: inject ORCA_PANE_KEY so global Claude/Codex hooks can attribute their
@@ -264,6 +284,8 @@ export function connectPanePty(
   const worktree = allWorktrees.find((w) => w.id === deps.worktreeId)
   const repo = worktree ? state.repos?.find((r) => r.id === worktree.repoId) : null
   const connectionId = repo?.connectionId ?? null
+  const tab = (state.tabsByWorktree[deps.worktreeId] ?? []).find((t) => t.id === deps.tabId)
+  const shellOverride = tab?.shellOverride
 
   const transport = createIpcPtyTransport({
     cwd: deps.cwd,
@@ -271,6 +293,7 @@ export function connectPanePty(
     command: paneStartup?.command,
     connectionId,
     worktreeId: deps.worktreeId,
+    ...(shellOverride ? { shellOverride } : {}),
     onPtyExit: onExit,
     onTitleChange,
     onPtySpawn,
@@ -282,17 +305,20 @@ export function connectPanePty(
     // Without this, the OSC parser in pty-transport strips sequences from xterm
     // output but the status never reaches the store or dashboard/hover UI.
     onAgentStatus: (payload) => {
-      if (!AGENT_DASHBOARD_ENABLED) {
-        return
-      }
       // Why: capture the store snapshot once so the title lookup and the
       // setAgentStatus call observe the same state. Re-reading getState()
       // between the two lines opens a brief window where the title could
       // shift (OSC title update landing in between) and the status would be
-      // stored against a title that was never paired with it.
-      const state = useAppStore.getState()
-      const title = state.runtimePaneTitlesByTabId?.[deps.tabId]?.[pane.id]
-      state.setAgentStatus(cacheKey, payload, title)
+      // stored against a title that was never paired with it. The same
+      // snapshot also gates on the experimental dashboard setting — without
+      // the opt-in, OSC 9999 status payloads are dropped before they reach
+      // the store.
+      const currentState = useAppStore.getState()
+      if (currentState.settings?.experimentalAgentDashboard !== true) {
+        return
+      }
+      const title = currentState.runtimePaneTitlesByTabId?.[deps.tabId]?.[pane.id]
+      currentState.setAgentStatus(cacheKey, payload, title)
     }
   })
   const hasExistingPaneTransport = deps.paneTransportsRef.current.size > 0
@@ -394,11 +420,13 @@ export function connectPanePty(
         )
         .catch(() => null)
         .finally(() => {
-          if (pendingSpawnByTabId.get(deps.tabId) === spawnPromise) {
-            pendingSpawnByTabId.delete(deps.tabId)
+          if (pendingSpawnByPaneKey.get(pendingSpawnKey) === spawnPromise) {
+            pendingSpawnByPaneKey.delete(pendingSpawnKey)
           }
         })
-      pendingSpawnByTabId.set(deps.tabId, spawnPromise)
+      // Why: split panes in the same tab can spawn concurrently. Key by pane
+      // as well as tab so a remount cannot attach to a sibling setup pane's PTY.
+      pendingSpawnByPaneKey.set(pendingSpawnKey, spawnPromise)
     }
 
     // Why: replay bytes (eager-buffer flush, attach-time screen clear) must
@@ -752,7 +780,7 @@ export function connectPanePty(
       allowInitialIdleCacheSeed = false
       const pendingSpawn = hasExistingPaneTransport
         ? undefined
-        : pendingSpawnByTabId.get(deps.tabId)
+        : pendingSpawnByPaneKey.get(pendingSpawnKey)
       if (pendingSpawn) {
         void pendingSpawn
           .then((spawnedPtyId) => {

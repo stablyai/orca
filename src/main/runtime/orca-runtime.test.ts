@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { WorktreeMeta } from '../../shared/types'
 import { addWorktree, listWorktrees } from '../git/worktree'
 import { createSetupRunnerScript, getEffectiveHooks, runHook } from '../hooks'
+import { OrchestrationDb } from './orchestration/db'
 import { OrcaRuntimeService } from './orca-runtime'
 
 const {
@@ -77,6 +78,31 @@ afterEach(() => {
   ensurePathWithinWorkspaceMock.mockReset()
   invalidateAuthorizedRootsCacheMock.mockReset()
 })
+
+function syncSinglePty(runtime: OrcaRuntimeService, ptyId: string | null = 'pty-1'): void {
+  runtime.attachWindow(1)
+  runtime.syncWindowGraph(1, {
+    tabs: [
+      {
+        tabId: 'tab-1',
+        worktreeId: TEST_WORKTREE_ID,
+        title: 'Codex',
+        activeLeafId: 'pane:1',
+        layout: null
+      }
+    ],
+    leaves: [
+      {
+        tabId: 'tab-1',
+        worktreeId: TEST_WORKTREE_ID,
+        leafId: 'pane:1',
+        paneRuntimeId: 1,
+        ptyId,
+        paneTitle: null
+      }
+    ]
+  })
+}
 
 const TEST_WINDOW_ID = 1
 const TEST_REPO_ID = 'repo-1'
@@ -300,7 +326,8 @@ describe('OrcaRuntimeService', () => {
         writes.push(data)
         return true
       },
-      kill: () => true
+      kill: () => true,
+      getForegroundProcess: async () => null
     })
 
     runtime.attachWindow(1)
@@ -344,7 +371,7 @@ describe('OrcaRuntimeService', () => {
       handle: terminal.handle,
       accepted: true
     })
-    expect(writes).toEqual(['continue\r'])
+    expect(writes).toEqual(['continue', '\r'])
   })
 
   it('waits for terminal exit and resolves with the exit status', async () => {
@@ -438,6 +465,136 @@ describe('OrcaRuntimeService', () => {
     expect(thirdRead.nextCursor).toBe('2')
   })
 
+  it('delivers pending orchestration messages to an already-idle agent', async () => {
+    vi.useFakeTimers()
+    const runtime = new OrcaRuntimeService(store)
+    const db = new OrchestrationDb(':memory:')
+    const write = vi.fn().mockReturnValue(true)
+    runtime.setOrchestrationDb(db)
+    runtime.setPtyController({
+      write,
+      kill: vi.fn(),
+      getForegroundProcess: async () => null
+    })
+    syncSinglePty(runtime)
+
+    const [terminal] = (await runtime.listTerminals()).terminals
+    runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
+    runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
+    db.insertMessage({ from: 'term_sender', to: terminal.handle, subject: 'hello' })
+
+    runtime.deliverPendingMessagesForHandle(terminal.handle)
+
+    expect(write).toHaveBeenCalledWith('pty-1', expect.stringContaining('Subject: hello'))
+    // Why: markAsRead is deferred until the 500ms delayed Enter is confirmed,
+    // so we must advance timers past the split-write delay.
+    await vi.advanceTimersByTimeAsync(500)
+    expect(write).toHaveBeenCalledWith('pty-1', '\r')
+    expect(db.getUnreadMessages(terminal.handle)).toHaveLength(0)
+    db.close()
+    vi.useRealTimers()
+  })
+
+  it('adopts preallocated ORCA_TERMINAL_HANDLE as a valid runtime handle', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const handle = runtime.preAllocateHandleForPty('pty-1')
+
+    syncSinglePty(runtime)
+    runtime.onPtyData('pty-1', 'ready\n', 100)
+
+    const read = await runtime.readTerminal(handle)
+    expect(read.handle).toBe(handle)
+    expect(read.tail).toEqual(['ready'])
+  })
+
+  it('keeps preallocated terminal handles valid across renderer reloads', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const handle = runtime.preAllocateHandleForPty('pty-1')
+
+    syncSinglePty(runtime)
+    runtime.markRendererReloading(1)
+    syncSinglePty(runtime, null)
+    runtime.onPtyData('pty-1', 'after reload\n', 100)
+
+    const read = await runtime.readTerminal(handle)
+    expect(read.tail).toEqual(['after reload'])
+  })
+
+  it('keeps preallocated terminal handles valid when a reload graph omits the live leaf', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const handle = runtime.preAllocateHandleForPty('pty-1')
+
+    syncSinglePty(runtime)
+    runtime.markRendererReloading(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: []
+    })
+    runtime.onPtyData('pty-1', 'after omitted leaf\n', 100)
+
+    const read = await runtime.readTerminal(handle)
+    expect(read.tail).toEqual(['after omitted leaf'])
+  })
+
+  it('keeps preallocated terminal handles valid after graph unavailable during reload', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const handle = runtime.preAllocateHandleForPty('pty-1')
+
+    syncSinglePty(runtime)
+    runtime.markGraphUnavailable(1)
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: []
+    })
+    runtime.onPtyData('pty-1', 'after unavailable\n', 100)
+
+    const read = await runtime.readTerminal(handle)
+    expect(read.tail).toEqual(['after unavailable'])
+  })
+
+  it('keeps already-idle status after tui-idle wait for immediate message delivery', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const db = new OrchestrationDb(':memory:')
+    const write = vi.fn().mockReturnValue(true)
+    runtime.setOrchestrationDb(db)
+    runtime.setPtyController({
+      write,
+      kill: vi.fn(),
+      getForegroundProcess: async () => null
+    })
+    syncSinglePty(runtime)
+
+    const [terminal] = (await runtime.listTerminals()).terminals
+    runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
+    runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
+    await runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle' })
+    db.insertMessage({ from: 'sender', to: terminal.handle, subject: 'after wait' })
+
+    runtime.deliverPendingMessagesForHandle(terminal.handle)
+
+    expect(write).toHaveBeenCalledWith('pty-1', expect.stringContaining('Subject: after wait'))
+    db.close()
+  })
+
+  it('resolves message waiters when notifyMessageArrived is called', async () => {
+    const runtime = new OrcaRuntimeService(store)
+
+    const waitPromise = runtime.waitForMessage('term_abc', { timeoutMs: 5000 })
+    runtime.notifyMessageArrived('term_abc')
+    await waitPromise
+  })
+
+  it('resolves message waiters on timeout when no message arrives', async () => {
+    const runtime = new OrcaRuntimeService(store)
+
+    const start = Date.now()
+    await runtime.waitForMessage('term_abc', { timeoutMs: 100 })
+    const elapsed = Date.now() - start
+    expect(elapsed).toBeGreaterThanOrEqual(90)
+    expect(elapsed).toBeLessThan(500)
+  })
+
   it('fails terminal waits closed when the handle goes stale during reload', async () => {
     const runtime = new OrcaRuntimeService(store)
 
@@ -481,7 +638,7 @@ describe('OrcaRuntimeService', () => {
           {
             tabId: 'tab-1',
             worktreeId: 'repo-1::/tmp/worktree-a',
-            title: 'Claude',
+            title: 'Terminal 1',
             activeLeafId: 'pane:1',
             layout: null
           }
@@ -611,7 +768,8 @@ describe('OrcaRuntimeService', () => {
       kill: () => {
         killed = true
         return true
-      }
+      },
+      getForegroundProcess: async () => null
     })
 
     runtime.attachWindow(1)
@@ -691,7 +849,8 @@ describe('OrcaRuntimeService', () => {
       kill: () => {
         killed = true
         return true
-      }
+      },
+      getForegroundProcess: async () => null
     })
 
     runtime.attachWindow(1)

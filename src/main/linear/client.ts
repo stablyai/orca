@@ -31,13 +31,62 @@ export function release(): void {
   }
 }
 
-// ── Token storage ────────────────────────────────────────────────────
+// ── Token + viewer storage ───────────────────────────────────────────
+// Why: the token is encrypted via safeStorage (OS keychain). The viewer
+// metadata is kept in a separate *plaintext* file so settings/status
+// checks can answer "are you connected, and as whom?" without ever
+// decrypting the token. Decrypting triggers a macOS Keychain permission
+// dialog after every app signature change (e.g. every update), so we only
+// touch the encrypted token when the user actually makes a Linear API
+// call or explicitly tests the connection.
 function getTokenPath(): string {
   return join(homedir(), '.orca', 'linear-token.enc')
 }
 
+function getViewerPath(): string {
+  return join(homedir(), '.orca', 'linear-viewer.json')
+}
+
 let cachedToken: string | null = null
 let cachedViewer: LinearViewer | null = null
+let viewerLoadedFromDisk = false
+
+function readViewerFromDisk(): LinearViewer | null {
+  const path = getViewerPath()
+  if (!existsSync(path)) {
+    return null
+  }
+  try {
+    const raw = readFileSync(path, { encoding: 'utf-8' })
+    const parsed = JSON.parse(raw) as Partial<LinearViewer>
+    if (typeof parsed?.displayName !== 'string' || typeof parsed?.organizationName !== 'string') {
+      return null
+    }
+    return {
+      displayName: parsed.displayName,
+      email: typeof parsed.email === 'string' ? parsed.email : null,
+      organizationName: parsed.organizationName
+    }
+  } catch {
+    return null
+  }
+}
+
+function writeViewerToDisk(viewer: LinearViewer): void {
+  const dir = join(homedir(), '.orca')
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true })
+  }
+  writeFileSync(getViewerPath(), JSON.stringify(viewer), { encoding: 'utf-8', mode: 0o600 })
+}
+
+function clearViewerOnDisk(): void {
+  try {
+    unlinkSync(getViewerPath())
+  } catch {
+    // File may not exist — safe to ignore.
+  }
+}
 
 export function saveToken(apiKey: string): void {
   const dir = join(homedir(), '.orca')
@@ -59,9 +108,16 @@ export function saveToken(apiKey: string): void {
   cachedToken = apiKey
 }
 
-export function loadToken(): string | null {
+// Why: force=true is used when the caller wants a token and accepts the
+// keychain prompt (explicit "Test connection" or an actual API call). The
+// default call path is fine with returning null if we haven't decrypted yet
+// this session, so status checks don't trigger Keychain.
+export function loadToken(options: { force?: boolean } = {}): string | null {
   if (cachedToken !== null) {
     return cachedToken
+  }
+  if (!options.force) {
+    return null
   }
   const tokenPath = getTokenPath()
   if (!existsSync(tokenPath)) {
@@ -78,20 +134,32 @@ export function loadToken(): string | null {
   }
 }
 
+export function hasStoredToken(): boolean {
+  if (cachedToken !== null) {
+    return true
+  }
+  return existsSync(getTokenPath())
+}
+
 export function clearToken(): void {
   cachedToken = null
   cachedViewer = null
+  viewerLoadedFromDisk = false
   const tokenPath = getTokenPath()
   try {
     unlinkSync(tokenPath)
   } catch {
     // File may not exist — safe to ignore.
   }
+  clearViewerOnDisk()
 }
 
 // ── Client factory ───────────────────────────────────────────────────
+// Why: this is called by the issues/teams modules when the user actually
+// performs a Linear action — at that point decrypting the token (and
+// surfacing a Keychain prompt if needed) is expected.
 export function getClient(): LinearClient | null {
-  const token = loadToken()
+  const token = loadToken({ force: true })
   if (!token) {
     return null
   }
@@ -122,7 +190,9 @@ export async function connect(
     }
 
     saveToken(apiKey)
+    writeViewerToDisk(viewer)
     cachedViewer = viewer
+    viewerLoadedFromDisk = true
     return { ok: true, viewer }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to validate API key'
@@ -134,36 +204,63 @@ export function disconnect(): void {
   clearToken()
 }
 
-export async function getStatus(): Promise<LinearConnectionStatus> {
-  const token = loadToken()
-  if (!token) {
+// Why: getStatus must NEVER decrypt the token. It returns the cached
+// viewer (written at connect time) so the settings/landing UIs can show
+// "Connected as X" without triggering a Keychain permission dialog after
+// every app update. The encrypted token is only touched lazily on real
+// Linear API calls or when the user clicks "Test connection".
+export function getStatus(): LinearConnectionStatus {
+  if (!hasStoredToken()) {
     return { connected: false, viewer: null }
   }
 
-  if (cachedViewer) {
-    return { connected: true, viewer: cachedViewer }
+  if (!cachedViewer && !viewerLoadedFromDisk) {
+    cachedViewer = readViewerFromDisk()
+    viewerLoadedFromDisk = true
   }
 
-  // Lazily fetch viewer info on first status check after app restart.
+  return { connected: true, viewer: cachedViewer }
+}
+
+// Why: explicit user-initiated check. Decrypts the token, pings the
+// Linear API to re-validate, and refreshes the cached viewer file. If the
+// token is rejected (401) it clears state just like a live API error.
+export async function testConnection(): Promise<
+  { ok: true; viewer: LinearViewer } | { ok: false; error: string }
+> {
+  const token = loadToken({ force: true })
+  if (!token) {
+    return { ok: false, error: 'No API key stored.' }
+  }
   try {
     const client = new LinearClient({ apiKey: token })
     const me = await client.viewer
     const org = await me.organization
-
-    cachedViewer = {
+    const viewer: LinearViewer = {
       displayName: me.displayName,
       email: me.email ?? null,
       organizationName: org.name
     }
-    return { connected: true, viewer: cachedViewer }
+    writeViewerToDisk(viewer)
+    cachedViewer = viewer
+    viewerLoadedFromDisk = true
+    return { ok: true, viewer }
   } catch (error) {
     if (isAuthError(error)) {
       clearToken()
     }
-    return { connected: false, viewer: null }
+    const message = error instanceof Error ? error.message : 'Test failed'
+    return { ok: false, error: message }
   }
 }
 
+// Why: called at main-process startup. This used to eagerly decrypt the
+// token (which triggered a Keychain prompt on every launch after an app
+// update). We now only warm the plaintext viewer cache — the token stays
+// encrypted on disk until actually needed.
 export function initLinearToken(): void {
-  loadToken()
+  if (!viewerLoadedFromDisk) {
+    cachedViewer = readViewerFromDisk()
+    viewerLoadedFromDisk = true
+  }
 }

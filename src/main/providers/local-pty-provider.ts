@@ -2,10 +2,11 @@
 ~70 lines of scanner/promise wiring to spawn(). Splitting the method would scatter
 tightly coupled PTY lifecycle logic (scan → ready → write → exit cleanup) across
 files without a cleaner ownership seam. */
-import { basename, win32 as pathWin32 } from 'path'
+import { basename } from 'path'
+import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
 import { existsSync } from 'fs'
 import * as pty from 'node-pty'
-import { parseWslPath } from '../wsl'
+import { parseWslPath, isWslAvailable } from '../wsl'
 import {
   injectHistoryEnv,
   updateHistFileForFallback,
@@ -134,33 +135,22 @@ export class LocalPtyProvider implements IPtyProvider {
       effectiveCwd = getDefaultCwd()
       validationCwd = cwd
     } else if (process.platform === 'win32') {
-      shellPath = this.opts.getWindowsShell?.() || process.env.COMSPEC || 'powershell.exe'
-      // Why: use path.win32.basename so backslash-separated Windows paths
-      // are parsed correctly even when tests mock process.platform on Linux CI.
-      const shellBasename = pathWin32.basename(shellPath).toLowerCase()
-      // Why: On CJK Windows (Chinese, Japanese, Korean), the console code page
-      // defaults to the system ANSI code page (e.g. 936/GBK for Chinese).
-      // ConPTY encodes its output pipe using this code page, but node-pty
-      // always decodes as UTF-8. Without switching to code page 65001 (UTF-8),
-      // multi-byte CJK characters are garbled because the GBK/Shift-JIS/EUC-KR
-      // byte sequences are misinterpreted as UTF-8.
-      if (shellBasename === 'cmd.exe') {
-        shellArgs = ['/K', 'chcp 65001 > nul']
-      } else if (shellBasename === 'powershell.exe' || shellBasename === 'pwsh.exe') {
-        // Why: `-NoExit -Command` alone skips the user's $PROFILE, breaking
-        // custom prompts (oh-my-posh, starship), aliases, and PSReadLine
-        // configuration. Dot-sourcing $PROFILE first restores the normal
-        // startup experience.
-        shellArgs = [
-          '-NoExit',
-          '-Command',
-          'try { . $PROFILE } catch {}; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8'
-        ]
-      } else {
-        shellArgs = []
-      }
-      effectiveCwd = cwd
-      validationCwd = cwd
+      // Why: shellOverride lets a single tab open in a different shell than the
+      // persisted default (e.g. "New WSL terminal" from the "+" submenu) without
+      // changing the user's setting. It takes priority over the setting.
+      shellPath =
+        args.shellOverride ||
+        this.opts.getWindowsShell?.() ||
+        process.env.COMSPEC ||
+        'powershell.exe'
+      // Why: both this path and the daemon-subprocess path must derive the
+      // same shellArgs for the same (shell, cwd) pair. The helper keeps CJK
+      // UTF-8 setup (chcp 65001), PowerShell $PROFILE dot-sourcing, and the
+      // wsl.exe /mnt/<drive> cwd translation in one place.
+      const resolved = resolveWindowsShellLaunchArgs(shellPath, cwd, defaultCwd)
+      shellArgs = resolved.shellArgs
+      effectiveCwd = resolved.effectiveCwd
+      validationCwd = resolved.validationCwd
     } else {
       shellPath = args.env?.SHELL || process.env.SHELL || '/bin/zsh'
       shellArgs = ['-l']
@@ -341,7 +331,12 @@ export class LocalPtyProvider implements IPtyProvider {
       })
     }
 
-    return { id }
+    // Why: publish the OS pid so ipc/pty can register the PTY with the memory
+    // collector without reaching back into the provider. `proc.pid` may be
+    // briefly 0/undefined if node-pty hasn't observed the forked child yet.
+    const rawPid = proc.pid
+    const pid = typeof rawPid === 'number' && Number.isFinite(rawPid) && rawPid > 0 ? rawPid : null
+    return { id, pid }
   }
 
   // Local PTYs are always attached -- no-op. Remote providers use this to resubscribe.
@@ -460,10 +455,14 @@ export class LocalPtyProvider implements IPtyProvider {
 
   async getProfiles(): Promise<{ name: string; path: string }[]> {
     if (process.platform === 'win32') {
-      return [
+      const profiles: { name: string; path: string }[] = [
         { name: 'PowerShell', path: 'powershell.exe' },
         { name: 'Command Prompt', path: 'cmd.exe' }
       ]
+      if (isWslAvailable()) {
+        profiles.push({ name: 'WSL', path: 'wsl.exe' })
+      }
+      return profiles
     }
     const shells = ['/bin/zsh', '/bin/bash', '/bin/sh']
     return shells.filter((s) => existsSync(s)).map((s) => ({ name: basename(s), path: s }))

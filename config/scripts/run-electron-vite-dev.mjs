@@ -1,6 +1,8 @@
 import { spawn } from 'node:child_process'
+import { chmodSync, mkdirSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 // Why: Electron-based hosts (e.g. Claude Code, VS Code) set
 // ELECTRON_RUN_AS_NODE=1 in their terminal environment. If this leaks into
@@ -9,6 +11,51 @@ import path from 'node:path'
 delete process.env.ELECTRON_RUN_AS_NODE
 
 const require = createRequire(import.meta.url)
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
+
+function getDevUserDataPath() {
+  if (process.env.ORCA_DEV_USER_DATA_PATH) {
+    return process.env.ORCA_DEV_USER_DATA_PATH
+  }
+  if (process.platform === 'darwin') {
+    return path.join(process.env.HOME ?? '', 'Library', 'Application Support', 'orca-dev')
+  }
+  if (process.platform === 'win32') {
+    return path.join(process.env.APPDATA ?? path.join(process.env.USERPROFILE ?? '', 'AppData', 'Roaming'), 'orca-dev')
+  }
+  return path.join(process.env.XDG_CONFIG_HOME ?? path.join(process.env.HOME ?? '', '.config'), 'orca-dev')
+}
+
+function prepareDevCliWrapper() {
+  const binDir = path.join(repoRoot, 'out', 'bin')
+  mkdirSync(binDir, { recursive: true })
+  const userDataPath = getDevUserDataPath()
+  const cliPath = path.join(repoRoot, 'out', 'cli', 'index.js')
+
+  if (process.platform === 'win32') {
+    writeFileSync(
+      path.join(binDir, 'orca-dev.cmd'),
+      `@echo off\r\nset "ORCA_USER_DATA_PATH=${userDataPath}"\r\nnode "${cliPath}" %*\r\n`,
+      'utf8'
+    )
+  } else {
+    const wrapperPath = path.join(binDir, 'orca-dev')
+    writeFileSync(
+      wrapperPath,
+      `#!/usr/bin/env bash\nexport ORCA_USER_DATA_PATH=${JSON.stringify(userDataPath)}\nexec node ${JSON.stringify(cliPath)} "$@"\n`,
+      'utf8'
+    )
+    chmodSync(wrapperPath, 0o755)
+  }
+
+  process.env.PATH = `${binDir}${path.delimiter}${process.env.PATH ?? ''}`
+  console.log(`[orca-dev] Prepared wrapper in ${binDir}`)
+}
+
+if (process.env.ORCA_SKIP_DEV_CLI_PREPARE !== '1') {
+  prepareDevCliWrapper()
+}
+
 // Why: tests inject a tiny fake CLI here so they can verify Ctrl+C tears down
 // the full child tree without depending on a real electron-vite install.
 const electronViteCli =
@@ -17,6 +64,7 @@ const electronViteCli =
 const forwardedArgs = ['dev', ...process.argv.slice(2)]
 const child = spawn(process.execPath, [electronViteCli, ...forwardedArgs], {
   stdio: 'inherit',
+  env: process.env,
   // Why: electron-vite launches Electron as a descendant process. Giving the
   // dev runner its own process group lets Ctrl+C kill the whole tree on macOS
   // instead of leaving the Electron app alive after the terminal exits.

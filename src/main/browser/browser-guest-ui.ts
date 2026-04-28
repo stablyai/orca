@@ -302,7 +302,7 @@ export function setupGuestShortcutForwarding(args: {
     } else if (action?.type === 'openQuickOpen') {
       renderer.send('ui:openQuickOpen')
     } else if (action?.type === 'openNewWorkspace') {
-      renderer.send('ui:openNewWorkspace')
+      renderer.send('ui:openNewWorkspace', action.tab)
     } else if (action?.type === 'jumpToWorktreeIndex') {
       renderer.send('ui:jumpToWorktreeIndex', action.index)
     } else {

@@ -2,10 +2,7 @@
 import { useEffect } from 'react'
 import { useAppStore } from '../store'
 import { applyUIZoom } from '@/lib/ui-zoom'
-import {
-  activateAndRevealWorktree,
-  ensureWorktreeHasInitialTerminal
-} from '@/lib/worktree-activation'
+import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { SPLIT_TERMINAL_PANE_EVENT, CLOSE_TERMINAL_PANE_EVENT } from '@/constants/terminal'
 import type { SplitTerminalPaneDetail, CloseTerminalPaneDetail } from '@/constants/terminal'
 import { getVisibleWorktreeIds } from '@/components/sidebar/visible-worktrees'
@@ -19,7 +16,6 @@ import { resolveZoomTarget } from './resolve-zoom-target'
 import { handleSwitchTab, handleSwitchTerminalTab } from './ipc-tab-switch'
 import { dispatchClearModifierHints } from './useModifierHint'
 import { normalizeAgentStatusPayload } from '../../../shared/agent-status-types'
-import { AGENT_DASHBOARD_ENABLED } from '../../../shared/constants'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 
 export { resolveZoomTarget } from './resolve-zoom-target'
@@ -85,7 +81,7 @@ export function useIpcEvents(): void {
     )
 
     unsubs.push(
-      window.api.ui.onOpenNewWorkspace(() => {
+      window.api.ui.onOpenNewWorkspace((tab) => {
         // Why: mirror the renderer's App.tsx Cmd+N guard — only open the
         // composer when there is at least one real git repo configured, so
         // users on a fresh install don't get a modal with nothing to target.
@@ -94,7 +90,15 @@ export function useIpcEvents(): void {
           return
         }
         dispatchClearModifierHints()
-        store.openModal('new-workspace-composer')
+        // Why: if the composer is already open, switch tabs in place so
+        // repeated Cmd+N / Cmd+Shift+N presses toggle between Quick and
+        // Create-from without remounting and losing in-flight composer state
+        // (repo pick, note drafts). Opening when closed seeds the initial tab.
+        if (store.activeModal === 'new-workspace-composer') {
+          store.setNewWorkspaceComposerTab(tab)
+          return
+        }
+        store.openModal('new-workspace-composer', { initialTab: tab })
       })
     )
 
@@ -141,18 +145,16 @@ export function useIpcEvents(): void {
     unsubs.push(
       window.api.ui.onActivateWorktree(({ repoId, worktreeId, setup }) => {
         void (async () => {
-          const store = useAppStore.getState()
-          await store.fetchWorktrees(repoId)
-          // Why: CLI-created worktrees should feel identical to UI-created
-          // worktrees. The renderer owns the "active worktree -> first tab"
-          // behavior today, so we explicitly replay that activation sequence
-          // after the runtime creates a worktree outside the renderer.
-          store.setActiveRepo(repoId)
-          store.setActiveView('terminal')
-          store.setActiveWorktree(worktreeId)
-          ensureWorktreeHasInitialTerminal(store, worktreeId, setup)
-
-          store.revealWorktreeInSidebar(worktreeId)
+          // Why: fetch worktrees first so the activation helper can resolve
+          // the CLI-created worktree via findWorktreeById — it arrived from
+          // the main process and is not yet in the renderer state.
+          await useAppStore.getState().fetchWorktrees(repoId)
+          // Why: route through activateAndRevealWorktree so CLI-created
+          // worktrees share the canonical activation path with UI-created
+          // ones. This records the visit in the back/forward history stack
+          // (recordWorktreeVisit), without which the nav buttons would
+          // ignore the CLI-driven workspace switch.
+          activateAndRevealWorktree(worktreeId, { setup })
         })().catch((error) => {
           console.error('Failed to activate CLI-created worktree:', error)
         })
@@ -518,6 +520,24 @@ export function useIpcEvents(): void {
           const state = await window.api.ssh.getState({ targetId: target.id })
           if (state) {
             useAppStore.getState().setSshConnectionState(target.id, state as SshConnectionState)
+            // Why: if the renderer reattaches while an SSH session is alive
+            // (e.g. window re-creation or reload), forwarded and detected ports
+            // are only populated via push events. Fetch current snapshots so the
+            // Ports panel doesn't show empty for an active session.
+            if ((state as SshConnectionState).status === 'connected') {
+              const [forwards, detected] = await Promise.all([
+                window.api.ssh.listPortForwards({ targetId: target.id }),
+                window.api.ssh.listDetectedPorts({ targetId: target.id })
+              ])
+              // Why: if the session disconnected while we were awaiting the
+              // snapshot, the disconnect handler already cleared port state.
+              // Applying stale data here would resurrect a dead session's ports.
+              const currentState = useAppStore.getState().sshConnectionStates.get(target.id)
+              if (currentState?.status === 'connected') {
+                useAppStore.getState().setPortForwards(target.id, forwards)
+                useAppStore.getState().setDetectedPorts(target.id, detected)
+              }
+            }
           }
         }
         useAppStore.getState().setSshTargetLabels(labels)
@@ -535,6 +555,18 @@ export function useIpcEvents(): void {
     unsubs.push(
       window.api.ssh.onCredentialResolved(({ requestId }) => {
         useAppStore.getState().removeSshCredentialRequest(requestId)
+      })
+    )
+
+    unsubs.push(
+      window.api.ssh.onPortForwardsChanged(({ targetId, forwards }) => {
+        useAppStore.getState().setPortForwards(targetId, forwards)
+      })
+    )
+
+    unsubs.push(
+      window.api.ssh.onDetectedPortsChanged(({ targetId, ports }) => {
+        useAppStore.getState().setDetectedPorts(targetId, ports)
       })
     )
 
@@ -568,6 +600,11 @@ export function useIpcEvents(): void {
           // promise. When the user reconnects and opens the quick-launch menu,
           // ensureRemoteDetectedAgents will re-detect against the new relay.
           store.clearRemoteDetectedAgents(data.targetId)
+
+          // Why: defensive — clear port forward and detected port state in case
+          // the broadcast from removeAllForwards races with the state change.
+          store.clearPortForwards(data.targetId)
+          store.setDetectedPorts(data.targetId, [])
 
           // Why: an explicit disconnect or terminal failure tears down the SSH
           // PTY provider without emitting per-PTY exit events. Clear the stale
@@ -668,43 +705,47 @@ export function useIpcEvents(): void {
     // Why: agent status arrives from native hook receivers in the main process.
     // Re-parse it here so the renderer enforces the same normalization rules
     // (state enum, field truncation) regardless of whether the source was a
-    // hook callback or an OSC fallback path.
-    if (AGENT_DASHBOARD_ENABLED) {
-      unsubs.push(
-        window.api.agentStatus.onSet((data) => {
-          // Why: the IPC payload is already a structured object — pass it
-          // straight to the object-input normalizer instead of round-tripping
-          // through JSON.stringify/JSON.parse. Hook events can fire many times
-          // per second during a tool-use run, so this avoids the per-event
-          // serialization cost.
-          const payload = normalizeAgentStatusPayload({
-            state: data.state,
-            prompt: data.prompt,
-            agentType: data.agentType,
-            toolName: data.toolName,
-            toolInput: data.toolInput,
-            lastAssistantMessage: data.lastAssistantMessage,
-            interrupted: data.interrupted
-          })
-          if (!payload) {
-            return
-          }
-          const store = useAppStore.getState()
-          // Why: resolve tab existence and terminal title in a single pass.
-          // Previously the code walked store.tabsByWorktree twice — once to
-          // look up the tab-level title (when the pane-level title was
-          // missing) and again for the explicit tabExists check. A paneKey
-          // that no longer resolves to a live tab belongs to a pane that has
-          // already been torn down; dropping here prevents orphan entries
-          // from accumulating in agentStatusByPaneKey.
-          const { exists, title } = resolvePaneKey(store, data.paneKey)
-          if (!exists) {
-            return
-          }
-          store.setAgentStatus(data.paneKey, payload, title)
+    // hook callback or an OSC fallback path. The subscription itself is
+    // unconditional so flipping the experimental dashboard setting takes
+    // effect without re-running this App-mount effect; the per-event guard
+    // inside the handler drops payloads when the setting is off.
+    unsubs.push(
+      window.api.agentStatus.onSet((data) => {
+        const store = useAppStore.getState()
+        if (store.settings?.experimentalAgentDashboard !== true) {
+          return
+        }
+        // Why: the IPC payload is already a structured object — pass it
+        // straight to the object-input normalizer instead of round-tripping
+        // through JSON.stringify/JSON.parse. Hook events can fire many times
+        // per second during a tool-use run, so this avoids the per-event
+        // serialization cost.
+        const payload = normalizeAgentStatusPayload({
+          state: data.state,
+          prompt: data.prompt,
+          agentType: data.agentType,
+          toolName: data.toolName,
+          toolInput: data.toolInput,
+          lastAssistantMessage: data.lastAssistantMessage,
+          interrupted: data.interrupted
         })
-      )
-    }
+        if (!payload) {
+          return
+        }
+        // Why: resolve tab existence and terminal title in a single pass.
+        // Previously the code walked store.tabsByWorktree twice — once to
+        // look up the tab-level title (when the pane-level title was
+        // missing) and again for the explicit tabExists check. A paneKey
+        // that no longer resolves to a live tab belongs to a pane that has
+        // already been torn down; dropping here prevents orphan entries
+        // from accumulating in agentStatusByPaneKey.
+        const { exists, title } = resolvePaneKey(store, data.paneKey)
+        if (!exists) {
+          return
+        }
+        store.setAgentStatus(data.paneKey, payload, title)
+      })
+    )
 
     return () => unsubs.forEach((fn) => fn())
   }, [])

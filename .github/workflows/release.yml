@@ -209,6 +209,24 @@ jobs:
       contents: write
     steps:
       - name: Publish release
-        run: gh release edit "${{ needs.resolve-release.outputs.tag }}" --draft=false --repo "${{ github.repository }}"
+        # Why: derive `--prerelease` from the tag shape (not from whatever
+        # electron-builder left the release flagged as). On 2026-04-27,
+        # electron-builder's publish step flipped `prerelease` back to
+        # `false` on -rc.N releases, which caused an RC to be marked as
+        # GitHub's "latest" release and broke release-cut.yml's math.
+        # Re-asserting here means the final release state is determined
+        # by the tag — a ground truth electron-builder can't rewrite.
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.resolve-release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ "$TAG" == *"-rc."* ]]; then
+            prerelease=true
+          else
+            prerelease=false
+          fi
+          gh release edit "$TAG" \
+            --draft=false \
+            --prerelease="$prerelease" \
+            --repo "$GITHUB_REPOSITORY"
