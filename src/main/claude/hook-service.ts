@@ -61,7 +61,7 @@ function getManagedScript(): string {
       // baked into its env from the old instance — loading `endpoint.cmd`
       // (`set KEY=VALUE` lines) via `call` refreshes them so the hook
       // reaches the current server. Falls through to PTY env if the file
-      // is missing (first run / pre-v2 / running outside Orca).
+      // is missing (first run / pre-endpoint-file / running outside Orca).
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
       'if "%ORCA_AGENT_HOOK_PORT%"=="" exit /b 0',
       'if "%ORCA_AGENT_HOOK_TOKEN%"=="" exit /b 0',
@@ -78,7 +78,7 @@ function getManagedScript(): string {
     // install. PTYs that survive an Orca restart have stale PORT/TOKEN
     // baked into their env from the old instance — sourcing the file here
     // lets us reach the new server. Falls back to PTY env if the file is
-    // missing (first-run / pre-v2 scripts / running outside Orca).
+    // missing (first-run / pre-endpoint-file scripts / running outside Orca).
     // Why: suppress stderr on the `.` builtin. A TOCTOU race (endpoint unlinked
     // between the `[ -r ]` test and the source) or a malformed line (e.g. CRLF
     // bled in from a cross-platform userData copy) would otherwise print a

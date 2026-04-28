@@ -123,7 +123,7 @@ function getOpenCodePluginSource(): string {
     '  // frozen when OpenCode was fork()ed — stale after an Orca restart. The',
     '  // file is rewritten on every Orca start(), so sourcing it per post lets',
     '  // a long-running OpenCode session reach the current server. Falls back',
-    '  // to process.env when the file is absent (first-run / pre-v2 / Orca',
+    '  // to process.env when the file is absent (first-run / pre-endpoint-file / Orca',
     '  // never started writing the file).',
     '  const fileEnv = readEndpointFile() || {};',
     '  return {',

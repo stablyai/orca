@@ -1228,7 +1228,7 @@ export class AgentHookServer {
     this.onAgentStatus = null
     // Why: intentionally do NOT delete the endpoint file on stop(). A stale
     // file points at a dead port, which matches the fail-open policy (hook
-    // POSTs silently fail → same as pre-v2 behavior). Attempting to unlink
+    // POSTs silently fail → same as pre-endpoint-file behavior). Attempting to unlink
     // introduces a TOCTOU race: a concurrent Orca instance sharing userData
     // could rewrite the file between our token check and unlink, and we'd
     // delete their live endpoint file. The next successful start() overwrites
@@ -1264,12 +1264,12 @@ export class AgentHookServer {
       return {}
     }
 
-    // Why: ORCA_AGENT_HOOK_ENDPOINT is new in v2 and is the key that lets a
-    // surviving PTY reach the *current* Orca after a restart. The other four
-    // variables are retained for back-compat so pre-v2 hook scripts (which do
-    // not know to source the endpoint file) continue to work on freshly
-    // spawned PTYs, and so the current script can fall through to env if the
-    // file is missing/unreadable for any reason.
+    // Why: ORCA_AGENT_HOOK_ENDPOINT is the key that lets a surviving PTY reach
+    // the *current* Orca after a restart. The other four variables are retained
+    // for back-compat so pre-endpoint-file hook scripts (which do not know to
+    // source the endpoint file) continue to work on freshly spawned PTYs, and
+    // so the current script can fall through to env if the file is
+    // missing/unreadable for any reason.
     const env: Record<string, string> = {
       ORCA_AGENT_HOOK_PORT: String(this.port),
       ORCA_AGENT_HOOK_TOKEN: this.token,

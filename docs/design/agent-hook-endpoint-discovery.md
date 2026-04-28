@@ -149,9 +149,7 @@ if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "
 
 No change to the HTTP transport, payload shape, or server routing.
 
-### Bumping the protocol version
-
-`ORCA_HOOK_PROTOCOL_VERSION` (`src/shared/agent-hook-types.ts`) bumped from `'1'` to `'2'` so the server's existing version-mismatch warning can distinguish pre-endpoint-file scripts from post-. That warning already exists and is already throttled — no new code, just a constant bump and the one-liner comment explaining what changed.
+`ORCA_HOOK_PROTOCOL_VERSION` stays at `'1'`. The endpoint-file rollout is purely additive — the posted JSON body shape is unchanged, so there is no wire-level distinction to surface. A bump would have been useful only if there were an in-wild fleet of pre-fix scripts to diagnose, but the Claude/Codex/Gemini install path is gated behind `AGENT_DASHBOARD_ENABLED=false` (never shipped) and the Cursor/OpenCode scripts reroll on every Orca launch. Reserve the next bump for a real wire change.
 
 ## Changes
 
@@ -262,11 +260,7 @@ function readEndpointFile() {
 
 `post()` consults the parsed file first for `ORCA_AGENT_HOOK_PORT` / `ORCA_AGENT_HOOK_TOKEN` / `ORCA_AGENT_HOOK_ENV` / `ORCA_AGENT_HOOK_VERSION`, falling back to `process.env.*` on any field the file didn't provide. Pane/tab/worktree identifiers stay on env (they are per-PTY, not per-Orca-instance).
 
-### 3. `src/shared/agent-hook-types.ts` — Protocol version bump
-
-Bumped `ORCA_HOOK_PROTOCOL_VERSION` from `'1'` → `'2'` (monotonic, no skipped version). The server already warns on mismatch, so users with stale installs see a clear, already-throttled diagnostic directing them to reinstall hooks.
-
-### 4. `src/main/agent-hooks/server.test.ts` — Coverage
+### 3. `src/main/agent-hooks/server.test.ts` — Coverage
 
 - `start()` writes endpoint file with correct permissions (POSIX-only assertion).
 - `start()` → `stop()` → `start()` writes a *different* port but the file path is stable.
@@ -309,7 +303,7 @@ Bumped `ORCA_HOOK_PROTOCOL_VERSION` from `'1'` → `'2'` (monotonic, no skipped 
 ## Scope
 
 - ~200 lines of production code added across `server.ts`, `{claude,codex,cursor,gemini}/hook-service.ts`, `opencode/hook-service.ts`, and `agent-hook-types.ts`, plus ~150 lines of tests and this design doc.
-- One protocol version bump.
+- No protocol version bump (payload shape unchanged).
 - No migrations: the endpoint file is reconstructed on every `start()`; its presence or absence on disk at startup is irrelevant.
 - No IPC changes, no UI changes.
 
