@@ -7,7 +7,6 @@ import type {
   GitHubPRFileContents,
   GitHubWorkItem,
   GitHubWorkItemDetails,
-  PRCheckDetail,
   PRComment
 } from '../../shared/types'
 import { ghExecFileAsync, acquire, release, getOwnerRepo } from './gh-utils'
@@ -42,15 +41,20 @@ function mergeGitHubUsers(users: GitHubAssignableUser[]): GitHubAssignableUser[]
     const key = user.login.toLowerCase()
     const existing = byLogin.get(key)
     if (existing) {
-      if (!existing.name && user.name) {
-        existing.name = user.name
-      }
-      if (!existing.avatarUrl && user.avatarUrl) {
-        existing.avatarUrl = user.avatarUrl
-      }
+      // Why: avoid mutating caller-provided objects — return a new merged record
+      // so upstream references to `user`/`existing` stay unchanged.
+      byLogin.set(key, {
+        login: existing.login,
+        name: existing.name ?? user.name ?? null,
+        avatarUrl: existing.avatarUrl || user.avatarUrl || ''
+      })
       continue
     }
-    byLogin.set(key, user)
+    byLogin.set(key, {
+      login: user.login,
+      name: user.name ?? null,
+      avatarUrl: user.avatarUrl ?? ''
+    })
   }
   return Array.from(byLogin.values())
 }
@@ -365,42 +369,6 @@ async function getGitHubUsersByLogin(
   }
 }
 
-async function getGitHubUserProfilesByLogin(
-  repoPath: string,
-  logins: string[]
-): Promise<GitHubAssignableUser[]> {
-  const uniqueLogins = Array.from(
-    new Set(logins.filter((login) => login && login !== 'ghost').map((login) => login.trim()))
-  ).slice(0, 20)
-  const results = await Promise.allSettled(
-    uniqueLogins.map((login) =>
-      ghExecFileAsync(['api', `users/${login}`], {
-        cwd: repoPath
-      })
-    )
-  )
-  return results.flatMap((result) => {
-    if (result.status !== 'fulfilled') {
-      return []
-    }
-    const data = JSON.parse(result.value.stdout) as {
-      login?: string
-      name?: string | null
-      avatar_url?: string | null
-    }
-    if (!data.login) {
-      return []
-    }
-    return [
-      {
-        login: data.login,
-        name: data.name ?? null,
-        avatarUrl: data.avatar_url ?? ''
-      }
-    ]
-  })
-}
-
 async function getMentionParticipants(
   repoPath: string,
   item: Pick<GitHubWorkItem, 'author' | 'number' | 'type'>,
@@ -408,11 +376,12 @@ async function getMentionParticipants(
   participants: GitHubAssignableUser[]
 ): Promise<GitHubAssignableUser[]> {
   const visibleLogins = [item.author ?? '', ...comments.map((comment) => comment.author)]
-  const [graphQlUsers, restUsers] = await Promise.all([
-    getGitHubUsersByLogin(repoPath, visibleLogins),
-    getGitHubUserProfilesByLogin(repoPath, visibleLogins)
-  ])
-  return mergeGitHubUsers([...participants, ...graphQlUsers, ...restUsers])
+  // Why: one aliased GraphQL query returns login/name/avatarUrl for every
+  // mentioned author in a single round-trip. The previous REST fan-out
+  // (/users/<login>) returned the same fields but cost one rate-limit point
+  // per user.
+  const graphQlUsers = await getGitHubUsersByLogin(repoPath, visibleLogins)
+  return mergeGitHubUsers([...participants, ...graphQlUsers])
 }
 
 export async function getWorkItemDetails(
@@ -430,8 +399,12 @@ export async function getWorkItemDetails(
   await acquire()
   try {
     if (item.type === 'issue') {
-      const { body, comments, assignees } = await getIssueBodyAndComments(repoPath, item.number)
-      const participants = await getWorkItemParticipants(repoPath, item)
+      // Why: fetch body/comments and GraphQL participants in parallel; the
+      // mention-participant merge is a cheap local operation afterward.
+      const [{ body, comments, assignees }, participants] = await Promise.all([
+        getIssueBodyAndComments(repoPath, item.number),
+        getWorkItemParticipants(repoPath, item)
+      ])
       const mentionParticipants = await getMentionParticipants(
         repoPath,
         item,
@@ -449,11 +422,16 @@ export async function getWorkItemDetails(
       getPRFiles(repoPath, item.number),
       getWorkItemParticipants(repoPath, item)
     ])
-    const mentionParticipants = await getMentionParticipants(repoPath, item, comments, participants)
 
-    const checks: PRCheckDetail[] = shas?.headSha
-      ? await getPRChecks(repoPath, item.number, shas.headSha)
-      : await getPRChecks(repoPath, item.number)
+    // Why: run the mention-author GraphQL lookup in parallel with the final
+    // checks fetch instead of serially — both depend only on data from the
+    // Promise.all above, so there's no ordering requirement between them.
+    const [mentionParticipants, checks] = await Promise.all([
+      getMentionParticipants(repoPath, item, comments, participants),
+      shas?.headSha
+        ? getPRChecks(repoPath, item.number, shas.headSha)
+        : getPRChecks(repoPath, item.number)
+    ])
 
     return {
       item,

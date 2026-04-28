@@ -1253,7 +1253,7 @@ export async function addPRReviewComment(
       '--raw-field',
       'side=RIGHT'
     ]
-    if (args.startLine && args.startLine !== args.line) {
+    if (typeof args.startLine === 'number' && args.startLine !== args.line) {
       fields.push(
         '--field',
         `start_line=${String(args.startLine)}`,

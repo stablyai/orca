@@ -289,39 +289,42 @@ export async function listAssignableUsers(repoPath: string): Promise<GitHubAssig
   }
   await acquire()
   try {
+    // Why: paginate through all assignable users — GraphQL's assignableUsers
+    // maxes out at 100 per page and large orgs/repos silently lose assignees
+    // beyond the first page. REST /assignees with --paginate walks every page;
+    // --jq collapses per-page arrays into NDJSON so we don't have to stitch
+    // JSON arrays that gh concatenates back-to-back.
     const { stdout } = await ghExecFileAsync(
       [
         'api',
-        'graphql',
-        '-f',
-        `owner=${ownerRepo.owner}`,
-        '-f',
-        `repo=${ownerRepo.repo}`,
-        '-f',
-        'query=query($owner: String!, $repo: String!) { repository(owner: $owner, name: $repo) { assignableUsers(first: 100) { nodes { login name avatarUrl(size: 48) } } } }'
+        '--paginate',
+        `repos/${ownerRepo.owner}/${ownerRepo.repo}/assignees?per_page=100`,
+        '--jq',
+        '.[] | {login, avatar_url}'
       ],
       { cwd: repoPath }
     )
-    const data = JSON.parse(stdout) as {
-      data?: {
-        repository?: {
-          assignableUsers?: {
-            nodes?: {
-              login?: string
-              name?: string | null
-              avatarUrl?: string | null
-            }[]
-          }
+    type RESTAssignee = { login?: string; avatar_url?: string | null }
+    const users: GitHubAssignableUser[] = []
+    for (const line of stdout.split('\n')) {
+      const trimmed = line.trim()
+      if (!trimmed) {
+        continue
+      }
+      try {
+        const user = JSON.parse(trimmed) as RESTAssignee
+        if (user.login) {
+          users.push({
+            login: user.login,
+            name: null,
+            avatarUrl: user.avatar_url ?? ''
+          })
         }
+      } catch {
+        // Skip malformed NDJSON lines defensively.
       }
     }
-    return (data.data?.repository?.assignableUsers?.nodes ?? [])
-      .map((user) => ({
-        login: user.login ?? '',
-        name: user.name ?? null,
-        avatarUrl: user.avatarUrl ?? ''
-      }))
-      .filter((user) => user.login.length > 0)
+    return users
   } catch {
     return []
   } finally {

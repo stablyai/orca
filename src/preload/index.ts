@@ -10,6 +10,7 @@ import type {
   BaseRefDefaultResult,
   FsChangedPayload,
   GitHubAssignableUser,
+  GitHubCommentResult,
   GhosttyImportPreview,
   MemorySnapshot,
   NotificationDispatchResult,
@@ -458,8 +459,11 @@ const api = {
     }): Promise<{ ok: true } | { ok: false; error: string }> =>
       ipcRenderer.invoke('gh:updateIssue', args),
 
-    addIssueComment: (args: { repoPath: string; number: number; body: string }): Promise<unknown> =>
-      ipcRenderer.invoke('gh:addIssueComment', args),
+    addIssueComment: (args: {
+      repoPath: string
+      number: number
+      body: string
+    }): Promise<GitHubCommentResult> => ipcRenderer.invoke('gh:addIssueComment', args),
 
     addPRReviewCommentReply: (args: {
       repoPath: string
@@ -469,7 +473,7 @@ const api = {
       threadId?: string
       path?: string
       line?: number
-    }): Promise<unknown> => ipcRenderer.invoke('gh:addPRReviewCommentReply', args),
+    }): Promise<GitHubCommentResult> => ipcRenderer.invoke('gh:addPRReviewCommentReply', args),
 
     addPRReviewComment: (args: {
       repoPath: string
@@ -479,7 +483,7 @@ const api = {
       line: number
       startLine?: number
       body: string
-    }): Promise<unknown> => ipcRenderer.invoke('gh:addPRReviewComment', args),
+    }): Promise<GitHubCommentResult> => ipcRenderer.invoke('gh:addPRReviewComment', args),
 
     listLabels: (args: { repoPath: string }): Promise<string[]> =>
       ipcRenderer.invoke('gh:listLabels', args),
