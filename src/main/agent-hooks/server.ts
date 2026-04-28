@@ -1,7 +1,17 @@
 /* eslint-disable max-lines -- Why: the hook server owns the full HTTP ingest surface (routing, body parsing, per-CLI normalization, transcript scan, pane dispatch) in one place so the contract with Claude/Codex/Gemini hooks stays consistent and doesn't drift across files. */
 import { createServer, type IncomingMessage, type ServerResponse } from 'http'
 import { randomUUID } from 'crypto'
-import { closeSync, openSync, readSync, statSync } from 'fs'
+import {
+  closeSync,
+  mkdirSync,
+  openSync,
+  readSync,
+  renameSync,
+  statSync,
+  unlinkSync,
+  writeFileSync
+} from 'fs'
+import { join } from 'path'
 import {
   parseAgentStatusPayload,
   type ParsedAgentStatusPayload
@@ -1038,6 +1048,15 @@ function normalizeHookPayload(
   return payload ? { paneKey, tabId, worktreeId, payload } : null
 }
 
+// Why: the endpoint file lives under userData so each Orca install (dev vs.
+// packaged) has its own path and the two cannot clobber each other. Using a
+// per-platform extension (`.env` on POSIX, `.cmd` on Windows) lets the hook
+// scripts source the file with their platform-native syntax without any
+// inline path detection — the parser in §2b accepts both shapes.
+function getEndpointFileName(): string {
+  return process.platform === 'win32' ? 'endpoint.cmd' : 'endpoint.env'
+}
+
 export class AgentHookServer {
   private server: ReturnType<typeof createServer> | null = null
   private port = 0
@@ -1047,6 +1066,13 @@ export class AgentHookServer {
   // caller's knowledge of whether this is a packaged build.
   private env = 'production'
   private onAgentStatus: ((payload: AgentHookEventPayload) => void) | null = null
+  // Why: directory that holds the on-disk endpoint file. Set via start()'s
+  // `userDataPath` option so the class has no direct Electron dependency
+  // (keeps it mockable in the vitest node environment). When unset, we skip
+  // the endpoint-file write entirely — hooks still work via PTY env, just
+  // without survive-a-restart semantics.
+  private endpointDir: string | null = null
+  private endpointFilePathCache: string | null = null
 
   setListener(listener: ((payload: AgentHookEventPayload) => void) | null): void {
     this.onAgentStatus = listener
@@ -1064,13 +1090,17 @@ export class AgentHookServer {
     }
   }
 
-  async start(options?: { env?: string }): Promise<void> {
+  async start(options?: { env?: string; userDataPath?: string }): Promise<void> {
     if (this.server) {
       return
     }
 
     if (options?.env) {
       this.env = options.env
+    }
+    if (options?.userDataPath) {
+      this.endpointDir = join(options.userDataPath, 'agent-hooks')
+      this.endpointFilePathCache = join(this.endpointDir, getEndpointFileName())
     }
     this.token = randomUUID()
     this.server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
@@ -1153,6 +1183,11 @@ export class AgentHookServer {
         if (address && typeof address === 'object') {
           this.port = address.port
         }
+        // Why: the endpoint file is the core of the survives-Orca-restart
+        // design. Write it *after* we have a concrete port — hooks that source
+        // the file must see a usable coordinate set, not a stale one left over
+        // from a previous process (e.g. one that crashed before getting here).
+        this.writeEndpointFile()
         resolve()
       }
       this.server!.once('error', onStartupError)
@@ -1167,6 +1202,15 @@ export class AgentHookServer {
     this.token = ''
     this.env = 'production'
     this.onAgentStatus = null
+    // Why: best-effort unlink on clean shutdown so a user who moves userData
+    // or uninstalls Orca does not leave a world-readable file hanging around.
+    // Leaving the file would not be dangerous (hooks reading stale contents
+    // would hit a dead port and silently fail — same as today) but a relaunch
+    // overwrites it anyway, so this keeps the filesystem tidy. Guarded so
+    // shutdown never throws.
+    this.unlinkEndpointFile()
+    this.endpointDir = null
+    this.endpointFilePathCache = null
     // Why: drop all per-pane cache entries on shutdown so a subsequent start()
     // in the same process (e.g. during tests or a settings-driven restart)
     // does not inherit stale prompt/tool state from the previous run.
@@ -1194,11 +1238,78 @@ export class AgentHookServer {
       return {}
     }
 
-    return {
+    // Why: ORCA_AGENT_HOOK_ENDPOINT is new in v2 and is the key that lets a
+    // surviving PTY reach the *current* Orca after a restart. The other four
+    // variables are retained for back-compat so pre-v2 hook scripts (which do
+    // not know to source the endpoint file) continue to work on freshly
+    // spawned PTYs, and so the current script can fall through to env if the
+    // file is missing/unreadable for any reason.
+    const env: Record<string, string> = {
       ORCA_AGENT_HOOK_PORT: String(this.port),
       ORCA_AGENT_HOOK_TOKEN: this.token,
       ORCA_AGENT_HOOK_ENV: this.env,
       ORCA_AGENT_HOOK_VERSION: ORCA_HOOK_PROTOCOL_VERSION
+    }
+    if (this.endpointFilePathCache) {
+      env.ORCA_AGENT_HOOK_ENDPOINT = this.endpointFilePathCache
+    }
+    return env
+  }
+
+  // Why: exposed as a read-only getter so tests (and any future main-process
+  // caller that needs the path for diagnostics) do not have to reconstruct
+  // the path convention.
+  get endpointFilePath(): string | null {
+    return this.endpointFilePathCache
+  }
+
+  // Why: writes the four coordinates atomically via a tmp-then-rename so a
+  // hook reading concurrently either sees the old file or the new one, never
+  // a half-written one. Fail-open: on EACCES / ENOSPC / etc. we log and move
+  // on — start() remains usable via PTY env for freshly-spawned PTYs. Only
+  // survivors lose the endpoint-file path, matching the hook-payload
+  // fail-open policy already enforced on the receiving end.
+  private writeEndpointFile(): void {
+    if (!this.endpointDir || !this.endpointFilePathCache) {
+      return
+    }
+    const finalPath = this.endpointFilePathCache
+    const tmpPath = `${finalPath}.tmp`
+    const prefix = process.platform === 'win32' ? 'set ' : ''
+    const lines = [
+      `${prefix}ORCA_AGENT_HOOK_PORT=${this.port}`,
+      `${prefix}ORCA_AGENT_HOOK_TOKEN=${this.token}`,
+      `${prefix}ORCA_AGENT_HOOK_ENV=${this.env}`,
+      `${prefix}ORCA_AGENT_HOOK_VERSION=${ORCA_HOOK_PROTOCOL_VERSION}`,
+      ''
+    ]
+    try {
+      mkdirSync(this.endpointDir, { recursive: true })
+      // Why: 0o600 — the token is a loopback bearer credential and must not
+      // be readable by other local users. Parity with PTY env exposure via
+      // /proc/<pid>/environ (owner-only on modern Linux).
+      writeFileSync(tmpPath, lines.join('\n'), { mode: 0o600 })
+      renameSync(tmpPath, finalPath)
+    } catch (err) {
+      console.error('[agent-hooks] failed to write endpoint file:', err)
+      try {
+        unlinkSync(tmpPath)
+      } catch {
+        // Why: tmp file may not exist (mkdir/writeFile may have been the
+        // failure point). Ignore — there is nothing to clean up.
+      }
+    }
+  }
+
+  private unlinkEndpointFile(): void {
+    if (!this.endpointFilePathCache) {
+      return
+    }
+    try {
+      unlinkSync(this.endpointFilePathCache)
+    } catch {
+      // Why: the file may already be gone (user purged userData, fs quirk,
+      // first shutdown after a failed write). Never throw from stop().
     }
   }
 }

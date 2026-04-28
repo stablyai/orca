@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: this suite exercises the full hook HTTP surface (Claude/Codex/Gemini parsing, transcript chunked scan, paneKey dispatch) and keeping the scenarios co-located avoids fixture drift across files. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, rmSync, writeFileSync } from 'fs'
+import { execFileSync } from 'child_process'
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { AgentHookServer, _internals } from './server'
@@ -827,5 +828,143 @@ describe('Cursor hook normalization', () => {
       'production'
     )
     expect(result).toBeNull()
+  })
+})
+
+describe('Endpoint file lifecycle', () => {
+  let userDataPath: string
+
+  beforeEach(() => {
+    userDataPath = mkdtempSync(join(tmpdir(), 'orca-endpoint-'))
+  })
+
+  afterEach(() => {
+    rmSync(userDataPath, { recursive: true, force: true })
+  })
+
+  it('writes the endpoint file with the expected shell-sourceable shape', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'development', userDataPath })
+    try {
+      const filePath = server.endpointFilePath
+      expect(filePath).toBeTruthy()
+      expect(existsSync(filePath!)).toBe(true)
+      const contents = readFileSync(filePath!, 'utf8')
+      const expectedPort = server.buildPtyEnv().ORCA_AGENT_HOOK_PORT
+      const expectedToken = server.buildPtyEnv().ORCA_AGENT_HOOK_TOKEN
+      const prefix = process.platform === 'win32' ? 'set ' : ''
+      expect(contents).toContain(`${prefix}ORCA_AGENT_HOOK_PORT=${expectedPort}`)
+      expect(contents).toContain(`${prefix}ORCA_AGENT_HOOK_TOKEN=${expectedToken}`)
+      expect(contents).toContain(`${prefix}ORCA_AGENT_HOOK_ENV=development`)
+      expect(contents).toContain(`${prefix}ORCA_AGENT_HOOK_VERSION=2`)
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('writes the endpoint file with owner-only permissions on POSIX', async () => {
+    if (process.platform === 'win32') {
+      return
+    }
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      const filePath = server.endpointFilePath!
+      // Why: mask off type/setuid bits so we assert only the rwx octet that
+      // writeFileSync(mode:0o600) sets. A leaky umask at dir-create time can
+      // leave group/other bits on the *parent* dir but not on the file itself.
+      const mode = statSync(filePath).mode & 0o777
+      expect(mode).toBe(0o600)
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('rewrites the endpoint file with a new port after restart on the same path', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    const firstPath = server.endpointFilePath
+    const firstPort = server.buildPtyEnv().ORCA_AGENT_HOOK_PORT
+    server.stop()
+
+    await server.start({ env: 'production', userDataPath })
+    try {
+      const secondPath = server.endpointFilePath
+      const secondPort = server.buildPtyEnv().ORCA_AGENT_HOOK_PORT
+      // Path is stable (so PTYs stamped before restart can still find the file)
+      expect(secondPath).toBe(firstPath)
+      // But contents are refreshed with the new port — that is the whole point
+      // of the design: survivors reading a stale-env file reach the live port.
+      expect(secondPort).toBeTruthy()
+      expect(secondPort).not.toBe(firstPort)
+      const contents = readFileSync(secondPath!, 'utf8')
+      expect(contents).toContain(`ORCA_AGENT_HOOK_PORT=${secondPort}`)
+      expect(contents).not.toContain(`ORCA_AGENT_HOOK_PORT=${firstPort}`)
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('removes the endpoint file on stop()', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    const filePath = server.endpointFilePath!
+    expect(existsSync(filePath)).toBe(true)
+    server.stop()
+    expect(existsSync(filePath)).toBe(false)
+  })
+
+  it('buildPtyEnv includes ORCA_AGENT_HOOK_ENDPOINT when the server is running', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      const env = server.buildPtyEnv()
+      expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBe(server.endpointFilePath)
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('buildPtyEnv omits ORCA_AGENT_HOOK_ENDPOINT when no userDataPath was provided', async () => {
+    // Why: the endpoint file is opt-in via start({ userDataPath }). In tests
+    // and in the packaged main-process path where userData is unset for any
+    // reason, hooks should fall back to the v1 behavior (no ENDPOINT key).
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBeUndefined()
+      expect(env.ORCA_AGENT_HOOK_PORT).toBeTruthy()
+      expect(env.ORCA_AGENT_HOOK_TOKEN).toBeTruthy()
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('buildPtyEnv returns empty when the server is not running', () => {
+    const server = new AgentHookServer()
+    expect(server.buildPtyEnv()).toEqual({})
+  })
+
+  it('endpoint file contents are re-parseable by /bin/sh', async () => {
+    if (process.platform === 'win32') {
+      return
+    }
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      const filePath = server.endpointFilePath!
+      const expectedPort = server.buildPtyEnv().ORCA_AGENT_HOOK_PORT
+      // Why: sources the file in a subshell and echoes the resulting env var,
+      // exactly as the managed hook script does at runtime. If the file shape
+      // ever drifts from `KEY=VALUE` (e.g. someone adds shell metacharacters
+      // without quoting), this test catches it before users do.
+      const out = execFileSync('/bin/sh', ['-c', `. "${filePath}" && echo "$ORCA_AGENT_HOOK_PORT"`])
+        .toString()
+        .trim()
+      expect(out).toBe(expectedPort)
+    } finally {
+      server.stop()
+    }
   })
 })

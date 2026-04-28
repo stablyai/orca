@@ -20,4 +20,10 @@ export type AgentHookInstallStatus = {
 // receiver logs a warning when it sees a request from a different version so a
 // stale script installed by an older app build is diagnosable instead of
 // silently producing partial payloads.
-export const ORCA_HOOK_PROTOCOL_VERSION = '1' as const
+//
+// v2 (2026-04): scripts now source ORCA_AGENT_HOOK_ENDPOINT (an on-disk file
+// written by each Orca start()) for live PORT/TOKEN/ENV/VERSION values,
+// falling back to PTY env. Required for surviving PTYs to reach the current
+// Orca after a restart — a pre-v2 script still works on a freshly spawned
+// PTY but cannot self-heal after the Orca it was stamped with is gone.
+export const ORCA_HOOK_PROTOCOL_VERSION = '2' as const
