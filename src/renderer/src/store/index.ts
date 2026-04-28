@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { AppState } from './types'
 import { createRepoSlice } from './slices/repos'
+import { createSparsePresetsSlice } from './slices/sparse-presets'
 import { createWorktreeSlice } from './slices/worktrees'
 import { createTerminalSlice } from './slices/terminals'
 import { createTabsSlice } from './slices/tabs'
@@ -25,6 +26,7 @@ import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
 
 export const useAppStore = create<AppState>()((...a) => ({
   ...createRepoSlice(...a),
+  ...createSparsePresetsSlice(...a),
   ...createWorktreeSlice(...a),
   ...createTerminalSlice(...a),
   ...createTabsSlice(...a),

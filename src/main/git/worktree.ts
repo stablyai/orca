@@ -2,6 +2,10 @@ import { posix, win32 } from 'path'
 import type { GitWorktreeInfo } from '../../shared/types'
 import { gitExecFileAsync, translateWslOutputPaths } from './runner'
 
+type SparseWorktreeCreateError = Error & {
+  cleanupFailed?: boolean
+}
+
 function normalizeLocalBranchRef(branch: string): string {
   return branch.replace(/^refs\/heads\//, '')
 }
@@ -29,21 +33,23 @@ function looksLikeWindowsPath(pathValue: string): boolean {
  */
 export function parseWorktreeList(output: string): GitWorktreeInfo[] {
   const worktrees: GitWorktreeInfo[] = []
-  // [Fix]: Use /\r?\n\r?\n/ to handle both LF and CRLF (\r\n) line endings,
-  // which are common when running git on Windows.
-  const blocks = output.trim().split(/\r?\n\r?\n/)
+  const blocks = output.includes('\0')
+    ? parseNullDelimitedWorktreeBlocks(output)
+    : output
+        .trim()
+        .split(/\r?\n\r?\n/)
+        .map((block) => block.trim().split(/\r?\n/))
 
-  for (const block of blocks) {
-    if (!block.trim()) {
+  for (const lines of blocks) {
+    if (lines.length === 0) {
       continue
     }
 
-    // [Fix]: Use /\r?\n/ to handle both LF and CRLF (\r\n) line endings.
-    const lines = block.trim().split(/\r?\n/)
     let path = ''
     let head = ''
     let branch = ''
     let isBare = false
+    let isSparse = false
 
     for (const line of lines) {
       if (line.startsWith('worktree ')) {
@@ -54,12 +60,21 @@ export function parseWorktreeList(output: string): GitWorktreeInfo[] {
         branch = line.slice('branch '.length)
       } else if (line === 'bare') {
         isBare = true
+      } else if (line === 'sparse') {
+        isSparse = true
       }
     }
 
     if (path) {
       // `git worktree list` always emits the main working tree first.
-      worktrees.push({ path, head, branch, isBare, isMainWorktree: worktrees.length === 0 })
+      worktrees.push({
+        path,
+        head,
+        branch,
+        isBare,
+        ...(isSparse ? { isSparse } : {}),
+        isMainWorktree: worktrees.length === 0
+      })
     }
   }
 
@@ -71,14 +86,25 @@ export function parseWorktreeList(output: string): GitWorktreeInfo[] {
  */
 export async function listWorktrees(repoPath: string): Promise<GitWorktreeInfo[]> {
   try {
-    const { stdout } = await gitExecFileAsync(['worktree', 'list', '--porcelain'], {
+    const { stdout } = await gitExecFileAsync(['worktree', 'list', '--porcelain', '-z'], {
       cwd: repoPath
     })
     // Why: when git runs inside WSL, worktree paths are Linux-native
     // (e.g. /home/user/repo). Translate them back to Windows UNC paths
     // so the rest of Orca can access them via Node fs APIs.
     const translated = translateWslOutputPaths(stdout, repoPath)
-    return parseWorktreeList(translated)
+    const worktrees = parseWorktreeList(translated)
+    return Promise.all(
+      worktrees.map(async (worktree) => {
+        if (worktree.isBare) {
+          return worktree
+        }
+        return {
+          ...worktree,
+          isSparse: worktree.isSparse || (await detectSparseCheckout(worktree.path))
+        }
+      })
+    )
   } catch {
     return []
   }
@@ -96,7 +122,8 @@ export async function addWorktree(
   worktreePath: string,
   branch: string,
   baseBranch?: string,
-  refreshLocalBaseRef = false
+  refreshLocalBaseRef = false,
+  noCheckout = false
 ): Promise<void> {
   // Why: Some users want Orca-created worktrees to make plain commands like
   // `git diff main...HEAD` work out of the box, while others do not want
@@ -152,11 +179,44 @@ export async function addWorktree(
     }
   }
 
-  const args = ['worktree', 'add', '-b', branch, worktreePath]
+  const args = ['worktree', 'add']
+  if (noCheckout) {
+    args.push('--no-checkout')
+  }
+  args.push('-b', branch, worktreePath)
   if (baseBranch) {
     args.push(baseBranch)
   }
   await gitExecFileAsync(args, { cwd: repoPath })
+}
+
+export async function addSparseWorktree(
+  repoPath: string,
+  worktreePath: string,
+  branch: string,
+  directories: string[],
+  baseBranch?: string,
+  refreshLocalBaseRef = false
+): Promise<void> {
+  let created = false
+  try {
+    await addWorktree(repoPath, worktreePath, branch, baseBranch, refreshLocalBaseRef, true)
+    created = true
+    await gitExecFileAsync(['sparse-checkout', 'init', '--cone'], { cwd: worktreePath })
+    await gitExecFileAsync(['sparse-checkout', 'set', ...directories], { cwd: worktreePath })
+    await gitExecFileAsync(['checkout', branch], { cwd: worktreePath })
+  } catch (error) {
+    const wrapped: SparseWorktreeCreateError =
+      error instanceof Error ? (error as SparseWorktreeCreateError) : new Error(String(error))
+    if (created) {
+      try {
+        await gitExecFileAsync(['worktree', 'remove', '--force', worktreePath], { cwd: repoPath })
+      } catch {
+        wrapped.cleanupFailed = true
+      }
+    }
+    throw wrapped
+  }
 }
 
 /**
@@ -207,4 +267,37 @@ export async function removeWorktree(
       error
     )
   }
+}
+
+async function detectSparseCheckout(worktreePath: string): Promise<boolean> {
+  try {
+    const { stdout } = await gitExecFileAsync(['config', '--bool', 'core.sparseCheckout'], {
+      cwd: worktreePath
+    })
+    return stdout.trim() === 'true'
+  } catch {
+    return false
+  }
+}
+
+function parseNullDelimitedWorktreeBlocks(output: string): string[][] {
+  const blocks: string[][] = []
+  let current: string[] = []
+
+  for (const token of output.split('\0')) {
+    if (!token) {
+      if (current.length > 0) {
+        blocks.push(current)
+        current = []
+      }
+      continue
+    }
+    current.push(token)
+  }
+
+  if (current.length > 0) {
+    blocks.push(current)
+  }
+
+  return blocks
 }

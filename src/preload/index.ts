@@ -244,6 +244,28 @@ const api = {
     }
   },
 
+  sparsePresets: {
+    list: (args: { repoId: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('sparsePresets:list', args),
+
+    save: (args: {
+      repoId: string
+      id?: string
+      name: string
+      directories: string[]
+    }): Promise<unknown> => ipcRenderer.invoke('sparsePresets:save', args),
+
+    remove: (args: { repoId: string; presetId: string }): Promise<void> =>
+      ipcRenderer.invoke('sparsePresets:remove', args),
+
+    onChanged: (callback: (data: { repoId: string }) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: { repoId: string }) =>
+        callback(data)
+      ipcRenderer.on('sparsePresets:changed', listener)
+      return () => ipcRenderer.removeListener('sparsePresets:changed', listener)
+    }
+  },
+
   worktrees: {
     list: (args: { repoId: string }): Promise<unknown[]> =>
       ipcRenderer.invoke('worktrees:list', args),
@@ -255,6 +277,7 @@ const api = {
       name: string
       baseBranch?: string
       setupDecision?: 'inherit' | 'run' | 'skip'
+      sparseCheckout?: { directories: string[]; presetId?: string }
     }): Promise<unknown> => ipcRenderer.invoke('worktrees:create', args),
 
     resolvePrBase: (args: {

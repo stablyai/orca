@@ -6,6 +6,7 @@ const {
   removeHandlerMock,
   listWorktreesMock,
   addWorktreeMock,
+  addSparseWorktreeMock,
   removeWorktreeMock,
   getGitUsernameMock,
   getDefaultBaseRefMock,
@@ -26,6 +27,7 @@ const {
   removeHandlerMock: vi.fn(),
   listWorktreesMock: vi.fn(),
   addWorktreeMock: vi.fn(),
+  addSparseWorktreeMock: vi.fn(),
   removeWorktreeMock: vi.fn(),
   getGitUsernameMock: vi.fn(),
   getDefaultBaseRefMock: vi.fn(),
@@ -53,6 +55,7 @@ vi.mock('electron', () => ({
 vi.mock('../git/worktree', () => ({
   listWorktrees: listWorktreesMock,
   addWorktree: addWorktreeMock,
+  addSparseWorktree: addSparseWorktreeMock,
   removeWorktree: removeWorktreeMock
 }))
 
@@ -125,6 +128,7 @@ describe('registerWorktreeHandlers', () => {
       removeHandlerMock,
       listWorktreesMock,
       addWorktreeMock,
+      addSparseWorktreeMock,
       removeWorktreeMock,
       getGitUsernameMock,
       getDefaultBaseRefMock,
@@ -469,6 +473,71 @@ describe('registerWorktreeHandlers', () => {
       'origin/main',
       false
     )
+  })
+
+  it('creates a sparse worktree and persists its sparse metadata', async () => {
+    listWorktreesMock.mockResolvedValue([
+      {
+        ...createdWorktreeList[0],
+        isSparse: true
+      }
+    ])
+    store.setWorktreeMeta.mockReturnValue({
+      sparseDirectories: ['packages/web', 'apps/api'],
+      sparseBaseRef: 'origin/main',
+      sparsePresetId: 'preset-1'
+    })
+
+    const result = await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'improve-dashboard',
+      sparseCheckout: {
+        directories: [' packages/web ', '\\apps\\api\\', '/packages/web/'],
+        presetId: 'preset-1'
+      }
+    })
+
+    expect(addWorktreeMock).not.toHaveBeenCalled()
+    expect(addSparseWorktreeMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      '/workspace/improve-dashboard',
+      'improve-dashboard',
+      ['packages/web', 'apps/api'],
+      'origin/main',
+      false
+    )
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith(
+      'repo-1::/workspace/improve-dashboard',
+      expect.objectContaining({
+        sparseDirectories: ['packages/web', 'apps/api'],
+        sparseBaseRef: 'origin/main',
+        sparsePresetId: 'preset-1'
+      })
+    )
+    expect(result).toEqual({
+      worktree: expect.objectContaining({
+        repoId: 'repo-1',
+        path: '/workspace/improve-dashboard',
+        sparseDirectories: ['packages/web', 'apps/api'],
+        sparseBaseRef: 'origin/main',
+        sparsePresetId: 'preset-1'
+      })
+    })
+  })
+
+  it('rejects sparse checkout directories that traverse above the repo root', async () => {
+    await expect(
+      handlers['worktrees:create'](null, {
+        repoId: 'repo-1',
+        name: 'improve-dashboard',
+        sparseCheckout: {
+          directories: ['packages/web', '../secrets']
+        }
+      })
+    ).rejects.toThrow('Sparse checkout directories must be repo-relative paths.')
+
+    expect(addSparseWorktreeMock).not.toHaveBeenCalled()
+    expect(addWorktreeMock).not.toHaveBeenCalled()
   })
 
   it('still returns the created worktree when setup runner generation fails', async () => {

@@ -26,6 +26,7 @@ function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): b
       worktree.branch === candidate.branch &&
       worktree.isBare === candidate.isBare &&
       worktree.isMainWorktree === candidate.isMainWorktree &&
+      worktree.isSparse === candidate.isSparse &&
       worktree.displayName === candidate.displayName &&
       worktree.comment === candidate.comment &&
       worktree.linkedIssue === candidate.linkedIssue &&
@@ -34,7 +35,10 @@ function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): b
       worktree.isUnread === candidate.isUnread &&
       worktree.isPinned === candidate.isPinned &&
       worktree.sortOrder === candidate.sortOrder &&
-      worktree.lastActivityAt === candidate.lastActivityAt
+      worktree.lastActivityAt === candidate.lastActivityAt &&
+      worktree.sparseBaseRef === candidate.sparseBaseRef &&
+      JSON.stringify(worktree.sparseDirectories ?? []) ===
+        JSON.stringify(candidate.sparseDirectories ?? [])
     )
   })
 }
@@ -86,7 +90,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     await Promise.all(repos.map((r) => get().fetchWorktrees(r.id)))
   },
 
-  createWorktree: async (repoId, name, baseBranch, setupDecision = 'inherit') => {
+  createWorktree: async (repoId, name, baseBranch, setupDecision = 'inherit', sparseCheckout) => {
     const retryableConflictPatterns = [
       /already exists locally/i,
       /already exists on a remote/i,
@@ -103,7 +107,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             repoId,
             name: candidateName,
             baseBranch,
-            setupDecision
+            setupDecision,
+            sparseCheckout
           })
           set((s) => ({
             worktreesByRepo: {
