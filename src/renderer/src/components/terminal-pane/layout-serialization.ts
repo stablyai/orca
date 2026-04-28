@@ -36,12 +36,18 @@ export const POST_REPLAY_MODE_RESET =
 
 // Why: daemon snapshot restore reattaches to a live session, so we avoid the
 // full POST_REPLAY_MODE_RESET bundle there — a still-running TUI may still
-// rely on mouse or bracketed-paste modes. Focus reporting is the exception:
-// if xterm preserves `?1004h` across snapshot replay, pane focus/blur emits
-// `\e[I` / `\e[O` into the PTY and shells like zsh ring BEL when no TUI is
-// actively consuming them. Clearing only 1004 preserves the other live-session
-// modes while preventing phantom bells on restored background tabs.
-export const POST_REPLAY_FOCUS_REPORTING_RESET = '\x1b[?1004l'
+// rely on mouse or bracketed-paste modes. Two exceptions are safe to reset:
+//
+//   25   — DECTCEM cursor visibility: SerializeAddon bakes `?25l` into the
+//          snapshot when the cursor was hidden at capture time. Without `?25h`
+//          here the cursor stays invisible after reattach. If a TUI is still
+//          running and wants the cursor hidden, the SIGWINCH sent immediately
+//          after restore triggers a repaint that re-hides it — a brief flash
+//          that is far less harmful than a permanently invisible cursor.
+//   1004 — focus event reporting: preserving `?1004h` makes restored shells
+//          ring BEL on pane focus/blur (shells like zsh treat `\e[I`/`\e[O`
+//          as unbound key input).
+export const POST_REPLAY_FOCUS_REPORTING_RESET = '\x1b[?25h\x1b[?1004l'
 
 export function paneLeafId(paneId: number): string {
   return `pane:${paneId}`
