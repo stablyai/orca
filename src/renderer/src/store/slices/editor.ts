@@ -383,25 +383,32 @@ function extractPublishFailureDetail(message: string): string | null {
 
 function resolveRemoteOperationErrorMessage(
   error: unknown,
-  options?: { publish?: boolean }
+  options?: { publish?: boolean; isPush?: boolean }
 ): string {
   if (!(error instanceof Error)) {
     return REMOTE_OPERATION_FAILED_MESSAGE
   }
 
-  if (!options?.publish) {
+  if (options?.publish) {
+    if (/non-fast-forward|fetch first/i.test(error.message)) {
+      return error.message
+    }
+
+    // Why: publish failures often bubble up as raw wrapped git/IPC payloads; this
+    // keeps the toast human-readable while preserving the actionable fatal reason.
+    const detail = extractPublishFailureDetail(error.message)
+    if (detail) {
+      return `Publish Branch failed. ${detail}. Check your remote access and try again.`
+    }
+
     return error.message
   }
 
-  if (/non-fast-forward|fetch first/i.test(error.message)) {
-    return error.message
-  }
-
-  // Why: publish failures often bubble up as raw wrapped git/IPC payloads; this
-  // keeps the toast human-readable while preserving the actionable fatal reason.
-  const detail = extractPublishFailureDetail(error.message)
-  if (detail) {
-    return `Publish Branch failed. ${detail}. Check your remote access and try again.`
+  if (options?.isPush) {
+    if (/non-fast-forward|updates were rejected/i.test(error.message)) {
+      return 'Push rejected — remote has changes. Pull first, then try again.'
+    }
+    return 'Push failed. Check your connection and try again.'
   }
 
   return error.message
@@ -1816,7 +1823,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     } catch (error) {
       // Why: centralize remote git failure feedback in the store so every caller
       // gets the same actionable message without duplicating toast handling.
-      toast.error(resolveRemoteOperationErrorMessage(error, { publish }))
+      toast.error(resolveRemoteOperationErrorMessage(error, { publish, isPush: true }))
       throw error
     } finally {
       get().setRemoteOperationActive(false)

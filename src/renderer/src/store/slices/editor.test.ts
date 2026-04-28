@@ -732,6 +732,57 @@ describe('createEditorSlice remote branch actions', () => {
     )
   })
 
+  it('maps non-fast-forward push errors into a clean actionable toast', async () => {
+    const store = createEditorStore()
+    const pushError = new Error(
+      'Updates were rejected because the tip of your current branch is behind its remote counterpart.'
+    )
+    gitPushMock.mockRejectedValueOnce(pushError)
+
+    await expect(store.getState().pushBranch('wt-1', '/repo', false)).rejects.toThrow(
+      pushError.message
+    )
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Push rejected — remote has changes. Pull first, then try again.'
+    )
+    expect(gitStatusMock).not.toHaveBeenCalled()
+    expect(gitUpstreamStatusMock).not.toHaveBeenCalled()
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+
+  it('maps non-fast-forward keyword push errors into a clean actionable toast', async () => {
+    const store = createEditorStore()
+    const pushError = new Error('Push rejected: remote has newer commits (non-fast-forward).')
+    gitPushMock.mockRejectedValueOnce(pushError)
+
+    await expect(store.getState().pushBranch('wt-1', '/repo', false)).rejects.toThrow(
+      pushError.message
+    )
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Push rejected — remote has changes. Pull first, then try again.'
+    )
+    expect(gitStatusMock).not.toHaveBeenCalled()
+    expect(gitUpstreamStatusMock).not.toHaveBeenCalled()
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+
+  it('uses a fallback message for generic push errors', async () => {
+    const store = createEditorStore()
+    const pushError = new Error('network timeout')
+    gitPushMock.mockRejectedValueOnce(pushError)
+
+    await expect(store.getState().pushBranch('wt-1', '/repo', false)).rejects.toThrow(
+      pushError.message
+    )
+
+    expect(toastErrorMock).toHaveBeenCalledWith('Push failed. Check your connection and try again.')
+    expect(gitStatusMock).not.toHaveBeenCalled()
+    expect(gitUpstreamStatusMock).not.toHaveBeenCalled()
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+
   it('uses a fallback remote failure message when push rejects without Error', async () => {
     const store = createEditorStore()
     gitPushMock.mockRejectedValueOnce('failure')
