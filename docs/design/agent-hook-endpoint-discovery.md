@@ -151,7 +151,7 @@ No change to the HTTP transport, payload shape, or server routing.
 
 ### Bumping the protocol version
 
-`ORCA_HOOK_PROTOCOL_VERSION` (`src/shared/agent-hook-types.ts`) should bump from `'1'` to `'2'` so the server's existing version-mismatch warning can distinguish pre-endpoint-file scripts from post-. That warning already exists and is already throttled — no new code, just a constant bump and the one-liner comment explaining what changed.
+`ORCA_HOOK_PROTOCOL_VERSION` (`src/shared/agent-hook-types.ts`) bumped from `'1'` to `'2'` so the server's existing version-mismatch warning can distinguish pre-endpoint-file scripts from post-. That warning already exists and is already throttled — no new code, just a constant bump and the one-liner comment explaining what changed.
 
 ## Changes
 
@@ -159,21 +159,39 @@ No change to the HTTP transport, payload shape, or server routing.
 
 **Add** a private method `writeEndpointFile()` that writes the four coordinates atomically with `0o600` permissions. Called at the end of `start()`, after `listen()` returns and `this.port` is populated. On failure (EACCES on userData, ENOSPC, etc.), log at `console.error` with the error message and fall through so `start()` still succeeds — the server remains usable via PTY env for freshly-spawned PTYs; only survivors lose the endpoint-file path. This is fail-open, matching the hook-payload failure-open policy already documented in `server.ts`.
 
-**Add** to `stop()`: optionally unlink the endpoint file. Not strictly necessary — leaving a stale file is harmless (hooks read it, get a dead port, `curl` fails silently, same as today) — but cleaner. Guard the `unlink` with a try/catch so it never throws during shutdown.
+**`stop()`** deliberately does NOT unlink the endpoint file. A stale file pointing at a dead port is the fail-open path (hook POSTs silently fail, same as pre-v2 behavior). Unlinking would introduce a TOCTOU race: a concurrent Orca instance sharing userData could rewrite the file between our token check and unlink, and we would delete its live endpoint. The next successful `start()` overwrites the file atomically; orphan hygiene is handled by the tmp-file sweep inside `writeEndpointFile()`. The mode `0o600` on the file itself means there is no world-readable-cleanup urgency either.
 
 **Modify** `buildPtyEnv()` to include `ORCA_AGENT_HOOK_ENDPOINT: <endpoint file path>` alongside the existing four variables. Keep the existing four for back-compat: a hook script that was installed before this change doesn't know to source the file, but still has (potentially stale) env to fall back on, and a hook script installed after the change will source the file first and then use the env as a fallback.
 
+**`buildPtyEnv()` write-success gate**: `buildPtyEnv()` only sets `ORCA_AGENT_HOOK_ENDPOINT` when the **current** `start()`'s `writeEndpointFile()` call succeeded. If the current start's write failed (EACCES, ENOSPC, etc.), `buildPtyEnv()` omits `ORCA_AGENT_HOOK_ENDPOINT` entirely so hooks fall back to PTY env coords for *this* Orca only. Why: a stale file left over from a previous crashed instance would still exist on disk at the known path, and stamping freshly-spawned PTYs with that path would cause them to source *old* coords — worse than simply running without the endpoint file. The gate is an in-memory boolean on the server; it does not consult the filesystem.
+
 **Export** the endpoint path from the server (read-only getter) so `buildPtyEnv` can include it without each caller needing to know the path convention.
 
-### 2. `src/main/{claude,codex,gemini}/hook-service.ts` — Script body
+**Safety invariants** (enforced in `writeEndpointFile()` and `start()`):
 
-Prepend the source-if-present step (see "Hook script changes" above) to the managed POSIX script in `getManagedScript()`. Add the equivalent PowerShell parse step to the Windows `.cmd` wrapper.
+- **Shell-safe value validator**: every value written into the file must match `/^[A-Za-z0-9._:/-]+$/` before write. Values failing the check cause the whole write to abort (logged, fail-open — hooks fall back to PTY env). Why: on Windows, `call "%ORCA_AGENT_HOOK_ENDPOINT%"` executes the file as a `.cmd` script — an attacker-controlled value containing `&` or `^` could inject commands. On POSIX, `. "$ORCA_AGENT_HOOK_ENDPOINT"` is similarly sensitive to quoting. Restricting to a conservative character class eliminates the class of injection bugs and is easily wide enough for UUIDs, ports, env names, and version strings.
+- **Directory mode `0o700` on POSIX**: `agent-hooks/` is created with `0o700` and re-chmod'd on every `start()` to catch a pre-existing directory with looser perms. Why: a token-bearing file needs its containing directory to also be owner-only or a local attacker can still enumerate/tamper at the directory level.
+- **Orphan tmp-file sweep**: at the top of `start()`, list `agent-hooks/` and `unlink` any `.endpoint-<pid>-<uuid>.tmp` files older than 5 minutes. Why: a crash mid-write between `writeFileSync(tmp)` and `renameSync(tmp → final)` leaves an orphaned tmp file. Without a sweep, repeated crashes over months would accumulate hundreds of these.
+- **Line endings**: CRLF on Windows, LF on POSIX. Why: some `cmd.exe` versions misparse `set KEY=VALUE` lines that end with a bare LF, producing values with trailing CR or silently ignoring the `set`. Matching the platform convention avoids the failure mode entirely.
+
+### 2. `src/main/{claude,codex,cursor,gemini}/hook-service.ts` — Script body
+
+Prepend the source-if-present step (see "Hook script changes" above) to the managed POSIX script in `getManagedScript()`. Add the equivalent `call`-based step — `if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%"` — to the Windows `.cmd` wrapper so the same `set KEY=VALUE` lines load into the cmd context.
 
 ### 2b. `src/main/opencode/hook-service.ts` — Plugin source
 
 OpenCode is structurally the same bug: the plugin runs inside OpenCode's Node process, which was started under whichever Orca was alive at spawn time. `process.env.ORCA_AGENT_HOOK_PORT` is frozen at `fork()` — so a long-running OpenCode session started under old Orca posts to the dead port forever. OpenCode sessions tend to be long-lived, which makes this at least as user-visible as the shell-script case.
 
-Change `getOpenCodePluginSource()` so `post()` (and only `post()`, since `getHookUrl()` is called from there) first attempts to read `ORCA_AGENT_HOOK_ENDPOINT` from env and — if present and readable — parses it for current `PORT`/`TOKEN`/`ENV`/`VERSION`, falling back to `process.env` otherwise. Parsing is a `fs.readFileSync` + `split('\n')` + regex per hook post; the endpoint file is small (<200 bytes) and local, so the cost is negligible compared to the HTTP round-trip that follows.
+Change `getOpenCodePluginSource()` so `post()` (and only `post()`, since `getHookUrl()` is called from there) first attempts to read `ORCA_AGENT_HOOK_ENDPOINT` from env and — if present and readable — parses it for current `PORT`/`TOKEN`/`ENV`/`VERSION`, falling back to `process.env` otherwise.
+
+**Stat-based cache** (not a plain read-every-post). `message.part.updated` fires many times per second during streaming, so a naive `readFileSync` per post would be a lot of redundant syscalls for a file that only changes on Orca restart. The plugin instead keeps a module-scope cache keyed by `mtimeMs + size + ino`:
+
+1. On each `post()`, `fs.statSync(path)` the endpoint file (one syscall, much cheaper than read+parse).
+2. Compute `cacheKey = ${stat.mtimeMs}:${stat.size}:${stat.ino}`. If it matches the last cached key, reuse the previously parsed object — no read, no parse.
+3. On a cache miss, `readFileSync` + parse, then store `{ cacheKey, parsed }`.
+4. On `statSync` failure (ENOENT, EACCES, etc.), **invalidate the cache** (`cacheKey = null`, `parsed = null`). Why: a transient stat failure must not lock in a stale parse — the next successful stat has to re-read. Without invalidation, a single flaky stat during an Orca restart could pin the plugin to the pre-restart coords for the lifetime of the OpenCode process.
+
+Why `ino` is part of the cache key (not just mtime+size): the writer uses `renameSync(tmp → final)`, which allocates a fresh inode for the final file. Including `ino` means the cache invalidates on rename even when `mtimeMs` resolution is coarse (HFS+ is 1s, some network filesystems are worse) and even when the new file happens to have the same size as the old one. Rename-allocates-new-inode is the atomic-write primitive we already rely on; making it drive cache invalidation costs nothing.
 
 Sketch (embedded in the plugin source string). A process-lifetime `let warnedBadEndpoint = false` guard is declared **inside the plugin source itself** (the plugin runs in OpenCode's process, not Orca's — it has no access to `server.ts` scope). This mirrors the *intent* of `server.ts`'s `warnedVersions` / `warnedEnvs` Sets (which are `const Set<string>` on the Orca side, not `let` booleans) but lives in a separate process:
 
@@ -182,25 +200,57 @@ Sketch (embedded in the plugin source string). A process-lifetime `let warnedBad
 // endpoint file does not spam OpenCode's stderr once per hook post.
 let warnedBadEndpoint = false;
 
+// Why: message.part.updated fires many times/sec during streaming. Stat is
+// much cheaper than read+parse; the file only changes across Orca restarts,
+// which renameSync makes detectable via ino (fresh inode on every write).
+let cacheKey = null;
+let cacheParsed = null;
+
 function readEndpointFile() {
+  const fs = require('fs');
   const path = process.env.ORCA_AGENT_HOOK_ENDPOINT;
   if (!path) return null;
+  let st;
   try {
-    const contents = require('fs').readFileSync(path, 'utf8');
+    st = fs.statSync(path);
+  } catch (err) {
+    // Why: invalidate the cache on stat failure so a transient ENOENT/EACCES
+    // during an Orca restart doesn't pin us to the pre-restart parsed coords.
+    cacheKey = null;
+    cacheParsed = null;
+    if (err && err.code !== 'ENOENT' && !warnedBadEndpoint) {
+      warnedBadEndpoint = true;
+      console.warn('[orca-hook] failed to stat endpoint file:', err.message);
+    }
+    return null;
+  }
+  // Why: ino included because renameSync(tmp → final) allocates a fresh inode,
+  // giving us a reliable invalidation signal even when mtimeMs resolution is
+  // coarse (HFS+ 1s, some NFS worse) and the new file is the same size.
+  const key = st.mtimeMs + ':' + st.size + ':' + st.ino;
+  if (key === cacheKey && cacheParsed) return cacheParsed;
+  try {
+    const contents = fs.readFileSync(path, 'utf8');
     const out = {};
     for (const line of contents.split(/\r?\n/)) {
       // Why: Windows endpoint.cmd uses `set KEY=VALUE`; Unix endpoint.env uses
       // `KEY=VALUE`. Making `set ` optional lets the same parser handle both
-      // without platform detection in the plugin.
-      const m = line.match(/^(?:set\s+)?([A-Z_]+)=(.*)$/);
-      if (m) out[m[1]] = m[2];
+      // without platform detection in the plugin. Digits are allowed in keys
+      // to match the real ORCA_AGENT_HOOK_* namespace and remain future-proof.
+      const m = line.match(/^(?:set\s+)?([A-Z0-9_]+)=(.*)$/);
+      // Why: strip trailing CR so a CRLF-terminated Windows endpoint.cmd
+      // parsed on POSIX (or vice versa) doesn't carry a '\r' into the value.
+      if (m) out[m[1]] = m[2].replace(/\r$/, "");
     }
+    cacheKey = key;
+    cacheParsed = out;
     return out;
   } catch (err) {
+    cacheKey = null;
+    cacheParsed = null;
     // Why: warn once per process if the file exists but is unreadable/malformed
     // — a persistent, silently-swallowed parse error would otherwise leave the
     // plugin falling back to stale process.env on every post with no signal.
-    // ENOENT / missing env var is the normal pre-install case; stay silent.
     if (err && err.code !== 'ENOENT' && !warnedBadEndpoint) {
       warnedBadEndpoint = true;
       console.warn('[orca-hook] failed to parse endpoint file:', err.message);
@@ -214,7 +264,7 @@ function readEndpointFile() {
 
 ### 3. `src/shared/agent-hook-types.ts` — Protocol version bump
 
-Bump `ORCA_HOOK_PROTOCOL_VERSION` from `'1'` → `'2'` (monotonic, no skipped version). The server already warns on mismatch, so users with stale installs see a clear, already-throttled diagnostic directing them to reinstall hooks.
+Bumped `ORCA_HOOK_PROTOCOL_VERSION` from `'1'` → `'2'` (monotonic, no skipped version). The server already warns on mismatch, so users with stale installs see a clear, already-throttled diagnostic directing them to reinstall hooks.
 
 ### 4. `src/main/agent-hooks/server.test.ts` — Coverage
 
@@ -245,7 +295,7 @@ Bump `ORCA_HOOK_PROTOCOL_VERSION` from `'1'` → `'2'` (monotonic, no skipped ve
 | Dev Orca + prod Orca running simultaneously | Works (separate envs per PTY) | Works (separate files per install) |
 | Force-quit Orca, relaunch | **Broken** for surviving PTYs | Works |
 | Hook installed by old Orca, PTY spawned by new Orca | Works (PTY env fresh, old script reads env) | Works (same, plus file overrides if script is upgraded) |
-| Hook installed by new Orca, PTY spawned by old Orca | N/A | Works (script sources fresh file even though PTY env is stale) |
+| Hook installed by new Orca, PTY spawned by old Orca | N/A | Works only if the PTY is new (spawned by new Orca, which stamps `ORCA_AGENT_HOOK_ENDPOINT`). Old PTYs lack the endpoint env var and fall through to stale env coords from old Orca → dead port. This is the Migration gap already described above; explicit refresh requires a new PTY. |
 | Hook installed by old Orca, PTY spawned by old Orca (upgrade transition) | Broken | Remains broken until user reinstalls hooks or spawns a new PTY — see "Migration gap" |
 
 ## Rejected Alternatives
@@ -258,12 +308,12 @@ Bump `ORCA_HOOK_PROTOCOL_VERSION` from `'1'` → `'2'` (monotonic, no skipped ve
 
 ## Scope
 
-- ~75 lines added across `server.ts`, `{claude,codex,gemini}/hook-service.ts`, `opencode/hook-service.ts`, and `agent-hook-types.ts`.
+- ~200 lines of production code added across `server.ts`, `{claude,codex,cursor,gemini}/hook-service.ts`, `opencode/hook-service.ts`, and `agent-hook-types.ts`, plus ~150 lines of tests and this design doc.
 - One protocol version bump.
 - No migrations: the endpoint file is reconstructed on every `start()`; its presence or absence on disk at startup is irrelevant.
 - No IPC changes, no UI changes.
 
 ## Open Questions
 
-1. **Should we delete the endpoint file on clean shutdown?** **Resolved:** `stop()` unlinks the endpoint file (see `unlinkEndpointFile()` in `src/main/agent-hooks/server.ts`). Rationale: filesystem hygiene — a user who moves their userData directory or uninstalls Orca should not leave a world-readable-looking file hanging around, and the next `start()` overwrites it anyway. Crashes skip `stop()` and leave the stale file, which is fine: the next `start()` overwrites it, and in the crash-then-no-restart window the stale coordinates just hit a dead port and the hook fails silently (fail-open, same as today). The world-readable concern is independently mitigated by the `0o600` mode on `writeFileSync`; unlinking on clean shutdown is belt-and-suspenders.
+1. **Should we delete the endpoint file on clean shutdown?** **Resolved: no.** `stop()` intentionally leaves the file on disk. A stale file points at a dead port, which matches the fail-open policy (hook POSTs silently fail, same as pre-v2). An earlier iteration added a token-matched `unlinkEndpointFile()` on stop for "filesystem hygiene", but that has a residual TOCTOU: between the token read and the `unlinkSync`, a concurrent Orca instance sharing userData can `renameSync` a fresh file over our path, and our unlink then deletes the peer's live file despite the token check passing moments before. The original hygiene argument is also weak: the endpoint file is written with mode `0o600`, so it is not world-readable in the first place. The next successful `start()` overwrites the file atomically; orphan `.tmp` files from crashed writers are swept inside `writeEndpointFile()`. TOCTOU-free by construction.
 2. **Hook-script auto-upgrade on version mismatch.** Deferred — see "Migration gap" under Goals for the resolution. In short: users with a pre-fix script either reinstall from Settings (prompted by the existing throttled server-log warning) or simply spawn a new PTY. Auto-reinstall would silently overwrite user-customized `settings.json` hook blocks and needs its own design before shipping.

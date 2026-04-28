@@ -915,13 +915,20 @@ describe('Endpoint file lifecycle', () => {
     }
   })
 
-  it('removes the endpoint file on stop()', async () => {
+  it('leaves the endpoint file in place on stop()', async () => {
+    // Why: stop() deliberately does NOT unlink the endpoint file. A stale file
+    // points at a dead port — the fail-open path (hook POSTs silently fail,
+    // same as pre-v2). Unlinking would introduce a TOCTOU race with a
+    // concurrent Orca instance sharing userData that could rewrite the file
+    // between our token check and unlink. The next successful start()
+    // overwrites the file atomically; tmp-file orphan hygiene is handled by
+    // the sweep inside writeEndpointFile().
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
     const filePath = server.endpointFilePath!
     expect(existsSync(filePath)).toBe(true)
     server.stop()
-    expect(existsSync(filePath)).toBe(false)
+    expect(existsSync(filePath)).toBe(true)
   })
 
   it('buildPtyEnv includes ORCA_AGENT_HOOK_ENDPOINT when the server is running', async () => {

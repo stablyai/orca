@@ -2,9 +2,11 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'http'
 import { randomUUID } from 'crypto'
 import {
+  chmodSync,
   closeSync,
   mkdirSync,
   openSync,
+  readdirSync,
   readSync,
   renameSync,
   statSync,
@@ -1057,6 +1059,19 @@ function getEndpointFileName(): string {
   return process.platform === 'win32' ? 'endpoint.cmd' : 'endpoint.env'
 }
 
+// Why: every value in the endpoint file is sourced as shell. Reject any
+// value that contains shell/cmd metacharacters so a future field whose
+// value is not shell-safe-by-construction cannot command-inject via the
+// sourced file. Keep to a conservative allowlist of common printable
+// chars plus hyphen/dot/slash/colon/underscore — sufficient for ports,
+// UUIDs, version strings, and env names.
+// Rejects empty values (`+` quantifier) as defense-in-depth for future
+// callers — an empty sourced `KEY=` would silently clear the env var in
+// the sourcing shell, masking whatever legitimate value was previously set.
+function isShellSafeEndpointValue(value: string): boolean {
+  return /^[A-Za-z0-9._:/-]+$/.test(value)
+}
+
 export class AgentHookServer {
   private server: ReturnType<typeof createServer> | null = null
   private port = 0
@@ -1211,13 +1226,14 @@ export class AgentHookServer {
     this.token = ''
     this.env = 'production'
     this.onAgentStatus = null
-    // Why: best-effort unlink on clean shutdown so a user who moves userData
-    // or uninstalls Orca does not leave a world-readable file hanging around.
-    // Leaving the file would not be dangerous (hooks reading stale contents
-    // would hit a dead port and silently fail — same as today) but a relaunch
-    // overwrites it anyway, so this keeps the filesystem tidy. Guarded so
-    // shutdown never throws.
-    this.unlinkEndpointFile()
+    // Why: intentionally do NOT delete the endpoint file on stop(). A stale
+    // file points at a dead port, which matches the fail-open policy (hook
+    // POSTs silently fail → same as pre-v2 behavior). Attempting to unlink
+    // introduces a TOCTOU race: a concurrent Orca instance sharing userData
+    // could rewrite the file between our token check and unlink, and we'd
+    // delete their live endpoint file. The next successful start() overwrites
+    // the file atomically; the tmp-file sweep inside writeEndpointFile()
+    // handles orphan hygiene.
     this.endpointDir = null
     this.endpointFilePathCache = null
     this.endpointFileWritten = false
@@ -1302,14 +1318,25 @@ export class AgentHookServer {
     // free-form field) MUST add escaping or a safe-character validator
     // before the write — otherwise a value like `foo&malicious` on Windows
     // would command-inject via `call`, and a newline in any value would
-    // corrupt the POSIX sourceable output.
-    const lines = [
-      `${prefix}ORCA_AGENT_HOOK_PORT=${this.port}`,
-      `${prefix}ORCA_AGENT_HOOK_TOKEN=${this.token}`,
-      `${prefix}ORCA_AGENT_HOOK_ENV=${this.env}`,
-      `${prefix}ORCA_AGENT_HOOK_VERSION=${ORCA_HOOK_PROTOCOL_VERSION}`,
-      ''
+    // corrupt the POSIX sourceable output. The isShellSafeEndpointValue
+    // check below enforces this contract at runtime.
+    const valuesToWrite: [string, string][] = [
+      ['ORCA_AGENT_HOOK_PORT', String(this.port)],
+      ['ORCA_AGENT_HOOK_TOKEN', this.token],
+      ['ORCA_AGENT_HOOK_ENV', this.env],
+      ['ORCA_AGENT_HOOK_VERSION', ORCA_HOOK_PROTOCOL_VERSION]
     ]
+    for (const [key, value] of valuesToWrite) {
+      if (!isShellSafeEndpointValue(value)) {
+        console.error(
+          `[agent-hooks] refusing to write endpoint file: ${key} contains ` +
+            'characters unsafe for shell sourcing. Falling back to PTY env.'
+        )
+        return
+      }
+    }
+    const lines = [...valuesToWrite.map(([key, value]) => `${prefix}${key}=${value}`), '']
+    let tmpWritten = false
     try {
       // Why: mode 0o700 — match the file's owner-only policy so the
       // agent-hooks/ directory itself does not leak the existence of this
@@ -1317,43 +1344,72 @@ export class AgentHookServer {
       // users on a multi-user POSIX host. Default umask would otherwise
       // leave the dir at 0o755 even though the file inside is 0o600.
       mkdirSync(this.endpointDir, { recursive: true, mode: 0o700 })
+      if (process.platform !== 'win32') {
+        // Why: mkdirSync's `mode` only applies when the dir is newly created —
+        // a pre-existing agent-hooks/ dir (from an earlier build or user
+        // intervention) keeps its original permissions. Re-chmod on every
+        // start() so the directory matches the 0600 file inside it. POSIX
+        // only; chmod semantics differ on Windows and the filesystem-level
+        // ACL model makes this check meaningless there.
+        try {
+          chmodSync(this.endpointDir, 0o700)
+        } catch {
+          // Why: best-effort — a chmod failure (exotic fs, read-only mount)
+          // must not block the endpoint-file write itself.
+        }
+      }
+      // Why: a crash between writeFileSync and renameSync leaves stale
+      // `.endpoint-<pid>-<uuid>.tmp` in this directory. Sweep older-than-5-min
+      // orphans so the dir does not grow unboundedly. Fresh tmps are left
+      // alone so a legitimate concurrent instance is not disturbed.
+      try {
+        const entries = readdirSync(this.endpointDir)
+        const cutoff = Date.now() - 5 * 60 * 1000
+        for (const entry of entries) {
+          if (!entry.startsWith('.endpoint-') || !entry.endsWith('.tmp')) {
+            continue
+          }
+          const entryPath = join(this.endpointDir, entry)
+          try {
+            if (statSync(entryPath).mtimeMs < cutoff) {
+              unlinkSync(entryPath)
+            }
+          } catch {
+            // best-effort sweep
+          }
+        }
+      } catch {
+        // readdirSync can fail on exotic filesystems; never block the write
+      }
       // Why: 0o600 — the token is a loopback bearer credential and must not
       // be readable by other local users. Parity with PTY env exposure via
       // /proc/<pid>/environ (owner-only on modern Linux).
-      writeFileSync(tmpPath, lines.join('\n'), { mode: 0o600 })
+      // Why: `.cmd` files require CRLF for consistent `set` parsing across
+      // Windows versions — LF-only terminators are silently mis-parsed by
+      // some cmd.exe versions, which would break hook coord refresh (exactly
+      // the bug this file exists to fix). POSIX stays LF.
+      const separator = process.platform === 'win32' ? '\r\n' : '\n'
+      writeFileSync(tmpPath, lines.join(separator), { mode: 0o600 })
+      tmpWritten = true
       renameSync(tmpPath, finalPath)
       this.endpointFileWritten = true
     } catch (err) {
       console.error('[agent-hooks] failed to write endpoint file:', err)
-      try {
-        unlinkSync(tmpPath)
-      } catch {
-        // Why: tmp file may not exist (mkdir/writeFile may have been the
-        // failure point). Ignore — there is nothing to clean up.
+      // Why: clean up tmp; never nuke the prior finalPath when we cannot
+      // guarantee we have replaced it. Stale finalPath → dead port → silent
+      // fail on hook POST matches the fail-open policy documented on the
+      // receiver side. Destroying the prior file would strand surviving PTYs
+      // that *could* have continued to fail silently against a dead port —
+      // strictly worse than leaving the prior coords in place until the next
+      // successful start() overwrites them.
+      if (tmpWritten) {
+        try {
+          unlinkSync(tmpPath)
+        } catch {
+          // Why: tmp may already be gone (rename partially succeeded, or an
+          // external process cleaned it). Nothing to do.
+        }
       }
-      try {
-        // Why: remove any stale finalPath left from a prior instance's
-        // successful write — callers must not source those stale coords
-        // after we've failed to refresh them, or surviving PTYs would post
-        // to a dead port with the wrong token. Guarded because the file
-        // may legitimately not exist (first run, or already cleaned up).
-        unlinkSync(finalPath)
-      } catch {
-        // Why: finalPath absence is the common case on first-run failure;
-        // swallow so stop()/error paths never throw.
-      }
-    }
-  }
-
-  private unlinkEndpointFile(): void {
-    if (!this.endpointFilePathCache) {
-      return
-    }
-    try {
-      unlinkSync(this.endpointFilePathCache)
-    } catch {
-      // Why: the file may already be gone (user purged userData, fs quirk,
-      // first shutdown after a failed write). Never throw from stop().
     }
   }
 }

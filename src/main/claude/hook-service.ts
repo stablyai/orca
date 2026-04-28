@@ -62,7 +62,7 @@ function getManagedScript(): string {
       // (`set KEY=VALUE` lines) via `call` refreshes them so the hook
       // reaches the current server. Falls through to PTY env if the file
       // is missing (first run / pre-v2 / running outside Orca).
-      'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%"',
+      'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
       'if "%ORCA_AGENT_HOOK_PORT%"=="" exit /b 0',
       'if "%ORCA_AGENT_HOOK_TOKEN%"=="" exit /b 0',
       'if "%ORCA_PANE_KEY%"=="" exit /b 0',
@@ -79,8 +79,17 @@ function getManagedScript(): string {
     // baked into their env from the old instance — sourcing the file here
     // lets us reach the new server. Falls back to PTY env if the file is
     // missing (first-run / pre-v2 scripts / running outside Orca).
+    // Why: suppress stderr on the `.` builtin. A TOCTOU race (endpoint unlinked
+    // between the `[ -r ]` test and the source) or a malformed line (e.g. CRLF
+    // bled in from a cross-platform userData copy) would otherwise print a
+    // parse error that agent transcripts could surface. Stale coords → dead
+    // port → silent-fail is the documented fail-open path anyway — the env-var
+    // guards below handle the empty PORT/TOKEN case — so swallowing the noise
+    // here is strictly better than leaking shell errors into the hook output.
+    // `|| :` defends against an eventual `set -e` in an outer script context
+    // (not present today) aborting the hook on a parse error.
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
-    '  . "$ORCA_AGENT_HOOK_ENDPOINT"',
+    '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
     'fi',
     'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
     '  exit 0',

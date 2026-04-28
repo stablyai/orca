@@ -45,7 +45,7 @@ describe('OpenCode hook plugin source', () => {
     expect(source).toContain('function readEndpointFile()')
     expect(source).toContain('process.env.ORCA_AGENT_HOOK_ENDPOINT')
     // Parser accepts both `KEY=VALUE` (Unix) and `set KEY=VALUE` (Windows):
-    expect(source).toContain('/^(?:set\\s+)?([A-Z_]+)=(.*)$/')
+    expect(source).toContain('/^(?:set\\s+)?([A-Z0-9_]+)=(.*)$/')
     expect(source).toContain('function resolveHookCoords()')
     // File takes precedence over env — the whole point of v2:
     expect(source).toContain(

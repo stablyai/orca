@@ -1,8 +1,8 @@
-// Why: these IPC payload shapes live here but have no renderer/main consumer
-// in this PR. They are pulled in by the main-process hook server (Claude /
-// Codex / Gemini native hook integrations) that lands in the follow-up PR.
-// Keeping the types shared up-front avoids a churn PR that renames or splits
-// them once the hook server imports them.
+// Why: shared agent-hook IPC payload shapes and the managed-script protocol
+// version constant. Consumed by both the main-process hook server (src/main/
+// agent-hooks/server.ts) and each per-agent hook service (claude/codex/
+// gemini/cursor/hook-service.ts). Lives in `shared/` to keep a single
+// source of truth for the version string and status contract.
 
 export type AgentHookTarget = 'claude' | 'codex' | 'gemini' | 'cursor'
 
