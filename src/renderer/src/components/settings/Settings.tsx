@@ -8,6 +8,7 @@ import {
   GitBranch,
   Globe,
   Keyboard,
+  ShieldCheck,
   Palette,
   Server,
   SlidersHorizontal,
@@ -37,6 +38,10 @@ import { ExperimentalPane, EXPERIMENTAL_PANE_SEARCH_ENTRIES } from './Experiment
 import { AgentsPane, AGENTS_PANE_SEARCH_ENTRIES } from './AgentsPane'
 import { StatsPane, STATS_PANE_SEARCH_ENTRIES } from '../stats/StatsPane'
 import { IntegrationsPane, INTEGRATIONS_PANE_SEARCH_ENTRIES } from './IntegrationsPane'
+import {
+  DeveloperPermissionsPane,
+  DEVELOPER_PERMISSIONS_PANE_SEARCH_ENTRIES
+} from './DeveloperPermissionsPane'
 import { SettingsSidebar } from './SettingsSidebar'
 import { SettingsSection } from './SettingsSection'
 import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
@@ -49,6 +54,7 @@ type SettingsNavTarget =
   | 'appearance'
   | 'terminal'
   | 'notifications'
+  | 'developer-permissions'
   | 'shortcuts'
   | 'stats'
   | 'ssh'
@@ -337,6 +343,17 @@ function Settings(): React.JSX.Element {
         icon: Bell,
         searchEntries: NOTIFICATIONS_PANE_SEARCH_ENTRIES
       },
+      ...(isMac
+        ? [
+            {
+              id: 'developer-permissions' as const,
+              title: 'Permissions',
+              description: 'macOS privacy access for terminal-launched developer tools.',
+              icon: ShieldCheck,
+              searchEntries: DEVELOPER_PERMISSIONS_PANE_SEARCH_ENTRIES
+            }
+          ]
+        : []),
       {
         id: 'shortcuts',
         title: 'Shortcuts',
@@ -381,7 +398,7 @@ function Settings(): React.JSX.Element {
         searchEntries: getRepositoryPaneSearchEntries(repo)
       }))
     ],
-    [repos, terminalPaneSearchEntries]
+    [isMac, repos, terminalPaneSearchEntries]
   )
 
   const visibleNavSections = useMemo(
@@ -647,6 +664,17 @@ function Settings(): React.JSX.Element {
                 >
                   <NotificationsPane settings={settings} updateSettings={updateSettings} />
                 </SettingsSection>
+
+                {isMac ? (
+                  <SettingsSection
+                    id="developer-permissions"
+                    title="Permissions"
+                    description="macOS privacy access for terminal-launched developer tools."
+                    searchEntries={DEVELOPER_PERMISSIONS_PANE_SEARCH_ENTRIES}
+                  >
+                    <DeveloperPermissionsPane />
+                  </SettingsSection>
+                ) : null}
 
                 <SettingsSection
                   id="shortcuts"

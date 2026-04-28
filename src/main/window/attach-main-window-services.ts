@@ -1,8 +1,8 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 
-import { app, clipboard, ipcMain, nativeImage, session } from 'electron'
-import type { BrowserWindow } from 'electron'
+import { app, clipboard, ipcMain, nativeImage, session, systemPreferences } from 'electron'
+import type { BrowserWindow, MediaAccessPermissionRequest } from 'electron'
 import type { Store } from '../persistence'
 import type { CreateWorktreeResult } from '../../shared/types'
 import { ORCA_BROWSER_PARTITION } from '../../shared/constants'
@@ -85,8 +85,23 @@ export function attachMainWindowServices(
 
   const allowedPermissions = new Set(['media', 'fullscreen', 'pointerLock'])
   mainWindow.webContents.session.setPermissionRequestHandler(
-    (_webContents, permission, callback) => {
+    (_webContents, permission, callback, details) => {
+      if (permission === 'media') {
+        void requestSystemMediaAccess(details).then(callback, (error: unknown) => {
+          console.error('[permissions] Failed to request media access:', error)
+          callback(false)
+        })
+        return
+      }
       callback(allowedPermissions.has(permission))
+    }
+  )
+  mainWindow.webContents.session.setPermissionCheckHandler(
+    (_webContents, permission, _origin, details) => {
+      if (permission !== 'media') {
+        return allowedPermissions.has(permission)
+      }
+      return hasSystemMediaAccess(details?.mediaType)
     }
   )
 
@@ -130,6 +145,54 @@ export function attachMainWindowServices(
     // or hot-reload cycles.
     browserManager.unregisterAll()
   })
+}
+
+function requestedMediaTypes(
+  details: MediaAccessPermissionRequest | undefined
+): Set<'audio' | 'video'> {
+  return new Set(details?.mediaTypes ?? [])
+}
+
+function hasSystemMediaAccess(mediaType: string | undefined): boolean {
+  if (process.platform !== 'darwin') {
+    return true
+  }
+  if (mediaType === 'audio') {
+    return systemPreferences.getMediaAccessStatus('microphone') === 'granted'
+  }
+  if (mediaType === 'video') {
+    return systemPreferences.getMediaAccessStatus('camera') === 'granted'
+  }
+  return false
+}
+
+async function requestSystemMediaAccess(
+  details: MediaAccessPermissionRequest | undefined
+): Promise<boolean> {
+  if (process.platform !== 'darwin') {
+    return true
+  }
+
+  const mediaTypes = requestedMediaTypes(details)
+  if (mediaTypes.size === 0) {
+    return false
+  }
+
+  if (mediaTypes.has('audio')) {
+    // Why: macOS only shows the TCC prompt from the app process, so Chromium's
+    // media grant is paired with the OS-level request at the actual media ask.
+    const granted = await systemPreferences.askForMediaAccess('microphone')
+    if (!granted) {
+      return false
+    }
+  }
+  if (mediaTypes.has('video')) {
+    const granted = await systemPreferences.askForMediaAccess('camera')
+    if (!granted) {
+      return false
+    }
+  }
+  return true
 }
 
 function registerRuntimeWindowLifecycle(

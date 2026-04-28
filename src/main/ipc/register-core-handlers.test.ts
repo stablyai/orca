@@ -10,6 +10,7 @@ const {
   registerStatsHandlersMock,
   registerMemoryHandlersMock,
   registerNotificationHandlersMock,
+  registerDeveloperPermissionHandlersMock,
   registerSettingsHandlersMock,
   registerShellHandlersMock,
   registerSessionHandlersMock,
@@ -39,6 +40,7 @@ const {
   registerStatsHandlersMock: vi.fn(),
   registerMemoryHandlersMock: vi.fn(),
   registerNotificationHandlersMock: vi.fn(),
+  registerDeveloperPermissionHandlersMock: vi.fn(),
   registerSettingsHandlersMock: vi.fn(),
   registerShellHandlersMock: vi.fn(),
   registerSessionHandlersMock: vi.fn(),
@@ -98,6 +100,10 @@ vi.mock('./memory', () => ({
 
 vi.mock('./notifications', () => ({
   registerNotificationHandlers: registerNotificationHandlersMock
+}))
+
+vi.mock('./developer-permissions', () => ({
+  registerDeveloperPermissionHandlers: registerDeveloperPermissionHandlersMock
 }))
 
 vi.mock('./settings', () => ({
@@ -176,6 +182,7 @@ describe('registerCoreHandlers', () => {
     registerStatsHandlersMock.mockReset()
     registerMemoryHandlersMock.mockReset()
     registerNotificationHandlersMock.mockReset()
+    registerDeveloperPermissionHandlersMock.mockReset()
     registerSettingsHandlersMock.mockReset()
     registerShellHandlersMock.mockReset()
     registerSessionHandlersMock.mockReset()
@@ -230,6 +237,7 @@ describe('registerCoreHandlers', () => {
     expect(registerStatsHandlersMock).toHaveBeenCalledWith(stats)
     expect(registerMemoryHandlersMock).toHaveBeenCalledWith(store)
     expect(registerNotificationHandlersMock).toHaveBeenCalledWith(store)
+    expect(registerDeveloperPermissionHandlersMock).toHaveBeenCalled()
     expect(registerSettingsHandlersMock).toHaveBeenCalledWith(store)
     expect(registerSessionHandlersMock).toHaveBeenCalledWith(store)
     expect(registerUIHandlersMock).toHaveBeenCalledWith(store)

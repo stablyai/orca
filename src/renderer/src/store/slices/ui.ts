@@ -99,6 +99,7 @@ export type UISlice = {
       | 'browser'
       | 'appearance'
       | 'terminal'
+      | 'developer-permissions'
       | 'shortcuts'
       | 'repo'
       | 'agents'

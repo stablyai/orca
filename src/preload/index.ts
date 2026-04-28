@@ -647,6 +647,14 @@ const api = {
     openSystemSettings: (): Promise<void> => ipcRenderer.invoke('notifications:openSystemSettings')
   },
 
+  developerPermissions: {
+    getStatus: (): Promise<unknown> => ipcRenderer.invoke('developerPermissions:getStatus'),
+    request: (args: { id: string }): Promise<unknown> =>
+      ipcRenderer.invoke('developerPermissions:request', args),
+    openSettings: (args: { id: string }): Promise<void> =>
+      ipcRenderer.invoke('developerPermissions:openSettings', args)
+  },
+
   shell: {
     openPath: (path: string): Promise<void> => ipcRenderer.invoke('shell:openPath', path),
 

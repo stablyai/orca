@@ -81,6 +81,11 @@ import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type { AgentStatusState } from '../shared/agent-status-types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../shared/runtime-types'
 import type {
+  DeveloperPermissionId,
+  DeveloperPermissionRequestResult,
+  DeveloperPermissionState
+} from '../shared/developer-permissions-types'
+import type {
   ClaudeUsageBreakdownKind,
   ClaudeUsageBreakdownRow,
   ClaudeUsageDailyPoint,
@@ -555,6 +560,11 @@ export type PreloadApi = {
   notifications: {
     dispatch: (args: NotificationDispatchRequest) => Promise<NotificationDispatchResult>
     openSystemSettings: () => Promise<void>
+  }
+  developerPermissions: {
+    getStatus: () => Promise<DeveloperPermissionState[]>
+    request: (args: { id: DeveloperPermissionId }) => Promise<DeveloperPermissionRequestResult>
+    openSettings: (args: { id: DeveloperPermissionId }) => Promise<void>
   }
   shell: {
     openPath: (path: string) => Promise<void>
