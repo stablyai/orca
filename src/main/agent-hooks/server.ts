@@ -1073,6 +1073,14 @@ export class AgentHookServer {
   // without survive-a-restart semantics.
   private endpointDir: string | null = null
   private endpointFilePathCache: string | null = null
+  // Why: tracks whether writeEndpointFile() succeeded for the *current*
+  // start(). Without this flag, buildPtyEnv() would expose
+  // ORCA_AGENT_HOOK_ENDPOINT pointing at a path that may hold stale
+  // coordinates from a prior crashed instance — hook scripts would source
+  // those stale coords and silently post to a dead server. Gating the
+  // ENDPOINT env var on a successful write preserves the
+  // fail-open-to-fresh-env guarantee.
+  private endpointFileWritten = false
 
   setListener(listener: ((payload: AgentHookEventPayload) => void) | null): void {
     this.onAgentStatus = listener
@@ -1103,6 +1111,7 @@ export class AgentHookServer {
       this.endpointFilePathCache = join(this.endpointDir, getEndpointFileName())
     }
     this.token = randomUUID()
+    this.endpointFileWritten = false
     this.server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
       if (req.method !== 'POST') {
         res.writeHead(404)
@@ -1211,6 +1220,7 @@ export class AgentHookServer {
     this.unlinkEndpointFile()
     this.endpointDir = null
     this.endpointFilePathCache = null
+    this.endpointFileWritten = false
     // Why: drop all per-pane cache entries on shutdown so a subsequent start()
     // in the same process (e.g. during tests or a settings-driven restart)
     // does not inherit stale prompt/tool state from the previous run.
@@ -1250,7 +1260,7 @@ export class AgentHookServer {
       ORCA_AGENT_HOOK_ENV: this.env,
       ORCA_AGENT_HOOK_VERSION: ORCA_HOOK_PROTOCOL_VERSION
     }
-    if (this.endpointFilePathCache) {
+    if (this.endpointFileWritten && this.endpointFilePathCache) {
       env.ORCA_AGENT_HOOK_ENDPOINT = this.endpointFilePathCache
     }
     return env
@@ -1273,10 +1283,26 @@ export class AgentHookServer {
     if (!this.endpointDir || !this.endpointFilePathCache) {
       return
     }
+    // Why: defensive reset — buildPtyEnv() must not see a stale `true` from
+    // a previous start() if this write fails before reaching the success
+    // assignment below.
+    this.endpointFileWritten = false
     const finalPath = this.endpointFilePathCache
     // Why: unique-per-call tmp name (mirrors persistence.ts / installer-utils.ts); prevents cross-process collision if two writers race on the same endpoint dir.
     const tmpPath = join(this.endpointDir, `.endpoint-${process.pid}-${randomUUID()}.tmp`)
     const prefix = process.platform === 'win32' ? 'set ' : ''
+    // Why: every value written here is sourced as shell (`. "$file"` on
+    // POSIX, `call "%file%"` on Windows) — the file format IS shell, not
+    // key=value data. The current four inputs are shell-safe by
+    // construction: PORT is a number from listen(), TOKEN is randomUUID()
+    // output (hex + dashes only), VERSION is a compile-time string
+    // constant, and ENV is a fixed 'production' / 'development' literal
+    // passed from index.ts. Any future change that relaxes these
+    // invariants (user-supplied env name, persisted token, arbitrary
+    // free-form field) MUST add escaping or a safe-character validator
+    // before the write — otherwise a value like `foo&malicious` on Windows
+    // would command-inject via `call`, and a newline in any value would
+    // corrupt the POSIX sourceable output.
     const lines = [
       `${prefix}ORCA_AGENT_HOOK_PORT=${this.port}`,
       `${prefix}ORCA_AGENT_HOOK_TOKEN=${this.token}`,
@@ -1285,12 +1311,18 @@ export class AgentHookServer {
       ''
     ]
     try {
-      mkdirSync(this.endpointDir, { recursive: true })
+      // Why: mode 0o700 — match the file's owner-only policy so the
+      // agent-hooks/ directory itself does not leak the existence of this
+      // Orca install (or the presence of the endpoint file) to other local
+      // users on a multi-user POSIX host. Default umask would otherwise
+      // leave the dir at 0o755 even though the file inside is 0o600.
+      mkdirSync(this.endpointDir, { recursive: true, mode: 0o700 })
       // Why: 0o600 — the token is a loopback bearer credential and must not
       // be readable by other local users. Parity with PTY env exposure via
       // /proc/<pid>/environ (owner-only on modern Linux).
       writeFileSync(tmpPath, lines.join('\n'), { mode: 0o600 })
       renameSync(tmpPath, finalPath)
+      this.endpointFileWritten = true
     } catch (err) {
       console.error('[agent-hooks] failed to write endpoint file:', err)
       try {
@@ -1298,6 +1330,17 @@ export class AgentHookServer {
       } catch {
         // Why: tmp file may not exist (mkdir/writeFile may have been the
         // failure point). Ignore — there is nothing to clean up.
+      }
+      try {
+        // Why: remove any stale finalPath left from a prior instance's
+        // successful write — callers must not source those stale coords
+        // after we've failed to refresh them, or surviving PTYs would post
+        // to a dead port with the wrong token. Guarded because the file
+        // may legitimately not exist (first run, or already cleaned up).
+        unlinkSync(finalPath)
+      } catch {
+        // Why: finalPath absence is the common case on first-run failure;
+        // swallow so stop()/error paths never throw.
       }
     }
   }
