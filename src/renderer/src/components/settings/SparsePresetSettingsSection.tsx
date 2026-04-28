@@ -3,6 +3,7 @@ import { Bookmark, LoaderCircle, Pencil, Plus, Save, Trash2, X } from 'lucide-re
 import type { SparsePreset } from '../../../../shared/types'
 import { useAppStore } from '../../store'
 import { cn } from '@/lib/utils'
+import { parseSparsePresetDirectories } from '@/lib/sparse-preset-draft'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
@@ -17,44 +18,6 @@ type SparsePresetDraft = {
   presetId?: string
   name: string
   directoriesText: string
-}
-
-type DirectoryParseResult = {
-  directories: string[]
-  error: string | null
-}
-
-function parseSparseDirectoryDraft(value: string): DirectoryParseResult {
-  const seen = new Set<string>()
-  const directories: string[] = []
-
-  for (const rawEntry of value.split('\n')) {
-    const entry = rawEntry
-      .trim()
-      .replace(/\\/g, '/')
-      .replace(/^\/+|\/+$/g, '')
-
-    if (!entry) {
-      continue
-    }
-    // Why: sparse preset paths are Git repo-relative paths, not OS paths;
-    // reject root and parent traversal before the save reaches IPC.
-    if (entry === '.' || entry.split('/').includes('..')) {
-      return {
-        directories: [],
-        error: 'Use repo-relative directories, not root, absolute paths, or parent segments.'
-      }
-    }
-    if (!seen.has(entry)) {
-      seen.add(entry)
-      directories.push(entry)
-    }
-  }
-
-  return {
-    directories,
-    error: directories.length === 0 ? 'Add at least one directory.' : null
-  }
 }
 
 function SparsePresetDirectoryPreview({
@@ -104,7 +67,7 @@ export function SparsePresetSettingsSection({
   }, [fetchSparsePresets, presets, repoId])
 
   const sortedPresets = presets ?? []
-  const parsedDirectories = draft ? parseSparseDirectoryDraft(draft.directoriesText) : null
+  const parsedDirectories = draft ? parseSparsePresetDirectories(draft.directoriesText) : null
   const trimmedName = draft?.name.trim() ?? ''
   const lowerName = trimmedName.toLowerCase()
   const collidingPreset =
