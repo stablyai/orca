@@ -12,7 +12,11 @@ import { SshDisconnectedDialog } from './SshDisconnectedDialog'
 import AgentStatusHover from './AgentStatusHover'
 import { cn } from '@/lib/utils'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import { getWorktreeStatus, type WorktreeStatus } from '@/lib/worktree-status'
+import {
+  getWorktreeStatus,
+  getWorktreeStatusLabel,
+  type WorktreeStatus
+} from '@/lib/worktree-status'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-types'
 import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
@@ -325,7 +329,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
   // side="right"). A dot-sized target was too easy to miss; the card-level
   // trigger preserves the dot as an at-a-glance cue while giving users a
   // much larger surface to surface the "agent activity" detail. Gated by
-  // dashboardExperimentEnabled to match the previous feature-flag scope.
+  // dashboardExperimentEnabled AND cardProps.includes('status') to match
+  // the previous scope — when the status dot is hidden, the hover panel
+  // stays hidden too.
   const cardBody = (
     <div
       className={cn(
@@ -374,7 +380,12 @@ const WorktreeCard = React.memo(function WorktreeCard({
                   hover target was too easy to miss; hovering any part of the
                   card is a far more forgiving way to reveal the "agent
                   activity" panel that appears to the right of the card. */}
-          {cardProps.includes('status') && <StatusIndicator status={status} />}
+          {cardProps.includes('status') && (
+            <>
+              <StatusIndicator status={status} aria-hidden="true" />
+              <span className="sr-only">{getWorktreeStatusLabel(status)}</span>
+            </>
+          )}
 
           {cardProps.includes('unread') && (
             <Tooltip>
@@ -540,7 +551,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   return (
     <>
       <WorktreeContextMenu worktree={worktree}>
-        {dashboardExperimentEnabled ? (
+        {dashboardExperimentEnabled && cardProps.includes('status') ? (
           <AgentStatusHover worktreeId={worktree.id}>{cardBody}</AgentStatusHover>
         ) : (
           cardBody
