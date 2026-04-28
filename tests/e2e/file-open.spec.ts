@@ -68,18 +68,12 @@ test.describe('File Open & Markdown Preview', () => {
   test('opening the right sidebar shows file explorer', async ({ orcaPage }) => {
     await openFileExplorer(orcaPage)
 
-    // Verify the right sidebar is open and on the explorer tab
-    await expect
-      .poll(async () => orcaPage.evaluate(() => window.__store?.getState().rightSidebarOpen), {
-        timeout: 3_000
-      })
-      .toBe(true)
-
-    await expect
-      .poll(async () => orcaPage.evaluate(() => window.__store?.getState().rightSidebarTab), {
-        timeout: 3_000
-      })
-      .toBe('explorer')
+    // Why: the load-bearing check is that `FileExplorer` actually mounted.
+    // `data-orca-explorer-shell` is the stable marker the component renders
+    // on its root shell div — a store-only `rightSidebarTab === 'explorer'`
+    // check would pass even if the explorer crashed on mount and the panel
+    // painted empty.
+    await expect(orcaPage.locator('[data-orca-explorer-shell]')).toBeVisible({ timeout: 5_000 })
   })
 
   /**
@@ -108,6 +102,20 @@ test.describe('File Open & Markdown Preview', () => {
     await expect
       .poll(async () => (await getOpenFiles(orcaPage, worktreeId)).length, { timeout: 5_000 })
       .toBeGreaterThan(filesBefore.length)
+
+    // Why: the load-bearing check is that the editor panel actually rendered
+    // the opened file. `.editor-header-path` is emitted by EditorPanel's
+    // header row and contains the file's full absolute path (which ends in
+    // the clicked file's name); a store-only `activeTabType === 'editor'`
+    // check would pass even if EditorPanel crashed on mount and the surface
+    // is blank. Timeout is generous (20s) because EditorPanel is lazy-loaded
+    // the first time the editor opens in a session — headless Electron runs
+    // routinely take 10s+ to hydrate that chunk plus the inner Monaco/Rich
+    // Markdown chunks, during which the outer Suspense shows "Loading
+    // editor…" and `.editor-header-path` is not yet in the DOM.
+    await expect(orcaPage.locator('.editor-header-path').first()).toContainText(clickedFile!, {
+      timeout: 20_000
+    })
   })
 
   /**
@@ -122,31 +130,26 @@ test.describe('File Open & Markdown Preview', () => {
     // Wait for the editor tab to become active
     await expect.poll(async () => getActiveTabType(orcaPage), { timeout: 5_000 }).toBe('editor')
 
-    await expect
-      .poll(
-        async () =>
-          orcaPage.evaluate(() => {
-            const store = window.__store
-            if (!store) {
-              return false
-            }
-
-            const state = store.getState()
-            const activeFile = state.openFiles.find((file) => file.id === state.activeFileId)
-            if (!activeFile || !activeFile.relativePath.endsWith('.md')) {
-              return false
-            }
-
-            // Why: markdown files default to the rendered "rich" mode in
-            // EditorPanel. Hidden Electron windows do not make the rendered DOM
-            // surface a reliable assertion target, so confirm the editor state
-            // chose the markdown view mode instead of falling back to a plain
-            // non-markdown tab.
-            return (state.markdownViewMode[activeFile.id] ?? 'rich') === 'rich'
-          }),
-        { timeout: 15_000, message: 'Markdown file did not enter rich markdown mode' }
-      )
-      .toBe(true)
+    // The seeded README.md starts with `# Orca E2E Test Repo`, so the rich
+    // markdown editor should render a real <h1> with that text. Asserting on
+    // the rendered heading (not `markdownViewMode` in the store) is the whole
+    // point of this spec — a store-only check passes even if
+    // RichMarkdownEditor failed to mount and the editor surface is blank.
+    // Fall back to CLAUDE.md's first heading when that file was opened
+    // instead: the seeded `CLAUDE.md` starts with `# CLAUDE.md`.
+    const expectedHeading = clickedFile?.endsWith('README.md')
+      ? /Orca E2E Test Repo/i
+      : /CLAUDE\.md/i
+    // Why 25s: first-time markdown open in a headless Electron session waits
+    // on two lazy chunks (EditorPanel → RichMarkdownEditor) plus ProseMirror
+    // boot + file read. Real-run traces show the heading reliably paints
+    // within ~10-15s but with enough variance that a 15s bound flakes. The
+    // user-facing guarantee is just "the rich markdown surface eventually
+    // paints the file's first heading" — giving it 25s keeps the assertion
+    // meaningful without turning every run into a flake risk.
+    await expect(orcaPage.getByRole('heading', { name: expectedHeading, level: 1 })).toBeVisible({
+      timeout: 25_000
+    })
   })
 
   /**
