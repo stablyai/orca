@@ -389,11 +389,13 @@ function resolveRemoteOperationErrorMessage(
     return REMOTE_OPERATION_FAILED_MESSAGE
   }
 
-  if (options?.publish) {
-    if (/non-fast-forward|fetch first/i.test(error.message)) {
-      return error.message
-    }
+  // Why: non-fast-forward/rejected detection is shared across publish and push so
+  // both paths surface the same actionable toast regardless of operation type.
+  if (/non-fast-forward|fetch first|updates were rejected/i.test(error.message)) {
+    return 'Push rejected — remote has changes. Pull first, then try again.'
+  }
 
+  if (options?.publish) {
     // Why: publish failures often bubble up as raw wrapped git/IPC payloads; this
     // keeps the toast human-readable while preserving the actionable fatal reason.
     const detail = extractPublishFailureDetail(error.message)
@@ -401,12 +403,15 @@ function resolveRemoteOperationErrorMessage(
       return `Publish Branch failed. ${detail}. Check your remote access and try again.`
     }
 
-    return error.message
+    return 'Publish Branch failed. Check your remote access and try again.'
   }
 
   if (options?.isPush) {
-    if (/non-fast-forward|updates were rejected/i.test(error.message)) {
-      return 'Push rejected — remote has changes. Pull first, then try again.'
+    // Why: surfacing fatal/remote lines from git is more actionable than a generic
+    // connection message for auth errors, protected branches, etc.
+    const detail = extractPublishFailureDetail(error.message)
+    if (detail) {
+      return `Push failed. ${detail}. Check your remote access and try again.`
     }
     return 'Push failed. Check your connection and try again.'
   }

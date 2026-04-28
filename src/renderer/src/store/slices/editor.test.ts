@@ -710,7 +710,28 @@ describe('createEditorSlice remote branch actions', () => {
       publishError.message
     )
 
-    expect(toastErrorMock).toHaveBeenCalledWith(publishError.message)
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Push rejected — remote has changes. Pull first, then try again.'
+    )
+    expect(gitStatusMock).not.toHaveBeenCalled()
+    expect(gitUpstreamStatusMock).not.toHaveBeenCalled()
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+
+  it('maps publish updates-were-rejected into a clean actionable toast', async () => {
+    const store = createEditorStore()
+    const publishError = new Error(
+      'Updates were rejected because the tip of your current branch is behind its remote counterpart.'
+    )
+    gitPushMock.mockRejectedValueOnce(publishError)
+
+    await expect(store.getState().pushBranch('wt-1', '/repo', true)).rejects.toThrow(
+      publishError.message
+    )
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Push rejected — remote has changes. Pull first, then try again.'
+    )
     expect(gitStatusMock).not.toHaveBeenCalled()
     expect(gitUpstreamStatusMock).not.toHaveBeenCalled()
     expect(store.getState().isRemoteOperationActive).toBe(false)
@@ -730,6 +751,23 @@ describe('createEditorSlice remote branch actions', () => {
     expect(toastErrorMock).toHaveBeenCalledWith(
       'Publish Branch failed. Authentication failed for https://github.com/acme/private-repo.git. Check your remote access and try again.'
     )
+  })
+
+  it('uses a fallback message for generic publish errors', async () => {
+    const store = createEditorStore()
+    const publishError = new Error('error: RPC failed; curl 56 GnuTLS recv error')
+    gitPushMock.mockRejectedValueOnce(publishError)
+
+    await expect(store.getState().pushBranch('wt-1', '/repo', true)).rejects.toThrow(
+      publishError.message
+    )
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Publish Branch failed. Check your remote access and try again.'
+    )
+    expect(gitStatusMock).not.toHaveBeenCalled()
+    expect(gitUpstreamStatusMock).not.toHaveBeenCalled()
+    expect(store.getState().isRemoteOperationActive).toBe(false)
   })
 
   it('maps non-fast-forward push errors into a clean actionable toast', async () => {
