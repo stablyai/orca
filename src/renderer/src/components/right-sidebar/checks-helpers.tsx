@@ -15,14 +15,34 @@ import {
   ChevronDown
 } from 'lucide-react'
 import { ExternalLink } from 'lucide-react'
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger
+} from '@/components/ui/accordion'
 import { cn } from '@/lib/utils'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
-import type { PRInfo, PRCheckDetail, PRComment } from '../../../../shared/types'
 import {
   filterPRCommentsByAudience,
-  isAutomatedPRComment,
+  getPRCommentAudienceCounts,
+  getPRCommentAudienceEmptyLabel,
+  isBotPRComment,
+  PR_COMMENT_AUDIENCE_FILTERS,
   type PRCommentAudienceFilter
-} from './pr-comment-filters'
+} from '@/lib/pr-comment-audience'
+import {
+  getPRCommentGroupCount,
+  getPRCommentGroupId,
+  getPRCommentGroupRoot,
+  groupPRComments,
+  isResolvedPRCommentGroup,
+  PR_COMMENT_OPEN_AUTHOR_CLASS,
+  PR_COMMENT_RESOLVED_AUTHOR_CLASS,
+  PR_COMMENT_RESOLVED_CONTAINER_CLASS,
+  type PRCommentGroup
+} from '@/lib/pr-comment-groups'
+import type { PRInfo, PRCheckDetail, PRComment } from '../../../../shared/types'
 import { useCheckDetailsResize } from './check-details-resize'
 
 export const PullRequestIcon = GitPullRequest
@@ -322,13 +342,13 @@ function CommentRow({
   showResolve: boolean
   onResolve?: (threadId: string, resolve: boolean) => void
 }): React.JSX.Element {
-  const automated = isAutomatedPRComment(comment)
+  const automated = isBotPRComment(comment)
   return (
     <div
       className={cn(
         'flex items-start gap-2 py-1.5 hover:bg-accent/40 transition-colors cursor-pointer group/comment',
         isReply ? 'pl-7 pr-3' : 'px-3',
-        comment.isResolved && 'opacity-50'
+        comment.isResolved && PR_COMMENT_RESOLVED_CONTAINER_CLASS
       )}
       onClick={() => {
         if (comment.url) {
@@ -353,7 +373,7 @@ function CommentRow({
           <span
             className={cn(
               'text-[11px] font-semibold shrink-0',
-              comment.isResolved ? 'text-muted-foreground' : 'text-foreground'
+              comment.isResolved ? PR_COMMENT_RESOLVED_AUTHOR_CLASS : PR_COMMENT_OPEN_AUTHOR_CLASS
             )}
           >
             {comment.author}
@@ -394,47 +414,65 @@ function CommentRow({
   )
 }
 
-/** Group structure for organizing comments by thread. */
-type CommentGroup =
-  | { kind: 'standalone'; comment: PRComment }
-  | { kind: 'thread'; threadId: string; root: PRComment; replies: PRComment[] }
-
-/** Groups comments by threadId. Comments without a threadId are standalone. */
-function groupComments(comments: PRComment[]): CommentGroup[] {
-  const groups: CommentGroup[] = []
-  const threadMap = new Map<string, { root: PRComment; replies: PRComment[] }>()
-  // Why: preserve insertion order so threads appear in the order their first
-  // comment was created (the comments array is already sorted by createdAt).
-  const threadOrder: string[] = []
-
-  for (const comment of comments) {
-    if (!comment.threadId) {
-      groups.push({ kind: 'standalone', comment })
-      continue
-    }
-    const existing = threadMap.get(comment.threadId)
-    if (existing) {
-      existing.replies.push(comment)
-    } else {
-      threadMap.set(comment.threadId, { root: comment, replies: [] })
-      threadOrder.push(comment.threadId)
-    }
+function renderCommentGroup(
+  group: PRCommentGroup,
+  onResolve?: (threadId: string, resolve: boolean) => void
+): React.JSX.Element {
+  if (group.kind === 'standalone') {
+    return (
+      <CommentRow
+        key={group.comment.id}
+        comment={group.comment}
+        isReply={false}
+        showResolve={false}
+        onResolve={onResolve}
+      />
+    )
   }
+  return (
+    <div key={group.threadId} className="py-0.5">
+      <CommentRow comment={group.root} isReply={false} showResolve={true} onResolve={onResolve} />
+      {group.replies.length > 0 && (
+        <div className="ml-3 border-l-2 border-border/50">
+          {group.replies.map((reply) => (
+            <CommentRow
+              key={reply.id}
+              comment={reply}
+              isReply={true}
+              showResolve={false}
+              onResolve={onResolve}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
-  // Interleave threads at the position of their first comment.
-  // Walk the original comment list and emit each thread/standalone once.
-  const emitted = new Set<string>()
-  const result: CommentGroup[] = []
-  for (const comment of comments) {
-    if (!comment.threadId) {
-      result.push({ kind: 'standalone', comment })
-    } else if (!emitted.has(comment.threadId)) {
-      emitted.add(comment.threadId)
-      const thread = threadMap.get(comment.threadId)!
-      result.push({ kind: 'thread', threadId: comment.threadId, ...thread })
-    }
-  }
-  return result
+function ResolvedCommentGroupAccordion({
+  group,
+  onResolve
+}: {
+  group: PRCommentGroup
+  onResolve?: (threadId: string, resolve: boolean) => void
+}): React.JSX.Element {
+  const root = getPRCommentGroupRoot(group)
+  const count = getPRCommentGroupCount(group)
+  return (
+    <Accordion type="single" collapsible>
+      <AccordionItem value={getPRCommentGroupId(group)} className="border-b-0">
+        <AccordionTrigger className="px-3 py-1.5 text-[11px] text-muted-foreground hover:bg-accent/35">
+          <span className="min-w-0 truncate">
+            Resolved {group.kind === 'thread' ? 'thread' : 'comment'} by {root.author}
+            {count > 1 ? ` (${count})` : ''}
+          </span>
+        </AccordionTrigger>
+        <AccordionContent className="pb-1 pt-0">
+          {renderCommentGroup(group, onResolve)}
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
+  )
 }
 
 /** Renders the PR comments section below checks. */
@@ -447,22 +485,13 @@ export function PRCommentsList({
   commentsLoading: boolean
   onResolve?: (threadId: string, resolve: boolean) => void
 }): React.JSX.Element {
-  const [audienceFilter, setAudienceFilter] = useState<PRCommentAudienceFilter>('all')
-  const humanCount = React.useMemo(
-    () => comments.filter((comment) => !isAutomatedPRComment(comment)).length,
-    [comments]
+  const [commentFilter, setCommentFilter] = useState<PRCommentAudienceFilter>('all')
+  const commentCounts = React.useMemo(() => getPRCommentAudienceCounts(comments), [comments])
+  const visibleComments = React.useMemo(
+    () => filterPRCommentsByAudience(comments, commentFilter),
+    [commentFilter, comments]
   )
-  const botCount = comments.length - humanCount
-  const filteredComments = React.useMemo(
-    () => filterPRCommentsByAudience(comments, audienceFilter),
-    [comments, audienceFilter]
-  )
-  const groups = React.useMemo(() => groupComments(filteredComments), [filteredComments])
-  const filterOptions: { value: PRCommentAudienceFilter; label: string; count: number }[] = [
-    { value: 'all', label: 'All', count: comments.length },
-    { value: 'human', label: 'Humans', count: humanCount },
-    { value: 'bot', label: 'Bots', count: botCount }
-  ]
+  const groups = React.useMemo(() => groupPRComments(visibleComments), [visibleComments])
 
   return (
     <div className="border-t border-border">
@@ -477,22 +506,24 @@ export function PRCommentsList({
         </div>
         {comments.length > 0 && (
           <div className="mt-2 grid grid-cols-3 rounded-md border border-border bg-background p-0.5">
-            {filterOptions.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                className={cn(
-                  'rounded px-1.5 py-1 text-[10px] font-medium leading-none transition-colors',
-                  audienceFilter === option.value
-                    ? 'bg-accent text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                )}
-                onClick={() => setAudienceFilter(option.value)}
-              >
-                {option.label}{' '}
-                <span className="text-[9px] tabular-nums opacity-70">{option.count}</span>
-              </button>
-            ))}
+            {PR_COMMENT_AUDIENCE_FILTERS.map((filter) => {
+              const isActive = commentFilter === filter.value
+              return (
+                <button
+                  key={filter.value}
+                  type="button"
+                  className={cn(
+                    'flex h-7 items-center justify-center gap-1 rounded-md px-1.5 text-[11px] font-medium text-muted-foreground transition-colors',
+                    isActive && 'bg-muted text-foreground'
+                  )}
+                  aria-pressed={isActive}
+                  onClick={() => setCommentFilter(filter.value)}
+                >
+                  <span>{filter.label}</span>
+                  <span className="tabular-nums">{commentCounts[filter.value]}</span>
+                </button>
+              )
+            })}
           </div>
         )}
       </div>
@@ -506,47 +537,23 @@ export function PRCommentsList({
         <div className="flex items-center justify-center py-6 text-[11px] text-muted-foreground">
           No comments
         </div>
-      ) : filteredComments.length === 0 ? (
+      ) : visibleComments.length === 0 ? (
         <div className="flex items-center justify-center py-6 text-[11px] text-muted-foreground">
-          No {audienceFilter === 'human' ? 'human' : 'bot'} comments
+          {getPRCommentAudienceEmptyLabel(commentFilter)}
         </div>
       ) : (
         <div className="py-1">
           {groups.map((group) => {
-            if (group.kind === 'standalone') {
+            if (isResolvedPRCommentGroup(group)) {
               return (
-                <CommentRow
-                  key={group.comment.id}
-                  comment={group.comment}
-                  isReply={false}
-                  showResolve={false}
+                <ResolvedCommentGroupAccordion
+                  key={getPRCommentGroupId(group)}
+                  group={group}
                   onResolve={onResolve}
                 />
               )
             }
-            return (
-              <div key={group.threadId} className="py-0.5">
-                <CommentRow
-                  comment={group.root}
-                  isReply={false}
-                  showResolve={true}
-                  onResolve={onResolve}
-                />
-                {group.replies.length > 0 && (
-                  <div className="ml-3 border-l-2 border-border/50">
-                    {group.replies.map((reply) => (
-                      <CommentRow
-                        key={reply.id}
-                        comment={reply}
-                        isReply={true}
-                        showResolve={false}
-                        onResolve={onResolve}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            )
+            return renderCommentGroup(group, onResolve)
           })}
         </div>
       )}

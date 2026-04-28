@@ -41,6 +41,10 @@ export type UseComposerStateOptions = {
   initialName?: string
   initialPrompt?: string
   initialLinkedWorkItem?: LinkedWorkItemSummary | null
+  /** Seed the Start-from selection when the composer opens. Used by the
+   *  Create-from → Quick fallback path so a PR pick that needs a setup
+   *  decision still lands with the resolved PR head as the base branch. */
+  initialBaseBranch?: string
   /** Why: the full-page composer persists drafts so users can navigate away
    *  without losing work; the quick-composer modal is transient and must not
    *  clobber or leak that long-running draft. */
@@ -145,6 +149,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     initialName = '',
     initialPrompt = '',
     initialLinkedWorkItem = null,
+    initialBaseBranch,
     persistDraft,
     onCreated,
     repoIdOverride,
@@ -246,7 +251,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     return initialLinkedWorkItem?.type === 'pr' ? initialLinkedWorkItem.number : null
   })
   const [baseBranch, setBaseBranch] = useState<string | undefined>(
-    persistDraft ? newWorkspaceDraft?.baseBranch : undefined
+    persistDraft ? newWorkspaceDraft?.baseBranch : initialBaseBranch
   )
   // Why: when a repo switch wipes a prior Start-from selection, surface the
   // reset inline (e.g. "was PR #8778") so the change is recoverable visually

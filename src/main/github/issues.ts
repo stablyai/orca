@@ -1,4 +1,10 @@
-import type { IssueInfo, GitHubIssueUpdate } from '../../shared/types'
+import type {
+  GitHubAssignableUser,
+  GitHubCommentResult,
+  GitHubIssueUpdate,
+  IssueInfo,
+  PRComment
+} from '../../shared/types'
 import { mapIssueInfo } from './mappers'
 import { ghExecFileAsync, acquire, release, getOwnerRepo, classifyGhError } from './gh-utils'
 
@@ -205,7 +211,7 @@ export async function addIssueComment(
   repoPath: string,
   issueNumber: number,
   body: string
-): Promise<{ ok: true; id: number } | { ok: false; error: string }> {
+): Promise<GitHubCommentResult> {
   const ownerRepo = await getOwnerRepo(repoPath)
   if (!ownerRepo) {
     return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
@@ -223,8 +229,23 @@ export async function addIssueComment(
       ],
       { cwd: repoPath }
     )
-    const data = JSON.parse(stdout) as { id?: number }
-    return { ok: true, id: data.id ?? 0 }
+    const data = JSON.parse(stdout) as {
+      id?: number
+      user: { login: string; avatar_url: string; type?: string } | null
+      body?: string
+      created_at?: string
+      html_url?: string
+    }
+    const comment: PRComment = {
+      id: data.id ?? Date.now(),
+      author: data.user?.login ?? 'You',
+      authorAvatarUrl: data.user?.avatar_url ?? '',
+      body: data.body ?? body,
+      createdAt: data.created_at ?? new Date().toISOString(),
+      url: data.html_url ?? '',
+      isBot: data.user?.type === 'Bot'
+    }
+    return { ok: true, comment }
   } catch (err) {
     const stderr = err instanceof Error ? err.message : String(err)
     return { ok: false, error: classifyGhError(stderr).message }
@@ -261,27 +282,49 @@ export async function listLabels(repoPath: string): Promise<string[]> {
   }
 }
 
-export async function listAssignableUsers(repoPath: string): Promise<string[]> {
+export async function listAssignableUsers(repoPath: string): Promise<GitHubAssignableUser[]> {
   const ownerRepo = await getOwnerRepo(repoPath)
   if (!ownerRepo) {
     return []
   }
   await acquire()
   try {
+    // Why: paginate through all assignable users — GraphQL's assignableUsers
+    // maxes out at 100 per page and large orgs/repos silently lose assignees
+    // beyond the first page. REST /assignees with --paginate walks every page;
+    // --jq collapses per-page arrays into NDJSON so we don't have to stitch
+    // JSON arrays that gh concatenates back-to-back.
     const { stdout } = await ghExecFileAsync(
       [
         'api',
         '--paginate',
-        `repos/${ownerRepo.owner}/${ownerRepo.repo}/assignees`,
+        `repos/${ownerRepo.owner}/${ownerRepo.repo}/assignees?per_page=100`,
         '--jq',
-        '.[].login'
+        '.[] | {login, avatar_url}'
       ],
       { cwd: repoPath }
     )
-    return stdout
-      .trim()
-      .split('\n')
-      .filter((l) => l.length > 0)
+    type RESTAssignee = { login?: string; avatar_url?: string | null }
+    const users: GitHubAssignableUser[] = []
+    for (const line of stdout.split('\n')) {
+      const trimmed = line.trim()
+      if (!trimmed) {
+        continue
+      }
+      try {
+        const user = JSON.parse(trimmed) as RESTAssignee
+        if (user.login) {
+          users.push({
+            login: user.login,
+            name: null,
+            avatarUrl: user.avatar_url ?? ''
+          })
+        }
+      } catch {
+        // Skip malformed NDJSON lines defensively.
+      }
+    }
+    return users
   } catch {
     return []
   } finally {

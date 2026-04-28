@@ -82,7 +82,7 @@ export function useIpcEvents(): void {
     )
 
     unsubs.push(
-      window.api.ui.onOpenNewWorkspace(() => {
+      window.api.ui.onOpenNewWorkspace((tab) => {
         // Why: mirror the renderer's App.tsx Cmd+N guard — only open the
         // composer when there is at least one real git repo configured, so
         // users on a fresh install don't get a modal with nothing to target.
@@ -91,7 +91,15 @@ export function useIpcEvents(): void {
           return
         }
         dispatchClearModifierHints()
-        store.openModal('new-workspace-composer')
+        // Why: if the composer is already open, switch tabs in place so
+        // repeated Cmd+N / Cmd+Shift+N presses toggle between Quick and
+        // Create-from without remounting and losing in-flight composer state
+        // (repo pick, note drafts). Opening when closed seeds the initial tab.
+        if (store.activeModal === 'new-workspace-composer') {
+          store.setNewWorkspaceComposerTab(tab)
+          return
+        }
+        store.openModal('new-workspace-composer', { initialTab: tab })
       })
     )
 

@@ -4,6 +4,8 @@ import type {
   PRInfo,
   PRMergeableState,
   PRCheckDetail,
+  GitHubCommentResult,
+  GitHubPRReviewCommentInput,
   PRComment,
   GitHubViewer,
   GitHubWorkItem
@@ -11,7 +13,14 @@ import type {
 import { parseTaskQuery, type ParsedTaskQuery } from '../../shared/task-query'
 import { sortWorkItemsByUpdatedAt } from '../../shared/work-items'
 import { getPRConflictSummary } from './conflict-summary'
-import { execFileAsync, ghExecFileAsync, acquire, release, getOwnerRepo } from './gh-utils'
+import {
+  execFileAsync,
+  ghExecFileAsync,
+  acquire,
+  release,
+  getOwnerRepo,
+  classifyGhError
+} from './gh-utils'
 export { _resetOwnerRepoCache } from './gh-utils'
 export {
   getIssue,
@@ -30,6 +39,7 @@ import {
   mapPRState,
   deriveCheckStatus
 } from './mappers'
+import { mapGraphQLReactionGroups, type GitHubGraphQLReactionGroup } from './comment-reactions'
 
 const ORCA_REPO = 'stablyai/orca'
 
@@ -865,6 +875,27 @@ query($owner: String!, $repo: String!, $pr: Int!) {
               createdAt
               url
               path
+              reactionGroups {
+                content
+                reactors {
+                  totalCount
+                }
+              }
+            }
+          }
+        }
+      }
+      comments(first: 100) {
+        nodes {
+          databaseId
+          author { __typename login avatarUrl(size: 48) }
+          body
+          createdAt
+          url
+          reactionGroups {
+            content
+            reactors {
+              totalCount
             }
           }
         }
@@ -970,15 +1001,48 @@ export async function getPRComments(
             createdAt: string
             url: string
             path: string
+            reactionGroups?: GitHubGraphQLReactionGroup[] | null
           }[]
         }
+      }
+      type GQLIssueComment = {
+        databaseId: number
+        author: { __typename?: string; login: string; avatarUrl: string } | null
+        body: string
+        createdAt: string
+        url: string
+        reactionGroups?: GitHubGraphQLReactionGroup[] | null
       }
       const reviewComments: PRComment[] = []
       if (threadsResult.status === 'fulfilled') {
         const threadsData = JSON.parse(threadsResult.value.stdout) as {
-          data: { repository: { pullRequest: { reviewThreads: { nodes: GQLThread[] } } } }
+          data: {
+            repository: {
+              pullRequest: {
+                reviewThreads: { nodes: GQLThread[] }
+                comments?: { nodes: GQLIssueComment[] }
+              }
+            }
+          }
         }
-        const threads = threadsData.data.repository.pullRequest.reviewThreads.nodes
+        const pullRequest = threadsData.data.repository.pullRequest
+        const graphQLIssueComments = (pullRequest.comments?.nodes ?? []).map(
+          (c): PRComment => ({
+            id: c.databaseId,
+            author: c.author?.login ?? 'ghost',
+            authorAvatarUrl: c.author?.avatarUrl ?? '',
+            body: c.body ?? '',
+            createdAt: c.createdAt,
+            url: c.url,
+            isBot: c.author?.__typename === 'Bot',
+            reactions: mapGraphQLReactionGroups(c.reactionGroups)
+          })
+        )
+        if (graphQLIssueComments.length > 0) {
+          issueComments = graphQLIssueComments
+        }
+
+        const threads = pullRequest.reviewThreads.nodes
         for (const thread of threads) {
           for (const c of thread.comments.nodes) {
             reviewComments.push({
@@ -988,10 +1052,11 @@ export async function getPRComments(
               body: c.body ?? '',
               createdAt: c.createdAt,
               url: c.url,
+              isBot: c.author?.__typename === 'Bot',
+              reactions: mapGraphQLReactionGroups(c.reactionGroups),
               path: c.path,
               threadId: thread.id,
               isResolved: thread.isResolved,
-              isBot: c.author?.__typename === 'Bot',
               // Why: GitHub nulls out line/startLine when the commented code is
               // outdated (e.g. after a force-push). Fall back to originalLine which
               // always preserves the line numbers from when the comment was created.
@@ -1089,6 +1154,127 @@ export async function resolveReviewThread(
   } catch (err) {
     console.warn(`${mutation} failed:`, err)
     return false
+  } finally {
+    release()
+  }
+}
+
+function mapReviewCommentResponse(
+  data: {
+    id?: number
+    user: { login: string; avatar_url: string; type?: string } | null
+    body?: string
+    created_at?: string
+    html_url?: string
+    path?: string
+    line?: number | null
+  },
+  body: string,
+  path?: string,
+  line?: number,
+  startLine?: number,
+  threadId?: string
+): PRComment {
+  return {
+    id: data.id ?? Date.now(),
+    author: data.user?.login ?? 'You',
+    authorAvatarUrl: data.user?.avatar_url ?? '',
+    body: data.body ?? body,
+    createdAt: data.created_at ?? new Date().toISOString(),
+    url: data.html_url ?? '',
+    isBot: data.user?.type === 'Bot',
+    path: data.path ?? path,
+    line: data.line ?? line,
+    startLine,
+    threadId
+  }
+}
+
+export async function addPRReviewCommentReply(
+  repoPath: string,
+  prNumber: number,
+  commentId: number,
+  body: string,
+  threadId?: string,
+  path?: string,
+  line?: number
+): Promise<GitHubCommentResult> {
+  const ownerRepo = await getOwnerRepo(repoPath)
+  if (!ownerRepo) {
+    return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
+  }
+  await acquire()
+  try {
+    const { stdout } = await ghExecFileAsync(
+      [
+        'api',
+        '-X',
+        'POST',
+        `repos/${ownerRepo.owner}/${ownerRepo.repo}/pulls/${prNumber}/comments/${commentId}/replies`,
+        '--raw-field',
+        `body=${body}`
+      ],
+      { cwd: repoPath }
+    )
+    return {
+      ok: true,
+      comment: mapReviewCommentResponse(JSON.parse(stdout), body, path, line, undefined, threadId)
+    }
+  } catch (err) {
+    const stderr = err instanceof Error ? err.message : String(err)
+    return { ok: false, error: classifyGhError(stderr).message }
+  } finally {
+    release()
+  }
+}
+
+export async function addPRReviewComment(
+  args: GitHubPRReviewCommentInput
+): Promise<GitHubCommentResult> {
+  const ownerRepo = await getOwnerRepo(args.repoPath)
+  if (!ownerRepo) {
+    return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
+  }
+  await acquire()
+  try {
+    const fields = [
+      'api',
+      '-X',
+      'POST',
+      `repos/${ownerRepo.owner}/${ownerRepo.repo}/pulls/${args.prNumber}/comments`,
+      '--raw-field',
+      `body=${args.body}`,
+      '--raw-field',
+      `commit_id=${args.commitId}`,
+      '--raw-field',
+      `path=${args.path}`,
+      '--field',
+      `line=${String(args.line)}`,
+      '--raw-field',
+      'side=RIGHT'
+    ]
+    if (typeof args.startLine === 'number' && args.startLine !== args.line) {
+      fields.push(
+        '--field',
+        `start_line=${String(args.startLine)}`,
+        '--raw-field',
+        'start_side=RIGHT'
+      )
+    }
+    const { stdout } = await ghExecFileAsync(fields, { cwd: args.repoPath })
+    return {
+      ok: true,
+      comment: mapReviewCommentResponse(
+        JSON.parse(stdout),
+        args.body,
+        args.path,
+        args.line,
+        args.startLine
+      )
+    }
+  } catch (err) {
+    const stderr = err instanceof Error ? err.message : String(err)
+    return { ok: false, error: classifyGhError(stderr).message }
   } finally {
     release()
   }

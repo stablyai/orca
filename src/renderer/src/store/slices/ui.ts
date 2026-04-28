@@ -1,6 +1,7 @@
 /* eslint-disable max-lines */
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
+import { findPrevLiveWorktreeHistoryIndex } from './worktree-nav-history'
 import type {
   ChangelogData,
   PersistedUIState,
@@ -122,6 +123,17 @@ export type UISlice = {
   modalData: Record<string, unknown>
   openModal: (modal: UISlice['activeModal'], data?: Record<string, unknown>) => void
   closeModal: () => void
+  /** Active tab inside the new-workspace composer modal. Mutable while the
+   *  modal is open so Cmd+N / Cmd+Shift+N can toggle tabs without tearing
+   *  down the composer state. */
+  newWorkspaceComposerTab: 'quick' | 'create-from'
+  setNewWorkspaceComposerTab: (tab: 'quick' | 'create-from') => void
+  /** Remembered sub-tab inside the Create-from tab (PRs / Issues / Branches /
+   *  Linear). Persists across composer opens within a session so users who
+   *  always start from Linear (for example) don't have to click back to that
+   *  tab every time. */
+  createFromSubTab: 'prs' | 'issues' | 'branches' | 'linear'
+  setCreateFromSubTab: (tab: 'prs' | 'issues' | 'branches' | 'linear') => void
   searchQuery: string
   setSearchQuery: (q: string) => void
   groupBy: 'none' | 'repo' | 'pr-status'
@@ -187,6 +199,13 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   taskPageData: {},
   newWorkspaceDraft: null,
   openTaskPage: (data = {}) => {
+    // Why: record a Tasks visit in the shared back/forward history so the
+    // titlebar Back/Forward buttons can return to Tasks. All task-source
+    // variants (github/linear presets) collapse to a single 'tasks' entry;
+    // the slice's adjacent-entry dedupe drops re-opens. No isNavigatingHistory
+    // guard needed — back-to-Tasks routes through setActiveView('tasks') and
+    // never re-enters openTaskPage.
+    get().recordViewVisit('tasks')
     set((state) => ({
       activeView: 'tasks',
       previousViewBeforeTasks:
@@ -208,10 +227,30 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     }
   },
   closeTaskPage: () =>
-    set((state) => ({
-      activeView: state.previousViewBeforeTasks,
-      taskPageData: {}
-    })),
+    set((state) => {
+      // Why: Esc-close from Tasks must rewind the history index if we're
+      // currently parked on a 'tasks' entry. Without this, A → Tasks → Esc
+      // leaves the index at the 'tasks' entry, making Back a visual no-op
+      // (activator re-activates A) and Forward re-opens Tasks. If there is no
+      // earlier live entry (e.g. history is just ['tasks']), leave the index
+      // at 0 — setting it to -1 would lose the only forward target, while the
+      // resulting Back visual no-op self-heals as soon as a real visit records
+      // a new entry. closeTaskPage never runs from the history-nav path, so no
+      // isNavigatingHistory guard is needed.
+      const currentEntry = state.worktreeNavHistory[state.worktreeNavHistoryIndex]
+      let nextHistoryIndex = state.worktreeNavHistoryIndex
+      if (currentEntry === 'tasks') {
+        const prev = findPrevLiveWorktreeHistoryIndex(state)
+        if (prev !== null) {
+          nextHistoryIndex = prev
+        }
+      }
+      return {
+        activeView: state.previousViewBeforeTasks,
+        taskPageData: {},
+        worktreeNavHistoryIndex: nextHistoryIndex
+      }
+    }),
   setNewWorkspaceDraft: (draft) => set({ newWorkspaceDraft: draft }),
   clearNewWorkspaceDraft: () => set({ newWorkspaceDraft: null }),
   openSettingsPage: () =>
@@ -234,8 +273,27 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
 
   activeModal: 'none',
   modalData: {},
-  openModal: (modal, data = {}) => set({ activeModal: modal, modalData: data }),
+  openModal: (modal, data = {}) => {
+    // Why: when the new-workspace composer opens, seed its active tab from
+    // modalData.initialTab so Cmd+Shift+N lands directly on the "Create from…"
+    // tab without the Quick tab flashing first. Default to 'quick' when no
+    // explicit target is provided so existing callers keep their behavior.
+    if (modal === 'new-workspace-composer') {
+      const requestedTab = (data as { initialTab?: 'quick' | 'create-from' }).initialTab
+      set({
+        activeModal: modal,
+        modalData: data,
+        newWorkspaceComposerTab: requestedTab ?? 'quick'
+      })
+      return
+    }
+    set({ activeModal: modal, modalData: data })
+  },
   closeModal: () => set({ activeModal: 'none', modalData: {} }),
+  newWorkspaceComposerTab: 'quick',
+  setNewWorkspaceComposerTab: (tab) => set({ newWorkspaceComposerTab: tab }),
+  createFromSubTab: 'prs',
+  setCreateFromSubTab: (tab) => set({ createFromSubTab: tab }),
 
   searchQuery: '',
   setSearchQuery: (q) => set({ searchQuery: q }),

@@ -630,10 +630,10 @@ function App(): React.JSX.Element {
         (isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey) &&
         (e.code === 'ArrowLeft' || e.code === 'ArrowRight')
       ) {
-        // Why: hidden buttons in non-terminal views mean the shortcut must be
-        // a no-op there too — navigating worktree history from Settings or
-        // Tasks is not a meaningful action.
-        if (activeView !== 'terminal') {
+        // Why: Back/Forward traverse mixed worktree + Tasks visits, so the
+        // shortcut is active wherever the titlebar button cluster is (terminal
+        // or tasks). Still suppressed in Settings to keep that view modal-ish.
+        if (activeView !== 'terminal' && activeView !== 'tasks') {
           return
         }
         dispatchClearModifierHints()
@@ -933,11 +933,10 @@ function App(): React.JSX.Element {
           </Popover>
         ) : null}
       </div>
-      {/* Why: Back/Forward navigate worktree-activation history. Only
-          meaningful while viewing a worktree (terminal view); hidden in
-          Settings/Tasks/Landing to keep the titlebar compact and the
-          semantics unambiguous. */}
-      {activeView === 'terminal' && (
+      {/* Why: Back/Forward traverse mixed worktree + Tasks history, so the
+          cluster is shown wherever the history shortcut is live (terminal or
+          tasks). Hidden in Settings to keep that view modal-ish. */}
+      {(activeView === 'terminal' || activeView === 'tasks') && (
         <div className="ml-auto mr-3 flex items-center">
           <Tooltip>
             <TooltipTrigger asChild>

@@ -407,7 +407,9 @@ export function createMainWindow(
       // Why: routed through the main process so focus contexts that bypass
       // the renderer's window-level keydown (contentEditable markdown editor,
       // browser-guest webContents) still reach the new-workspace composer.
-      mainWindow.webContents.send('ui:openNewWorkspace')
+      // Forward the target tab so Cmd/Ctrl+Shift+N lands on the
+      // "Create from…" tab instead of the default quick-create form.
+      mainWindow.webContents.send('ui:openNewWorkspace', action.tab)
       return
     }
 

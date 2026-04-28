@@ -1002,6 +1002,14 @@
   outline-offset: 1px;
 }
 
+.orca-diff-comment-range-highlight {
+  background: rgba(59, 130, 246, 0.14);
+}
+
+.dark .orca-diff-comment-range-highlight {
+  background: rgba(96, 165, 250, 0.18);
+}
+
 .orca-diff-comment-inline {
   width: 100%;
   /* Why: match the popover's horizontal inset so the saved card lines up with

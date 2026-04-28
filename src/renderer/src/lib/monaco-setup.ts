@@ -32,24 +32,22 @@ globalThis.MonacoEnvironment = {
   }
 }
 
-// Why: Monaco's built-in TypeScript worker runs in isolation without filesystem
-// access, so it cannot resolve imports to project files that aren't open as
-// editor models. Every imported symbol collapses to `any`/unknown inside the
-// worker, which cascades into a long tail of false semantic diagnostics:
-// unresolved modules (2307/2792), unused-import fades rendered via
-// `.squiggly-inline-unnecessary` (6133/6138/6192/6196/6198/6205), missing
-// names (2304/2305), bogus type mismatches (2322/2339/2345/2571/2724),
-// and implicit-any noise (7006/7016/7026/7031/7053/18046/18048). Maintaining
-// a growing ignore list is whack-a-mole — the root cause is that semantic
-// validation is structurally meaningless without project context. Disable
-// semantic + suggestion diagnostics entirely and keep only syntax validation,
-// which is the only class of error that can be trusted from a sandboxed
-// worker viewing a single file. Users edit real code in their own IDE; Monaco
-// here is a viewer/diff surface, not a type checker.
+// Why: Monaco here is a viewer/diff surface, not a type checker — users edit
+// real code in their own IDE. The sandboxed TS worker cannot resolve imports
+// to project files, so semantic validation produces a long tail of false
+// positives (unresolved modules 2307/2792, unused-import fades 6133/6138/
+// 6192/6196/6198/6205, missing names 2304/2305, bogus type mismatches 2322/
+// 2339/2345/2571/2724, implicit-any 7006/7016/7026/7031/7053/18046/18048).
+// Syntax validation is also noisy in the diff viewer: with `renderSideBySide`
+// off (or during partial hunks), Monaco feeds the worker concatenated
+// original+modified text that isn't a valid TS program, producing fake
+// parse errors like "',' expected (1005)". Disable all three categories —
+// we keep tokenization (colorization) which is what actually gives useful
+// reading affordance here.
 const diagnosticsOptions = {
   noSemanticValidation: true,
   noSuggestionDiagnostics: true,
-  noSyntaxValidation: false
+  noSyntaxValidation: true
 }
 monacoTS.typescriptDefaults.setDiagnosticsOptions(diagnosticsOptions)
 monacoTS.javascriptDefaults.setDiagnosticsOptions(diagnosticsOptions)

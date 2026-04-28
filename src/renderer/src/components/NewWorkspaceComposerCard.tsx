@@ -18,8 +18,7 @@ import AgentCombobox from '@/components/agent/AgentCombobox'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
-import type { GitHubWorkItem, TuiAgent } from '../../../shared/types'
-import StartFromField from '@/components/new-workspace/StartFromField'
+import type { TuiAgent } from '../../../shared/types'
 
 const isMac = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
 
@@ -45,13 +44,6 @@ type NewWorkspaceComposerCardProps = {
   onCreate: () => void
   note: string
   onNoteChange: (value: string) => void
-  baseBranch: string | undefined
-  onBaseBranchChange: (next: string | undefined) => void
-  onBaseBranchPrSelect: (baseBranch: string, item: GitHubWorkItem) => void
-  baseBranchLinkedPrNumber: number | null
-  selectedRepoPath: string | null
-  selectedRepoIsRemote: boolean
-  startFromResetHint: string | null
   setupConfig: { source: 'yaml' | 'legacy'; command: string } | null
   requiresExplicitSetupChoice: boolean
   setupDecision: 'run' | 'skip' | null
@@ -188,13 +180,6 @@ export default function NewWorkspaceComposerCard({
   onCreate,
   note,
   onNoteChange,
-  baseBranch,
-  onBaseBranchChange,
-  onBaseBranchPrSelect,
-  baseBranchLinkedPrNumber,
-  selectedRepoPath,
-  selectedRepoIsRemote,
-  startFromResetHint,
   setupConfig,
   requiresExplicitSetupChoice,
   setupDecision,
@@ -363,19 +348,6 @@ export default function NewWorkspaceComposerCard({
                 inside the overflow-hidden drawer above. Without it the ring
                 gets clipped on the right edge when the field is focused. */}
             <div className="space-y-4 px-1 pt-1">
-              {repoId ? (
-                <StartFromField
-                  repoId={repoId}
-                  repoPath={selectedRepoPath}
-                  isRemoteRepo={selectedRepoIsRemote}
-                  baseBranch={baseBranch}
-                  baseBranchLinkedPrNumber={baseBranchLinkedPrNumber}
-                  onBaseBranchChange={onBaseBranchChange}
-                  onBaseBranchPrSelect={onBaseBranchPrSelect}
-                  resetHint={startFromResetHint}
-                />
-              ) : null}
-
               <div className="space-y-1">
                 <label className="text-xs font-medium text-muted-foreground">Note</label>
                 <textarea

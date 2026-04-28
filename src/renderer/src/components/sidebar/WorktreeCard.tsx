@@ -4,7 +4,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { Bell, GitMerge, LoaderCircle, CircleCheck, CircleX, Globe, WifiOff } from 'lucide-react'
+import { Bell, GitMerge, LoaderCircle, CircleCheck, CircleX, Server, ServerOff } from 'lucide-react'
 import StatusIndicator from './StatusIndicator'
 import CacheTimer from './CacheTimer'
 import WorktreeContextMenu from './WorktreeContextMenu'
@@ -406,9 +406,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
                     <TooltipTrigger asChild>
                       <span className="shrink-0 inline-flex items-center">
                         {isSshDisconnected ? (
-                          <WifiOff className="size-3 text-red-400" />
+                          <ServerOff className="size-3 text-red-400" />
                         ) : (
-                          <Globe className="size-3 text-muted-foreground" />
+                          <Server className="size-3 text-muted-foreground" />
                         )}
                       </span>
                     </TooltipTrigger>

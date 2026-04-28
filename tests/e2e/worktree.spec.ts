@@ -8,11 +8,15 @@
  * crash when `StartFromField` rendered the new `getBaseRefDefault` envelope
  * as JSX) shipped despite a green suite.
  *
- * The spec now drives the real user flow: open the composer, expand
- * Advanced (so StartFromField mounts and exercises the crash path), type a
+ * The spec now drives the real user flow: open the composer, type a
  * workspace name, click Create, and assert the worktree actually
  * materialized and became active. See `tests/e2e/AGENTS.md` for the rule
  * that E2E assertions must target the DOM, not the store.
+ *
+ * Note: the original StartFromField regression guard was removed with #1191
+ * (Tabbed Create Workspace), which deleted StartFromField/StartFromPicker
+ * entirely. The render-error sweep below still catches any React #31-class
+ * crash in whatever replaces it.
  */
 
 import type { ConsoleMessage } from '@stablyai/playwright-test'
@@ -66,30 +70,14 @@ test.describe('Create Workspace', () => {
       // Wait for the composer to settle. The card fires several async effects
       // on mount (detected-agent probe, repo combobox autofocus + hydration,
       // setup-hooks fetch). Clicking before those settle can race Radix's
-      // FocusScope reparenting and leaves the Advanced button detached.
+      // FocusScope reparenting.
       await expect(dialog.getByRole('combobox').first()).toBeVisible()
 
-      // 2. Expand Advanced so StartFromField mounts. In the collapsed state
-      // the drawer is `aria-hidden` and StartFromField is not in the DOM at
-      // all, so the #1186 crash path cannot be exercised until after this.
-      //
-      // Why `force: true`: the button is visible and enabled, but the
-      // composer can still be mid-flush from a late-resolving effect. The
-      // real user hits the same button; force skips Playwright's stability
-      // retry loop, which otherwise races with Radix's focus management.
-      await dialog.getByRole('button', { name: /Advanced/i }).click({ force: true })
-
-      const startFromTrigger = dialog
-        .locator('label', { hasText: 'Start from' })
-        .locator('..')
-        .getByRole('button')
-        .first()
-      await expect(startFromTrigger).toBeVisible()
-
-      // Force the `getBaseRefDefault` IPC to round-trip, then give React a
-      // frame to commit. Before this settles the trigger shows the fallback
-      // "Default branch" label, which masks the #1186 regression — the
-      // crash only fires on the render after the envelope lands in state.
+      // Force the `getBaseRefDefault` IPC to round-trip so any consumer that
+      // renders the envelope (e.g. SourceControl) has a chance to crash
+      // inside the open modal's React tree — the console/pageerror sweep
+      // below is what catches #1186-class regressions now that the
+      // StartFromField trigger no longer exists (#1191).
       await orcaPage.evaluate(async () => {
         const repoId = Object.values(window.__store!.getState().worktreesByRepo).flat()[0]?.repoId
         if (!repoId) {
@@ -98,14 +86,6 @@ test.describe('Create Workspace', () => {
         await window.api.repos.getBaseRefDefault({ repoId })
       })
       await orcaPage.waitForTimeout(100)
-
-      // Post-IPC assertion: the StartFromField subtree must still be mounted.
-      // Under the #1186 bug, React throws when rendering the envelope object
-      // as a child and unmounts the popover trigger — so `toBeVisible` is
-      // the tight regression guard here, not a liveness check.
-      await expect(startFromTrigger).toBeVisible()
-      await expect(startFromTrigger).not.toHaveText('')
-      await expect(startFromTrigger).not.toContainText('[object')
 
       // 3. Type the workspace name into the Name input. This is what lets
       // the composer pass its `workspaceName` guard inside submitQuick.

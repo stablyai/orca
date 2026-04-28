@@ -53,7 +53,7 @@ import RepoMultiCombobox from '@/components/ui/repo-multi-combobox'
 import TeamMultiCombobox from '@/components/ui/team-multi-combobox'
 import RepoDotLabel from '@/components/repo/RepoDotLabel'
 import { stripRepoQualifiers } from '../../../shared/task-query'
-import GitHubItemDrawer from '@/components/GitHubItemDrawer'
+import GitHubItemDialog from '@/components/GitHubItemDialog'
 import LinearItemDrawer from '@/components/LinearItemDrawer'
 import { cn } from '@/lib/utils'
 import {
@@ -700,7 +700,7 @@ export default function TaskPage(): React.JSX.Element {
     [eligibleRepos, repoSelection]
   )
 
-  // Why: many affordances (new-issue dialog default, drawer repo path lookup,
+  // Why: many affordances (new-issue dialog default, item dialog repo path lookup,
   // optimistic stub) need *a* repo. First selected is used as the default;
   // cross-repo dialogs still let the user override per-action.
   const primaryRepo = selectedRepos[0] ?? null
@@ -776,35 +776,36 @@ export default function TaskPage(): React.JSX.Element {
   const fetchWorkItemsNextPage = useAppStore((s) => s.fetchWorkItemsNextPage)
   const countWorkItemsAcrossRepos = useAppStore((s) => s.countWorkItemsAcrossRepos)
 
-  // Why: clicking a GitHub row opens this drawer for a read-only preview.
-  // Drawer's "Use" button routes through the same direct-launch flow as the
-  // row-level "Use" CTA so behavior is consistent regardless of entry point.
-  const [drawerWorkItemId, setDrawerWorkItemId] = useState<string | null>(null)
-  const [drawerWorkItemFallback, setDrawerWorkItemFallback] = useState<GitHubWorkItem | null>(null)
+  // Why: clicking a GitHub row (or completing the create-issue flow) opens
+  // this dialog for a read/review surface. The dialog's "Use" button routes
+  // through the same direct-launch flow as the row-level "Use" CTA so
+  // behavior is consistent regardless of entry point.
+  const [dialogWorkItemId, setDialogWorkItemId] = useState<string | null>(null)
+  const [dialogWorkItemFallback, setDialogWorkItemFallback] = useState<GitHubWorkItem | null>(null)
 
   const workItemsCache = useAppStore((s) => s.workItemsCache)
   const linearIssueCache = useAppStore((s) => s.linearIssueCache)
   const linearSearchCache = useAppStore((s) => s.linearSearchCache)
 
-  // Why: derive the drawer's work item from the store cache so it reflects
+  // Why: derive the dialog's work item from the store cache so it reflects
   // optimistic patches (e.g. table-cell status toggle). Falls back to the
   // snapshot stored at click time for newly-created stubs not yet in the cache.
-  const drawerWorkItem = useMemo(() => {
-    if (!drawerWorkItemId) {
+  const dialogWorkItem = useMemo(() => {
+    if (!dialogWorkItemId) {
       return null
     }
     for (const entry of Object.values(workItemsCache)) {
-      const found = entry?.data?.find((wi) => wi.id === drawerWorkItemId)
+      const found = entry?.data?.find((wi) => wi.id === dialogWorkItemId)
       if (found) {
         return found
       }
     }
-    return drawerWorkItemFallback
-  }, [drawerWorkItemId, workItemsCache, drawerWorkItemFallback])
+    return dialogWorkItemFallback
+  }, [dialogWorkItemId, workItemsCache, dialogWorkItemFallback])
 
-  const setDrawerWorkItem = useCallback((item: GitHubWorkItem | null) => {
-    setDrawerWorkItemId(item?.id ?? null)
-    setDrawerWorkItemFallback(item)
+  const setDialogWorkItem = useCallback((item: GitHubWorkItem | null) => {
+    setDialogWorkItemId(item?.id ?? null)
+    setDialogWorkItemFallback(item)
   }, [])
   const [newIssueOpen, setNewIssueOpen] = useState(false)
   const [newIssueTitle, setNewIssueTitle] = useState('')
@@ -1233,8 +1234,8 @@ export default function TaskPage(): React.JSX.Element {
       // Why: bump the nonce so the list refetches and shows the new issue.
       setTaskRefreshNonce((current) => current + 1)
 
-      // Why: auto-open the new issue in the side drawer so the user sees
-      // exactly what was filed. Use an optimistic stub first so the drawer
+      // Why: auto-open the new issue in the dialog so the user sees
+      // exactly what was filed. Use an optimistic stub first so the dialog
       // has immediate content, then refine with the full `workItem` fetch.
       const stub: GitHubWorkItem = {
         id: `issue:${String(result.number)}`,
@@ -1248,7 +1249,7 @@ export default function TaskPage(): React.JSX.Element {
         updatedAt: new Date().toISOString(),
         author: null
       }
-      setDrawerWorkItem(stub)
+      setDialogWorkItem(stub)
       const stubRepoId = newIssueTargetRepo.id
       void window.api.gh
         .workItem({ repoPath: newIssueTargetRepo.path, number: result.number })
@@ -1259,14 +1260,14 @@ export default function TaskPage(): React.JSX.Element {
             // discriminant, so `{ ...full, repoId }` doesn't typecheck as
             // GitHubWorkItem. The runtime shape is correct by construction.
             const withRepoId = { ...full, repoId: stubRepoId } as unknown as GitHubWorkItem
-            setDrawerWorkItem(withRepoId)
+            setDialogWorkItem(withRepoId)
           }
         })
         .catch(() => {})
     } finally {
       setNewIssueSubmitting(false)
     }
-  }, [newIssueBody, newIssueSubmitting, newIssueTargetRepo, newIssueTitle, setDrawerWorkItem])
+  }, [newIssueBody, newIssueSubmitting, newIssueTargetRepo, newIssueTitle, setDialogWorkItem])
 
   const handleCreateNewLinearIssue = useCallback(async (): Promise<void> => {
     if (!newLinearIssueTargetTeam) {
@@ -1324,7 +1325,7 @@ export default function TaskPage(): React.JSX.Element {
   useEffect(() => {
     // Why: when a modal is open, let it own Esc dismissal.
     if (
-      drawerWorkItem ||
+      dialogWorkItem ||
       drawerLinearIssue ||
       newIssueOpen ||
       newLinearIssueOpen ||
@@ -1366,8 +1367,8 @@ export default function TaskPage(): React.JSX.Element {
   }, [
     activeModal,
     closeTaskPage,
+    dialogWorkItem,
     drawerLinearIssue,
-    drawerWorkItem,
     newIssueOpen,
     newLinearIssueOpen
   ])
@@ -1899,7 +1900,7 @@ export default function TaskPage(): React.JSX.Element {
 
           {taskSource === 'github' ? (
             <div className="flex min-h-0 max-h-full flex-col rounded-md border border-t-0 border-border/50 bg-muted/50 overflow-hidden rounded-t-none shadow-sm">
-              <div className="flex-none grid grid-cols-[80px_minmax(0,3fr)_minmax(110px,0.8fr)_100px_110px_80px] gap-3 border-b border-border/50 px-3 py-2 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              <div className="flex-none grid grid-cols-[80px_minmax(0,3fr)_minmax(110px,0.8fr)_100px_110px_112px] gap-3 border-b border-border/50 px-3 py-2 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
                 <span>ID</span>
                 <span>Title / Context</span>
                 <span>Source Branch</span>
@@ -1935,7 +1936,7 @@ export default function TaskPage(): React.JSX.Element {
                     {Array.from({ length: 3 }).map((_, i) => (
                       <div
                         key={i}
-                        className="grid w-full gap-2 px-3 py-2 grid-cols-[80px_minmax(0,3fr)_minmax(110px,0.8fr)_100px_110px_80px]"
+                        className="grid w-full gap-2 px-3 py-2 grid-cols-[80px_minmax(0,3fr)_minmax(110px,0.8fr)_100px_110px_112px]"
                       >
                         <div className="flex items-center">
                           <div className="h-7 w-16 animate-pulse rounded-lg bg-muted/70" />
@@ -1984,14 +1985,14 @@ export default function TaskPage(): React.JSX.Element {
                         key={item.id}
                         role="button"
                         tabIndex={0}
-                        onClick={() => setDrawerWorkItem(item)}
+                        onClick={() => setDialogWorkItem(item)}
                         onKeyDown={(event) => {
                           if (event.key === 'Enter' || event.key === ' ') {
                             event.preventDefault()
-                            setDrawerWorkItem(item)
+                            setDialogWorkItem(item)
                           }
                         }}
-                        className="grid w-full cursor-pointer gap-2 px-3 py-2 text-left transition hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 grid-cols-[80px_minmax(0,3fr)_minmax(110px,0.8fr)_100px_110px_80px]"
+                        className="grid w-full cursor-pointer gap-2 px-3 py-2 text-left transition hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 grid-cols-[80px_minmax(0,3fr)_minmax(110px,0.8fr)_100px_110px_112px]"
                       >
                         <div className="flex items-center">
                           <span className="inline-flex items-center gap-1 rounded-md border border-border/50 bg-muted/40 px-1.5 py-0.5 text-muted-foreground">
@@ -2060,15 +2061,10 @@ export default function TaskPage(): React.JSX.Element {
                         </Tooltip>
 
                         <div className="flex items-center justify-start gap-1 lg:justify-end">
-                          {/* Why: "Use" is the primary CTA — it should open
-                              the composer directly, skipping the read-only
-                              drawer that the row-click opens for previewing.
-                              Stop propagation so the row-level button that
-                              owns this grid doesn't also toggle the drawer. */}
                           <button
                             type="button"
-                            onClick={(e) => {
-                              e.stopPropagation()
+                            onClick={(event) => {
+                              event.stopPropagation()
                               handleUseWorkItem(item)
                             }}
                             className="inline-flex items-center gap-1 rounded-md border border-border/50 bg-background/80 px-2 py-1 text-[11px] text-foreground transition hover:bg-muted/60"
@@ -2532,20 +2528,20 @@ export default function TaskPage(): React.JSX.Element {
         </DialogContent>
       </Dialog>
 
-      <GitHubItemDrawer
-        workItem={drawerWorkItem}
+      <GitHubItemDialog
+        workItem={dialogWorkItem}
         repoPath={
-          // Why: the drawer is for a single item — resolve its repoPath from the
+          // Why: the dialog is for a single item — resolve its repoPath from the
           // item's own repoId (set when fan-out merged the list) so it works in
           // cross-repo mode too. Reusing the memoized repo map avoids an O(n)
-          // scan on every render while the drawer is open.
-          drawerWorkItem ? (repoMap.get(drawerWorkItem.repoId)?.path ?? null) : null
+          // scan on every render while the dialog is open.
+          dialogWorkItem ? (repoMap.get(dialogWorkItem.repoId)?.path ?? null) : null
         }
         onUse={(item) => {
-          setDrawerWorkItem(null)
+          setDialogWorkItem(null)
           handleUseWorkItem(item)
         }}
-        onClose={() => setDrawerWorkItem(null)}
+        onClose={() => setDialogWorkItem(null)}
       />
 
       <LinearItemDrawer

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Loader2, MonitorSmartphone, Pencil, Server, Trash2, Wifi, WifiOff } from 'lucide-react'
+import { Loader2, MonitorSmartphone, Pencil, Server, ServerOff, Trash2 } from 'lucide-react'
 import type {
   SshTarget,
   SshConnectionState,
@@ -111,7 +111,7 @@ export function SshTargetCard({
             className="gap-1.5"
             disabled={actionInFlight !== null}
           >
-            <WifiOff className="size-3" />
+            <ServerOff className="size-3" />
             Disconnect
           </Button>
         ) : isConnecting(status) ? (
@@ -131,7 +131,7 @@ export function SshTargetCard({
               {actionInFlight === 'connect' ? (
                 <Loader2 className="size-3 animate-spin" />
               ) : (
-                <Wifi className="size-3" />
+                <Server className="size-3" />
               )}
               Connect
             </Button>

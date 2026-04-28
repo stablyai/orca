@@ -7,8 +7,8 @@ import {
   ChevronRight,
   MemoryStick as MemoryStickIcon,
   RefreshCw,
-  Terminal,
-  Wifi
+  Server,
+  Terminal
 } from 'lucide-react'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -705,7 +705,7 @@ function StatusBarInner(): React.JSX.Element | null {
             checked={statusBarItems.includes('ssh')}
             onCheckedChange={() => toggleStatusBarItem('ssh')}
           >
-            <Wifi className="size-3.5" />
+            <Server className="size-3.5" />
             SSH Status
           </DropdownMenuCheckboxItem>
           <DropdownMenuCheckboxItem

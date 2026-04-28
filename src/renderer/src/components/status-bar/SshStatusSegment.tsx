@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react'
-import { Loader2, MonitorSmartphone, Wifi, WifiOff } from 'lucide-react'
+import { Loader2, MonitorSmartphone, Server, ServerOff } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   DropdownMenu,
@@ -174,11 +174,11 @@ export function SshStatusSegment({
               {anyConnecting ? (
                 <Loader2 className="size-3 animate-spin text-yellow-500" />
               ) : overall === 'connected' ? (
-                <Wifi className="size-3 text-emerald-500" />
+                <Server className="size-3 text-emerald-500" />
               ) : overall === 'partial' ? (
-                <Wifi className="size-3 text-muted-foreground" />
+                <Server className="size-3 text-muted-foreground" />
               ) : (
-                <WifiOff className="size-3 text-muted-foreground" />
+                <ServerOff className="size-3 text-muted-foreground" />
               )}
               {!compact && (
                 <span className="text-[11px]">

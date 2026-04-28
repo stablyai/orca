@@ -13,7 +13,7 @@ export type WindowShortcutAction =
   | { type: 'toggleLeftSidebar' }
   | { type: 'toggleRightSidebar' }
   | { type: 'openQuickOpen' }
-  | { type: 'openNewWorkspace' }
+  | { type: 'openNewWorkspace'; tab: 'quick' | 'create-from' }
   | { type: 'jumpToWorktreeIndex'; index: number }
   | { type: 'worktreeHistoryNavigate'; direction: 'back' | 'forward' }
 
@@ -167,8 +167,13 @@ export function resolveWindowShortcutAction(
   // main process so it reaches the renderer even when focus lives inside
   // a contentEditable surface (markdown rich editor) or a browser guest
   // webContents, both of which bypass the renderer's window-level keydown.
-  if (matchesLetterShortcut(input, 'n', 'KeyN') && !input.shift) {
-    return { type: 'openNewWorkspace' }
+  // Cmd/Ctrl+Shift+N opens the composer on the "Create from…" tab so users
+  // can start a workspace directly from an existing PR, issue, branch, or
+  // Linear ticket without going through the quick-create flow first.
+  if (matchesLetterShortcut(input, 'n', 'KeyN')) {
+    if (!input.alt) {
+      return { type: 'openNewWorkspace', tab: input.shift ? 'create-from' : 'quick' }
+    }
   }
 
   if (input.key && input.key >= '1' && input.key <= '9' && !input.shift) {

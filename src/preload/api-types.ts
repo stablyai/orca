@@ -17,8 +17,11 @@ import type {
   GitConflictOperation,
   GitDiffResult,
   GitStatusEntry,
+  GitHubAssignableUser,
   GitHubPRFile,
   GitHubPRFileContents,
+  GitHubPRReviewCommentInput,
+  GitHubCommentResult,
   GitHubWorkItem,
   GitHubWorkItemDetails,
   GitHubViewer,
@@ -285,6 +288,12 @@ export type AppApi = {
   /** Relaunches the app via Electron's app.relaunch() + app.exit(0). Used
    *  by the "Restart now" button on the Experimental settings pane. */
   relaunch: () => Promise<void>
+  /** Returns the macOS `AppleCurrentKeyboardLayoutInputSourceID` when
+   *  available (e.g. `com.apple.keylayout.PolishPro`). Used by the
+   *  keyboard-layout probe to distinguish layouts whose base layer matches
+   *  US QWERTY but whose Option layer composes characters (issue #1205).
+   *  Returns null on non-Darwin platforms or when the defaults read fails. */
+  getKeyboardInputSourceId: () => Promise<string | null>
 }
 
 export type PreloadApi = {
@@ -454,9 +463,19 @@ export type PreloadApi = {
       repoPath: string
       number: number
       body: string
-    }) => Promise<{ ok: true; id: number } | { ok: false; error: string }>
+    }) => Promise<GitHubCommentResult>
+    addPRReviewCommentReply: (args: {
+      repoPath: string
+      prNumber: number
+      commentId: number
+      body: string
+      threadId?: string
+      path?: string
+      line?: number
+    }) => Promise<GitHubCommentResult>
+    addPRReviewComment: (args: GitHubPRReviewCommentInput) => Promise<GitHubCommentResult>
     listLabels: (args: { repoPath: string }) => Promise<string[]>
-    listAssignableUsers: (args: { repoPath: string }) => Promise<string[]>
+    listAssignableUsers: (args: { repoPath: string }) => Promise<GitHubAssignableUser[]>
     checkOrcaStarred: () => Promise<boolean | null>
     starOrca: () => Promise<boolean>
   }
@@ -720,7 +739,7 @@ export type PreloadApi = {
     onToggleRightSidebar: (callback: () => void) => () => void
     onToggleWorktreePalette: (callback: () => void) => () => void
     onOpenQuickOpen: (callback: () => void) => () => void
-    onOpenNewWorkspace: (callback: () => void) => () => void
+    onOpenNewWorkspace: (callback: (tab: 'quick' | 'create-from') => void) => () => void
     onJumpToWorktreeIndex: (callback: (index: number) => void) => () => void
     onWorktreeHistoryNavigate: (callback: (direction: 'back' | 'forward') => void) => () => void
     onNewBrowserTab: (callback: () => void) => () => void

@@ -3,15 +3,18 @@ import { describe, expect, it } from 'vitest'
 import { getDefaultUIState } from '../../../../shared/constants'
 import type { PersistedUIState } from '../../../../shared/types'
 import { createUISlice } from './ui'
+import { createWorktreeNavHistorySlice } from './worktree-nav-history'
 import type { AppState } from '../types'
 
 function createUIStore(): StoreApi<AppState> {
   // Only the UI slice, repo ids, and right sidebar width fallback are needed
-  // for persisted UI hydration tests.
+  // for persisted UI hydration tests. The worktree-nav-history slice is also
+  // included because openTaskPage records a Tasks visit via recordViewVisit.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return createStore<any>()((...args: any[]) => ({
     repos: [],
     rightSidebarWidth: 280,
+    ...createWorktreeNavHistorySlice(...(args as Parameters<typeof createWorktreeNavHistorySlice>)),
     ...createUISlice(...(args as Parameters<typeof createUISlice>))
   })) as unknown as StoreApi<AppState>
 }
