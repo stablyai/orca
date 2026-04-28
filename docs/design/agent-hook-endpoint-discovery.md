@@ -111,7 +111,7 @@ set ORCA_AGENT_HOOK_VERSION=1
 
 Permissions: `0600` on POSIX. The token is a loopback bearer credential and must not be readable by other local users. (Parity with what PTY env already exposes via `/proc/<pid>/environ`, which is also owner-only on modern Linux.)
 
-Atomicity: write to `endpoint.env.tmp` with `fs.writeFileSync(..., { mode: 0o600 })` then `fs.renameSync` to `endpoint.env`. Rename is atomic on the same filesystem; a hook reading concurrently either sees the old file or the new one, never a half-written one.
+Atomicity: write to a unique-per-call `.endpoint-<pid>-<uuid>.tmp` sibling with `fs.writeFileSync(..., { mode: 0o600 })` then `fs.renameSync` to the stable `endpoint.env` / `endpoint.cmd` path. Rename is atomic on the same filesystem; a hook reading concurrently either sees the old file or the new one, never a half-written one. The unique tmp name avoids collisions between a same-install double-launch (or a stop/start storm) trying to race on the same tmp path; orphan tmps from crashed writers are swept in §"Safety invariants".
 
 ### Token lifetime
 
