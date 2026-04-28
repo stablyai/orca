@@ -29,6 +29,16 @@ jobs:
         with:
           run_install: false
 
+      # Why: pnpm's bundled node-gyp ships gyp_main.py without execute
+      # permission, which breaks native module builds (e.g. node-pty's
+      # postinstall) with "/bin/sh: gyp_main.py: Permission denied".
+      # Point npm_config_node_gyp at a fresh global install so pnpm
+      # uses that one instead of its broken bundled copy.
+      - name: Use external node-gyp to avoid pnpm's bundled copy
+        run: |
+          npm install -g node-gyp@latest
+          echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
