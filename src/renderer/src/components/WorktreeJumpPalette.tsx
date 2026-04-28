@@ -58,9 +58,15 @@ type SectionHeader = {
   label: string
 }
 
+type HintRow = {
+  id: string
+  type: 'hint'
+  label: string
+}
+
 type PaletteItem = WorktreePaletteItem | BrowserPaletteItem
 
-type PaletteListEntry = PaletteItem | SectionHeader
+type PaletteListEntry = PaletteItem | SectionHeader | HintRow
 
 type BrowserSelection = {
   worktree: Worktree
@@ -167,10 +173,22 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const repoMap = useMemo(() => new Map(repos.map((r) => [r.id, r])), [repos])
   const canCreateWorktree = useMemo(() => repos.some((repo) => isGitRepoKind(repo)), [repos])
 
+  const hasQuery = deferredQuery.trim().length > 0
+
   const sortedWorktrees = useMemo(() => {
     const visibleWorktrees = allWorktrees.filter((worktree) => !worktree.isArchived)
-    return sortWorktreesSmart(visibleWorktrees, tabsByWorktree, repoMap, prCache)
-  }, [allWorktrees, tabsByWorktree, repoMap, prCache])
+    // Why: on empty query, show pure recency (matches sidebar's 'recent' sort
+    // rationale in smart-sort.ts) so Cmd+J is a predictable "jump back to what
+    // I was just on" surface. Typing swaps in smart-sort to rank matches.
+    // Deps over-include on the empty-query branch; acceptable since they
+    // change infrequently and branching the memo isn't worth it.
+    return hasQuery
+      ? sortWorktreesSmart(visibleWorktrees, tabsByWorktree, repoMap, prCache)
+      : [...visibleWorktrees].sort(
+          (a, b) =>
+            b.lastActivityAt - a.lastActivityAt || a.displayName.localeCompare(b.displayName)
+        )
+  }, [allWorktrees, tabsByWorktree, repoMap, prCache, hasQuery])
 
   const browserSortedWorktrees = useMemo(() => {
     // Why: browser-tab search is explicitly cross-worktree, so it must keep
@@ -266,69 +284,64 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     [browserMatches]
   )
 
-  // Why: merging both result sets into a single list avoids the tab-switching
-  // UX that forces users to guess which scope their target lives in. Section
-  // headers follow the VSCode "AnythingQuickAccess" pattern but we only render
-  // them when both sections have content — a lone "WORKTREES" or "BROWSER TABS"
-  // label above a single list is redundant noise.
-  //
-  // Why cap only the browser section on empty query: Cmd+J is worktree-first,
-  // and power users arrow-key through the recent-worktree list. Truncating
-  // worktrees would hide any past the cap until the user types. Instead we
-  // keep worktrees unbounded and cap the secondary Browser Tabs section to a
-  // small preview on open — users type to see more, or scroll past worktrees.
+  // Why: on empty query we cap the worktree section (not browser tabs) so the
+  // BROWSER TABS header + ≥1 page row stays visible above the fold — users
+  // with 30+ worktrees would otherwise never see browser pages. The cap is
+  // paired with a "Type to see all N worktrees" hint row so the full list is
+  // one keystroke away. Typing lifts both caps. Cap size is tied to the
+  // palette's max-h-[min(460px,62vh)] viewport math: ~60px/row, ~32px/header,
+  // leaves room for BROWSER TABS header + one page row at default window size.
+  // Revisit if row heights or max-h change.
+  const EMPTY_QUERY_WORKTREE_CAP = 5
+  const EMPTY_QUERY_BROWSER_CAP = 5
+
   const listEntries = useMemo<PaletteListEntry[]>(() => {
     const entries: PaletteListEntry[] = []
-    const bothSectionsPopulated = worktreeItems.length > 0 && browserItems.length > 0
-    const hasQuery = deferredQuery.trim().length > 0
-    const EMPTY_QUERY_BROWSER_PREVIEW = 3
-    const RECENT_COUNT = 3
-    const RECENT_MIN_WORKTREES = 4
 
-    // Rule A: Recent section renders only when the user hasn't typed and there
-    // are enough worktrees that "the rest" is non-empty. With ≤3 worktrees, a
-    // RECENT label would sit atop the entire list with nothing below it —
-    // chrome with no decision value. In that case we fall through to the
-    // existing showHeaders logic below.
-    const showRecentSection = !hasQuery && worktreeItems.length >= RECENT_MIN_WORKTREES
+    // Why: the worktree cap only earns its keep when there are browser tabs
+    // to protect above-the-fold. With zero browser pages, capping would force
+    // the user to type for no reason — uncap so the recent list fills the
+    // viewport naturally.
+    const worktreeCap = !hasQuery && browserItems.length > 0 ? EMPTY_QUERY_WORKTREE_CAP : Infinity
+    const visibleWorktreeItems = hasQuery ? worktreeItems : worktreeItems.slice(0, worktreeCap)
+    const visibleBrowserItems = hasQuery
+      ? browserItems
+      : browserItems.slice(0, EMPTY_QUERY_BROWSER_CAP)
 
-    const visibleBrowserItems =
-      !hasQuery && bothSectionsPopulated
-        ? browserItems.slice(0, EMPTY_QUERY_BROWSER_PREVIEW)
-        : browserItems
-    const showHeaders = bothSectionsPopulated
+    // Header rule: on empty query each section is categorically distinct
+    // (worktrees vs. tabs), so a lone header is a useful signpost. On query,
+    // suppress headers unless both sections are populated — otherwise a lone
+    // header above one list is noise.
+    const showWorktreeHeader = hasQuery
+      ? visibleWorktreeItems.length > 0 && visibleBrowserItems.length > 0
+      : visibleWorktreeItems.length > 0
+    const showBrowserHeader = hasQuery
+      ? visibleWorktreeItems.length > 0 && visibleBrowserItems.length > 0
+      : visibleBrowserItems.length > 0
 
-    if (showRecentSection) {
-      // Why: symmetric RECENT WORKTREES / WORKTREES headers make the two
-      // groups unambiguous. Users asked for an explicit "Worktrees" title on
-      // the lower group rather than a bare divider.
-      entries.push({
-        id: '__header_recent__',
-        type: 'section-header',
-        label: 'Recent Worktrees'
-      })
-      entries.push(...worktreeItems.slice(0, RECENT_COUNT))
-      entries.push({ id: '__header_all_worktrees__', type: 'section-header', label: 'Worktrees' })
-      entries.push(...worktreeItems.slice(RECENT_COUNT))
-      if (visibleBrowserItems.length > 0) {
+    // Why: only surface the hint when there's actually something hidden,
+    // otherwise the row would be a lie.
+    const showWorktreeHint = !hasQuery && worktreeItems.length > worktreeCap
+
+    if (visibleWorktreeItems.length > 0) {
+      if (showWorktreeHeader) {
         entries.push({
-          id: '__header_browser__',
+          id: '__header_worktrees__',
           type: 'section-header',
-          label: 'Browser Tabs'
+          label: hasQuery ? 'Worktrees' : 'Recent Worktrees'
         })
-        entries.push(...visibleBrowserItems)
       }
-      return entries
-    }
-
-    if (worktreeItems.length > 0) {
-      if (showHeaders) {
-        entries.push({ id: '__header_worktrees__', type: 'section-header', label: 'Worktrees' })
+      entries.push(...visibleWorktreeItems)
+      if (showWorktreeHint) {
+        entries.push({
+          id: '__hint_worktree_cap__',
+          type: 'hint',
+          label: `Type to see all ${worktreeItems.length} worktrees`
+        })
       }
-      entries.push(...worktreeItems)
     }
     if (visibleBrowserItems.length > 0) {
-      if (showHeaders) {
+      if (showBrowserHeader) {
         entries.push({
           id: '__header_browser__',
           type: 'section-header',
@@ -338,10 +351,11 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       entries.push(...visibleBrowserItems)
     }
     return entries
-  }, [worktreeItems, browserItems, deferredQuery])
+  }, [worktreeItems, browserItems, hasQuery])
 
   const selectableItems = useMemo<PaletteItem[]>(
-    () => listEntries.filter((e): e is PaletteItem => e.type !== 'section-header'),
+    () =>
+      listEntries.filter((e): e is PaletteItem => e.type !== 'section-header' && e.type !== 'hint'),
     [listEntries]
   )
 
@@ -352,7 +366,6 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const isLoading = repos.length > 0 && Object.keys(worktreesByRepo).length === 0
   const hasAnyWorktrees = sortedWorktrees.length > 0
   const hasAnyBrowserPages = browserPageEntries.length > 0
-  const hasQuery = deferredQuery.trim().length > 0
 
   useEffect(() => {
     if (visible && !wasVisibleRef.current) {
@@ -726,6 +739,19 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                   <div
                     key={entry.id}
                     className="mx-0.5 mt-3 mb-1 px-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70"
+                  >
+                    {entry.label}
+                  </div>
+                )
+              }
+
+              if (entry.type === 'hint') {
+                // Why: plain div (not CommandItem) so cmdk can't land selection
+                // on it and arrow keys skip over it naturally via selectableItems.
+                return (
+                  <div
+                    key={entry.id}
+                    className="mx-0.5 mt-1 px-3 py-1.5 text-[12px] italic text-muted-foreground/70"
                   >
                     {entry.label}
                   </div>
