@@ -40,6 +40,20 @@ export function safeFit(pane: ManagedPaneInternal): void {
       // Why: divider drags fire refits every frame, but most frames do not
       // cross a cell boundary. Skipping those avoids FitAddon.clear()+refresh()
       // churn, which was causing visible terminal blinking while resizing.
+      //
+      // Why: diagnostic for intermittent dead-terminal-after-split. If a
+      // just-reparented pane's proposed dimensions match its current
+      // dimensions (the default 80×24 at certain screen widths), this
+      // early-return skips fitAddon.fit() and no terminal.resize() fires
+      // — leaving the WebGL canvas at stale dimensions.
+      if (pane.pendingSplitScrollState) {
+        console.warn(
+          '[terminal] safeFit early-return during pending split for pane',
+          pane.id,
+          `— dims ${dims.cols}×${dims.rows} match current, webgl:`,
+          !!pane.webglAddon
+        )
+      }
       return
     }
     pane.fitAddon.fit()
