@@ -58,7 +58,7 @@ describe('removeWorktree', () => {
 
   it('removes the worktree, prunes stale refs, and deletes its local branch', async () => {
     mockGitCommands({
-      'git worktree list --porcelain': {
+      'git worktree list --porcelain -z': {
         stdout: `worktree /repo
 HEAD abc123
 branch refs/heads/main
@@ -68,7 +68,7 @@ HEAD def456
 branch refs/heads/feature/test
 `
       },
-      'git worktree list --porcelain#2': {
+      'git worktree list --porcelain -z#2': {
         stdout: `worktree /repo
 HEAD abc123
 branch refs/heads/main
@@ -92,7 +92,7 @@ branch refs/heads/main
 
   it('skips branch deletion when another worktree still points at the branch', async () => {
     mockGitCommands({
-      'git worktree list --porcelain': {
+      'git worktree list --porcelain -z': {
         stdout: `worktree /repo
 HEAD abc123
 branch refs/heads/main
@@ -106,7 +106,7 @@ HEAD def456
 branch refs/heads/feature/test
 `
       },
-      'git worktree list --porcelain#2': {
+      'git worktree list --porcelain -z#2': {
         stdout: `worktree /repo
 HEAD abc123
 branch refs/heads/main
@@ -125,7 +125,7 @@ branch refs/heads/feature/test
       expect.arrayContaining([
         'git worktree remove /repo-feature',
         'git worktree prune',
-        'git worktree list --porcelain'
+        'git worktree list --porcelain -z'
       ])
     )
     expect(calls).not.toContain('git branch -D feature/test')
@@ -134,7 +134,7 @@ branch refs/heads/feature/test
 
   it('deletes the branch after prune removes stale sibling worktree entries', async () => {
     mockGitCommands({
-      'git worktree list --porcelain': {
+      'git worktree list --porcelain -z': {
         stdout: `worktree /repo
 HEAD abc123
 branch refs/heads/main
@@ -149,7 +149,7 @@ branch refs/heads/feature/test
 prunable gitdir file points to non-existent location
 `
       },
-      'git worktree list --porcelain#2': {
+      'git worktree list --porcelain -z#2': {
         stdout: `worktree /repo
 HEAD abc123
 branch refs/heads/main
@@ -172,7 +172,7 @@ branch refs/heads/main
 
   it('passes --force before the worktree path when forced removal is requested', async () => {
     mockGitCommands({
-      'git worktree list --porcelain': {
+      'git worktree list --porcelain -z': {
         stdout: `worktree /repo
 HEAD abc123
 branch refs/heads/main
@@ -182,7 +182,7 @@ HEAD def456
 branch refs/heads/feature/test
 `
       },
-      'git worktree list --porcelain#2': {
+      'git worktree list --porcelain -z#2': {
         stdout: `worktree /repo
 HEAD abc123
 branch refs/heads/main
@@ -197,7 +197,7 @@ branch refs/heads/main
 
   it('matches Windows worktree paths before deleting the branch', async () => {
     mockGitCommands({
-      'git worktree list --porcelain': {
+      'git worktree list --porcelain -z': {
         stdout: `worktree C:/repo
 HEAD abc123
 branch refs/heads/main
@@ -207,7 +207,7 @@ HEAD def456
 branch refs/heads/feature/test
 `
       },
-      'git worktree list --porcelain#2': {
+      'git worktree list --porcelain -z#2': {
         stdout: `worktree C:/repo
 HEAD abc123
 branch refs/heads/main
@@ -230,7 +230,7 @@ branch refs/heads/main
   it('keeps removal successful when branch cleanup fails', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     mockGitCommands({
-      'git worktree list --porcelain': {
+      'git worktree list --porcelain -z': {
         stdout: `worktree /repo
 HEAD abc123
 branch refs/heads/main
@@ -240,7 +240,7 @@ HEAD def456
 branch refs/heads/feature/test
 `
       },
-      'git worktree list --porcelain#2': {
+      'git worktree list --porcelain -z#2': {
         stdout: `worktree /repo
 HEAD abc123
 branch refs/heads/main

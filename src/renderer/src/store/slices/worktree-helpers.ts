@@ -1,5 +1,6 @@
 import type {
   CreateWorktreeResult,
+  CreateSparseCheckoutRequest,
   SetupDecision,
   Worktree,
   WorktreeMeta
@@ -40,7 +41,8 @@ export type WorktreeSlice = {
     repoId: string,
     name: string,
     baseBranch?: string,
-    setupDecision?: SetupDecision
+    setupDecision?: SetupDecision,
+    sparseCheckout?: CreateSparseCheckoutRequest
   ) => Promise<CreateWorktreeResult>
   removeWorktree: (
     worktreeId: string,
