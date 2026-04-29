@@ -10,6 +10,7 @@ import CacheTimer from './CacheTimer'
 import WorktreeContextMenu from './WorktreeContextMenu'
 import { SshDisconnectedDialog } from './SshDisconnectedDialog'
 import AgentStatusHover from './AgentStatusHover'
+import WorktreeCardAgents from './WorktreeCardAgents'
 import { cn } from '@/lib/utils'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import {
@@ -544,14 +545,35 @@ const WorktreeCard = React.memo(function WorktreeCard({
             )}
           </div>
         )}
+
+        {/* Why: opt-in inline agent list. Gated on the experimental dashboard
+             so managed hook data is only surfaced where the cockpit is enabled.
+             When this is on, the hovercard wrapper is suppressed below so the
+             same rows are never shown in two places at once. Layout coupling:
+             this block grows the card height dynamically — WorktreeList uses
+             measureElement on each row, so the virtualizer re-measures
+             naturally when agents appear/disappear. */}
+        {dashboardExperimentEnabled && cardProps.includes('inline-agents') && (
+          <WorktreeCardAgents worktreeId={worktree.id} />
+        )}
       </div>
     </div>
   )
 
+  // Why: the hover-to-the-right agent panel and the inline agents list would
+  // render the same rows twice if both were active on one card. When the user
+  // enables 'inline-agents', suppress the hovercard wrapper — the inline
+  // section already gives persistent visibility of the same data, and a
+  // hovercard that duplicates it on every pointer move is noise. Keep the
+  // hovercard as the default surface when the inline toggle is off.
+  const showInlineAgents = dashboardExperimentEnabled && cardProps.includes('inline-agents')
+  const wrapInHoverCard =
+    dashboardExperimentEnabled && cardProps.includes('status') && !showInlineAgents
+
   return (
     <>
       <WorktreeContextMenu worktree={worktree}>
-        {dashboardExperimentEnabled && cardProps.includes('status') ? (
+        {wrapInHoverCard ? (
           <AgentStatusHover worktreeId={worktree.id}>{cardBody}</AgentStatusHover>
         ) : (
           cardBody

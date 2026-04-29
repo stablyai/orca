@@ -89,6 +89,14 @@ type Props = {
    * don't care.
    */
   isUnvisited?: boolean
+  /**
+   * Why: the inline-in-card variant sits in a tighter layout next to the
+   * agent identity icon, so 'md' reads as a second ~12px glyph that users
+   * can confuse with the agent icon. 'sm' keeps them visually distinct.
+   * The full dashboard has more breathing room and prefers 'md' for leading-
+   * slot presence, so default stays 'md'.
+   */
+  stateDotSize?: 'sm' | 'md'
 }
 
 const DashboardAgentRow = React.memo(function DashboardAgentRow({
@@ -96,7 +104,8 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   onDismiss,
   onActivate,
   now,
-  isUnvisited = false
+  isUnvisited = false,
+  stateDotSize = 'md'
 }: Props) {
   const [expanded, setExpanded] = useState(false)
   // Why: stop propagation so clicking the X doesn't also fire the worktree
@@ -208,7 +217,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         <Tooltip>
           <TooltipTrigger asChild>
             <span className="inline-flex shrink-0 items-center justify-center">
-              <AgentStateDot state={asDotState(agent.state)} size="md" />
+              <AgentStateDot state={asDotState(agent.state)} size={stateDotSize} />
             </span>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>
@@ -253,9 +262,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
             'block min-w-0 flex-1 overflow-hidden text-[11px] leading-snug',
             'transition-[height] duration-200 ease-out [interpolate-size:allow-keywords]',
             expanded ? 'h-auto whitespace-pre-wrap break-words' : 'h-[1lh] truncate',
-            isUnvisited
-              ? 'font-semibold text-foreground'
-              : 'font-normal text-muted-foreground'
+            isUnvisited ? 'font-semibold text-foreground' : 'font-normal text-muted-foreground'
           )}
           // Why: tooltip should only reveal truncated prompt text — not echo state-word fallbacks
           // (e.g. "Working"/"Done") that already fit on one line and never overflow.

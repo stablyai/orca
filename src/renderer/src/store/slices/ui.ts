@@ -59,17 +59,8 @@ export type UISlice = {
   toggleSidebar: () => void
   setSidebarOpen: (open: boolean) => void
   setSidebarWidth: (width: number) => void
-  /** Which view the left sidebar is showing. Session-only (not persisted) —
-   *  the sidebar should land on Workspaces each launch; an agent view restored
-   *  from disk would hide worktrees behind a dashboard on startup, which hurts
-   *  discoverability for users who rarely engage the agent cockpit. */
-  sidebarView: 'workspaces' | 'agents'
-  setSidebarView: (view: UISlice['sidebarView']) => void
-  /** State filter for the Agents view (mirrors DashboardFilter in
-   *  useDashboardFilter.ts). Lifted into the store so the sidebar's options
-   *  dropdown and the dashboard share a single source of truth — the user
-   *  expects the filter they picked to persist across sidebar-view toggles
-   *  within a session. Session-only, same rationale as sidebarView. */
+  /** State filter for the Agents dashboard (mirrors DashboardFilter in
+   *  useDashboardFilter.ts). Session-only. */
   dashboardFilter: 'all' | 'active' | 'blocked' | 'done'
   setDashboardFilter: (filter: UISlice['dashboardFilter']) => void
   /** Per-agent "I've looked at this" timestamps, keyed by paneKey. Set when
@@ -81,6 +72,12 @@ export type UISlice = {
    *  first visit after launch is a legitimate "need to see" moment. */
   acknowledgedAgentsByPaneKey: Record<string, number>
   acknowledgeAgents: (paneKeys: string[]) => void
+  /** Per-worktree collapsed state for the inline agents section shown inside
+   *  each workspace card. Session-only — a restart defaults back to expanded,
+   *  which matches the expected default (people rarely want agents hidden
+   *  across launches). */
+  collapsedInlineAgentsByWorktreeId: Record<string, boolean>
+  toggleInlineAgentsCollapsed: (worktreeId: string) => void
   activeView: 'terminal' | 'settings' | 'tasks'
   previousViewBeforeTasks: 'terminal' | 'settings'
   previousViewBeforeSettings: 'terminal' | 'tasks'
@@ -215,8 +212,6 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
   setSidebarWidth: (width) => set({ sidebarWidth: width }),
 
-  sidebarView: 'workspaces',
-  setSidebarView: (view) => set({ sidebarView: view }),
   dashboardFilter: 'all',
   setDashboardFilter: (filter) => set({ dashboardFilter: filter }),
   acknowledgedAgentsByPaneKey: {},
@@ -244,6 +239,18 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         }
       }
       return next ? { acknowledgedAgentsByPaneKey: next } : s
+    }),
+  collapsedInlineAgentsByWorktreeId: {},
+  toggleInlineAgentsCollapsed: (worktreeId) =>
+    set((s) => {
+      const current = s.collapsedInlineAgentsByWorktreeId[worktreeId] === true
+      const next = { ...s.collapsedInlineAgentsByWorktreeId }
+      if (current) {
+        delete next[worktreeId]
+      } else {
+        next[worktreeId] = true
+      }
+      return { collapsedInlineAgentsByWorktreeId: next }
     }),
 
   activeView: 'terminal',

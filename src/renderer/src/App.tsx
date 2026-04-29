@@ -104,7 +104,6 @@ function App(): React.JSX.Element {
       setRightSidebarOpen: s.setRightSidebarOpen,
       setRightSidebarTab: s.setRightSidebarTab,
       setSidebarOpen: s.setSidebarOpen,
-      setSidebarView: s.setSidebarView,
       updateSettings: s.updateSettings
     }))
   )
@@ -711,40 +710,6 @@ function App(): React.JSX.Element {
         e.preventDefault()
         actions.setRightSidebarTab('source-control')
         actions.setRightSidebarOpen(true)
-        return
-      }
-
-      // Cmd/Ctrl+Shift+D — open the left sidebar and switch to the Agents
-      // view. The dashboard lives as a tab inside the left sidebar (see
-      // sidebar/index.tsx), so revealing it means ensuring the sidebar is
-      // open AND sidebarView is 'agents'. Previously this opened the right
-      // sidebar because the dashboard was docked there; that panel has been
-      // removed on this branch.
-      // Why: skip when a terminal is focused — that combo is the terminal
-      // split-pane shortcut (see terminal-shortcut-policy.ts). Both listeners
-      // share the window capture phase and registration order can vary with
-      // React effect re-runs, so a DOM check is the reliable coordination
-      // mechanism (same pattern as Cmd+Shift+G above). xterm-helper-textarea
-      // is the focus target the terminal handler itself uses to detect
-      // terminal focus (see keyboard-handlers.ts isEditableTarget).
-      if (e.shiftKey && !e.altKey && e.key.toLowerCase() === 'd') {
-        // Why: read the experiment gate at keypress time via getState() so
-        // flipping the setting takes effect immediately without re-binding
-        // the window-level listener. Shortcut is inert until the user opts
-        // in to the experiment. Gated behind the key/modifier check so
-        // getState() isn't invoked on unrelated keystrokes.
-        const dashboardSettings = useAppStore.getState().settings
-        if (dashboardSettings?.experimentalAgentDashboard !== true) {
-          return
-        }
-        const active = document.activeElement as HTMLElement | null
-        if (active?.classList.contains('xterm-helper-textarea')) {
-          return
-        }
-        dispatchClearModifierHints()
-        e.preventDefault()
-        actions.setSidebarOpen(true)
-        actions.setSidebarView('agents')
         return
       }
 

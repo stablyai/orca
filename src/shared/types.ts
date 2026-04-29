@@ -1042,7 +1042,19 @@ export type NotificationDispatchResult = {
   reason?: 'disabled' | 'source-disabled' | 'suppressed-focus' | 'cooldown' | 'not-supported'
 }
 
-export type WorktreeCardProperty = 'status' | 'unread' | 'ci' | 'issue' | 'pr' | 'comment'
+export type WorktreeCardProperty =
+  | 'status'
+  | 'unread'
+  | 'ci'
+  | 'issue'
+  | 'pr'
+  | 'comment'
+  // Why: opt-in inline list of agent activity rendered directly inside each
+  // workspace card. When this toggle is on, the card shows the same rows that
+  // the hover-to-right AgentStatusHover panel would show — and the hovercard
+  // is suppressed on the card (see WorktreeCard) so the data is not
+  // duplicated. Off by default to preserve the current compact sidebar.
+  | 'inline-agents'
 
 export type StatusBarItem = 'claude' | 'codex' | 'ssh' | 'sessions' | 'memory'
 

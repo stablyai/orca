@@ -212,15 +212,17 @@ export function ExperimentalPane({
 
       {showAgentDashboard ? (
         <SearchableSetting
-          title="Agent dashboard"
-          description="Live cross-worktree view of agent activity, plus retention of finished runs in the sidebar hover."
+          title="Detailed agent activity"
+          description="Shows each agent’s live status, prompt, and last message inside its workspace card."
           keywords={[
             'experimental',
             'agent',
-            'dashboard',
-            'status',
             'activity',
-            'worktree',
+            'status',
+            'live',
+            'workspace',
+            'card',
+            'inline',
             'hook',
             'claude',
             'codex',
@@ -231,10 +233,10 @@ export function ExperimentalPane({
         >
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0 shrink space-y-1.5">
-              <Label>Agent dashboard</Label>
+              <Label>Detailed agent activity</Label>
               <p className="text-xs text-muted-foreground">
-                Adds a cross-worktree dashboard and hover cards showing each agent&apos;s live
-                status. Requires an app restart
+                Shows each agent&apos;s live status, current prompt, and last message inline inside
+                its workspace card. Requires an app restart
                 {settings.experimentalTerminalDaemon
                   ? ', and tracks agents started in new terminals opened after the restart'
                   : ''}
@@ -271,8 +273,8 @@ export function ExperimentalPane({
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {settings.experimentalAgentDashboard
-                    ? 'Restart Orca to finish enabling the agent dashboard.'
-                    : 'Restart Orca to finish disabling the agent dashboard.'}
+                    ? 'Restart Orca to finish enabling detailed agent activity.'
+                    : 'Restart Orca to finish disabling detailed agent activity.'}
                 </p>
               </div>
               <Button

@@ -18,16 +18,18 @@ export const EXPERIMENTAL_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     ]
   },
   {
-    title: 'Agent dashboard',
+    title: 'Detailed agent activity',
     description:
-      'Live cross-worktree view of agent activity, plus retention of finished runs in the sidebar hover. Experimental — managed hook installs require an app restart.',
+      'Shows each agent’s live status, prompt, and last message inside its workspace card. Experimental — managed hook installs require an app restart.',
     keywords: [
       'experimental',
       'agent',
-      'dashboard',
-      'status',
       'activity',
-      'worktree',
+      'status',
+      'live',
+      'workspace',
+      'card',
+      'inline',
       'hook',
       'claude',
       'codex',

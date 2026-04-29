@@ -67,7 +67,13 @@ export const DEFAULT_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = [
   'ci',
   'issue',
   'pr',
-  'comment'
+  'comment',
+  // Why: agent activity is the primary reason users opt into the cockpit, so
+  // show it inline on each card by default. Users who prefer the old
+  // hover-to-the-right panel can uncheck this — WorktreeCard auto-suppresses
+  // the hovercard whenever inline-agents is on, so the two surfaces are never
+  // active at the same time.
+  'inline-agents'
 ]
 
 export const DEFAULT_STATUS_BAR_ITEMS: StatusBarItem[] = [

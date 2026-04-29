@@ -4,9 +4,7 @@ import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { cn } from '@/lib/utils'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,7 +29,12 @@ const PROPERTY_OPTIONS: { id: WorktreeCardProperty; label: string }[] = [
   { id: 'ci', label: 'CI checks' },
   { id: 'issue', label: 'Linked issue' },
   { id: 'pr', label: 'Linked PR' },
-  { id: 'comment', label: 'Comment' }
+  { id: 'comment', label: 'Comment' },
+  // Why: toggling this replaces the hover-to-the-right "Agent activity"
+  // popover with an inline list below the card body. The card-level hover
+  // panel is suppressed when this is on so the same rows are not shown
+  // twice (see WorktreeCard).
+  { id: 'inline-agents', label: 'Agent activity' }
 ]
 
 const SORT_OPTIONS = [
@@ -41,34 +44,8 @@ const SORT_OPTIONS = [
   { id: 'repo', label: 'Repo' }
 ] as const
 
-const AGENT_FILTER_OPTIONS = [
-  { id: 'all', label: 'All' },
-  { id: 'active', label: 'Active' },
-  { id: 'blocked', label: 'Blocked' },
-  { id: 'done', label: 'Done' }
-] as const
-
 const isMac = navigator.userAgent.includes('Mac')
 const newWorktreeShortcutLabel = isMac ? '⌘N' : 'Ctrl+N'
-
-// Why: the Agents tab badge counts agents that need human attention — blocked
-// (explicit) and waiting (input requested). "working" agents are not counted:
-// the goal is a VS-Code-style "problems" badge that appears only when there's
-// something actionable, so a zero state reads as "nothing to look at". Note
-// this is GLOBAL — the repo filter on the sidebar's filter dropdown scopes
-// useDashboardFilter, but deliberately NOT this badge, so a narrowed
-// worktree view doesn't hide attention signals from the filtered-out repos.
-function countAgentsNeedingAttention(
-  agentStatusByPaneKey: Record<string, AgentStatusEntry>
-): number {
-  let count = 0
-  for (const entry of Object.values(agentStatusByPaneKey)) {
-    if (entry.state === 'blocked' || entry.state === 'waiting') {
-      count++
-    }
-  }
-  return count
-}
 
 const SidebarHeader = React.memo(function SidebarHeader() {
   const openModal = useAppStore((s) => s.openModal)
@@ -81,90 +58,20 @@ const SidebarHeader = React.memo(function SidebarHeader() {
   const setSortBy = useAppStore((s) => s.setSortBy)
   const groupBy = useAppStore((s) => s.groupBy)
   const setGroupBy = useAppStore((s) => s.setGroupBy)
-
-  const sidebarView = useAppStore((s) => s.sidebarView)
-  const setSidebarView = useAppStore((s) => s.setSidebarView)
-  // Why: gate the Agents tab behind the experimental setting. Users who have
-  // not opted in keep the pre-existing single-view sidebar — no new UI
-  // surfaces for them. A separate user-level hide toggle used to live here,
-  // but the Workspaces/Agents toggle itself is now the opt-in: users who
-  // don't want the cockpit simply stay on the Workspaces tab.
-  const agentsToggleVisible = useAppStore((s) => s.settings?.experimentalAgentDashboard === true)
-  // Why: return the primitive count directly so this header only re-renders
-  // when the badge number actually changes. setAgentStatus replaces
-  // agentStatusByPaneKey on every PTY event (including within-state tool/
-  // prompt pings), so selecting the map reference would force a re-render
-  // on every agent event even when the blocked/waiting count is identical.
-  // Zustand's default Object.is equality on the primitive return collapses
-  // those no-op updates.
-  const attentionCount = useAppStore((s) => countAgentsNeedingAttention(s.agentStatusByPaneKey))
-
-  // Why: gate on `agentsToggleVisible` too, so if the user disables the
-  // experimental dashboard while parked on the Agents view, the header
-  // controls fall back to Workspaces-mode in lockstep with sidebar/index.tsx's
-  // showAgentsView gate — otherwise the options dropdown would still show
-  // agent filters while the main panel shows the worktree list.
-  const viewingAgents = agentsToggleVisible && sidebarView === 'agents'
-  // Why: keep the header icons in BOTH views so the sidebar chrome doesn't
-  // shift when the user toggles between Workspaces and Agents — just repoint
-  // the dropdown's contents at the active view's options. Preserving the same
-  // slot positions (options, action button) avoids the jarring expand/collapse
-  // of the toggle width that happens if the icons disappear on one side.
-  const dashboardFilter = useAppStore((s) => s.dashboardFilter)
-  const setDashboardFilter = useAppStore((s) => s.setDashboardFilter)
+  // Why: hide the 'Agents in card' checkbox entirely when the experimental
+  // live-agent-activity feature is off — toggling it is a no-op otherwise
+  // (WorktreeCard gates rendering on the same flag), so surfacing a dead
+  // checkbox is just misleading chrome.
+  const liveAgentsEnabled = useAppStore((s) => s.settings?.experimentalAgentDashboard === true)
+  const visiblePropertyOptions = liveAgentsEnabled
+    ? PROPERTY_OPTIONS
+    : PROPERTY_OPTIONS.filter((opt) => opt.id !== 'inline-agents')
 
   return (
     <div className="flex h-8 items-center justify-between px-2 mt-1 gap-2">
-      {agentsToggleVisible ? (
-        <ToggleGroup
-          type="single"
-          value={sidebarView}
-          onValueChange={(v) => {
-            // Why: ToggleGroup reports '' when the user clicks the already-on
-            // item. Treat that as a no-op so the sidebar never lands in a
-            // neutral "neither view selected" state — one of workspaces/agents
-            // must always be visible.
-            if (v === 'workspaces' || v === 'agents') {
-              setSidebarView(v)
-            }
-          }}
-          variant="outline"
-          size="sm"
-          className="h-6 min-w-0 flex-1"
-        >
-          <ToggleGroupItem
-            value="workspaces"
-            className="h-6 flex-1 px-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/80 data-[state=on]:bg-foreground/10 data-[state=on]:text-foreground"
-          >
-            Workspaces
-          </ToggleGroupItem>
-          <ToggleGroupItem
-            value="agents"
-            className="h-6 flex-1 gap-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/80 data-[state=on]:bg-foreground/10 data-[state=on]:text-foreground"
-          >
-            <span>Agents</span>
-            {attentionCount > 0 && (
-              <span
-                className={cn(
-                  'inline-flex min-w-[14px] items-center justify-center rounded-full bg-amber-500/90 px-1 text-[9px] font-semibold leading-none text-white',
-                  // Why: fixed 14px height keeps the badge vertically centered
-                  // inside the compact (h-6) toggle item regardless of digit
-                  // count — otherwise a single-digit vs double-digit count
-                  // would jitter the toggle height.
-                  'h-[14px]'
-                )}
-                aria-label={`${attentionCount} agent${attentionCount === 1 ? '' : 's'} need attention`}
-              >
-                {attentionCount}
-              </span>
-            )}
-          </ToggleGroupItem>
-        </ToggleGroup>
-      ) : (
-        <span className="px-2 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/80 select-none">
-          Workspaces
-        </span>
-      )}
+      <span className="px-2 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/80 select-none">
+        Workspaces
+      </span>
       <div className="flex items-center gap-1.5 shrink-0">
         <DropdownMenu>
           <Tooltip>
@@ -185,136 +92,88 @@ const SidebarHeader = React.memo(function SidebarHeader() {
             </TooltipContent>
           </Tooltip>
           <DropdownMenuContent side="right" align="start" sideOffset={8} className="w-56 pb-2">
-            {viewingAgents ? (
-              <>
-                <DropdownMenuLabel>Show</DropdownMenuLabel>
-                <div className="px-2 pt-0.5 pb-1">
-                  <ToggleGroup
-                    type="single"
-                    value={dashboardFilter}
-                    onValueChange={(v) => {
-                      // Why: ToggleGroup fires '' on click-of-selected. Keep
-                      // the previous filter rather than collapsing to a
-                      // neutral state — the dashboard must always show some
-                      // bucket, and 'all' is never worse than nothing.
-                      if (v === 'all' || v === 'active' || v === 'blocked' || v === 'done') {
-                        setDashboardFilter(v)
-                      }
-                    }}
-                    variant="outline"
-                    size="sm"
-                    className="h-6 w-full justify-start"
-                  >
-                    {AGENT_FILTER_OPTIONS.map((opt) => (
-                      <ToggleGroupItem
-                        key={opt.id}
-                        value={opt.id}
-                        className="h-6 flex-1 px-2 text-[10px] data-[state=on]:bg-foreground/10 data-[state=on]:font-semibold data-[state=on]:text-foreground"
-                      >
-                        {opt.label}
-                      </ToggleGroupItem>
-                    ))}
-                  </ToggleGroup>
-                </div>
-              </>
-            ) : (
-              <>
-                <DropdownMenuLabel>Group by</DropdownMenuLabel>
-                <div className="px-2 pt-0.5 pb-1">
-                  <ToggleGroup
-                    type="single"
-                    value={groupBy}
-                    onValueChange={(v) => {
-                      if (v) {
-                        setGroupBy(v as typeof groupBy)
-                      }
-                    }}
-                    variant="outline"
-                    size="sm"
-                    className="h-6 w-full justify-start"
-                  >
-                    {GROUP_BY_OPTIONS.map((opt) => (
-                      <ToggleGroupItem
-                        key={opt.id}
-                        value={opt.id}
-                        className="h-6 px-2 text-[10px] data-[state=on]:bg-foreground/10 data-[state=on]:font-semibold data-[state=on]:text-foreground"
-                      >
-                        {opt.label}
-                      </ToggleGroupItem>
-                    ))}
-                  </ToggleGroup>
-                </div>
-
-                <DropdownMenuSeparator />
-                <DropdownMenuLabel>Sort by</DropdownMenuLabel>
-                <DropdownMenuRadioGroup
-                  value={sortBy}
-                  onValueChange={(v) => setSortBy(v as typeof sortBy)}
-                >
-                  {SORT_OPTIONS.map((opt) => (
-                    <DropdownMenuRadioItem
-                      key={opt.id}
-                      value={opt.id}
-                      // Keep the menu open so people can compare sort modes and
-                      // toggle card properties without reopening the same panel.
-                      onSelect={(e) => e.preventDefault()}
-                    >
-                      {opt.label}
-                    </DropdownMenuRadioItem>
-                  ))}
-                </DropdownMenuRadioGroup>
-
-                <DropdownMenuSeparator />
-                <DropdownMenuLabel>Show properties</DropdownMenuLabel>
-                {PROPERTY_OPTIONS.map((opt) => (
-                  <DropdownMenuCheckboxItem
+            <DropdownMenuLabel>Group by</DropdownMenuLabel>
+            <div className="px-2 pt-0.5 pb-1">
+              <ToggleGroup
+                type="single"
+                value={groupBy}
+                onValueChange={(v) => {
+                  if (v) {
+                    setGroupBy(v as typeof groupBy)
+                  }
+                }}
+                variant="outline"
+                size="sm"
+                className="h-6 w-full justify-start"
+              >
+                {GROUP_BY_OPTIONS.map((opt) => (
+                  <ToggleGroupItem
                     key={opt.id}
-                    checked={worktreeCardProperties.includes(opt.id)}
-                    onCheckedChange={() => toggleWorktreeCardProperty(opt.id)}
-                    onSelect={(e) => e.preventDefault()}
+                    value={opt.id}
+                    className="h-6 px-2 text-[10px] data-[state=on]:bg-foreground/10 data-[state=on]:font-semibold data-[state=on]:text-foreground"
                   >
                     {opt.label}
-                  </DropdownMenuCheckboxItem>
+                  </ToggleGroupItem>
                 ))}
-              </>
-            )}
+              </ToggleGroup>
+            </div>
+
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>Sort by</DropdownMenuLabel>
+            <DropdownMenuRadioGroup
+              value={sortBy}
+              onValueChange={(v) => setSortBy(v as typeof sortBy)}
+            >
+              {SORT_OPTIONS.map((opt) => (
+                <DropdownMenuRadioItem
+                  key={opt.id}
+                  value={opt.id}
+                  // Keep the menu open so people can compare sort modes and
+                  // toggle card properties without reopening the same panel.
+                  onSelect={(e) => e.preventDefault()}
+                >
+                  {opt.label}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>Show properties</DropdownMenuLabel>
+            {visiblePropertyOptions.map((opt) => (
+              <DropdownMenuCheckboxItem
+                key={opt.id}
+                checked={worktreeCardProperties.includes(opt.id)}
+                onCheckedChange={() => toggleWorktreeCardProperty(opt.id)}
+                onSelect={(e) => e.preventDefault()}
+              >
+                {opt.label}
+              </DropdownMenuCheckboxItem>
+            ))}
           </DropdownMenuContent>
         </DropdownMenu>
 
         <Tooltip>
           <TooltipTrigger asChild>
-            {/* Why: the "+" action is Workspaces-only (New workspace). For
-                Agents view there is no meaningful "create" action — agents
-                are spawned from terminals, not from this header — so render
-                the button disabled + invisible to keep the icon slot reserved
-                and the header chrome stable across view toggles. Using
-                `visibility: hidden` rather than conditional render preserves
-                layout width so the toggle doesn't expand to fill the gap. */}
             <Button
               variant="ghost"
               size="icon-xs"
               onClick={() => {
-                if (viewingAgents || !canCreateWorktree) {
+                if (!canCreateWorktree) {
                   return
                 }
                 openModal('new-workspace-composer')
               }}
               aria-label="New workspace"
-              aria-hidden={viewingAgents}
-              tabIndex={viewingAgents ? -1 : undefined}
-              disabled={viewingAgents || !canCreateWorktree}
-              className={cn(viewingAgents && 'invisible')}
+              disabled={!canCreateWorktree}
             >
               <Plus className="size-3.5" strokeWidth={2.25} />
             </Button>
           </TooltipTrigger>
-          {!viewingAgents && (
-            <TooltipContent side="right" sideOffset={6}>
-              {canCreateWorktree
-                ? `New workspace (${newWorktreeShortcutLabel})`
-                : 'Add a Git project to create worktrees'}
-            </TooltipContent>
-          )}
+          <TooltipContent side="right" sideOffset={6}>
+            {canCreateWorktree
+              ? `New workspace (${newWorktreeShortcutLabel})`
+              : 'Add a Git project to create worktrees'}
+          </TooltipContent>
         </Tooltip>
       </div>
     </div>

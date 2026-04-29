@@ -62,13 +62,12 @@ export function useAutoAckViewedAgent(): void {
       lastAcknowledged = s.acknowledgedAgentsByPaneKey
       lastSettings = s.settings
 
-      // Why: mirror the dashboard's visibility gate (see App.tsx Cmd+Shift+D
-      // handler and sidebar/index.tsx `showAgentsView`). If the experimental
-      // dashboard is off, the ack map is never read by any UI — accumulating
-      // entries for unseen agents is wasted memory and the Object.entries
-      // scan is pure overhead. The subscribe callback fires on any store
-      // change, so flipping the setting naturally re-evaluates this guard
-      // without a separate subscription.
+      // Why: mirror the dashboard's visibility gate — if the experimental
+      // agent dashboard is off, nothing in the UI reads the ack map, so
+      // accumulating entries for unseen agents is wasted memory and the
+      // Object.entries scan below is pure overhead. The subscribe callback
+      // fires on any store change, so flipping the setting naturally
+      // re-evaluates this guard without a separate subscription.
       if (s.settings?.experimentalAgentDashboard !== true) {
         return
       }
