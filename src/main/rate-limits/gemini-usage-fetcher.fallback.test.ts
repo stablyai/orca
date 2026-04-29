@@ -2,42 +2,33 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   expiredCreds,
   makeResponse,
-  oauth2JsContent,
   quotaResponse,
   validCreds
 } from './gemini-usage-fetcher.test-fixtures'
 
-const {
-  readFileMock,
-  existsSyncMock,
-  readdirSyncMock,
-  readFileSyncMock,
-  realpathSyncMock,
-  execSyncMock,
-  netFetchMock
-} = vi.hoisted(() => ({
+const { readFileMock, extractCredsMock, netFetchMock } = vi.hoisted(() => ({
   readFileMock: vi.fn(),
-  existsSyncMock: vi.fn(),
-  readdirSyncMock: vi.fn(),
-  readFileSyncMock: vi.fn(),
-  realpathSyncMock: vi.fn(),
-  execSyncMock: vi.fn(),
+  extractCredsMock: vi.fn(),
   netFetchMock: vi.fn()
 }))
 
+// Why: mock the CLI-credential extractor at the module boundary. The extractor
+// is a self-contained dependency with a simple async contract (returns a
+// { clientId, clientSecret } record or null). Mocking it here keeps these
+// tests focused on the oauth_creds.json refresh → loadCodeAssist → quota
+// flow rather than on filesystem plumbing, and avoids having to keep pace
+// with extractor internals when they change.
+vi.mock('./gemini-cli-oauth-extractor', () => ({
+  extractOAuthClientCredentials: extractCredsMock
+}))
+
 vi.mock('node:fs/promises', () => ({
-  readFile: readFileMock
-}))
-
-vi.mock('node:fs', () => ({
-  existsSync: existsSyncMock,
-  readdirSync: readdirSyncMock,
-  readFileSync: readFileSyncMock,
-  realpathSync: realpathSyncMock
-}))
-
-vi.mock('node:child_process', () => ({
-  execSync: execSyncMock
+  readFile: readFileMock,
+  // Why: saveGeminiCredentials is exercised on the refresh path. The atomic
+  // tmp+rename write has no observable side effect in these tests, so the
+  // stubs just resolve.
+  writeFile: vi.fn().mockResolvedValue(undefined),
+  rename: vi.fn().mockResolvedValue(undefined)
 }))
 
 vi.mock('electron', () => ({
@@ -51,19 +42,11 @@ describe('fetchGeminiRateLimits fallback oauth creds', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-04-24T12:00:00.000Z'))
     readFileMock.mockReset()
-    existsSyncMock.mockReset()
-    readdirSyncMock.mockReset()
-    readFileSyncMock.mockReset()
-    realpathSyncMock.mockReset()
-    execSyncMock.mockReset()
+    extractCredsMock.mockReset()
     netFetchMock.mockReset()
-    // Why: default to "binary found, symlink already resolved, no package roots found"
-    // so individual tests only override what they care about.
-    realpathSyncMock.mockImplementation((p: string) => p)
-    existsSyncMock.mockReturnValue(false)
-    readdirSyncMock.mockReturnValue([])
-    readFileSyncMock.mockImplementation(() => {
-      throw new Error('ENOENT')
+    extractCredsMock.mockResolvedValue({
+      clientId: 'client-id-123',
+      clientSecret: 'client-secret-456'
     })
   })
 
@@ -81,7 +64,7 @@ describe('fetchGeminiRateLimits fallback oauth creds', () => {
       .mockResolvedValueOnce(makeResponse({ cloudaicompanionProject: 'proj-123' }))
       .mockResolvedValueOnce(makeResponse(quotaResponse))
 
-    const result = await fetchGeminiRateLimits()
+    const result = await fetchGeminiRateLimits(true)
 
     expect(result.status).toBe('ok')
     expect(result.error).toBeNull()
@@ -89,10 +72,6 @@ describe('fetchGeminiRateLimits fallback oauth creds', () => {
   })
 
   it('falls back to oauth_creds.json and resolves project via loadCodeAssist', async () => {
-    // Why: simulates the Homebrew known-path hit — realpathSync resolves the symlink,
-    // then extractFromKnownPaths reads oauth2.js from the libexec/lib layout.
-    execSyncMock.mockReturnValue('/opt/homebrew/bin/gemini')
-    realpathSyncMock.mockReturnValue('/opt/homebrew/Cellar/gemini-cli/0.38.2/bin/gemini')
     readFileMock.mockImplementation(async (filePath: string) => {
       if (filePath.includes('auth.json')) {
         return JSON.stringify({})
@@ -100,16 +79,13 @@ describe('fetchGeminiRateLimits fallback oauth creds', () => {
       if (filePath.includes('oauth_creds.json')) {
         return JSON.stringify(validCreds)
       }
-      if (filePath.includes('oauth2.js')) {
-        return oauth2JsContent
-      }
-      throw new Error('Unexpected readFile call')
+      throw { code: 'ENOENT' }
     })
     netFetchMock
       .mockResolvedValueOnce(makeResponse({ cloudaicompanionProject: 'cli-proj-456' }))
       .mockResolvedValueOnce(makeResponse(quotaResponse))
 
-    const result = await fetchGeminiRateLimits()
+    const result = await fetchGeminiRateLimits(true)
 
     expect(result.status).toBe('ok')
     expect(result.error).toBeNull()
@@ -123,29 +99,7 @@ describe('fetchGeminiRateLimits fallback oauth creds', () => {
     expect(quotaBody.project).toBe('cli-proj-456')
   })
 
-  it('falls back to oauth_creds.json and refreshes via bundle dir when expired', async () => {
-    // Why: simulates the bundle-dir fallback — known paths miss (existsSync false by default),
-    // findGeminiPackageRoot finds package.json via readFileSync, then extractFromBundleDir
-    // reads an oauth2-provider chunk that contains the credentials.
-    execSyncMock.mockReturnValue('/usr/local/bin/gemini')
-    realpathSyncMock.mockReturnValue('/usr/local/bin/gemini')
-    const pkgJsonPath = '/usr/local/package.json'
-    const bundleDir = '/usr/local/bundle'
-    existsSyncMock.mockImplementation((p: string) => {
-      return p === pkgJsonPath || p === bundleDir
-    })
-    readFileSyncMock.mockImplementation((p: string) => {
-      if (p === pkgJsonPath) {
-        return JSON.stringify({ name: '@google/gemini-cli' })
-      }
-      throw new Error('ENOENT')
-    })
-    readdirSyncMock.mockImplementation((dir: string) => {
-      if (dir === bundleDir) {
-        return ['oauth2-provider-ABCD.js']
-      }
-      return []
-    })
+  it('refreshes via bundled client credentials when expiry passed', async () => {
     readFileMock.mockImplementation(async (filePath: string) => {
       if (filePath.includes('auth.json')) {
         return JSON.stringify({})
@@ -153,17 +107,16 @@ describe('fetchGeminiRateLimits fallback oauth creds', () => {
       if (filePath.includes('oauth_creds.json')) {
         return JSON.stringify(expiredCreds)
       }
-      if (filePath.includes('oauth2-provider-ABCD.js')) {
-        return oauth2JsContent
-      }
       throw { code: 'ENOENT' }
     })
     netFetchMock
-      .mockResolvedValueOnce(makeResponse({ access_token: 'bundle-refreshed-token' }))
+      .mockResolvedValueOnce(
+        makeResponse({ access_token: 'bundle-refreshed-token', expires_in: 3600 })
+      )
       .mockResolvedValueOnce(makeResponse({ cloudaicompanionProject: 'cli-proj-456' }))
       .mockResolvedValueOnce(makeResponse(quotaResponse))
 
-    const result = await fetchGeminiRateLimits()
+    const result = await fetchGeminiRateLimits(true)
 
     expect(result.status).toBe('ok')
     expect(result.error).toBeNull()
@@ -186,13 +139,13 @@ describe('fetchGeminiRateLimits fallback oauth creds', () => {
       if (filePath.includes('oauth_creds.json')) {
         return JSON.stringify(expiredCreds)
       }
-      throw new Error('Unexpected readFile call')
+      throw { code: 'ENOENT' }
     })
-    execSyncMock.mockReturnValue('/usr/local/bin/gemini')
-    // existsSync returns false by default — no known-path or walk-up match found
-    netFetchMock.mockResolvedValueOnce(makeResponse({ error: 'invalid_grant' }, 400))
+    // Simulate: no Gemini CLI installed, so the extractor returns null and
+    // tryRefreshTokenFromBundle can't obtain client credentials to refresh.
+    extractCredsMock.mockResolvedValue(null)
 
-    const result = await fetchGeminiRateLimits()
+    const result = await fetchGeminiRateLimits(true)
 
     expect(result.status).toBe('error')
     expect(result.error).toContain('Token refresh failed')
@@ -200,7 +153,11 @@ describe('fetchGeminiRateLimits fallback oauth creds', () => {
     expect(result.weekly).toBeNull()
   })
 
-  it('proceeds with empty projectId when loadCodeAssist fails for fallback path', async () => {
+  it('returns error when loadCodeAssist cannot resolve a project for oauth_creds path', async () => {
+    // Why: when the fallback (oauth_creds.json) path has no project embedded
+    // and loadCodeAssist fails, we surface a clear "project ID not found"
+    // error rather than silently posting an empty project to the quota API —
+    // an empty project causes a 400 that looks like an auth failure.
     readFileMock.mockImplementation(async (filePath: string) => {
       if (filePath.includes('auth.json')) {
         return JSON.stringify({})
@@ -208,22 +165,29 @@ describe('fetchGeminiRateLimits fallback oauth creds', () => {
       if (filePath.includes('oauth_creds.json')) {
         return JSON.stringify(validCreds)
       }
-      throw new Error('Unexpected readFile call')
+      throw { code: 'ENOENT' }
     })
-    netFetchMock
-      .mockResolvedValueOnce(makeResponse('Internal Server Error', 500))
-      .mockResolvedValueOnce(makeResponse(quotaResponse))
+    netFetchMock.mockResolvedValueOnce(makeResponse('Internal Server Error', 500))
 
-    const result = await fetchGeminiRateLimits()
+    const result = await fetchGeminiRateLimits(true)
 
-    expect(result.status).toBe('ok')
-    expect(result.session).not.toBeNull()
+    expect(result.status).toBe('error')
+    expect(result.error).toContain('Gemini project ID not found')
+  })
 
-    const quotaCall = netFetchMock.mock.calls.find(
-      (call) => typeof call[0] === 'string' && call[0].includes('retrieveUserQuota')
-    )
-    expect(quotaCall).toBeDefined()
-    const quotaBody = JSON.parse((quotaCall![1] as RequestInit).body as string)
-    expect(quotaBody.project).toBe('')
+  it('returns unavailable when geminiCliOAuthEnabled=false and no google entry in auth.json', async () => {
+    readFileMock.mockImplementation(async (filePath: string) => {
+      if (filePath.includes('auth.json')) {
+        return JSON.stringify({ 'opencode-go': { type: 'api', key: 'k' } })
+      }
+      throw { code: 'ENOENT' }
+    })
+
+    const result = await fetchGeminiRateLimits(false)
+
+    expect(result.status).toBe('unavailable')
+    expect(result.error).toContain('disabled')
+    // No network calls should have been made.
+    expect(netFetchMock).not.toHaveBeenCalled()
   })
 })

@@ -3,42 +3,28 @@ import {
   authJsonGoogle,
   authJsonGoogleExpired,
   makeResponse,
-  quotaResponse,
-  oauth2JsContent
+  quotaResponse
 } from './gemini-usage-fetcher.test-fixtures'
 
-const {
-  readFileMock,
-  existsSyncMock,
-  readdirSyncMock,
-  readFileSyncMock,
-  realpathSyncMock,
-  execSyncMock,
-  netFetchMock
-} = vi.hoisted(() => ({
+const { readFileMock, extractCredsMock, netFetchMock } = vi.hoisted(() => ({
   readFileMock: vi.fn(),
-  existsSyncMock: vi.fn(),
-  readdirSyncMock: vi.fn(),
-  readFileSyncMock: vi.fn(),
-  realpathSyncMock: vi.fn(),
-  execSyncMock: vi.fn(),
+  extractCredsMock: vi.fn(),
   netFetchMock: vi.fn()
 }))
 
-vi.mock('node:fs/promises', () => ({ readFile: readFileMock }))
-vi.mock('node:fs', () => ({
-  existsSync: existsSyncMock,
-  readdirSync: readdirSyncMock,
-  readFileSync: readFileSyncMock,
-  realpathSync: realpathSyncMock
+// Why: mock the extractor at the module boundary rather than re-routing every
+// child_process/fs call. The extractor is a self-contained dependency with a
+// simple async contract; mocking it directly keeps tests focused on the
+// fetcher's refresh/quota logic rather than on filesystem plumbing that has
+// already been integration-tested elsewhere.
+vi.mock('./gemini-cli-oauth-extractor', () => ({
+  extractOAuthClientCredentials: extractCredsMock
 }))
-vi.mock('node:child_process', () => ({
-  execSync: execSyncMock,
-  exec: vi.fn((_cmd, cb) => {
-    if (typeof cb === 'function') {
-      cb(null, { stdout: '', stderr: '' })
-    }
-  })
+
+vi.mock('node:fs/promises', () => ({
+  readFile: readFileMock,
+  writeFile: vi.fn().mockResolvedValue(undefined),
+  rename: vi.fn().mockResolvedValue(undefined)
 }))
 vi.mock('electron', () => ({ net: { fetch: netFetchMock } }))
 
@@ -49,9 +35,7 @@ describe('fetchGeminiRateLimits', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-04-24T12:00:00.000Z'))
     readFileMock.mockReset()
-    existsSyncMock.mockReset()
-    realpathSyncMock.mockReset()
-    execSyncMock.mockReset()
+    extractCredsMock.mockReset()
     netFetchMock.mockReset()
     netFetchMock.mockImplementation((url: string) => {
       if (url.includes('loadCodeAssist')) {
@@ -62,17 +46,8 @@ describe('fetchGeminiRateLimits', () => {
       }
       return Promise.resolve(makeResponse({ error: `Unhandled fetch to ${url}` }, 500))
     })
-    execSyncMock.mockImplementation(() => {
-      throw new Error('not found')
-    })
-    realpathSyncMock.mockImplementation((p: string) => {
-      return p
-    })
-    existsSyncMock.mockReturnValue(false)
-    readdirSyncMock.mockReturnValue([])
-    readFileSyncMock.mockImplementation(() => {
-      throw new Error('ENOENT')
-    })
+    // Default: no CLI installed, refresh path cannot find client credentials.
+    extractCredsMock.mockResolvedValue(null)
     readFileMock.mockRejectedValue({ code: 'ENOENT' })
   })
 
@@ -215,25 +190,21 @@ describe('fetchGeminiRateLimits', () => {
   })
 
   it('retries refresh on 401', async () => {
-    vi.useRealTimers()
     setupAuthJsonValid()
-    execSyncMock.mockReturnValue('/bin/gemini')
-    realpathSyncMock.mockReturnValue('/bin/gemini')
-    readFileMock.mockImplementation(async (p: string) => {
-      if (p.includes('auth.json')) {
-        return JSON.stringify(authJsonGoogle)
-      }
-      if (p.includes('oauth2.js')) {
-        return oauth2JsContent
-      }
-      throw { code: 'ENOENT' }
-    })
+    extractCredsMock.mockResolvedValue({ clientId: 'cid', clientSecret: 'csec' })
+    let quotaCallCount = 0
     netFetchMock.mockImplementation((url: string) => {
       if (url.includes('retrieveUserQuota')) {
+        quotaCallCount += 1
+        if (quotaCallCount === 1) {
+          return Promise.resolve(makeResponse({ error: 'Unauthenticated' }, 401))
+        }
         return Promise.resolve(makeResponse(quotaResponse))
       }
       if (url.includes('token')) {
-        return Promise.resolve(makeResponse({ access_token: 'retried-token' }))
+        return Promise.resolve(
+          makeResponse({ access_token: 'retried-token', expires_in: 3600 })
+        )
       }
       if (url.includes('loadCodeAssist')) {
         return Promise.resolve(makeResponse({ cloudaicompanionProject: 'proj-123' }))
@@ -242,6 +213,7 @@ describe('fetchGeminiRateLimits', () => {
     })
     const result = await fetchGeminiRateLimits(true)
     expect(result.status).toBe('ok')
-    vi.useFakeTimers()
+    // The second quota call should have been made with the refreshed token.
+    expect(quotaCallCount).toBe(2)
   })
 })
