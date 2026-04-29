@@ -59,6 +59,15 @@ export type UISlice = {
   toggleSidebar: () => void
   setSidebarOpen: (open: boolean) => void
   setSidebarWidth: (width: number) => void
+  /** Per-agent "I've looked at this" timestamps, keyed by paneKey. Set when
+   *  the user clicks an agent row or its parent workspace card from the
+   *  dashboard. A row is considered unvisited when no ack exists OR the
+   *  agent's current stateStartedAt is newer than the last ack (i.e. the
+   *  agent has transitioned state since the user last saw it). Session-only
+   *  — restart resets everyone to unvisited, which is harmless since the
+   *  first visit after launch is a legitimate "need to see" moment. */
+  acknowledgedAgentsByPaneKey: Record<string, number>
+  acknowledgeAgents: (paneKeys: string[]) => void
   activeView: 'terminal' | 'settings' | 'tasks'
   previousViewBeforeTasks: 'terminal' | 'settings'
   previousViewBeforeSettings: 'terminal' | 'tasks'
@@ -192,6 +201,33 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
   setSidebarWidth: (width) => set({ sidebarWidth: width }),
+
+  acknowledgedAgentsByPaneKey: {},
+  acknowledgeAgents: (paneKeys) =>
+    set((s) => {
+      if (paneKeys.length === 0) {
+        return s
+      }
+      const now = Date.now()
+      // Why: only allocate a new map (and emit a store update) if at least
+      // one ack is actually moving forward. Comparing `prev < now` instead
+      // of `prev !== now` matters because stored values are historical
+      // timestamps and `Date.now()` advances every millisecond — a strict-
+      // inequality guard would fire on every call and rewrite the map on
+      // every dashboard click or auto-ack tick, forcing every subscriber
+      // (all agent rows, the SidebarHeader count, etc.) to re-render.
+      let next: Record<string, number> | null = null
+      for (const key of paneKeys) {
+        const prev = s.acknowledgedAgentsByPaneKey[key] ?? 0
+        if (prev < now) {
+          if (next === null) {
+            next = { ...s.acknowledgedAgentsByPaneKey }
+          }
+          next[key] = now
+        }
+      }
+      return next ? { acknowledgedAgentsByPaneKey: next } : s
+    }),
 
   activeView: 'terminal',
   previousViewBeforeTasks: 'terminal',

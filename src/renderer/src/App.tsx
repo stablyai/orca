@@ -27,6 +27,7 @@ import { ZoomOverlay } from './components/ZoomOverlay'
 import { SshPassphraseDialog } from './components/settings/SshPassphraseDialog'
 import { useGitStatusPolling } from './components/right-sidebar/useGitStatusPolling'
 import { useEditorExternalWatch } from './hooks/useEditorExternalWatch'
+import { useAutoAckViewedAgent } from './hooks/useAutoAckViewedAgent'
 import {
   setRuntimeGraphStoreStateGetter,
   setRuntimeGraphSyncEnabled
@@ -175,6 +176,7 @@ function App(): React.JSX.Element {
   // of tying reloads to the Explorer UI lifecycle.
   useEditorExternalWatch()
   useGlobalFileDrop()
+  useAutoAckViewedAgent()
 
   // Why: sidebar open/close flips width instantaneously. useLayoutEffect
   // runs synchronously after React commits the DOM but before paint, so
