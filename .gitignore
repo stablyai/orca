@@ -84,3 +84,4 @@ playwright-report/
 # Agent skill installations (machine-local, populated by agent tooling)
 /.claude/skills/
 /.agents/skills/
+/skills-lock.json
