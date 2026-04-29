@@ -36,15 +36,15 @@ const StatusIndicator = React.memo(function StatusIndicator({
       <span
         className={cn(
           'block size-2 rounded-full',
-          status === 'active'
-            ? 'bg-emerald-500'
-            : status === 'permission'
-              ? 'bg-red-500'
-              : status === 'done'
-                ? // Why: sky-500/80 matches the dashboard AgentStateDot's
-                  // `done` color so the two surfaces read as the same state.
-                  'bg-sky-500/80'
-                : 'bg-neutral-500/40'
+          status === 'permission'
+            ? 'bg-red-500'
+            : status === 'done'
+              ? // Green dot for done so working (green spinner) and done (green
+                // solid) share a hue; motion is the differentiator. 'active'
+                // (terminal open, quiet) collapses to the same grey as
+                // 'inactive' to free the green for the done state.
+                'bg-emerald-500'
+              : 'bg-neutral-500/40'
         )}
       />
     </span>

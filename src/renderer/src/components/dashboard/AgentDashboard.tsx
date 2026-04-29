@@ -267,7 +267,7 @@ const AgentDashboard = React.memo(function AgentDashboard() {
                           )}
                           {groupDone > 0 && (
                             <span>
-                              <span className="font-semibold text-sky-500/80">{groupDone}</span>{' '}
+                              <span className="font-semibold text-emerald-500">{groupDone}</span>{' '}
                               done
                             </span>
                           )}
