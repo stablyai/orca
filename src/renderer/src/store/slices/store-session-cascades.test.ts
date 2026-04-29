@@ -908,14 +908,7 @@ describe('reconnectPersistedTerminals', () => {
   // otherwise hydration clears pendingReconnectPtyIdByTabId and tab.ptyId
   // never gets rehydrated.
   function createDaemonEnabledStore(): ReturnType<typeof createTestStore> {
-    const store = createTestStore()
-    store.setState((prev) => ({
-      settings: {
-        ...(prev.settings ?? ({} as AppState['settings'])),
-        experimentalTerminalDaemon: true
-      } as AppState['settings']
-    }))
-    return store
+    return createTestStore()
   }
 
   beforeEach(() => {

@@ -1419,35 +1419,26 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       // Why: preserve the previous session's ptyId for each tab so that
       // reconnectPersistedTerminals can pass it as sessionId to the daemon's
       // createOrAttach RPC, triggering reattach instead of a fresh spawn.
-      // When the experimental daemon is disabled, the LocalPtyProvider will
-      // ignore any sessionId we pass anyway — populating this map just
-      // persists stale daemon-era session IDs into the next session save,
-      // which confuses debugging and bloats the session file. Skip it.
-      const daemonEnabled = s.settings?.experimentalTerminalDaemon === true
       const pendingReconnectPtyIdByTabId: Record<string, string> = {}
-      if (daemonEnabled) {
-        for (const worktreeId of pendingReconnectWorktreeIds) {
-          const worktree = Object.values(s.worktreesByRepo)
-            .flat()
-            .find((entry) => entry.id === worktreeId)
-          const repo = worktree ? s.repos.find((entry) => entry.id === worktree.repoId) : null
-          if (repo?.connectionId) {
-            continue
-          }
-          const rawTabs = session.tabsByWorktree[worktreeId] ?? []
-          for (const tab of rawTabs) {
-            if (tab.ptyId && validTabIds.has(tab.id)) {
-              pendingReconnectPtyIdByTabId[tab.id] = tab.ptyId
-            }
+      for (const worktreeId of pendingReconnectWorktreeIds) {
+        const worktree = Object.values(s.worktreesByRepo)
+          .flat()
+          .find((entry) => entry.id === worktreeId)
+        const repo = worktree ? s.repos.find((entry) => entry.id === worktree.repoId) : null
+        if (repo?.connectionId) {
+          continue
+        }
+        const rawTabs = session.tabsByWorktree[worktreeId] ?? []
+        for (const tab of rawTabs) {
+          if (tab.ptyId && validTabIds.has(tab.id)) {
+            pendingReconnectPtyIdByTabId[tab.id] = tab.ptyId
           }
         }
       }
 
-      // Why: this runs outside the daemonEnabled guard because remote PTY
-      // reattach uses the relay's pty.attach RPC, not the local terminal
-      // daemon. SSH-backed tabs need their session IDs regardless of the
-      // experimentalTerminalDaemon setting. The existing loop above correctly
-      // skips SSH repos (connectionId check), so there is no overlap.
+      // Why: remote PTY reattach uses the relay's pty.attach RPC, not the
+      // local terminal daemon. The loop above correctly skips SSH repos
+      // (connectionId check), so there is no overlap.
       console.warn(
         `[terminals-hydration] remoteSessionIdsByTabId:`,
         JSON.stringify(remoteSessionIds)

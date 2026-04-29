@@ -1006,16 +1006,6 @@ export type GlobalSettings = {
    *  detection, so no visible behavior change. Then we flip this flag to true
    *  and never migrate again. */
   terminalMacOptionAsAltMigrated: boolean
-  /** Experimental: persist terminal sessions across app restarts via an
-   *  out-of-process daemon (src/main/daemon/**). Opt-in because the daemon
-   *  protocol is still stabilizing — some sessions have been observed to go
-   *  unresponsive after internal state drift. Disabled sessions fall back to
-   *  the in-process LocalPtyProvider. Requires an app restart to apply. */
-  experimentalTerminalDaemon: boolean
-  /** One-shot flag for the "persistent sessions are now opt-in" transition
-   *  toast shown to users upgrading from v1.3.0 (where the daemon was on by
-   *  default). Set to true the first time the toast fires so it never repeats. */
-  experimentalTerminalDaemonNoticeShown: boolean
   /** Experimental: live Agent Dashboard — a bottom-docked right-sidebar panel
    *  that aggregates working/blocked/done agents across all worktrees, plus
    *  the sidebar AgentStatusHover surface, retention of "done" rows, and the

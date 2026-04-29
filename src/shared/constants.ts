@@ -179,8 +179,6 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     // the box (issue #903) while US users keep Option-as-Alt readline chords.
     terminalMacOptionAsAlt: 'auto',
     terminalMacOptionAsAltMigrated: false,
-    experimentalTerminalDaemon: false,
-    experimentalTerminalDaemonNoticeShown: false,
     // Why: opt-in preview — default off so managed-hook installation
     // (Claude/Codex/Gemini) stays dormant for existing users and upgraders
     // (persistence.ts merges defaults first, so upgraders inherit this).
