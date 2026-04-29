@@ -710,37 +710,6 @@ function App(): React.JSX.Element {
         return
       }
 
-      // Cmd/Ctrl+Shift+D — open right sidebar (agent dashboard is now
-      // docked at the sidebar bottom, so only toggle visibility).
-      // Why: skip when a terminal is focused — that combo is the terminal
-      // split-pane shortcut (see terminal-shortcut-policy.ts). Both listeners
-      // share the window capture phase and registration order can vary with
-      // React effect re-runs, so a DOM check is the reliable coordination
-      // mechanism (same pattern as Cmd+Shift+G above). xterm-helper-textarea
-      // is the focus target the terminal handler itself uses to detect
-      // terminal focus (see keyboard-handlers.ts isEditableTarget).
-      if (e.shiftKey && !e.altKey && e.key.toLowerCase() === 'd') {
-        // Why: read the experimental toggle at keypress time via getState() so
-        // flipping the setting takes effect immediately without re-binding the
-        // window-level listener (which would require adding `settings` to the
-        // effect deps and tearing down/rebinding on every unrelated settings
-        // change, like theme or font adjustments). Gated behind the key/modifier
-        // check so getState() isn't invoked on every unrelated keystroke.
-        const dashboardExperimentEnabled =
-          useAppStore.getState().settings?.experimentalAgentDashboard === true
-        if (!dashboardExperimentEnabled) {
-          return
-        }
-        const active = document.activeElement as HTMLElement | null
-        if (active?.classList.contains('xterm-helper-textarea')) {
-          return
-        }
-        dispatchClearModifierHints()
-        e.preventDefault()
-        actions.setRightSidebarOpen(true)
-        return
-      }
-
       // Cmd+Shift+I — toggle right sidebar / ports tab (macOS only).
       // Why: Ctrl+Shift+I is the built-in DevTools accelerator on Windows/Linux;
       // intercepting it would break an essential developer tool.
