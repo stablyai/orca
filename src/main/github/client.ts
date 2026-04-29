@@ -439,9 +439,8 @@ async function listRecentWorkItems(
       // Why: PR-side failures must preserve the pre-diff behavior of
       // Promise.all by re-throwing so the rejection propagates up through
       // listWorkItems to the renderer's cross-repo aggregator (which counts
-      // the repo as failed). This feature (docs/issue-source-indicator-and-errors.md §6)
-      // is scoped to the issue-side silent wrongness from #1076; PR errors
-      // must not be silently swallowed here.
+      // the repo as failed). This feature is scoped to the issue-side silent
+      // wrongness from #1076; PR errors must not be silently swallowed here.
       // Why: if the issue side ALSO failed, the classified issuesError would
       // otherwise be silently dropped when we throw the PR reason. Log it so
       // debugging both-sides-failed scenarios (e.g. 403 on both endpoints)
