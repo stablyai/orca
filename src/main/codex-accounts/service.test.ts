@@ -112,7 +112,8 @@ function createStore(settings: GlobalSettings) {
 
 function createRateLimits() {
   return {
-    refreshForCodexAccountChange: vi.fn().mockResolvedValue(undefined)
+    refreshForCodexAccountChange: vi.fn().mockResolvedValue(undefined),
+    evictInactiveCodexCache: vi.fn()
   }
 }
 
@@ -555,7 +556,8 @@ describe('CodexAccountService config sync', () => {
     const rateLimits = {
       refreshForCodexAccountChange: vi.fn(async () => {
         callOrder.push('refresh')
-      })
+      }),
+      evictInactiveCodexCache: vi.fn()
     }
     const runtimeHome = createRuntimeHome()
 
