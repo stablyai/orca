@@ -299,15 +299,11 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const request = (async () => {
       await acquireWorkItemSlot()
       try {
-        const envelope = (await window.api.gh.listWorkItems({
+        const envelope = await window.api.gh.listWorkItems({
           repoPath,
           limit,
           query: query || undefined
-        })) as {
-          items: Omit<GitHubWorkItem, 'repoId'>[]
-          sources: WorkItemsCacheSources
-          errors?: { issues?: ClassifiedError; prs?: ClassifiedError }
-        }
+        })
         // Why: stamp repoId at the renderer fetch boundary so every downstream
         // consumer (cross-repo merge, row rendering, drawer) can rely on the
         // field being present. Main doesn't know Orca's Repo.id.
@@ -387,12 +383,12 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       repos.map(async (r) => {
         await acquireWorkItemSlot()
         try {
-          const envelope = (await window.api.gh.listWorkItems({
+          const envelope = await window.api.gh.listWorkItems({
             repoPath: r.path,
             limit: perRepoLimit,
             query: query || undefined,
             before
-          })) as { items: Omit<GitHubWorkItem, 'repoId'>[] }
+          })
           return envelope.items.map((item): GitHubWorkItem => ({ ...item, repoId: r.repoId }))
         } catch (err) {
           console.warn(`[workItems] next page ${r.repoId} failed:`, err)

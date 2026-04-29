@@ -290,6 +290,12 @@ export default function CreateFromTab({
             .filter((i) => i.type === 'issue')
             .map((i) => ({ ...i, repoId: selectedRepo.id })) as unknown as GitHubWorkItem[]
         )
+        // Why: partial failures (e.g. a 403 on a private upstream's issues)
+        // must surface here, otherwise the subtab shows an empty list and
+        // re-creates the silent-wrongness the parent feature aims to eliminate.
+        if (envelope.errors?.issues) {
+          setIssueError(envelope.errors.issues.message)
+        }
         setIssueLoading(false)
       })
       .catch((err) => {

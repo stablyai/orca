@@ -23,6 +23,7 @@ import {
   getOwnerRepo,
   getIssueOwnerRepo,
   classifyGhError,
+  classifyListIssuesError,
   type OwnerRepo
 } from './gh-utils'
 export { _resetOwnerRepoCache } from './gh-utils'
@@ -426,7 +427,7 @@ async function listRecentWorkItems(
         issuesSettled.reason instanceof Error
           ? issuesSettled.reason.message
           : String(issuesSettled.reason)
-      issuesError = classifyGhError(stderr)
+      issuesError = classifyListIssuesError(stderr)
     }
 
     let prs: MainWorkItem[] = []
@@ -523,7 +524,7 @@ async function listQueriedWorkItems(
       }
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err)
-      return { items: [], issuesError: classifyGhError(stderr) }
+      return { items: [], issuesError: classifyListIssuesError(stderr) }
     }
   })()
 

@@ -12,7 +12,9 @@ import type {
   FsChangedPayload,
   GitHubAssignableUser,
   GitHubCommentResult,
+  GitHubWorkItem,
   GhosttyImportPreview,
+  ListWorkItemsResult,
   MemorySnapshot,
   NotificationDispatchResult,
   SearchResult
@@ -431,7 +433,8 @@ const api = {
       limit?: number
       query?: string
       before?: string
-    }): Promise<unknown> => ipcRenderer.invoke('gh:listWorkItems', args),
+    }): Promise<ListWorkItemsResult<Omit<GitHubWorkItem, 'repoId'>>> =>
+      ipcRenderer.invoke('gh:listWorkItems', args),
 
     prChecks: (args: {
       repoPath: string

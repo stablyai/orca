@@ -2052,6 +2052,7 @@ export default function TaskPage(): React.JSX.Element {
                     return (
                       <div
                         key={`source-err-${s.repoId}`}
+                        role="alert"
                         className="flex items-center justify-between gap-3 border-b border-border/50 bg-destructive/10 px-4 py-3 text-sm text-destructive"
                       >
                         <span>
