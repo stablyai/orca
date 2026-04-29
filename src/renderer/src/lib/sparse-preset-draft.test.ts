@@ -7,7 +7,7 @@ describe('parseSparsePresetDirectories', () => {
       parseSparsePresetDirectories(`
         src\\renderer
         packages/ui/
-        /src/renderer
+        src/renderer
       `)
     ).toEqual({
       directories: ['src/renderer', 'packages/ui'],
@@ -16,7 +16,7 @@ describe('parseSparsePresetDirectories', () => {
   })
 
   it('requires at least one directory', () => {
-    expect(parseSparsePresetDirectories(' \n / ')).toEqual({
+    expect(parseSparsePresetDirectories(' \n ')).toEqual({
       directories: [],
       error: 'Add at least one directory.'
     })
@@ -31,5 +31,19 @@ describe('parseSparsePresetDirectories', () => {
       directories: [],
       error: 'Use repo-relative directories, not root, absolute paths, or parent segments.'
     })
+    expect(parseSparsePresetDirectories('/')).toEqual({
+      directories: [],
+      error: 'Use repo-relative directories, not root, absolute paths, or parent segments.'
+    })
   })
+
+  it.each(['/Users/me/repo/packages/web', 'C:\\repo\\packages\\web', '\\\\server\\share\\repo'])(
+    'rejects absolute directory input before normalization: %s',
+    (entry) => {
+      expect(parseSparsePresetDirectories(entry)).toEqual({
+        directories: [],
+        error: 'Use repo-relative directories, not root, absolute paths, or parent segments.'
+      })
+    }
+  )
 })

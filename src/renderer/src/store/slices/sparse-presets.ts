@@ -5,10 +5,16 @@ import type { SparsePreset } from '../../../../shared/types'
 
 const ERROR_TOAST_DURATION = 60_000
 
+export type SparsePresetsLoadStatus = 'idle' | 'loading' | 'loaded' | 'error'
+
 export type SparsePresetsSlice = {
   /** Per-repo preset list. Lazily populated by `fetchSparsePresets`; missing
    *  key means "not yet fetched", empty array means "fetched, none exist". */
   sparsePresetsByRepo: Record<string, SparsePreset[]>
+  /** Per-repo fetch guard so missing preset buckets keep their loading meaning. */
+  sparsePresetsLoadingByRepo: Record<string, boolean>
+  sparsePresetsLoadStatusByRepo: Record<string, SparsePresetsLoadStatus>
+  sparsePresetsErrorByRepo: Record<string, string | undefined>
   fetchSparsePresets: (repoId: string) => Promise<void>
   saveSparsePreset: (args: {
     repoId: string
@@ -24,23 +30,62 @@ export const createSparsePresetsSlice: StateCreator<AppState, [], [], SparsePres
   get
 ) => ({
   sparsePresetsByRepo: {},
+  sparsePresetsLoadingByRepo: {},
+  sparsePresetsLoadStatusByRepo: {},
+  sparsePresetsErrorByRepo: {},
 
   fetchSparsePresets: async (repoId) => {
+    const state = get()
+    if (
+      state.sparsePresetsByRepo[repoId] !== undefined ||
+      state.sparsePresetsLoadingByRepo[repoId]
+    ) {
+      return
+    }
+    set((s) => ({
+      sparsePresetsLoadingByRepo: { ...s.sparsePresetsLoadingByRepo, [repoId]: true },
+      sparsePresetsLoadStatusByRepo: { ...s.sparsePresetsLoadStatusByRepo, [repoId]: 'loading' },
+      sparsePresetsErrorByRepo: { ...s.sparsePresetsErrorByRepo, [repoId]: undefined }
+    }))
     try {
       const presets = await window.api.sparsePresets.list({ repoId })
       set((s) => ({
-        sparsePresetsByRepo: { ...s.sparsePresetsByRepo, [repoId]: presets }
+        sparsePresetsByRepo: { ...s.sparsePresetsByRepo, [repoId]: presets },
+        sparsePresetsLoadingByRepo: { ...s.sparsePresetsLoadingByRepo, [repoId]: false },
+        sparsePresetsLoadStatusByRepo: { ...s.sparsePresetsLoadStatusByRepo, [repoId]: 'loaded' },
+        sparsePresetsErrorByRepo: { ...s.sparsePresetsErrorByRepo, [repoId]: undefined }
       }))
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      set((s) => ({
+        sparsePresetsLoadingByRepo: { ...s.sparsePresetsLoadingByRepo, [repoId]: false },
+        sparsePresetsLoadStatusByRepo: { ...s.sparsePresetsLoadStatusByRepo, [repoId]: 'error' },
+        sparsePresetsErrorByRepo: { ...s.sparsePresetsErrorByRepo, [repoId]: message }
+      }))
       console.error(`Failed to fetch sparse presets for repo ${repoId}:`, err)
     }
   },
 
   saveSparsePreset: async (args) => {
     try {
+      if (get().sparsePresetsByRepo[args.repoId] === undefined) {
+        // Why: a saved preset alone is not an authoritative repo bucket; load
+        // existing presets first so we do not hide them behind a one-item cache.
+        await get().fetchSparsePresets(args.repoId)
+        if (get().sparsePresetsByRepo[args.repoId] === undefined) {
+          toast.error(args.id ? 'Failed to update preset' : 'Failed to save preset', {
+            description: 'Presets must load before saving.',
+            duration: ERROR_TOAST_DURATION
+          })
+          return null
+        }
+      }
       const saved = await window.api.sparsePresets.save(args)
       set((s) => {
-        const existing = s.sparsePresetsByRepo[args.repoId] ?? []
+        const existing = s.sparsePresetsByRepo[args.repoId]
+        if (existing === undefined) {
+          return {}
+        }
         const without = existing.filter((preset) => preset.id !== saved.id)
         return {
           sparsePresetsByRepo: {

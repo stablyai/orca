@@ -151,6 +151,7 @@ export type UseComposerStateResult = {
 // modal wins when both are present, and the page takes over once the modal
 // closes.
 const composerDropStack: symbol[] = []
+const EMPTY_SPARSE_PRESETS: SparsePreset[] = []
 
 export function useComposerState(options: UseComposerStateOptions): UseComposerStateResult {
   const {
@@ -345,10 +346,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   agentPromptRef.current = agentPrompt
 
   const selectedRepo = eligibleRepos.find((repo) => repo.id === repoId)
-  const sparsePresets = useMemo<SparsePreset[]>(
-    () => sparsePresetsByRepo[repoId] ?? [],
-    [repoId, sparsePresetsByRepo]
-  )
+  const sparsePresetsForRepo = sparsePresetsByRepo[repoId]
+  const sparsePresets = sparsePresetsForRepo ?? EMPTY_SPARSE_PRESETS
   const normalizedSparseDirectories = useMemo(
     () => normalizeSparseDirectoryLines(sparseDirectories),
     [sparseDirectories]

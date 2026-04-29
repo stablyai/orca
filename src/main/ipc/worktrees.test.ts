@@ -116,6 +116,7 @@ describe('registerWorktreeHandlers', () => {
   const store = {
     getRepos: vi.fn(),
     getRepo: vi.fn(),
+    getSparsePresets: vi.fn(),
     getSettings: vi.fn(),
     getWorktreeMeta: vi.fn(),
     setWorktreeMeta: vi.fn(),
@@ -147,6 +148,7 @@ describe('registerWorktreeHandlers', () => {
       mainWindow.webContents.send,
       store.getRepos,
       store.getRepo,
+      store.getSparsePresets,
       store.getSettings,
       store.getWorktreeMeta,
       store.setWorktreeMeta,
@@ -172,6 +174,7 @@ describe('registerWorktreeHandlers', () => {
     }
     store.getRepos.mockReturnValue([repo])
     store.getRepo.mockReturnValue({ ...repo, worktreeBaseRef: null })
+    store.getSparsePresets.mockReturnValue([])
     store.getSettings.mockReturnValue({
       branchPrefix: 'none',
       nestWorkspaces: false,
@@ -487,12 +490,22 @@ describe('registerWorktreeHandlers', () => {
       sparseBaseRef: 'origin/main',
       sparsePresetId: 'preset-1'
     })
+    store.getSparsePresets.mockReturnValue([
+      {
+        id: 'preset-1',
+        repoId: 'repo-1',
+        name: 'Frontend and API',
+        directories: ['packages/web', 'apps/api'],
+        createdAt: 1,
+        updatedAt: 1
+      }
+    ])
 
     const result = await handlers['worktrees:create'](null, {
       repoId: 'repo-1',
       name: 'improve-dashboard',
       sparseCheckout: {
-        directories: [' packages/web ', '\\apps\\api\\', '/packages/web/'],
+        directories: [' packages/web ', 'apps\\api\\', 'packages/web/'],
         presetId: 'preset-1'
       }
     })
@@ -525,6 +538,80 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
+  it('clears sparse preset attribution when the preset id does not belong to the repo', async () => {
+    listWorktreesMock.mockResolvedValue([
+      {
+        ...createdWorktreeList[0],
+        isSparse: true
+      }
+    ])
+    store.getSparsePresets.mockReturnValue([
+      {
+        id: 'preset-2',
+        repoId: 'repo-1',
+        name: 'Other preset',
+        directories: ['packages/web'],
+        createdAt: 1,
+        updatedAt: 1
+      }
+    ])
+
+    await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'improve-dashboard',
+      sparseCheckout: {
+        directories: ['packages/web'],
+        presetId: 'preset-1'
+      }
+    })
+
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith(
+      'repo-1::/workspace/improve-dashboard',
+      expect.objectContaining({
+        sparseDirectories: ['packages/web'],
+        sparseBaseRef: 'origin/main',
+        sparsePresetId: undefined
+      })
+    )
+  })
+
+  it('clears sparse preset attribution when normalized directories do not match', async () => {
+    listWorktreesMock.mockResolvedValue([
+      {
+        ...createdWorktreeList[0],
+        isSparse: true
+      }
+    ])
+    store.getSparsePresets.mockReturnValue([
+      {
+        id: 'preset-1',
+        repoId: 'repo-1',
+        name: 'Frontend and API',
+        directories: ['packages/web', 'apps/api'],
+        createdAt: 1,
+        updatedAt: 1
+      }
+    ])
+
+    await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'improve-dashboard',
+      sparseCheckout: {
+        directories: ['packages/web'],
+        presetId: 'preset-1'
+      }
+    })
+
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith(
+      'repo-1::/workspace/improve-dashboard',
+      expect.objectContaining({
+        sparseDirectories: ['packages/web'],
+        sparseBaseRef: 'origin/main',
+        sparsePresetId: undefined
+      })
+    )
+  })
+
   it('rejects sparse checkout directories that traverse above the repo root', async () => {
     await expect(
       handlers['worktrees:create'](null, {
@@ -539,6 +626,24 @@ describe('registerWorktreeHandlers', () => {
     expect(addSparseWorktreeMock).not.toHaveBeenCalled()
     expect(addWorktreeMock).not.toHaveBeenCalled()
   })
+
+  it.each(['/Users/me/repo/packages/web', 'C:\\repo\\packages\\web', '\\\\server\\share\\repo'])(
+    'rejects absolute sparse checkout directory before normalization: %s',
+    async (directory) => {
+      await expect(
+        handlers['worktrees:create'](null, {
+          repoId: 'repo-1',
+          name: 'improve-dashboard',
+          sparseCheckout: {
+            directories: ['packages/web', directory]
+          }
+        })
+      ).rejects.toThrow('Sparse checkout directories must be repo-relative paths.')
+
+      expect(addSparseWorktreeMock).not.toHaveBeenCalled()
+      expect(addWorktreeMock).not.toHaveBeenCalled()
+    }
+  )
 
   it('still returns the created worktree when setup runner generation fails', async () => {
     listWorktreesMock.mockResolvedValue(createdWorktreeList)

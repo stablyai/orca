@@ -89,20 +89,19 @@ export async function listWorktrees(repoPath: string): Promise<GitWorktreeInfo[]
     const { stdout } = await gitExecFileAsync(['worktree', 'list', '--porcelain', '-z'], {
       cwd: repoPath
     })
-    // Why: when git runs inside WSL, worktree paths are Linux-native
-    // (e.g. /home/user/repo). Translate them back to Windows UNC paths
-    // so the rest of Orca can access them via Node fs APIs.
-    const translated = translateWslOutputPaths(stdout, repoPath)
-    const worktrees = parseWorktreeList(translated)
+    // Why: WSL path translation is line-oriented, but `-z` porcelain output is
+    // NUL-delimited. Parse first so only complete path fields are translated.
+    const worktrees = parseWorktreeList(stdout).map((worktree) => {
+      const translatedPath = translateWorktreePath(worktree.path, repoPath)
+      return translatedPath === worktree.path ? worktree : { ...worktree, path: translatedPath }
+    })
     return Promise.all(
       worktrees.map(async (worktree) => {
-        if (worktree.isBare) {
+        if (worktree.isBare || worktree.isSparse) {
           return worktree
         }
-        return {
-          ...worktree,
-          isSparse: worktree.isSparse || (await detectSparseCheckout(worktree.path))
-        }
+        const isSparse = await detectSparseCheckout(worktree.path)
+        return isSparse ? { ...worktree, isSparse } : worktree
       })
     )
   } catch {
@@ -203,14 +202,14 @@ export async function addSparseWorktree(
     await addWorktree(repoPath, worktreePath, branch, baseBranch, refreshLocalBaseRef, true)
     created = true
     await gitExecFileAsync(['sparse-checkout', 'init', '--cone'], { cwd: worktreePath })
-    await gitExecFileAsync(['sparse-checkout', 'set', ...directories], { cwd: worktreePath })
+    await gitExecFileAsync(['sparse-checkout', 'set', '--', ...directories], { cwd: worktreePath })
     await gitExecFileAsync(['checkout', branch], { cwd: worktreePath })
   } catch (error) {
     const wrapped: SparseWorktreeCreateError =
       error instanceof Error ? (error as SparseWorktreeCreateError) : new Error(String(error))
     if (created) {
       try {
-        await gitExecFileAsync(['worktree', 'remove', '--force', worktreePath], { cwd: repoPath })
+        await removeWorktree(repoPath, worktreePath, true)
       } catch {
         wrapped.cleanupFailed = true
       }
@@ -269,17 +268,6 @@ export async function removeWorktree(
   }
 }
 
-async function detectSparseCheckout(worktreePath: string): Promise<boolean> {
-  try {
-    const { stdout } = await gitExecFileAsync(['config', '--bool', 'core.sparseCheckout'], {
-      cwd: worktreePath
-    })
-    return stdout.trim() === 'true'
-  } catch {
-    return false
-  }
-}
-
 function parseNullDelimitedWorktreeBlocks(output: string): string[][] {
   const blocks: string[][] = []
   let current: string[] = []
@@ -300,4 +288,21 @@ function parseNullDelimitedWorktreeBlocks(output: string): string[][] {
   }
 
   return blocks
+}
+
+function translateWorktreePath(worktreePath: string, repoPath: string): string {
+  const prefix = 'worktree '
+  const translated = translateWslOutputPaths(`${prefix}${worktreePath}`, repoPath)
+  return translated.startsWith(prefix) ? translated.slice(prefix.length) : worktreePath
+}
+
+async function detectSparseCheckout(worktreePath: string): Promise<boolean> {
+  try {
+    const { stdout } = await gitExecFileAsync(['config', '--bool', 'core.sparseCheckout'], {
+      cwd: worktreePath
+    })
+    return stdout.trim() === 'true'
+  } catch {
+    return false
+  }
 }

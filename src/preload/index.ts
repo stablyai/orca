@@ -9,6 +9,7 @@ import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type {
   BaseRefDefaultResult,
+  CreateWorktreeArgs,
   FsChangedPayload,
   GitHubAssignableUser,
   GitHubCommentResult,
@@ -272,13 +273,8 @@ const api = {
 
     listAll: (): Promise<unknown[]> => ipcRenderer.invoke('worktrees:listAll'),
 
-    create: (args: {
-      repoId: string
-      name: string
-      baseBranch?: string
-      setupDecision?: 'inherit' | 'run' | 'skip'
-      sparseCheckout?: { directories: string[]; presetId?: string }
-    }): Promise<unknown> => ipcRenderer.invoke('worktrees:create', args),
+    create: (args: CreateWorktreeArgs): Promise<unknown> =>
+      ipcRenderer.invoke('worktrees:create', args),
 
     resolvePrBase: (args: {
       repoId: string

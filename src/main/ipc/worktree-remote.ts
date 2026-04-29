@@ -318,6 +318,23 @@ export async function createLocalWorktree(
   if (args.sparseCheckout && sparseDirectories.length === 0) {
     throw new Error('Sparse checkout requires at least one repo-relative directory.')
   }
+  let sparsePresetId: string | undefined
+  if (args.sparseCheckout?.presetId) {
+    const preset = store
+      .getSparsePresets(repo.id)
+      .find((entry) => entry.id === args.sparseCheckout?.presetId)
+    if (preset?.repoId === repo.id) {
+      try {
+        const presetDirectories = normalizeSparseDirectories(preset.directories)
+        const directoriesMatch =
+          presetDirectories.length === sparseDirectories.length &&
+          presetDirectories.every((entry, index) => entry === sparseDirectories[index])
+        sparsePresetId = directoriesMatch ? preset.id : undefined
+      } catch {
+        // Why: corrupt preset data should not block creation or falsely label the new worktree.
+      }
+    }
+  }
 
   // Why: `git fetch` previously blocked worktree creation for 1–5s on every
   // click, even though the fetch result isn't actually required — the
@@ -367,7 +384,7 @@ export async function createLocalWorktree(
       ? {
           sparseDirectories,
           sparseBaseRef: baseBranch,
-          ...(args.sparseCheckout?.presetId ? { sparsePresetId: args.sparseCheckout.presetId } : {})
+          sparsePresetId
         }
       : {})
   }

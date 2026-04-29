@@ -8,6 +8,7 @@ import type {
   BrowserSessionProfileSource,
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState,
+  CreateWorktreeArgs,
   CreateWorktreeResult,
   DirEntry,
   FsChangedPayload,
@@ -342,13 +343,7 @@ export type PreloadApi = {
   worktrees: {
     list: (args: { repoId: string }) => Promise<Worktree[]>
     listAll: () => Promise<Worktree[]>
-    create: (args: {
-      repoId: string
-      name: string
-      baseBranch?: string
-      setupDecision?: 'inherit' | 'run' | 'skip'
-      sparseCheckout?: { directories: string[]; presetId?: string }
-    }) => Promise<CreateWorktreeResult>
+    create: (args: CreateWorktreeArgs) => Promise<CreateWorktreeResult>
     resolvePrBase: (args: {
       repoId: string
       prNumber: number
