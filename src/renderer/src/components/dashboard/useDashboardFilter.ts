@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react'
+import { useMemo } from 'react'
+import { useAppStore } from '@/store'
 import type {
   DashboardRepoGroup,
   DashboardWorktreeCard,
@@ -85,12 +86,30 @@ export function useDashboardFilter(
   filteredGroups: FilteredDashboardGroup[]
   hasResults: boolean
 } {
-  const [filter, setFilter] = useState<DashboardFilter>('all')
+  // Why: the filter now lives on the UI slice (dashboardFilter) so the
+  // sidebar's options dropdown and the dashboard share a single source of
+  // truth — the user can pick All|Active|Blocked|Done from the sidebar's
+  // header icon and see it applied without flipping to a separate filter
+  // bar inside the panel. Same session-only retention as before; no
+  // persistence across restarts.
+  const filter = useAppStore((s) => s.dashboardFilter)
+  const setFilter = useAppStore((s) => s.setDashboardFilter)
+  // Why: the sidebar's "Filter worktrees" dropdown (search-bar adornment)
+  // exposes a per-repo selection. Apply it here too so the same control
+  // scopes BOTH the Workspaces list and the Agents dashboard — one filter
+  // UI, one mental model. `showActiveOnly` is intentionally not wired in:
+  // its meaning ("worktree has a live terminal") collides with the
+  // dashboard's own Active-state filter and would confuse the two axes.
+  const filterRepoIds = useAppStore((s) => s.filterRepoIds)
 
   const filteredGroups = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
+    const repoFilter = filterRepoIds.length > 0 ? new Set(filterRepoIds) : null
     const out: FilteredDashboardGroup[] = []
     for (const group of groups) {
+      if (repoFilter && !repoFilter.has(group.repo.id)) {
+        continue
+      }
       const worktrees: DashboardWorktreeCard[] = []
       // Why: accumulate per-repo state counts while we already iterate the
       // filtered agents — avoids a second pass (and avoids re-walking every
@@ -169,7 +188,7 @@ export function useDashboardFilter(
     // and fall to the top, which is fine since they render empty anyway.
     out.sort((a, b) => a.earliestStartedAt - b.earliestStartedAt)
     return out
-  }, [groups, filter, searchQuery])
+  }, [groups, filter, searchQuery, filterRepoIds])
 
   // Why: filteredGroups drops any group whose worktrees array is empty (see the
   // early-continue above), so a non-empty groups array guarantees at least one

@@ -1,14 +1,11 @@
 import React, { useState, useCallback, useMemo, useRef } from 'react'
-import { Search, X, ChevronDown, ChevronRight, FolderGit2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, FolderGit2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
 import { useDashboardData } from './useDashboardData'
 import { useDashboardFilter } from './useDashboardFilter'
 import { useDashboardKeyboard } from './useDashboardKeyboard'
 import { useRetainedAgents } from './useRetainedAgents'
-import DashboardFilterBar from './DashboardFilterBar'
 import DashboardWorktreeCard from './DashboardWorktreeCard'
 import { useNow } from './useNow'
 
@@ -48,7 +45,13 @@ const AgentDashboard = React.memo(function AgentDashboard() {
     [dropAgentStatus, dismissAgent]
   )
 
-  const [searchQuery, setSearchQuery] = useState('')
+  // Why: share the sidebar's search input with the dashboard. The left
+  // sidebar's Workspaces and Agents views both render <SearchBar /> above
+  // the list, and both write into `searchQuery`. Re-using the same store
+  // field means typing in the search bar filters whichever view the user
+  // is currently looking at, with no duplicated UI.
+  const searchQuery = useAppStore((s) => s.searchQuery)
+  const setSearchQuery = useAppStore((s) => s.setSearchQuery)
   const { filter, setFilter, filteredGroups, hasResults } = useDashboardFilter(groups, searchQuery)
   const [focusedWorktreeId, setFocusedWorktreeId] = useState<string | null>(null)
   // Why: repo groups are collapsible so users can hide repos they aren't
@@ -144,7 +147,7 @@ const AgentDashboard = React.memo(function AgentDashboard() {
     [setKeyboardContainer]
   )
 
-  const handleClearSearch = useCallback(() => setSearchQuery(''), [])
+  const handleClearSearch = useCallback(() => setSearchQuery(''), [setSearchQuery])
 
   const searchActive = searchQuery.trim().length > 0
   const showNoResults = searchActive && !hasResults
@@ -167,32 +170,11 @@ const AgentDashboard = React.memo(function AgentDashboard() {
         </div>
       ) : (
         <>
-          <div className="flex shrink-0 flex-col gap-1.5 border-b border-border/40 px-2 py-1.5">
-            <div className="relative flex items-center">
-              <Search className="absolute left-2 size-3.5 text-muted-foreground pointer-events-none" />
-              <Input
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search..."
-                className="h-7 pl-7 pr-7 text-[11px] border-none bg-muted/50 shadow-none focus-visible:ring-1 focus-visible:ring-ring/30"
-              />
-              {searchActive && (
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={handleClearSearch}
-                  className="absolute right-1 size-5"
-                  aria-label="Clear search"
-                >
-                  <X className="size-3" />
-                </Button>
-              )}
-            </div>
-            <div className="flex items-center justify-center">
-              <DashboardFilterBar value={filter} onChange={setFilter} />
-            </div>
-          </div>
-
+          {/* Why: the search input and state-filter (All|Active|Blocked|Done)
+              used to live inside the dashboard's own header. They now render
+              in the sidebar's shared SearchBar + options dropdown so the
+              sidebar chrome stays stable when the user toggles between
+              Workspaces and Agents — no layout shift, no duplicated controls. */}
           <div className="flex-1 overflow-y-auto scrollbar-sleek">
             {hasResults ? (
               <div className="flex flex-col">

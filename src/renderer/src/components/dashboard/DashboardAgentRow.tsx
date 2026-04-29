@@ -63,8 +63,10 @@ function lastEnteredDoneAt(agent: DashboardAgentRowData): number | null {
 type Props = {
   agent: DashboardAgentRowData
   onDismiss: (paneKey: string) => void
-  /** Navigate directly to the tab this agent lives in. */
-  onActivate: (tabId: string) => void
+  /** Navigate directly to the tab this agent lives in. paneKey is passed
+   *  through so the caller can acknowledge (mark-visited) the specific row
+   *  that was clicked, without having to re-derive it from the tab id. */
+  onActivate: (tabId: string, paneKey: string) => void
   /**
    * Why: the relative-time labels ("Xm ago") need a periodic re-render to stay
    * honest. We accept `now` from a parent container so a single 30s tick owned
@@ -73,13 +75,28 @@ type Props = {
    * tick (AgentDashboard for the dashboard, AgentStatusHover for hovercards).
    */
   now: number
+  /**
+   * Why: bold weight for the prompt rides on the enclosing worktree's
+   * isUnread (unvisited) signal, not on the per-agent state. Passed in from
+   * DashboardWorktreeCard so the workspace name and its agent rows share
+   * the same "you haven't looked at this yet" rule — visiting the worktree
+   * clears isUnread, and the next render mutes both in lockstep.
+   *
+   * Optional because this row is also reused by the sidebar's
+   * AgentStatusHover, which is a transient popover where the WorktreeCard
+   * itself already carries the unread signal visually — bolding prompts
+   * there would double-encode. Default false = muted everywhere callers
+   * don't care.
+   */
+  isUnvisited?: boolean
 }
 
 const DashboardAgentRow = React.memo(function DashboardAgentRow({
   agent,
   onDismiss,
   onActivate,
-  now
+  now,
+  isUnvisited = false
 }: Props) {
   const [expanded, setExpanded] = useState(false)
   // Why: stop propagation so clicking the X doesn't also fire the worktree
@@ -120,9 +137,9 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const handleActivate = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
-      onActivate(agent.tab.id)
+      onActivate(agent.tab.id, agent.paneKey)
     },
-    [onActivate, agent.tab.id]
+    [onActivate, agent.tab.id, agent.paneKey]
   )
   const startedAt = agent.startedAt > 0 ? agent.startedAt : null
   const doneAt = lastEnteredDoneAt(agent)
@@ -165,8 +182,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
     // role=button violates ARIA's "no interactive content inside interactive
     // content" rule and breaks keyboard/AT navigation. Keyboard users reach
     // the agent via the child buttons and the tab switcher; the outer <div>
-    // stays a plain clickable surface for pointer activation, mirroring the
-    // pattern in DashboardBottomPanel.tsx's collapse header.
+    // stays a plain clickable surface for pointer activation.
     <div
       onClick={handleActivate}
       className={cn(
@@ -223,12 +239,11 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
             overflow-hidden so the truncate→wrap class flip stays clipped
             during the interpolation.
 
-            Done and waiting rows get "unread" weight (semibold + full
-            foreground) so the user can tell at a glance which rows need
-            their attention. Working/idle stay at the quieter baseline
-            since the state dot (spinner or neutral) is already doing the
-            work. Mirrors the convention in Slack/Gmail/Linear where the
-            row text thickens to signal "you haven't dealt with this yet."
+            Weight tracks the workspace's unvisited signal (isUnread):
+            bold + full foreground for agents inside a workspace the user
+            hasn't looked at yet, normal + muted once they've visited. This
+            keeps the prompt row's weight in lockstep with the workspace
+            name above it — one attention axis, not two.
 
             Rendered unconditionally with a state-label fallback so rows
             without a prompt (fresh/unknown) still have a human-readable
@@ -238,9 +253,9 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
             'block min-w-0 flex-1 overflow-hidden text-[11px] leading-snug',
             'transition-[height] duration-200 ease-out [interpolate-size:allow-keywords]',
             expanded ? 'h-auto whitespace-pre-wrap break-words' : 'h-[1lh] truncate',
-            agent.state === 'done' || agent.state === 'waiting' || agent.state === 'blocked'
+            isUnvisited
               ? 'font-semibold text-foreground'
-              : 'font-medium text-foreground/90'
+              : 'font-normal text-muted-foreground'
           )}
           // Why: tooltip should only reveal truncated prompt text — not echo state-word fallbacks
           // (e.g. "Working"/"Done") that already fit on one line and never overflow.

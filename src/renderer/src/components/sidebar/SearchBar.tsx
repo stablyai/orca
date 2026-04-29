@@ -73,7 +73,7 @@ const SearchBar = React.memo(function SearchBar() {
   })()
 
   return (
-    <div className="px-2 pb-4">
+    <div className="px-2 pb-1">
       <div className="relative flex items-center">
         <Search
           className="absolute left-2.5 size-3.5 text-muted-foreground pointer-events-none"

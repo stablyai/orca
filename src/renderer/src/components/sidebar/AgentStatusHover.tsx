@@ -203,8 +203,12 @@ const AgentStatusHover = React.memo(function AgentStatusHover({
   // Why: clicking a row activates the specific tab the agent runs in. Retained
   // rows can outlive their tab, so fall back to worktree-only activation when
   // the tab is no longer present.
+  // Why: paneKey is accepted to match DashboardAgentRow's onActivate
+  // signature but ignored here — the sidebar hovercard is a preview, not
+  // the dashboard; per-agent "visited" ack only makes sense in the
+  // dashboard context where the bold/muted weight signals unread.
   const handleActivateAgentTab = useCallback(
-    (tabId: string) => {
+    (tabId: string, _paneKey: string) => {
       setActiveWorktree(worktreeId)
       setActiveView('terminal')
       const tabs = useAppStore.getState().tabsByWorktree[worktreeId] ?? []
@@ -249,7 +253,7 @@ const AgentStatusHover = React.memo(function AgentStatusHover({
 type AgentStatusHoverContentProps = {
   agents: DashboardAgentRowType[]
   onDismiss: (paneKey: string) => void
-  onActivate: (tabId: string) => void
+  onActivate: (tabId: string, paneKey: string) => void
 }
 
 // Why: split out so `useNow(30_000)` only runs while the hovercard body is

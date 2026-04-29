@@ -21,7 +21,6 @@ import FileExplorer from './FileExplorer'
 import SourceControl from './SourceControl'
 import SearchPanel from './Search'
 import ChecksPanel from './ChecksPanel'
-import DashboardBottomPanel from './DashboardBottomPanel'
 import PortsPanel from './PortsPanel'
 
 const MIN_WIDTH = 220
@@ -124,16 +123,6 @@ function RightSidebarInner(): React.JSX.Element {
   const checksStatus = useAppStore(getActiveChecksStatus)
   const activityBarPosition = useAppStore((s) => s.activityBarPosition)
   const setActivityBarPosition = useAppStore((s) => s.setActivityBarPosition)
-  // Why: the bottom-docked agent dashboard is opt-out via Settings → Agents,
-  // AND gated behind the experimental opt-in setting. Users who prefer a
-  // quieter sidebar can hide the panel without losing any in-terminal agent
-  // status — the per-tab status indicators remain. While settings are still
-  // loading, render the panel so it doesn't flash in once settings arrive.
-  const showAgentDashboard = useAppStore((s) => s.settings?.showAgentDashboard !== false)
-  const dashboardExperimentEnabled = useAppStore(
-    (s) => s.settings?.experimentalAgentDashboard === true
-  )
-
   // Why: source control and checks are meaningless for non-git folders.
   // Hide those tabs so the activity bar only shows relevant actions.
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
@@ -245,10 +234,10 @@ function RightSidebarInner(): React.JSX.Element {
           that froze the app for seconds on Windows.  Each panel now reacts
           to activeWorktreeId changes via store subscriptions and reset
           effects, keeping the component instance alive across switches. */}
-      {/* Why: the active tab content takes the top of the sidebar. The agent
-          dashboard docks at the bottom regardless of which tab is selected,
-          so users keep a glanceable view of agent status while they browse
-          files, search, etc. */}
+      {/* Why: the agent cockpit has moved to the left sidebar (Workspaces |
+          Agents toggle) so it lives as a peer to Workspaces rather than as a
+          bottom-docked panel that competed with file Explorer/Search for
+          vertical space. The right sidebar is back to tab-only content. */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {effectiveTab === 'explorer' && <FileExplorer />}
         {effectiveTab === 'search' && <SearchPanel />}
@@ -256,7 +245,6 @@ function RightSidebarInner(): React.JSX.Element {
         {effectiveTab === 'checks' && <ChecksPanel />}
         {effectiveTab === 'ports' && <PortsPanel />}
       </div>
-      {dashboardExperimentEnabled && showAgentDashboard && <DashboardBottomPanel />}
     </div>
   )
 

@@ -1,4 +1,5 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, useMemo } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import DashboardAgentRow from './DashboardAgentRow'
@@ -39,26 +40,57 @@ const DashboardWorktreeCard = React.memo(function DashboardWorktreeCard({
 }: Props) {
   const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
   const setActiveView = useAppStore((s) => s.setActiveView)
+  const acknowledgeAgents = useAppStore((s) => s.acknowledgeAgents)
 
-  // Why: clicking a worktree row only navigates. It does NOT dismiss retained
-  // done agents — the user may have multiple agents done (e.g. Claude + Codex)
-  // and silently dropping any of them on row click erases a signal they were
-  // about to click through to investigate. Dismissal happens only through the
-  // explicit X button on each agent row.
+  // Why: selector returns the per-agent ack timestamps for only THIS card's
+  // agents via useShallow so the card doesn't re-render on unrelated ack
+  // changes elsewhere in the dashboard. Map paneKey -> last-ack-at (or 0).
+  const paneKeys = useMemo(() => card.agents.map((a) => a.paneKey), [card.agents])
+  const ackByPaneKey = useAppStore(
+    useShallow((s) => {
+      const out: Record<string, number> = {}
+      for (const paneKey of paneKeys) {
+        out[paneKey] = s.acknowledgedAgentsByPaneKey[paneKey] ?? 0
+      }
+      return out
+    })
+  )
+
+  // Why: an agent counts as "unvisited" when it has no ack OR the agent's
+  // current state began after the last ack (a new turn/state transition is
+  // a fresh signal the user hasn't seen). Using stateStartedAt (not
+  // updatedAt) means within-state tool/prompt pings don't re-trigger the
+  // unread highlight; only genuine state changes do.
+  const isAgentUnvisited = useCallback(
+    (paneKey: string, stateStartedAt: number) => {
+      const ackAt = ackByPaneKey[paneKey] ?? 0
+      return ackAt < stateStartedAt
+    },
+    [ackByPaneKey]
+  )
+
+  // Why: clicking a worktree row navigates AND acknowledges every agent
+  // currently shown under it. The user looking at the card counts as
+  // "seeing" all its rows, even ones they don't click individually —
+  // otherwise a workspace with five done agents would stay bold forever
+  // after the user scrolled past it. Dismissal of done rows still requires
+  // the explicit X; ack only changes the visual weight.
   const handleClick = useCallback(() => {
     setActiveWorktree(card.worktree.id)
     setActiveView('terminal')
-  }, [card.worktree.id, setActiveWorktree, setActiveView])
+    acknowledgeAgents(paneKeys)
+  }, [card.worktree.id, paneKeys, setActiveWorktree, setActiveView, acknowledgeAgents])
 
-  // Why: clicking an agent row only navigates to that agent's tab. It must not
-  // call onCheck() — that would mark the worktree as checked AND dismiss all
-  // retained done rows in it, which erases the signal the user was clicking
-  // through to investigate. Only the X button on a done row should dismiss it.
+  // Why: clicking an agent row navigates to that agent's tab AND acks the
+  // row so it fades to the visited weight. Scoped to a single paneKey so
+  // sibling rows (other agents on the same workspace) remain bold until the
+  // user looks at them. Dismissal still requires the explicit X.
   const handleActivateAgent = useCallback(
-    (tabId: string) => {
+    (tabId: string, paneKey: string) => {
       onActivateAgentTab(card.worktree.id, tabId)
+      acknowledgeAgents([paneKey])
     },
-    [card.worktree.id, onActivateAgentTab]
+    [card.worktree.id, onActivateAgentTab, acknowledgeAgents]
   )
 
   // Why: React's onFocus handler receives a SyntheticEvent, but the parent
@@ -68,7 +100,16 @@ const DashboardWorktreeCard = React.memo(function DashboardWorktreeCard({
     onFocus(card.worktree.id)
   }, [onFocus, card.worktree.id])
 
-  const branchName = card.worktree.branch?.replace(/^refs\/heads\//, '') ?? ''
+  // Why: workspace-level bold/muted weight tracks whether ANY of this card's
+  // agents are unvisited — so the workspace header stays bold while even one
+  // row inside it needs the user's attention, and fades once they've clicked
+  // through every agent. Per-agent granularity lives on the rows themselves
+  // (DashboardAgentRow isUnvisited prop). If a workspace has no agents yet
+  // (edge case during spin-up), default to muted so the row doesn't read
+  // louder than it has value to.
+  const anyAgentUnvisited = card.agents.some((a) =>
+    isAgentUnvisited(a.paneKey, a.entry.stateStartedAt)
+  )
 
   // Why: the card is a clickable *surface* but NOT a `role="button"` — its
   // children (DashboardAgentRow) render real <button>s (dismiss X, chevron),
@@ -77,8 +118,7 @@ const DashboardWorktreeCard = React.memo(function DashboardWorktreeCard({
   // dashboard's keyboard hook (useDashboardKeyboard.ts) owns Enter/arrow-key
   // routing via `closest('[data-worktree-id]')`, so activation is handled
   // there — we only need the surface to be programmatically focusable
-  // (tabIndex={-1}) so arrow-key navigation's `cardEl.focus()` works. This
-  // mirrors the DashboardBottomPanel.tsx:247-253 pattern.
+  // (tabIndex={-1}) so arrow-key navigation's `cardEl.focus()` works.
   return (
     <div
       tabIndex={-1}
@@ -105,18 +145,24 @@ const DashboardWorktreeCard = React.memo(function DashboardWorktreeCard({
         !isLast && 'border-b border-border/80'
       )}
     >
-      {/* Worktree header row. Why: workspace name + branch share one line
-          to save vertical space — the branch is a secondary qualifier that
-          reads fine as a muted suffix rather than its own line. */}
+      {/* Worktree header row. Why: minimal — workspace name only. The branch
+          and path used to sit next to the name but they duplicate what the
+          sidebar's worktree list already shows; in the agent dashboard the
+          user cares about "is there activity I need to look at?", not the
+          ref or filesystem path. Weight is driven by isUnread so unvisited
+          workspaces read boldly, while already-visited ones fade into the
+          background. */}
       <div className="flex items-baseline gap-1.5 min-w-0">
-        <span className="text-[11px] font-semibold text-foreground truncate leading-tight shrink-0 max-w-[60%]">
+        <span
+          className={cn(
+            'text-[11px] truncate leading-tight min-w-0',
+            anyAgentUnvisited
+              ? 'font-semibold text-foreground'
+              : 'font-normal text-muted-foreground'
+          )}
+        >
           {card.worktree.displayName}
         </span>
-        {branchName && (
-          <span className="text-[10px] text-muted-foreground/60 truncate min-w-0 leading-tight">
-            {branchName}
-          </span>
-        )}
       </div>
 
       {/* Agent rows with activity blocks */}
@@ -129,6 +175,7 @@ const DashboardWorktreeCard = React.memo(function DashboardWorktreeCard({
                 onDismiss={onDismissAgent}
                 onActivate={handleActivateAgent}
                 now={now}
+                isUnvisited={isAgentUnvisited(agent.paneKey, agent.entry.stateStartedAt)}
               />
             </div>
           ))}
