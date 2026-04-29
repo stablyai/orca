@@ -10,10 +10,10 @@ import { useAppStore } from '@/store'
 // The effect subscribes directly to the store (not via React selectors) so it
 // sees every state change with no re-render amplification up the component
 // tree. A reference-equality guard inside the callback bails out immediately
-// when none of the four slices we care about (activeView, activeTabId,
-// agentStatusByPaneKey, acknowledgedAgentsByPaneKey) have changed — so the
-// Object.entries walk only runs for updates that could legitimately affect
-// the ack decision.
+// when none of the five slices we care about (activeView, activeTabId,
+// agentStatusByPaneKey, acknowledgedAgentsByPaneKey, settings) have changed —
+// so the Object.entries walk only runs for updates that could legitimately
+// affect the ack decision.
 //
 // It acks whenever:
 //   - activeView is 'terminal' (the user isn't on Settings/Tasks), AND
@@ -36,6 +36,14 @@ export function useAutoAckViewedAgent(): void {
     let lastActiveTabId: unknown = undefined
     let lastAgentStatus: unknown = undefined
     let lastAcknowledged: unknown = undefined
+    // Why: settings is tracked so flipping `experimentalAgentDashboard`
+    // alone re-evaluates the feature gate below — without this, a pure
+    // settings change would be swallowed by the fast-path until some other
+    // tracked slice changed. Tracking the whole settings reference (rather
+    // than the one specific boolean) is acceptable because settings changes
+    // are rare compared to agent-status updates, and it matches the existing
+    // pattern of tracking whole slice references.
+    let lastSettings: unknown = undefined
 
     const maybeAck = (): void => {
       const s = useAppStore.getState()
@@ -43,7 +51,8 @@ export function useAutoAckViewedAgent(): void {
         s.activeView === lastActiveView &&
         s.activeTabId === lastActiveTabId &&
         s.agentStatusByPaneKey === lastAgentStatus &&
-        s.acknowledgedAgentsByPaneKey === lastAcknowledged
+        s.acknowledgedAgentsByPaneKey === lastAcknowledged &&
+        s.settings === lastSettings
       ) {
         return
       }
@@ -51,6 +60,18 @@ export function useAutoAckViewedAgent(): void {
       lastActiveTabId = s.activeTabId
       lastAgentStatus = s.agentStatusByPaneKey
       lastAcknowledged = s.acknowledgedAgentsByPaneKey
+      lastSettings = s.settings
+
+      // Why: mirror the dashboard's visibility gate (see App.tsx Cmd+Shift+D
+      // handler and sidebar/index.tsx `showAgentsView`). If the experimental
+      // dashboard is off, the ack map is never read by any UI — accumulating
+      // entries for unseen agents is wasted memory and the Object.entries
+      // scan is pure overhead. The subscribe callback fires on any store
+      // change, so flipping the setting naturally re-evaluates this guard
+      // without a separate subscription.
+      if (s.settings?.experimentalAgentDashboard !== true) {
+        return
+      }
 
       if (s.activeView !== 'terminal') {
         return
@@ -87,7 +108,7 @@ export function useAutoAckViewedAgent(): void {
     // Why: store.subscribe fires on every state change. The reference-
     // equality guard above bails out immediately for the common case
     // (terminal output, timers, etc.) so the Object.entries walk only runs
-    // when one of the four slices we read has actually changed.
+    // when one of the five slices we read has actually changed.
     const unsubscribe = useAppStore.subscribe(maybeAck)
     return unsubscribe
   }, [])

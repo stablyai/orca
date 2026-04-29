@@ -94,6 +94,7 @@ const AgentStatusHover = React.memo(function AgentStatusHover({
   const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
   const setActiveTab = useAppStore((s) => s.setActiveTab)
   const setActiveView = useAppStore((s) => s.setActiveView)
+  const acknowledgeAgents = useAppStore((s) => s.acknowledgeAgents)
 
   const agents = useMemo<DashboardAgentRowType[]>(() => {
     const rows: DashboardAgentRowType[] = []
@@ -203,12 +204,15 @@ const AgentStatusHover = React.memo(function AgentStatusHover({
   // Why: clicking a row activates the specific tab the agent runs in. Retained
   // rows can outlive their tab, so fall back to worktree-only activation when
   // the tab is no longer present.
-  // Why: paneKey is accepted to match DashboardAgentRow's onActivate
-  // signature but ignored here — the sidebar hovercard is a preview, not
-  // the dashboard; per-agent "visited" ack only makes sense in the
-  // dashboard context where the bold/muted weight signals unread.
+  // Why: clicking a row acks the specific paneKey so the dashboard's
+  // unvisited-bold signal clears for that agent immediately, without
+  // waiting for the auto-ack hook's next tick. The hovercard itself
+  // renders with isUnvisited={false} (the default) because the preview
+  // is transient — bolding prompts here would double-encode with the
+  // WorktreeCard's own unread signal that already surfaces this card.
   const handleActivateAgentTab = useCallback(
-    (tabId: string, _paneKey: string) => {
+    (tabId: string, paneKey: string) => {
+      acknowledgeAgents([paneKey])
       setActiveWorktree(worktreeId)
       setActiveView('terminal')
       const tabs = useAppStore.getState().tabsByWorktree[worktreeId] ?? []
@@ -216,7 +220,7 @@ const AgentStatusHover = React.memo(function AgentStatusHover({
         setActiveTab(tabId)
       }
     },
-    [worktreeId, setActiveWorktree, setActiveTab, setActiveView]
+    [worktreeId, setActiveWorktree, setActiveTab, setActiveView, acknowledgeAgents]
   )
 
   return (

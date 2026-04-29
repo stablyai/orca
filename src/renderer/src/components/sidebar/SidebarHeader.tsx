@@ -54,9 +54,10 @@ const newWorktreeShortcutLabel = isMac ? '⌘N' : 'Ctrl+N'
 // Why: the Agents tab badge counts agents that need human attention — blocked
 // (explicit) and waiting (input requested). "working" agents are not counted:
 // the goal is a VS-Code-style "problems" badge that appears only when there's
-// something actionable, so a zero state reads as "nothing to look at". Kept in
-// lockstep with useDashboardFilter's 'blocked' bucket so the number the user
-// sees on the toggle matches the row count they find after switching.
+// something actionable, so a zero state reads as "nothing to look at". Note
+// this is GLOBAL — the repo filter on the sidebar's filter dropdown scopes
+// useDashboardFilter, but deliberately NOT this badge, so a narrowed
+// worktree view doesn't hide attention signals from the filtered-out repos.
 function countAgentsNeedingAttention(
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
 ): number {
@@ -83,17 +84,12 @@ const SidebarHeader = React.memo(function SidebarHeader() {
 
   const sidebarView = useAppStore((s) => s.sidebarView)
   const setSidebarView = useAppStore((s) => s.setSidebarView)
-  // Why: gate the Agents tab behind the same experimental setting that gated
-  // the old bottom-docked cockpit. Users who have not opted in keep the
-  // pre-existing single-view sidebar — no new UI surfaces for them.
-  // `showAgentDashboard` is the user-facing opt-out (Settings → Agents): it
-  // previously hid the bottom-docked panel and now hides the Agents toggle
-  // entirely, preserving the same "I don't want to see the cockpit" control.
-  const dashboardExperimentEnabled = useAppStore(
-    (s) => s.settings?.experimentalAgentDashboard === true
-  )
-  const showAgentDashboard = useAppStore((s) => s.settings?.showAgentDashboard !== false)
-  const agentsToggleVisible = dashboardExperimentEnabled && showAgentDashboard
+  // Why: gate the Agents tab behind the experimental setting. Users who have
+  // not opted in keep the pre-existing single-view sidebar — no new UI
+  // surfaces for them. A separate user-level hide toggle used to live here,
+  // but the Workspaces/Agents toggle itself is now the opt-in: users who
+  // don't want the cockpit simply stay on the Workspaces tab.
+  const agentsToggleVisible = useAppStore((s) => s.settings?.experimentalAgentDashboard === true)
   // Why: return the primitive count directly so this header only re-renders
   // when the badge number actually changes. setAgentStatus replaces
   // agentStatusByPaneKey on every PTY event (including within-state tool/
@@ -103,7 +99,12 @@ const SidebarHeader = React.memo(function SidebarHeader() {
   // those no-op updates.
   const attentionCount = useAppStore((s) => countAgentsNeedingAttention(s.agentStatusByPaneKey))
 
-  const viewingAgents = sidebarView === 'agents'
+  // Why: gate on `agentsToggleVisible` too, so if the user disables the
+  // experimental dashboard while parked on the Agents view, the header
+  // controls fall back to Workspaces-mode in lockstep with sidebar/index.tsx's
+  // showAgentsView gate — otherwise the options dropdown would still show
+  // agent filters while the main panel shows the worktree list.
+  const viewingAgents = agentsToggleVisible && sidebarView === 'agents'
   // Why: keep the header icons in BOTH views so the sidebar chrome doesn't
   // shift when the user toggles between Workspaces and Agents — just repoint
   // the dropdown's contents at the active view's options. Preserving the same
@@ -146,9 +147,10 @@ const SidebarHeader = React.memo(function SidebarHeader() {
               <span
                 className={cn(
                   'inline-flex min-w-[14px] items-center justify-center rounded-full bg-amber-500/90 px-1 text-[9px] font-semibold leading-none text-white',
-                  // Why: preserve badge color in both toggle states — amber
-                  // conveys "needs attention" and should not dim out just
-                  // because the user happens to be on the Workspaces side.
+                  // Why: fixed 14px height keeps the badge vertically centered
+                  // inside the compact (h-6) toggle item regardless of digit
+                  // count — otherwise a single-digit vs double-digit count
+                  // would jitter the toggle height.
                   'h-[14px]'
                 )}
                 aria-label={`${attentionCount} agent${attentionCount === 1 ? '' : 's'} need attention`}

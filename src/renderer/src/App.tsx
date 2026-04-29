@@ -728,17 +728,13 @@ function App(): React.JSX.Element {
       // is the focus target the terminal handler itself uses to detect
       // terminal focus (see keyboard-handlers.ts isEditableTarget).
       if (e.shiftKey && !e.altKey && e.key.toLowerCase() === 'd') {
-        // Why: read the dashboard gates at keypress time via getState() so
-        // flipping the setting takes effect immediately without re-binding the
-        // window-level listener. Both gates must be live — experimental
-        // unlocks the feature at all, and showAgentDashboard is the user
-        // opt-out. Either false = shortcut is inert. Gated behind the
-        // key/modifier check so getState() isn't invoked on unrelated
-        // keystrokes.
+        // Why: read the experiment gate at keypress time via getState() so
+        // flipping the setting takes effect immediately without re-binding
+        // the window-level listener. Shortcut is inert until the user opts
+        // in to the experiment. Gated behind the key/modifier check so
+        // getState() isn't invoked on unrelated keystrokes.
         const dashboardSettings = useAppStore.getState().settings
-        const dashboardExperimentEnabled = dashboardSettings?.experimentalAgentDashboard === true
-        const dashboardNotHidden = dashboardSettings?.showAgentDashboard !== false
-        if (!dashboardExperimentEnabled || !dashboardNotHidden) {
+        if (dashboardSettings?.experimentalAgentDashboard !== true) {
           return
         }
         const active = document.activeElement as HTMLElement | null
