@@ -213,7 +213,7 @@ export function ExperimentalPane({
         <SearchableSetting
           title="Agent Orchestration"
           description="Coordinate multiple coding agents via messaging, task DAGs, dispatch, and decision gates."
-          keywords={EXPERIMENTAL_PANE_SEARCH_ENTRIES[2].keywords}
+          keywords={EXPERIMENTAL_PANE_SEARCH_ENTRIES[1].keywords}
           className="space-y-3 px-1 py-2"
         >
           <div className="flex items-start justify-between gap-4">
