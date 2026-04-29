@@ -32,9 +32,18 @@ export type ProviderRateLimits = {
   status: ProviderRateLimitStatus
 }
 
+export type InactiveAccountUsage = {
+  accountId: string
+  claude: ProviderRateLimits | null
+  updatedAt: number
+  isFetching: boolean
+}
+
 export type RateLimitState = {
   claude: ProviderRateLimits | null
   codex: ProviderRateLimits | null
   gemini: ProviderRateLimits | null
   opencodeGo: ProviderRateLimits | null
+  inactiveClaudeAccounts: InactiveAccountUsage[]
+  inactiveCodexAccounts: InactiveAccountUsage[]
 }

@@ -1579,6 +1579,10 @@ const api = {
     refresh: (): Promise<RateLimitState> => ipcRenderer.invoke('rateLimits:refresh'),
     setPollingInterval: (ms: number): Promise<void> =>
       ipcRenderer.invoke('rateLimits:setPollingInterval', ms),
+    fetchInactiveClaudeAccounts: (): Promise<void> =>
+      ipcRenderer.invoke('rateLimits:fetchInactiveClaudeAccounts'),
+    fetchInactiveCodexAccounts: (): Promise<void> =>
+      ipcRenderer.invoke('rateLimits:fetchInactiveCodexAccounts'),
     onUpdate: (callback: (state: RateLimitState) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, state: RateLimitState) => callback(state)
       ipcRenderer.on('rateLimits:update', listener)

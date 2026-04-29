@@ -333,6 +333,18 @@ app.whenReady().then(async () => {
   rateLimits.setCodexHomePathResolver(() => codexRuntimeHome!.prepareForRateLimitFetch())
   rateLimits.setClaudeAuthPreparationResolver(() => claudeRuntimeAuth!.prepareForRateLimitFetch())
   rateLimits.setSettingsResolver(() => store!.getSettings())
+  rateLimits.setInactiveClaudeAccountsResolver(() => {
+    const settings = store!.getSettings()
+    return settings.claudeManagedAccounts
+      .filter((account) => account.id !== settings.activeClaudeManagedAccountId)
+      .map((account) => ({ id: account.id, managedAuthPath: account.managedAuthPath }))
+  })
+  rateLimits.setInactiveCodexAccountsResolver(() => {
+    const settings = store!.getSettings()
+    return settings.codexManagedAccounts
+      .filter((account) => account.id !== settings.activeCodexManagedAccountId)
+      .map((account) => ({ id: account.id, managedHomePath: account.managedHomePath }))
+  })
   runtime = new OrcaRuntimeService(store, stats)
   starNag = new StarNagService(store, stats)
   starNag.start()

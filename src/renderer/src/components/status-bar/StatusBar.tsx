@@ -27,7 +27,7 @@ import type {
   CodexRateLimitAccountsState
 } from '../../../../shared/types'
 import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
-import { ProviderIcon, ProviderPanel } from './tooltip'
+import { ProviderIcon, ProviderPanel, barColor } from './tooltip'
 import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 import { formatWindowLabel } from '@/lib/window-label-formatter'
 import { markLiveCodexSessionsForRestart } from '@/lib/codex-session-restart'
@@ -65,6 +65,8 @@ function ClaudeSwitcherMenu({
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
+  const fetchInactiveClaudeAccountUsage = useAppStore((s) => s.fetchInactiveClaudeAccountUsage)
+  const inactiveClaudeAccounts = useAppStore((s) => s.rateLimits.inactiveClaudeAccounts)
   const claudeAccountSyncKey = useAppStore((s) => {
     const settings = s.settings
     if (!settings) {
@@ -89,6 +91,12 @@ function ClaudeSwitcherMenu({
       setAccountsExpanded(false)
     }
   }, [open])
+
+  useEffect(() => {
+    if (accountsExpanded) {
+      void fetchInactiveClaudeAccountUsage()
+    }
+  }, [accountsExpanded, fetchInactiveClaudeAccountUsage])
 
   const handleSelectAccount = async (accountId: string | null): Promise<void> => {
     if (isSwitching) {
@@ -155,18 +163,36 @@ function ClaudeSwitcherMenu({
             {availableSwitchTargets.length === 0 ? (
               <div className="px-2 py-1.5 text-[11px] text-muted-foreground">No other accounts</div>
             ) : null}
-            {availableSwitchTargets.map((target) => (
-              <DropdownMenuItem
-                key={target.id ?? 'system'}
-                disabled={isSwitching}
-                onSelect={(event) => {
-                  event.preventDefault()
-                  void handleSelectAccount(target.id)
-                }}
-              >
-                <span className="max-w-[220px] truncate">{target.label}</span>
-              </DropdownMenuItem>
-            ))}
+            {availableSwitchTargets.map((target) => {
+              const inactiveUsage = target.id
+                ? inactiveClaudeAccounts.find((a) => a.accountId === target.id)
+                : null
+
+              return (
+                <DropdownMenuItem
+                  key={target.id ?? 'system'}
+                  disabled={isSwitching}
+                  onSelect={(event) => {
+                    event.preventDefault()
+                    void handleSelectAccount(target.id)
+                  }}
+                >
+                  <div className="flex w-full flex-col gap-0.5">
+                    <span className="max-w-[220px] truncate">{target.label}</span>
+                    {inactiveUsage?.isFetching && !inactiveUsage.claude ? (
+                      <span className="text-[10px] text-muted-foreground animate-pulse">
+                        Loading…
+                      </span>
+                    ) : inactiveUsage?.claude ? (
+                      <InlineUsageBars
+                        limits={inactiveUsage.claude}
+                        isFetching={inactiveUsage.isFetching}
+                      />
+                    ) : null}
+                  </div>
+                </DropdownMenuItem>
+              )
+            })}
           </div>
           <div className="px-2 py-1.5 text-[10px] leading-4 text-muted-foreground">
             Restart live Claude terminals before continuing old conversations after switching.
@@ -201,6 +227,57 @@ function MiniBar({ leftPct }: { leftPct: number }): React.JSX.Element {
         className="h-full rounded-full transition-all duration-300 bg-muted-foreground/40"
         style={{ width: `${Math.min(100, Math.max(0, leftPct))}%` }}
       />
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Inline usage bars (compact bars for inactive accounts in the switcher)
+// ---------------------------------------------------------------------------
+
+function InlineUsageBars({
+  limits,
+  isFetching
+}: {
+  limits: ProviderRateLimits
+  isFetching: boolean
+}): React.JSX.Element {
+  const sessionLeft = limits.session
+    ? Math.max(0, Math.round(100 - limits.session.usedPercent))
+    : null
+  const weeklyLeft = limits.weekly ? Math.max(0, Math.round(100 - limits.weekly.usedPercent)) : null
+
+  return (
+    <div className={`flex w-full items-center gap-2 ${isFetching ? 'animate-pulse' : ''}`}>
+      {sessionLeft !== null && (
+        <div className="flex flex-1 items-center gap-1">
+          <div className="h-[4px] flex-1 overflow-hidden rounded-full bg-muted">
+            <div
+              className={`h-full rounded-full ${barColor(sessionLeft)}`}
+              style={{ width: `${sessionLeft}%` }}
+            />
+          </div>
+          <span className="text-[10px] tabular-nums text-muted-foreground shrink-0">
+            {sessionLeft}% 5h
+          </span>
+        </div>
+      )}
+      {weeklyLeft !== null && (
+        <div className="flex flex-1 items-center gap-1">
+          <div className="h-[4px] flex-1 overflow-hidden rounded-full bg-muted">
+            <div
+              className={`h-full rounded-full ${barColor(weeklyLeft)}`}
+              style={{ width: `${weeklyLeft}%` }}
+            />
+          </div>
+          <span className="text-[10px] tabular-nums text-muted-foreground shrink-0">
+            {weeklyLeft}% wk
+          </span>
+        </div>
+      )}
+      {limits.status === 'error' && !limits.session && !limits.weekly && (
+        <span className="text-[10px] text-muted-foreground">Sign in to see usage</span>
+      )}
     </div>
   )
 }
@@ -336,6 +413,8 @@ function CodexSwitcherMenu({
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
+  const fetchInactiveCodexAccountUsage = useAppStore((s) => s.fetchInactiveCodexAccountUsage)
+  const inactiveCodexAccounts = useAppStore((s) => s.rateLimits.inactiveCodexAccounts)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
   const codexRestartNoticeByPtyId = useAppStore((s) => s.codexRestartNoticeByPtyId)
@@ -396,6 +475,12 @@ function CodexSwitcherMenu({
       setAccountsExpanded(false)
     }
   }, [open])
+
+  useEffect(() => {
+    if (accountsExpanded) {
+      void fetchInactiveCodexAccountUsage()
+    }
+  }, [accountsExpanded, fetchInactiveCodexAccountUsage])
 
   const activeAccountLabel =
     accounts.activeAccountId === null
@@ -461,22 +546,40 @@ function CodexSwitcherMenu({
             {availableSwitchTargets.length === 0 ? (
               <div className="px-2 py-1.5 text-[11px] text-muted-foreground">No other accounts</div>
             ) : null}
-            {availableSwitchTargets.map((target) => (
-              <DropdownMenuItem
-                key={target.id ?? 'system'}
-                onSelect={(event) => {
-                  // Why: account switching may need an immediate follow-up
-                  // restart action for live Codex tabs. Prevent the menu from
-                  // auto-closing so that prompt can stay within the same
-                  // account-switcher interaction instead of jumping elsewhere.
-                  event.preventDefault()
-                  void handleSelectAccount(target.id)
-                }}
-                disabled={isSwitching}
-              >
-                <span className="truncate">{target.label}</span>
-              </DropdownMenuItem>
-            ))}
+            {availableSwitchTargets.map((target) => {
+              const inactiveUsage = target.id
+                ? inactiveCodexAccounts.find((a) => a.accountId === target.id)
+                : null
+
+              return (
+                <DropdownMenuItem
+                  key={target.id ?? 'system'}
+                  onSelect={(event) => {
+                    // Why: account switching may need an immediate follow-up
+                    // restart action for live Codex tabs. Prevent the menu from
+                    // auto-closing so that prompt can stay within the same
+                    // account-switcher interaction instead of jumping elsewhere.
+                    event.preventDefault()
+                    void handleSelectAccount(target.id)
+                  }}
+                  disabled={isSwitching}
+                >
+                  <div className="flex w-full flex-col gap-0.5">
+                    <span className="truncate">{target.label}</span>
+                    {inactiveUsage?.isFetching && !inactiveUsage.claude ? (
+                      <span className="text-[10px] text-muted-foreground animate-pulse">
+                        Loading…
+                      </span>
+                    ) : inactiveUsage?.claude ? (
+                      <InlineUsageBars
+                        limits={inactiveUsage.claude}
+                        isFetching={inactiveUsage.isFetching}
+                      />
+                    ) : null}
+                  </div>
+                </DropdownMenuItem>
+              )
+            })}
           </div>
         </div>
       ) : null}

@@ -2,12 +2,22 @@
 handling, account-switch fetch semantics, and renderer push coordination so the
 fetch ordering rules stay in one place. */
 import type { BrowserWindow } from 'electron'
-import type { RateLimitState, ProviderRateLimits } from '../../shared/rate-limit-types'
-import { fetchClaudeRateLimits } from './claude-fetcher'
+import type {
+  RateLimitState,
+  ProviderRateLimits,
+  InactiveAccountUsage
+} from '../../shared/rate-limit-types'
+import { fetchClaudeRateLimits, fetchManagedAccountUsage } from './claude-fetcher'
+import type { InactiveClaudeAccountInfo } from './claude-fetcher'
 import { fetchCodexRateLimits } from './codex-fetcher'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
 import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
+
+export type InactiveCodexAccountInfo = {
+  id: string
+  managedHomePath: string
+}
 
 // Why: quota state does not need near-real-time polling, and a less aggressive
 // default reduces avoidable Claude /usage pressure. We intentionally use a
@@ -15,9 +25,19 @@ import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
 const DEFAULT_POLL_MS = 5 * 60 * 1000 // 5 minutes
 const MIN_REFETCH_MS = 30 * 1000 // 30 seconds — debounce rapid refresh requests
 const STALE_THRESHOLD_MS = 10 * 60 * 1000 // 10 minutes — after this, stale data is dropped
+const INACTIVE_FETCH_DEBOUNCE_MS = 60 * 1000 // 60 seconds — debounce fetch-on-open
+
+// Why: the internal state only tracks claude and codex. The inactiveClaudeAccounts
+// array is derived from the cache on demand in getState() and pushToRenderer().
+type InternalRateLimitState = {
+  claude: ProviderRateLimits | null
+  codex: ProviderRateLimits | null
+  gemini: ProviderRateLimits | null
+  opencodeGo: ProviderRateLimits | null
+}
 
 export class RateLimitService {
-  private state: RateLimitState = { claude: null, codex: null, gemini: null, opencodeGo: null }
+  private state: InternalRateLimitState = { claude: null, codex: null, gemini: null, opencodeGo: null }
   private pollInterval: number = DEFAULT_POLL_MS
   private timer: ReturnType<typeof setInterval> | null = null
   private lastFetchAt = 0
@@ -41,6 +61,14 @@ export class RateLimitService {
         geminiCliOAuthEnabled?: boolean
       })
     | null = null
+  private inactiveClaudeAccountsResolver: (() => InactiveClaudeAccountInfo[]) | null = null
+  private inactiveCodexAccountsResolver: (() => InactiveCodexAccountInfo[]) | null = null
+  private inactiveClaudeCache = new Map<string, ProviderRateLimits>()
+  private inactiveCodexCache = new Map<string, ProviderRateLimits>()
+  private inactiveClaudeFetching = new Set<string>()
+  private inactiveCodexFetching = new Set<string>()
+  private lastInactiveClaudeFetchAt = 0
+  private lastInactiveCodexFetchAt = 0
 
   constructor() {}
 
@@ -61,6 +89,15 @@ export class RateLimitService {
   ): void {
     this.settingsResolver = resolver
   }
+
+  setInactiveClaudeAccountsResolver(resolver: () => InactiveClaudeAccountInfo[]): void {
+    this.inactiveClaudeAccountsResolver = resolver
+  }
+
+  setInactiveCodexAccountsResolver(resolver: () => InactiveCodexAccountInfo[]): void {
+    this.inactiveCodexAccountsResolver = resolver
+  }
+
   attach(mainWindow: BrowserWindow): void {
     this.detachWindowListeners?.()
     this.mainWindow = mainWindow
@@ -98,7 +135,17 @@ export class RateLimitService {
   }
 
   getState(): RateLimitState {
-    return this.state
+    return {
+      ...this.state,
+      inactiveClaudeAccounts: this.buildInactiveArray(
+        this.inactiveClaudeCache,
+        this.inactiveClaudeFetching
+      ),
+      inactiveCodexAccounts: this.buildInactiveArray(
+        this.inactiveCodexCache,
+        this.inactiveCodexFetching
+      )
+    }
   }
 
   async refresh(): Promise<RateLimitState> {
@@ -107,11 +154,15 @@ export class RateLimitService {
     // broken after wake/focus transitions because the click can no-op even
     // though the user is asking for a fresh read right now.
     await this.fetchAll({ force: true })
-    return this.state
+    return this.getState()
   }
 
-  async refreshForCodexAccountChange(): Promise<RateLimitState> {
+  async refreshForCodexAccountChange(outgoingAccountId?: string | null): Promise<RateLimitState> {
+    if (outgoingAccountId && this.state.codex?.session) {
+      this.inactiveCodexCache.set(outgoingAccountId, this.state.codex)
+    }
     this.codexFetchGeneration += 1
+    this.lastInactiveCodexFetchAt = 0
     // Why: switching the selected Codex account must immediately clear the old
     // Codex quota view. Keeping stale values visible would show the previous
     // account's limits under the newly selected identity until the next poll.
@@ -120,17 +171,97 @@ export class RateLimitService {
       codex: this.withFetchingStatus(null, 'codex')
     })
     await this.fetchCodexOnly({ force: true })
-    return this.state
+    return this.getState()
   }
 
-  async refreshForClaudeAccountChange(): Promise<RateLimitState> {
+  async refreshForClaudeAccountChange(outgoingAccountId?: string | null): Promise<RateLimitState> {
+    // Why: snapshot the outgoing account's usage before clearing it so the
+    // inline usage bars in the switcher can show last-known data immediately.
+    if (outgoingAccountId && this.state.claude?.session) {
+      this.inactiveClaudeCache.set(outgoingAccountId, this.state.claude)
+    }
     this.claudeFetchGeneration += 1
+    this.lastInactiveClaudeFetchAt = 0
     this.updateState({
       ...this.state,
       claude: this.withFetchingStatus(null, 'claude')
     })
     await this.fetchClaudeOnly({ force: true })
-    return this.state
+    return this.getState()
+  }
+
+  async fetchInactiveClaudeAccountsOnOpen(): Promise<void> {
+    if (Date.now() - this.lastInactiveClaudeFetchAt < INACTIVE_FETCH_DEBOUNCE_MS) {
+      return
+    }
+    const accounts = this.inactiveClaudeAccountsResolver?.() ?? []
+    if (accounts.length === 0) {
+      return
+    }
+
+    for (const account of accounts) {
+      this.inactiveClaudeFetching.add(account.id)
+    }
+    this.pushToRenderer()
+
+    for (const account of accounts) {
+      try {
+        const fresh = await fetchManagedAccountUsage(account)
+        const cached = this.inactiveClaudeCache.get(account.id) ?? null
+        this.inactiveClaudeCache.set(account.id, this.applyStalePolicy(fresh, cached))
+      } catch {
+        // Why: per-account try/catch prevents one Keychain rejection or
+        // network error from aborting the remaining accounts in the batch.
+      }
+      this.inactiveClaudeFetching.delete(account.id)
+      this.pushToRenderer()
+    }
+
+    this.lastInactiveClaudeFetchAt = Date.now()
+  }
+
+  async fetchInactiveCodexAccountsOnOpen(): Promise<void> {
+    if (Date.now() - this.lastInactiveCodexFetchAt < INACTIVE_FETCH_DEBOUNCE_MS) {
+      return
+    }
+    const accounts = this.inactiveCodexAccountsResolver?.() ?? []
+    if (accounts.length === 0) {
+      return
+    }
+
+    for (const account of accounts) {
+      this.inactiveCodexFetching.add(account.id)
+    }
+    this.pushToRenderer()
+
+    for (const account of accounts) {
+      try {
+        // Why: fetchCodexRateLimits already accepts codexHomePath, so we can
+        // point it at the managed account's home directory directly without
+        // materializing credentials into the shared runtime location.
+        const fresh = await fetchCodexRateLimits({ codexHomePath: account.managedHomePath })
+        const cached = this.inactiveCodexCache.get(account.id) ?? null
+        this.inactiveCodexCache.set(account.id, this.applyStalePolicy(fresh, cached))
+      } catch {
+        // Why: per-account try/catch prevents one failure from aborting the batch.
+      }
+      this.inactiveCodexFetching.delete(account.id)
+      this.pushToRenderer()
+    }
+
+    this.lastInactiveCodexFetchAt = Date.now()
+  }
+
+  evictInactiveClaudeCache(accountId: string): void {
+    this.inactiveClaudeCache.delete(accountId)
+    this.inactiveClaudeFetching.delete(accountId)
+    this.pushToRenderer()
+  }
+
+  evictInactiveCodexCache(accountId: string): void {
+    this.inactiveCodexCache.delete(accountId)
+    this.inactiveCodexFetching.delete(accountId)
+    this.pushToRenderer()
   }
 
   setPollingInterval(ms: number): void {
@@ -587,7 +718,35 @@ export class RateLimitService {
     }
   }
 
-  private updateState(next: RateLimitState): void {
+  private buildInactiveArray(
+    cache: Map<string, ProviderRateLimits>,
+    fetching: Set<string>
+  ): InactiveAccountUsage[] {
+    const result: InactiveAccountUsage[] = []
+    for (const [accountId, limits] of cache) {
+      result.push({
+        accountId,
+        claude: limits,
+        updatedAt: limits.updatedAt,
+        isFetching: fetching.has(accountId)
+      })
+    }
+    // Why: include accounts that are fetching but have no cache yet so the
+    // renderer can show a loading indicator for newly added accounts.
+    for (const accountId of fetching) {
+      if (!cache.has(accountId)) {
+        result.push({
+          accountId,
+          claude: null,
+          updatedAt: 0,
+          isFetching: true
+        })
+      }
+    }
+    return result
+  }
+
+  private updateState(next: InternalRateLimitState): void {
     this.state = next
     this.pushToRenderer()
   }
@@ -596,6 +755,6 @@ export class RateLimitService {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) {
       return
     }
-    this.mainWindow.webContents.send('rateLimits:update', this.state)
+    this.mainWindow.webContents.send('rateLimits:update', this.getState())
   }
 }

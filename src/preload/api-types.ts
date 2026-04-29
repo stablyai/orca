@@ -829,6 +829,8 @@ export type PreloadApi = {
     get: () => Promise<RateLimitState>
     refresh: () => Promise<RateLimitState>
     setPollingInterval: (ms: number) => Promise<void>
+    fetchInactiveClaudeAccounts: () => Promise<void>
+    fetchInactiveCodexAccounts: () => Promise<void>
     onUpdate: (callback: (state: RateLimitState) => void) => () => void
   }
   ssh: {

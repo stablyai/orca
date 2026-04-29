@@ -108,7 +108,7 @@ export function getWindowSections(
 
 // Why: color-coded by remaining capacity so users can quickly gauge urgency.
 // Green = comfortable (>40% left), yellow = caution (20-40%), red = critical (<20%).
-function barColor(leftPct: number): string {
+export function barColor(leftPct: number): string {
   if (leftPct > 40) {
     return 'bg-green-500'
   }
