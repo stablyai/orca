@@ -963,6 +963,8 @@ export type TerminalColorOverrides = {
 export type GlobalSettings = {
   workspaceDir: string
   nestWorkspaces: boolean
+  /** Hide the repo's original checked-out branch from workspace navigation. */
+  hideDefaultBranchWorkspace: boolean
   refreshLocalBaseRefOnWorktreeCreate: boolean
   branchPrefix: 'git-username' | 'custom' | 'none'
   branchPrefixCustom: string

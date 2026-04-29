@@ -67,4 +67,40 @@ describe('computeVisibleWorktreeIds', () => {
 
     expect(result).toEqual([wt.id])
   })
+
+  it('hides branch-backed main worktrees when default branch workspaces are hidden', () => {
+    const main = makeWorktree('main')
+    const feature = makeWorktree('feature')
+    main.isMainWorktree = true
+
+    const result = computeVisibleWorktreeIds({ repo1: [main, feature] }, [main.id, feature.id], {
+      filterRepoIds: [],
+      showActiveOnly: false,
+      tabsByWorktree: {},
+      browserTabsByWorktree: {},
+      activeWorktreeId: main.id,
+      hideDefaultBranchWorkspace: true,
+      repoMap
+    })
+
+    expect(result).toEqual([feature.id])
+  })
+
+  it('keeps folder-mode main worktrees visible when default branch workspaces are hidden', () => {
+    const folder = makeWorktree('folder')
+    folder.isMainWorktree = true
+    folder.branch = ''
+
+    const result = computeVisibleWorktreeIds({ repo1: [folder] }, [folder.id], {
+      filterRepoIds: [],
+      showActiveOnly: false,
+      tabsByWorktree: {},
+      browserTabsByWorktree: {},
+      activeWorktreeId: null,
+      hideDefaultBranchWorkspace: true,
+      repoMap
+    })
+
+    expect(result).toEqual([folder.id])
+  })
 })

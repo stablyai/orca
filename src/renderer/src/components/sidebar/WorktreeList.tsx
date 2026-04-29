@@ -440,6 +440,9 @@ const WorktreeList = React.memo(function WorktreeList() {
   const groupBy = useAppStore((s) => s.groupBy)
   const sortBy = useAppStore((s) => s.sortBy)
   const showActiveOnly = useAppStore((s) => s.showActiveOnly)
+  const hideDefaultBranchWorkspace = useAppStore(
+    (s) => s.settings?.hideDefaultBranchWorkspace ?? false
+  )
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const openModal = useAppStore((s) => s.openModal)
   const activeView = useAppStore((s) => s.activeView)
@@ -632,6 +635,7 @@ const WorktreeList = React.memo(function WorktreeList() {
       tabsByWorktree,
       browserTabsByWorktree,
       activeWorktreeId,
+      hideDefaultBranchWorkspace,
       repoMap
     })
     return ids.map((id) => worktreeMap.get(id)).filter((w): w is Worktree => w != null)
@@ -639,6 +643,7 @@ const WorktreeList = React.memo(function WorktreeList() {
     filterRepoIds,
     showActiveOnly,
     activeWorktreeId,
+    hideDefaultBranchWorkspace,
     repoMap,
     tabsByWorktree,
     browserTabsByWorktree,

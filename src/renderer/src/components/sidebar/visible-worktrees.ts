@@ -22,6 +22,7 @@ export function computeVisibleWorktreeIds(
     tabsByWorktree: Record<string, TerminalTab[]> | null
     browserTabsByWorktree?: Record<string, { id: string }[]> | null
     activeWorktreeId?: string | null
+    hideDefaultBranchWorkspace?: boolean
     repoMap: Map<string, Repo>
   }
 ): string[] {
@@ -29,6 +30,12 @@ export function computeVisibleWorktreeIds(
 
   // Filter archived
   all = all.filter((w) => !w.isArchived)
+
+  if (opts.hideDefaultBranchWorkspace) {
+    // Why: folder-mode projects are represented as main worktrees but have no
+    // Git branch, so only branch-backed main worktrees are default-branch rows.
+    all = all.filter((w) => !(w.isMainWorktree && w.branch.trim() !== ''))
+  }
 
   // Filter by repo
   if (opts.filterRepoIds.length > 0) {
@@ -141,6 +148,7 @@ export function getVisibleWorktreeIds(): string[] {
     tabsByWorktree: state.tabsByWorktree,
     browserTabsByWorktree: state.browserTabsByWorktree,
     activeWorktreeId: state.activeWorktreeId,
+    hideDefaultBranchWorkspace: state.settings?.hideDefaultBranchWorkspace ?? false,
     repoMap
   })
 }
