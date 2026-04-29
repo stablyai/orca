@@ -33,7 +33,7 @@ const StatusIndicator = React.memo(function StatusIndicator({
         title={resolvedTitle}
         {...rest}
       >
-        <span className="block size-2 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin" />
+        <span className="block size-2 rounded-full border-2 border-yellow-500 border-t-transparent animate-spin" />
       </span>
     )
   }
@@ -50,10 +50,11 @@ const StatusIndicator = React.memo(function StatusIndicator({
           status === 'permission'
             ? 'bg-red-500'
             : status === 'done'
-              ? // Green dot for done so working (green spinner) and done (green
-                // solid) share a hue; motion is the differentiator. 'active'
-                // (terminal open, quiet) collapses to the same grey as
-                // 'inactive' to free the green for the done state.
+              ? // Green dot for done; working uses a yellow spinner so the
+                // two states differ by both hue and motion. 'active' (terminal
+                // open, quiet) collapses to the same grey as 'inactive' — the
+                // tooltip carries the distinction for sighted users and the
+                // sr-only sibling in callers carries it for AT.
                 'bg-emerald-500'
               : 'bg-neutral-500/40'
         )}

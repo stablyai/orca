@@ -58,7 +58,7 @@ export const AgentStateDot = React.memo(function AgentStateDot({
       >
         <span
           className={cn(
-            'block rounded-full border-2 border-emerald-500 border-t-transparent animate-spin',
+            'block rounded-full border-2 border-yellow-500 border-t-transparent animate-spin',
             inner
           )}
         />
@@ -78,7 +78,8 @@ export const AgentStateDot = React.memo(function AgentStateDot({
           state === 'blocked' || state === 'waiting' || state === 'permission'
             ? 'bg-red-500'
             : state === 'done'
-              ? // Why: same emerald as the working spinner — motion (spin vs solid) is the intentional differentiator; matches StatusIndicator.
+              ? // Why: emerald-500 matches StatusIndicator's done dot so the
+                // dashboard and sidebar read as the same state.
                 'bg-emerald-500'
               : 'bg-neutral-500/40'
         )}
