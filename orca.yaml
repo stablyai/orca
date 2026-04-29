@@ -1,7 +1,9 @@
 scripts:
   setup: |
-    pnpm install
     # Internal Stably dev setup: populates .claude/skills and .agents/skills
-    # from a private repo. Silent no-op for public contributors (env unset).
+    # from a private repo. Runs first (cheap, just symlinks) so skills are
+    # available before the long-running pnpm install below. Silent no-op for
+    # public contributors (env unset).
     [ -n "$ORCA_INTERNAL_DEV_SETUP" ] && [ -x "$ORCA_INTERNAL_DEV_SETUP" ] && \
       "$ORCA_INTERNAL_DEV_SETUP" "$ORCA_WORKTREE_PATH" || true
+    pnpm install
