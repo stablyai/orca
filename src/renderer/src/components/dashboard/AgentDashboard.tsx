@@ -255,7 +255,7 @@ const AgentDashboard = React.memo(function AgentDashboard() {
                         <span className="ml-auto flex shrink-0 items-center gap-2 text-[10px] text-muted-foreground">
                           {groupRunning > 0 && (
                             <span>
-                              <span className="font-semibold text-emerald-500">{groupRunning}</span>{' '}
+                              <span className="font-semibold text-yellow-500">{groupRunning}</span>{' '}
                               active
                             </span>
                           )}
@@ -265,10 +265,9 @@ const AgentDashboard = React.memo(function AgentDashboard() {
                               blocked
                             </span>
                           )}
-                          {/* Why: groupRunning above uses full-opacity text-emerald-500; tinting done to /80 preserves the emerald-means-completion hue while keeping the two adjacent static counts visually distinct. */}
                           {groupDone > 0 && (
                             <span>
-                              <span className="font-semibold text-emerald-500/80">{groupDone}</span>{' '}
+                              <span className="font-semibold text-emerald-500">{groupDone}</span>{' '}
                               done
                             </span>
                           )}
