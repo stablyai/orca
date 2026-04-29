@@ -12,6 +12,8 @@ Keep this folder focused on the durable references for Orca's public CLI and run
   - Why the runtime layer exists and which boundaries it owns.
 - `orca-cli-bundled-distribution.md`
   - How the bundled desktop-app distribution and PATH registration model works.
+- `orca-ios-companion-architecture.md`
+  - The first-pass control-plane architecture for continuing laptop sessions from an iPhone.
 
 ## Why The Folder Is Small
 
