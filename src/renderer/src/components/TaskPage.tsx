@@ -2528,35 +2528,30 @@ export default function TaskPage(): React.JSX.Element {
           <DialogHeader>
             <DialogTitle>New GitHub issue</DialogTitle>
             <DialogDescription>
-              {selectedRepos.length > 1
-                ? 'Opens a new issue in the selected repository.'
-                : `Opens a new issue in ${newIssueTargetRepo?.displayName ?? 'this repository'}.`}
+              {(() => {
+                // Why: parent design doc §1 surface 2 — the composer is the
+                // non-negotiable surface because User D's regression (filing a
+                // personal TODO against upstream/fork after #1076 changed
+                // routing) is specifically about this dialog. The description
+                // line doubles as the source indicator: inlining the resolved
+                // `{owner}/{repo}` slug (e.g. "stablyai/orca") means the
+                // destination is impossible to miss before the user submits,
+                // without needing a secondary chip that duplicates the info.
+                // Falls back to the local displayName when the slug isn't
+                // resolved yet (pre-IPC cache hit, or non-GitHub remote).
+                if (selectedRepos.length > 1) {
+                  return 'Filing a new issue in the selected repository.'
+                }
+                const entry = newIssueTargetRepo
+                  ? perRepoSourceState.find((s) => s.repoId === newIssueTargetRepo.id)
+                  : undefined
+                const issuesSlug = entry?.sources?.issues
+                  ? `${entry.sources.issues.owner}/${entry.sources.issues.repo}`
+                  : null
+                const fallback = newIssueTargetRepo?.displayName ?? 'this repository'
+                return `Filing a new issue in ${issuesSlug ?? fallback}.`
+              })()}
             </DialogDescription>
-            {(() => {
-              // Why: parent design doc §1 surface 2 — non-negotiable. User D's
-              // regression (filing a personal TODO against upstream/fork after
-              // #1076 changed routing) is specifically about the composer. The
-              // indicator gives the user a chance to pause before submit and
-              // verify they're filing on the repo they think they are. The
-              // suppression rule matches the TaskPage header: hide when issues
-              // and PRs resolve to the same slug. Derived from the currently
-              // selected target repo's cache entry so we don't need a second
-              // IPC round-trip to open the dialog.
-              if (!newIssueTargetRepo) {
-                return null
-              }
-              const entry = perRepoSourceState.find((s) => s.repoId === newIssueTargetRepo.id)
-              const issues = entry?.sources?.issues ?? null
-              const prs = entry?.sources?.prs ?? null
-              if (!issues || !prs || sameGitHubOwnerRepo(issues, prs)) {
-                return null
-              }
-              return (
-                <div className="mt-2">
-                  <IssueSourceIndicator issues={issues} prs={prs} />
-                </div>
-              )
-            })()}
           </DialogHeader>
           <div className="flex flex-col gap-3">
             {selectedRepos.length > 1 ? (

@@ -377,6 +377,21 @@ describe('IssueSourceIndicator suppression', () => {
       issues: { owner: 'up', repo: 'r' },
       prs: { owner: 'fork', repo: 'r' }
     })
-    expect(renderToStaticMarkup(diffEl)).toContain('up/r')
+    const defaultMarkup = renderToStaticMarkup(diffEl)
+    expect(defaultMarkup).toContain('up/r')
+    // Default variant is 'list' → plural prefix on list surfaces.
+    expect(defaultMarkup).toContain('Issues from')
+
+    // 'item' variant → singular prefix on detail surfaces where the chip
+    // annotates a single issue (e.g. GitHubItemDialog).
+    const itemEl = React.createElement(IssueSourceIndicator, {
+      issues: { owner: 'up', repo: 'r' },
+      prs: { owner: 'fork', repo: 'r' },
+      variant: 'item'
+    })
+    const itemMarkup = renderToStaticMarkup(itemEl)
+    expect(itemMarkup).toContain('up/r')
+    expect(itemMarkup).toContain('Issue from')
+    expect(itemMarkup).not.toContain('Issues from')
   })
 })

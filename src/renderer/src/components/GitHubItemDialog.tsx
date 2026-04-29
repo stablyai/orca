@@ -1996,7 +1996,7 @@ function WorkItemIssueSourceIndicator({
   }
   return (
     <div className="mt-1">
-      <IssueSourceIndicator issues={issues} prs={prs} />
+      <IssueSourceIndicator issues={issues} prs={prs} variant="item" />
     </div>
   )
 }
