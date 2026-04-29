@@ -1,3 +1,10 @@
+const WINDOWS_DRIVE_PATH_PATTERN = /^[A-Za-z]:/
+
+export function isAbsoluteSparseDirectoryPath(value: string): boolean {
+  const entry = value.trim()
+  return entry.startsWith('/') || entry.startsWith('\\') || WINDOWS_DRIVE_PATH_PATTERN.test(entry)
+}
+
 /** Normalize the user's free-form textarea input into a clean directory list:
  *  trim whitespace, convert backslashes to forward slashes, strip leading and
  *  trailing slashes, drop empty lines, dedupe. Order preserved so the

@@ -28,6 +28,7 @@ import {
 } from '../git/repo'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 import { getActiveMultiplexer } from './ssh'
+import { normalizeSparseDirectories } from './sparse-checkout-directories'
 
 // Why: module-scoped so the abort handle survives window re-creation on macOS.
 // registerRepoHandlers is called again when a new BrowserWindow is created,
@@ -263,6 +264,10 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   )
 
   ipcMain.handle('sparsePresets:remove', (_event, args: { repoId: string; presetId: string }) => {
+    const repo = store.getRepo(args.repoId)
+    if (!repo) {
+      throw new Error(`Repo "${args.repoId}" not found`)
+    }
     store.removeSparsePreset(args.repoId, args.presetId)
     notifySparsePresetsChanged(mainWindow, args.repoId)
   })
@@ -581,25 +586,18 @@ function normalizeSparsePresetName(name: string): string {
 }
 
 function normalizeSparsePresetDirectories(directories: string[]): string[] {
-  const seen = new Set<string>()
-  const normalized = directories
-    .map((entry) =>
-      entry
-        .trim()
-        .replace(/\\/g, '/')
-        .replace(/^\/+|\/+$/g, '')
-    )
-    .filter((entry) => entry.length > 0 && entry !== '.')
-    .filter((entry) => {
-      if (entry.split('/').includes('..')) {
-        throw new Error('Preset directories must be repo-relative paths.')
-      }
-      if (seen.has(entry)) {
-        return false
-      }
-      seen.add(entry)
-      return true
-    })
+  let normalized: string[]
+  try {
+    normalized = normalizeSparseDirectories(directories)
+  } catch (err) {
+    if (
+      err instanceof Error &&
+      err.message === 'Sparse checkout directories must be repo-relative paths.'
+    ) {
+      throw new Error('Preset directories must be repo-relative paths.')
+    }
+    throw err
+  }
   if (normalized.length === 0) {
     throw new Error('Preset must have at least one directory.')
   }

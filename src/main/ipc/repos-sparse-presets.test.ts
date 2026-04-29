@@ -104,7 +104,7 @@ describe('sparse preset repo IPC handlers', () => {
     const saved = handlers.get('sparsePresets:save')!(null, {
       repoId: 'repo-1',
       name: '  Web preset  ',
-      directories: [' packages/web ', '\\apps\\api\\', '/packages/web/', '.', '']
+      directories: [' packages/web ', 'apps\\api\\', 'packages/web/', '.', '']
     })
 
     expect(mockStore.saveSparsePreset).toHaveBeenCalledWith(
@@ -176,6 +176,23 @@ describe('sparse preset repo IPC handlers', () => {
     expect(mockStore.saveSparsePreset).not.toHaveBeenCalled()
   })
 
+  it.each([
+    '/Users/me/repo/packages/web',
+    'C:\\repo\\packages\\web',
+    '\\\\server\\share\\repo',
+    '\\repo\\packages\\web'
+  ])('rejects absolute sparse preset directory before normalization: %s', (directory) => {
+    expect(() =>
+      handlers.get('sparsePresets:save')!(null, {
+        repoId: 'repo-1',
+        name: 'Web',
+        directories: ['packages/web', directory]
+      })
+    ).toThrow('Preset directories must be repo-relative paths.')
+
+    expect(mockStore.saveSparsePreset).not.toHaveBeenCalled()
+  })
+
   it('rejects sparse preset saves for unknown repos', () => {
     mockStore.getRepo.mockReturnValue(null)
 
@@ -186,5 +203,21 @@ describe('sparse preset repo IPC handlers', () => {
         directories: ['packages/web']
       })
     ).toThrow('Repo "missing" not found')
+  })
+
+  it('rejects sparse preset removals for unknown repos before persistence', () => {
+    mockStore.getRepo.mockReturnValue(null)
+
+    expect(() =>
+      handlers.get('sparsePresets:remove')!(null, {
+        repoId: 'missing',
+        presetId: 'preset-1'
+      })
+    ).toThrow('Repo "missing" not found')
+
+    expect(mockStore.removeSparsePreset).not.toHaveBeenCalled()
+    expect(mainWindow.webContents.send).not.toHaveBeenCalledWith('sparsePresets:changed', {
+      repoId: 'missing'
+    })
   })
 })

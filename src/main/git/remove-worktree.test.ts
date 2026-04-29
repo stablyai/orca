@@ -1,17 +1,22 @@
+/* eslint-disable max-lines -- Why: remove/list/sparse cleanup tests share one git runner
+   mock harness, and splitting them would duplicate setup without a clearer boundary. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { gitExecFileAsyncMock, gitExecFileSyncMock } = vi.hoisted(() => ({
-  gitExecFileAsyncMock: vi.fn(),
-  gitExecFileSyncMock: vi.fn()
-}))
+const { gitExecFileAsyncMock, gitExecFileSyncMock, translateWslOutputPathsMock } = vi.hoisted(
+  () => ({
+    gitExecFileAsyncMock: vi.fn(),
+    gitExecFileSyncMock: vi.fn(),
+    translateWslOutputPathsMock: vi.fn((output: string) => output)
+  })
+)
 
 vi.mock('./runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock,
   gitExecFileSync: gitExecFileSyncMock,
-  translateWslOutputPaths: (output: string) => output
+  translateWslOutputPaths: translateWslOutputPathsMock
 }))
 
-import { removeWorktree } from './worktree'
+import { addSparseWorktree, listWorktrees, removeWorktree } from './worktree'
 
 type MockResult = {
   error?: Error
@@ -54,6 +59,8 @@ describe('removeWorktree', () => {
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
     gitExecFileSyncMock.mockReset()
+    translateWslOutputPathsMock.mockReset()
+    translateWslOutputPathsMock.mockImplementation((output: string) => output)
   })
 
   it('removes the worktree, prunes stale refs, and deletes its local branch', async () => {
@@ -260,5 +267,164 @@ branch refs/heads/main
     )
 
     warnSpy.mockRestore()
+  })
+})
+
+describe('listWorktrees', () => {
+  beforeEach(() => {
+    gitExecFileAsyncMock.mockReset()
+    gitExecFileSyncMock.mockReset()
+    translateWslOutputPathsMock.mockReset()
+    translateWslOutputPathsMock.mockImplementation((output: string) => output)
+  })
+
+  it('translates parsed path fields from NUL-delimited porcelain output', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({
+      stdout:
+        'worktree /home/me/repo\0HEAD abc123\0branch refs/heads/main\0\0' +
+        'worktree /home/me/repo-feature\0HEAD def456\0branch refs/heads/feature/test\0sparse\0\0'
+    })
+    translateWslOutputPathsMock.mockImplementation((output: string) => {
+      expect(output).not.toContain('\0')
+      return output.replace('/home/me/', '\\\\wsl.localhost\\Ubuntu\\home\\me\\')
+    })
+
+    await expect(listWorktrees('\\\\wsl.localhost\\Ubuntu\\home\\me\\repo')).resolves.toEqual([
+      {
+        path: '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo',
+        head: 'abc123',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      },
+      {
+        path: '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo-feature',
+        head: 'def456',
+        branch: 'refs/heads/feature/test',
+        isBare: false,
+        isSparse: true,
+        isMainWorktree: false
+      }
+    ])
+    expect(getGitCalls()).toEqual([
+      'git worktree list --porcelain -z',
+      'git config --bool core.sparseCheckout'
+    ])
+    expect(translateWslOutputPathsMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('detects sparse checkout after translating paths when porcelain omits sparse token', async () => {
+    gitExecFileAsyncMock.mockImplementation((args: string[], options: { cwd: string }) => {
+      if (args.join(' ') === 'worktree list --porcelain -z') {
+        return {
+          stdout:
+            'worktree /home/me/repo\0HEAD abc123\0branch refs/heads/main\0\0' +
+            'worktree /home/me/repo-feature\0HEAD def456\0branch refs/heads/feature/test\0\0',
+          stderr: ''
+        }
+      }
+      if (args.join(' ') === 'config --bool core.sparseCheckout') {
+        const isFeatureWorktree =
+          options.cwd === '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo-feature'
+        return {
+          stdout: isFeatureWorktree ? 'true\n' : 'false\n',
+          stderr: ''
+        }
+      }
+      throw new Error(`Unexpected git call: ${args.join(' ')}`)
+    })
+    translateWslOutputPathsMock.mockImplementation((output: string) => {
+      expect(output).not.toContain('\0')
+      return output.replace('/home/me/', '\\\\wsl.localhost\\Ubuntu\\home\\me\\')
+    })
+
+    const worktrees = await listWorktrees('\\\\wsl.localhost\\Ubuntu\\home\\me\\repo')
+
+    expect(worktrees).toEqual([
+      {
+        path: '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo',
+        head: 'abc123',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      },
+      {
+        path: '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo-feature',
+        head: 'def456',
+        branch: 'refs/heads/feature/test',
+        isBare: false,
+        isSparse: true,
+        isMainWorktree: false
+      }
+    ])
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['config', '--bool', 'core.sparseCheckout'], {
+      cwd: '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo-feature'
+    })
+  })
+})
+
+describe('addSparseWorktree', () => {
+  beforeEach(() => {
+    gitExecFileAsyncMock.mockReset()
+    gitExecFileSyncMock.mockReset()
+    translateWslOutputPathsMock.mockReset()
+    translateWslOutputPathsMock.mockImplementation((output: string) => output)
+  })
+
+  it('separates sparse checkout directory operands from options', async () => {
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
+
+    await addSparseWorktree('/repo', '/repo-feature', 'feature/test', ['-docs', 'src'])
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['sparse-checkout', 'set', '--', '-docs', 'src'],
+      { cwd: '/repo-feature' }
+    )
+  })
+
+  it('removes the worktree and deletes the created branch when sparse setup fails', async () => {
+    mockGitCommands({
+      'git sparse-checkout set -- packages/web': {
+        error: new Error('sparse setup failed')
+      },
+      'git worktree list --porcelain -z': {
+        stdout: `worktree /repo
+HEAD abc123
+branch refs/heads/main
+
+worktree /repo-feature
+HEAD def456
+branch refs/heads/feature/test
+`
+      },
+      'git worktree list --porcelain -z#2': {
+        stdout: `worktree /repo
+HEAD abc123
+branch refs/heads/main
+`
+      }
+    })
+
+    await expect(
+      addSparseWorktree('/repo', '/repo-feature', 'feature/test', ['packages/web'])
+    ).rejects.toThrow('sparse setup failed')
+
+    const calls = getGitCalls()
+    expect(calls).toEqual(
+      expect.arrayContaining([
+        'git worktree add --no-checkout -b feature/test /repo-feature',
+        'git sparse-checkout init --cone',
+        'git sparse-checkout set -- packages/web',
+        'git worktree remove --force /repo-feature',
+        'git worktree prune',
+        'git branch -D feature/test'
+      ])
+    )
+    expectGitCallOrder(
+      calls,
+      'git sparse-checkout set -- packages/web',
+      'git worktree remove --force /repo-feature'
+    )
+    expectGitCallOrder(calls, 'git worktree prune', 'git branch -D feature/test')
   })
 })
