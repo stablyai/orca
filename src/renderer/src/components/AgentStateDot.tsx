@@ -76,7 +76,7 @@ export const AgentStateDot = React.memo(function AgentStateDot({
           'block rounded-full',
           inner,
           state === 'blocked' || state === 'waiting' || state === 'permission'
-            ? 'bg-red-500 animate-pulse'
+            ? 'bg-red-500'
             : state === 'done'
               ? // Why: same emerald as the working spinner — motion (spin vs solid) is the intentional differentiator; matches StatusIndicator.
                 'bg-emerald-500'
