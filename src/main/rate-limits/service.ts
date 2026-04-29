@@ -379,7 +379,7 @@ export class RateLimitService {
     const [claudeResult, codexResult, geminiResult, opencodeGoResult] = await Promise.allSettled([
       fetchClaudeRateLimits({ authPreparation: claudeAuthPreparation }),
       fetchCodexRateLimits({ codexHomePath }),
-      fetchGeminiRateLimits(false, geminiCliOAuthEnabled),
+      fetchGeminiRateLimits(geminiCliOAuthEnabled),
       fetchOpenCodeGoRateLimits(cookie, workspaceIdOverride || undefined)
     ])
 

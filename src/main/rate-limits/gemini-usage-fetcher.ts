@@ -201,7 +201,6 @@ async function fetchViaOauthCreds(
 }
 
 export async function fetchGeminiRateLimits(
-  _force = false,
   geminiCliOAuthEnabled = false
 ): Promise<ProviderRateLimits> {
   try {

@@ -87,6 +87,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     defaultLinearTeamSelection: null,
     opencodeSessionCookie: '',
     opencodeWorkspaceId: '',
+    geminiCliOAuthEnabled: false,
     agentCmdOverrides: {},
     terminalMacOptionAsAlt: 'false',
     terminalMacOptionAsAltMigrated: true,

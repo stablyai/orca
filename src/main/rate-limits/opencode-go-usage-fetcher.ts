@@ -56,7 +56,7 @@ function parseWorkspaceIds(text: string): string[] {
   // more specific regex with word boundaries avoids picking up unrelated
   // object properties that might match a generic ID pattern.
   const ids: string[] = []
-  const workspaceIdRegex = /\bid\s*:\\s*["']((?:wrk|wk)_[a-zA-Z0-9]+)["']/g
+  const workspaceIdRegex = /\bid\s*:\s*["']((?:wrk|wk)_[a-zA-Z0-9]+)["']/g
   for (const match of text.matchAll(workspaceIdRegex)) {
     const id = match[1]
     if (id && !ids.includes(id)) {
