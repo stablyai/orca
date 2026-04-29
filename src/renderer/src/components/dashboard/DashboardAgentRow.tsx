@@ -72,7 +72,8 @@ type Props = {
    * honest. We accept `now` from a parent container so a single 30s tick owned
    * by the container drives every visible row, rather than each row running
    * its own setInterval. See useNow.ts for the shared hook — callers own the
-   * tick (AgentDashboard for the dashboard, AgentStatusHover for hovercards).
+   * tick (AgentDashboard for the dashboard, WorktreeCardAgents for the
+   * inline-in-card list).
    */
   now: number
   /**
@@ -82,11 +83,8 @@ type Props = {
    * the same "you haven't looked at this yet" rule — visiting the worktree
    * clears isUnread, and the next render mutes both in lockstep.
    *
-   * Optional because this row is also reused by the sidebar's
-   * AgentStatusHover, which is a transient popover where the WorktreeCard
-   * itself already carries the unread signal visually — bolding prompts
-   * there would double-encode. Default false = muted everywhere callers
-   * don't care.
+   * Optional so other callers can opt out and default to muted when their
+   * surface carries the unread signal elsewhere.
    */
   isUnvisited?: boolean
   /**
@@ -158,7 +156,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   // slot would collapse the text column and leave the row with no human-
   // readable label — just a state dot and icon. Fall back to the state label
   // ("Working", "Done", "Waiting", …) so every row is identifiable at a
-  // glance, matching the old AgentStatusHover.tsx behavior.
+  // glance.
   const displayLabel = prompt || agentStateLabel(asDotState(agent.state))
   // Why: the tool row describes what the agent is *currently* doing; once it
   // leaves working, that line goes stale and misleads (a done row showing

@@ -16,15 +16,11 @@ type Props = {
 
 /**
  * Inline agent list rendered directly inside WorktreeCard when the
- * 'inline-agents' card property is enabled. Replaces the hover-to-the-right
- * AgentStatusHover surface so users who prefer persistent per-card visibility
- * don't have to hover and wait. The hovercard is suppressed on the same card
- * when this is shown (WorktreeCard gates it) so the two surfaces never
- * render the same rows concurrently.
+ * 'inline-agents' card property is enabled. Gives persistent per-card
+ * visibility of each agent's live state, prompt, and last message.
  *
- * Reuses useWorktreeAgentRows + DashboardAgentRow so the list contents are
- * identical to the hover surface and the Agents tab — changes to row layout
- * or the derivation propagate to all three.
+ * Reuses useWorktreeAgentRows + DashboardAgentRow so row layout and the
+ * derivation stay consistent with the Agents tab cockpit.
  */
 const WorktreeCardAgents = React.memo(function WorktreeCardAgents({
   worktreeId,

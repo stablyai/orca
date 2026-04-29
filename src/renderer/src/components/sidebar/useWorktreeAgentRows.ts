@@ -19,12 +19,11 @@ const EMPTY_LIVE_ENTRIES: AgentStatusEntry[] = []
 const EMPTY_RETAINED: RetainedAgentEntry[] = []
 
 /**
- * Narrow per-worktree agent row hook shared by the AgentStatusHover popup and
- * the WorktreeCard inline agents list. Both surfaces need the exact same row
- * set (live hook-reported agents + retained "done" snapshots, stale-decayed to
- * 'idle' when the hook stream has gone quiet), so centralizing the
- * derivation here keeps them in lockstep and avoids two independent
- * re-implementations drifting. The computation itself mirrors
+ * Narrow per-worktree agent row hook used by the WorktreeCard inline agents
+ * list and kept as a stable contract so future surfaces (e.g. the Agents tab)
+ * can share the same row derivation without re-implementing it. Produces live
+ * hook-reported agents plus retained "done" snapshots, stale-decayed to
+ * 'idle' when the hook stream has gone quiet. The computation itself mirrors
  * buildAgentRowsForWorktree + enrichGroupsWithRetained in useDashboardData.ts.
  *
  * Why not useDashboardData()+enrichGroupsWithRetained: those build the
