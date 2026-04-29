@@ -261,7 +261,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
                 onClick={handleBrowse}
                 disabled={isAdding}
                 variant="outline"
-                className="h-auto py-5 px-2 flex flex-col items-center gap-2 text-center"
+                className="h-auto py-5 px-2 flex flex-col items-center gap-2 text-center border-border/80"
               >
                 <FolderOpen className="size-6 text-muted-foreground" />
                 <div>
@@ -275,7 +275,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
               <Button
                 onClick={() => setStep('clone')}
                 variant="outline"
-                className="h-auto py-5 px-2 flex flex-col items-center gap-2 text-center"
+                className="h-auto py-5 px-2 flex flex-col items-center gap-2 text-center border-border/80"
               >
                 <Globe className="size-6 text-muted-foreground" />
                 <div>
@@ -289,7 +289,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
               <Button
                 onClick={handleOpenRemoteStep}
                 variant="outline"
-                className="h-auto py-5 px-2 flex flex-col items-center gap-2 text-center"
+                className="h-auto py-5 px-2 flex flex-col items-center gap-2 text-center border-border/80"
               >
                 <Monitor className="size-6 text-muted-foreground" />
                 <div>
