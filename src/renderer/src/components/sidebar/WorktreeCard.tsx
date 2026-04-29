@@ -157,7 +157,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   // that the spinner flickered; the blocked/waiting/done states don't have
   // that problem — they're terminal (done) or attention-needed (blocked/
   // waiting) and persist until the user acts. Retained "done" snapshots are
-  // consulted too so the sky dot keeps glowing after the agent process exits,
+  // consulted too so the done dot keeps glowing after the agent process exits,
   // matching the dashboard's retention behavior.
   //
   // Priority (highest first): permission (blocked/waiting) > heuristic

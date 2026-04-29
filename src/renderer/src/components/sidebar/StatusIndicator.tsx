@@ -1,6 +1,6 @@
 import React from 'react'
 import { cn } from '@/lib/utils'
-import type { WorktreeStatus } from '@/lib/worktree-status'
+import { getWorktreeStatusLabel, type WorktreeStatus } from '@/lib/worktree-status'
 
 // Why: re-export WorktreeStatus under the existing `Status` alias so the
 // sidebar component and the canonical lib share one source of truth — the
@@ -15,12 +15,22 @@ type StatusIndicatorProps = React.ComponentProps<'span'> & {
 const StatusIndicator = React.memo(function StatusIndicator({
   status,
   className,
+  title,
   ...rest
 }: StatusIndicatorProps) {
+  // Why: surface the status label as a native tooltip so hovering the dot
+  // reveals the state — matters especially for 'active' vs 'inactive', which
+  // share the same grey dot (see color-branch comment below). Callers pass
+  // aria-hidden="true" alongside an sr-only label, so the `title` attribute
+  // is ignored by AT and only serves sighted users on hover. Callers can
+  // override by passing their own `title`.
+  const resolvedTitle = title ?? getWorktreeStatusLabel(status)
+
   if (status === 'working') {
     return (
       <span
         className={cn('inline-flex h-3 w-3 shrink-0 items-center justify-center', className)}
+        title={resolvedTitle}
         {...rest}
       >
         <span className="block size-2 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin" />
@@ -31,6 +41,7 @@ const StatusIndicator = React.memo(function StatusIndicator({
   return (
     <span
       className={cn('inline-flex h-3 w-3 shrink-0 items-center justify-center', className)}
+      title={resolvedTitle}
       {...rest}
     >
       <span
