@@ -71,6 +71,17 @@ const SUB_TABS: {
 
 const PR_LIST_LIMIT = 36
 const ISSUE_LIST_LIMIT = 36
+const BRANCH_CACHE_TTL_MS = 60_000
+// Why: branches change rarely during a composer session. A module-scoped
+// cache keyed on repoId + query (60s TTL) means switching sub-tabs or
+// re-opening the modal returns the prior result instantly instead of
+// re-shelling out to `git for-each-ref` (which can be slow on large repos).
+const branchCache = new Map<string, { data: string[]; fetchedAt: number }>()
+// Why: the unqualified empty-query path returns PRs + issues merged and
+// sliced to `limit`. Use the sum so each tab can render up to its own cap
+// after filtering by type client-side — and because both effects pass the
+// same limit, they share one cached IPC call and one gh invocation.
+const COMBINED_WORK_ITEM_LIMIT = PR_LIST_LIMIT + ISSUE_LIST_LIMIT
 const LINEAR_LIST_LIMIT = 36
 const SEARCH_DEBOUNCE_MS = 200
 
@@ -86,7 +97,9 @@ export default function CreateFromTab({
     listLinearIssues,
     searchLinearIssues,
     rememberedSubTab,
-    setRememberedSubTab
+    setRememberedSubTab,
+    fetchWorkItems,
+    getCachedWorkItems
   } = useAppStore(
     useShallow((s) => ({
       activeRepoId: s.activeRepoId,
@@ -95,7 +108,9 @@ export default function CreateFromTab({
       listLinearIssues: s.listLinearIssues,
       searchLinearIssues: s.searchLinearIssues,
       rememberedSubTab: s.createFromSubTab,
-      setRememberedSubTab: s.setCreateFromSubTab
+      setRememberedSubTab: s.setCreateFromSubTab,
+      fetchWorkItems: s.fetchWorkItems,
+      getCachedWorkItems: s.getCachedWorkItems
     }))
   )
 
@@ -221,22 +236,38 @@ export default function CreateFromTab({
       return // handled by direct-lookup effect below
     }
     const trimmed = debouncedQuery.trim()
-    const q = trimmed ? `is:pr is:open ${normalizedGhQuery.query}` : 'is:pr is:open'
+    // Why: when the user hasn't typed anything, use the unqualified listing —
+    // the backend routes that to `listRecentWorkItems` which hits
+    // `gh api --cache 120s` (fast, cached). Adding `is:pr is:open` forces the
+    // slow `gh pr list --search` path every time and skips the 60s renderer
+    // cache in the store. Same shortcut is used for the issues effect below.
+    const q = trimmed ? `is:pr is:open ${normalizedGhQuery.query}` : ''
+    // Why: empty-query path returns PRs+issues merged, so use the combined
+    // cap so the PR and Issue effects collapse onto the same cache key and
+    // dedupe into a single gh invocation via the store's inflight tracker.
+    const effectiveLimit = trimmed ? PR_LIST_LIMIT : COMBINED_WORK_ITEM_LIMIT
+
+    // Why: route through the store so the 60s workItemsCache + inflight dedup
+    // kick in. Re-opening the modal or toggling PR↔Issue sub-tabs returns
+    // cached data instantly instead of re-running gh search.
+    const cached = getCachedWorkItems(selectedRepo.path, effectiveLimit, q)
+    if (cached) {
+      setPrItems(cached.filter((i) => i.type === 'pr').slice(0, PR_LIST_LIMIT))
+      setPrLoading(false)
+      setPrError(null)
+    }
 
     let stale = false
-    setPrLoading(true)
+    if (!cached) {
+      setPrLoading(true)
+    }
     setPrError(null)
-    void window.api.gh
-      .listWorkItems({ repoPath: selectedRepo.path, limit: PR_LIST_LIMIT, query: q })
+    void fetchWorkItems(selectedRepo.id, selectedRepo.path, effectiveLimit, q)
       .then((items) => {
         if (stale) {
           return
         }
-        setPrItems(
-          items
-            .filter((i) => i.type === 'pr')
-            .map((i) => ({ ...i, repoId: selectedRepo.id })) as unknown as GitHubWorkItem[]
-        )
+        setPrItems(items.filter((i) => i.type === 'pr').slice(0, PR_LIST_LIMIT))
         setPrLoading(false)
       })
       .catch((err) => {
@@ -256,7 +287,9 @@ export default function CreateFromTab({
     isRemoteRepo,
     debouncedQuery,
     normalizedGhQuery.query,
-    normalizedGhQuery.directNumber
+    normalizedGhQuery.directNumber,
+    fetchWorkItems,
+    getCachedWorkItems
   ])
 
   // ---------------------------------------------------------------------
@@ -274,22 +307,30 @@ export default function CreateFromTab({
       return
     }
     const trimmed = debouncedQuery.trim()
-    const q = trimmed ? `is:issue is:open ${normalizedGhQuery.query}` : 'is:issue is:open'
+    // Why: empty query → backend's fast cached path (see PR effect above).
+    // When no query is typed this is the SAME IPC call as the PR effect, so
+    // the store's inflight dedup collapses them into a single gh invocation.
+    const q = trimmed ? `is:issue is:open ${normalizedGhQuery.query}` : ''
+    const effectiveLimit = trimmed ? ISSUE_LIST_LIMIT : COMBINED_WORK_ITEM_LIMIT
+
+    const cached = getCachedWorkItems(selectedRepo.path, effectiveLimit, q)
+    if (cached) {
+      setIssueItems(cached.filter((i) => i.type === 'issue').slice(0, ISSUE_LIST_LIMIT))
+      setIssueLoading(false)
+      setIssueError(null)
+    }
 
     let stale = false
-    setIssueLoading(true)
+    if (!cached) {
+      setIssueLoading(true)
+    }
     setIssueError(null)
-    void window.api.gh
-      .listWorkItems({ repoPath: selectedRepo.path, limit: ISSUE_LIST_LIMIT, query: q })
+    void fetchWorkItems(selectedRepo.id, selectedRepo.path, effectiveLimit, q)
       .then((items) => {
         if (stale) {
           return
         }
-        setIssueItems(
-          items
-            .filter((i) => i.type === 'issue')
-            .map((i) => ({ ...i, repoId: selectedRepo.id })) as unknown as GitHubWorkItem[]
-        )
+        setIssueItems(items.filter((i) => i.type === 'issue').slice(0, ISSUE_LIST_LIMIT))
         setIssueLoading(false)
       })
       .catch((err) => {
@@ -309,7 +350,9 @@ export default function CreateFromTab({
     isRemoteRepo,
     debouncedQuery,
     normalizedGhQuery.query,
-    normalizedGhQuery.directNumber
+    normalizedGhQuery.directNumber,
+    fetchWorkItems,
+    getCachedWorkItems
   ])
 
   // ---------------------------------------------------------------------
@@ -371,11 +414,26 @@ export default function CreateFromTab({
       return
     }
     const trimmed = debouncedQuery.trim()
+    const cacheKey = `${selectedRepo.id}::${trimmed}`
+    const cached = branchCache.get(cacheKey)
+    const fresh = cached && Date.now() - cached.fetchedAt < BRANCH_CACHE_TTL_MS
+    if (cached) {
+      // Why: show stale cache immediately (SWR-style); the fetch below keeps
+      // the list current. Only skip the loader flash if the entry is fresh.
+      setBranches(cached.data)
+      if (fresh) {
+        setBranchesLoading(false)
+        return
+      }
+    }
     let stale = false
-    setBranchesLoading(true)
+    if (!cached) {
+      setBranchesLoading(true)
+    }
     void window.api.repos
       .searchBaseRefs({ repoId: selectedRepo.id, query: trimmed, limit: 30 })
       .then((results) => {
+        branchCache.set(cacheKey, { data: results, fetchedAt: Date.now() })
         if (!stale) {
           setBranches(results)
         }
