@@ -919,7 +919,7 @@ export type GlobalSettings = {
   rightSidebarOpenByDefault: boolean
   /** Whether to show the live agent activity count badge in the titlebar. */
   showTitlebarAgentActivity: boolean
-  /** Whether to show the Agent Dashboard panel at the bottom of the right sidebar.
+  /** Whether to show the Agent Dashboard panel in the sidebar.
    *  Why: optional because readers use the `settings?.showAgentDashboard !== false`
    *  idiom (right-sidebar/index.tsx, AgentsPane.tsx) which presumes the field may
    *  be undefined — e.g. on first hydrate before main-process defaults apply, or
@@ -1016,7 +1016,7 @@ export type GlobalSettings = {
    *  toast shown to users upgrading from v1.3.0 (where the daemon was on by
    *  default). Set to true the first time the toast fires so it never repeats. */
   experimentalTerminalDaemonNoticeShown: boolean
-  /** Experimental: live Agent Dashboard — a bottom-docked right-sidebar panel
+  /** Experimental: live Agent Dashboard — a sidebar Agents tab
    *  that aggregates working/blocked/done agents across all worktrees, plus
    *  the sidebar AgentStatusHover surface, retention of "done" rows, and the
    *  hook-driven status slice that feeds them. Opt-in because the surface is

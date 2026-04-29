@@ -1,5 +1,4 @@
 import React, { useCallback, useMemo } from 'react'
-import { useShallow } from 'zustand/react/shallow'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import DashboardAgentRow from './DashboardAgentRow'
@@ -42,19 +41,24 @@ const DashboardWorktreeCard = React.memo(function DashboardWorktreeCard({
   const setActiveView = useAppStore((s) => s.setActiveView)
   const acknowledgeAgents = useAppStore((s) => s.acknowledgeAgents)
 
-  // Why: selector returns the per-agent ack timestamps for only THIS card's
-  // agents via useShallow so the card doesn't re-render on unrelated ack
-  // changes elsewhere in the dashboard. Map paneKey -> last-ack-at (or 0).
   const paneKeys = useMemo(() => card.agents.map((a) => a.paneKey), [card.agents])
-  const ackByPaneKey = useAppStore(
-    useShallow((s) => {
-      const out: Record<string, number> = {}
-      for (const paneKey of paneKeys) {
-        out[paneKey] = s.acknowledgedAgentsByPaneKey[paneKey] ?? 0
-      }
-      return out
-    })
-  )
+  // Why: subscribe to the ack map's single reference (cheap Object.is check
+  // via Zustand's default equality) and derive the per-card slice locally.
+  // Previously this used a useShallow selector that allocated a fresh
+  // object on every store change — including unrelated ones like terminal
+  // output — multiplied across every card on screen. Reading the reference
+  // and memoizing the per-card slice collapses that to one allocation per
+  // card per genuine ack change. acknowledgeAgents in ui.ts preserves the
+  // map reference when no ack is actually moving forward, so unrelated
+  // clicks do not invalidate this memo either.
+  const acknowledgedAgentsByPaneKey = useAppStore((s) => s.acknowledgedAgentsByPaneKey)
+  const ackByPaneKey = useMemo(() => {
+    const out: Record<string, number> = {}
+    for (const paneKey of paneKeys) {
+      out[paneKey] = acknowledgedAgentsByPaneKey[paneKey] ?? 0
+    }
+    return out
+  }, [paneKeys, acknowledgedAgentsByPaneKey])
 
   // Why: an agent counts as "unvisited" when it has no ack OR the agent's
   // current state began after the last ack (a new turn/state transition is

@@ -45,14 +45,15 @@ export function useDashboardKeyboard({
 }: UseDashboardKeyboardParams): ContainerCallbackRef {
   const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
   const setActiveView = useAppStore((s) => s.setActiveView)
-  // Why: no `rightSidebarOpen` guard needed. The keydown listener is attached
-  // to the dashboard container element (see attach-effect below), which lives
-  // inside the right sidebar. When the sidebar is closed it collapses to 0
-  // width with overflow hidden, so focus cannot land inside the dashboard,
-  // and keydown events from the focused element (typically the terminal) are
-  // never dispatched to the dashboard container. Subscribing to the flag here
-  // would only cause this hook to recompute and re-attach the listener on
-  // every sidebar toggle without adding any safety.
+  // Why: no `sidebarOpen` guard needed. The keydown listener is attached to
+  // the dashboard container element (see attach-effect below), which lives
+  // inside the left sidebar's Agents view. When the sidebar is closed it
+  // collapses to 0 width with overflow hidden, so focus cannot land inside
+  // the dashboard, and keydown events from the focused element (typically
+  // the terminal) are never dispatched to the dashboard container.
+  // Subscribing to the flag here would only cause this hook to recompute
+  // and re-attach the listener on every sidebar toggle without adding any
+  // safety.
 
   // Why: track the container element in state so the attach-effect re-runs
   // whenever the element mounts or unmounts. See the file-level comment for

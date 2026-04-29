@@ -8,20 +8,50 @@ import { useAppStore } from '@/store'
 // the dashboard bolded for an event the user literally just watched happen.
 //
 // The effect subscribes directly to the store (not via React selectors) so it
-// re-runs on EVERY status update or view change without amplifying re-renders
-// up the component tree. It acks whenever:
+// sees every state change with no re-render amplification up the component
+// tree. A reference-equality guard inside the callback bails out immediately
+// when none of the four slices we care about (activeView, activeTabId,
+// agentStatusByPaneKey, acknowledgedAgentsByPaneKey) have changed — so the
+// Object.entries walk only runs for updates that could legitimately affect
+// the ack decision.
+//
+// It acks whenever:
 //   - activeView is 'terminal' (the user isn't on Settings/Tasks), AND
-//   - activeWorktreeId + activeTabId identify a live tab, AND
-//   - at least one agentStatusByPaneKey entry has tabId === activeTabId AND
-//     its paneKey is not yet acked at the current stateStartedAt.
+//   - activeTabId identifies a live tab, AND
+//   - at least one agentStatusByPaneKey entry has paneKey prefixed by
+//     `${activeTabId}:` AND its ackAt < stateStartedAt.
 //
 // We ack ALL matching panes in one call (a tab can host split panes, each
 // with its own paneKey) so acknowledgeAgents' identity-preserving guard
 // collapses the no-op path.
 export function useAutoAckViewedAgent(): void {
   useEffect(() => {
+    // Why: the root zustand store is created with plain `create()` (no
+    // subscribeWithSelector middleware), so subscribe has no selector form.
+    // Track the slice references we actually depend on and early-return on
+    // unrelated updates — terminal output, tab state, settings, etc. would
+    // otherwise invoke the scan on every store change. Initialize to
+    // `undefined` so the first call always runs at least once.
+    let lastActiveView: unknown = undefined
+    let lastActiveTabId: unknown = undefined
+    let lastAgentStatus: unknown = undefined
+    let lastAcknowledged: unknown = undefined
+
     const maybeAck = (): void => {
       const s = useAppStore.getState()
+      if (
+        s.activeView === lastActiveView &&
+        s.activeTabId === lastActiveTabId &&
+        s.agentStatusByPaneKey === lastAgentStatus &&
+        s.acknowledgedAgentsByPaneKey === lastAcknowledged
+      ) {
+        return
+      }
+      lastActiveView = s.activeView
+      lastActiveTabId = s.activeTabId
+      lastAgentStatus = s.agentStatusByPaneKey
+      lastAcknowledged = s.acknowledgedAgentsByPaneKey
+
       if (s.activeView !== 'terminal') {
         return
       }
@@ -54,11 +84,10 @@ export function useAutoAckViewedAgent(): void {
     // Why: run once on mount to catch the case where the app restores to a
     // session whose current state already has agents on the visible tab.
     maybeAck()
-    // Why: store.subscribe fires on every state change — the callback is a
-    // cheap guard + Object.entries walk bounded by live agents, so running it
-    // universally is far simpler than wiring per-slice selectors. The
-    // acknowledgeAgents identity guard filters out no-ops so spurious
-    // re-renders don't cascade.
+    // Why: store.subscribe fires on every state change. The reference-
+    // equality guard above bails out immediately for the common case
+    // (terminal output, timers, etc.) so the Object.entries walk only runs
+    // when one of the four slices we read has actually changed.
     const unsubscribe = useAppStore.subscribe(maybeAck)
     return unsubscribe
   }, [])

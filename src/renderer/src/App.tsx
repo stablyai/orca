@@ -103,6 +103,8 @@ function App(): React.JSX.Element {
       toggleRightSidebar: s.toggleRightSidebar,
       setRightSidebarOpen: s.setRightSidebarOpen,
       setRightSidebarTab: s.setRightSidebarTab,
+      setSidebarOpen: s.setSidebarOpen,
+      setSidebarView: s.setSidebarView,
       updateSettings: s.updateSettings
     }))
   )
@@ -712,8 +714,12 @@ function App(): React.JSX.Element {
         return
       }
 
-      // Cmd/Ctrl+Shift+D — open right sidebar (agent dashboard is now
-      // docked at the sidebar bottom, so only toggle visibility).
+      // Cmd/Ctrl+Shift+D — open the left sidebar and switch to the Agents
+      // view. The dashboard lives as a tab inside the left sidebar (see
+      // sidebar/index.tsx), so revealing it means ensuring the sidebar is
+      // open AND sidebarView is 'agents'. Previously this opened the right
+      // sidebar because the dashboard was docked there; that panel has been
+      // removed on this branch.
       // Why: skip when a terminal is focused — that combo is the terminal
       // split-pane shortcut (see terminal-shortcut-policy.ts). Both listeners
       // share the window capture phase and registration order can vary with
@@ -722,15 +728,17 @@ function App(): React.JSX.Element {
       // is the focus target the terminal handler itself uses to detect
       // terminal focus (see keyboard-handlers.ts isEditableTarget).
       if (e.shiftKey && !e.altKey && e.key.toLowerCase() === 'd') {
-        // Why: read the experimental toggle at keypress time via getState() so
+        // Why: read the dashboard gates at keypress time via getState() so
         // flipping the setting takes effect immediately without re-binding the
-        // window-level listener (which would require adding `settings` to the
-        // effect deps and tearing down/rebinding on every unrelated settings
-        // change, like theme or font adjustments). Gated behind the key/modifier
-        // check so getState() isn't invoked on every unrelated keystroke.
-        const dashboardExperimentEnabled =
-          useAppStore.getState().settings?.experimentalAgentDashboard === true
-        if (!dashboardExperimentEnabled) {
+        // window-level listener. Both gates must be live — experimental
+        // unlocks the feature at all, and showAgentDashboard is the user
+        // opt-out. Either false = shortcut is inert. Gated behind the
+        // key/modifier check so getState() isn't invoked on unrelated
+        // keystrokes.
+        const dashboardSettings = useAppStore.getState().settings
+        const dashboardExperimentEnabled = dashboardSettings?.experimentalAgentDashboard === true
+        const dashboardNotHidden = dashboardSettings?.showAgentDashboard !== false
+        if (!dashboardExperimentEnabled || !dashboardNotHidden) {
           return
         }
         const active = document.activeElement as HTMLElement | null
@@ -739,7 +747,8 @@ function App(): React.JSX.Element {
         }
         dispatchClearModifierHints()
         e.preventDefault()
-        actions.setRightSidebarOpen(true)
+        actions.setSidebarOpen(true)
+        actions.setSidebarView('agents')
         return
       }
 

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React from 'react'
 import { Plus, SlidersHorizontal } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
@@ -94,17 +94,14 @@ const SidebarHeader = React.memo(function SidebarHeader() {
   )
   const showAgentDashboard = useAppStore((s) => s.settings?.showAgentDashboard !== false)
   const agentsToggleVisible = dashboardExperimentEnabled && showAgentDashboard
-  // Why: select the raw map and derive the count with useMemo rather than
-  // computing in the selector. Zustand re-invokes every selector on each
-  // state change; a selector that returns a number recomputed from an object
-  // would allocate in every unrelated update (tab switches, terminal events)
-  // and force this memoized header to re-render needlessly. Memoizing on the
-  // map reference matches how setAgentStatus preserves/mutates identity.
-  const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
-  const attentionCount = useMemo(
-    () => countAgentsNeedingAttention(agentStatusByPaneKey),
-    [agentStatusByPaneKey]
-  )
+  // Why: return the primitive count directly so this header only re-renders
+  // when the badge number actually changes. setAgentStatus replaces
+  // agentStatusByPaneKey on every PTY event (including within-state tool/
+  // prompt pings), so selecting the map reference would force a re-render
+  // on every agent event even when the blocked/waiting count is identical.
+  // Zustand's default Object.is equality on the primitive return collapses
+  // those no-op updates.
+  const attentionCount = useAppStore((s) => countAgentsNeedingAttention(s.agentStatusByPaneKey))
 
   const viewingAgents = sidebarView === 'agents'
   // Why: keep the header icons in BOTH views so the sidebar chrome doesn't
@@ -198,12 +195,7 @@ const SidebarHeader = React.memo(function SidebarHeader() {
                       // the previous filter rather than collapsing to a
                       // neutral state — the dashboard must always show some
                       // bucket, and 'all' is never worse than nothing.
-                      if (
-                        v === 'all' ||
-                        v === 'active' ||
-                        v === 'blocked' ||
-                        v === 'done'
-                      ) {
+                      if (v === 'all' || v === 'active' || v === 'blocked' || v === 'done') {
                         setDashboardFilter(v)
                       }
                     }}

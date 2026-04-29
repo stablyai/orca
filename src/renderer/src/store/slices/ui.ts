@@ -226,19 +226,24 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         return s
       }
       const now = Date.now()
-      // Why: only allocate a new map if at least one key actually changes —
-      // spreading on every dashboard click would spuriously re-render every
-      // subscriber (all agent rows) even when the user re-clicks a row they
-      // already acked for the same state window.
-      let changed = false
-      const next = { ...s.acknowledgedAgentsByPaneKey }
+      // Why: only allocate a new map (and emit a store update) if at least
+      // one ack is actually moving forward. Comparing `prev < now` instead
+      // of `prev !== now` matters because stored values are historical
+      // timestamps and `Date.now()` advances every millisecond — a strict-
+      // inequality guard would fire on every call and rewrite the map on
+      // every dashboard click or auto-ack tick, forcing every subscriber
+      // (all agent rows, the SidebarHeader count, etc.) to re-render.
+      let next: Record<string, number> | null = null
       for (const key of paneKeys) {
-        if (next[key] !== now) {
+        const prev = s.acknowledgedAgentsByPaneKey[key] ?? 0
+        if (prev < now) {
+          if (next === null) {
+            next = { ...s.acknowledgedAgentsByPaneKey }
+          }
           next[key] = now
-          changed = true
         }
       }
-      return changed ? { acknowledgedAgentsByPaneKey: next } : s
+      return next ? { acknowledgedAgentsByPaneKey: next } : s
     }),
 
   activeView: 'terminal',

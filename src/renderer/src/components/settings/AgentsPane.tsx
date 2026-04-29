@@ -263,8 +263,8 @@ export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React
                 Show Agent Dashboard
               </span>
               <p id="show-agent-dashboard-desc" className="text-xs text-muted-foreground">
-                Show the live agent activity panel docked at the bottom of the right sidebar —
-                surfaces working, blocked, and done agents across all open worktrees.
+                Show the live agent activity panel in the sidebar — surfaces working, blocked, and
+                done agents across all open worktrees via the Workspaces/Agents toggle.
               </p>
             </div>
             <button

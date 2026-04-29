@@ -73,8 +73,10 @@ function Sidebar(): React.JSX.Element {
         {/* Why: SearchBar renders in BOTH views so the chrome above the list
             doesn't shift when the user flips to Agents. The dashboard reads
             `searchQuery` from the same store field, so typing filters the
-            visible panel either way. The filter button inside SearchBar
-            hides itself in Agents view since its toggles target worktrees. */}
+            visible panel either way. The filter button's repo picker also
+            scopes the Agents view (see useDashboardFilter); its "Active only"
+            toggle is intentionally inert in Agents view to avoid overlapping
+            the dashboard's own state-filter axis. */}
         <SearchBar />
 
         {showAgentsView ? (
