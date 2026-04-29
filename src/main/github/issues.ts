@@ -75,8 +75,16 @@ export async function listIssues(repoPath: string, limit = 20): Promise<IssueLis
         ],
         { cwd: repoPath }
       )
-      const data = JSON.parse(stdout) as unknown[]
-      return { items: data.map((d) => mapIssueInfo(d as Parameters<typeof mapIssueInfo>[0])) }
+      const data = JSON.parse(stdout) as Record<string, unknown>[]
+      // Why: the GitHub REST `/repos/{owner}/{repo}/issues` endpoint returns
+      // pull requests alongside issues (PRs carry a `pull_request` key).
+      // Strip them here so `listIssues` only returns true issues, matching the
+      // filter applied in `listRecentWorkItems` (src/main/github/client.ts).
+      return {
+        items: data
+          .filter((d) => !('pull_request' in d))
+          .map((d) => mapIssueInfo(d as Parameters<typeof mapIssueInfo>[0]))
+      }
     }
     // Fallback for non-GitHub remotes
     const { stdout } = await ghExecFileAsync(

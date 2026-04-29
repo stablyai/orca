@@ -57,6 +57,7 @@ import {
   type PRCommentGroup
 } from '@/lib/pr-comment-groups'
 import { useAppStore } from '@/store'
+import type { WorkItemsCacheSources } from '@/store/slices/github'
 import { useRepoLabels, useRepoAssignees, useImmediateMutation } from '@/hooks/useIssueMetadata'
 import IssueSourceIndicator, { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
 import type {
@@ -1957,7 +1958,7 @@ function WorkItemIssueSourceIndicator({
   const { sources, fallback } = useAppStore(
     useShallow((s) => {
       const primary = s.getWorkItemsSourcesAndError(repoPath ?? '', PER_REPO_FETCH_LIMIT, '')
-      let fallback: { issues: GitHubOwnerRepo | null; prs: GitHubOwnerRepo | null } | null = null
+      let fallback: WorkItemsCacheSources | null = null
       if (repoPath && !primary.sources) {
         const prefix = `${repoPath}::`
         for (const [key, entry] of Object.entries(s.workItemsCache)) {

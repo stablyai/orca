@@ -605,6 +605,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           // queried so downstream consumers typed against GitHubWorkItem work.
           // Cast through unknown: spreading a discriminated union loses the
           // discriminant, so the union-preserving shape must be asserted.
+          // Why: the link popover intentionally does NOT surface
+          // `envelope.errors?.issues`. Per-surface error copy lives in the
+          // Tasks view (TaskPage) and the new-workspace Create tab
+          // (CreateFromTab) — a partial-failure banner inside the small
+          // @-mention popover would crowd the input and the user would
+          // already see the same error on the originating Tasks page. If a
+          // future UX decision flips this, add an error row to the popover's
+          // render output.
           setLinkItems(
             envelope.items.map((it) => ({
               ...it,

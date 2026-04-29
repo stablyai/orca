@@ -98,7 +98,7 @@ function releaseWorkItemSlot(): void {
   workItemFetchInFlight -= 1
 }
 
-function workItemsCacheKey(repoPath: string, limit: number, query: string): string {
+export function workItemsCacheKey(repoPath: string, limit: number, query: string): string {
   return `${repoPath}::${limit}::${query}`
 }
 
@@ -389,6 +389,19 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             query: query || undefined,
             before
           })
+          // Why: page-N partial failures don't participate in the cache's per-repo
+          // error banner (which is keyed on the initial-fetch cache entry). Log the
+          // classified issues-side error so pagination failures are at least
+          // observable in logs rather than silently truncating the merged list. A
+          // richer surface would require threading per-page errors back to the
+          // caller and wiring a transient pagination banner — deferred per parent
+          // design doc §6 scope.
+          if (envelope.errors?.issues) {
+            console.warn(
+              `[workItems] next page ${r.repoId} issues-side partial failure:`,
+              envelope.errors.issues
+            )
+          }
           return envelope.items.map((item): GitHubWorkItem => ({ ...item, repoId: r.repoId }))
         } catch (err) {
           console.warn(`[workItems] next page ${r.repoId} failed:`, err)

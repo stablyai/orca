@@ -442,6 +442,17 @@ async function listRecentWorkItems(
       // the repo as failed). This feature (docs/issue-source-indicator-and-errors.md §6)
       // is scoped to the issue-side silent wrongness from #1076; PR errors
       // must not be silently swallowed here.
+      // Why: if the issue side ALSO failed, the classified issuesError would
+      // otherwise be silently dropped when we throw the PR reason. Log it so
+      // debugging both-sides-failed scenarios (e.g. 403 on both endpoints)
+      // isn't blind to the issue-side classification.
+      if (issuesError) {
+        console.warn(
+          'listRecentWorkItems: both issue and PR sides failed; issuesError was classified:',
+          issuesError.type,
+          issuesError.message
+        )
+      }
       throw prsSettled.reason
     }
 

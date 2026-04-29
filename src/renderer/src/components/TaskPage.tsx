@@ -24,6 +24,11 @@ import { toast } from 'sonner'
 
 import { useAppStore } from '@/store'
 import { useRepoMap } from '@/store/selectors'
+import {
+  workItemsCacheKey,
+  type WorkItemsCacheSources,
+  type WorkItemsCacheError
+} from '@/store/slices/github'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -68,7 +73,6 @@ import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { useTeamStates } from '@/hooks/useIssueMetadata'
 import type {
-  ClassifiedError,
   GitHubOwnerRepo,
   GitHubWorkItem,
   LinearIssue,
@@ -622,7 +626,6 @@ export default function TaskPage(): React.JSX.Element {
   const updateSettings = useAppStore((s) => s.updateSettings)
   const fetchWorkItemsAcrossRepos = useAppStore((s) => s.fetchWorkItemsAcrossRepos)
   const getCachedWorkItems = useAppStore((s) => s.getCachedWorkItems)
-  const getWorkItemsSourcesAndError = useAppStore((s) => s.getWorkItemsSourcesAndError)
   const linearStatus = useAppStore((s) => s.linearStatus)
   const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
   const connectLinear = useAppStore((s) => s.connectLinear)
@@ -820,31 +823,42 @@ export default function TaskPage(): React.JSX.Element {
   // selected repo whose issue-source and PR-source slugs differ, and surface
   // a per-repo retryable banner when the issue-side fetch failed. Both derive
   // from the same `workItemsCache` entry the list already consumes, so no
-  // extra IPC round-trip is needed. Re-memoized on cache mutation so a
-  // successful retry clears the banner automatically.
+  // extra IPC round-trip is needed.
   type RepoSourceState = {
     repoId: string
     repoPath: string
-    sources: { issues: GitHubOwnerRepo | null; prs: GitHubOwnerRepo | null } | null
-    error: (ClassifiedError & { source: GitHubOwnerRepo }) | null
+    sources: WorkItemsCacheSources | null
+    error: WorkItemsCacheError | null
   }
+  // Why: subscribe to `workItemsCache` directly (already bound above) and
+  // memoize the derived per-repo view. The alternative —
+  // `useAppStore(useShallow(...))` — doesn't help here because the selector
+  // would allocate a wrapper object per repo and zustand's shallow compare
+  // uses `Object.is` on each element, so every cache mutation would still
+  // force a re-render. Memoizing over stable inputs re-derives only when the
+  // cache, selection, or query changes. The dialog's
+  // `WorkItemIssueSourceIndicator` uses `useShallow` because it returns a
+  // single `{sources, fallback}` pair (one allocation), not a per-repo list.
   const perRepoSourceState = useMemo<RepoSourceState[]>(() => {
     const appliedQ = stripRepoQualifiers(appliedTaskSearch.trim())
     return selectedRepos.map((r) => {
-      const { sources, error } = getWorkItemsSourcesAndError(r.path, PER_REPO_FETCH_LIMIT, appliedQ)
+      const key = workItemsCacheKey(r.path, PER_REPO_FETCH_LIMIT, appliedQ)
+      const entry = workItemsCache[key]
       return {
         repoId: r.id,
         repoPath: r.path,
-        sources,
-        error
+        sources: entry?.sources ?? null,
+        error: entry?.error ?? null
       }
     })
-    // Why: `workItemsCache` is listed in deps so the derivation re-runs when a
-    // fetch populates or clears the entry. eslint can't see that
-    // `getWorkItemsSourcesAndError` reads from the cache through the store
-    // closure, so the dep looks unused to the rule — it isn't.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedRepos, appliedTaskSearch, workItemsCache, getWorkItemsSourcesAndError])
+  }, [selectedRepos, appliedTaskSearch, workItemsCache])
+
+  // Why: on a partial-failure retry the cache still holds successful-side
+  // data, so `tasksLoading` (which is gated on `anyUncached`) never flips
+  // true and the Retry button would otherwise give no feedback. Track an
+  // explicit retry-in-flight flag; the fetch effect clears it when the
+  // nonce-driven refresh settles.
+  const [isRetryingTasks, setIsRetryingTasks] = useState(false)
 
   const handleRetryIssuesFetch = useCallback(
     (repoPath: string) => {
@@ -865,6 +879,7 @@ export default function TaskPage(): React.JSX.Element {
       // in if the user hadn't clicked retry on this one). The `repoPath`
       // arg is kept for call-site clarity and the selectedRepos guard makes
       // the retry a no-op if the repo dropped out of selection mid-click.
+      setIsRetryingTasks(true)
       setTaskRefreshNonce((n) => n + 1)
     },
     [selectedRepos]
@@ -1144,6 +1159,12 @@ export default function TaskPage(): React.JSX.Element {
       force: forceRefresh && taskRefreshNonce > 0
     })
       .then(({ items, failedCount: failed }) => {
+        // Why: clear retry-in-flight even when the effect was cancelled
+        // mid-retry, so a subsequent effect run that early-returns (e.g.
+        // taskSource switched) doesn't leave the Retry button stuck in the
+        // disabled/Retrying state. Safe to call unconditionally — it's a
+        // no-op when not retrying.
+        setIsRetryingTasks(false)
         if (cancelled) {
           return
         }
@@ -1155,6 +1176,9 @@ export default function TaskPage(): React.JSX.Element {
       .catch((err) => {
         // Why: fetchWorkItemsAcrossRepos swallows per-repo failures, so a
         // reject here means an IPC-level or programmer error — surface it.
+        // Clear retry-in-flight before the cancelled guard for the same
+        // reason as the .then branch above.
+        setIsRetryingTasks(false)
         if (cancelled) {
           return
         }
@@ -2066,9 +2090,16 @@ export default function TaskPage(): React.JSX.Element {
                           variant="outline"
                           size="sm"
                           onClick={() => handleRetryIssuesFetch(s.repoPath)}
-                          disabled={tasksLoading}
+                          disabled={tasksLoading || isRetryingTasks}
                         >
-                          Retry
+                          {isRetryingTasks ? (
+                            <>
+                              <LoaderCircle className="h-3 w-3 animate-spin" />
+                              Retrying…
+                            </>
+                          ) : (
+                            'Retry'
+                          )}
                         </Button>
                       </div>
                     )
@@ -2109,7 +2140,17 @@ export default function TaskPage(): React.JSX.Element {
                   </div>
                 ) : null}
 
-                {!tasksLoading && filteredWorkItems.length === 0 ? (
+                {/* Why: suppress the generic empty state when any error banner is
+                    visible (IPC reject via tasksError, cross-repo partial failure
+                    via failedCount, or per-repo issue-side error). Showing
+                    "No matching GitHub work" next to "Couldn't load issues from X/Y"
+                    is contradictory and misleads the user into thinking they
+                    typed the wrong query. */}
+                {!tasksLoading &&
+                filteredWorkItems.length === 0 &&
+                !tasksError &&
+                failedCount === 0 &&
+                perRepoSourceState.every((s) => !s.error) ? (
                   <div className="px-4 py-10 text-center">
                     <p className="text-base font-medium text-foreground">No matching GitHub work</p>
                     <p className="mt-2 text-sm text-muted-foreground">
