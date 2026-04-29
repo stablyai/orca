@@ -431,7 +431,7 @@ const api = {
       limit?: number
       query?: string
       before?: string
-    }): Promise<unknown[]> => ipcRenderer.invoke('gh:listWorkItems', args),
+    }): Promise<unknown> => ipcRenderer.invoke('gh:listWorkItems', args),
 
     prChecks: (args: {
       repoPath: string

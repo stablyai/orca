@@ -67,7 +67,10 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
 
   ipcMain.handle('gh:listIssues', (_event, args: { repoPath: string; limit?: number }) => {
     const repo = assertRegisteredRepo(args.repoPath, store)
-    return listIssues(repo.path, args.limit)
+    // Why: listIssues now returns { items, error? }. The IPC handler unwraps to
+    // the items array for the existing contract; feature 1's UI consumes the
+    // richer envelope through `gh:listWorkItems` instead.
+    return listIssues(repo.path, args.limit).then((r) => r.items)
   })
 
   ipcMain.handle(

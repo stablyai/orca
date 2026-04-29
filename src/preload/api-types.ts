@@ -25,6 +25,7 @@ import type {
   GitHubWorkItem,
   GitHubWorkItemDetails,
   GitHubViewer,
+  ListWorkItemsResult,
   IssueInfo,
   LinearViewer,
   LinearConnectionStatus,
@@ -439,7 +440,7 @@ export type PreloadApi = {
       limit?: number
       query?: string
       before?: string
-    }) => Promise<Omit<GitHubWorkItem, 'repoId'>[]>
+    }) => Promise<ListWorkItemsResult<Omit<GitHubWorkItem, 'repoId'>>>
     prChecks: (args: {
       repoPath: string
       prNumber: number

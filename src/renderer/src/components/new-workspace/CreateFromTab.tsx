@@ -228,12 +228,12 @@ export default function CreateFromTab({
     setPrError(null)
     void window.api.gh
       .listWorkItems({ repoPath: selectedRepo.path, limit: PR_LIST_LIMIT, query: q })
-      .then((items) => {
+      .then((envelope) => {
         if (stale) {
           return
         }
         setPrItems(
-          items
+          envelope.items
             .filter((i) => i.type === 'pr')
             .map((i) => ({ ...i, repoId: selectedRepo.id })) as unknown as GitHubWorkItem[]
         )
@@ -281,12 +281,12 @@ export default function CreateFromTab({
     setIssueError(null)
     void window.api.gh
       .listWorkItems({ repoPath: selectedRepo.path, limit: ISSUE_LIST_LIMIT, query: q })
-      .then((items) => {
+      .then((envelope) => {
         if (stale) {
           return
         }
         setIssueItems(
-          items
+          envelope.items
             .filter((i) => i.type === 'issue')
             .map((i) => ({ ...i, repoId: selectedRepo.id })) as unknown as GitHubWorkItem[]
         )

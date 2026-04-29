@@ -85,17 +85,18 @@ describe('registerGitHubHandlers', () => {
     expect(getIssueMock).not.toHaveBeenCalled()
   })
 
-  it('forwards listIssues for registered repositories', async () => {
-    listIssuesMock.mockResolvedValue([])
+  it('forwards listIssues for registered repositories and unwraps items', async () => {
+    listIssuesMock.mockResolvedValue({ items: [] })
 
     registerGitHubHandlers(store as never, stats as never)
 
-    await handlers['gh:listIssues'](null, {
+    const result = await handlers['gh:listIssues'](null, {
       repoPath: '/workspace/repo',
       limit: 5
     })
 
     expect(listIssuesMock).toHaveBeenCalledWith('/workspace/repo', 5)
+    expect(result).toEqual([])
   })
 
   it('forwards the authenticated viewer lookup', async () => {

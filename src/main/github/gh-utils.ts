@@ -64,6 +64,23 @@ export function classifyGhError(stderr: string): ClassifiedError {
   return { type: 'unknown', message: `Failed to update issue: ${stderr.trim()}` }
 }
 
+// Why: classifyGhError's copy is phrased for edit/update operations, but
+// `listIssues` is a read op and the renderer interpolates err.message verbatim
+// into a read-context banner. Rewrite the message for read contexts while
+// keeping the typed classification so callers/telemetry are unaffected.
+export function classifyListIssuesError(stderr: string): ClassifiedError {
+  const c = classifyGhError(stderr)
+  const trimmed = stderr.trim()
+  const readMessages: Partial<Record<ClassifiedError['type'], string>> = {
+    permission_denied:
+      "You don't have permission to read issues for this repository. Check your GitHub token scopes.",
+    not_found: 'Repository not found.',
+    validation_error: `Invalid request — ${trimmed}`,
+    unknown: `Failed to load issues: ${trimmed}`
+  }
+  return { type: c.type, message: readMessages[c.type] ?? c.message }
+}
+
 // ── Owner/repo resolution for gh api --cache ──────────────────────────
 export type OwnerRepo = { owner: string; repo: string }
 

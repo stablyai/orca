@@ -599,14 +599,17 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     const lookupRepoId = selectedRepo.id
     void window.api.gh
       .listWorkItems({ repoPath: selectedRepo.path, limit: 100 })
-      .then((items) => {
+      .then((envelope) => {
         if (!cancelled) {
           // Why: IPC payload omits repoId — stamp it here from the repo we
           // queried so downstream consumers typed against GitHubWorkItem work.
           // Cast through unknown: spreading a discriminated union loses the
           // discriminant, so the union-preserving shape must be asserted.
           setLinkItems(
-            items.map((it) => ({ ...it, repoId: lookupRepoId })) as unknown as GitHubWorkItem[]
+            envelope.items.map((it) => ({
+              ...it,
+              repoId: lookupRepoId
+            })) as unknown as GitHubWorkItem[]
           )
         }
       })

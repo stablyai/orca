@@ -57,8 +57,9 @@ import {
 } from '@/lib/pr-comment-groups'
 import { useAppStore } from '@/store'
 import { useRepoLabels, useRepoAssignees, useImmediateMutation } from '@/hooks/useIssueMetadata'
-
+import IssueSourceIndicator, { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
 import type {
+  GitHubOwnerRepo,
   GitHubPRFile,
   GitHubPRFileContents,
   GitHubWorkItem,
@@ -67,6 +68,29 @@ import type {
   GitHubReaction,
   PRComment
 } from '../../../shared/types'
+import { PER_REPO_FETCH_LIMIT } from '../../../shared/work-items'
+
+// Why: the GH item dialog can be opened from any work-item list surface and
+// doesn't have the full owner/repo context the list's cache entry carries.
+// Parsing the canonical `https://github.com/{owner}/{repo}/...` URL is the
+// simplest reliable source — the URL is already present on every work item
+// and survives the main-process → IPC boundary. Non-GitHub hosts return null,
+// which matches the indicator's suppression rule.
+function parseOwnerRepoFromItemUrl(url: string): GitHubOwnerRepo | null {
+  try {
+    const parsed = new URL(url)
+    if (parsed.hostname !== 'github.com') {
+      return null
+    }
+    const segments = parsed.pathname.split('/').filter(Boolean)
+    if (segments.length < 2) {
+      return null
+    }
+    return { owner: segments[0], repo: segments[1] }
+  } catch {
+    return null
+  }
+}
 
 // Why: the editor's DiffViewer loads Monaco, which is heavy and should not be
 // pulled into the dialog's bundle until the user actually opens the Files tab.
@@ -1894,6 +1918,59 @@ function GHCommentComposer({
   )
 }
 
+// Why: the dialog doesn't carry the resolved PR-source slug the Tasks view's
+// list cache carries, so we reach into workItemsCache to recover it. We scope
+// the lookup to the dialog's own `repoPath` via the public
+// `getWorkItemsSourcesAndError` selector keyed by (repoPath, limit, query) —
+// scanning the whole cache risks picking a sibling repo's PR-source when two
+// selected repos share the same issue-source (e.g. two forks of the same
+// upstream), producing an incorrect "Issues from" chip or incorrectly
+// suppressing it. We key on the first-page entry (PER_REPO_FETCH_LIMIT, empty
+// query) because sources are repo-level and don't vary by search query; the
+// first-page entry is the authoritative one populated by the Tasks view.
+// Falling back to hiding the indicator when we can't find a match matches the
+// parent design doc §1 rule: hide when either side is unknown rather than
+// guessing.
+function WorkItemIssueSourceIndicator({
+  url,
+  repoPath
+}: {
+  url: string
+  repoPath: string | null
+}): React.JSX.Element | null {
+  const sourcesAndError = useAppStore((s) =>
+    s.getWorkItemsSourcesAndError(repoPath ?? '', PER_REPO_FETCH_LIMIT, '')
+  )
+  const issues = useMemo<GitHubOwnerRepo | null>(() => {
+    const fromUrl = parseOwnerRepoFromItemUrl(url)
+    if (!fromUrl) {
+      return null
+    }
+    // Prefer the cache's resolved issue-source when it matches the URL-derived
+    // slug — the cache entry is authoritative (canonicalized by the main
+    // process) while the URL parse is a best-effort fallback.
+    const cachedIssues = sourcesAndError.sources?.issues
+    if (
+      cachedIssues &&
+      cachedIssues.owner.toLowerCase() === fromUrl.owner.toLowerCase() &&
+      cachedIssues.repo.toLowerCase() === fromUrl.repo.toLowerCase()
+    ) {
+      return cachedIssues
+    }
+    return fromUrl
+  }, [url, sourcesAndError.sources])
+  const prs = sourcesAndError.sources?.prs ?? null
+
+  if (!issues || !prs || sameGitHubOwnerRepo(issues, prs)) {
+    return null
+  }
+  return (
+    <div className="mt-1">
+      <IssueSourceIndicator issues={issues} prs={prs} />
+    </div>
+  )
+}
+
 export default function GitHubItemDialog({
   workItem,
   repoPath,
@@ -2092,6 +2169,9 @@ export default function GitHubItemDialog({
                       </span>
                     )}
                   </div>
+                  {workItem.type === 'issue' && (
+                    <WorkItemIssueSourceIndicator url={workItem.url} repoPath={repoPath} />
+                  )}
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
                   <Tooltip>

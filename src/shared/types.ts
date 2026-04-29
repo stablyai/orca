@@ -607,6 +607,36 @@ export type ClassifiedError = {
   message: string
 }
 
+// Why: duplicated in `src/main/github/gh-utils.ts` as `OwnerRepo` but
+// declared here as a shared shape so IPC return envelopes and renderer slices
+// can reference the same structural type without importing from main.
+export type GitHubOwnerRepo = { owner: string; repo: string }
+
+/**
+ * Envelope for `gh:listWorkItems`. Carries resolved issue/PR sources so the
+ * renderer can render the "Issues from owner/repo" indicator without an
+ * extra IPC round-trip, and per-source classified errors so the UI can show
+ * a retryable banner when (e.g.) a private upstream 403s.
+ *
+ * Why piggyback instead of adding `gh:resolveWorkItemSources`: the renderer
+ * already round-trips this endpoint on every Tasks refresh, and the source
+ * data is a 2-field-per-side metadata add — cheaper than another IPC call.
+ */
+export type ListWorkItemsResult<T> = {
+  items: T[]
+  sources: {
+    issues: GitHubOwnerRepo | null
+    prs: GitHubOwnerRepo | null
+  }
+  errors?: {
+    issues?: ClassifiedError
+    // Reserved for future use — never populated by the current main-process
+    // implementation. PR-side failures are intentionally out of scope per the
+    // parent design doc §6 and are swallowed at the call sites in client.ts.
+    prs?: ClassifiedError
+  }
+}
+
 export type LinearWorkflowState = {
   id: string
   name: string

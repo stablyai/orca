@@ -52,6 +52,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import RepoMultiCombobox from '@/components/ui/repo-multi-combobox'
 import TeamMultiCombobox from '@/components/ui/team-multi-combobox'
 import RepoDotLabel from '@/components/repo/RepoDotLabel'
+import IssueSourceIndicator, { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
 import { stripRepoQualifiers } from '../../../shared/task-query'
 import GitHubItemDialog from '@/components/GitHubItemDialog'
 import LinearItemDrawer from '@/components/LinearItemDrawer'
@@ -66,7 +67,13 @@ import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { useTeamStates } from '@/hooks/useIssueMetadata'
-import type { GitHubWorkItem, LinearIssue, TaskViewPresetId } from '../../../shared/types'
+import type {
+  ClassifiedError,
+  GitHubOwnerRepo,
+  GitHubWorkItem,
+  LinearIssue,
+  TaskViewPresetId
+} from '../../../shared/types'
 import { shouldSuppressEnterSubmit } from '@/lib/new-workspace-enter-guard'
 
 type TaskSource = 'github' | 'linear'
@@ -615,6 +622,7 @@ export default function TaskPage(): React.JSX.Element {
   const updateSettings = useAppStore((s) => s.updateSettings)
   const fetchWorkItemsAcrossRepos = useAppStore((s) => s.fetchWorkItemsAcrossRepos)
   const getCachedWorkItems = useAppStore((s) => s.getCachedWorkItems)
+  const getWorkItemsSourcesAndError = useAppStore((s) => s.getWorkItemsSourcesAndError)
   const linearStatus = useAppStore((s) => s.linearStatus)
   const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
   const connectLinear = useAppStore((s) => s.connectLinear)
@@ -807,6 +815,60 @@ export default function TaskPage(): React.JSX.Element {
     setDialogWorkItemId(item?.id ?? null)
     setDialogWorkItemFallback(item)
   }, [])
+
+  // Why: feature 1 — render the "Issues from {owner}/{repo}" indicator per
+  // selected repo whose issue-source and PR-source slugs differ, and surface
+  // a per-repo retryable banner when the issue-side fetch failed. Both derive
+  // from the same `workItemsCache` entry the list already consumes, so no
+  // extra IPC round-trip is needed. Re-memoized on cache mutation so a
+  // successful retry clears the banner automatically.
+  type RepoSourceState = {
+    repoId: string
+    repoPath: string
+    sources: { issues: GitHubOwnerRepo | null; prs: GitHubOwnerRepo | null } | null
+    error: (ClassifiedError & { source: GitHubOwnerRepo }) | null
+  }
+  const perRepoSourceState = useMemo<RepoSourceState[]>(() => {
+    const appliedQ = stripRepoQualifiers(appliedTaskSearch.trim())
+    return selectedRepos.map((r) => {
+      const { sources, error } = getWorkItemsSourcesAndError(r.path, PER_REPO_FETCH_LIMIT, appliedQ)
+      return {
+        repoId: r.id,
+        repoPath: r.path,
+        sources,
+        error
+      }
+    })
+    // Why: `workItemsCache` is listed in deps so the derivation re-runs when a
+    // fetch populates or clears the entry. eslint can't see that
+    // `getWorkItemsSourcesAndError` reads from the cache through the store
+    // closure, so the dep looks unused to the rule — it isn't.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRepos, appliedTaskSearch, workItemsCache, getWorkItemsSourcesAndError])
+
+  const handleRetryIssuesFetch = useCallback(
+    (repoPath: string) => {
+      const repo = selectedRepos.find((r) => r.path === repoPath)
+      if (!repo) {
+        return
+      }
+      // Why: bumping the shared refresh nonce reuses the Tasks list's
+      // single fetch path. That path treats nonce changes as force=true, so
+      // the retry doesn't silently dedupe onto a still-failing in-flight
+      // request from the initial load.
+      //
+      // Note: this nonce bump is global — it refreshes ALL selected repos,
+      // not just `repoPath`. That's acceptable today because per-repo scoped
+      // retry would require threading repo identity through the fetch path;
+      // the simpler global refresh is a no-op for other repos' banners
+      // (still-failing fetches stay failing, matching the state they'd be
+      // in if the user hadn't clicked retry on this one). The `repoPath`
+      // arg is kept for call-site clarity and the selectedRepos guard makes
+      // the retry a no-op if the repo dropped out of selection mid-click.
+      setTaskRefreshNonce((n) => n + 1)
+    },
+    [selectedRepos]
+  )
   const [newIssueOpen, setNewIssueOpen] = useState(false)
   const [newIssueTitle, setNewIssueTitle] = useState('')
   const [newIssueBody, setNewIssueBody] = useState('')
@@ -1777,6 +1839,56 @@ export default function TaskPage(): React.JSX.Element {
                         ) : null}
                       </div>
                     </div>
+
+                    {(() => {
+                      // Why: compute the visible list once so the visibility
+                      // gate and the map don't re-run the same predicate.
+                      // Typed as a narrowed RepoSourceState so `sources.issues`
+                      // and `sources.prs` are known non-null inside the map.
+                      const hasDivergentSources = (
+                        s: RepoSourceState
+                      ): s is RepoSourceState & {
+                        sources: { issues: GitHubOwnerRepo; prs: GitHubOwnerRepo }
+                      } =>
+                        !!s.sources?.issues &&
+                        !!s.sources.prs &&
+                        !sameGitHubOwnerRepo(s.sources.issues, s.sources.prs)
+                      const visibleRepoSources = perRepoSourceState.filter(hasDivergentSources)
+                      if (visibleRepoSources.length === 0) {
+                        return null
+                      }
+                      // Why: per parent design doc §2, the indicator lives near
+                      // the filter row. It's the self-announcing surface that
+                      // makes the convention-based routing in #1076 legitimate
+                      // — without it, a fork contributor filing a personal TODO
+                      // against `upstream` has no way to tell before submit.
+                      return (
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          {visibleRepoSources.map((s) => {
+                            // Why: when multiple repos are selected, attach the
+                            // local dot-label so readers can tell which chip
+                            // describes which repo. Single-repo views omit it —
+                            // the repo is already unambiguous from context.
+                            const repo =
+                              selectedRepos.length > 1
+                                ? selectedRepos.find((r) => r.id === s.repoId)
+                                : undefined
+                            return (
+                              <IssueSourceIndicator
+                                key={s.repoId}
+                                issues={s.sources.issues}
+                                prs={s.sources.prs}
+                                localRepo={
+                                  repo
+                                    ? { displayName: repo.displayName, color: repo.badgeColor }
+                                    : undefined
+                                }
+                              />
+                            )
+                          })}
+                        </div>
+                      )
+                    })()}
                   </div>
                 ) : linearStatus.connected ? (
                   <div className="rounded-md rounded-b-none border border-border/50 bg-muted/50 p-3 shadow-sm">
@@ -1926,6 +2038,40 @@ export default function TaskPage(): React.JSX.Element {
                     {failedCount} of {selectedRepos.length} repos failed to load
                   </div>
                 ) : null}
+
+                {perRepoSourceState
+                  .filter((s) => s.error)
+                  .map((s) => {
+                    const err = s.error!
+                    // Why: parent design doc §2 — when the issue fetch fails
+                    // (e.g. a 403 on a private upstream) we render a retryable
+                    // banner with slug-qualified copy instead of a silent
+                    // empty list. The [Retry] action re-invokes the fetch
+                    // with force=true via the shared refresh nonce so any
+                    // still-failing in-flight request is invalidated first.
+                    return (
+                      <div
+                        key={`source-err-${s.repoId}`}
+                        className="flex items-center justify-between gap-3 border-b border-border/50 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+                      >
+                        <span>
+                          Couldn&apos;t load issues from{' '}
+                          <span className="font-mono">
+                            {err.source.owner}/{err.source.repo}
+                          </span>{' '}
+                          — {err.message}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleRetryIssuesFetch(s.repoPath)}
+                          disabled={tasksLoading}
+                        >
+                          Retry
+                        </Button>
+                      </div>
+                    )
+                  })}
 
                 {tasksLoading && filteredWorkItems.length === 0 ? (
                   // Why: shimmer skeleton stands in for the first ~3 rows while
@@ -2344,6 +2490,31 @@ export default function TaskPage(): React.JSX.Element {
                 ? 'Opens a new issue in the selected repository.'
                 : `Opens a new issue in ${newIssueTargetRepo?.displayName ?? 'this repository'}.`}
             </DialogDescription>
+            {(() => {
+              // Why: parent design doc §1 surface 2 — non-negotiable. User D's
+              // regression (filing a personal TODO against upstream/fork after
+              // #1076 changed routing) is specifically about the composer. The
+              // indicator gives the user a chance to pause before submit and
+              // verify they're filing on the repo they think they are. The
+              // suppression rule matches the TaskPage header: hide when issues
+              // and PRs resolve to the same slug. Derived from the currently
+              // selected target repo's cache entry so we don't need a second
+              // IPC round-trip to open the dialog.
+              if (!newIssueTargetRepo) {
+                return null
+              }
+              const entry = perRepoSourceState.find((s) => s.repoId === newIssueTargetRepo.id)
+              const issues = entry?.sources?.issues ?? null
+              const prs = entry?.sources?.prs ?? null
+              if (!issues || !prs || sameGitHubOwnerRepo(issues, prs)) {
+                return null
+              }
+              return (
+                <div className="mt-2">
+                  <IssueSourceIndicator issues={issues} prs={prs} />
+                </div>
+              )
+            })()}
           </DialogHeader>
           <div className="flex flex-col gap-3">
             {selectedRepos.length > 1 ? (
