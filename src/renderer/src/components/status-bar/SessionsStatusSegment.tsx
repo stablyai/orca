@@ -143,11 +143,17 @@ export function SessionsStatusSegment({
   // title. Build a ptyId→title map so the popover can show the same name as the
   // tab bar for bound sessions.
   const ptyIdToTabTitle = useMemo(() => {
+    // Why: build a tabId→tab lookup once up-front instead of doing
+    // O(totalTabs) .flat().find() per ptyIdsByTabId entry.
+    const tabById = new Map<string, (typeof tabsByWorktree)[string][number]>()
+    for (const tabs of Object.values(tabsByWorktree)) {
+      for (const tab of tabs) {
+        tabById.set(tab.id, tab)
+      }
+    }
     const map = new Map<string, string>()
     for (const [tabId, ptyIds] of Object.entries(ptyIdsByTabId)) {
-      const tab = Object.values(tabsByWorktree)
-        .flat()
-        .find((t) => t.id === tabId)
+      const tab = tabById.get(tabId)
       if (!tab) {
         continue
       }
