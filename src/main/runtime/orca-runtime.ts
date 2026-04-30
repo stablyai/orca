@@ -1036,6 +1036,9 @@ export class OrcaRuntimeService {
 
     let setup: CreateWorktreeResult['setup']
     let warning: string | undefined
+    // Why: CLI-created worktrees do not have a renderer preview to mismatch
+    // against. Trust is granted by the direct CLI invocation (`--run-hooks`),
+    // so loading the setup hook from the created worktree is intentional here.
     const hooks = getEffectiveHooks(repo, worktreePath)
     if (hooks?.scripts.setup && args.runHooks === true) {
       if (this.authoritativeWindowId !== null) {

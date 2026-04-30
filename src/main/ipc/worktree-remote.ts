@@ -17,7 +17,12 @@ import { listWorktrees, addWorktree, addSparseWorktree } from '../git/worktree'
 import { getGitUsername, getDefaultBaseRef, getBranchConflictKind } from '../git/repo'
 import { gitExecFileAsync } from '../git/runner'
 import { isWslPath, parseWslPath, getWslHome } from '../wsl'
-import { createSetupRunnerScript, getEffectiveHooks, shouldRunSetupForCreate } from '../hooks'
+import {
+  createSetupRunnerScript,
+  getEffectiveHooks,
+  setupScriptsMatch,
+  shouldRunSetupForCreate
+} from '../hooks'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 import { getActiveMultiplexer } from './ssh'
 import type { SshGitProvider } from '../providers/ssh-git-provider'
@@ -406,8 +411,13 @@ export async function createLocalWorktree(
 
   let setup: CreateWorktreeResult['setup']
   const setupScript = getEffectiveHooks(repo, worktreePath)?.scripts.setup
+  const setupMatchesPreview = setupScriptsMatch(repo, worktreePath, primarySetupScript)
   let shouldLaunchSetup = false
-  if (setupScript) {
+  if (setupScript && !setupMatchesPreview) {
+    console.warn(
+      `[hooks] setup hook skipped for ${worktreePath}: worktree setup script differs from the primary checkout setup script shown to the user`
+    )
+  } else if (setupScript) {
     try {
       shouldLaunchSetup = shouldRunSetupForCreate(repo, args.setupDecision)
     } catch (error) {
