@@ -17,6 +17,7 @@ import { handleSwitchTab, handleSwitchTerminalTab } from './ipc-tab-switch'
 import { dispatchClearModifierHints } from './useModifierHint'
 import { normalizeAgentStatusPayload } from '../../../shared/agent-status-types'
 import { isGitRepoKind } from '../../../shared/repo-kind'
+import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 
 export { resolveZoomTarget } from './resolve-zoom-target'
 
@@ -476,6 +477,7 @@ export function useIpcEvents(): void {
         const order = base.filter((id) => id !== newTab.id)
         order.push(newTab.id)
         store.setTabBarOrder(worktreeId, order)
+        focusTerminalTabSurface(newTab.id)
       })
     )
 

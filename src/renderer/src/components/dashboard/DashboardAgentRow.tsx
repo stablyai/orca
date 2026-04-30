@@ -246,7 +246,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
             overflow-hidden so the truncate→wrap class flip stays clipped
             during the interpolation.
 
-            Weight tracks the workspace's unvisited signal (isUnread):
+            Weight tracks the workspace's unvisited signal (isUnvisited):
             bold + full foreground for agents inside a workspace the user
             hasn't looked at yet, normal + muted once they've visited. This
             keeps the prompt row's weight in lockstep with the workspace

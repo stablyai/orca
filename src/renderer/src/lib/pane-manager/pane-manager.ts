@@ -93,7 +93,7 @@ export class PaneManager {
   splitPane(
     paneId: number,
     direction: 'vertical' | 'horizontal',
-    opts?: { ratio?: number }
+    opts?: { ratio?: number; cwd?: string }
   ): ManagedPane | null {
     const existing = this.panes.get(paneId)
     if (!existing) {
@@ -130,7 +130,14 @@ export class PaneManager {
     this.applyDividerStylesWrapped()
     newPane.terminal?.focus()
     updateMultiPaneState(this.getDragCallbacks())
-    void this.options.onPaneCreated?.(toPublicPane(newPane))
+    // Why: forward the caller's spawn hint so onPaneCreated → connectPanePty
+    // can boot the new PTY in the source pane's live cwd instead of the
+    // worktree root. The hint is synchronous-only: splitPane returns after
+    // onPaneCreated runs, so there is no reason for it to outlive this call.
+    void this.options.onPaneCreated?.(
+      toPublicPane(newPane),
+      opts?.cwd ? { cwd: opts.cwd } : undefined
+    )
     this.options.onLayoutChanged?.()
 
     scheduleSplitScrollRestore(

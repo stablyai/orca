@@ -106,11 +106,11 @@ const DashboardWorktreeCard = React.memo(function DashboardWorktreeCard({
 
   // Why: workspace-level bold/muted weight tracks whether ANY of this card's
   // agents are unvisited — so the workspace header stays bold while even one
-  // row inside it needs the user's attention, and fades once they've clicked
-  // through every agent. Per-agent granularity lives on the rows themselves
-  // (DashboardAgentRow isUnvisited prop). If a workspace has no agents yet
-  // (edge case during spin-up), default to muted so the row doesn't read
-  // louder than it has value to.
+  // row inside it needs the user's attention, and fades once the user has
+  // clicked through every agent. Per-agent granularity lives on the rows
+  // themselves (DashboardAgentRow isUnvisited prop). If a workspace has no
+  // agents (edge case during spin-up), default to muted so the row doesn't
+  // read louder than it has value to.
   const anyAgentUnvisited = card.agents.some((a) =>
     isAgentUnvisited(a.paneKey, a.entry.stateStartedAt)
   )

@@ -27,15 +27,14 @@ export function resolveDefaultShell(): string {
  * Tries /proc on Linux and lsof on macOS before falling back to `fallbackCwd`.
  */
 export async function resolveProcessCwd(pid: number, fallbackCwd: string): Promise<string> {
-  // Try to read /proc/{pid}/cwd on Linux
-  const procCwd = `/proc/${pid}/cwd`
-  if (existsSync(procCwd)) {
-    try {
-      const { readlinkSync } = await import('fs')
-      return readlinkSync(procCwd)
-    } catch {
-      // Fall through
-    }
+  // Try to read /proc/{pid}/cwd on Linux. Skip an existsSync gate — the
+  // check+read pair races a concurrent exit anyway, and the catch already
+  // falls through to lsof.
+  try {
+    const { readlinkSync } = await import('fs')
+    return readlinkSync(`/proc/${pid}/cwd`)
+  } catch {
+    // Fall through
   }
 
   // Fallback: use lsof on macOS
@@ -50,10 +49,11 @@ export async function resolveProcessCwd(pid: number, fallbackCwd: string): Promi
     const lines = output.split('\n')
     for (const line of lines) {
       if (line.startsWith('n') && line.includes('/')) {
-        const candidate = line.slice(1)
-        if (existsSync(candidate)) {
-          return candidate
-        }
+        // Why: lsof -d cwd is authoritative — don't second-guess it with
+        // existsSync. A concurrent rmdir would race the check and cause us
+        // to drop the correct answer; node-pty handles a missing cwd on
+        // spawn anyway.
+        return line.slice(1)
       }
     }
   } catch {

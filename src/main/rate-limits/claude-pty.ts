@@ -4,6 +4,7 @@ import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-au
 import { applyClaudeEnvPatch } from '../claude-accounts/environment'
 
 const PTY_TIMEOUT_MS = 25_000
+const MAX_OUTPUT_LENGTH = 100_000 // 100KB buffer limit
 
 // ---------------------------------------------------------------------------
 // PTY fallback — spawn interactive `claude`, send `/usage`, parse the TUI
@@ -141,12 +142,11 @@ export async function fetchViaPty(options?: {
     const claudeCommand = resolveClaudeCommand()
 
     // Why: node-pty cannot spawn .cmd/.bat batch scripts directly on Windows —
-    // those need cmd.exe as an interpreter. resolveClaudeCommand() may also fall
-    // back to bare 'claude' when it can't locate the binary on disk, yet cmd.exe
-    // can still find claude.cmd via PATHEXT. Always route through cmd.exe on win32.
+    // those need cmd.exe as an interpreter. Always route through cmd.exe on win32
+    // and ensure the command path is properly quoted if it contains spaces.
     const isWin32 = process.platform === 'win32'
     const spawnFile = isWin32 ? 'cmd.exe' : claudeCommand
-    const spawnArgs = isWin32 ? ['/c', claudeCommand] : []
+    const spawnArgs = isWin32 ? ['/c', `"${claudeCommand}"`] : []
 
     const spawnEnv = applyClaudeEnvPatch(
       { ...process.env, TERM: 'xterm-256color' } as Record<string, string>,
@@ -210,7 +210,7 @@ export async function fetchViaPty(options?: {
         return
       }
       enterInterval = setInterval(() => {
-        if (!resolved) {
+        if (!resolved && !stopDetected) {
           term.write('\r')
         }
       }, 800)
@@ -266,6 +266,10 @@ export async function fetchViaPty(options?: {
 
     const onDataDisposable = term.onData((data) => {
       output += data
+      // Why: prevent memory exhaustion if the CLI process floods output
+      if (output.length > MAX_OUTPUT_LENGTH) {
+        output = output.slice(-MAX_OUTPUT_LENGTH)
+      }
 
       // eslint-disable-next-line no-control-regex
       const cleanChunk = data.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')

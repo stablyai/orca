@@ -122,6 +122,7 @@ export type UISlice = {
       | 'shortcuts'
       | 'repo'
       | 'agents'
+      | 'accounts'
       | 'experimental'
       | 'ssh'
     repoId: string | null

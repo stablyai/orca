@@ -336,6 +336,7 @@ app.whenReady().then(async () => {
   claudeAccounts = new ClaudeAccountService(store, rateLimits, claudeRuntimeAuth)
   rateLimits.setCodexHomePathResolver(() => codexRuntimeHome!.prepareForRateLimitFetch())
   rateLimits.setClaudeAuthPreparationResolver(() => claudeRuntimeAuth!.prepareForRateLimitFetch())
+  rateLimits.setSettingsResolver(() => store!.getSettings())
   runtime = new OrcaRuntimeService(store, stats)
   starNag = new StarNagService(store, stats)
   starNag.start()

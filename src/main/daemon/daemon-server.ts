@@ -273,7 +273,7 @@ export class DaemonServer {
         return {}
 
       case 'getCwd':
-        return { cwd: this.host.getCwd(request.payload.sessionId) }
+        return { cwd: await this.host.getCwd(request.payload.sessionId) }
 
       case 'clearScrollback':
         this.host.clearScrollback(request.payload.sessionId)

@@ -4,6 +4,7 @@ tightly coupled PTY lifecycle logic (scan → ready → write → exit cleanup) 
 files without a cleaner ownership seam. */
 import { basename } from 'path'
 import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
+import { resolveProcessCwd } from './process-cwd'
 import { existsSync } from 'fs'
 import * as pty from 'node-pty'
 import { parseWslPath, isWslAvailable } from '../wsl'
@@ -386,11 +387,19 @@ export class LocalPtyProvider implements IPtyProvider {
   }
 
   async getCwd(id: string): Promise<string> {
-    if (!ptyProcesses.has(id)) {
-      throw new Error(`PTY ${id} not found`)
+    const proc = ptyProcesses.get(id)
+    // Why: return '' (not throw) on unknown id — the renderer treats empty
+    // as "no result, try the next fallback layer". Throwing would surface a
+    // noisy rejection for a non-exceptional case (PTY just exited, pane
+    // still has its old id).
+    if (!proc) {
+      return ''
     }
-    // node-pty doesn't expose cwd; would need /proc on Linux or lsof on macOS
-    return ''
+    // Why: resolveProcessCwd returns '' when it can't resolve — let that
+    // empty surface so the renderer's fallback chain decides what to do.
+    // Handing back a fabricated initialCwd here would lie to the renderer
+    // and short-circuit that chain.
+    return resolveProcessCwd(proc.pid)
   }
   async getInitialCwd(_id: string): Promise<string> {
     return ''

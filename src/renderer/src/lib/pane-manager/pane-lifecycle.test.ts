@@ -53,6 +53,16 @@ describe('buildDefaultTerminalOptions', () => {
   it('leaves macOS Option available for keyboard layout characters', () => {
     expect(buildDefaultTerminalOptions().macOptionIsMeta).toBe(false)
   })
+
+  it('advertises kitty keyboard protocol so CLIs enable enhanced key reporting', () => {
+    // Why: Orca already writes CSI-u bytes for extended key chords like
+    // Shift+Enter (see terminal-shortcut-policy.ts). CLIs that gate
+    // enhanced input on a CSI ? u handshake only read those bytes once the
+    // terminal advertises support. Regressing this flag silently breaks
+    // Shift+Enter (and other extended chords) in apps like Claude Code and
+    // Codex, especially when running inside tmux.
+    expect(buildDefaultTerminalOptions().vtExtensions?.kittyKeyboard).toBe(true)
+  })
 })
 
 describe('attachWebgl', () => {

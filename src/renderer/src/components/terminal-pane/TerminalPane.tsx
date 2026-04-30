@@ -63,6 +63,11 @@ export default function TerminalPane({
     new Map()
   )
   const paneTransportsRef = useRef<Map<number, PtyTransport>>(new Map())
+  // Why: per-pane live cwd tracked via OSC 7 for split-pane cwd inheritance.
+  // See docs/ssh-split-pane-inherit-cwd.md. The OSC 7 handler is installed
+  // in use-terminal-pane-lifecycle; keyboard and context-menu split actions
+  // read this map at dispatch time to pass cwd into splitPane.
+  const paneCwdRef = useRef<Map<number, { cwd: string; confirmed: boolean }>>(new Map())
   const paneMode2031Ref = useRef<Map<number, boolean>>(new Map())
   const paneLastThemeModeRef = useRef<Map<number, 'dark' | 'light'>>(new Map())
   const panePtyBindingsRef = useRef<Map<number, IDisposable>>(new Map())
@@ -373,6 +378,7 @@ export default function TerminalPane({
     expandedStyleSnapshotRef,
     paneFontSizesRef,
     paneTransportsRef,
+    paneCwdRef,
     paneMode2031Ref,
     paneLastThemeModeRef,
     panePtyBindingsRef,
@@ -513,6 +519,8 @@ export default function TerminalPane({
     isActive,
     managerRef,
     paneTransportsRef,
+    paneCwdRef,
+    fallbackCwd: cwd ?? '',
     expandedPaneIdRef,
     setExpandedPane,
     restoreExpandedLayout,
@@ -865,6 +873,9 @@ export default function TerminalPane({
 
   const contextMenu = useTerminalPaneContextMenu({
     managerRef,
+    paneTransportsRef,
+    paneCwdRef,
+    fallbackCwd: cwd ?? '',
     toggleExpandPane,
     onRequestClosePane: handleRequestClosePane,
     onSetTitle: handleStartRename,

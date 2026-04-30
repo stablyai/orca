@@ -20,7 +20,7 @@ function shortCwd(cwd: string): string {
   return parts.length > 2 ? parts.slice(-2).join(separator) : cwd
 }
 
-function sessionLabel(session: DaemonSession): string {
+function sessionLabel(session: DaemonSession, tabTitle?: string): string {
   if (session.cwd) {
     return shortCwd(session.cwd)
   }
@@ -33,6 +33,17 @@ function sessionLabel(session: DaemonSession): string {
     const worktreeId = session.id.slice(0, sep)
     return shortCwd(worktreeId)
   }
+  // Why: for sessions with legacy numeric IDs (e.g. from LocalPtyProvider) or
+  // sessions whose shells haven't emitted OSC 7, use the tab title from the
+  // renderer store — it carries the live terminal title shown in the tab bar.
+  // Fall back to the daemon-reported title (typically "shell") so orphan
+  // sessions without a bound tab still display something meaningful.
+  if (tabTitle) {
+    return tabTitle
+  }
+  if (session.title) {
+    return session.title
+  }
   return 'unknown'
 }
 
@@ -40,12 +51,14 @@ function SessionRow({
   session,
   isBound,
   tabId,
+  tabTitle,
   onKill,
   onNavigate
 }: {
   session: DaemonSession
   isBound: boolean
   tabId: string | null
+  tabTitle: string | undefined
   onKill: (id: string) => void
   onNavigate: (tabId: string) => void
 }): React.JSX.Element {
@@ -60,7 +73,9 @@ function SessionRow({
         className={`size-1.5 shrink-0 rounded-full ${isBound ? 'bg-emerald-500' : 'bg-muted-foreground/40'}`}
       />
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[12px] font-medium font-mono">{sessionLabel(session)}</div>
+        <div className="truncate text-[12px] font-medium font-mono">
+          {sessionLabel(session, tabTitle)}
+        </div>
       </div>
       {!isBound && (
         <button
@@ -90,6 +105,7 @@ export function SessionsStatusSegment({
   const [open, setOpen] = useState(false)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
+  const runtimePaneTitlesByTabId = useAppStore((s) => s.runtimePaneTitlesByTabId)
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
   const setActiveTab = useAppStore((s) => s.setActiveTab)
   const setActiveView = useAppStore((s) => s.setActiveView)
@@ -121,6 +137,45 @@ export function SessionsStatusSegment({
     }
     return map
   }, [tabsByWorktree])
+
+  // Why: the daemon IPC response has sparse metadata (cwd may be null, title is
+  // hardcoded to "shell"), but the renderer store already knows each tab's live
+  // title. Build a ptyId→title map so the popover can show the same name as the
+  // tab bar for bound sessions.
+  const ptyIdToTabTitle = useMemo(() => {
+    // Why: build a tabId→tab lookup once up-front instead of doing
+    // O(totalTabs) .flat().find() per ptyIdsByTabId entry.
+    const tabById = new Map<string, (typeof tabsByWorktree)[string][number]>()
+    for (const tabs of Object.values(tabsByWorktree)) {
+      for (const tab of tabs) {
+        tabById.set(tab.id, tab)
+      }
+    }
+    const map = new Map<string, string>()
+    for (const [tabId, ptyIds] of Object.entries(ptyIdsByTabId)) {
+      const tab = tabById.get(tabId)
+      if (!tab) {
+        continue
+      }
+      // Why: runtimePaneTitlesByTabId holds the most current OSC-reported title
+      // for each mounted pane — it updates on every title change regardless of
+      // which split pane is focused. Prefer the first non-empty runtime pane
+      // title, then the persisted tab.title (which only updates for the focused
+      // pane), then the stable defaultTitle.
+      const runtimeTitles = runtimePaneTitlesByTabId[tabId]
+      const liveTitle = runtimeTitles
+        ? Object.values(runtimeTitles).find((t) => t?.trim())
+        : undefined
+      const title =
+        tab.customTitle?.trim() || liveTitle?.trim() || tab.title || tab.defaultTitle?.trim()
+      if (title) {
+        for (const ptyId of ptyIds) {
+          map.set(ptyId, title)
+        }
+      }
+    }
+    return map
+  }, [ptyIdsByTabId, tabsByWorktree, runtimePaneTitlesByTabId])
 
   const refresh = useCallback(async () => {
     try {
@@ -227,6 +282,7 @@ export function SessionsStatusSegment({
                     session={s}
                     isBound={workspaceSessionReady && boundPtyIds.has(s.id)}
                     tabId={tabId}
+                    tabTitle={ptyIdToTabTitle.get(s.id)}
                     onKill={handleKill}
                     onNavigate={handleNavigate}
                   />

@@ -237,19 +237,19 @@ const AgentDashboard = React.memo(function AgentDashboard() {
                         <span className="ml-auto flex shrink-0 items-center gap-2 text-[10px] text-muted-foreground">
                           {groupRunning > 0 && (
                             <span>
-                              <span className="font-semibold text-emerald-500">{groupRunning}</span>{' '}
+                              <span className="font-semibold text-yellow-500">{groupRunning}</span>{' '}
                               active
                             </span>
                           )}
                           {groupBlocked > 0 && (
                             <span>
-                              <span className="font-semibold text-amber-500">{groupBlocked}</span>{' '}
+                              <span className="font-semibold text-red-500">{groupBlocked}</span>{' '}
                               blocked
                             </span>
                           )}
                           {groupDone > 0 && (
                             <span>
-                              <span className="font-semibold text-sky-500/80">{groupDone}</span>{' '}
+                              <span className="font-semibold text-emerald-500">{groupDone}</span>{' '}
                               done
                             </span>
                           )}

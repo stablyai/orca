@@ -1,3 +1,5 @@
 scripts:
   setup: |
+    [ -n "$ORCA_INTERNAL_DEV_SETUP" ] && [ -x "$ORCA_INTERNAL_DEV_SETUP" ] && \
+      "$ORCA_INTERNAL_DEV_SETUP" "$ORCA_WORKTREE_PATH" || true
     pnpm install

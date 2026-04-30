@@ -232,6 +232,7 @@ export async function testConnection(): Promise<
   if (!token) {
     return { ok: false, error: 'No API key stored.' }
   }
+
   try {
     const client = new LinearClient({ apiKey: token })
     const me = await client.viewer

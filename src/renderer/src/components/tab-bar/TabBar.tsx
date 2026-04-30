@@ -3,7 +3,7 @@
  * to a file that was already ~398 code lines on main. The per-type render
  * branches share little beyond drag data, so consolidating them would cost
  * more clarity than the ~5 lines of bloat is worth. */
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { SortableContext } from '@dnd-kit/sortable'
 import { FilePlus, Globe, Plus, TerminalSquare } from 'lucide-react'
 import type {
@@ -24,6 +24,7 @@ import type { HoveredTabInsertion, TabDragItemData } from '../tab-group/useTabDr
 import { resolveTabIndicatorEdges } from '../tab-group/tab-insertion'
 import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
 import { ShellIcon } from './shell-icons'
+import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -224,27 +225,6 @@ function TabBarInner({
     }
     return indicators
   }, [activeIndicator, orderedItems])
-
-  const focusTerminalTabSurface = useCallback((tabId: string) => {
-    // Why: creating a terminal from the "+" menu is a two-step focus race:
-    // React must first mount the new TerminalPane/xterm, then Radix closes the
-    // menu. Even after suppressing trigger focus restore, the terminal's hidden
-    // textarea may not exist until the next paint. Double-rAF waits for that
-    // commit so the new tab, not the "+" button, ends up owning keyboard focus.
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        const scoped = document.querySelector(
-          `[data-terminal-tab-id="${tabId}"] .xterm-helper-textarea`
-        ) as HTMLElement | null
-        if (scoped) {
-          scoped.focus()
-          return
-        }
-        const fallback = document.querySelector('.xterm-helper-textarea') as HTMLElement | null
-        fallback?.focus()
-      })
-    })
-  }, [])
 
   // Horizontal wheel scrolling for the tab strip
   const tabStripRef = useRef<HTMLDivElement>(null)
@@ -508,10 +488,6 @@ function TabBarInner({
                     key={entry.shell}
                     onSelect={() => {
                       onNewTerminalWithShell(entry.shell)
-                      const newActiveTabId = useAppStore.getState().activeTabId
-                      if (newActiveTabId) {
-                        focusTerminalTabSurface(newActiveTabId)
-                      }
                     }}
                     className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
                   >
@@ -528,10 +504,6 @@ function TabBarInner({
             <DropdownMenuItem
               onSelect={() => {
                 onNewTerminalTab()
-                const newActiveTabId = useAppStore.getState().activeTabId
-                if (newActiveTabId) {
-                  focusTerminalTabSurface(newActiveTabId)
-                }
               }}
               className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
             >

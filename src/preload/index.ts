@@ -339,6 +339,10 @@ const api = {
     getForegroundProcess: (id: string): Promise<string | null> =>
       ipcRenderer.invoke('pty:getForegroundProcess', { id }),
 
+    /** Resolve the live cwd of a PTY via `/proc` (Linux) or `lsof` (macOS).
+     *  Returns `''` when the id is unknown or the platform cannot resolve one. */
+    getCwd: (id: string): Promise<string> => ipcRenderer.invoke('pty:getCwd', { id }),
+
     onData: (callback: (data: { id: string; data: string }) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, data: { id: string; data: string }) =>
         callback(data)

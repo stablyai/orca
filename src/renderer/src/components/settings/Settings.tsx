@@ -13,7 +13,8 @@ import {
   Server,
   SlidersHorizontal,
   Blocks,
-  SquareTerminal
+  SquareTerminal,
+  UserCog
 } from 'lucide-react'
 import type { OrcaHooks } from '../../../../shared/types'
 import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
@@ -36,6 +37,7 @@ import { NotificationsPane, NOTIFICATIONS_PANE_SEARCH_ENTRIES } from './Notifica
 import { SshPane, SSH_PANE_SEARCH_ENTRIES } from './SshPane'
 import { ExperimentalPane, EXPERIMENTAL_PANE_SEARCH_ENTRIES } from './ExperimentalPane'
 import { AgentsPane, AGENTS_PANE_SEARCH_ENTRIES } from './AgentsPane'
+import { AccountsPane, ACCOUNTS_PANE_SEARCH_ENTRIES } from './AccountsPane'
 import { StatsPane, STATS_PANE_SEARCH_ENTRIES } from '../stats/StatsPane'
 import { IntegrationsPane, INTEGRATIONS_PANE_SEARCH_ENTRIES } from './IntegrationsPane'
 import {
@@ -49,6 +51,7 @@ import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-sear
 type SettingsNavTarget =
   | 'general'
   | 'integrations'
+  | 'accounts'
   | 'browser'
   | 'git'
   | 'appearance'
@@ -307,6 +310,13 @@ function Settings(): React.JSX.Element {
         description: 'Manage AI agents, set a default, and customize commands.',
         icon: Bot,
         searchEntries: AGENTS_PANE_SEARCH_ENTRIES
+      },
+      {
+        id: 'accounts',
+        title: 'Agent Accounts',
+        description: 'Sign in and switch between Claude, Codex, Gemini, and OpenCode Go accounts.',
+        icon: UserCog,
+        searchEntries: ACCOUNTS_PANE_SEARCH_ENTRIES
       },
       {
         id: 'git',
@@ -590,6 +600,15 @@ function Settings(): React.JSX.Element {
                   searchEntries={AGENTS_PANE_SEARCH_ENTRIES}
                 >
                   <AgentsPane settings={settings} updateSettings={updateSettings} />
+                </SettingsSection>
+
+                <SettingsSection
+                  id="accounts"
+                  title="Agent Accounts"
+                  description="Sign in and switch between Claude, Codex, Gemini, and OpenCode Go accounts."
+                  searchEntries={ACCOUNTS_PANE_SEARCH_ENTRIES}
+                >
+                  <AccountsPane settings={settings} updateSettings={updateSettings} />
                 </SettingsSection>
 
                 <SettingsSection

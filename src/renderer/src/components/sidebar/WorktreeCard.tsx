@@ -157,7 +157,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   // that the spinner flickered; the blocked/waiting/done states don't have
   // that problem — they're terminal (done) or attention-needed (blocked/
   // waiting) and persist until the user acts. Retained "done" snapshots are
-  // consulted too so the sky dot keeps glowing after the agent process exits,
+  // consulted too so the done dot keeps glowing after the agent process exits,
   // matching the dashboard's retention behavior.
   //
   // Priority (highest first): permission (blocked/waiting) > heuristic
@@ -328,7 +328,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
       className={cn(
         'group relative flex items-start gap-2.5 px-2 py-2 rounded-lg cursor-pointer transition-all duration-200 outline-none select-none ml-1',
         isActive
-          ? 'bg-black/[0.06] shadow-[0_1px_2px_rgba(0,0,0,0.03)] border border-border/60 dark:bg-white/[0.10] dark:border-border/40'
+          ? 'bg-black/[0.08] shadow-[0_1px_2px_rgba(0,0,0,0.04)] border border-black/[0.015] dark:bg-white/[0.10] dark:border-border/40 dark:shadow-[0_1px_2px_rgba(0,0,0,0.03)]'
           : 'border border-transparent hover:bg-accent/40',
         isDeleting && 'opacity-50 grayscale cursor-not-allowed',
         isSshDisconnected && !isDeleting && 'opacity-60'
@@ -435,7 +435,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
                 <TooltipTrigger asChild>
                   <Badge
                     variant="outline"
-                    className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 leading-none text-muted-foreground border-muted-foreground/30 bg-muted-foreground/5"
+                    className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 leading-none text-foreground/70 border-foreground/20 bg-foreground/[0.06]"
                   >
                     primary
                   </Badge>

@@ -6,6 +6,8 @@ import type { RateLimitState, ProviderRateLimits } from '../../shared/rate-limit
 import { fetchClaudeRateLimits } from './claude-fetcher'
 import { fetchCodexRateLimits } from './codex-fetcher'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
+import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
+import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
 
 // Why: quota state does not need near-real-time polling, and a less aggressive
 // default reduces avoidable Claude /usage pressure. We intentionally use a
@@ -15,7 +17,7 @@ const MIN_REFETCH_MS = 30 * 1000 // 30 seconds — debounce rapid refresh reques
 const STALE_THRESHOLD_MS = 10 * 60 * 1000 // 10 minutes — after this, stale data is dropped
 
 export class RateLimitService {
-  private state: RateLimitState = { claude: null, codex: null }
+  private state: RateLimitState = { claude: null, codex: null, gemini: null, opencodeGo: null }
   private pollInterval: number = DEFAULT_POLL_MS
   private timer: ReturnType<typeof setInterval> | null = null
   private lastFetchAt = 0
@@ -28,8 +30,17 @@ export class RateLimitService {
   private fetchIdleResolvers: (() => void)[] = []
   private codexFetchGeneration = 0
   private claudeFetchGeneration = 0
+  private opencodeFetchGeneration = 0
+  private lastOpencodeConfigHash = ''
   private codexHomePathResolver: (() => string | null) | null = null
   private claudeAuthPreparationResolver: (() => Promise<ClaudeRuntimeAuthPreparation>) | null = null
+  private settingsResolver:
+    | (() => {
+        opencodeSessionCookie: string
+        opencodeWorkspaceId: string
+        geminiCliOAuthEnabled?: boolean
+      })
+    | null = null
 
   constructor() {}
 
@@ -41,6 +52,15 @@ export class RateLimitService {
     this.claudeAuthPreparationResolver = resolver
   }
 
+  setSettingsResolver(
+    resolver: () => {
+      opencodeSessionCookie: string
+      opencodeWorkspaceId: string
+      geminiCliOAuthEnabled?: boolean
+    }
+  ): void {
+    this.settingsResolver = resolver
+  }
   attach(mainWindow: BrowserWindow): void {
     this.detachWindowListeners?.()
     this.mainWindow = mainWindow
@@ -305,7 +325,7 @@ export class RateLimitService {
 
   private withFetchingStatus(
     current: ProviderRateLimits | null,
-    provider: 'claude' | 'codex'
+    provider: 'claude' | 'codex' | 'gemini' | 'opencode-go'
   ): ProviderRateLimits {
     if (!current) {
       return {
@@ -328,37 +348,95 @@ export class RateLimitService {
     const codexProvenance = codexHomePath ? `managed:${codexHomePath}` : 'system'
     const codexGeneration = this.codexFetchGeneration
     const previousState = this.state
+    const settings = this.settingsResolver?.()
+    const cookie = settings?.opencodeSessionCookie ?? ''
+    const workspaceIdOverride = settings?.opencodeWorkspaceId ?? ''
+    const geminiCliOAuthEnabled = settings?.geminiCliOAuthEnabled ?? false
 
-    // Mark both providers as fetching while keeping previous data visible.
+    // Detect if configuration changed — if it did, we must discard any stale
+    // data because it belongs to a different session/workspace.
+    const currentConfigHash = `${cookie}|${workspaceIdOverride}`
+    const opencodeConfigChanged = currentConfigHash !== this.lastOpencodeConfigHash
+    if (opencodeConfigChanged) {
+      this.lastOpencodeConfigHash = currentConfigHash
+      this.opencodeFetchGeneration += 1
+    }
+    const opencodeGeneration = this.opencodeFetchGeneration
+
+    // Mark all providers as fetching while keeping previous data visible.
     // Codex account changes clear Codex separately before this method is
     // called, so ordinary refreshes still preserve the current values.
     this.updateState({
+      ...previousState,
       claude: this.withFetchingStatus(previousState.claude, 'claude'),
-      codex: this.withFetchingStatus(previousState.codex, 'codex')
+      codex: this.withFetchingStatus(previousState.codex, 'codex'),
+      gemini: this.withFetchingStatus(previousState.gemini, 'gemini'),
+      opencodeGo: opencodeConfigChanged
+        ? this.withFetchingStatus(null, 'opencode-go')
+        : this.withFetchingStatus(previousState.opencodeGo, 'opencode-go')
     })
 
-    const [claude, codex] = await Promise.all([
-      fetchClaudeRateLimits({ authPreparation: claudeAuthPreparation }).catch(
-        (err): ProviderRateLimits => ({
-          provider: 'claude',
-          session: null,
-          weekly: null,
-          updatedAt: Date.now(),
-          error: err instanceof Error ? err.message : 'Unknown error',
-          status: 'error'
-        })
-      ),
-      fetchCodexRateLimits({ codexHomePath }).catch(
-        (err): ProviderRateLimits => ({
-          provider: 'codex',
-          session: null,
-          weekly: null,
-          updatedAt: Date.now(),
-          error: err instanceof Error ? err.message : 'Unknown error',
-          status: 'error'
-        })
-      )
+    const [claudeResult, codexResult, geminiResult, opencodeGoResult] = await Promise.allSettled([
+      fetchClaudeRateLimits({ authPreparation: claudeAuthPreparation }),
+      fetchCodexRateLimits({ codexHomePath }),
+      fetchGeminiRateLimits(geminiCliOAuthEnabled),
+      fetchOpenCodeGoRateLimits(cookie, workspaceIdOverride || undefined)
     ])
+
+    const claude =
+      claudeResult.status === 'fulfilled'
+        ? claudeResult.value
+        : ({
+            provider: 'claude',
+            session: null,
+            weekly: null,
+            updatedAt: Date.now(),
+            error:
+              claudeResult.reason instanceof Error ? claudeResult.reason.message : 'Unknown error',
+            status: 'error'
+          } satisfies ProviderRateLimits)
+
+    const codex =
+      codexResult.status === 'fulfilled'
+        ? codexResult.value
+        : ({
+            provider: 'codex',
+            session: null,
+            weekly: null,
+            updatedAt: Date.now(),
+            error:
+              codexResult.reason instanceof Error ? codexResult.reason.message : 'Unknown error',
+            status: 'error'
+          } satisfies ProviderRateLimits)
+
+    const gemini =
+      geminiResult.status === 'fulfilled'
+        ? geminiResult.value
+        : ({
+            provider: 'gemini',
+            session: null,
+            weekly: null,
+            updatedAt: Date.now(),
+            error:
+              geminiResult.reason instanceof Error ? geminiResult.reason.message : 'Unknown error',
+            status: 'error'
+          } satisfies ProviderRateLimits)
+
+    const opencodeGo =
+      opencodeGoResult.status === 'fulfilled'
+        ? opencodeGoResult.value
+        : ({
+            provider: 'opencode-go',
+            session: null,
+            weekly: null,
+            monthly: null,
+            updatedAt: Date.now(),
+            error:
+              opencodeGoResult.reason instanceof Error
+                ? opencodeGoResult.reason.message
+                : 'Unknown error',
+            status: 'error'
+          } satisfies ProviderRateLimits)
 
     const latestCodexHomePath = this.codexHomePathResolver?.() ?? null
     const latestClaudeAuthPreparation = await this.claudeAuthPreparationResolver?.()
@@ -368,16 +446,26 @@ export class RateLimitService {
       codexGeneration === this.codexFetchGeneration && codexProvenance === latestCodexProvenance
     const shouldApplyClaude =
       claudeGeneration === this.claudeFetchGeneration && claudeProvenance === latestClaudeProvenance
+    const shouldApplyOpencode = opencodeGeneration === this.opencodeFetchGeneration
 
     // Why: account switches can race in-flight Codex fetches. Only apply a
     // Codex result if both the selected-account provenance and the request
     // generation still match, otherwise an old account could overwrite the
     // newly selected account's quota state.
     this.updateState({
+      ...previousState,
       claude: shouldApplyClaude
         ? this.applyStalePolicy(claude, previousState.claude)
         : this.state.claude,
-      codex: shouldApplyCodex ? this.applyStalePolicy(codex, previousState.codex) : this.state.codex
+      codex: shouldApplyCodex
+        ? this.applyStalePolicy(codex, previousState.codex)
+        : this.state.codex,
+      gemini: this.applyStalePolicy(gemini, previousState.gemini),
+      opencodeGo: shouldApplyOpencode
+        ? opencodeConfigChanged
+          ? opencodeGo
+          : this.applyStalePolicy(opencodeGo, previousState.opencodeGo)
+        : this.state.opencodeGo
     })
 
     this.lastFetchAt = Date.now()
@@ -464,7 +552,18 @@ export class RateLimitService {
       return fresh
     }
 
-    const previousHasData = Boolean(previous?.session || previous?.weekly)
+    // Explicitly unavailable — user likely cleared a setting. Discard any stale
+    // data so the UI reflects that the provider is now disabled/unconfigured.
+    if (fresh.status === 'unavailable') {
+      return fresh
+    }
+
+    const previousHasData = Boolean(
+      previous?.session ||
+      previous?.weekly ||
+      previous?.monthly ||
+      (previous?.buckets && previous.buckets.length > 0)
+    )
 
     // No previous data to fall back on
     if (!previous || !previousHasData) {

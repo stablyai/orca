@@ -1079,6 +1079,15 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       }
     })
 
+    // Why: sleep keeps the tab records (so wake restores them) but kills the
+    // PTYs, and there is no implicit "PTY death drops agent-status rows" path
+    // — closeTab and pane-close drop their own rows explicitly. Without the
+    // same explicit sweep here, a worktree slept in the 'done' state leaves
+    // live/retained entries behind and WorktreeCard's dot stays blue.
+    for (const tab of tabs) {
+      get().dropAgentStatusByTabPrefix(tab.id)
+    }
+
     if (ptyIds.length === 0) {
       return
     }

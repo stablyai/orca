@@ -1,5 +1,5 @@
 import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
-import { ClaudeIcon, OpenAIIcon } from './icons'
+import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 
 // ---------------------------------------------------------------------------
 // Formatting helpers
@@ -44,14 +44,23 @@ export function ProviderIcon({ provider }: { provider: string }): React.JSX.Elem
   if (provider === 'codex') {
     return <OpenAIIcon size={13} />
   }
+  if (provider === 'gemini') {
+    return <GeminiIcon size={13} />
+  }
+  if (provider === 'opencode-go') {
+    return <OpenCodeGoIcon size={13} />
+  }
   return <ClaudeIcon size={13} />
 }
 
 function ErrorMessage({
   message,
+  stale = false,
   inverted = false
 }: {
   message: string
+  /** When true, prior data is still visible — show a softer "refresh failed" label. */
+  stale?: boolean
   inverted?: boolean
 }): React.JSX.Element {
   const labelClass = inverted ? 'text-background/80' : 'text-foreground/85'
@@ -59,10 +68,33 @@ function ErrorMessage({
 
   return (
     <div className="space-y-0.5">
-      <div className={`text-[11px] font-medium ${labelClass}`}>Usage unavailable</div>
+      <div className={`text-[11px] font-medium ${labelClass}`}>
+        {stale ? 'Refresh failed — showing cached data' : 'Usage unavailable'}
+      </div>
       <div className={detailClass}>{message}</div>
     </div>
   )
+}
+
+// ---------------------------------------------------------------------------
+// Window section derivation
+// ---------------------------------------------------------------------------
+
+export function getWindowSections(
+  p: ProviderRateLimits
+): { label: string; window: RateLimitWindow | null }[] {
+  if (p.buckets?.length) {
+    const bucketSections = p.buckets.map((b) => ({ label: b.name, window: b as RateLimitWindow }))
+    return [...bucketSections, { label: 'Weekly', window: p.weekly }]
+  }
+  const sections: { label: string; window: RateLimitWindow | null }[] = [
+    { label: 'Session', window: p.session },
+    { label: 'Weekly', window: p.weekly }
+  ]
+  if (p.monthly !== undefined && p.monthly !== null) {
+    sections.push({ label: 'Monthly', window: p.monthly })
+  }
+  return sections
 }
 
 // ---------------------------------------------------------------------------
@@ -125,7 +157,16 @@ export function ProviderTooltip({ p }: { p: ProviderRateLimits | null }): React.
     return <span className="text-xs text-background/60">No data available</span>
   }
 
-  const name = p.provider === 'claude' ? 'Claude' : 'Codex'
+  const name =
+    p.provider === 'claude'
+      ? 'Claude'
+      : p.provider === 'codex'
+        ? 'Codex'
+        : p.provider === 'gemini'
+          ? 'Gemini'
+          : p.provider === 'opencode-go'
+            ? 'OpenCode Go'
+            : p.provider
 
   if (p.status === 'unavailable') {
     return (
@@ -134,12 +175,12 @@ export function ProviderTooltip({ p }: { p: ProviderRateLimits | null }): React.
           <ProviderIcon provider={p.provider} />
           {name}
         </div>
-        <div className="text-background/60">{p.error ?? 'CLI not found'}</div>
+        <div className="text-background/60">{p.error ?? 'Unavailable'}</div>
       </div>
     )
   }
 
-  if (p.status === 'error' && !p.session && !p.weekly) {
+  if (p.status === 'error' && !p.session && !p.weekly && !p.monthly) {
     return (
       <div className="text-xs w-[200px]">
         <div className="flex items-center gap-1.5 font-medium text-background">
@@ -167,14 +208,14 @@ export function ProviderTooltip({ p }: { p: ProviderRateLimits | null }): React.
       {/* Divider */}
       <div className="border-t border-background/15" />
 
-      {/* Session window */}
-      <TooltipWindowSection w={p.session} label="Session" />
+      {getWindowSections(p).map((s) => (
+        <TooltipWindowSection key={s.label} w={s.window} label={s.label} />
+      ))}
 
-      {/* Weekly window */}
-      <TooltipWindowSection w={p.weekly} label="Weekly" />
-
-      {/* Stale data warning */}
-      {p.error ? <ErrorMessage message={p.error} inverted /> : null}
+      {/* Stale data warning — softer label when prior data is still shown */}
+      {p.error ? (
+        <ErrorMessage message={p.error} stale={!!(p.session || p.weekly || p.monthly)} inverted />
+      ) : null}
     </div>
   )
 }
@@ -198,7 +239,16 @@ export function ProviderPanel({
     return <span className={`text-xs ${mutedClass}`}>No data available</span>
   }
 
-  const name = p.provider === 'claude' ? 'Claude' : 'Codex'
+  const name =
+    p.provider === 'claude'
+      ? 'Claude'
+      : p.provider === 'codex'
+        ? 'Codex'
+        : p.provider === 'gemini'
+          ? 'Gemini'
+          : p.provider === 'opencode-go'
+            ? 'OpenCode Go'
+            : p.provider
 
   if (p.status === 'unavailable') {
     return (
@@ -207,12 +257,12 @@ export function ProviderPanel({
           <ProviderIcon provider={p.provider} />
           {name}
         </div>
-        <div className={mutedClass}>{p.error ?? 'CLI not found'}</div>
+        <div className={mutedClass}>{p.error ?? 'Unavailable'}</div>
       </div>
     )
   }
 
-  if (p.status === 'error' && !p.session && !p.weekly) {
+  if (p.status === 'error' && !p.session && !p.weekly && !p.monthly) {
     return (
       <div className={`text-xs ${className ?? 'w-full'}`}>
         <div className={`flex items-center gap-1.5 font-medium ${textClass}`}>
@@ -270,10 +320,17 @@ export function ProviderPanel({
 
       <div className={`border-t ${dividerClass}`} />
 
-      <PanelWindowSection w={p.session} label="Session" />
-      <PanelWindowSection w={p.weekly} label="Weekly" />
+      {getWindowSections(p).map((s) => (
+        <PanelWindowSection key={s.label} w={s.window} label={s.label} />
+      ))}
 
-      {p.error ? <ErrorMessage message={p.error} inverted={inverted} /> : null}
+      {p.error ? (
+        <ErrorMessage
+          message={p.error}
+          stale={!!(p.session || p.weekly || p.monthly)}
+          inverted={inverted}
+        />
+      ) : null}
     </div>
   )
 }

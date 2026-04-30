@@ -1,5 +1,6 @@
 import { Session, type SubprocessHandle } from './session'
 import { normalizePtySize } from './daemon-pty-size'
+import { resolveProcessCwd } from '../providers/process-cwd'
 import type { SessionInfo, TerminalSnapshot, ShellReadyState } from './types'
 import { SessionNotFoundError } from './types'
 
@@ -155,8 +156,19 @@ export class TerminalHost {
     session?.detachClient(token)
   }
 
-  getCwd(sessionId: string): string | null {
-    return this.getAliveSession(sessionId).getCwd()
+  async getCwd(sessionId: string): Promise<string | null> {
+    const session = this.getAliveSession(sessionId)
+    const tracked = session.getCwd()
+    if (tracked) {
+      return tracked
+    }
+    // Why: the emulator's cwd is null until the shell emits OSC 7. Orca's
+    // bash/zsh rcfiles ship with OSC 133 markers but not OSC 7, so the
+    // tracked value stays null through the entire session for most users.
+    // Fall back to the live process cwd via /proc/<pid>/cwd (Linux) or
+    // lsof (macOS). Matches the LocalPtyProvider.getCwd fallback.
+    const resolved = await resolveProcessCwd(session.pid)
+    return resolved || null
   }
 
   clearScrollback(sessionId: string): void {

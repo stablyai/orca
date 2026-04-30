@@ -171,8 +171,12 @@ describe('DaemonServer', () => {
         sessionId: 'test-session'
       })
 
-      // Mock subprocess doesn't emit OSC-7, so cwd is null
-      expect(result.cwd).toBeNull()
+      // Mock subprocess doesn't emit OSC-7. The terminal-host fallback then
+      // calls resolveProcessCwd(55555); on CI that pid is almost always dead
+      // so the result is null, but we accept string too — a recycled pid that
+      // happens to match would legitimately return a path and we don't want
+      // this test to flake on whatever happens to be running on the host.
+      expect(result.cwd === null || typeof result.cwd === 'string').toBe(true)
     })
 
     it('returns error for unknown session operations', async () => {
