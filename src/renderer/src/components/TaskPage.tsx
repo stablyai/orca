@@ -2540,7 +2540,7 @@ export default function TaskPage(): React.JSX.Element {
                 // Falls back to the local displayName when the slug isn't
                 // resolved yet (pre-IPC cache hit, or non-GitHub remote).
                 if (selectedRepos.length > 1) {
-                  return 'Filing a new issue in the selected repository.'
+                  return 'Filing in the selected repository'
                 }
                 const entry = newIssueTargetRepo
                   ? perRepoSourceState.find((s) => s.repoId === newIssueTargetRepo.id)
@@ -2549,7 +2549,7 @@ export default function TaskPage(): React.JSX.Element {
                   ? `${entry.sources.issues.owner}/${entry.sources.issues.repo}`
                   : null
                 const fallback = newIssueTargetRepo?.displayName ?? 'this repository'
-                return `Filing a new issue in ${issuesSlug ?? fallback}.`
+                return `Filing in ${issuesSlug ?? fallback}`
               })()}
             </DialogDescription>
           </DialogHeader>
