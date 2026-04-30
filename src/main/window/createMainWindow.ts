@@ -69,11 +69,43 @@ export function createMainWindow(
   // Why: defense in depth — if a previous quit/update path persisted
   // shrink-to-min bounds (see freezeBoundsOnQuit), discard them on restore
   // rather than resurrecting a tiny window. Anything at or below the min
-  // dimensions is treated as corrupt and falls back to defaultBounds.
+  // dimensions is treated as corrupt and falls back to defaultBounds. The
+  // position must also land on a currently-attached display — a rect saved
+  // while an external monitor was connected would otherwise be restored
+  // off-screen and macOS would silently shrink/reposition the window.
+  const rectIntersectsAnyDisplay = (b: {
+    x: number
+    y: number
+    width: number
+    height: number
+  }): boolean => {
+    try {
+      return screen.getAllDisplays().some((d) => {
+        const wa = d.workArea
+        const overlapX = Math.max(0, Math.min(b.x + b.width, wa.x + wa.width) - Math.max(b.x, wa.x))
+        const overlapY = Math.max(
+          0,
+          Math.min(b.y + b.height, wa.y + wa.height) - Math.max(b.y, wa.y)
+        )
+        return overlapX > 0 && overlapY > 0
+      })
+    } catch {
+      return false
+    }
+  }
   const savedBounds =
-    rawSavedBounds && rawSavedBounds.width > MIN_WIDTH && rawSavedBounds.height > MIN_HEIGHT
+    rawSavedBounds &&
+    rawSavedBounds.width > MIN_WIDTH &&
+    rawSavedBounds.height > MIN_HEIGHT &&
+    rectIntersectsAnyDisplay(rawSavedBounds)
       ? rawSavedBounds
       : undefined
+  if (rawSavedBounds && !savedBounds) {
+    console.warn(
+      '[window] Discarding persisted windowBounds and falling back to defaultBounds:',
+      rawSavedBounds
+    )
+  }
   const savedMaximized = store?.getUI().windowMaximized ?? false
   // Why: on first launch (no saved bounds), fill the primary display work area
   // so the window feels spacious without calling maximize(). Saved bounds still
@@ -101,6 +133,14 @@ export function createMainWindow(
         : {}
     : {}
 
+  if (is.dev) {
+    console.log(
+      '[window] Creating main window with bounds:',
+      savedBounds
+        ? { source: 'saved', ...savedBounds, maximized: savedMaximized }
+        : { source: 'default', ...defaultBounds, maximized: savedMaximized }
+    )
+  }
   const mainWindow = new BrowserWindow({
     width: savedBounds?.width ?? defaultBounds.width,
     height: savedBounds?.height ?? defaultBounds.height,
@@ -210,7 +250,18 @@ export function createMainWindow(
       const isMaximized = mainWindow.isMaximized()
       store?.updateUI({ windowMaximized: isMaximized })
       if (!isMaximized) {
-        store?.updateUI({ windowBounds: mainWindow.getBounds() })
+        const bounds = mainWindow.getBounds()
+        // Why: never persist shrink-to-min bounds. The user cannot want these
+        // saved — the window hit the enforced minimum, so either the teardown
+        // race from PR #1269 slipped past the freeze (e.g. dev-mode Ctrl+C
+        // where will-prevent-unload re-opens the freeze), or a transient
+        // OS resize fired. Dropping the write here makes the next launch fall
+        // back to defaultBounds instead of resurrecting a tiny window.
+        if (bounds.width <= MIN_WIDTH || bounds.height <= MIN_HEIGHT) {
+          console.warn('[window] Skipping persist of near-minimum windowBounds:', bounds)
+          return
+        }
+        store?.updateUI({ windowBounds: bounds })
       }
     }, 500)
   }
@@ -242,7 +293,16 @@ export function createMainWindow(
     if (windowClosing) {
       return
     }
-    store?.updateUI({ windowMaximized: false, windowBounds: mainWindow.getBounds() })
+    const bounds = mainWindow.getBounds()
+    // Why: mirror the saveBounds guard — unmaximize during teardown can land
+    // at MIN_WIDTH × MIN_HEIGHT and we must not persist those as the user's
+    // remembered size.
+    if (bounds.width <= MIN_WIDTH || bounds.height <= MIN_HEIGHT) {
+      console.warn('[window] Skipping unmaximize-time persist of near-min bounds:', bounds)
+      store?.updateUI({ windowMaximized: false })
+      return
+    }
+    store?.updateUI({ windowMaximized: false, windowBounds: bounds })
   })
 
   mainWindow.on('enter-full-screen', () => {
