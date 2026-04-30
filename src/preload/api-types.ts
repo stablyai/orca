@@ -272,25 +272,14 @@ export type CodexUsageApi = {
 }
 
 export type AppRuntimeFlags = {
-  daemonEnabledAtStartup: boolean
   agentDashboardEnabledAtStartup: boolean
 }
 
-export type DaemonTransitionNotice = {
-  killedCount: number
-}
-
 export type AppApi = {
-  /** Returns flags about the main-process state that was set at startup
-   *  (e.g. whether the persistent terminal daemon actually started). The
-   *  renderer uses this to show a "restart required" banner when the user
+  /** Returns flags about the main-process state that was set at startup.
+   *  The renderer uses this to show a "restart required" banner when the user
    *  toggles a setting that only applies across a full relaunch. */
   getRuntimeFlags: () => Promise<AppRuntimeFlags>
-  /** Reads and clears any pending one-shot notice about a daemon cleanup
-   *  that ran during startup (e.g. when upgrading from v1.3.0 where the
-   *  daemon was on by default to a build where it's opt-in). Returns null
-   *  when there is nothing to show. */
-  consumeDaemonTransitionNotice: () => Promise<DaemonTransitionNotice | null>
   /** Relaunches the app via Electron's app.relaunch() + app.exit(0). Used
    *  by the "Restart now" button on the Experimental settings pane. */
   relaunch: () => Promise<void>

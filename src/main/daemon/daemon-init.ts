@@ -343,27 +343,3 @@ async function createLegacyDaemonAdapters(runtimeDir: string): Promise<DaemonPty
   }
   return adapters
 }
-
-/** Detect and tear down an orphaned daemon left behind by a previous app
- *  session (e.g. a user who had `experimentalTerminalDaemon` enabled on an
- *  older build and is now launching a build where the feature is disabled).
- *
- *  Why it matters: the daemon is designed to outlive the Electron process.
- *  If we just skip `initDaemonPtyProvider()` on this launch, any live sessions
- *  from the previous session keep running invisibly — consuming CPU / holding
- *  files open / re-launching on every boot because nothing ever kills them.
- *  This helper connects to the existing socket, enumerates sessions, and asks
- *  the daemon to shut itself down (which terminates all PTYs). */
-export async function cleanupOrphanedDaemon(): Promise<OrphanedDaemonCleanupResult> {
-  const runtimeDir = getRuntimeDir()
-  let cleaned = false
-  let killedCount = 0
-
-  for (const protocolVersion of [PROTOCOL_VERSION, ...PREVIOUS_DAEMON_PROTOCOL_VERSIONS]) {
-    const result = await cleanupDaemonForProtocol(runtimeDir, protocolVersion)
-    cleaned ||= result.cleaned
-    killedCount += result.killedCount
-  }
-
-  return { cleaned, killedCount }
-}

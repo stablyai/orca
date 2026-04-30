@@ -204,10 +204,8 @@ function App(): React.JSX.Element {
         const persistedUI = await window.api.ui.get()
         const session = await window.api.session.get()
         // Why: settings must be loaded before hydrateWorkspaceSession so that
-        // it can read experimentalTerminalDaemon to decide whether to stage
-        // pendingReconnectPtyIdByTabId. Without this, opted-in daemon users
-        // would silently lose session reattach on every launch because
-        // s.settings would still be null at hydration time.
+        // hydration has access to user preferences. Without this, settings
+        // would still be null at hydration time.
         await actions.fetchSettings()
         if (!cancelled) {
           actions.hydratePersistedUI(persistedUI)
@@ -496,65 +494,6 @@ function App(): React.JSX.Element {
     document.addEventListener('visibilitychange', handler)
     return () => document.removeEventListener('visibilitychange', handler)
   }, [actions])
-
-  // Why: v1.3.0 shipped the persistent-terminal daemon ON by default. v1.3.1+
-  // defaults it OFF and gates it behind an Experimental toggle. On the first
-  // launch after that upgrade, main detects a still-running daemon, shuts it
-  // down (killing any surviving `sleep 9999`-style sessions), and stashes a
-  // one-shot notice. We consume that notice here and inform the user so their
-  // vanished sessions don't look like a bug. The renderer-side
-  // `experimentalTerminalDaemonNoticeShown` flag guarantees the toast fires at
-  // most once per install, even if main stashes a notice again on a later
-  // launch.
-  const transitionNoticeHandledRef = useRef(false)
-  useEffect(() => {
-    if (!settings || transitionNoticeHandledRef.current) {
-      return
-    }
-    if (settings.experimentalTerminalDaemonNoticeShown) {
-      transitionNoticeHandledRef.current = true
-      return
-    }
-    transitionNoticeHandledRef.current = true
-    void (async () => {
-      let notice: { killedCount: number } | null = null
-      try {
-        notice = await window.api.app.consumeDaemonTransitionNotice()
-      } catch {
-        // Informational only — if the IPC fails, don't fire the toast and
-        // don't flip the "shown" flag so we can retry on next launch.
-        return
-      }
-      if (!notice) {
-        return
-      }
-      const killedCount = notice.killedCount
-      const killedClause =
-        killedCount > 0
-          ? ` Cleaned up ${killedCount} background session${killedCount === 1 ? '' : 's'} from the previous version.`
-          : ''
-      toast.info('Persistent terminal sessions are now opt-in.', {
-        description: `${killedClause} You can re-enable them in Settings → Experimental.`.trim(),
-        duration: 15000,
-        action: {
-          label: 'Open settings',
-          onClick: () => {
-            useAppStore.getState().openSettingsTarget({
-              pane: 'experimental',
-              repoId: null
-            })
-            useAppStore.getState().openSettingsPage()
-          }
-        }
-      })
-      try {
-        await actions.updateSettings({ experimentalTerminalDaemonNoticeShown: true })
-      } catch {
-        // If persistence fails, the toast may re-fire on a later launch —
-        // acceptable tradeoff vs. silently dropping the notification.
-      }
-    })()
-  }, [actions, settings])
 
   const tabs = activeWorktreeId ? (tabsByWorktree[activeWorktreeId] ?? []) : []
   const hasTabBar = tabs.length >= 2

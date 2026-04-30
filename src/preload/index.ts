@@ -4,7 +4,7 @@ review and type drift checks easier than scattering these bindings across module
 import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
-import type { AppRuntimeFlags, DaemonTransitionNotice } from './api-types'
+import type { AppRuntimeFlags } from './api-types'
 import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type {
@@ -176,8 +176,6 @@ document.addEventListener(
 const api = {
   app: {
     getRuntimeFlags: (): Promise<AppRuntimeFlags> => ipcRenderer.invoke('app:getRuntimeFlags'),
-    consumeDaemonTransitionNotice: (): Promise<DaemonTransitionNotice | null> =>
-      ipcRenderer.invoke('app:consumeDaemonTransitionNotice'),
     relaunch: (): Promise<void> => ipcRenderer.invoke('app:relaunch'),
     // Why: on macOS this returns AppleCurrentKeyboardLayoutInputSourceID so
     // the renderer's keyboard-layout probe can distinguish Polish Pro / US

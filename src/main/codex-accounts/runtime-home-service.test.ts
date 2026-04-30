@@ -91,8 +91,6 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     agentCmdOverrides: {},
     terminalMacOptionAsAlt: 'false',
     terminalMacOptionAsAltMigrated: true,
-    experimentalTerminalDaemon: false,
-    experimentalTerminalDaemonNoticeShown: false,
     experimentalAgentDashboard: false,
     terminalWindowsShell: 'powershell.exe',
     enableGitHubAttribution: true,

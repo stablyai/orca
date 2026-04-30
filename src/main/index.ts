@@ -11,12 +11,8 @@ import { StatsCollector, initStatsPath } from './stats/collector'
 import { ClaudeUsageStore, initClaudeUsagePath } from './claude-usage/store'
 import { CodexUsageStore, initCodexUsagePath } from './codex-usage/store'
 import { killAllPty } from './ipc/pty'
-import {
-  initDaemonPtyProvider,
-  disconnectDaemon,
-  cleanupOrphanedDaemon
-} from './daemon/daemon-init'
-import { recordPendingDaemonTransitionNotice, setAppRuntimeFlags } from './ipc/app'
+import { initDaemonPtyProvider, disconnectDaemon } from './daemon/daemon-init'
+import { setAppRuntimeFlags } from './ipc/app'
 import { closeAllWatchers } from './ipc/filesystem-watcher'
 import { registerCoreHandlers } from './ipc/register-core-handlers'
 import { triggerStartupNotificationRegistration } from './ipc/notifications'
@@ -397,40 +393,15 @@ app.whenReady().then(async () => {
     userDataPath: app.getPath('userData')
   })
 
-  // Why: persistent terminal sessions (the out-of-process daemon) are gated
-  // behind an experimental setting that defaults to OFF. Users on v1.3.0 had
-  // the daemon on by default, so on upgrade we may need to clean up a live
-  // daemon from their previous session before continuing with the local
-  // provider. `registerPtyHandlers` (called inside openMainWindow) relies on
-  // the provider being set, so whichever branch runs must complete first.
-  const daemonEnabled = store.getSettings().experimentalTerminalDaemon === true
-  let daemonStarted = false
-  if (daemonEnabled) {
-    // Why: catch so the app still opens even if the daemon fails. The local
-    // PTY provider remains as the fallback — terminals will still work, just
-    // without cross-restart persistence.
-    try {
-      await initDaemonPtyProvider()
-      daemonStarted = true
-    } catch (error) {
-      console.error('[daemon] Failed to start daemon PTY provider, falling back to local:', error)
-    }
-  } else {
-    // Why: stash the cleanup result so the renderer's one-shot transition
-    // toast can tell the user how many background sessions were stopped. Only
-    // record when `cleaned: true` — i.e. an orphan daemon was actually found.
-    // Fresh installs (no socket) skip the toast entirely.
-    try {
-      const result = await cleanupOrphanedDaemon()
-      if (result.cleaned) {
-        recordPendingDaemonTransitionNotice({ killedCount: result.killedCount })
-      }
-    } catch (error) {
-      console.error('[daemon] Failed to clean up orphaned daemon:', error)
-    }
+  // Why: the persistent-terminal daemon is always started. If it fails, the
+  // LocalPtyProvider (initialized at module load in ipc/pty.ts) remains as the
+  // implicit fallback — terminals work, just without cross-restart persistence.
+  try {
+    await initDaemonPtyProvider()
+  } catch (error) {
+    console.error('[daemon] Failed to start daemon PTY provider, falling back to local:', error)
   }
   setAppRuntimeFlags({
-    daemonEnabledAtStartup: daemonStarted,
     agentDashboardEnabledAtStartup: agentDashboardEnabled
   })
 

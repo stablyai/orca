@@ -390,8 +390,7 @@ function Settings(): React.JSX.Element {
         title: 'SSH',
         description: 'Remote SSH connections.',
         icon: Server,
-        searchEntries: SSH_PANE_SEARCH_ENTRIES,
-        badge: 'Beta'
+        searchEntries: SSH_PANE_SEARCH_ENTRIES
       },
       {
         id: 'experimental',
@@ -716,7 +715,6 @@ function Settings(): React.JSX.Element {
                 <SettingsSection
                   id="ssh"
                   title="SSH"
-                  badge="Beta"
                   description="Manage remote SSH connections. Connect to remote servers to browse files, run terminals, and use git."
                   searchEntries={SSH_PANE_SEARCH_ENTRIES}
                 >
