@@ -19,11 +19,12 @@ const StatusIndicator = React.memo(function StatusIndicator({
   ...rest
 }: StatusIndicatorProps) {
   // Why: surface the status label as a native tooltip so hovering the dot
-  // reveals the state — matters especially for 'active' vs 'inactive', which
-  // share the same grey dot (see color-branch comment below). Callers pass
-  // aria-hidden="true" alongside an sr-only label, so the `title` attribute
-  // is ignored by AT and only serves sighted users on hover. Callers can
-  // override by passing their own `title`.
+  // reveals the state — matters especially for 'active' vs 'done', which
+  // share the same emerald dot until TODO(#1265) lands (see color-branch
+  // comment below). Callers pass aria-hidden="true" alongside an sr-only
+  // label, so the `title` attribute is ignored by AT and only serves
+  // sighted users on hover. Callers can override by passing their own
+  // `title`.
   const resolvedTitle = title ?? getWorktreeStatusLabel(status)
 
   if (status === 'working') {
