@@ -1,8 +1,12 @@
 import { useAppStore } from '../store'
 import { getActiveTabNavOrder } from '@/components/tab-bar/group-tab-order'
+import {
+  getActiveEntityIdForTabType,
+  getNextTabWithinActiveType
+} from '@/components/terminal/tab-type-cycle'
 
 /**
- * Handle Cmd/Ctrl+Tab direction switching across terminal, editor, and browser tabs.
+ * Handle Cmd/Ctrl+Shift+[ / ] direction switching within the active tab type.
  * Extracted from useIpcEvents to keep file size under the max-lines lint threshold.
  * Returns true if a tab switch occurred, false otherwise.
  */
@@ -33,19 +37,18 @@ export function handleSwitchTab(direction: number): boolean {
     group?.activeTabId && allTabIds.some((entry) => entry.tabId === group.activeTabId)
       ? group.activeTabId
       : null
-  let idx: number
-  if (groupTabIdInNav) {
-    idx = allTabIds.findIndex((t) => t.tabId === groupTabIdInNav)
-  } else {
-    const fallbackId =
-      store.activeTabType === 'editor'
-        ? store.activeFileId
-        : store.activeTabType === 'browser'
-          ? store.activeBrowserTabId
-          : store.activeTabId
-    idx = allTabIds.findIndex((t) => t.id === fallbackId)
+  const next = getNextTabWithinActiveType({
+    tabs: allTabIds,
+    activeTabType: store.activeTabType,
+    activeTabId: store.activeTabId,
+    activeFileId: store.activeFileId,
+    activeBrowserTabId: store.activeBrowserTabId,
+    activeGroupTabId: groupTabIdInNav,
+    direction
+  })
+  if (!next) {
+    return false
   }
-  const next = allTabIds[(idx + direction + allTabIds.length) % allTabIds.length]
   if (next.type === 'terminal') {
     store.setActiveTab(next.id)
     store.setActiveTabType('terminal')
@@ -83,12 +86,12 @@ export function handleSwitchTerminalTab(direction: number): boolean {
   if (terminalTabs.length === 0) {
     return false
   }
-  const currentId =
-    store.activeTabType === 'editor'
-      ? store.activeFileId
-      : store.activeTabType === 'browser'
-        ? store.activeBrowserTabId
-        : store.activeTabId
+  const currentId = getActiveEntityIdForTabType(
+    store.activeTabType,
+    store.activeTabId,
+    store.activeFileId,
+    store.activeBrowserTabId
+  )
   // Why: when an editor/browser tab is active, jump to the first terminal on
   // forward navigation instead of skipping to index 1.
   const idx = terminalTabs.findIndex((t) => t.id === currentId)

@@ -1,12 +1,18 @@
 import { useEffect, useEffectEvent } from 'react'
 import type { UnifiedTerminalItem } from './useTerminalTabs'
+import {
+  getNextTabWithinActiveType,
+  type TabCycleType,
+  type TypeCyclableTab
+} from './tab-type-cycle'
 import { isUpdaterQuitAndInstallInProgress } from '@/lib/updater-beforeunload'
 
 type UseTerminalShortcutsParams = {
   activeWorktreeId: string | null
   activeTabId: string | null
   activeFileId: string | null
-  activeTabType: 'terminal' | 'editor'
+  activeBrowserTabId?: string | null
+  activeTabType: TabCycleType
   unifiedTabs: UnifiedTerminalItem[]
   hasDirtyFiles: boolean
   onNewTab: () => void
@@ -14,12 +20,14 @@ type UseTerminalShortcutsParams = {
   onCloseFile: (fileId: string) => void
   onActivateTerminalTab: (tabId: string) => void
   onActivateEditorTab: (fileId: string) => void
+  onActivateBrowserTab?: (tabId: string) => void
 }
 
 export function useTerminalShortcuts({
   activeWorktreeId,
   activeTabId,
   activeFileId,
+  activeBrowserTabId = null,
   activeTabType,
   unifiedTabs,
   hasDirtyFiles,
@@ -27,7 +35,8 @@ export function useTerminalShortcuts({
   onCloseTab,
   onCloseFile,
   onActivateTerminalTab,
-  onActivateEditorTab
+  onActivateEditorTab,
+  onActivateBrowserTab
 }: UseTerminalShortcutsParams): void {
   const handleKeyDown = useEffectEvent((event: KeyboardEvent) => {
     // Accept Cmd on macOS, Ctrl on other platforms
@@ -55,26 +64,31 @@ export function useTerminalShortcuts({
 
     // Why: use event.code instead of event.key because on macOS, Shift+[
     // reports '{' as the key value (the shifted character), not '['.
-    if (
-      !event.shiftKey ||
-      (event.code !== 'BracketRight' && event.code !== 'BracketLeft')
-    ) {
+    if (!event.shiftKey || (event.code !== 'BracketRight' && event.code !== 'BracketLeft')) {
       return
     }
 
-    if (unifiedTabs.length <= 1) {
+    const nextTab = getNextTabWithinActiveType({
+      tabs: unifiedTabs as TypeCyclableTab[],
+      activeTabType,
+      activeTabId,
+      activeFileId,
+      activeBrowserTabId,
+      direction: event.code === 'BracketRight' ? 1 : -1
+    })
+    if (!nextTab) {
       return
     }
 
     event.preventDefault()
-    const currentId = activeTabType === 'editor' ? activeFileId : activeTabId
-    const currentIndex = unifiedTabs.findIndex((tab) => tab.id === currentId)
-    const direction = event.code === 'BracketRight' ? 1 : -1
-    const nextTab =
-      unifiedTabs[(currentIndex + direction + unifiedTabs.length) % unifiedTabs.length]
 
     if (nextTab.type === 'terminal') {
       onActivateTerminalTab(nextTab.id)
+      return
+    }
+
+    if (nextTab.type === 'browser') {
+      onActivateBrowserTab?.(nextTab.id)
       return
     }
 
