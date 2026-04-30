@@ -117,7 +117,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
 
   return (
     <div
-      className={cn('flex flex-col', className)}
+      className={cn('flex flex-col mt-1', className)}
       onClick={(e) => e.stopPropagation()}
       onDoubleClick={(e) => e.stopPropagation()}
     >
