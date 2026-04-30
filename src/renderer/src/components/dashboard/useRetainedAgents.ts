@@ -69,7 +69,7 @@ export function useRetainedAgentsSync(liveGroups: DashboardRepoGroup[]): void {
     // would trigger N set(...) calls and N subscriber notifications when
     // several agents vanish in the same frame (e.g. tab close, worktree
     // teardown), exposing intermediate maps to consumers mid-loop. A single
-    // atomic update keeps the dashboard + sidebar hovercard visually stable.
+    // atomic update keeps the inline agents list visually stable.
     retainAgents(toRetain)
 
     prevAgentsRef.current = current

@@ -345,15 +345,15 @@ app.whenReady().then(async () => {
   nativeTheme.themeSource = store.getSettings().theme ?? 'system'
   // Why: managed hook installation mutates user-global agent config.
   // Startup must fail open so a malformed local config never bricks Orca.
-  // Claude/Codex/Gemini installs are gated behind the experimental
-  // Agent Dashboard setting because the surface they feed (the in-progress
-  // agent dashboard) isn't shippable yet. Cursor installs unconditionally
-  // because cursor-agent emits no title-based working/idle signal at all
-  // (its terminal title stays literally "Cursor Agent" across a turn), so
-  // the hook channel is the only way to drive the sidebar spinner + unread
-  // path for it — there is no "pre-dashboard" fallback to degrade to the
-  // way Claude/Codex have. Toggling the setting takes effect on next launch
-  // because the hook scripts are installed once per boot.
+  // Claude/Codex/Gemini installs are gated behind the experimentalAgentDashboard
+  // setting because the feature they feed (the inline agent-activity list) is
+  // still in preview. Cursor installs unconditionally because cursor-agent
+  // emits no title-based working/idle signal at all (its terminal title stays
+  // literally "Cursor Agent" across a turn), so the hook channel is the only
+  // way to drive the sidebar spinner + unread path for it — there is no
+  // title-based fallback the way Claude/Codex have. Toggling the setting
+  // takes effect on next launch because the hook scripts are installed once
+  // per boot.
   const agentDashboardEnabled = store.getSettings().experimentalAgentDashboard === true
   if (agentDashboardEnabled) {
     for (const installManagedHooks of [

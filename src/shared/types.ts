@@ -1057,10 +1057,11 @@ export type WorktreeCardProperty =
   | 'pr'
   | 'comment'
   // Why: inline list of agent activity rendered directly inside each
-  // workspace card when the experimental agent dashboard is on. On by default
-  // (see DEFAULT_WORKTREE_CARD_PROPERTIES in shared/constants.ts) because live
-  // agent activity is the primary reason users opt into the cockpit; users who
-  // prefer a compact sidebar can uncheck it from the Workspaces view options.
+  // workspace card when the experimental agent-activity feature is on. On by
+  // default (see DEFAULT_WORKTREE_CARD_PROPERTIES in shared/constants.ts) —
+  // live agent activity is the primary reason users opt into the feature.
+  // Users who prefer a compact sidebar can uncheck it from the Workspaces
+  // view options.
   | 'inline-agents'
 
 export type StatusBarItem =

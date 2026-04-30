@@ -528,7 +528,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     })
     // Why: sweep live AND retained agent-status entries for this tab — closing
     // the tab is the user telling us "I'm done with this session", so any
-    // completion snapshots it left behind (in the sidebar/hovercard) must go
+    // completion snapshots it left behind (in the inline agents list) must go
     // too. Use dropAgentStatusByTabPrefix (not removeAgentStatusByTabPrefix)
     // so retention suppressors are planted: a live→gone transition inside the
     // same frame as the tab close cannot re-snapshot a row we just dropped.

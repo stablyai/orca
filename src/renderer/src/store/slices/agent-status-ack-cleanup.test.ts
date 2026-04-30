@@ -107,7 +107,7 @@ describe('acknowledgedAgentsByPaneKey cleanup on teardown', () => {
     const newEntry = store.getState().agentStatusByPaneKey['tab-1:0']
     const ackAt = store.getState().acknowledgedAgentsByPaneKey['tab-1:0'] ?? 0
 
-    // Why: the unvisited rule (DashboardWorktreeCard's isAgentUnvisited) is
+    // Why: the unvisited rule (WorktreeCardAgents' unvisitedByPaneKey) is
     // `ackAt < stateStartedAt`. A leaked session-1 ack would still be
     // greater than the second paneKey's fresh stateStartedAt only by
     // accident of wall-clock ordering, but more robustly: after cleanup,

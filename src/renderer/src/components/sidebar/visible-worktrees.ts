@@ -119,9 +119,9 @@ export function getVisibleWorktreeIds(): string[] {
 
   let sortedIds: string[]
 
-  // Why: matches WorktreeList's gate — when the experimental Agent Dashboard
-  // is off, the agent-status map is not populated, so fall back to the
-  // non-status sort heuristics instead of scoring against an empty map.
+  // Why: matches WorktreeList's gate — when the experimental agent-activity
+  // feature is off, the agent-status map is not populated, so fall back to
+  // the non-status sort heuristics instead of scoring against an empty map.
   const agentStatusForSort =
     state.settings?.experimentalAgentDashboard === true ? state.agentStatusByPaneKey : undefined
   if (state.sortBy === 'smart') {

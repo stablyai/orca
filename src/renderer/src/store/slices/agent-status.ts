@@ -405,7 +405,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           // Why: mirrors removeAgentStatus — dropping a live working/blocked
           // agent changes its contribution to the worktree sort score, so the
           // sidebar smart-sort must recompute. Without this bump, a user-
-          // initiated dismissal via the dashboard/hovercard would leave the
+          // initiated dismissal from the inline agents list would leave the
           // sidebar ordering stale until some unrelated event repaired it.
           sortEpoch: hasLive ? s.sortEpoch + 1 : s.sortEpoch
         }
@@ -505,7 +505,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       set((s) => {
         // Why: skip the allocation + set(...) entirely when every input entry
         // is already present by reference. Consumers of retainedAgentsByPaneKey
-        // select on its identity (dashboard + hovercard), so a spurious map
+        // select on its identity (the inline agents list), so a spurious map
         // reallocation forces re-renders even when nothing changed. Mirrors
         // the identity-preservation pattern used by pruneRetainedAgents and
         // clearRetentionSuppressedPaneKeys.

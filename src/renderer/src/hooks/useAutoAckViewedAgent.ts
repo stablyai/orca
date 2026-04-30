@@ -65,12 +65,13 @@ export function useAutoAckViewedAgent(): void {
         return
       }
 
-      // Why: mirror the dashboard's visibility gate — if the experimental
-      // agent dashboard is off, nothing in the UI reads the ack map, so
-      // accumulating entries for unseen agents is wasted memory and the
-      // Object.entries scan below is pure overhead. The subscribe callback
-      // fires on any store change, so flipping the setting naturally
-      // re-evaluates this guard without a separate subscription.
+      // Why: mirror the inline agents' visibility gate — when the
+      // experimental agent-activity feature is off, nothing in the UI reads
+      // the ack map, so accumulating entries for unseen agents is wasted
+      // memory and the Object.entries scan below is pure overhead. The
+      // subscribe callback fires on any store change, so flipping the
+      // setting naturally re-evaluates this guard without a separate
+      // subscription.
       if (s.settings?.experimentalAgentDashboard !== true) {
         return
       }
@@ -80,10 +81,10 @@ export function useAutoAckViewedAgent(): void {
       }
       // Why: the auto-ack represents "the user saw this row" — but tab-active is
       // only a proxy. If the OS window is hidden, minimized, or another app has
-      // focus, the user is demonstrably not looking at the dashboard even with the
-      // terminal tab set. Without this gate, an agent finishing while the user is
-      // away silently clears the bold-until-viewed signal and the user returns to
-      // a dashboard with no indication anything transitioned.
+      // focus, the user is demonstrably not looking at the inline agents list
+      // even with the terminal tab set. Without this gate, an agent finishing
+      // while the user is away silently clears the bold-until-viewed signal and
+      // the user returns to a card with no indication anything transitioned.
       if (typeof document !== 'undefined') {
         if (document.visibilityState !== 'visible') {
           return
@@ -100,8 +101,8 @@ export function useAutoAckViewedAgent(): void {
       // or feature gate caused an early return, we must leave the refs stale so
       // the next call (e.g. triggered by the focus listener on return) sees a
       // diff and actually runs the scan. Updating refs before the gates would
-      // consume the diff silently and leave the user returning to a dashboard
-      // whose bold-until-viewed rows stay bold until some unrelated store change
+      // consume the diff silently and leave the user returning to cards whose
+      // bold-until-viewed rows stay bold until some unrelated store change
       // happens to bump the refs again.
       lastActiveView = s.activeView
       lastActiveTabId = s.activeTabId

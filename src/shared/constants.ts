@@ -68,7 +68,7 @@ export const DEFAULT_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = [
   'issue',
   'pr',
   'comment',
-  // Why: agent activity is the primary reason users opt into the cockpit, so
+  // Why: agent activity is the primary reason users opt into the feature, so
   // show it inline on each card by default. Unchecking this from the
   // Workspaces view options hides the inline list entirely — there is no
   // alternative agent-activity surface in the sidebar.
