@@ -70,10 +70,16 @@ export function createMainWindow(
   // shrink-to-min bounds (see freezeBoundsOnQuit), discard them on restore
   // rather than resurrecting a tiny window. Anything at or below the min
   // dimensions is treated as corrupt and falls back to defaultBounds. The
-  // position must also land on a currently-attached display — a rect saved
-  // while an external monitor was connected would otherwise be restored
-  // off-screen and macOS would silently shrink/reposition the window.
-  const rectIntersectsAnyDisplay = (b: {
+  // position must also land on a currently-attached display with a
+  // *meaningful* visible area — not just any >0 overlap, since a 1-pixel
+  // sliver (or a sub-pixel shaving after DPI scaling) would still leave
+  // the titlebar unreachable. Require at least MIN_WIDTH/2 of horizontal
+  // and MIN_HEIGHT/2 of vertical overlap with some display's workArea
+  // (workArea excludes menu bar / dock, so a rect entirely hidden under
+  // the dock is also correctly discarded). A rect saved while an external
+  // monitor was connected would otherwise be restored off-screen and
+  // macOS would silently shrink/reposition the window.
+  const rectHasVisibleAreaOnAnyDisplay = (b: {
     x: number
     y: number
     width: number
@@ -87,9 +93,10 @@ export function createMainWindow(
           0,
           Math.min(b.y + b.height, wa.y + wa.height) - Math.max(b.y, wa.y)
         )
-        return overlapX > 0 && overlapY > 0
+        return overlapX >= MIN_WIDTH / 2 && overlapY >= MIN_HEIGHT / 2
       })
-    } catch {
+    } catch (err) {
+      console.warn('[window] screen.getAllDisplays() threw; treating bounds as off-screen', err)
       return false
     }
   }
@@ -97,7 +104,7 @@ export function createMainWindow(
     rawSavedBounds &&
     rawSavedBounds.width > MIN_WIDTH &&
     rawSavedBounds.height > MIN_HEIGHT &&
-    rectIntersectsAnyDisplay(rawSavedBounds)
+    rectHasVisibleAreaOnAnyDisplay(rawSavedBounds)
       ? rawSavedBounds
       : undefined
   if (rawSavedBounds && !savedBounds) {
@@ -239,22 +246,31 @@ export function createMainWindow(
       if (windowClosing || mainWindow.isDestroyed() || mainWindow.isFullScreen()) {
         return
       }
+      // Why: windowMaximized and windowBounds must be sampled and persisted
+      // atomically — writing windowMaximized first and then deciding whether
+      // to write bounds can leave the store with `windowMaximized: false`
+      // paired with stale/absent windowBounds if the near-min guard trips,
+      // which violates the pairing invariant subsequent launches rely on.
       const isMaximized = mainWindow.isMaximized()
-      store?.updateUI({ windowMaximized: isMaximized })
-      if (!isMaximized) {
-        const bounds = mainWindow.getBounds()
-        // Why: never persist shrink-to-min bounds. The user cannot want these
-        // saved — the window hit the enforced minimum, so either the teardown
-        // race from PR #1269 slipped past the freeze (e.g. dev-mode Ctrl+C
-        // where will-prevent-unload re-opens the freeze), or a transient
-        // OS resize fired. Dropping the write here makes the next launch fall
-        // back to defaultBounds instead of resurrecting a tiny window.
-        if (bounds.width <= MIN_WIDTH || bounds.height <= MIN_HEIGHT) {
-          console.warn('[window] Skipping persist of near-minimum windowBounds:', bounds)
-          return
-        }
-        store?.updateUI({ windowBounds: bounds })
+      if (isMaximized) {
+        store?.updateUI({ windowMaximized: true })
+        return
       }
+      const bounds = mainWindow.getBounds()
+      // Why: never persist shrink-to-min bounds. The user cannot want these
+      // saved — the window hit the enforced minimum, so either the teardown
+      // race from PR #1269 slipped past the freeze (e.g. dev-mode Ctrl+C
+      // where will-prevent-unload re-opens the freeze), or a transient
+      // OS resize fired. Dropping the bounds write here makes the next
+      // launch fall back to defaultBounds instead of resurrecting a tiny
+      // window. We still record windowMaximized: false so subsequent
+      // launches don't incorrectly restore maximized state.
+      if (bounds.width <= MIN_WIDTH || bounds.height <= MIN_HEIGHT) {
+        console.warn('[window] Skipping persist of near-minimum windowBounds:', bounds)
+        store?.updateUI({ windowMaximized: false })
+        return
+      }
+      store?.updateUI({ windowMaximized: false, windowBounds: bounds })
     }, 500)
   }
   mainWindow.on('resize', saveBounds)
