@@ -16,6 +16,7 @@ import { Label } from '../ui/label'
 import { Separator } from '../ui/separator'
 import { Loader2, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { useAppStore } from '../../store'
+import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeGoIcon } from '../status-bar/icons'
 import { toast } from 'sonner'
 import {
   ACCOUNTS_CLAUDE_SEARCH_ENTRIES,
@@ -246,7 +247,10 @@ export function AccountsPane({ settings, updateSettings }: AccountsPaneProps): R
     matchesSettingsSearch(searchQuery, ACCOUNTS_CLAUDE_SEARCH_ENTRIES) ? (
       <section key="claude-accounts" id="accounts-claude" className="space-y-4 scroll-mt-6">
         <div className="space-y-1">
-          <h3 className="text-sm font-semibold">Claude</h3>
+          <h3 className="flex items-center gap-2 text-sm font-semibold">
+            <ClaudeIcon size={16} />
+            Claude
+          </h3>
           <p className="text-xs text-muted-foreground">
             Add and switch Claude Code accounts without moving chat sessions to account-specific
             config directories.
@@ -408,7 +412,10 @@ export function AccountsPane({ settings, updateSettings }: AccountsPaneProps): R
     matchesSettingsSearch(searchQuery, ACCOUNTS_CODEX_SEARCH_ENTRIES) ? (
       <section key="codex-accounts" id="accounts-codex" className="space-y-4 scroll-mt-6">
         <div className="space-y-1">
-          <h3 className="text-sm font-semibold">Codex</h3>
+          <h3 className="flex items-center gap-2 text-sm font-semibold">
+            <OpenAIIcon size={16} />
+            Codex
+          </h3>
           <p className="text-xs text-muted-foreground">
             Add and switch between Codex accounts in Orca.
           </p>
@@ -592,7 +599,10 @@ export function AccountsPane({ settings, updateSettings }: AccountsPaneProps): R
     matchesSettingsSearch(searchQuery, ACCOUNTS_GEMINI_SEARCH_ENTRIES) ? (
       <section key="gemini" id="accounts-gemini" className="space-y-4 scroll-mt-6">
         <div className="space-y-1">
-          <h3 className="text-sm font-semibold">Gemini</h3>
+          <h3 className="flex items-center gap-2 text-sm font-semibold">
+            <GeminiIcon size={16} />
+            Gemini
+          </h3>
           <p className="text-xs text-muted-foreground">Configure Gemini provider settings.</p>
         </div>
 
@@ -642,7 +652,10 @@ export function AccountsPane({ settings, updateSettings }: AccountsPaneProps): R
     matchesSettingsSearch(searchQuery, ACCOUNTS_OPENCODE_SEARCH_ENTRIES) ? (
       <section key="opencode-go" id="accounts-opencode-go" className="space-y-4 scroll-mt-6">
         <div className="space-y-1">
-          <h3 className="text-sm font-semibold">OpenCode Go</h3>
+          <h3 className="flex items-center gap-2 text-sm font-semibold">
+            <OpenCodeGoIcon size={16} />
+            OpenCode Go
+          </h3>
           <p className="text-xs text-muted-foreground">Configure OpenCode Go provider settings.</p>
         </div>
 
