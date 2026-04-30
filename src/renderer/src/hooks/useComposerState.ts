@@ -34,6 +34,7 @@ import {
   type LinkedWorkItemSummary
 } from '@/lib/new-workspace'
 import { getSuggestedCreatureName } from '@/components/sidebar/worktree-name-suggestions'
+import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 
 export type UseComposerStateOptions = {
   initialRepoId?: string
@@ -979,12 +980,21 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     setCreateError(null)
     setCreating(true)
     try {
-      const result = await createWorktree(
-        repoId,
-        workspaceName,
-        baseBranch,
-        (resolvedSetupDecision ?? 'inherit') as SetupDecision
-      )
+      const setupTrustDecision = await ensureHooksConfirmed(useAppStore.getState(), repoId, 'setup')
+      const effectiveSetupDecision: SetupDecision =
+        setupTrustDecision === 'skip'
+          ? 'skip'
+          : ((resolvedSetupDecision ?? 'inherit') as SetupDecision)
+
+      let issueCommandTrustDecision: 'run' | 'skip' = 'run'
+      if (shouldRunIssueAutomation) {
+        issueCommandTrustDecision =
+          setupTrustDecision === 'skip'
+            ? 'skip'
+            : await ensureHooksConfirmed(useAppStore.getState(), repoId, 'issueCommand')
+      }
+
+      const result = await createWorktree(repoId, workspaceName, baseBranch, effectiveSetupDecision)
       const worktree = result.worktree
 
       await applyWorktreeMeta(worktree.id, {
@@ -993,14 +1003,15 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         ...(note.trim() ? { comment: note.trim() } : {})
       })
 
-      const issueCommand = shouldRunIssueAutomation
-        ? {
-            command: renderIssueCommandTemplate(issueCommandTemplate, {
-              issueNumber: parsedLinkedIssueNumber,
-              artifactUrl: linkedWorkItem?.url ?? null
-            })
-          }
-        : undefined
+      const issueCommand =
+        shouldRunIssueAutomation && issueCommandTrustDecision === 'run'
+          ? {
+              command: renderIssueCommandTemplate(issueCommandTemplate, {
+                issueNumber: parsedLinkedIssueNumber,
+                artifactUrl: linkedWorkItem?.url ?? null
+              })
+            }
+          : undefined
       const startupPlan = buildAgentStartupPlan({
         agent: tuiAgent,
         prompt: startupPrompt,
@@ -1087,11 +1098,17 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       setCreateError(null)
       setCreating(true)
       try {
+        const trustDecision = await ensureHooksConfirmed(useAppStore.getState(), repoId, 'setup')
+        const effectiveSetupDecision: SetupDecision =
+          trustDecision === 'skip'
+            ? 'skip'
+            : ((resolvedSetupDecision ?? 'inherit') as SetupDecision)
+
         const result = await createWorktree(
           repoId,
           workspaceName,
           baseBranch,
-          (resolvedSetupDecision ?? 'inherit') as SetupDecision
+          effectiveSetupDecision
         )
         const worktree = result.worktree
 

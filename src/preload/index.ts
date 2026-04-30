@@ -265,7 +265,7 @@ const api = {
     }): Promise<{ baseBranch: string } | { error: string }> =>
       ipcRenderer.invoke('worktrees:resolvePrBase', args),
 
-    remove: (args: { worktreeId: string; force?: boolean }): Promise<void> =>
+    remove: (args: { worktreeId: string; force?: boolean; skipArchive?: boolean }): Promise<void> =>
       ipcRenderer.invoke('worktrees:remove', args),
 
     updateMeta: (args: {

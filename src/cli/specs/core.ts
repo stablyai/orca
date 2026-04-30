@@ -72,9 +72,12 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     path: ['worktree', 'create'],
     summary: 'Create a new Orca-managed worktree',
     usage:
-      'orca worktree create --repo <selector> --name <name> [--base-branch <ref>] [--issue <number>] [--comment <text>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'name', 'base-branch', 'issue', 'comment'],
-    notes: ['By default this matches the Orca UI flow and activates the new worktree in the app.']
+      'orca worktree create --repo <selector> --name <name> [--base-branch <ref>] [--issue <number>] [--comment <text>] [--run-hooks] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'name', 'base-branch', 'issue', 'comment', 'run-hooks'],
+    notes: [
+      'By default this matches the Orca UI flow and activates the new worktree in the app.',
+      'Repo-defined orca.yaml hooks are skipped unless --run-hooks is passed.'
+    ]
   },
   {
     path: ['worktree', 'set'],
@@ -86,8 +89,9 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['worktree', 'rm'],
     summary: 'Remove a worktree from Orca and git',
-    usage: 'orca worktree rm --worktree <selector> [--force] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'force']
+    usage: 'orca worktree rm --worktree <selector> [--force] [--run-hooks] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'force', 'run-hooks'],
+    notes: ['Repo-defined orca.yaml archive hooks are skipped unless --run-hooks is passed.']
   },
   {
     path: ['worktree', 'ps'],

@@ -1117,7 +1117,21 @@ export type PersistedUIState = {
   /** Once the user has starred Orca (from any entry point) we permanently
    *  suppress the nag — no further thresholds, no notifications. */
   starNagCompleted?: boolean
+  trustedOrcaHooks?: PersistedTrustedOrcaHooks
 }
+
+export type PersistedTrustedOrcaHookEntry = {
+  contentHash: string
+  approvedAt: number
+}
+
+export type PersistedTrustedOrcaHookRepo = {
+  setup?: PersistedTrustedOrcaHookEntry
+  archive?: PersistedTrustedOrcaHookEntry
+  issueCommand?: PersistedTrustedOrcaHookEntry
+}
+
+export type PersistedTrustedOrcaHooks = Record<string, PersistedTrustedOrcaHookRepo>
 
 // ─── Persistence shape ──────────────────────────────────────────────
 export type PersistedState = {

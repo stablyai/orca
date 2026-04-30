@@ -232,7 +232,8 @@ export function getDefaultUIState(): PersistedUIState {
     statusBarItems: [...DEFAULT_STATUS_BAR_ITEMS],
     statusBarVisible: true,
     dismissedUpdateVersion: null,
-    lastUpdateCheckAt: null
+    lastUpdateCheckAt: null,
+    trustedOrcaHooks: {}
   }
 }
 

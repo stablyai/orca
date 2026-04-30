@@ -46,7 +46,8 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       name: getRequiredStringFlag(flags, 'name'),
       baseBranch: getOptionalStringFlag(flags, 'base-branch'),
       linkedIssue: getOptionalNumberFlag(flags, 'issue'),
-      comment: getOptionalStringFlag(flags, 'comment')
+      comment: getOptionalStringFlag(flags, 'comment'),
+      runHooks: flags.get('run-hooks') === true
     })
     printResult(result, json, formatWorktreeShow)
   },
@@ -62,7 +63,8 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
   'worktree rm': async ({ flags, client, cwd, json }) => {
     const result = await client.call<{ removed: boolean }>('worktree.rm', {
       worktree: await getRequiredWorktreeSelector(flags, 'worktree', cwd, client),
-      force: flags.get('force') === true
+      force: flags.get('force') === true,
+      runHooks: flags.get('run-hooks') === true
     })
     printResult(result, json, (value) => `removed: ${value.removed}`)
   }

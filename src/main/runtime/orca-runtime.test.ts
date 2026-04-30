@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: runtime behavior is stateful and cross-cutting, so these tests stay in one file to preserve the end-to-end invariants around handles, waits, and graph sync. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { WorktreeMeta } from '../../shared/types'
-import { addWorktree, listWorktrees } from '../git/worktree'
+import { addWorktree, listWorktrees, removeWorktree } from '../git/worktree'
 import { createSetupRunnerScript, getEffectiveHooks, runHook } from '../hooks'
 import { OrchestrationDb } from './orchestration/db'
 import { OrcaRuntimeService } from './orca-runtime'
@@ -9,6 +9,7 @@ import { OrcaRuntimeService } from './orca-runtime'
 const {
   MOCK_GIT_WORKTREES,
   addWorktreeMock,
+  removeWorktreeMock,
   computeWorktreePathMock,
   ensurePathWithinWorkspaceMock,
   invalidateAuthorizedRootsCacheMock
@@ -23,6 +24,7 @@ const {
     }
   ],
   addWorktreeMock: vi.fn(),
+  removeWorktreeMock: vi.fn(),
   computeWorktreePathMock: vi.fn(),
   ensurePathWithinWorkspaceMock: vi.fn(),
   invalidateAuthorizedRootsCacheMock: vi.fn()
@@ -30,7 +32,8 @@ const {
 
 vi.mock('../git/worktree', () => ({
   listWorktrees: vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES),
-  addWorktree: addWorktreeMock
+  addWorktree: addWorktreeMock,
+  removeWorktree: removeWorktreeMock
 }))
 
 vi.mock('../hooks', () => ({
@@ -70,6 +73,7 @@ vi.mock('../git/repo', async (importOriginal) => {
 afterEach(() => {
   vi.mocked(listWorktrees).mockResolvedValue(MOCK_GIT_WORKTREES)
   vi.mocked(addWorktree).mockReset()
+  vi.mocked(removeWorktree).mockReset()
   vi.mocked(createSetupRunnerScript).mockReset()
   vi.mocked(getEffectiveHooks).mockReset()
   vi.mocked(runHook).mockReset()
@@ -899,7 +903,7 @@ describe('OrcaRuntimeService', () => {
     await expect(runtime.searchRepoRefs('id:repo-1', 'main', -5)).rejects.toThrow('invalid_limit')
   })
 
-  it('returns a setup launch payload for CLI-created worktrees when orca.yaml defines setup', async () => {
+  it('returns a setup launch payload for CLI-created worktrees when hooks are explicitly enabled', async () => {
     const runtime = new OrcaRuntimeService(store)
     const activateWorktree = vi.fn()
     runtime.setNotifier({
@@ -940,7 +944,8 @@ describe('OrcaRuntimeService', () => {
 
     const result = await runtime.createManagedWorktree({
       repoSelector: 'id:repo-1',
-      name: 'runtime-hook-test'
+      name: 'runtime-hook-test',
+      runHooks: true
     })
 
     expect(createSetupRunnerScript).toHaveBeenCalledWith(
@@ -971,6 +976,90 @@ describe('OrcaRuntimeService', () => {
       }
     })
     expect(activateWorktree).toHaveBeenCalledWith('repo-1', expect.any(String), result.setup)
+  })
+
+  it('skips setup hooks for CLI-created worktrees by default', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const activateWorktree = vi.fn()
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree,
+      createTerminal: vi.fn(),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn()
+    })
+    runtime.attachWindow(1)
+
+    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-hook-skip')
+    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-hook-skip')
+    vi.mocked(getEffectiveHooks).mockReturnValue({
+      scripts: {
+        setup: 'pnpm worktree:setup'
+      }
+    })
+    vi.mocked(listWorktrees).mockResolvedValueOnce([
+      {
+        path: '/tmp/workspaces/runtime-hook-skip',
+        head: 'def',
+        branch: 'runtime-hook-skip',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const result = await runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'runtime-hook-skip'
+    })
+
+    expect(createSetupRunnerScript).not.toHaveBeenCalled()
+    expect(runHook).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      worktree: expect.objectContaining({
+        repoId: 'repo-1',
+        path: '/tmp/workspaces/runtime-hook-skip',
+        branch: 'runtime-hook-skip'
+      })
+    })
+    expect(activateWorktree).toHaveBeenCalledWith('repo-1', expect.any(String), undefined)
+  })
+
+  it('skips archive hooks for CLI worktree removal by default', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    vi.mocked(getEffectiveHooks).mockReturnValue({
+      scripts: {
+        archive: 'pnpm worktree:archive'
+      }
+    })
+    vi.mocked(removeWorktree).mockResolvedValue(undefined)
+
+    await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
+
+    expect(runHook).not.toHaveBeenCalled()
+    expect(removeWorktree).toHaveBeenCalledWith(TEST_REPO_PATH, TEST_WORKTREE_PATH, false)
+  })
+
+  it('runs archive hooks for CLI worktree removal when hooks are explicitly enabled', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    vi.mocked(getEffectiveHooks).mockReturnValue({
+      scripts: {
+        archive: 'pnpm worktree:archive'
+      }
+    })
+    vi.mocked(runHook).mockResolvedValue({ success: true, output: '' })
+    vi.mocked(removeWorktree).mockResolvedValue(undefined)
+
+    await runtime.removeManagedWorktree(TEST_WORKTREE_ID, false, true)
+
+    expect(runHook).toHaveBeenCalledWith(
+      'archive',
+      TEST_WORKTREE_PATH,
+      expect.objectContaining({ id: TEST_REPO_ID, path: TEST_REPO_PATH })
+    )
+    expect(removeWorktree).toHaveBeenCalledWith(TEST_REPO_PATH, TEST_WORKTREE_PATH, false)
   })
 
   it('invalidates the filesystem-auth cache after CLI worktree creation', async () => {

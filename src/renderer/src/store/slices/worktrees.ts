@@ -8,6 +8,7 @@ import {
   getRepoIdFromWorktreeId,
   type WorktreeSlice
 } from './worktree-helpers'
+import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 export type { WorktreeSlice, WorktreeDeleteState } from './worktree-helpers'
 
 function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): boolean {
@@ -141,12 +142,16 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     }))
 
     try {
+      const repoIdForTrust = getRepoIdFromWorktreeId(worktreeId)
+      const trustDecision = await ensureHooksConfirmed(get(), repoIdForTrust, 'archive')
+      const skipArchive = trustDecision === 'skip'
+
       // Why: setup-enabled worktrees now commonly have a live shell open as soon as
       // they are created. We must tear those PTYs down before asking Git to remove
       // the working tree or Windows and some shells can keep the directory in use
       // and make delete look broken even though the git state itself is fine.
       await get().shutdownWorktreeTerminals(worktreeId)
-      await window.api.worktrees.remove({ worktreeId, force })
+      await window.api.worktrees.remove({ worktreeId, force, skipArchive })
       const tabs = get().tabsByWorktree[worktreeId] ?? []
       const tabIds = new Set(tabs.map((t) => t.id))
 

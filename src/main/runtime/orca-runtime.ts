@@ -949,6 +949,7 @@ export class OrcaRuntimeService {
     baseBranch?: string
     linkedIssue?: number | null
     comment?: string
+    runHooks?: boolean
   }): Promise<CreateWorktreeResult> {
     if (!this.store) {
       throw new Error('runtime_unavailable')
@@ -1035,7 +1036,7 @@ export class OrcaRuntimeService {
 
     let setup: CreateWorktreeResult['setup']
     const hooks = getEffectiveHooks(repo)
-    if (hooks?.scripts.setup) {
+    if (hooks?.scripts.setup && args.runHooks === true) {
       if (this.authoritativeWindowId !== null) {
         try {
           // Why: CLI-created worktrees must use the same runner-script path as the
@@ -1056,6 +1057,9 @@ export class OrcaRuntimeService {
           }
         })
       }
+    } else if (hooks?.scripts.setup) {
+      // Runtime RPC calls have no renderer trust prompt, so hooks require explicit CLI opt-in.
+      console.info(`[hooks] setup hook skipped for ${worktreePath}; pass --run-hooks to run it`)
     }
 
     this.notifier?.worktreesChanged(repo.id)
@@ -1101,7 +1105,11 @@ export class OrcaRuntimeService {
     return mergeWorktree(worktree.repoId, worktree.git, meta)
   }
 
-  async removeManagedWorktree(worktreeSelector: string, force = false): Promise<void> {
+  async removeManagedWorktree(
+    worktreeSelector: string,
+    force = false,
+    runHooks = false
+  ): Promise<void> {
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
@@ -1115,11 +1123,14 @@ export class OrcaRuntimeService {
     }
 
     const hooks = getEffectiveHooks(repo)
-    if (hooks?.scripts.archive) {
+    if (hooks?.scripts.archive && runHooks) {
       const result = await runHook('archive', worktree.path, repo)
       if (!result.success) {
         console.error(`[hooks] archive hook failed for ${worktree.path}:`, result.output)
       }
+    } else if (hooks?.scripts.archive) {
+      // Runtime RPC calls have no renderer trust prompt, so hooks require explicit CLI opt-in.
+      console.info(`[hooks] archive hook skipped for ${worktree.path}; pass --run-hooks to run it`)
     }
 
     try {

@@ -11,6 +11,7 @@ import {
   getWorkspaceSeedName
 } from '@/lib/new-workspace'
 import { getSuggestedCreatureName } from '@/components/sidebar/worktree-name-suggestions'
+import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import type { OrcaHooks, RepoHookSettings, SetupDecision, TuiAgent } from '../../../shared/types'
 
 export type LaunchableWorkItem = {
@@ -164,6 +165,10 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     return
   }
 
+  const trustDecision = await ensureHooksConfirmed(useAppStore.getState(), repoId, 'setup')
+  const finalSetupDecision: SetupDecision =
+    trustDecision === 'skip' ? 'skip' : setupResolution.decision
+
   const workspaceName = getWorkspaceSeedName({
     explicitName: getLinkedWorkItemSuggestedName(item),
     prompt: '',
@@ -175,12 +180,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   let primaryTabId: string | null
   let startupPlan: ReturnType<typeof buildAgentStartupPlan> = null
   try {
-    const result = await store.createWorktree(
-      repoId,
-      workspaceName,
-      baseBranch,
-      setupResolution.decision
-    )
+    const result = await store.createWorktree(repoId, workspaceName, baseBranch, finalSetupDecision)
     worktreeId = result.worktree.id
 
     const detectedIds = new Set(await detectedAgentsPromise)
@@ -289,6 +289,10 @@ export async function launchFromBranch(args: LaunchFromBranchArgs): Promise<void
     return
   }
 
+  const trustDecision = await ensureHooksConfirmed(useAppStore.getState(), repoId, 'setup')
+  const finalSetupDecision: SetupDecision =
+    trustDecision === 'skip' ? 'skip' : setupResolution.decision
+
   // Why: branch-based launches don't carry a title hint, so fall back to the
   // repo's creature-name generator — same distinct, readable default the
   // quick-composer uses when the name field is blank.
@@ -306,12 +310,7 @@ export async function launchFromBranch(args: LaunchFromBranchArgs): Promise<void
   })
 
   try {
-    const result = await store.createWorktree(
-      repoId,
-      workspaceName,
-      baseBranch,
-      setupResolution.decision
-    )
+    const result = await store.createWorktree(repoId, workspaceName, baseBranch, finalSetupDecision)
     const detectedIds = new Set(await detectedAgentsPromise)
     const effectiveAgent = pickAgent(settings?.defaultTuiAgent, detectedIds)
     const startupPlan =

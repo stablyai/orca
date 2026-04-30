@@ -4,6 +4,7 @@ import type { AppState } from '../types'
 import { findPrevLiveWorktreeHistoryIndex } from './worktree-nav-history'
 import type {
   ChangelogData,
+  PersistedTrustedOrcaHooks,
   PersistedUIState,
   StatusBarItem,
   TaskViewPresetId,
@@ -13,10 +14,9 @@ import type {
 } from '../../../../shared/types'
 import { PER_REPO_FETCH_LIMIT } from '../../../../shared/work-items'
 
-// Why: mirrors the preset→query mapping in getTaskPresetQuery (new-workspace.ts).
+// Why: mirrors the preset→query mapping used by TaskPage's preset buttons.
 // Keeping a local copy here avoids a store ↔ lib circular import while letting
 // openTaskPage warm exactly the cache key the page will read on mount.
-// Must stay in sync with getTaskPresetQuery — see DESIGN-gh-issues-improve.md.
 function presetToQuery(presetId: TaskViewPresetId | null): string {
   switch (presetId) {
     case 'issues':
@@ -25,10 +25,10 @@ function presetToQuery(presetId: TaskViewPresetId | null): string {
       return 'assignee:@me is:issue is:open'
     case 'prs':
       return 'is:pr is:open'
-    case 'my-prs':
-      return 'author:@me is:pr is:open'
     case 'review':
       return 'review-requested:@me is:pr is:open'
+    case 'my-prs':
+      return 'author:@me is:pr is:open'
     default:
       return 'is:open'
   }
@@ -37,6 +37,7 @@ import {
   DEFAULT_STATUS_BAR_ITEMS,
   DEFAULT_WORKTREE_CARD_PROPERTIES
 } from '../../../../shared/constants'
+import type { OrcaHookScriptKind } from '../../lib/orca-hook-trust'
 
 const MIN_SIDEBAR_WIDTH = 220
 const MAX_LEFT_SIDEBAR_WIDTH = 500
@@ -45,6 +46,19 @@ const MAX_LEFT_SIDEBAR_WIDTH = 500
 // cap on wide displays. Use a large hard ceiling purely as a safety net for
 // corrupted/manually-edited values rather than as a product limit.
 const MAX_RIGHT_SIDEBAR_WIDTH = 4000
+
+function filterTrustedOrcaHooksToValidRepos(
+  trust: PersistedTrustedOrcaHooks,
+  validRepoIds: Set<string>
+): PersistedTrustedOrcaHooks {
+  const next: PersistedTrustedOrcaHooks = {}
+  for (const [repoId, entry] of Object.entries(trust)) {
+    if (validRepoIds.has(repoId)) {
+      next[repoId] = entry
+    }
+  }
+  return next
+}
 
 function sanitizePersistedSidebarWidth(width: unknown, fallback: number, maxWidth: number): number {
   if (typeof width !== 'number' || !Number.isFinite(width)) {
@@ -131,6 +145,7 @@ export type UISlice = {
     | 'quick-open'
     | 'worktree-palette'
     | 'new-workspace-composer'
+    | 'confirm-orca-yaml-hooks'
   modalData: Record<string, unknown>
   openModal: (modal: UISlice['activeModal'], data?: Record<string, unknown>) => void
   closeModal: () => void
@@ -145,6 +160,13 @@ export type UISlice = {
    *  tab every time. */
   createFromSubTab: 'prs' | 'issues' | 'branches' | 'linear'
   setCreateFromSubTab: (tab: 'prs' | 'issues' | 'branches' | 'linear') => void
+  trustedOrcaHooks: PersistedTrustedOrcaHooks
+  markOrcaHookScriptConfirmed: (
+    repoId: string,
+    kind: OrcaHookScriptKind,
+    contentHash: string
+  ) => void
+  clearOrcaHookTrustForRepo: (repoId: string) => void
   searchQuery: string
   setSearchQuery: (q: string) => void
   groupBy: 'none' | 'repo' | 'pr-status'
@@ -333,6 +355,33 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   createFromSubTab: 'prs',
   setCreateFromSubTab: (tab) => set({ createFromSubTab: tab }),
 
+  trustedOrcaHooks: {},
+  markOrcaHookScriptConfirmed: (repoId, kind, contentHash) =>
+    set((s) => {
+      const existing = s.trustedOrcaHooks[repoId]
+      const currentEntry = existing?.[kind]
+      if (currentEntry?.contentHash === contentHash) {
+        return s
+      }
+      const nextRepo = {
+        ...existing,
+        [kind]: { contentHash, approvedAt: Date.now() }
+      }
+      const next = { ...s.trustedOrcaHooks, [repoId]: nextRepo }
+      window.api.ui.set({ trustedOrcaHooks: next }).catch(console.error)
+      return { trustedOrcaHooks: next }
+    }),
+  clearOrcaHookTrustForRepo: (repoId) =>
+    set((s) => {
+      if (!(repoId in s.trustedOrcaHooks)) {
+        return s
+      }
+      const next = { ...s.trustedOrcaHooks }
+      delete next[repoId]
+      window.api.ui.set({ trustedOrcaHooks: next }).catch(console.error)
+      return { trustedOrcaHooks: next }
+    }),
+
   searchQuery: '',
   setSearchQuery: (q) => set({ searchQuery: q }),
 
@@ -449,6 +498,10 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         updateReassuranceSeen: ui.updateReassuranceSeen ?? false,
         browserDefaultUrl: ui.browserDefaultUrl ?? null,
         browserDefaultSearchEngine: ui.browserDefaultSearchEngine ?? null,
+        trustedOrcaHooks: filterTrustedOrcaHooksToValidRepos(
+          ui.trustedOrcaHooks ?? {},
+          validRepoIds
+        ),
         persistedUIReady: true
       }
     }),

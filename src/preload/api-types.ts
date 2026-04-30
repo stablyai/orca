@@ -342,7 +342,7 @@ export type PreloadApi = {
       headRefName?: string
       isCrossRepository?: boolean
     }) => Promise<{ baseBranch: string } | { error: string }>
-    remove: (args: { worktreeId: string; force?: boolean }) => Promise<void>
+    remove: (args: { worktreeId: string; force?: boolean; skipArchive?: boolean }) => Promise<void>
     updateMeta: (args: { worktreeId: string; updates: Partial<WorktreeMeta> }) => Promise<Worktree>
     persistSortOrder: (args: { orderedIds: string[] }) => Promise<void>
     onChanged: (callback: (data: { repoId: string }) => void) => () => void

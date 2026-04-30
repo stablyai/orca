@@ -34,7 +34,8 @@ const WorktreeCreate = z.object({
     .pipe(z.string().min(1, 'Missing worktree name')),
   baseBranch: OptionalString,
   linkedIssue: TriStateLinkedIssue,
-  comment: OptionalString
+  comment: OptionalString,
+  runHooks: OptionalBoolean
 })
 
 const WorktreeSet = WorktreeSelector.extend({
@@ -44,7 +45,8 @@ const WorktreeSet = WorktreeSelector.extend({
 })
 
 const WorktreeRemove = WorktreeSelector.extend({
-  force: OptionalBoolean
+  force: OptionalBoolean,
+  runHooks: OptionalBoolean
 })
 
 export const WORKTREE_METHODS: RpcMethod[] = [
@@ -74,7 +76,8 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         name: params.name,
         baseBranch: params.baseBranch,
         linkedIssue: params.linkedIssue,
-        comment: params.comment
+        comment: params.comment,
+        runHooks: params.runHooks === true
       })
   }),
   defineMethod({
@@ -92,7 +95,11 @@ export const WORKTREE_METHODS: RpcMethod[] = [
     name: 'worktree.rm',
     params: WorktreeRemove,
     handler: async (params, { runtime }) => {
-      await runtime.removeManagedWorktree(params.worktree, params.force === true)
+      await runtime.removeManagedWorktree(
+        params.worktree,
+        params.force === true,
+        params.runHooks === true
+      )
       return { removed: true }
     }
   })
