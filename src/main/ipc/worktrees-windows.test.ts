@@ -17,6 +17,7 @@ const {
   runHookMock,
   hasHooksFileMock,
   loadHooksMock,
+  setupScriptsMatchMock,
   computeWorktreePathMock,
   ensurePathWithinWorkspaceMock
 } = vi.hoisted(() => ({
@@ -33,6 +34,7 @@ const {
   createIssueCommandRunnerScriptMock: vi.fn(),
   createSetupRunnerScriptMock: vi.fn(),
   shouldRunSetupForCreateMock: vi.fn(),
+  setupScriptsMatchMock: vi.fn(() => true),
   runHookMock: vi.fn(),
   hasHooksFileMock: vi.fn(),
   loadHooksMock: vi.fn(),
@@ -78,7 +80,8 @@ vi.mock('../hooks', () => ({
   loadHooks: loadHooksMock,
   runHook: runHookMock,
   hasHooksFile: hasHooksFileMock,
-  shouldRunSetupForCreate: shouldRunSetupForCreateMock
+  shouldRunSetupForCreate: shouldRunSetupForCreateMock,
+  setupScriptsMatch: setupScriptsMatchMock
 }))
 
 vi.mock('./worktree-logic', async (importOriginal) => {

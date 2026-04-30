@@ -1,6 +1,11 @@
+/* eslint-disable max-lines */
 // Why: extracted from worktrees.ts to keep the main IPC module under the
 // max-lines threshold. Worktree creation helpers (local and remote) live
-// here so the IPC dispatch file stays focused on handler wiring.
+// here so the IPC dispatch file stays focused on handler wiring. The
+// recently added sparse-checkout flow plus the worktree-bound setup-script
+// trust gate pushed this file marginally over the per-file limit; matches
+// the eslint-disable pattern other files in src/renderer use when a
+// cohesive flow would split awkwardly.
 
 import type { BrowserWindow } from 'electron'
 import { join } from 'path'
