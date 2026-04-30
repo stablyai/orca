@@ -177,9 +177,9 @@ function ClaudeSwitcherMenu({
       <DropdownMenuItem
         onSelect={() => {
           openSettingsTarget({
-            pane: 'general',
+            pane: 'accounts',
             repoId: null,
-            sectionId: 'general-claude-accounts'
+            sectionId: 'accounts-claude'
           })
           openSettingsPage()
         }}
@@ -513,9 +513,9 @@ function CodexSwitcherMenu({
       <DropdownMenuItem
         onSelect={() => {
           openSettingsTarget({
-            pane: 'general',
+            pane: 'accounts',
             repoId: null,
-            sectionId: 'general-codex-accounts'
+            sectionId: 'accounts-codex'
           })
           openSettingsPage()
         }}
