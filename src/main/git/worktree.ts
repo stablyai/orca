@@ -212,6 +212,9 @@ export async function addSparseWorktree(
         await removeWorktree(repoPath, worktreePath, true)
       } catch {
         wrapped.cleanupFailed = true
+        // Why: the user needs to know that manual cleanup may be required —
+        // otherwise a half-created worktree silently lingers on disk.
+        wrapped.message = `${wrapped.message} (cleanup also failed — the partially created worktree at "${worktreePath}" may need manual removal)`
       }
     }
     throw wrapped
@@ -297,11 +300,13 @@ function translateWorktreePath(worktreePath: string, repoPath: string): string {
 }
 
 async function detectSparseCheckout(worktreePath: string): Promise<boolean> {
+  // Why: `core.sparseCheckout` is repo-level config shared across all worktrees.
+  // Querying it would false-positive every linked worktree when the main repo
+  // has sparse checkout enabled. Instead, check the worktree-local
+  // `sparse-checkout` config file which only exists when sparse is active.
   try {
-    const { stdout } = await gitExecFileAsync(['config', '--bool', 'core.sparseCheckout'], {
-      cwd: worktreePath
-    })
-    return stdout.trim() === 'true'
+    const { stdout } = await gitExecFileAsync(['sparse-checkout', 'list'], { cwd: worktreePath })
+    return stdout.trim().length > 0
   } catch {
     return false
   }

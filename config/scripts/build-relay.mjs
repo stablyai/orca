@@ -15,7 +15,8 @@ import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const ROOT = join(__dirname, '..')
+// Why: the script moved from `scripts/` to `config/scripts/` — go two levels up to reach the repo root.
+const ROOT = join(__dirname, '..', '..')
 const RELAY_ENTRY = join(ROOT, 'src', 'relay', 'relay.ts')
 
 const PLATFORMS = ['linux-x64', 'linux-arm64', 'darwin-x64', 'darwin-arm64']

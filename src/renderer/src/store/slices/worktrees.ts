@@ -11,6 +11,16 @@ import {
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 export type { WorktreeSlice, WorktreeDeleteState } from './worktree-helpers'
 
+function arraysShallowEqual(a: string[] | undefined, b: string[] | undefined): boolean {
+  if (a === b) {
+    return true
+  }
+  if (!a || !b || a.length !== b.length) {
+    return !a?.length && !b?.length
+  }
+  return a.every((v, i) => v === b[i])
+}
+
 function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): boolean {
   if (!current || current.length !== next.length) {
     return false
@@ -37,8 +47,7 @@ function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): b
       worktree.sortOrder === candidate.sortOrder &&
       worktree.lastActivityAt === candidate.lastActivityAt &&
       worktree.sparseBaseRef === candidate.sparseBaseRef &&
-      JSON.stringify(worktree.sparseDirectories ?? []) ===
-        JSON.stringify(candidate.sparseDirectories ?? [])
+      arraysShallowEqual(worktree.sparseDirectories, candidate.sparseDirectories)
     )
   })
 }
