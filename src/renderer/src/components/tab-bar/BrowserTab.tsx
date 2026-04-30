@@ -97,6 +97,20 @@ export default function BrowserTab({
     return () => window.removeEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
   }, [])
 
+  // Why: Electron <webview> elements run in a separate process, so clicking
+  // inside one never dispatches a pointerdown on the renderer document. Radix
+  // DropdownMenu relies on document pointerdown for outside-click detection,
+  // so it misses webview clicks. Listening for window blur catches the moment
+  // focus leaves the renderer (including into a webview).
+  useEffect(() => {
+    if (!menuOpen) {
+      return
+    }
+    const dismiss = (): void => setMenuOpen(false)
+    window.addEventListener('blur', dismiss)
+    return () => window.removeEventListener('blur', dismiss)
+  }, [menuOpen])
+
   return (
     <>
       <div
