@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: the GH item dialog keeps its header, conversation, files, and checks tabs co-located so the read-only PR/Issue surface stays in one place while this view evolves. */
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  AlignJustify,
   ArrowDown,
   ArrowRight,
   ArrowUp,
@@ -11,7 +12,10 @@ import {
   CircleDot,
   ExternalLink,
   FileText,
+  Folder,
+  FolderOpen,
   GitPullRequest,
+  LayoutList,
   LoaderCircle,
   MessageSquare,
   MessageSquarePlus,
@@ -36,6 +40,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { detectLanguage } from '@/lib/language-detect'
 import { cn } from '@/lib/utils'
+import { buildDiffTree, type DiffTreeNode } from '@/components/pr-diff-tree'
 import { CHECK_COLOR, CHECK_ICON } from '@/components/right-sidebar/checks-helpers'
 import {
   filterPRCommentsByAudience,
@@ -315,6 +320,131 @@ type FileRowProps = {
   baseSha: string | undefined
 }
 
+type DiffViewMode = 'flat' | 'tree'
+
+// ─── Tree view components ────────────────────────────────────────────
+
+type DiffTreeNodeProps = {
+  node: DiffTreeNode
+  depth: number
+  repoPath: string
+  prNumber: number
+  headSha: string | undefined
+  baseSha: string | undefined
+  onCommentAdded: (comment: PRComment) => void
+}
+
+function PRDiffTreeNode({
+  node,
+  depth,
+  repoPath,
+  prNumber,
+  headSha,
+  baseSha,
+  onCommentAdded
+}: DiffTreeNodeProps): React.JSX.Element {
+  const [open, setOpen] = useState(true)
+
+  if (node.kind === 'file') {
+    return (
+      <PRFileRow
+        file={node.file}
+        repoPath={repoPath}
+        prNumber={prNumber}
+        headSha={headSha}
+        baseSha={baseSha}
+        onCommentAdded={onCommentAdded}
+        // Why: tree-view file rows are indented by a CSS left-padding proportional
+        // to depth so the expand chevron of PRFileRow stays at position 0 while
+        // the folder hierarchy is communicated purely through indentation.
+        indentDepth={depth}
+        label={node.name}
+      />
+    )
+  }
+
+  // Directory node
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-1.5 px-3 py-1.5 text-left transition hover:bg-muted/40"
+        style={{ paddingLeft: `${12 + depth * 16}px` }}
+        aria-expanded={open}
+        aria-label={`${open ? 'Collapse' : 'Expand'} folder ${node.name}`}
+      >
+        {open ? (
+          <>
+            <ChevronDown className="size-3 shrink-0 text-muted-foreground" />
+            <FolderOpen className="size-3.5 shrink-0 text-amber-400" />
+          </>
+        ) : (
+          <>
+            <ChevronRight className="size-3 shrink-0 text-muted-foreground" />
+            <Folder className="size-3.5 shrink-0 text-amber-400" />
+          </>
+        )}
+        <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground">
+          {node.name}
+        </span>
+      </button>
+      {open && (
+        <div>
+          {node.children.map((child) => (
+            <PRDiffTreeNode
+              key={child.kind === 'file' ? child.file.path : child.path}
+              node={child}
+              depth={depth + 1}
+              repoPath={repoPath}
+              prNumber={prNumber}
+              headSha={headSha}
+              baseSha={baseSha}
+              onCommentAdded={onCommentAdded}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+type PRDiffTreeViewProps = {
+  files: GitHubPRFile[]
+  repoPath: string
+  prNumber: number
+  headSha: string | undefined
+  baseSha: string | undefined
+  onCommentAdded: (comment: PRComment) => void
+}
+
+function PRDiffTreeView({
+  files,
+  repoPath,
+  prNumber,
+  headSha,
+  baseSha,
+  onCommentAdded
+}: PRDiffTreeViewProps): React.JSX.Element {
+  const tree = useMemo(() => buildDiffTree(files), [files])
+  return (
+    <div>
+      {tree.map((node) => (
+        <PRDiffTreeNode
+          key={node.kind === 'file' ? node.file.path : node.path}
+          node={node}
+          depth={0}
+          repoPath={repoPath}
+          prNumber={prNumber}
+          headSha={headSha}
+          baseSha={baseSha}
+          onCommentAdded={onCommentAdded}
+        />
+      ))}
+    </div>
+  )
+}
+
 // Why: bounded LRU — opening many PRs with many files during a session
 // would otherwise grow this module-level map without bound until reload.
 const PR_FILE_CONTENT_CACHE_MAX = 64
@@ -396,8 +526,14 @@ function PRFileRow({
   prNumber,
   headSha,
   baseSha,
-  onCommentAdded
-}: FileRowProps & { onCommentAdded: (comment: PRComment) => void }): React.JSX.Element {
+  onCommentAdded,
+  indentDepth = 0,
+  label
+}: FileRowProps & {
+  onCommentAdded: (comment: PRComment) => void
+  indentDepth?: number
+  label?: string
+}): React.JSX.Element {
   const [expanded, setExpanded] = useState(false)
   const [contents, setContents] = useState<GitHubPRFileContents | null>(null)
   const [loading, setLoading] = useState(false)
@@ -473,7 +609,8 @@ function PRFileRow({
       <button
         type="button"
         onClick={handleToggle}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left transition hover:bg-muted/40"
+        className="flex w-full items-center gap-2 py-2 pr-3 text-left transition hover:bg-muted/40"
+        style={{ paddingLeft: `${12 + indentDepth * 16}px` }}
       >
         {expanded ? (
           <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
@@ -490,14 +627,14 @@ function PRFileRow({
           {fileStatusLabel(file.status)}
         </span>
         <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-foreground">
-          {file.oldPath && file.oldPath !== file.path ? (
+          {file.oldPath && file.oldPath !== file.path && !label ? (
             <>
               <span className="text-muted-foreground">{file.oldPath}</span>
               <span className="mx-1 text-muted-foreground">→</span>
               {file.path}
             </>
           ) : (
-            file.path
+            (label ?? file.path)
           )}
         </span>
         <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
@@ -1906,6 +2043,7 @@ export default function GitHubItemDialog({
   const [error, setError] = useState<string | null>(null)
   const [localState, setLocalState] = useState<GitHubWorkItem['state']>(workItem?.state ?? 'open')
   const [localLabels, setLocalLabels] = useState<string[]>(workItem?.labels ?? [])
+  const [diffViewMode, setDiffViewMode] = useState<DiffViewMode>('flat')
   const workItemId = workItem?.id
   const workItemState = workItem?.state
   const workItemLabels = workItem?.labels
@@ -2202,17 +2340,75 @@ export default function GitHubItemDialog({
                           </div>
                         ) : (
                           <div>
-                            {files.map((file) => (
-                              <PRFileRow
-                                key={file.path}
-                                file={file}
+                            {/* Files-tab toolbar: view-mode toggle */}
+                            <div className="flex items-center justify-end gap-1 border-b border-border/40 px-3 py-1.5">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    id="pr-files-flat-view"
+                                    type="button"
+                                    onClick={() => setDiffViewMode('flat')}
+                                    aria-label="Flat view"
+                                    aria-pressed={diffViewMode === 'flat'}
+                                    className={cn(
+                                      'flex size-6 items-center justify-center rounded transition hover:bg-muted',
+                                      diffViewMode === 'flat'
+                                        ? 'bg-muted text-foreground'
+                                        : 'text-muted-foreground'
+                                    )}
+                                  >
+                                    <AlignJustify className="size-3.5" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="bottom" sideOffset={4}>
+                                  Flat view
+                                </TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    id="pr-files-tree-view"
+                                    type="button"
+                                    onClick={() => setDiffViewMode('tree')}
+                                    aria-label="Tree view"
+                                    aria-pressed={diffViewMode === 'tree'}
+                                    className={cn(
+                                      'flex size-6 items-center justify-center rounded transition hover:bg-muted',
+                                      diffViewMode === 'tree'
+                                        ? 'bg-muted text-foreground'
+                                        : 'text-muted-foreground'
+                                    )}
+                                  >
+                                    <LayoutList className="size-3.5" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="bottom" sideOffset={4}>
+                                  Tree view
+                                </TooltipContent>
+                              </Tooltip>
+                            </div>
+                            {diffViewMode === 'flat' ? (
+                              files.map((file) => (
+                                <PRFileRow
+                                  key={file.path}
+                                  file={file}
+                                  repoPath={repoPath ?? ''}
+                                  prNumber={workItem.number}
+                                  headSha={details?.headSha}
+                                  baseSha={details?.baseSha}
+                                  onCommentAdded={appendOptimisticComment}
+                                />
+                              ))
+                            ) : (
+                              <PRDiffTreeView
+                                files={files}
                                 repoPath={repoPath ?? ''}
                                 prNumber={workItem.number}
                                 headSha={details?.headSha}
                                 baseSha={details?.baseSha}
                                 onCommentAdded={appendOptimisticComment}
                               />
-                            ))}
+                            )}
                           </div>
                         )}
                       </TabsContent>
