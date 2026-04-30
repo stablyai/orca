@@ -5,6 +5,7 @@ import DashboardAgentRow from '@/components/dashboard/DashboardAgentRow'
 import { useNow } from '@/components/dashboard/useNow'
 import { useWorktreeAgentRows } from './useWorktreeAgentRows'
 import { cn } from '@/lib/utils'
+import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 
 type Props = {
   worktreeId: string
@@ -20,13 +21,33 @@ type Props = {
  * visibility of each agent's live state, prompt, and last message.
  *
  * Reuses useWorktreeAgentRows + DashboardAgentRow so row layout and the
- * derivation stay consistent with the Agents tab cockpit.
+ * derivation stay consistent with the inline agent activity on each card.
  */
 const WorktreeCardAgents = React.memo(function WorktreeCardAgents({
   worktreeId,
   className
 }: Props) {
   const agents = useWorktreeAgentRows(worktreeId)
+  if (agents.length === 0) {
+    return null
+  }
+  // Why: gate the 30s tick behind non-empty rows by mounting the inner body
+  // only when there's something to show. The setInterval lives in the inner
+  // component's useNow, so idle worktrees don't pay per-card timer cost.
+  return <WorktreeCardAgentsBody worktreeId={worktreeId} agents={agents} className={className} />
+})
+
+type BodyProps = {
+  worktreeId: string
+  agents: DashboardAgentRowData[]
+  className?: string
+}
+
+const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
+  worktreeId,
+  agents,
+  className
+}: BodyProps) {
   const dropAgentStatus = useAppStore((s) => s.dropAgentStatus)
   const dismissRetainedAgent = useAppStore((s) => s.dismissRetainedAgent)
   const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
@@ -41,10 +62,11 @@ const WorktreeCardAgents = React.memo(function WorktreeCardAgents({
   const toggleInlineAgentsCollapsed = useAppStore((s) => s.toggleInlineAgentsCollapsed)
 
   // Why: subscribe to the ack map reference (Object.is equality) and derive
-  // per-agent unvisited flags locally. Mirrors DashboardWorktreeCard so inline
-  // rows bold on first appearance and mute once the user has visited the
-  // agent's tab (useAutoAckViewedAgent acks automatically on terminal focus).
-  // Without this, all inline rows stayed muted regardless of attention state.
+  // per-agent unvisited flags locally. Keeps the inline list's bold/mute
+  // behavior consistent with how acks flow elsewhere — rows bold on first
+  // appearance and mute once the user has visited the agent's tab
+  // (useAutoAckViewedAgent acks automatically on terminal focus). Without
+  // this, all inline rows stayed muted regardless of attention state.
   const acknowledgedAgentsByPaneKey = useAppStore((s) => s.acknowledgedAgentsByPaneKey)
   const unvisitedByPaneKey = useMemo(() => {
     const out: Record<string, boolean> = {}
@@ -88,15 +110,10 @@ const WorktreeCardAgents = React.memo(function WorktreeCardAgents({
     [toggleInlineAgentsCollapsed, worktreeId]
   )
 
-  // Why: always own one 30s tick here — the inline variant is always mounted
-  // (unlike the portaled hovercard), so the timer is effectively "one per
-  // visible card with agents." Suppressing the entire subtree when the list
-  // is empty keeps that cost scoped to cards the user actually has agents in.
+  // Why: own one 30s tick per non-empty inline list. Cards with zero agents
+  // never mount this component (see WorktreeCardAgents), so idle worktrees
+  // don't pay any timer cost.
   const now = useNow(30_000)
-
-  if (agents.length === 0) {
-    return null
-  }
 
   return (
     <div
@@ -129,13 +146,11 @@ const WorktreeCardAgents = React.memo(function WorktreeCardAgents({
                 onActivate={handleActivateAgentTab}
                 now={now}
                 // Why: bold an agent row until the user has visited its tab.
-                // Mirrors DashboardWorktreeCard so unvisited signals behave
-                // consistently between the inline surface and the cockpit.
                 // useAutoAckViewedAgent acks automatically when the user
                 // focuses the agent's tab, which mutes the row in lockstep.
                 isUnvisited={unvisitedByPaneKey[agent.paneKey] ?? false}
-                // Why: inline rows pack tighter than the dashboard; 'md'
-                // reads as a second ~12px glyph users confuse with the
+                // Why: inline rows pack tighter than a full-panel layout;
+                // 'md' reads as a second ~12px glyph users confuse with the
                 // agent identity icon right next to it. 'sm' keeps the two
                 // distinguishable at a glance.
                 stateDotSize="sm"

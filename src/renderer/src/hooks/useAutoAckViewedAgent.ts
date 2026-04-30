@@ -119,7 +119,7 @@ export function useAutoAckViewedAgent(): void {
         // within the same state don't re-trigger ack work on every event —
         // acknowledgeAgents short-circuits anyway when the value is
         // unchanged, but keeping the comparison in sync with the
-        // "is-unvisited" rule in DashboardWorktreeCard avoids a stutter
+        // "is-unvisited" rule in WorktreeCardAgents avoids a stutter
         // where we ack on an updatedAt-bump that didn't cross a state
         // transition.
         if (ackAt < entry.stateStartedAt) {

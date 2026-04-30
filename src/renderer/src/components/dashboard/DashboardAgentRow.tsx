@@ -71,17 +71,16 @@ type Props = {
    * Why: the relative-time labels ("Xm ago") need a periodic re-render to stay
    * honest. We accept `now` from a parent container so a single 30s tick owned
    * by the container drives every visible row, rather than each row running
-   * its own setInterval. See useNow.ts for the shared hook — callers own the
-   * tick (AgentDashboard for the dashboard, WorktreeCardAgents for the
-   * inline-in-card list).
+   * its own setInterval. See useNow.ts for the shared hook — WorktreeCardAgents
+   * owns the tick for the inline-in-card list.
    */
   now: number
   /**
-   * Why: bold weight for the prompt rides on the enclosing worktree's
-   * isUnread (unvisited) signal, not on the per-agent state. Passed in from
-   * DashboardWorktreeCard so the workspace name and its agent rows share
+   * Why: bold weight for the prompt rides on the enclosing workspace card's
+   * unvisited signal, not on the per-agent state. Passed in from
+   * WorktreeCardAgents so the workspace name and its agent rows share
    * the same "you haven't looked at this yet" rule — visiting the worktree
-   * clears isUnread, and the next render mutes both in lockstep.
+   * clears the signal, and the next render mutes both in lockstep.
    *
    * Optional so other callers can opt out and default to muted when their
    * surface carries the unread signal elsewhere.

@@ -59,10 +59,6 @@ export type UISlice = {
   toggleSidebar: () => void
   setSidebarOpen: (open: boolean) => void
   setSidebarWidth: (width: number) => void
-  /** State filter for the Agents dashboard (mirrors DashboardFilter in
-   *  useDashboardFilter.ts). Session-only. */
-  dashboardFilter: 'all' | 'active' | 'blocked' | 'done'
-  setDashboardFilter: (filter: UISlice['dashboardFilter']) => void
   /** Per-agent "I've looked at this" timestamps, keyed by paneKey. Set when
    *  the user clicks an agent row or its parent workspace card from the
    *  dashboard. A row is considered unvisited when no ack exists OR the
@@ -213,8 +209,6 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
   setSidebarWidth: (width) => set({ sidebarWidth: width }),
 
-  dashboardFilter: 'all',
-  setDashboardFilter: (filter) => set({ dashboardFilter: filter }),
   acknowledgedAgentsByPaneKey: {},
   acknowledgeAgents: (paneKeys) =>
     set((s) => {

@@ -30,10 +30,9 @@ const PROPERTY_OPTIONS: { id: WorktreeCardProperty; label: string }[] = [
   { id: 'issue', label: 'Linked issue' },
   { id: 'pr', label: 'Linked PR' },
   { id: 'comment', label: 'Comment' },
-  // Why: toggling this replaces the hover-to-the-right "Agent activity"
-  // popover with an inline list below the card body. The card-level hover
-  // panel is suppressed when this is on so the same rows are not shown
-  // twice (see WorktreeCard).
+  // Why: toggles the inline "Agent activity" list rendered below each
+  // workspace card body (see WorktreeCard → WorktreeCardAgents). Off hides
+  // the list; there is no alternate surface.
   { id: 'inline-agents', label: 'Agent activity' }
 ]
 

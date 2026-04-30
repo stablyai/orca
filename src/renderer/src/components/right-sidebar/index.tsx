@@ -234,10 +234,11 @@ function RightSidebarInner(): React.JSX.Element {
           that froze the app for seconds on Windows.  Each panel now reacts
           to activeWorktreeId changes via store subscriptions and reset
           effects, keeping the component instance alive across switches. */}
-      {/* Why: the agent cockpit has moved to the left sidebar (Workspaces |
-          Agents toggle) so it lives as a peer to Workspaces rather than as a
-          bottom-docked panel that competed with file Explorer/Search for
-          vertical space. The right sidebar is back to tab-only content. */}
+      {/* Why: live agent activity now renders inline inside each workspace
+          card (WorktreeCardAgents, toggled by the 'inline-agents' card
+          property) rather than in a bottom-docked dashboard panel that
+          competed with file Explorer/Search for vertical space. The right
+          sidebar is back to tab-only content. */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {effectiveTab === 'explorer' && <FileExplorer />}
         {effectiveTab === 'search' && <SearchPanel />}

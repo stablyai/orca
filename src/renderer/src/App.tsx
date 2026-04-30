@@ -147,10 +147,10 @@ function App(): React.JSX.Element {
 
   // Subscribe to IPC push events
   useIpcEvents()
-  // Why: retention must run at App level (not inside AgentDashboard) because
-  // the inline per-card agents list also reads retained entries. If retention
-  // only ran when the dashboard is mounted, "done" agents would vanish from
-  // the sidebar cards any time the user collapses the dashboard panel.
+  // Why: retention must run at App level so the inline per-card agents list
+  // always sees retained entries. If retention ran inside the sidebar-card
+  // subtree, "done" agents would vanish any time the user collapsed a card's
+  // inline agents section.
   //
   // The retention hooks are hosted inside <RetainedAgentsSyncGate /> (a leaf
   // component that renders null) rather than being called inline here.

@@ -20,17 +20,13 @@ const EMPTY_RETAINED: RetainedAgentEntry[] = []
 
 /**
  * Narrow per-worktree agent row hook used by the WorktreeCard inline agents
- * list and kept as a stable contract so future surfaces (e.g. the Agents tab)
- * can share the same row derivation without re-implementing it. Produces live
- * hook-reported agents plus retained "done" snapshots, stale-decayed to
- * 'idle' when the hook stream has gone quiet. The computation itself mirrors
- * buildAgentRowsForWorktree + enrichGroupsWithRetained in useDashboardData.ts.
+ * list. Produces live hook-reported agents plus retained "done" snapshots,
+ * stale-decayed to 'idle' when the hook stream has gone quiet.
  *
- * Why not useDashboardData()+enrichGroupsWithRetained: those build the
- * cross-worktree cockpit aggregate — reusing them here would recompute the
- * O(repos × worktrees × agents) pipeline once per sidebar card on every
- * agent-status event (render amplification). Narrow selectors scoped to this
- * worktree keep the cost O(this-worktree-entries) per card.
+ * Uses per-worktree selectors rather than reusing useDashboardData's
+ * cross-worktree aggregate — that pipeline is O(repos × worktrees × agents)
+ * and would recompute once per sidebar card on every agent-status event.
+ * Scoped selectors keep the cost O(this-worktree-entries) per card.
  */
 export function useWorktreeAgentRows(worktreeId: string): DashboardAgentRow[] {
   const tabs = useAppStore((s) => s.tabsByWorktree[worktreeId])
