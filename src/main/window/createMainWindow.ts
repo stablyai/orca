@@ -1,5 +1,5 @@
 /* oxlint-disable max-lines */
-import { BrowserWindow, ipcMain, nativeTheme, screen, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, nativeTheme, screen, shell } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import icon from '../../../resources/icon.png?asset'
@@ -38,6 +38,8 @@ function forceRepaint(window: BrowserWindow): void {
 const TITLEBAR_CSS_CENTER = 20
 const TRAFFIC_LIGHT_RADIUS = 6
 const TRAFFIC_LIGHT_X = 16
+const MIN_WIDTH = 600
+const MIN_HEIGHT = 400
 
 function syncTrafficLightPosition(win: BrowserWindow, zoomFactor: number): void {
   if (process.platform !== 'darwin' || win.isDestroyed()) {
@@ -63,7 +65,15 @@ export function createMainWindow(
   store: Store | null,
   opts?: CreateMainWindowOptions
 ): BrowserWindow {
-  const savedBounds = store?.getUI().windowBounds
+  const rawSavedBounds = store?.getUI().windowBounds
+  // Why: defense in depth — if a previous quit/update path persisted
+  // shrink-to-min bounds (see freezeBoundsOnQuit), discard them on restore
+  // rather than resurrecting a tiny window. Anything at or below the min
+  // dimensions is treated as corrupt and falls back to defaultBounds.
+  const savedBounds =
+    rawSavedBounds && rawSavedBounds.width > MIN_WIDTH && rawSavedBounds.height > MIN_HEIGHT
+      ? rawSavedBounds
+      : undefined
   const savedMaximized = store?.getUI().windowMaximized ?? false
   // Why: on first launch (no saved bounds), fill the primary display work area
   // so the window feels spacious without calling maximize(). Saved bounds still
@@ -95,8 +105,8 @@ export function createMainWindow(
     width: savedBounds?.width ?? defaultBounds.width,
     height: savedBounds?.height ?? defaultBounds.height,
     ...(savedBounds ? { x: savedBounds.x, y: savedBounds.y } : {}),
-    minWidth: 600,
-    minHeight: 400,
+    minWidth: MIN_WIDTH,
+    minHeight: MIN_HEIGHT,
     show: false,
     // Why: on macOS the menu lives in the system menu bar, so the in-window
     // menu bar is irrelevant. On Windows/Linux we auto-hide so the menu bar
@@ -180,13 +190,21 @@ export function createMainWindow(
   // position/size instead of maximizing on every launch. Debounce to avoid
   // hammering the persistence layer during continuous resize drags.
   let boundsTimer: ReturnType<typeof setTimeout> | null = null
+  // Why: once close has been initiated (user Cmd+Q, auto-updater relaunch,
+  // app.quit during quitAndInstall), Electron can still emit resize/move/
+  // unmaximize events while the OS tears the window down — persisting those
+  // intermediate, often near-minimum bounds would clobber the user's real
+  // last-used size and cause the next launch (especially post-update
+  // relaunch) to come up at minWidth × minHeight. Freeze persistence as soon
+  // as 'close' is observed.
+  let windowClosing = false
   const saveBounds = (): void => {
     if (boundsTimer) {
       clearTimeout(boundsTimer)
     }
     boundsTimer = setTimeout(() => {
       boundsTimer = null
-      if (mainWindow.isDestroyed() || mainWindow.isFullScreen()) {
+      if (windowClosing || mainWindow.isDestroyed() || mainWindow.isFullScreen()) {
         return
       }
       const isMaximized = mainWindow.isMaximized()
@@ -199,10 +217,31 @@ export function createMainWindow(
   mainWindow.on('resize', saveBounds)
   mainWindow.on('move', saveBounds)
 
+  // Why: the auto-updater install path calls
+  // `win.removeAllListeners('close')` before quitting, so the per-window
+  // 'close' handler below never runs for update-triggered relaunches.
+  // Listen to app-level 'before-quit' as a second latch so resize/move
+  // events emitted during window teardown don't persist shrink-to-min
+  // bounds that would be restored on next launch.
+  const freezeBoundsOnQuit = (): void => {
+    windowClosing = true
+    if (boundsTimer) {
+      clearTimeout(boundsTimer)
+      boundsTimer = null
+    }
+  }
+  app.on('before-quit', freezeBoundsOnQuit)
+
   mainWindow.on('maximize', () => {
+    if (windowClosing) {
+      return
+    }
     store?.updateUI({ windowMaximized: true })
   })
   mainWindow.on('unmaximize', () => {
+    if (windowClosing) {
+      return
+    }
     store?.updateUI({ windowMaximized: false, windowBounds: mainWindow.getBounds() })
   })
 
@@ -448,6 +487,16 @@ export function createMainWindow(
   mainWindow.on('close', (e) => {
     if (windowCloseConfirmed) {
       windowCloseConfirmed = false
+      // Why: past this point Electron/OS may emit resize/move/unmaximize as
+      // the window is destroyed. Freeze bounds persistence so those
+      // teardown events can't clobber the user's saved window size — which
+      // would otherwise make the post-update relaunch come up at minWidth ×
+      // minHeight (issue surfaced in v1.3.26-rc2).
+      windowClosing = true
+      if (boundsTimer) {
+        clearTimeout(boundsTimer)
+        boundsTimer = null
+      }
       return
     }
     e.preventDefault()
@@ -456,6 +505,10 @@ export function createMainWindow(
     })
   })
   mainWindow.webContents.on('will-prevent-unload', () => {
+    // Why: a prevented beforeunload cancels the in-flight quit. Release the
+    // bounds-persistence freeze so a user who keeps using the window after
+    // aborting Cmd+Q still gets their size saved.
+    windowClosing = false
     opts?.onQuitAborted?.()
   })
 
@@ -480,6 +533,7 @@ export function createMainWindow(
     ipcMain.removeListener(trafficLightChannel, onSyncTrafficLights)
     ipcMain.removeListener(confirmCloseChannel, onConfirmClose)
     ipcMain.removeListener(markdownFocusChannel, onMarkdownEditorFocused)
+    app.removeListener('before-quit', freezeBoundsOnQuit)
   })
 
   if (is.dev && process.env.ELECTRON_RENDERER_URL) {
