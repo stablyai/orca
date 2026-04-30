@@ -4,6 +4,7 @@ import { basename, dirname, join, resolve } from 'path'
 import type { Store } from '../persistence'
 import { authorizeExternalPath, resolveAuthorizedPath, isENOENT } from './filesystem-auth'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
+import { importExternalPathsSsh } from './filesystem-import-ssh'
 
 /**
  * Re-throw filesystem errors with user-friendly messages.
@@ -120,15 +121,19 @@ export function registerFilesystemMutationHandlers(store: Store): void {
     'fs:importExternalPaths',
     async (
       _event,
-      args: { sourcePaths: string[]; destDir: string }
+      args: { sourcePaths: string[]; destDir: string; connectionId?: string }
     ): Promise<{ results: ImportItemResult[] }> => {
+      if (args.connectionId) {
+        return importExternalPathsSsh(args.sourcePaths, args.destDir, args.connectionId)
+      }
+
       // Why: destDir must be authorized before any copy work begins. If the
       // destination is outside allowed roots, the entire import fails.
+      // This only applies to local imports — remote paths are authorized by
+      // the SSH connection boundary (see importExternalPathsSsh).
       const resolvedDest = await resolveAuthorizedPath(args.destDir, store)
 
       const results: ImportItemResult[] = []
-      // Track names reserved during this import batch to avoid collisions
-      // between multiple dropped items that share the same basename.
       const reservedNames = new Set<string>()
 
       for (const sourcePath of args.sourcePaths) {

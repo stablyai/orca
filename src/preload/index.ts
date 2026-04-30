@@ -1158,6 +1158,7 @@ const api = {
     importExternalPaths: (args: {
       sourcePaths: string[]
       destDir: string
+      connectionId?: string
     }): Promise<{
       results: (
         | {

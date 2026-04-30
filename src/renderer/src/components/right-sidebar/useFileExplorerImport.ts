@@ -1,5 +1,8 @@
 import { useEffect, useRef } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
+import { toast } from 'sonner'
+import { getConnectionId } from '@/lib/connection-context'
+import { extractIpcErrorMessage } from '@/lib/ipc-error'
 
 type UseFileExplorerImportParams = {
   worktreePath: string | null
@@ -54,12 +57,14 @@ export function useFileExplorerImport({
       }
 
       const { paths, destinationDir } = data
+      const connectionId = getConnectionId(wtId) ?? undefined
 
       void (async () => {
         try {
           const { results } = await window.api.fs.importExternalPaths({
             sourcePaths: paths,
-            destDir: destinationDir
+            destDir: destinationDir,
+            connectionId
           })
 
           // Refresh the destination directory once per gesture
@@ -71,9 +76,18 @@ export function useFileExplorerImport({
           // scroll-to-center races with FS watcher refreshes and can snap the
           // viewport back to the top of the tree.
           const imported = results.filter((r) => r.status === 'imported')
+          const failed = results.filter((r) => r.status === 'failed')
+
           if (imported.length > 0) {
             setSelectedPathRef.current(imported[0].destPath)
           }
+
+          if (failed.length > 0) {
+            const noun = failed.length === 1 ? 'file' : 'files'
+            toast.error(`Failed to import ${failed.length} ${noun}.`)
+          }
+        } catch (err) {
+          toast.error(extractIpcErrorMessage(err, 'Failed to import files.'))
         } finally {
           clearNativeDragStateRef.current()
         }
