@@ -18,7 +18,7 @@ import { registerCoreHandlers } from './ipc/register-core-handlers'
 import { triggerStartupNotificationRegistration } from './ipc/notifications'
 import { OrcaRuntimeService } from './runtime/orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime/runtime-rpc'
-import { registerAppMenu } from './menu/register-app-menu'
+import { registerAppMenu, rebuildAppMenu } from './menu/register-app-menu'
 import { checkForUpdatesFromMenu, isQuittingForUpdate } from './updater'
 import {
   configureDevUserDataPath,
@@ -396,8 +396,40 @@ app.whenReady().then(async () => {
     onZoomReset: () => {
       mainWindow?.webContents.send('terminal:zoom', 'reset')
     },
-    onToggleStatusBar: () => {
-      mainWindow?.webContents.send('ui:toggleStatusBar')
+    onToggleLeftSidebar: () => {
+      mainWindow?.webContents.send('ui:toggleLeftSidebar')
+    },
+    onToggleRightSidebar: () => {
+      mainWindow?.webContents.send('ui:toggleRightSidebar')
+    },
+    onToggleAppearance: (key) => {
+      if (!store) {
+        return
+      }
+      if (key === 'statusBarVisible') {
+        // Why: status bar visibility lives under the persisted UI state
+        // (ui:set/ui:get), not settings. The renderer owns the authoritative
+        // toggle logic (it knows the current value and persists it back), so
+        // we forward the event and let it flip + store.
+        mainWindow?.webContents.send('ui:toggleStatusBar')
+        return
+      }
+      const current = store.getSettings()
+      store.updateSettings({ [key]: !current[key] })
+      // Why: settings:get returns the current snapshot; renderer tracks
+      // settings through window.api.settings.get(). Push the new value so
+      // the sidebar/titlebar re-render without waiting for a round-trip.
+      mainWindow?.webContents.send('settings:changed', { [key]: !current[key] })
+      rebuildAppMenu()
+    },
+    getAppearanceState: () => {
+      const settings = store?.getSettings()
+      const ui = store?.getUI()
+      return {
+        showTasksButton: settings?.showTasksButton !== false,
+        showTitlebarAgentActivity: settings?.showTitlebarAgentActivity !== false,
+        statusBarVisible: ui?.statusBarVisible !== false
+      }
     }
   })
   runtimeRpc = new OrcaRuntimeRpcServer({

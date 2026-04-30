@@ -589,7 +589,16 @@ const api = {
     listFonts: (): Promise<string[]> => ipcRenderer.invoke('settings:listFonts'),
 
     previewGhosttyImport: (): Promise<GhosttyImportPreview> =>
-      ipcRenderer.invoke('settings:previewGhosttyImport')
+      ipcRenderer.invoke('settings:previewGhosttyImport'),
+
+    onChanged: (callback: (updates: Record<string, unknown>) => void): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        updates: Record<string, unknown>
+      ): void => callback(updates)
+      ipcRenderer.on('settings:changed', listener)
+      return () => ipcRenderer.removeListener('settings:changed', listener)
+    }
   },
 
   codexAccounts: {

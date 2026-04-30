@@ -919,9 +919,10 @@ export type GlobalSettings = {
   rightSidebarOpenByDefault: boolean
   /** Whether to show the live agent activity count badge in the titlebar. */
   showTitlebarAgentActivity: boolean
-  /** Why: the Tasks sidebar label can be kept cleaner for users who do not
-   *  actively use the GitHub/Linear integrations behind it. */
-  showTaskProviderIcons: boolean
+  /** Why: some users do not use the Tasks feature and prefer to keep the
+   *  left sidebar free of its button entirely. Hiding the button here also
+   *  removes it from keyboard navigation. */
+  showTasksButton: boolean
   diffDefaultView: 'inline' | 'side-by-side'
   notifications: NotificationSettings
   /** When true, a countdown timer is shown after a Claude agent becomes idle,

@@ -30,7 +30,14 @@ function buildMenuOptions() {
     onZoomIn: vi.fn(),
     onZoomOut: vi.fn(),
     onZoomReset: vi.fn(),
-    onToggleStatusBar: vi.fn()
+    onToggleLeftSidebar: vi.fn(),
+    onToggleRightSidebar: vi.fn(),
+    onToggleAppearance: vi.fn(),
+    getAppearanceState: vi.fn(() => ({
+      showTasksButton: true,
+      showTitlebarAgentActivity: true,
+      statusBarVisible: true
+    }))
   }
 }
 
@@ -181,5 +188,75 @@ describe('registerAppMenu', () => {
     expect(fileLabels).not.toContain('Exit')
     // No Help menu on macOS — About/Check for Updates live in the app menu.
     expect(template.find((item) => item.label === 'Help')).toBeUndefined()
+  })
+
+  it('exposes an Appearance submenu under View with checkbox items reflecting state', () => {
+    const options = buildMenuOptions()
+    options.getAppearanceState.mockReturnValue({
+      showTasksButton: false,
+      showTitlebarAgentActivity: true,
+      statusBarVisible: true
+    })
+    registerAppMenu(options)
+
+    const viewSubmenu = getSubmenu(getTemplate(), 'View')
+    const appearanceEntry = viewSubmenu.find((item) => item.label === 'Appearance')
+    expect(appearanceEntry).toBeDefined()
+
+    const appearanceSubmenu = (appearanceEntry?.submenu ??
+      []) as Electron.MenuItemConstructorOptions[]
+    const tasksItem = appearanceSubmenu.find((item) => item.label === 'Show Tasks Button')
+    expect(tasksItem?.type).toBe('checkbox')
+    expect(tasksItem?.checked).toBe(false)
+
+    const titlebarItem = appearanceSubmenu.find(
+      (item) => item.label === 'Show Titlebar Agent Activity'
+    )
+    expect(titlebarItem?.checked).toBe(true)
+
+    const statusBarItem = appearanceSubmenu.find((item) => item.label === 'Show Status Bar')
+    expect(statusBarItem?.checked).toBe(true)
+  })
+
+  it('routes Appearance checkbox clicks through onToggleAppearance', () => {
+    const options = buildMenuOptions()
+    registerAppMenu(options)
+
+    const viewSubmenu = getSubmenu(getTemplate(), 'View')
+    const appearanceSubmenu = (viewSubmenu.find((item) => item.label === 'Appearance')?.submenu ??
+      []) as Electron.MenuItemConstructorOptions[]
+
+    appearanceSubmenu
+      .find((item) => item.label === 'Show Tasks Button')
+      ?.click?.({} as never, {} as never, {} as never)
+
+    expect(options.onToggleAppearance).toHaveBeenCalledWith('showTasksButton')
+  })
+
+  it('routes sidebar toggle items through their callbacks', () => {
+    const options = buildMenuOptions()
+    registerAppMenu(options)
+
+    const viewSubmenu = getSubmenu(getTemplate(), 'View')
+    const appearanceSubmenu = (viewSubmenu.find((item) => item.label === 'Appearance')?.submenu ??
+      []) as Electron.MenuItemConstructorOptions[]
+
+    const leftLabel = `Toggle Left Sidebar\t${isMac ? 'Cmd+B' : 'Ctrl+B'}`
+    const rightLabel = `Toggle Right Sidebar\t${isMac ? 'Alt+Cmd+B' : 'Ctrl+Alt+B'}`
+
+    appearanceSubmenu
+      .find((item) => item.label === leftLabel)
+      ?.click?.({} as never, {} as never, {} as never)
+    appearanceSubmenu
+      .find((item) => item.label === rightLabel)
+      ?.click?.({} as never, {} as never, {} as never)
+
+    expect(options.onToggleLeftSidebar).toHaveBeenCalledTimes(1)
+    expect(options.onToggleRightSidebar).toHaveBeenCalledTimes(1)
+    // Why: these entries must not bind Cmd/Ctrl+B as real accelerators
+    // because before-input-event carries a TipTap-bold carve-out that the
+    // menu accelerator would bypass.
+    expect(appearanceSubmenu.find((item) => item.label === leftLabel)?.accelerator).toBeUndefined()
+    expect(appearanceSubmenu.find((item) => item.label === rightLabel)?.accelerator).toBeUndefined()
   })
 })

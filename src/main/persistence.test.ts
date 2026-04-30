@@ -77,7 +77,7 @@ describe('Store', () => {
     expect(settings.terminalFontSize).toBe(14)
     expect(settings.terminalFontWeight).toBe(500)
     expect(settings.rightSidebarOpenByDefault).toBe(true)
-    expect(settings.showTaskProviderIcons).toBe(true)
+    expect(settings.showTasksButton).toBe(true)
   })
 
   it('returns default UI state when no data file exists', async () => {
@@ -145,7 +145,7 @@ describe('Store', () => {
     expect(store.getSettings().editorAutoSaveDelayMs).toBe(1000)
     expect(store.getSettings().refreshLocalBaseRefOnWorktreeCreate).toBe(false)
     expect(store.getSettings().rightSidebarOpenByDefault).toBe(true)
-    expect(store.getSettings().showTaskProviderIcons).toBe(true)
+    expect(store.getSettings().showTasksButton).toBe(true)
     // repos should be loaded
     expect(store.getRepos()).toHaveLength(1)
   })

@@ -45,6 +45,30 @@ export function useIpcEvents(): void {
       })
     )
 
+    // Why: the View > Appearance menu toggles settings directly in main (so
+    // checkbox state reflects the persisted value without a round-trip) and
+    // broadcasts the change. Merge it into the store so the sidebar and
+    // titlebar re-render immediately instead of waiting for the next
+    // fetchSettings() call.
+    unsubs.push(
+      window.api.settings.onChanged((updates) => {
+        const store = useAppStore.getState()
+        if (!store.settings) {
+          return
+        }
+        useAppStore.setState({
+          settings: {
+            ...store.settings,
+            ...updates,
+            notifications: {
+              ...store.settings.notifications,
+              ...updates.notifications
+            }
+          }
+        })
+      })
+    )
+
     unsubs.push(
       window.api.ui.onToggleLeftSidebar(() => {
         dispatchClearModifierHints()
