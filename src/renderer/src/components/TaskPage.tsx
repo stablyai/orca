@@ -791,7 +791,10 @@ export default function TaskPage(): React.JSX.Element {
   // this dialog for a read/review surface. The dialog's "Use" button routes
   // through the same direct-launch flow as the row-level "Use" CTA so
   // behavior is consistent regardless of entry point.
-  const [dialogWorkItemId, setDialogWorkItemId] = useState<string | null>(null)
+  const [dialogWorkItemKey, setDialogWorkItemKey] = useState<{
+    id: string
+    repoId: string
+  } | null>(null)
   const [dialogWorkItemFallback, setDialogWorkItemFallback] = useState<GitHubWorkItem | null>(null)
 
   const workItemsCache = useAppStore((s) => s.workItemsCache)
@@ -801,21 +804,26 @@ export default function TaskPage(): React.JSX.Element {
   // Why: derive the dialog's work item from the store cache so it reflects
   // optimistic patches (e.g. table-cell status toggle). Falls back to the
   // snapshot stored at click time for newly-created stubs not yet in the cache.
+  // Disambiguates by repoId so issues with the same number fetched from
+  // multiple repos (e.g. fork + non-fork, both routed through the same
+  // upstream) resolve to the clicked row's repo, not the first one scanned.
   const dialogWorkItem = useMemo(() => {
-    if (!dialogWorkItemId) {
+    if (!dialogWorkItemKey) {
       return null
     }
     for (const entry of Object.values(workItemsCache)) {
-      const found = entry?.data?.find((wi) => wi.id === dialogWorkItemId)
+      const found = entry?.data?.find(
+        (wi) => wi.id === dialogWorkItemKey.id && wi.repoId === dialogWorkItemKey.repoId
+      )
       if (found) {
         return found
       }
     }
     return dialogWorkItemFallback
-  }, [dialogWorkItemId, workItemsCache, dialogWorkItemFallback])
+  }, [dialogWorkItemKey, workItemsCache, dialogWorkItemFallback])
 
   const setDialogWorkItem = useCallback((item: GitHubWorkItem | null) => {
-    setDialogWorkItemId(item?.id ?? null)
+    setDialogWorkItemKey(item ? { id: item.id, repoId: item.repoId } : null)
     setDialogWorkItemFallback(item)
   }, [])
 
