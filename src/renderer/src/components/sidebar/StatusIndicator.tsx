@@ -49,12 +49,18 @@ const StatusIndicator = React.memo(function StatusIndicator({
           'block size-2 rounded-full',
           status === 'permission'
             ? 'bg-red-500'
-            : status === 'done'
-              ? // Green dot for done; working uses a yellow spinner so the
-                // two states differ by both hue and motion. 'active' (terminal
-                // open, quiet) collapses to the same grey as 'inactive' — the
-                // tooltip carries the distinction for sighted users and the
-                // sr-only sibling in callers carries it for AT.
+            : status === 'done' || status === 'active'
+              ? // Green dot for both hook-reported 'done' and the heuristic
+                // 'active' (terminal open, quiet). Without the 'active'
+                // branch users without the experimental agent-tracking
+                // setting never reach 'done' and lose the green dot
+                // entirely. Working uses a yellow spinner so working vs
+                // done differ by both hue and motion; 'inactive' stays grey.
+                // TODO(#1265): differentiate 'active' (quiet terminal)
+                // from 'done' (agent-reported completion) visually — today
+                // both share emerald, so with the experimental tracking
+                // toggle on a newly-opened quiet terminal reads the same
+                // as a completed agent.
                 'bg-emerald-500'
               : 'bg-neutral-500/40'
         )}
