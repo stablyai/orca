@@ -319,6 +319,32 @@ describe('getEffectiveHooks', () => {
     })
   })
 
+  it("loads setup hooks from the target worktree's orca.yaml when a worktree path is provided", async () => {
+    const fs = await import('fs')
+    vi.mocked(fs.existsSync).mockImplementation(
+      (path) => path === '/test/repo/orca.yaml' || path === '/test/worktree/orca.yaml'
+    )
+    vi.mocked(fs.readFileSync).mockImplementation((path) => {
+      if (path === '/test/repo/orca.yaml') {
+        return 'scripts:\n  setup: |\n    echo old-version\n'
+      }
+      if (path === '/test/worktree/orca.yaml') {
+        return 'scripts:\n  setup: |\n    echo new-version\n'
+      }
+      return ''
+    })
+
+    const { getEffectiveHooks } = await import('./hooks')
+    const result = getEffectiveHooks(makeRepo(), '/test/worktree')
+
+    expect(result).toEqual({
+      scripts: {
+        setup: 'echo new-version'
+      }
+    })
+    expect(result?.scripts.setup).not.toContain('old-version')
+  })
+
   it('falls back to legacy UI hooks when yaml is missing', async () => {
     const fs = await import('fs')
     vi.mocked(fs.existsSync).mockReturnValue(false)
