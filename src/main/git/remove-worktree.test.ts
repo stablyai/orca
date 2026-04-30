@@ -306,10 +306,7 @@ describe('listWorktrees', () => {
         isMainWorktree: false
       }
     ])
-    expect(getGitCalls()).toEqual([
-      'git worktree list --porcelain -z',
-      'git config --bool core.sparseCheckout'
-    ])
+    expect(getGitCalls()).toEqual(['git worktree list --porcelain -z', 'git sparse-checkout list'])
     expect(translateWslOutputPathsMock).toHaveBeenCalledTimes(2)
   })
 
@@ -323,11 +320,11 @@ describe('listWorktrees', () => {
           stderr: ''
         }
       }
-      if (args.join(' ') === 'config --bool core.sparseCheckout') {
+      if (args.join(' ') === 'sparse-checkout list') {
         const isFeatureWorktree =
           options.cwd === '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo-feature'
         return {
-          stdout: isFeatureWorktree ? 'true\n' : 'false\n',
+          stdout: isFeatureWorktree ? 'packages/web\n' : '',
           stderr: ''
         }
       }
@@ -357,7 +354,7 @@ describe('listWorktrees', () => {
         isMainWorktree: false
       }
     ])
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['config', '--bool', 'core.sparseCheckout'], {
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['sparse-checkout', 'list'], {
       cwd: '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo-feature'
     })
   })

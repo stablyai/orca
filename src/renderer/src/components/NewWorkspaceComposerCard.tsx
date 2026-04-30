@@ -383,22 +383,6 @@ export default function NewWorkspaceComposerCard({
                 />
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Sparse checkout</label>
-                <SparseCheckoutPresetSelect
-                  repoId={repoId}
-                  presets={sparsePresets}
-                  selectedPresetId={sparseSelectedPresetId}
-                  onSelectPreset={onSparseSelectPreset}
-                  disabled={!canUseSparseCheckout}
-                />
-                {!canUseSparseCheckout ? (
-                  <p className="text-[11px] text-muted-foreground">
-                    Only available for local repositories.
-                  </p>
-                ) : null}
-              </div>
-
               {setupConfig ? (
                 <div className="space-y-2">
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -481,6 +465,22 @@ export default function NewWorkspaceComposerCard({
                   ) : null}
                 </div>
               ) : null}
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Sparse checkout</label>
+                <SparseCheckoutPresetSelect
+                  repoId={repoId}
+                  presets={sparsePresets}
+                  selectedPresetId={sparseSelectedPresetId}
+                  onSelectPreset={onSparseSelectPreset}
+                  disabled={!canUseSparseCheckout}
+                />
+                {!canUseSparseCheckout ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    Only available for local repositories.
+                  </p>
+                ) : null}
+              </div>
             </div>
           </div>
         </div>

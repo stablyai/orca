@@ -326,9 +326,12 @@ export async function createLocalWorktree(
     if (preset?.repoId === repo.id) {
       try {
         const presetDirectories = normalizeSparseDirectories(preset.directories)
+        // Why: use Set-based comparison so directory order does not affect
+        // attribution — matches the renderer's sparseDirectoriesMatch logic.
+        const presetSet = new Set(presetDirectories)
         const directoriesMatch =
           presetDirectories.length === sparseDirectories.length &&
-          presetDirectories.every((entry, index) => entry === sparseDirectories[index])
+          sparseDirectories.every((entry) => presetSet.has(entry))
         sparsePresetId = directoriesMatch ? preset.id : undefined
       } catch {
         // Why: corrupt preset data should not block creation or falsely label the new worktree.
