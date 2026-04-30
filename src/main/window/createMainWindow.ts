@@ -133,14 +133,6 @@ export function createMainWindow(
         : {}
     : {}
 
-  if (is.dev) {
-    console.log(
-      '[window] Creating main window with bounds:',
-      savedBounds
-        ? { source: 'saved', ...savedBounds, maximized: savedMaximized }
-        : { source: 'default', ...defaultBounds, maximized: savedMaximized }
-    )
-  }
   const mainWindow = new BrowserWindow({
     width: savedBounds?.width ?? defaultBounds.width,
     height: savedBounds?.height ?? defaultBounds.height,
