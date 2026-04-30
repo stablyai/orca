@@ -365,13 +365,12 @@ function PRDiffTreeNode({
 
   // Directory node
   return (
-    <div>
+    <div role="treeitem" aria-expanded={open}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center gap-1.5 px-3 py-1.5 text-left transition hover:bg-muted/40"
         style={{ paddingLeft: `${12 + depth * 16}px` }}
-        aria-expanded={open}
         aria-label={`${open ? 'Collapse' : 'Expand'} folder ${node.name}`}
       >
         {open ? (
@@ -390,7 +389,7 @@ function PRDiffTreeNode({
         </span>
       </button>
       {open && (
-        <div>
+        <div role="group">
           {node.children.map((child) => (
             <PRDiffTreeNode
               key={child.kind === 'file' ? child.file.path : child.path}
@@ -428,7 +427,7 @@ function PRDiffTreeView({
 }: PRDiffTreeViewProps): React.JSX.Element {
   const tree = useMemo(() => buildDiffTree(files), [files])
   return (
-    <div>
+    <div role="tree" aria-label="Changed files">
       {tree.map((node) => (
         <PRDiffTreeNode
           key={node.kind === 'file' ? node.file.path : node.path}
@@ -605,7 +604,7 @@ function PRFileRow({
   )
 
   return (
-    <div className="border-b border-border/50">
+    <div className="border-b border-border/50" {...(label != null ? { role: 'treeitem' } : {})}>
       <button
         type="button"
         onClick={handleToggle}
@@ -627,12 +626,43 @@ function PRFileRow({
           {fileStatusLabel(file.status)}
         </span>
         <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-foreground">
-          {file.oldPath && file.oldPath !== file.path && !label ? (
-            <>
-              <span className="text-muted-foreground">{file.oldPath}</span>
-              <span className="mx-1 text-muted-foreground">→</span>
-              {file.path}
-            </>
+          {file.oldPath && file.oldPath !== file.path ? (
+            label ? (
+              // Why: in tree view we only have room for basenames, but still need to
+              // communicate the rename so the user doesn't have to expand or switch
+              // to flat view to discover what was renamed. When basenames match (i.e.
+              // only the directory changed), we include the parent directory so the
+              // display isn't a meaningless "foo.ts → foo.ts".
+              (() => {
+                const oldBase = file.oldPath!.split('/').pop() ?? file.oldPath!
+                if (oldBase === label) {
+                  const oldParts = file.oldPath!.split('/')
+                  const newParts = file.path.split('/')
+                  const oldShort = oldParts.slice(-2).join('/')
+                  const newShort = newParts.slice(-2).join('/')
+                  return (
+                    <>
+                      <span className="text-muted-foreground">{oldShort}</span>
+                      <span className="mx-1 text-muted-foreground">→</span>
+                      {newShort}
+                    </>
+                  )
+                }
+                return (
+                  <>
+                    <span className="text-muted-foreground">{oldBase}</span>
+                    <span className="mx-1 text-muted-foreground">→</span>
+                    {label}
+                  </>
+                )
+              })()
+            ) : (
+              <>
+                <span className="text-muted-foreground">{file.oldPath}</span>
+                <span className="mx-1 text-muted-foreground">→</span>
+                {file.path}
+              </>
+            )
           ) : (
             (label ?? file.path)
           )}

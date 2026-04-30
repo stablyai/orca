@@ -84,4 +84,67 @@ describe('buildDiffTree', () => {
     expect(a.children[0].name).toBe('b')
     expect(a.children[1].name).toBe('d')
   })
+
+  it('returns an empty array for an empty file list', () => {
+    expect(buildDiffTree([])).toEqual([])
+  })
+
+  it('handles root-level-only files with no directories', () => {
+    const files: GitHubPRFile[] = [
+      { path: 'README.md', status: 'modified', additions: 1, deletions: 0, isBinary: false },
+      { path: 'package.json', status: 'modified', additions: 2, deletions: 1, isBinary: false }
+    ]
+
+    const tree = buildDiffTree(files)
+    expect(tree).toHaveLength(2)
+    expect(tree.every((n) => n.kind === 'file')).toBe(true)
+    expect(tree[0].name).toBe('package.json')
+    expect(tree[1].name).toBe('README.md')
+  })
+
+  it('preserves renamed file metadata in leaf nodes', () => {
+    const files: GitHubPRFile[] = [
+      {
+        path: 'src/utils/new-name.ts',
+        oldPath: 'src/helpers/old-name.ts',
+        status: 'renamed',
+        additions: 0,
+        deletions: 0,
+        isBinary: false
+      }
+    ]
+
+    const tree = buildDiffTree(files)
+    expect(tree).toHaveLength(1)
+
+    const src = tree[0]
+    if (src.kind !== 'dir') {
+      throw new Error('expected dir')
+    }
+    expect(src.name).toBe('src/utils')
+
+    const leaf = src.children[0]
+    if (leaf.kind !== 'file') {
+      throw new Error('expected file')
+    }
+    expect(leaf.name).toBe('new-name.ts')
+    expect(leaf.file.oldPath).toBe('src/helpers/old-name.ts')
+  })
+
+  it('handles backslash-separated paths', () => {
+    const files: GitHubPRFile[] = [
+      { path: 'src\\lib\\index.ts', status: 'added', additions: 5, deletions: 0, isBinary: false }
+    ]
+
+    const tree = buildDiffTree(files)
+    expect(tree).toHaveLength(1)
+    expect(tree[0].name).toBe('src/lib')
+
+    const dir = tree[0]
+    if (dir.kind !== 'dir') {
+      throw new Error('expected dir')
+    }
+    expect(dir.children).toHaveLength(1)
+    expect(dir.children[0].name).toBe('index.ts')
+  })
 })
