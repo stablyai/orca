@@ -1,7 +1,7 @@
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { gitExecFileAsync, ghExecFileAsync } from '../git/runner'
-import type { ClassifiedError } from '../../shared/types'
+import type { ClassifiedError, GitHubOwnerRepo } from '../../shared/types'
 
 // Why: legacy generic execFile wrapper — only used by callers that don't need
 // WSL-aware routing (e.g. non-repo-scoped gh commands). Repo-scoped callers
@@ -71,18 +71,27 @@ export function classifyGhError(stderr: string): ClassifiedError {
 export function classifyListIssuesError(stderr: string): ClassifiedError {
   const c = classifyGhError(stderr)
   const trimmed = stderr.trim()
-  const readMessages: Partial<Record<ClassifiedError['type'], string>> = {
+  // Why: provide an explicit entry for every `ClassifiedError['type']` value
+  // (even when the copy matches the generic fallback) so the read-context
+  // rewrite is complete and any newly added error type surfaces as a
+  // TypeScript error rather than silently falling through to edit-phrased copy.
+  const readMessages: Record<ClassifiedError['type'], string> = {
     permission_denied:
       "You don't have permission to read issues for this repository. Check your GitHub token scopes.",
     not_found: 'Repository not found.',
     validation_error: `Invalid request — ${trimmed}`,
+    rate_limited: 'GitHub rate limit hit. Try again in a few minutes.',
+    network_error: 'Network error — check your connection.',
     unknown: `Failed to load issues: ${trimmed}`
   }
-  return { type: c.type, message: readMessages[c.type] ?? c.message }
+  return { type: c.type, message: readMessages[c.type] }
 }
 
 // ── Owner/repo resolution for gh api --cache ──────────────────────────
-export type OwnerRepo = { owner: string; repo: string }
+// Why: alias the shared shape so `src/shared/types.ts#GitHubOwnerRepo` remains
+// the single source of truth while main-side call sites can keep using the
+// short local name `OwnerRepo`.
+export type OwnerRepo = GitHubOwnerRepo
 
 const ownerRepoCache = new Map<string, OwnerRepo | null>()
 

@@ -461,6 +461,13 @@ async function listRecentWorkItems(
     }
   }
 
+  // Why: the fallback path (non-GitHub remote — neither issueOwnerRepo nor
+  // prOwnerRepo resolved) intentionally stays on Promise.all rather than the
+  // Promise.allSettled + per-side classification used above. There are no
+  // `sources` to surface on this branch and nothing for the partial-failure
+  // banner to render, so a single-side failure here means the whole call is
+  // effectively unusable for the feature — reject-all matches reality. If
+  // non-GitHub remotes ever grow source metadata, revisit this symmetry.
   const [issuesResult, prsResult] = await Promise.all([
     ghExecFileAsync(
       [

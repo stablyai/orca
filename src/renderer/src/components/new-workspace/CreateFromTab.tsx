@@ -293,6 +293,9 @@ export default function CreateFromTab({
         // Why: partial failures (e.g. a 403 on a private upstream's issues)
         // must surface here, otherwise the subtab shows an empty list and
         // re-creates the silent-wrongness the parent feature aims to eliminate.
+        // This envelope-level error branch is mutually exclusive with the .catch
+        // below: the envelope implies the IPC call resolved, so there's no
+        // double-surface risk between the two setIssueError paths.
         if (envelope.errors?.issues) {
           setIssueError(envelope.errors.issues.message)
         }

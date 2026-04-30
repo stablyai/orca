@@ -607,9 +607,10 @@ export type ClassifiedError = {
   message: string
 }
 
-// Why: duplicated in `src/main/github/gh-utils.ts` as `OwnerRepo` but
-// declared here as a shared shape so IPC return envelopes and renderer slices
-// can reference the same structural type without importing from main.
+// Why: declared here as a shared shape so IPC return envelopes and renderer
+// slices can reference the same structural type without importing from main.
+// Aliased as `OwnerRepo` in `src/main/github/gh-utils.ts` so main call sites
+// can continue using the short local name.
 export type GitHubOwnerRepo = { owner: string; repo: string }
 
 /**
@@ -621,6 +622,10 @@ export type GitHubOwnerRepo = { owner: string; repo: string }
  * Why piggyback instead of adding `gh:resolveWorkItemSources`: the renderer
  * already round-trips this endpoint on every Tasks refresh, and the source
  * data is a 2-field-per-side metadata add — cheaper than another IPC call.
+ *
+ * Invariant: `items` always contains whatever succeeded; `errors.issues` indicates
+ * the issues-side fetch failed, but any PR-side items that succeeded are still
+ * present in `items`. Consumers should render `items` alongside the error banner.
  */
 export type ListWorkItemsResult<T> = {
   items: T[]
@@ -630,10 +635,6 @@ export type ListWorkItemsResult<T> = {
   }
   errors?: {
     issues?: ClassifiedError
-    // Reserved for future use — never populated by the current main-process
-    // implementation. PR-side failures are intentionally out of scope per the
-    // parent design doc §6 and are swallowed at the call sites in client.ts.
-    prs?: ClassifiedError
   }
 }
 

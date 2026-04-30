@@ -207,6 +207,22 @@ export type GitHubSlice = {
     limit: number,
     query: string
   ) => { sources: WorkItemsCacheSources | null; error: WorkItemsCacheError | null }
+  /**
+   * Why: the dialog renders the "Issue from owner/repo" chip for a single work
+   * item but may be opened before the Tasks view has populated the primary
+   * `(repoPath, PER_REPO_FETCH_LIMIT, '')` cache entry — e.g. when the user
+   * searches for an issue by query. Falls back to scanning `workItemsCache`
+   * for any entry keyed by `${repoPath}::` that carries resolved sources,
+   * returning that entry's `sources` directly. Sources are repo-level
+   * (query-independent), so any sibling entry is safe to reuse.
+   *
+   * Returning a single stable reference means the dialog can subscribe to just
+   * this selector instead of the whole `workItemsCache`, so unrelated cache
+   * writes don't force a re-render. Cache entries are fully replaced (not
+   * mutated) on every write, so reference equality is preserved between
+   * unchanged entries.
+   */
+  getWorkItemsAnySourcesForRepo: (repoPath: string, limit: number) => WorkItemsCacheSources | null
   fetchWorkItems: (
     repoId: string,
     repoPath: string,
@@ -274,6 +290,22 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     }
   },
 
+  getWorkItemsAnySourcesForRepo: (repoPath, limit) => {
+    const cache = get().workItemsCache
+    const primaryKey = workItemsCacheKey(repoPath, limit, '')
+    const primary = cache[primaryKey]?.sources
+    if (primary) {
+      return primary
+    }
+    const prefix = `${repoPath}::`
+    for (const [key, entry] of Object.entries(cache)) {
+      if (key.startsWith(prefix) && entry.sources) {
+        return entry.sources
+      }
+    }
+    return null
+  },
+
   fetchWorkItems: async (repoId, repoPath, limit, query, options): Promise<GitHubWorkItem[]> => {
     const key = workItemsCacheKey(repoPath, limit, query)
     const cached = get().workItemsCache[key]
@@ -313,6 +345,16 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         // wrongness introduced by the issue-source split in #1076; PR-side
         // failures existed before and are out of scope for this banner.
         const issuesError = envelope.errors?.issues
+        // Why: if the main process resolved `errors.issues` but not `sources.issues`,
+        // the renderer has no slug to render in the banner copy, so the error is
+        // dropped from the cache entry. Log it so this rare case is at least visible
+        // in devtools rather than disappearing silently.
+        if (issuesError && !envelope.sources.issues) {
+          console.warn(
+            '[workItems] dropping issues-side error with no resolved source:',
+            issuesError
+          )
+        }
         const errorForCache: WorkItemsCacheError | undefined =
           issuesError && envelope.sources.issues
             ? { ...issuesError, source: envelope.sources.issues }

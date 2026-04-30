@@ -615,6 +615,26 @@ function PaginationBar({
   )
 }
 
+// Why: feature 1 — shape of the per-repo view derived from `workItemsCache`,
+// used by both the indicator render and the `hasDivergentSources` guard.
+// Hoisted to module scope so the type isn't re-parsed per render and so the
+// guard below can narrow it without a forward reference.
+type RepoSourceState = {
+  repoId: string
+  repoPath: string
+  sources: WorkItemsCacheSources | null
+  error: WorkItemsCacheError | null
+}
+
+// Why: type-guard predicate used to filter `perRepoSourceState` down to rows
+// whose issue-source and PR-source slugs differ. Hoisted to module scope so
+// the predicate isn't re-allocated on every TaskPage render.
+const hasDivergentSources = (
+  s: RepoSourceState
+): s is RepoSourceState & {
+  sources: { issues: GitHubOwnerRepo; prs: GitHubOwnerRepo }
+} => !!s.sources?.issues && !!s.sources.prs && !sameGitHubOwnerRepo(s.sources.issues, s.sources.prs)
+
 export default function TaskPage(): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const pageData = useAppStore((s) => s.taskPageData)
@@ -831,22 +851,20 @@ export default function TaskPage(): React.JSX.Element {
   // selected repo whose issue-source and PR-source slugs differ, and surface
   // a per-repo retryable banner when the issue-side fetch failed. Both derive
   // from the same `workItemsCache` entry the list already consumes, so no
-  // extra IPC round-trip is needed.
-  type RepoSourceState = {
-    repoId: string
-    repoPath: string
-    sources: WorkItemsCacheSources | null
-    error: WorkItemsCacheError | null
-  }
+  // extra IPC round-trip is needed. The `RepoSourceState` shape itself lives
+  // at module scope so the type isn't re-parsed per render.
   // Why: subscribe to `workItemsCache` directly (already bound above) and
   // memoize the derived per-repo view. The alternative —
   // `useAppStore(useShallow(...))` — doesn't help here because the selector
   // would allocate a wrapper object per repo and zustand's shallow compare
   // uses `Object.is` on each element, so every cache mutation would still
   // force a re-render. Memoizing over stable inputs re-derives only when the
-  // cache, selection, or query changes. The dialog's
-  // `WorkItemIssueSourceIndicator` uses `useShallow` because it returns a
-  // single `{sources, fallback}` pair (one allocation), not a per-repo list.
+  // cache, selection, or query changes. The dialog's `WorkItemIssueSourceIndicator`
+  // subscribes to a single `getWorkItemsAnySourcesForRepo(repoPath, limit)`
+  // selector that returns a stable `WorkItemsCacheSources | null` reference,
+  // so it doesn't need `useShallow` — unrelated cache writes don't force a
+  // re-render because the selector result's reference identity is preserved
+  // between unchanged entries.
   const perRepoSourceState = useMemo<RepoSourceState[]>(() => {
     const appliedQ = stripRepoQualifiers(appliedTaskSearch.trim())
     return selectedRepos.map((r) => {
@@ -1115,10 +1133,17 @@ export default function TaskPage(): React.JSX.Element {
   }, [taskSearchInput])
 
   useEffect(() => {
+    // Why: both early-return branches must clear `isRetryingTasks` — if the
+    // user clicks Retry and then switches `taskSource` away from 'github' (or
+    // somehow ends up with zero repos selected) before the fetch dispatches,
+    // neither the `.then` nor the `.catch` below will fire, and the Retry
+    // button would stay stuck in its disabled/Retrying state indefinitely.
     if (taskSource !== 'github') {
+      setIsRetryingTasks(false)
       return
     }
     if (selectedRepos.length === 0) {
+      setIsRetryingTasks(false)
       return
     } // unreachable — multi-combobox forbids empty
 
@@ -1168,10 +1193,11 @@ export default function TaskPage(): React.JSX.Element {
     })
       .then(({ items, failedCount: failed }) => {
         // Why: clear retry-in-flight even when the effect was cancelled
-        // mid-retry, so a subsequent effect run that early-returns (e.g.
-        // taskSource switched) doesn't leave the Retry button stuck in the
-        // disabled/Retrying state. Safe to call unconditionally — it's a
-        // no-op when not retrying.
+        // mid-retry, so the Retry button isn't left stuck in the
+        // disabled/Retrying state. The early-return branches above also
+        // clear the flag directly so a source-switch mid-retry can't orphan
+        // it either. Safe to call unconditionally — it's a no-op when not
+        // retrying.
         setIsRetryingTasks(false)
         if (cancelled) {
           return
@@ -1875,16 +1901,10 @@ export default function TaskPage(): React.JSX.Element {
                     {(() => {
                       // Why: compute the visible list once so the visibility
                       // gate and the map don't re-run the same predicate.
-                      // Typed as a narrowed RepoSourceState so `sources.issues`
-                      // and `sources.prs` are known non-null inside the map.
-                      const hasDivergentSources = (
-                        s: RepoSourceState
-                      ): s is RepoSourceState & {
-                        sources: { issues: GitHubOwnerRepo; prs: GitHubOwnerRepo }
-                      } =>
-                        !!s.sources?.issues &&
-                        !!s.sources.prs &&
-                        !sameGitHubOwnerRepo(s.sources.issues, s.sources.prs)
+                      // `hasDivergentSources` lives at module scope so the
+                      // predicate isn't re-allocated on every render; the
+                      // narrowed return type means `sources.issues` and
+                      // `sources.prs` are known non-null inside the map.
                       const visibleRepoSources = perRepoSourceState.filter(hasDivergentSources)
                       if (visibleRepoSources.length === 0) {
                         return null
@@ -2101,10 +2121,10 @@ export default function TaskPage(): React.JSX.Element {
                           disabled={tasksLoading || isRetryingTasks}
                         >
                           {isRetryingTasks ? (
-                            <>
+                            <span className="flex items-center gap-1">
                               <LoaderCircle className="h-3 w-3 animate-spin" />
                               Retrying…
-                            </>
+                            </span>
                           ) : (
                             'Retry'
                           )}

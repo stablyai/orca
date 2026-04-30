@@ -613,6 +613,16 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           // already see the same error on the originating Tasks page. If a
           // future UX decision flips this, add an error row to the popover's
           // render output.
+          // Why: surface partial issues-side failures via devtools even though the
+          // popover intentionally omits a UI banner (see rationale above). A user
+          // hitting a 403 on a private upstream would otherwise see an empty popover
+          // and no diagnostic trail.
+          if (envelope.errors?.issues) {
+            console.warn(
+              '[composer/link] issues-side partial failure in @-mention popover:',
+              envelope.errors.issues
+            )
+          }
           setLinkItems(
             envelope.items.map((it) => ({
               ...it,

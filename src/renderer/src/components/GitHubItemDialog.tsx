@@ -1,6 +1,5 @@
 /* eslint-disable max-lines -- Why: the GH item dialog keeps its header, conversation, files, and checks tabs co-located so the read-only PR/Issue surface stays in one place while this view evolves. */
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useShallow } from 'zustand/react/shallow'
 import {
   ArrowDown,
   ArrowRight,
@@ -57,7 +56,6 @@ import {
   type PRCommentGroup
 } from '@/lib/pr-comment-groups'
 import { useAppStore } from '@/store'
-import type { WorkItemsCacheSources } from '@/store/slices/github'
 import { useRepoLabels, useRepoAssignees, useImmediateMutation } from '@/hooks/useIssueMetadata'
 import IssueSourceIndicator, { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
 import type {
@@ -1923,18 +1921,18 @@ function GHCommentComposer({
 // Why: the dialog doesn't carry the resolved PR-source slug the Tasks view's
 // list cache carries, so we reach into workItemsCache to recover it. We scope
 // the lookup to the dialog's own `repoPath` via the public
-// `getWorkItemsSourcesAndError` selector keyed by (repoPath, limit, query) —
+// `getWorkItemsAnySourcesForRepo` selector keyed by (repoPath, limit) —
 // scanning the whole cache risks picking a sibling repo's PR-source when two
 // selected repos share the same issue-source (e.g. two forks of the same
 // upstream), producing an incorrect "Issues from" chip or incorrectly
-// suppressing it. We key primarily on the first-page entry
+// suppressing it. The selector keys primarily on the first-page entry
 // (PER_REPO_FETCH_LIMIT, empty query) because sources are repo-level and
 // don't vary by search query. If that slot is empty — e.g. the Tasks view is
-// filtering by a typed query and only populated the query-keyed entry — we
-// fall back to scanning cache entries prefixed by this same `repoPath::` and
-// reuse sources from the first match. Falling back to hiding the indicator
-// when we still can't find a match matches the parent design doc §1 rule:
-// hide when either side is unknown rather than guessing.
+// filtering by a typed query and only populated the query-keyed entry — the
+// selector falls back to scanning cache entries prefixed by this same
+// `repoPath::` and reuses sources from the first match. Falling back to hiding
+// the indicator when we still can't find a match matches the parent design
+// doc §1 rule: hide when either side is unknown rather than guessing.
 function WorkItemIssueSourceIndicator({
   url,
   repoPath
@@ -1942,34 +1940,16 @@ function WorkItemIssueSourceIndicator({
   url: string
   repoPath: string | null
 }): React.JSX.Element | null {
-  // Why: combine the primary (repoPath, limit, '') lookup and the
-  // prefix-scan fallback into a single useShallow selector. A separate
-  // subscription to `s.workItemsCache` would re-render this dialog on every
-  // unrelated repo's cache mutation (cache object reference changes on every
-  // write). useShallow here compares the returned {sources, fallback} shape
-  // by value, so we only re-render when the fields this dialog actually
-  // reads change. The Tasks view may write cache entries keyed by a
-  // user-typed search query, which means the `(repoPath, PER_REPO_FETCH_LIMIT,
-  // '')` slot can be empty even though sources are known for this repo.
-  // Sources are repo-level (query-independent), so reading them from a
-  // sibling query's entry is safe — scan workItemsCache for any entry
-  // matching this repoPath with populated sources. Key format is
-  // `${repoPath}::${limit}::${query}` (see src/renderer/src/store/slices/github.ts).
-  const { sources, fallback } = useAppStore(
-    useShallow((s) => {
-      const primary = s.getWorkItemsSourcesAndError(repoPath ?? '', PER_REPO_FETCH_LIMIT, '')
-      let fallback: WorkItemsCacheSources | null = null
-      if (repoPath && !primary.sources) {
-        const prefix = `${repoPath}::`
-        for (const [key, entry] of Object.entries(s.workItemsCache)) {
-          if (key.startsWith(prefix) && entry.sources) {
-            fallback = entry.sources
-            break
-          }
-        }
-      }
-      return { sources: primary.sources, fallback }
-    })
+  // Why: subscribe to a single store-side selector that returns the resolved
+  // sources for this repo — either the primary `(repoPath, PER_REPO_FETCH_LIMIT, '')`
+  // entry or the first sibling cache entry that has sources (the Tasks view may
+  // write cache entries keyed by a user-typed search query, so the primary slot
+  // can be empty even when sources are known). Sources are repo-level
+  // (query-independent), so any sibling entry is safe. Returning a single stable
+  // reference (not an object) means unrelated cache writes don't force a
+  // re-render — this was the regression iter-2 fixed.
+  const sources = useAppStore((s) =>
+    s.getWorkItemsAnySourcesForRepo(repoPath ?? '', PER_REPO_FETCH_LIMIT)
   )
   const issues = useMemo<GitHubOwnerRepo | null>(() => {
     const fromUrl = parseOwnerRepoFromItemUrl(url)
@@ -1979,17 +1959,13 @@ function WorkItemIssueSourceIndicator({
     // Prefer the cache's resolved issue-source when it matches the URL-derived
     // slug — the cache entry is authoritative (canonicalized by the main
     // process) while the URL parse is a best-effort fallback.
-    const cachedIssues = sources?.issues ?? fallback?.issues
-    if (
-      cachedIssues &&
-      cachedIssues.owner.toLowerCase() === fromUrl.owner.toLowerCase() &&
-      cachedIssues.repo.toLowerCase() === fromUrl.repo.toLowerCase()
-    ) {
+    const cachedIssues = sources?.issues
+    if (cachedIssues && sameGitHubOwnerRepo(cachedIssues, fromUrl)) {
       return cachedIssues
     }
     return fromUrl
-  }, [url, sources, fallback])
-  const prs = sources?.prs ?? fallback?.prs ?? null
+  }, [url, sources])
+  const prs = sources?.prs ?? null
 
   if (!issues || !prs || sameGitHubOwnerRepo(issues, prs)) {
     return null
