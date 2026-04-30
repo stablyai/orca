@@ -21,6 +21,7 @@ import {
   GENERAL_CACHE_TIMER_SEARCH_ENTRIES,
   GENERAL_CLI_SEARCH_ENTRIES,
   GENERAL_EDITOR_SEARCH_ENTRIES,
+  GENERAL_MARKDOWN_TEMPLATE_SEARCH_ENTRIES,
   GENERAL_PANE_SEARCH_ENTRIES,
   GENERAL_SUPPORT_SEARCH_ENTRIES,
   GENERAL_UPDATE_SEARCH_ENTRIES,
@@ -29,6 +30,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
+import { MarkdownTemplatesSection } from './MarkdownTemplatesSection'
 
 export { GENERAL_PANE_SEARCH_ENTRIES }
 
@@ -267,6 +269,13 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
           </SearchableSetting>
         </div>
       </section>
+    ) : null,
+    matchesSettingsSearch(searchQuery, GENERAL_MARKDOWN_TEMPLATE_SEARCH_ENTRIES) ? (
+      <MarkdownTemplatesSection
+        key="markdown-templates"
+        templates={settings.markdownDocumentTemplates}
+        updateSettings={updateSettings}
+      />
     ) : null,
     matchesSettingsSearch(searchQuery, GENERAL_EDITOR_SEARCH_ENTRIES) ? (
       <section key="editor" className="space-y-4">

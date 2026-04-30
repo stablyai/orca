@@ -127,14 +127,22 @@ describe('writeStartupCommandWhenShellReady', () => {
 const describePosix = process.platform === 'win32' ? describe.skip : describe
 
 describePosix('local PTY shell-ready launch config', () => {
+  let previousOrigZdotdir: string | undefined
   let userDataPath: string
 
   beforeEach(() => {
+    previousOrigZdotdir = process.env.ORCA_ORIG_ZDOTDIR
     userDataPath = mkdtempSync(join(tmpdir(), 'local-pty-shell-ready-test-'))
     getUserDataPathMock.mockReturnValue(userDataPath)
+    delete process.env.ORCA_ORIG_ZDOTDIR
   })
 
   afterEach(() => {
+    if (previousOrigZdotdir === undefined) {
+      delete process.env.ORCA_ORIG_ZDOTDIR
+    } else {
+      process.env.ORCA_ORIG_ZDOTDIR = previousOrigZdotdir
+    }
     rmSync(userDataPath, { recursive: true, force: true })
     vi.restoreAllMocks()
   })

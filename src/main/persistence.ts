@@ -11,7 +11,8 @@ import type {
   Repo,
   SparsePreset,
   WorktreeMeta,
-  GlobalSettings
+  GlobalSettings,
+  MarkdownDocumentTemplate
 } from '../shared/types'
 import type { SshTarget } from '../shared/ssh-types'
 import { isFolderRepo } from '../shared/repo-kind'
@@ -94,6 +95,44 @@ function normalizeSshTarget(t: SshTarget): SshTarget {
   return { ...t, configHost: t.configHost ?? t.label ?? t.host }
 }
 
+function normalizeMarkdownDocumentTemplates(value: unknown): MarkdownDocumentTemplate[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value
+    .filter((template): template is MarkdownDocumentTemplate => {
+      if (!template || typeof template !== 'object') {
+        return false
+      }
+      return (
+        typeof template.id === 'string' &&
+        typeof template.name === 'string' &&
+        typeof template.content === 'string' &&
+        typeof template.createdAt === 'number' &&
+        Number.isFinite(template.createdAt) &&
+        typeof template.updatedAt === 'number' &&
+        Number.isFinite(template.updatedAt)
+      )
+    })
+    .map((template) => ({
+      id: template.id,
+      name: template.name,
+      content: template.content,
+      createdAt: template.createdAt,
+      updatedAt: template.updatedAt
+    }))
+}
+
+function normalizeSettings(settings: GlobalSettings): GlobalSettings {
+  return {
+    ...settings,
+    markdownDocumentTemplates: normalizeMarkdownDocumentTemplates(
+      settings.markdownDocumentTemplates
+    )
+  }
+}
+
 export class Store {
   private state: PersistedState
   private writeTimer: ReturnType<typeof setTimeout> | null = null
@@ -140,19 +179,20 @@ export class Store {
           : rawOptionAsAlt === undefined || rawOptionAsAlt === 'true'
             ? 'auto'
             : rawOptionAsAlt
+        const settings = normalizeSettings({
+          ...defaults.settings,
+          ...parsed.settings,
+          terminalMacOptionAsAlt: migratedOptionAsAlt,
+          terminalMacOptionAsAltMigrated: true,
+          notifications: {
+            ...getDefaultNotificationSettings(),
+            ...parsed.settings?.notifications
+          }
+        })
         return {
           ...defaults,
           ...parsed,
-          settings: {
-            ...defaults.settings,
-            ...parsed.settings,
-            terminalMacOptionAsAlt: migratedOptionAsAlt,
-            terminalMacOptionAsAltMigrated: true,
-            notifications: {
-              ...getDefaultNotificationSettings(),
-              ...parsed.settings?.notifications
-            }
-          },
+          settings,
           // Why: 'recent' used to mean the weighted smart sort. One-shot
           // migration moves it to 'smart'; the flag prevents re-firing after
           // a user intentionally selects the new last-activity 'recent' sort.
@@ -420,18 +460,19 @@ export class Store {
   // ── Settings ───────────────────────────────────────────────────────
 
   getSettings(): GlobalSettings {
+    this.state.settings = normalizeSettings(this.state.settings)
     return this.state.settings
   }
 
   updateSettings(updates: Partial<GlobalSettings>): GlobalSettings {
-    this.state.settings = {
+    this.state.settings = normalizeSettings({
       ...this.state.settings,
       ...updates,
       notifications: {
         ...this.state.settings.notifications,
         ...updates.notifications
       }
-    }
+    })
     this.scheduleSave()
     return this.state.settings
   }

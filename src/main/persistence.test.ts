@@ -77,6 +77,7 @@ describe('Store', () => {
     expect(settings.terminalFontSize).toBe(14)
     expect(settings.terminalFontWeight).toBe(500)
     expect(settings.rightSidebarOpenByDefault).toBe(true)
+    expect(settings.markdownDocumentTemplates).toEqual([])
     expect(settings.showTasksButton).toBe(true)
   })
 
@@ -145,9 +146,76 @@ describe('Store', () => {
     expect(store.getSettings().editorAutoSaveDelayMs).toBe(1000)
     expect(store.getSettings().refreshLocalBaseRefOnWorktreeCreate).toBe(false)
     expect(store.getSettings().rightSidebarOpenByDefault).toBe(true)
+    expect(store.getSettings().markdownDocumentTemplates).toEqual([])
     expect(store.getSettings().showTasksButton).toBe(true)
     // repos should be loaded
     expect(store.getRepos()).toHaveLength(1)
+  })
+
+  it('preserves existing persisted Markdown document templates', async () => {
+    const template = {
+      id: 'template-1',
+      name: 'Daily',
+      content: '# {{title}}',
+      createdAt: 100,
+      updatedAt: 200
+    }
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { markdownDocumentTemplates: [template] },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getSettings().markdownDocumentTemplates).toEqual([template])
+  })
+
+  it('normalizes malformed persisted Markdown document templates', async () => {
+    const validTemplate = {
+      id: 'template-1',
+      name: 'Daily',
+      content: '# {{title}}',
+      createdAt: 100,
+      updatedAt: 200
+    }
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        markdownDocumentTemplates: [
+          validTemplate,
+          { id: 'bad', name: 'Bad', createdAt: 100, updatedAt: 200 },
+          null,
+          'bad'
+        ]
+      },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getSettings().markdownDocumentTemplates).toEqual([validTemplate])
+  })
+
+  it('normalizes non-array Markdown document templates to an empty list', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { markdownDocumentTemplates: { id: 'bad' } },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getSettings().markdownDocumentTemplates).toEqual([])
   })
 
   it('preserves editorAutoSaveDelayMs when set in persisted data', async () => {

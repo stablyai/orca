@@ -873,6 +873,14 @@ export type TerminalColorOverrides = {
   bold?: string
 }
 
+export type MarkdownDocumentTemplate = {
+  id: string
+  name: string
+  content: string
+  createdAt: number
+  updatedAt: number
+}
+
 export type GlobalSettings = {
   workspaceDir: string
   nestWorkspaces: boolean
@@ -948,6 +956,7 @@ export type GlobalSettings = {
    *  until the user explicitly wants worktree-scoped in-app browsing. */
   openLinksInApp: boolean
   rightSidebarOpenByDefault: boolean
+  markdownDocumentTemplates: MarkdownDocumentTemplate[]
   /** Whether to show the live agent activity count badge in the titlebar. */
   showTitlebarAgentActivity: boolean
   /** Why: some users do not use the Tasks feature and prefer to keep the

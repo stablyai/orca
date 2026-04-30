@@ -17,8 +17,12 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuPortal,
   DropdownMenuSeparator,
   DropdownMenuShortcut,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '../tab-bar/SortableTab'
@@ -46,6 +50,11 @@ import {
   getMarkdownViewModes,
   isMarkdownPreviewShortcut
 } from './markdown-preview-controls'
+import {
+  getMarkdownTemplateVariables,
+  getTitleFromMarkdownPath,
+  renderMarkdownTemplate
+} from '../../../../shared/document-templates'
 
 const isMac = navigator.userAgent.includes('Mac')
 const isLinux = navigator.userAgent.includes('Linux')
@@ -66,6 +75,12 @@ type FileContent = {
 }
 
 type DiffContent = GitDiffResult
+
+function getPathFilename(relativePath: string): string {
+  const normalized = relativePath.replace(/[\\/]+/g, '/')
+  const slashIndex = normalized.lastIndexOf('/')
+  return slashIndex === -1 ? normalized : normalized.slice(slashIndex + 1)
+}
 
 // Why: split-pane layouts mount one EditorPanel per pane, and each panel
 // attaches its own listener to `ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT`.
@@ -873,6 +888,29 @@ function EditorPanelInner({
     mode: activeFile.mode,
     diffSource: activeFile.diffSource
   })
+  const markdownDocumentTemplates = settings?.markdownDocumentTemplates ?? []
+  const currentMarkdownContent =
+    editorDrafts[activeFile.id] ?? fileContents[activeFile.id]?.content ?? ''
+  const canInsertMarkdownTemplate = isMarkdown && activeFile.mode === 'edit'
+
+  const handleInsertMarkdownTemplate = (templateId: string): void => {
+    const template = markdownDocumentTemplates.find((candidate) => candidate.id === templateId)
+    if (!template || !canInsertMarkdownTemplate) {
+      return
+    }
+    const filename = getPathFilename(activeFile.relativePath)
+    const renderedTemplate = renderMarkdownTemplate(
+      template.content,
+      getMarkdownTemplateVariables({
+        title: getTitleFromMarkdownPath(activeFile.relativePath),
+        filename
+      })
+    )
+    const nextContent = currentMarkdownContent.trim()
+      ? `${currentMarkdownContent.trimEnd()}\n\n${renderedTemplate}`
+      : renderedTemplate
+    handleContentChange(nextContent)
+  }
 
   const handleOpenDiffTargetFile = (): void => {
     if (!openFileState.canOpen) {
@@ -1057,6 +1095,32 @@ function EditorPanelInner({
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" sideOffset={4}>
+                {markdownDocumentTemplates.length > 0 && (
+                  <>
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger>Insert Template</DropdownMenuSubTrigger>
+                      <DropdownMenuPortal>
+                        <DropdownMenuSubContent>
+                          {canInsertMarkdownTemplate ? (
+                            markdownDocumentTemplates.map((template) => (
+                              <DropdownMenuItem
+                                key={template.id}
+                                onSelect={() => handleInsertMarkdownTemplate(template.id)}
+                              >
+                                {template.name}
+                              </DropdownMenuItem>
+                            ))
+                          ) : (
+                            <DropdownMenuItem disabled>
+                              Only available in Markdown edit mode
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuSubContent>
+                      </DropdownMenuPortal>
+                    </DropdownMenuSub>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
                 <DropdownMenuItem
                   // Why: the item is disabled (not hidden) only in source/Monaco
                   // mode, which has no document DOM to export. We intentionally

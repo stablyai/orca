@@ -94,6 +94,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     experimentalAgentDashboard: false,
     terminalWindowsShell: 'powershell.exe',
     enableGitHubAttribution: true,
+    markdownDocumentTemplates: [],
     ...overrides
   }
 }

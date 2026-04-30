@@ -36,6 +36,14 @@ export const GENERAL_EDITOR_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   }
 ]
 
+export const GENERAL_MARKDOWN_TEMPLATE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
+  {
+    title: 'Markdown Templates',
+    description: 'Reusable templates for new Markdown documents.',
+    keywords: ['markdown', 'template', 'document', 'note', 'md', 'mdx']
+  }
+]
+
 export const GENERAL_CLI_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Shell command',
@@ -94,6 +102,7 @@ export const GENERAL_SUPPORT_SEARCH_ENTRIES: SettingsSearchEntry[] = [
 export const GENERAL_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   ...GENERAL_WORKSPACE_SEARCH_ENTRIES,
   ...GENERAL_EDITOR_SEARCH_ENTRIES,
+  ...GENERAL_MARKDOWN_TEMPLATE_SEARCH_ENTRIES,
   ...GENERAL_CLI_SEARCH_ENTRIES,
   ...GENERAL_CACHE_TIMER_SEARCH_ENTRIES,
   ...GENERAL_UPDATE_SEARCH_ENTRIES,
