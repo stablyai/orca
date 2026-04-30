@@ -1016,7 +1016,7 @@ export type GlobalSettings = {
   experimentalTerminalDaemonNoticeShown: boolean
   /** Experimental: live Agent Dashboard — a sidebar Agents tab
    *  that aggregates working/blocked/done agents across all worktrees, plus
-   *  the sidebar AgentStatusHover surface, retention of "done" rows, and the
+   *  inline per-card agent activity, retention of "done" rows, and the
    *  hook-driven status slice that feeds them. Opt-in because the surface is
    *  still in preview: managed hook installation (Claude/Codex/Gemini) only
    *  runs when this is true, so toggling it on takes effect on the next app
@@ -1057,11 +1057,11 @@ export type WorktreeCardProperty =
   | 'issue'
   | 'pr'
   | 'comment'
-  // Why: opt-in inline list of agent activity rendered directly inside each
-  // workspace card. When this toggle is on, the card shows the same rows that
-  // the hover-to-right AgentStatusHover panel would show — and the hovercard
-  // is suppressed on the card (see WorktreeCard) so the data is not
-  // duplicated. Off by default to preserve the current compact sidebar.
+  // Why: inline list of agent activity rendered directly inside each
+  // workspace card when the experimental agent dashboard is on. On by default
+  // (see DEFAULT_WORKTREE_CARD_PROPERTIES in shared/constants.ts) because live
+  // agent activity is the primary reason users opt into the cockpit; users who
+  // prefer a compact sidebar can uncheck it from the Workspaces view options.
   | 'inline-agents'
 
 export type StatusBarItem =

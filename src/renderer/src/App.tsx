@@ -103,7 +103,6 @@ function App(): React.JSX.Element {
       toggleRightSidebar: s.toggleRightSidebar,
       setRightSidebarOpen: s.setRightSidebarOpen,
       setRightSidebarTab: s.setRightSidebarTab,
-      setSidebarOpen: s.setSidebarOpen,
       updateSettings: s.updateSettings
     }))
   )
