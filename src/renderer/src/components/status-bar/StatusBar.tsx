@@ -180,9 +180,7 @@ function ClaudeSwitcherMenu({
                   <div className="flex w-full flex-col gap-0.5">
                     <span className="max-w-[220px] truncate">{target.label}</span>
                     {inactiveUsage?.isFetching && !inactiveUsage.claude ? (
-                      <span className="text-[10px] text-muted-foreground animate-pulse">
-                        Loading…
-                      </span>
+                      <InlineUsageSkeleton />
                     ) : inactiveUsage?.claude ? (
                       <InlineUsageBars
                         limits={inactiveUsage.claude}
@@ -278,6 +276,15 @@ function InlineUsageBars({
       {limits.status === 'error' && !limits.session && !limits.weekly && (
         <span className="text-[10px] text-muted-foreground">Sign in to see usage</span>
       )}
+    </div>
+  )
+}
+
+function InlineUsageSkeleton(): React.JSX.Element {
+  return (
+    <div className="flex w-full animate-pulse items-center gap-2">
+      <div className="h-[4px] flex-1 rounded-full bg-muted" />
+      <div className="h-[4px] flex-1 rounded-full bg-muted" />
     </div>
   )
 }
@@ -567,9 +574,7 @@ function CodexSwitcherMenu({
                   <div className="flex w-full flex-col gap-0.5">
                     <span className="truncate">{target.label}</span>
                     {inactiveUsage?.isFetching && !inactiveUsage.claude ? (
-                      <span className="text-[10px] text-muted-foreground animate-pulse">
-                        Loading…
-                      </span>
+                      <InlineUsageSkeleton />
                     ) : inactiveUsage?.claude ? (
                       <InlineUsageBars
                         limits={inactiveUsage.claude}
