@@ -67,6 +67,36 @@ describe('getNextTabWithinActiveType', () => {
     ).toBeNull()
   })
 
+  it('uses direction-aware fallback when the active tab is missing from the active type', () => {
+    const terminalTabs: TypeCyclableTab[] = [
+      { type: 'terminal', id: 'term-1' },
+      { type: 'terminal', id: 'term-2' },
+      { type: 'terminal', id: 'term-3' }
+    ]
+
+    expect(
+      getNextTabWithinActiveType({
+        tabs: terminalTabs,
+        activeTabType: 'terminal',
+        activeTabId: null,
+        activeFileId: 'file-1',
+        activeBrowserTabId: 'browser-1',
+        direction: -1
+      })
+    ).toEqual({ type: 'terminal', id: 'term-3' })
+
+    expect(
+      getNextTabWithinActiveType({
+        tabs: terminalTabs,
+        activeTabType: 'terminal',
+        activeTabId: null,
+        activeFileId: 'file-1',
+        activeBrowserTabId: 'browser-1',
+        direction: 1
+      })
+    ).toEqual({ type: 'terminal', id: 'term-1' })
+  })
+
   it('uses the active group tab id for split editor duplicates', () => {
     expect(
       getNextTabWithinActiveType({

@@ -59,6 +59,10 @@ export function getNextTabWithinActiveType({
     ? tabsOfActiveType.findIndex((tab) => tab.tabId === groupTabIdInNav)
     : tabsOfActiveType.findIndex((tab) => tab.id === currentId)
 
+  if (currentIndex === -1) {
+    return direction < 0 ? tabsOfActiveType.at(-1)! : tabsOfActiveType.at(0)!
+  }
+
   return tabsOfActiveType[
     (currentIndex + direction + tabsOfActiveType.length) % tabsOfActiveType.length
   ]

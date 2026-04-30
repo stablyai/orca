@@ -54,6 +54,9 @@ export function handleSwitchTab(direction: number): boolean {
     store.setActiveTabType('terminal')
   } else if (next.type === 'browser') {
     store.setActiveBrowserTab(next.id)
+    if (next.tabId) {
+      store.activateTab?.(next.tabId)
+    }
     store.setActiveTabType('browser')
   } else {
     // Why: `setActiveFile` targets the file entity (its implicit activateTab
