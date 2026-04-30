@@ -48,7 +48,6 @@ export type GitWorktreeInfo = {
   head: string
   branch: string
   isBare: boolean
-  isSparse?: boolean
   /** True for the repo's main working tree (the first entry from `git worktree list`).
    *  Linked worktrees created via `git worktree add` have this set to false. */
   isMainWorktree: boolean
@@ -68,11 +67,6 @@ export type Worktree = {
   isPinned: boolean
   sortOrder: number
   lastActivityAt: number
-  sparseDirectories?: string[]
-  sparseBaseRef?: string
-  /** ID of the saved preset this worktree was created from, if any. Cleared
-   *  when the worktree is no longer sparse on refresh. */
-  sparsePresetId?: string
   diffComments?: DiffComment[]
 } & GitWorktreeInfo
 
@@ -88,9 +82,6 @@ export type WorktreeMeta = {
   isPinned: boolean
   sortOrder: number
   lastActivityAt: number
-  sparseDirectories?: string[]
-  sparseBaseRef?: string
-  sparsePresetId?: string
   diffComments?: DiffComment[]
 }
 
@@ -668,32 +659,11 @@ export type WorktreeSetupLaunch = {
   envVars: Record<string, string>
 }
 
-export type CreateSparseCheckoutRequest = {
-  directories: string[]
-  /** Set when the directories came from a saved preset and the user did not
-   *  modify them — recorded on WorktreeMeta so the worktree can show "from
-   *  preset X" later. Cleared if the user edited the textarea. */
-  presetId?: string
-}
-
-/** A reusable per-repo sparse directory list. Saved by the user from the
- *  composer; surfaced again the next time they create a worktree in the same
- *  repo. The MVP scope (no preset) is `presetId === undefined`. */
-export type SparsePreset = {
-  id: string
-  repoId: string
-  name: string
-  directories: string[]
-  createdAt: number
-  updatedAt: number
-}
-
 export type CreateWorktreeArgs = {
   repoId: string
   name: string
   baseBranch?: string
   setupDecision?: SetupDecision
-  sparseCheckout?: CreateSparseCheckoutRequest
 }
 
 export type CreateWorktreeResult = {
@@ -1174,9 +1144,6 @@ export type PersistedTrustedOrcaHooks = Record<string, PersistedTrustedOrcaHookR
 export type PersistedState = {
   schemaVersion: number
   repos: Repo[]
-  /** Sparse-checkout presets keyed by repoId. Empty record on first launch;
-   *  presets are managed from the new-workspace composer and repo settings. */
-  sparsePresetsByRepo: Record<string, SparsePreset[]>
   worktreeMeta: Record<string, WorktreeMeta>
   settings: GlobalSettings
   ui: PersistedUIState

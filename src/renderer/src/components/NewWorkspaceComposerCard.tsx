@@ -18,8 +18,7 @@ import AgentCombobox from '@/components/agent/AgentCombobox'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
-import type { SparsePreset, TuiAgent } from '../../../shared/types'
-import SparseCheckoutPresetSelect from '@/components/sparse/SparseCheckoutPresetSelect'
+import type { TuiAgent } from '../../../shared/types'
 
 const isMac = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
 
@@ -52,10 +51,6 @@ type NewWorkspaceComposerCardProps = {
   shouldWaitForSetupCheck: boolean
   resolvedSetupDecision: 'run' | 'skip' | null
   createError: string | null
-  canUseSparseCheckout: boolean
-  sparsePresets: SparsePreset[]
-  sparseSelectedPresetId: string | null
-  onSparseSelectPreset: (preset: SparsePreset | null) => void
 }
 
 function SetupCommandPreview({
@@ -191,11 +186,7 @@ export default function NewWorkspaceComposerCard({
   onSetupDecisionChange,
   shouldWaitForSetupCheck,
   resolvedSetupDecision,
-  createError,
-  canUseSparseCheckout,
-  sparsePresets,
-  sparseSelectedPresetId,
-  onSparseSelectPreset
+  createError
 }: NewWorkspaceComposerCardProps): React.JSX.Element {
   const { isFileDragOver, dragHandlers } = useComposerFileDragOver()
   const openModal = useAppStore((s) => s.openModal)
@@ -346,8 +337,8 @@ export default function NewWorkspaceComposerCard({
 
         <div
           className={cn(
-            'grid overflow-hidden transition-[grid-template-rows] duration-200 ease-out',
-            advancedOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+            'grid overflow-hidden transition-[grid-template-rows,opacity] duration-200 ease-out',
+            advancedOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
           )}
           aria-hidden={!advancedOpen}
         >
@@ -356,14 +347,7 @@ export default function NewWorkspaceComposerCard({
                 textarea's 3px outset focus ring has horizontal breathing room
                 inside the overflow-hidden drawer above. Without it the ring
                 gets clipped on the right edge when the field is focused. */}
-            <div
-              className={cn(
-                'space-y-4 px-1 pt-1 pb-3 transition-[opacity,transform] duration-150 ease-out',
-                advancedOpen
-                  ? 'translate-y-0 opacity-100 delay-200'
-                  : '-translate-y-1 opacity-0 delay-0'
-              )}
-            >
+            <div className="space-y-4 px-1 pt-1">
               <div className="space-y-1">
                 <label className="text-xs font-medium text-muted-foreground">Note</label>
                 <textarea
@@ -465,22 +449,6 @@ export default function NewWorkspaceComposerCard({
                   ) : null}
                 </div>
               ) : null}
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Sparse checkout</label>
-                <SparseCheckoutPresetSelect
-                  repoId={repoId}
-                  presets={sparsePresets}
-                  selectedPresetId={sparseSelectedPresetId}
-                  onSelectPreset={onSparseSelectPreset}
-                  disabled={!canUseSparseCheckout}
-                />
-                {!canUseSparseCheckout ? (
-                  <p className="text-[11px] text-muted-foreground">
-                    Only available for local repositories.
-                  </p>
-                ) : null}
-              </div>
             </div>
           </div>
         </div>

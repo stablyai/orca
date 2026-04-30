@@ -40,11 +40,6 @@ type WorktreeCardProps = {
   hintNumber?: number
 }
 
-function formatSparseDirectoryPreview(directories: string[]): string {
-  const preview = directories.slice(0, 4).join(', ')
-  return directories.length <= 4 ? preview : `${preview}, +${directories.length - 4} more`
-}
-
 const WorktreeCard = React.memo(function WorktreeCard({
   worktree,
   repo,
@@ -447,29 +442,6 @@ const WorktreeCard = React.memo(function WorktreeCard({
                 </TooltipTrigger>
                 <TooltipContent side="right" sideOffset={8}>
                   Primary worktree (original clone directory)
-                </TooltipContent>
-              </Tooltip>
-            )}
-
-            {worktree.isSparse && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Badge
-                    variant="outline"
-                    className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 leading-none text-amber-700 dark:text-amber-300 border-amber-500/30 bg-amber-500/5"
-                  >
-                    sparse
-                  </Badge>
-                </TooltipTrigger>
-                <TooltipContent side="right" sideOffset={8} className="max-w-72">
-                  <div className="space-y-1">
-                    <div>Partial checkout. Files outside these paths are not on disk.</div>
-                    {worktree.sparseDirectories && worktree.sparseDirectories.length > 0 ? (
-                      <div className="font-mono text-[11px] opacity-80">
-                        {formatSparseDirectoryPreview(worktree.sparseDirectories)}
-                      </div>
-                    ) : null}
-                  </div>
                 </TooltipContent>
               </Tooltip>
             )}

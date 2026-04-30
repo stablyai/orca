@@ -5,7 +5,7 @@ import type { BrowserWindow } from 'electron'
 import { dialog, ipcMain } from 'electron'
 import { randomUUID } from 'crypto'
 import type { Store } from '../persistence'
-import type { Repo, BaseRefDefaultResult, SparsePreset } from '../../shared/types'
+import type { Repo, BaseRefDefaultResult } from '../../shared/types'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { REPO_COLORS } from '../../shared/constants'
 import { rebuildAuthorizedRootsCache } from './filesystem-auth'
@@ -28,7 +28,6 @@ import {
 } from '../git/repo'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 import { getActiveMultiplexer } from './ssh'
-import { normalizeSparseDirectories } from './sparse-checkout-directories'
 
 // Why: module-scoped so the abort handle survives window re-creation on macOS.
 // registerRepoHandlers is called again when a new BrowserWindow is created,
@@ -51,9 +50,6 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.removeHandler('repos:getBaseRefDefault')
   ipcMain.removeHandler('repos:searchBaseRefs')
   ipcMain.removeHandler('repos:addRemote')
-  ipcMain.removeHandler('sparsePresets:list')
-  ipcMain.removeHandler('sparsePresets:save')
-  ipcMain.removeHandler('sparsePresets:remove')
 
   ipcMain.handle('repos:list', () => {
     return store.getRepos()
@@ -222,55 +218,6 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       return updated
     }
   )
-
-  // ── Sparse presets ─────────────────────────────────────────────
-  // Why: presets are repo-scoped reusable directory lists used by the
-  // new-workspace composer. Persisted via Store and broadcast back to the
-  // renderer so any open composer reflects new/edited/deleted presets
-  // immediately.
-
-  ipcMain.handle('sparsePresets:list', (_event, args: { repoId: string }) => {
-    return store.getSparsePresets(args.repoId)
-  })
-
-  ipcMain.handle(
-    'sparsePresets:save',
-    (
-      _event,
-      args: { repoId: string; id?: string; name: string; directories: string[] }
-    ): SparsePreset => {
-      const repo = store.getRepo(args.repoId)
-      if (!repo) {
-        throw new Error(`Repo "${args.repoId}" not found`)
-      }
-      const name = normalizeSparsePresetName(args.name)
-      const directories = normalizeSparsePresetDirectories(args.directories)
-      const now = Date.now()
-      const existing = args.id
-        ? store.getSparsePresets(args.repoId).find((preset) => preset.id === args.id)
-        : undefined
-      const preset: SparsePreset = {
-        id: existing?.id ?? randomUUID(),
-        repoId: args.repoId,
-        name,
-        directories,
-        createdAt: existing?.createdAt ?? now,
-        updatedAt: now
-      }
-      const saved = store.saveSparsePreset(preset)
-      notifySparsePresetsChanged(mainWindow, args.repoId)
-      return saved
-    }
-  )
-
-  ipcMain.handle('sparsePresets:remove', (_event, args: { repoId: string; presetId: string }) => {
-    const repo = store.getRepo(args.repoId)
-    if (!repo) {
-      throw new Error(`Repo "${args.repoId}" not found`)
-    }
-    store.removeSparsePreset(args.repoId, args.presetId)
-    notifySparsePresetsChanged(mainWindow, args.repoId)
-  })
 
   ipcMain.handle('repos:pickFolder', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
@@ -566,40 +513,4 @@ function notifyReposChanged(mainWindow: BrowserWindow): void {
   if (!mainWindow.isDestroyed()) {
     mainWindow.webContents.send('repos:changed')
   }
-}
-
-function notifySparsePresetsChanged(mainWindow: BrowserWindow, repoId: string): void {
-  if (!mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('sparsePresets:changed', { repoId })
-  }
-}
-
-function normalizeSparsePresetName(name: string): string {
-  const trimmed = name.trim()
-  if (!trimmed) {
-    throw new Error('Preset name is required.')
-  }
-  if (trimmed.length > 80) {
-    throw new Error('Preset name is too long.')
-  }
-  return trimmed
-}
-
-function normalizeSparsePresetDirectories(directories: string[]): string[] {
-  let normalized: string[]
-  try {
-    normalized = normalizeSparseDirectories(directories)
-  } catch (err) {
-    if (
-      err instanceof Error &&
-      err.message === 'Sparse checkout directories must be repo-relative paths.'
-    ) {
-      throw new Error('Preset directories must be repo-relative paths.')
-    }
-    throw err
-  }
-  if (normalized.length === 0) {
-    throw new Error('Preset must have at least one directory.')
-  }
-  return normalized
 }

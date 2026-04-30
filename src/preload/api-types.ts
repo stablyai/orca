@@ -8,7 +8,6 @@ import type {
   BrowserSessionProfileSource,
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState,
-  CreateWorktreeArgs,
   CreateWorktreeResult,
   DirEntry,
   FsChangedPayload,
@@ -45,7 +44,6 @@ import type {
   PRComment,
   PRInfo,
   Repo,
-  SparsePreset,
   SearchOptions,
   SearchResult,
   StatsSummary,
@@ -329,21 +327,15 @@ export type PreloadApi = {
     searchBaseRefs: (args: { repoId: string; query: string; limit?: number }) => Promise<string[]>
     onChanged: (callback: () => void) => () => void
   }
-  sparsePresets: {
-    list: (args: { repoId: string }) => Promise<SparsePreset[]>
-    save: (args: {
-      repoId: string
-      id?: string
-      name: string
-      directories: string[]
-    }) => Promise<SparsePreset>
-    remove: (args: { repoId: string; presetId: string }) => Promise<void>
-    onChanged: (callback: (data: { repoId: string }) => void) => () => void
-  }
   worktrees: {
     list: (args: { repoId: string }) => Promise<Worktree[]>
     listAll: () => Promise<Worktree[]>
-    create: (args: CreateWorktreeArgs) => Promise<CreateWorktreeResult>
+    create: (args: {
+      repoId: string
+      name: string
+      baseBranch?: string
+      setupDecision?: 'inherit' | 'run' | 'skip'
+    }) => Promise<CreateWorktreeResult>
     resolvePrBase: (args: {
       repoId: string
       prNumber: number

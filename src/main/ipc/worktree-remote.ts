@@ -13,7 +13,7 @@ import type {
   WorktreeMeta
 } from '../../shared/types'
 import { getPRForBranch } from '../github/client'
-import { listWorktrees, addWorktree, addSparseWorktree } from '../git/worktree'
+import { listWorktrees, addWorktree } from '../git/worktree'
 import { getGitUsername, getDefaultBaseRef, getBranchConflictKind } from '../git/repo'
 import { gitExecFileAsync } from '../git/runner'
 import { isWslPath, parseWslPath, getWslHome } from '../wsl'
@@ -31,7 +31,6 @@ import {
   areWorktreePathsEqual
 } from './worktree-logic'
 import { invalidateAuthorizedRootsCache } from './filesystem-auth'
-import { normalizeSparseDirectories } from './sparse-checkout-directories'
 
 export function notifyWorktreesChanged(mainWindow: BrowserWindow, repoId: string): void {
   if (!mainWindow.isDestroyed()) {
@@ -45,10 +44,6 @@ export async function createRemoteWorktree(
   store: Store,
   mainWindow: BrowserWindow
 ): Promise<CreateWorktreeResult> {
-  if (args.sparseCheckout) {
-    throw new Error('Sparse checkout is not supported for remote SSH repos yet.')
-  }
-
   const provider = getSshGitProvider(repo.connectionId!) as SshGitProvider | undefined
   if (!provider) {
     throw new Error(`No git provider for connection "${repo.connectionId}"`)
@@ -312,32 +307,6 @@ export async function createLocalWorktree(
   // Resolve it before mutating git state so missing UI input cannot strand
   // a real worktree on disk while the renderer reports "create failed".
   const shouldLaunchSetup = setupScript ? shouldRunSetupForCreate(repo, args.setupDecision) : false
-  const sparseDirectories = args.sparseCheckout
-    ? normalizeSparseDirectories(args.sparseCheckout.directories)
-    : []
-  if (args.sparseCheckout && sparseDirectories.length === 0) {
-    throw new Error('Sparse checkout requires at least one repo-relative directory.')
-  }
-  let sparsePresetId: string | undefined
-  if (args.sparseCheckout?.presetId) {
-    const preset = store
-      .getSparsePresets(repo.id)
-      .find((entry) => entry.id === args.sparseCheckout?.presetId)
-    if (preset?.repoId === repo.id) {
-      try {
-        const presetDirectories = normalizeSparseDirectories(preset.directories)
-        // Why: use Set-based comparison so directory order does not affect
-        // attribution — matches the renderer's sparseDirectoriesMatch logic.
-        const presetSet = new Set(presetDirectories)
-        const directoriesMatch =
-          presetDirectories.length === sparseDirectories.length &&
-          sparseDirectories.every((entry) => presetSet.has(entry))
-        sparsePresetId = directoriesMatch ? preset.id : undefined
-      } catch {
-        // Why: corrupt preset data should not block creation or falsely label the new worktree.
-      }
-    }
-  }
 
   // Why: `git fetch` previously blocked worktree creation for 1–5s on every
   // click, even though the fetch result isn't actually required — the
@@ -350,22 +319,13 @@ export async function createLocalWorktree(
     // Fetch is best-effort — don't block worktree creation if offline
   })
 
-  await (sparseDirectories.length > 0
-    ? addSparseWorktree(
-        repo.path,
-        worktreePath,
-        branchName,
-        sparseDirectories,
-        baseBranch,
-        settings.refreshLocalBaseRefOnWorktreeCreate
-      )
-    : addWorktree(
-        repo.path,
-        worktreePath,
-        branchName,
-        baseBranch,
-        settings.refreshLocalBaseRefOnWorktreeCreate
-      ))
+  await addWorktree(
+    repo.path,
+    worktreePath,
+    branchName,
+    baseBranch,
+    settings.refreshLocalBaseRefOnWorktreeCreate
+  )
 
   // Re-list to get the freshly created worktree info
   const gitWorktrees = await listWorktrees(repo.path)
@@ -382,13 +342,6 @@ export async function createLocalWorktree(
     lastActivityAt: Date.now(),
     ...(shouldSetDisplayName(effectiveRequestedName, branchName, effectiveSanitizedName)
       ? { displayName: effectiveRequestedName }
-      : {}),
-    ...(sparseDirectories.length > 0
-      ? {
-          sparseDirectories,
-          sparseBaseRef: baseBranch,
-          sparsePresetId
-        }
       : {})
   }
   const meta = store.setWorktreeMeta(worktreeId, metaUpdates)

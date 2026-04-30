@@ -11,16 +11,6 @@ import {
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 export type { WorktreeSlice, WorktreeDeleteState } from './worktree-helpers'
 
-function arraysShallowEqual(a: string[] | undefined, b: string[] | undefined): boolean {
-  if (a === b) {
-    return true
-  }
-  if (!a || !b || a.length !== b.length) {
-    return !a?.length && !b?.length
-  }
-  return a.every((v, i) => v === b[i])
-}
-
 function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): boolean {
   if (!current || current.length !== next.length) {
     return false
@@ -36,7 +26,6 @@ function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): b
       worktree.branch === candidate.branch &&
       worktree.isBare === candidate.isBare &&
       worktree.isMainWorktree === candidate.isMainWorktree &&
-      worktree.isSparse === candidate.isSparse &&
       worktree.displayName === candidate.displayName &&
       worktree.comment === candidate.comment &&
       worktree.linkedIssue === candidate.linkedIssue &&
@@ -45,9 +34,7 @@ function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): b
       worktree.isUnread === candidate.isUnread &&
       worktree.isPinned === candidate.isPinned &&
       worktree.sortOrder === candidate.sortOrder &&
-      worktree.lastActivityAt === candidate.lastActivityAt &&
-      worktree.sparseBaseRef === candidate.sparseBaseRef &&
-      arraysShallowEqual(worktree.sparseDirectories, candidate.sparseDirectories)
+      worktree.lastActivityAt === candidate.lastActivityAt
     )
   })
 }
@@ -99,7 +86,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     await Promise.all(repos.map((r) => get().fetchWorktrees(r.id)))
   },
 
-  createWorktree: async (repoId, name, baseBranch, setupDecision = 'inherit', sparseCheckout) => {
+  createWorktree: async (repoId, name, baseBranch, setupDecision = 'inherit') => {
     const retryableConflictPatterns = [
       /already exists locally/i,
       /already exists on a remote/i,
@@ -116,8 +103,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             repoId,
             name: candidateName,
             baseBranch,
-            setupDecision,
-            sparseCheckout
+            setupDecision
           })
           set((s) => ({
             worktreesByRepo: {

@@ -476,10 +476,7 @@ function AnimatedTabPanels({
       // leaving no room for a ring to paint. `overflow-clip-margin` gives
       // the ring breathing room on every side without re-introducing scroll
       // containers or letting the inactive panel leak layout.
-      className={cn(
-        'relative overflow-clip',
-        isAnimating && 'transition-[height] duration-200 ease-out'
-      )}
+      className="relative overflow-clip transition-[height] duration-200 ease-out"
       style={{
         ...(wrapperHeight !== null ? { height: wrapperHeight } : null),
         overflowClipMargin: '8px'

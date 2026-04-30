@@ -6,13 +6,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync, unlinkS
 import { writeFile, rename, mkdir, rm } from 'fs/promises'
 import { join, dirname } from 'path'
 import { homedir } from 'os'
-import type {
-  PersistedState,
-  Repo,
-  SparsePreset,
-  WorktreeMeta,
-  GlobalSettings
-} from '../shared/types'
+import type { PersistedState, Repo, WorktreeMeta, GlobalSettings } from '../shared/types'
 import type { SshTarget } from '../shared/ssh-types'
 import { isFolderRepo } from '../shared/repo-kind'
 import { getGitUsername } from './git/repo'
@@ -320,9 +314,6 @@ export class Store {
 
   removeRepo(id: string): void {
     this.state.repos = this.state.repos.filter((r) => r.id !== id)
-    // Why: presets are repo-scoped, so removing the repo means the presets
-    // can never be referenced again — drop them with the parent.
-    delete this.state.sparsePresetsByRepo[id]
     // Clean up worktree meta for this repo
     const prefix = `${id}::`
     for (const key of Object.keys(this.state.worktreeMeta)) {
@@ -371,31 +362,6 @@ export class Store {
         }
       }
     }
-  }
-
-  // ── Sparse Presets ─────────────────────────────────────────────────
-
-  getSparsePresets(repoId: string): SparsePreset[] {
-    return [...(this.state.sparsePresetsByRepo[repoId] ?? [])].sort((left, right) =>
-      left.name.localeCompare(right.name)
-    )
-  }
-
-  saveSparsePreset(preset: SparsePreset): SparsePreset {
-    const existing = this.state.sparsePresetsByRepo[preset.repoId] ?? []
-    const index = existing.findIndex((entry) => entry.id === preset.id)
-    this.state.sparsePresetsByRepo[preset.repoId] =
-      index === -1
-        ? [...existing, preset]
-        : existing.map((entry, i) => (i === index ? preset : entry))
-    this.scheduleSave()
-    return preset
-  }
-
-  removeSparsePreset(repoId: string, presetId: string): void {
-    const existing = this.state.sparsePresetsByRepo[repoId] ?? []
-    this.state.sparsePresetsByRepo[repoId] = existing.filter((entry) => entry.id !== presetId)
-    this.scheduleSave()
   }
 
   // ── Worktree Meta ──────────────────────────────────────────────────

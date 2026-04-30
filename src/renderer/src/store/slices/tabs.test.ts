@@ -85,7 +85,6 @@ const mockApi = {
 globalThis.window = { api: mockApi }
 
 import { createRepoSlice } from './repos'
-import { createSparsePresetsSlice } from './sparse-presets'
 import { createWorktreeSlice } from './worktrees'
 import { createTerminalSlice } from './terminals'
 import { createTabsSlice } from './tabs'
@@ -111,7 +110,6 @@ const WT = 'repo1::/tmp/feature'
 function createTestStore() {
   return create<AppState>()((...a) => ({
     ...createRepoSlice(...a),
-    ...createSparsePresetsSlice(...a),
     ...createWorktreeSlice(...a),
     ...createTerminalSlice(...a),
     ...createTabsSlice(...a),

@@ -210,7 +210,6 @@ export function getDefaultPersistedState(homedir: string): PersistedState {
   return {
     schemaVersion: SCHEMA_VERSION,
     repos: [],
-    sparsePresetsByRepo: {},
     worktreeMeta: {},
     settings: getDefaultSettings(homedir),
     ui: getDefaultUIState(),

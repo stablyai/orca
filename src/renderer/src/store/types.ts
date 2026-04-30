@@ -1,5 +1,4 @@
 import type { RepoSlice } from './slices/repos'
-import type { SparsePresetsSlice } from './slices/sparse-presets'
 import type { WorktreeSlice } from './slices/worktrees'
 import type { TerminalSlice } from './slices/terminals'
 import type { TabsSlice } from './slices/tabs'
@@ -21,7 +20,6 @@ import type { DetectedAgentsSlice } from './slices/detected-agents'
 import type { WorktreeNavHistorySlice } from './slices/worktree-nav-history'
 
 export type AppState = RepoSlice &
-  SparsePresetsSlice &
   WorktreeSlice &
   TerminalSlice &
   TabsSlice &
