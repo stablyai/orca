@@ -1,11 +1,13 @@
 import React from 'react'
+import { CircleCheck } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-// Why: shared state-dot primitive so the dashboard and the sidebar's agent
-// hover render the same state vocabulary identically. The dot sits next to the
-// agent icon (Claude/Codex/etc.) — they are two distinct glyphs: one for *who*
-// (icon) and one for *what state* (dot). Keeping them separate keeps each
-// glyph scannable at a glance instead of fused into a single decorated icon.
+// Why: shared state-indicator primitive so the dashboard and the sidebar's
+// agent hover render the same state vocabulary identically. Most states render
+// as a dot; 'working' renders a spinner and 'done' renders a check icon. It
+// sits next to the agent icon (Claude/Codex/etc.) — two distinct glyphs: one
+// for *who* (agent icon) and one for *what state* (this indicator). Keeping
+// them separate keeps each scannable instead of fused into one decorated icon.
 
 export type AgentDotState =
   | 'working'
@@ -49,6 +51,7 @@ export const AgentStateDot = React.memo(function AgentStateDot({
 }: Props): React.JSX.Element {
   const box = size === 'md' ? 'h-3 w-3' : 'h-2.5 w-2.5'
   const inner = size === 'md' ? 'size-2' : 'size-1.5'
+  const icon = size === 'md' ? 'size-3' : 'size-2.5'
 
   if (state === 'working') {
     return (
@@ -66,6 +69,22 @@ export const AgentStateDot = React.memo(function AgentStateDot({
     )
   }
 
+  if (state === 'done') {
+    // Why: match StatusIndicator — agent-reported completion renders as an
+    // emerald check icon instead of an emerald dot so 'done' is visually
+    // distinct from other emerald states (e.g., sidebar 'active'). Keeping
+    // the dashboard and sidebar on the same glyph for 'done' is the whole
+    // point of this shared primitive (see file header).
+    return (
+      <span
+        className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
+        aria-label={agentStateLabel(state)}
+      >
+        <CircleCheck className={cn('text-emerald-500', icon)} aria-hidden="true" />
+      </span>
+    )
+  }
+
   return (
     <span
       className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
@@ -77,11 +96,7 @@ export const AgentStateDot = React.memo(function AgentStateDot({
           inner,
           state === 'blocked' || state === 'waiting' || state === 'permission'
             ? 'bg-red-500'
-            : state === 'done'
-              ? // Why: emerald-500 matches StatusIndicator's done dot so the
-                // dashboard and sidebar read as the same state.
-                'bg-emerald-500'
-              : 'bg-neutral-500/40'
+            : 'bg-neutral-500/40'
         )}
       />
     </span>
