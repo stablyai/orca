@@ -1945,9 +1945,12 @@ function WorkItemIssueSourceIndicator({
   // entry or the first sibling cache entry that has sources (the Tasks view may
   // write cache entries keyed by a user-typed search query, so the primary slot
   // can be empty even when sources are known). Sources are repo-level
-  // (query-independent), so any sibling entry is safe. Returning a single stable
-  // reference (not an object) means unrelated cache writes don't force a
-  // re-render — this was the regression iter-2 fixed.
+  // (query-independent), so any sibling entry is safe. When the primary slot
+  // is populated its reference is stable across unrelated cache writes; when
+  // the fallback path is used a sibling cache rewrite may produce a new
+  // `sources` object and trigger a harmless extra render. That's cheap — the
+  // indicator is small and the cache rewrite rate is bounded by user-initiated
+  // refresh/search actions.
   const sources = useAppStore((s) =>
     s.getWorkItemsAnySourcesForRepo(repoPath ?? '', PER_REPO_FETCH_LIMIT)
   )

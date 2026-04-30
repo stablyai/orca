@@ -46,7 +46,12 @@ export function classifyGhError(stderr: string): ClassifiedError {
       message: "You don't have permission to edit this issue. Check your GitHub token scopes."
     }
   }
-  if (s.includes('http 404') || s.includes('could not resolve')) {
+  // Why: the full gh message is "Could not resolve to a Repository with the
+  // name ...". Matching the substring 'could not resolve' alone would also
+  // capture DNS failures like "could not resolve host: api.github.com" and
+  // misclassify them as not_found. Anchor on the 'repository' qualifier so
+  // DNS errors fall through to the network_error branch below.
+  if (s.includes('http 404') || s.includes('could not resolve to a repository')) {
     return { type: 'not_found', message: 'Issue not found — it may have been deleted.' }
   }
   if (s.includes('http 422') || s.includes('validation failed')) {
@@ -58,7 +63,12 @@ export function classifyGhError(stderr: string): ClassifiedError {
       message: 'GitHub rate limit hit. Try again in a few minutes.'
     }
   }
-  if (s.includes('timeout') || s.includes('no such host') || s.includes('network')) {
+  if (
+    s.includes('timeout') ||
+    s.includes('no such host') ||
+    s.includes('network') ||
+    s.includes('could not resolve host')
+  ) {
     return { type: 'network_error', message: 'Network error — check your connection.' }
   }
   return { type: 'unknown', message: `Failed to update issue: ${stderr.trim()}` }
