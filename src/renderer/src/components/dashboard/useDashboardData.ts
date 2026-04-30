@@ -133,6 +133,12 @@ function buildDashboardData(
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
+// Why: stable empty array reference so the memo returns the same
+// value each call when the feature is off. Without this, fresh [] per
+// memo run churns downstream effect deps and re-fires them on every
+// PTY agent-status tick purely to early-return.
+const EMPTY_GROUPS: DashboardRepoGroup[] = []
+
 /**
  * Cross-worktree aggregate of live agent rows. Used by useRetainedAgentsSync
  * to drive retention: when a previously-live 'done' agent disappears from
@@ -165,7 +171,7 @@ export function useDashboardData(): DashboardRepoGroup[] {
       // rules-of-hooks satisfied and so flipping the setting re-renders
       // consumers.
       if (!dashboardEnabled) {
-        return []
+        return EMPTY_GROUPS
       }
       return buildDashboardData(
         repos,

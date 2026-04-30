@@ -13,8 +13,9 @@ import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
 
 // Why: agents with a per-agent hook-service module under src/main that posts
 // status to the shared agent-hooks server. Keep this list in sync with the
-// hook-service.ts files — any agent without one will not light up the
-// dashboard even when the experimental setting is on.
+// hook-service.ts files — any agent without one will not appear in the inline
+// per-workspace-card agent activity list even when the experimental setting
+// is on.
 const AGENT_DASHBOARD_SUPPORTED_AGENTS: readonly TuiAgent[] = [
   'claude',
   'codex',
