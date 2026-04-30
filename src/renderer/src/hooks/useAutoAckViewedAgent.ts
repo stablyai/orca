@@ -21,6 +21,14 @@ import { useAppStore } from '@/store'
 //   - at least one agentStatusByPaneKey entry has paneKey prefixed by
 //     `${activeTabId}:` AND its ackAt < stateStartedAt.
 //
+// The ack ALSO requires the OS window to be visible and focused
+// (document.visibilityState === 'visible' && document.hasFocus()) —
+// otherwise a transition that arrives while the user is away would silently
+// clear the bold-until-viewed signal for an event they never saw. A
+// visibilitychange / focus listener re-runs the scan when the user returns
+// so any transitions that failed the gate while away get acked the moment
+// focus actually comes back.
+//
 // We ack ALL matching panes in one call (a tab can host split panes, each
 // with its own paneKey) so acknowledgeAgents' identity-preserving guard
 // collapses the no-op path.
@@ -56,11 +64,6 @@ export function useAutoAckViewedAgent(): void {
       ) {
         return
       }
-      lastActiveView = s.activeView
-      lastActiveTabId = s.activeTabId
-      lastAgentStatus = s.agentStatusByPaneKey
-      lastAcknowledged = s.acknowledgedAgentsByPaneKey
-      lastSettings = s.settings
 
       // Why: mirror the dashboard's visibility gate — if the experimental
       // agent dashboard is off, nothing in the UI reads the ack map, so
@@ -75,10 +78,36 @@ export function useAutoAckViewedAgent(): void {
       if (s.activeView !== 'terminal') {
         return
       }
+      // Why: the auto-ack represents "the user saw this row" — but tab-active is
+      // only a proxy. If the OS window is hidden, minimized, or another app has
+      // focus, the user is demonstrably not looking at the dashboard even with the
+      // terminal tab set. Without this gate, an agent finishing while the user is
+      // away silently clears the bold-until-viewed signal and the user returns to
+      // a dashboard with no indication anything transitioned.
+      if (typeof document !== 'undefined') {
+        if (document.visibilityState !== 'visible') {
+          return
+        }
+        if (!document.hasFocus()) {
+          return
+        }
+      }
       const activeTabId = s.activeTabId
       if (!activeTabId) {
         return
       }
+      // Why: advance the refs ONLY after all gates have passed — if the visibility
+      // or feature gate caused an early return, we must leave the refs stale so
+      // the next call (e.g. triggered by the focus listener on return) sees a
+      // diff and actually runs the scan. Updating refs before the gates would
+      // consume the diff silently and leave the user returning to a dashboard
+      // whose bold-until-viewed rows stay bold until some unrelated store change
+      // happens to bump the refs again.
+      lastActiveView = s.activeView
+      lastActiveTabId = s.activeTabId
+      lastAgentStatus = s.agentStatusByPaneKey
+      lastAcknowledged = s.acknowledgedAgentsByPaneKey
+      lastSettings = s.settings
       const prefix = `${activeTabId}:`
       const toAck: string[] = []
       for (const [paneKey, entry] of Object.entries(s.agentStatusByPaneKey)) {
@@ -109,6 +138,18 @@ export function useAutoAckViewedAgent(): void {
     // (terminal output, timers, etc.) so the Object.entries walk only runs
     // when one of the five slices we read has actually changed.
     const unsubscribe = useAppStore.subscribe(maybeAck)
-    return unsubscribe
+    // Why: focus/visibility don't flow through the zustand store, so a
+    // late-arriving transition that failed the gate above never re-evaluates
+    // when focus returns. Subscribe to the two DOM events so the ack scan
+    // reruns the moment the user is actually back on the window.
+    const onVisibility = (): void => maybeAck()
+    const onFocus = (): void => maybeAck()
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('focus', onFocus)
+    return () => {
+      unsubscribe()
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('focus', onFocus)
+    }
   }, [])
 }

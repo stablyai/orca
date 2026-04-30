@@ -94,6 +94,7 @@ const AgentStatusHover = React.memo(function AgentStatusHover({
   const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
   const setActiveTab = useAppStore((s) => s.setActiveTab)
   const setActiveView = useAppStore((s) => s.setActiveView)
+  const acknowledgeAgents = useAppStore((s) => s.acknowledgeAgents)
 
   const agents = useMemo<DashboardAgentRowType[]>(() => {
     const rows: DashboardAgentRowType[] = []
@@ -203,16 +204,22 @@ const AgentStatusHover = React.memo(function AgentStatusHover({
   // Why: clicking a row activates the specific tab the agent runs in. Retained
   // rows can outlive their tab, so fall back to worktree-only activation when
   // the tab is no longer present.
+  // Why: symmetric with the dashboard's handleActivateAgent — clicking a row
+  // through the sidebar hovercard should fade it to the visited weight
+  // immediately, instead of waiting for useAutoAckViewedAgent to catch up once
+  // the tab becomes active. Scoped to the single clicked paneKey so sibling
+  // rows remain bold.
   const handleActivateAgentTab = useCallback(
-    (tabId: string) => {
+    (tabId: string, paneKey: string) => {
       setActiveWorktree(worktreeId)
       setActiveView('terminal')
       const tabs = useAppStore.getState().tabsByWorktree[worktreeId] ?? []
       if (tabs.some((t) => t.id === tabId)) {
         setActiveTab(tabId)
       }
+      acknowledgeAgents([paneKey])
     },
-    [worktreeId, setActiveWorktree, setActiveTab, setActiveView]
+    [worktreeId, setActiveWorktree, setActiveTab, setActiveView, acknowledgeAgents]
   )
 
   return (
@@ -249,7 +256,7 @@ const AgentStatusHover = React.memo(function AgentStatusHover({
 type AgentStatusHoverContentProps = {
   agents: DashboardAgentRowType[]
   onDismiss: (paneKey: string) => void
-  onActivate: (tabId: string) => void
+  onActivate: (tabId: string, paneKey: string) => void
 }
 
 // Why: split out so `useNow(30_000)` only runs while the hovercard body is
@@ -275,6 +282,28 @@ const AgentStatusHoverContent = React.memo(function AgentStatusHoverContent({
   // this to the inner content (which only mounts while the card is open)
   // keeps the overhead bounded to the card the user is actually looking at.
   const now = useNow(30_000)
+
+  // Why: mirrors DashboardWorktreeCard's isAgentUnvisited rule so the
+  // hovercard's weight signal stays consistent with the dashboard. Without
+  // this, previously-bold attention-needed states (done/waiting/blocked)
+  // render muted because DashboardAgentRow's weight is now driven exclusively
+  // by isUnvisited.
+  const acknowledgedAgentsByPaneKey = useAppStore((s) => s.acknowledgedAgentsByPaneKey)
+  const paneKeys = useMemo(() => agents.map((a) => a.paneKey), [agents])
+  const ackByPaneKey = useMemo(() => {
+    const out: Record<string, number> = {}
+    for (const paneKey of paneKeys) {
+      out[paneKey] = acknowledgedAgentsByPaneKey[paneKey] ?? 0
+    }
+    return out
+  }, [paneKeys, acknowledgedAgentsByPaneKey])
+  const isAgentUnvisited = useCallback(
+    (paneKey: string, stateStartedAt: number) => {
+      const ackAt = ackByPaneKey[paneKey] ?? 0
+      return ackAt < stateStartedAt
+    },
+    [ackByPaneKey]
+  )
 
   if (agents.length === 0) {
     return <div className="py-1 text-center text-muted-foreground">No agent activity</div>
@@ -304,6 +333,7 @@ const AgentStatusHoverContent = React.memo(function AgentStatusHoverContent({
               onDismiss={onDismiss}
               onActivate={onActivate}
               now={now}
+              isUnvisited={isAgentUnvisited(agent.paneKey, agent.entry.stateStartedAt)}
             />
           </div>
         ))}
