@@ -147,13 +147,32 @@ async function requestPermission(
   }
 
   if (id === 'microphone' || id === 'camera') {
+    // Why: askForMediaAccess only surfaces the TCC prompt when status is
+    // 'not-determined'. If the user previously denied (or macOS set the status
+    // to 'denied'/'restricted'), it resolves false with no prompt — leaving
+    // the user stuck. Fall through to the Privacy pane so they can toggle it.
     const granted = await systemPreferences.askForMediaAccess(id)
-    return { id, status: granted ? 'granted' : getMediaStatus(id), openedSystemSettings: false }
+    if (granted) {
+      return { id, status: 'granted', openedSystemSettings: false }
+    }
+    const status = getMediaStatus(id)
+    if (status === 'denied' || status === 'restricted' || status === 'unknown') {
+      await openPrivacyPane(id)
+      return { id, status, openedSystemSettings: true }
+    }
+    return { id, status, openedSystemSettings: false }
   }
 
   if (id === 'accessibility') {
-    systemPreferences.isTrustedAccessibilityClient(true)
-    return { id, status: getAccessibilityStatus(), openedSystemSettings: false }
+    // Why: isTrustedAccessibilityClient(true) shows the prompt only the first
+    // time for a given bundle. Once the user has dismissed or denied, calling
+    // it again is a no-op. Fall through to the Privacy pane when not granted.
+    const trusted = systemPreferences.isTrustedAccessibilityClient(true)
+    if (trusted) {
+      return { id, status: 'granted', openedSystemSettings: false }
+    }
+    await openPrivacyPane(id)
+    return { id, status: getAccessibilityStatus(), openedSystemSettings: true }
   }
 
   if (id === 'automation') {
