@@ -1180,6 +1180,18 @@ const api = {
           }
       )[]
     }> => ipcRenderer.invoke('fs:importExternalPaths', args),
+    resolveDroppedPathsForAgent: (args: {
+      paths: string[]
+      worktreePath: string
+      connectionId?: string
+    }): Promise<{
+      resolvedPaths: string[]
+      skipped: {
+        sourcePath: string
+        reason: 'missing' | 'symlink' | 'permission-denied' | 'unsupported'
+      }[]
+      failed: { sourcePath: string; reason: string }[]
+    }> => ipcRenderer.invoke('fs:resolveDroppedPathsForAgent', args),
     watchWorktree: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
       ipcRenderer.invoke('fs:watchWorktree', args),
     unwatchWorktree: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>

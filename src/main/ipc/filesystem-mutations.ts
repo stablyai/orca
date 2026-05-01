@@ -147,6 +147,53 @@ export function registerFilesystemMutationHandlers(store: Store): void {
       return { results }
     }
   )
+
+  // Why: terminal drag-and-drop resolver. Local worktrees pass paths through
+  // unchanged (reference-in-place; preserves zero-latency drop). SSH worktrees
+  // upload each path into `${worktreePath}/.orca/drops/` and return remote
+  // paths the remote agent can read. Kept as a separate IPC from
+  // fs:importExternalPaths because terminal semantics differ from the
+  // explorer's "copy into user-picked destDir". See docs/terminal-drop-ssh.md.
+  ipcMain.handle(
+    'fs:resolveDroppedPathsForAgent',
+    async (
+      _event,
+      args: { paths: string[]; worktreePath: string; connectionId?: string }
+    ): Promise<ResolveDroppedPathsResult> => {
+      // Why: `== null` (not `!args.connectionId`) so an empty string is
+      // treated as a renderer error, not silently routed to the local branch.
+      if (args.connectionId == null) {
+        return { resolvedPaths: args.paths, skipped: [], failed: [] }
+      }
+      const worktreePath = args.worktreePath.replace(/\/+$/, '')
+      const destDir = `${worktreePath}/.orca/drops`
+      const { results } = await importExternalPathsSsh(args.paths, destDir, args.connectionId, {
+        ensureDir: true
+      })
+      const resolvedPaths: string[] = []
+      const skipped: { sourcePath: string; reason: ImportSkipReason }[] = []
+      const failed: { sourcePath: string; reason: string }[] = []
+      // Iterate in input order so injected paths align with the user's drop order.
+      for (const r of results) {
+        if (r.status === 'imported') {
+          resolvedPaths.push(r.destPath)
+        } else if (r.status === 'skipped') {
+          skipped.push({ sourcePath: r.sourcePath, reason: r.reason })
+        } else {
+          failed.push({ sourcePath: r.sourcePath, reason: r.reason })
+        }
+      }
+      return { resolvedPaths, skipped, failed }
+    }
+  )
+}
+
+export type ImportSkipReason = 'missing' | 'symlink' | 'permission-denied' | 'unsupported'
+
+export type ResolveDroppedPathsResult = {
+  resolvedPaths: string[]
+  skipped: { sourcePath: string; reason: ImportSkipReason }[]
+  failed: { sourcePath: string; reason: string }[]
 }
 
 // ─── External Import Types ──────────────────────────────────────────
@@ -162,7 +209,7 @@ export type ImportItemResult =
   | {
       sourcePath: string
       status: 'skipped'
-      reason: 'missing' | 'symlink' | 'permission-denied' | 'unsupported'
+      reason: ImportSkipReason
     }
   | {
       sourcePath: string

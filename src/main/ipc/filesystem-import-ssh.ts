@@ -12,7 +12,8 @@ import type { ImportItemResult } from './filesystem-mutations'
 export async function importExternalPathsSsh(
   sourcePaths: string[],
   destDir: string,
-  connectionId: string
+  connectionId: string,
+  options?: { ensureDir?: boolean }
 ): Promise<{ results: ImportItemResult[] }> {
   if (sourcePaths.length === 0) {
     return { results: [] }
@@ -35,6 +36,17 @@ export async function importExternalPathsSsh(
   const sftp = await conn.sftp()
 
   try {
+    if (options?.ensureDir) {
+      // Why: terminal-drop staging needs `${worktree}/.orca/drops` to exist
+      // before the first upload. Upload primitives do not create parent dirs,
+      // and mkdirSftp is not recursive — so walk the parent chain here on the
+      // same SFTP session to avoid doubling the handshake cost. Writing the
+      // .orca/.gitignore marker only when absent prevents clobbering user-
+      // authored patterns. .orca/ is reserved as Orca-owned remote state;
+      // see docs/terminal-drop-ssh.md.
+      await ensureDropStagingDir(sftp, destDir)
+    }
+
     const results: ImportItemResult[] = []
     const reservedNames = new Set<string>()
 
@@ -169,6 +181,38 @@ async function deconflictNameSftp(
   throw new Error(
     `Could not generate a unique name for '${originalName}' after ${counter} attempts`
   )
+}
+
+async function ensureDropStagingDir(sftp: SFTPWrapper, destDir: string): Promise<void> {
+  // destDir is a posix remote path, expected to be `${worktreePath}/.orca/drops`.
+  const parent = posix.dirname(destDir)
+  await mkdirSftp(sftp, parent)
+  const gitignorePath = `${parent}/.gitignore`
+  if (!(await sftpPathExists(sftp, gitignorePath))) {
+    // Why: negate the marker so .orca/.gitignore itself is trackable if we
+    // ever want to, without dirtying `git status` today. Only write when
+    // absent to avoid clobbering user-authored patterns.
+    await writeSftpFile(sftp, gitignorePath, '*\n!.gitignore\n')
+  }
+  await mkdirSftp(sftp, destDir)
+}
+
+function writeSftpFile(sftp: SFTPWrapper, remotePath: string, contents: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let settled = false
+    const writeStream = sftp.createWriteStream(remotePath)
+    const settle = (fn: typeof resolve | typeof reject, val?: unknown): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      writeStream.destroy()
+      fn(val as never)
+    }
+    writeStream.on('close', () => settle(resolve))
+    writeStream.on('error', (err) => settle(reject, err))
+    writeStream.end(contents)
+  })
 }
 
 async function preScanForSymlinks(dirPath: string): Promise<boolean> {
