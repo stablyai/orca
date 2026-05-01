@@ -245,3 +245,21 @@ jobs:
             --draft=false \
             --prerelease="$prerelease" \
             --repo "$GITHUB_REPOSITORY"
+
+      # Why: dispatch the Homebrew cask bump directly instead of relying on a
+      # `release.published` trigger inside homebrew-bump.yml. GitHub blocks
+      # events raised by GITHUB_TOKEN (like the `gh release edit` above) from
+      # starting other workflows — it's a documented anti-loop safeguard. A
+      # workflow_dispatch from inside an already-running workflow is the
+      # documented escape hatch. Scoped to GA tags only; rc/prerelease tags
+      # should not touch the stable cask.
+      - name: Trigger Homebrew cask bump (stable releases only)
+        if: ${{ !contains(needs.resolve-release.outputs.tag, '-rc.') }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.resolve-release.outputs.tag }}
+        run: |
+          gh workflow run homebrew-bump.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref main \
+            -f tag="$TAG"
