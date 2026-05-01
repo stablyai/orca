@@ -1,5 +1,5 @@
-import React, { useCallback } from 'react'
-import { Activity, FolderPlus, Plus, SlidersHorizontal, X } from 'lucide-react'
+import React from 'react'
+import { Plus, SlidersHorizontal } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
@@ -10,14 +10,13 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
   DropdownMenuCheckboxItem,
-  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem
 } from '@/components/ui/dropdown-menu'
 import type { WorktreeCardProperty } from '../../../../shared/types'
-import RepoDotLabel from '@/components/repo/RepoDotLabel'
+import SidebarFilter from './SidebarFilter'
 
 const GROUP_BY_OPTIONS = [
   { id: 'none', label: 'All' },
@@ -68,33 +67,13 @@ const SidebarHeader = React.memo(function SidebarHeader() {
     ? PROPERTY_OPTIONS
     : PROPERTY_OPTIONS.filter((opt) => opt.id !== 'inline-agents')
 
-  const showActiveOnly = useAppStore((s) => s.showActiveOnly)
-  const setShowActiveOnly = useAppStore((s) => s.setShowActiveOnly)
-  const filterRepoIds = useAppStore((s) => s.filterRepoIds)
-  const setFilterRepoIds = useAppStore((s) => s.setFilterRepoIds)
-  const addRepo = useAppStore((s) => s.addRepo)
-
-  const canFilterRepos = repos.length > 1
-  const hasRepoFilter = canFilterRepos && filterRepoIds.length > 0
-  const hasAnyFilter = showActiveOnly || hasRepoFilter
-
-  const handleToggleRepo = useCallback(
-    (repoId: string) => {
-      setFilterRepoIds(
-        filterRepoIds.includes(repoId)
-          ? filterRepoIds.filter((id) => id !== repoId)
-          : [...filterRepoIds, repoId]
-      )
-    },
-    [filterRepoIds, setFilterRepoIds]
-  )
-
   return (
     <div className="flex h-8 items-center justify-between px-2 mt-1 gap-2">
       <span className="px-2 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/80 select-none">
         Workspaces
       </span>
       <div className="flex items-center gap-1.5 shrink-0">
+        <SidebarFilter />
         <DropdownMenu>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -102,20 +81,10 @@ const SidebarHeader = React.memo(function SidebarHeader() {
                 <Button
                   variant="ghost"
                   size="icon-xs"
-                  className="relative text-muted-foreground"
+                  className="text-muted-foreground"
                   aria-label="View options"
                 >
                   <SlidersHorizontal className="size-3.5" strokeWidth={2.25} />
-                  {hasAnyFilter && (
-                    // Why: signals that filters are applied even though the
-                    // control itself is just the view-options gear — without
-                    // this dot there's no affordance that the workspace list
-                    // is being filtered.
-                    <span
-                      aria-hidden
-                      className="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-primary"
-                    />
-                  )}
                 </Button>
               </DropdownMenuTrigger>
             </TooltipTrigger>
@@ -181,56 +150,6 @@ const SidebarHeader = React.memo(function SidebarHeader() {
                 {opt.label}
               </DropdownMenuCheckboxItem>
             ))}
-
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel>Filter</DropdownMenuLabel>
-            <DropdownMenuCheckboxItem
-              checked={showActiveOnly}
-              onCheckedChange={(v) => setShowActiveOnly(!!v)}
-              onSelect={(e) => e.preventDefault()}
-            >
-              <Activity className="size-3.5 text-muted-foreground" />
-              Active only
-            </DropdownMenuCheckboxItem>
-            {canFilterRepos && (
-              <>
-                <DropdownMenuLabel className="pt-1 text-[10px] font-normal text-muted-foreground/80">
-                  Repositories
-                </DropdownMenuLabel>
-                {repos.map((r) => (
-                  <DropdownMenuCheckboxItem
-                    key={r.id}
-                    checked={filterRepoIds.includes(r.id)}
-                    onCheckedChange={() => handleToggleRepo(r.id)}
-                    onSelect={(e) => e.preventDefault()}
-                  >
-                    <RepoDotLabel name={r.displayName} color={r.badgeColor} />
-                  </DropdownMenuCheckboxItem>
-                ))}
-              </>
-            )}
-            {hasAnyFilter && (
-              <DropdownMenuItem
-                onSelect={() => {
-                  setShowActiveOnly(false)
-                  setFilterRepoIds([])
-                }}
-              >
-                <X className="size-3.5 text-muted-foreground" />
-                Clear filters
-              </DropdownMenuItem>
-            )}
-            {canFilterRepos && (
-              <DropdownMenuItem
-                inset
-                onSelect={() => {
-                  addRepo()
-                }}
-              >
-                <FolderPlus className="absolute left-2.5 size-3.5 text-muted-foreground" />
-                Add project
-              </DropdownMenuItem>
-            )}
           </DropdownMenuContent>
         </DropdownMenu>
 
