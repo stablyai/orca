@@ -37,6 +37,7 @@ import type {
   LinearMember,
   LinearTeam,
   GitHubIssueUpdate,
+  IssueSourcePreference,
   NotificationDispatchRequest,
   NotificationDispatchResult,
   OrcaHooks,
@@ -308,7 +309,15 @@ export type PreloadApi = {
     update: (args: {
       repoId: string
       updates: Partial<
-        Pick<Repo, 'displayName' | 'badgeColor' | 'hookSettings' | 'worktreeBaseRef' | 'kind'>
+        Pick<
+          Repo,
+          | 'displayName'
+          | 'badgeColor'
+          | 'hookSettings'
+          | 'worktreeBaseRef'
+          | 'kind'
+          | 'issueSourcePreference'
+        >
       >
     }) => Promise<Repo>
     pickFolder: () => Promise<string | null>
@@ -477,6 +486,16 @@ export type PreloadApi = {
     listAssignableUsers: (args: { repoPath: string }) => Promise<GitHubAssignableUser[]>
     checkOrcaStarred: () => Promise<boolean | null>
     starOrca: () => Promise<boolean>
+    /** Reads the persisted per-repo issue-source preference. Returns `'auto'`
+     *  when the repo has no explicit choice so renderers never have to
+     *  distinguish undefined vs explicit-auto. */
+    getIssueSourcePreference: (args: { repoId: string }) => Promise<IssueSourcePreference>
+    /** Writes the per-repo issue-source preference. Passing `'auto'` clears
+     *  any stored explicit choice (read will return `'auto'` thereafter). */
+    setIssueSourcePreference: (args: {
+      repoId: string
+      preference: IssueSourcePreference
+    }) => Promise<void>
   }
   linear: {
     connect: (args: {

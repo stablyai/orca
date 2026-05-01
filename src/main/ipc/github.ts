@@ -1,6 +1,10 @@
+/* eslint-disable max-lines -- Why: all GitHub IPC handlers stay co-located so
+the repo-path validation, preference-threading, and stats wiring patterns are
+reviewable as one surface. Splitting by feature area would risk drifting
+validation/gate conventions across handler files. */
 import { ipcMain } from 'electron'
 import { resolve } from 'path'
-import type { Repo, GitHubIssueUpdate } from '../../shared/types'
+import type { Repo, GitHubIssueUpdate, IssueSourcePreference } from '../../shared/types'
 import type { Store } from '../persistence'
 import type { StatsCollector } from '../stats/collector'
 import {
@@ -42,6 +46,16 @@ function assertRegisteredRepo(repoPath: string, store: Store): Repo {
   return repo
 }
 
+// Why: ensure only the three valid values make it through the IPC boundary —
+// an unknown value from a stale preload/renderer is coerced to `undefined`
+// ('auto') rather than propagating into persistence or resolver logic.
+function coerceIssueSourcePreference(value: unknown): IssueSourcePreference | undefined {
+  if (value === 'upstream' || value === 'origin' || value === 'auto') {
+    return value
+  }
+  return undefined
+}
+
 export function registerGitHubHandlers(store: Store, stats: StatsCollector): void {
   ipcMain.handle('gh:prForBranch', async (_event, args: { repoPath: string; branch: string }) => {
     const repo = assertRegisteredRepo(args.repoPath, store)
@@ -70,14 +84,14 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
     // Why: listIssues now returns { items, error? }. The IPC handler unwraps to
     // the items array for the existing contract; feature 1's UI consumes the
     // richer envelope through `gh:listWorkItems` instead.
-    return listIssues(repo.path, args.limit).then((r) => r.items)
+    return listIssues(repo.path, args.limit, repo.issueSourcePreference).then((r) => r.items)
   })
 
   ipcMain.handle(
     'gh:createIssue',
     (_event, args: { repoPath: string; title: string; body: string }) => {
       const repo = assertRegisteredRepo(args.repoPath, store)
-      return createIssue(repo.path, args.title, args.body)
+      return createIssue(repo.path, args.title, args.body, repo.issueSourcePreference)
     }
   )
 
@@ -85,13 +99,19 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
     'gh:listWorkItems',
     (_event, args: { repoPath: string; limit?: number; query?: string; before?: string }) => {
       const repo = assertRegisteredRepo(args.repoPath, store)
-      return listWorkItems(repo.path, args.limit, args.query, args.before)
+      return listWorkItems(
+        repo.path,
+        args.limit,
+        args.query,
+        args.before,
+        repo.issueSourcePreference
+      )
     }
   )
 
   ipcMain.handle('gh:countWorkItems', (_event, args: { repoPath: string; query?: string }) => {
     const repo = assertRegisteredRepo(args.repoPath, store)
-    return countWorkItems(repo.path, args.query)
+    return countWorkItems(repo.path, args.query, repo.issueSourcePreference)
   })
 
   ipcMain.handle('gh:workItem', (_event, args: WorkItemArgs) =>
@@ -295,7 +315,7 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       if (!args.updates || typeof args.updates !== 'object') {
         return { ok: false, error: 'Updates object is required' }
       }
-      return updateIssue(repo.path, args.number, args.updates)
+      return updateIssue(repo.path, args.number, args.updates, repo.issueSourcePreference)
     }
   )
 
@@ -309,22 +329,46 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       if (!args.body?.trim()) {
         return { ok: false, error: 'Comment body required' }
       }
-      return addIssueComment(repo.path, args.number, args.body.trim())
+      return addIssueComment(repo.path, args.number, args.body.trim(), repo.issueSourcePreference)
     }
   )
 
   ipcMain.handle('gh:listLabels', (_event, args: { repoPath: string }) => {
     const repo = assertRegisteredRepo(args.repoPath, store)
-    return listLabels(repo.path)
+    return listLabels(repo.path, repo.issueSourcePreference)
   })
 
   ipcMain.handle('gh:listAssignableUsers', (_event, args: { repoPath: string }) => {
     const repo = assertRegisteredRepo(args.repoPath, store)
-    return listAssignableUsers(repo.path)
+    return listAssignableUsers(repo.path, repo.issueSourcePreference)
   })
 
   // Star operations target the Orca repo itself — no repoPath validation needed
   ipcMain.handle('gh:viewer', () => getAuthenticatedViewer())
   ipcMain.handle('gh:checkOrcaStarred', () => checkOrcaStarred())
   ipcMain.handle('gh:starOrca', () => starOrca())
+
+  // ── Per-repo issue-source preference ───────────────────────────────
+  // Why: explicit get/set is simpler than extending a generic repo-update
+  // surface that does not yet exist. Read returns `'auto'` for unset repos so
+  // the renderer never has to distinguish undefined from explicit-auto.
+  ipcMain.handle(
+    'gh:getIssueSourcePreference',
+    (_event, args: { repoId: string }): IssueSourcePreference => {
+      const repo = store.getRepo(args.repoId)
+      return repo?.issueSourcePreference ?? 'auto'
+    }
+  )
+
+  ipcMain.handle(
+    'gh:setIssueSourcePreference',
+    (_event, args: { repoId: string; preference: IssueSourcePreference }) => {
+      const coerced = coerceIssueSourcePreference(args.preference)
+      // Why: store `undefined` for 'auto' so the persisted record drops the key
+      // entirely — matches the design-doc invariant that 'auto' and undefined
+      // are treated identically and no stale explicit value is left on disk.
+      const patch = coerced === 'auto' ? undefined : coerced
+      store.updateRepo(args.repoId, { issueSourcePreference: patch })
+    }
+  )
 }

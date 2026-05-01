@@ -4,6 +4,23 @@ import type { SshTarget } from './ssh-types'
 // ─── Repo ────────────────────────────────────────────────────────────
 export type RepoKind = 'git' | 'folder'
 
+/**
+ * Per-repo user choice for where issues are fetched and filed.
+ *
+ * Why three states, not two: storage must distinguish "user explicitly chose
+ * upstream" from "heuristic happens to resolve to upstream right now." Collapsing
+ * the two would let a remote-topology change (someone removes `upstream`, or
+ * adds one later) silently move the effective source — the exact silent-source-
+ * switch class the upstream-issue-source design rejects.
+ *
+ * - `'auto'` (or undefined): honor the heuristic in `getIssueOwnerRepo`
+ *   (upstream-if-exists, else origin). Initial state for every repo.
+ * - `'upstream'`: explicit upstream. Wins over heuristic and future topology
+ *   changes. Falls back to origin if `upstream` remote vanishes, with a toast.
+ * - `'origin'`: explicit origin. Same precedence.
+ */
+export type IssueSourcePreference = 'upstream' | 'origin' | 'auto'
+
 export type Repo = {
   id: string
   path: string
@@ -16,6 +33,10 @@ export type Repo = {
   hookSettings?: RepoHookSettings
   /** SSH target ID for remote repos. null/undefined = local. */
   connectionId?: string | null
+  /** Per-repo override for issue-source resolution. `undefined` is treated
+   *  identically to `'auto'`; writers leave it undefined on creation so
+   *  existing persisted records stay forward-compatible. */
+  issueSourcePreference?: IssueSourcePreference
 }
 
 export type SetupRunPolicy = 'ask' | 'run-by-default' | 'skip-by-default'
@@ -632,10 +653,21 @@ export type ListWorkItemsResult<T> = {
   sources: {
     issues: GitHubOwnerRepo | null
     prs: GitHubOwnerRepo | null
+    /** Raw `upstream` remote resolved for this repo, independent of the
+     *  user's preference. Present so the renderer's issue-source selector
+     *  can always decide whether to render (upstream exists & differs from
+     *  origin) and show both slugs in its tooltips, even when the user has
+     *  picked 'origin' and `sources.issues` has collapsed onto origin. */
+    upstreamCandidate?: GitHubOwnerRepo | null
   }
   errors?: {
     issues?: ClassifiedError
   }
+  /** True when the user's per-repo preference was `'upstream'` but no upstream
+   *  remote is configured, so the resolver fell back to origin. Renderer uses
+   *  this to surface a one-time-per-session toast. Omitted when absent so
+   *  existing consumers and test fixtures don't care about it. */
+  issueSourceFellBack?: boolean
 }
 
 export type LinearWorkflowState = {

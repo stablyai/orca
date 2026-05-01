@@ -58,6 +58,7 @@ import RepoMultiCombobox from '@/components/ui/repo-multi-combobox'
 import TeamMultiCombobox from '@/components/ui/team-multi-combobox'
 import RepoDotLabel from '@/components/repo/RepoDotLabel'
 import IssueSourceIndicator, { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
+import IssueSourceSelector from '@/components/github/IssueSourceSelector'
 import { stripRepoQualifiers } from '../../../shared/task-query'
 import GitHubItemDialog from '@/components/GitHubItemDialog'
 import LinearItemDrawer from '@/components/LinearItemDrawer'
@@ -635,6 +636,20 @@ const hasDivergentSources = (
   sources: { issues: GitHubOwnerRepo; prs: GitHubOwnerRepo }
 } => !!s.sources?.issues && !!s.sources.prs && !sameGitHubOwnerRepo(s.sources.issues, s.sources.prs)
 
+// Why: the selector keeps rendering even after the user picks 'origin' (which
+// collapses `sources.issues` onto origin). Upstream-candidate divergence is
+// the right render gate — a repo that has an `upstream` remote pointing
+// somewhere different from origin is always a candidate for the toggle,
+// regardless of the current effective preference.
+const hasUpstreamCandidateDivergence = (
+  s: RepoSourceState
+): s is RepoSourceState & {
+  sources: { prs: GitHubOwnerRepo; upstreamCandidate: GitHubOwnerRepo }
+} =>
+  !!s.sources?.prs &&
+  !!s.sources.upstreamCandidate &&
+  !sameGitHubOwnerRepo(s.sources.prs, s.sources.upstreamCandidate)
+
 export default function TaskPage(): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const pageData = useAppStore((s) => s.taskPageData)
@@ -646,6 +661,7 @@ export default function TaskPage(): React.JSX.Element {
   const updateSettings = useAppStore((s) => s.updateSettings)
   const fetchWorkItemsAcrossRepos = useAppStore((s) => s.fetchWorkItemsAcrossRepos)
   const getCachedWorkItems = useAppStore((s) => s.getCachedWorkItems)
+  const setIssueSourcePreference = useAppStore((s) => s.setIssueSourcePreference)
   const linearStatus = useAppStore((s) => s.linearStatus)
   const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
   const connectLinear = useAppStore((s) => s.connectLinear)
@@ -878,6 +894,36 @@ export default function TaskPage(): React.JSX.Element {
       }
     })
   }, [selectedRepos, appliedTaskSearch, workItemsCache])
+
+  // Why: surface a one-time toast per session per repo when the user's
+  // preferred `'upstream'` is no longer configured and we fell back to
+  // origin. Gated on a ref-backed set so repeated list refreshes don't
+  // re-toast. We deliberately do NOT auto-reset the preference — the user
+  // may re-add `upstream` later and expect it to pick up again.
+  const fellBackToastedRef = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    if (taskSource !== 'github') {
+      return
+    }
+    const appliedQ = stripRepoQualifiers(appliedTaskSearch.trim())
+    for (const r of selectedRepos) {
+      const key = workItemsCacheKey(r.path, PER_REPO_FETCH_LIMIT, appliedQ)
+      const entry = workItemsCache[key]
+      if (!entry?.issueSourceFellBack) {
+        continue
+      }
+      if (fellBackToastedRef.current.has(r.id)) {
+        continue
+      }
+      const prSlug = entry.sources?.prs
+        ? `${entry.sources.prs.owner}/${entry.sources.prs.repo}`
+        : r.displayName
+      toast.message(
+        `Your preferred issue source (upstream) is no longer configured for ${prSlug}. Using origin.`
+      )
+      fellBackToastedRef.current.add(r.id)
+    }
+  }, [selectedRepos, appliedTaskSearch, workItemsCache, taskSource])
 
   // Why: on a partial-failure retry the cache still holds successful-side
   // data, so `tasksLoading` (which is gated on `anyUncached`) never flips
@@ -1934,7 +1980,10 @@ export default function TaskPage(): React.JSX.Element {
                       // narrowed return type means `sources.issues` and
                       // `sources.prs` are known non-null inside the map.
                       const visibleRepoSources = perRepoSourceState.filter(hasDivergentSources)
-                      if (visibleRepoSources.length === 0) {
+                      const visibleSelectorRepos = perRepoSourceState.filter(
+                        hasUpstreamCandidateDivergence
+                      )
+                      if (visibleRepoSources.length === 0 && visibleSelectorRepos.length === 0) {
                         return null
                       }
                       // Why: per parent design doc §2, the indicator lives near
@@ -1964,6 +2013,42 @@ export default function TaskPage(): React.JSX.Element {
                                     : undefined
                                 }
                               />
+                            )
+                          })}
+                          {visibleSelectorRepos.map((s) => {
+                            // Why: feature 2 — per-repo selector lives adjacent
+                            // to the indicator. Rendered once per repo with
+                            // divergent upstream/origin, regardless of the
+                            // effective preference (so the user can always flip
+                            // back). The label prefix is only shown in
+                            // multi-repo mode to disambiguate — matching the
+                            // indicator's dot-label rule.
+                            const repo = selectedRepos.find((r) => r.id === s.repoId)
+                            if (!repo) {
+                              return null
+                            }
+                            return (
+                              <div
+                                key={`selector-${s.repoId}`}
+                                className="inline-flex items-center gap-1"
+                              >
+                                {selectedRepos.length > 1 ? (
+                                  <RepoDotLabel
+                                    name={repo.displayName}
+                                    color={repo.badgeColor}
+                                    dotClassName="size-1.5"
+                                    className="text-[10px] text-muted-foreground"
+                                  />
+                                ) : null}
+                                <IssueSourceSelector
+                                  preference={repo.issueSourcePreference}
+                                  origin={s.sources.prs}
+                                  upstream={s.sources.upstreamCandidate}
+                                  onChange={(next) => {
+                                    void setIssueSourcePreference(repo.id, repo.path, next)
+                                  }}
+                                />
+                              </div>
                             )
                           })}
                         </div>
@@ -2593,7 +2678,7 @@ export default function TaskPage(): React.JSX.Element {
         >
           <DialogHeader>
             <DialogTitle>New GitHub issue</DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="flex flex-wrap items-center gap-2">
               {(() => {
                 // Why: parent design doc §1 surface 2 — the composer is the
                 // non-negotiable surface because User D's regression (filing a
@@ -2614,7 +2699,40 @@ export default function TaskPage(): React.JSX.Element {
                   ? `${entry.sources.issues.owner}/${entry.sources.issues.repo}`
                   : null
                 const fallback = newIssueTargetRepo?.displayName ?? 'this repository'
-                return `Filing in ${issuesSlug ?? fallback}`
+                return <span>Filing in {issuesSlug ?? fallback}</span>
+              })()}
+              {(() => {
+                // Why: mirror the Tasks-view selector in the composer so User D
+                // (fork contributor filing a personal TODO against their own
+                // fork) can flip the target *at the moment of filing* — the
+                // only moment that matters for this regression. Reuses the
+                // same cache entry the description line reads so no extra
+                // IPC round-trip is needed.
+                if (!newIssueTargetRepo) {
+                  return null
+                }
+                const entry = perRepoSourceState.find((s) => s.repoId === newIssueTargetRepo.id)
+                if (!entry || !entry.sources?.upstreamCandidate || !entry.sources?.prs) {
+                  return null
+                }
+                if (sameGitHubOwnerRepo(entry.sources.prs, entry.sources.upstreamCandidate)) {
+                  return null
+                }
+                return (
+                  <IssueSourceSelector
+                    preference={newIssueTargetRepo.issueSourcePreference}
+                    origin={entry.sources.prs}
+                    upstream={entry.sources.upstreamCandidate}
+                    disabled={newIssueSubmitting}
+                    onChange={(next) => {
+                      void setIssueSourcePreference(
+                        newIssueTargetRepo.id,
+                        newIssueTargetRepo.path,
+                        next
+                      )
+                    }}
+                  />
+                )
               })()}
             </DialogDescription>
           </DialogHeader>

@@ -249,6 +249,34 @@ describe('Store', () => {
     expect(store.updateRepo('nope', { displayName: 'x' })).toBeNull()
   })
 
+  it('updateRepo persists issueSourcePreference across reloads', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+
+    const updated = store.updateRepo('r1', { issueSourcePreference: 'upstream' })
+    expect(updated!.issueSourcePreference).toBe('upstream')
+
+    store.flush()
+    const reloaded = await createStore()
+    expect(reloaded.getRepo('r1')!.issueSourcePreference).toBe('upstream')
+  })
+
+  it('updateRepo with issueSourcePreference=undefined clears the preference', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ issueSourcePreference: 'origin' }))
+    expect(store.getRepo('r1')!.issueSourcePreference).toBe('origin')
+
+    // Why: passing the key with value `undefined` must clear the preference.
+    // Plain `Object.assign` skips undefined values, so without the explicit
+    // delete branch in updateRepo, the persisted record would keep 'origin'.
+    store.updateRepo('r1', { issueSourcePreference: undefined })
+    expect(store.getRepo('r1')!.issueSourcePreference).toBeUndefined()
+
+    store.flush()
+    const reloaded = await createStore()
+    expect(reloaded.getRepo('r1')!.issueSourcePreference).toBeUndefined()
+  })
+
   // ── 8. setWorktreeMeta and getWorktreeMeta ─────────────────────────
 
   it('setWorktreeMeta creates meta with defaults for missing fields', async () => {

@@ -1,9 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GhUtils from './gh-utils'
 
-const { ghExecFileAsyncMock, getIssueOwnerRepoMock, acquireMock, releaseMock } = vi.hoisted(() => ({
+const {
+  ghExecFileAsyncMock,
+  getIssueOwnerRepoMock,
+  resolveIssueSourceMock,
+  acquireMock,
+  releaseMock
+} = vi.hoisted(() => ({
   ghExecFileAsyncMock: vi.fn(),
   getIssueOwnerRepoMock: vi.fn(),
+  resolveIssueSourceMock: vi.fn(),
   acquireMock: vi.fn(),
   releaseMock: vi.fn()
 }))
@@ -14,6 +21,7 @@ vi.mock('./gh-utils', async () => {
     ...actual,
     ghExecFileAsync: ghExecFileAsyncMock,
     getIssueOwnerRepo: getIssueOwnerRepoMock,
+    resolveIssueSource: resolveIssueSourceMock,
     acquire: acquireMock,
     release: releaseMock
   }
@@ -25,9 +33,17 @@ describe('issue source operations', () => {
   beforeEach(() => {
     ghExecFileAsyncMock.mockReset()
     getIssueOwnerRepoMock.mockReset()
+    resolveIssueSourceMock.mockReset()
     acquireMock.mockReset()
     releaseMock.mockReset()
     acquireMock.mockResolvedValue(undefined)
+    // Why: preference-aware paths call resolveIssueSource instead of
+    // getIssueOwnerRepo. Route through the same mock so existing tests that
+    // set up getIssueOwnerRepoMock continue to work.
+    resolveIssueSourceMock.mockImplementation(async () => ({
+      source: await getIssueOwnerRepoMock(),
+      fellBack: false
+    }))
   })
 
   it('gets a single issue from the issue owner/repo', async () => {

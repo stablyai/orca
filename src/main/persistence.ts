@@ -356,14 +356,33 @@ export class Store {
   updateRepo(
     id: string,
     updates: Partial<
-      Pick<Repo, 'displayName' | 'badgeColor' | 'hookSettings' | 'worktreeBaseRef' | 'kind'>
+      Pick<
+        Repo,
+        | 'displayName'
+        | 'badgeColor'
+        | 'hookSettings'
+        | 'worktreeBaseRef'
+        | 'kind'
+        | 'issueSourcePreference'
+      >
     >
   ): Repo | null {
     const repo = this.state.repos.find((r) => r.id === id)
     if (!repo) {
       return null
     }
-    Object.assign(repo, updates)
+    // Why: `issueSourcePreference === undefined` in the patch means "reset to
+    // auto" (and the persisted record should drop the key, not preserve a
+    // stale explicit value via Object.assign's skip-on-undefined behavior).
+    // Without this delete branch, toggling explicit → auto would silently
+    // leave the old preference in place on disk.
+    if ('issueSourcePreference' in updates && updates.issueSourcePreference === undefined) {
+      delete repo.issueSourcePreference
+      const { issueSourcePreference: _drop, ...rest } = updates
+      Object.assign(repo, rest)
+    } else {
+      Object.assign(repo, updates)
+    }
     this.scheduleSave()
     return this.hydrateRepo(repo)
   }

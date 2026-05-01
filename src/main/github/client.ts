@@ -2,6 +2,7 @@
 concurrency acquire/release pattern and error handling consistent across operations. */
 import type {
   ClassifiedError,
+  IssueSourcePreference,
   ListWorkItemsResult,
   PRInfo,
   PRMergeableState,
@@ -22,6 +23,8 @@ import {
   release,
   getOwnerRepo,
   getIssueOwnerRepo,
+  getOwnerRepoForRemote,
+  resolveIssueSource,
   classifyGhError,
   classifyListIssuesError,
   type OwnerRepo
@@ -578,12 +581,20 @@ export async function listWorkItems(
   repoPath: string,
   limit = 24,
   query?: string,
-  before?: string
+  before?: string,
+  preference?: IssueSourcePreference
 ): Promise<ListWorkItemsResult<MainWorkItem>> {
-  const [issueOwnerRepo, prOwnerRepo] = await Promise.all([
-    getIssueOwnerRepo(repoPath),
-    getOwnerRepo(repoPath)
+  // Why: resolve the raw upstream candidate alongside the preference-aware
+  // issue source. The selector needs to know whether an upstream remote
+  // *exists* to decide whether to render — independent of whether the user
+  // has picked 'origin' (which would otherwise make `sources.issues` equal
+  // origin and hide the selector permanently).
+  const [issueResolved, prOwnerRepo, upstreamCandidate] = await Promise.all([
+    resolveIssueSource(repoPath, preference),
+    getOwnerRepo(repoPath),
+    getOwnerRepoForRemote(repoPath, 'upstream')
   ])
+  const issueOwnerRepo = issueResolved.source
   const trimmedQuery = query?.trim() ?? ''
   await acquire()
   try {
@@ -605,8 +616,13 @@ export async function listWorkItems(
     const errors = partial.issuesError ? { issues: partial.issuesError } : undefined
     return {
       items: partial.items,
-      sources: { issues: issueOwnerRepo, prs: prOwnerRepo },
-      ...(errors ? { errors } : {})
+      sources: {
+        issues: issueOwnerRepo,
+        prs: prOwnerRepo,
+        upstreamCandidate: upstreamCandidate ?? null
+      },
+      ...(errors ? { errors } : {}),
+      ...(issueResolved.fellBack ? { issueSourceFellBack: true } : {})
     }
   } finally {
     release()
@@ -701,11 +717,16 @@ function defaultOpenWorkItemQuery(): ParsedTaskQuery {
 // Why: uses GitHub's search API to get total_count without fetching items.
 // This powers the pagination bar so the user sees total pages upfront.
 // Cached for 120s to avoid burning the search rate limit (30 req/min).
-export async function countWorkItems(repoPath: string, query?: string): Promise<number> {
-  const [issueOwnerRepo, prOwnerRepo] = await Promise.all([
-    getIssueOwnerRepo(repoPath),
+export async function countWorkItems(
+  repoPath: string,
+  query?: string,
+  preference?: IssueSourcePreference
+): Promise<number> {
+  const [issueResolved, prOwnerRepo] = await Promise.all([
+    resolveIssueSource(repoPath, preference),
     getOwnerRepo(repoPath)
   ])
+  const issueOwnerRepo = issueResolved.source
   const ownerRepo = prOwnerRepo ?? issueOwnerRepo
   if (!ownerRepo) {
     return 0

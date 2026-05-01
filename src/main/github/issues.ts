@@ -1,23 +1,42 @@
+/* eslint-disable max-lines -- Why: co-locating issue list/create/update/
+comment operations keeps the shared acquire/release + error-classification
+pattern obvious. Each function is short; the file is long because the
+surface is broad. */
 import type {
   ClassifiedError,
   GitHubAssignableUser,
   GitHubCommentResult,
   GitHubIssueUpdate,
   IssueInfo,
+  IssueSourcePreference,
   PRComment
 } from '../../shared/types'
 import { mapIssueInfo } from './mappers'
 // prettier-ignore
-import { ghExecFileAsync, acquire, release, getIssueOwnerRepo, classifyGhError, classifyListIssuesError } from './gh-utils'
+import { ghExecFileAsync, acquire, release, getIssueOwnerRepo, resolveIssueSource, classifyGhError, classifyListIssuesError } from './gh-utils'
 
 // Why: distinguishes a successful-empty listing from a failed fetch. The
 // previous `catch { return [] }` conflated a 403 on a private upstream with an
 // empty backlog. Callers decide how to surface `error`.
-export type IssueListResult = { items: IssueInfo[]; error?: ClassifiedError }
+export type IssueListResult = {
+  items: IssueInfo[]
+  error?: ClassifiedError
+  /** True when the user preferred `'upstream'` but no upstream remote was
+   *  configured and we fell back to origin. Renderer surfaces a one-time
+   *  toast; absent on fresh-auto and explicit-origin paths. */
+  fellBack?: boolean
+}
 
 /**
  * Get a single issue by number.
  * Uses gh api --cache so 304 Not Modified responses don't count against the rate limit.
+ *
+ * Why this path doesn't take a preference: linked-issue lookups persist a
+ * number to a worktree at creation time. Routing detail lookups through the
+ * live per-repo preference would silently flip an existing link to a
+ * different repo after the user toggled the selector — the opposite of what
+ * #1186 / the parent design doc guard against. List and create paths honor
+ * preference; number-resolution stays on the heuristic.
  */
 export async function getIssue(repoPath: string, issueNumber: number): Promise<IssueInfo | null> {
   const ownerRepo = await getIssueOwnerRepo(repoPath)
@@ -61,8 +80,14 @@ export async function getIssue(repoPath: string, issueNumber: number): Promise<I
  * (§3) — silently hiding failures re-creates the same silent-source-switch
  * class of wrongness #1186 warned against, one level deeper.
  */
-export async function listIssues(repoPath: string, limit = 20): Promise<IssueListResult> {
-  const ownerRepo = await getIssueOwnerRepo(repoPath)
+export async function listIssues(
+  repoPath: string,
+  limit = 20,
+  preference?: IssueSourcePreference
+): Promise<IssueListResult> {
+  const resolved = await resolveIssueSource(repoPath, preference)
+  const ownerRepo = resolved.source
+  const fellBack = resolved.fellBack
   await acquire()
   try {
     if (ownerRepo) {
@@ -83,7 +108,8 @@ export async function listIssues(repoPath: string, limit = 20): Promise<IssueLis
       return {
         items: data
           .filter((d) => !('pull_request' in d))
-          .map((d) => mapIssueInfo(d as Parameters<typeof mapIssueInfo>[0]))
+          .map((d) => mapIssueInfo(d as Parameters<typeof mapIssueInfo>[0])),
+        ...(fellBack ? { fellBack: true } : {})
       }
     }
     // Fallback for non-GitHub remotes
@@ -92,10 +118,17 @@ export async function listIssues(repoPath: string, limit = 20): Promise<IssueLis
       { cwd: repoPath }
     )
     const data = JSON.parse(stdout) as unknown[]
-    return { items: data.map((d) => mapIssueInfo(d as Parameters<typeof mapIssueInfo>[0])) }
+    return {
+      items: data.map((d) => mapIssueInfo(d as Parameters<typeof mapIssueInfo>[0])),
+      ...(fellBack ? { fellBack: true } : {})
+    }
   } catch (err) {
     const stderr = err instanceof Error ? err.message : String(err)
-    return { items: [], error: classifyListIssuesError(stderr) }
+    return {
+      items: [],
+      error: classifyListIssuesError(stderr),
+      ...(fellBack ? { fellBack: true } : {})
+    }
   } finally {
     release()
   }
@@ -109,13 +142,14 @@ export async function listIssues(repoPath: string, limit = 20): Promise<IssueLis
 export async function createIssue(
   repoPath: string,
   title: string,
-  body: string
+  body: string,
+  preference?: IssueSourcePreference
 ): Promise<{ ok: true; number: number; url: string } | { ok: false; error: string }> {
   const trimmedTitle = title.trim()
   if (!trimmedTitle) {
     return { ok: false, error: 'Title is required' }
   }
-  const ownerRepo = await getIssueOwnerRepo(repoPath)
+  const { source: ownerRepo } = await resolveIssueSource(repoPath, preference)
   if (!ownerRepo) {
     return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
   }
@@ -158,9 +192,10 @@ export async function createIssue(
 export async function updateIssue(
   repoPath: string,
   issueNumber: number,
-  updates: GitHubIssueUpdate
+  updates: GitHubIssueUpdate,
+  preference?: IssueSourcePreference
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const ownerRepo = await getIssueOwnerRepo(repoPath)
+  const { source: ownerRepo } = await resolveIssueSource(repoPath, preference)
   if (!ownerRepo) {
     return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
   }
@@ -233,9 +268,10 @@ export async function updateIssue(
 export async function addIssueComment(
   repoPath: string,
   issueNumber: number,
-  body: string
+  body: string,
+  preference?: IssueSourcePreference
 ): Promise<GitHubCommentResult> {
-  const ownerRepo = await getIssueOwnerRepo(repoPath)
+  const { source: ownerRepo } = await resolveIssueSource(repoPath, preference)
   if (!ownerRepo) {
     return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
   }
@@ -277,8 +313,11 @@ export async function addIssueComment(
   }
 }
 
-export async function listLabels(repoPath: string): Promise<string[]> {
-  const ownerRepo = await getIssueOwnerRepo(repoPath)
+export async function listLabels(
+  repoPath: string,
+  preference?: IssueSourcePreference
+): Promise<string[]> {
+  const { source: ownerRepo } = await resolveIssueSource(repoPath, preference)
   if (!ownerRepo) {
     return []
   }
@@ -305,8 +344,11 @@ export async function listLabels(repoPath: string): Promise<string[]> {
   }
 }
 
-export async function listAssignableUsers(repoPath: string): Promise<GitHubAssignableUser[]> {
-  const ownerRepo = await getIssueOwnerRepo(repoPath)
+export async function listAssignableUsers(
+  repoPath: string,
+  preference?: IssueSourcePreference
+): Promise<GitHubAssignableUser[]> {
+  const { source: ownerRepo } = await resolveIssueSource(repoPath, preference)
   if (!ownerRepo) {
     return []
   }

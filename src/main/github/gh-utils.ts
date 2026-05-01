@@ -1,7 +1,7 @@
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { gitExecFileAsync, ghExecFileAsync } from '../git/runner'
-import type { ClassifiedError, GitHubOwnerRepo } from '../../shared/types'
+import type { ClassifiedError, GitHubOwnerRepo, IssueSourcePreference } from '../../shared/types'
 
 // Why: legacy generic execFile wrapper — only used by callers that don't need
 // WSL-aware routing (e.g. non-repo-scoped gh commands). Repo-scoped callers
@@ -118,7 +118,7 @@ export function parseGitHubOwnerRepo(remoteUrl: string): OwnerRepo | null {
   return { owner: match[1], repo: match[2] }
 }
 
-async function getOwnerRepoForRemote(
+export async function getOwnerRepoForRemote(
   repoPath: string,
   remoteName: string
 ): Promise<OwnerRepo | null> {
@@ -152,4 +152,42 @@ export async function getIssueOwnerRepo(repoPath: string): Promise<OwnerRepo | n
     return upstream
   }
   return getOwnerRepoForRemote(repoPath, 'origin')
+}
+
+export type ResolvedIssueSource = {
+  source: OwnerRepo | null
+  /** True when the user preferred `upstream` but the upstream remote is no
+   *  longer configured and the resolver fell back to origin. Consumers
+   *  surface this as a one-time toast per session/repo. */
+  fellBack: boolean
+}
+
+/**
+ * Resolve the issue source for a repo honoring the user's per-repo preference.
+ *
+ * Do not delete `getIssueOwnerRepo`: it remains the right primitive for
+ * `'auto'` mode and for preference-agnostic callers like typed work-item
+ * detail lookups (where the issue-vs-PR disambiguation is orthogonal to
+ * user choice).
+ */
+export async function resolveIssueSource(
+  repoPath: string,
+  preference: IssueSourcePreference | undefined
+): Promise<ResolvedIssueSource> {
+  if (preference === 'upstream') {
+    const upstream = await getOwnerRepoForRemote(repoPath, 'upstream')
+    if (upstream) {
+      return { source: upstream, fellBack: false }
+    }
+    // Why: explicit upstream is gone — fall back to origin but flag it so the
+    // UI can toast once. Do NOT auto-reset the preference: the user may be
+    // mid-way through a workflow and expect their choice to re-engage if
+    // `upstream` is re-added.
+    return { source: await getOwnerRepoForRemote(repoPath, 'origin'), fellBack: true }
+  }
+  if (preference === 'origin') {
+    return { source: await getOwnerRepoForRemote(repoPath, 'origin'), fellBack: false }
+  }
+  // 'auto' or undefined
+  return { source: await getIssueOwnerRepo(repoPath), fellBack: false }
 }

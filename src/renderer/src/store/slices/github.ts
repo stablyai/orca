@@ -5,6 +5,7 @@ import type { AppState } from '../types'
 import type {
   ClassifiedError,
   GitHubOwnerRepo,
+  IssueSourcePreference,
   PRInfo,
   IssueInfo,
   PRCheckDetail,
@@ -18,6 +19,9 @@ import { syncPRChecksStatus } from './github-checks'
 export type WorkItemsCacheSources = {
   issues: GitHubOwnerRepo | null
   prs: GitHubOwnerRepo | null
+  /** Raw upstream remote (if any) — present so the selector can render
+   *  independently of the currently-effective preference. */
+  upstreamCandidate?: GitHubOwnerRepo | null
 }
 
 // Why: the indicator and retry banner both need the resolved owner/repo for
@@ -42,6 +46,13 @@ export type CacheEntry<T> = {
    * render together.
    */
   error?: WorkItemsCacheError
+  /**
+   * True when the resolver fell back to origin because the user's preferred
+   * `'upstream'` remote is no longer configured for this repo. Consumers
+   * surface a one-time toast per session/repo; TaskPage tracks the
+   * already-toasted set so repeated refreshes don't re-toast.
+   */
+  issueSourceFellBack?: boolean
 }
 
 type FetchOptions = {
@@ -267,6 +278,21 @@ export type GitHubSlice = {
    */
   prefetchWorkItems: (repoId: string, repoPath: string, limit?: number, query?: string) => void
   patchWorkItem: (itemId: string, patch: Partial<GitHubWorkItem>) => void
+  /**
+   * Persist a per-repo issue-source preference, update the local Repo record
+   * for reactive UI, and invalidate all cached work-items entries that key
+   * off this repo's path so the Tasks list re-fetches against the new source.
+   *
+   * Why invalidate all `${repoPath}::*` keys and not only the primary entry:
+   * preferences flip the issue source for every list query (query-less +
+   * user-entered queries alike). Surgical eviction of the primary key alone
+   * would leave stale results in alternate-query cache lines.
+   */
+  setIssueSourcePreference: (
+    repoId: string,
+    repoPath: string,
+    preference: IssueSourcePreference
+  ) => Promise<void>
 }
 
 export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (set, get) => ({
@@ -366,7 +392,8 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
               data: items,
               fetchedAt: Date.now(),
               sources: envelope.sources,
-              ...(errorForCache ? { error: errorForCache } : {})
+              ...(errorForCache ? { error: errorForCache } : {}),
+              ...(envelope.issueSourceFellBack ? { issueSourceFellBack: true } : {})
             }
           }
         }))
@@ -822,6 +849,48 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       }
       return changed ? { workItemsCache: nextCache } : {}
     })
+  },
+
+  setIssueSourcePreference: async (repoId, repoPath, preference) => {
+    // Why: optimistically patch the local Repo first so the segmented control
+    // reflects the new selection on the same frame. If the IPC fails the
+    // next `fetchRepos()` will re-sync from disk; there is no cross-device
+    // concern here so we don't implement a rollback.
+    set((s) => ({
+      repos: s.repos.map((r) =>
+        r.id === repoId
+          ? {
+              ...r,
+              issueSourcePreference: preference === 'auto' ? undefined : preference
+            }
+          : r
+      )
+    }))
+    // Why: evict every cache entry keyed on this repo's path. Work-items
+    // cache keys are `${repoPath}::${limit}::${query}` so we can't selectively
+    // invalidate by query — the preference change affects all queries against
+    // this repo. Also wipe in-flight dedupe entries so a new fetch doesn't
+    // resolve to the pre-flip request and skip the source swap.
+    set((s) => {
+      const prefix = `${repoPath}::`
+      const next: Record<string, CacheEntry<GitHubWorkItem[]>> = {}
+      for (const [key, entry] of Object.entries(s.workItemsCache)) {
+        if (!key.startsWith(prefix)) {
+          next[key] = entry
+        }
+      }
+      return { workItemsCache: next }
+    })
+    for (const key of Array.from(inflightWorkItemsRequests.keys())) {
+      if (key.startsWith(`${repoPath}::`)) {
+        inflightWorkItemsRequests.delete(key)
+      }
+    }
+    try {
+      await window.api.gh.setIssueSourcePreference({ repoId, preference })
+    } catch (err) {
+      console.error('Failed to persist issue-source preference:', err)
+    }
   },
 
   // Why: worktree switches previously force-refreshed GitHub data on every
