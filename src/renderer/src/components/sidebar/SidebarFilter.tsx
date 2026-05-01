@@ -81,7 +81,7 @@ const SidebarFilter = React.memo(function SidebarFilter() {
               className={cn(
                 'gap-1 border-none text-[10px] font-normal shadow-none focus-visible:ring-0',
                 hasAnyFilter
-                  ? 'h-6 w-auto px-1.5 bg-accent text-accent-foreground hover:bg-accent/80'
+                  ? 'h-6 w-auto max-w-[9rem] px-1.5 bg-accent text-accent-foreground hover:bg-accent/80'
                   : 'text-muted-foreground'
               )}
             >
