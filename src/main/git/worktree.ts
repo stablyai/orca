@@ -1,6 +1,8 @@
-import { posix, win32 } from 'path'
+import { stat } from 'fs/promises'
+import { join, posix, win32 } from 'path'
 import type { GitWorktreeInfo } from '../../shared/types'
 import { gitExecFileAsync, translateWslOutputPaths } from './runner'
+import { resolveGitDir } from './status'
 
 type SparseWorktreeCreateError = Error & {
   cleanupFailed?: boolean
@@ -300,13 +302,26 @@ function translateWorktreePath(worktreePath: string, repoPath: string): string {
 }
 
 async function detectSparseCheckout(worktreePath: string): Promise<boolean> {
-  // Why: `core.sparseCheckout` is repo-level config shared across all worktrees.
-  // Querying it would false-positive every linked worktree when the main repo
-  // has sparse checkout enabled. Instead, check the worktree-local
-  // `sparse-checkout` config file which only exists when sparse is active.
+  // Why: `listWorktrees` runs on every 3-second git-status poll and on every
+  // worktree refresh, so this probe fires N times per poll for N worktrees.
+  // The previous `git sparse-checkout list` subprocess made that N*poll extra
+  // git processes, which regressed app responsiveness on machines with many
+  // worktrees (see PR #1131 revert in #1290). A single fs.stat on the
+  // per-worktree sparse-checkout config file is ~two orders of magnitude
+  // cheaper and has the same truthiness semantics: Git writes this file when
+  // sparse checkout is enabled for the worktree and does not write it
+  // otherwise.
+  //
+  // Why per-worktree gitdir and not `<worktreePath>/.git/info/sparse-checkout`:
+  // linked worktrees have a `.git` file that points at
+  // `<repo>/.git/worktrees/<name>`, and that is where Git stores the
+  // worktree-local sparse-checkout config. `core.sparseCheckout` itself is
+  // shared across all worktrees, so the presence of the config file is the
+  // correct per-worktree signal.
   try {
-    const { stdout } = await gitExecFileAsync(['sparse-checkout', 'list'], { cwd: worktreePath })
-    return stdout.trim().length > 0
+    const gitDir = await resolveGitDir(worktreePath)
+    const stats = await stat(join(gitDir, 'info', 'sparse-checkout'))
+    return stats.isFile() && stats.size > 0
   } catch {
     return false
   }

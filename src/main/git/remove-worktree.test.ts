@@ -1,20 +1,36 @@
 /* eslint-disable max-lines -- Why: remove/list/sparse cleanup tests share one git runner
    mock harness, and splitting them would duplicate setup without a clearer boundary. */
+import type * as FsPromises from 'fs/promises'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { gitExecFileAsyncMock, gitExecFileSyncMock, translateWslOutputPathsMock } = vi.hoisted(
-  () => ({
-    gitExecFileAsyncMock: vi.fn(),
-    gitExecFileSyncMock: vi.fn(),
-    translateWslOutputPathsMock: vi.fn((output: string) => output)
-  })
-)
+const {
+  gitExecFileAsyncMock,
+  gitExecFileSyncMock,
+  translateWslOutputPathsMock,
+  statMock,
+  resolveGitDirMock
+} = vi.hoisted(() => ({
+  gitExecFileAsyncMock: vi.fn(),
+  gitExecFileSyncMock: vi.fn(),
+  translateWslOutputPathsMock: vi.fn((output: string) => output),
+  statMock: vi.fn(),
+  resolveGitDirMock: vi.fn()
+}))
 
 vi.mock('./runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock,
   gitExecFileSync: gitExecFileSyncMock,
   translateWslOutputPaths: translateWslOutputPathsMock
 }))
+
+vi.mock('./status', () => ({
+  resolveGitDir: resolveGitDirMock
+}))
+
+vi.mock('fs/promises', async () => {
+  const actual = await vi.importActual<typeof FsPromises>('fs/promises')
+  return { ...actual, stat: statMock }
+})
 
 import { addSparseWorktree, listWorktrees, removeWorktree } from './worktree'
 
@@ -61,6 +77,12 @@ describe('removeWorktree', () => {
     gitExecFileSyncMock.mockReset()
     translateWslOutputPathsMock.mockReset()
     translateWslOutputPathsMock.mockImplementation((output: string) => output)
+    statMock.mockReset()
+    // Default: no worktree has a sparse-checkout config file. Tests that need
+    // sparse detection override this.
+    statMock.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
+    resolveGitDirMock.mockReset()
+    resolveGitDirMock.mockImplementation(async (worktreePath: string) => `${worktreePath}/.git`)
   })
 
   it('removes the worktree, prunes stale refs, and deletes its local branch', async () => {
@@ -276,6 +298,12 @@ describe('listWorktrees', () => {
     gitExecFileSyncMock.mockReset()
     translateWslOutputPathsMock.mockReset()
     translateWslOutputPathsMock.mockImplementation((output: string) => output)
+    statMock.mockReset()
+    // Default: no worktree has a sparse-checkout config file. Tests that need
+    // sparse detection override this.
+    statMock.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
+    resolveGitDirMock.mockReset()
+    resolveGitDirMock.mockImplementation(async (worktreePath: string) => `${worktreePath}/.git`)
   })
 
   it('translates parsed path fields from NUL-delimited porcelain output', async () => {
@@ -306,12 +334,16 @@ describe('listWorktrees', () => {
         isMainWorktree: false
       }
     ])
-    expect(getGitCalls()).toEqual(['git worktree list --porcelain -z', 'git sparse-checkout list'])
+    // Why: the non-sparse main worktree gets an fs probe of its sparse config
+    // file; the linked worktree short-circuits on the parsed `sparse` token and
+    // does not. Only one git subprocess runs regardless of worktree count.
+    expect(getGitCalls()).toEqual(['git worktree list --porcelain -z'])
+    expect(statMock).toHaveBeenCalledTimes(1)
     expect(translateWslOutputPathsMock).toHaveBeenCalledTimes(2)
   })
 
   it('detects sparse checkout after translating paths when porcelain omits sparse token', async () => {
-    gitExecFileAsyncMock.mockImplementation((args: string[], options: { cwd: string }) => {
+    gitExecFileAsyncMock.mockImplementation((args: string[]) => {
       if (args.join(' ') === 'worktree list --porcelain -z') {
         return {
           stdout:
@@ -320,19 +352,23 @@ describe('listWorktrees', () => {
           stderr: ''
         }
       }
-      if (args.join(' ') === 'sparse-checkout list') {
-        const isFeatureWorktree =
-          options.cwd === '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo-feature'
-        return {
-          stdout: isFeatureWorktree ? 'packages/web\n' : '',
-          stderr: ''
-        }
-      }
       throw new Error(`Unexpected git call: ${args.join(' ')}`)
     })
     translateWslOutputPathsMock.mockImplementation((output: string) => {
       expect(output).not.toContain('\0')
       return output.replace('/home/me/', '\\\\wsl.localhost\\Ubuntu\\home\\me\\')
+    })
+    const featureWorktreePath = '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo-feature'
+    resolveGitDirMock.mockImplementation(async (worktreePath: string) =>
+      worktreePath === featureWorktreePath
+        ? `${featureWorktreePath}\\.git-worktrees\\feature`
+        : `${worktreePath}/.git`
+    )
+    statMock.mockImplementation(async (filePath: string) => {
+      if (filePath.includes('repo-feature') && filePath.includes('sparse-checkout')) {
+        return { isFile: () => true, size: 32 }
+      }
+      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     })
 
     const worktrees = await listWorktrees('\\\\wsl.localhost\\Ubuntu\\home\\me\\repo')
@@ -354,9 +390,11 @@ describe('listWorktrees', () => {
         isMainWorktree: false
       }
     ])
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['sparse-checkout', 'list'], {
-      cwd: '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo-feature'
-    })
+    expect(resolveGitDirMock).toHaveBeenCalledWith(featureWorktreePath)
+    // Why: the detection path must not spawn a git subprocess per worktree —
+    // the perf regression in #1131 came from `git sparse-checkout list` firing
+    // on every poll.
+    expect(getGitCalls()).toEqual(['git worktree list --porcelain -z'])
   })
 })
 
@@ -366,6 +404,12 @@ describe('addSparseWorktree', () => {
     gitExecFileSyncMock.mockReset()
     translateWslOutputPathsMock.mockReset()
     translateWslOutputPathsMock.mockImplementation((output: string) => output)
+    statMock.mockReset()
+    // Default: no worktree has a sparse-checkout config file. Tests that need
+    // sparse detection override this.
+    statMock.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
+    resolveGitDirMock.mockReset()
+    resolveGitDirMock.mockImplementation(async (worktreePath: string) => `${worktreePath}/.git`)
   })
 
   it('separates sparse checkout directory operands from options', async () => {
