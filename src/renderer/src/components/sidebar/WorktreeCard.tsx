@@ -157,7 +157,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   // that the spinner flickered; the blocked/waiting/done states don't have
   // that problem — they're terminal (done) or attention-needed (blocked/
   // waiting) and persist until the user acts. Retained "done" snapshots are
-  // consulted too so the done indicator keeps showing after the agent process exits,
+  // consulted too so the done dot keeps glowing after the agent process exits,
   // matching the dashboard's retention behavior.
   //
   // Priority (highest first): permission (blocked/waiting) > heuristic
@@ -167,7 +167,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   // completion.
   // heuristic 'working' wins over done because a spinner means the user has
   // already re-prompted the agent after it reported done — the newer "work
-  // in progress" signal is more informative than a retained completion indicator.
+  // in progress" signal is more informative than a retained completion dot.
   // Only the 'working' heuristic earns this precedence; 'active'/'inactive'
   // mean "quiet terminal", which shouldn't drown out a recent done.
   // Why: collapse live hook entries to booleans inside the selector so the
