@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <a href="https://onOrca.dev"><strong>onOrca.dev でダウンロード</strong></a>
+  <a href="#インストール"><strong>ダウンロード 🐋</strong></a>
 </p>
 
 <p align="center">
@@ -74,8 +74,30 @@ Orca は任意の CLI Agent に対応しています（_このリストに限定
 
 ## インストール
 
-- **[onOrca.dev からダウンロード](https://onOrca.dev)**
-- または、**[GitHub Releases ページ](https://github.com/stablyai/orca/releases)**から最新のインストーラーをダウンロードしてください。
+- **[onOrca.dev からダウンロード](https://onOrca.dev)** — または **[GitHub Releases ページ](https://github.com/stablyai/orca/releases/latest)** から最新のインストーラーを取得できます。
+
+パッケージマネージャーからのインストールも可能です:
+
+### macOS (Homebrew)
+
+```bash
+brew tap stablyai/orca
+brew install --cask orca
+```
+
+アップデートは Orca 内蔵のアップデータが処理します。詳しくは [docs/homebrew-cask.md](homebrew-cask.md) を参照してください。
+
+### Arch Linux (AUR)
+
+```bash
+# ビルド済みバイナリ
+yay -S stably-orca-bin
+
+# GitHub ソースからビルド
+yay -S stably-orca-git
+```
+
+AUR の [stably-orca-bin](https://aur.archlinux.org/packages/stably-orca-bin) と [stably-orca-git](https://aur.archlinux.org/packages/stably-orca-git) を参照してください。
 
 ---
 

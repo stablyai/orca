@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <a href="https://onOrca.dev"><strong>在 onOrca.dev 下载</strong></a>
+  <a href="#安装"><strong>下载 🐋</strong></a>
 </p>
 
 <p align="center">
@@ -74,8 +74,30 @@ Orca 支持任何 CLI Agent (_不仅限于以下列表_)。
 
 ## 安装
 
-- **[从 onOrca.dev 下载](https://onOrca.dev)**
-- 或者通过 **[GitHub Releases 页面](https://github.com/stablyai/orca/releases)** 下载最新的安装包。
+- **[从 onOrca.dev 下载](https://onOrca.dev)** — 或通过 **[GitHub Releases 页面](https://github.com/stablyai/orca/releases/latest)** 获取最新安装包。
+
+你也可以通过包管理器安装:
+
+### macOS (Homebrew)
+
+```bash
+brew tap stablyai/orca
+brew install --cask orca
+```
+
+更新由 Orca 内置的更新器处理；详见 [docs/homebrew-cask.md](homebrew-cask.md)。
+
+### Arch Linux (AUR)
+
+```bash
+# 预编译二进制
+yay -S stably-orca-bin
+
+# 从 GitHub 源码构建
+yay -S stably-orca-git
+```
+
+详见 AUR 上的 [stably-orca-bin](https://aur.archlinux.org/packages/stably-orca-bin) 与 [stably-orca-git](https://aur.archlinux.org/packages/stably-orca-git)。
 
 ---
 

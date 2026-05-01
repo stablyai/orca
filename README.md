@@ -21,7 +21,7 @@
 </p>
 
 <p align="center">
-  <a href="https://onOrca.dev"><strong>Download at onOrca.dev</strong></a>
+  <a href="#install"><strong>Download 🐋</strong></a>
 </p>
 
 <p align="center">
@@ -73,14 +73,30 @@ Orca supports any CLI agent (_not just this list_).
 
 ## Install
 
-- **[Download from onOrca.dev](https://onOrca.dev)**
-- On macOS, install via Homebrew:
-  ```bash
-  brew tap stablyai/orca
-  brew install --cask orca
-  ```
-  Updates are handled by Orca's built-in updater; see [docs/homebrew-cask.md](docs/homebrew-cask.md).
-- Or download the latest binaries via the **[GitHub Releases page](https://github.com/stablyai/orca/releases)**.
+- **[Download from onOrca.dev](https://onOrca.dev)** — or grab the latest binaries from the **[GitHub Releases page](https://github.com/stablyai/orca/releases/latest)**.
+
+Alternatively, install from a package manager:
+
+### macOS (Homebrew)
+
+```bash
+brew tap stablyai/orca
+brew install --cask orca
+```
+
+Updates are handled by Orca's built-in updater; see [docs/homebrew-cask.md](docs/homebrew-cask.md).
+
+### Arch Linux (AUR)
+
+```bash
+# Precompiled binary
+yay -S stably-orca-bin
+
+# Build from GitHub source
+yay -S stably-orca-git
+```
+
+See [stably-orca-bin](https://aur.archlinux.org/packages/stably-orca-bin) and [stably-orca-git](https://aur.archlinux.org/packages/stably-orca-git) on the AUR.
 
 ---
 
