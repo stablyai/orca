@@ -58,7 +58,7 @@ import RepoMultiCombobox from '@/components/ui/repo-multi-combobox'
 import TeamMultiCombobox from '@/components/ui/team-multi-combobox'
 import RepoDotLabel from '@/components/repo/RepoDotLabel'
 import IssueSourceIndicator, { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
-import IssueSourceSelector from '@/components/github/IssueSourceSelector'
+import IssueSourceSelector, { issueSourceChipClass } from '@/components/github/IssueSourceSelector'
 import { stripRepoQualifiers } from '../../../shared/task-query'
 import GitHubItemDialog from '@/components/GitHubItemDialog'
 import LinearItemDrawer from '@/components/LinearItemDrawer'
@@ -1992,9 +1992,30 @@ export default function TaskPage(): React.JSX.Element {
                             const repo = selectedRepos.find((r) => r.id === s.repoId)
                             const showDotLabel = selectedRepos.length > 1 && repo
                             const selectorRenderable = hasUpstreamCandidateDivergence(s)
+                            // Why: the static indicator has its own wrapping
+                            // chip styles, so we render it standalone and don't
+                            // nest it inside our own chip — nesting would
+                            // double-border it.
+                            if (!selectorRenderable && hasDivergentSources(s)) {
+                              return (
+                                <IssueSourceIndicator
+                                  key={s.repoId}
+                                  issues={s.sources.issues}
+                                  prs={s.sources.prs}
+                                  localRepo={
+                                    showDotLabel && repo
+                                      ? { displayName: repo.displayName, color: repo.badgeColor }
+                                      : undefined
+                                  }
+                                />
+                              )
+                            }
+                            if (!selectorRenderable || !repo) {
+                              return null
+                            }
                             return (
-                              <div key={s.repoId} className="inline-flex items-center gap-1.5">
-                                {showDotLabel && repo ? (
+                              <span key={s.repoId} className={issueSourceChipClass}>
+                                {showDotLabel ? (
                                   <RepoDotLabel
                                     name={repo.displayName}
                                     color={repo.badgeColor}
@@ -2002,26 +2023,15 @@ export default function TaskPage(): React.JSX.Element {
                                     className="text-[10px] text-muted-foreground"
                                   />
                                 ) : null}
-                                {selectorRenderable && repo ? (
-                                  <IssueSourceSelector
-                                    preference={repo.issueSourcePreference}
-                                    origin={s.sources.prs}
-                                    upstream={s.sources.upstreamCandidate}
-                                    onChange={(next) => {
-                                      void setIssueSourcePreference(repo.id, repo.path, next)
-                                    }}
-                                  />
-                                ) : hasDivergentSources(s) ? (
-                                  // Why: fall back to the static indicator when
-                                  // there's no upstream remote to toggle but the
-                                  // issue/PR sources still diverge (rare —
-                                  // typically means a non-GitHub upstream).
-                                  <IssueSourceIndicator
-                                    issues={s.sources.issues}
-                                    prs={s.sources.prs}
-                                  />
-                                ) : null}
-                              </div>
+                                <IssueSourceSelector
+                                  preference={repo.issueSourcePreference}
+                                  origin={s.sources.prs}
+                                  upstream={s.sources.upstreamCandidate}
+                                  onChange={(next) => {
+                                    void setIssueSourcePreference(repo.id, repo.path, next)
+                                  }}
+                                />
+                              </span>
                             )
                           })}
                         </div>

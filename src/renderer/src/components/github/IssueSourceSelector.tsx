@@ -31,20 +31,27 @@ export type IssueSourceSelectorProps = {
 
 type PillState = 'active' | 'inactive'
 
-function pillClass(state: PillState, disabled: boolean | undefined): string {
+function segmentClass(state: PillState, disabled: boolean | undefined): string {
   return cn(
-    'inline-flex items-center gap-1 border border-border/50 px-2 py-0.5 text-[10px] font-medium transition',
-    'first:rounded-l-md first:border-r-0 last:rounded-r-md',
-    // Why: match the weight of the neighbouring IssueSourceIndicator chip —
-    // a solid-dark active pill would read as a CTA rather than a state
-    // indicator. `bg-muted/60 text-foreground` sits in the same visual band
-    // as the static indicator while still being clearly the active choice.
+    // Why: segments live *inside* an outer chip (see `containerClass` below)
+    // so they deliberately carry no border of their own — a second border
+    // here would double-stroke the chip outline and look heavy. Active state
+    // is expressed by a slightly darker inner background that sits one step
+    // above the chip's own `bg-muted/40`.
+    'inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium transition',
     state === 'active'
-      ? 'bg-muted/60 text-foreground'
-      : 'bg-transparent text-muted-foreground hover:bg-muted/40 hover:text-foreground',
+      ? 'bg-foreground/10 text-foreground'
+      : 'bg-transparent text-muted-foreground hover:bg-foreground/5 hover:text-foreground',
     disabled ? 'cursor-not-allowed opacity-60 hover:bg-transparent hover:text-muted-foreground' : ''
   )
 }
+
+// Why: exported so the Tasks-header row can wrap the selector (and the
+// optional per-repo dot-label prefix) in the same pill shape used by the
+// static `IssueSourceIndicator`. Keeping the styling here means the chip
+// and its segments stay visually consistent.
+export const issueSourceChipClass =
+  'inline-flex items-center gap-1 rounded border border-border/50 bg-muted/40 px-1.5 py-0.5 text-[10px] text-muted-foreground'
 
 /**
  * Two-pill segmented control: `Upstream | Origin`.
@@ -91,7 +98,13 @@ export default function IssueSourceSelector({
     <div
       role="group"
       aria-label="Issue source"
-      className={cn('inline-flex items-center text-[10px]', className)}
+      className={cn(
+        // Why: an inner rounded track with subtle divider between segments.
+        // Thin border matches the outer chip's border weight so the control
+        // reads as part of the chip rather than a nested surface.
+        'inline-flex items-center overflow-hidden rounded border border-border/40',
+        className
+      )}
     >
       <button
         type="button"
@@ -104,7 +117,7 @@ export default function IssueSourceSelector({
           }
           onChange('upstream')
         }}
-        className={pillClass(effective === 'upstream' ? 'active' : 'inactive', disabled)}
+        className={segmentClass(effective === 'upstream' ? 'active' : 'inactive', disabled)}
       >
         {density === 'compact' ? 'U' : 'Upstream'}
       </button>
@@ -119,7 +132,11 @@ export default function IssueSourceSelector({
           }
           onChange('origin')
         }}
-        className={pillClass(effective === 'origin' ? 'active' : 'inactive', disabled)}
+        className={cn(
+          segmentClass(effective === 'origin' ? 'active' : 'inactive', disabled),
+          // Why: 1px divider between segments, matching the outer chip border.
+          'border-l border-border/40'
+        )}
       >
         {density === 'compact' ? 'O' : 'Origin'}
       </button>
