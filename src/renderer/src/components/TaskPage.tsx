@@ -1973,66 +1973,28 @@ export default function TaskPage(): React.JSX.Element {
                     </div>
 
                     {(() => {
-                      // Why: compute the visible list once so the visibility
-                      // gate and the map don't re-run the same predicate.
-                      // `hasDivergentSources` lives at module scope so the
-                      // predicate isn't re-allocated on every render; the
-                      // narrowed return type means `sources.issues` and
-                      // `sources.prs` are known non-null inside the map.
-                      const visibleRepoSources = perRepoSourceState.filter(hasDivergentSources)
-                      const visibleSelectorRepos = perRepoSourceState.filter(
-                        hasUpstreamCandidateDivergence
+                      // Why: unify feature 1 (indicator) and feature 2 (selector)
+                      // into a single chip per repo. Rendering both separately
+                      // produced visually redundant output — two local-repo
+                      // dot-labels, duplicate slugs. The selector's active pill
+                      // + tooltip already announce the source, so the "Issues
+                      // from {slug}" chip is only shown when the selector does
+                      // not render (no upstream remote — nothing to toggle).
+                      const rows = perRepoSourceState.filter(
+                        (s) => hasUpstreamCandidateDivergence(s) || hasDivergentSources(s)
                       )
-                      if (visibleRepoSources.length === 0 && visibleSelectorRepos.length === 0) {
+                      if (rows.length === 0) {
                         return null
                       }
-                      // Why: per parent design doc §2, the indicator lives near
-                      // the filter row. It's the self-announcing surface that
-                      // makes the convention-based routing in #1076 legitimate
-                      // — without it, a fork contributor filing a personal TODO
-                      // against `upstream` has no way to tell before submit.
                       return (
                         <div className="mt-2 flex flex-wrap items-center gap-2">
-                          {visibleRepoSources.map((s) => {
-                            // Why: when multiple repos are selected, attach the
-                            // local dot-label so readers can tell which chip
-                            // describes which repo. Single-repo views omit it —
-                            // the repo is already unambiguous from context.
-                            const repo =
-                              selectedRepos.length > 1
-                                ? selectedRepos.find((r) => r.id === s.repoId)
-                                : undefined
-                            return (
-                              <IssueSourceIndicator
-                                key={s.repoId}
-                                issues={s.sources.issues}
-                                prs={s.sources.prs}
-                                localRepo={
-                                  repo
-                                    ? { displayName: repo.displayName, color: repo.badgeColor }
-                                    : undefined
-                                }
-                              />
-                            )
-                          })}
-                          {visibleSelectorRepos.map((s) => {
-                            // Why: feature 2 — per-repo selector lives adjacent
-                            // to the indicator. Rendered once per repo with
-                            // divergent upstream/origin, regardless of the
-                            // effective preference (so the user can always flip
-                            // back). The label prefix is only shown in
-                            // multi-repo mode to disambiguate — matching the
-                            // indicator's dot-label rule.
+                          {rows.map((s) => {
                             const repo = selectedRepos.find((r) => r.id === s.repoId)
-                            if (!repo) {
-                              return null
-                            }
+                            const showDotLabel = selectedRepos.length > 1 && repo
+                            const selectorRenderable = hasUpstreamCandidateDivergence(s)
                             return (
-                              <div
-                                key={`selector-${s.repoId}`}
-                                className="inline-flex items-center gap-1"
-                              >
-                                {selectedRepos.length > 1 ? (
+                              <div key={s.repoId} className="inline-flex items-center gap-1.5">
+                                {showDotLabel && repo ? (
                                   <RepoDotLabel
                                     name={repo.displayName}
                                     color={repo.badgeColor}
@@ -2040,14 +2002,25 @@ export default function TaskPage(): React.JSX.Element {
                                     className="text-[10px] text-muted-foreground"
                                   />
                                 ) : null}
-                                <IssueSourceSelector
-                                  preference={repo.issueSourcePreference}
-                                  origin={s.sources.prs}
-                                  upstream={s.sources.upstreamCandidate}
-                                  onChange={(next) => {
-                                    void setIssueSourcePreference(repo.id, repo.path, next)
-                                  }}
-                                />
+                                {selectorRenderable && repo ? (
+                                  <IssueSourceSelector
+                                    preference={repo.issueSourcePreference}
+                                    origin={s.sources.prs}
+                                    upstream={s.sources.upstreamCandidate}
+                                    onChange={(next) => {
+                                      void setIssueSourcePreference(repo.id, repo.path, next)
+                                    }}
+                                  />
+                                ) : hasDivergentSources(s) ? (
+                                  // Why: fall back to the static indicator when
+                                  // there's no upstream remote to toggle but the
+                                  // issue/PR sources still diverge (rare —
+                                  // typically means a non-GitHub upstream).
+                                  <IssueSourceIndicator
+                                    issues={s.sources.issues}
+                                    prs={s.sources.prs}
+                                  />
+                                ) : null}
                               </div>
                             )
                           })}

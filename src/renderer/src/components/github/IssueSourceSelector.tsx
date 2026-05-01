@@ -35,9 +35,13 @@ function pillClass(state: PillState, disabled: boolean | undefined): string {
   return cn(
     'inline-flex items-center gap-1 border border-border/50 px-2 py-0.5 text-[10px] font-medium transition',
     'first:rounded-l-md first:border-r-0 last:rounded-r-md',
+    // Why: match the weight of the neighbouring IssueSourceIndicator chip —
+    // a solid-dark active pill would read as a CTA rather than a state
+    // indicator. `bg-muted/60 text-foreground` sits in the same visual band
+    // as the static indicator while still being clearly the active choice.
     state === 'active'
-      ? 'bg-foreground/90 text-background'
-      : 'bg-transparent text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+      ? 'bg-muted/60 text-foreground'
+      : 'bg-transparent text-muted-foreground hover:bg-muted/40 hover:text-foreground',
     disabled ? 'cursor-not-allowed opacity-60 hover:bg-transparent hover:text-muted-foreground' : ''
   )
 }
