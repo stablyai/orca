@@ -35,7 +35,7 @@ export type MarkdownDocLinkResolution =
   | { status: 'missing' }
   | { status: 'ambiguous'; matches: MarkdownDocument[] }
 
-function stripMarkdownExtension(value: string): string {
+export function stripMarkdownExtension(value: string): string {
   const lower = value.toLowerCase()
   for (const extension of ['.markdown', '.mdx', '.md']) {
     if (lower.endsWith(extension)) {

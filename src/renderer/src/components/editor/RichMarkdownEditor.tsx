@@ -4,13 +4,20 @@ import { EditorContent, useEditor } from '@tiptap/react'
 import type { Editor } from '@tiptap/react'
 import type { MarkdownDocument } from '../../../../shared/types'
 import { RichMarkdownSlashMenu } from './RichMarkdownSlashMenu'
+import { RichMarkdownDocLinkMenu } from './RichMarkdownDocLinkMenu'
 import { useAppStore } from '@/store'
 import { RichMarkdownToolbar } from './RichMarkdownToolbar'
 import { encodeRawMarkdownHtmlForRichEditor } from './raw-markdown-html'
 import { useLocalImagePick } from './useLocalImagePick'
 import { createRichMarkdownExtensions } from './rich-markdown-extensions'
-import { slashCommands, syncSlashMenu } from './rich-markdown-commands'
-import type { SlashCommand, SlashMenuState } from './rich-markdown-commands'
+import { slashCommands, syncDocLinkMenu, syncSlashMenu } from './rich-markdown-commands'
+import type {
+  DocLinkMenuRow,
+  DocLinkMenuState,
+  SlashCommand,
+  SlashMenuState
+} from './rich-markdown-commands'
+import { getMarkdownDocCompletionDocuments } from './markdown-doc-completions'
 import { RichMarkdownSearchBar } from './RichMarkdownSearchBar'
 import { useRichMarkdownSearch } from './useRichMarkdownSearch'
 import {
@@ -83,11 +90,16 @@ export default function RichMarkdownEditor({
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
   const [slashMenu, setSlashMenu] = useState<SlashMenuState | null>(null)
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(0)
+  const [docLinkMenu, setDocLinkMenu] = useState<DocLinkMenuState | null>(null)
+  const [selectedDocLinkIndex, setSelectedDocLinkIndex] = useState(0)
   const isMac = navigator.userAgent.includes('Mac')
   const lastCommittedMarkdownRef = useRef(content)
   const slashMenuRef = useRef<SlashMenuState | null>(null)
   const filteredSlashCommandsRef = useRef<SlashCommand[]>(slashCommands)
   const selectedCommandIndexRef = useRef(0)
+  const docLinkMenuRef = useRef<DocLinkMenuState | null>(null)
+  const filteredDocLinkRowsRef = useRef<DocLinkMenuRow[]>([])
+  const selectedDocLinkIndexRef = useRef(0)
   const onContentChangeRef = useRef(onContentChange)
   const onDirtyStateHintRef = useRef(onDirtyStateHint)
   const onSaveRef = useRef(onSave)
@@ -168,13 +180,18 @@ export default function RichMarkdownEditor({
         slashMenuRef,
         filteredSlashCommandsRef,
         selectedCommandIndexRef,
+        docLinkMenuRef,
+        filteredDocLinkRowsRef,
+        selectedDocLinkIndexRef,
         handleLocalImagePickRef,
         flushPendingSerialization,
         openSearchRef,
         setIsEditingLink,
         setLinkBubble,
         setSelectedCommandIndex,
-        setSlashMenu
+        setSelectedDocLinkIndex,
+        setSlashMenu,
+        setDocLinkMenu
       }),
       // Why: Cmd/Ctrl-click activates links via the shared classifier +
       // dispatcher, so in-worktree .md links open in an Orca tab instead of the
@@ -267,6 +284,7 @@ export default function RichMarkdownEditor({
     },
     onUpdate: ({ editor: nextEditor }) => {
       syncSlashMenu(nextEditor, rootRef.current, setSlashMenu)
+      syncDocLinkMenu(nextEditor, rootRef.current, setDocLinkMenu)
 
       // Why: bail out during normalizeSoftBreaks's onCreate transaction so the
       // structural housekeeping doesn't mark the file dirty before the user
@@ -298,6 +316,7 @@ export default function RichMarkdownEditor({
     },
     onSelectionUpdate: ({ editor: nextEditor }) => {
       syncSlashMenu(nextEditor, rootRef.current, setSlashMenu)
+      syncDocLinkMenu(nextEditor, rootRef.current, setDocLinkMenu)
 
       // Sync link bubble: show preview when cursor is on a link, hide otherwise.
       // Any selection change in the editor cancels an in-progress link edit.
@@ -444,6 +463,39 @@ export default function RichMarkdownEditor({
     )
   }, [filteredSlashCommands.length])
 
+  // Why: memo key is the `markdownDocuments` prop (stable reference from parent),
+  // not `editor.storage.markdownDocLink.documents`. The storage mirror is mutated
+  // in place by the extension so React would not see a new reference and the memo
+  // would stale-out. The prop is the single source of truth for filtering.
+  const DOC_LINK_MENU_MAX_ROWS = 20
+  const { docLinkRows, docLinkTotalMatches } = useMemo(() => {
+    if (!docLinkMenu || !markdownDocuments) {
+      return { docLinkRows: [] as DocLinkMenuRow[], docLinkTotalMatches: 0 }
+    }
+    const matches = getMarkdownDocCompletionDocuments(markdownDocuments, docLinkMenu.query)
+    const rows: DocLinkMenuRow[] = matches
+      .slice(0, DOC_LINK_MENU_MAX_ROWS)
+      .map((document) => ({ kind: 'document', document }))
+    return { docLinkRows: rows, docLinkTotalMatches: matches.length }
+  }, [docLinkMenu, markdownDocuments])
+
+  useEffect(() => {
+    docLinkMenuRef.current = docLinkMenu
+  }, [docLinkMenu])
+  useEffect(() => {
+    filteredDocLinkRowsRef.current = docLinkRows
+  }, [docLinkRows])
+  useEffect(() => {
+    selectedDocLinkIndexRef.current = selectedDocLinkIndex
+  }, [selectedDocLinkIndex])
+  useEffect(() => {
+    if (docLinkRows.length === 0) {
+      setSelectedDocLinkIndex(0)
+      return
+    }
+    setSelectedDocLinkIndex((currentIndex) => Math.min(currentIndex, docLinkRows.length - 1))
+  }, [docLinkRows.length])
+
   useEffect(() => {
     if (!editor) {
       return
@@ -518,6 +570,7 @@ export default function RichMarkdownEditor({
       isApplyingProgrammaticUpdateRef.current = false
     }
     syncSlashMenu(editor, rootRef.current, setSlashMenu)
+    syncDocLinkMenu(editor, rootRef.current, setDocLinkMenu)
     // Why: fileId is part of the dep array so switching between files (where
     // content can coincidentally match what was last committed for the prior
     // file) still triggers the content-sync path and prevents cross-file
@@ -572,6 +625,15 @@ export default function RichMarkdownEditor({
           filteredCommands={filteredSlashCommands}
           selectedIndex={selectedCommandIndex}
           onImagePick={handleLocalImagePick}
+        />
+      ) : null}
+      {docLinkMenu ? (
+        <RichMarkdownDocLinkMenu
+          editor={editor}
+          menu={docLinkMenu}
+          rows={docLinkRows}
+          totalMatches={docLinkTotalMatches}
+          selectedIndex={selectedDocLinkIndex}
         />
       ) : null}
     </div>
