@@ -95,7 +95,7 @@ describe('registerGitHubHandlers', () => {
       limit: 5
     })
 
-    expect(listIssuesMock).toHaveBeenCalledWith('/workspace/repo', 5)
+    expect(listIssuesMock).toHaveBeenCalledWith('/workspace/repo', 5, undefined)
     expect(result).toEqual([])
   })
 
@@ -123,7 +123,7 @@ describe('registerGitHubHandlers', () => {
       limit: 5
     })
 
-    expect(listIssuesMock).toHaveBeenCalledWith('/workspace/repo', 5)
+    expect(listIssuesMock).toHaveBeenCalledWith('/workspace/repo', 5, undefined)
     expect(result).toEqual([])
   })
 

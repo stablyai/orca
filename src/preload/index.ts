@@ -14,7 +14,6 @@ import type {
   GitHubCommentResult,
   GitHubWorkItem,
   GhosttyImportPreview,
-  IssueSourcePreference,
   ListWorkItemsResult,
   MemorySnapshot,
   NotificationDispatchResult,
@@ -511,15 +510,7 @@ const api = {
       ipcRenderer.invoke('gh:listAssignableUsers', args),
 
     checkOrcaStarred: (): Promise<boolean | null> => ipcRenderer.invoke('gh:checkOrcaStarred'),
-    starOrca: (): Promise<boolean> => ipcRenderer.invoke('gh:starOrca'),
-
-    getIssueSourcePreference: (args: { repoId: string }): Promise<IssueSourcePreference> =>
-      ipcRenderer.invoke('gh:getIssueSourcePreference', args),
-
-    setIssueSourcePreference: (args: {
-      repoId: string
-      preference: IssueSourcePreference
-    }): Promise<void> => ipcRenderer.invoke('gh:setIssueSourcePreference', args)
+    starOrca: (): Promise<boolean> => ipcRenderer.invoke('gh:starOrca')
   },
 
   linear: {

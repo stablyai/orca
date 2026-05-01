@@ -662,6 +662,11 @@ export default function TaskPage(): React.JSX.Element {
   const fetchWorkItemsAcrossRepos = useAppStore((s) => s.fetchWorkItemsAcrossRepos)
   const getCachedWorkItems = useAppStore((s) => s.getCachedWorkItems)
   const setIssueSourcePreference = useAppStore((s) => s.setIssueSourcePreference)
+  // Why: bumped by `setIssueSourcePreference` after cache eviction so the
+  // fetch effect below re-runs and repopulates work-items against the new
+  // source. Eviction alone isn't enough because the effect's deps don't
+  // include `workItemsCache`.
+  const workItemsInvalidationNonce = useAppStore((s) => s.workItemsInvalidationNonce)
   const linearStatus = useAppStore((s) => s.linearStatus)
   const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
   const connectLinear = useAppStore((s) => s.connectLinear)
@@ -797,6 +802,12 @@ export default function TaskPage(): React.JSX.Element {
   // user clicking the refresh button (force=true) vs. re-running for any
   // other reason — e.g. a repo change while the nonce happens to be > 0.
   const lastFetchedNonceRef = useRef(-1)
+  // Why: analogous to `lastFetchedNonceRef` for the invalidation nonce. A
+  // preference flip should force the dispatch past fetch-dedupe (same repos +
+  // same query, cache just evicted — without `force: true` the fan-out could
+  // collapse onto a stale in-flight request that resolved against the
+  // pre-flip source).
+  const lastFetchedInvalidationNonceRef = useRef(0)
   // Why: pages holds all fetched pages of work items. Page 0 is seeded from
   // cache for instant first paint; subsequent pages are loaded via date cursors.
   const [pages, setPages] = useState<GitHubWorkItem[][]>(() => {
@@ -1232,6 +1243,13 @@ export default function TaskPage(): React.JSX.Element {
     // Preserve the existing nonce-gated force behavior.
     const forceRefresh = taskRefreshNonce !== lastFetchedNonceRef.current
     lastFetchedNonceRef.current = taskRefreshNonce
+    // Why: a preference flip bumps `workItemsInvalidationNonce`. Treat that
+    // bump as a forced refresh so the fan-out bypasses the in-flight dedupe
+    // map — otherwise an overlapping request started before the flip could
+    // resolve the new fetch and repopulate the cache with pre-flip data.
+    const preferenceInvalidated =
+      workItemsInvalidationNonce !== lastFetchedInvalidationNonceRef.current
+    lastFetchedInvalidationNonceRef.current = workItemsInvalidationNonce
 
     const repoArgs = selectedRepos.map((r) => ({ repoId: r.id, path: r.path }))
     // Why: snapshot the retrying paths at effect-dispatch so overlapping
@@ -1241,7 +1259,7 @@ export default function TaskPage(): React.JSX.Element {
     // when this effect dispatched preserves later additions.
     const dispatchedRetryPaths = retryingRepoPaths
     void fetchWorkItemsAcrossRepos(repoArgs, PER_REPO_FETCH_LIMIT, CROSS_REPO_DISPLAY_LIMIT, q, {
-      force: forceRefresh && taskRefreshNonce > 0
+      force: (forceRefresh && taskRefreshNonce > 0) || preferenceInvalidated
     })
       .then(({ items, failedCount: failed }) => {
         // Why: clear only the repos this effect was responsible for
@@ -1312,9 +1330,16 @@ export default function TaskPage(): React.JSX.Element {
     }
     // Why: getCachedWorkItems and fetchWorkItemsAcrossRepos are stable zustand
     // selectors; depending on them would re-run the effect on unrelated store
-    // updates.
+    // updates. `workItemsInvalidationNonce` is explicitly included so a
+    // preference flip (which only evicts cache) re-dispatches this effect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedRepos, appliedTaskSearch, taskRefreshNonce, taskSource])
+  }, [
+    selectedRepos,
+    appliedTaskSearch,
+    taskRefreshNonce,
+    taskSource,
+    workItemsInvalidationNonce
+  ])
 
   const handleApplyTaskSearch = useCallback((): void => {
     const trimmed = taskSearchInput.trim()
@@ -2661,47 +2686,55 @@ export default function TaskPage(): React.JSX.Element {
         >
           <DialogHeader>
             <DialogTitle>New GitHub issue</DialogTitle>
-            <DialogDescription className="flex flex-wrap items-center gap-2">
-              {(() => {
-                // Why: parent design doc §1 surface 2 — the composer is the
-                // non-negotiable surface because User D's regression (filing a
-                // personal TODO against upstream/fork after #1076 changed
-                // routing) is specifically about this dialog. The description
-                // line doubles as the source indicator: inlining the resolved
-                // `{owner}/{repo}` slug (e.g. "stablyai/orca") means the
-                // destination is impossible to miss before the user submits,
-                // without needing a secondary chip that duplicates the info.
-                // Falls back to the local displayName when the slug isn't
-                // resolved yet (pre-IPC cache hit, or non-GitHub remote). The
-                // multi-repo case uses the same computation — the Select below
-                // drives `newIssueTargetRepo`, so the active target is known.
-                const entry = newIssueTargetRepo
-                  ? perRepoSourceState.find((s) => s.repoId === newIssueTargetRepo.id)
-                  : undefined
-                const issuesSlug = entry?.sources?.issues
-                  ? `${entry.sources.issues.owner}/${entry.sources.issues.repo}`
-                  : null
-                const fallback = newIssueTargetRepo?.displayName ?? 'this repository'
-                return <span>Filing in {issuesSlug ?? fallback}</span>
-              })()}
-              {(() => {
-                // Why: mirror the Tasks-view selector in the composer so User D
-                // (fork contributor filing a personal TODO against their own
-                // fork) can flip the target *at the moment of filing* — the
-                // only moment that matters for this regression. Reuses the
-                // same cache entry the description line reads so no extra
-                // IPC round-trip is needed.
-                if (!newIssueTargetRepo) {
-                  return null
-                }
-                const entry = perRepoSourceState.find((s) => s.repoId === newIssueTargetRepo.id)
-                if (!entry || !entry.sources?.upstreamCandidate || !entry.sources?.prs) {
-                  return null
-                }
-                if (sameGitHubOwnerRepo(entry.sources.prs, entry.sources.upstreamCandidate)) {
-                  return null
-                }
-                return (
+            {(() => {
+              // Why: parent design doc §1 surface 2 — the composer is the
+              // non-negotiable surface because User D's regression (filing a
+              // personal TODO against upstream/fork after #1076 changed
+              // routing) is specifically about this dialog. The description
+              // line doubles as the source indicator: inlining the resolved
+              // `{owner}/{repo}` slug (e.g. "stablyai/orca") means the
+              // destination is impossible to miss before the user submits,
+              // without needing a secondary chip that duplicates the info.
+              // Falls back to the local displayName when the slug isn't
+              // resolved yet (pre-IPC cache hit, or non-GitHub remote). The
+              // multi-repo case uses the same computation — the Select below
+              // drives `newIssueTargetRepo`, so the active target is known.
+              const entry = newIssueTargetRepo
+                ? perRepoSourceState.find((s) => s.repoId === newIssueTargetRepo.id)
+                : undefined
+              const issuesSlug = entry?.sources?.issues
+                ? `${entry.sources.issues.owner}/${entry.sources.issues.repo}`
+                : null
+              const fallback = newIssueTargetRepo?.displayName ?? 'this repository'
+              return <DialogDescription>Filing in {issuesSlug ?? fallback}</DialogDescription>
+            })()}
+            {(() => {
+              // Why: mirror the Tasks-view selector in the composer so User D
+              // (fork contributor filing a personal TODO against their own
+              // fork) can flip the target *at the moment of filing* — the
+              // only moment that matters for this regression. Reuses the
+              // same cache entry the description line reads so no extra
+              // IPC round-trip is needed.
+              //
+              // Why sibling of DialogDescription (not nested inside it):
+              // DialogDescription renders a <p>, and `IssueSourceSelector`
+              // renders a <div role="group"> with <button>s inside. Nesting
+              // a div inside a <p> is invalid HTML — React emits a hydration
+              // warning and some a11y tools flag it. Rendering the selector
+              // as a sibling keeps both surfaces in the same header band
+              // without the nesting violation.
+              if (!newIssueTargetRepo) {
+                return null
+              }
+              const entry = perRepoSourceState.find((s) => s.repoId === newIssueTargetRepo.id)
+              if (!entry || !entry.sources?.upstreamCandidate || !entry.sources?.prs) {
+                return null
+              }
+              if (sameGitHubOwnerRepo(entry.sources.prs, entry.sources.upstreamCandidate)) {
+                return null
+              }
+              return (
+                <div className="mt-1">
                   <IssueSourceSelector
                     preference={newIssueTargetRepo.issueSourcePreference}
                     origin={entry.sources.prs}
@@ -2720,9 +2753,9 @@ export default function TaskPage(): React.JSX.Element {
                       )
                     }}
                   />
-                )
-              })()}
-            </DialogDescription>
+                </div>
+              )
+            })()}
           </DialogHeader>
           <div className="flex flex-col gap-3">
             {selectedRepos.length > 1 ? (

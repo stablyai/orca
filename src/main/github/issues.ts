@@ -18,13 +18,15 @@ import { ghExecFileAsync, acquire, release, getIssueOwnerRepo, resolveIssueSourc
 // Why: distinguishes a successful-empty listing from a failed fetch. The
 // previous `catch { return [] }` conflated a 403 on a private upstream with an
 // empty backlog. Callers decide how to surface `error`.
+//
+// Why no `fellBack` here: the fell-back signal for the renderer toast rides on
+// `ListWorkItemsResult.issueSourceFellBack` (the Tasks list's envelope). The
+// only consumer of `listIssues` — the `gh:listIssues` IPC handler — unwraps
+// to `.items` and has no UI hook to surface a fallback toast. Adding a dead
+// `fellBack` field here invited drift between the JSDoc promise and reality.
 export type IssueListResult = {
   items: IssueInfo[]
   error?: ClassifiedError
-  /** True when the user preferred `'upstream'` but no upstream remote was
-   *  configured and we fell back to origin. Renderer surfaces a one-time
-   *  toast; absent on fresh-auto and explicit-origin paths. */
-  fellBack?: boolean
 }
 
 /**
@@ -85,9 +87,7 @@ export async function listIssues(
   limit = 20,
   preference?: IssueSourcePreference
 ): Promise<IssueListResult> {
-  const resolved = await resolveIssueSource(repoPath, preference)
-  const ownerRepo = resolved.source
-  const fellBack = resolved.fellBack
+  const { source: ownerRepo } = await resolveIssueSource(repoPath, preference)
   await acquire()
   try {
     if (ownerRepo) {
@@ -108,8 +108,7 @@ export async function listIssues(
       return {
         items: data
           .filter((d) => !('pull_request' in d))
-          .map((d) => mapIssueInfo(d as Parameters<typeof mapIssueInfo>[0])),
-        ...(fellBack ? { fellBack: true } : {})
+          .map((d) => mapIssueInfo(d as Parameters<typeof mapIssueInfo>[0]))
       }
     }
     // Fallback for non-GitHub remotes
@@ -119,15 +118,13 @@ export async function listIssues(
     )
     const data = JSON.parse(stdout) as unknown[]
     return {
-      items: data.map((d) => mapIssueInfo(d as Parameters<typeof mapIssueInfo>[0])),
-      ...(fellBack ? { fellBack: true } : {})
+      items: data.map((d) => mapIssueInfo(d as Parameters<typeof mapIssueInfo>[0]))
     }
   } catch (err) {
     const stderr = err instanceof Error ? err.message : String(err)
     return {
       items: [],
-      error: classifyListIssuesError(stderr),
-      ...(fellBack ? { fellBack: true } : {})
+      error: classifyListIssuesError(stderr)
     }
   } finally {
     release()

@@ -102,6 +102,14 @@ export default function IssueSourceSelector({
   const upstreamSlug = `${upstream.owner}/${upstream.repo}`
   const originSlug = `${origin.owner}/${origin.repo}`
 
+  // Why: "pin-on-click" semantics — any click writes the explicit preference,
+  // even when the pill is already active under `auto`. Short-circuiting when
+  // the clicked pill already looks selected would leave `preference ===
+  // undefined`, which means a later remote-topology change (upstream removed
+  // or re-added) could silently move the effective source. Only short-circuit
+  // when the persisted preference already matches the click.
+  const persistedMatches = (target: 'upstream' | 'origin'): boolean => preference === target
+
   const group = (
     <div
       role="group"
@@ -119,7 +127,7 @@ export default function IssueSourceSelector({
         aria-pressed={effective === 'upstream'}
         disabled={disabled}
         onClick={() => {
-          if (disabled || effective === 'upstream') {
+          if (disabled || persistedMatches('upstream')) {
             return
           }
           onChange('upstream')
@@ -133,7 +141,7 @@ export default function IssueSourceSelector({
         aria-pressed={effective === 'origin'}
         disabled={disabled}
         onClick={() => {
-          if (disabled || effective === 'origin') {
+          if (disabled || persistedMatches('origin')) {
             return
           }
           onChange('origin')

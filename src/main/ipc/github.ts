@@ -4,7 +4,7 @@ reviewable as one surface. Splitting by feature area would risk drifting
 validation/gate conventions across handler files. */
 import { ipcMain } from 'electron'
 import { resolve } from 'path'
-import type { Repo, GitHubIssueUpdate, IssueSourcePreference } from '../../shared/types'
+import type { Repo, GitHubIssueUpdate } from '../../shared/types'
 import type { Store } from '../persistence'
 import type { StatsCollector } from '../stats/collector'
 import {
@@ -44,16 +44,6 @@ function assertRegisteredRepo(repoPath: string, store: Store): Repo {
     throw new Error('Access denied: unknown repository path')
   }
   return repo
-}
-
-// Why: ensure only the three valid values make it through the IPC boundary —
-// an unknown value from a stale preload/renderer is coerced to `undefined`
-// ('auto') rather than propagating into persistence or resolver logic.
-function coerceIssueSourcePreference(value: unknown): IssueSourcePreference | undefined {
-  if (value === 'upstream' || value === 'origin' || value === 'auto') {
-    return value
-  }
-  return undefined
 }
 
 export function registerGitHubHandlers(store: Store, stats: StatsCollector): void {
@@ -348,27 +338,10 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
   ipcMain.handle('gh:checkOrcaStarred', () => checkOrcaStarred())
   ipcMain.handle('gh:starOrca', () => starOrca())
 
-  // ── Per-repo issue-source preference ───────────────────────────────
-  // Why: explicit get/set is simpler than extending a generic repo-update
-  // surface that does not yet exist. Read returns `'auto'` for unset repos so
-  // the renderer never has to distinguish undefined from explicit-auto.
-  ipcMain.handle(
-    'gh:getIssueSourcePreference',
-    (_event, args: { repoId: string }): IssueSourcePreference => {
-      const repo = store.getRepo(args.repoId)
-      return repo?.issueSourcePreference ?? 'auto'
-    }
-  )
-
-  ipcMain.handle(
-    'gh:setIssueSourcePreference',
-    (_event, args: { repoId: string; preference: IssueSourcePreference }) => {
-      const coerced = coerceIssueSourcePreference(args.preference)
-      // Why: store `undefined` for 'auto' so the persisted record drops the key
-      // entirely — matches the design-doc invariant that 'auto' and undefined
-      // are treated identically and no stale explicit value is left on disk.
-      const patch = coerced === 'auto' ? undefined : coerced
-      store.updateRepo(args.repoId, { issueSourcePreference: patch })
-    }
-  )
+  // Why: issue-source preference writes go through the generic `repos:update`
+  // IPC (extended in this PR to accept `issueSourcePreference`). Routing
+  // through the same channel keeps a single write path, guarantees the
+  // `repos:changed` broadcast is emitted, and avoids two channels racing to
+  // persist the same field with different validation and eviction semantics.
+  // Reads piggyback on the `Repo` record already delivered by `repos:list`.
 }

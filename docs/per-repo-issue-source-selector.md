@@ -28,17 +28,25 @@ The UI is a two-pill segmented control. But storage needs three states because "
 
 The segmented control shows two pills; `'auto'` is the *absence* of explicit choice, rendered as the heuristic-picked pill highlighted. Clicking either pill writes the explicit preference.
 
-## Ground truth (verified against current `main`)
+## Ground truth (captured before implementation)
+
+> Line numbers and file-state claims below are pre-implementation snapshots. The
+> shipped code lives in `src/main/persistence.ts`, `src/main/github/gh-utils.ts`,
+> `src/main/ipc/github.ts`, `src/preload/api-types.ts`, `src/preload/index.ts`,
+> `src/renderer/src/components/TaskPage.tsx`,
+> `src/renderer/src/components/github/IssueSourceSelector.tsx`, and
+> `src/renderer/src/store/slices/github.ts`. `updateRepo`'s `Pick` was extended
+> to include `issueSourcePreference`. Composer integration lives directly in
+> `TaskPage.tsx`, not `useComposerState.ts`.
 
 - Persistence lives in `src/main/persistence.ts` — a **single file exporting `class Store`**, not a directory. Earlier sketches had the path wrong.
-- `Repo` is defined in `src/shared/types.ts:7`. It already carries per-repo metadata: `worktreeBaseRef`, `hookSettings`, `displayName`, `badgeColor`, `kind`, `connectionId`. Adding a new optional field follows the same pattern.
-- The `updateRepo` entry in `persistence.ts:268` uses `Pick<Repo, 'displayName' | 'badgeColor' | 'hookSettings' | 'worktreeBaseRef' | 'kind'>` — extend this Pick to include the new field.
+- `Repo` is defined in `src/shared/types.ts`. It already carries per-repo metadata: `worktreeBaseRef`, `hookSettings`, `displayName`, `badgeColor`, `kind`, `connectionId`. Adding a new optional field follows the same pattern.
+- The `updateRepo` entry in `persistence.ts` uses `Pick<Repo, 'displayName' | 'badgeColor' | 'hookSettings' | 'worktreeBaseRef' | 'kind'>` — extend this Pick to include the new field.
 - `Repo.id` is the stable registered-repo id and the correct persistence key.
-- Owner/repo resolution: `src/main/github/gh-utils.ts` — `getOwnerRepo` (line 109), `getIssueOwnerRepo` (line 113), `getOwnerRepoForRemote` (line 85, private but the primitive we need).
+- Owner/repo resolution: `src/main/github/gh-utils.ts` — `getOwnerRepo`, `getIssueOwnerRepo`, `getOwnerRepoForRemote` (exported; the primitive we need).
 - IPC handler: `src/main/ipc/github.ts`.
 - Preload types: `src/preload/api-types.ts`.
 - Tasks view: `src/renderer/src/components/TaskPage.tsx`.
-- Composer hook: `src/renderer/src/hooks/useComposerState.ts`.
 - Work-items cache: `src/renderer/src/store/slices/github.ts` — invalidation logic lives here.
 
 ## Spec
@@ -71,10 +79,10 @@ export async function resolveIssueSource(
     const upstream = await getOwnerRepoForRemote(repoPath, 'upstream')
     if (upstream) return { source: upstream, fellBack: false }
     // Preferred upstream no longer exists — fall back, signal for toast
-    return { source: await getOwnerRepo(repoPath), fellBack: true }
+    return { source: await getOwnerRepoForRemote(repoPath, 'origin'), fellBack: true }
   }
   if (preference === 'origin') {
-    return { source: await getOwnerRepo(repoPath), fellBack: false }
+    return { source: await getOwnerRepoForRemote(repoPath, 'origin'), fellBack: false }
   }
   // 'auto' or undefined
   return { source: await getIssueOwnerRepo(repoPath), fellBack: false }
@@ -110,12 +118,11 @@ Writing `undefined` should clear the preference (reset to auto). If the current 
 
 ### 5. IPC
 
-Two new handlers in `src/main/ipc/github.ts`:
-
-- `gh:getIssueSourcePreference({ repoId }) → IssueSourcePreference | 'auto'` — reads from Store.
-- `gh:setIssueSourcePreference({ repoId, preference }) → void` — writes to Store, then invalidates the renderer-side work-items cache for that repo (either by emitting an event or relying on the caller to dispatch a cache-invalidation action).
-
-Or, if there's an existing `repos:update`-style handler that patches `Repo` fields generically, extend that. Match what the codebase already does — don't add a new surface for one field if a general one exists.
+As shipped: preference reads come off the `Repo` record already delivered by
+`repos:list`; writes go through the existing generic `repos:update` IPC
+(`src/main/ipc/repos.ts`), which was extended to accept `issueSourcePreference`
+in its `Pick`. This keeps a single write path, emits the `repos:changed`
+broadcast for free, and avoids two channels racing on the same field.
 
 Update `src/preload/api-types.ts` and `src/preload/index.ts` accordingly.
 
@@ -132,7 +139,7 @@ Update `src/preload/api-types.ts` and `src/preload/index.ts` accordingly.
 
 **Disabled state:** when upstream and origin resolve to the same slug (no upstream remote, or upstream is non-GitHub), the selector is meaningless. Hide it entirely, or render it disabled with a tooltip — match whatever the surrounding UI does for "nothing to toggle."
 
-**Mirror in composer:** the Create Issue composer must have the same segmented control. This is non-negotiable per the parent doc — User D's regression is specifically about filing against the wrong repo, and the composer is where "which repo is this actually landing on?" bites. Find the composer render site by tracing consumers of `useComposerState.ts`.
+**Mirror in composer:** the Create Issue composer must have the same segmented control. This is non-negotiable per the parent doc — User D's regression is specifically about filing against the wrong repo, and the composer is where "which repo is this actually landing on?" bites. As shipped, the composer-mirrored selector lives directly in `TaskPage.tsx`'s new-issue dialog (the dialog's `DialogHeader` renders `IssueSourceSelector` as a sibling of `DialogDescription` — nesting the selector inside `DialogDescription`'s `<p>` would produce invalid HTML).
 
 **Cache invalidation on change:** when the user flips the selector, the work-items cache in `src/renderer/src/store/slices/github.ts` for that repo must be invalidated and re-fetched against the new source. Don't just re-render with stale cached data from the other source.
 
@@ -150,20 +157,19 @@ Use the existing toast mechanism (`sonner` is already in use — see `TaskPage.t
 - `src/shared/types.ts` — add `IssueSourcePreference` type and the optional `Repo` field.
 
 **Main:**
-- `src/main/persistence.ts` — extend `updateRepo` Pick at line 268.
+- `src/main/persistence.ts` — extend `updateRepo` Pick with `issueSourcePreference` and add the "reset to auto drops the key" delete branch.
 - `src/main/github/gh-utils.ts` — new `resolveIssueSource` helper.
 - `src/main/github/client.ts`, `src/main/github/issues.ts` — migrate call sites.
-- `src/main/ipc/github.ts` — new IPC handlers (or extension of existing generic update handler).
+- `src/main/ipc/repos.ts` — extend `repos:update` to accept `issueSourcePreference`.
 
 **Preload:**
 - `src/preload/api-types.ts`, `src/preload/index.ts`.
 
 **Renderer:**
-- `src/renderer/src/components/TaskPage.tsx` — render the segmented control; wire to store.
-- `src/renderer/src/hooks/useComposerState.ts` — expose current preference + setter to composer.
-- Composer render site(s) — mirror the control.
-- `src/renderer/src/store/slices/github.ts` — invalidate work-items cache entries for a repo when its preference changes.
-- Registered-repo state (wherever it lives in `src/renderer/src/store/`) — thread `issueSourcePreference` read path.
+- `src/renderer/src/components/TaskPage.tsx` — render the segmented control (tasks header + composer dialog); wire to store; subscribe to the invalidation nonce.
+- `src/renderer/src/components/github/IssueSourceSelector.tsx` — new segmented-control component.
+- `src/renderer/src/store/slices/github.ts` — `setIssueSourcePreference` action, work-items cache eviction, `workItemsInvalidationNonce` counter.
+- `src/renderer/src/store/slices/repos.ts` — add `issueSourcePreference` to the `updateRepo` Pick so the action can persist it.
 
 ### 9. Tests
 
@@ -175,7 +181,7 @@ Use the existing toast mechanism (`sonner` is already in use — see `TaskPage.t
   - `preference='origin'` + upstream exists → origin.
   - `preference='origin'` + no upstream → origin.
 - **Persistence round-trip test** (new or extension of existing `src/main/persistence.test.ts`): set `issueSourcePreference`, reload Store, verify it survives. Set to `undefined`, verify it clears.
-- **IPC test:** `gh:setIssueSourcePreference` correctly updates the Store and returns the right value from `gh:getIssueSourcePreference`.
+- **IPC test:** `repos:update` with `{ issueSourcePreference }` persists the field; reads come off the `Repo` record in `repos:list`. The persistence round-trip test above already covers the main invariant.
 - **Renderer test:** clicking the segmented control triggers a cache invalidation and re-fetch of work-items for that repo.
 
 ### 10. Out of scope

@@ -279,6 +279,15 @@ export type GitHubSlice = {
   prefetchWorkItems: (repoId: string, repoPath: string, limit?: number, query?: string) => void
   patchWorkItem: (itemId: string, patch: Partial<GitHubWorkItem>) => void
   /**
+   * Monotonic counter bumped whenever a repo's issue-source preference is
+   * flipped. Subscribers (TaskPage's fetch effect) include this in their
+   * dependency array to force a re-fetch after preference changes — the
+   * work-items cache eviction alone isn't enough because the effect keys on
+   * `selectedRepos`/`appliedTaskSearch`/`taskRefreshNonce` and wouldn't
+   * otherwise notice the cache went empty.
+   */
+  workItemsInvalidationNonce: number
+  /**
    * Persist a per-repo issue-source preference, update the local Repo record
    * for reactive UI, and invalidate all cached work-items entries that key
    * off this repo's path so the Tasks list re-fetches against the new source.
@@ -301,6 +310,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   checksCache: {},
   commentsCache: {},
   workItemsCache: {},
+  workItemsInvalidationNonce: 0,
 
   getCachedWorkItems: (repoPath, limit, query) => {
     const key = workItemsCacheKey(repoPath, limit, query)
@@ -853,9 +863,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
   setIssueSourcePreference: async (repoId, repoPath, preference) => {
     // Why: optimistically patch the local Repo first so the segmented control
-    // reflects the new selection on the same frame. If the IPC fails the
-    // next `fetchRepos()` will re-sync from disk; there is no cross-device
-    // concern here so we don't implement a rollback.
+    // reflects the new selection on the same frame. On IPC failure we resync
+    // from disk via `fetchRepos()` below so the UI doesn't lie about what's
+    // persisted.
     set((s) => ({
       repos: s.repos.map((r) =>
         r.id === repoId
@@ -866,11 +876,42 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           : r
       )
     }))
-    // Why: evict every cache entry keyed on this repo's path. Work-items
+    try {
+      // Why: persist via the generic `repos:update` channel rather than a
+      // dedicated gh-namespaced handler. Single write path → single
+      // `repos:changed` broadcast → other windows re-fetch. The store layer
+      // normalizes `'auto'` to `undefined` so the persisted record drops
+      // the key entirely (see main/persistence.ts#updateRepo).
+      await window.api.repos.update({
+        repoId,
+        updates: { issueSourcePreference: preference === 'auto' ? undefined : preference }
+      })
+    } catch (err) {
+      console.error('Failed to persist issue-source preference:', err)
+      // Why: the optimistic patch above may now disagree with disk. Resync
+      // rather than leave a lie on screen. We only refetch repos — the cache
+      // eviction below is still safe to run; worst case we trigger a
+      // harmless re-fetch of work items against the pre-flip preference.
+      void get().fetchRepos()
+    }
+    // Why: wipe in-flight dedupe entries for this repo BEFORE bumping the
+    // invalidation nonce. The bump triggers a re-run of TaskPage's fetch
+    // effect; if the inflight map still held a pre-flip entry, the new
+    // dispatch could collapse onto it and skip the source swap. Clearing
+    // first makes the "new fetch gets a fresh request" invariant impossible
+    // to trip on later refactors that change zustand or React flush timing.
+    for (const key of Array.from(inflightWorkItemsRequests.keys())) {
+      if (key.startsWith(`${repoPath}::`)) {
+        inflightWorkItemsRequests.delete(key)
+      }
+    }
+    // Why: evict every cache entry keyed on this repo's path AFTER the IPC
+    // resolves. If we evicted before awaiting, an overlapping fetch triggered
+    // by a different subscriber would hit main with the pre-flip persisted
+    // preference and repopulate the cache with stale-source data. Work-items
     // cache keys are `${repoPath}::${limit}::${query}` so we can't selectively
     // invalidate by query — the preference change affects all queries against
-    // this repo. Also wipe in-flight dedupe entries so a new fetch doesn't
-    // resolve to the pre-flip request and skip the source swap.
+    // this repo.
     set((s) => {
       const prefix = `${repoPath}::`
       const next: Record<string, CacheEntry<GitHubWorkItem[]>> = {}
@@ -879,18 +920,13 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           next[key] = entry
         }
       }
-      return { workItemsCache: next }
+      // Why: bump the invalidation nonce so the Tasks list's fetch effect
+      // — which keys on `[selectedRepos, appliedTaskSearch, taskRefreshNonce,
+      // taskSource, workItemsInvalidationNonce]` — re-runs and re-populates
+      // the just-evicted entries. Evicting alone wouldn't trigger the effect
+      // because it doesn't depend on the cache.
+      return { workItemsCache: next, workItemsInvalidationNonce: s.workItemsInvalidationNonce + 1 }
     })
-    for (const key of Array.from(inflightWorkItemsRequests.keys())) {
-      if (key.startsWith(`${repoPath}::`)) {
-        inflightWorkItemsRequests.delete(key)
-      }
-    }
-    try {
-      await window.api.gh.setIssueSourcePreference({ repoId, preference })
-    } catch (err) {
-      console.error('Failed to persist issue-source preference:', err)
-    }
   },
 
   // Why: worktree switches previously force-refreshed GitHub data on every
