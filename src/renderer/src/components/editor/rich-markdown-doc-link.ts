@@ -12,6 +12,8 @@ import {
 const DOC_LINK_PLACEHOLDER_PREFIX = '[[ORCA_DOC_LINK:'
 const DOC_LINK_PLACEHOLDER_SUFFIX = ']]'
 
+// Why: `.matchAll()` at each call site creates a fresh iterator so the shared
+// `/g` regex never leaks `lastIndex` state across nested or concurrent scans.
 const DOC_LINK_PATTERN = /\[\[([^[\]\r\n|]+)\]\]/g
 
 const docLinkDissolveKey = new PluginKey('docLinkDissolve')
@@ -26,6 +28,10 @@ type DocLinkStorage = {
 
 function getDocIndex(storage: DocLinkStorage): MarkdownDocumentIndex | null {
   if (storage.documents.length === 0) {
+    // Why: clear the cache so stale MarkdownDocument references aren't retained
+    // after the document list empties (e.g., when switching worktrees).
+    storage._cachedDocs = null
+    storage._cachedIndex = null
     return null
   }
   if (storage._cachedDocs !== storage.documents) {
@@ -38,19 +44,24 @@ function getDocIndex(storage: DocLinkStorage): MarkdownDocumentIndex | null {
 function buildPreviewDecorations(state: EditorState, storage: DocLinkStorage): DecorationSet {
   const decorations: Decoration[] = []
   const index = getDocIndex(storage)
+  const cursor = state.selection.from
   state.doc.descendants((node, pos) => {
     if (node.type.name !== 'text' || !node.text) {
       return
     }
-    DOC_LINK_PATTERN.lastIndex = 0
-    let match: RegExpExecArray | null = null
-    while ((match = DOC_LINK_PATTERN.exec(node.text)) !== null) {
+    for (const match of node.text.matchAll(DOC_LINK_PATTERN)) {
       const target = getMarkdownDocLinkTarget(match[1])
-      if (!target) {
+      if (!target || match.index === undefined) {
         continue
       }
       const from = pos + match.index
       const to = from + match[0].length
+      // Why: only decorate the match the cursor is currently editing. Other
+      // `[[target]]` matches are auto-converted to atom nodes on the next
+      // transaction, so decorating them here just causes a one-frame flicker.
+      if (cursor <= from || cursor > to) {
+        continue
+      }
       const resolved = resolveAgainstIndex(target, index)
       const cls = resolved
         ? 'rich-markdown-doc-link-preview'
@@ -231,11 +242,9 @@ export const MarkdownDocLink = Node.create({
               return
             }
 
-            DOC_LINK_PATTERN.lastIndex = 0
-            let match: RegExpExecArray | null = null
-            while ((match = DOC_LINK_PATTERN.exec(node.text)) !== null) {
+            for (const match of node.text.matchAll(DOC_LINK_PATTERN)) {
               const target = getMarkdownDocLinkTarget(match[1])
-              if (!target) {
+              if (!target || match.index === undefined) {
                 continue
               }
 
@@ -268,8 +277,9 @@ export const MarkdownDocLink = Node.create({
           init(_, state) {
             return buildPreviewDecorations(state, storage)
           },
-          apply(tr, prev, _oldState, newState) {
-            if (!tr.docChanged && !tr.getMeta('docLinksUpdated')) {
+          apply(tr, prev, oldState, newState) {
+            const selectionMoved = !oldState.selection.eq(newState.selection)
+            if (!tr.docChanged && !selectionMoved && !tr.getMeta('docLinksUpdated')) {
               return prev
             }
             return buildPreviewDecorations(newState, storage)
