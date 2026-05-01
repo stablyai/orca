@@ -11,6 +11,8 @@ vi.mock('../git/runner', () => ({
 
 import {
   _resetOwnerRepoCache,
+  classifyGhError,
+  classifyListIssuesError,
   getIssueOwnerRepo,
   getOwnerRepo,
   parseGitHubOwnerRepo,
@@ -171,6 +173,26 @@ describe('resolveIssueSource', () => {
     await expect(resolveIssueSource('/repo', undefined)).resolves.toEqual({
       source: { owner: 'stablyai', repo: 'orca' },
       fellBack: false
+    })
+  })
+})
+
+describe('gh error classification', () => {
+  // Why: a fork with Issues turned off triggers `gh issue list` stderr
+  // "the '<slug>' repository has disabled issues". Without a dedicated branch
+  // the raw "Command failed: gh issue list …" line leaks into the Tasks banner
+  // via the `unknown` fallback — which is what users see when they flip the
+  // per-repo selector to an origin fork that has issues disabled.
+  it('classifies "has disabled issues" stderr as issues_disabled', () => {
+    const stderr =
+      "Command failed: gh issue list --limit 36 --json number,title,state --repo brennanb2025/orca --state open\nthe 'brennanb2025/orca' repository has disabled issues"
+    expect(classifyGhError(stderr)).toEqual({
+      type: 'issues_disabled',
+      message: 'Issues are disabled on this repository.'
+    })
+    expect(classifyListIssuesError(stderr)).toEqual({
+      type: 'issues_disabled',
+      message: 'Issues are disabled on this repository.'
     })
   })
 })

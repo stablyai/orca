@@ -54,6 +54,14 @@ export function classifyGhError(stderr: string): ClassifiedError {
   if (s.includes('http 404') || s.includes('could not resolve to a repository')) {
     return { type: 'not_found', message: 'Issue not found — it may have been deleted.' }
   }
+  // Why: `gh issue list` prints "the '<owner>/<repo>' repository has disabled
+  // issues" when Issues are turned off in repo settings (common on forks). This
+  // hits during feature-2 when a user flips the selector to an origin fork —
+  // without a dedicated branch the raw "Command failed: gh issue list …" line
+  // leaks verbatim into the banner via the `unknown` fallback.
+  if (s.includes('has disabled issues')) {
+    return { type: 'issues_disabled', message: 'Issues are disabled on this repository.' }
+  }
   if (s.includes('http 422') || s.includes('validation failed')) {
     return { type: 'validation_error', message: `Invalid update — ${stderr.trim()}` }
   }
@@ -89,6 +97,7 @@ export function classifyListIssuesError(stderr: string): ClassifiedError {
     permission_denied:
       "You don't have permission to read issues for this repository. Check your GitHub token scopes.",
     not_found: 'Repository not found.',
+    issues_disabled: 'Issues are disabled on this repository.',
     validation_error: `Invalid request — ${trimmed}`,
     rate_limited: 'GitHub rate limit hit. Try again in a few minutes.',
     network_error: 'Network error — check your connection.',
