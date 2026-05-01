@@ -77,7 +77,7 @@ const SidebarFilter = React.memo(function SidebarFilter() {
               variant="ghost"
               size={hasAnyFilter ? 'sm' : 'icon-xs'}
               type="button"
-              aria-label="Filter worktrees"
+              aria-label="Filter workspaces"
               className={cn(
                 'gap-1 border-none text-[10px] font-normal shadow-none focus-visible:ring-0',
                 hasAnyFilter
@@ -91,7 +91,7 @@ const SidebarFilter = React.memo(function SidebarFilter() {
           </DropdownMenuTrigger>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={6}>
-          {hasAnyFilter ? 'Edit filters' : 'Filter worktrees'}
+          {hasAnyFilter ? 'Edit filters' : 'Filter workspaces'}
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end" className="min-w-[12rem]">
