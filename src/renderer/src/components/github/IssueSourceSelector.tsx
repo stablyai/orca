@@ -1,6 +1,7 @@
 import React from 'react'
 import type { GitHubOwnerRepo, IssueSourcePreference } from '../../../../shared/types'
 import { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
 export type IssueSourceSelectorProps = {
@@ -27,6 +28,12 @@ export type IssueSourceSelectorProps = {
    *  slug in a tooltip. Used where horizontal space is tight (composer
    *  description line). Defaults to `'labeled'` on the Tasks header. */
   density?: 'labeled' | 'compact'
+  /** Suppresses the "Issues from <slug>" hover tooltip. Passed by callers on
+   *  surfaces that only act on issues (e.g. the Create Issue composer) where
+   *  the caveat is implicit — on mixed surfaces like the Tasks header the
+   *  tooltip is important because the same page also lists PRs, which the
+   *  selector does NOT affect. */
+  suppressTooltip?: boolean
 }
 
 type PillState = 'active' | 'inactive'
@@ -76,7 +83,8 @@ export default function IssueSourceSelector({
   onChange,
   disabled,
   className,
-  density = 'labeled'
+  density = 'labeled',
+  suppressTooltip = false
 }: IssueSourceSelectorProps): React.JSX.Element | null {
   if (!origin || !upstream) {
     return null
@@ -94,7 +102,7 @@ export default function IssueSourceSelector({
   const upstreamSlug = `${upstream.owner}/${upstream.repo}`
   const originSlug = `${origin.owner}/${origin.repo}`
 
-  return (
+  const group = (
     <div
       role="group"
       aria-label="Issue source"
@@ -110,7 +118,6 @@ export default function IssueSourceSelector({
         type="button"
         aria-pressed={effective === 'upstream'}
         disabled={disabled}
-        title={`Use upstream (${upstreamSlug})`}
         onClick={() => {
           if (disabled || effective === 'upstream') {
             return
@@ -125,7 +132,6 @@ export default function IssueSourceSelector({
         type="button"
         aria-pressed={effective === 'origin'}
         disabled={disabled}
-        title={`Use origin (${originSlug})`}
         onClick={() => {
           if (disabled || effective === 'origin') {
             return
@@ -141,5 +147,24 @@ export default function IssueSourceSelector({
         {density === 'compact' ? 'O' : 'Origin'}
       </button>
     </div>
+  )
+
+  // Why: on surfaces where only issues are ever relevant (Create Issue
+  // composer) the "Issues from <slug>" hover text is redundant and can even
+  // mislead by implying a PR/issue split the user isn't thinking about. Let
+  // the caller opt out via `suppressTooltip` rather than branching on page
+  // identity inside this component.
+  if (suppressTooltip) {
+    return group
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{group}</TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={4} className="max-w-[260px]">
+        Issues from{' '}
+        <span className="font-mono">{effective === 'upstream' ? upstreamSlug : originSlug}</span>
+      </TooltipContent>
+    </Tooltip>
   )
 }

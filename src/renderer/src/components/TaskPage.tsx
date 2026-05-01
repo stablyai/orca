@@ -2707,6 +2707,11 @@ export default function TaskPage(): React.JSX.Element {
                     origin={entry.sources.prs}
                     upstream={entry.sources.upstreamCandidate}
                     disabled={newIssueSubmitting}
+                    // Why: the composer only files issues, so the "Issues from
+                    // <slug>" tooltip restates what the surrounding form already
+                    // implies. Keep it on the Tasks header (that page also lists
+                    // PRs, which the selector doesn't affect).
+                    suppressTooltip
                     onChange={(next) => {
                       void setIssueSourcePreference(
                         newIssueTargetRepo.id,
