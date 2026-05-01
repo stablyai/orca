@@ -38,9 +38,13 @@ const SidebarFilter = React.memo(function SidebarFilter() {
     [showActiveOnly, setShowActiveOnly]
   )
   const canFilterRepos = repos.length > 1
-  const hasRepoFilter = canFilterRepos && filterRepoIds.length > 0
+  // Why: derive from the current repos list so stale IDs in filterRepoIds
+  // (e.g. lingering after a repo is removed) don't inflate the active-filter
+  // count or falsely signal an applied filter.
+  const selectedRepos = canFilterRepos ? repos.filter((r) => filterRepoIds.includes(r.id)) : []
+  const hasRepoFilter = selectedRepos.length > 0
   const hasAnyFilter = showActiveOnly || hasRepoFilter
-  const activeFilterCount = (showActiveOnly ? 1 : 0) + (hasRepoFilter ? filterRepoIds.length : 0)
+  const activeFilterCount = (showActiveOnly ? 1 : 0) + selectedRepos.length
 
   return (
     <DropdownMenu>
@@ -51,7 +55,9 @@ const SidebarFilter = React.memo(function SidebarFilter() {
               variant="ghost"
               size="icon-xs"
               type="button"
-              aria-label="Filter workspaces"
+              aria-label={
+                hasAnyFilter ? `Edit filters (${activeFilterCount} active)` : 'Filter workspaces'
+              }
               className="relative text-muted-foreground"
             >
               <ListFilter className="size-3.5" strokeWidth={2.25} />
@@ -62,7 +68,7 @@ const SidebarFilter = React.memo(function SidebarFilter() {
                   aria-hidden
                   className="absolute -top-0.5 -right-0.5 flex h-3 min-w-3 items-center justify-center rounded-full bg-primary px-0.5 text-[9px] font-medium leading-none text-primary-foreground"
                 >
-                  {activeFilterCount}
+                  {activeFilterCount > 9 ? '9+' : activeFilterCount}
                 </span>
               )}
             </Button>

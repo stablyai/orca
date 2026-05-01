@@ -24,11 +24,14 @@ const SearchBar = React.memo(function SearchBar() {
           className="h-7 pl-7 pr-8 text-[12px] border-none bg-muted/50 shadow-none focus-visible:ring-1 focus-visible:ring-ring/30 placeholder:text-muted-foreground/70"
         />
         {searchQuery && (
-          <div className="absolute right-1 flex items-center gap-0.5">
-            <Button variant="ghost" size="icon-xs" onClick={handleClear} className="size-5">
-              <X className="size-3" />
-            </Button>
-          </div>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={handleClear}
+            className="absolute right-1 size-5"
+          >
+            <X className="size-3" />
+          </Button>
         )}
       </div>
     </div>
