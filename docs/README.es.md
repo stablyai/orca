@@ -83,8 +83,6 @@ También puedes instalar desde un gestor de paquetes:
 brew install --cask stablyai/orca/orca
 ```
 
-Las actualizaciones las gestiona el actualizador integrado de Orca; consulta [docs/homebrew-cask.md](homebrew-cask.md).
-
 ### Arch Linux (AUR)
 
 ```bash
