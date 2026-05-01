@@ -1,0 +1,155 @@
+name: Homebrew Cask Bump
+
+# Why: keep the stablyai/homebrew-orca tap in sync with GitHub Releases.
+# Triggers:
+#   - release.published with !prerelease → release workflow just finalized a
+#     stable tag (see publish-release step in release.yml)
+#   - workflow_dispatch → manual backfill for a specific tag
+#
+# The job computes the sha256 of orca-macos-arm64.dmg + orca-macos-x64.dmg
+# from the release, templates Casks/orca.rb in this repo with the new
+# version and hashes, then PRs the result into stablyai/homebrew-orca. It
+# does NOT run for -rc.* tags: the stable cask should only track GA.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to sync (e.g. v1.3.25)
+        required: true
+        type: string
+
+jobs:
+  bump-cask:
+    runs-on: ubuntu-latest
+    # Why: skip prereleases and RC tags. The stable cask tracks GA only; a
+    # beta channel would be a separate cask in a separate job.
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.release.prerelease == false &&
+       !contains(github.event.release.tag_name, '-rc.'))
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout orca
+        uses: actions/checkout@v4
+
+      - name: Resolve tag and version
+        id: tag
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            tag="$INPUT_TAG"
+          else
+            tag="$RELEASE_TAG"
+          fi
+          version="${tag#v}"
+          echo "tag=$tag" >>"$GITHUB_OUTPUT"
+          echo "version=$version" >>"$GITHUB_OUTPUT"
+
+      - name: Download DMGs and compute sha256
+        id: hash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p dmgs
+          gh release download "$TAG" \
+            --repo "${{ github.repository }}" \
+            --pattern 'orca-macos-arm64.dmg' \
+            --pattern 'orca-macos-x64.dmg' \
+            --dir dmgs
+          arm=$(sha256sum dmgs/orca-macos-arm64.dmg | awk '{print $1}')
+          intel=$(sha256sum dmgs/orca-macos-x64.dmg  | awk '{print $1}')
+          echo "arm=$arm"     >>"$GITHUB_OUTPUT"
+          echo "intel=$intel" >>"$GITHUB_OUTPUT"
+
+      - name: Render updated cask file
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+          ARM_SHA: ${{ steps.hash.outputs.arm }}
+          INTEL_SHA: ${{ steps.hash.outputs.intel }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, re, pathlib
+          p = pathlib.Path("Casks/orca.rb")
+          src = p.read_text()
+          src = re.sub(r'version "[^"]+"',
+                       f'version "{os.environ["VERSION"]}"', src, count=1)
+          src = re.sub(r'sha256 arm:\s*"[0-9a-f]+",\s*\n\s*intel:\s*"[0-9a-f]+"',
+                       'sha256 arm:   "{arm}",\n         intel: "{intel}"'.format(
+                           arm=os.environ["ARM_SHA"],
+                           intel=os.environ["INTEL_SHA"]),
+                       src, count=1)
+          p.write_text(src)
+          print(src)
+          PY
+
+      # Why: reuse the existing buf0-bot GitHub App (also used by
+      # track-community-prs.yaml) instead of minting a new PAT. The app is
+      # installed org-wide, so it has access to stablyai/homebrew-orca
+      # automatically. GITHUB_TOKEN cannot push cross-repo; a short-lived
+      # installation token can.
+      - name: Generate buf0-bot token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: 2590194
+          private-key: ${{ secrets.BUFO_BOT_PRIVATE_KEY }}
+          owner: stablyai
+          repositories: homebrew-orca
+
+      - name: Checkout tap
+        uses: actions/checkout@v4
+        with:
+          repository: stablyai/homebrew-orca
+          path: tap
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Copy cask into tap and open PR
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          VERSION: ${{ steps.tag.outputs.version }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p tap/Casks
+          cp Casks/orca.rb tap/Casks/orca.rb
+
+          cd tap
+          # Why: commit author must match the buf0-bot app so commits are
+          # attributed to the bot in the tap's history / PR UI.
+          git config user.name  "buf0-bot[bot]"
+          git config user.email "252831055+buf0-bot[bot]@users.noreply.github.com"
+
+          if git diff --quiet; then
+            echo "Cask already up-to-date for $TAG; nothing to do."
+            exit 0
+          fi
+
+          branch="bump/orca-$VERSION"
+          git checkout -b "$branch"
+          git add Casks/orca.rb
+          git commit -m "orca $VERSION"
+          git push -u origin "$branch" --force
+
+          # Why: prefer --fill so the PR body matches the commit; fall back
+          # to a brief body if the PR already exists for this branch.
+          gh pr create \
+            --title "orca $VERSION" \
+            --body "Automated bump from stablyai/orca release $TAG." \
+            --base main \
+            --head "$branch" \
+            || gh pr edit "$branch" --title "orca $VERSION"
+
+          # Why: auto-merge so the tap stays hands-free. Tap repo must have
+          # "Allow auto-merge" enabled in settings for this to take effect.
+          gh pr merge "$branch" --squash --auto --delete-branch || true
