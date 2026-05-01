@@ -153,8 +153,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         // Why: `align: 'auto'` is a no-op when the card is already visible and
         // otherwise scrolls the minimum amount to bring it into view. Using
         // 'center' here made every worktree click re-center the sidebar, which
-        // is visually jumpy even when nothing needed to move.
-        virtualizer.scrollToIndex(targetIndex, { align: 'auto' })
+        // is visually jumpy even when nothing needed to move. `behavior: 'smooth'`
+        // animates that minimum scroll so off-screen reveals slide into view
+        // instead of snapping — matching the native scroll-into-view feel.
+        virtualizer.scrollToIndex(targetIndex, { align: 'auto', behavior: 'smooth' })
       }
       clearPendingRevealWorktreeId()
     })
