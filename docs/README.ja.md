@@ -81,8 +81,7 @@ Orca は任意の CLI Agent に対応しています（_このリストに限定
 ### macOS (Homebrew)
 
 ```bash
-brew tap stablyai/orca
-brew install --cask orca
+brew install --cask stablyai/orca/orca
 ```
 
 アップデートは Orca 内蔵のアップデータが処理します。詳しくは [docs/homebrew-cask.md](homebrew-cask.md) を参照してください。

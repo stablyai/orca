@@ -80,8 +80,7 @@ También puedes instalar desde un gestor de paquetes:
 ### macOS (Homebrew)
 
 ```bash
-brew tap stablyai/orca
-brew install --cask orca
+brew install --cask stablyai/orca/orca
 ```
 
 Las actualizaciones las gestiona el actualizador integrado de Orca; consulta [docs/homebrew-cask.md](homebrew-cask.md).

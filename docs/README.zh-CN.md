@@ -81,8 +81,7 @@ Orca 支持任何 CLI Agent (_不仅限于以下列表_)。
 ### macOS (Homebrew)
 
 ```bash
-brew tap stablyai/orca
-brew install --cask orca
+brew install --cask stablyai/orca/orca
 ```
 
 更新由 Orca 内置的更新器处理；详见 [docs/homebrew-cask.md](homebrew-cask.md)。

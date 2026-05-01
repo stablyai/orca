@@ -80,8 +80,7 @@ Alternatively, install from a package manager:
 ### macOS (Homebrew)
 
 ```bash
-brew tap stablyai/orca
-brew install --cask orca
+brew install --cask stablyai/orca/orca
 ```
 
 Updates are handled by Orca's built-in updater; see [docs/homebrew-cask.md](docs/homebrew-cask.md).
