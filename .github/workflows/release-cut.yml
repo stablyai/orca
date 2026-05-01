@@ -440,7 +440,7 @@ jobs:
               ~/Library/Caches/electron-builder
           - os: windows-latest
             platform: win
-            release_command: pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish always
+            release_command: pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never
             eb_cache_path: |
               ~\AppData\Local\electron\Cache
               ~\AppData\Local\electron-builder\Cache
@@ -454,6 +454,7 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     permissions:
+      actions: read
       contents: write
 
     steps:
@@ -600,8 +601,8 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
-      - name: Publish release artifacts
-        if: matrix.platform != 'mac'
+      - name: Publish release artifacts (Linux)
+        if: matrix.platform == 'linux'
         uses: nick-fields/retry@v3
         with:
           timeout_minutes: 30
@@ -611,10 +612,152 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Why post-publish (not pre-publish): electron-builder packs and
-      # uploads in a single `--publish always` invocation, so there is no
-      # cheap insertion point between pack and upload without splitting
-      # that step. Running verify last still blocks the bad release: the
+      # Why: SignPath signs GitHub workflow artifacts, so Windows builds must
+      # publish only after the production-signed installer has been returned.
+      - name: Build Windows release artifacts
+        if: matrix.platform == 'win'
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 30
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: ${{ matrix.release_command }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload unsigned Windows installer for SignPath
+        if: matrix.platform == 'win'
+        id: upload-unsigned-windows-installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: orca-windows-unsigned-${{ needs.cut.outputs.tag }}
+          path: dist/orca-windows-setup.exe
+          if-no-files-found: error
+
+      # Why: SignPath Foundation production certificates require manual review,
+      # so the release job waits while the signing request is approved in UI.
+      - name: Submit Windows installer signing request
+        id: submit-signing-request
+        if: matrix.platform == 'win'
+        uses: signpath/github-action-submit-signing-request@v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: c37aa192-a27a-4377-9c90-5d6c95912dc0
+          project-slug: orca
+          signing-policy-slug: release-signing
+          artifact-configuration-slug: github-actions-windows-installer
+          github-artifact-id: ${{ steps.upload-unsigned-windows-installer.outputs.artifact-id }}
+          wait-for-completion: false
+
+      - name: Notify Slack that Windows signing is waiting for approval
+        if: matrix.platform == 'win'
+        shell: pwsh
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SIGNPATH_ORGANIZATION_ID: c37aa192-a27a-4377-9c90-5d6c95912dc0
+          SIGNPATH_REQUEST_ID: ${{ steps.submit-signing-request.outputs.signing-request-id }}
+          SIGNPATH_REQUEST_URL: ${{ steps.submit-signing-request.outputs.signing-request-web-url }}
+          TAG: ${{ needs.cut.outputs.tag }}
+          GITHUB_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:SLACK_WEBHOOK_URL)) {
+            throw 'SLACK_WEBHOOK_URL secret is required so release approvers know when SignPath is waiting.'
+          }
+
+          $requestUrl = $env:SIGNPATH_REQUEST_URL
+          if ([string]::IsNullOrWhiteSpace($requestUrl)) {
+            $requestUrl = "https://app.signpath.io/Web/$env:SIGNPATH_ORGANIZATION_ID/SigningRequests/$env:SIGNPATH_REQUEST_ID"
+          }
+
+          $message = "Orca Windows release $env:TAG is ready for SignPath approval.`n<$requestUrl|Open SignPath signing request>`n<$env:GITHUB_RUN_URL|Open GitHub Actions run>"
+          $payload = @{
+            text = $message
+            blocks = @(
+              @{
+                type = 'section'
+                text = @{
+                  type = 'mrkdwn'
+                  text = $message
+                }
+              }
+            )
+          } | ConvertTo-Json -Depth 5
+
+          Invoke-RestMethod -Method Post -Uri $env:SLACK_WEBHOOK_URL -ContentType 'application/json' -Body $payload
+
+      - name: Install SignPath PowerShell module
+        if: matrix.platform == 'win'
+        shell: pwsh
+        run: |
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Install-Module -Name SignPath -MinimumVersion 4.0.0 -MaximumVersion 4.999.999 -Scope CurrentUser -Force
+
+      - name: Download signed Windows installer from SignPath
+        if: matrix.platform == 'win'
+        shell: pwsh
+        env:
+          SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+          SIGNPATH_REQUEST_ID: ${{ steps.submit-signing-request.outputs.signing-request-id }}
+        run: |
+          Get-SignedArtifact `
+            -OrganizationId c37aa192-a27a-4377-9c90-5d6c95912dc0 `
+            -ApiToken $env:SIGNPATH_API_TOKEN `
+            -SigningRequestId $env:SIGNPATH_REQUEST_ID `
+            -OutputArtifactPath signed-windows.zip `
+            -Force `
+            -WaitForCompletionTimeoutInSeconds 14400
+
+          New-Item -ItemType Directory -Path signed-windows -Force
+          Expand-Archive -Path signed-windows.zip -DestinationPath signed-windows -Force
+
+      - name: Stage signed Windows release assets
+        if: matrix.platform == 'win'
+        shell: pwsh
+        run: |
+          $signedInstaller = Get-ChildItem -Path signed-windows -Recurse -File -Filter 'orca-windows-setup.exe' | Select-Object -First 1
+          if ($null -eq $signedInstaller) {
+            Write-Error 'Signed Windows installer was not returned by SignPath.'
+          }
+
+          Copy-Item -Path $signedInstaller.FullName -Destination 'dist/orca-windows-setup.exe' -Force
+          & 'node_modules/app-builder-bin/win/x64/app-builder.exe' blockmap --input 'dist/orca-windows-setup.exe' --output 'dist/orca-windows-setup.exe.blockmap'
+
+          $installer = Get-Item 'dist/orca-windows-setup.exe'
+          $blockmap = Get-Item 'dist/orca-windows-setup.exe.blockmap'
+          $stream = [System.IO.File]::OpenRead($installer.FullName)
+          try {
+            $sha512 = [System.Security.Cryptography.SHA512]::Create()
+            $hash = [Convert]::ToBase64String($sha512.ComputeHash($stream))
+          } finally {
+            if ($null -ne $sha512) {
+              $sha512.Dispose()
+            }
+            $stream.Dispose()
+          }
+
+          $latestYml = Get-Content -Path 'dist/latest.yml' -Raw
+          $latestYml = $latestYml -replace '(?m)^sha512: .+$', "sha512: $hash"
+          $latestYml = $latestYml -replace '(?m)^    size: \d+$', "    size: $($installer.Length)"
+          $latestYml = $latestYml -replace '(?m)^    blockMapSize: \d+$', "    blockMapSize: $($blockmap.Length)"
+          Set-Content -Path 'dist/latest.yml' -Value $latestYml -NoNewline
+
+          Get-Item 'dist/orca-windows-setup.exe', 'dist/orca-windows-setup.exe.blockmap', 'dist/latest.yml'
+
+      - name: Publish signed Windows release artifacts
+        if: matrix.platform == 'win'
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: gh release upload "${{ needs.cut.outputs.tag }}" "dist/orca-windows-setup.exe" "dist/orca-windows-setup.exe.blockmap" "dist/latest.yml" --clobber --repo "${{ github.repository }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Why post-publish for macOS/Linux: electron-builder packs and uploads
+      # in a single `--publish always` invocation, so there is no cheap
+      # insertion point between pack and upload without splitting those steps.
+      # Running verify last still blocks the bad release: the
       # binary is uploaded to the draft, but a failed matrix job blocks
       # the `publish-release` job (which depends on `build`) from flipping
       # the release from draft → published, so users never see it. A human
