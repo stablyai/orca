@@ -16,6 +16,7 @@ import {
   DropdownMenuRadioItem
 } from '@/components/ui/dropdown-menu'
 import type { WorktreeCardProperty } from '../../../../shared/types'
+import SidebarFilter from './SidebarFilter'
 
 const GROUP_BY_OPTIONS = [
   { id: 'none', label: 'All' },
@@ -72,6 +73,7 @@ const SidebarHeader = React.memo(function SidebarHeader() {
         Workspaces
       </span>
       <div className="flex items-center gap-1.5 shrink-0">
+        <SidebarFilter />
         <DropdownMenu>
           <Tooltip>
             <TooltipTrigger asChild>
