@@ -67,12 +67,19 @@ export const DEFAULT_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = [
   'ci',
   'issue',
   'pr',
-  'comment'
+  'comment',
+  // Why: agent activity is the primary reason users opt into the feature, so
+  // show it inline on each card by default. Unchecking this from the
+  // Workspaces view options hides the inline list entirely — there is no
+  // alternative agent-activity surface in the sidebar.
+  'inline-agents'
 ]
 
 export const DEFAULT_STATUS_BAR_ITEMS: StatusBarItem[] = [
   'claude',
   'codex',
+  'gemini',
+  'opencode-go',
   'ssh',
   'sessions',
   'memory'
@@ -153,8 +160,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     openLinksInApp: true,
     rightSidebarOpenByDefault: true,
     showTitlebarAgentActivity: true,
-    showAgentDashboard: true,
-    showTaskProviderIcons: true,
+    showTasksButton: true,
     notifications: getDefaultNotificationSettings(),
     diffDefaultView: 'inline',
     promptCacheTimerEnabled: false,
@@ -170,6 +176,9 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     defaultTaskSource: 'github',
     defaultRepoSelection: null,
     defaultLinearTeamSelection: null,
+    opencodeSessionCookie: '',
+    opencodeWorkspaceId: '',
+    geminiCliOAuthEnabled: false,
     agentCmdOverrides: {},
     // Why: 'auto' runs a layout-aware probe at boot (see
     // src/renderer/src/lib/keyboard-layout/*) that picks 'true' for US and
@@ -179,8 +188,6 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     // the box (issue #903) while US users keep Option-as-Alt readline chords.
     terminalMacOptionAsAlt: 'auto',
     terminalMacOptionAsAltMigrated: false,
-    experimentalTerminalDaemon: false,
-    experimentalTerminalDaemonNoticeShown: false,
     // Why: opt-in preview — default off so managed-hook installation
     // (Claude/Codex/Gemini) stays dormant for existing users and upgraders
     // (persistence.ts merges defaults first, so upgraders inherit this).
@@ -219,7 +226,7 @@ export function getDefaultUIState(): PersistedUIState {
     sidebarWidth: 280,
     rightSidebarWidth: 350,
     groupBy: 'none',
-    sortBy: 'name',
+    sortBy: 'recent',
     showActiveOnly: false,
     filterRepoIds: [],
     collapsedGroups: [],
@@ -229,7 +236,8 @@ export function getDefaultUIState(): PersistedUIState {
     statusBarItems: [...DEFAULT_STATUS_BAR_ITEMS],
     statusBarVisible: true,
     dismissedUpdateVersion: null,
-    lastUpdateCheckAt: null
+    lastUpdateCheckAt: null,
+    trustedOrcaHooks: {}
   }
 }
 

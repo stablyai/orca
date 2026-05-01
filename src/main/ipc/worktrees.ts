@@ -249,7 +249,7 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
 
   ipcMain.handle(
     'worktrees:remove',
-    async (_event, args: { worktreeId: string; force?: boolean }) => {
+    async (_event, args: { worktreeId: string; force?: boolean; skipArchive?: boolean }) => {
       const { repoId, worktreePath } = parseWorktreeId(args.worktreeId)
       const repo = store.getRepo(repoId)
       if (!repo) {
@@ -273,7 +273,7 @@ export function registerWorktreeHandlers(mainWindow: BrowserWindow, store: Store
 
       // Run archive hook before removal
       const hooks = getEffectiveHooks(repo)
-      if (hooks?.scripts.archive) {
+      if (hooks?.scripts.archive && !args.skipArchive) {
         const result = await runHook('archive', worktreePath, repo)
         if (!result.success) {
           console.error(`[hooks] archive hook failed for ${worktreePath}:`, result.output)

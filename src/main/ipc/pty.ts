@@ -334,6 +334,7 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:listSessions')
   ipcMain.removeHandler('pty:hasChildProcesses')
   ipcMain.removeHandler('pty:getForegroundProcess')
+  ipcMain.removeHandler('pty:getCwd')
   ipcMain.removeAllListeners('pty:write')
   ipcMain.removeAllListeners('pty:ackColdRestore')
 
@@ -819,6 +820,20 @@ export function registerPtyHandlers(
       return getProviderForPty(args.id).getForegroundProcess(args.id)
     }
   )
+
+  // Why: renderer needs the live shell cwd when the user presses Cmd+D so
+  // the new split pane inherits the source pane's cwd instead of the
+  // worktree root. Routed through getProviderForPty so local and SSH PTYs
+  // use the same code path. Providers return '' when the id is unknown or
+  // the platform cannot resolve a cwd (Windows); the renderer treats ''
+  // as "fall through to the next fallback layer".
+  ipcMain.handle('pty:getCwd', async (_event, args: { id: string }): Promise<string> => {
+    try {
+      return await getProviderForPty(args.id).getCwd(args.id)
+    } catch {
+      return ''
+    }
+  })
 }
 
 /**

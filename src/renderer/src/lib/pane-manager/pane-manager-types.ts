@@ -12,14 +12,26 @@ import type { SerializeAddon } from '@xterm/addon-serialize'
 // Public interfaces
 // ---------------------------------------------------------------------------
 
+/** Hints forwarded from splitPane() into onPaneCreated for a single split.
+ *  Currently only carries the resolved cwd for the new pane's PTY spawn.
+ *  Kept as a separate parameter (rather than extending ManagedPane) so the
+ *  hint is scoped to pane creation and does not live on the pane afterwards. */
+export type PaneSpawnHints = {
+  cwd?: string
+}
+
 export type PaneManagerOptions = {
-  onPaneCreated?: (pane: ManagedPane) => void | Promise<void>
+  onPaneCreated?: (pane: ManagedPane, spawnHints?: PaneSpawnHints) => void | Promise<void>
   onPaneClosed?: (paneId: number) => void
   onActivePaneChange?: (pane: ManagedPane) => void
   onLayoutChanged?: () => void
   terminalOptions?: (paneId: number) => Partial<ITerminalOptions>
   onLinkClick?: (event: MouseEvent | undefined, url: string) => void
   initialRenderingSuspended?: boolean
+  // Why: diagnostic label for log correlation. safeFit and other internal
+  // helpers log warnings that are hard to correlate without knowing which
+  // tab/worktree the PaneManager belongs to.
+  debugLabel?: string
 }
 
 export type PaneStyleOptions = {
@@ -83,6 +95,7 @@ export type ManagedPaneInternal = {
   // intermediate fit paths skip their own scroll restoration, deferring to
   // the splitPane's final authoritative restore.
   pendingSplitScrollState: ScrollState | null
+  debugLabel: string | null
 } & ManagedPane
 
 export type DropZone = 'top' | 'bottom' | 'left' | 'right'

@@ -9,7 +9,7 @@ import StatusIndicator from './StatusIndicator'
 import CacheTimer from './CacheTimer'
 import WorktreeContextMenu from './WorktreeContextMenu'
 import { SshDisconnectedDialog } from './SshDisconnectedDialog'
-import AgentStatusHover from './AgentStatusHover'
+import WorktreeCardAgents from './WorktreeCardAgents'
 import { cn } from '@/lib/utils'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import {
@@ -157,7 +157,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   // that the spinner flickered; the blocked/waiting/done states don't have
   // that problem — they're terminal (done) or attention-needed (blocked/
   // waiting) and persist until the user acts. Retained "done" snapshots are
-  // consulted too so the sky dot keeps glowing after the agent process exits,
+  // consulted too so the done indicator keeps showing after the agent process exits,
   // matching the dashboard's retention behavior.
   //
   // Priority (highest first): permission (blocked/waiting) > heuristic
@@ -167,7 +167,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   // completion.
   // heuristic 'working' wins over done because a spinner means the user has
   // already re-prompted the agent after it reported done — the newer "work
-  // in progress" signal is more informative than a retained completion dot.
+  // in progress" signal is more informative than a retained completion indicator.
   // Only the 'working' heuristic earns this precedence; 'active'/'inactive'
   // mean "quiet terminal", which shouldn't drown out a recent done.
   // Why: collapse live hook entries to booleans inside the selector so the
@@ -323,21 +323,12 @@ const WorktreeCard = React.memo(function WorktreeCard({
 
   const unreadTooltip = worktree.isUnread ? 'Mark read' : 'Mark unread'
 
-  // Why: the whole card is the hover target for the agent-status panel, not
-  // just the dot. Hovering any part of the workspace row reveals the panel
-  // to the right (HoverCardContent inside AgentStatusHover uses
-  // side="right"). A dot-sized target was too easy to miss; the card-level
-  // trigger preserves the dot as an at-a-glance cue while giving users a
-  // much larger surface to surface the "agent activity" detail. Gated by
-  // dashboardExperimentEnabled AND cardProps.includes('status') to match
-  // the previous scope — when the status dot is hidden, the hover panel
-  // stays hidden too.
   const cardBody = (
     <div
       className={cn(
         'group relative flex items-start gap-2.5 px-2 py-2 rounded-lg cursor-pointer transition-all duration-200 outline-none select-none ml-1',
         isActive
-          ? 'bg-black/[0.06] shadow-[0_1px_2px_rgba(0,0,0,0.03)] border border-border/60 dark:bg-white/[0.10] dark:border-border/40'
+          ? 'bg-black/[0.08] shadow-[0_1px_2px_rgba(0,0,0,0.04)] border border-black/[0.015] dark:bg-white/[0.10] dark:border-border/40 dark:shadow-[0_1px_2px_rgba(0,0,0,0.03)]'
           : 'border border-transparent hover:bg-accent/40',
         isDeleting && 'opacity-50 grayscale cursor-not-allowed',
         isSshDisconnected && !isDeleting && 'opacity-60'
@@ -374,12 +365,6 @@ const WorktreeCard = React.memo(function WorktreeCard({
       {/* Status indicator on the left */}
       {(cardProps.includes('status') || cardProps.includes('unread')) && (
         <div className="flex flex-col items-center justify-start pt-[2px] gap-2 shrink-0">
-          {/* Why: the agent-status hovercard is now attached to the whole
-                  card (see AgentStatusHover wrapper below), not just the dot,
-                  so the dot renders as a plain visual indicator. A dot-sized
-                  hover target was too easy to miss; hovering any part of the
-                  card is a far more forgiving way to reveal the "agent
-                  activity" panel that appears to the right of the card. */}
           {cardProps.includes('status') && (
             <>
               <StatusIndicator status={status} aria-hidden="true" />
@@ -450,7 +435,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
                 <TooltipTrigger asChild>
                   <Badge
                     variant="outline"
-                    className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 leading-none text-muted-foreground border-muted-foreground/30 bg-muted-foreground/5"
+                    className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 leading-none text-foreground/70 border-foreground/20 bg-foreground/[0.06]"
                   >
                     primary
                   </Badge>
@@ -544,19 +529,23 @@ const WorktreeCard = React.memo(function WorktreeCard({
             )}
           </div>
         )}
+
+        {/* Why: inline agent list. Gated on the experimental setting so
+             managed hook data is only surfaced where the cockpit is enabled,
+             and on the 'inline-agents' card property so users can hide it.
+             Layout coupling: this block grows the card height dynamically —
+             WorktreeList uses measureElement on each row, so the virtualizer
+             re-measures naturally when agents appear/disappear. */}
+        {dashboardExperimentEnabled && cardProps.includes('inline-agents') && (
+          <WorktreeCardAgents worktreeId={worktree.id} />
+        )}
       </div>
     </div>
   )
 
   return (
     <>
-      <WorktreeContextMenu worktree={worktree}>
-        {dashboardExperimentEnabled && cardProps.includes('status') ? (
-          <AgentStatusHover worktreeId={worktree.id}>{cardBody}</AgentStatusHover>
-        ) : (
-          cardBody
-        )}
-      </WorktreeContextMenu>
+      <WorktreeContextMenu worktree={worktree}>{cardBody}</WorktreeContextMenu>
 
       {repo?.connectionId && (
         <SshDisconnectedDialog

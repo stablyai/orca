@@ -4,6 +4,7 @@ import type { AppState } from '../types'
 import { findPrevLiveWorktreeHistoryIndex } from './worktree-nav-history'
 import type {
   ChangelogData,
+  PersistedTrustedOrcaHooks,
   PersistedUIState,
   StatusBarItem,
   TaskViewPresetId,
@@ -13,10 +14,9 @@ import type {
 } from '../../../../shared/types'
 import { PER_REPO_FETCH_LIMIT } from '../../../../shared/work-items'
 
-// Why: mirrors the preset→query mapping in getTaskPresetQuery (new-workspace.ts).
+// Why: mirrors the preset→query mapping used by TaskPage's preset buttons.
 // Keeping a local copy here avoids a store ↔ lib circular import while letting
 // openTaskPage warm exactly the cache key the page will read on mount.
-// Must stay in sync with getTaskPresetQuery — see DESIGN-gh-issues-improve.md.
 function presetToQuery(presetId: TaskViewPresetId | null): string {
   switch (presetId) {
     case 'issues':
@@ -25,10 +25,10 @@ function presetToQuery(presetId: TaskViewPresetId | null): string {
       return 'assignee:@me is:issue is:open'
     case 'prs':
       return 'is:pr is:open'
-    case 'my-prs':
-      return 'author:@me is:pr is:open'
     case 'review':
       return 'review-requested:@me is:pr is:open'
+    case 'my-prs':
+      return 'author:@me is:pr is:open'
     default:
       return 'is:open'
   }
@@ -37,6 +37,7 @@ import {
   DEFAULT_STATUS_BAR_ITEMS,
   DEFAULT_WORKTREE_CARD_PROPERTIES
 } from '../../../../shared/constants'
+import type { OrcaHookScriptKind } from '../../lib/orca-hook-trust'
 
 const MIN_SIDEBAR_WIDTH = 220
 const MAX_LEFT_SIDEBAR_WIDTH = 500
@@ -45,6 +46,19 @@ const MAX_LEFT_SIDEBAR_WIDTH = 500
 // cap on wide displays. Use a large hard ceiling purely as a safety net for
 // corrupted/manually-edited values rather than as a product limit.
 const MAX_RIGHT_SIDEBAR_WIDTH = 4000
+
+function filterTrustedOrcaHooksToValidRepos(
+  trust: PersistedTrustedOrcaHooks,
+  validRepoIds: Set<string>
+): PersistedTrustedOrcaHooks {
+  const next: PersistedTrustedOrcaHooks = {}
+  for (const [repoId, entry] of Object.entries(trust)) {
+    if (validRepoIds.has(repoId)) {
+      next[repoId] = entry
+    }
+  }
+  return next
+}
 
 function sanitizePersistedSidebarWidth(width: unknown, fallback: number, maxWidth: number): number {
   if (typeof width !== 'number' || !Number.isFinite(width)) {
@@ -59,6 +73,21 @@ export type UISlice = {
   toggleSidebar: () => void
   setSidebarOpen: (open: boolean) => void
   setSidebarWidth: (width: number) => void
+  /** Per-agent "I've looked at this" timestamps, keyed by paneKey. Set when
+   *  the user clicks an agent row or its parent workspace card from the
+   *  dashboard. A row is considered unvisited when no ack exists OR the
+   *  agent's current stateStartedAt is newer than the last ack (i.e. the
+   *  agent has transitioned state since the user last saw it). Session-only
+   *  — restart resets everyone to unvisited, which is harmless since the
+   *  first visit after launch is a legitimate "need to see" moment. */
+  acknowledgedAgentsByPaneKey: Record<string, number>
+  acknowledgeAgents: (paneKeys: string[]) => void
+  /** Per-worktree collapsed state for the inline agents section shown inside
+   *  each workspace card. Session-only — a restart defaults back to expanded,
+   *  which matches the expected default (people rarely want agents hidden
+   *  across launches). */
+  collapsedInlineAgentsByWorktreeId: Record<string, boolean>
+  toggleInlineAgentsCollapsed: (worktreeId: string) => void
   activeView: 'terminal' | 'settings' | 'tasks'
   previousViewBeforeTasks: 'terminal' | 'settings'
   previousViewBeforeSettings: 'terminal' | 'tasks'
@@ -103,6 +132,7 @@ export type UISlice = {
       | 'shortcuts'
       | 'repo'
       | 'agents'
+      | 'accounts'
       | 'experimental'
       | 'ssh'
     repoId: string | null
@@ -121,6 +151,7 @@ export type UISlice = {
     | 'quick-open'
     | 'worktree-palette'
     | 'new-workspace-composer'
+    | 'confirm-orca-yaml-hooks'
   modalData: Record<string, unknown>
   openModal: (modal: UISlice['activeModal'], data?: Record<string, unknown>) => void
   closeModal: () => void
@@ -135,6 +166,14 @@ export type UISlice = {
    *  tab every time. */
   createFromSubTab: 'prs' | 'issues' | 'branches' | 'linear'
   setCreateFromSubTab: (tab: 'prs' | 'issues' | 'branches' | 'linear') => void
+  trustedOrcaHooks: PersistedTrustedOrcaHooks
+  markOrcaHookScriptConfirmed: (
+    repoId: string,
+    kind: OrcaHookScriptKind,
+    contentHash: string
+  ) => void
+  markOrcaHookRepoAlwaysTrusted: (repoId: string) => void
+  clearOrcaHookTrustForRepo: (repoId: string) => void
   searchQuery: string
   setSearchQuery: (q: string) => void
   groupBy: 'none' | 'repo' | 'pr-status'
@@ -192,6 +231,45 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
   setSidebarWidth: (width) => set({ sidebarWidth: width }),
+
+  acknowledgedAgentsByPaneKey: {},
+  acknowledgeAgents: (paneKeys) =>
+    set((s) => {
+      if (paneKeys.length === 0) {
+        return s
+      }
+      const now = Date.now()
+      // Why: only allocate a new map (and emit a store update) if at least
+      // one ack is actually moving forward. Comparing `prev < now` instead
+      // of `prev !== now` matters because stored values are historical
+      // timestamps and `Date.now()` advances every millisecond — a strict-
+      // inequality guard would fire on every call and rewrite the map on
+      // every dashboard click or auto-ack tick, forcing every subscriber
+      // (all agent rows, the SidebarHeader count, etc.) to re-render.
+      let next: Record<string, number> | null = null
+      for (const key of paneKeys) {
+        const prev = s.acknowledgedAgentsByPaneKey[key] ?? 0
+        if (prev < now) {
+          if (next === null) {
+            next = { ...s.acknowledgedAgentsByPaneKey }
+          }
+          next[key] = now
+        }
+      }
+      return next ? { acknowledgedAgentsByPaneKey: next } : s
+    }),
+  collapsedInlineAgentsByWorktreeId: {},
+  toggleInlineAgentsCollapsed: (worktreeId) =>
+    set((s) => {
+      const current = s.collapsedInlineAgentsByWorktreeId[worktreeId] === true
+      const next = { ...s.collapsedInlineAgentsByWorktreeId }
+      if (current) {
+        delete next[worktreeId]
+      } else {
+        next[worktreeId] = true
+      }
+      return { collapsedInlineAgentsByWorktreeId: next }
+    }),
 
   activeView: 'terminal',
   previousViewBeforeTasks: 'terminal',
@@ -296,6 +374,49 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   createFromSubTab: 'prs',
   setCreateFromSubTab: (tab) => set({ createFromSubTab: tab }),
 
+  trustedOrcaHooks: {},
+  markOrcaHookScriptConfirmed: (repoId, kind, contentHash) =>
+    set((s) => {
+      const existing = s.trustedOrcaHooks[repoId]
+      const currentEntry = existing?.[kind]
+      if (currentEntry?.contentHash === contentHash) {
+        return s
+      }
+      const nextRepo = {
+        ...existing,
+        [kind]: { contentHash, approvedAt: Date.now() }
+      }
+      const next = { ...s.trustedOrcaHooks, [repoId]: nextRepo }
+      window.api.ui.set({ trustedOrcaHooks: next }).catch(console.error)
+      return { trustedOrcaHooks: next }
+    }),
+  markOrcaHookRepoAlwaysTrusted: (repoId) =>
+    set((s) => {
+      const existing = s.trustedOrcaHooks[repoId]
+      if (existing?.all) {
+        return s
+      }
+      const next = {
+        ...s.trustedOrcaHooks,
+        [repoId]: {
+          ...existing,
+          all: { approvedAt: Date.now() }
+        }
+      }
+      window.api.ui.set({ trustedOrcaHooks: next }).catch(console.error)
+      return { trustedOrcaHooks: next }
+    }),
+  clearOrcaHookTrustForRepo: (repoId) =>
+    set((s) => {
+      if (!(repoId in s.trustedOrcaHooks)) {
+        return s
+      }
+      const next = { ...s.trustedOrcaHooks }
+      delete next[repoId]
+      window.api.ui.set({ trustedOrcaHooks: next }).catch(console.error)
+      return { trustedOrcaHooks: next }
+    }),
+
   searchQuery: '',
   setSearchQuery: (q) => set({ searchQuery: q }),
 
@@ -308,7 +429,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set({ groupBy: g, collapsedGroups: new Set<string>() })
   },
 
-  sortBy: 'name',
+  sortBy: 'recent',
   setSortBy: (s) => set({ sortBy: s }),
 
   showActiveOnly: false,
@@ -412,6 +533,10 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         updateReassuranceSeen: ui.updateReassuranceSeen ?? false,
         browserDefaultUrl: ui.browserDefaultUrl ?? null,
         browserDefaultSearchEngine: ui.browserDefaultSearchEngine ?? null,
+        trustedOrcaHooks: filterTrustedOrcaHooksToValidRepos(
+          ui.trustedOrcaHooks ?? {},
+          validRepoIds
+        ),
         persistedUIReady: true
       }
     }),

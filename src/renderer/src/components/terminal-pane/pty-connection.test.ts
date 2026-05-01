@@ -14,7 +14,7 @@ type StoreState = {
   repos: { id: string; connectionId?: string | null }[]
   sshConnectionStates: Map<string, { status: string }>
   cacheTimerByKey: Record<string, number | null>
-  settings: { promptCacheTimerEnabled?: boolean; experimentalTerminalDaemon?: boolean } | null
+  settings: { promptCacheTimerEnabled?: boolean } | null
   codexRestartNoticeByPtyId: Record<
     string,
     { previousAccountLabel: string; nextAccountLabel: string }
@@ -529,8 +529,7 @@ describe('connectPanePty', () => {
     mockStoreState = {
       ...mockStoreState,
       settings: {
-        ...mockStoreState.settings,
-        experimentalTerminalDaemon: true
+        ...mockStoreState.settings
       }
     } as StoreState
     const pane = createPane(2)
@@ -570,8 +569,7 @@ describe('connectPanePty', () => {
     mockStoreState = {
       ...mockStoreState,
       settings: {
-        ...mockStoreState.settings,
-        experimentalTerminalDaemon: true
+        ...mockStoreState.settings
       }
     } as StoreState
     const pane = createPane(2)
@@ -615,8 +613,7 @@ describe('connectPanePty', () => {
         'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty' }]
       },
       settings: {
-        ...mockStoreState.settings,
-        experimentalTerminalDaemon: true
+        ...mockStoreState.settings
       }
     } as StoreState
 
@@ -645,7 +642,7 @@ describe('connectPanePty', () => {
     )
   })
 
-  it('reuses the existing local PTY on split remount when the daemon is disabled', async () => {
+  it('reattaches via daemon sessionId when an in-session PTY is live', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
@@ -656,47 +653,7 @@ describe('connectPanePty', () => {
         'wt-1': [{ id: 'tab-1', ptyId: 'pty-local-detached' }]
       },
       settings: {
-        ...mockStoreState.settings,
-        // Why: with the daemon off, split/remount should still keep the
-        // in-process PTY alive within the same app session. This regression
-        // came from treating every remount like a daemon session reattach.
-        experimentalTerminalDaemon: false
-      }
-    } as StoreState
-
-    const pane = createPane(2)
-    const manager = createManager(2)
-    const deps = createDeps({
-      restoredLeafId: 'pane:2',
-      restoredPtyIdByLeafId: { 'pane:2': 'pty-local-detached' }
-    })
-
-    connectPanePty(pane as never, manager as never, deps as never)
-
-    expect(transport.attach).toHaveBeenCalledWith(
-      expect.objectContaining({ existingPtyId: 'pty-local-detached' })
-    )
-    expect(transport.connect).not.toHaveBeenCalled()
-    expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'pty-local-detached')
-    expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'pty-local-detached')
-  })
-
-  it('reattaches via daemon sessionId when the daemon is enabled and an in-session PTY is live', async () => {
-    const { connectPanePty } = await import('./pty-connection')
-    const transport = createMockTransport()
-    transportFactoryQueue.push(transport)
-
-    mockStoreState = {
-      ...mockStoreState,
-      tabsByWorktree: {
-        'wt-1': [{ id: 'tab-1', ptyId: 'pty-local-detached' }]
-      },
-      settings: {
-        ...mockStoreState.settings,
-        // Why: complement of the daemon-off case — with the daemon on, the
-        // in-session remount path must go through connect({sessionId}) so
-        // the daemon's createOrAttach runs at the pane's real dimensions.
-        experimentalTerminalDaemon: true
+        ...mockStoreState.settings
       }
     } as StoreState
 
@@ -745,8 +702,7 @@ describe('connectPanePty', () => {
         'wt-1': [{ id: 'tab-1', ptyId: 'pty-restarted' }]
       },
       settings: {
-        ...mockStoreState.settings,
-        experimentalTerminalDaemon: true
+        ...mockStoreState.settings
       }
     }
 

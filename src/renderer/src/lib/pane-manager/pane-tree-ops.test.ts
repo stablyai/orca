@@ -52,7 +52,8 @@ function createPane({
     webglAddon: null,
     ligaturesAddon: null,
     compositionHandler: null,
-    pendingSplitScrollState: null
+    pendingSplitScrollState: null,
+    debugLabel: null
   }
 }
 

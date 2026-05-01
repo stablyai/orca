@@ -14,6 +14,16 @@ import {
 } from '../flags'
 import { getRequiredWorktreeSelector, resolveCurrentWorktreeSelector } from '../selectors'
 
+type HookWarningResult = {
+  warning?: string
+}
+
+function printHookWarning(result: HookWarningResult, json: boolean): void {
+  if (!json && result.warning) {
+    console.error(`warning: ${result.warning}`)
+  }
+}
+
 export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
   'worktree ps': async ({ flags, client, json }) => {
     const result = await client.call<RuntimeWorktreePsResult>('worktree.ps', {
@@ -41,13 +51,18 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, formatWorktreeShow)
   },
   'worktree create': async ({ flags, client, json }) => {
-    const result = await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.create', {
-      repo: getRequiredStringFlag(flags, 'repo'),
-      name: getRequiredStringFlag(flags, 'name'),
-      baseBranch: getOptionalStringFlag(flags, 'base-branch'),
-      linkedIssue: getOptionalNumberFlag(flags, 'issue'),
-      comment: getOptionalStringFlag(flags, 'comment')
-    })
+    const result = await client.call<{ worktree: RuntimeWorktreeRecord; warning?: string }>(
+      'worktree.create',
+      {
+        repo: getRequiredStringFlag(flags, 'repo'),
+        name: getRequiredStringFlag(flags, 'name'),
+        baseBranch: getOptionalStringFlag(flags, 'base-branch'),
+        linkedIssue: getOptionalNumberFlag(flags, 'issue'),
+        comment: getOptionalStringFlag(flags, 'comment'),
+        runHooks: flags.get('run-hooks') === true
+      }
+    )
+    printHookWarning(result.result, json)
     printResult(result, json, formatWorktreeShow)
   },
   'worktree set': async ({ flags, client, cwd, json }) => {
@@ -60,10 +75,12 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, formatWorktreeShow)
   },
   'worktree rm': async ({ flags, client, cwd, json }) => {
-    const result = await client.call<{ removed: boolean }>('worktree.rm', {
+    const result = await client.call<{ removed: boolean; warning?: string }>('worktree.rm', {
       worktree: await getRequiredWorktreeSelector(flags, 'worktree', cwd, client),
-      force: flags.get('force') === true
+      force: flags.get('force') === true,
+      runHooks: flags.get('run-hooks') === true
     })
+    printHookWarning(result.result, json)
     printResult(result, json, (value) => `removed: ${value.removed}`)
   }
 }

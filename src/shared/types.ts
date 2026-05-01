@@ -700,6 +700,7 @@ export type CreateWorktreeArgs = {
 export type CreateWorktreeResult = {
   worktree: Worktree
   setup?: WorktreeSetupLaunch
+  warning?: string
 }
 
 // ─── Updater ─────────────────────────────────────────────────────────
@@ -950,19 +951,10 @@ export type GlobalSettings = {
   rightSidebarOpenByDefault: boolean
   /** Whether to show the live agent activity count badge in the titlebar. */
   showTitlebarAgentActivity: boolean
-  /** Whether to show the Agent Dashboard panel at the bottom of the right sidebar.
-   *  Why: optional because readers use the `settings?.showAgentDashboard !== false`
-   *  idiom (right-sidebar/index.tsx, AgentsPane.tsx) which presumes the field may
-   *  be undefined — e.g. on first hydrate before main-process defaults apply, or
-   *  when migrating settings persisted before this field existed. A required
-   *  `boolean` here would make those readers' fallback branches dead-on-paper
-   *  while still being reached at runtime, which is exactly the kind of type
-   *  hack that drifts silently. Aligning the declaration with reader intent
-   *  keeps the contract honest. */
-  showAgentDashboard?: boolean
-  /** Why: the Tasks sidebar label can be kept cleaner for users who do not
-   *  actively use the GitHub/Linear integrations behind it. */
-  showTaskProviderIcons: boolean
+  /** Why: some users do not use the Tasks feature and prefer to keep the
+   *  left sidebar free of its button entirely. Hiding the button here also
+   *  removes it from keyboard navigation. */
+  showTasksButton: boolean
   diffDefaultView: 'inline' | 'side-by-side'
   notifications: NotificationSettings
   /** When true, a countdown timer is shown after a Claude agent becomes idle,
@@ -1015,6 +1007,14 @@ export type GlobalSettings = {
    *  Same nullable-array pattern as `defaultRepoSelection`: `null` = sticky-all,
    *  `string[]` = frozen subset of team IDs. */
   defaultLinearTeamSelection: string[] | null
+  /** Session cookie for OpenCode Go rate-limit fetching. Stored encrypted. */
+  opencodeSessionCookie: string
+  /** Optional workspace ID override for OpenCode Go. When set, skips the
+   *  workspaces lookup and fetches usage directly for this workspace. */
+  opencodeWorkspaceId: string
+  /** Whether to extract OAuth credentials from the local Gemini CLI installation
+   *  for rate-limit fetching. Disabled by default for explicit opt-in. */
+  geminiCliOAuthEnabled: boolean
   /** Per-agent CLI command overrides. A missing key means use the catalog default binary name. */
   agentCmdOverrides: Partial<Record<TuiAgent, string>>
   /** Why: macOS terminals must choose between letting Option compose layout
@@ -1037,24 +1037,13 @@ export type GlobalSettings = {
    *  detection, so no visible behavior change. Then we flip this flag to true
    *  and never migrate again. */
   terminalMacOptionAsAltMigrated: boolean
-  /** Experimental: persist terminal sessions across app restarts via an
-   *  out-of-process daemon (src/main/daemon/**). Opt-in because the daemon
-   *  protocol is still stabilizing — some sessions have been observed to go
-   *  unresponsive after internal state drift. Disabled sessions fall back to
-   *  the in-process LocalPtyProvider. Requires an app restart to apply. */
-  experimentalTerminalDaemon: boolean
-  /** One-shot flag for the "persistent sessions are now opt-in" transition
-   *  toast shown to users upgrading from v1.3.0 (where the daemon was on by
-   *  default). Set to true the first time the toast fires so it never repeats. */
-  experimentalTerminalDaemonNoticeShown: boolean
-  /** Experimental: live Agent Dashboard — a bottom-docked right-sidebar panel
-   *  that aggregates working/blocked/done agents across all worktrees, plus
-   *  the sidebar AgentStatusHover surface, retention of "done" rows, and the
-   *  hook-driven status slice that feeds them. Opt-in because the surface is
-   *  still in preview: managed hook installation (Claude/Codex/Gemini) only
-   *  runs when this is true, so toggling it on takes effect on the next app
-   *  launch. The in-pane status indicators and the cursor-agent hook path are
-   *  unaffected by this toggle. */
+  /** Experimental: live agent activity — inline per-workspace-card agent
+   *  rows showing state, prompt, and last message, plus retention of "done"
+   *  rows and the hook-driven status slice that feeds them. Opt-in because
+   *  the surface is still in preview: managed hook installation
+   *  (Claude/Codex/Gemini) only runs when this is true, so toggling it on
+   *  takes effect on the next app launch. The in-pane status indicators and
+   *  the cursor-agent hook path are unaffected by this toggle. */
   experimentalAgentDashboard: boolean
 }
 
@@ -1083,10 +1072,29 @@ export type NotificationDispatchResult = {
   reason?: 'disabled' | 'source-disabled' | 'suppressed-focus' | 'cooldown' | 'not-supported'
 }
 
-export type WorktreeCardProperty = 'status' | 'unread' | 'ci' | 'issue' | 'pr' | 'comment'
+export type WorktreeCardProperty =
+  | 'status'
+  | 'unread'
+  | 'ci'
+  | 'issue'
+  | 'pr'
+  | 'comment'
+  // Why: inline list of agent activity rendered directly inside each
+  // workspace card when the experimental agent-activity feature is on. On by
+  // default (see DEFAULT_WORKTREE_CARD_PROPERTIES in shared/constants.ts) —
+  // live agent activity is the primary reason users opt into the feature.
+  // Users who prefer a compact sidebar can uncheck it from the Workspaces
+  // view options.
+  | 'inline-agents'
 
-export type StatusBarItem = 'claude' | 'codex' | 'ssh' | 'sessions' | 'memory'
-
+export type StatusBarItem =
+  | 'claude'
+  | 'codex'
+  | 'gemini'
+  | 'opencode-go'
+  | 'ssh'
+  | 'sessions'
+  | 'memory'
 export type PersistedUIState = {
   lastActiveRepoId: string | null
   lastActiveWorktreeId: string | null
@@ -1128,6 +1136,15 @@ export type PersistedUIState = {
    *  migration never re-fires — allowing users to intentionally select the
    *  new 'recent' (last-activity) sort without it being clobbered on restart. */
   _sortBySmartMigrated?: boolean
+  /** One-shot migration flag for the inline-agents view-mode rollout. The
+   *  'inline-agents' card property was introduced after the
+   *  experimentalAgentDashboard toggle — users on prior rcs who had the
+   *  toggle on already had `worktreeCardProperties` persisted without it,
+   *  so merging with the new defaults never added it for them. When this
+   *  flag is absent, the main-process load() appends 'inline-agents' to
+   *  the persisted array if experimentalAgentDashboard is true, then sets
+   *  the flag so a later uncheck from the view-options menu sticks. */
+  _inlineAgentsDefaultedForExperiment?: boolean
   /** Snapshot of totalAgentsSpawned captured the first time we see the current
    *  app version. Why: the nag threshold counts agents spawned *since the
    *  user's last update* so a fresh install or new release does not trigger
@@ -1144,7 +1161,24 @@ export type PersistedUIState = {
   /** Once the user has starred Orca (from any entry point) we permanently
    *  suppress the nag — no further thresholds, no notifications. */
   starNagCompleted?: boolean
+  trustedOrcaHooks?: PersistedTrustedOrcaHooks
 }
+
+export type PersistedTrustedOrcaHookEntry = {
+  contentHash: string
+  approvedAt: number
+}
+
+export type PersistedTrustedOrcaHookRepo = {
+  all?: {
+    approvedAt: number
+  }
+  setup?: PersistedTrustedOrcaHookEntry
+  archive?: PersistedTrustedOrcaHookEntry
+  issueCommand?: PersistedTrustedOrcaHookEntry
+}
+
+export type PersistedTrustedOrcaHooks = Record<string, PersistedTrustedOrcaHookRepo>
 
 // ─── Persistence shape ──────────────────────────────────────────────
 export type PersistedState = {

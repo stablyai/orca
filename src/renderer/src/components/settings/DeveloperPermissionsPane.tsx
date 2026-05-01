@@ -179,6 +179,18 @@ export function DeveloperPermissionsPane(): React.JSX.Element {
     void refresh()
   }, [refresh])
 
+  // Why: after the user flips a permission in System Settings and switches
+  // back to Orca, the chip should reflect the new status without a manual
+  // Refresh click. Tied to window focus rather than a polling interval so
+  // we don't keep hammering `systemPreferences` while the pane is idle.
+  useEffect(() => {
+    const onFocus = (): void => {
+      void refresh()
+    }
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [refresh])
+
   const request = async (id: DeveloperPermissionId): Promise<void> => {
     setPendingId(id)
     try {

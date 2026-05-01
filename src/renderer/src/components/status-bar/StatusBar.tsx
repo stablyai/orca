@@ -27,8 +27,9 @@ import type {
   CodexRateLimitAccountsState
 } from '../../../../shared/types'
 import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
-import { ProviderIcon, ProviderPanel } from './tooltip'
-import { ClaudeIcon, OpenAIIcon } from './icons'
+import { ProviderIcon, ProviderPanel, barColor } from './tooltip'
+import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
+import { formatWindowLabel } from '@/lib/window-label-formatter'
 import { markLiveCodexSessionsForRestart } from '@/lib/codex-session-restart'
 import { SshStatusSegment } from './SshStatusSegment'
 import { SessionsStatusSegment } from './SessionsStatusSegment'
@@ -64,6 +65,8 @@ function ClaudeSwitcherMenu({
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
+  const fetchInactiveClaudeAccountUsage = useAppStore((s) => s.fetchInactiveClaudeAccountUsage)
+  const inactiveClaudeAccounts = useAppStore((s) => s.rateLimits.inactiveClaudeAccounts)
   const claudeAccountSyncKey = useAppStore((s) => {
     const settings = s.settings
     if (!settings) {
@@ -88,6 +91,12 @@ function ClaudeSwitcherMenu({
       setAccountsExpanded(false)
     }
   }, [open])
+
+  useEffect(() => {
+    if (accountsExpanded) {
+      void fetchInactiveClaudeAccountUsage()
+    }
+  }, [accountsExpanded, fetchInactiveClaudeAccountUsage])
 
   const handleSelectAccount = async (accountId: string | null): Promise<void> => {
     if (isSwitching) {
@@ -154,18 +163,34 @@ function ClaudeSwitcherMenu({
             {availableSwitchTargets.length === 0 ? (
               <div className="px-2 py-1.5 text-[11px] text-muted-foreground">No other accounts</div>
             ) : null}
-            {availableSwitchTargets.map((target) => (
-              <DropdownMenuItem
-                key={target.id ?? 'system'}
-                disabled={isSwitching}
-                onSelect={(event) => {
-                  event.preventDefault()
-                  void handleSelectAccount(target.id)
-                }}
-              >
-                <span className="max-w-[220px] truncate">{target.label}</span>
-              </DropdownMenuItem>
-            ))}
+            {availableSwitchTargets.map((target) => {
+              const inactiveUsage = target.id
+                ? inactiveClaudeAccounts.find((a) => a.accountId === target.id)
+                : null
+
+              return (
+                <DropdownMenuItem
+                  key={target.id ?? 'system'}
+                  disabled={isSwitching}
+                  onSelect={(event) => {
+                    event.preventDefault()
+                    void handleSelectAccount(target.id)
+                  }}
+                >
+                  <div className="flex w-full flex-col gap-0.5">
+                    <span className="max-w-[220px] truncate">{target.label}</span>
+                    {inactiveUsage?.isFetching && !inactiveUsage.claude ? (
+                      <InlineUsageSkeleton />
+                    ) : inactiveUsage?.claude ? (
+                      <InlineUsageBars
+                        limits={inactiveUsage.claude}
+                        isFetching={inactiveUsage.isFetching}
+                      />
+                    ) : null}
+                  </div>
+                </DropdownMenuItem>
+              )
+            })}
           </div>
           <div className="px-2 py-1.5 text-[10px] leading-4 text-muted-foreground">
             Restart live Claude terminals before continuing old conversations after switching.
@@ -176,9 +201,9 @@ function ClaudeSwitcherMenu({
       <DropdownMenuItem
         onSelect={() => {
           openSettingsTarget({
-            pane: 'general',
+            pane: 'accounts',
             repoId: null,
-            sectionId: 'general-claude-accounts'
+            sectionId: 'accounts-claude'
           })
           openSettingsPage()
         }}
@@ -205,6 +230,66 @@ function MiniBar({ leftPct }: { leftPct: number }): React.JSX.Element {
 }
 
 // ---------------------------------------------------------------------------
+// Inline usage bars (compact bars for inactive accounts in the switcher)
+// ---------------------------------------------------------------------------
+
+function InlineUsageBars({
+  limits,
+  isFetching
+}: {
+  limits: ProviderRateLimits
+  isFetching: boolean
+}): React.JSX.Element {
+  const sessionLeft = limits.session
+    ? Math.max(0, Math.round(100 - limits.session.usedPercent))
+    : null
+  const weeklyLeft = limits.weekly ? Math.max(0, Math.round(100 - limits.weekly.usedPercent)) : null
+
+  return (
+    <div className={`flex w-full items-center gap-2 ${isFetching ? 'animate-pulse' : ''}`}>
+      {sessionLeft !== null && (
+        <div className="flex flex-1 items-center gap-1">
+          <div className="h-[4px] flex-1 overflow-hidden rounded-full bg-muted">
+            <div
+              className={`h-full rounded-full ${barColor(sessionLeft)}`}
+              style={{ width: `${sessionLeft}%` }}
+            />
+          </div>
+          <span className="text-[10px] tabular-nums text-muted-foreground shrink-0">
+            {sessionLeft}% 5h
+          </span>
+        </div>
+      )}
+      {weeklyLeft !== null && (
+        <div className="flex flex-1 items-center gap-1">
+          <div className="h-[4px] flex-1 overflow-hidden rounded-full bg-muted">
+            <div
+              className={`h-full rounded-full ${barColor(weeklyLeft)}`}
+              style={{ width: `${weeklyLeft}%` }}
+            />
+          </div>
+          <span className="text-[10px] tabular-nums text-muted-foreground shrink-0">
+            {weeklyLeft}% wk
+          </span>
+        </div>
+      )}
+      {limits.status === 'error' && !limits.session && !limits.weekly && (
+        <span className="text-[10px] text-muted-foreground">Sign in to see usage</span>
+      )}
+    </div>
+  )
+}
+
+function InlineUsageSkeleton(): React.JSX.Element {
+  return (
+    <div className="flex w-full animate-pulse items-center gap-2">
+      <div className="h-[4px] flex-1 rounded-full bg-muted" />
+      <div className="h-[4px] flex-1 rounded-full bg-muted" />
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Window label (shows percent remaining)
 // ---------------------------------------------------------------------------
 
@@ -220,6 +305,10 @@ function WindowLabel({ w, label }: { w: RateLimitWindow; label: string }): React
 // ---------------------------------------------------------------------------
 // Provider segment
 // ---------------------------------------------------------------------------
+
+// Why: only Flash and the latest Pro are shown in the status bar —
+// the rest (Flash Lite, experimental) are secondary and would clutter the bar.
+const STATUS_BAR_BUCKET_NAMES = new Set(['Flash', 'Pro', '1.5 Pro'])
 
 function ProviderSegment({
   p,
@@ -273,13 +362,40 @@ function ProviderSegment({
 
   // Has data (ok, fetching with stale data, or error with stale data)
   const isStale = p.status === 'error'
+
+  if (p.buckets && p.buckets.length > 0) {
+    const visibleBuckets = p.buckets.filter((b) => STATUS_BAR_BUCKET_NAMES.has(b.name))
+    return (
+      <span className="inline-flex items-center gap-1.5">
+        <ProviderIcon provider={provider} />
+        {visibleBuckets.map((bucket, i) => {
+          const left = Math.max(0, Math.round(100 - bucket.usedPercent))
+          return (
+            <React.Fragment key={bucket.name}>
+              {i > 0 && <span className="text-muted-foreground">&middot;</span>}
+              <span className="tabular-nums">
+                {bucket.name} {left}%
+              </span>
+            </React.Fragment>
+          )
+        })}
+        {visibleBuckets.length === 0 && p.session && (
+          <WindowLabel w={p.session} label={formatWindowLabel(p.session.windowMinutes)} />
+        )}
+        {isStale && <AlertTriangle size={11} className="text-muted-foreground/80" />}
+      </span>
+    )
+  }
+
   return (
     <span className="inline-flex items-center gap-1.5">
       <ProviderIcon provider={provider} />
       {p.session && !compact && <MiniBar leftPct={Math.max(0, 100 - p.session.usedPercent)} />}
-      {p.session && <WindowLabel w={p.session} label="5h" />}
+      {p.session && (
+        <WindowLabel w={p.session} label={formatWindowLabel(p.session.windowMinutes)} />
+      )}
       {p.session && p.weekly && <span className="text-muted-foreground">&middot;</span>}
-      {p.weekly && <WindowLabel w={p.weekly} label="wk" />}
+      {p.weekly && <WindowLabel w={p.weekly} label={formatWindowLabel(p.weekly.windowMinutes)} />}
       {isStale && <AlertTriangle size={11} className="text-muted-foreground/80" />}
     </span>
   )
@@ -304,6 +420,8 @@ function CodexSwitcherMenu({
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
+  const fetchInactiveCodexAccountUsage = useAppStore((s) => s.fetchInactiveCodexAccountUsage)
+  const inactiveCodexAccounts = useAppStore((s) => s.rateLimits.inactiveCodexAccounts)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
   const codexRestartNoticeByPtyId = useAppStore((s) => s.codexRestartNoticeByPtyId)
@@ -364,6 +482,12 @@ function CodexSwitcherMenu({
       setAccountsExpanded(false)
     }
   }, [open])
+
+  useEffect(() => {
+    if (accountsExpanded) {
+      void fetchInactiveCodexAccountUsage()
+    }
+  }, [accountsExpanded, fetchInactiveCodexAccountUsage])
 
   const activeAccountLabel =
     accounts.activeAccountId === null
@@ -429,22 +553,38 @@ function CodexSwitcherMenu({
             {availableSwitchTargets.length === 0 ? (
               <div className="px-2 py-1.5 text-[11px] text-muted-foreground">No other accounts</div>
             ) : null}
-            {availableSwitchTargets.map((target) => (
-              <DropdownMenuItem
-                key={target.id ?? 'system'}
-                onSelect={(event) => {
-                  // Why: account switching may need an immediate follow-up
-                  // restart action for live Codex tabs. Prevent the menu from
-                  // auto-closing so that prompt can stay within the same
-                  // account-switcher interaction instead of jumping elsewhere.
-                  event.preventDefault()
-                  void handleSelectAccount(target.id)
-                }}
-                disabled={isSwitching}
-              >
-                <span className="truncate">{target.label}</span>
-              </DropdownMenuItem>
-            ))}
+            {availableSwitchTargets.map((target) => {
+              const inactiveUsage = target.id
+                ? inactiveCodexAccounts.find((a) => a.accountId === target.id)
+                : null
+
+              return (
+                <DropdownMenuItem
+                  key={target.id ?? 'system'}
+                  onSelect={(event) => {
+                    // Why: account switching may need an immediate follow-up
+                    // restart action for live Codex tabs. Prevent the menu from
+                    // auto-closing so that prompt can stay within the same
+                    // account-switcher interaction instead of jumping elsewhere.
+                    event.preventDefault()
+                    void handleSelectAccount(target.id)
+                  }}
+                  disabled={isSwitching}
+                >
+                  <div className="flex w-full flex-col gap-0.5">
+                    <span className="truncate">{target.label}</span>
+                    {inactiveUsage?.isFetching && !inactiveUsage.claude ? (
+                      <InlineUsageSkeleton />
+                    ) : inactiveUsage?.claude ? (
+                      <InlineUsageBars
+                        limits={inactiveUsage.claude}
+                        isFetching={inactiveUsage.isFetching}
+                      />
+                    ) : null}
+                  </div>
+                </DropdownMenuItem>
+              )
+            })}
           </div>
         </div>
       ) : null}
@@ -481,9 +621,9 @@ function CodexSwitcherMenu({
       <DropdownMenuItem
         onSelect={() => {
           openSettingsTarget({
-            pane: 'general',
+            pane: 'accounts',
             repoId: null,
-            sectionId: 'general-codex-accounts'
+            sectionId: 'accounts-codex'
           })
           openSettingsPage()
         }}
@@ -525,7 +665,13 @@ function ProviderDetailsMenu({
                 className={`inline-block h-2 w-2 rounded-full ${provider.session || provider.weekly ? 'bg-muted-foreground/60' : 'bg-muted-foreground/30'}`}
               />
               <span className="text-muted-foreground">
-                {provider.provider === 'claude' ? 'C' : 'X'}
+                {provider.provider === 'claude'
+                  ? 'C'
+                  : provider.provider === 'gemini'
+                    ? 'G'
+                    : provider.provider === 'opencode-go'
+                      ? 'O'
+                      : 'X'}
               </span>
             </span>
           ) : (
@@ -608,7 +754,7 @@ function StatusBarInner(): React.JSX.Element | null {
     return null
   }
 
-  const { claude, codex } = rateLimits
+  const { claude, codex, gemini, opencodeGo } = rateLimits
 
   // Why: hiding `unavailable` providers makes the status bar appear to lose a
   // provider at random after refreshes or wake/resume. Keeping the slot visible
@@ -616,11 +762,20 @@ function StatusBarInner(): React.JSX.Element | null {
   // configured but currently unavailable.
   const showClaude = claude && statusBarItems.includes('claude')
   const showCodex = codex && statusBarItems.includes('codex')
+  // Why: hide only when the state hasn't loaded yet (null), not when unavailable.
+  // Gemini shows if credentials exist; OpenCode Go shows always so users can see
+  // the provider and know to configure the cookie in Settings.
+  const showGemini = gemini !== null && statusBarItems.includes('gemini')
+  const showOpencodeGo = opencodeGo !== null && statusBarItems.includes('opencode-go')
   const showSsh = statusBarItems.includes('ssh')
   const showSessions = statusBarItems.includes('sessions')
   const showMemory = statusBarItems.includes('memory')
-  const anyVisible = showClaude || showCodex
-  const anyFetching = claude?.status === 'fetching' || codex?.status === 'fetching'
+  const anyVisible = showClaude || showCodex || showGemini || showOpencodeGo || showMemory
+  const anyFetching =
+    claude?.status === 'fetching' ||
+    codex?.status === 'fetching' ||
+    gemini?.status === 'fetching' ||
+    opencodeGo?.status === 'fetching'
 
   const compact = containerWidth < 900
   const iconOnly = containerWidth < 500
@@ -646,6 +801,22 @@ function StatusBarInner(): React.JSX.Element | null {
       <div className="flex items-center gap-3">
         {showClaude && <ClaudeSwitcherMenu claude={claude} compact={compact} iconOnly={iconOnly} />}
         {showCodex && <CodexSwitcherMenu codex={codex} compact={compact} iconOnly={iconOnly} />}
+        {showGemini && (
+          <ProviderDetailsMenu
+            provider={gemini}
+            compact={compact}
+            iconOnly={iconOnly}
+            ariaLabel="Open Gemini usage details"
+          />
+        )}
+        {showOpencodeGo && (
+          <ProviderDetailsMenu
+            provider={opencodeGo}
+            compact={compact}
+            iconOnly={iconOnly}
+            ariaLabel="Open OpenCode Go usage details"
+          />
+        )}
         {anyVisible && (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -700,6 +871,20 @@ function StatusBarInner(): React.JSX.Element | null {
           >
             <OpenAIIcon size={14} />
             Codex Usage
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuCheckboxItem
+            checked={statusBarItems.includes('gemini')}
+            onCheckedChange={() => toggleStatusBarItem('gemini')}
+          >
+            <GeminiIcon size={14} />
+            Gemini Usage
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuCheckboxItem
+            checked={statusBarItems.includes('opencode-go')}
+            onCheckedChange={() => toggleStatusBarItem('opencode-go')}
+          >
+            <OpenCodeGoIcon size={14} />
+            OpenCode Go Usage
           </DropdownMenuCheckboxItem>
           <DropdownMenuCheckboxItem
             checked={statusBarItems.includes('ssh')}

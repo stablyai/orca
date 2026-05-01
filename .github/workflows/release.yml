@@ -122,8 +122,23 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version-file: .nvmrc
+          node-version-file: package.json
           cache: pnpm
+
+      # Why: release builds hit the same native-module postinstall path as
+      # PR CI, so keep the pinned node-gyp override here too instead of
+      # relying on pnpm's bundled copy. Scoped to Linux via runner.os (not
+      # a specific matrix image) because the failing postinstall has only
+      # been observed on Linux runners — see run 25081763129. The macOS
+      # and Windows release jobs exercise the same pnpm install path and
+      # have not reproduced it, so keep the gate narrow until we know why.
+      # Using runner.os instead of matrix.os == 'ubuntu-latest' means the
+      # gate still works if another Linux matrix entry is added later.
+      - name: Use external node-gyp to avoid pnpm's bundled copy (Linux only)
+        if: runner.os == 'Linux'
+        run: |
+          npm install -g node-gyp@11.5.0
+          echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
 
       # Cache the Electron binary + electron-builder tool downloads (notarytool,
       # winCodeSign, nsis, squirrel, AppImage). Saves ~30-90s per job, incl. mac.

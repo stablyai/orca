@@ -282,7 +282,9 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         // Why: clone destination may be a WSL path (e.g. user picks a WSL
         // directory). Use the parent destination as the cwd so the runner
         // detects WSL and routes through wsl.exe.
-        const proc = gitSpawn(['clone', '--progress', args.url, clonePath], {
+        // Why: use the '--' separator to isolate the URL argument and prevent
+        // malicious URLs from being interpreted as git flags (command injection).
+        const proc = gitSpawn(['clone', '--progress', '--', args.url, clonePath], {
           cwd: args.destination,
           stdio: ['ignore', 'ignore', 'pipe']
         })

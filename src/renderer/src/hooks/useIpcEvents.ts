@@ -17,6 +17,7 @@ import { handleSwitchTab, handleSwitchTerminalTab } from './ipc-tab-switch'
 import { dispatchClearModifierHints } from './useModifierHint'
 import { normalizeAgentStatusPayload } from '../../../shared/agent-status-types'
 import { isGitRepoKind } from '../../../shared/repo-kind'
+import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 
 export { resolveZoomTarget } from './resolve-zoom-target'
 
@@ -41,6 +42,30 @@ export function useIpcEvents(): void {
     unsubs.push(
       window.api.ui.onOpenSettings(() => {
         useAppStore.getState().openSettingsPage()
+      })
+    )
+
+    // Why: the View > Appearance menu toggles settings directly in main (so
+    // checkbox state reflects the persisted value without a round-trip) and
+    // broadcasts the change. Merge it into the store so the sidebar and
+    // titlebar re-render immediately instead of waiting for the next
+    // fetchSettings() call.
+    unsubs.push(
+      window.api.settings.onChanged((updates) => {
+        const store = useAppStore.getState()
+        if (!store.settings) {
+          return
+        }
+        useAppStore.setState({
+          settings: {
+            ...store.settings,
+            ...updates,
+            notifications: {
+              ...store.settings.notifications,
+              ...updates.notifications
+            }
+          }
+        })
       })
     )
 
@@ -476,6 +501,7 @@ export function useIpcEvents(): void {
         const order = base.filter((id) => id !== newTab.id)
         order.push(newTab.id)
         store.setTabBarOrder(worktreeId, order)
+        focusTerminalTabSurface(newTab.id)
       })
     )
 

@@ -6,8 +6,8 @@ import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
-const source = path.join(repoRoot, 'bin', 'orca-dev')
+const scriptDir = path.dirname(fileURLToPath(import.meta.url))
+const source = path.join(scriptDir, 'orca-dev')
 
 const commandPath =
   process.platform === 'darwin' || process.platform === 'linux'

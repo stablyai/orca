@@ -1,18 +1,10 @@
 import React from 'react'
-import { Github, List } from 'lucide-react'
+import { List } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useRepoMap } from '@/store/selectors'
 import { cn } from '@/lib/utils'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getTaskPresetQuery, PER_REPO_FETCH_LIMIT } from '@/lib/new-workspace'
-
-function LinearIcon({ className }: { className?: string }): React.JSX.Element {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden className={className} fill="currentColor">
-      <path d="M2.886 4.18A11.982 11.982 0 0 1 11.99 0C18.624 0 24 5.376 24 12.009c0 3.64-1.62 6.903-4.18 9.105L2.887 4.18ZM1.817 5.626l16.556 16.556c-.524.33-1.075.62-1.65.866L.951 7.277c.247-.575.537-1.126.866-1.65ZM.322 9.163l14.515 14.515c-.71.172-1.443.282-2.195.322L0 11.358a12 12 0 0 1 .322-2.195Zm-.17 4.862 9.823 9.824a12.02 12.02 0 0 1-9.824-9.824Z" />
-    </svg>
-  )
-}
 
 const SidebarNav = React.memo(function SidebarNav() {
   const openTaskPage = useAppStore((s) => s.openTaskPage)
@@ -20,7 +12,9 @@ const SidebarNav = React.memo(function SidebarNav() {
   const repos = useAppStore((s) => s.repos)
   const repoMap = useRepoMap()
   const canBrowseTasks = repos.some((repo) => isGitRepoKind(repo))
-  const showTaskProviderIcons = useAppStore((s) => s.settings?.showTaskProviderIcons !== false)
+  // Why: the setting is opt-out (default true). `!== false` keeps the button
+  // visible for users whose persisted settings predate this field.
+  const showTasksButton = useAppStore((s) => s.settings?.showTasksButton !== false)
 
   // Why: warm the GitHub work-item cache on hover/focus so by the time the
   // user's click finishes the round-trip has either completed or is already
@@ -51,6 +45,10 @@ const SidebarNav = React.memo(function SidebarNav() {
 
   const tasksActive = activeView === 'tasks'
 
+  if (!showTasksButton) {
+    return null
+  }
+
   return (
     <div className="flex flex-col gap-0.5 px-2 pt-2 pb-1">
       <button
@@ -75,38 +73,6 @@ const SidebarNav = React.memo(function SidebarNav() {
       >
         <List className="size-4 shrink-0" strokeWidth={2.25} />
         <span className="flex-1">Tasks</span>
-        {showTaskProviderIcons ? (
-          <span className="flex items-center gap-1">
-            <span
-              role="button"
-              tabIndex={-1}
-              onClick={(e) => {
-                e.stopPropagation()
-                if (!canBrowseTasks) {
-                  return
-                }
-                openTaskPage({ taskSource: 'github' })
-              }}
-              className="rounded p-0.5 text-muted-foreground/70 transition-colors hover:text-foreground"
-            >
-              <Github className="size-3.5" aria-hidden />
-            </span>
-            <span
-              role="button"
-              tabIndex={-1}
-              onClick={(e) => {
-                e.stopPropagation()
-                if (!canBrowseTasks) {
-                  return
-                }
-                openTaskPage({ taskSource: 'linear' })
-              }}
-              className="rounded p-0.5 text-muted-foreground/70 transition-colors hover:text-foreground"
-            >
-              <LinearIcon className="size-3.5" />
-            </span>
-          </span>
-        ) : null}
       </button>
     </div>
   )

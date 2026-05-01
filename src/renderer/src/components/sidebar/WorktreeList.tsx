@@ -566,7 +566,7 @@ const WorktreeList = React.memo(function WorktreeList() {
     // O(N × E × T) per sortEpoch bump. Only smart mode uses the score map;
     // other modes ignore it.
     // Why: smart-sort only weighs live agent status when the experimental
-    // Agent Dashboard is opted in — that's the surface that populates
+    // agent-activity feature is opted in — that's what populates
     // agentStatusByPaneKey via hooks. With the setting off, pass undefined
     // so the comparator falls back to the persisted-sortOrder + title
     // heuristics instead of scoring against an empty map.

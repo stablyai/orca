@@ -16,6 +16,7 @@ import { join } from 'node:path'
 import { ORCA_BROWSER_PARTITION } from '../../shared/constants'
 import type { BrowserSessionProfile, BrowserSessionProfileScope } from '../../shared/types'
 import { browserManager } from './browser-manager'
+import { hasSystemMediaAccess, requestSystemMediaAccess } from './browser-media-access'
 import { cleanElectronUserAgent, setupClientHintsOverride } from './browser-session-ua'
 
 type BrowserSessionMeta = {
@@ -358,7 +359,39 @@ class BrowserSessionRegistry {
     // clipboard commands to work. Without these, navigator.clipboard.writeText/readText
     // throws NotAllowedError even when invoked via CDP with userGesture:true.
     const autoGranted = new Set(['fullscreen', 'clipboard-read', 'clipboard-sanitized-write'])
-    sess.setPermissionRequestHandler((webContents, permission, callback) => {
+    sess.setPermissionRequestHandler((webContents, permission, callback, details) => {
+      // Why: `media` (camera/mic) must defer to macOS TCC instead of being
+      // denied outright. Denying at the session layer would make pages inside
+      // isolated browser profiles throw NotAllowedError even after the user
+      // granted Camera/Microphone to Orca — the same bug we fixed for the
+      // default partition. macOS TCC still gates the actual stream, so
+      // granting here only forwards what the OS has already authorized.
+      if (permission === 'media') {
+        void requestSystemMediaAccess(
+          details as Electron.MediaAccessPermissionRequest | undefined
+        ).then(
+          (granted) => {
+            if (!granted) {
+              browserManager.notifyPermissionDenied({
+                guestWebContentsId: webContents.id,
+                permission,
+                rawUrl: webContents.getURL()
+              })
+            }
+            callback(granted)
+          },
+          (error: unknown) => {
+            console.error('[permissions] Browser media access failed:', error)
+            browserManager.notifyPermissionDenied({
+              guestWebContentsId: webContents.id,
+              permission,
+              rawUrl: webContents.getURL()
+            })
+            callback(false)
+          }
+        )
+        return
+      }
       const allowed = autoGranted.has(permission)
       if (!allowed) {
         browserManager.notifyPermissionDenied({
@@ -369,7 +402,10 @@ class BrowserSessionRegistry {
       }
       callback(allowed)
     })
-    sess.setPermissionCheckHandler((_webContents, permission) => {
+    sess.setPermissionCheckHandler((_webContents, permission, _origin, details) => {
+      if (permission === 'media') {
+        return hasSystemMediaAccess(details?.mediaType)
+      }
       return autoGranted.has(permission)
     })
     sess.setDisplayMediaRequestHandler((_request, callback) => {

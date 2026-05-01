@@ -22,12 +22,28 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version-file: .nvmrc
+          node-version-file: package.json
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           run_install: false
+
+      # Why: pnpm's bundled node-gyp ships gyp_main.py without execute
+      # permission, which breaks native module builds (e.g. node-pty's
+      # postinstall) with "/bin/sh: gyp_main.py: Permission denied".
+      # Pin the fallback to the lockfile's node-gyp version so CI stays
+      # reproducible while forcing pnpm to bypass its broken bundled copy.
+      # Gate on runner.os == 'Linux' to match release.yml — the
+      # npm-global path layout this step assumes is POSIX-shaped, and the
+      # failure has only been observed on Linux runners. Today this job
+      # pins runs-on: ubuntu-latest so the guard is a no-op, but it
+      # prevents a silent break if a Windows/macOS matrix is added later.
+      - name: Use external node-gyp to avoid pnpm's bundled copy (Linux only)
+        if: runner.os == 'Linux'
+        run: |
+          npm install -g node-gyp@11.5.0
+          echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

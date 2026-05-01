@@ -1,63 +1,9 @@
-import { createReadStream } from 'fs'
-import type { SFTPWrapper, ClientChannel } from 'ssh2'
+import type { ClientChannel } from 'ssh2'
 import type { SshConnection } from './ssh-connection'
 import { RELAY_SENTINEL, RELAY_SENTINEL_TIMEOUT_MS } from './relay-protocol'
 import type { MultiplexerTransport } from './ssh-channel-multiplexer'
 
-// ── SFTP upload helpers ───────────────────────────────────────────────
-
-export async function uploadDirectory(
-  sftp: SFTPWrapper,
-  localDir: string,
-  remoteDir: string
-): Promise<void> {
-  const { readdirSync, statSync } = await import('fs')
-  const { join: pathJoin } = await import('path')
-
-  const entries = readdirSync(localDir)
-  for (const entry of entries) {
-    const localPath = pathJoin(localDir, entry)
-    const remotePath = `${remoteDir}/${entry}`
-    const stat = statSync(localPath)
-
-    if (stat.isDirectory()) {
-      await mkdirSftp(sftp, remotePath)
-      await uploadDirectory(sftp, localPath, remotePath)
-    } else {
-      await uploadFile(sftp, localPath, remotePath)
-    }
-  }
-}
-
-export function mkdirSftp(sftp: SFTPWrapper, path: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    sftp.mkdir(path, (err) => {
-      // Ignore "already exists" errors (SFTP status code 4 = SSH_FX_FAILURE)
-      if (err && (err as { code?: number }).code !== 4) {
-        reject(err)
-      } else {
-        resolve()
-      }
-    })
-  })
-}
-
-export function uploadFile(
-  sftp: SFTPWrapper,
-  localPath: string,
-  remotePath: string
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const readStream = createReadStream(localPath)
-    const writeStream = sftp.createWriteStream(remotePath)
-
-    writeStream.on('close', resolve)
-    writeStream.on('error', reject)
-    readStream.on('error', reject)
-
-    readStream.pipe(writeStream)
-  })
-}
+export { uploadFile, uploadDirectory, mkdirSftp } from './sftp-upload'
 
 // ── Sentinel detection ────────────────────────────────────────────────
 

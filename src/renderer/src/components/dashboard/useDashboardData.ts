@@ -9,7 +9,7 @@ import {
 } from '../../../../shared/agent-status-types'
 import type { Repo, Worktree, TerminalTab } from '../../../../shared/types'
 
-// ─── Dashboard data types ─────────────────────────────────────────────────────
+// ─── Shared data types ────────────────────────────────────────────────────────
 
 export type DashboardAgentRow = {
   paneKey: string
@@ -23,19 +23,14 @@ export type DashboardAgentRow = {
   startedAt: number
 }
 
+// Why: the shape here is deliberately minimal — just what useRetainedAgentsSync
+// needs to diff liveGroups and decide which vanished agents to retain. The
+// per-card rendering pipeline is separate (WorktreeCardAgents +
+// useWorktreeAgentRows read retained entries directly from the store).
 export type DashboardWorktreeCard = {
   repo: Repo
   worktree: Worktree
   agents: DashboardAgentRow[]
-  /** Highest-priority agent state for filtering.
-   *  Priority: blocked > working > done > idle.
-   *  `waiting` is folded into `blocked` — both are attention-needed states. */
-  dominantState: 'working' | 'blocked' | 'done' | 'idle'
-  /** Earliest startedAt across all agents in this worktree. Once the worktree
-   *  has at least one agent, this value is stable — new agents starting in
-   *  the same worktree do not change it. Sorting worktrees by this value
-   *  asc keeps list order stable while the user is reading. */
-  earliestStartedAt: number
 }
 
 export type DashboardRepoGroup = {
@@ -45,39 +40,11 @@ export type DashboardRepoGroup = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-export function computeDominantState(
-  agents: DashboardAgentRow[]
-): DashboardWorktreeCard['dominantState'] {
-  if (agents.length === 0) {
-    return 'idle'
-  }
-  let hasWorking = false
-  let hasDone = false
-  for (const agent of agents) {
-    if (agent.state === 'blocked' || agent.state === 'waiting') {
-      return 'blocked'
-    }
-    if (agent.state === 'working') {
-      hasWorking = true
-    }
-    if (agent.state === 'done') {
-      hasDone = true
-    }
-  }
-  if (hasWorking) {
-    return 'working'
-  }
-  if (hasDone) {
-    return 'done'
-  }
-  return 'idle'
-}
-
-// Why: the dashboard only surfaces agents that have reported state via a hook.
-// A tab hosting a shell, a REPL before its first turn, or an agent we have no
-// hook integration for will have no entry here — and that's correct. The
-// dashboard's job is to show *agent work in progress*, not to guess which
-// terminals might contain an agent.
+// Why: only surface agents that have reported state via a hook. A tab hosting
+// a shell, a REPL before its first turn, or an agent we have no hook
+// integration for will have no entry here — and that's correct. Agent rows
+// represent *agent work in progress*, not "which terminals might contain an
+// agent".
 function buildAgentRowsForWorktree(
   worktreeId: string,
   tabsByWorktree: Record<string, TerminalTab[]>,
@@ -132,9 +99,9 @@ function buildDashboardData(
   agentStatusByPaneKey: Record<string, AgentStatusEntry>,
   now: number
 ): DashboardRepoGroup[] {
-  // Why: build a tabId -> entries index once per dashboard computation instead
-  // of re-scanning every agent status entry inside the per-tab loop. paneKey
-  // is formatted as `${tabId}:${paneId}`; splitting on the first ':' lets us
+  // Why: build a tabId -> entries index once per computation instead of
+  // re-scanning every agent status entry inside the per-tab loop. paneKey is
+  // formatted as `${tabId}:${paneId}`; splitting on the first ':' lets us
   // bucket entries by tab in a single O(N) pass, turning the per-worktree
   // build from O(tabs × statuses) into O(tabs).
   const entriesByTabId = new Map<string, AgentStatusEntry[]>()
@@ -157,25 +124,7 @@ function buildDashboardData(
       .filter((w) => !w.isArchived)
       .map((worktree) => {
         const agents = buildAgentRowsForWorktree(worktree.id, tabsByWorktree, entriesByTabId, now)
-        // Why: sort agents within a worktree oldest-first by startedAt. A new
-        // agent appears at the BOTTOM so it doesn't shove the row the user
-        // is currently reading down the list. Stable order also means
-        // retained/live transitions don't reshuffle siblings. Users care
-        // less about "which is newest" than "let this list stop moving
-        // while I read it".
-        agents.sort((a, b) => a.startedAt - b.startedAt)
-        // Why: earliestStartedAt (oldest agent in the worktree) is stable once
-        // the worktree has any agent at all. Using it for outer sorts means
-        // a brand-new agent in a different worktree no longer shoves this
-        // card around while the user is reading.
-        const earliestStartedAt = agents.length > 0 ? agents[0].startedAt : 0
-        return {
-          repo,
-          worktree,
-          agents,
-          dominantState: computeDominantState(agents),
-          earliestStartedAt
-        } satisfies DashboardWorktreeCard
+        return { repo, worktree, agents } satisfies DashboardWorktreeCard
       })
 
     return { repo, worktrees } satisfies DashboardRepoGroup
@@ -184,6 +133,21 @@ function buildDashboardData(
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
+// Why: stable empty array reference so the memo returns the same
+// value each call when the feature is off. Without this, fresh [] per
+// memo run churns downstream effect deps and re-fires them on every
+// PTY agent-status tick purely to early-return.
+const EMPTY_GROUPS: DashboardRepoGroup[] = []
+
+/**
+ * Cross-worktree aggregate of live agent rows. Used by useRetainedAgentsSync
+ * to drive retention: when a previously-live 'done' agent disappears from
+ * this set, its snapshot is moved into retainedAgentsByPaneKey so the inline
+ * per-card list can still render it.
+ *
+ * Not used to render anything directly — the inline list reads its own
+ * worktree-scoped slice via useWorktreeAgentRows.
+ */
 export function useDashboardData(): DashboardRepoGroup[] {
   const repos = useAppStore((s) => s.repos)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
@@ -203,11 +167,11 @@ export function useDashboardData(): DashboardRepoGroup[] {
     () => {
       // Why: experimental-setting gate inside the memo avoids the
       // O(repos × worktrees × agents) rebuild on every store update when the
-      // dashboard is disabled. Store selectors still subscribe to keep
+      // feature is disabled. Store selectors still subscribe to keep
       // rules-of-hooks satisfied and so flipping the setting re-renders
       // consumers.
       if (!dashboardEnabled) {
-        return []
+        return EMPTY_GROUPS
       }
       return buildDashboardData(
         repos,

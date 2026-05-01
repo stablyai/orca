@@ -3,7 +3,7 @@ import type { ITerminalOptions } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 // Upstream packaging bug: @xterm/addon-ligatures declares `"main":
 // "lib/addon-ligatures.js"` but ships only the `.mjs` entry, so Vite fails to
-// resolve the bare import. Fixed locally via patches/@xterm__addon-ligatures*.
+// resolve the bare import. Fixed locally via config/patches/@xterm__addon-ligatures*.
 // Tracking upstream: https://github.com/xtermjs/xterm.js/issues/5822 — drop
 // the patch once that lands.
 import { LigaturesAddon } from '@xterm/addon-ligatures'
@@ -121,7 +121,8 @@ export function createPaneDOM(
     webglAddon: null,
     ligaturesAddon: null,
     compositionHandler: null,
-    pendingSplitScrollState: null
+    pendingSplitScrollState: null,
+    debugLabel: options.debugLabel ?? null
   }
 
   // Focus handler: clicking a pane makes it active and explicitly focuses

@@ -524,6 +524,55 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
+  it('runs the archive hook on remove when skipArchive is not set', async () => {
+    listWorktreesMock.mockResolvedValue([])
+    removeWorktreeMock.mockResolvedValue(undefined)
+    getEffectiveHooksMock.mockReturnValue({
+      scripts: {
+        archive: 'echo archived'
+      }
+    })
+    runHookMock.mockResolvedValue({ success: true, output: '' })
+
+    await handlers['worktrees:remove'](null, {
+      worktreeId: 'repo-1::/workspace/feature-wt'
+    })
+
+    expect(runHookMock).toHaveBeenCalledWith(
+      'archive',
+      '/workspace/feature-wt',
+      expect.objectContaining({ id: 'repo-1' })
+    )
+    expect(removeWorktreeMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      '/workspace/feature-wt',
+      false
+    )
+  })
+
+  it('skips the archive hook on remove when skipArchive is true', async () => {
+    listWorktreesMock.mockResolvedValue([])
+    removeWorktreeMock.mockResolvedValue(undefined)
+    getEffectiveHooksMock.mockReturnValue({
+      scripts: {
+        archive: 'echo archived'
+      }
+    })
+    runHookMock.mockResolvedValue({ success: true, output: '' })
+
+    await handlers['worktrees:remove'](null, {
+      worktreeId: 'repo-1::/workspace/feature-wt',
+      skipArchive: true
+    })
+
+    expect(runHookMock).not.toHaveBeenCalled()
+    expect(removeWorktreeMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      '/workspace/feature-wt',
+      false
+    )
+  })
+
   it('rejects ask-policy creates before mutating git state when setup decision is missing', async () => {
     getEffectiveHooksMock.mockReturnValue({
       scripts: {

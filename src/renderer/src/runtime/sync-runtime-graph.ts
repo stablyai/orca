@@ -13,6 +13,13 @@ type RegisteredTerminalTab = {
 }
 
 const registeredTabs = new Map<string, RegisteredTerminalTab>()
+// Why: track when each tab was registered so we can suppress the "no live
+// transport" warning during the initial PTY connection window. The warning
+// is noise when it fires on mount (PTY spawn/attach is async and hasn't
+// finished yet), but valuable if the transport is still missing after the
+// grace period — that indicates a real stuck state.
+const tabRegisteredAt = new Map<string, number>()
+const NO_TRANSPORT_GRACE_MS = 10_000
 let syncScheduled = false
 let syncEnabled = false
 let getStoreState: (() => AppState) | null = null
@@ -23,9 +30,11 @@ export function setRuntimeGraphStoreStateGetter(getter: (() => AppState) | null)
 
 export function registerRuntimeTerminalTab(tab: RegisteredTerminalTab): () => void {
   registeredTabs.set(tab.tabId, tab)
+  tabRegisteredAt.set(tab.tabId, Date.now())
   scheduleRuntimeGraphSync()
   return () => {
     registeredTabs.delete(tab.tabId)
+    tabRegisteredAt.delete(tab.tabId)
     scheduleRuntimeGraphSync()
   }
 }
@@ -89,7 +98,8 @@ async function syncRuntimeGraph(): Promise<void> {
       const leafId = paneLeafId(pane.id)
       const ptyId = registeredTab.getPtyIdForPane(pane.id)
       const savedPtyId = savedPtyIdsByLeafId[leafId] ?? null
-      if (!ptyId && savedPtyId) {
+      const registeredTime = tabRegisteredAt.get(tabId) ?? 0
+      if (!ptyId && savedPtyId && Date.now() - registeredTime > NO_TRANSPORT_GRACE_MS) {
         warnTerminalLifecycleAnomaly('mounted terminal leaf has saved PTY but no live transport', {
           tabId,
           worktreeId: registeredTab.worktreeId,

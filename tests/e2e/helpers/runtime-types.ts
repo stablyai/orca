@@ -19,6 +19,8 @@ export type PaneManagerLike = {
   splitPane?(paneId: number, direction: 'vertical' | 'horizontal'): ManagedPane | null
   closePane?(paneId: number): void
   setActivePane?(paneId: number, opts?: { focus?: boolean }): void
+  suspendRendering?(): void
+  resumeRendering?(): void
 }
 
 export type ExplorerFileSummary = Pick<OpenFile, 'id' | 'filePath' | 'relativePath'>

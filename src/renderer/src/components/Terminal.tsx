@@ -34,6 +34,7 @@ import BrowserPaneOverlayLayer from './browser-pane/BrowserPaneOverlayLayer'
 import { handleSwitchTab, handleSwitchTerminalTab } from '../hooks/ipc-tab-switch'
 import TabGroupSplitLayout from './tab-group/TabGroupSplitLayout'
 import { shouldAutoCreateInitialTerminal } from './terminal/initial-terminal'
+import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import {
   getEffectiveLayoutForWorktree as getEffectiveLayout,
   anyMountedWorktreeHasLayout as computeAnyMountedWorktreeHasLayout
@@ -400,6 +401,12 @@ function Terminal(): React.JSX.Element | null {
       const order = base.filter((id) => id !== newTab.id)
       order.push(newTab.id)
       setTabBarOrder(activeWorktreeId, order)
+      // Why: keyboard (Cmd/Ctrl+T) creation should leave the user ready to type
+      // in the new shell. Without an explicit focus call, the window-level
+      // keydown handler keeps focus on whatever surface dispatched the shortcut
+      // (often <body>), so the first keystroke is dropped instead of reaching
+      // the new xterm. Matches the "+" menu path in TabBar.tsx.
+      focusTerminalTabSurface(newTab.id)
     },
     [activeWorktreeId, createTab, setActiveTabType, setTabBarOrder]
   )

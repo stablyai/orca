@@ -33,12 +33,24 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version-file: .nvmrc
+          node-version-file: package.json
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           run_install: false
+
+      # Why: this job runs the same pnpm install path as pr.yml's verify
+      # job, so it needs the same pinned node-gyp override to avoid pnpm's
+      # broken bundled gyp_main.py on Linux. Gate on runner.os matches
+      # release.yml so the invariant "this workaround is Linux-only" is
+      # consistent across all three workflows, even though this job
+      # currently pins runs-on: ubuntu-latest.
+      - name: Use external node-gyp to avoid pnpm's bundled copy (Linux only)
+        if: runner.os == 'Linux'
+        run: |
+          npm install -g node-gyp@11.5.0
+          echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
