@@ -72,7 +72,7 @@ const SidebarHeader = React.memo(function SidebarHeader() {
       <span className="px-2 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/80 select-none">
         Workspaces
       </span>
-      <div className="flex items-center gap-1.5 shrink-0">
+      <div className="flex min-w-0 flex-1 items-center justify-end gap-1.5">
         <SidebarFilter />
         <DropdownMenu>
           <Tooltip>
