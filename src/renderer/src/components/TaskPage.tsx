@@ -2231,7 +2231,12 @@ export default function TaskPage(): React.JSX.Element {
                       // <button> is invalid HTML and triggers React hydration
                       // errors that break rendering of the whole page.
                       <div
-                        key={item.id}
+                        // Why: combine repoId with item.id because two selected repos
+                        // that route issues through the same upstream (e.g. fork +
+                        // non-fork both resolving to stablyai/orca) surface the same
+                        // item.id under different repoIds. React treats a bare id as
+                        // a collision and warns + silently drops rows otherwise.
+                        key={`${item.repoId}:${item.id}`}
                         role="button"
                         tabIndex={0}
                         onClick={() => setDialogWorkItem(item)}
