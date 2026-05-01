@@ -3,11 +3,15 @@ import { CircleCheck } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 // Why: shared state-indicator primitive so the dashboard and the sidebar's
-// agent hover render the same state vocabulary identically. Most states render
-// as a dot; 'working' renders a spinner and 'done' renders a check icon. It
-// sits next to the agent icon (Claude/Codex/etc.) — two distinct glyphs: one
-// for *who* (agent icon) and one for *what state* (this indicator). Keeping
-// them separate keeps each scannable instead of fused into one decorated icon.
+// agent hover share a single state vocabulary. Most states render as a dot;
+// 'working' renders a spinner. 'done' intentionally diverges from the
+// sidebar's StatusIndicator: the dashboard uses a check icon so completion
+// is visually distinct from 'idle' (grey dot) and the sidebar's 'active'
+// (emerald dot), while the sidebar collapses 'done'/'active' to the same
+// emerald dot and relies on a tooltip. It sits next to the agent icon
+// (Claude/Codex/etc.) — two distinct glyphs: one for *who* (agent icon) and
+// one for *what state* (this indicator). Keeping them separate keeps each
+// scannable instead of fused into one decorated icon.
 
 export type AgentDotState =
   | 'working'
@@ -70,11 +74,10 @@ export const AgentStateDot = React.memo(function AgentStateDot({
   }
 
   if (state === 'done') {
-    // Why: match StatusIndicator — agent-reported completion renders as an
-    // emerald check icon instead of an emerald dot so 'done' is visually
-    // distinct from other emerald states (e.g., sidebar 'active'). Keeping
-    // the dashboard and sidebar on the same glyph for 'done' is the whole
-    // point of this shared primitive (see file header).
+    // Why: the dashboard lists many agents, so a check glyph scans well for
+    // agent-reported completion and keeps 'done' visually distinct from
+    // 'idle' and other dot states at a glance. The sidebar's StatusIndicator
+    // intentionally diverges (emerald dot + tooltip) — see file header.
     return (
       <span
         className={cn('inline-flex shrink-0 items-center justify-center', box, className)}

@@ -12,8 +12,9 @@ describe('AgentStateDot', () => {
     const markup = renderMarkup('done')
 
     // Why: 'done' renders a CircleCheck icon rather than a dot so it is
-    // visually distinct from other emerald-adjacent states across surfaces
-    // (mirrors StatusIndicator). Assertion targets the lucide 'circle-check'
+    // visually distinct from other emerald-adjacent states across surfaces.
+    // Note: the sidebar's StatusIndicator intentionally diverges and uses an
+    // emerald dot for 'done'. Assertion targets the lucide 'circle-check'
     // class hook + emerald text color, identifying the check icon without
     // coupling to the exact SVG path markup lucide emits.
     expect(markup).toContain('lucide-circle-check')
