@@ -619,6 +619,12 @@
   cursor: pointer;
 }
 
+.rich-markdown-mod-held
+  .rich-markdown-editor
+  .rich-markdown-doc-link.rich-markdown-doc-link--missing {
+  cursor: default;
+}
+
 /* In-progress [[target]] text while cursor is inside */
 .rich-markdown-editor .rich-markdown-doc-link-preview {
   color: #0969da;

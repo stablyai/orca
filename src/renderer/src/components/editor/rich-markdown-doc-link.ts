@@ -1,7 +1,8 @@
 import { Node, mergeAttributes } from '@tiptap/core'
-import { Plugin, PluginKey, TextSelection } from '@tiptap/pm/state'
+import { type EditorState, Plugin, PluginKey, TextSelection } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import type { MarkdownDocument } from '../../../../shared/types'
+import type { MarkdownDocumentIndex } from './markdown-doc-links'
 import {
   createMarkdownDocumentIndex,
   getMarkdownDocLinkTarget,
@@ -13,14 +14,57 @@ const DOC_LINK_PLACEHOLDER_SUFFIX = ']]'
 
 const DOC_LINK_PATTERN = /\[\[([^[\]\r\n|]+)\]\]/g
 
+const docLinkDissolveKey = new PluginKey('docLinkDissolve')
 const docLinkAutoConvertKey = new PluginKey('docLinkAutoConvert')
 const docLinkInlinePreviewKey = new PluginKey('docLinkInlinePreview')
 
-function isDocLinkResolved(target: string, documents: MarkdownDocument[]): boolean {
-  if (documents.length === 0) {
+type DocLinkStorage = {
+  documents: MarkdownDocument[]
+  _cachedDocs: MarkdownDocument[] | null
+  _cachedIndex: MarkdownDocumentIndex | null
+}
+
+function getDocIndex(storage: DocLinkStorage): MarkdownDocumentIndex | null {
+  if (storage.documents.length === 0) {
+    return null
+  }
+  if (storage._cachedDocs !== storage.documents) {
+    storage._cachedIndex = createMarkdownDocumentIndex(storage.documents)
+    storage._cachedDocs = storage.documents
+  }
+  return storage._cachedIndex
+}
+
+function buildPreviewDecorations(state: EditorState, storage: DocLinkStorage): DecorationSet {
+  const decorations: Decoration[] = []
+  const index = getDocIndex(storage)
+  state.doc.descendants((node, pos) => {
+    if (node.type.name !== 'text' || !node.text) {
+      return
+    }
+    DOC_LINK_PATTERN.lastIndex = 0
+    let match: RegExpExecArray | null = null
+    while ((match = DOC_LINK_PATTERN.exec(node.text)) !== null) {
+      const target = getMarkdownDocLinkTarget(match[1])
+      if (!target) {
+        continue
+      }
+      const from = pos + match.index
+      const to = from + match[0].length
+      const resolved = resolveAgainstIndex(target, index)
+      const cls = resolved
+        ? 'rich-markdown-doc-link-preview'
+        : 'rich-markdown-doc-link-preview rich-markdown-doc-link-preview--missing'
+      decorations.push(Decoration.inline(from, to, { class: cls }))
+    }
+  })
+  return DecorationSet.create(state.doc, decorations)
+}
+
+function resolveAgainstIndex(target: string, index: MarkdownDocumentIndex | null): boolean {
+  if (!index) {
     return false
   }
-  const index = createMarkdownDocumentIndex(documents)
   return resolveMarkdownDocLink(target, index).status === 'resolved'
 }
 
@@ -32,7 +76,11 @@ export const MarkdownDocLink = Node.create({
   selectable: true,
 
   addStorage() {
-    return { documents: [] as MarkdownDocument[] }
+    return {
+      documents: [] as MarkdownDocument[],
+      _cachedDocs: null as MarkdownDocument[] | null,
+      _cachedIndex: null as MarkdownDocumentIndex | null
+    }
   },
 
   addAttributes() {
@@ -83,7 +131,7 @@ export const MarkdownDocLink = Node.create({
     `[[${typeof node.attrs?.target === 'string' ? node.attrs.target : ''}]]`,
 
   addNodeView() {
-    const storage = this.storage as { documents: MarkdownDocument[] }
+    const storage = this.storage as DocLinkStorage
     return ({ node }: { node: { type: { name: string }; attrs: Record<string, unknown> } }) => {
       const getTarget = (n: { attrs: Record<string, unknown> }): string =>
         typeof n.attrs.target === 'string' ? n.attrs.target : ''
@@ -95,7 +143,7 @@ export const MarkdownDocLink = Node.create({
       dom.textContent = target
 
       const applyResolutionClass = (t: string): void => {
-        const resolved = isDocLinkResolved(t, storage.documents)
+        const resolved = resolveAgainstIndex(t, getDocIndex(storage))
         dom.className = resolved
           ? 'rich-markdown-doc-link'
           : 'rich-markdown-doc-link rich-markdown-doc-link--missing'
@@ -122,41 +170,55 @@ export const MarkdownDocLink = Node.create({
     }
   },
 
-  // Why: when the cursor is adjacent to a doc link atom and the user presses
-  // an arrow key toward it, dissolve the atom back to editable [[target]] text.
-  // Without this, atom nodes are un-enterable — the cursor jumps over them.
-  addKeyboardShortcuts() {
-    const dissolveDocLink = (direction: 'left' | 'right'): boolean => {
-      const { state, dispatch } = this.editor.view
-      const { $from } = state.selection
-      const adjacent = direction === 'left' ? $from.nodeBefore : $from.nodeAfter
-      if (!adjacent || adjacent.type.name !== 'markdownDocLink') {
-        return false
-      }
-      const target = typeof adjacent.attrs.target === 'string' ? adjacent.attrs.target : ''
-      const text = `[[${target}]]`
-      const nodeStart = direction === 'left' ? $from.pos - adjacent.nodeSize : $from.pos
-      const nodeEnd = nodeStart + adjacent.nodeSize
-      const tr = state.tr.replaceWith(nodeStart, nodeEnd, state.schema.text(text))
-      const cursorPos = direction === 'left' ? nodeStart + text.length - 2 : nodeStart + 2
-      tr.setSelection(TextSelection.create(tr.doc, cursorPos))
-      dispatch(tr)
-      return true
-    }
-
-    return {
-      ArrowLeft: () => dissolveDocLink('left'),
-      ArrowRight: () => dissolveDocLink('right')
-    }
-  },
-
   // Why: a ProseMirror plugin (not an input rule) so that [[target]] typed in
   // any order — brackets first then target, paste, etc. — converts to a doc
   // link node. Input rules only fire on sequential append at the cursor.
   addProseMirrorPlugins() {
     const nodeType = this.type
-    const storage = this.storage as { documents: MarkdownDocument[] }
+    const storage = this.storage as DocLinkStorage
     return [
+      // Why: when the cursor is adjacent to a doc link atom and the user presses
+      // an arrow key toward it, dissolve the atom back to editable [[target]] text.
+      // Without this, atom nodes are un-enterable — the cursor jumps over them.
+      // Uses handleKeyDown (not addKeyboardShortcuts) so we can check modifier
+      // keys and let Shift+Arrow extend the selection normally.
+      new Plugin({
+        key: docLinkDissolveKey,
+        props: {
+          handleKeyDown(view, event) {
+            if (event.shiftKey || event.altKey || event.metaKey || event.ctrlKey) {
+              return false
+            }
+            let direction: 'left' | 'right'
+            if (event.key === 'ArrowLeft') {
+              direction = 'left'
+            } else if (event.key === 'ArrowRight') {
+              direction = 'right'
+            } else {
+              return false
+            }
+            const { state } = view
+            if (!(state.selection instanceof TextSelection)) {
+              return false
+            }
+            const { $from } = state.selection
+            const adjacent = direction === 'left' ? $from.nodeBefore : $from.nodeAfter
+            if (!adjacent || adjacent.type.name !== 'markdownDocLink') {
+              return false
+            }
+            const target = typeof adjacent.attrs.target === 'string' ? adjacent.attrs.target : ''
+            const text = `[[${target}]]`
+            const nodeStart = direction === 'left' ? $from.pos - adjacent.nodeSize : $from.pos
+            const nodeEnd = nodeStart + adjacent.nodeSize
+            const tr = state.tr.replaceWith(nodeStart, nodeEnd, state.schema.text(text))
+            const cursorPos = direction === 'left' ? nodeStart + text.length - 2 : nodeStart + 2
+            tr.setSelection(TextSelection.create(tr.doc, cursorPos))
+            view.dispatch(tr)
+            return true
+          }
+        }
+      }),
+
       new Plugin({
         key: docLinkAutoConvertKey,
         appendTransaction(_transactions, _oldState, newState) {
@@ -202,30 +264,20 @@ export const MarkdownDocLink = Node.create({
       // so the user knows whether the target resolves before moving the cursor out.
       new Plugin({
         key: docLinkInlinePreviewKey,
+        state: {
+          init(_, state) {
+            return buildPreviewDecorations(state, storage)
+          },
+          apply(tr, prev, _oldState, newState) {
+            if (!tr.docChanged && !tr.getMeta('docLinksUpdated')) {
+              return prev
+            }
+            return buildPreviewDecorations(newState, storage)
+          }
+        },
         props: {
           decorations(state) {
-            const decorations: Decoration[] = []
-            state.doc.descendants((node, pos) => {
-              if (node.type.name !== 'text' || !node.text) {
-                return
-              }
-              DOC_LINK_PATTERN.lastIndex = 0
-              let match: RegExpExecArray | null = null
-              while ((match = DOC_LINK_PATTERN.exec(node.text)) !== null) {
-                const target = getMarkdownDocLinkTarget(match[1])
-                if (!target) {
-                  continue
-                }
-                const from = pos + match.index
-                const to = from + match[0].length
-                const resolved = isDocLinkResolved(target, storage.documents)
-                const cls = resolved
-                  ? 'rich-markdown-doc-link-preview'
-                  : 'rich-markdown-doc-link-preview rich-markdown-doc-link-preview--missing'
-                decorations.push(Decoration.inline(from, to, { class: cls }))
-              }
-            })
-            return DecorationSet.create(state.doc, decorations)
+            return docLinkInlinePreviewKey.getState(state)
           }
         }
       })
