@@ -975,118 +975,130 @@ function App(): React.JSX.Element {
             The hooks' internal early-returns remain as defense-in-depth
             (see the comment above useIpcEvents()). */}
         {agentDashboardEnabled ? <RetainedAgentsSyncGate /> : null}
-        {/* Why: in workspace view (split groups always enabled), the full-width
-            titlebar is removed so tab groups + terminal extend to the top of
-            the window. Left titlebar controls move to a header above the sidebar.
-            Settings, landing, and the tasks page keep the full-width titlebar. */}
-        {!workspaceActive ? (
-          <div className="titlebar">
-            <div
-              className={`flex items-center${showSidebar && sidebarOpen ? ' overflow-hidden shrink-0' : ' shrink-0 mr-2'}`}
-              style={{ width: showSidebar && sidebarOpen ? sidebarWidth : undefined }}
-            >
-              {titlebarLeftControls}
-            </div>
-            <div
-              id="titlebar-tabs"
-              className={`flex flex-1 min-w-0 self-stretch${activeView !== 'terminal' || !activeWorktreeId ? ' invisible pointer-events-none' : ''}`}
-            />
-            {showTitlebarExpandButton && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    className="titlebar-icon-button"
-                    onClick={handleToggleExpand}
-                    aria-label="Collapse pane"
-                    disabled={!activeTabCanExpand}
-                  >
-                    <Minimize2 size={14} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6}>
-                  Collapse pane
-                </TooltipContent>
-              </Tooltip>
-            )}
-            {rightSidebarToggle}
-          </div>
-        ) : null}
         <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
-          {showSidebar ? (
-            workspaceActive ? (
-              /* Why: left column wraps the sidebar with a titlebar-height
-                 header above it. The header holds the same controls
-                 (traffic lights, sidebar toggle, "Orca" title, agent badge)
-                 that the full-width titlebar held while the center and right
-                 columns keep their own top strips at the same 42px height.
-                 When the sidebar is collapsed, take this header out of flex
-                 layout so the terminal/editor reclaim the left edge instead of
-                 leaving behind a content-width blank strip. */
-              <div
-                className={`flex min-h-0 flex-col shrink-0${sidebarOpen ? '' : ' relative w-0 overflow-visible'}`}
-              >
+          {/* Why: the non-workspace titlebar lives inside this left+center
+              wrapper so it does not span over the right-sidebar column —
+              when the right sidebar is open, its own header anchors at the
+              top alongside the titlebar instead of being pushed below it. */}
+          <div className="flex flex-col flex-1 min-w-0 min-h-0">
+            {/* Why: in workspace view (split groups always enabled), the
+                full-width titlebar is removed so tab groups + terminal extend
+                to the top of the window. Left titlebar controls move to a
+                header above the sidebar. Settings, landing, and the tasks
+                page keep the titlebar. */}
+            {!workspaceActive ? (
+              <div className="titlebar">
                 <div
-                  // Why: when the sidebar is collapsed, titlebar-left floats
-                  // absolutely on top of the center column's own `border-l`
-                  // (see TabGroupSplitLayout), occluding that seam. Add a
-                  // `border-r` in the floating state so the vertical line
-                  // between the traffic-light/nav cluster and the tab strip
-                  // stays visible in both states.
-                  className={`titlebar-left${sidebarOpen ? '' : ' absolute top-0 left-0 z-10 border-r border-border'}`}
-                  style={{
-                    // Why: the Sidebar resize hook updates the sidebar DOM width
-                    // directly during drag and only persists to Zustand on
-                    // mouseup. In workspace view, size this header from the
-                    // wrapper's live width so it tracks those in-flight resizes
-                    // instead of leaving a stale-width gap until the drag ends.
-                    width: sidebarOpen ? '100%' : undefined
-                  }}
+                  className={`flex items-center${showSidebar && sidebarOpen ? ' overflow-hidden shrink-0' : ' shrink-0 mr-2'}`}
+                  style={{ width: showSidebar && sidebarOpen ? sidebarWidth : undefined }}
                 >
                   {titlebarLeftControls}
                 </div>
-                <div className="flex min-h-0 flex-1">
-                  {/* Why: the workspace-view wrapper adds a fixed 42px header
-                      above the sidebar. Without a flex-1/min-h-0 slot here,
-                      the sidebar falls back to its content height, so the
-                      worktree list loses its scroll viewport and the fixed
-                      bottom toolbar (including Add Project) gets pushed offscreen. */}
+                <div
+                  id="titlebar-tabs"
+                  className={`flex flex-1 min-w-0 self-stretch${activeView !== 'terminal' || !activeWorktreeId ? ' invisible pointer-events-none' : ''}`}
+                />
+                {showTitlebarExpandButton && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        className="titlebar-icon-button"
+                        onClick={handleToggleExpand}
+                        aria-label="Collapse pane"
+                        disabled={!activeTabCanExpand}
+                      >
+                        <Minimize2 size={14} />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" sideOffset={6}>
+                      Collapse pane
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+                {/* Why: when the right sidebar is open, its own header renders
+                    an identical close button — hide this copy so only one is
+                    visible at a time. */}
+                {!rightSidebarOpen && rightSidebarToggle}
+              </div>
+            ) : null}
+            <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
+              {showSidebar ? (
+                workspaceActive ? (
+                  /* Why: left column wraps the sidebar with a titlebar-height
+                     header above it. The header holds the same controls
+                     (traffic lights, sidebar toggle, "Orca" title, agent badge)
+                     that the full-width titlebar held while the center and right
+                     columns keep their own top strips at the same 36px height.
+                     When the sidebar is collapsed, take this header out of flex
+                     layout so the terminal/editor reclaim the left edge instead of
+                     leaving behind a content-width blank strip. */
+                  <div
+                    className={`flex min-h-0 flex-col shrink-0${sidebarOpen ? '' : ' relative w-0 overflow-visible'}`}
+                  >
+                    <div
+                      // Why: when the sidebar is collapsed, titlebar-left floats
+                      // absolutely on top of the center column's own `border-l`
+                      // (see TabGroupSplitLayout), occluding that seam. Add a
+                      // `border-r` in the floating state so the vertical line
+                      // between the traffic-light/nav cluster and the tab strip
+                      // stays visible in both states.
+                      className={`titlebar-left${sidebarOpen ? '' : ' absolute top-0 left-0 z-10 border-r border-border'}`}
+                      style={{
+                        // Why: the Sidebar resize hook updates the sidebar DOM width
+                        // directly during drag and only persists to Zustand on
+                        // mouseup. In workspace view, size this header from the
+                        // wrapper's live width so it tracks those in-flight resizes
+                        // instead of leaving a stale-width gap until the drag ends.
+                        width: sidebarOpen ? '100%' : undefined
+                      }}
+                    >
+                      {titlebarLeftControls}
+                    </div>
+                    <div className="flex min-h-0 flex-1">
+                      {/* Why: the workspace-view wrapper adds a fixed 36px header
+                          above the sidebar. Without a flex-1/min-h-0 slot here,
+                          the sidebar falls back to its content height, so the
+                          worktree list loses its scroll viewport and the fixed
+                          bottom toolbar (including Add Project) gets pushed offscreen. */}
+                      <Sidebar />
+                    </div>
+                  </div>
+                ) : (
                   <Sidebar />
+                )
+              ) : null}
+              <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
+                {/* Why: right sidebar toggle floats at the top-right of the center
+                    column so it's always accessible whether the right sidebar is
+                    open or closed. Match the RightSidebar header's 36px height and
+                    top-0 anchor so the icon's vertical center is identical between
+                    open and closed states — otherwise toggling makes the icon jump
+                    a few pixels, which reads as layout jitter. */}
+                {workspaceActive && !rightSidebarOpen && (
+                  <div
+                    className="absolute top-0 right-0 z-10 flex items-center h-[36px]"
+                    style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                  >
+                    {rightSidebarToggle}
+                  </div>
+                )}
+                <div className="flex flex-1 min-w-0 min-h-0 flex-col">
+                  <div
+                    className={
+                      activeView !== 'terminal' || !activeWorktreeId
+                        ? 'hidden flex-1 min-w-0 min-h-0'
+                        : 'flex flex-1 min-w-0 min-h-0'
+                    }
+                  >
+                    <Terminal />
+                  </div>
+                  <Suspense fallback={null}>
+                    {activeView === 'settings' ? <Settings /> : null}
+                    {activeView === 'tasks' ? <TaskPage /> : null}
+                    {activeView === 'terminal' && !activeWorktreeId ? <Landing /> : null}
+                  </Suspense>
                 </div>
               </div>
-            ) : (
-              <Sidebar />
-            )
-          ) : null}
-          <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
-            {/* Why: right sidebar toggle floats at the top-right of the center
-                column so it's always accessible whether the right sidebar is
-                open or closed. Match the RightSidebar header's 42px height and
-                top-0 anchor so the icon's vertical center is identical between
-                open and closed states — otherwise toggling makes the icon jump
-                a few pixels, which reads as layout jitter. */}
-            {workspaceActive && !rightSidebarOpen && (
-              <div
-                className="absolute top-0 right-0 z-10 flex items-center h-[36px]"
-                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-              >
-                {rightSidebarToggle}
-              </div>
-            )}
-            <div className="flex flex-1 min-w-0 min-h-0 flex-col">
-              <div
-                className={
-                  activeView !== 'terminal' || !activeWorktreeId
-                    ? 'hidden flex-1 min-w-0 min-h-0'
-                    : 'flex flex-1 min-w-0 min-h-0'
-                }
-              >
-                <Terminal />
-              </div>
-              <Suspense fallback={null}>
-                {activeView === 'settings' ? <Settings /> : null}
-                {activeView === 'tasks' ? <TaskPage /> : null}
-                {activeView === 'terminal' && !activeWorktreeId ? <Landing /> : null}
-              </Suspense>
             </div>
           </div>
           {/* Why: keep RightSidebar mounted even when closed so that its
