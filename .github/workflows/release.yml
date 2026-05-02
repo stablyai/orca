@@ -222,6 +222,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      # Why: actions:write is required for `gh workflow run homebrew-bump.yml`
+      # (below). Without it GITHUB_TOKEN gets HTTP 403 "Resource not accessible
+      # by integration" on POST /actions/workflows/:id/dispatches. The default
+      # scoped-down token grants only what the `permissions:` block lists.
+      actions: write
     steps:
       - name: Publish release
         # Why: derive `--prerelease` from the tag shape (not from whatever

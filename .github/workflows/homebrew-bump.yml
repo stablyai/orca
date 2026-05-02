@@ -150,6 +150,8 @@ jobs:
             --head "$branch" \
             || gh pr edit "$branch" --title "orca $VERSION"
 
-          # Why: auto-merge so the tap stays hands-free. Tap repo must have
-          # "Allow auto-merge" enabled in settings for this to take effect.
-          gh pr merge "$branch" --squash --auto --delete-branch || true
+          # Why: squash-merge immediately rather than --auto. The tap has no
+          # required checks or branch protection, and `gh pr merge --auto`
+          # only activates when there's something to wait on — on a repo
+          # with no gates it silently no-ops, leaving the PR open forever.
+          gh pr merge "$branch" --squash --delete-branch
