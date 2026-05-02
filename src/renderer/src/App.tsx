@@ -2,7 +2,7 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { DEFAULT_STATUS_BAR_ITEMS, DEFAULT_WORKTREE_CARD_PROPERTIES } from '../../shared/constants'
 
-import { ArrowLeft, ArrowRight, Minimize2, PanelLeft, PanelRight, Search } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Minimize2, PanelLeft, PanelRight } from 'lucide-react'
 import {
   FOCUS_TERMINAL_PANE_EVENT,
   SYNC_FIT_PANES_EVENT,
@@ -869,27 +869,6 @@ function App(): React.JSX.Element {
             </PopoverContent>
           </Popover>
         ) : null}
-        {/* Why: always rendered (not gated on showSidebar) because the
-            worktree palette is global — it mirrors the ⌘J/Ctrl+Shift+J
-            shortcut which is live from every view including Settings and
-            Landing. The `sidebar-toggle` class is the shared titlebar
-            icon-button style used by back/forward/sidebar-toggle/right-
-            sidebar neighbors; the name is historical and applies to any
-            titlebar icon button, not only sidebar toggles. */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              className="sidebar-toggle"
-              onClick={() => actions.openModal('worktree-palette')}
-              aria-label="Search worktrees and browser tabs"
-            >
-              <Search size={14} />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" sideOffset={6}>
-            {`Search (${isMac ? '⌘J' : 'Ctrl+Shift+J'})`}
-          </TooltipContent>
-        </Tooltip>
       </div>
       {/* Why: Back/Forward traverse mixed worktree + Tasks history, so the
           cluster is shown wherever the history shortcut is live (terminal or
