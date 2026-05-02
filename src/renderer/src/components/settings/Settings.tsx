@@ -120,6 +120,17 @@ function flashSectionHighlight(sectionId: string): void {
   }, SECTION_FLASH_DURATION_MS)
 }
 
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false
+  }
+  if (target.isContentEditable) {
+    return true
+  }
+  const tag = target.tagName
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+}
+
 function Settings(): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
@@ -177,6 +188,14 @@ function Settings(): React.JSX.Element {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape' || event.defaultPrevented) {
+        return
+      }
+      // Why: Escape in an editable control usually means "cancel this edit",
+      // not "close Settings". Closing the entire page would discard the user's
+      // in-progress typing. Defer to the field's own handler when focus is on
+      // an input/textarea/select or contenteditable region; a subsequent
+      // Escape (with focus back on the body) will then close the page.
+      if (isEditableTarget(event.target)) {
         return
       }
       closeSettingsPage()
