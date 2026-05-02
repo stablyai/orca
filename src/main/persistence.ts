@@ -2272,6 +2272,7 @@ export class Store {
         | 'projectGroupId'
         | 'projectGroupOrder'
         | 'sourceControlAi'
+        | 'defaultIsolation'
       >
     >
   ): Repo | null {
@@ -2331,6 +2332,14 @@ export class Store {
       } else {
         sanitizedUpdates.sourceControlAi = normalizedSourceControlAi
       }
+    }
+    if (
+      'defaultIsolation' in sanitizedUpdates &&
+      sanitizedUpdates.defaultIsolation !== undefined &&
+      sanitizedUpdates.defaultIsolation !== 'host' &&
+      sanitizedUpdates.defaultIsolation !== 'docker'
+    ) {
+      delete sanitizedUpdates.defaultIsolation
     }
     Object.assign(repo, sanitizedUpdates)
     this.scheduleSave()
@@ -3532,6 +3541,7 @@ function getDefaultWorktreeMeta(): WorktreeMeta {
     isPinned: false,
     sortOrder: Date.now(),
     lastActivityAt: 0,
+    isolation: 'host',
     workspaceStatus: DEFAULT_WORKSPACE_STATUS_ID
   }
 }

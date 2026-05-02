@@ -75,6 +75,28 @@ export type RepoKind = 'git' | 'folder'
  */
 export type IssueSourcePreference = 'upstream' | 'origin' | 'auto'
 export type ExternalWorktreeVisibility = 'hide' | 'show'
+export type WorktreeIsolation = 'host' | 'docker'
+export type RepoIsolationDefault = WorktreeIsolation
+
+export type DockerEngineFlavor =
+  | 'docker-desktop-mac'
+  | 'colima'
+  | 'docker-engine-linux'
+  | 'docker-rootless-linux'
+  | 'docker-desktop-windows-wsl2'
+
+export type DockerEngineStatus = {
+  available: boolean
+  flavor: DockerEngineFlavor
+  reason?: string
+}
+
+export type DockerBuildProgress = {
+  worktreeId: string
+  phase: 'pull' | 'build' | 'ready' | 'failed'
+  percent?: number
+  error?: string
+}
 
 export type Repo = {
   id: string
@@ -111,6 +133,8 @@ export type Repo = {
   projectGroupOrder?: number
   /** Repo-specific source-control AI overrides. Missing fields inherit global settings. */
   sourceControlAi?: RepoSourceControlAiOverrides
+  /** Opt-in default for newly created local worktrees; undefined preserves host behavior. */
+  defaultIsolation?: RepoIsolationDefault
 }
 
 export type ProjectGroupCreatedFrom = 'manual' | 'folder-scan' | 'migration'
@@ -245,6 +269,8 @@ export type Worktree = {
   /** User-authored sidebar ordering. Higher values render earlier in Manual sort. */
   manualOrder?: number
   lastActivityAt: number
+  /** Execution isolation preference. Defaults to host for persisted records without this field. */
+  isolation?: WorktreeIsolation
   /** Set once when Orca creates the worktree. Absent for worktrees discovered
    *  on disk or persisted before this field existed. Used by the sidebar to
    *  grant newly-created worktrees a short grace window at the top of Recent,
@@ -295,6 +321,8 @@ export type WorktreeMeta = {
   /** User-authored sidebar ordering. Higher values render earlier in Manual sort. */
   manualOrder?: number
   lastActivityAt: number
+  /** See {@link Worktree.isolation}. Persisted to orca-data.json. */
+  isolation?: WorktreeIsolation
   /** See {@link Worktree.createdAt}. Persisted to orca-data.json. */
   createdAt?: number
   /** See {@link Worktree.createdWithAgent}. Persisted to orca-data.json. */

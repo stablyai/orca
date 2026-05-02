@@ -61,7 +61,8 @@ const RepoUpdate = RepoSelector.extend({
     externalWorktreeVisibilityPromptDismissedAt: z.number().finite().optional(),
     projectGroupId: OptionalString.nullable().optional(),
     projectGroupOrder: OptionalFiniteNumber,
-    sourceControlAi: RepoSourceControlAiOverrides
+    sourceControlAi: RepoSourceControlAiOverrides,
+    defaultIsolation: z.enum(['host', 'docker']).optional()
   })
 })
 

@@ -960,6 +960,7 @@ export async function createRemoteWorktree(
     // attach to the new occupant of the same path.
     instanceId: randomUUID(),
     lastActivityAt: now,
+    isolation: 'host',
     // Why: grants the new worktree a short grace window at the top of the
     // Recent sort. During worktree creation (git fetch + add can take several
     // seconds) other worktrees get ambient PTY bumps that would otherwise
@@ -1353,6 +1354,7 @@ export async function createLocalWorktree(
     // immediately — prevents scroll-to-reveal racing with a later
     // bumpWorktreeActivity that would re-sort the list.
     lastActivityAt: now,
+    isolation: repo.defaultIsolation ?? 'host',
     // See createRemoteWorktree above: createdAt protects the newly-created
     // worktree from ambient PTY bumps in other worktrees for CREATE_GRACE_MS.
     createdAt: now,

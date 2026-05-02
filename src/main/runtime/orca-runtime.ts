@@ -793,6 +793,7 @@ function mergeRuntimeFolderWorkspace(repo: Repo, worktreeId: string, meta: Workt
     sortOrder: meta.sortOrder ?? 0,
     ...(meta.manualOrder !== undefined ? { manualOrder: meta.manualOrder } : {}),
     lastActivityAt: meta.lastActivityAt ?? 0,
+    isolation: meta.isolation ?? 'host',
     ...(meta.createdAt !== undefined ? { createdAt: meta.createdAt } : {}),
     ...(meta.createdWithAgent !== undefined ? { createdWithAgent: meta.createdWithAgent } : {}),
     workspaceStatus: meta.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
@@ -829,7 +830,9 @@ function listRuntimeFolderWorkspaces(
       ? existing
       : store.setWorktreeMeta(worktreeId, {
           instanceId: getRuntimeFolderWorkspaceInstanceIdentity(repo, worktreeId),
-          ...(existing ? {} : { displayName: repo.displayName, lastActivityAt: Date.now() })
+          ...(existing
+            ? {}
+            : { displayName: repo.displayName, lastActivityAt: Date.now(), isolation: 'host' })
         })
     return mergeRuntimeFolderWorkspace(repo, worktreeId, meta)
   })
@@ -5652,6 +5655,7 @@ export class OrcaRuntimeService {
         | 'projectGroupId'
         | 'projectGroupOrder'
         | 'sourceControlAi'
+        | 'defaultIsolation'
       >
     >
   ): Promise<Repo> {
@@ -7416,6 +7420,7 @@ export class OrcaRuntimeService {
         instanceId,
         displayName: args.displayName?.trim() || args.name,
         lastActivityAt: now,
+        isolation: 'host',
         createdAt: now,
         orcaCreatedAt: now,
         orcaCreationSource: 'runtime',
@@ -7684,6 +7689,7 @@ export class OrcaRuntimeService {
       // stale lineage records tied to the old occupant fail validation.
       instanceId: randomUUID(),
       lastActivityAt: now,
+      isolation: repo.defaultIsolation ?? 'host',
       // See createRemoteWorktree: createdAt grants the new worktree a grace
       // window in Recent sort so ambient PTY bumps in OTHER worktrees can't
       // push it down before the user has had a chance to notice it. Smart-sort

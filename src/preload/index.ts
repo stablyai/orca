@@ -14,6 +14,8 @@ import type {
   BrowserViewportOverride,
   CreateWorktreeArgs,
   CustomPet,
+  DockerBuildProgress,
+  DockerEngineStatus,
   FsChangedPayload,
   GetRateLimitResult,
   GitHubPRRefreshCandidate,
@@ -661,6 +663,25 @@ const api = {
       ) => callback(data)
       ipcRenderer.on('worktree:remoteBranchConflict', listener)
       return () => ipcRenderer.removeListener('worktree:remoteBranchConflict', listener)
+    }
+  },
+
+  docker: {
+    engineStatus: (): Promise<DockerEngineStatus> => ipcRenderer.invoke('docker:engine-status'),
+
+    buildImage: (args: { repoId: string; worktreeId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('docker:build-image', args),
+
+    setWorktreeIsolation: (args: {
+      worktreeId: string
+      isolation: 'host' | 'docker'
+    }): Promise<unknown> => ipcRenderer.invoke('docker:set-worktree-isolation', args),
+
+    onBuildProgress: (callback: (data: DockerBuildProgress) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: DockerBuildProgress) =>
+        callback(data)
+      ipcRenderer.on('docker:build-progress', listener)
+      return () => ipcRenderer.removeListener('docker:build-progress', listener)
     }
   },
 

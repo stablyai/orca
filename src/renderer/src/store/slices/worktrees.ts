@@ -145,6 +145,7 @@ function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): b
       worktree.sortOrder === candidate.sortOrder &&
       worktree.manualOrder === candidate.manualOrder &&
       worktree.lastActivityAt === candidate.lastActivityAt &&
+      (worktree.isolation ?? 'host') === (candidate.isolation ?? 'host') &&
       worktree.workspaceStatus === candidate.workspaceStatus &&
       worktree.createdWithAgent === candidate.createdWithAgent &&
       worktree.baseRef === candidate.baseRef &&
@@ -1489,6 +1490,33 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         }
       })
     )
+  },
+
+  setIsolation: async (worktreeId, isolation) => {
+    set((s) => {
+      const nextWorktrees = applyWorktreeUpdates(s.worktreesByRepo, worktreeId, { isolation })
+      const nextDetectedWorktrees = applyDetectedWorktreeUpdates(
+        s.detectedWorktreesByRepo,
+        worktreeId,
+        { isolation }
+      )
+      return nextWorktrees === s.worktreesByRepo &&
+        nextDetectedWorktrees === s.detectedWorktreesByRepo
+        ? {}
+        : {
+            ...(nextWorktrees !== s.worktreesByRepo ? { worktreesByRepo: nextWorktrees } : {}),
+            ...(nextDetectedWorktrees !== s.detectedWorktreesByRepo
+              ? { detectedWorktreesByRepo: nextDetectedWorktrees }
+              : {})
+          }
+    })
+
+    try {
+      await window.api.docker.setWorktreeIsolation({ worktreeId, isolation })
+    } catch (err) {
+      console.error('Failed to persist worktree isolation:', err)
+      void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+    }
   },
 
   markWorktreeUnread: (worktreeId) => {

@@ -9,6 +9,7 @@ import { ORCA_BROWSER_PARTITION } from '../../shared/constants'
 import { registerRepoHandlers } from '../ipc/repos'
 import { registerWorktreeHandlers } from '../ipc/worktrees'
 import { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup'
+import { registerDockerIpcHandlers } from '../ipc/docker'
 import { getLocalPtyProvider, registerPtyHandlers } from '../ipc/pty'
 import { registerDaemonManagementHandlers } from '../ipc/pty-management'
 import { registerSshHandlers } from '../ipc/ssh'
@@ -49,6 +50,7 @@ export function attachMainWindowServices(
   registerRepoHandlers(mainWindow, store)
   registerWorktreeHandlers(mainWindow, store, runtime)
   registerWorkspaceCleanupHandlers(store, { runtime, getLocalPtyProvider })
+  registerDockerIpcHandlers(mainWindow, store)
   registerPtyHandlers(
     mainWindow,
     runtime,

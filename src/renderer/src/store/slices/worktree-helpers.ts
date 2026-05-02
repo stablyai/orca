@@ -10,6 +10,7 @@ import type {
   WorkspaceStatus,
   Worktree,
   WorktreeBaseStatusEvent,
+  WorktreeIsolation,
   WorktreeLineage,
   WorktreeRemoteBranchConflictEvent,
   WorktreeMeta
@@ -105,6 +106,7 @@ export type WorktreeSlice = {
   updateWorktreesMeta: (
     updatesByWorktreeId: ReadonlyMap<string, Partial<WorktreeMeta>>
   ) => Promise<void>
+  setIsolation: (worktreeId: string, isolation: WorktreeIsolation) => Promise<void>
   markWorktreeUnread: (worktreeId: string) => void
   /** Clear the worktree's unread dot. Called on user interaction with any
    *  terminal pane inside the worktree (keystroke, click) — matches
