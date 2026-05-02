@@ -1,13 +1,19 @@
+/* eslint-disable max-lines */
 import hostedGitInfo from 'hosted-git-info'
 import type { DockerEngineClientLike } from '../docker/docker-engine-client'
 import { DockerEngineClient } from '../docker/docker-engine-client'
 import type { DockerTarget } from '../docker/types'
+import { resolveDefaultBaseRefViaExec } from '../git/repo'
 import type { IGitProvider } from './types'
 import type {
+  GitBranchChangeEntry,
   GitBranchCompareResult,
+  GitBranchChangeStatus,
+  GitConflictKind,
   GitConflictOperation,
   GitDiffResult,
   GitFileStatus,
+  GitStatusEntry,
   GitStatusResult,
   GitWorktreeInfo
 } from '../../shared/types'
@@ -34,15 +40,14 @@ export class DockerGitProvider implements IGitProvider {
   }
 
   async getDiff(worktreePath: string, filePath: string, staged: boolean): Promise<GitDiffResult> {
-    const args = staged ? ['diff', '--cached', '--', filePath] : ['diff', '--', filePath]
-    const result = await this.git(args, worktreePath)
-    return {
-      kind: 'text',
-      originalContent: '',
-      modifiedContent: result.stdout,
-      originalIsBinary: false,
-      modifiedIsBinary: false
-    }
+    const originalBlob = staged
+      ? await this.readGitBlob(worktreePath, 'HEAD', filePath)
+      : await this.readUnstagedLeftBlob(worktreePath, filePath)
+    const modifiedContent = staged
+      ? (await this.readGitIndexBlob(worktreePath, filePath)).content
+      : await this.readWorkingTreeFile(worktreePath, filePath)
+
+    return buildTextDiffResult(originalBlob.content, modifiedContent)
   }
 
   async stageFile(worktreePath: string, filePath: string): Promise<void> {
@@ -87,18 +92,15 @@ export class DockerGitProvider implements IGitProvider {
 
   async getBranchCompare(worktreePath: string, baseRef: string): Promise<GitBranchCompareResult> {
     const mergeBase = (await this.git(['merge-base', baseRef, 'HEAD'], worktreePath)).stdout.trim()
-    const names = await this.git(['diff', '--name-status', mergeBase, 'HEAD'], worktreePath)
+    const names = await this.git(
+      ['diff', '--name-status', '-M', '-C', mergeBase, 'HEAD'],
+      worktreePath
+    )
     const entries = names.stdout
       .split(/\r?\n/)
       .filter(Boolean)
-      .map((line) => {
-        const [status, filePath, oldPath] = line.split('\t')
-        return {
-          path: filePath,
-          status: parseBranchStatus(status),
-          ...(oldPath ? { oldPath } : {})
-        }
-      })
+      .map(parseBranchChangeLine)
+      .filter((entry): entry is GitBranchChangeEntry => entry !== null)
     return {
       summary: {
         baseRef,
@@ -118,20 +120,31 @@ export class DockerGitProvider implements IGitProvider {
     baseRef: string,
     options?: { includePatch?: boolean; filePath?: string; oldPath?: string }
   ): Promise<GitDiffResult[]> {
-    const args = ['diff', baseRef, 'HEAD']
-    if (options?.filePath) {
-      args.push('--', options.filePath)
+    const entries = options?.filePath
+      ? [
+          {
+            path: options.filePath,
+            status: 'modified' as const,
+            ...(options.oldPath ? { oldPath: options.oldPath } : {})
+          }
+        ]
+      : await this.loadBranchChanges(worktreePath, baseRef)
+
+    if (options?.includePatch === false) {
+      return entries.map(() => buildTextDiffResult('', ''))
     }
-    const result = await this.git(args, worktreePath)
-    return [
-      {
-        kind: 'text',
-        originalContent: '',
-        modifiedContent: result.stdout,
-        originalIsBinary: false,
-        modifiedIsBinary: false
-      }
-    ]
+
+    return Promise.all(
+      entries.map(async (entry) => {
+        const originalContent = await this.readGitBlob(
+          worktreePath,
+          baseRef,
+          entry.oldPath ?? entry.path
+        )
+        const modifiedContent = await this.readGitBlob(worktreePath, 'HEAD', entry.path)
+        return buildTextDiffResult(originalContent.content, modifiedContent.content)
+      })
+    )
   }
 
   async listWorktrees(repoPath: string): Promise<GitWorktreeInfo[]> {
@@ -195,7 +208,14 @@ export class DockerGitProvider implements IGitProvider {
     if (!info) {
       return null
     }
-    const browseUrl = info.browseFile(relativePath, { committish: 'main' })
+    const defaultBaseRef = await resolveDefaultBaseRefViaExec((argv) =>
+      this.git(argv, worktreePath)
+    )
+    if (!defaultBaseRef) {
+      return null
+    }
+    const defaultBranch = defaultBaseRef.replace(/^origin\//, '')
+    const browseUrl = info.browseFile(relativePath, { committish: defaultBranch })
     return browseUrl ? `${browseUrl}#L${line}` : null
   }
 
@@ -220,6 +240,76 @@ export class DockerGitProvider implements IGitProvider {
       return false
     }
   }
+
+  private async loadBranchChanges(
+    worktreePath: string,
+    baseRef: string
+  ): Promise<GitBranchChangeEntry[]> {
+    const result = await this.git(
+      ['diff', '--name-status', '-M', '-C', baseRef, 'HEAD'],
+      worktreePath
+    )
+    return result.stdout
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .map(parseBranchChangeLine)
+      .filter((entry): entry is GitBranchChangeEntry => entry !== null)
+  }
+
+  private async readUnstagedLeftBlob(
+    worktreePath: string,
+    filePath: string
+  ): Promise<DockerGitBlobReadResult> {
+    const indexBlob = await this.readGitIndexBlob(worktreePath, filePath)
+    if (indexBlob.exists) {
+      return indexBlob
+    }
+    return this.readGitBlob(worktreePath, 'HEAD', filePath)
+  }
+
+  private async readGitIndexBlob(
+    worktreePath: string,
+    filePath: string
+  ): Promise<DockerGitBlobReadResult> {
+    return this.readGitBlobSpec(worktreePath, `:${filePath}`)
+  }
+
+  private async readGitBlob(
+    worktreePath: string,
+    ref: string,
+    filePath: string
+  ): Promise<DockerGitBlobReadResult> {
+    return this.readGitBlobSpec(worktreePath, `${ref}:${filePath}`)
+  }
+
+  private async readGitBlobSpec(
+    worktreePath: string,
+    spec: string
+  ): Promise<DockerGitBlobReadResult> {
+    try {
+      return { content: (await this.git(['show', spec], worktreePath)).stdout, exists: true }
+    } catch {
+      return { content: '', exists: false }
+    }
+  }
+
+  private async readWorkingTreeFile(worktreePath: string, filePath: string): Promise<string> {
+    try {
+      const result = await this.engine.exec({
+        containerId: this.target.containerId,
+        args: ['cat', '--', filePath],
+        cwd: worktreePath
+      })
+      return result.stdout
+    } catch {
+      return ''
+    }
+  }
+}
+
+type DockerGitBlobReadResult = {
+  content: string
+  exists: boolean
 }
 
 function parseStatus(stdout: string): GitStatusResult['entries'] {
@@ -241,6 +331,13 @@ function parseStatus(stdout: string): GitStatusResult['entries'] {
       }
       if (xy[1] !== '.') {
         entries.push({ path: filePath, status: parseFileStatus(xy[1]), area: 'unstaged' })
+      }
+      continue
+    }
+    if (line.startsWith('u ')) {
+      const entry = parseUnmergedStatusLine(line)
+      if (entry) {
+        entries.push(entry)
       }
     }
   }
@@ -264,6 +361,79 @@ function parseFileStatus(char: string): GitFileStatus {
 
 function parseBranchStatus(char: string): 'modified' | 'added' | 'deleted' | 'renamed' | 'copied' {
   return parseFileStatus(char[0]) as 'modified' | 'added' | 'deleted' | 'renamed' | 'copied'
+}
+
+function parseBranchChangeLine(line: string): GitBranchChangeEntry | null {
+  const parts = line.split('\t')
+  const rawStatus = parts[0] ?? ''
+  const status = parseBranchStatus(rawStatus) as GitBranchChangeStatus
+
+  if (rawStatus.startsWith('R') || rawStatus.startsWith('C')) {
+    const oldPath = parts[1]
+    const filePath = parts[2]
+    if (!filePath) {
+      return null
+    }
+    return { path: filePath, oldPath, status }
+  }
+
+  const filePath = parts[1]
+  if (!filePath) {
+    return null
+  }
+  return { path: filePath, status }
+}
+
+function parseUnmergedStatusLine(line: string): GitStatusEntry | null {
+  const parts = line.split(' ')
+  const xy = parts[1]
+  const filePath = parts.slice(10).join(' ')
+  if (!xy || !filePath) {
+    return null
+  }
+  const conflictKind = parseConflictKind(xy)
+  if (!conflictKind) {
+    return null
+  }
+
+  return {
+    path: filePath,
+    area: 'unstaged',
+    status: conflictKind === 'both_deleted' ? 'deleted' : 'modified',
+    conflictKind,
+    conflictStatus: 'unresolved'
+  }
+}
+
+function parseConflictKind(xy: string): GitConflictKind | null {
+  switch (xy) {
+    case 'UU':
+      return 'both_modified'
+    case 'AA':
+      return 'both_added'
+    case 'DD':
+      return 'both_deleted'
+    case 'AU':
+      return 'added_by_us'
+    case 'UA':
+      return 'added_by_them'
+    case 'DU':
+      return 'deleted_by_us'
+    case 'UD':
+      return 'deleted_by_them'
+    default:
+      return null
+  }
+}
+
+function buildTextDiffResult(originalContent: string, modifiedContent: string): GitDiffResult {
+  return {
+    kind: 'text',
+    originalContent,
+    modifiedContent,
+    originalIsBinary: false,
+    modifiedIsBinary: false
+  }
 }
 
 function parseWorktrees(stdout: string): GitWorktreeInfo[] {

@@ -37,6 +37,7 @@ describe('DockerPtyProvider', () => {
         containerId: 'container-1',
         args: ['/bin/sh'],
         cwd: '/workspace',
+        tty: true,
         cols: 80,
         rows: 24
       }
