@@ -1,7 +1,3 @@
-export function buildUnsavedDiffModelKey(fileId: string, requestId: number): string {
-  return `unsaved-close:${fileId}:${requestId}`
-}
-
 export function appendUniqueOpenFileIds(
   queue: string[],
   requestedFileIds: string[],

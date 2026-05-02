@@ -10,6 +10,7 @@ import { findWorktreeById } from '../store/slices/worktree-helpers'
 import { createUntitledMarkdownFile } from '../lib/create-untitled-markdown'
 import { getConnectionId } from '../lib/connection-context'
 import { extractIpcErrorMessage } from '../lib/ipc-error'
+import { basename } from '../lib/path'
 import {
   Dialog,
   DialogContent,
@@ -40,11 +41,17 @@ import {
   getEffectiveLayoutForWorktree as getEffectiveLayout,
   anyMountedWorktreeHasLayout as computeAnyMountedWorktreeHasLayout
 } from './terminal/split-group-mount'
-import { appendUniqueOpenFileIds, buildUnsavedDiffModelKey } from './terminal/unsaved-close-queue'
+import { appendUniqueOpenFileIds } from './terminal/unsaved-close-queue'
 import CodexRestartChip from './CodexRestartChip'
 
 const EditorPanel = lazy(() => import('./editor/EditorPanel'))
-const DiffViewer = lazy(() => import('./editor/DiffViewer'))
+
+// Why: after a close-dialog handler advances the queue and renders the next
+// dialog, gate new handler runs for this long so a stray carry-over click
+// from the prior dialog can't silently act on the new one. Short enough to
+// feel responsive on a deliberate follow-up click; long enough to absorb the
+// trailing edge of a physical double-click (~150 ms on most hardware).
+const CLOSE_DIALOG_DEBOUNCE_MS = 200
 
 function Terminal(): React.JSX.Element | null {
   const allWorktrees = useAllWorktrees()
@@ -138,18 +145,24 @@ function Terminal(): React.JSX.Element | null {
   // Save confirmation dialog state
   const [saveDialogFileId, setSaveDialogFileId] = useState<string | null>(null)
   const saveDialogFile = saveDialogFileId ? openFiles.find((f) => f.id === saveDialogFileId) : null
-  const [unsavedDiffDialogOpen, setUnsavedDiffDialogOpen] = useState(false)
-  const [unsavedDiffLoading, setUnsavedDiffLoading] = useState(false)
-  const [unsavedDiffError, setUnsavedDiffError] = useState<string | null>(null)
-  const [unsavedDiffModelKey, setUnsavedDiffModelKey] = useState<string | null>(null)
-  const [unsavedDiffModel, setUnsavedDiffModel] = useState<{
-    fileLabel: string
-    language: string
-    originalContent: string
-    modifiedContent: string
-  } | null>(null)
-  const unsavedDiffRequestIdRef = useRef(0)
   const pendingEditorCloseQueueRef = useRef<string[]>([])
+
+  // Why: while a save-and-close is awaiting the file to disappear from
+  // openFiles, concurrent queueEditorCloseRequests calls (e.g. user clicks X
+  // on another dirty tab, or a split-group dispatch fires
+  // ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT) must not re-open the dialog over
+  // the in-flight save. Track the in-flight file here so
+  // getNextQueuedEditorClose can skip it as an un-advanceable head.
+  const inFlightSaveFileIdRef = useRef<string | null>(null)
+
+  // Why: after a Save/Discard/Cancel handler dismisses its dialog and advances
+  // the queue, a rapid second physical click can land on the freshly-rendered
+  // next dialog's button before the user has read the filename — silently
+  // discarding or saving work they didn't consciously choose to act on. Gate
+  // the three handlers on this ref and release after CLOSE_DIALOG_DEBOUNCE_MS
+  // so the stray click from the previous dialog is absorbed while a genuine
+  // new click on the next dialog still works.
+  const isClosingRef = useRef(false)
 
   // Window close confirmation dialog — shown when the user tries to close the
   // window (X button, Cmd+Q) while terminals with running processes exist.
@@ -205,6 +218,14 @@ function Terminal(): React.JSX.Element | null {
           resolve(true)
         }
       })
+      // Why: zustand only fires subscribers on subsequent state changes. If
+      // the file closed between the initial guard and subscribe, the
+      // transition was missed — re-check synchronously after subscribe.
+      if (!useAppStore.getState().openFiles.some((f) => f.id === fileId)) {
+        window.clearTimeout(timeoutId)
+        unsub?.()
+        resolve(true)
+      }
     })
   }, [])
 
@@ -214,6 +235,12 @@ function Terminal(): React.JSX.Element | null {
     // only blocks on tabs that still require an explicit close decision.
     while (pendingEditorCloseQueueRef.current.length > 0) {
       const fileId = pendingEditorCloseQueueRef.current[0]
+      // Why: if a save is still in-flight for this fileId, do not re-open the
+      // dialog on top of it. waitForFileClosed will re-advance the queue once
+      // the file finishes closing (or the save times out).
+      if (inFlightSaveFileIdRef.current === fileId) {
+        return null
+      }
       const file = useAppStore.getState().openFiles.find((candidate) => candidate.id === fileId)
       if (!file) {
         pendingEditorCloseQueueRef.current.shift()
@@ -232,6 +259,14 @@ function Terminal(): React.JSX.Element | null {
   const advanceEditorCloseQueue = useCallback(() => {
     const nextFileId = getNextQueuedEditorClose()
     if (nextFileId) {
+      // Why: the queue can cross worktree boundaries during window-close
+      // flows. Switch to the target file's worktree before opening the
+      // dialog so the UI behind the dialog matches the filename in it.
+      const state = useAppStore.getState()
+      const file = state.openFiles.find((f) => f.id === nextFileId)
+      if (file && file.worktreeId !== state.activeWorktreeId) {
+        setActiveWorktree(file.worktreeId)
+      }
       setActiveFile(nextFileId)
       setActiveTabType('editor')
       setSaveDialogFileId(nextFileId)
@@ -243,7 +278,13 @@ function Terminal(): React.JSX.Element | null {
       windowCloseAfterDirtyRef.current = null
       proceedToNativeWindowClose(pendingWindowClose.isQuitting)
     }
-  }, [getNextQueuedEditorClose, proceedToNativeWindowClose, setActiveFile, setActiveTabType])
+  }, [
+    getNextQueuedEditorClose,
+    proceedToNativeWindowClose,
+    setActiveFile,
+    setActiveTabType,
+    setActiveWorktree
+  ])
 
   const queueEditorCloseRequests = useCallback(
     (fileIds: string[], pendingWindowClose?: { isQuitting: boolean }) => {
@@ -273,9 +314,13 @@ function Terminal(): React.JSX.Element | null {
   )
 
   const handleSaveDialogSave = useCallback(async () => {
+    if (isClosingRef.current) {
+      return
+    }
     if (!saveDialogFileId) {
       return
     }
+    isClosingRef.current = true
     const fileId = saveDialogFileId
     const file = useAppStore.getState().openFiles.find((f) => f.id === fileId)
     if (!file) {
@@ -283,6 +328,9 @@ function Terminal(): React.JSX.Element | null {
         (id) => id !== fileId
       )
       advanceEditorCloseQueue()
+      setTimeout(() => {
+        isClosingRef.current = false
+      }, CLOSE_DIALOG_DEBOUNCE_MS)
       return
     }
 
@@ -291,113 +339,101 @@ function Terminal(): React.JSX.Element | null {
     // owns that write path now, so the dialog signals it through a custom
     // event instead of poking at editor component refs.
     setSaveDialogFileId(null)
-    setUnsavedDiffDialogOpen(false)
     window.dispatchEvent(new CustomEvent(ORCA_EDITOR_SAVE_AND_CLOSE_EVENT, { detail: { fileId } }))
-    const closed = await waitForFileClosed(fileId, 10_000)
+    inFlightSaveFileIdRef.current = fileId
+    let closed = false
+    try {
+      closed = await waitForFileClosed(fileId, 10_000)
+    } finally {
+      // Why: clear the in-flight ref regardless of success/timeout so the
+      // queue head is no longer treated as un-advanceable by
+      // getNextQueuedEditorClose before we re-advance the queue below.
+      if (inFlightSaveFileIdRef.current === fileId) {
+        inFlightSaveFileIdRef.current = null
+      }
+    }
     if (!closed) {
+      // Why: the save may have resolved in the tiny gap after the timeout
+      // fired. Re-check synchronously so we don't re-open a stale dialog
+      // for a file that is already gone — drain the queue entry and
+      // advance instead. Toast only for the genuine timeout case.
+      if (!useAppStore.getState().openFiles.some((f) => f.id === fileId)) {
+        pendingEditorCloseQueueRef.current = pendingEditorCloseQueueRef.current.filter(
+          (id) => id !== fileId
+        )
+        advanceEditorCloseQueue()
+        setTimeout(() => {
+          isClosingRef.current = false
+        }, CLOSE_DIALOG_DEBOUNCE_MS)
+        return
+      }
       toast.error('Save timed out or failed. Fix errors before closing.')
       setSaveDialogFileId(fileId)
+      // Why: a genuine timeout leaves the user back on the same dialog, so
+      // release the guard immediately — a new click here is a deliberate
+      // retry, not a stray carry-over from a prior dialog.
+      isClosingRef.current = false
       return
     }
     pendingEditorCloseQueueRef.current = pendingEditorCloseQueueRef.current.filter(
       (id) => id !== fileId
     )
     advanceEditorCloseQueue()
+    setTimeout(() => {
+      isClosingRef.current = false
+    }, CLOSE_DIALOG_DEBOUNCE_MS)
   }, [advanceEditorCloseQueue, saveDialogFileId, waitForFileClosed])
 
   const handleSaveDialogDiscard = useCallback(async () => {
+    if (isClosingRef.current) {
+      return
+    }
     if (!saveDialogFileId) {
       return
     }
+    isClosingRef.current = true
     const fileId = saveDialogFileId
+
+    // Why: dismiss the dialog synchronously before awaiting quiesce. A rapid
+    // double-click on "Don't Save" would otherwise fire the handler twice
+    // with the same captured fileId, causing two concurrent queue advances
+    // after the quiesce settles. Mirrors handleSaveDialogSave's early clear.
+    setSaveDialogFileId(null)
 
     // Why: autosave runs on a background timer. Wait for any pending/in-flight
     // write to settle before honoring "Don't Save", otherwise the file can be
     // written after the user explicitly chose to discard their edits.
     try {
       await requestEditorSaveQuiesce({ fileId })
-    } catch {
-      // Quiesce failure must not trap the user in a close dialog loop.
+    } catch (error) {
+      // Why: quiesce failure must not trap the user in a close dialog loop, but
+      // silently swallowing it also hides broken autosave state. Warn so a
+      // stuck controller is visible in devtools instead of disappearing.
+      console.warn('Autosave quiesce failed before discard', error)
     }
     markFileDirty(fileId, false)
     closeFile(fileId)
-    setUnsavedDiffDialogOpen(false)
     pendingEditorCloseQueueRef.current = pendingEditorCloseQueueRef.current.filter(
       (id) => id !== fileId
     )
     advanceEditorCloseQueue()
+    setTimeout(() => {
+      isClosingRef.current = false
+    }, CLOSE_DIALOG_DEBOUNCE_MS)
   }, [advanceEditorCloseQueue, closeFile, markFileDirty, saveDialogFileId])
 
   const handleSaveDialogCancel = useCallback(() => {
+    if (isClosingRef.current) {
+      return
+    }
+    isClosingRef.current = true
     pendingEditorCloseQueueRef.current = []
     windowCloseAfterDirtyRef.current = null
-    setUnsavedDiffDialogOpen(false)
-    setUnsavedDiffError(null)
-    setUnsavedDiffModelKey(null)
-    setUnsavedDiffModel(null)
-    setUnsavedDiffLoading(false)
     setSaveDialogFileId(null)
+    setTimeout(() => {
+      isClosingRef.current = false
+    }, CLOSE_DIALOG_DEBOUNCE_MS)
   }, [])
-
-  const handleSaveDialogViewDiff = useCallback(async () => {
-    if (!saveDialogFileId) {
-      return
-    }
-    const file = useAppStore
-      .getState()
-      .openFiles.find((candidate) => candidate.id === saveDialogFileId)
-    if (!file) {
-      return
-    }
-
-    const requestId = ++unsavedDiffRequestIdRef.current
-    setUnsavedDiffModelKey(buildUnsavedDiffModelKey(file.id, requestId))
-    setUnsavedDiffDialogOpen(true)
-    setUnsavedDiffLoading(true)
-    setUnsavedDiffError(null)
-
-    let originalContent = ''
-    if (!file.isUntitled) {
-      try {
-        const connectionId = getConnectionId(file.worktreeId) ?? undefined
-        const saved = await window.api.fs.readFile({ filePath: file.filePath, connectionId })
-        if (saved.isBinary) {
-          if (requestId !== unsavedDiffRequestIdRef.current) {
-            return
-          }
-          setUnsavedDiffModel(null)
-          setUnsavedDiffModelKey(null)
-          setUnsavedDiffLoading(false)
-          setUnsavedDiffError('Diff is unavailable for binary files.')
-          return
-        }
-        originalContent = saved.content
-      } catch (error) {
-        if (requestId !== unsavedDiffRequestIdRef.current) {
-          return
-        }
-        setUnsavedDiffModel(null)
-        setUnsavedDiffModelKey(null)
-        setUnsavedDiffLoading(false)
-        setUnsavedDiffError(
-          `Failed to load saved file: ${extractIpcErrorMessage(error, 'Unable to read file')}`
-        )
-        return
-      }
-    }
-
-    const modifiedContent = useAppStore.getState().editorDrafts[file.id] ?? originalContent
-    if (requestId !== unsavedDiffRequestIdRef.current) {
-      return
-    }
-    setUnsavedDiffModel({
-      fileLabel: file.relativePath.split('/').pop() ?? file.relativePath,
-      language: file.language,
-      originalContent,
-      modifiedContent
-    })
-    setUnsavedDiffLoading(false)
-  }, [saveDialogFileId])
 
   useEffect(() => {
     const onRequestEditorClose = (event: Event): void => {
@@ -1321,9 +1357,9 @@ function Terminal(): React.JSX.Element | null {
 
       {/* Save confirmation dialog */}
       <Dialog
-        open={saveDialogFileId !== null && !unsavedDiffDialogOpen}
+        open={saveDialogFileId !== null}
         onOpenChange={(open) => {
-          if (!open && !unsavedDiffDialogOpen) {
+          if (!open) {
             handleSaveDialogCancel()
           }
         }}
@@ -1333,89 +1369,13 @@ function Terminal(): React.JSX.Element | null {
             <DialogTitle className="text-sm">Unsaved Changes</DialogTitle>
             <DialogDescription className="text-xs">
               {saveDialogFile
-                ? `"${saveDialogFile.relativePath.split('/').pop()}" has unsaved changes. Do you want to save before closing?`
+                ? `"${basename(saveDialogFile.relativePath)}" has unsaved changes. Do you want to save before closing?`
                 : 'This file has unsaved changes.'}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">
             <Button type="button" variant="outline" size="sm" onClick={handleSaveDialogCancel}>
               Cancel
-            </Button>
-            <Button type="button" variant="outline" size="sm" onClick={handleSaveDialogViewDiff}>
-              View Diff
-            </Button>
-            <Button type="button" variant="outline" size="sm" onClick={handleSaveDialogDiscard}>
-              Don&apos;t Save
-            </Button>
-            <Button type="button" size="sm" onClick={handleSaveDialogSave}>
-              Save
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={unsavedDiffDialogOpen}
-        onOpenChange={(open) => {
-          setUnsavedDiffDialogOpen(open)
-        }}
-      >
-        <DialogContent className="top-0 right-0 bottom-0 left-0 m-auto translate-x-0 translate-y-0 w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] h-[calc(100vh-4rem)] flex flex-col p-4">
-          <DialogHeader>
-            <DialogTitle className="text-sm">
-              Unsaved Diff{unsavedDiffModel ? ` - ${unsavedDiffModel.fileLabel}` : ''}
-            </DialogTitle>
-            <DialogDescription className="text-xs">
-              Compare your current unsaved draft with the saved file on disk.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="min-h-0 flex-1 overflow-hidden rounded-md border border-border/60">
-            {unsavedDiffLoading ? (
-              <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
-                Loading diff...
-              </div>
-            ) : unsavedDiffError ? (
-              <div className="h-full flex items-center justify-center px-4 text-xs text-destructive">
-                {unsavedDiffError}
-              </div>
-            ) : unsavedDiffModel ? (
-              <Suspense
-                fallback={
-                  <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
-                    Loading diff view...
-                  </div>
-                }
-              >
-                <div className="h-full min-h-0 flex flex-col">
-                  <DiffViewer
-                    key={unsavedDiffModelKey ?? `unsaved-close:${unsavedDiffModel.fileLabel}`}
-                    modelKey={unsavedDiffModelKey ?? `unsaved-close:${unsavedDiffModel.fileLabel}`}
-                    originalContent={unsavedDiffModel.originalContent}
-                    modifiedContent={unsavedDiffModel.modifiedContent}
-                    language={unsavedDiffModel.language}
-                    filePath={saveDialogFile?.filePath ?? ''}
-                    relativePath={saveDialogFile?.relativePath ?? unsavedDiffModel.fileLabel}
-                    // Why: the unsaved-close modal is transient and space-constrained.
-                    // Inline diff keeps one wide code column so long lines remain readable.
-                    sideBySide={false}
-                    editable={false}
-                  />
-                </div>
-              </Suspense>
-            ) : (
-              <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
-                No diff available.
-              </div>
-            )}
-          </div>
-          <DialogFooter className="mt-4 gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setUnsavedDiffDialogOpen(false)}
-            >
-              Back
             </Button>
             <Button type="button" variant="outline" size="sm" onClick={handleSaveDialogDiscard}>
               Don&apos;t Save

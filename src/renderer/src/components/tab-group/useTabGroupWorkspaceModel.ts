@@ -66,8 +66,6 @@ export function useTabGroupWorkspaceModel({
   const focusGroup = useAppStore((state) => state.focusGroup)
   const activateTab = useAppStore((state) => state.activateTab)
   const closeUnifiedTab = useAppStore((state) => state.closeUnifiedTab)
-  const closeOtherTabs = useAppStore((state) => state.closeOtherTabs)
-  const closeTabsToRight = useAppStore((state) => state.closeTabsToRight)
   const closeEmptyGroup = useAppStore((state) => state.closeEmptyGroup)
   const createTab = useAppStore((state) => state.createTab)
   const closeTab = useAppStore((state) => state.closeTab)
@@ -375,6 +373,47 @@ export function useTabGroupWorkspaceModel({
     }
   }, [closeItem, groupTabs])
 
+  const closeOthers = useCallback(
+    (itemId: string) => {
+      const item = groupTabs.find((candidate) => candidate.id === itemId)
+      if (!item) {
+        return
+      }
+      // Why: the store's closeOtherTabs helper unconditionally closes every non-pinned
+      // sibling unified tab, including dirty editor tabs — stranding those files in
+      // openFiles without a tab if the user cancels the save dialog. Collect the target
+      // ids here instead and route them through the same dirty-aware closeMany path
+      // used by individual tab closes so the Cancel -> zombie-file hazard is impossible.
+      const siblingIds = groupTabs
+        .filter((candidate) => candidate.id !== itemId && !candidate.isPinned)
+        .map((candidate) => candidate.id)
+      closeMany(siblingIds)
+    },
+    [closeMany, groupTabs]
+  )
+
+  const closeToRight = useCallback(
+    (itemId: string) => {
+      // Why: see closeOthers — the store's closeTabsToRight helper pre-closes dirty
+      // editor tabs before the save dialog resolves. Walking the group's tabOrder
+      // locally (unifiedTabsByWorktree is append-ordered, not visually ordered, so
+      // tabOrder is the canonical left-to-right sequence) and routing through
+      // closeMany keeps the dirty-aware flow intact.
+      const order = group?.tabOrder ?? []
+      const index = order.indexOf(itemId)
+      if (index === -1) {
+        return
+      }
+      const tabById = new Map(groupTabs.map((candidate) => [candidate.id, candidate]))
+      const rightIds = order.slice(index + 1).filter((id) => {
+        const candidate = tabById.get(id)
+        return candidate ? !candidate.isPinned : false
+      })
+      closeMany(rightIds)
+    },
+    [closeMany, group, groupTabs]
+  )
+
   const tabBarOrder = useMemo(
     () =>
       (group?.tabOrder ?? []).map((itemId) => {
@@ -410,8 +449,8 @@ export function useTabGroupWorkspaceModel({
       closeAllEditorTabsInGroup,
       closeGroup,
       closeItem,
-      closeOthers: (itemId: string) => closeMany(closeOtherTabs(itemId)),
-      closeToRight: (itemId: string) => closeMany(closeTabsToRight(itemId)),
+      closeOthers,
+      closeToRight,
       consumeSuppressedPtyExit,
       createSplitGroup,
       newBrowserTab: () => {
