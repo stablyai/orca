@@ -10,7 +10,7 @@ import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type {
   BaseRefDefaultResult,
   CreateWorktreeArgs,
-  CustomPetModel,
+  CustomSidekick,
   FsChangedPayload,
   GitHubAssignableUser,
   GitHubCommentResult,
@@ -717,12 +717,12 @@ const api = {
       ipcRenderer.invoke('shell:copyFile', args)
   },
 
-  pet: {
-    importModel: (): Promise<CustomPetModel | null> => ipcRenderer.invoke('pet:import'),
-    readModel: (id: string, fileName: string): Promise<ArrayBuffer | null> =>
-      ipcRenderer.invoke('pet:read', id, fileName),
-    deleteModel: (id: string, fileName: string): Promise<void> =>
-      ipcRenderer.invoke('pet:delete', id, fileName)
+  sidekick: {
+    import: (): Promise<CustomSidekick | null> => ipcRenderer.invoke('sidekick:import'),
+    read: (id: string, fileName: string): Promise<ArrayBuffer | null> =>
+      ipcRenderer.invoke('sidekick:read', id, fileName),
+    delete: (id: string, fileName: string): Promise<void> =>
+      ipcRenderer.invoke('sidekick:delete', id, fileName)
   },
 
   browser: {

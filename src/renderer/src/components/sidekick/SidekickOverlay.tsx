@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { usePetModelUrl } from './usePetModelUrl'
+import { useSidekickUrl } from './useSidekickUrl'
 
 function useDocumentVisible(): boolean {
   const [visible, setVisible] = useState(() =>
@@ -34,30 +34,30 @@ function usePrefersReducedMotion(): boolean {
   return reduced
 }
 
-export function PetOverlay(): React.JSX.Element {
+export function SidekickOverlay(): React.JSX.Element {
   const documentVisible = useDocumentVisible()
   const reducedMotion = usePrefersReducedMotion()
-  const { url } = usePetModelUrl()
+  const { url } = useSidekickUrl()
   const animate = documentVisible && !reducedMotion
 
   return (
-    // Why: pointer-events-none so the app chrome underneath the pet stays
-    // interactive — the pet is purely decorative. z-index sits just under
+    // Why: pointer-events-none so the app chrome underneath the sidekick stays
+    // interactive — the sidekick is purely decorative. z-index sits just under
     // typical modal layers.
     <div
       aria-hidden
-      className="pointer-events-none fixed bottom-4 right-3 z-40 h-[140px] w-[140px]"
+      className="pointer-events-none fixed bottom-4 right-16 z-40 h-[180px] w-[180px]"
     >
       <div
         className="flex size-full items-center justify-end"
         style={{
-          animation: 'pet-bob 1.2s ease-in-out infinite',
+          animation: 'sidekick-bob 1.2s ease-in-out infinite',
           animationPlayState: animate ? 'running' : 'paused'
         }}
       >
         <style>
           {
-            '@keyframes pet-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }'
+            '@keyframes sidekick-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }'
           }
         </style>
         <img src={url} alt="" className="max-h-full max-w-full object-contain" draggable={false} />
@@ -66,4 +66,4 @@ export function PetOverlay(): React.JSX.Element {
   )
 }
 
-export default PetOverlay
+export default SidekickOverlay

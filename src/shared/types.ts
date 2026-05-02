@@ -1075,11 +1075,11 @@ export type GlobalSettings = {
    *  takes effect on the next app launch. The in-pane status indicators and
    *  the cursor-agent hook path are unaffected by this toggle. */
   experimentalAgentDashboard: boolean
-  /** Experimental: floating animated pet (claude.webp) in the bottom-right
+  /** Experimental: floating animated sidekick (claude.webp) in the bottom-right
    *  corner. Opt-in because it's a cosmetic joke feature; users who leave it
    *  off never mount the overlay. Toggling takes effect immediately in the
    *  current session (no relaunch) because it is purely renderer-side. */
-  experimentalPet: boolean
+  experimentalSidekick: boolean
 }
 
 export type GhosttyImportPreview = {
@@ -1197,28 +1197,28 @@ export type PersistedUIState = {
    *  suppress the nag — no further thresholds, no notifications. */
   starNagCompleted?: boolean
   trustedOrcaHooks?: PersistedTrustedOrcaHooks
-  /** Whether the experimental pet overlay is currently visible. Separate from
-   *  the experimentalPet settings flag so "Hide pet" from the status-bar menu
-   *  is a reversible dismiss (re-show without re-enabling the feature).
-   *  Absent = treated as true so existing users see the pet the first time
-   *  they enable the experimental flag. */
-  petVisible?: boolean
-  /** Active pet id: either 'default' (bundled claude.webp) or a custom
-   *  model UUID from customPetModels. Unknown ids fall back to 'default' at
-   *  read time so removing a custom model the user had selected doesn't
-   *  leave the overlay rendering nothing. */
-  petModelId?: string
-  /** User-uploaded pet images. Bytes live under userData/pets/custom/; this
-   *  field is the metadata index so custom pets ride the existing
+  /** Whether the experimental sidekick overlay is currently visible. Separate
+   *  from the experimentalSidekick settings flag so "Hide sidekick" from the
+   *  status-bar menu is a reversible dismiss (re-show without re-enabling the
+   *  feature). Absent = treated as true so existing users see the sidekick
+   *  the first time they enable the experimental flag. */
+  sidekickVisible?: boolean
+  /** Active sidekick id: one of the bundled ids or a custom UUID from
+   *  customSidekicks. Unknown ids fall back to the default at read time so
+   *  removing a custom sidekick the user had selected doesn't leave the
+   *  overlay rendering nothing. */
+  sidekickId?: string
+  /** User-uploaded sidekick images. Bytes live under userData/sidekicks/custom/;
+   *  this field is the metadata index so custom sidekicks ride the existing
    *  PersistedUIState save pipeline. */
-  customPetModels?: CustomPetModel[]
+  customSidekicks?: CustomSidekick[]
 }
 
-/** Metadata for a user-uploaded pet image. `id` is the stable identifier; the
- *  on-disk filename (preserving the original extension) lives in `fileName`.
+/** Metadata for a user-uploaded sidekick image. `id` is the stable identifier;
+ *  the on-disk filename (preserving the original extension) lives in `fileName`.
  *  The renderer never learns the absolute path — it asks main for the bytes
- *  via pet:read using (id, fileName). */
-export type CustomPetModel = {
+ *  via sidekick:read using (id, fileName). */
+export type CustomSidekick = {
   id: string
   label: string
   fileName: string

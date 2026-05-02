@@ -10,7 +10,7 @@ import type {
   CodexRateLimitAccountsState,
   CreateWorktreeArgs,
   CreateWorktreeResult,
-  CustomPetModel,
+  CustomSidekick,
   DirEntry,
   FsChangedPayload,
   GhosttyImportPreview,
@@ -584,10 +584,10 @@ export type PreloadApi = {
     pickDirectory: (args: { defaultPath?: string }) => Promise<string | null>
     copyFile: (args: { srcPath: string; destPath: string }) => Promise<void>
   }
-  pet: {
-    importModel: () => Promise<CustomPetModel | null>
-    readModel: (id: string, fileName: string) => Promise<ArrayBuffer | null>
-    deleteModel: (id: string, fileName: string) => Promise<void>
+  sidekick: {
+    import: () => Promise<CustomSidekick | null>
+    read: (id: string, fileName: string) => Promise<ArrayBuffer | null>
+    delete: (id: string, fileName: string) => Promise<void>
   }
   browser: BrowserApi
   hooks: {

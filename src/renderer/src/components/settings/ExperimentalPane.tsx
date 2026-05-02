@@ -91,7 +91,7 @@ export function ExperimentalPane({
   const showAgentDashboard = matchesSettingsSearch(searchQuery, [
     EXPERIMENTAL_PANE_SEARCH_ENTRIES[0]
   ])
-  const showPet = matchesSettingsSearch(searchQuery, [EXPERIMENTAL_PANE_SEARCH_ENTRIES[1]])
+  const showSidekick = matchesSettingsSearch(searchQuery, [EXPERIMENTAL_PANE_SEARCH_ENTRIES[1]])
   const showOrchestration = matchesSettingsSearch(searchQuery, [
     EXPERIMENTAL_PANE_SEARCH_ENTRIES[2]
   ])
@@ -229,37 +229,38 @@ export function ExperimentalPane({
         </SearchableSetting>
       ) : null}
 
-      {showPet ? (
+      {showSidekick ? (
         <SearchableSetting
-          title="Pet"
-          description="Floating animated pet in the bottom-right corner."
+          title="Sidekick"
+          description="Floating animated sidekick in the bottom-right corner."
           keywords={EXPERIMENTAL_PANE_SEARCH_ENTRIES[1].keywords}
           className="space-y-3 px-1 py-2"
-          id="experimental-pet"
+          id="experimental-sidekick"
         >
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0 shrink space-y-1.5">
-              <Label>Pet</Label>
+              <Label>Sidekick</Label>
               <p className="text-xs text-muted-foreground">
-                Shows a small animated pet pinned to the bottom-right corner. Upload your own PNG,
-                APNG, GIF, WebP, JPG, or SVG from the status-bar pet menu. Hide it any time from the
-                same menu without disabling this setting.
+                Shows a small animated sidekick pinned to the bottom-right corner. Pick a character
+                (Claudino, OpenCode, Gremlin) or upload your own PNG, APNG, GIF, WebP, JPG, or SVG
+                from the status-bar sidekick menu. Hide it any time from the same menu without
+                disabling this setting.
               </p>
             </div>
             <button
               type="button"
               role="switch"
-              aria-checked={settings.experimentalPet}
+              aria-checked={settings.experimentalSidekick}
               onClick={() => {
-                updateSettings({ experimentalPet: !settings.experimentalPet })
+                updateSettings({ experimentalSidekick: !settings.experimentalSidekick })
               }}
               className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-                settings.experimentalPet ? 'bg-foreground' : 'bg-muted-foreground/30'
+                settings.experimentalSidekick ? 'bg-foreground' : 'bg-muted-foreground/30'
               }`}
             >
               <span
                 className={`inline-block h-3.5 w-3.5 transform rounded-full bg-background shadow-sm transition-transform ${
-                  settings.experimentalPet ? 'translate-x-4' : 'translate-x-0.5'
+                  settings.experimentalSidekick ? 'translate-x-4' : 'translate-x-0.5'
                 }`}
               />
             </button>

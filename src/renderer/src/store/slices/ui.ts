@@ -4,7 +4,7 @@ import type { AppState } from '../types'
 import { findPrevLiveWorktreeHistoryIndex } from './worktree-nav-history'
 import type {
   ChangelogData,
-  CustomPetModel,
+  CustomSidekick,
   PersistedTrustedOrcaHooks,
   PersistedUIState,
   StatusBarItem,
@@ -39,8 +39,8 @@ import {
   DEFAULT_WORKTREE_CARD_PROPERTIES
 } from '../../../../shared/constants'
 import type { OrcaHookScriptKind } from '../../lib/orca-hook-trust'
-import { DEFAULT_PET_MODEL_ID, isBundledPetId } from '../../components/pet/pet-models'
-import { revokeCustomPetBlobUrl } from '../../components/pet/pet-blob-cache'
+import { DEFAULT_SIDEKICK_ID, isBundledSidekickId } from '../../components/sidekick/sidekick-models'
+import { revokeCustomSidekickBlobUrl } from '../../components/sidekick/sidekick-blob-cache'
 
 const MIN_SIDEBAR_WIDTH = 220
 const MAX_LEFT_SIDEBAR_WIDTH = 500
@@ -193,20 +193,20 @@ export type UISlice = {
   toggleStatusBarItem: (item: StatusBarItem) => void
   statusBarVisible: boolean
   setStatusBarVisible: (v: boolean) => void
-  /** Whether the experimental pet overlay is currently visible. Persisted so
-   *  "Hide pet" from the status-bar menu survives reload. Independent of the
-   *  experimentalPet settings flag — the feature flag gates whether the
-   *  overlay can ever render; this controls whether it does right now. */
-  petVisible: boolean
-  setPetVisible: (v: boolean) => void
-  /** Which pet is active. 'default' for the bundled image or a custom model
-   *  UUID. Persisted alongside petVisible via the PersistedUIState pipeline. */
-  petModelId: string
-  setPetModelId: (id: string) => void
-  /** User-uploaded pet images. Metadata only — bytes live in main's userData. */
-  customPetModels: CustomPetModel[]
-  addCustomPetModel: (model: CustomPetModel) => void
-  removeCustomPetModel: (id: string) => void
+  /** Whether the experimental sidekick overlay is currently visible. Persisted
+   *  so "Hide sidekick" from the status-bar menu survives reload. Independent
+   *  of the experimentalSidekick settings flag — the feature flag gates
+   *  whether the overlay can ever render; this controls whether it does now. */
+  sidekickVisible: boolean
+  setSidekickVisible: (v: boolean) => void
+  /** Which sidekick is active — either a bundled id or a custom UUID.
+   *  Persisted alongside sidekickVisible via the PersistedUIState pipeline. */
+  sidekickId: string
+  setSidekickId: (id: string) => void
+  /** User-uploaded sidekick images. Metadata only — bytes live in main's userData. */
+  customSidekicks: CustomSidekick[]
+  addCustomSidekick: (model: CustomSidekick) => void
+  removeCustomSidekick: (id: string) => void
   pendingRevealWorktreeId: string | null
   revealWorktreeInSidebar: (worktreeId: string) => void
   clearPendingRevealWorktreeId: () => void
@@ -491,51 +491,51 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set({ statusBarVisible: v })
   },
 
-  // Why: default true so a user who enables experimentalPet sees the pet
-  // immediately. Hide pet from the status-bar menu flips this to false; the
-  // value is persisted via the standard PersistedUIState pipeline.
-  petVisible: true,
-  setPetVisible: (v) => {
-    window.api.ui.set({ petVisible: v }).catch(console.error)
-    set({ petVisible: v })
+  // Why: default true so a user who enables experimentalSidekick sees the
+  // sidekick immediately. Hide sidekick from the status-bar menu flips this
+  // to false; the value is persisted via the standard PersistedUIState pipeline.
+  sidekickVisible: true,
+  setSidekickVisible: (v) => {
+    window.api.ui.set({ sidekickVisible: v }).catch(console.error)
+    set({ sidekickVisible: v })
   },
 
-  petModelId: DEFAULT_PET_MODEL_ID,
-  setPetModelId: (id) => {
-    window.api.ui.set({ petModelId: id }).catch(console.error)
-    set({ petModelId: id })
+  sidekickId: DEFAULT_SIDEKICK_ID,
+  setSidekickId: (id) => {
+    window.api.ui.set({ sidekickId: id }).catch(console.error)
+    set({ sidekickId: id })
   },
 
-  customPetModels: [],
-  addCustomPetModel: (model) =>
+  customSidekicks: [],
+  addCustomSidekick: (model) =>
     set((s) => {
-      const next = [...s.customPetModels.filter((m) => m.id !== model.id), model]
-      window.api.ui.set({ customPetModels: next }).catch(console.error)
-      return { customPetModels: next }
+      const next = [...s.customSidekicks.filter((m) => m.id !== model.id), model]
+      window.api.ui.set({ customSidekicks: next }).catch(console.error)
+      return { customSidekicks: next }
     }),
-  removeCustomPetModel: (id) =>
+  removeCustomSidekick: (id) =>
     set((s) => {
-      const target = s.customPetModels.find((m) => m.id === id)
+      const target = s.customSidekicks.find((m) => m.id === id)
       if (!target) {
         return s
       }
-      const next = s.customPetModels.filter((m) => m.id !== id)
-      window.api.ui.set({ customPetModels: next }).catch(console.error)
-      // Why: if the user removes the currently-active custom pet, fall back
-      // to the bundled default so the overlay doesn't render nothing.
-      const fallback = s.petModelId === id ? DEFAULT_PET_MODEL_ID : s.petModelId
-      if (fallback !== s.petModelId) {
-        window.api.ui.set({ petModelId: fallback }).catch(console.error)
+      const next = s.customSidekicks.filter((m) => m.id !== id)
+      window.api.ui.set({ customSidekicks: next }).catch(console.error)
+      // Why: if the user removes the currently-active custom sidekick, fall
+      // back to the bundled default so the overlay doesn't render nothing.
+      const fallback = s.sidekickId === id ? DEFAULT_SIDEKICK_ID : s.sidekickId
+      if (fallback !== s.sidekickId) {
+        window.api.ui.set({ sidekickId: fallback }).catch(console.error)
       }
       // Why: revoke the cached blob: URL so the underlying Blob is released;
       // otherwise it stays in memory for the rest of the session.
-      revokeCustomPetBlobUrl(id)
+      revokeCustomSidekickBlobUrl(id)
       // Why: best-effort — the bytes are owned by main. If the disk delete
       // fails, the orphaned image stays in userData; each import uses a fresh
       // UUID so the file won't be hit again, and the renderer's metadata
       // index no longer references it.
-      window.api.pet.deleteModel(id, target.fileName).catch(console.error)
-      return { customPetModels: next, petModelId: fallback }
+      window.api.sidekick.delete(id, target.fileName).catch(console.error)
+      return { customSidekicks: next, sidekickId: fallback }
     }),
 
   pendingRevealWorktreeId: null,
@@ -588,27 +588,27 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         worktreeCardProperties: ui.worktreeCardProperties ?? [...DEFAULT_WORKTREE_CARD_PROPERTIES],
         statusBarItems: ui.statusBarItems ?? [...DEFAULT_STATUS_BAR_ITEMS],
         statusBarVisible: ui.statusBarVisible ?? true,
-        // Why: absent → true so existing users see the pet the first time
-        // they enable the experimental flag. Only an explicit Hide pet
+        // Why: absent → true so existing users see the sidekick the first time
+        // they enable the experimental flag. Only an explicit Hide sidekick
         // dismissal persists a `false` value.
-        petVisible: ui.petVisible ?? true,
-        customPetModels: Array.isArray(ui.customPetModels) ? ui.customPetModels : [],
-        // Why: accept the persisted id if it matches the bundled default or a
-        // known custom model; otherwise fall back so the overlay never
-        // renders nothing (e.g. custom model was removed by another session).
-        petModelId: ((): string => {
-          const id = ui.petModelId
+        sidekickVisible: ui.sidekickVisible ?? true,
+        customSidekicks: Array.isArray(ui.customSidekicks) ? ui.customSidekicks : [],
+        // Why: accept the persisted id if it matches a bundled sidekick or a
+        // known custom one; otherwise fall back so the overlay never renders
+        // nothing (e.g. custom sidekick was removed by another session).
+        sidekickId: ((): string => {
+          const id = ui.sidekickId
           if (typeof id !== 'string') {
-            return DEFAULT_PET_MODEL_ID
+            return DEFAULT_SIDEKICK_ID
           }
-          if (isBundledPetId(id)) {
+          if (isBundledSidekickId(id)) {
             return id
           }
-          const custom = Array.isArray(ui.customPetModels) ? ui.customPetModels : []
+          const custom = Array.isArray(ui.customSidekicks) ? ui.customSidekicks : []
           if (custom.some((m) => m.id === id)) {
             return id
           }
-          return DEFAULT_PET_MODEL_ID
+          return DEFAULT_SIDEKICK_ID
         })(),
         dismissedUpdateVersion: ui.dismissedUpdateVersion ?? null,
         updateReassuranceSeen: ui.updateReassuranceSeen ?? false,

@@ -2,11 +2,11 @@ import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import { copyFile, mkdir, readFile, rm, stat } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { basename, extname, join, normalize, sep } from 'node:path'
-import type { CustomPetModel } from '../../shared/types'
+import type { CustomSidekick } from '../../shared/types'
 
-// Why: image-only pet uploads. Static + animated variants render natively via
-// <img>, so no 3D engine is needed. Main owns the accepted-format table as the
-// single source of truth for what the renderer will try to display.
+// Why: image-only sidekick uploads. Static + animated variants render natively
+// via <img>, so no 3D engine is needed. Main owns the accepted-format table as
+// the single source of truth for what the renderer will try to display.
 const IMAGE_FORMATS: Record<string, string> = {
   '.png': 'image/png',
   '.apng': 'image/apng',
@@ -29,9 +29,9 @@ function classifyFile(src: string): { mimeType: string; ext: string } | null {
 // Why: custom user-uploaded images live in a dedicated folder under userData
 // so they persist across updates but are scoped to the Orca install. We never
 // trust paths the renderer hands us — the renderer only ever knows the opaque
-// CustomPetModel.id; main resolves it to an absolute path inside this folder.
-function getPetsDir(): string {
-  return join(app.getPath('userData'), 'pets', 'custom')
+// CustomSidekick.id; main resolves it to an absolute path inside this folder.
+function getSidekicksDir(): string {
+  return join(app.getPath('userData'), 'sidekicks', 'custom')
 }
 
 const MAX_BYTES = 64 * 1024 * 1024 // 64 MB — generous but bounded so a user can't point at a multi-GB file and OOM the renderer when it builds a Blob URL.
@@ -41,34 +41,34 @@ function isSafeId(id: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
 }
 
-function resolvePetFile(id: string, fileName: string): string | null {
+function resolveSidekickFile(id: string, fileName: string): string | null {
   if (!isSafeId(id)) {
     return null
   }
   // Why: the renderer hands back the persisted fileName (which includes the
   // original extension so Blob MIME detection works). We still normalize and
-  // prefix-check against the pets dir to defend against any edge case that
+  // prefix-check against the sidekicks dir to defend against any edge case that
   // slipped the id regex.
   const safeName = basename(fileName)
   if (!safeName.startsWith(`${id}.`)) {
     return null
   }
-  const filePath = normalize(join(getPetsDir(), safeName))
-  if (!filePath.startsWith(normalize(getPetsDir()) + sep)) {
+  const filePath = normalize(join(getSidekicksDir(), safeName))
+  if (!filePath.startsWith(normalize(getSidekicksDir()) + sep)) {
     return null
   }
   return filePath
 }
 
-export function registerPetHandlers(): void {
-  ipcMain.handle('pet:import', async (event): Promise<CustomPetModel | null> => {
+export function registerSidekickHandlers(): void {
+  ipcMain.handle('sidekick:import', async (event): Promise<CustomSidekick | null> => {
     // Why: parent the file picker to the sender window so the dialog opens as
     // a sheet attached to the main window. Without a parent, on macOS the
     // dialog can land behind the main window.
     const senderWindow =
       BrowserWindow.fromWebContents(event.sender) ?? BrowserWindow.getFocusedWindow()
     const options: Electron.OpenDialogOptions = {
-      title: 'Pick pet',
+      title: 'Pick sidekick',
       properties: ['openFile'],
       // Why: single filter and no `apng` extension. macOS file dialogs map
       // filter extensions to UTIs; `apng` has no registered UTI, so including
@@ -77,7 +77,7 @@ export function registerPetHandlers(): void {
       // bytes by the browser.
       filters: [
         {
-          name: 'Pet image',
+          name: 'Sidekick image',
           extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg']
         }
       ]
@@ -108,11 +108,11 @@ export function registerPetHandlers(): void {
       )
     }
 
-    const dir = getPetsDir()
+    const dir = getSidekicksDir()
     await mkdir(dir, { recursive: true })
     const id = randomUUID()
-    // Why: preserve original extension in the on-disk name so pet:read can
-    // rebuild the right Blob MIME via resolvePetFile without a separate
+    // Why: preserve original extension in the on-disk name so sidekick:read can
+    // rebuild the right Blob MIME via resolveSidekickFile without a separate
     // lookup. The extension is only ever written by main (never the renderer).
     const fileName = `${id}${classified.ext}`
     const dest = join(dir, fileName)
@@ -120,11 +120,11 @@ export function registerPetHandlers(): void {
       await copyFile(src, dest)
     } catch {
       await rm(dest, { force: true }).catch(() => {})
-      throw new Error('Could not save the pet.')
+      throw new Error('Could not save the sidekick.')
     }
 
     const rawLabel = basename(src, extname(src)).trim()
-    const label = rawLabel.length > 0 ? rawLabel.slice(0, 40) : 'Custom pet'
+    const label = rawLabel.length > 0 ? rawLabel.slice(0, 40) : 'Custom sidekick'
     return {
       id,
       label,
@@ -134,9 +134,9 @@ export function registerPetHandlers(): void {
   })
 
   ipcMain.handle(
-    'pet:read',
+    'sidekick:read',
     async (_event, id: string, fileName: string): Promise<ArrayBuffer | null> => {
-      const filePath = resolvePetFile(id, fileName)
+      const filePath = resolveSidekickFile(id, fileName)
       if (!filePath) {
         return null
       }
@@ -144,21 +144,21 @@ export function registerPetHandlers(): void {
         const buf = await readFile(filePath)
         return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)
       } catch (error) {
-        console.warn('[pet-overlay] pet:read failed', error)
+        console.warn('[sidekick-overlay] sidekick:read failed', error)
         return null
       }
     }
   )
 
-  ipcMain.handle('pet:delete', async (_event, id: string, fileName: string): Promise<void> => {
-    const filePath = resolvePetFile(id, fileName)
+  ipcMain.handle('sidekick:delete', async (_event, id: string, fileName: string): Promise<void> => {
+    const filePath = resolveSidekickFile(id, fileName)
     if (!filePath) {
       return
     }
     try {
       await rm(filePath, { force: true })
     } catch (error) {
-      console.warn('[pet-overlay] pet:delete failed', error)
+      console.warn('[sidekick-overlay] sidekick:delete failed', error)
     }
   })
 }

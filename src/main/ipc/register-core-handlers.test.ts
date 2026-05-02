@@ -13,7 +13,7 @@ const {
   registerDeveloperPermissionHandlersMock,
   registerSettingsHandlersMock,
   registerShellHandlersMock,
-  registerPetHandlersMock,
+  registerSidekickHandlersMock,
   registerSessionHandlersMock,
   registerUIHandlersMock,
   registerFilesystemHandlersMock,
@@ -44,7 +44,7 @@ const {
   registerDeveloperPermissionHandlersMock: vi.fn(),
   registerSettingsHandlersMock: vi.fn(),
   registerShellHandlersMock: vi.fn(),
-  registerPetHandlersMock: vi.fn(),
+  registerSidekickHandlersMock: vi.fn(),
   registerSessionHandlersMock: vi.fn(),
   registerUIHandlersMock: vi.fn(),
   registerFilesystemHandlersMock: vi.fn(),
@@ -116,8 +116,8 @@ vi.mock('./shell', () => ({
   registerShellHandlers: registerShellHandlersMock
 }))
 
-vi.mock('./pet', () => ({
-  registerPetHandlers: registerPetHandlersMock
+vi.mock('./sidekick', () => ({
+  registerSidekickHandlers: registerSidekickHandlersMock
 }))
 
 vi.mock('./session', () => ({
@@ -191,7 +191,7 @@ describe('registerCoreHandlers', () => {
     registerDeveloperPermissionHandlersMock.mockReset()
     registerSettingsHandlersMock.mockReset()
     registerShellHandlersMock.mockReset()
-    registerPetHandlersMock.mockReset()
+    registerSidekickHandlersMock.mockReset()
     registerSessionHandlersMock.mockReset()
     registerUIHandlersMock.mockReset()
     registerFilesystemHandlersMock.mockReset()
@@ -236,7 +236,7 @@ describe('registerCoreHandlers', () => {
     expect(registerCodexUsageHandlersMock).toHaveBeenCalledWith(codexUsage)
     expect(registerCodexAccountHandlersMock).toHaveBeenCalledWith(codexAccounts)
     expect(registerAgentHookHandlersMock).toHaveBeenCalled()
-    expect(registerPetHandlersMock).toHaveBeenCalled()
+    expect(registerSidekickHandlersMock).toHaveBeenCalled()
     expect(registerClaudeAccountHandlersMock).toHaveBeenCalledWith(claudeAccounts)
     expect(registerRateLimitHandlersMock).toHaveBeenCalledWith(rateLimits)
     expect(registerGitHubHandlersMock).toHaveBeenCalledWith(store, stats)
