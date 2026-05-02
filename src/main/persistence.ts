@@ -6,6 +6,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync, unlinkS
 import { writeFile, rename, mkdir, rm } from 'fs/promises'
 import { join, dirname } from 'path'
 import { homedir } from 'os'
+import { randomUUID } from 'node:crypto'
 import type { PersistedState, Repo, WorktreeMeta, GlobalSettings } from '../shared/types'
 import type { SshTarget } from '../shared/ssh-types'
 import { isFolderRepo } from '../shared/repo-kind'
@@ -71,9 +72,19 @@ export class Store {
   }
 
   private load(): PersistedState {
+    // Capture once, at the top: this is the unambiguous "has the user run
+    // Orca before?" signal used by the telemetry cohort migration below.
+    // Field-based inference (e.g., `settings.telemetry` presence) does not
+    // work on the telemetry release itself — `telemetry` is new here, so it
+    // would be absent on every pre-telemetry install and misclassify existing
+    // users as fresh, flipping them to default-on in violation of the
+    // social contract we installed them under.
+    const dataFile = getDataFile()
+    const fileExistedOnLoad = existsSync(dataFile)
+
+    let result: PersistedState | null = null
     try {
-      const dataFile = getDataFile()
-      if (existsSync(dataFile)) {
+      if (fileExistedOnLoad) {
         const raw = readFileSync(dataFile, 'utf-8')
         const parsed = JSON.parse(raw) as PersistedState
         // Merge with defaults in case new fields were added
@@ -98,7 +109,7 @@ export class Store {
           : rawOptionAsAlt === undefined || rawOptionAsAlt === 'true'
             ? 'auto'
             : rawOptionAsAlt
-        return {
+        result = {
           ...defaults,
           ...parsed,
           settings: {
@@ -151,7 +162,47 @@ export class Store {
     } catch (err) {
       console.error('[persistence] Failed to load state, using defaults:', err)
     }
-    return getDefaultPersistedState(homedir())
+
+    // Corrupt-file catch path and "no file on disk" path converge here. The
+    // telemetry migration below runs on whichever branch produced `result`,
+    // because a user whose `orca-data.json` got corrupted is not a fresh
+    // install of the telemetry release — they still count as existing and
+    // must see the opt-in banner, not the default-on toast.
+    if (result === null) {
+      result = getDefaultPersistedState(homedir())
+    }
+
+    return this.migrateTelemetry(result, fileExistedOnLoad)
+  }
+
+  // One-shot telemetry cohort migration. Runs on every `load()` but is a
+  // no-op once `existedBeforeTelemetryRelease` is set, so subsequent launches
+  // pay only the property lookup. Populates:
+  //   - `existedBeforeTelemetryRelease` — cohort discriminator (drives the
+  //     first-launch toast vs. banner in PR 3).
+  //   - `optedIn` — new users start opted in; existing users are `null` until
+  //     the banner resolves (the consent resolver returns `pending_banner`
+  //     until then, so nothing transmits).
+  //   - `installId` — anonymous UUID v4. Stable across launches; regenerable
+  //     from the Privacy pane (PR 3).
+  private migrateTelemetry(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
+    if (state.settings?.telemetry?.existedBeforeTelemetryRelease !== undefined) {
+      return state
+    }
+    return {
+      ...state,
+      settings: {
+        ...state.settings,
+        telemetry: {
+          ...state.settings?.telemetry,
+          existedBeforeTelemetryRelease: fileExistedOnLoad,
+          // New users: on. Existing users: undecided — the first-launch
+          // banner in PR 3 is what flips them to true or false.
+          optedIn: fileExistedOnLoad ? null : true,
+          installId: state.settings?.telemetry?.installId ?? randomUUID()
+        }
+      }
+    }
   }
 
   private scheduleSave(): void {

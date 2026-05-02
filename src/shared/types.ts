@@ -1025,6 +1025,41 @@ export type GlobalSettings = {
    *  launch. The in-pane status indicators and the cursor-agent hook path are
    *  unaffected by this toggle. */
   experimentalAgentDashboard: boolean
+  /** Anonymous product-telemetry state. Optional because the one-shot
+   *  migration in `Store.load()` is what populates it on first boot of the
+   *  telemetry release; before migration runs, the field is absent. After
+   *  migration every user has `installId` set and `optedIn` is `true` (new
+   *  users) or `null` (existing users awaiting the first-launch banner).
+   *
+   *  Why: crash-detection state (`lastSessionId`, `lastHeartbeatTs`, clean-exit
+   *  flag) deliberately does NOT live here. That state ships in a separate
+   *  `orca-telemetry-heartbeat.json` file so a 5-minute heartbeat tick does
+   *  not amplify the debounced user-settings write, and a corrupt heartbeat
+   *  file can only break crash attribution — never user preferences. */
+  telemetry?: {
+    /** New users: initialized to `true` at install.
+     *  Existing users: `null` until they resolve the first-launch banner. */
+    optedIn: boolean | null
+    /** Anonymous UUID v4. Generated on first run. Regenerable from Privacy pane. */
+    installId: string
+    /** Cohort marker set once during migration. Drives toast-vs-banner. */
+    existedBeforeTelemetryRelease: boolean
+    /** ISO YYYY-MM-DD in local time. Gates `daily_active_user`. */
+    lastActiveDate?: string
+    /** New-user toast: true only after active dismissal ("Got it" or "Turn off").
+     *  Re-shows on next launch if false/undefined so the consent disclosure
+     *  is never silently skipped by quitting mid-session. */
+    firstRunNoticeShown?: boolean
+    /** Existing-user banner ✕ dismissal timestamp (ISO). While set, the
+     *  cohort resolver suppresses the banner for 7 days, then re-renders it
+     *  one final time with the ✕ removed. */
+    firstBannerDismissedAt?: string
+    /** True once the post-7-day follow-up banner has been rendered. If the
+     *  user dismisses that banner without clicking Sure/No-thanks, the next
+     *  cohort resolve treats it as `optedIn = false` (Case A in
+     *  cohort-resolver.ts). */
+    firstBannerSecondAskShown?: boolean
+  }
 }
 
 export type GhosttyImportPreview = {
